@@ -74,6 +74,7 @@ extension ElementInflation {
         case .success(.moved):
             switch await awaitLiveTargetRefresh(
                 for: inflatedTarget.target,
+                treeElement: inflatedTarget.treeElement,
                 method: method,
                 after: settledSequence,
                 deadline: deadline

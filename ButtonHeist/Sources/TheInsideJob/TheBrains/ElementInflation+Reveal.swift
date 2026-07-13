@@ -7,8 +7,12 @@ import ThePlans
 extension ElementInflation {
 
     private enum TargetRefreshMode {
-        case revealPath
-        case liveTarget(method: ActionMethod)
+        case revealPath(treeElement: InterfaceTree.Element)
+        case liveTarget(
+            treeElement: InterfaceTree.Element,
+            target: AccessibilityTarget,
+            method: ActionMethod
+        )
     }
 
     private enum TargetRefreshResolution {
@@ -23,10 +27,11 @@ extension ElementInflation {
         target: AccessibilityTarget,
         deadline: SemanticObservationDeadline
     ) async -> State {
-        if case .success(let visible)? = visibleTargetResolution(target) {
+        if stash.liveContains(heistId: treeElement.heistId),
+           let committed = stash.interfaceElement(heistId: treeElement.heistId) {
             return .refreshing(
                 target: target,
-                treeElement: visible,
+                treeElement: committed,
                 didReveal: false
             )
         }
@@ -35,8 +40,7 @@ extension ElementInflation {
         let reveal = await revealSemanticTarget(treeElement)
         if case .failed(let failure) = reveal {
             switch await awaitTargetRefresh(
-                for: target,
-                mode: .revealPath,
+                mode: .revealPath(treeElement: treeElement),
                 after: settledSequence,
                 deadline: deadline
             ) {
@@ -75,13 +79,13 @@ extension ElementInflation {
 
     internal func awaitLiveTargetRefresh(
         for target: AccessibilityTarget,
+        treeElement: InterfaceTree.Element,
         method: ActionMethod,
         after settledSequence: SettledObservationSequence?,
         deadline: SemanticObservationDeadline
     ) async -> TargetRefreshTerminal {
         await awaitTargetRefresh(
-            for: target,
-            mode: .liveTarget(method: method),
+            mode: .liveTarget(treeElement: treeElement, target: target, method: method),
             after: settledSequence,
             deadline: deadline
         )
@@ -90,7 +94,6 @@ extension ElementInflation {
     /// Resolve only after committed semantic truth advances. A known target
     /// that gains scroll membership earns at most one reveal attempt.
     private func awaitTargetRefresh(
-        for target: AccessibilityTarget,
         mode: TargetRefreshMode,
         after settledSequence: SettledObservationSequence?,
         deadline: SemanticObservationDeadline
@@ -109,10 +112,7 @@ extension ElementInflation {
             }
             sequence = event.sequence
 
-            switch targetRefreshResolution(
-                target: target,
-                mode: mode
-            ) {
+            switch targetRefreshResolution(mode: mode) {
             case .treeElement(let visible, let didReveal):
                 return .treeElement(visible, didReveal: didReveal)
             case .liveTarget(let inflatedTarget):
@@ -123,9 +123,9 @@ extension ElementInflation {
                 break
             }
 
-            guard case .revealPath = mode,
+            guard case .revealPath(let treeElement) = mode,
                   !didAttemptKnownTargetReveal,
-                  case .success(let fresh) = knownSemanticTarget(target),
+                  let fresh = stash.interfaceElement(heistId: treeElement.heistId),
                   fresh.scrollMembership != nil
             else { continue }
 
@@ -139,27 +139,26 @@ extension ElementInflation {
     }
 
     private func targetRefreshResolution(
-        target: AccessibilityTarget,
         mode: TargetRefreshMode
     ) -> TargetRefreshResolution {
         switch mode {
-        case .revealPath:
-            switch visibleTargetResolution(target) {
-            case .success(let visible)?:
-                return .treeElement(visible, didReveal: false)
-            case .failure(let failure)?:
-                return .failed(failure)
-            case nil:
-                return .missing
-            }
+        case .revealPath(let treeElement):
+            guard stash.liveContains(heistId: treeElement.heistId),
+                  let committed = stash.interfaceElement(heistId: treeElement.heistId)
+            else { return .missing }
+            return .treeElement(committed, didReveal: false)
 
-        case .liveTarget(let method):
-            switch resolveCurrentVisibleLiveElementTarget(target: target, method: method) {
-            case .success(let inflatedTarget)?:
+        case .liveTarget(let treeElement, let target, let method):
+            switch resolveCurrentLiveElementTarget(
+                treeElement: treeElement,
+                target: target,
+                method: method
+            ) {
+            case .success(let inflatedTarget):
                 return .liveTarget(inflatedTarget)
-            case .failure(let failure)?:
+            case .failure(let failure):
                 return .failed(failure)
-            case .retry?, nil:
+            case .retry:
                 return .missing
             }
         }

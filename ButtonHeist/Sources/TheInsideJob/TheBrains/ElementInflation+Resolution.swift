@@ -29,8 +29,12 @@ extension ElementInflation {
                 deadline: deadline
             )
         case .retry(let reason):
-            if stash.refreshLiveCapture() != nil,
-               let refreshed = resolveCurrentVisibleLiveElementTarget(target: target, method: method) {
+            if stash.refreshLiveCapture() != nil {
+                let refreshed = resolveCurrentLiveElementTarget(
+                    treeElement: treeElement,
+                    target: target,
+                    method: method
+                )
                 switch refreshed {
                 case .success(let inflatedTarget):
                     return await stateAfterResolvedFreshTarget(
@@ -47,6 +51,7 @@ extension ElementInflation {
             }
             switch await awaitLiveTargetRefresh(
                 for: target,
+                treeElement: treeElement,
                 method: method,
                 after: stash.latestSettledSemanticObservationEvent?.sequence,
                 deadline: deadline
@@ -132,37 +137,33 @@ extension ElementInflation {
         }
     }
 
-    internal func resolveCurrentVisibleLiveElementTarget(
+    internal func resolveCurrentLiveElementTarget(
+        treeElement: InterfaceTree.Element,
         target: AccessibilityTarget,
         method: ActionMethod
-    ) -> FreshElementTargetResolution? {
-        switch visibleTargetResolution(target) {
-        case .success(let treeElement)?:
-            switch stash.resolveLiveActionTarget(for: treeElement) {
-            case .resolved(let liveTarget):
-                guard retainedInterfaceElement(liveTarget.treeElement, matches: target) else {
-                    return .retry(.staleTarget)
-                }
-                return .success(InflatedElementTarget(
-                    target: target,
-                    treeElement: liveTarget.treeElement,
-                    liveTarget: liveTarget
-                ))
-            case .objectUnavailable:
-                return nil
-            case .geometryUnavailable:
-                return .failure(.geometryNotActionable(
-                    ActionCapabilityDiagnostic.gestureTargetUnavailable(
-                        method: method,
-                        element: treeElement,
-                        isVisible: stash.viewportElementIDs.contains(treeElement.heistId)
-                    )
-                ))
-            }
-        case .failure(let failure)?:
-            return .failure(failure)
-        case nil:
-            return nil
+    ) -> FreshElementTargetResolution {
+        guard let committed = stash.interfaceElement(heistId: treeElement.heistId),
+              retainedInterfaceElement(committed, matches: target)
+        else {
+            return .retry(.staleTarget)
+        }
+        switch stash.resolveLiveActionTarget(for: committed) {
+        case .resolved(let liveTarget):
+            return .success(InflatedElementTarget(
+                target: target,
+                treeElement: committed,
+                liveTarget: liveTarget
+            ))
+        case .objectUnavailable:
+            return .retry(.objectDeallocated)
+        case .geometryUnavailable:
+            return .failure(.geometryNotActionable(
+                ActionCapabilityDiagnostic.gestureTargetUnavailable(
+                    method: method,
+                    element: committed,
+                    isVisible: stash.viewportElementIDs.contains(committed.heistId)
+                )
+            ))
         }
     }
 
@@ -208,39 +209,11 @@ extension ElementInflation {
         method: ActionMethod,
         deallocatedBoundary: String
     ) -> FreshElementTargetResolution {
-        switch stash.resolveLiveActionTarget(for: treeElement) {
-        case .resolved(let liveTarget):
-            guard retainedInterfaceElement(liveTarget.treeElement, matches: target) else {
-                if let currentVisibleTarget = resolveCurrentVisibleLiveElementTarget(
-                    target: target,
-                    method: method
-                ) {
-                    return currentVisibleTarget
-                }
-                return .retry(.staleTarget)
-            }
-            return .success(InflatedElementTarget(
-                target: target,
-                treeElement: liveTarget.treeElement,
-                liveTarget: liveTarget
-            ))
-        case .objectUnavailable:
-            if let currentVisibleTarget = resolveCurrentVisibleLiveElementTarget(
-                target: target,
-                method: method
-            ) {
-                return currentVisibleTarget
-            }
-            return .retry(.objectDeallocated)
-        case .geometryUnavailable:
-            return .failure(.geometryNotActionable(
-                ActionCapabilityDiagnostic.gestureTargetUnavailable(
-                    method: method,
-                    element: treeElement,
-                    isVisible: stash.viewportElementIDs.contains(treeElement.heistId)
-                )
-            ))
-        }
+        resolveCurrentLiveElementTarget(
+            treeElement: treeElement,
+            target: target,
+            method: method
+        )
     }
 }
 
