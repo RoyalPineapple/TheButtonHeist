@@ -206,15 +206,17 @@ final class AccessibilityNotificationObserver {
         guard !subscribers.isEmpty else { return }
 
         latestSequence += 1
-        let event = PendingAccessibilityNotificationEvent(
-            sequence: latestSequence,
-            rawCode: code,
-            timestamp: Date(),
-            notificationData: CapturedAccessibilityNotificationPayload(notificationData).pendingPayload,
-            associatedElement: CapturedAccessibilityNotificationPayload(associatedElement).pendingPayload
-        )
+        let timestamp = Date()
+        let notificationPayload = CapturedAccessibilityNotificationPayload(notificationData).pendingPayload
+        let associatedElementPayload = CapturedAccessibilityNotificationPayload(associatedElement).pendingPayload
         for subscriber in subscribers {
-            subscriber.record(event)
+            subscriber.record(
+                sequence: latestSequence,
+                rawCode: code,
+                timestamp: timestamp,
+                notificationData: notificationPayload,
+                associatedElement: associatedElementPayload
+            )
         }
     }
 

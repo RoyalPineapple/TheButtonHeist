@@ -65,10 +65,10 @@ enum SemanticObservationEventFactory {
             identityScreen: notificationIdentityScreen ?? screen,
             referenceScreen: screen
         )
-        let windows = observation.tripwireSignal.windowStack.windows.enumerated().map { index, window in
+        let windows = observation.semanticSignal.windows.enumerated().map { index, window in
             AccessibilityTrace.WindowContext(
                 index: index,
-                level: Double(window.level),
+                level: window.level,
                 isKeyWindow: window.isKeyWindow
             )
         }

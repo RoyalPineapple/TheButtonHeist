@@ -152,7 +152,7 @@ final class PostActionObservation {
     func captureSemanticState(from observation: SettledSemanticObservation) -> BeforeState {
         captureSemanticState(
             from: observation.screen,
-            tripwireSignal: observation.tripwireSignal,
+            tripwireSignal: stash.tripwire.tripwireSignal(),
             settledObservationSequence: observation.sequence,
             interfaceProjection: observation.scope.stateInterfaceProjection
         )
@@ -161,7 +161,7 @@ final class PostActionObservation {
     func captureSemanticState(from evidence: VisibleSemanticObservationEvidence) -> BeforeState {
         captureSemanticState(
             from: evidence.screen,
-            tripwireSignal: evidence.tripwireSignal,
+            tripwireSignal: stash.tripwire.tripwireSignal(),
             settledObservationSequence: evidence.settledObservationSequence
         )
     }
@@ -172,7 +172,7 @@ final class PostActionObservation {
             : event.observation.screen
         let current = captureSemanticState(
             from: screen,
-            tripwireSignal: event.observation.tripwireSignal,
+            tripwireSignal: stash.tripwire.tripwireSignal(),
             settledObservationSequence: event.sequence,
             interfaceProjection: event.scope.stateInterfaceProjection
         )
@@ -410,7 +410,7 @@ final class PostActionObservation {
             : observation.screen
         return captureSemanticState(
             from: screen,
-            tripwireSignal: observation.tripwireSignal,
+            tripwireSignal: stash.tripwire.tripwireSignal(),
             settledObservationSequence: observation.sequence
         )
     }

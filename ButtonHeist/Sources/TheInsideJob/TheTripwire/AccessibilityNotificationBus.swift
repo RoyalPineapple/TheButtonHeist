@@ -24,7 +24,7 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
     private let maxBufferedEvents = 64
     private let lock = NSLock()
     private var bufferedEvents: [PendingAccessibilityNotificationEvent] = []
-    private var discardedThroughSequenceStorage: UInt64 = 0
+    private var discardedScopedThroughSequenceStorage: UInt64 = 0
     private var latestSequenceStorage: UInt64 = 0
     private var latestScopedScreenChangedSequenceStorage: UInt64 = 0
     private var activeHeistScopes = 0
@@ -153,9 +153,6 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         lock.lock()
         defer { lock.unlock() }
 
-        if activeHeistScopes == 0 && activeActionWindows == 0 {
-            discardBufferedEventsLocked()
-        }
         activeHeistScopes += 1
         return AccessibilityNotificationHeistScope(bus: self)
     }
@@ -187,7 +184,8 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
             rawCode: code,
             timestamp: Date(),
             notificationData: data.pendingPayload,
-            associatedElement: element.pendingPayload
+            associatedElement: element.pendingPayload,
+            provenance: provenanceLocked
         )
         let resumptions = recordLocked(event)
         lock.unlock()
@@ -203,19 +201,44 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         resume(resumptions)
     }
 
+    func record(
+        sequence: UInt64,
+        rawCode: UInt32,
+        timestamp: Date,
+        notificationData: PendingAccessibilityNotificationPayload,
+        associatedElement: PendingAccessibilityNotificationPayload
+    ) {
+        lock.lock()
+        let event = PendingAccessibilityNotificationEvent(
+            sequence: sequence,
+            rawCode: rawCode,
+            timestamp: timestamp,
+            notificationData: notificationData,
+            associatedElement: associatedElement,
+            provenance: provenanceLocked
+        )
+        let resumptions = recordLocked(event)
+        lock.unlock()
+
+        resume(resumptions)
+    }
+
     private func recordLocked(_ event: PendingAccessibilityNotificationEvent) -> NotificationResumptions {
         precondition(
             event.sequence > latestSequenceStorage,
             "Accessibility notification sequence must advance"
         )
         latestSequenceStorage = event.sequence
-        if case .screenChanged = event.kind, hasActiveNotificationScopeLocked {
+        if case .screenChanged = event.kind, event.provenance == .scoped {
             latestScopedScreenChangedSequenceStorage = event.sequence
         }
         bufferedEvents.append(event)
         if bufferedEvents.count > maxBufferedEvents {
             let removed = bufferedEvents.prefix(bufferedEvents.count - maxBufferedEvents)
-            discardedThroughSequenceStorage = max(discardedThroughSequenceStorage, removed.last?.sequence ?? 0)
+            discardedScopedThroughSequenceStorage = max(
+                discardedScopedThroughSequenceStorage,
+                removed.last(where: { $0.provenance == .scoped })?.sequence ?? 0
+            )
             bufferedEvents.removeFirst(removed.count)
         }
         return NotificationResumptions(
@@ -242,9 +265,9 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
     }
 
     private func discardBufferedEventsLocked() {
-        discardedThroughSequenceStorage = max(
-            discardedThroughSequenceStorage,
-            bufferedEvents.last?.sequence ?? 0
+        discardedScopedThroughSequenceStorage = max(
+            discardedScopedThroughSequenceStorage,
+            bufferedEvents.last(where: { $0.provenance == .scoped })?.sequence ?? 0
         )
         bufferedEvents.removeAll()
     }
@@ -364,11 +387,13 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
 
     private func batchLocked(after cursor: AccessibilityNotificationCursor) -> AccessibilityNotificationBatch {
         AccessibilityNotificationBatch(
-            events: bufferedEvents.filter { $0.sequence > cursor.sequence },
+            events: bufferedEvents.filter {
+                $0.sequence > cursor.sequence && $0.provenance == .scoped
+            },
             through: AccessibilityNotificationCursor(sequence: latestSequenceStorage),
             scopedScreenChangedThrough: latestScopedScreenChangedSequenceStorage,
-            gap: cursor.sequence < discardedThroughSequenceStorage
-                ? AccessibilityNotificationGap(droppedThroughSequence: discardedThroughSequenceStorage)
+            gap: cursor.sequence < discardedScopedThroughSequenceStorage
+                ? AccessibilityNotificationGap(droppedThroughSequence: discardedScopedThroughSequenceStorage)
                 : nil
         )
     }
@@ -388,9 +413,10 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
 
         guard activeHeistScopes > 0 else { return }
         activeHeistScopes -= 1
-        if activeHeistScopes == 0 {
-            discardBufferedEventsLocked()
-        }
+    }
+
+    private var provenanceLocked: AccessibilityNotificationProvenance {
+        hasActiveNotificationScopeLocked ? .scoped : .ambient
     }
 }
 
@@ -405,6 +431,11 @@ struct AccessibilityNotificationBatch {
     let through: AccessibilityNotificationCursor
     let scopedScreenChangedThrough: UInt64
     let gap: AccessibilityNotificationGap?
+}
+
+enum AccessibilityNotificationProvenance: Sendable, Equatable {
+    case scoped
+    case ambient
 }
 
 /// Lifetime token for a heist-level notification stream.
@@ -475,19 +506,22 @@ struct PendingAccessibilityNotificationEvent {
     let timestamp: Date
     let notificationData: PendingAccessibilityNotificationPayload
     let associatedElement: PendingAccessibilityNotificationPayload
+    let provenance: AccessibilityNotificationProvenance
 
     init(
         sequence: UInt64,
         kind: AccessibilityNotificationKind,
         timestamp: Date,
         notificationData: PendingAccessibilityNotificationPayload,
-        associatedElement: PendingAccessibilityNotificationPayload
+        associatedElement: PendingAccessibilityNotificationPayload,
+        provenance: AccessibilityNotificationProvenance
     ) {
         self.sequence = sequence
         self.kind = kind
         self.timestamp = timestamp
         self.notificationData = notificationData
         self.associatedElement = associatedElement
+        self.provenance = provenance
     }
 
     init(
@@ -495,14 +529,16 @@ struct PendingAccessibilityNotificationEvent {
         rawCode: UInt32,
         timestamp: Date,
         notificationData: PendingAccessibilityNotificationPayload,
-        associatedElement: PendingAccessibilityNotificationPayload
+        associatedElement: PendingAccessibilityNotificationPayload,
+        provenance: AccessibilityNotificationProvenance
     ) {
         self.init(
             sequence: sequence,
             kind: AccessibilityNotificationKind(rawCode: rawCode),
             timestamp: timestamp,
             notificationData: notificationData,
-            associatedElement: associatedElement
+            associatedElement: associatedElement,
+            provenance: provenance
         )
     }
 

@@ -198,7 +198,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertEqual(batch.gap, AccessibilityNotificationGap(droppedThroughSequence: 2))
     }
 
-    func testEndingHeistScopeReportsDiscardedEventsToOpenActionWindow() throws {
+    func testEndingHeistScopePreservesEventsForOpenActionWindow() throws {
         let bus = AccessibilityNotificationBus()
         let heist = bus.beginHeistScope()
         let action = bus.beginActionWindow()
@@ -209,9 +209,9 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
 
         let batch = try XCTUnwrap(action.capture())
         action.cancel()
-        XCTAssertTrue(batch.events.isEmpty)
+        XCTAssertEqual(batch.events.map(\.kind), [.elementChanged(.layout), .elementChanged(.value)])
         XCTAssertEqual(batch.through.sequence, 2)
-        XCTAssertEqual(batch.gap, AccessibilityNotificationGap(droppedThroughSequence: 2))
+        XCTAssertNil(batch.gap)
     }
 
     func testStringPayloadsFromPublicNotificationsAreCapturedAsAnnouncements() {
@@ -296,7 +296,8 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
             kind: .elementChanged(.value),
             timestamp: Date(timeIntervalSince1970: 0),
             notificationData: .none,
-            associatedElement: .none
+            associatedElement: .none,
+            provenance: .ambient
         )
 
         bus.record(event)
@@ -304,6 +305,22 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
 
         XCTAssertEqual(bus.pendingEvents().map(\.sequence), [7, 8])
         XCTAssertEqual(bus.latestSequence, 8)
+    }
+
+    func testCheckpointIncludesScopedEventsAndExcludesAmbientEvents() {
+        let bus = AccessibilityNotificationBus()
+        bus.record(code: 1000, notificationData: .none, associatedElement: .none)
+        let heist = bus.beginHeistScope()
+        bus.record(code: 1001, notificationData: .none, associatedElement: .none)
+        heist.cancel()
+        bus.record(code: 1000, notificationData: .none, associatedElement: .none)
+
+        let batch = bus.checkpoint(after: .origin)
+
+        XCTAssertEqual(batch.events.map(\.sequence), [2])
+        XCTAssertEqual(batch.events.map(\.provenance), [.scoped])
+        XCTAssertEqual(batch.through.sequence, 3)
+        XCTAssertEqual(bus.announcements().count, 0)
     }
 
     // MARK: - Settled Observation Invalidation

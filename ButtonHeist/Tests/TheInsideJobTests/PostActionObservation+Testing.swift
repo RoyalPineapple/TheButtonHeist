@@ -12,7 +12,7 @@ extension PostActionObservation {
                 tree: stash.interfaceTree,
                 liveCapture: LiveCapture.makeForTests(snapshot: stash.interfaceTree.viewportCapture)
             ),
-            tripwireSignal: latestEvent?.observation.tripwireSignal ?? .empty,
+            tripwireSignal: stash.tripwire.tripwireSignal(),
             settledObservationSequence: latestEvent?.sequence
         )
     }

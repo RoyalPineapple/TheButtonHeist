@@ -1735,6 +1735,26 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
     }
 
+    func testPassiveCommitIgnoresAmbientScreenChangedBetweenHeistScopes() {
+        let notifications = brains.stash.accessibilityNotifications
+        let before = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
+            makeScreen(elements: [("Checkout", .header, "checkout_header")])
+        )
+        let firstScope = notifications.beginHeistScope()
+        firstScope.cancel()
+        notifications.record(code: 1000, notificationData: .none, associatedElement: .none)
+        let secondScope = notifications.beginHeistScope()
+        defer { secondScope.cancel() }
+
+        let after = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
+            makeScreen(elements: [("Checkout", .header, "checkout_header")])
+        )
+
+        XCTAssertEqual(after.generation, before.generation)
+        XCTAssertTrue(after.trace.captures.last?.transition.accessibilityNotifications.isEmpty == true)
+        XCTAssertTrue(after.trace.changeFacts.isEmpty)
+    }
+
     func testElementChangedNotificationSuppressesSnapshotFallback() throws {
         let before = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             makeScreen(elements: [("Menu", .header, "menu_header")])
@@ -2028,7 +2048,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             sequence: 7,
             scope: .discovery,
             screen: screen,
-            tripwireSignal: .empty
+            semanticSignal: .empty
         )
         let event = SettledSemanticObservationEvent(
             sequence: 7,
@@ -2433,7 +2453,8 @@ final class TheBrainsPipelineTests: XCTestCase {
                 kind: kind,
                 timestamp: Date(timeIntervalSince1970: 0),
                 notificationData: .none,
-                associatedElement: .none
+                associatedElement: .none,
+                provenance: .scoped
             )],
             through: AccessibilityNotificationCursor(sequence: 1),
             scopedScreenChangedThrough: kind == .screenChanged ? 1 : 0,
@@ -2497,7 +2518,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             sequence: sequence,
             scope: scope,
             screen: screen,
-            tripwireSignal: .empty
+            semanticSignal: .empty
         )
         let state = brains.postActionObservation.captureSemanticState(from: settled)
         let trace = AccessibilityTrace(capture: state.capture)
@@ -2525,7 +2546,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             sequence: sequence,
             scope: .discovery,
             screen: state.screen,
-            tripwireSignal: .empty
+            semanticSignal: .empty
         )
         let event = SettledSemanticObservationEvent(
             sequence: sequence,

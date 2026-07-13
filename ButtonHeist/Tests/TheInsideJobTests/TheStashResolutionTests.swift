@@ -391,6 +391,14 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertNil(settledScreen.liveCapture.object(for: "email"))
     }
 
+    func testSettledSemanticObservationEventContainsNoLiveTripwireIdentity() {
+        let screen = InterfaceObservation.makeForTests(elements: [(element(label: "Home"), "home")])
+
+        let event = bagman.semanticObservationStream.commitVisibleObservationForTesting(screen)
+
+        XCTAssertFalse(containsLiveTripwireIdentity(event))
+    }
+
     func testCleanVisibleSettleCommitUpdatesSettledSemanticTruth() {
         let screen = InterfaceObservation.makeForTests(elements: [(element(label: "Settled"), "settled")])
 
@@ -602,7 +610,8 @@ final class TheStashResolutionTests: XCTestCase {
             kind: .elementChanged(.layout),
             timestamp: Date(timeIntervalSince1970: 0),
             notificationData: .object(identity),
-            associatedElement: .none
+            associatedElement: .none,
+            provenance: .scoped
         )
 
         let evidence = bagman.resolveAccessibilityNotificationEvidence([event], in: screen)
@@ -632,7 +641,8 @@ final class TheStashResolutionTests: XCTestCase {
                 className: "NSObject",
                 summary: nil
             )),
-            associatedElement: .none
+            associatedElement: .none,
+            provenance: .scoped
         )
 
         let evidence = bagman.resolveAccessibilityNotificationEvidence(
@@ -675,7 +685,8 @@ final class TheStashResolutionTests: XCTestCase {
                 className: "NSObject",
                 summary: nil
             )),
-            associatedElement: .none
+            associatedElement: .none,
+            provenance: .scoped
         )
 
         let evidence = bagman.resolveAccessibilityNotificationEvidence(
@@ -751,10 +762,13 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(event.observation.screen.liveCapture.firstResponderHeistId, "email")
     }
 
-    func testFailedSettleClearsPendingAccessibilityNotifications() async {
-        let screen = InterfaceObservation.makeForTests(elements: [(element(label: "Unstable"), "unstable")])
+    func testFailedSettlePreservesScreenChangedForNextIdenticalCommit() async {
+        let screen = InterfaceObservation.makeForTests(elements: [(element(label: "Stable"), "stable")])
+        let firstEvent = bagman.semanticObservationStream.commitVisibleObservationForTesting(screen)
+        let firstHeist = bagman.accessibilityNotifications.beginHeistScope()
+        let action = bagman.accessibilityNotifications.beginActionWindow()
         bagman.accessibilityNotifications.record(
-            code: 1001,
+            code: 1000,
             notificationData: .none,
             associatedElement: .none
         )
@@ -767,10 +781,55 @@ final class TheStashResolutionTests: XCTestCase {
 
         _ = await bagman.semanticObservationStream.settlePostActionObservation(
             baselineTripwireSignal: bagman.tripwire.tripwireSignal(),
-            settleOutcome: outcome
+            settleOutcome: outcome,
+            notificationWindow: action
+        )
+        firstHeist.cancel()
+        bagman.accessibilityNotifications.record(
+            code: 1000,
+            notificationData: .none,
+            associatedElement: .none
         )
 
-        XCTAssertEqual(bagman.accessibilityNotifications.pendingEvents().count, 0)
+        XCTAssertEqual(
+            bagman.accessibilityNotifications.pendingEvents().map(\.provenance),
+            [.scoped, .ambient]
+        )
+
+        let secondHeist = bagman.accessibilityNotifications.beginHeistScope()
+        defer { secondHeist.cancel() }
+        let secondEvent = bagman.semanticObservationStream.commitVisibleObservationForTesting(screen)
+
+        XCTAssertNotEqual(secondEvent.generation, firstEvent.generation)
+        XCTAssertEqual(
+            secondEvent.trace.captures.last?.transition.accessibilityNotifications.map(\.kind),
+            [.screenChanged]
+        )
+        XCTAssertEqual(
+            secondEvent.trace.captures.last?.transition.accessibilityNotifications.map(\.sequence),
+            [1]
+        )
+        XCTAssertEqual(secondEvent.trace.changeFacts.map(\.kind), [.screenChanged])
+    }
+
+    func testAmbientScreenChangedBetweenHeistScopesDoesNotStartGeneration() {
+        let screen = InterfaceObservation.makeForTests(elements: [(element(label: "Stable"), "stable")])
+        let firstEvent = bagman.semanticObservationStream.commitVisibleObservationForTesting(screen)
+        let firstHeist = bagman.accessibilityNotifications.beginHeistScope()
+        firstHeist.cancel()
+        bagman.accessibilityNotifications.record(
+            code: 1000,
+            notificationData: .none,
+            associatedElement: .none
+        )
+        let secondHeist = bagman.accessibilityNotifications.beginHeistScope()
+        defer { secondHeist.cancel() }
+
+        let secondEvent = bagman.semanticObservationStream.commitVisibleObservationForTesting(screen)
+
+        XCTAssertEqual(secondEvent.generation, firstEvent.generation)
+        XCTAssertTrue(secondEvent.trace.captures.last?.transition.accessibilityNotifications.isEmpty == true)
+        XCTAssertTrue(secondEvent.trace.changeFacts.isEmpty)
     }
 
     func testCleanPostActionSettleRequiresActionWindowToClaimAccessibilityNotifications() async {
@@ -3046,6 +3105,15 @@ private func startedCycle(
         fatalError("Expected semantic observation cycle to start")
     }
     return cycle
+}
+
+private func containsLiveTripwireIdentity(_ value: Any) -> Bool {
+    if value is ObjectIdentifier || value is TheTripwire.TripwireSignal {
+        return true
+    }
+    return Mirror(reflecting: value).children.contains {
+        containsLiveTripwireIdentity($0.value)
+    }
 }
 
 #endif

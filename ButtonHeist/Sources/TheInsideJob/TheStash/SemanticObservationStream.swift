@@ -8,7 +8,7 @@ import TheScore
 struct SettledSemanticObservation: Sendable {
     let sequence: SettledObservationSequence
     let scope: SemanticObservationScope
-    let tripwireSignal: TheTripwire.TripwireSignal
+    let semanticSignal: TheTripwire.SemanticSignal
     private let tree: InterfaceTree
 
     var screen: InterfaceObservation {
@@ -23,11 +23,11 @@ struct SettledSemanticObservation: Sendable {
         sequence: SettledObservationSequence,
         scope: SemanticObservationScope,
         screen: InterfaceObservation,
-        tripwireSignal: TheTripwire.TripwireSignal
+        semanticSignal: TheTripwire.SemanticSignal
     ) {
         self.sequence = sequence
         self.scope = scope
-        self.tripwireSignal = tripwireSignal
+        self.semanticSignal = semanticSignal
         self.tree = screen.tree
     }
 }
@@ -99,7 +99,6 @@ struct SettledSemanticObservationEvent: Sendable {
 
 struct VisibleSemanticObservationEvidence {
     let screen: InterfaceObservation
-    let tripwireSignal: TheTripwire.TripwireSignal
     let settledObservationSequence: SettledObservationSequence?
     let settleOutcome: SettleOutcome
 }
@@ -144,11 +143,6 @@ struct PostActionSettleObservation {
 
     let settle: SettleSession.Outcome
     let result: Result
-}
-
-private enum FailedSettleAccessibilityNotificationPolicy {
-    case clearPendingEvents
-    case preservePendingEvents
 }
 
 private struct SemanticObservationFulfillmentState {
@@ -219,7 +213,7 @@ private struct SemanticObservationFulfillmentState {
         generation: ObservationGeneration,
         notificationBatch: AccessibilityNotificationBatch,
         screen: InterfaceObservation,
-        tripwireSignal: TheTripwire.TripwireSignal,
+        semanticSignal: TheTripwire.SemanticSignal,
         stash: TheStash,
         notificationIdentityScreen: InterfaceObservation? = nil
     ) -> Publication {
@@ -231,7 +225,7 @@ private struct SemanticObservationFulfillmentState {
             sequence: sequence,
             scope: sourceScope,
             screen: screen.semanticObservationProjection(for: sourceScope),
-            tripwireSignal: tripwireSignal
+            semanticSignal: semanticSignal
         )
         let startsNewGeneration = sourceClassification.isScreenReplacement
         let eventGeneration = startsNewGeneration ? generation.advanced() : generation
@@ -246,7 +240,7 @@ private struct SemanticObservationFulfillmentState {
                     sequence: sequence,
                     scope: fulfilledScope,
                     screen: screen.semanticObservationProjection(for: fulfilledScope),
-                    tripwireSignal: tripwireSignal
+                    semanticSignal: semanticSignal
                 )
             let classification = fulfilledScope == sourceScope
                 ? sourceClassification
@@ -553,7 +547,7 @@ final class SemanticObservationStream {
             demandState: activeObservationDemandState,
             stash: stash,
             tripwire: tripwire,
-            baselineTripwireSignal: latestEvent?.observation.tripwireSignal ?? tripwire.tripwireSignal(),
+            baselineTripwireSignal: tripwire.tripwireSignal(),
             timeoutMs: Self.timeoutMilliseconds(from: timeout)
         )
         if case .cancelled = outcome.outcome {
@@ -575,7 +569,6 @@ final class SemanticObservationStream {
             let event = commitSettledVisibleObservation(proof)
             return VisibleSemanticObservationEvidence(
                 screen: event.observation.screen,
-                tripwireSignal: event.observation.tripwireSignal,
                 settledObservationSequence: event.sequence,
                 settleOutcome: outcome.outcome
             )
@@ -816,7 +809,7 @@ final class SemanticObservationStream {
             generation: observationGeneration,
             notificationBatch: notificationBatch,
             screen: settledScreen,
-            tripwireSignal: tripwire.tripwireSignal(),
+            semanticSignal: tripwire.tripwireSignal().semanticValue,
             stash: stash,
             notificationIdentityScreen: notificationIdentityScreen
         )
@@ -1017,7 +1010,7 @@ final class SemanticObservationStream {
         // loop below is the correctness signal for accessibility actions.
         let layerGateWasClear = tripwire.latestReading?.isSettled ?? tripwire.allClear()
 
-        let baselineSignal = latestEvent?.observation.tripwireSignal ?? tripwire.tripwireSignal()
+        let baselineSignal = tripwire.tripwireSignal()
         let settleSession = SettleSession.live(stash: stash, tripwire: tripwire, timeoutMs: 1_000)
         let settle = await settleSession.run(
             start: CFAbsoluteTimeGetCurrent(),
@@ -1044,7 +1037,7 @@ final class SemanticObservationStream {
     }
 
     private func observeVisibleSemanticStateAtActiveCadence(stash: TheStash) async -> Bool {
-        let baselineSignal = latestEvent?.observation.tripwireSignal ?? tripwire.tripwireSignal()
+        let baselineSignal = tripwire.tripwireSignal()
         let settle = await SemanticObservationSettleCadence.settleVisibleObservationAtActiveCadence(
             stash: stash,
             tripwire: tripwire,
@@ -1072,13 +1065,7 @@ final class SemanticObservationStream {
         _ tree: InterfaceTree?,
         stash: TheStash
     ) {
-        recordFailedSettleDiagnosticEvidence(
-            tree,
-            stash: stash,
-            pendingAccessibilityNotificationPolicy: stash.accessibilityNotifications.hasActiveNotificationScope
-                ? .preservePendingEvents
-                : .clearPendingEvents
-        )
+        recordFailedSettleDiagnosticEvidence(tree, stash: stash)
     }
 
     private func recordPostActionFailedSettleDiagnosticEvidence(
@@ -1089,26 +1076,13 @@ final class SemanticObservationStream {
         if let notificationWindow {
             notificationWindow.cancel()
         }
-        recordFailedSettleDiagnosticEvidence(
-            tree,
-            stash: stash,
-            pendingAccessibilityNotificationPolicy: stash.accessibilityNotifications.hasActiveNotificationScope
-                ? .preservePendingEvents
-                : .clearPendingEvents
-        )
+        recordFailedSettleDiagnosticEvidence(tree, stash: stash)
     }
 
     private func recordFailedSettleDiagnosticEvidence(
         _ tree: InterfaceTree?,
-        stash: TheStash,
-        pendingAccessibilityNotificationPolicy: FailedSettleAccessibilityNotificationPolicy
+        stash: TheStash
     ) {
-        switch pendingAccessibilityNotificationPolicy {
-        case .clearPendingEvents:
-            stash.accessibilityNotifications.clearPendingEvents()
-        case .preservePendingEvents:
-            break
-        }
         let screen = tree.map { tree in
             do {
                 return try InterfaceObservation.build(tree: tree)

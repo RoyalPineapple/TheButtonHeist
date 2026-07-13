@@ -26,7 +26,8 @@ final class AccessibilityNotificationIdentityTests: XCTestCase {
             rawCode: 1005,
             timestamp: Date(timeIntervalSince1970: 1),
             notificationData: .string("Updated"),
-            associatedElement: .none
+            associatedElement: .none,
+            provenance: .scoped
         )
 
         let announcement = try XCTUnwrap(event.capturedAnnouncement)
@@ -40,7 +41,8 @@ final class AccessibilityNotificationIdentityTests: XCTestCase {
             rawCode: rawCode,
             timestamp: Date(timeIntervalSince1970: 1),
             notificationData: .none,
-            associatedElement: .none
+            associatedElement: .none,
+            provenance: .ambient
         )
     }
 }

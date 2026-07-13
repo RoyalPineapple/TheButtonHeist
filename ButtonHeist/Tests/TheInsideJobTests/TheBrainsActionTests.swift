@@ -4850,7 +4850,7 @@ private final class ScriptedHeistObservationSource {
             sequence: sequence,
             scope: scope,
             screen: .empty,
-            tripwireSignal: .empty
+            semanticSignal: .empty
         )
         let trace = if let previousCapture {
             AccessibilityTrace(captures: [previousCapture, state.capture])

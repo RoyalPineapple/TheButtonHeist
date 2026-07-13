@@ -4,6 +4,17 @@ import UIKit
 
 extension TheTripwire {
 
+    struct SemanticSignal: Sendable, Equatable {
+        static let empty = SemanticSignal(windows: [])
+
+        let windows: [SemanticWindowSignal]
+    }
+
+    struct SemanticWindowSignal: Sendable, Equatable {
+        let level: Double
+        let isKeyWindow: Bool
+    }
+
     /// Cheap UIKit-side identity used to decide whether to re-check the
     /// accessibility tree. A changed Tripwire signal means "parse and check";
     /// it does not guarantee the parsed interface changed.
@@ -43,6 +54,15 @@ extension TheTripwire {
             topmostVC != previous.topmostVC
                 || navigation != previous.navigation
                 || windowStack != previous.windowStack
+        }
+
+        var semanticValue: SemanticSignal {
+            SemanticSignal(windows: windowStack.windows.map {
+                SemanticWindowSignal(
+                    level: Double($0.level),
+                    isKeyWindow: $0.isKeyWindow
+                )
+            })
         }
     }
 
