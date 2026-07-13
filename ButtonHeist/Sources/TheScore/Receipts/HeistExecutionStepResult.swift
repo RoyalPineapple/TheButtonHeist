@@ -1,4 +1,5 @@
 import Foundation
+import ThePlans
 
 public enum HeistExecutionStepKind: String, Codable, Sendable, Equatable {
     case action
@@ -389,10 +390,86 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         outcome: HeistExecutionStepOutcome,
         codingPath: [CodingKey]
     ) throws {
-        switch outcome {
-        case .passed(let passed):
+        switch (kind, outcome) {
+        case (.action, .passed(let passed)):
+            try validateActionEvidence(passed.evidence, receiptOutcome: .passed, codingPath: codingPath)
+        case (.action, .failed(let failed)):
+            try validateActionEvidence(failed.evidence, receiptOutcome: .failed, codingPath: codingPath)
+        case (.action, .childAborted(let aborted)):
+            try validateActionEvidence(aborted.evidence, receiptOutcome: .childAborted, codingPath: codingPath)
+        case (.warn, .passed(let passed)):
+            try validateEvidence(passed.evidence, matches: kind, codingPath: codingPath)
+            guard case .warning? = passed.evidence else {
+                throw receiptError(
+                    "passed warn heist execution step requires warning evidence",
+                    codingPath: evidenceCodingPath(codingPath)
+                )
+            }
+        case (.warn, .failed), (.warn, .childAborted):
+            throw receiptError(
+                "warn heist execution step must use passed or skipped outcome",
+                codingPath: codingPath
+            )
+        case (.fail, .failed(let failed)):
+            try validateEvidence(failed.evidence, matches: kind, codingPath: codingPath)
+        case (.fail, .passed), (.fail, .childAborted):
+            throw receiptError(
+                "fail heist execution step must use failed or skipped outcome",
+                codingPath: codingPath
+            )
+        case (.wait, .passed(let passed)),
+             (.conditional, .passed(let passed)),
+             (.forEachElement, .passed(let passed)),
+             (.forEachString, .passed(let passed)),
+             (.forEachIteration, .passed(let passed)),
+             (.repeatUntil, .passed(let passed)),
+             (.repeatUntilIteration, .passed(let passed)),
+             (.heist, .passed(let passed)),
+             (.invoke, .passed(let passed)):
             try validateEvidence(passed.evidence, matches: kind, codingPath: codingPath)
             try validatePassedEvidence(passed.evidence, kind: kind, codingPath: codingPath)
+        case (.wait, .failed(let failed)),
+             (.conditional, .failed(let failed)),
+             (.forEachElement, .failed(let failed)),
+             (.forEachString, .failed(let failed)),
+             (.forEachIteration, .failed(let failed)),
+             (.repeatUntil, .failed(let failed)),
+             (.repeatUntilIteration, .failed(let failed)),
+             (.heist, .failed(let failed)),
+             (.invoke, .failed(let failed)):
+            try validateEvidence(failed.evidence, matches: kind, codingPath: codingPath)
+        case (.wait, .childAborted(let aborted)),
+             (.conditional, .childAborted(let aborted)),
+             (.forEachElement, .childAborted(let aborted)),
+             (.forEachString, .childAborted(let aborted)),
+             (.forEachIteration, .childAborted(let aborted)),
+             (.repeatUntil, .childAborted(let aborted)),
+             (.repeatUntilIteration, .childAborted(let aborted)),
+             (.heist, .childAborted(let aborted)),
+             (.invoke, .childAborted(let aborted)):
+            try validateEvidence(aborted.evidence, matches: kind, codingPath: codingPath)
+        case (.action, .skipped(let skipped)),
+             (.wait, .skipped(let skipped)),
+             (.conditional, .skipped(let skipped)),
+             (.forEachElement, .skipped(let skipped)),
+             (.forEachString, .skipped(let skipped)),
+             (.forEachIteration, .skipped(let skipped)),
+             (.repeatUntil, .skipped(let skipped)),
+             (.repeatUntilIteration, .skipped(let skipped)),
+             (.warn, .skipped(let skipped)),
+             (.fail, .skipped(let skipped)),
+             (.heist, .skipped(let skipped)),
+             (.invoke, .skipped(let skipped)):
+            guard skipped.children.allSatisfy({ $0.status == .skipped }) else {
+                throw receiptError(
+                    "skipped heist execution step children must also be skipped",
+                    codingPath: codingPath + [HeistExecutionStepOutcome.CodingKeys.children]
+                )
+            }
+        }
+
+        switch outcome {
+        case .passed(let passed):
             if let failedChildPath = firstFailedPath(in: passed.children) {
                 throw receiptError(
                     "passed heist execution step must not contain failed child \(failedChildPath)",
@@ -400,26 +477,19 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
                 )
             }
         case .failed(let failed):
-            try validateEvidence(failed.evidence, matches: kind, codingPath: codingPath)
             try validateChildAbortPath(
                 nil,
                 failedChildPath: firstFailedPath(in: failed.children),
                 codingPath: codingPath
             )
         case .childAborted(let aborted):
-            try validateEvidence(aborted.evidence, matches: kind, codingPath: codingPath)
             try validateChildAbortPath(
                 aborted.abortedAtChildPath,
                 failedChildPath: firstFailedPath(in: aborted.children),
                 codingPath: codingPath
             )
-        case .skipped(let skipped):
-            guard skipped.children.allSatisfy({ $0.status == .skipped }) else {
-                throw receiptError(
-                    "skipped heist execution step children must also be skipped",
-                    codingPath: codingPath + [HeistExecutionStepOutcome.CodingKeys.children]
-                )
-            }
+        case .skipped:
+            break
         }
     }
 
@@ -501,8 +571,6 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         codingPath: [CodingKey]
     ) throws {
         switch (kind, evidence) {
-        case (.action, .action(let evidence)):
-            try validatePassedActionEvidence(evidence, codingPath: codingPath)
         case (.wait, .wait(let evidence)):
             try validatePassedWaitEvidence(evidence, codingPath: codingPath)
         case (.forEachElement, .forEachElement(let evidence)),
@@ -553,22 +621,102 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         }
     }
 
-    private static func validatePassedActionEvidence(
-        _ evidence: HeistActionEvidence,
+    private enum ActionReceiptOutcome {
+        case passed
+        case failed
+        case childAborted
+
+        var requiresSuccessfulEvidence: Bool {
+            switch self {
+            case .passed, .childAborted:
+                return true
+            case .failed:
+                return false
+            }
+        }
+
+        var description: String {
+            switch self {
+            case .passed:
+                return "passed"
+            case .failed:
+                return "failed"
+            case .childAborted:
+                return "child_aborted"
+            }
+        }
+    }
+
+    private static func validateActionEvidence(
+        _ stepEvidence: HeistStepEvidence?,
+        receiptOutcome: ActionReceiptOutcome,
         codingPath: [CodingKey]
     ) throws {
-        if evidence.dispatchResult?.outcome.isSuccess == false {
+        try validateEvidence(stepEvidence, matches: .action, codingPath: codingPath)
+        guard case .action(let evidence)? = stepEvidence else {
             throw receiptError(
-                "passed action heist execution step must not include failed action evidence",
-                codingPath: codingPath + [HeistExecutionStepOutcome.CodingKeys.evidence]
+                "\(receiptOutcome.description) action heist execution step requires action evidence",
+                codingPath: evidenceCodingPath(codingPath)
             )
         }
-        if evidence.expectationResult?.outcome.isSuccess == false || evidence.checkedExpectation?.met == false {
+
+        let evidenceSucceeded: Bool
+        switch evidence {
+        case .commandResolutionFailure:
+            evidenceSucceeded = false
+        case .dispatch(let command, let dispatchResult):
+            try validate(command: command, matches: dispatchResult, codingPath: codingPath)
+            evidenceSucceeded = dispatchResult.outcome.isSuccess
+        case .commandlessDispatch(let dispatchResult):
+            evidenceSucceeded = dispatchResult.outcome.isSuccess
+        case .expectation(let command, let dispatchResult, let expectationResult, let expectation):
+            try validate(command: command, matches: dispatchResult, codingPath: codingPath)
+            guard dispatchResult.outcome.isSuccess else {
+                throw receiptError(
+                    "action expectation evidence requires successful dispatch result",
+                    codingPath: evidenceCodingPath(codingPath)
+                )
+            }
+            guard expectationResult.method == .wait else {
+                throw receiptError(
+                    "action expectation result method must be wait, got \(expectationResult.method.rawValue)",
+                    codingPath: evidenceCodingPath(codingPath)
+                )
+            }
+            guard expectationResult.outcome.isSuccess == expectation.met else {
+                throw receiptError(
+                    "action expectation result success must match expectation met=\(expectation.met)",
+                    codingPath: evidenceCodingPath(codingPath)
+                )
+            }
+            evidenceSucceeded = expectation.met
+        }
+
+        guard evidenceSucceeded == receiptOutcome.requiresSuccessfulEvidence else {
             throw receiptError(
-                "passed action heist execution step must not include failed expectation evidence",
-                codingPath: codingPath + [HeistExecutionStepOutcome.CodingKeys.evidence]
+                "\(receiptOutcome.description) action heist execution step requires "
+                    + "\(receiptOutcome.requiresSuccessfulEvidence ? "successful" : "failed") action evidence",
+                codingPath: evidenceCodingPath(codingPath)
             )
         }
+    }
+
+    private static func validate(
+        command: HeistActionCommand,
+        matches result: ActionResult,
+        codingPath: [CodingKey]
+    ) throws {
+        guard command.actionResultMethod == result.method else {
+            throw receiptError(
+                "action command \(command.wireType.rawValue) requires \(command.actionResultMethod.rawValue) "
+                    + "result method, got \(result.method.rawValue)",
+                codingPath: evidenceCodingPath(codingPath)
+            )
+        }
+    }
+
+    private static func evidenceCodingPath(_ codingPath: [CodingKey]) -> [CodingKey] {
+        codingPath + [HeistExecutionStepOutcome.CodingKeys.evidence]
     }
 
     private static func validatePassedRepeatUntilEvidence(

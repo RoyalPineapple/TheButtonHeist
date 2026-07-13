@@ -150,6 +150,32 @@ public enum HeistActionEvidence: Codable, Sendable, Equatable {
     }
 }
 
+extension HeistActionCommand {
+    var actionResultMethod: ActionMethod {
+        switch self {
+        case .activate: .activate
+        case .increment: .increment
+        case .decrement: .decrement
+        case .customAction: .customAction
+        case .rotor: .rotor
+        case .dismiss: .dismiss
+        case .magicTap: .magicTap
+        case .typeText: .typeText
+        case .mechanicalTap: .syntheticTap
+        case .mechanicalLongPress: .syntheticLongPress
+        case .mechanicalSwipe: .syntheticSwipe
+        case .mechanicalDrag: .syntheticDrag
+        case .viewportScroll: .scroll
+        case .viewportScrollToVisible: .scrollToVisible
+        case .viewportScrollToEdge: .scrollToEdge
+        case .editAction: .editAction
+        case .setPasteboard: .setPasteboard
+        case .takeScreenshot: .takeScreenshot
+        case .dismissKeyboard: .resignFirstResponder
+        }
+    }
+}
+
 public enum HeistActionWarning: Codable, Sendable, Equatable {
     case activationWeakAffordance(evidence: String?)
     case textEntryWeakAffordance(evidence: String?)

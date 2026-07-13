@@ -584,7 +584,12 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     evidence: .expectation(
                         command: .activate(.predicate(ElementPredicateTemplate(label: "Pay"))),
                         dispatchResult: ActionResult.success(method: .activate, evidence: .none),
-                        expectationResult: ActionResult.success(method: .wait, message: "screen did not change", evidence: .none),
+                        expectationResult: ActionResult.failure(
+                            method: .wait,
+                            errorKind: .timeout,
+                            message: "screen did not change",
+                            evidence: .none
+                        ),
                         expectation: ExpectationResult(
                             met: false,
                             predicate: predicate,
@@ -604,7 +609,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(node.reportFacts.status, .failed)
         XCTAssertEqual(node.reportFacts.message, "screen did not change")
         XCTAssertEqual(node.reportFacts.failureMessage, "screen did not change")
-        XCTAssertEqual(node.reportFacts.results.actionResult?.outcome.isSuccess, true)
+        XCTAssertEqual(node.reportFacts.results.actionResult?.outcome.isSuccess, false)
         guard case .failed(let outcome) = node.outcome else {
             return XCTFail("Expected failed typed outcome")
         }
@@ -939,7 +944,12 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     evidence: .expectation(
                         command: .activate(.predicate(ElementPredicateTemplate(label: "Pay"))),
                         dispatchResult: ActionResult.success(method: .activate, evidence: .none),
-                        expectationResult: ActionResult.success(method: .wait, message: "elementsChanged", evidence: .none),
+                        expectationResult: ActionResult.failure(
+                            method: .wait,
+                            errorKind: .timeout,
+                            message: "elementsChanged",
+                            evidence: .none
+                        ),
                         expectation: ExpectationResult(
                             met: false,
                             predicate: predicate,
@@ -969,7 +979,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertTrue(message.contains("kind: request"), message)
         XCTAssertTrue(message.contains("phase: request"), message)
         XCTAssertTrue(message.contains("retryable: false"), message)
-        XCTAssertNil(errorKind)
+        XCTAssertEqual(errorKind, .action(.timeout))
     }
 
     func testJUnitFailureIncludesFailureScreenshotInterfaceDump() async {
