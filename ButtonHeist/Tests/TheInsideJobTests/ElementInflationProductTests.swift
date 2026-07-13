@@ -464,7 +464,7 @@ final class ElementInflationProductTests: XCTestCase {
         )
 
         let result = await brains.executeRuntimeAction(.activate(
-            literalTarget(ElementPredicate(identifier: fixture.identifier, traits: [.button]))
+            literalTarget(ElementPredicate(identifier: .exact(fixture.identifier), traits: [.button]))
         ))
 
         XCTAssertTrue(
