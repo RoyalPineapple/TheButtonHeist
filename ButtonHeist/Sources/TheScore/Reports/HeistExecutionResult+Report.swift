@@ -31,16 +31,10 @@ package struct HeistExecutionEvidenceRollup: Sendable, Equatable {
     ) {
         let folds = steps.map(HeistExecutionEvidenceFold.init(step:))
         let firstFailedStep = folds.lazy.compactMap(\.firstFailedStep).first
-        let events = Array(folds
-            .lazy
-            .flatMap(\.events)
-            .filter { event in
-                guard case .firstFailure(let step) = event else { return true }
-                guard let firstFailedStep else { return false }
-                return step == firstFailedStep
-            })
+        let orderedFacts = folds.flatMap(\.orderedFacts)
+        let events = orderedFacts.flatMap { $0.events(firstFailedStep: firstFailedStep) }
         let rootNodes = folds.map(\.node)
-        let nodes = events.compactMap(\.visitedNode)
+        let nodes = orderedFacts.map(\.node)
         let finalScreenId = events.compactMap(\.finalScreenId).last
 
         self.rootNodes = rootNodes
@@ -48,7 +42,7 @@ package struct HeistExecutionEvidenceRollup: Sendable, Equatable {
         self.events = events
         summary = HeistExecutionEvidenceSummary(
             executedTopLevelStepCount: rootNodes.count {
-                $0.isExecuted && HeistExecutionReceiptPlacement(path: $0.step.path) != .failureHookAction
+                $0.isExecuted && HeistExecutionReceiptPlacement(step: $0.step) != .failureHookAction
             },
             executedNodeCount: nodes.count(where: \.isExecuted),
             outputReceiptNodeCount: nodes.count,
@@ -63,15 +57,15 @@ package struct HeistExecutionEvidenceRollup: Sendable, Equatable {
             reportedResults: events.compactMap(\.reportedActionResult),
             traceResultsInExecutionOrder: events.compactMap(\.traceResult)
         )
-        warnings = nodes.compactMap(\.step.warningEvidence)
-        metrics = HeistExecutionMetricProjection(durationMs: durationMs, nodes: nodes)
+        warnings = orderedFacts.compactMap(\.warning)
+        metrics = HeistExecutionMetricProjection(durationMs: durationMs, orderedFacts: orderedFacts)
         self.firstFailedStep = firstFailedStep
     }
 }
 
 private struct HeistExecutionEvidenceFold {
     let node: HeistExecutionEvidenceNode
-    let events: [HeistExecutionEvidenceEvent]
+    let orderedFacts: [HeistExecutionNodeFacts]
     let firstFailedStep: HeistExecutionStepResult?
 
     init(step: HeistExecutionStepResult) {
@@ -85,31 +79,40 @@ private struct HeistExecutionEvidenceFold {
         )
 
         self.node = node
-        events = Self.events(for: node, firstFailedStep: firstFailedStep)
-            + childFolds.flatMap(\.events)
+        orderedFacts = [HeistExecutionNodeFacts(node: node)]
+            + childFolds.flatMap(\.orderedFacts)
         self.firstFailedStep = firstFailedStep
     }
+}
 
-    private static func events(
-        for node: HeistExecutionEvidenceNode,
-        firstFailedStep: HeistExecutionStepResult?
-    ) -> [HeistExecutionEvidenceEvent] {
+fileprivate struct HeistExecutionNodeFacts {
+    let node: HeistExecutionEvidenceNode
+    let evidenceEvents: [HeistExecutionEvidenceEvent]
+    let warning: HeistExecutionWarning?
+    let metrics: HeistExecutionMetricProjection
+
+    init(node: HeistExecutionEvidenceNode) {
         let path = node.step.path
         let results = node.reportFacts.results
         let traceResult = results.traceEvidenceResult
         let expectation = results.expectation
-        return [
+        self.node = node
+        evidenceEvents = [
             .nodeVisited(node),
             results.dispatchedActionResult.map { .dispatchedActionResult(path: path, result: $0) },
-            node.step.kind == .action
-                ? results.actionResult.map { .reportedActionResult(path: path, result: $0) }
-                : nil,
+            results.reportedActionResult.map { .reportedActionResult(path: path, result: $0) },
             traceResult.map { .traceResult(path: path, result: $0) },
             traceResult?.accessibilityTrace?.endpointScreenId.map { .finalScreen(path: path, screenId: $0) },
             expectation.map { .expectationChecked(path: path, result: $0) },
             expectation?.met == true ? expectation.map { .expectationMet(path: path, result: $0) } : nil,
-            firstFailedStep?.path == path ? .firstFailure(node.step) : nil,
         ].compactMap { $0 }
+        warning = node.reportFacts.warning
+        metrics = HeistExecutionMetricProjection(node: node)
+    }
+
+    func events(firstFailedStep: HeistExecutionStepResult?) -> [HeistExecutionEvidenceEvent] {
+        guard let firstFailedStep, node.step == firstFailedStep else { return evidenceEvents }
+        return evidenceEvents + [.firstFailure(node.step)]
     }
 }
 
@@ -117,27 +120,21 @@ private enum HeistExecutionReceiptPlacement: Equatable {
     case ordinary
     case failureHookAction
 
-    init(path: String) {
+    init(step: HeistExecutionStepResult) {
         let bodyPrefix = "$.body["
-        let marker = ".failure.actions["
-        guard path.hasPrefix(bodyPrefix),
-              path.last == "]",
-              let markerRange = path.range(of: marker, options: .backwards),
-              let bodyClose = path[path.index(path.startIndex, offsetBy: bodyPrefix.count)...].firstIndex(of: "]"),
-              bodyClose < markerRange.lowerBound
+        let failureHookSuffix = ".failure.actions[0]"
+        guard step.kind == .action,
+              step.path.hasPrefix(bodyPrefix),
+              step.path.hasSuffix(failureHookSuffix),
+              let bodyClose = step.path.dropFirst(bodyPrefix.count).firstIndex(of: "]")
         else {
             self = .ordinary
             return
         }
-        let bodyOrdinal = path[
-            path.index(path.startIndex, offsetBy: bodyPrefix.count)..<bodyClose
+        let bodyOrdinal = step.path[
+            step.path.index(step.path.startIndex, offsetBy: bodyPrefix.count)..<bodyClose
         ]
-        let ordinal = path[markerRange.upperBound..<path.index(before: path.endIndex)]
-        let hasValidBodyOrdinal = !bodyOrdinal.isEmpty
-            && bodyOrdinal.utf8.allSatisfy { (48...57).contains($0) }
-        self = hasValidBodyOrdinal
-            && !ordinal.isEmpty
-            && ordinal.utf8.allSatisfy { (48...57).contains($0) }
+        self = !bodyOrdinal.isEmpty && bodyOrdinal.utf8.allSatisfy { (48...57).contains($0) }
             ? .failureHookAction
             : .ordinary
     }
@@ -146,10 +143,7 @@ private enum HeistExecutionReceiptPlacement: Equatable {
 package struct HeistExecutionEvidenceNode: Sendable, Equatable {
     package let step: HeistExecutionStepResult
     package let children: [HeistExecutionEvidenceNode]
-
-    package var reportFacts: HeistExecutionStepReportFacts {
-        step.reportFacts
-    }
+    package let reportFacts: HeistExecutionStepReportFacts
 
     package init(
         step: HeistExecutionStepResult,
@@ -157,6 +151,7 @@ package struct HeistExecutionEvidenceNode: Sendable, Equatable {
     ) {
         self.step = step
         self.children = children
+        reportFacts = step.reportFacts
     }
 
     package var isExecuted: Bool {
@@ -176,11 +171,6 @@ package enum HeistExecutionEvidenceEvent: Sendable, Equatable {
 }
 
 private extension HeistExecutionEvidenceEvent {
-    var visitedNode: HeistExecutionEvidenceNode? {
-        guard case .nodeVisited(let node) = self else { return nil }
-        return node
-    }
-
     var dispatchedActionResult: ActionResult? {
         guard case .dispatchedActionResult(_, let result) = self else { return nil }
         return result
@@ -271,10 +261,18 @@ package struct HeistExecutionMetricProjection: Codable, Sendable, Equatable {
         self = rollup.metrics
     }
 
-    fileprivate init(durationMs: Int, nodes: [HeistExecutionEvidenceNode]) {
+    fileprivate init(
+        durationMs: Int,
+        orderedFacts: [HeistExecutionNodeFacts]
+    ) {
         samples = [HeistExecutionMetricSample(name: .heistDurationMs, valueMs: max(0, durationMs))]
-            + nodes.flatMap(Self.samples(for:))
-        ceilings = nodes.compactMap(Self.ceiling(for:))
+            + orderedFacts.flatMap(\.metrics.samples)
+        ceilings = orderedFacts.flatMap(\.metrics.ceilings)
+    }
+
+    fileprivate init(node: HeistExecutionEvidenceNode) {
+        samples = Self.samples(for: node)
+        ceilings = Self.ceiling(for: node).map { [$0] } ?? []
     }
 
     private static func samples(for node: HeistExecutionEvidenceNode) -> [HeistExecutionMetricSample] {
@@ -452,10 +450,52 @@ package struct HeistExecutionCeilingMetric: Codable, Sendable, Equatable {
 
 }
 
-package struct HeistExecutionStepReportResults: Sendable, Equatable {
-    package let dispatchedActionResult: ActionResult?
-    package let actionResult: ActionResult?
-    package let expectation: ExpectationResult?
+package enum HeistExecutionStepReportResults: Sendable, Equatable {
+    case action(HeistActionEvidence)
+    case wait(HeistWaitEvidence)
+    case repeatUntil(HeistRepeatUntilEvidence)
+    case invocation(HeistInvocationEvidence)
+    case none
+
+    package var dispatchedActionResult: ActionResult? {
+        guard case .action(let evidence) = self else { return nil }
+        return evidence.dispatchResult
+    }
+
+    package var actionResult: ActionResult? {
+        switch self {
+        case .action(let evidence):
+            return evidence.reportedResult
+        case .wait(let evidence):
+            return evidence.actionResult
+        case .repeatUntil(let evidence):
+            return evidence.actionResult
+        case .invocation(let evidence):
+            return evidence.expectationActionResult
+        case .none:
+            return nil
+        }
+    }
+
+    package var reportedActionResult: ActionResult? {
+        guard case .action(let evidence) = self else { return nil }
+        return evidence.reportedResult
+    }
+
+    package var expectation: ExpectationResult? {
+        switch self {
+        case .action(let evidence):
+            return evidence.dispatchResult?.outcome.isSuccess == false ? nil : evidence.checkedExpectation
+        case .wait(let evidence):
+            return evidence.expectation
+        case .repeatUntil(let evidence):
+            return evidence.expectation
+        case .invocation(let evidence):
+            return evidence.expectation
+        case .none:
+            return nil
+        }
+    }
 
     package var traceEvidenceResult: ActionResult? {
         actionResult
@@ -464,18 +504,6 @@ package struct HeistExecutionStepReportResults: Sendable, Equatable {
     package var actionErrorKind: ErrorKind? {
         actionResult?.outcome.isSuccess == false ? actionResult?.outcome.errorKind : nil
     }
-
-    package init(
-        dispatchedActionResult: ActionResult? = nil,
-        actionResult: ActionResult? = nil,
-        expectation: ExpectationResult? = nil
-    ) {
-        self.dispatchedActionResult = dispatchedActionResult
-        self.actionResult = actionResult
-        self.expectation = expectation
-    }
-
-    package static let none = HeistExecutionStepReportResults()
 }
 
 package enum HeistExecutionStepReportDetail: Sendable, Equatable {
@@ -532,30 +560,21 @@ package enum HeistExecutionStepReportDetail: Sendable, Equatable {
         return evidence.invocation?.runHeistSummary
     }
 
+    package var warning: HeistExecutionWarning? {
+        guard case .warning(let warning) = self else { return nil }
+        return warning
+    }
+
     package var results: HeistExecutionStepReportResults {
         switch self {
         case .action(let evidence):
-            let actionResult = evidence.reportedResult
-            return HeistExecutionStepReportResults(
-                dispatchedActionResult: evidence.dispatchResult,
-                actionResult: actionResult,
-                expectation: evidence.dispatchResult?.outcome.isSuccess == false ? nil : evidence.checkedExpectation
-            )
+            return .action(evidence)
         case .wait(let evidence):
-            return HeistExecutionStepReportResults(
-                actionResult: evidence.actionResult,
-                expectation: evidence.expectation
-            )
+            return .wait(evidence)
         case .repeatUntil(let evidence):
-            return HeistExecutionStepReportResults(
-                actionResult: evidence.actionResult,
-                expectation: evidence.expectation
-            )
+            return .repeatUntil(evidence)
         case .invocation(let evidence):
-            return HeistExecutionStepReportResults(
-                actionResult: evidence.expectationActionResult,
-                expectation: evidence.expectation
-            )
+            return .invocation(evidence)
         case .caseSelection, .forEachString, .forEachElement, .warning, .none:
             return .none
         }
@@ -627,6 +646,7 @@ package struct HeistExecutionStepReportFacts: Sendable, Equatable {
     package let failureMessage: String?
     package let failureCategory: HeistFailureCategory?
     package let results: HeistExecutionStepReportResults
+    package let warning: HeistExecutionWarning?
 
     package init(step: HeistExecutionStepResult) {
         let detail = HeistExecutionStepReportDetail(kind: step.kind, evidence: step.evidence)
@@ -643,6 +663,7 @@ package struct HeistExecutionStepReportFacts: Sendable, Equatable {
         failureMessage = Self.failureMessage(for: step)
         failureCategory = step.failure?.category
         self.results = results
+        warning = detail.warning
     }
 
     private static func message(for step: HeistExecutionStepResult, detail: HeistExecutionStepReportDetail) -> String? {

@@ -34,6 +34,7 @@ import TheScore
         let projection = HeistExecutionMetricProjection(rollup: rollup)
 
         #expect(projection == rollup.metrics)
+        #expect(HeistExecutionMetricProjection(result: result) == rollup.metrics)
         #expect(values(in: projection, named: .heistDurationMs) == [1234])
         #expect(values(in: projection, named: .actionPipelineTargetResolutionMs) == [1])
         #expect(values(in: projection, named: .actionPipelineTotalMs) == [15])
@@ -81,15 +82,22 @@ import TheScore
             steps: [
                 .passed(path: "$.body[0]", kind: .wait, durationMs: 1),
                 .passed(path: "$.body[0].failure.actions[0]", kind: .action, durationMs: 1),
+                .passed(path: "$.body[0].failure.actions[1]", kind: .action, durationMs: 1),
                 .passed(path: "$.body[1].failure.actions[x]", kind: .action, durationMs: 1),
                 .passed(path: "$.body[2].failure.actions[1].body[0]", kind: .action, durationMs: 1),
-                .passed(path: "root.failure.actions[2]", kind: .action, durationMs: 1),
+                .passed(path: "root.failure.actions[0]", kind: .action, durationMs: 1),
+                .passed(path: "$.body[3].failure.actions[0]", kind: .wait, durationMs: 1),
+                .passed(
+                    path: "$.body[4].conditional.cases[0].body[0].failure.actions[0]",
+                    kind: .action,
+                    durationMs: 1
+                ),
                 .skipped(path: "$.body[3]", kind: .action),
             ],
             durationMs: 5
         )
 
-        #expect(result.evidenceRollup.summary.executedTopLevelStepCount == 4)
+        #expect(result.evidenceRollup.summary.executedTopLevelStepCount == 6)
     }
 
     private func metricProjectionFixture() throws -> HeistExecutionResult {

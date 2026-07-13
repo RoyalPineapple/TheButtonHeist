@@ -248,11 +248,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(actionEvidence.expectationResult?.method, .wait)
         XCTAssertEqual(actionEvidence.reportedResult?.method, .wait)
         XCTAssertEqual(actionEvidence.reportedResult?.accessibilityTrace?.endpointScreenId, "settled")
-        XCTAssertEqual(reportResults, HeistExecutionStepReportResults(
-            dispatchedActionResult: actionEvidence.dispatchResult,
-            actionResult: actionEvidence.reportedResult,
-            expectation: actionEvidence.checkedExpectation
-        ))
+        XCTAssertEqual(reportResults, .action(actionEvidence))
         XCTAssertEqual(reportFacts.results.dispatchedActionResult, reportResults.dispatchedActionResult)
         XCTAssertEqual(reportFacts.results.actionResult, reportResults.actionResult)
         XCTAssertEqual(reportFacts.results.traceEvidenceResult, reportResults.traceEvidenceResult)
@@ -1071,6 +1067,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertNil(skipped.intent)
         XCTAssertNil(skipped.evidence)
         XCTAssertNil(skipped.failure)
+        XCTAssertEqual(skipped.reportFacts.results, .none)
         XCTAssertNil(skipped.reportFacts.results.actionResult)
         XCTAssertNil(skipped.reportFacts.results.expectation)
     }
