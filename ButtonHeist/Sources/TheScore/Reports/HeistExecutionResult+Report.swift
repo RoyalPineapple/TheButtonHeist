@@ -29,90 +29,45 @@ package struct HeistExecutionEvidenceRollup: Sendable, Equatable {
         steps: [HeistExecutionStepResult],
         durationMs: Int = 0
     ) {
-        let folds = steps.map(HeistExecutionEvidenceFold.init(step:))
-        let firstFailedStep = folds.lazy.compactMap(\.firstFailedStep).first
-        let orderedFacts = folds.flatMap(\.orderedFacts)
-        let events = orderedFacts.flatMap { $0.events(firstFailedStep: firstFailedStep) }
-        let rootNodes = folds.map(\.node)
-        let nodes = orderedFacts.map(\.node)
-        let finalScreenId = events.compactMap(\.finalScreenId).last
+        let rootNodes = steps.map(Self.node(from:))
+        var accumulator = HeistExecutionEvidenceAccumulator(durationMs: durationMs)
+        for node in rootNodes {
+            accumulator.visit(node)
+        }
 
         self.rootNodes = rootNodes
-        self.nodes = nodes
-        self.events = events
+        nodes = accumulator.nodes
+        events = accumulator.events
         summary = HeistExecutionEvidenceSummary(
             executedTopLevelStepCount: rootNodes.count {
                 $0.isExecuted && HeistExecutionReceiptPlacement(step: $0.step) != .failureHookAction
             },
-            executedNodeCount: nodes.count(where: \.isExecuted),
-            outputReceiptNodeCount: nodes.count,
-            abortedAtPath: firstFailedStep?.path,
+            executedNodeCount: accumulator.executedNodeCount,
+            outputReceiptNodeCount: accumulator.nodes.count,
+            abortedAtPath: accumulator.firstFailedStep?.path,
             durationMs: durationMs,
-            expectationsChecked: events.count(where: \.isExpectationChecked),
-            expectationsMet: events.count(where: \.isExpectationMet),
-            finalScreenId: finalScreenId
+            expectationsChecked: accumulator.expectationsChecked,
+            expectationsMet: accumulator.expectationsMet,
+            finalScreenId: accumulator.finalScreenId
         )
         actions = HeistExecutionActionEvidenceRollup(
-            dispatchedResults: events.compactMap(\.dispatchedActionResult),
-            reportedResults: events.compactMap(\.reportedActionResult),
-            traceResultsInExecutionOrder: events.compactMap(\.traceResult)
+            dispatchedResults: accumulator.dispatchedResults,
+            reportedResults: accumulator.reportedResults,
+            traceResultsInExecutionOrder: accumulator.traceResultsInExecutionOrder
         )
-        warnings = orderedFacts.compactMap(\.warning)
-        metrics = HeistExecutionMetricProjection(durationMs: durationMs, orderedFacts: orderedFacts)
-        self.firstFailedStep = firstFailedStep
+        warnings = accumulator.warnings
+        metrics = HeistExecutionMetricProjection(
+            samples: accumulator.metricBuilder.samples,
+            ceilings: accumulator.metricBuilder.ceilings
+        )
+        firstFailedStep = accumulator.firstFailedStep
     }
-}
 
-private struct HeistExecutionEvidenceFold {
-    let node: HeistExecutionEvidenceNode
-    let orderedFacts: [HeistExecutionNodeFacts]
-    let firstFailedStep: HeistExecutionStepResult?
-
-    init(step: HeistExecutionStepResult) {
-        let childFolds = step.children.map(Self.init(step:))
-        let childNodes = childFolds.map(\.node)
-        let firstFailedStep = childFolds.lazy.compactMap(\.firstFailedStep).first
-            ?? (step.status == .failed ? step : nil)
-        let node = HeistExecutionEvidenceNode(
+    private static func node(from step: HeistExecutionStepResult) -> HeistExecutionEvidenceNode {
+        HeistExecutionEvidenceNode(
             step: step,
-            children: childNodes
+            children: step.children.map(Self.node(from:))
         )
-
-        self.node = node
-        orderedFacts = [HeistExecutionNodeFacts(node: node)]
-            + childFolds.flatMap(\.orderedFacts)
-        self.firstFailedStep = firstFailedStep
-    }
-}
-
-private struct HeistExecutionNodeFacts {
-    let node: HeistExecutionEvidenceNode
-    let evidenceEvents: [HeistExecutionEvidenceEvent]
-    let warning: HeistExecutionWarning?
-    let metrics: HeistExecutionMetricProjection
-
-    init(node: HeistExecutionEvidenceNode) {
-        let path = node.step.path
-        let results = node.reportFacts.results
-        let traceResult = results.traceEvidenceResult
-        let expectation = results.expectation
-        self.node = node
-        evidenceEvents = [
-            .nodeVisited(node),
-            results.dispatchedActionResult.map { .dispatchedActionResult(path: path, result: $0) },
-            results.reportedActionResult.map { .reportedActionResult(path: path, result: $0) },
-            traceResult.map { .traceResult(path: path, result: $0) },
-            traceResult?.accessibilityTrace?.endpointScreenId.map { .finalScreen(path: path, screenId: $0) },
-            expectation.map { .expectationChecked(path: path, result: $0) },
-            expectation?.met == true ? expectation.map { .expectationMet(path: path, result: $0) } : nil,
-        ].compactMap { $0 }
-        warning = node.reportFacts.warning
-        metrics = HeistExecutionMetricProjection(node: node)
-    }
-
-    func events(firstFailedStep: HeistExecutionStepResult?) -> [HeistExecutionEvidenceEvent] {
-        guard let firstFailedStep, node.step == firstFailedStep else { return evidenceEvents }
-        return evidenceEvents + [.firstFailure(node.step)]
     }
 }
 
@@ -170,35 +125,83 @@ package enum HeistExecutionEvidenceEvent: Sendable, Equatable {
     case finalScreen(path: String, screenId: String)
 }
 
-private extension HeistExecutionEvidenceEvent {
-    var dispatchedActionResult: ActionResult? {
-        guard case .dispatchedActionResult(_, let result) = self else { return nil }
-        return result
+private struct HeistExecutionEvidenceAccumulator {
+    var nodes: [HeistExecutionEvidenceNode] = []
+    var events: [HeistExecutionEvidenceEvent] = []
+    var warnings: [HeistExecutionWarning] = []
+    var firstFailedStep: HeistExecutionStepResult?
+    var executedNodeCount = 0
+    var expectationsChecked = 0
+    var expectationsMet = 0
+    var finalScreenId: String?
+    var dispatchedResults: [ActionResult] = []
+    var reportedResults: [ActionResult] = []
+    var traceResultsInExecutionOrder: [ActionResult] = []
+    var metricBuilder: HeistExecutionMetricProjectionBuilder
+
+    init(durationMs: Int) {
+        var metricBuilder = HeistExecutionMetricProjectionBuilder()
+        metricBuilder.append(.heistDurationMs, valueMs: durationMs)
+        self.metricBuilder = metricBuilder
     }
 
-    var reportedActionResult: ActionResult? {
-        guard case .reportedActionResult(_, let result) = self else { return nil }
-        return result
+    mutating func visit(_ node: HeistExecutionEvidenceNode) {
+        record(.nodeVisited(node))
+        let results = node.reportFacts.results
+        if let dispatchResult = results.dispatchedActionResult {
+            record(.dispatchedActionResult(path: node.step.path, result: dispatchResult))
+        }
+        if let reportedResult = results.reportedActionResult {
+            record(.reportedActionResult(path: node.step.path, result: reportedResult))
+        }
+        if let traceResult = results.traceEvidenceResult {
+            record(.traceResult(path: node.step.path, result: traceResult))
+            if let screenId = traceResult.accessibilityTrace?.endpointScreenId {
+                record(.finalScreen(path: node.step.path, screenId: screenId))
+            }
+        }
+        if let expectation = results.expectation {
+            record(.expectationChecked(path: node.step.path, result: expectation))
+            if expectation.met {
+                record(.expectationMet(path: node.step.path, result: expectation))
+            }
+        }
+
+        let firstFailureEventIndex = events.count
+        for child in node.children {
+            visit(child)
+        }
+        if firstFailedStep == nil, node.step.status == .failed {
+            firstFailedStep = node.step
+            events.insert(.firstFailure(node.step), at: firstFailureEventIndex)
+        }
     }
 
-    var traceResult: ActionResult? {
-        guard case .traceResult(_, let result) = self else { return nil }
-        return result
-    }
-
-    var isExpectationChecked: Bool {
-        if case .expectationChecked = self { return true }
-        return false
-    }
-
-    var isExpectationMet: Bool {
-        if case .expectationMet = self { return true }
-        return false
-    }
-
-    var finalScreenId: String? {
-        guard case .finalScreen(_, let screenId) = self else { return nil }
-        return screenId
+    private mutating func record(_ event: HeistExecutionEvidenceEvent) {
+        events.append(event)
+        switch event {
+        case .nodeVisited(let node):
+            nodes.append(node)
+            executedNodeCount += node.isExecuted ? 1 : 0
+            if let warning = node.reportFacts.warning {
+                warnings.append(warning)
+            }
+            metricBuilder.appendMetrics(for: node)
+        case .dispatchedActionResult(_, let result):
+            dispatchedResults.append(result)
+        case .reportedActionResult(_, let result):
+            reportedResults.append(result)
+        case .traceResult(_, let traceResult):
+            traceResultsInExecutionOrder.append(traceResult)
+        case .expectationChecked:
+            expectationsChecked += 1
+        case .expectationMet:
+            expectationsMet += 1
+        case .firstFailure(let step):
+            firstFailedStep = step
+        case .finalScreen(_, let screenId):
+            finalScreenId = screenId
+        }
     }
 }
 
@@ -262,119 +265,11 @@ package struct HeistExecutionMetricProjection: Codable, Sendable, Equatable {
     }
 
     fileprivate init(
-        durationMs: Int,
-        orderedFacts: [HeistExecutionNodeFacts]
+        samples: [HeistExecutionMetricSample],
+        ceilings: [HeistExecutionCeilingMetric]
     ) {
-        samples = [HeistExecutionMetricSample(name: .heistDurationMs, valueMs: max(0, durationMs))]
-            + orderedFacts.flatMap(\.metrics.samples)
-        ceilings = orderedFacts.flatMap(\.metrics.ceilings)
-    }
-
-    fileprivate init(node: HeistExecutionEvidenceNode) {
-        samples = Self.samples(for: node)
-        ceilings = Self.ceiling(for: node).map { [$0] } ?? []
-    }
-
-    private static func samples(for node: HeistExecutionEvidenceNode) -> [HeistExecutionMetricSample] {
-        switch node.step.evidence {
-        case .action(let evidence):
-            let expectationTiming = evidence.expectationResult?.timing
-            return actionTimingSamples(evidence.dispatchResult?.timing, node: node)
-                + waitTimingSamples(expectationTiming, node: node)
-                + sample(.expectationWaitMs, valueMs: expectationTiming?.totalMs, node: node)
-        case .wait(let evidence):
-            return waitTimingSamples(evidence.actionResult.timing, node: node)
-        case .repeatUntil(let evidence):
-            return waitTimingSamples(evidence.actionResult?.timing, node: node)
-        case .invocation(let evidence):
-            let timing = (evidence.waitEvidence?.actionResult ?? evidence.expectationActionResult)?.timing
-            return waitTimingSamples(timing, node: node)
-                + sample(.expectationWaitMs, valueMs: timing?.totalMs, node: node)
-        case .caseSelection, .forEachString, .forEachElement, .warning, .none:
-            return []
-        }
-    }
-
-    private static func actionTimingSamples(
-        _ timing: ActionPerformanceTiming?,
-        node: HeistExecutionEvidenceNode
-    ) -> [HeistExecutionMetricSample] {
-        guard let timing else { return [] }
-        return [
-            sample(.actionPipelineTargetResolutionMs, valueMs: timing.targetResolutionMs, node: node),
-            sample(.actionPipelineActionDispatchMs, valueMs: timing.actionDispatchMs, node: node),
-            sample(.actionPipelineSettleMs, valueMs: timing.settleMs, node: node),
-            sample(.actionPipelineBeforeObservationMs, valueMs: timing.beforeObservationMs, node: node),
-            sample(.actionPipelineFinalSemanticEvidenceMs, valueMs: timing.finalSemanticEvidenceMs, node: node),
-            sample(.actionPipelineTotalMs, valueMs: timing.totalMs, node: node),
-        ].flatMap { $0 }
-    }
-
-    private static func waitTimingSamples(
-        _ timing: ActionPerformanceTiming?,
-        node: HeistExecutionEvidenceNode
-    ) -> [HeistExecutionMetricSample] {
-        guard let timing else { return [] }
-        return [
-            sample(.waitPipelineTargetResolutionMs, valueMs: timing.targetResolutionMs, node: node),
-            sample(.waitPipelineActionDispatchMs, valueMs: timing.actionDispatchMs, node: node),
-            sample(.waitPipelineSettleMs, valueMs: timing.settleMs, node: node),
-            sample(.waitPipelineBeforeObservationMs, valueMs: timing.beforeObservationMs, node: node),
-            sample(.waitPipelineFinalSemanticEvidenceMs, valueMs: timing.finalSemanticEvidenceMs, node: node),
-            sample(.waitPipelineTotalMs, valueMs: timing.totalMs, node: node),
-        ].flatMap { $0 }
-    }
-
-    private static func sample(
-        _ name: HeistExecutionMetricName,
-        valueMs: Int?,
-        node: HeistExecutionEvidenceNode
-    ) -> [HeistExecutionMetricSample] {
-        guard let valueMs else { return [] }
-        return [HeistExecutionMetricSample(
-            name: name,
-            valueMs: max(0, valueMs),
-            path: node.reportFacts.path,
-            kind: node.reportFacts.kind,
-            status: node.reportFacts.status
-        )]
-    }
-
-    private static func ceiling(for node: HeistExecutionEvidenceNode) -> HeistExecutionCeilingMetric? {
-        let source: HeistExecutionCeilingMetricSource
-        let budgetMs: Int?
-        let elapsedMs: Int
-        switch node.step.evidence {
-        case .wait(let evidence):
-            guard case .wait(_, let timeout) = node.step.intent else { return nil }
-            source = .intentWaitTimeout
-            budgetMs = milliseconds(seconds: timeout)
-            elapsedMs = evidence.actionResult.timing?.totalMs ?? node.step.durationMs
-        case .repeatUntil(let evidence):
-            source = .repeatUntilTimeout
-            budgetMs = milliseconds(seconds: evidence.timeout)
-            elapsedMs = node.step.durationMs
-        case .caseSelection(let evidence):
-            source = .caseSelectionTimeout
-            budgetMs = milliseconds(seconds: evidence.selection.timeout)
-            elapsedMs = evidence.selection.elapsedMs
-        case .action, .forEachString, .forEachElement, .invocation, .warning, .none:
-            return nil
-        }
-        guard let budgetMs else { return nil }
-        return HeistExecutionCeilingMetric(
-            source: source,
-            budgetMs: budgetMs,
-            elapsedMs: max(0, elapsedMs),
-            path: node.reportFacts.path,
-            kind: node.reportFacts.kind,
-            status: node.reportFacts.status
-        )
-    }
-
-    private static func milliseconds(seconds: Double?) -> Int? {
-        guard let seconds, seconds.isFinite else { return nil }
-        return max(0, Int((seconds * 1_000).rounded()))
+        self.samples = samples
+        self.ceilings = ceilings
     }
 }
 
@@ -448,6 +343,109 @@ package struct HeistExecutionCeilingMetric: Codable, Sendable, Equatable {
         self.status = status
     }
 
+}
+
+private struct HeistExecutionMetricProjectionBuilder {
+    var samples: [HeistExecutionMetricSample] = []
+    var ceilings: [HeistExecutionCeilingMetric] = []
+
+    mutating func appendMetrics(for node: HeistExecutionEvidenceNode) {
+        switch node.step.evidence {
+        case .action(let evidence):
+            appendActionTiming(evidence.dispatchResult?.timing, node: node)
+            if let expectationResult = evidence.expectationResult {
+                appendWaitTiming(expectationResult.timing, node: node)
+                append(.expectationWaitMs, valueMs: expectationResult.timing?.totalMs, node: node)
+            }
+        case .wait(let evidence):
+            appendWaitTiming(evidence.actionResult.timing, node: node)
+            guard case .wait(_, let timeout) = node.step.intent else { return }
+            appendCeiling(
+                .intentWaitTimeout,
+                budgetMs: Self.milliseconds(seconds: timeout),
+                elapsedMs: evidence.actionResult.timing?.totalMs ?? node.step.durationMs,
+                node: node
+            )
+        case .repeatUntil(let evidence):
+            appendWaitTiming(evidence.actionResult?.timing, node: node)
+            appendCeiling(
+                .repeatUntilTimeout,
+                budgetMs: Self.milliseconds(seconds: evidence.timeout),
+                elapsedMs: node.step.durationMs,
+                node: node
+            )
+        case .invocation(let evidence):
+            let expectationResult = evidence.waitEvidence?.actionResult ?? evidence.expectationActionResult
+            appendWaitTiming(expectationResult?.timing, node: node)
+            append(.expectationWaitMs, valueMs: expectationResult?.timing?.totalMs, node: node)
+        case .caseSelection(let evidence):
+            appendCeiling(
+                .caseSelectionTimeout,
+                budgetMs: Self.milliseconds(seconds: evidence.selection.timeout),
+                elapsedMs: evidence.selection.elapsedMs,
+                node: node
+            )
+        case .forEachString, .forEachElement, .warning, .none:
+            break
+        }
+    }
+
+    mutating func append(
+        _ name: HeistExecutionMetricName,
+        valueMs: Int?,
+        node: HeistExecutionEvidenceNode? = nil
+    ) {
+        guard let valueMs else { return }
+        samples.append(HeistExecutionMetricSample(
+            name: name,
+            valueMs: max(0, valueMs),
+            path: node?.reportFacts.path,
+            kind: node?.reportFacts.kind,
+            status: node?.reportFacts.status
+        ))
+    }
+
+    private mutating func appendActionTiming(_ timing: ActionPerformanceTiming?, node: HeistExecutionEvidenceNode) {
+        guard let timing else { return }
+        append(.actionPipelineTargetResolutionMs, valueMs: timing.targetResolutionMs, node: node)
+        append(.actionPipelineActionDispatchMs, valueMs: timing.actionDispatchMs, node: node)
+        append(.actionPipelineSettleMs, valueMs: timing.settleMs, node: node)
+        append(.actionPipelineBeforeObservationMs, valueMs: timing.beforeObservationMs, node: node)
+        append(.actionPipelineFinalSemanticEvidenceMs, valueMs: timing.finalSemanticEvidenceMs, node: node)
+        append(.actionPipelineTotalMs, valueMs: timing.totalMs, node: node)
+    }
+
+    private mutating func appendWaitTiming(_ timing: ActionPerformanceTiming?, node: HeistExecutionEvidenceNode) {
+        guard let timing else { return }
+        append(.waitPipelineTargetResolutionMs, valueMs: timing.targetResolutionMs, node: node)
+        append(.waitPipelineActionDispatchMs, valueMs: timing.actionDispatchMs, node: node)
+        append(.waitPipelineSettleMs, valueMs: timing.settleMs, node: node)
+        append(.waitPipelineBeforeObservationMs, valueMs: timing.beforeObservationMs, node: node)
+        append(.waitPipelineFinalSemanticEvidenceMs, valueMs: timing.finalSemanticEvidenceMs, node: node)
+        append(.waitPipelineTotalMs, valueMs: timing.totalMs, node: node)
+    }
+
+    private mutating func appendCeiling(
+        _ source: HeistExecutionCeilingMetricSource,
+        budgetMs: Int?,
+        elapsedMs: Int,
+        node: HeistExecutionEvidenceNode
+    ) {
+        guard let budgetMs else { return }
+        ceilings.append(HeistExecutionCeilingMetric(
+            source: source,
+            budgetMs: budgetMs,
+            elapsedMs: max(0, elapsedMs),
+            path: node.reportFacts.path,
+            kind: node.reportFacts.kind,
+            status: node.reportFacts.status
+        ))
+    }
+
+    private static func milliseconds(seconds: Double?) -> Int? {
+        guard let seconds, seconds.isFinite else { return nil }
+        return max(0, Int((seconds * 1_000).rounded()))
+    }
 }
 
 package enum HeistExecutionStepReportResults: Sendable, Equatable {
