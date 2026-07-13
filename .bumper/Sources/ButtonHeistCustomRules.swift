@@ -748,8 +748,8 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
         guard node.name.text == "Dictionary",
               let arguments = node.genericArgumentClause?.arguments,
               arguments.count == 2,
-              let key = arguments.first?.argument,
-              let value = arguments.last?.argument,
+              let key = arguments.first?.argument.as(TypeSyntax.self),
+              let value = arguments.last?.argument.as(TypeSyntax.self),
               isNamedType(key, "String"),
               isNamedType(value, "HeistValue") else {
             return
@@ -1924,9 +1924,6 @@ private func containsFunctionType(_ type: TypeSyntax) -> Bool {
 }
 
 private func hasCallbackIsolationAnnotation(_ type: TypeSyntax) -> Bool {
-    if let function = type.as(FunctionTypeSyntax.self) {
-        return hasCallbackIsolationAnnotation(function.attributes)
-    }
     if let optional = type.as(OptionalTypeSyntax.self) {
         return hasCallbackIsolationAnnotation(optional.wrappedType)
     }
