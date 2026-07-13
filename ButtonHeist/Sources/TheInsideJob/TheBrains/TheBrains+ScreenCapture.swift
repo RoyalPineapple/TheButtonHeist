@@ -26,6 +26,15 @@ extension TheBrains {
                 return "Failed to encode screen as PNG"
             }
         }
+
+        var errorKind: ErrorKind {
+            switch self {
+            case .inactiveRuntime, .accessibilityTreeUnavailable:
+                return .accessibilityTreeUnavailable
+            case .appWindowUnavailable, .accessibilitySnapshotRenderingFailed, .pngEncodingFailed:
+                return .actionFailed
+            }
+        }
     }
 
     enum ScreenCaptureGatewayResult {
@@ -83,7 +92,7 @@ extension TheBrains {
         case .failure(let failure):
             return .failure(
                 method: .takeScreenshot,
-                errorKind: .general,
+                errorKind: failure.errorKind,
                 message: failure.message,
                 evidence: ActionResultFailureEvidence(
                     observation: .none,

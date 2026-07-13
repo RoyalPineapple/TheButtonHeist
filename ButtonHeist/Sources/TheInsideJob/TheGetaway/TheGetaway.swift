@@ -204,7 +204,7 @@ final class TheGetaway {
             await brains.recordSentState()
         case .failure(let error):
             await sendMessage(
-                .error(ServerError(kind: .general, message: error.message)),
+                .error(ServerError(kind: error.errorKind, message: error.message)),
                 requestId: requestId,
                 respond: respond
             )
@@ -226,7 +226,7 @@ final class TheGetaway {
             insideJobLogger.debug("InterfaceObservation sent: \(payload.pngData.count) base64 characters")
         case .failure(let failure):
             await sendMessage(
-                .error(ServerError(kind: .general, message: failure.message)),
+                .error(ServerError(kind: failure.errorKind, message: failure.message)),
                 requestId: requestId,
                 respond: respond
             )

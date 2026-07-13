@@ -122,6 +122,15 @@ final class TheBrains {
                 return error.message
             }
         }
+
+        var errorKind: ErrorKind {
+            switch self {
+            case .rootViewUnavailable, .inactiveRuntime:
+                return .accessibilityTreeUnavailable
+            case .selection:
+                return .validationError
+            }
+        }
     }
 
     init(
