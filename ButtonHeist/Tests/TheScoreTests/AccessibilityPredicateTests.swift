@@ -756,7 +756,8 @@ final class AccessibilityPredicateTests: XCTestCase {
         let lost = makeTraitUpdate(label: "Disabled", beforeTraits: [.button, .notEnabled], afterTraits: [.button])
         let action = makeResult(
             success: true,
-            trace: .elementsChangedForTests(elementCount: 2, edits: ElementEdits(updated: [gained, lost]))
+            trace: .elementsChangedForTests(elementCount: 2, edits: ElementEdits(updated: [gained, lost])),
+            completeness: .incomplete
         )
 
         let selectedGain = AccessibilityPredicate<RootContext>.changed(.elements([
@@ -783,7 +784,8 @@ final class AccessibilityPredicateTests: XCTestCase {
         ))
         let action = makeResult(
             success: true,
-            trace: .elementsChangedForTests(elementCount: 1, edits: ElementEdits(updated: [update]))
+            trace: .elementsChangedForTests(elementCount: 1, edits: ElementEdits(updated: [update])),
+            completeness: .incomplete
         )
 
         let predicate = AccessibilityPredicate<RootContext>.changed(.elements([
@@ -817,7 +819,8 @@ final class AccessibilityPredicateTests: XCTestCase {
             trace: .elementsChangedForTests(
                 elementCount: 2,
                 edits: ElementEdits(updated: [frameUpdate, pointUpdate])
-            )
+            ),
+            completeness: .incomplete
         )
 
         let framePredicate = AccessibilityPredicate<RootContext>.changed(.elements([
@@ -850,7 +853,8 @@ final class AccessibilityPredicateTests: XCTestCase {
             trace: .elementsChangedForTests(
                 elementCount: 2,
                 edits: ElementEdits(updated: [customUpdate, rotorUpdate])
-            )
+            ),
+            completeness: .incomplete
         )
 
         let customPredicate = AccessibilityPredicate<RootContext>.changed(.elements([
