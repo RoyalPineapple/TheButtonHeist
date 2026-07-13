@@ -54,51 +54,105 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
         XCTAssertEqual(capture.snapshot.firstResponderHeistId, heistId)
     }
 
-    func testFirstResponderInflationAcceptsReplacementObjectUnderSameHeistId() throws {
-        let heistId: HeistId = "email_field"
-        let original = UITextField()
-        let replacement = UITextField()
-        let before = responderObservation(heistId: heistId, object: original)
-        let after = responderObservation(heistId: heistId, object: replacement)
-        let expected = try XCTUnwrap(before.liveCapture.firstResponderHeistId)
-
-        XCTAssertFalse(before.liveCapture.object(for: heistId) === after.liveCapture.object(for: heistId))
-        XCTAssertNil(ElementInflation.firstResponderIdentityFailure(
-            expected: expected,
-            current: after.liveCapture.firstResponderHeistId,
-            inflated: heistId
-        ))
-    }
-
-    func testFirstResponderInflationRejectsCurrentResponderUnderWrongHeistId() throws {
+    func testFirstResponderInflationRejectsCurrentResponderUnderWrongHeistId() async throws {
         let expected: HeistId = "email_field"
         let replacement: HeistId = "password_field"
-        let before = responderObservation(heistId: expected, object: UITextField())
-        let after = responderObservation(heistId: replacement, object: UITextField())
-        let captured = try XCTUnwrap(before.liveCapture.firstResponderHeistId)
-
-        let failure = try XCTUnwrap(ElementInflation.firstResponderIdentityFailure(
-            expected: captured,
-            current: after.liveCapture.firstResponderHeistId,
-            inflated: expected
+        let brains = TheBrains(tripwire: TheTripwire())
+        let expectedObject = UITextField()
+        let replacementObject = UITextField()
+        let expectedEntry = InterfaceObservation.TestEntry(
+            label: "Email",
+            heistId: expected,
+            traits: .textEntry,
+            object: expectedObject
+        )
+        brains.stash.installScreenForTesting(.makeForTests(
+            [expectedEntry],
+            firstResponderHeistId: expected
         ))
+        brains.stash.nextVisibleRefreshScreenForTesting = .makeForTests(
+            [
+                expectedEntry,
+                InterfaceObservation.TestEntry(
+                    label: "Password",
+                    heistId: replacement,
+                    traits: .textEntry,
+                    object: replacementObject
+                ),
+            ],
+            firstResponderHeistId: replacement
+        )
+        let result = await brains.navigation.elementInflation.inflateFirstResponder(method: .editAction)
+        let failure = try XCTUnwrap(result)
 
         XCTAssertEqual(failure.failedStep, .staleRefresh)
         XCTAssertEqual(failure.failureKind, .targetUnavailable)
+        XCTAssertEqual(
+            failure.message,
+            "element inflation failed [staleRefresh]: first responder no longer matches captured HeistId "
+                + "email_field after inflation"
+        )
     }
 
-    func testFirstResponderInflationRejectsInflatedTargetUnderWrongHeistId() throws {
+    func testFirstResponderInflationRejectsInflatedTargetUnderWrongHeistId() async throws {
         let expected: HeistId = "email_field"
         let replacement: HeistId = "password_field"
+        let brains = TheBrains(tripwire: TheTripwire())
+        let expectedObject = UITextField()
+        let replacementObject = UITextField()
+        let screen = InterfaceObservation.makeForTests(
+            [
+                InterfaceObservation.TestEntry(
+                    label: "Email",
+                    heistId: expected,
+                    traits: .textEntry,
+                    object: expectedObject
+                ),
+                InterfaceObservation.TestEntry(
+                    label: "Password",
+                    heistId: replacement,
+                    traits: .textEntry,
+                    object: replacementObject
+                ),
+            ],
+            firstResponderHeistId: expected
+        )
+        brains.stash.installScreenForTesting(screen)
+        let expectedElement = try XCTUnwrap(brains.stash.interfaceElement(heistId: expected))
+        let expectedTarget = try XCTUnwrap(brains.stash.minimumUniqueTarget(for: expectedElement))
+        let replacementElement = try XCTUnwrap(brains.stash.interfaceElement(heistId: replacement))
+        guard case .resolved(let replacementLiveTarget) = brains.stash.resolveLiveActionTarget(
+            for: replacementElement
+        ) else {
+            return XCTFail("Expected live replacement target")
+        }
+        let inflatedTarget = ElementInflation.InflatedElementTarget(
+            target: expectedTarget,
+            treeElement: replacementElement,
+            liveTarget: replacementLiveTarget,
+            deadline: SemanticObservationDeadline(
+                start: CFAbsoluteTimeGetCurrent(),
+                timeoutSeconds: 1
+            )
+        )
 
-        let failure = try XCTUnwrap(ElementInflation.firstResponderIdentityFailure(
-            expected: expected,
-            current: expected,
-            inflated: replacement
-        ))
+        let result = await brains.navigation.elementInflation.inflateFirstResponder(
+            method: .editAction,
+            inflateTarget: { target, method in
+                XCTAssertEqual(target, expectedTarget)
+                XCTAssertEqual(method, .editAction)
+                return .inflated(inflatedTarget)
+            }
+        )
+        let failure = try XCTUnwrap(result)
 
         XCTAssertEqual(failure.failedStep, .staleRefresh)
         XCTAssertEqual(failure.failureKind, .targetUnavailable)
+        XCTAssertEqual(
+            failure.message,
+            "element inflation failed [staleRefresh]: first responder no longer matches captured HeistId "
+                + "email_field after inflation"
+        )
     }
 
     func testSemanticAndPostActionContextsShareCanonicalFirstResponderTarget() {
@@ -166,22 +220,6 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
         XCTAssertNil(brains.stash.firstResponderTarget(in: removed.tree))
     }
 
-    private func responderObservation(
-        heistId: HeistId,
-        object: NSObject
-    ) -> InterfaceObservation {
-        InterfaceObservation.makeForTests(
-            [
-                InterfaceObservation.TestEntry(
-                    label: "Text field",
-                    heistId: heistId,
-                    traits: .textEntry,
-                    object: object
-                ),
-            ],
-            firstResponderHeistId: heistId
-        )
-    }
 }
 
 #endif
