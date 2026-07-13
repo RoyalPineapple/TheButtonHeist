@@ -259,6 +259,8 @@ final class ElementInflationProductTests: XCTestCase {
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "semantic activate failed")
         guard result.outcome.isSuccess else { return }
         XCTAssertEqual(result.method, .activate)
+        XCTAssertEqual(result.subjectEvidence?.source, .resolvedSemanticTarget)
+        XCTAssertEqual(result.subjectEvidence?.element.identifier, fixture.knownHeistId.rawValue)
         XCTAssertEqual(fixture.target.activationCount, 1)
         XCTAssertTrue(fixture.scrollView.didReceiveRevealRequest)
     }
@@ -307,6 +309,8 @@ final class ElementInflationProductTests: XCTestCase {
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "semantic type_text failed")
         guard result.outcome.isSuccess else { return }
         XCTAssertEqual(result.method, .typeText)
+        XCTAssertEqual(result.subjectEvidence?.source, .textInputTarget)
+        XCTAssertEqual(result.subjectEvidence?.element.identifier, fixture.knownHeistId.rawValue)
         XCTAssertEqual(fixture.target.text, "leave at desk")
         XCTAssertTrue(fixture.target.isFirstResponder)
         XCTAssertTrue(fixture.scrollView.didReceiveRevealRequest)
@@ -331,11 +335,49 @@ final class ElementInflationProductTests: XCTestCase {
         ))
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "visible text field activate failed")
+        XCTAssertEqual(result.subjectEvidence?.element.identifier, fixture.knownHeistId.rawValue)
         XCTAssertTrue(fixture.target.isFirstResponder)
         XCTAssertEqual(fixture.scrollView.revealRequestCount, 0)
         XCTAssertEqual(result.activationTrace?.axActivateReturned, false)
         XCTAssertEqual(result.activationTrace?.tapActivationDispatched, true)
         XCTAssertEqual(result.activationTrace?.tapActivationSucceeded, true)
+    }
+
+    func testFirstResponderInflationReplacesStaleLiveObjectForCommittedHeistId() async throws {
+        let fixture = try installVisibleTextInputFixture(
+            identifier: "replacement_first_responder",
+            label: "Replacement First Responder"
+        )
+        defer { fixture.cleanup() }
+        let replacement = try XCTUnwrap(fixture.target as? RefusingActivationTextField)
+        XCTAssertTrue(replacement.becomeFirstResponder())
+
+        let refreshed = try XCTUnwrap(brains.stash.refreshLiveCapture())
+        XCTAssertEqual(refreshed.liveCapture.firstResponderHeistId, fixture.knownHeistId)
+        let stale = RefusingActivationTextField(frame: replacement.frame)
+        var elementRefs = refreshed.liveCapture.elementRefs
+        elementRefs[fixture.knownHeistId] = .init(object: stale, scrollView: fixture.scrollView)
+        let staleObservation = try InterfaceObservation.build(
+            tree: refreshed.tree,
+            dispatchReferences: .init(
+                elementRefs: elementRefs,
+                containerRefsByPath: refreshed.liveCapture.containerRefsByPath,
+                scrollableContainerViewsByPath: refreshed.liveCapture.scrollableContainerViewsByPath
+            )
+        )
+        brains.stash.installScreenForTesting(staleObservation)
+        XCTAssertTrue(brains.stash.liveObject(for: fixture.knownHeistId) === stale)
+        brains.stash.nextVisibleRefreshScreenForTesting = refreshed
+
+        let result = await brains.actions.executeResignFirstResponder()
+
+        XCTAssertTrue(result.success, result.message ?? "resign first responder failed")
+        XCTAssertEqual(result.method, .resignFirstResponder)
+        XCTAssertEqual(stale.resignationCount, 0)
+        XCTAssertEqual(replacement.resignationCount, 1)
+        XCTAssertTrue(brains.stash.liveObject(for: fixture.knownHeistId) === replacement)
+        XCTAssertFalse(replacement.isFirstResponder)
+        XCTAssertEqual(brains.stash.interfaceTree.firstResponderHeistId, fixture.knownHeistId)
     }
 
     func testSemanticActivateRevealsTargetInsideNestedOffscreenScrollContainer() async throws {
@@ -345,6 +387,13 @@ final class ElementInflationProductTests: XCTestCase {
         )
         defer { fixture.cleanup() }
         try seedKnownNestedScrollTarget(fixture)
+        var revealOrder: [ObjectIdentifier] = []
+        fixture.outerScrollView.onFirstRevealRequest = {
+            revealOrder.append(ObjectIdentifier(fixture.outerScrollView))
+        }
+        fixture.innerScrollView.onFirstRevealRequest = {
+            revealOrder.append(ObjectIdentifier(fixture.innerScrollView))
+        }
 
         XCTAssertEqual(fixture.outerScrollView.contentOffset, .zero)
         XCTAssertEqual(fixture.innerScrollView.contentOffset, .zero)
@@ -359,7 +408,12 @@ final class ElementInflationProductTests: XCTestCase {
         )
         guard result.outcome.isSuccess else { return }
         XCTAssertEqual(result.method, .activate)
+        XCTAssertEqual(result.subjectEvidence?.element.identifier, fixture.knownHeistId.rawValue)
         XCTAssertEqual(fixture.target.activationCount, 1)
+        XCTAssertEqual(revealOrder, [
+            ObjectIdentifier(fixture.outerScrollView),
+            ObjectIdentifier(fixture.innerScrollView),
+        ])
         XCTAssertTrue(fixture.outerScrollView.didReceiveRevealRequest)
         XCTAssertTrue(fixture.innerScrollView.didReceiveRevealRequest)
     }
@@ -370,9 +424,10 @@ final class ElementInflationProductTests: XCTestCase {
             label: "Confirm Decoy Payment"
         )
         defer { fixture.cleanup() }
-        let decoyWindow = try installScrollDecoyWindow(contentSize: fixture.innerScrollView.contentSize)
-        defer { cleanupWindow(decoyWindow) }
-        try seedKnownNestedScrollTarget(fixture)
+        let decoy = try installScrollDecoyWindow(contentSize: fixture.innerScrollView.contentSize)
+        defer { decoy.cleanup() }
+        try seedKnownNestedScrollTarget(fixture, decoy: .separate(decoy.scrollView))
+        XCTAssertTrue(brains.stash.scrollableContainerViewsByPath.values.contains { $0 === decoy.scrollView })
 
         let result = await brains.executeRuntimeAction(.activate(
             literalTarget(ElementPredicate(identifier: "nested_scroll_with_decoy_submit", traits: [.button]))
@@ -387,6 +442,41 @@ final class ElementInflationProductTests: XCTestCase {
         XCTAssertEqual(fixture.target.activationCount, 1)
         XCTAssertTrue(fixture.outerScrollView.didReceiveRevealRequest)
         XCTAssertTrue(fixture.innerScrollView.didReceiveRevealRequest)
+        XCTAssertEqual(decoy.scrollView.contentOffset, .zero)
+        XCTAssertEqual(decoy.scrollView.revealRequestCount, 0)
+    }
+
+    func testNestedRevealDoesNotTreatDuplicateOuterScrollViewPathAsInnerAlias() async throws {
+        let fixture = try installNestedScrollActivationFixture(
+            identifier: "nested_scroll_duplicate_outer_path_submit",
+            label: "Confirm Duplicate Path Payment"
+        )
+        defer { fixture.cleanup() }
+        let decoy = try installScrollDecoyWindow(contentSize: fixture.innerScrollView.contentSize)
+        defer { decoy.cleanup() }
+        try seedKnownNestedScrollTarget(
+            fixture,
+            decoy: .duplicateOuterReferenceAtDecoyPath(decoy.scrollView)
+        )
+        XCTAssertEqual(
+            brains.stash.scrollableContainerViewsByPath.values.filter { $0 === fixture.outerScrollView }.count,
+            2
+        )
+
+        let result = await brains.executeRuntimeAction(.activate(
+            literalTarget(ElementPredicate(identifier: fixture.identifier, traits: [.button]))
+        ))
+
+        XCTAssertTrue(
+            result.outcome.isSuccess,
+            nestedScrollFailureDescription(result, fixture: fixture)
+        )
+        guard result.outcome.isSuccess else { return }
+        XCTAssertEqual(result.subjectEvidence?.element.identifier, fixture.knownHeistId.rawValue)
+        XCTAssertEqual(fixture.target.activationCount, 1)
+        XCTAssertTrue(fixture.outerScrollView.didReceiveRevealRequest)
+        XCTAssertTrue(fixture.innerScrollView.didReceiveRevealRequest)
+        XCTAssertEqual(decoy.scrollView.contentOffset, .zero)
     }
 
     func testAmbiguousSemanticActivateFailsBeforeGeometryOrAction() async throws {
@@ -939,24 +1029,29 @@ final class ElementInflationProductTests: XCTestCase {
         )
     }
 
-    private func installScrollDecoyWindow(contentSize: CGSize) throws -> UIWindow {
+    private func installScrollDecoyWindow(contentSize: CGSize) throws -> ScrollDecoyFixture {
         let windowScene = try requireForegroundWindowScene()
         let viewController = UIViewController()
         viewController.view.backgroundColor = .clear
 
-        let scrollView = UIScrollView(frame: CGRect(x: 12, y: 120, width: 280, height: 200))
+        let scrollView = RevealingScrollView(frame: CGRect(x: 12, y: 120, width: 280, height: 200))
         scrollView.contentSize = contentSize
         scrollView.backgroundColor = .clear
         scrollView.isAccessibilityElement = false
+        let anchor = UILabel(frame: CGRect(x: 20, y: 20, width: 220, height: 44))
+        anchor.text = "Separate Window Scroll Decoy"
+        anchor.accessibilityLabel = anchor.text
+        anchor.isAccessibilityElement = true
+        scrollView.addSubview(anchor)
         viewController.view.addSubview(scrollView)
 
         let window = UIWindow(windowScene: windowScene)
         window.frame = UIScreen.main.bounds
-        window.windowLevel = .alert + 70
+        window.windowLevel = .alert + 90
         window.rootViewController = viewController
         window.isHidden = false
         window.layoutIfNeeded()
-        return window
+        return ScrollDecoyFixture(window: window, scrollView: scrollView)
     }
 
     private func seedOffViewportTarget(
@@ -1067,13 +1162,24 @@ final class ElementInflationProductTests: XCTestCase {
     }
 
     private func seedKnownNestedScrollTarget(
-        _ fixture: NestedScrollRevealFixture
+        _ fixture: NestedScrollRevealFixture,
+        decoy: NestedScrollDecoy = .absent
     ) throws {
         let screen = try XCTUnwrap(brains.stash.refreshLiveCapture())
         let outerContainerPath = try XCTUnwrap(
             liveScrollableContainerPath(for: fixture.outerScrollView, in: screen),
             "Expected nested fixture to expose the live outer scroll view. \(scrollContainerDiagnostics(in: screen))"
         )
+        let decoyContainerPath: TreePath?
+        switch decoy {
+        case .absent:
+            decoyContainerPath = nil
+        case .separate(let scrollView), .duplicateOuterReferenceAtDecoyPath(let scrollView):
+            decoyContainerPath = try XCTUnwrap(
+                liveScrollableContainerPath(for: scrollView, in: screen),
+                "Expected separate-window decoy in the parser capture. \(scrollContainerDiagnostics(in: screen))"
+            )
+        }
         let innerContainerPath = nestedInnerScrollContainerPath(
             for: fixture.innerScrollView,
             below: outerContainerPath,
@@ -1125,9 +1231,26 @@ final class ElementInflationProductTests: XCTestCase {
             observedScrollContentActivationPoint: observedContainerActivationPoint
         )
 
+        let liveCapture: LiveCapture
+        switch decoy {
+        case .absent, .separate:
+            liveCapture = screen.liveCapture
+        case .duplicateOuterReferenceAtDecoyPath:
+            var scrollableViews = screen.liveCapture.scrollableContainerViewsByPath
+            scrollableViews[try XCTUnwrap(decoyContainerPath)] = .init(view: fixture.outerScrollView)
+            liveCapture = LiveCapture.makeForTests(
+                snapshot: screen.liveCapture.snapshot,
+                dispatchReferences: .init(
+                    elementRefs: screen.liveCapture.elementRefs,
+                    containerRefsByPath: screen.liveCapture.containerRefsByPath,
+                    scrollableContainerViewsByPath: scrollableViews
+                )
+            )
+        }
+
         brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
             tree: InterfaceTree(elements: elements, containers: containers),
-            liveCapture: screen.liveCapture
+            liveCapture: liveCapture
         ))
         brains.stash.clearInstalledVisibleRefreshScreenForTesting()
     }
@@ -1247,12 +1370,6 @@ final class ElementInflationProductTests: XCTestCase {
         }
     }
 
-    @MainActor
-    private func cleanupWindow(_ window: UIWindow) {
-        window.rootViewController?.view.accessibilityViewIsModal = false
-        window.isHidden = true
-        window.rootViewController = nil
-    }
 }
 
 private struct SemanticRevealFixture {
@@ -1309,6 +1426,23 @@ private struct NestedScrollRevealFixture {
     }
 }
 
+private enum NestedScrollDecoy {
+    case absent
+    case separate(RevealingScrollView)
+    case duplicateOuterReferenceAtDecoyPath(RevealingScrollView)
+}
+
+private struct ScrollDecoyFixture {
+    let window: UIWindow
+    let scrollView: RevealingScrollView
+
+    @MainActor
+    func cleanup() {
+        window.isHidden = true
+        window.rootViewController = nil
+    }
+}
+
 private struct AmbiguousActivationFixture {
     let window: UIWindow
     let first: SemanticActivationView
@@ -1337,8 +1471,15 @@ private final class SemanticActivationView: UIView {
 }
 
 private final class RefusingActivationTextField: UITextField {
+    private(set) var resignationCount = 0
+
     override func accessibilityActivate() -> Bool {
         false
+    }
+
+    override func resignFirstResponder() -> Bool {
+        resignationCount += 1
+        return super.resignFirstResponder()
     }
 }
 
@@ -1399,6 +1540,7 @@ private final class ProductTextInputKeyboardImpl: NSObject {
 private final class RevealingScrollView: UIScrollView {
     var revealedElements: [UIView] = []
     var revealedContainers: [UIView] = []
+    var onFirstRevealRequest: (() -> Void)?
     private(set) var revealRequestCount = 0
     var didReceiveRevealRequest: Bool { revealRequestCount > 0 }
     private let revealThreshold: CGFloat = 500
@@ -1411,6 +1553,9 @@ private final class RevealingScrollView: UIScrollView {
 
     override func setContentOffset(_ contentOffset: CGPoint, animated: Bool) {
         if contentOffset.y >= revealThreshold {
+            if revealRequestCount == 0 {
+                onFirstRevealRequest?()
+            }
             revealRequestCount += 1
         }
         super.setContentOffset(contentOffset, animated: animated)
