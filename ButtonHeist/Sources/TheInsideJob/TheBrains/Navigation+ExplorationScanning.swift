@@ -209,33 +209,43 @@ extension Navigation {
             return .terminal(terminal)
         }
 
-        for offset in scanOffsets(for: plan.container, direction: plan.direction) {
-            guard !Task.isCancelled, exploration.hasTimeRemaining else { return .exhausted }
-            if let reason = exploration.manifest.recordScrollAttempt(in: plan.container.path) {
-                return .limitHit(reason)
-            }
-            let classification: ScreenClassifier.Classification?
-            do {
-                let notificationWindow = stash.accessibilityNotifications.beginActionWindow()
-                defer { notificationWindow.cancel() }
-                plan.container.scrollView.setContentOffset(offset, animated: plan.animated)
+        // Lazy containers can revise contentSize as each viewport materializes.
+        // Derive one offset at a time from the geometry proven by the last page.
+        while let offset = Self.nextExplorationScanOffset(
+            in: plan.container.scrollView,
+            axis: plan.container.hasVOverflow ? .vertical : .horizontal,
+            direction: plan.direction
+        ) {
+            observeOffset: while true {
                 guard !Task.isCancelled, exploration.hasTimeRemaining else { return .exhausted }
-                if plan.animated {
-                    _ = await tripwire.waitForAllClear(timeout: exploration.cappedAnimatedWait(0.5))
-                } else {
-                    await tripwire.yieldFrames(Self.postScrollLayoutFrames)
+                if let reason = exploration.manifest.recordScrollAttempt(in: plan.container.path) {
+                    return .limitHit(reason)
+                }
+                let classification: ScreenClassifier.Classification?
+                do {
+                    let notificationWindow = stash.accessibilityNotifications.beginActionWindow()
+                    defer { notificationWindow.cancel() }
+                    plan.container.scrollView.setContentOffset(offset, animated: plan.animated)
+                    guard !Task.isCancelled, exploration.hasTimeRemaining else { return .exhausted }
+                    if plan.animated {
+                        _ = await tripwire.waitForAllClear(timeout: exploration.cappedAnimatedWait(0.5))
+                    } else {
+                        await tripwire.yieldFrames(Self.postScrollLayoutFrames)
+                    }
+                    guard !Task.isCancelled, exploration.hasTimeRemaining else { return .exhausted }
+                    classification = await absorbExplorationPage(
+                        in: &exploration,
+                        notificationBatch: notificationWindow.capture()
+                    )
                 }
                 guard !Task.isCancelled, exploration.hasTimeRemaining else { return .exhausted }
-                classification = await absorbExplorationPage(
-                    in: &exploration,
-                    notificationBatch: notificationWindow.capture()
-                )
-            }
-            guard !Task.isCancelled, exploration.hasTimeRemaining else { return .exhausted }
-            if classification?.isScreenReplacement == true { return .screenReplaced }
+                guard let classification else { continue observeOffset }
+                if classification.isScreenReplacement { return .screenReplaced }
 
-            if let terminal = scanGoalTerminal(plan.goal, in: exploration.screen) {
-                return .terminal(terminal)
+                if let terminal = scanGoalTerminal(plan.goal, in: exploration.screen) {
+                    return .terminal(terminal)
+                }
+                break observeOffset
             }
         }
 
@@ -254,8 +264,11 @@ extension Navigation {
         return totalElementCount > visibleCount * exploration.manifest.maxScrollsPerContainer
     }
 
-    private func scanOffsets(for containerExploration: ContainerExploration, direction: ScrollScanDirection) -> [CGPoint] {
-        let scrollView = containerExploration.scrollView
+    static func nextExplorationScanOffset(
+        in scrollView: UIScrollView,
+        axis: ScanAxis,
+        direction: ScrollScanDirection
+    ) -> CGPoint? {
         let current = scrollView.contentOffset
         let bounds = scrollView.bounds
         let insets = scrollView.adjustedContentInset
@@ -264,96 +277,19 @@ extension Navigation {
             x: max(scrollView.contentSize.width + insets.right - bounds.width, -insets.left),
             y: max(scrollView.contentSize.height + insets.bottom - bounds.height, -insets.top)
         )
-
-        if containerExploration.hasVOverflow {
-            let step = max(1, bounds.height * 0.8)
-            return axisOffsets(
-                current: current,
-                minOffset: minOffset,
-                maxOffset: maxOffset,
-                step: step,
-                axis: .vertical,
-                direction: direction
-            )
-        }
-
-        let step = max(1, bounds.width * 0.8)
-        return axisOffsets(
-            current: current,
-            minOffset: minOffset,
-            maxOffset: maxOffset,
-            step: step,
-            axis: .horizontal,
-            direction: direction
-        )
-    }
-
-    private func axisOffsets(
-        current: CGPoint,
-        minOffset: CGPoint,
-        maxOffset: CGPoint,
-        step: CGFloat,
-        axis: ScanAxis,
-        direction: ScrollScanDirection
-    ) -> [CGPoint] {
         let currentScalar = axis.scalar(from: current)
         let minScalar = axis.scalar(from: minOffset)
         let maxScalar = axis.scalar(from: maxOffset)
-
-        let offsets: [CGPoint]
-        let edge: CGPoint
-        switch direction {
+        let clampedCurrent = min(max(currentScalar, minScalar), maxScalar)
+        let step = max(1, axis.scalar(from: CGPoint(x: bounds.width, y: bounds.height)) * 0.8)
+        let nextScalar: CGFloat = switch direction {
         case .forward:
-            offsets = strideOffsets(
-                from: currentScalar + step,
-                through: maxScalar,
-                by: step,
-                current: current,
-                axis: axis
-            )
-            edge = axis.point(updating: current, scalar: maxScalar)
+            min(clampedCurrent + step, maxScalar)
         case .back:
-            offsets = strideOffsets(
-                from: currentScalar - step,
-                through: minScalar,
-                by: -step,
-                current: current,
-                axis: axis
-            )
-            edge = axis.point(updating: current, scalar: minScalar)
+            max(clampedCurrent - step, minScalar)
         }
-
-        return dedupedOffsets(offsets + [edge])
-            .filter { axis.scalar(from: $0) >= minScalar && axis.scalar(from: $0) <= maxScalar }
-            .filter { axis.scalar(from: $0) != currentScalar }
-    }
-
-    private func strideOffsets(
-        from start: CGFloat,
-        through end: CGFloat,
-        by step: CGFloat,
-        current: CGPoint,
-        axis: ScanAxis
-    ) -> [CGPoint] {
-        guard step != 0 else { return [] }
-        var values: [CGPoint] = []
-        var value = start
-        if step > 0 {
-            while value <= end {
-                values.append(axis.point(updating: current, scalar: value))
-                value += step
-            }
-        } else {
-            while value >= end {
-                values.append(axis.point(updating: current, scalar: value))
-                value += step
-            }
-        }
-        return values
-    }
-
-    private func dedupedOffsets(_ offsets: [CGPoint]) -> [CGPoint] {
-        offsets.uniqued(on: CoarseOffset.init)
+        guard Int(nextScalar.rounded()) != Int(currentScalar.rounded()) else { return nil }
+        return axis.point(updating: current, scalar: nextScalar)
     }
 
     private func scanGoalTerminal(
@@ -385,10 +321,8 @@ extension Navigation {
             page = await settledKnownTargetPage(deadline: deadline)
         }
         guard !Task.isCancelled, exploration.hasTimeRemaining else { return nil }
-        if let notificationBatch {
-            return exploration.absorbScrolledPage(page, notificationBatch: notificationBatch)
-        }
-        return exploration.absorb(page)
+        guard let page else { return nil }
+        return exploration.absorbScrolledPage(page, notificationBatch: notificationBatch)
     }
 
     private func restoreContainerPosition(
@@ -502,7 +436,7 @@ extension Navigation {
         let overflow: CGFloat
     }
 
-    private enum ScanAxis {
+    enum ScanAxis {
         case horizontal
         case vertical
 
@@ -525,15 +459,6 @@ extension Navigation {
         }
     }
 
-    private struct CoarseOffset: Hashable {
-        let x: Int
-        let y: Int
-
-        init(_ point: CGPoint) {
-            x = Int(point.x.rounded())
-            y = Int(point.y.rounded())
-        }
-    }
 }
 
 private extension StateChange
