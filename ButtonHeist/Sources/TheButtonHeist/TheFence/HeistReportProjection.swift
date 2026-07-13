@@ -81,12 +81,6 @@ struct HeistReportProjection: Sendable {
     }
 }
 
-private extension ProjectionProfile {
-    var heistReport: ProjectionProfile {
-        kind == .summary ? .mcp : self
-    }
-}
-
 struct HeistReportNodeProjection: Sendable {
     private let node: HeistExecutionEvidenceNode
     private let profile: ProjectionProfile

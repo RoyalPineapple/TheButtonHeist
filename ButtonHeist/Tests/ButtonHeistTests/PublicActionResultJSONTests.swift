@@ -225,6 +225,61 @@ final class PublicActionResultJSONTests: XCTestCase {
         XCTAssertEqual(try action.bool("retryable"), try failure.bool("retryable"))
     }
 
+    func testHeistReportProjectionIsDeterministicAcrossInterleavedProfiles() throws {
+        let checkoutRows = (0..<4).map { index in
+            makeReceiptTestElement(
+                label: "Checkout Row \(index)",
+                identifier: "checkout_row_\(index)"
+            )
+        }
+        let trace = makeReceiptTestTrace(
+            before: makeReceiptTestInterface([]),
+            after: makeReceiptTestInterface(checkoutRows),
+            beforeScreenId: "cart",
+            afterScreenId: "checkout"
+        )
+        let actionResult = ActionResult.failure(
+            method: .activate,
+            errorKind: .elementNotFound,
+            message: "Pay not found",
+            evidence: ActionResultFailureEvidence(observation: .trace(trace))
+        )
+        let response = FenceResponse.heistExecution(
+            plan: try minimalPlan(),
+            result: HeistExecutionResult(
+                steps: [
+                    .failed(
+                        path: "$.body[0]",
+                        receiptKind: .action,
+                        durationMs: 7,
+                        evidence: .commandlessDispatch(dispatchResult: actionResult),
+                        failure: HeistFailureDetail(
+                            category: .targetResolution,
+                            contract: "action dispatch succeeds",
+                            observed: "Pay not found"
+                        )
+                    ),
+                ],
+                durationMs: 7
+            )
+        )
+        let narrowProfile = summaryProfile(screenPreviewElements: 1)
+        let wideProfile = summaryProfile(screenPreviewElements: 4)
+
+        let firstNarrow = try heistReportJSON(response, profile: narrowProfile)
+        let wide = try heistReportJSON(response, profile: wideProfile)
+        let secondNarrow = try heistReportJSON(response, profile: narrowProfile)
+
+        XCTAssertEqual(
+            try firstNarrow.decode(JSONValue.self),
+            try secondNarrow.decode(JSONValue.self)
+        )
+        XCTAssertEqual(try nestedScreenElements(firstNarrow).count, 1)
+        XCTAssertEqual(try nestedScreenElements(wide).count, 4)
+        let failure = try XCTUnwrap(try firstNarrow.array("nodes").first).object("failure")
+        XCTAssertEqual(try failure.string("code"), "request.element_not_found")
+    }
+
     func testNestedHeistActionResultEncodesSubjectEvidenceOmissionReason() throws {
         let subject = makeReceiptTestElement(label: "Pay", identifier: "pay")
         let actionResult = ActionResult.success(
@@ -466,6 +521,39 @@ final class PublicActionResultJSONTests: XCTestCase {
         )
         let data = try JSONEncoder().encode(response)
         return try JSONProbe(data: data).object()
+    }
+
+    private func heistReportJSON(
+        _ response: FenceResponse,
+        profile: ProjectionProfile
+    ) throws -> JSONProbe {
+        let data = try JSONEncoder().encode(PublicResponseModel(response: response, profile: profile))
+        return try JSONProbe(data: data).object("report")
+    }
+
+    private func nestedScreenElements(_ report: JSONProbe) throws -> [JSONProbe] {
+        let node = try XCTUnwrap(try report.array("nodes").first)
+        return try node
+            .object("evidence")
+            .object("action")
+            .object("result")
+            .object("delta")
+            .object("screen")
+            .array("elements")
+    }
+
+    private func summaryProfile(screenPreviewElements: Int) -> ProjectionProfile {
+        ProjectionProfile(
+            kind: .summary,
+            limits: ProjectionLimits(
+                visibleElementBudget: 300,
+                totalNodeBudget: 5_000,
+                deltaElementsPerBucket: 5,
+                screenPreviewElements: screenPreviewElements,
+                caseResults: 10,
+                failureInterfaceElements: HeistFailureDiagnostics.defaultElementLimit
+            )
+        )
     }
 
     private func minimalPlan() throws -> HeistPlan {
