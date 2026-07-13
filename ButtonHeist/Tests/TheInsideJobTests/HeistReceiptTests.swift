@@ -689,7 +689,7 @@ private final class ReceiptWaitScript {
             )
             return .timedOut(
                 message: expectation.actual,
-                accessibilityTrace: nil,
+                traceEvidence: nil,
                 expectation: expectation
             )
         }
@@ -700,12 +700,17 @@ private final class ReceiptWaitScript {
             ?? AccessibilityTrace(capture: state.capture)
         previousCapture = state.capture
 
-        let expectation = PredicateEvaluation.evaluate(step.predicate, in: trace, isComplete: true)
+        let expectation = PredicateEvaluation.evaluate(
+            step.predicate,
+            in: trace,
+            completeness: .complete
+        )
+        let traceEvidence = makeTestTraceEvidence(trace, completeness: .complete)
         switch expectation {
         case .met(let expectation):
             return .matched(
                 message: expectation.actual,
-                accessibilityTrace: trace,
+                traceEvidence: traceEvidence,
                 expectation: expectation,
                 observedSequence: nextSequence,
                 observationSummary: "interface: \(state.interface.projectedElements.count) elements"
@@ -713,7 +718,7 @@ private final class ReceiptWaitScript {
         case .unmet(let expectation):
             return .timedOut(
                 message: expectation.actual,
-                accessibilityTrace: trace,
+                traceEvidence: traceEvidence,
                 expectation: expectation,
                 observedSequence: nextSequence,
                 observationSummary: "interface: \(state.interface.projectedElements.count) elements"

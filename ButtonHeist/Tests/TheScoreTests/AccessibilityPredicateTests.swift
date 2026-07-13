@@ -124,7 +124,7 @@ final class AccessibilityPredicateTests: XCTestCase {
     func testPresentMatchesAnyValueFour() {
         let elements = [makeElement(label: "Counter", value: "4")]
         let predicate = AccessibilityPredicate<RootContext>.exists(.value("4"))
-        XCTAssertTrue(predicate.validate(against: makeResult(success: true, trace: currentTrace(elements))).met)
+        XCTAssertTrue(predicate.validate(against: makeResult(success: true, trace: currentTrace(elements), completeness: .incomplete)).met)
     }
 
     func testStateEvaluationReturnsNamedResult() {
@@ -171,7 +171,7 @@ final class AccessibilityPredicateTests: XCTestCase {
                 identifier: "checkout"
             ), children: []),
         ])
-        let action = makeResult(success: true, trace: AccessibilityTrace(interface: interface))
+        let action = makeResult(success: true, trace: AccessibilityTrace(interface: interface), completeness: .incomplete)
 
         XCTAssertTrue(
             AccessibilityPredicate<RootContext>.exists(.container(.identifier("checkout")))
@@ -194,14 +194,14 @@ final class AccessibilityPredicateTests: XCTestCase {
         ]
         let matching = AccessibilityPredicate<RootContext>.exists(.element(.identifier("slider"), .value("4")))
         let missing = AccessibilityPredicate<RootContext>.exists(.element(.identifier("slider"), .value("5")))
-        let action = makeResult(success: true, trace: currentTrace(elements))
+        let action = makeResult(success: true, trace: currentTrace(elements), completeness: .incomplete)
         XCTAssertTrue(matching.validate(against: action).met)
         XCTAssertFalse(missing.validate(against: action).met)
     }
 
     func testAbsentTrueOnlyWhenNoneMatch() {
         let elements = [makeElement(label: "Ready")]
-        let action = makeResult(success: true, trace: currentTrace(elements))
+        let action = makeResult(success: true, trace: currentTrace(elements), completeness: .incomplete)
         XCTAssertTrue(AccessibilityPredicate<RootContext>.missing(.label("Loading")).validate(against: action).met)
         XCTAssertFalse(AccessibilityPredicate<RootContext>.missing(.label("Ready")).validate(against: action).met)
     }
@@ -305,7 +305,7 @@ final class AccessibilityPredicateTests: XCTestCase {
         let predicate = AccessibilityPredicate<RootContext>.exists(
             .predicate(ElementPredicateTemplate(label: "Save", traits: [.button]), ordinal: 1)
         )
-        XCTAssertTrue(predicate.validate(against: makeResult(success: true, trace: currentTrace(elements))).met)
+        XCTAssertTrue(predicate.validate(against: makeResult(success: true, trace: currentTrace(elements), completeness: .incomplete)).met)
     }
 
     func testTargetWithinContainerSelectsOnlyDescendants() {
@@ -376,14 +376,14 @@ final class AccessibilityPredicateTests: XCTestCase {
 
     func testScreenChangedMetWhenTraceChangesScreen() {
         let interface = Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
-        let action = makeResult(success: true, trace: .screenChangedForTests(replacementInterface: interface))
+        let action = makeResult(success: true, trace: .screenChangedForTests(replacementInterface: interface), completeness: .incomplete)
         let result = AccessibilityPredicate<RootContext>.changed(.screen()).validate(against: action)
         XCTAssertTrue(result.met)
     }
 
     func testScreenChangedNotMetWhenTraceOnlyChangesElements() {
         let trace = makeUpdateTrace(label: "counter", property: .value, old: "0", new: "1")
-        let action = makeResult(success: true, trace: trace)
+        let action = makeResult(success: true, trace: trace, completeness: .incomplete)
         let result = AccessibilityPredicate<RootContext>.changed(.screen()).validate(against: action)
         XCTAssertFalse(result.met)
         XCTAssertEqual(result.actual, "elementsChanged")
@@ -423,7 +423,12 @@ final class AccessibilityPredicateTests: XCTestCase {
         )
         let result = ActionResult.success(
             method: .activate,
-            evidence: ActionResultSuccessEvidence(observation: .trace(AccessibilityTrace(captures: [first, last])))
+            evidence: ActionResultSuccessEvidence(
+                observation: .trace(traceEvidence(
+                    AccessibilityTrace(captures: [first, last]),
+                    completeness: .incomplete
+                ))
+            )
         )
 
         let outcome = AccessibilityPredicate<RootContext>.changed(.screen()).validate(against: result)
@@ -442,7 +447,7 @@ final class AccessibilityPredicateTests: XCTestCase {
             .missing(.label("Home")),
         ]))
 
-        XCTAssertTrue(predicate.validate(against: makeResult(success: true, trace: trace)).met)
+        XCTAssertTrue(predicate.validate(against: makeResult(success: true, trace: trace, completeness: .incomplete)).met)
     }
 
     func testScreenDepartureAndArrivalSatisfyElementLifecycleAssertions() {
@@ -455,7 +460,7 @@ final class AccessibilityPredicateTests: XCTestCase {
             .appeared(.label("Settings")),
         ]))
 
-        XCTAssertTrue(predicate.validate(against: makeResult(success: true, trace: trace)).met)
+        XCTAssertTrue(predicate.validate(against: makeResult(success: true, trace: trace, completeness: .incomplete)).met)
     }
 
     func testIdenticalTargetCanDisappearAndReappearAcrossScreenBoundary() {
@@ -469,7 +474,7 @@ final class AccessibilityPredicateTests: XCTestCase {
             .appeared(.label("Continue")),
         ]))
 
-        XCTAssertTrue(predicate.validate(against: makeResult(success: true, trace: trace)).met)
+        XCTAssertTrue(predicate.validate(against: makeResult(success: true, trace: trace, completeness: .incomplete)).met)
     }
 
     func testUpdatedOnlyMatchesSameScreenElementFacts() {
@@ -481,8 +486,8 @@ final class AccessibilityPredicateTests: XCTestCase {
             .updated(.label("Count"), .value(before: "1", after: "2")),
         ]))
 
-        XCTAssertTrue(predicate.validate(against: makeResult(success: true, trace: sameScreen)).met)
-        XCTAssertFalse(predicate.validate(against: makeResult(success: true, trace: screenBoundary)).met)
+        XCTAssertTrue(predicate.validate(against: makeResult(success: true, trace: sameScreen, completeness: .incomplete)).met)
+        XCTAssertFalse(predicate.validate(against: makeResult(success: true, trace: screenBoundary, completeness: .incomplete)).met)
     }
 
     func testNotificationOnlyFactSatisfiesGenericElementsChange() {
@@ -501,31 +506,42 @@ final class AccessibilityPredicateTests: XCTestCase {
 
         XCTAssertTrue(
             AccessibilityPredicate<RootContext>.changed(.elements())
-                .validate(against: makeResult(success: true, trace: trace)).met
+                .validate(against: makeResult(success: true, trace: trace, completeness: .incomplete)).met
         )
     }
 
     func testNoChangeRequiresCompleteFactFreeWindow() {
         let interface = makeTestInterface(elements: [makeElement(label: "Ready")])
-        let incomplete = AccessibilityTrace(interface: interface)
-        let complete = AccessibilityTrace(first: interface).appending(interface)
+        let factFreeTrace = AccessibilityTrace(first: interface).appending(interface)
         let changed = AccessibilityTrace(first: interface).appending(
             makeTestInterface(elements: [makeElement(label: "Done")])
         )
         let predicate = AccessibilityPredicate<RootContext>.noChange
 
-        let incompleteResult = predicate.validate(against: makeResult(success: true, trace: incomplete))
+        let incompleteResult = predicate.validate(against: makeResult(
+            success: true,
+            trace: factFreeTrace,
+            completeness: .incomplete
+        ))
         XCTAssertFalse(incompleteResult.met)
         XCTAssertEqual(incompleteResult.actual, "observation history incomplete")
-        XCTAssertTrue(predicate.validate(against: makeResult(success: true, trace: complete)).met)
-        XCTAssertFalse(predicate.validate(against: makeResult(success: true, trace: changed)).met)
+        XCTAssertTrue(predicate.validate(against: makeResult(
+            success: true,
+            trace: factFreeTrace,
+            completeness: .complete
+        )).met)
+        XCTAssertFalse(predicate.validate(against: makeResult(
+            success: true,
+            trace: changed,
+            completeness: .complete
+        )).met)
 
         let explicitlyIncomplete = ActionResult.success(
             method: .syntheticTap,
             evidence: ActionResultSuccessEvidence(
                 observation: .settledTrace(
-                    complete,
-                    .timedOut(durationMs: 0)
+                    traceEvidence(factFreeTrace, completeness: .incomplete),
+                    .settled(durationMs: 0)
                 )
             )
         )
@@ -552,7 +568,9 @@ final class AccessibilityPredicateTests: XCTestCase {
 
         let action = ActionResult.success(
             method: .activate,
-            evidence: ActionResultSuccessEvidence(observation: .trace(trace))
+            evidence: ActionResultSuccessEvidence(
+                observation: .trace(traceEvidence(trace, completeness: .incomplete))
+            )
         )
         let changePredicate = AccessibilityPredicate<RootContext>.changed(.elements([
             .updated(.label("Counter"), .value(before: "0", after: "1")),
@@ -566,10 +584,13 @@ final class AccessibilityPredicateTests: XCTestCase {
         let result = ActionResult.success(
             method: .activate,
             evidence: ActionResultSuccessEvidence(
-                observation: .trace(AccessibilityTrace(interface: Interface(
-                    timestamp: Date(timeIntervalSince1970: 0),
-                    tree: []
-                )))
+                observation: .trace(traceEvidence(
+                    AccessibilityTrace(interface: Interface(
+                        timestamp: Date(timeIntervalSince1970: 0),
+                        tree: []
+                    )),
+                    completeness: .incomplete
+                ))
             )
         )
 
@@ -583,13 +604,13 @@ final class AccessibilityPredicateTests: XCTestCase {
 
     func testElementsChangedMetWhenTraceChangesElements() {
         let trace = makeUpdateTrace(label: "counter", property: .value, old: "0", new: "1")
-        let action = makeResult(success: true, trace: trace)
+        let action = makeResult(success: true, trace: trace, completeness: .incomplete)
         let result = AccessibilityPredicate<RootContext>.changed(.elements()).validate(against: action)
         XCTAssertTrue(result.met)
     }
 
     func testElementsChangedNotMetWhenTraceHasNoChange() {
-        let action = makeResult(success: true, trace: .noChangeForTests(elementCount: 5))
+        let action = makeResult(success: true, trace: .noChangeForTests(elementCount: 5), completeness: .incomplete)
         let result = AccessibilityPredicate<RootContext>.changed(.elements()).validate(against: action)
         XCTAssertFalse(result.met)
         XCTAssertEqual(result.actual, "noChange")
@@ -597,7 +618,7 @@ final class AccessibilityPredicateTests: XCTestCase {
 
     func testElementsChangedMetForScreenDepartureAndArrivalFacts() {
         let interface = Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
-        let action = makeResult(success: true, trace: .screenChangedForTests(replacementInterface: interface))
+        let action = makeResult(success: true, trace: .screenChangedForTests(replacementInterface: interface), completeness: .incomplete)
         let result = AccessibilityPredicate<RootContext>.changed(.elements()).validate(against: action)
         XCTAssertTrue(result.met)
     }
@@ -633,7 +654,7 @@ final class AccessibilityPredicateTests: XCTestCase {
 
     func testElementUpdatedMetWhenNewValueMatches() {
         let trace = makeUpdateTrace(label: "counter", property: .value, old: "3", new: "5")
-        let action = makeResult(success: true, trace: trace)
+        let action = makeResult(success: true, trace: trace, completeness: .incomplete)
         let predicate = AccessibilityPredicate<RootContext>.changed(.elements([
             .updated(.label("counter"), .value(after: "5")),
         ]))
@@ -642,7 +663,7 @@ final class AccessibilityPredicateTests: XCTestCase {
 
     func testElementUpdatedPassReportsObservedPropertyProof() {
         let trace = makeUpdateTrace(label: "Quantity", property: .value, old: "2", new: "3")
-        let action = makeResult(success: true, trace: trace)
+        let action = makeResult(success: true, trace: trace, completeness: .incomplete)
         let predicate = AccessibilityPredicate<RootContext>.changed(.elements([
             .updated(.label("Quantity"), .value(before: "2", after: "3")),
         ]))
@@ -665,7 +686,7 @@ final class AccessibilityPredicateTests: XCTestCase {
 
     func testElementUpdatedNotMetWhenNoMatch() {
         let trace = makeUpdateTrace(label: "counter", property: .value, old: "3", new: "4")
-        let action = makeResult(success: true, trace: trace)
+        let action = makeResult(success: true, trace: trace, completeness: .incomplete)
         let predicate = AccessibilityPredicate<RootContext>.changed(.elements([
             .updated(.label("counter"), .value(after: "5")),
         ]))
@@ -677,7 +698,7 @@ final class AccessibilityPredicateTests: XCTestCase {
             makeUpdate(label: "Other", property: .value, old: "1", new: "5"),
             makeUpdate(label: "Counter", property: .value, old: "3", new: "5"),
         ]))
-        let action = makeResult(success: true, trace: trace)
+        let action = makeResult(success: true, trace: trace, completeness: .incomplete)
         let predicate = AccessibilityPredicate<RootContext>.changed(.elements([
             .updated(.label("Counter"), .value(after: "5")),
         ]))
@@ -686,7 +707,7 @@ final class AccessibilityPredicateTests: XCTestCase {
 
     func testElementUpdatedNotMetWhenElementPredicateDoesNotMatch() {
         let trace = makeUpdateTrace(label: "Other", property: .value, old: "3", new: "5")
-        let action = makeResult(success: true, trace: trace)
+        let action = makeResult(success: true, trace: trace, completeness: .incomplete)
         let predicate = AccessibilityPredicate<RootContext>.changed(.elements([
             .updated(.label("Counter"), .value(after: "5")),
         ]))
@@ -695,7 +716,7 @@ final class AccessibilityPredicateTests: XCTestCase {
 
     func testElementUpdatedMetWhenOldAndNewValueMatch() {
         let trace = makeUpdateTrace(label: "counter", property: .value, old: "3", new: "5")
-        let action = makeResult(success: true, trace: trace)
+        let action = makeResult(success: true, trace: trace, completeness: .incomplete)
         let predicate = AccessibilityPredicate<RootContext>.changed(.elements([
             .updated(.label("counter"), .value(before: "3", after: "5")),
         ]))
@@ -704,7 +725,7 @@ final class AccessibilityPredicateTests: XCTestCase {
 
     func testElementUpdatedUsesConfiguredStringMatchForOldAndNewValues() {
         let trace = makeUpdateTrace(label: "cart", property: .value, old: "cart: empty", new: "3 items")
-        let action = makeResult(success: true, trace: trace)
+        let action = makeResult(success: true, trace: trace, completeness: .incomplete)
         let predicate = AccessibilityPredicate<RootContext>.changed(.elements([
             .updated(.label("cart"), .value(before: .prefix("cart:"), after: .suffix("items"))),
         ]))
@@ -714,7 +735,7 @@ final class AccessibilityPredicateTests: XCTestCase {
 
     func testElementUpdatedUsesConfiguredStringMatchForEveryModeAcrossBeforeAndAfter() {
         let trace = makeUpdateTrace(label: "Search Field", property: .value, old: "Search for tea", new: "John Smith")
-        let action = makeResult(success: true, trace: trace)
+        let action = makeResult(success: true, trace: trace, completeness: .incomplete)
         let changes: [AnyPropertyChangeExpr] = [
             .value(before: .exact("Search for tea"), after: .exact("John Smith")),
             .value(before: .contains("for"), after: .contains("Smith")),
@@ -972,7 +993,7 @@ final class AccessibilityPredicateTests: XCTestCase {
 
     func testElementUpdatedWithPropertyOnlyMetWhenTargetUpdates() {
         let trace = makeUpdateTrace(label: "counter", property: .value, old: "a", new: "b")
-        let action = makeResult(success: true, trace: trace)
+        let action = makeResult(success: true, trace: trace, completeness: .incomplete)
         let predicate = AccessibilityPredicate<RootContext>.changed(.elements([
             .updated(.label("counter"), .value()),
         ]))
@@ -991,7 +1012,7 @@ final class AccessibilityPredicateTests: XCTestCase {
 
     func testElementUpdatedNotMetWhenEmptyUpdates() {
         let trace = AccessibilityTrace.elementsChangedForTests(elementCount: 5, edits: ElementEdits())
-        let action = makeResult(success: true, trace: trace)
+        let action = makeResult(success: true, trace: trace, completeness: .incomplete)
         let predicate = AccessibilityPredicate<RootContext>.changed(.elements([
             .updated(.label("counter"), .value(after: "5")),
         ]))
@@ -1002,7 +1023,7 @@ final class AccessibilityPredicateTests: XCTestCase {
 
     func testElementUpdatedDiagnosticOnMiss() {
         let trace = makeUpdateTrace(label: "counter", property: .value, old: "3", new: "4")
-        let action = makeResult(success: true, trace: trace)
+        let action = makeResult(success: true, trace: trace, completeness: .incomplete)
         let predicate = AccessibilityPredicate<RootContext>.changed(.elements([
             .updated(.label("counter"), .value(after: "5")),
         ]))
@@ -1016,7 +1037,7 @@ final class AccessibilityPredicateTests: XCTestCase {
             makeUpdate(label: "label", property: .value, old: "A", new: "B"),
             makeUpdate(label: "counter", property: .value, old: "3", new: "5"),
         ]))
-        let action = makeResult(success: true, trace: trace)
+        let action = makeResult(success: true, trace: trace, completeness: .incomplete)
         let predicate = AccessibilityPredicate<RootContext>.changed(.elements([
             .updated(.label("counter"), .value(after: "5")),
         ]))
@@ -1034,7 +1055,7 @@ final class AccessibilityPredicateTests: XCTestCase {
                 ]
             ),
         ]))
-        let action = makeResult(success: true, trace: trace)
+        let action = makeResult(success: true, trace: trace, completeness: .incomplete)
         let traitsResult = AccessibilityPredicate<RootContext>.changed(.elements([
             .updated(.label("Toggle"), .traits()),
         ]))
@@ -1056,12 +1077,15 @@ final class AccessibilityPredicateTests: XCTestCase {
         let result = ActionResult.success(
             method: .activate,
             evidence: ActionResultSuccessEvidence(
-                observation: .trace(.elementsChangedForTests(
-                elementCount: 5,
-                edits: ElementEdits(updated: [
-                    makeUpdate(label: "btn_1", property: .value, old: "OFF", new: "ON"),
-                ])
-            ))
+                observation: .trace(traceEvidence(
+                    .elementsChangedForTests(
+                        elementCount: 5,
+                        edits: ElementEdits(updated: [
+                            makeUpdate(label: "btn_1", property: .value, old: "OFF", new: "ON"),
+                        ])
+                    ),
+                    completeness: .incomplete
+                ))
             )
         )
         let predicate = AccessibilityPredicate<RootContext>.changed(.elements([
@@ -1074,12 +1098,15 @@ final class AccessibilityPredicateTests: XCTestCase {
         let result = ActionResult.success(
             method: .activate,
             evidence: ActionResultSuccessEvidence(
-                observation: .trace(.elementsChangedForTests(
-                elementCount: 5,
-                edits: ElementEdits(updated: [
-                    makeUpdate(label: "any", property: .value, old: "A", new: "B"),
-                ])
-            ))
+                observation: .trace(traceEvidence(
+                    .elementsChangedForTests(
+                        elementCount: 5,
+                        edits: ElementEdits(updated: [
+                            makeUpdate(label: "any", property: .value, old: "A", new: "B"),
+                        ])
+                    ),
+                    completeness: .incomplete
+                ))
             )
         )
         let predicate = AccessibilityPredicate<RootContext>.changed(.elements([
@@ -1091,7 +1118,12 @@ final class AccessibilityPredicateTests: XCTestCase {
     func testElementUpdatedNoUpdatesInResult() {
         let result = ActionResult.success(
             method: .activate,
-            evidence: ActionResultSuccessEvidence(observation: .trace(.elementsChangedForTests(elementCount: 5, edits: ElementEdits())))
+            evidence: ActionResultSuccessEvidence(
+                observation: .trace(traceEvidence(
+                    .elementsChangedForTests(elementCount: 5, edits: ElementEdits()),
+                    completeness: .incomplete
+                ))
+            )
         )
         let predicate = AccessibilityPredicate<RootContext>.changed(.elements([
             .updated(.label("any"), .value()),
@@ -1105,12 +1137,15 @@ final class AccessibilityPredicateTests: XCTestCase {
         let result = ActionResult.success(
             method: .activate,
             evidence: ActionResultSuccessEvidence(
-                observation: .trace(.elementsChangedForTests(
-                elementCount: 5,
-                edits: ElementEdits(updated: [
-                    makeUpdate(label: "btn_1", property: .hint, old: "A", new: "B"),
-                ])
-            ))
+                observation: .trace(traceEvidence(
+                    .elementsChangedForTests(
+                        elementCount: 5,
+                        edits: ElementEdits(updated: [
+                            makeUpdate(label: "btn_1", property: .hint, old: "A", new: "B"),
+                        ])
+                    ),
+                    completeness: .incomplete
+                ))
             )
         )
         let predicate = AccessibilityPredicate<RootContext>.changed(.elements([
@@ -1133,7 +1168,12 @@ final class AccessibilityPredicateTests: XCTestCase {
         let replacementInterface = makeTestInterface(elements: [newElement], timestamp: Date())
         let result = ActionResult.success(
             method: .wait,
-            evidence: ActionResultSuccessEvidence(observation: .trace(.screenChangedForTests(replacementInterface: replacementInterface)))
+            evidence: ActionResultSuccessEvidence(
+                observation: .trace(traceEvidence(
+                    .screenChangedForTests(replacementInterface: replacementInterface),
+                    completeness: .incomplete
+                ))
+            )
         )
         let predicate = AccessibilityPredicate<RootContext>.exists(.label("No receipt"))
         XCTAssertTrue(predicate.validate(against: result).met)
@@ -1144,7 +1184,12 @@ final class AccessibilityPredicateTests: XCTestCase {
         let replacementInterface = makeTestInterface(elements: [otherElement], timestamp: Date())
         let result = ActionResult.success(
             method: .wait,
-            evidence: ActionResultSuccessEvidence(observation: .trace(.screenChangedForTests(replacementInterface: replacementInterface)))
+            evidence: ActionResultSuccessEvidence(
+                observation: .trace(traceEvidence(
+                    .screenChangedForTests(replacementInterface: replacementInterface),
+                    completeness: .incomplete
+                ))
+            )
         )
         let predicate = AccessibilityPredicate<RootContext>.exists(.label("No receipt"))
         let outcome = predicate.validate(against: result)
@@ -1164,7 +1209,12 @@ final class AccessibilityPredicateTests: XCTestCase {
         let replacementInterface = makeTestInterface(elements: [newElement], timestamp: Date())
         let result = ActionResult.success(
             method: .wait,
-            evidence: ActionResultSuccessEvidence(observation: .trace(.screenChangedForTests(replacementInterface: replacementInterface)))
+            evidence: ActionResultSuccessEvidence(
+                observation: .trace(traceEvidence(
+                    .screenChangedForTests(replacementInterface: replacementInterface),
+                    completeness: .incomplete
+                ))
+            )
         )
         let predicate = AccessibilityPredicate<RootContext>.missing(.label("Recording payment"))
         XCTAssertTrue(predicate.validate(against: result).met)
@@ -1175,7 +1225,12 @@ final class AccessibilityPredicateTests: XCTestCase {
         let replacementInterface = makeTestInterface(elements: [sameElement], timestamp: Date())
         let result = ActionResult.success(
             method: .wait,
-            evidence: ActionResultSuccessEvidence(observation: .trace(.screenChangedForTests(replacementInterface: replacementInterface)))
+            evidence: ActionResultSuccessEvidence(
+                observation: .trace(traceEvidence(
+                    .screenChangedForTests(replacementInterface: replacementInterface),
+                    completeness: .incomplete
+                ))
+            )
         )
         let predicate = AccessibilityPredicate<RootContext>.missing(.label("Header"))
         let outcome = predicate.validate(against: result)
@@ -1420,10 +1475,29 @@ final class AccessibilityPredicateTests: XCTestCase {
 
     private func makeResult(
         success: Bool,
-        message: String? = nil,
-        trace: AccessibilityTrace? = nil
+        message: String? = nil
     ) -> ActionResult {
-        let observation = trace.map(ActionResultObservationEvidence.trace) ?? .none
+        makeResult(success: success, message: message, observation: .none)
+    }
+
+    private func makeResult(
+        success: Bool,
+        message: String? = nil,
+        trace: AccessibilityTrace,
+        completeness: AccessibilityTraceEvidence.Completeness
+    ) -> ActionResult {
+        makeResult(
+            success: success,
+            message: message,
+            observation: .trace(traceEvidence(trace, completeness: completeness))
+        )
+    }
+
+    private func makeResult(
+        success: Bool,
+        message: String?,
+        observation: ActionResultObservationEvidence
+    ) -> ActionResult {
         if success {
             return ActionResult.success(
                 method: .syntheticTap,
@@ -1437,6 +1511,16 @@ final class AccessibilityPredicateTests: XCTestCase {
             message: message,
             evidence: ActionResultFailureEvidence(observation: observation)
         )
+    }
+
+    private func traceEvidence(
+        _ trace: AccessibilityTrace,
+        completeness: AccessibilityTraceEvidence.Completeness
+    ) -> AccessibilityTraceEvidence {
+        guard let evidence = AccessibilityTraceEvidence(trace: trace, completeness: completeness) else {
+            preconditionFailure("test trace evidence requires a current capture")
+        }
+        return evidence
     }
 
     private func currentTrace(_ elements: [HeistElement]) -> AccessibilityTrace {
@@ -1471,8 +1555,8 @@ final class AccessibilityPredicateTests: XCTestCase {
         ])
     }
 
-    private func makeEvidence(_ trace: AccessibilityTrace) -> PredicateEvaluationEvidence {
-        guard let evidence = PredicateEvaluationEvidence(trace: trace, isComplete: true) else {
+    private func makeEvidence(_ trace: AccessibilityTrace) -> AccessibilityTraceEvidence {
+        guard let evidence = AccessibilityTraceEvidence(trace: trace, completeness: .complete) else {
             preconditionFailure("test trace requires at least one capture")
         }
         return evidence

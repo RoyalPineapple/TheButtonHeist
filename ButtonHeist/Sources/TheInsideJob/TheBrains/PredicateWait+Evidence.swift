@@ -11,7 +11,10 @@ extension PredicateWait {
     ) -> ExpectationResult? {
         guard predicate.requiresChangeBaseline,
               let initialTrace,
-              let evidence = PredicateEvaluationEvidence(trace: initialTrace, isComplete: false)
+              let evidence = AccessibilityTraceEvidence(
+                  trace: initialTrace,
+                  completeness: .incomplete
+              )
         else { return nil }
         return predicate.evaluate(in: evidence)
     }
@@ -83,10 +86,6 @@ internal struct PredicateObservationEvidence {
         snapshot.observation
     }
 
-    internal var trace: AccessibilityTrace? {
-        window?.trace ?? snapshot.trace
-    }
-
     internal func evaluate(_ predicate: AccessibilityPredicate<RootContext>) -> ExpectationResult {
         if predicate.requiresChangeBaseline {
             guard baseline != nil else {
@@ -99,29 +98,34 @@ internal struct PredicateObservationEvidence {
                     actual: PredicateObservationDiagnostics.changePredicateNeedsFutureObservationMessage
                 )
             }
-            let isComplete: Bool
-            switch window.completeness {
-            case .complete:
-                isComplete = true
-            case .incomplete:
-                isComplete = false
-            }
-            guard let evidence = PredicateEvaluationEvidence(
-                trace: window.trace,
-                isComplete: isComplete
-            ) else {
-                return ExpectationResult(met: false, predicate: predicate, actual: "noTrace")
-            }
-            return predicate.evaluate(in: evidence)
+            return predicate.evaluate(in: window.traceEvidence)
         }
 
-        guard let evidence = PredicateEvaluationEvidence(
+        guard let evidence = AccessibilityTraceEvidence(
             trace: snapshot.trace,
-            isComplete: false
+            completeness: .incomplete
         ) else {
             return ExpectationResult(met: false, predicate: predicate, actual: "noTrace")
         }
         return predicate.evaluate(in: evidence)
+    }
+}
+
+extension ObservationWindow {
+    internal var traceEvidence: AccessibilityTraceEvidence {
+        let evidenceCompleteness: AccessibilityTraceEvidence.Completeness = switch completeness {
+        case .complete:
+            .complete
+        case .incomplete:
+            .incomplete
+        }
+        guard let evidence = AccessibilityTraceEvidence(
+            trace: trace,
+            completeness: evidenceCompleteness
+        ) else {
+            preconditionFailure("observation window requires at least one capture")
+        }
+        return evidence
     }
 }
 

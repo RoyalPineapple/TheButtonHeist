@@ -156,7 +156,9 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             before: makeReceiptTestInterface(elementCount: 1),
             after: makeReceiptTestInterface(elementCount: 2)
         )
-        let result = makeTestActionResult(accessibilityTrace: trace)
+        let result = makeTestActionResult(
+            traceEvidence: makeTestTraceEvidence(trace, completeness: .incomplete)
+        )
         let response = FenceResponse.action(
             command: .activate,
             result: result,
@@ -217,7 +219,10 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let result = ActionResult.success(
             method: .activate,
             evidence: ActionResultSuccessEvidence(
-                observation: .settledTrace(trace, .settled(durationMs: 1))
+                observation: .settledTrace(
+                    makeTestTraceEvidence(trace, completeness: .incomplete),
+                    .settled(durationMs: 1)
+                )
             )
         )
         let response = FenceResponse.action(
@@ -269,7 +274,10 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         )
         let response = FenceResponse.action(
             command: .activate,
-            result: makeTestActionResult(method: .activate, accessibilityTrace: trace),
+            result: makeTestActionResult(
+                method: .activate,
+                traceEvidence: makeTestTraceEvidence(trace, completeness: .incomplete)
+            ),
             expectation: ExpectationResult(
                 met: false,
                 predicate: .changed(.elements()),
@@ -288,7 +296,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let unchanged = makeReceiptTestInterface(elementCount: 1)
         let trace = makeReceiptTestTrace(before: unchanged, after: unchanged)
         let observation = ActionResultObservationEvidence.settledTrace(
-            trace,
+            makeTestTraceEvidence(trace, completeness: .incomplete),
             .settled(durationMs: 1)
         )
         let expectation = ExpectationResult(
@@ -338,9 +346,12 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             command: .activate,
             result: makeTestActionResult(
                 method: .activate,
-                accessibilityTrace: makeReceiptTestTrace(
-                    before: makeReceiptTestInterface(elementCount: 3),
-                    after: makeReceiptTestInterface(elementCount: 3)
+                traceEvidence: makeTestTraceEvidence(
+                    makeReceiptTestTrace(
+                        before: makeReceiptTestInterface(elementCount: 3),
+                        after: makeReceiptTestInterface(elementCount: 3)
+                    ),
+                    completeness: .incomplete
                 ),
                 activationTrace: ActivationTrace(.activationPointFallback(
                     axActivateReturned: false,
@@ -380,7 +391,9 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         )
         let response = FenceResponse.action(
             command: .activate,
-            result: makeTestActionResult(accessibilityTrace: trace)
+            result: makeTestActionResult(
+                traceEvidence: makeTestTraceEvidence(trace, completeness: .incomplete)
+            )
         )
 
         let delta = try publicJSONProbe(response).object("delta")
@@ -413,7 +426,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             command: .activate,
             result: ActionResult.success(
                 method: .activate,
-                evidence: ActionResultSuccessEvidence(observation: .trace(trace))
+                evidence: ActionResultSuccessEvidence(observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete)))
             )
         )
 
@@ -460,7 +473,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             command: .activate,
             result: ActionResult.success(
                 method: .activate,
-                evidence: ActionResultSuccessEvidence(observation: .trace(trace))
+                evidence: ActionResultSuccessEvidence(observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete)))
             )
         )
 
@@ -494,7 +507,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             command: .activate,
             result: ActionResult.success(
                 method: .activate,
-                evidence: ActionResultSuccessEvidence(observation: .trace(trace))
+                evidence: ActionResultSuccessEvidence(observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete)))
             )
         )
 
@@ -544,7 +557,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             command: .activate,
             result: ActionResult.success(
                 method: .activate,
-                evidence: ActionResultSuccessEvidence(observation: .trace(trace))
+                evidence: ActionResultSuccessEvidence(observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete)))
             )
         )
 
@@ -578,7 +591,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                     command: command,
                     result: ActionResult.success(
                         method: .activate,
-                        evidence: ActionResultSuccessEvidence(observation: .trace(trace))
+                        evidence: ActionResultSuccessEvidence(observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete)))
                     )
                 ),
             ],
@@ -660,7 +673,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                         command: command,
                         result: ActionResult.success(
                             method: .activate,
-                            evidence: ActionResultSuccessEvidence(observation: .trace(trace))
+                            evidence: ActionResultSuccessEvidence(observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete)))
                         )
                     ),
                 ],
@@ -739,7 +752,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                         command: command,
                         result: ActionResult.success(
                             method: .activate,
-                            evidence: ActionResultSuccessEvidence(observation: .trace(trace))
+                            evidence: ActionResultSuccessEvidence(observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete)))
                         )
                     ),
                 ],
@@ -812,7 +825,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                         method: .activate,
                         errorKind: .actionFailed,
                         message: "target stopped responding",
-                        evidence: ActionResultFailureEvidence(observation: .trace(trace))
+                        evidence: ActionResultFailureEvidence(observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete)))
                     ),
                     failure: HeistFailureDetail(
                         category: .action,
@@ -1016,7 +1029,10 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                         method: .wait,
                         evidence: ActionResultSuccessEvidence(
                             observation: .settledTrace(
-                                .noChangeForTests(elementCount: 0),
+                                makeTestTraceEvidence(
+                                    .noChangeForTests(elementCount: 0),
+                                    completeness: .complete
+                                ),
                                 .settled(durationMs: 7)
                             ),
                             timing: ActionPerformanceTiming(totalMs: 9)

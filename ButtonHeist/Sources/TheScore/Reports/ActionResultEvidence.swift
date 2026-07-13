@@ -145,6 +145,7 @@ public enum ActionResultEvidence: Sendable, Equatable {
     case success(ActionResultSuccessEvidence)
     case failure(ActionResultFailureEvidence)
 
+    public var traceEvidence: AccessibilityTraceEvidence? { observation.traceEvidence }
     public var accessibilityTrace: AccessibilityTrace? { observation.accessibilityTrace }
     public var settlement: ActionSettlementEvidence? { observation.settlement }
     public var announcement: String? { observation.announcement }

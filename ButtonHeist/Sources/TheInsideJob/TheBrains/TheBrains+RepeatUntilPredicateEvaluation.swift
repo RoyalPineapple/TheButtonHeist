@@ -8,23 +8,25 @@ import TheScore
 extension TheBrains.RepeatUntil {
     internal struct Observation {
         internal let sequence: SettledObservationSequence
-        internal let trace: AccessibilityTrace?
+        internal let traceEvidence: AccessibilityTraceEvidence?
         internal let summary: String?
 
         internal init(
             sequence: SettledObservationSequence,
-            trace: AccessibilityTrace?,
+            traceEvidence: AccessibilityTraceEvidence?,
             summary: String?
         ) {
             self.sequence = sequence
-            self.trace = trace
+            self.traceEvidence = traceEvidence
             self.summary = summary
         }
+
+        internal var trace: AccessibilityTrace? { traceEvidence?.trace }
 
         internal init?(_ receipt: HeistWaitReceipt) {
             guard let sequence = receipt.observedSequence else { return nil }
             self.sequence = sequence
-            trace = receipt.accessibilityTrace
+            traceEvidence = receipt.traceEvidence
             summary = receipt.observationSummary
         }
     }
@@ -204,8 +206,7 @@ extension TheBrains {
         ))
         let expectation = repeatUntilStopExpectation(
             step.predicate,
-            trace: receipt.accessibilityTrace,
-            isComplete: true,
+            evidence: receipt.traceEvidence,
             fallback: receipt.message ?? receipt.expectation.actual
         )
         let stopCheck = expectation
@@ -250,24 +251,24 @@ extension TheBrains {
             .last(where: repeatUntilActionResultCarriesSettledChange)
         else { return nil }
 
-        guard let trace = result.accessibilityTrace else { return nil }
+        guard let traceEvidence = result.traceEvidence else { return nil }
+        let trace = traceEvidence.trace
         let stopExpectation = repeatUntilStopExpectation(
             step.predicate,
-            trace: trace,
-            isComplete: result.settled != false,
+            evidence: traceEvidence,
             fallback: result.message
         )
         let sequence = repeatUntilObservedSequence(after: observation, result: result)
         let actionObservation = RepeatUntil.Observation(
             sequence: sequence,
-            trace: trace,
+            traceEvidence: traceEvidence,
             summary: repeatUntilObservationSummary(trace)
         )
         switch stopExpectation {
         case .met(let expectation):
             let receipt = HeistWaitReceipt.matched(
                 message: expectation.actual,
-                accessibilityTrace: trace,
+                traceEvidence: traceEvidence,
                 expectation: expectation,
                 observedSequence: sequence,
                 observationSummary: actionObservation.summary
@@ -280,7 +281,7 @@ extension TheBrains {
         case .unmet(let expectation):
             let receipt = HeistWaitReceipt.timedOut(
                 message: expectation.actual,
-                accessibilityTrace: trace,
+                traceEvidence: traceEvidence,
                 expectation: expectation,
                 observedSequence: sequence,
                 observationSummary: actionObservation.summary
@@ -296,10 +297,9 @@ extension TheBrains {
     private func repeatUntilActionResultCarriesSettledChange(_ result: ActionResult) -> Bool {
         guard result.outcome.isSuccess,
               result.settled == true,
-              let trace = result.accessibilityTrace,
-              !trace.captures.isEmpty
+              let evidence = result.traceEvidence
         else { return false }
-        return !trace.changeFacts.isEmpty
+        return !evidence.trace.changeFacts.isEmpty
     }
 
     private func repeatUntilObservedSequence(
@@ -322,18 +322,17 @@ extension TheBrains {
 
     private func repeatUntilStopExpectation(
         _ predicate: AccessibilityPredicate<RootContext>,
-        trace: AccessibilityTrace?,
-        isComplete: Bool,
+        evidence: AccessibilityTraceEvidence?,
         fallback: String?
     ) -> ExpectationResult {
-        guard let trace else {
+        guard let evidence else {
             return ExpectationResult(
                 met: false,
                 predicate: predicate,
                 actual: fallback ?? "no observed accessibility trace"
             )
         }
-        return PredicateEvaluation.evaluate(predicate, in: trace, isComplete: isComplete)
+        return predicate.evaluate(in: evidence)
     }
 }
 

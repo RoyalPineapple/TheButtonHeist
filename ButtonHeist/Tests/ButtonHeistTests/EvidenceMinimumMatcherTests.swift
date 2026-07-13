@@ -1,3 +1,4 @@
+import ButtonHeistTestSupport
 import XCTest
 import ThePlans
 @_spi(ButtonHeistTooling) @testable import ButtonHeist
@@ -51,9 +52,12 @@ private func semanticActionResult(
         method: method,
         evidence: ActionResultSuccessEvidence(
             observation: .settledTrace(
-                makeReceiptTestTrace(
-                    before: makeReceiptTestInterface(before),
-                    after: makeReceiptTestInterface(after)
+                makeTestTraceEvidence(
+                    makeReceiptTestTrace(
+                        before: makeReceiptTestInterface(before),
+                        after: makeReceiptTestInterface(after)
+                    ),
+                    completeness: .incomplete
                 ),
                 settled ? .settled(durationMs: 0) : .timedOut(durationMs: 0)
             ),

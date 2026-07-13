@@ -1505,6 +1505,22 @@ final class TheBrainsPipelineTests: XCTestCase {
             window: window
         ).evaluate(.noChange)
         XCTAssertTrue(predicateResult.met)
+
+        let receipt = predicateWaitForReceiptProofTests().waitReceipt(
+            for: ResolvedWaitStep(predicate: .noChange, timeout: 0),
+            trace: window.trace,
+            observationSummary: observation.summary,
+            expectation: predicateResult,
+            start: CFAbsoluteTimeGetCurrent(),
+            success: true,
+            baseline: baseline,
+            window: window,
+            observedSequence: currentEvent.sequence
+        )
+
+        XCTAssertEqual(receipt.traceEvidence?.completeness, .complete)
+        XCTAssertEqual(receipt.actionResult.traceEvidence?.completeness, .complete)
+        XCTAssertTrue(AccessibilityPredicate<RootContext>.noChange.validate(against: receipt.actionResult).met)
     }
 
     func testIncompleteObservationWindowDoesNotProduceUnchangedVerdict() throws {
@@ -1533,6 +1549,27 @@ final class TheBrainsPipelineTests: XCTestCase {
             window: window
         ).evaluate(.noChange)
         XCTAssertFalse(predicateResult.met)
+        XCTAssertEqual(predicateResult.actual, "observation history incomplete")
+
+        let receipt = predicateWaitForReceiptProofTests().waitReceipt(
+            for: ResolvedWaitStep(predicate: .noChange, timeout: 0),
+            trace: window.trace,
+            observationSummary: observation.summary,
+            expectation: predicateResult,
+            start: CFAbsoluteTimeGetCurrent(),
+            success: false,
+            baseline: baseline,
+            window: window,
+            observedSequence: currentEvent.sequence
+        )
+        let laterValidation = AccessibilityPredicate<RootContext>.noChange.validate(
+            against: receipt.actionResult
+        )
+
+        XCTAssertEqual(receipt.traceEvidence?.completeness, .incomplete)
+        XCTAssertEqual(receipt.actionResult.traceEvidence?.completeness, .incomplete)
+        XCTAssertFalse(laterValidation.met)
+        XCTAssertEqual(laterValidation.actual, "observation history incomplete")
     }
 
     func testIncompleteObservationWindowStillProvesEndpointElementChange() throws {
@@ -2408,6 +2445,20 @@ final class TheBrainsPipelineTests: XCTestCase {
                 "volume"
             ),
         ])
+    }
+
+    private func predicateWaitForReceiptProofTests() -> PredicateWait {
+        PredicateWait(
+            observeEvent: { _, _, _ in nil },
+            latestEvent: { nil },
+            latestSettleFailure: { nil },
+            semanticObservation: { event in
+                self.brains.postActionObservation.semanticObservation(from: event)
+            },
+            presenceTimeoutMessage: { _, _ in nil },
+            announcementCursor: { _ in .origin },
+            waitForAnnouncement: { _, _, _ in nil }
+        )
     }
 
     private func makeScreen(elements: [(label: String, traits: UIAccessibilityTraits, heistId: HeistId)]) -> InterfaceObservation {

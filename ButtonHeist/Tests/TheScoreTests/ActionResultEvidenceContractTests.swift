@@ -5,11 +5,14 @@ final class ActionResultEvidenceContractTests: XCTestCase {
 
     func testEveryOutcomeRoundTripsWithEveryObservationCase() throws {
         let trace = traceWithAnnouncement("Ready")
+        let complete = traceEvidence(trace, completeness: .complete)
+        let incomplete = traceEvidence(trace, completeness: .incomplete)
         let observations: [ActionResultObservationEvidence] = [
             .none,
             .announcement("Ready"),
-            .trace(trace),
-            .settledTrace(trace, .settled(durationMs: 12)),
+            .trace(complete),
+            .trace(incomplete),
+            .settledTrace(incomplete, .settled(durationMs: 12)),
         ]
 
         for observation in observations {
@@ -33,11 +36,12 @@ final class ActionResultEvidenceContractTests: XCTestCase {
 
     func testSuccessEvidenceRoundTripsWithCanonicalShape() throws {
         let trace = traceWithAnnouncement("Checkout")
+        let traceEvidence = traceEvidence(trace, completeness: .incomplete)
         let result = ActionResult.success(
             method: .activate,
             message: "done",
             evidence: ActionResultSuccessEvidence(
-                observation: .settledTrace(trace, .settled(durationMs: 125)),
+                observation: .settledTrace(traceEvidence, .settled(durationMs: 125)),
                 timing: ActionPerformanceTiming(actionDispatchMs: 4),
                 warning: .activationWeakAffordance(evidence: "label=Checkout")
             )
@@ -47,13 +51,17 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
         let evidence = try XCTUnwrap(object["evidence"] as? [String: Any])
         let observation = try XCTUnwrap(evidence["observation"] as? [String: Any])
+        let encodedTraceEvidence = try XCTUnwrap(observation["traceEvidence"] as? [String: Any])
         let settlement = try XCTUnwrap(observation["settlement"] as? [String: Any])
         let timing = try XCTUnwrap(evidence["timing"] as? [String: Any])
 
         XCTAssertEqual(Set(object.keys), Set(["outcome", "method", "message", "evidence"]))
         XCTAssertEqual(Set(evidence.keys), Set(["observation", "timing", "warning"]))
         XCTAssertEqual(observation["kind"] as? String, "settledTrace")
-        XCTAssertNotNil(observation["accessibilityTrace"])
+        XCTAssertEqual(Set(observation.keys), Set(["kind", "traceEvidence", "settlement"]))
+        XCTAssertEqual(Set(encodedTraceEvidence.keys), Set(["accessibilityTrace", "completeness"]))
+        XCTAssertNotNil(encodedTraceEvidence["accessibilityTrace"])
+        XCTAssertEqual(encodedTraceEvidence["completeness"] as? String, "incomplete")
         XCTAssertNil(observation["announcement"])
         XCTAssertEqual(settlement["kind"] as? String, "settled")
         XCTAssertEqual(settlement["durationMs"] as? Int, 125)
@@ -109,7 +117,9 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         let trace = traceWithAnnouncement("Checkout")
         let result = ActionResult.success(
             method: .activate,
-            evidence: ActionResultSuccessEvidence(observation: .trace(trace))
+            evidence: ActionResultSuccessEvidence(
+                observation: .trace(traceEvidence(trace, completeness: .incomplete))
+            )
         )
 
         XCTAssertEqual(result.announcement, "Checkout")
@@ -118,10 +128,11 @@ final class ActionResultEvidenceContractTests: XCTestCase {
 
     func testWithTimingUpdatesSettlementOwnerWithoutStoringDuplicate() {
         let trace = traceWithAnnouncement("Checkout")
+        let traceEvidence = traceEvidence(trace, completeness: .incomplete)
         let result = ActionResult.success(
             method: .activate,
             evidence: ActionResultSuccessEvidence(
-                observation: .settledTrace(trace, .settled(durationMs: 5)),
+                observation: .settledTrace(traceEvidence, .settled(durationMs: 5)),
                 timing: ActionPerformanceTiming(actionDispatchMs: 1)
             )
         )
@@ -226,6 +237,37 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         """)
     }
 
+    func testDecodingRejectsTraceObservationWithoutCanonicalCompletenessProof() throws {
+        let traceJSON = try XCTUnwrap(String(
+            data: JSONEncoder().encode(traceWithAnnouncement("Ready")),
+            encoding: .utf8
+        ))
+        assertActionResultRejects("""
+        {
+          "outcome": {"kind": "success"},
+          "method": "wait",
+          "evidence": {
+            "observation": {
+              "kind": "trace",
+              "accessibilityTrace": \(traceJSON)
+            }
+          }
+        }
+        """)
+        assertActionResultRejects("""
+        {
+          "outcome": {"kind": "success"},
+          "method": "wait",
+          "evidence": {
+            "observation": {
+              "kind": "trace",
+              "traceEvidence": {"accessibilityTrace": \(traceJSON)}
+            }
+          }
+        }
+        """)
+    }
+
     func testDecodingRejectsSiblingWarning() {
         assertActionResultRejects("""
         {
@@ -322,5 +364,15 @@ final class ActionResultEvidenceContractTests: XCTestCase {
             )
         )
         return AccessibilityTrace(captures: [first, second])
+    }
+
+    private func traceEvidence(
+        _ trace: AccessibilityTrace,
+        completeness: AccessibilityTraceEvidence.Completeness
+    ) -> AccessibilityTraceEvidence {
+        guard let evidence = AccessibilityTraceEvidence(trace: trace, completeness: completeness) else {
+            preconditionFailure("test trace evidence requires a current capture")
+        }
+        return evidence
     }
 }

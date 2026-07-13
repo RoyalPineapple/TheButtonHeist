@@ -417,13 +417,17 @@ final class ServerMessageTests: XCTestCase {
         let trace = AccessibilityTrace(first: interface).appending(interface)
         let result = ActionResult.success(
             method: .activate,
-            evidence: ActionResultSuccessEvidence(observation: .trace(trace))
+            evidence: ActionResultSuccessEvidence(
+                observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
+            )
         )
 
         let data = try JSONEncoder().encode(result)
         let json = try JSONProbe(data: data)
+        let traceEvidence = try json.object("evidence").object("observation").object("traceEvidence")
 
-        _ = try json.object("evidence").object("observation").object("accessibilityTrace")
+        XCTAssertEqual(try traceEvidence.string("completeness"), "incomplete")
+        _ = try traceEvidence.object("accessibilityTrace")
     }
 
     func testActionResultHasNoTraceProjectionWithoutTrace() throws {
@@ -448,7 +452,9 @@ final class ServerMessageTests: XCTestCase {
 
         let result = ActionResult.success(
             method: .activate,
-            evidence: ActionResultSuccessEvidence(observation: .trace(trace))
+            evidence: ActionResultSuccessEvidence(
+                observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
+            )
         )
 
         XCTAssertEqual(result.accessibilityTrace?.endpointScreenName, "Trace Screen")
@@ -464,7 +470,9 @@ final class ServerMessageTests: XCTestCase {
         )
         let result = ActionResult.success(
             method: .activate,
-            evidence: ActionResultSuccessEvidence(observation: .trace(trace))
+            evidence: ActionResultSuccessEvidence(
+                observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
+            )
         )
 
         let data = try JSONEncoder().encode(result)
@@ -482,7 +490,9 @@ final class ServerMessageTests: XCTestCase {
         let trace = AccessibilityTrace(first: before).appending(interfaceWithoutHeader(timestamp: 1))
         let result = ActionResult.success(
             method: .activate,
-            evidence: ActionResultSuccessEvidence(observation: .trace(trace))
+            evidence: ActionResultSuccessEvidence(
+                observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
+            )
         )
 
         XCTAssertNil(result.accessibilityTrace?.endpointScreenName)
@@ -732,7 +742,9 @@ final class ServerMessageTests: XCTestCase {
         let evidence: ActionResultSuccessEvidence
 
         init(accessibilityTrace: AccessibilityTrace) {
-            evidence = ActionResultSuccessEvidence(observation: .trace(accessibilityTrace))
+            evidence = ActionResultSuccessEvidence(
+                observation: .trace(makeTestTraceEvidence(accessibilityTrace, completeness: .incomplete))
+            )
         }
     }
 

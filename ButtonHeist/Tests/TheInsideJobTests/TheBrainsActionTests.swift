@@ -799,7 +799,12 @@ final class TheBrainsActionTests: XCTestCase {
                 waitRequests.append(request)
                 return ActionResult.success(
                     method: .wait,
-                    evidence: ActionResultSuccessEvidence(observation: .trace(AccessibilityTrace(capture: observedReady.capture)))
+                    evidence: ActionResultSuccessEvidence(
+                        observation: .trace(makeTestTraceEvidence(
+                            AccessibilityTrace(capture: observedReady.capture),
+                            completeness: .incomplete
+                        ))
+                    )
                 )
             }
         )
@@ -1200,7 +1205,10 @@ final class TheBrainsActionTests: XCTestCase {
                     method: .increment,
                     evidence: ActionResultSuccessEvidence(
                         observation: .settledTrace(
-                            AccessibilityTrace(captures: [before.capture, after.capture]),
+                            makeTestTraceEvidence(
+                                AccessibilityTrace(captures: [before.capture, after.capture]),
+                                completeness: .incomplete
+                            ),
                             .settled(durationMs: 0)
                         )
                     )
@@ -1210,10 +1218,14 @@ final class TheBrainsActionTests: XCTestCase {
                 switch request {
                 case .immediate:
                     let initialTrace = AccessibilityTrace(capture: initialState.capture)
-                    let expectation = PredicateEvaluation.evaluate(predicate, in: initialTrace, isComplete: false)
+                    let expectation = PredicateEvaluation.evaluate(
+                        predicate,
+                        in: initialTrace,
+                        completeness: .incomplete
+                    )
                     return .timedOut(
                         message: expectation.actual,
-                        accessibilityTrace: initialTrace,
+                        traceEvidence: makeTestTraceEvidence(initialTrace, completeness: .incomplete),
                         expectation: self.unmetExpectation(expectation),
                         observedSequence: 1,
                         observationSummary: "interface: 1 elements"
@@ -1223,7 +1235,7 @@ final class TheBrainsActionTests: XCTestCase {
                     return .failed(
                         errorKind: .general,
                         message: "unexpected post-body wait",
-                        accessibilityTrace: nil,
+                        traceEvidence: nil,
                         expectation: ExpectationResult.Unmet(
                             predicate: predicate,
                             actual: "unexpected post-body wait"
@@ -1234,7 +1246,7 @@ final class TheBrainsActionTests: XCTestCase {
                     return .failed(
                         errorKind: .general,
                         message: "unexpected wait request",
-                        accessibilityTrace: nil,
+                        traceEvidence: nil,
                         expectation: ExpectationResult.Unmet(
                             predicate: predicate,
                             actual: "unexpected wait request"
@@ -1430,20 +1442,28 @@ final class TheBrainsActionTests: XCTestCase {
             wait: { request in
                 switch request {
                 case .immediate:
-                    let expectation = PredicateEvaluation.evaluate(predicate, in: initialTrace, isComplete: false)
+                    let expectation = PredicateEvaluation.evaluate(
+                        predicate,
+                        in: initialTrace,
+                        completeness: .incomplete
+                    )
                     return .timedOut(
                         message: expectation.actual,
-                        accessibilityTrace: initialTrace,
+                        traceEvidence: makeTestTraceEvidence(initialTrace, completeness: .incomplete),
                         expectation: self.unmetExpectation(expectation),
                         observedSequence: 1,
                         observationSummary: "interface: 1 elements"
                     )
                 case .afterObservation:
                     afterObservationCount += 1
-                    let expectation = PredicateEvaluation.evaluate(predicate, in: matchedTrace, isComplete: false)
+                    let expectation = PredicateEvaluation.evaluate(
+                        predicate,
+                        in: matchedTrace,
+                        completeness: .incomplete
+                    )
                     return .matched(
                         message: expectation.actual,
-                        accessibilityTrace: matchedTrace,
+                        traceEvidence: makeTestTraceEvidence(matchedTrace, completeness: .incomplete),
                         expectation: self.metExpectation(expectation)
                     )
                 case .standalone, .actionEndpoint, .baselineTraceOnly:
@@ -1451,7 +1471,7 @@ final class TheBrainsActionTests: XCTestCase {
                     return .failed(
                         errorKind: .general,
                         message: "unexpected wait request",
-                        accessibilityTrace: nil,
+                        traceEvidence: nil,
                         expectation: ExpectationResult.Unmet(
                             predicate: predicate,
                             actual: "unexpected wait request"
@@ -1493,10 +1513,14 @@ final class TheBrainsActionTests: XCTestCase {
             wait: { request in
                 switch request {
                 case .immediate:
-                    let expectation = PredicateEvaluation.evaluate(predicate, in: initialTrace, isComplete: false)
+                    let expectation = PredicateEvaluation.evaluate(
+                        predicate,
+                        in: initialTrace,
+                        completeness: .incomplete
+                    )
                     return .timedOut(
                         message: expectation.actual,
-                        accessibilityTrace: initialTrace,
+                        traceEvidence: makeTestTraceEvidence(initialTrace, completeness: .incomplete),
                         expectation: self.unmetExpectation(expectation),
                         observedSequence: 1,
                         observationSummary: "interface: 1 elements"
@@ -1504,7 +1528,7 @@ final class TheBrainsActionTests: XCTestCase {
                 case .afterObservation:
                     return .timedOut(
                         message: "no observed accessibility trace",
-                        accessibilityTrace: nil,
+                        traceEvidence: nil,
                         expectation: ExpectationResult.Unmet(
                             predicate: .changed(.elements()),
                             actual: "no observed accessibility trace"
@@ -1517,7 +1541,7 @@ final class TheBrainsActionTests: XCTestCase {
                     return .failed(
                         errorKind: .general,
                         message: "unexpected wait request",
-                        accessibilityTrace: nil,
+                        traceEvidence: nil,
                         expectation: ExpectationResult.Unmet(
                             predicate: predicate,
                             actual: "unexpected wait request"
@@ -2061,7 +2085,7 @@ final class TheBrainsActionTests: XCTestCase {
         let actionResult = ActionResult.success(
             method: .activate,
             evidence: ActionResultSuccessEvidence(observation: .settledTrace(
-                initialTrace,
+                makeTestTraceEvidence(initialTrace, completeness: .incomplete),
                 .settled(durationMs: 0)
             ))
         )
@@ -2692,7 +2716,7 @@ final class TheBrainsActionTests: XCTestCase {
                 ActionResult.success(
                     method: .activate,
                     evidence: ActionResultSuccessEvidence(observation: .settledTrace(
-                        trace,
+                        makeTestTraceEvidence(trace, completeness: .incomplete),
                         .settled(durationMs: 7)
                     ))
                 )
@@ -2734,7 +2758,12 @@ final class TheBrainsActionTests: XCTestCase {
                     method: .wait,
                     errorKind: .timeout,
                     message: "timed out after 0.2s — expectation not met",
-                    evidence: ActionResultFailureEvidence(observation: .trace(.noChangeForTests(elementCount: 1)))
+                    evidence: ActionResultFailureEvidence(
+                        observation: .trace(makeTestTraceEvidence(
+                            .noChangeForTests(elementCount: 1),
+                            completeness: .incomplete
+                        ))
+                    )
                 )
             }
         )
@@ -3296,14 +3325,24 @@ final class TheBrainsActionTests: XCTestCase {
                 executedCommands.append(command)
                 return ActionResult.success(
                     method: .activate,
-                    evidence: ActionResultSuccessEvidence(observation: .trace(AccessibilityTrace(capture: stillPresentState.capture)))
+                    evidence: ActionResultSuccessEvidence(
+                        observation: .trace(makeTestTraceEvidence(
+                            AccessibilityTrace(capture: stillPresentState.capture),
+                            completeness: .incomplete
+                        ))
+                    )
                 )
             },
             wait: { request in
                 waitedSteps.append(request.step)
                 return ActionResult.success(
                     method: .wait,
-                    evidence: ActionResultSuccessEvidence(observation: .trace(AccessibilityTrace(capture: waitObservedState.capture)))
+                    evidence: ActionResultSuccessEvidence(
+                        observation: .trace(makeTestTraceEvidence(
+                            AccessibilityTrace(capture: waitObservedState.capture),
+                            completeness: .incomplete
+                        ))
+                    )
                 )
             }
         )
@@ -4704,12 +4743,16 @@ final class TheBrainsActionTests: XCTestCase {
             return heistWaitReceipt(for: waitStep, result: await wait(request))
         }
         if let initialTrace, afterSequence == nil {
-            let expectation = PredicateEvaluation.evaluate(waitStep.predicate, in: initialTrace, isComplete: false)
+            let expectation = PredicateEvaluation.evaluate(
+                waitStep.predicate,
+                in: initialTrace,
+                completeness: .incomplete
+            )
             if expectation.met || waitStep.timeout == 0 {
                 let result = makeWaitActionResult(
                     met: expectation.met,
                     message: expectation.actual,
-                    accessibilityTrace: initialTrace
+                    traceEvidence: makeTestTraceEvidence(initialTrace, completeness: .incomplete)
                 )
                 return heistWaitReceipt(for: waitStep, result: result, expectation: expectation)
             }
@@ -4747,13 +4790,16 @@ final class TheBrainsActionTests: XCTestCase {
         let result = makeWaitActionResult(
             met: expectation.met,
             message: expectation.actual,
-            accessibilityTrace: observation.accessibilityTrace
+            traceEvidence: makeTestTraceEvidence(
+                observation.accessibilityTrace,
+                completeness: .incomplete
+            )
         )
         switch expectation {
         case .met(let expectation):
             return .matched(
                 message: result.message,
-                accessibilityTrace: result.accessibilityTrace,
+                traceEvidence: result.traceEvidence,
                 expectation: expectation,
                 observedSequence: observation.event.sequence,
                 observationSummary: observation.summary
@@ -4761,7 +4807,7 @@ final class TheBrainsActionTests: XCTestCase {
         case .unmet(let expectation):
             return .timedOut(
                 message: result.message,
-                accessibilityTrace: result.accessibilityTrace,
+                traceEvidence: result.traceEvidence,
                 expectation: expectation,
                 observedSequence: observation.event.sequence,
                 observationSummary: observation.summary
@@ -4794,7 +4840,7 @@ final class TheBrainsActionTests: XCTestCase {
         if result.outcome.isSuccess, case .met(let expectation) = expectation {
             return .matched(
                 message: result.message,
-                accessibilityTrace: result.accessibilityTrace,
+                traceEvidence: result.traceEvidence,
                 expectation: expectation
             )
         }
@@ -4805,14 +4851,14 @@ final class TheBrainsActionTests: XCTestCase {
         if result.outcome.errorKind == .timeout || result.outcome.isSuccess {
             return .timedOut(
                 message: result.message,
-                accessibilityTrace: result.accessibilityTrace,
+                traceEvidence: result.traceEvidence,
                 expectation: unmet
             )
         }
         return .failed(
                 errorKind: result.outcome.errorKind ?? .general,
                 message: result.message,
-                accessibilityTrace: result.accessibilityTrace,
+                traceEvidence: result.traceEvidence,
                 expectation: unmet
             )
     }
@@ -5036,9 +5082,9 @@ private extension ActionResult {
 private func makeWaitActionResult(
     met: Bool,
     message: String?,
-    accessibilityTrace: AccessibilityTrace?
+    traceEvidence: AccessibilityTraceEvidence?
 ) -> ActionResult {
-    let observation = accessibilityTrace.map(ActionResultObservationEvidence.trace) ?? .none
+    let observation = traceEvidence.map(ActionResultObservationEvidence.trace) ?? .none
     if met {
         return ActionResult.success(
             method: .wait,

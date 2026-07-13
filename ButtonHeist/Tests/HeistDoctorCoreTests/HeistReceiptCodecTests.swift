@@ -279,7 +279,7 @@ import TheScore
         let result = ActionResult.success(
             method: .activate,
             evidence: ActionResultSuccessEvidence(
-                observation: .trace(trace),
+                observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete)),
                 subjectEvidence: ActionSubjectEvidence(
                     source: .resolvedSemanticTarget,
                     target: .predicate(.label("Checkout")),

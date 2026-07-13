@@ -580,7 +580,10 @@ final class AccessibilityTraceDiffTests: XCTestCase {
             ),
         ])
         let trace = AccessibilityTrace(first: beforeInterface).appending(afterInterface)
-        guard let evidence = PredicateEvaluationEvidence(trace: trace, isComplete: true) else {
+        guard let evidence = AccessibilityTraceEvidence(
+            trace: trace,
+            completeness: .complete
+        ) else {
             return XCTFail("Expected predicate evidence")
         }
         let framePredicate = AccessibilityPredicate<RootContext>.changed(.elements([

@@ -462,11 +462,11 @@ final class WireConverterTests: XCTestCase {
 
         let interface = WireConversion.toSemanticInterface(from: screen.tree)
         let predicate = AccessibilityPredicate<RootContext>.exists(.container(.identifier(containerIdentifier)))
-        let evidence = try XCTUnwrap(PredicateEvaluationEvidence(
+        let evidence = try XCTUnwrap(AccessibilityTraceEvidence(
             trace: AccessibilityTrace(captures: [
                 AccessibilityTrace.Capture(sequence: 1, interface: interface),
             ]),
-            isComplete: false
+            completeness: .incomplete
         ))
         let result = predicate.evaluate(in: evidence)
 
@@ -546,11 +546,11 @@ final class WireConverterTests: XCTestCase {
 
         let interface = WireConversion.toSemanticInterface(from: screen.tree)
         let predicate = AccessibilityPredicate<RootContext>.exists(.container(.identifier(orderIdentifier)))
-        let evidence = try XCTUnwrap(PredicateEvaluationEvidence(
+        let evidence = try XCTUnwrap(AccessibilityTraceEvidence(
             trace: AccessibilityTrace(captures: [
                 AccessibilityTrace.Capture(sequence: 1, interface: interface),
             ]),
-            isComplete: false
+            completeness: .incomplete
         ))
         let result = predicate.evaluate(in: evidence)
 

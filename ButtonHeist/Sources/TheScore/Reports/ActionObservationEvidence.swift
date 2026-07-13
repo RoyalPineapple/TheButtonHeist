@@ -50,16 +50,20 @@ public struct ActionPerformanceTiming: Codable, Sendable, Equatable {
 public enum ActionResultObservationEvidence: Codable, Sendable, Equatable {
     case none
     case announcement(String)
-    case trace(AccessibilityTrace)
-    case settledTrace(AccessibilityTrace, ActionSettlementEvidence)
+    case trace(AccessibilityTraceEvidence)
+    case settledTrace(AccessibilityTraceEvidence, ActionSettlementEvidence)
 
-    public var accessibilityTrace: AccessibilityTrace? {
+    public var traceEvidence: AccessibilityTraceEvidence? {
         switch self {
-        case .trace(let trace), .settledTrace(let trace, _):
-            return trace
+        case .trace(let evidence), .settledTrace(let evidence, _):
+            return evidence
         case .none, .announcement:
             return nil
         }
+    }
+
+    public var accessibilityTrace: AccessibilityTrace? {
+        traceEvidence?.trace
     }
 
     public var settlement: ActionSettlementEvidence? {
@@ -73,8 +77,8 @@ public enum ActionResultObservationEvidence: Codable, Sendable, Equatable {
             return nil
         case .announcement(let text):
             return text
-        case .trace(let trace), .settledTrace(let trace, _):
-            return trace.capturedAnnouncements.first?.text
+        case .trace(let evidence), .settledTrace(let evidence, _):
+            return evidence.trace.capturedAnnouncements.first?.text
         }
     }
 
@@ -88,7 +92,7 @@ public enum ActionResultObservationEvidence: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case kind
         case announcement
-        case accessibilityTrace
+        case traceEvidence
         case settlement
     }
 
@@ -111,16 +115,16 @@ public enum ActionResultObservationEvidence: Codable, Sendable, Equatable {
             }
             self = .announcement(text)
         case .trace:
-            try Self.rejectFields(except: [.kind, .accessibilityTrace], in: container, kind: .trace)
-            self = .trace(try container.decode(AccessibilityTrace.self, forKey: .accessibilityTrace))
+            try Self.rejectFields(except: [.kind, .traceEvidence], in: container, kind: .trace)
+            self = .trace(try container.decode(AccessibilityTraceEvidence.self, forKey: .traceEvidence))
         case .settledTrace:
             try Self.rejectFields(
-                except: [.kind, .accessibilityTrace, .settlement],
+                except: [.kind, .traceEvidence, .settlement],
                 in: container,
                 kind: .settledTrace
             )
             self = .settledTrace(
-                try container.decode(AccessibilityTrace.self, forKey: .accessibilityTrace),
+                try container.decode(AccessibilityTraceEvidence.self, forKey: .traceEvidence),
                 try container.decode(ActionSettlementEvidence.self, forKey: .settlement)
             )
         }
@@ -134,12 +138,12 @@ public enum ActionResultObservationEvidence: Codable, Sendable, Equatable {
         case .announcement(let text):
             try container.encode(Kind.announcement, forKey: .kind)
             try container.encode(text, forKey: .announcement)
-        case .trace(let trace):
+        case .trace(let evidence):
             try container.encode(Kind.trace, forKey: .kind)
-            try container.encode(trace, forKey: .accessibilityTrace)
-        case .settledTrace(let trace, let settlement):
+            try container.encode(evidence, forKey: .traceEvidence)
+        case .settledTrace(let evidence, let settlement):
             try container.encode(Kind.settledTrace, forKey: .kind)
-            try container.encode(trace, forKey: .accessibilityTrace)
+            try container.encode(evidence, forKey: .traceEvidence)
             try container.encode(settlement, forKey: .settlement)
         }
     }

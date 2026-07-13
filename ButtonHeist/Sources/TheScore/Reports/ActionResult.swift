@@ -166,10 +166,10 @@ public struct ActionSettlementEvidence: Codable, Sendable, Equatable {
 extension ActionResultObservationEvidence {
     fileprivate func replacingSettlementDuration(_ durationMs: Int?) -> ActionResultObservationEvidence {
         guard let durationMs else { return self }
-        guard case .settledTrace(let trace, let settlement) = self else {
+        guard case .settledTrace(let evidence, let settlement) = self else {
             preconditionFailure("settle timing requires trace settlement evidence")
         }
-        return .settledTrace(trace, settlement.replacingDurationMs(durationMs))
+        return .settledTrace(evidence, settlement.replacingDurationMs(durationMs))
     }
 }
 
@@ -285,6 +285,8 @@ public struct ActionResult: Codable, Sendable, Equatable {
     public var payload: ResultPayload? { methodAndPayload.resultPayload }
     /// Source-of-truth accessibility capture receipt for this action.
     public var accessibilityTrace: AccessibilityTrace? { evidence.accessibilityTrace }
+    /// Source-of-truth trace and observation-completeness proof for this action.
+    public var traceEvidence: AccessibilityTraceEvidence? { evidence.traceEvidence }
     /// True when the response represents a settled UI state — either the
     /// AX tree reached multi-cycle stability, or a screen transition
     /// preempted the settle loop and the new screen has been observed via

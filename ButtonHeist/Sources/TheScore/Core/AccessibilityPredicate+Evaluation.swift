@@ -2,17 +2,12 @@ import ThePlans
 import Foundation
 
 public extension AccessibilityPredicate where Context == RootContext {
-    func evaluate(in evidence: PredicateEvaluationEvidence) -> ExpectationResult {
+    func evaluate(in evidence: AccessibilityTraceEvidence) -> ExpectationResult {
         evaluateNode(node, evidence: evidence).expectation(for: self)
     }
 
     func validate(against result: ActionResult) -> ExpectationResult {
-        guard let trace = result.accessibilityTrace,
-              let evidence = PredicateEvaluationEvidence(
-                  trace: trace,
-                  isComplete: result.settled ?? (trace.captures.count >= 2)
-              )
-        else {
+        guard let evidence = result.traceEvidence else {
             return ExpectationResult(
                 met: false,
                 predicate: self,
@@ -26,7 +21,7 @@ public extension AccessibilityPredicate where Context == RootContext {
 private extension AccessibilityPredicate where Context == RootContext {
     func evaluateNode(
         _ node: AccessibilityPredicateNode,
-        evidence: PredicateEvaluationEvidence
+        evidence: AccessibilityTraceEvidence
     ) -> PredicateEvaluationResult {
         let current = ElementMatchGraph(interface: evidence.currentInterface)
         switch node {
@@ -59,7 +54,7 @@ private extension AccessibilityPredicate where Context == RootContext {
 
     func evaluateScreen(
         _ assertions: [AccessibilityPredicateNode],
-        evidence: PredicateEvaluationEvidence,
+        evidence: AccessibilityTraceEvidence,
         current: ElementMatchGraph
     ) -> PredicateEvaluationResult {
         let facts = evidence.changeFacts
@@ -78,7 +73,7 @@ private extension AccessibilityPredicate where Context == RootContext {
 
     func evaluateElements(
         _ assertions: [AccessibilityPredicateNode],
-        evidence: PredicateEvaluationEvidence,
+        evidence: AccessibilityTraceEvidence,
         current: ElementMatchGraph
     ) -> PredicateEvaluationResult {
         let facts = evidence.changeFacts
@@ -118,7 +113,7 @@ private extension AccessibilityPredicate where Context == RootContext {
     func evaluateElementAssertion(
         _ assertion: AccessibilityPredicateNode,
         facts: [AccessibilityTrace.ElementsChangeFact],
-        evidence: PredicateEvaluationEvidence,
+        evidence: AccessibilityTraceEvidence,
         current: ElementMatchGraph
     ) -> PredicateEvaluationResult {
         switch assertion {

@@ -17,7 +17,7 @@ extension ActionResult {
             ? .settled(durationMs: settledObservation.settleTimeMs)
             : .timedOut(durationMs: settledObservation.settleTimeMs)
         let observation = ActionResultObservationEvidence.settledTrace(
-            settledObservation.accessibilityTrace,
+            settledObservation.traceEvidence,
             settlement
         )
         switch resultOutcome {
@@ -66,6 +66,16 @@ extension ActionResult {
 }
 
 extension PostActionObservation.SettledObservationResult {
+    var traceEvidence: AccessibilityTraceEvidence {
+        guard let evidence = AccessibilityTraceEvidence(
+            trace: accessibilityTrace,
+            completeness: .incomplete
+        ) else {
+            preconditionFailure("post-action observation requires a current accessibility capture")
+        }
+        return evidence
+    }
+
     var accessibilityTrace: AccessibilityTrace {
         switch self {
         case .committed(_, _, let trace), .diagnostic(_, let trace):
