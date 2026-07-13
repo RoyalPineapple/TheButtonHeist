@@ -570,7 +570,7 @@ final class ElementInflationProductTests: XCTestCase {
             target: target,
             identifier: identifier,
             label: label,
-            knownHeistId: HeistId(rawValue: "known_\(identifier)"),
+            knownHeistId: HeistId(rawValue: identifier),
             frameOrigin: frameOrigin
         )
     }
@@ -652,7 +652,7 @@ final class ElementInflationProductTests: XCTestCase {
             target: target,
             identifier: identifier,
             label: label,
-            knownHeistId: HeistId(rawValue: "known_\(identifier)"),
+            knownHeistId: HeistId(rawValue: identifier),
             frameOrigin: target.frame.origin
         )
     }
@@ -695,7 +695,7 @@ final class ElementInflationProductTests: XCTestCase {
             target: target,
             identifier: identifier,
             label: label,
-            knownHeistId: HeistId(rawValue: "known_\(identifier)"),
+            knownHeistId: HeistId(rawValue: identifier),
             frameOrigin: target.frame.origin
         )
     }
@@ -760,7 +760,7 @@ final class ElementInflationProductTests: XCTestCase {
             target: target,
             identifier: identifier,
             label: label,
-            knownHeistId: HeistId(rawValue: "known_\(identifier)"),
+            knownHeistId: HeistId(rawValue: identifier),
             innerFrameOrigin: innerScrollView.frame.origin,
             targetFrameOrigin: target.frame.origin
         )
