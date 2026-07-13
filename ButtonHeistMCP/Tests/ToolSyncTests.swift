@@ -20,6 +20,48 @@ struct ToolSyncTests {
         )
     }
 
+    @Test("Committed public command contract stays digest-based and below 100 KB")
+    func committedPublicCommandContractStaysDigestBasedAndBounded() throws {
+        let data = try Data(contentsOf: PublicCommandContractFixture.fileURL)
+        let contract = try JSONDecoder().decode(Value.self, from: data)
+        let commands = try #require(contract.objectValue?["commands"]?.arrayValue)
+        let lowercaseHex = CharacterSet(charactersIn: "0123456789abcdef")
+
+        #expect(data.count < PublicCommandContractFixture.maximumCommittedByteCount)
+        #expect(!commands.isEmpty)
+        for command in commands {
+            let fields = try #require(command.objectValue)
+            let digest = try #require(fields["inputSchemaSHA256"]?.stringValue)
+
+            #expect(fields["inputSchema"] == nil)
+            #expect(digest.utf8.count == 64)
+            #expect(digest.unicodeScalars.allSatisfy(lowercaseHex.contains))
+        }
+    }
+
+    @Test("Public command input schema digest is canonical across dictionary order")
+    func publicCommandInputSchemaDigestIsCanonicalAcrossDictionaryOrder() throws {
+        let first = HeistValue.object([
+            "type": .string("object"),
+            "properties": .object([
+                "alpha": .object(["type": .string("string")]),
+                "beta": .object(["type": .string("integer")]),
+            ]),
+        ])
+        let reordered = HeistValue.object([
+            "properties": .object([
+                "beta": .object(["type": .string("integer")]),
+                "alpha": .object(["type": .string("string")]),
+            ]),
+            "type": .string("object"),
+        ])
+
+        #expect(
+            try PublicCommandContractFixture.inputSchemaSHA256(first)
+                == PublicCommandContractFixture.inputSchemaSHA256(reordered)
+        )
+    }
+
     @Test("Public command contract update requires exact local opt-in")
     func publicCommandContractUpdateRequiresExactLocalOptIn() {
         let key = PublicCommandContractFixture.updateEnvironmentKey
@@ -462,6 +504,11 @@ private func assertStringMatchSchema(_ schema: Value, path: String) {
 }
 
 private extension Value {
+    var arrayValue: [Value]? {
+        guard case .array(let array) = self else { return nil }
+        return array
+    }
+
     var objectValue: [String: Value]? {
         guard case .object(let object) = self else { return nil }
         return object

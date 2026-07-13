@@ -29,6 +29,7 @@ enum PublicCommandContractFixture {
     }
 
     static let updateEnvironmentKey = "BUTTONHEIST_UPDATE_PUBLIC_COMMAND_CONTRACT"
+    static let maximumCommittedByteCount = 100_000
     static let updateCommand = """
         BUTTONHEIST_UPDATE_PUBLIC_COMMAND_CONTRACT=1 scripts/swift-test-gate.sh \
         ButtonHeistMCP --filter ToolSyncTests.publicCommandContractMatchesCommittedDescriptorSnapshot
@@ -54,6 +55,14 @@ enum PublicCommandContractFixture {
         var data = try encoder.encode(Contract(commands: commands))
         data.append(0x0A)
         return data
+    }
+
+    static func inputSchemaSHA256(_ inputSchema: HeistValue) throws -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        return SHA256.hash(data: try encoder.encode(inputSchema))
+            .map { String(format: "%02x", $0) }
+            .joined()
     }
 
     static func mode(environment: [String: String]) -> Mode {
@@ -105,11 +114,9 @@ private extension PublicCommandContractFixture {
             exposedByCLI = descriptor.cliExposure == .directCommand
             exposedByMCP = descriptor.mcpExposure == .directTool
             description = descriptor.description
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
-            inputSchemaSHA256 = SHA256.hash(data: try encoder.encode(descriptor.inputJSONSchema))
-                .map { String(format: "%02x", $0) }
-                .joined()
+            inputSchemaSHA256 = try PublicCommandContractFixture.inputSchemaSHA256(
+                descriptor.inputJSONSchema
+            )
             mcpAnnotations = descriptor.mcpAnnotations.map(MCPAnnotations.init)
         }
     }
