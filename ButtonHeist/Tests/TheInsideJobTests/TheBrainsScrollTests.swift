@@ -941,7 +941,8 @@ final class TheBrainsScrollTests: XCTestCase {
         }
         revealTask.cancel()
 
-        XCTAssertTrue(await revealTask.value)
+        let wasCancelled = await revealTask.value
+        XCTAssertTrue(wasCancelled)
         XCTAssertEqual(knownTargetAttempts, 0)
         XCTAssertEqual(scrollView.setContentOffsetAnimations, [])
     }
