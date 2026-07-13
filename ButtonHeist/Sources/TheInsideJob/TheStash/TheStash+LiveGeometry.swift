@@ -54,10 +54,10 @@ extension TheStash {
     }
 
     func resolveLiveActionTarget(for treeElement: InterfaceTree.Element) -> LiveActionTargetResolution {
-        guard let object = dispatchObject(for: treeElement) else {
+        guard let liveElement = liveElementAliasing(treeElement),
+              let object = dispatchObject(for: liveElement) else {
             return .objectUnavailable
         }
-        let liveElement = liveInterfaceElement(heistId: treeElement.heistId) ?? treeElement
         guard let geometry = Self.liveGeometry(for: liveElement.element) else {
             return .geometryUnavailable
         }
@@ -67,6 +67,18 @@ extension TheStash {
             frame: geometry.frame,
             activationPoint: geometry.activationPoint
         ))
+    }
+
+    func liveElementAliasing(_ treeElement: InterfaceTree.Element) -> InterfaceTree.Element? {
+        guard let liveElement = liveInterfaceElement(heistId: treeElement.heistId) else { return nil }
+        let committedIdentity = AccessibilityPolicy.matcherIdentityFacts(
+            for: WireConversion.convert(treeElement.element)
+        )
+        let liveIdentity = AccessibilityPolicy.matcherIdentityFacts(
+            for: WireConversion.convert(liveElement.element)
+        )
+        guard liveIdentity == committedIdentity else { return nil }
+        return liveElement
     }
 
     func resolveLiveContainerTarget(for containerTarget: InterfaceTree.Container) -> LiveContainerTargetResolution {
@@ -105,6 +117,20 @@ extension TheStash {
             .flatMap { liveScrollableContainerView(forPath: $0) }
     }
 
+    func refreshedLiveScrollView(
+        for semanticContainer: InterfaceTree.Container,
+        directChildOf parent: UIScrollView? = nil
+    ) -> UIScrollView? {
+        let matchingViews = latestObservation.tree.containers.values.compactMap { candidate -> UIScrollView? in
+            guard Self.container(candidate, aliases: semanticContainer) else { return nil }
+            return liveScrollableContainerView(forPath: candidate.path)
+        }
+        guard matchingViews.count == 1, let scrollView = matchingViews.first else { return nil }
+        guard let parent else { return scrollView }
+        guard scrollableContainerViewsByPath.values.contains(where: { $0 === parent }) else { return nil }
+        return scrollView.nearestScrollableSuperview === parent ? scrollView : nil
+    }
+
     private func dispatchObject(for treeElement: InterfaceTree.Element) -> NSObject? {
         if viewportElementIDs.contains(treeElement.heistId) {
             return liveObject(for: treeElement.heistId)
@@ -132,6 +158,17 @@ extension TheStash {
         return LiveGeometry(frame: frame, activationPoint: activationPoint)
     }
 
+    private static func container(
+        _ candidate: InterfaceTree.Container,
+        aliases semanticContainer: InterfaceTree.Container
+    ) -> Bool {
+        if let name = semanticContainer.containerName {
+            return candidate.containerName == name
+        }
+        return candidate.path == semanticContainer.path
+            && candidate.container == semanticContainer.container
+    }
+
     private static func isUsableFrame(_ frame: CGRect) -> Bool {
         !frame.isNull
             && !frame.isEmpty
@@ -143,6 +180,19 @@ extension TheStash {
 
     private static func isUsablePoint(_ point: CGPoint) -> Bool {
         point.x.isFinite && point.y.isFinite
+    }
+}
+
+private extension UIView {
+    var nearestScrollableSuperview: UIScrollView? {
+        var ancestor = superview
+        while let current = ancestor {
+            if let scrollView = current as? UIScrollView {
+                return scrollView
+            }
+            ancestor = current.superview
+        }
+        return nil
     }
 }
 

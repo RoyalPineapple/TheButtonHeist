@@ -28,7 +28,8 @@ extension ElementInflation {
     internal func stateAfterPlacement(
         _ inflatedTarget: InflatedElementTarget,
         didReveal: Bool,
-        method: ActionMethod
+        method: ActionMethod,
+        transaction: RevealTransaction
     ) async -> State {
         let liveTarget = inflatedTarget.liveTarget
         if ScreenMetrics.current.bounds.contains(liveTarget.activationPoint) {
@@ -58,7 +59,8 @@ extension ElementInflation {
                 method: method
             ),
             unsafeProgrammaticScrollMessage: nil,
-            scrollFailedMessage: "target \(description) activation point could not be brought on-screen"
+            scrollFailedMessage: "target \(description) activation point could not be brought on-screen",
+            transaction: transaction
         )
         switch placement {
         case .success(.alreadyInPosition):
@@ -105,7 +107,8 @@ extension ElementInflation {
         method: ActionMethod,
         noScrollViewFailure: ElementInflationFailure,
         unsafeProgrammaticScrollMessage: String?,
-        scrollFailedMessage: String
+        scrollFailedMessage: String,
+        transaction: RevealTransaction? = nil
     ) async -> Result<TheSafecracker.ScrollPrimitiveResult, ElementInflationFailure> {
         if Self.interactionComfortZone.contains(activationPoint) {
             return .success(.alreadyInPosition)
@@ -123,6 +126,7 @@ extension ElementInflation {
             }
             return .failure(.geometryNotActionable(unsafeProgrammaticScrollMessage))
         }
+        transaction?.record(scrollView)
         switch safecracker.scrollToMakeScreenPointVisible(
             activationPoint,
             in: scrollView,
@@ -217,17 +221,23 @@ extension ElementInflation {
             requiresOnscreen: requireOnscreenActivationPoint
         )
 
-        while deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) {
+        while deadline.hasTimeRemaining(at: geometryEnvironment.now()) {
             guard !Task.isCancelled else {
                 return stateAfterGeometryReduction(
                     stabilization.reduce(.cancelled),
                     target: stableTarget
                 )
             }
-            await tripwire.yieldRealFrames(1)
+            await geometryEnvironment.awaitFrame()
             guard !Task.isCancelled else {
                 return stateAfterGeometryReduction(
                     stabilization.reduce(.cancelled),
+                    target: stableTarget
+                )
+            }
+            guard deadline.hasTimeRemaining(at: geometryEnvironment.now()) else {
+                return stateAfterGeometryReduction(
+                    stabilization.reduce(.deadlineExpired),
                     target: stableTarget
                 )
             }
@@ -245,6 +255,12 @@ extension ElementInflation {
                 deadline: deadline
             ) else { continue }
             stableTarget = currentTarget
+            guard deadline.hasTimeRemaining(at: geometryEnvironment.now()) else {
+                return stateAfterGeometryReduction(
+                    stabilization.reduce(.deadlineExpired),
+                    target: stableTarget
+                )
+            }
             switch stabilization.reduce(.sample(
                 LiveGeometrySample(currentTarget.liveTarget),
                 viewport: ScreenMetrics.current.bounds
@@ -252,6 +268,12 @@ extension ElementInflation {
             case .awaiting(let next):
                 stabilization = next
             case .stable:
+                guard deadline.hasTimeRemaining(at: geometryEnvironment.now()) else {
+                    return stateAfterGeometryReduction(
+                        stabilization.reduce(.deadlineExpired),
+                        target: stableTarget
+                    )
+                }
                 return .inflated(currentTarget)
             case .offscreen:
                 return .failed(.geometryNotActionable(
@@ -276,7 +298,7 @@ extension ElementInflation {
     ) -> State {
         switch reduction {
         case .timedOut:
-            return .failed(.geometryNotActionable(
+            return .failed(.timedOut(
                 "target \(Navigation.ScrollTargetDescription(target.treeElement).description) "
                     + "live geometry did not settle before the action deadline; "
                     + Self.liveGeometrySummary(target.liveTarget)

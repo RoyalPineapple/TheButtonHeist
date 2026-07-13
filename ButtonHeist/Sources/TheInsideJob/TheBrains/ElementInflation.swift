@@ -27,6 +27,11 @@ internal final class ElementInflation {
         internal var revealKnownTarget: @MainActor (KnownTargetRevealRequest) async -> Navigation.ExploredScreen?
     }
 
+    internal struct GeometryEnvironment {
+        internal let now: @MainActor () -> CFAbsoluteTime
+        internal let awaitFrame: @MainActor () async -> Void
+    }
+
     internal struct CommittedElementTarget {
         private let sourceTarget: AccessibilityTarget
         private let resolvedHeistId: HeistId
@@ -47,6 +52,7 @@ internal final class ElementInflation {
     internal let safecracker: TheSafecracker
     internal let tripwire: TheTripwire
     internal var exploration: Exploration
+    internal var geometryEnvironment: GeometryEnvironment
 
     internal static let comfortMarginFraction: CGFloat = 1.0 / 6.0
     internal static var postScrollLayoutFrames: Int { Navigation.postScrollLayoutFrames }
@@ -61,6 +67,10 @@ internal final class ElementInflation {
         self.safecracker = safecracker
         self.tripwire = tripwire
         self.exploration = exploration
+        geometryEnvironment = GeometryEnvironment(
+            now: CFAbsoluteTimeGetCurrent,
+            awaitFrame: { await tripwire.yieldRealFrames(1) }
+        )
     }
 
     internal func inflate(
@@ -91,6 +101,8 @@ internal final class ElementInflation {
         initialState: State = .resolving
     ) async -> ElementInflationResult {
         var state = initialState
+        let revealTransaction = RevealTransaction()
+        revealTransaction.captureScrollableHierarchy(in: stash)
 
         while true {
             switch state {
@@ -114,6 +126,7 @@ internal final class ElementInflation {
                     nextState = .failed(failure)
                 }
                 if let failure = transition(&state, to: nextState) {
+                    revealTransaction.rollBack()
                     return .failed(failure)
                 }
 
@@ -121,9 +134,11 @@ internal final class ElementInflation {
                 let nextState = await stateAfterReveal(
                     treeElement,
                     target: target,
-                    deadline: deadline
+                    deadline: deadline,
+                    transaction: revealTransaction
                 )
                 if let failure = transition(&state, to: nextState) {
+                    revealTransaction.rollBack()
                     return .failed(failure)
                 }
 
@@ -137,6 +152,7 @@ internal final class ElementInflation {
                     deadline: deadline
                 )
                 if let failure = transition(&state, to: nextState) {
+                    revealTransaction.rollBack()
                     return .failed(failure)
                 }
 
@@ -144,16 +160,20 @@ internal final class ElementInflation {
                 let nextState = await stateAfterPlacement(
                     inflatedTarget,
                     didReveal: didReveal,
-                    method: method
+                    method: method,
+                    transaction: revealTransaction
                 )
                 if let failure = transition(&state, to: nextState) {
+                    revealTransaction.rollBack()
                     return .failed(failure)
                 }
 
             case .inflated(let result):
+                revealTransaction.commit()
                 return .inflated(result)
 
             case .failed(let failure):
+                revealTransaction.rollBack()
                 return .failed(failure)
             }
         }

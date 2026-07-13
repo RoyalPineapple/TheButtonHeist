@@ -7,7 +7,10 @@ import ThePlans
 extension ElementInflation {
 
     private enum TargetRefreshMode {
-        case revealPath(treeElement: InterfaceTree.Element)
+        case revealPath(
+            treeElement: InterfaceTree.Element,
+            transaction: RevealTransaction
+        )
         case liveTarget(
             treeElement: InterfaceTree.Element,
             target: AccessibilityTarget,
@@ -25,7 +28,8 @@ extension ElementInflation {
     internal func stateAfterReveal(
         _ treeElement: InterfaceTree.Element,
         target: AccessibilityTarget,
-        deadline: SemanticObservationDeadline
+        deadline: SemanticObservationDeadline,
+        transaction: RevealTransaction
     ) async -> State {
         if stash.liveContains(heistId: treeElement.heistId),
            let committed = stash.interfaceElement(heistId: treeElement.heistId) {
@@ -38,7 +42,11 @@ extension ElementInflation {
         }
 
         let settledSequence = stash.latestSettledSemanticObservationEvent?.sequence
-        let reveal = await revealSemanticTarget(treeElement, deadline: deadline)
+        let reveal = await revealSemanticTarget(
+            treeElement,
+            deadline: deadline,
+            transaction: transaction
+        )
         switch reveal {
         case .cancelled:
             return .failed(.cancelled(
@@ -49,8 +57,11 @@ extension ElementInflation {
                 "semantic target reveal reached the action deadline before the target became actionable"
             ))
         case .failed(let failure):
+            if failure == .scanDidNotRevealTarget {
+                return .failed(.noRevealPath(semanticRevealFailureMessage(failure, entry: treeElement)))
+            }
             switch await awaitTargetRefresh(
-                mode: .revealPath(treeElement: treeElement),
+                mode: .revealPath(treeElement: treeElement, transaction: transaction),
                 after: settledSequence,
                 deadline: deadline
             ) {
@@ -138,14 +149,18 @@ extension ElementInflation {
                 break
             }
 
-            guard case .revealPath(let treeElement) = mode,
+            guard case .revealPath(let treeElement, let transaction) = mode,
                   !didAttemptKnownTargetReveal,
                   let fresh = stash.interfaceElement(heistId: treeElement.heistId),
                   fresh.scrollMembership != nil
             else { continue }
 
             didAttemptKnownTargetReveal = true
-            switch await revealSemanticTarget(fresh, deadline: deadline) {
+            switch await revealSemanticTarget(
+                fresh,
+                deadline: deadline,
+                transaction: transaction
+            ) {
             case .alreadyVisible:
                 return .treeElement(fresh, didReveal: false)
             case .revealed:
@@ -167,7 +182,7 @@ extension ElementInflation {
         deadline: SemanticObservationDeadline
     ) -> TargetRefreshResolution {
         switch mode {
-        case .revealPath(let treeElement):
+        case .revealPath(let treeElement, _):
             guard stash.liveContains(heistId: treeElement.heistId),
                   let committed = stash.interfaceElement(heistId: treeElement.heistId)
             else { return .missing }

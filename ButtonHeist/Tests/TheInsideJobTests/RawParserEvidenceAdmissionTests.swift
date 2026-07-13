@@ -134,6 +134,29 @@ final class RawParserEvidenceAdmissionTests: XCTestCase {
         XCTAssertEqual(rawObject.incrementCount, 0)
     }
 
+    func testReusedCommittedHeistIdCannotDispatchDifferentRawElement() throws {
+        let sharedId: HeistId = "shared_control"
+        brains.stash.semanticObservationStream.commitVisibleObservationForTesting(
+            observation(label: "Quantity", heistId: sharedId)
+        )
+        let committedTarget = try XCTUnwrap(
+            brains.stash.resolveVisibleTarget(target(label: "Quantity")).resolved
+        )
+
+        let replacementObject = RawEvidenceAdjustableView()
+        brains.stash.nextVisibleRefreshScreenForTesting = observation(
+            label: "Tip",
+            heistId: sharedId,
+            object: replacementObject
+        )
+        XCTAssertNotNil(brains.stash.refreshLiveCapture())
+
+        guard case .objectUnavailable = brains.stash.resolveLiveActionTarget(for: committedTarget) else {
+            return XCTFail("Expected recycled raw evidence to fail semantic alias proof")
+        }
+        XCTAssertEqual(replacementObject.incrementCount, 0)
+    }
+
     func testSettledCommitAdmitsPreviouslyRawTarget() async {
         brains.stash.semanticObservationStream.commitVisibleObservationForTesting(
             observation(label: "Screen A", heistId: "screen_a")

@@ -7,6 +7,62 @@ import ThePlans
 
 extension ElementInflation {
 
+    @MainActor
+    internal final class RevealTransaction {
+        internal enum Phase: Equatable {
+            case active
+            case committed
+            case rolledBack
+        }
+
+        private struct Movement {
+            let scrollView: UIScrollView
+            let visualOrigin: CGPoint
+        }
+
+        private var movements: [ObjectIdentifier: Movement] = [:]
+        private var movementOrder: [ObjectIdentifier] = []
+        private(set) var phase = Phase.active
+
+        internal func captureScrollableHierarchy(in stash: TheStash) {
+            stash.scrollableContainerViewsByPath.values.forEach(recordHierarchy(from:))
+        }
+
+        internal func record(_ scrollView: UIScrollView) {
+            guard phase == .active else { return }
+            let identifier = ObjectIdentifier(scrollView)
+            guard movements[identifier] == nil else { return }
+            movements[identifier] = Movement(
+                scrollView: scrollView,
+                visualOrigin: Navigation.visualOrigin(in: scrollView)
+            )
+            movementOrder.append(identifier)
+        }
+
+        internal func commit() {
+            guard phase == .active else { return }
+            phase = .committed
+        }
+
+        internal func rollBack() {
+            guard phase == .active else { return }
+            phase = .rolledBack
+            movementOrder.reversed().forEach { identifier in
+                guard let movement = movements[identifier] else { return }
+                let currentOrigin = Navigation.visualOrigin(in: movement.scrollView)
+                guard currentOrigin != movement.visualOrigin else { return }
+                Navigation.restoreVisualOrigin(movement.visualOrigin, in: movement.scrollView)
+            }
+        }
+
+        private func recordHierarchy(from view: UIView) {
+            if let scrollView = view as? UIScrollView {
+                record(scrollView)
+            }
+            view.subviews.forEach(recordHierarchy(from:))
+        }
+    }
+
     internal struct InflatedElementTarget {
         internal let target: AccessibilityTarget
         internal let treeElement: InterfaceTree.Element
