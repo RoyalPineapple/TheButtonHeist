@@ -440,8 +440,10 @@ final class WaitForIntegrationTests: XCTestCase {
                 timeout: 5.0
             )
         }
-        // Mutate only after the wait is suspended beyond the committed baseline.
+        // Commit the wait-owned baseline before publishing the satisfying event.
         await waitForSemanticObservationWaiter()
+        let didObserveWaitBaseline = await waitForSettledVisibleObservation()
+        XCTAssertTrue(didObserveWaitBaseline)
         delayedLabel = addLabel("WaitForChange-Delayed")
         insideJob.brains.stash.invalidateSettledObservationFromTripwire()
         let result = await waitTask.value
