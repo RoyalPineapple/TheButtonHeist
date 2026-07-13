@@ -102,13 +102,16 @@ extension ElementInflation {
         guard let membership = container.scrollMembership else {
             return stash.liveScrollView(forContainerPath: path)
         }
-        guard let observedActivationPoint = container.observedScrollContentActivationPoint else {
-            return nil
-        }
         guard let parentScrollView = await revealScrollContainer(
             at: membership.containerPath,
             depth: depth + 1
         ) else { return nil }
+        if stash.liveScrollableContainerView(forPath: path) === parentScrollView {
+            return parentScrollView
+        }
+        guard let observedActivationPoint = container.observedScrollContentActivationPoint else {
+            return nil
+        }
 
         parentScrollView.setContentOffset(
             Self.semanticRevealTargetOffset(for: observedActivationPoint, in: parentScrollView),
