@@ -112,17 +112,12 @@ extension Actions {
     }
 
     func typeTextPayload(
-        for request: TypeTextTarget,
-        resolvedElementId: HeistId?,
+        resolvedElementId: HeistId,
         in afterState: PostActionObservation.BeforeState
     ) -> ActionResultPayload? {
-        if let resolvedElementId,
-           let value = afterState.screen.findElement(heistId: resolvedElementId)?.element.value {
-            return .typeText(value)
-        }
-        guard let target = request.target else { return nil }
-        return Self.textInputValue(for: target, in: afterState.interface.projectedElements)
-            .map(ActionResultPayload.typeText)
+        guard let element = afterState.screen.findElement(heistId: resolvedElementId),
+              let value = element.element.value else { return nil }
+        return .typeText(value)
     }
 
     private func typeTextInjectionFailureMessage(
@@ -264,22 +259,6 @@ extension Actions {
             resolvedObject: inflatedTarget.liveTarget.object,
             currentValue: inflatedTarget.liveTarget.element.value
         )
-    }
-
-    private static func textInputValue(for target: AccessibilityTarget, in elements: [HeistElement]) -> String? {
-        switch target {
-        case .predicate(let template, let ordinal):
-            guard let predicate = try? template.resolve(in: .empty) else { return nil }
-            let matches = ElementMatchGraph(elements: elements).resolve(predicate).elements
-            if let ordinal {
-                guard matches.indices.contains(ordinal) else { return nil }
-                return matches[ordinal].value
-            }
-            guard matches.count == 1 else { return nil }
-            return matches[0].value
-        case .container, .ref, .within:
-            return nil
-        }
     }
 
     private static func liveTextInputValue(for object: NSObject?) -> String? {

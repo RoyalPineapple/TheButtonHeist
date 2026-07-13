@@ -515,6 +515,82 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(result.payload, .value("Saved"))
     }
 
+    func testPostActionReceiptDoesNotResolveDeferredPayloadFromUnsettledDiagnosticEvidence() async {
+        let beforeScreen = makeScreen(elements: [("Status", .staticText, "status")])
+        brains.stash.installScreenForTesting(beforeScreen)
+        let before = brains.postActionObservation.captureSemanticState()
+        let diagnosticScreen = InterfaceObservation.makeForTests(elements: [
+            (
+                AccessibilityElement.make(
+                    label: "Status",
+                    value: "Saved",
+                    traits: .staticText,
+                    respondsToUserInteraction: false
+                ),
+                HeistId(rawValue: "status")
+            ),
+        ])
+        let outcome = PostActionObservation.ActionOutcome.success(.init(
+            payload: .afterState { state in
+                guard let value = state.screen.findElement(heistId: "status")?.element.value else {
+                    return .none
+                }
+                return .payload(.typeText(value))
+            }
+        ))
+
+        let result = await brains.interactionObservation.finishAfterAction(
+            method: .typeText,
+            outcome: outcome,
+            before: before,
+            settleOutcome: settledOutcome(
+                finalScreen: diagnosticScreen,
+                outcome: .timedOut(timeMs: 250)
+            )
+        )
+
+        XCTAssertTrue(result.outcome.isSuccess)
+        XCTAssertEqual(result.method, .typeText)
+        XCTAssertNil(result.payload)
+        XCTAssertEqual(result.settled, false)
+        XCTAssertEqual(
+            result.accessibilityTrace?.captures.last?.interface.projectedElements.first?.value,
+            "Saved"
+        )
+    }
+
+    func testTypeTextPayloadUsesCommittedElementIdentity() {
+        let selectedId: HeistId = "selected_message"
+        let replacementId: HeistId = "replacement_message"
+        let afterScreen = InterfaceObservation.makeForTests(elements: [
+            (
+                AccessibilityElement.make(
+                    label: "Message",
+                    value: "Selected",
+                    traits: .textEntry,
+                    respondsToUserInteraction: false
+                ),
+                selectedId
+            ),
+            (
+                AccessibilityElement.make(
+                    label: "Message",
+                    value: "Replacement",
+                    traits: .textEntry,
+                    respondsToUserInteraction: false
+                ),
+                replacementId
+            ),
+        ])
+        brains.stash.installScreenForTesting(afterScreen)
+        let afterState = brains.postActionObservation.captureSemanticState()
+
+        XCTAssertEqual(
+            brains.actions.typeTextPayload(resolvedElementId: selectedId, in: afterState),
+            .typeText("Selected")
+        )
+    }
+
     func testActionResultWithDeltaReportsTypedFallbackScreenChange() async {
         let beforeScreen = makeScreen(elements: [("Menu", .header, "menu_header")])
         brains.stash.installScreenForTesting(beforeScreen)

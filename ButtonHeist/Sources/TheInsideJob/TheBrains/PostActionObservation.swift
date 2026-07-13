@@ -77,7 +77,8 @@ final class PostActionObservation {
     }
 
     enum SettledObservationResult {
-        case observed(settle: SettleSession.Outcome, finalState: BeforeState, trace: AccessibilityTrace)
+        case committed(settle: SettleSession.Outcome, finalState: BeforeState, trace: AccessibilityTrace)
+        case diagnostic(settle: SettleSession.Outcome, trace: AccessibilityTrace)
         case unavailable(
             settle: SettleSession.Outcome,
             baselineCapture: AccessibilityTrace.Capture,
@@ -86,7 +87,7 @@ final class PostActionObservation {
 
         var accessibilityTrace: AccessibilityTrace {
             switch self {
-            case .observed(_, _, let trace):
+            case .committed(_, _, let trace), .diagnostic(_, let trace):
                 return trace
             case .unavailable(_, let baselineCapture, _):
                 return AccessibilityTrace(capture: baselineCapture)
@@ -94,7 +95,8 @@ final class PostActionObservation {
         }
 
         var settled: Bool {
-            settle.outcome.didSettleCleanly
+            if case .committed = self { return true }
+            return false
         }
 
         var settleTimeMs: Int {
@@ -103,7 +105,8 @@ final class PostActionObservation {
 
         private var settle: SettleSession.Outcome {
             switch self {
-            case .observed(let settle, _, _),
+            case .committed(let settle, _, _),
+                 .diagnostic(let settle, _),
                  .unavailable(let settle, _, _):
                 return settle
             }
@@ -111,7 +114,7 @@ final class PostActionObservation {
 
         func message(explicit message: String?) -> String? {
             switch self {
-            case .observed:
+            case .committed, .diagnostic:
                 return message
             case .unavailable(_, _, let failureMessage):
                 return failureMessage
@@ -122,7 +125,7 @@ final class PostActionObservation {
             for outcome: PostActionObservation.ActionOutcome
         ) -> ActionResultOutcome {
             switch self {
-            case .observed:
+            case .committed, .diagnostic:
                 return outcome.resultOutcome
             case .unavailable:
                 return .failure(.actionFailed)
@@ -133,9 +136,9 @@ final class PostActionObservation {
             for outcome: PostActionObservation.ActionOutcome
         ) -> ActionResultPayload? {
             switch self {
-            case .observed(_, let finalState, _):
+            case .committed(_, let finalState, _):
                 return outcome.resolvedPayload(after: finalState)
-            case .unavailable:
+            case .diagnostic, .unavailable:
                 return outcome.immediatePayload
             }
         }
@@ -206,11 +209,16 @@ final class PostActionObservation {
                 "committed observation requires clean settle"
             )
             let finalState = captureFinalSemanticState(after: event)
-            return observedResult(
+            let trace = observedTrace(
                 before: before,
                 finalState: finalState,
                 settle: observation.settle,
                 accessibilityNotifications: event.trace.captures.last?.transition.accessibilityNotifications ?? []
+            )
+            return .committed(
+                settle: observation.settle,
+                finalState: finalState,
+                trace: trace
             )
 
         case .observedUnsettled(let screen):
@@ -222,12 +230,13 @@ final class PostActionObservation {
                 tripwireSignal: before.tripwireSignal,
                 settledObservationSequence: nil
             )
-            return observedResult(
+            let trace = observedTrace(
                 before: before,
                 finalState: finalState,
                 settle: observation.settle,
                 accessibilityNotifications: []
             )
+            return .diagnostic(settle: observation.settle, trace: trace)
 
         case .unavailable:
             switch observation.settle.outcome {
@@ -249,27 +258,22 @@ final class PostActionObservation {
         }
     }
 
-    private func observedResult(
+    private func observedTrace(
         before: BeforeState,
         finalState: BeforeState,
         settle: SettleSession.Outcome,
         accessibilityNotifications: [AccessibilityNotificationEvidence]
-    ) -> SettledObservationResult {
+    ) -> AccessibilityTrace {
         let accessibilityNotifications = Self.remapAccessibilityNotifications(
             accessibilityNotifications,
             from: finalState,
             to: finalState
         )
-        let trace = buildPostActionTrace(
+        return buildPostActionTrace(
             before: before,
             final: finalState,
             settleOutcome: settle,
             accessibilityNotifications: accessibilityNotifications
-        )
-        return .observed(
-            settle: settle,
-            finalState: finalState,
-            trace: trace
         )
     }
 
