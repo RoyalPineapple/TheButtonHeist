@@ -97,6 +97,10 @@ Recommended commands:
 tuist test TheScoreTests --no-selective-testing
 tuist test ButtonHeistTests --no-selective-testing
 tuist test TheInsideJobTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
+tuist test DogfoodFeatureFlowTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
+tuist test DogfoodRuntimeContractTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
+tuist test AdversarialMutationTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
+tuist test AdversarialNavigationTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
 ```
 
 If Tuist reports missing external dependencies, run:
@@ -257,6 +261,10 @@ Before pushing any commit, verify the following:
   tuist test TheScoreTests --no-selective-testing
   tuist test ButtonHeistTests --no-selective-testing
   tuist test TheInsideJobTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
+  tuist test DogfoodFeatureFlowTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
+  tuist test DogfoodRuntimeContractTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
+  tuist test AdversarialMutationTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
+  tuist test AdversarialNavigationTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
   ```
 - If tests fail, fix the code or update tests to reflect intentional changes.
 
@@ -286,7 +294,8 @@ Before pushing any commit, verify the following:
 `tuist test` is the one true way to run tests in this repository.
 
 - `TheScoreTests` and `ButtonHeistTests` run as explicit Tuist schemes.
-- `TheInsideJobTests` must run as a hosted iOS test bundle via the `BH Demo` test host, so always use the `TheInsideJobTests` scheme with an explicit simulator destination.
+- The hosted iOS suite is five explicit schemes: core `TheInsideJobTests`, `DogfoodFeatureFlowTests`, `DogfoodRuntimeContractTests`, `AdversarialMutationTests`, and `AdversarialNavigationTests`.
+- All five hosted schemes run via the `BH Demo` test host and require an explicit simulator destination. Running only `TheInsideJobTests` does not run the dogfood or adversarial shards.
 - Use `--no-selective-testing` when you need to force the full suite instead of Tuist's default selective run.
 - Treat `swift test` as a package-debugging tool, not as the source of truth for CI-style verification.
 
@@ -494,7 +503,7 @@ Two type families are the currency for referring to UI elements. Use them everyw
 
 `synthesizeBaseId(_:)` in `TheStash.IdAssignment` produces deterministic heistIds derived from element content. **Synthesis is wire format.** Modifications are equivalent to changes to the JSON schema — they break fixture references and the agent's predict-the-heistId pattern that benchmarks rely on. Treat any change to the synthesis rule like a wire-protocol bump.
 
-The contract is locked by `SynthesisDeterminismTests` (property test across 200+ random permutations, plus a regression table of known input → known output). If you find yourself wanting to "improve" the heistId format, run `tuist test TheInsideJobTests` first — that test exists to make the contract auditable. Any change requires updating the regression table in the same PR.
+The contract is locked by `SynthesisDeterminismTests` (property test across 200+ random permutations, plus a regression table of known input → known output). If you find yourself wanting to "improve" the heistId format, run the core `TheInsideJobTests` scheme first — that test exists to make the contract auditable. Any change requires updating the regression table in the same PR.
 
 ## Versioning and Releases
 
