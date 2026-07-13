@@ -3,17 +3,18 @@ import SwiftUI
 internal struct DynamicCellsScenarioView: View {
     private struct MenuItem: Identifiable {
         let id: String
-        var name: String
+        let name: String
         let category: String
-        var detail: String
+        let detail: String
         let unitPrice: String
         let sku: String
-        var churnState: String
-        var slot: String
+        let generation: Int
+        let slot: String
     }
 
     @State private var items: [MenuItem] = DynamicCellsScenarioView.makeMenuItems()
     @State private var quantities: [String: Int] = [:]
+    @State private var actionCounts: [String: Int] = [:]
     @State private var didChurn = false
 
     var body: some View {
@@ -33,6 +34,7 @@ internal struct DynamicCellsScenarioView: View {
         .onAppear {
             items = Self.makeMenuItems()
             quantities = [:]
+            actionCounts = [:]
             didChurn = false
         }
     }
@@ -47,7 +49,7 @@ internal struct DynamicCellsScenarioView: View {
                     detail: "Black garlic and sesame",
                     unitPrice: "$18.00",
                     sku: "SKU-72",
-                    churnState: "pre-churn",
+                    generation: 1,
                     slot: "deep target"
                 )
             } else {
@@ -58,7 +60,7 @@ internal struct DynamicCellsScenarioView: View {
                     detail: "Batch \(index % 9) fixture",
                     unitPrice: "$\(8 + index % 17).00",
                     sku: "SKU-\(index)",
-                    churnState: "pre-churn",
+                    generation: 1,
                     slot: index < 18 ? "front shelf" : index < 60 ? "middle shelf" : "deep shelf"
                 )
             }
@@ -80,7 +82,7 @@ internal struct DynamicCellsScenarioView: View {
                     detail: "Inserted during churn",
                     unitPrice: "$12.00",
                     sku: "SKU-new-front",
-                    churnState: "post-churn",
+                    generation: 2,
                     slot: "front insert"
                 )
             ),
@@ -93,7 +95,7 @@ internal struct DynamicCellsScenarioView: View {
                     detail: "Middle insert reusing a common label",
                     unitPrice: "$13.00",
                     sku: "SKU-new-middle",
-                    churnState: "post-churn",
+                    generation: 2,
                     slot: "middle insert"
                 )
             ),
@@ -106,7 +108,7 @@ internal struct DynamicCellsScenarioView: View {
                     detail: "Deep insert reusing a common label",
                     unitPrice: "$16.00",
                     sku: "SKU-new-deep",
-                    churnState: "post-churn",
+                    generation: 2,
                     slot: "deep insert"
                 )
             ),
@@ -117,19 +119,26 @@ internal struct DynamicCellsScenarioView: View {
         items = Array(nextItems.suffix(pivot)) + Array(nextItems.dropLast(pivot))
 
         guard let targetIndex = items.firstIndex(where: { $0.id == "dish-72" }) else { return }
-        var target = items.remove(at: targetIndex)
-        target.name = "Nebula Noodles Prime"
-        target.detail = "Black garlic, sesame, and chili oil"
-        target.churnState = "post-churn"
-        target.slot = "deep target after churn"
-        items.append(target)
+        items.remove(at: targetIndex)
+        items.append(MenuItem(
+            id: "dish-72-generation-2",
+            name: "Nebula Noodles",
+            category: "Mains",
+            detail: "Black garlic, sesame, and chili oil",
+            unitPrice: "$18.00",
+            sku: "SKU-72",
+            generation: 2,
+            slot: "deep target after churn"
+        ))
         let liveIDs = Set(items.map(\.id))
         quantities = quantities.filter { liveIDs.contains($0.key) }
+        actionCounts = actionCounts.filter { liveIDs.contains($0.key) }
         didChurn = true
     }
 
     private func menuRow(_ item: MenuItem) -> some View {
         let quantity = quantities[item.id, default: 0]
+        let actionCount = actionCounts[item.id, default: 0]
         return VStack(alignment: .leading) {
             Text(item.name)
             Text(item.detail)
@@ -142,12 +151,14 @@ internal struct DynamicCellsScenarioView: View {
         .accessibilityCustomContent(Text("Category"), Text(item.category), importance: .high)
         .accessibilityCustomContent(Text("Detail"), Text(item.detail))
         .accessibilityCustomContent(Text("SKU"), Text(item.sku), importance: .high)
-        .accessibilityCustomContent(Text("Churn State"), Text(item.churnState), importance: .high)
+        .accessibilityCustomContent(Text("Generation"), Text("\(item.generation)"), importance: .high)
+        .accessibilityCustomContent(Text("Action Count"), Text("\(actionCount)"), importance: .high)
         .accessibilityCustomContent(Text("Menu Slot"), Text(item.slot))
         .accessibilityCustomContent(Text("Unit Price"), Text(item.unitPrice), importance: .high)
         .accessibilityCustomContent(Text("Quantity"), Text("\(quantity)"), importance: .high)
         .accessibilityCustomContent(Text("Line Total"), Text(lineTotal(unitPrice: item.unitPrice, quantity: quantity)))
         .accessibilityAction(named: quantity == 0 ? "Add to Cart" : "Remove from Cart") {
+            actionCounts[item.id, default: 0] += 1
             quantities[item.id] = quantity == 0 ? 1 : 0
         }
     }
