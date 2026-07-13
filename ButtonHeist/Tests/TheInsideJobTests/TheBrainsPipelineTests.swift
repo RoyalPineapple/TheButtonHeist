@@ -671,7 +671,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
     }
 
-    func testElementChangedNotificationReferencesAreRemappedAfterPruning() async throws {
+    func testGappedElementChangedNotificationReferencesAreRemappedAfterPruning() async throws {
         let beforeScreen = makeScreen(elements: [
             ("ButtonHeist Demo", .header, "root_header"),
             ("Controls Demo", .button, "controls_demo"),
@@ -736,6 +736,12 @@ final class TheBrainsPipelineTests: XCTestCase {
         let notificationWindow = brains.stash.accessibilityNotifications.beginActionWindow()
         defer { notificationWindow.cancel() }
         brains.stash.accessibilityNotifications.record(
+            code: 99_999,
+            notificationData: .none,
+            associatedElement: .none
+        )
+        brains.stash.accessibilityNotifications.clearPendingEvents()
+        brains.stash.accessibilityNotifications.record(
             code: 1001,
             notificationData: CapturedAccessibilityNotificationPayload(acidObject),
             associatedElement: .none
@@ -753,7 +759,10 @@ final class TheBrainsPipelineTests: XCTestCase {
             result.accessibilityTrace?.captures.last?.transition.accessibilityNotifications.first
         )
         XCTAssertEqual(notification.kind, .elementChanged(.layout))
-        XCTAssertNil(result.accessibilityTrace?.captures.last?.transition.fallbackReason)
+        XCTAssertEqual(
+            result.accessibilityTrace?.captures.last?.transition.fallbackReason,
+            .navigationMarkerChanged
+        )
         guard case .element(let reference) = notification.notificationData else {
             return XCTFail("Expected notification data to resolve to final trace element, got \(notification.notificationData)")
         }
