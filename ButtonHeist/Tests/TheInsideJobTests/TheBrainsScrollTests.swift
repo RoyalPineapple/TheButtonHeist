@@ -541,9 +541,9 @@ final class TheBrainsScrollTests: XCTestCase {
         visible: InterfaceObservation.TestEntry,
         offscreen: OffViewportScrollTarget,
         includeLiveScrollAncestor: Bool = true,
-        scrollContainerPath: TreePath = TreePath([0]),
         revealsTargetOnRefresh: Bool = false
     ) {
+        let scrollContainerPath = TreePath([0])
         let visibleEntry = InterfaceTree.Element(
             heistId: visible.heistId,
             scrollMembership: nil,
@@ -570,14 +570,11 @@ final class TheBrainsScrollTests: XCTestCase {
                     .element(visible.element, traversalIndex: 0)
                 ])
             ],
-            containerNamesByPath: [TreePath([0]): containerName],
-            heistIdsByPath: [TreePath([0, 0]): visible.heistId],
-            elementRefs: includeLiveScrollAncestor ? [
-                offscreenEntry.heistId: .init(object: nil, scrollView: offscreen.scrollView)
-            ] : [:],
+            containerNamesByPath: [scrollContainerPath: containerName],
+            heistIdsByPath: [scrollContainerPath.appending(0): visible.heistId],
             firstResponderHeistId: nil,
             scrollableContainerViewsByPath: includeLiveScrollAncestor
-                ? [TreePath([0]): .init(view: offscreen.scrollView)]
+                ? [scrollContainerPath: .init(view: offscreen.scrollView)]
                 : [:]
         ))
         if revealsTargetOnRefresh {
@@ -588,14 +585,14 @@ final class TheBrainsScrollTests: XCTestCase {
                         .element(offscreen.element, traversalIndex: 0),
                     ]),
                 ],
-                containerNamesByPath: [TreePath([0]): containerName],
-                heistIdsByPath: [TreePath([0, 0]): offscreen.heistId],
+                containerNamesByPath: [scrollContainerPath: containerName],
+                heistIdsByPath: [scrollContainerPath.appending(0): offscreen.heistId],
                 elementRefs: [
                     offscreen.heistId: .init(object: retainedLiveObject(), scrollView: offscreen.scrollView),
                 ],
                 firstResponderHeistId: nil,
                 scrollableContainerViewsByPath: [
-                    TreePath([0]): .init(view: offscreen.scrollView),
+                    scrollContainerPath: .init(view: offscreen.scrollView),
                 ]
             )
         }
@@ -973,7 +970,7 @@ final class TheBrainsScrollTests: XCTestCase {
                 contentActivationPoint: CGPoint(x: 0, y: 1_200),
                 scrollView: scrollView
             ),
-            scrollContainerPath: TreePath([99])
+            includeLiveScrollAncestor: false
         )
         scrollView.setContentOffsetAnimations.removeAll()
         let treeElement = try XCTUnwrap(brains.stash.interfaceElement(heistId: targetId))
@@ -1587,8 +1584,7 @@ final class TheBrainsScrollTests: XCTestCase {
                 contentActivationPoint: CGPoint(x: 0, y: 1_200),
                 scrollView: scrollView
             ),
-            includeLiveScrollAncestor: false,
-            scrollContainerPath: TreePath([99])
+            includeLiveScrollAncestor: false
         )
         let result = await brains.navigation.elementInflation.inflate(
             for: literalTarget(ElementPredicate(label: "Offscreen")),
@@ -1605,7 +1601,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
         XCTAssertTrue(failure.message.contains("element inflation failed [noRevealPath]"))
         XCTAssertTrue(failure.message.contains("no live scrollable ancestor"))
-        XCTAssertTrue(failure.message.contains("expectedScrollContainerPath=[99]"), failure.message)
+        XCTAssertTrue(failure.message.contains("expectedScrollContainerPath=[0]"), failure.message)
         XCTAssertTrue(failure.message.contains("available live scroll containers: path=[0]"), failure.message)
     }
 
@@ -2020,10 +2016,8 @@ final class TheBrainsScrollTests: XCTestCase {
                 method: .scrollToVisible
             )
         }
-        for _ in 0..<50 where brains.stash.semanticObservationStream.settledWaiterCount == 0 {
-            await Task.yield()
-        }
-        XCTAssertEqual(brains.stash.semanticObservationStream.settledWaiterCount, 1)
+        await waitForSettledSemanticWaiter()
+        brains.stash.nextVisibleRefreshScreenForTesting = recoveredScreen
         brains.stash.semanticObservationStream.commitVisibleObservationForTesting(recoveredScreen)
 
         await inflation.value
@@ -2095,17 +2089,23 @@ final class TheBrainsScrollTests: XCTestCase {
         brains.navigation.elementInflation.exploration.revealKnownTarget = { request in
             XCTAssertEqual(request.heistId, targetId)
             revealAttempts += 1
-            self.brains.stash.semanticObservationStream.commitVisibleObservationForTesting(recoveredScreen)
             return nil
         }
 
-        let result = await brains.navigation.elementInflation.inflate(
-            for: literalTarget(ElementPredicate(label: "Coke", traits: [.button])),
-            method: .activate
-        )
+        let resultBox = InflationResultBox()
+        let inflation = Task { @MainActor in
+            resultBox.value = await self.brains.navigation.elementInflation.inflate(
+                for: literalTarget(ElementPredicate(label: "Coke", traits: [.button])),
+                method: .activate
+            )
+        }
+        await waitForSettledSemanticWaiter()
+        brains.stash.nextVisibleRefreshScreenForTesting = recoveredScreen
+        brains.stash.semanticObservationStream.commitVisibleObservationForTesting(recoveredScreen)
+        await inflation.value
 
-        guard case .inflated(let inflatedTarget) = result else {
-            return XCTFail("Expected current visible target recovery, got \(result)")
+        guard case .inflated(let inflatedTarget)? = resultBox.value else {
+            return XCTFail("Expected current visible target recovery, got \(String(describing: resultBox.value))")
         }
         XCTAssertEqual(revealAttempts, 1)
         XCTAssertEqual(staleScrollView.setContentOffsetAnimations, [])
@@ -2385,6 +2385,10 @@ final class TheBrainsScrollTests: XCTestCase {
             hierarchy: [
                 .element(first, traversalIndex: 0),
                 .element(second, traversalIndex: 1),
+            ],
+            heistIdsByPath: [
+                TreePath([0]): firstEntry.heistId,
+                TreePath([1]): secondEntry.heistId,
             ],
             firstResponderHeistId: nil,
         ))
