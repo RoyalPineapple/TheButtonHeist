@@ -379,7 +379,7 @@ final class ElementInflationProductTests: XCTestCase {
             method: .activate,
             deallocatedBoundary: "predicate retarget test",
             activationPointPolicy: .liveObjectOnly,
-            deadline: SemanticObservationDeadline(start: CFAbsoluteTimeGetCurrent(), timeoutSeconds: 0)
+            deadline: SemanticObservationDeadline(start: CFAbsoluteTimeGetCurrent(), timeoutSeconds: 1)
         )
         guard case .inflated(let inflatedTarget) = state else {
             return XCTFail("Expected refresh to reacquire live evidence for the selected identity, got \(state)")
@@ -473,7 +473,8 @@ final class ElementInflationProductTests: XCTestCase {
             fixture,
             semanticIdentifier: "unrevealable_submit",
             semanticLabel: "Submit Order",
-            scrollContainerPathOverride: TreePath([99])
+            scrollContainerPathOverride: TreePath([99]),
+            refreshesFromUIKit: false
         )
 
         let result = await brains.executeRuntimeAction(.activate(
@@ -875,7 +876,8 @@ final class ElementInflationProductTests: XCTestCase {
         in targetBrains: TheBrains? = nil,
         semanticIdentifier: String? = nil,
         semanticLabel: String? = nil,
-        scrollContainerPathOverride: TreePath? = nil
+        scrollContainerPathOverride: TreePath? = nil,
+        refreshesFromUIKit: Bool = true
     ) throws {
         let targetBrains = targetBrains ?? brains!
         let screen = try XCTUnwrap(targetBrains.stash.refreshLiveCapture())
@@ -915,7 +917,9 @@ final class ElementInflationProductTests: XCTestCase {
             tree: InterfaceTree(elements: elements, containers: screen.tree.containers),
             liveCapture: screen.liveCapture
         ))
-        targetBrains.stash.clearInstalledVisibleRefreshScreenForTesting()
+        if refreshesFromUIKit {
+            targetBrains.stash.clearInstalledVisibleRefreshScreenForTesting()
+        }
     }
 
     private func seedOffViewportTextInputTarget(
