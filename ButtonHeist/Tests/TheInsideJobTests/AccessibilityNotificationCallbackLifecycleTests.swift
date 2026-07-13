@@ -43,7 +43,10 @@ final class AccessibilityNotificationCallbackLifecycleTests: XCTestCase {
         removedCallback(1005, nil, nil)
         removedCallback(1008, "Stale announcement" as NSString, nil)
 
-        XCTAssertTrue(actionWindow.capture()?.events.isEmpty == true)
+        let staleBatch = try XCTUnwrap(actionWindow.capture())
+        XCTAssertEqual(actionWindow.cursor.sequence, 0)
+        XCTAssertTrue(staleBatch.events.isEmpty)
+        XCTAssertEqual(staleBatch.through.sequence, 0)
         actionWindow.cancel()
         XCTAssertEqual(observer.latestSequence, 0)
 
@@ -53,9 +56,41 @@ final class AccessibilityNotificationCallbackLifecycleTests: XCTestCase {
         activeCallback(1005, nil, nil)
         activeCallback(1008, "Current announcement" as NSString, nil)
 
-        let kinds: [AccessibilityNotificationKind] = activeWindow.capture()?.events.map(\.kind) ?? []
+        let activeBatch = try XCTUnwrap(activeWindow.capture())
         activeWindow.cancel()
-        XCTAssertEqual(kinds, [.screenChanged, .elementChanged(.value), .announcement])
+        XCTAssertEqual(activeWindow.cursor.sequence, 0)
+        XCTAssertEqual(activeBatch.events.map(\.sequence), [1, 2, 3])
+        XCTAssertEqual(activeBatch.through.sequence, 3)
+        XCTAssertEqual(
+            activeBatch.events.map(\.kind),
+            [.screenChanged, .elementChanged(.value), .announcement]
+        )
+        XCTAssertEqual(observer.latestSequence, 3)
+    }
+
+    func testCallbacksDeliveredIntoOpenActionWindowExtendSameRangeWithoutLoss() throws {
+        let harness = CallbackHarness()
+        let observer = makeObserver(harness: harness)
+        defer { observer.uninstall() }
+        let bus = AccessibilityNotificationBus()
+        observer.subscribe(bus)
+        let callback = try XCTUnwrap(harness.callbacks.first)
+        let actionWindow = bus.beginActionWindow()
+
+        callback(1000, nil, nil)
+        let firstBatch = try XCTUnwrap(actionWindow.capture())
+        callback(UInt32.max, nil, nil)
+        let secondBatch = try XCTUnwrap(actionWindow.capture())
+
+        XCTAssertEqual(actionWindow.cursor.sequence, 0)
+        XCTAssertEqual(firstBatch.events.map(\.sequence), [1])
+        XCTAssertEqual(firstBatch.through.sequence, 1)
+        XCTAssertEqual(secondBatch.events.map(\.sequence), [1, 2])
+        XCTAssertEqual(secondBatch.through.sequence, 2)
+        XCTAssertEqual(secondBatch.events.map(\.kind), [.screenChanged, .unknown(.max)])
+        XCTAssertNil(firstBatch.gap)
+        XCTAssertNil(secondBatch.gap)
+        actionWindow.cancel()
     }
 
     func testCallbackImmediatelyNormalizesMutableObjectiveCPayload() throws {

@@ -6,11 +6,13 @@ import XCTest
 final class AccessibilityNotificationIdentityTests: XCTestCase {
     func testPendingEventNormalizesUIKitCodeOnce() {
         let expectations: [(UInt32, AccessibilityNotificationKind)] = [
+            (.min, .unknown(.min)),
             (1000, .screenChanged),
             (1001, .elementChanged(.layout)),
             (1005, .elementChanged(.value)),
             (1008, .announcement),
             (4002, .unknown(4002)),
+            (.max, .unknown(.max)),
         ]
 
         for (rawCode, expectedKind) in expectations {
