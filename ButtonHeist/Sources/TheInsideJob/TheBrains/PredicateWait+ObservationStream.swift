@@ -28,7 +28,7 @@ internal struct PredicateObservationStreamState {
         self.window = window
     }
 
-    internal var changeBaseline: SettledCapture? {
+    internal var observationBaseline: SettledCapture? {
         baseline
     }
 
@@ -39,21 +39,6 @@ internal struct PredicateObservationStreamState {
         observationWindow suppliedWindow: ObservationWindow? = nil,
         preserving suppliedTrace: AccessibilityTrace? = nil
     ) -> PredicateObservationStreamReduction {
-        guard predicate.requiresChangeBaseline else {
-            let evidence = PredicateObservationEvidence(
-                observation: observation,
-                baseline: nil,
-                window: nil
-            )
-            return PredicateObservationStreamReduction(
-                state: self,
-                reduction: PredicateObservationReduction(
-                    evidence: evidence,
-                    expectation: PredicateEvaluation.evaluate(predicate, in: evidence)
-                )
-            )
-        }
-
         let baseline = baseline ?? baselineSeed.baseline(for: observation.event)
         let candidateWindow = baseline.flatMap { baseline in
             suppliedWindow ?? ObservationWindow.direct(
@@ -78,7 +63,7 @@ internal struct PredicateObservationStreamState {
         }
         let evidence = PredicateObservationEvidence(
             observation: observation,
-            baseline: baseline,
+            baseline: predicate.requiresChangeBaseline ? baseline : nil,
             window: window
         )
         return PredicateObservationStreamReduction(

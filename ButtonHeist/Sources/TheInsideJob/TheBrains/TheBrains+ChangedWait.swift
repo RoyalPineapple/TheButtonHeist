@@ -11,7 +11,8 @@ extension TheBrains {
     /// deltas, never command-local baseline state.
     func executeChangedWait(
         timeout: TimeInterval,
-        expectation: AccessibilityPredicate<RootContext>?
+        expectation: AccessibilityPredicate<RootContext>?,
+        onReadyToPoll: PredicateWait.ReadyToPoll? = nil
     ) async -> ActionResult {
         guard semanticObservationIsActive else {
             return runtimeInactiveResult(method: .wait)
@@ -27,7 +28,10 @@ extension TheBrains {
         defer { finishChangedWait() }
 
         let predicate = expectation ?? .changed(.elements())
-        let receipt = await interactionObservation.waitForPredicate(WaitStep(predicate: predicate, timeout: timeout))
+        let receipt = await interactionObservation.waitForPredicate(
+            WaitStep(predicate: predicate, timeout: timeout),
+            onReadyToPoll: onReadyToPoll
+        )
         return receipt.actionResult
     }
 }

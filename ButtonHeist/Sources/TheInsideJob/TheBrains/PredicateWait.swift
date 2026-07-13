@@ -48,6 +48,8 @@ internal struct WaitObservationPlan: Sendable, Equatable {
         AnnouncementPredicate,
         Double
     ) async -> CapturedAnnouncement?
+    /// Called after an unmatched initial observation is reduced and before polling begins.
+    internal typealias ReadyToPoll = @MainActor (SettledObservationSequence) -> Void
 
     internal let observeEvent: ObserveEvent
     internal let latestEvent: LatestEvent
@@ -83,7 +85,8 @@ internal struct WaitObservationPlan: Sendable, Equatable {
         initialTrace: AccessibilityTrace? = nil,
         after sequence: SettledObservationSequence? = nil,
         observationPlan: WaitObservationPlan? = nil,
-        announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly
+        announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly,
+        onReadyToPoll: ReadyToPoll? = nil
     ) async -> HeistWaitReceipt {
         do {
             let resolvedStep = try step.resolve(in: .empty)
@@ -92,7 +95,8 @@ internal struct WaitObservationPlan: Sendable, Equatable {
                 initialTrace: initialTrace,
                 after: sequence,
                 observationPlan: observationPlan ?? WaitObservationPlan(step: resolvedStep),
-                announcementCursorStrategy: announcementCursorStrategy
+                announcementCursorStrategy: announcementCursorStrategy,
+                onReadyToPoll: onReadyToPoll
             )
         } catch {
             let predicate = Self.unresolvedWaitPredicate()
@@ -118,7 +122,8 @@ internal struct WaitObservationPlan: Sendable, Equatable {
         initialTrace: AccessibilityTrace? = nil,
         after sequence: SettledObservationSequence? = nil,
         observationPlan: WaitObservationPlan? = nil,
-        announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly
+        announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly,
+        onReadyToPoll: ReadyToPoll? = nil
     ) async -> HeistWaitReceipt {
         let start = CFAbsoluteTimeGetCurrent()
         let timeout = Self.clampedWaitTimeout(step.timeout)
@@ -198,6 +203,8 @@ internal struct WaitObservationPlan: Sendable, Equatable {
             return waitReceipt(for: step, state: state, start: start, success: false)
         }
 
+        onReadyToPoll?(entry.event.sequence)
+
         if let decision = await pollDecision(
             for: step,
             scope: plan.scope,
@@ -276,7 +283,7 @@ internal struct WaitObservationPlan: Sendable, Equatable {
             reducer: reducer,
             stream: &stream,
             state: state,
-            baselineSeed: .preserve,
+            baselineSeed: .currentObservation,
             timedOutWhenUnmatched: timeout == 0
         )
     }
@@ -361,7 +368,7 @@ internal struct WaitObservationPlan: Sendable, Equatable {
             baselineSeed: baselineSeed,
             preserving: suppliedTrace
         )
-        guard let baseline = seeded.state.changeBaseline else { return seeded }
+        guard let baseline = seeded.state.observationBaseline else { return seeded }
         let window = buildObservationWindow(
             baseline,
             observation.event
