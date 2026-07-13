@@ -77,8 +77,9 @@ extension ElementInflation {
     }
 
     private func moveToObservedContentActivationPoint(_ treeElement: InterfaceTree.Element) async -> Bool {
-        guard let observedActivationPoint = treeElement.observedScrollContentActivationPoint,
-              let scrollView = liveScrollView(for: treeElement)
+        guard let scrollContainerPath = treeElement.scrollContainerPath,
+              let observedActivationPoint = treeElement.observedScrollContentActivationPoint,
+              let scrollView = stash.liveScrollView(forContainerPath: scrollContainerPath)
         else { return false }
 
         scrollView.setContentOffset(
@@ -96,7 +97,7 @@ extension ElementInflation {
     }
 
     private func revealScrollContainer(at path: TreePath, depth: Int) async -> Bool {
-        if hasLiveScrollContainer(at: path) {
+        if stash.liveScrollView(forContainerPath: path) != nil {
             return true
         }
         guard depth < Self.maxNestedRevealDepth else { return false }
@@ -105,7 +106,7 @@ extension ElementInflation {
               let observedActivationPoint = container.observedScrollContentActivationPoint
         else { return false }
         guard await revealScrollContainer(at: membership.containerPath, depth: depth + 1),
-              let parentScrollView = liveScrollView(forScrollContainerPath: membership.containerPath)
+              let parentScrollView = stash.liveScrollView(forContainerPath: membership.containerPath)
         else { return false }
 
         parentScrollView.setContentOffset(
@@ -114,25 +115,7 @@ extension ElementInflation {
         )
         await tripwire.yieldFrames(Self.postScrollLayoutFrames)
         guard stash.refreshLiveCapture() != nil else { return false }
-        return hasLiveScrollContainer(at: path)
-    }
-
-    private func liveScrollView(for treeElement: InterfaceTree.Element) -> UIScrollView? {
-        guard let scrollContainerPath = treeElement.scrollContainerPath else {
-            return stash.liveScrollView(for: treeElement)
-        }
-        return liveScrollView(forScrollContainerPath: scrollContainerPath)
-            ?? stash.liveScrollView(for: treeElement)
-    }
-
-    private func liveScrollView(forScrollContainerPath path: TreePath) -> UIScrollView? {
-        stash.liveScrollView(forContainerPath: path)
-    }
-
-    private func hasLiveScrollContainer(at path: TreePath) -> Bool {
-        guard let livePath = stash.nearestLiveScrollContainerPath(for: path) else { return false }
-        guard let parentPath = semanticContainer(at: path)?.scrollMembership?.containerPath else { return true }
-        return livePath != stash.nearestLiveScrollContainerPath(for: parentPath)
+        return stash.liveScrollView(forContainerPath: path) != nil
     }
 
     private func semanticContainer(at path: TreePath) -> InterfaceTree.Container? {
