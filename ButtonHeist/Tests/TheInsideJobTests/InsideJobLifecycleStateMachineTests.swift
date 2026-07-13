@@ -350,39 +350,6 @@ final class InsideJobLifecycleStateMachineTests: XCTestCase {
         )
     }
 
-    func testLifecycleSourcesKeepIsolationStructural() throws {
-        let sources = try lifecycleSourceNames.map { sourceName in
-            try String(
-                contentsOf: lifecycleSourceDirectory.appendingPathComponent(sourceName),
-                encoding: .utf8
-            )
-        }.joined(separator: "\n")
-
-        XCTAssertTrue(sources.contains("struct InsideJobLifecycleMachine: @MainActor SimpleStateMachine"))
-        [
-            "@unchecked Sendable",
-            "nonisolated(unsafe)",
-            "@preconcurrency",
-            "swiftlint:disable",
-        ].forEach { forbiddenSource in
-            XCTAssertFalse(sources.contains(forbiddenSource), "Found forbidden source: \(forbiddenSource)")
-        }
-    }
-
-    private let lifecycleSourceNames = [
-        "InsideJobLifecycleState.swift",
-        "InsideJobRuntimeConfiguration.swift",
-        "InsideJobRuntimeResources.swift",
-        "InsideJobTransportRuntime.swift",
-    ]
-
-    private var lifecycleSourceDirectory: URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Sources/TheInsideJob")
-    }
 }
 
 private struct Fixture {

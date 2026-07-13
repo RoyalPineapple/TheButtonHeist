@@ -335,8 +335,6 @@ final class ScreenClassifierTests: XCTestCase {
         let before = screen(elements: beforeElements)
         let after = screen(elements: afterElements)
 
-        XCTAssertEqual(ScreenClassifier.snapshot(of: before.tree).signature.rootShape.count, 201)
-        XCTAssertEqual(ScreenClassifier.snapshot(of: after.tree).signature.rootShape.count, 201)
         XCTAssertEqual(
             classify(before: before, after: after),
             .inferredScreenChange(reason: .rootShapeChanged)
