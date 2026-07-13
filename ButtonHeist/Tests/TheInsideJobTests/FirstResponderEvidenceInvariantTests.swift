@@ -83,7 +83,9 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
             firstResponderHeistId: replacement
         )
         let result = await brains.navigation.elementInflation.inflateFirstResponder(method: .editAction)
-        let failure = try XCTUnwrap(result)
+        guard case .failed(let failure) = result else {
+            return XCTFail("Expected stale first-responder failure, got \(result)")
+        }
 
         XCTAssertEqual(failure.failedStep, .staleRefresh)
         XCTAssertEqual(failure.failureKind, .targetUnavailable)
@@ -144,7 +146,9 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
                 return .inflated(inflatedTarget)
             }
         )
-        let failure = try XCTUnwrap(result)
+        guard case .failed(let failure) = result else {
+            return XCTFail("Expected mismatched first-responder failure, got \(result)")
+        }
 
         XCTAssertEqual(failure.failedStep, .staleRefresh)
         XCTAssertEqual(failure.failureKind, .targetUnavailable)

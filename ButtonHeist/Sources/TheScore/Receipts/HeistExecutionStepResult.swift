@@ -642,9 +642,9 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         case (.repeatUntil, .repeatUntil(let evidence)) where evidence.outcome != .failed,
              (.repeatUntilIteration, .repeatUntil(let evidence)) where evidence.outcome != .failed:
             failureDescription = "failed repeat_until step requires failed repeat_until evidence outcome"
-        case (.heist, .invocation(let evidence)) where evidence.childFailedPath == nil,
-             (.invoke, .invocation(let evidence)) where evidence.childFailedPath == nil:
-            failureDescription = "failed invocation step requires child failure evidence"
+        case (.heist, .invocation(let evidence)) where !evidence.provesInvocationFailure,
+             (.invoke, .invocation(let evidence)) where !evidence.provesInvocationFailure:
+            failureDescription = "failed invocation step requires child failure or unmet expectation evidence"
         default:
             failureDescription = nil
         }

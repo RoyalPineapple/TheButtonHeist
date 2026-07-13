@@ -135,6 +135,18 @@ extension TheSafecracker {
             }
         }
 
+        func withResolvedElementId(_ heistId: HeistId) -> ActionDispatchOutcome {
+            switch outcome {
+            case .success(let success):
+                return ActionDispatchOutcome(
+                    message: message,
+                    outcome: .success(success.withResolvedElementId(heistId))
+                )
+            case .failure:
+                return self
+            }
+        }
+
         func withActivationTrace(_ trace: ActivationTrace?) -> ActionDispatchOutcome {
             guard let trace else { return self }
             switch outcome {
@@ -216,13 +228,14 @@ extension TheSafecracker {
         private init(
             preserving source: ActionDispatchSuccess,
             subjectEvidence: ActionSubjectEvidence?,
+            resolvedElementId: HeistId?,
             activationTrace: ActivationTrace?,
             timing: ActionPerformanceTiming?
         ) {
             method = source.method
             payload = source.payload
             self.subjectEvidence = subjectEvidence
-            resolvedElementId = source.resolvedElementId
+            self.resolvedElementId = resolvedElementId
             self.activationTrace = activationTrace
             self.timing = timing
         }
@@ -231,6 +244,17 @@ extension TheSafecracker {
             ActionDispatchSuccess(
                 preserving: self,
                 subjectEvidence: evidence,
+                resolvedElementId: resolvedElementId,
+                activationTrace: activationTrace,
+                timing: timing
+            )
+        }
+
+        func withResolvedElementId(_ heistId: HeistId) -> ActionDispatchSuccess {
+            ActionDispatchSuccess(
+                preserving: self,
+                subjectEvidence: subjectEvidence,
+                resolvedElementId: heistId,
                 activationTrace: activationTrace,
                 timing: timing
             )
@@ -240,6 +264,7 @@ extension TheSafecracker {
             ActionDispatchSuccess(
                 preserving: self,
                 subjectEvidence: subjectEvidence,
+                resolvedElementId: resolvedElementId,
                 activationTrace: trace,
                 timing: timing
             )
@@ -249,6 +274,7 @@ extension TheSafecracker {
             ActionDispatchSuccess(
                 preserving: self,
                 subjectEvidence: subjectEvidence,
+                resolvedElementId: resolvedElementId,
                 activationTrace: activationTrace,
                 timing: timing
             )

@@ -6,7 +6,13 @@ import ThePlans
 
 extension ElementInflation {
 
-    internal func inflateFirstResponder(method: ActionMethod) async -> ElementInflationFailure? {
+    internal enum FirstResponderInflation {
+        case unavailable
+        case inflated(InflatedElementTarget)
+        case failed(ElementInflationFailure)
+    }
+
+    internal func inflateFirstResponder(method: ActionMethod) async -> FirstResponderInflation {
         await inflateFirstResponder(method: method) { target, method in
             await self.inflate(for: target, method: method)
         }
@@ -15,22 +21,22 @@ extension ElementInflation {
     internal func inflateFirstResponder(
         method: ActionMethod,
         inflateTarget: @MainActor (AccessibilityTarget, ActionMethod) async -> ElementInflationResult
-    ) async -> ElementInflationFailure? {
+    ) async -> FirstResponderInflation {
         guard let firstResponderHeistId = stash.firstResponderHeistId,
               let treeElement = stash.interfaceElement(heistId: firstResponderHeistId),
-              let target = stash.minimumUniqueTarget(for: treeElement) else { return nil }
+              let target = stash.minimumUniqueTarget(for: treeElement) else { return .unavailable }
         switch await inflateTarget(target, method) {
         case .inflated(let inflatedTarget):
             guard stash.firstResponderHeistId == firstResponderHeistId,
                   inflatedTarget.treeElement.heistId == firstResponderHeistId else {
-                return .staleRefresh(
+                return .failed(.staleRefresh(
                     "first responder no longer matches captured HeistId \(firstResponderHeistId) after inflation",
                     failureKind: .targetUnavailable
-                )
+                ))
             }
-            return nil
+            return .inflated(inflatedTarget)
         case .failed(let failure):
-            return failure
+            return .failed(failure)
         }
     }
 }

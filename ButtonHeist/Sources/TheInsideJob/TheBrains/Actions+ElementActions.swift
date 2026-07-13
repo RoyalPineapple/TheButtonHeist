@@ -48,9 +48,9 @@ extension Actions {
             ) {
                 result = failure
             } else {
-                result = await action(context).withSubjectEvidence(
-                    context.subjectEvidence(source: .resolvedSemanticTarget)
-                )
+                result = await action(context)
+                    .withSubjectEvidence(context.subjectEvidence(source: .resolvedSemanticTarget))
+                    .withResolvedElementId(context.treeElement.heistId)
             }
         }
 

@@ -66,12 +66,16 @@ final class TheSafecracker {
         await keyboardInput.clearText(existingValue: existingValue, interKeyDelay: interKeyDelay)
     }
 
-    func performEditAction(_ action: EditAction) -> Bool {
-        editActions.perform(action)
+    func performEditAction(_ action: EditAction, on object: NSObject) -> Bool {
+        editActions.perform(action, on: object)
     }
 
     func resignFirstResponder() -> Bool {
         editActions.resignFirstResponder()
+    }
+
+    func resignFirstResponder(_ object: NSObject) -> Bool {
+        editActions.resignFirstResponder(object)
     }
 
     func showFingerprint(at point: CGPoint) {

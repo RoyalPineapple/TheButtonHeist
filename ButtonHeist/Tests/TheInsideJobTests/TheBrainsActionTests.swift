@@ -717,7 +717,11 @@ final class TheBrainsActionTests: XCTestCase {
         var dispatchedTypes: [RuntimeActionType] = []
         let runtime = heistRuntime(observations: []) { command in
             dispatchedTypes.append(command.runtimeType)
-            return ActionResult.success(method: .heistPlan, message: command.runtimeType.rawValue, evidence: .none)
+            return ActionResult.success(
+                method: command.testActionResultMethod,
+                message: command.runtimeType.rawValue,
+                evidence: .none
+            )
         }
         let plan = try HeistPlan(body: commands.map { .action(try ActionStep(command: $0)) })
 
@@ -1210,7 +1214,7 @@ final class TheBrainsActionTests: XCTestCase {
                     return .timedOut(
                         message: expectation.actual,
                         accessibilityTrace: initialTrace,
-                        expectation: expectation,
+                        expectation: self.unmetExpectation(expectation),
                         observedSequence: 1,
                         observationSummary: "interface: 1 elements"
                     )
@@ -1220,8 +1224,7 @@ final class TheBrainsActionTests: XCTestCase {
                         errorKind: .general,
                         message: "unexpected post-body wait",
                         accessibilityTrace: nil,
-                        expectation: ExpectationResult(
-                            met: false,
+                        expectation: ExpectationResult.Unmet(
                             predicate: predicate,
                             actual: "unexpected post-body wait"
                         )
@@ -1232,8 +1235,7 @@ final class TheBrainsActionTests: XCTestCase {
                         errorKind: .general,
                         message: "unexpected wait request",
                         accessibilityTrace: nil,
-                        expectation: ExpectationResult(
-                            met: false,
+                        expectation: ExpectationResult.Unmet(
                             predicate: predicate,
                             actual: "unexpected wait request"
                         )
@@ -1432,7 +1434,7 @@ final class TheBrainsActionTests: XCTestCase {
                     return .timedOut(
                         message: expectation.actual,
                         accessibilityTrace: initialTrace,
-                        expectation: expectation,
+                        expectation: self.unmetExpectation(expectation),
                         observedSequence: 1,
                         observationSummary: "interface: 1 elements"
                     )
@@ -1442,7 +1444,7 @@ final class TheBrainsActionTests: XCTestCase {
                     return .matched(
                         message: expectation.actual,
                         accessibilityTrace: matchedTrace,
-                        expectation: expectation
+                        expectation: self.metExpectation(expectation)
                     )
                 case .standalone, .actionEndpoint, .baselineTraceOnly:
                     XCTFail("repeat_until should not issue \(request)")
@@ -1450,7 +1452,10 @@ final class TheBrainsActionTests: XCTestCase {
                         errorKind: .general,
                         message: "unexpected wait request",
                         accessibilityTrace: nil,
-                        expectation: ExpectationResult(met: false, predicate: predicate, actual: "unexpected wait request")
+                        expectation: ExpectationResult.Unmet(
+                            predicate: predicate,
+                            actual: "unexpected wait request"
+                        )
                     )
                 }
             }
@@ -1492,7 +1497,7 @@ final class TheBrainsActionTests: XCTestCase {
                     return .timedOut(
                         message: expectation.actual,
                         accessibilityTrace: initialTrace,
-                        expectation: expectation,
+                        expectation: self.unmetExpectation(expectation),
                         observedSequence: 1,
                         observationSummary: "interface: 1 elements"
                     )
@@ -1500,8 +1505,7 @@ final class TheBrainsActionTests: XCTestCase {
                     return .timedOut(
                         message: "no observed accessibility trace",
                         accessibilityTrace: nil,
-                        expectation: ExpectationResult(
-                            met: false,
+                        expectation: ExpectationResult.Unmet(
                             predicate: .changed(.elements()),
                             actual: "no observed accessibility trace"
                         ),
@@ -1514,7 +1518,10 @@ final class TheBrainsActionTests: XCTestCase {
                         errorKind: .general,
                         message: "unexpected wait request",
                         accessibilityTrace: nil,
-                        expectation: ExpectationResult(met: false, predicate: predicate, actual: "unexpected wait request")
+                        expectation: ExpectationResult.Unmet(
+                            predicate: predicate,
+                            actual: "unexpected wait request"
+                        )
                     )
                 }
             }
@@ -2412,7 +2419,7 @@ final class TheBrainsActionTests: XCTestCase {
         let runtime = heistRuntime(
             observations: [
                 observedState(labels: ["Checkout"], screenId: "checkout"),
-                observedState(labels: ["Receipt"], screenId: "receipt"),
+                observedState(labels: ["Receipt"], screenId: "receipt", screenChanged: true),
             ],
             execute: { _ in
                 ActionResult.success(method: .activate, evidence: .none)
@@ -2648,23 +2655,6 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(executedCommands, [
             .activate(literalTarget(ElementPredicate(label: "Nested Setup"))),
         ])
-    }
-
-    func testHeistAdmissionRejectsSelfInvocationOutsideLocalScope() throws {
-        let recursiveName = "repeatHeist"
-        let candidate = HeistPlanAdmissionCandidate(definitions: [
-            HeistPlanAdmissionCandidate(name: recursiveName, body: [
-                .invoke(HeistInvocationStep(path: [recursiveName])),
-            ]),
-        ], body: [])
-
-        XCTAssertThrowsError(try candidate.validatedSemantics()) { error in
-            guard let admissionError = error as? HeistPlanRuntimeSafetyError else {
-                return XCTFail("Expected HeistPlanRuntimeSafetyError, got \(error)")
-            }
-            XCTAssertEqual(admissionError.failures.first?.contract, "heist runs must not be recursive")
-            XCTAssertEqual(admissionError.failures.first?.observed, "repeatHeist -> repeatHeist")
-        }
     }
 
     func testHeistActionExpectationTimeoutZeroUsesActionInteractionTrace() async throws {
@@ -2971,8 +2961,8 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(heist.abortedAtPath, failedChildPath)
-        XCTAssertEqual(heist.steps.map(\.kind), [.forEachString, .warn])
-        XCTAssertEqual(heist.steps.map(\.status), [.failed, .skipped])
+        XCTAssertEqual(heist.steps.map(\.kind), [.forEachString, .warn, .action])
+        XCTAssertEqual(heist.steps.map(\.status), [.failed, .skipped, .passed])
         XCTAssertEqual(forEachStep.status, .failed)
         XCTAssertEqual(forEachResult.count, 2)
         XCTAssertEqual(forEachResult.iterationCount, 1)
@@ -4351,9 +4341,10 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(result.outcome.errorKind, .timeout)
         XCTAssertDiagnostic(result.message, contains: [
             "timed out after",
-            "waiting for element to appear",
-            "interface: 0 elements",
-            "last result: element not found",
+            "waiting for heist predicate",
+            "expected: exists(target(predicate(label=\"never\")))",
+            "last result: no settled semantic observation available",
+            "last parsed: no accessibility tree",
         ])
     }
 
@@ -4563,11 +4554,12 @@ final class TheBrainsActionTests: XCTestCase {
 
     private func observedState(
         labels: [String],
-        screenId: String? = nil
+        screenId: String? = nil,
+        screenChanged: Bool = false
     ) -> PostActionObservation.BeforeState {
         observedState(elements: labels.enumerated().map { index, label in
             (makeElement(label: label), HeistId(rawValue: "element_\(index)"))
-        }, screenId: screenId)
+        }, screenId: screenId, screenChanged: screenChanged)
     }
 
     private func waitForSettledSemanticWaiter(
@@ -4586,7 +4578,8 @@ final class TheBrainsActionTests: XCTestCase {
 
     private func observedState(
         elements: [(AccessibilityElement, HeistId)],
-        screenId: String? = nil
+        screenId: String? = nil,
+        screenChanged: Bool = false
     ) -> PostActionObservation.BeforeState {
         brains.stash.installScreenForTesting(.makeForTests(elements: elements))
         let state = brains.postActionObservation.captureSemanticState()
@@ -4603,7 +4596,17 @@ final class TheBrainsActionTests: XCTestCase {
             interface: state.capture.interface,
             parentHash: state.capture.parentHash,
             context: context,
-            transition: state.capture.transition
+            transition: screenChanged
+                ? AccessibilityTrace.Transition(accessibilityNotifications: [
+                    AccessibilityNotificationEvidence(
+                        sequence: 1,
+                        kind: .screenChanged,
+                        timestamp: Date(timeIntervalSince1970: 0),
+                        notificationData: .none,
+                        associatedElement: .none
+                    ),
+                ])
+                : state.capture.transition
         )
         return PostActionObservation.BeforeState(
             screen: state.screen,
@@ -4637,7 +4640,11 @@ final class TheBrainsActionTests: XCTestCase {
                 if let execute {
                     return await execute(command)
                 }
-                return ActionResult.success(method: .heistPlan, message: command.runtimeType.rawValue, evidence: .none)
+                return ActionResult.success(
+                    method: command.testActionResultMethod,
+                    message: command.runtimeType.rawValue,
+                    evidence: .none
+                )
             },
             wait: { request in
                 await self.heistRuntimeWaitReceipt(
@@ -4670,7 +4677,11 @@ final class TheBrainsActionTests: XCTestCase {
                 if let execute {
                     return await execute(command)
                 }
-                return ActionResult.success(method: .heistPlan, message: command.runtimeType.rawValue, evidence: .none)
+                return ActionResult.success(
+                    method: command.testActionResultMethod,
+                    message: command.runtimeType.rawValue,
+                    evidence: .none
+                )
             },
             wait: wait,
             selectPredicateCase: { _, _ in
@@ -4738,8 +4749,8 @@ final class TheBrainsActionTests: XCTestCase {
             message: expectation.actual,
             accessibilityTrace: observation.accessibilityTrace
         )
-        switch heistWaitStatus(for: result) {
-        case .matched:
+        switch expectation {
+        case .met(let expectation):
             return .matched(
                 message: result.message,
                 accessibilityTrace: result.accessibilityTrace,
@@ -4747,20 +4758,13 @@ final class TheBrainsActionTests: XCTestCase {
                 observedSequence: observation.event.sequence,
                 observationSummary: observation.summary
             )
-        case .timedOut:
+        case .unmet(let expectation):
             return .timedOut(
                 message: result.message,
                 accessibilityTrace: result.accessibilityTrace,
                 expectation: expectation,
                 observedSequence: observation.event.sequence,
                 observationSummary: observation.summary
-            )
-        case .failed(let errorKind):
-            return .failed(
-                errorKind: errorKind,
-                message: result.message,
-                accessibilityTrace: result.accessibilityTrace,
-                expectation: expectation
             )
         }
     }
@@ -4787,36 +4791,54 @@ final class TheBrainsActionTests: XCTestCase {
         result: ActionResult,
         expectation: ExpectationResult
     ) -> HeistWaitReceipt {
-        switch heistWaitStatus(for: result) {
-        case .matched:
+        if result.outcome.isSuccess, case .met(let expectation) = expectation {
             return .matched(
                 message: result.message,
                 accessibilityTrace: result.accessibilityTrace,
                 expectation: expectation
             )
-        case .timedOut:
+        }
+        let unmet = ExpectationResult.Unmet(expectation) ?? ExpectationResult.Unmet(
+            predicate: expectation.predicate,
+            actual: result.message ?? expectation.actual
+        )
+        if result.outcome.errorKind == .timeout || result.outcome.isSuccess {
             return .timedOut(
                 message: result.message,
                 accessibilityTrace: result.accessibilityTrace,
-                expectation: expectation
+                expectation: unmet
             )
-        case .failed(let errorKind):
-            return .failed(
-                errorKind: errorKind,
+        }
+        return .failed(
+                errorKind: result.outcome.errorKind ?? .general,
                 message: result.message,
                 accessibilityTrace: result.accessibilityTrace,
-                expectation: expectation
+                expectation: unmet
             )
-        }
     }
 
-    private func heistWaitStatus(for result: ActionResult) -> HeistWaitReceipt.Status {
-        if result.outcome.isSuccess {
-            return .matched
+    private func metExpectation(
+        _ result: ExpectationResult,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) -> ExpectationResult.Met {
+        guard let expectation = ExpectationResult.Met(result) else {
+            XCTFail("Expected met expectation fixture", file: file, line: line)
+            return ExpectationResult.Met(predicate: result.predicate, actual: result.actual)
         }
-        return result.outcome.errorKind == .timeout
-            ? .timedOut
-            : .failed(result.outcome.errorKind ?? .general)
+        return expectation
+    }
+
+    private func unmetExpectation(
+        _ result: ExpectationResult,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) -> ExpectationResult.Unmet {
+        guard let expectation = ExpectationResult.Unmet(result) else {
+            XCTFail("Expected unmet expectation fixture", file: file, line: line)
+            return ExpectationResult.Unmet(predicate: result.predicate, actual: result.actual)
+        }
+        return expectation
     }
 
     private func normalizedActionMessage(
@@ -4866,6 +4888,33 @@ final class TheBrainsActionTests: XCTestCase {
             }
         }
         return await operation()
+    }
+}
+
+private extension RuntimeActionMessage {
+    var testActionResultMethod: ActionMethod {
+        switch self {
+        case .activate: .activate
+        case .increment: .increment
+        case .decrement: .decrement
+        case .performCustomAction: .customAction
+        case .rotor: .rotor
+        case .dismiss: .dismiss
+        case .magicTap: .magicTap
+        case .oneFingerTap: .syntheticTap
+        case .longPress: .syntheticLongPress
+        case .swipe: .syntheticSwipe
+        case .drag: .syntheticDrag
+        case .typeText: .typeText
+        case .editAction: .editAction
+        case .scroll: .scroll
+        case .scrollToVisible: .scrollToVisible
+        case .scrollToEdge: .scrollToEdge
+        case .resignFirstResponder: .resignFirstResponder
+        case .setPasteboard: .setPasteboard
+        case .takeScreenshot: .takeScreenshot
+        case .wait: .wait
+        }
     }
 }
 

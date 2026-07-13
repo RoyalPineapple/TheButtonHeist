@@ -11,24 +11,38 @@ extension Actions {
     // MARK: - Edit / Pasteboard / Responder
 
     func executeEditAction(_ target: EditActionTarget) async -> TheSafecracker.ActionDispatchOutcome {
-        if let failure = await navigation.elementInflation.inflateFirstResponder(method: .editAction) {
+        let inflatedTarget: ElementInflation.InflatedElementTarget
+        switch await navigation.elementInflation.inflateFirstResponder(method: .editAction) {
+        case .unavailable:
+            return .failure(
+                .editAction,
+                message: ActionCapabilityDiagnostic.editActionFailed(
+                    target.action,
+                    stash: stash,
+                    safecracker: safecracker
+                )
+            )
+        case .failed(let failure):
             return failure.actionDispatchOutcome(commandMethod: .editAction)
+        case .inflated(let target):
+            inflatedTarget = target
         }
-        let success = safecracker.performEditAction(target.action)
+        let success = safecracker.performEditAction(target.action, on: inflatedTarget.liveTarget.object)
         let message = success ? nil : ActionCapabilityDiagnostic.editActionFailed(
             target.action,
             stash: stash,
             safecracker: safecracker
         )
         return success
-            ? .success(method: .editAction)
+            ? .success(
+                method: .editAction,
+                subjectEvidence: inflatedTarget.subjectEvidence(source: .textInputTarget),
+                resolvedElementId: inflatedTarget.treeElement.heistId
+            )
             : .failure(.editAction, message: message ?? "edit action failed")
     }
 
     func executeSetPasteboard(_ target: SetPasteboardTarget) async -> TheSafecracker.ActionDispatchOutcome {
-        if let failure = await navigation.elementInflation.inflateFirstResponder(method: .setPasteboard) {
-            return failure.actionDispatchOutcome(commandMethod: .setPasteboard)
-        }
         UIPasteboard.general.string = target.text
         return .success(payload: .setPasteboard(target.text))
     }
@@ -45,11 +59,29 @@ extension Actions {
     }
 
     func executeResignFirstResponder() async -> TheSafecracker.ActionDispatchOutcome {
-        if let failure = await navigation.elementInflation.inflateFirstResponder(method: .resignFirstResponder) {
+        let inflatedTarget: ElementInflation.InflatedElementTarget
+        switch await navigation.elementInflation.inflateFirstResponder(method: .resignFirstResponder) {
+        case .unavailable:
+            return .failure(
+                .resignFirstResponder,
+                message: ActionCapabilityDiagnostic.resignFirstResponderFailed(
+                    stash: stash,
+                    safecracker: safecracker
+                )
+            )
+        case .failed(let failure):
             return failure.actionDispatchOutcome(commandMethod: .resignFirstResponder)
+        case .inflated(let target):
+            inflatedTarget = target
         }
-        let success = safecracker.resignFirstResponder()
-        if success { return .success(method: .resignFirstResponder) }
+        let success = safecracker.resignFirstResponder(inflatedTarget.liveTarget.object)
+        if success {
+            return .success(
+                method: .resignFirstResponder,
+                subjectEvidence: inflatedTarget.subjectEvidence(source: .textInputTarget),
+                resolvedElementId: inflatedTarget.treeElement.heistId
+            )
+        }
         return .failure(
             .resignFirstResponder,
             message: ActionCapabilityDiagnostic.resignFirstResponderFailed(

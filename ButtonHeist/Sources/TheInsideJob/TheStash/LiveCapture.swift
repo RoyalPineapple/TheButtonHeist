@@ -396,7 +396,7 @@ struct LiveCapture: Equatable {
                     treePath: treeElement.path
                 )
             }
-            guard treeElement.element == item.element else {
+            guard capturedElementsMatch(treeElement.element, item.element) else {
                 throw ValidationError.treeElementMismatch(heistId: heistId, path: item.path)
             }
             try validateScrollEvidence(
@@ -419,6 +419,25 @@ struct LiveCapture: Equatable {
             liveHeistIds: Set(entries.map(\.heistId))
         )
         return entries
+    }
+
+    private static func capturedElementsMatch(
+        _ lhs: AccessibilityElement,
+        _ rhs: AccessibilityElement
+    ) -> Bool {
+        if lhs == rhs { return true }
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        encoder.nonConformingFloatEncodingStrategy = .convertToString(
+            positiveInfinity: "+Infinity",
+            negativeInfinity: "-Infinity",
+            nan: "NaN"
+        )
+        guard let lhsData = try? encoder.encode(lhs),
+              let rhsData = try? encoder.encode(rhs)
+        else { return false }
+        return lhsData == rhsData
     }
 
     private static func validateContainers(in tree: InterfaceTree) throws {

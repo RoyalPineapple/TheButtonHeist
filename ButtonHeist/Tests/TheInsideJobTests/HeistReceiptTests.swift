@@ -683,8 +683,7 @@ private final class ReceiptWaitScript {
 
     func receipt(for step: ResolvedWaitStep) -> HeistWaitReceipt {
         guard !states.isEmpty else {
-            let expectation = ExpectationResult(
-                met: false,
+            let expectation = ExpectationResult.Unmet(
                 predicate: step.predicate,
                 actual: "no settled semantic observation available"
             )
@@ -702,7 +701,8 @@ private final class ReceiptWaitScript {
         previousCapture = state.capture
 
         let expectation = PredicateEvaluation.evaluate(step.predicate, in: trace, isComplete: true)
-        if expectation.met {
+        switch expectation {
+        case .met(let expectation):
             return .matched(
                 message: expectation.actual,
                 accessibilityTrace: trace,
@@ -710,14 +710,15 @@ private final class ReceiptWaitScript {
                 observedSequence: nextSequence,
                 observationSummary: "interface: \(state.interface.projectedElements.count) elements"
             )
+        case .unmet(let expectation):
+            return .timedOut(
+                message: expectation.actual,
+                accessibilityTrace: trace,
+                expectation: expectation,
+                observedSequence: nextSequence,
+                observationSummary: "interface: \(state.interface.projectedElements.count) elements"
+            )
         }
-        return .timedOut(
-            message: expectation.actual,
-            accessibilityTrace: trace,
-            expectation: expectation,
-            observedSequence: nextSequence,
-            observationSummary: "interface: \(state.interface.projectedElements.count) elements"
-        )
     }
 }
 

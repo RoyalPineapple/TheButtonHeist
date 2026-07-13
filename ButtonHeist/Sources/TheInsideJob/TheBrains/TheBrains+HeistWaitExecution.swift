@@ -53,7 +53,7 @@ struct HeistWaitReceipt {
     struct MatchedEvidence {
         let message: String?
         let accessibilityTrace: AccessibilityTrace?
-        let expectation: ExpectationResult
+        let expectation: ExpectationResult.Met
         let observedSequence: SettledObservationSequence?
         let observationSummary: String?
         let announcement: String?
@@ -62,7 +62,7 @@ struct HeistWaitReceipt {
     struct TimedOutEvidence {
         let message: String?
         let accessibilityTrace: AccessibilityTrace?
-        let expectation: ExpectationResult
+        let expectation: ExpectationResult.Unmet
         let observedSequence: SettledObservationSequence?
         let observationSummary: String?
     }
@@ -71,7 +71,7 @@ struct HeistWaitReceipt {
         let errorKind: ErrorKind
         let message: String?
         let accessibilityTrace: AccessibilityTrace?
-        let expectation: ExpectationResult
+        let expectation: ExpectationResult.Unmet
         let announcement: String?
     }
 
@@ -119,11 +119,11 @@ struct HeistWaitReceipt {
     var expectation: ExpectationResult {
         switch outcome {
         case .matched(let evidence):
-            return evidence.expectation
+            return evidence.expectation.result
         case .timedOut(let evidence):
-            return evidence.expectation
+            return evidence.expectation.result
         case .failed(let evidence):
-            return evidence.expectation
+            return evidence.expectation.result
         }
     }
 
@@ -171,7 +171,7 @@ struct HeistWaitReceipt {
     static func matched(
         message: String?,
         accessibilityTrace: AccessibilityTrace?,
-        expectation: ExpectationResult,
+        expectation: ExpectationResult.Met,
         observedSequence: SettledObservationSequence? = nil,
         observationSummary: String? = nil,
         announcement: String? = nil
@@ -189,7 +189,7 @@ struct HeistWaitReceipt {
     static func timedOut(
         message: String?,
         accessibilityTrace: AccessibilityTrace?,
-        expectation: ExpectationResult,
+        expectation: ExpectationResult.Unmet,
         observedSequence: SettledObservationSequence? = nil,
         observationSummary: String? = nil
     ) -> HeistWaitReceipt {
@@ -206,7 +206,7 @@ struct HeistWaitReceipt {
         errorKind: ErrorKind,
         message: String?,
         accessibilityTrace: AccessibilityTrace?,
-        expectation: ExpectationResult,
+        expectation: ExpectationResult.Unmet,
         announcement: String? = nil
     ) -> HeistWaitReceipt {
         HeistWaitReceipt(outcome: .failed(FailedEvidence(

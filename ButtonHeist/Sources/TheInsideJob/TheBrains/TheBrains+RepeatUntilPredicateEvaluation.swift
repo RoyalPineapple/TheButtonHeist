@@ -263,23 +263,33 @@ extension TheBrains {
             trace: trace,
             summary: repeatUntilObservationSummary(trace)
         )
-        let receipt = HeistWaitReceipt.matched(
-            message: stopExpectation.actual,
-            accessibilityTrace: trace,
-            expectation: stopExpectation,
-            observedSequence: sequence,
-            observationSummary: actionObservation.summary
-        )
-        let check = RepeatUntil.ObservedCheck(
-            observation: actionObservation,
-            check: stopExpectation,
-            receipt: receipt
-        )
-        switch check {
-        case .met(let check):
-            return .changedMet(check)
-        case .unmet(let check):
-            return .changedUnmet(check)
+        switch stopExpectation {
+        case .met(let expectation):
+            let receipt = HeistWaitReceipt.matched(
+                message: expectation.actual,
+                accessibilityTrace: trace,
+                expectation: expectation,
+                observedSequence: sequence,
+                observationSummary: actionObservation.summary
+            )
+            return .changedMet(RepeatUntil.MetCheck(
+                observation: actionObservation,
+                expectation: expectation,
+                receipt: receipt
+            ))
+        case .unmet(let expectation):
+            let receipt = HeistWaitReceipt.timedOut(
+                message: expectation.actual,
+                accessibilityTrace: trace,
+                expectation: expectation,
+                observedSequence: sequence,
+                observationSummary: actionObservation.summary
+            )
+            return .changedUnmet(RepeatUntil.UnmetCheck(
+                observation: actionObservation,
+                expectation: expectation,
+                receipt: receipt
+            ))
         }
     }
 

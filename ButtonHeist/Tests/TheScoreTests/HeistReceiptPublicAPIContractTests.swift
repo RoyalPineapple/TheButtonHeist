@@ -132,7 +132,7 @@ import TheScore
                         outcome: .completed(expectation: nil)
                     )
                 ),
-                "failed invocation step requires child failure evidence"
+                "failed invocation step requires child failure or unmet expectation evidence"
             ),
             (
                 .passed(
@@ -144,7 +144,7 @@ import TheScore
                         childFailedPath: nil
                     )
                 ),
-                "failed invocation step requires child failure evidence"
+                "failed invocation step requires child failure or unmet expectation evidence"
             ),
         ]
 
@@ -167,6 +167,43 @@ import TheScore
             evidence: HeistWaitEvidence.handledElse(unmatched),
             failure: failure,
             child: failedChild
+        )
+
+        let decoded = try JSONDecoder().decode(
+            HeistExecutionStepResult.self,
+            from: JSONEncoder().encode(step)
+        )
+
+        #expect(decoded == step)
+    }
+
+    @Test func `failed invocation accepts unmet attached expectation evidence`() throws {
+        let predicate = AccessibilityPredicate<RootContext>.exists(.label("Done"))
+        let expectation = ExpectationResult(
+            met: false,
+            predicate: predicate,
+            actual: "not found"
+        )
+        let check = try #require(HeistWaitEvidence.UnmatchedCheck(
+            actionResult: .failure(
+                method: .wait,
+                errorKind: .timeout,
+                evidence: .none
+            ),
+            expectation: expectation
+        ))
+        let evidence = HeistInvocationEvidence.invocation(
+            invocation: HeistInvocationStep(path: ["checkout"]),
+            name: "checkout",
+            argument: nil,
+            outcome: .completed(expectation: .wait(.failed(check)))
+        )
+        let step = HeistExecutionStepResult.failed(
+            path: "$.body[0]",
+            receiptKind: .invocation,
+            durationMs: 1,
+            evidence: evidence,
+            failure: failure
         )
 
         let decoded = try JSONDecoder().decode(
