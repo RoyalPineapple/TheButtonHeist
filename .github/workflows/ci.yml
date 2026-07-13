@@ -271,8 +271,8 @@ jobs:
       BUTTONHEIST_RECEIPTS_DIR: process-temporary-directory
       BUTTONHEIST_RECEIPTS_MODE: ${{ github.ref == 'refs/heads/main' && 'failing-and-passing' || 'failures' }}
       BUTTONHEIST_CI_RECEIPTS_DIR: ${{ github.workspace }}/ci-artifacts/buttonheist-receipts/ios-tests-${{ matrix.lane }}
-      IOS_TEST_RESULT_BUNDLE: ${{ runner.temp }}/ios-tests-${{ matrix.lane }}.xcresult
-      IOS_TEST_DIAGNOSTICS_DIR: ${{ runner.temp }}/ios-tests-${{ matrix.lane }}-diagnostics
+      IOS_TEST_RESULT_BUNDLE: /tmp/ButtonHeist-ios-tests-${{ matrix.lane }}.xcresult
+      IOS_TEST_DIAGNOSTICS_DIR: /tmp/ButtonHeist-ios-tests-${{ matrix.lane }}-diagnostics
 
     steps:
       - name: Checkout repository
