@@ -193,6 +193,7 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
     }
 
     override func visit(_ node: TypeAliasDeclSyntax) -> SyntaxVisitorContinueKind {
+        recordAccessibilityTargetAlias(node)
         recordExportedTupleTypealias(node)
         recordCompatibilitySurface(
             node: node,
@@ -207,6 +208,7 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
         recordRetiredVariableSymbols(node)
         recordSiblingReceiptWarnings(node)
         recordVariableCompatibilitySurface(node)
+        recordUnannotatedCallback(node)
         recordTupleProperties(node)
         recordSettledValueLiveStorage(node)
         return .visitChildren
@@ -495,6 +497,49 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
                     evidence: ViolationEvidence(
                         observed: name,
                         expectation: "exported API names avoid legacy/compatibility/deprecated spellings"
+                    )
+                )
+            )
+        }
+    }
+
+    private func recordAccessibilityTargetAlias(_ node: TypeAliasDeclSyntax) {
+        guard isNamedType(node.initializer.value, "AccessibilityTarget"),
+              !(isButtonHeistDSLFacade(file.path) && node.name.text == "AccessibilityTarget") else {
+            return
+        }
+
+        failures.append(
+            file.failure(
+                at: node,
+                message: "alternate AccessibilityTarget typealias",
+                evidence: ViolationEvidence(
+                    observed: "\(node.name.text) = \(node.initializer.value.trimmedDescription)",
+                    expectation: "AccessibilityTarget is the canonical target spelling"
+                )
+            )
+        )
+    }
+
+    private func recordUnannotatedCallback(_ node: VariableDeclSyntax) {
+        guard isFileOrTypeMember(node) else { return }
+
+        for binding in node.bindings {
+            guard let identifier = binding.pattern.as(IdentifierPatternSyntax.self),
+                  isCallbackName(identifier.identifier.text),
+                  let type = binding.typeAnnotation?.type,
+                  containsFunctionType(type),
+                  !hasCallbackIsolationAnnotation(type) else {
+                continue
+            }
+
+            failures.append(
+                file.failure(
+                    at: type,
+                    message: "callback without isolation annotation",
+                    evidence: ViolationEvidence(
+                        observed: "\(identifier.identifier.text): \(type.trimmedDescription)",
+                        expectation: "onFoo callbacks declare a global actor or @Sendable in the closure type"
                     )
                 )
             )
@@ -1925,6 +1970,52 @@ private func isCompatibilityName(_ name: String) -> Bool {
         return true
     }
     return name.contains("Compat") && !name.contains("Compatible")
+}
+
+private func isCallbackName(_ name: String) -> Bool {
+    guard name.hasPrefix("on") else { return false }
+    return name.dropFirst(2).first?.isUppercase == true
+}
+
+private func containsFunctionType(_ type: TypeSyntax) -> Bool {
+    if type.is(FunctionTypeSyntax.self) { return true }
+    if let optional = type.as(OptionalTypeSyntax.self) {
+        return containsFunctionType(optional.wrappedType)
+    }
+    if let attributed = type.as(AttributedTypeSyntax.self) {
+        return containsFunctionType(attributed.baseType)
+    }
+    if let tuple = type.as(TupleTypeSyntax.self), tuple.elements.count == 1,
+       let element = tuple.elements.first {
+        return containsFunctionType(element.type)
+    }
+    return false
+}
+
+private func hasCallbackIsolationAnnotation(_ type: TypeSyntax) -> Bool {
+    if let function = type.as(FunctionTypeSyntax.self) {
+        return hasCallbackIsolationAnnotation(function.attributes)
+    }
+    if let optional = type.as(OptionalTypeSyntax.self) {
+        return hasCallbackIsolationAnnotation(optional.wrappedType)
+    }
+    if let attributed = type.as(AttributedTypeSyntax.self) {
+        return hasCallbackIsolationAnnotation(attributed.attributes)
+            || hasCallbackIsolationAnnotation(attributed.baseType)
+    }
+    if let tuple = type.as(TupleTypeSyntax.self), tuple.elements.count == 1,
+       let element = tuple.elements.first {
+        return hasCallbackIsolationAnnotation(element.type)
+    }
+    return false
+}
+
+private func hasCallbackIsolationAnnotation(_ attributes: AttributeListSyntax) -> Bool {
+    attributes.contains { element in
+        guard let attribute = element.as(AttributeSyntax.self) else { return false }
+        let name = attribute.attributeName.trimmedDescription
+        return name == "Sendable" || name.hasSuffix("Actor")
+    }
 }
 
 private func isAllowedAnyBoundaryUse(_ node: IdentifierTypeSyntax, path: String) -> Bool {
