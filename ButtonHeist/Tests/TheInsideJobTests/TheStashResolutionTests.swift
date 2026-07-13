@@ -1798,6 +1798,53 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertNotEqual(liveTarget.activationPoint, liveObject.accessibilityActivationPoint)
     }
 
+    func testRawEvidenceRequiresCommittedHeistIdForLiveObjectAndGeometry() throws {
+        let committedId: HeistId = "committed_control"
+        let rawId: HeistId = "raw_control"
+        let settledFrame = CGRect(x: 20, y: 40, width: 120, height: 44)
+        let settledElement = AccessibilityElement.make(
+            label: "Shared Control",
+            traits: .adjustable,
+            frame: settledFrame
+        )
+        bagman.semanticObservationStream.commitVisibleObservationForTesting(
+            InterfaceObservation.makeForTests(elements: [(settledElement, committedId)])
+        )
+        let target = literalTarget(ElementPredicate(label: .exact("Shared Control"), traits: [.adjustable]))
+        let semanticTarget = try XCTUnwrap(bagman.resolveVisibleTarget(target).resolved)
+
+        let rawObject = NSObject()
+        let rawFrame = CGRect(x: 80, y: 160, width: 180, height: 52)
+        let rawElement = AccessibilityElement.make(
+            label: "Shared Control",
+            traits: .adjustable,
+            frame: rawFrame
+        )
+        bagman.recordParsedObservedEvidence(InterfaceObservation.makeForTests(
+            elements: [(rawElement, rawId)],
+            objects: [rawId: rawObject]
+        ))
+
+        XCTAssertNil(bagman.interfaceElement(heistId: rawId))
+        XCTAssertEqual(bagman.resolveVisibleTarget(target).resolved?.heistId, committedId)
+        XCTAssertNil(bagman.liveInterfaceElement(heistId: committedId))
+        guard case .objectUnavailable = bagman.resolveLiveActionTarget(for: semanticTarget) else {
+            return XCTFail("Expected different-HeistId raw evidence to remain non-dispatchable")
+        }
+
+        bagman.recordParsedObservedEvidence(InterfaceObservation.makeForTests(
+            elements: [(rawElement, committedId)],
+            objects: [committedId: rawObject]
+        ))
+
+        guard case .resolved(let liveTarget) = bagman.resolveLiveActionTarget(for: semanticTarget) else {
+            return XCTFail("Expected committed identity to admit raw live evidence")
+        }
+        XCTAssertTrue(liveTarget.object === rawObject)
+        XCTAssertEqual(liveTarget.treeElement.heistId, committedId)
+        XCTAssertEqual(liveTarget.frame, rawFrame)
+    }
+
     func testVisibleSettleCommitStripsLiveHandlesFromSettledProjection() {
         let liveObject = UIAccessibilityElement(accessibilityContainer: NSObject())
         liveObject.accessibilityFrame = CGRect(x: 10, y: 10, width: 100, height: 44)

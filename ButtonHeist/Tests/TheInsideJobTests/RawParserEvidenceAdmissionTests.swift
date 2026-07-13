@@ -103,6 +103,37 @@ final class RawParserEvidenceAdmissionTests: XCTestCase {
         )
     }
 
+    func testMatchingRawIdentityCannotStealResolvedAction() throws {
+        let committedId: HeistId = "committed_control"
+        let rawId: HeistId = "raw_control"
+        brains.stash.semanticObservationStream.commitVisibleObservationForTesting(
+            observation(label: "Shared Control", heistId: committedId)
+        )
+        let resolvedActionTarget = try XCTUnwrap(
+            brains.stash.resolveVisibleTarget(target(label: "Shared Control")).resolved
+        )
+
+        let rawObject = RawEvidenceAdjustableView()
+        brains.stash.nextVisibleRefreshScreenForTesting = observation(
+            label: "Shared Control",
+            heistId: rawId,
+            object: rawObject,
+            frame: CGRect(x: 80, y: 160, width: 180, height: 52)
+        )
+        XCTAssertNotNil(brains.stash.refreshLiveCapture())
+
+        XCTAssertEqual(brains.stash.latestObservation.orderedElements.first?.heistId, rawId)
+        XCTAssertNil(brains.stash.interfaceElement(heistId: rawId))
+        XCTAssertEqual(
+            brains.stash.resolveVisibleTarget(target(label: "Shared Control")).resolved?.heistId,
+            committedId
+        )
+        guard case .objectUnavailable = brains.stash.resolveLiveActionTarget(for: resolvedActionTarget) else {
+            return XCTFail("Expected raw evidence with a different HeistId to remain non-dispatchable")
+        }
+        XCTAssertEqual(rawObject.incrementCount, 0)
+    }
+
     func testSettledCommitAdmitsPreviouslyRawTarget() async {
         brains.stash.semanticObservationStream.commitVisibleObservationForTesting(
             observation(label: "Screen A", heistId: "screen_a")
