@@ -122,6 +122,14 @@ struct InterfaceObservation: Equatable {
         }
     }
 
+    func replacingTreeWithCurrentCapture(_ tree: InterfaceTree) throws -> InterfaceObservation {
+        try Self.build(
+            tree: tree,
+            dispatchReferences: liveCapture.dispatchReferences,
+            captureToken: captureToken
+        )
+    }
+
     var orderedElements: [InterfaceTree.Element] {
         tree.orderedElements
     }

@@ -93,8 +93,11 @@ extension ElementInflation {
         case .failure:
             break
         }
-        if let exploredScreen = await exploration.discoverTarget(target) {
-            stash.semanticObservationStream.commitSettledDiscoveryObservation(.explored(exploredScreen))
+        for _ in 0..<2 {
+            guard let exploredScreen = await exploration.discoverTarget(target) else { break }
+            if stash.semanticObservationStream.commitExploredDiscoveryObservation(exploredScreen) != nil {
+                break
+            }
         }
         switch visibleTargetResolution(target) {
         case .success(let visible):

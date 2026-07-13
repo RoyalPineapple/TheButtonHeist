@@ -1102,7 +1102,7 @@ final class TheStashResolutionTests: XCTestCase {
             settleOutcome: outcome
         )
 
-        guard case .observedUnsettled(let observedTree) = result.result else {
+        guard case .observedUnsettled(let observedTree, _) = result.result else {
             return XCTFail("Expected observed unsettled settle evidence")
         }
         XCTAssertEqual(observedTree.orderedElements.first?.element.label, "Unstable")
@@ -1124,6 +1124,78 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(bagman.interface().projectedElements.compactMap(\.label), ["Settled"])
         XCTAssertEqual(bagman.semanticInterface().projectedElements.compactMap(\.label), ["Settled"])
         XCTAssertNil(bagman.resolveVisibleTarget(literalTarget(ElementPredicate(label: "Timeout"))).resolved)
+    }
+
+    func testRejectedSettleDiagnosticDoesNotReplaceNewerParsedObservation() async {
+        let objectA = NSObject()
+        let objectB = NSObject()
+        let screenA = InterfaceObservation.makeForTests([
+            .init(element(label: "A"), heistId: "a", object: objectA),
+        ])
+        let screenB = InterfaceObservation.makeForTests([
+            .init(element(label: "B"), heistId: "b", object: objectB),
+        ])
+        let rejectedOutcome = SettleSession.Outcome(
+            outcome: .settled(timeMs: 1),
+            events: [],
+            finalObservation: SettleSessionFinalObservation(screen: screenA),
+            elementsByKey: [:]
+        )
+        bagman.recordParsedObservedEvidence(screenA)
+        bagman.recordParsedObservedEvidence(screenB)
+
+        let result = await bagman.semanticObservationStream.settlePostActionObservation(
+            baselineTripwireSignal: bagman.tripwire.tripwireSignal(),
+            settleOutcome: rejectedOutcome
+        )
+
+        guard case .unavailable = result.result else {
+            return XCTFail("Expected stale settle proof to be rejected")
+        }
+        XCTAssertEqual(bagman.latestObservation.captureToken, screenB.captureToken)
+        XCTAssertTrue(bagman.latestObservation.liveCapture.object(for: "b") === objectB)
+        XCTAssertNil(bagman.latestObservation.liveCapture.object(for: "a"))
+        XCTAssertEqual(bagman.latestFailedSettleDiagnosticEvidence?.tree, screenA.tree)
+        XCTAssertNil(bagman.latestFailedSettleDiagnosticEvidence?.liveCapture.object(for: "a"))
+    }
+
+    func testExploredAdmissionRejectsStaleSourceAndAcceptsCurrentSourceMerge() {
+        let objectA = NSObject()
+        let objectB = NSObject()
+        let screenA = InterfaceObservation.makeForTests([
+            .init(label: "Catalog", heistId: "header", traits: .header),
+            .init(label: "Old", heistId: "old", object: objectA),
+        ])
+        let screenB = InterfaceObservation.makeForTests([
+            .init(label: "Catalog", heistId: "header", traits: .header),
+            .init(label: "Current", heistId: "current", object: objectB),
+        ])
+        bagman.recordParsedObservedEvidence(screenA)
+        let staleExploration = Navigation.ExploredScreen(
+            screen: screenA,
+            manifest: .init(),
+            generationDisposition: .preservesGeneration
+        )
+        bagman.recordParsedObservedEvidence(screenB)
+
+        XCTAssertNil(bagman.semanticObservationStream.commitExploredDiscoveryObservation(staleExploration))
+
+        var currentExploration = Navigation.SemanticExploration(baseline: screenA)
+        currentExploration.absorb(screenB)
+        let currentScreen = currentExploration.screen
+        let currentResult = bagman.semanticObservationStream.commitExploredDiscoveryObservation(
+            Navigation.ExploredScreen(
+                screen: currentScreen,
+                manifest: currentExploration.manifest,
+                generationDisposition: currentExploration.generationDisposition
+            )
+        )
+
+        XCTAssertEqual(currentScreen.captureToken, screenB.captureToken)
+        XCTAssertTrue(currentScreen.liveCapture.object(for: "current") === objectB)
+        XCTAssertNotNil(currentScreen.findElement(heistId: "old"))
+        XCTAssertNotNil(currentScreen.findElement(heistId: "current"))
+        XCTAssertNotNil(currentResult)
     }
 
     func testSettledSemanticObservationWaiterCompletesOnLaterObservation() async {
@@ -1529,7 +1601,12 @@ final class TheStashResolutionTests: XCTestCase {
         var discoveryCount = 0
         bagman.startPassiveSemanticObservation {
             discoveryCount += 1
-            return Navigation.ExploredScreen(screen: second, manifest: .init())
+            bagman.recordParsedObservedEvidence(second)
+            return Navigation.ExploredScreen(
+                screen: second,
+                manifest: .init(),
+                generationDisposition: .preservesGeneration
+            )
         }
 
         let observation = await bagman.observeSettledSemanticObservation(
@@ -1548,7 +1625,12 @@ final class TheStashResolutionTests: XCTestCase {
         var discoveryCount = 0
         bagman.startPassiveSemanticObservation {
             discoveryCount += 1
-            return Navigation.ExploredScreen(screen: discovery, manifest: .init())
+            bagman.recordParsedObservedEvidence(discovery)
+            return Navigation.ExploredScreen(
+                screen: discovery,
+                manifest: .init(),
+                generationDisposition: .preservesGeneration
+            )
         }
 
         XCTAssertEqual(bagman.subscribedObservationScope(), .visible)
@@ -1633,7 +1715,14 @@ final class TheStashResolutionTests: XCTestCase {
             }
             let screen = discoveryScreen
             discoveryScreen = nil
-            return screen.map { Navigation.ExploredScreen(screen: $0, manifest: .init()) }
+            return screen.map {
+                bagman.recordParsedObservedEvidence($0)
+                return Navigation.ExploredScreen(
+                    screen: $0,
+                    manifest: .init(),
+                    generationDisposition: .preservesGeneration
+                )
+            }
         }
         defer { resumeDiscovery(returning: nil) }
 

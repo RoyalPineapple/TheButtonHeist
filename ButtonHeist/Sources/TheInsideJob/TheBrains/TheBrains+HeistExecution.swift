@@ -153,7 +153,7 @@ extension TheBrains {
         runtime: HeistExecutionRuntime
     ) async -> ActionResult {
         let notificationScope = stash.accessibilityNotifications.beginHeistScope()
-        interactionObservation.resetAnnouncementWaitCursorForHeist()
+        interactionObservation.resetAnnouncementWaitCursorForHeist(to: notificationScope.cursor)
         defer { notificationScope.cancel() }
 
         let demand = stash.beginSemanticObservationDemand(scope: .visible)

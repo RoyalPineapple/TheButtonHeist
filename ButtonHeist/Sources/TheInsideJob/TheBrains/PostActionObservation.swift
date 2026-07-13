@@ -81,7 +81,7 @@ final class PostActionObservation {
         case diagnostic(settle: SettleSession.Outcome, trace: AccessibilityTrace)
         case unavailable(
             settle: SettleSession.Outcome,
-            baselineCapture: AccessibilityTrace.Capture,
+            trace: AccessibilityTrace,
             failureMessage: String
         )
 
@@ -89,8 +89,8 @@ final class PostActionObservation {
             switch self {
             case .committed(_, _, let trace), .diagnostic(_, let trace):
                 return trace
-            case .unavailable(_, let baselineCapture, _):
-                return AccessibilityTrace(capture: baselineCapture)
+            case .unavailable(_, let trace, _):
+                return trace
             }
         }
 
@@ -221,7 +221,7 @@ final class PostActionObservation {
                 trace: trace
             )
 
-        case .observedUnsettled(let tree):
+        case .observedUnsettled(let tree, let notificationBatch):
             guard case .timedOut = observation.settle.outcome else {
                 preconditionFailure("unsettled observation requires settle timeout")
             }
@@ -240,22 +240,39 @@ final class PostActionObservation {
                 before: before,
                 finalState: finalState,
                 settle: observation.settle,
-                transitionEvidence: nil
+                transitionEvidence: diagnosticTransitionEvidence(
+                    notificationBatch,
+                    in: finalState.screen
+                )
             )
             return .diagnostic(settle: observation.settle, trace: trace)
 
-        case .unavailable:
+        case .unavailable(let notificationBatch):
+            let trace: AccessibilityTrace
+            if let notificationBatch {
+                trace = observedTrace(
+                    before: before,
+                    finalState: before,
+                    settle: observation.settle,
+                    transitionEvidence: diagnosticTransitionEvidence(
+                        notificationBatch,
+                        in: before.screen
+                    )
+                )
+            } else {
+                trace = AccessibilityTrace(capture: before.capture)
+            }
             switch observation.settle.outcome {
             case .cancelled(let timeMs):
                 return .unavailable(
                     settle: observation.settle,
-                    baselineCapture: before.capture,
+                    trace: trace,
                     failureMessage: "cancelled after \(timeMs)ms"
                 )
             case .timedOut:
                 return .unavailable(
                     settle: observation.settle,
-                    baselineCapture: before.capture,
+                    trace: trace,
                     failureMessage: "Could not parse post-action accessibility tree"
                 )
             case .settled:
@@ -281,6 +298,20 @@ final class PostActionObservation {
             settleOutcome: settle,
             accessibilityNotifications: accessibilityNotifications,
             transitionEvidence: transitionEvidence
+        )
+    }
+
+    private func diagnosticTransitionEvidence(
+        _ notificationBatch: AccessibilityNotificationBatch?,
+        in screen: InterfaceObservation
+    ) -> AccessibilityTrace.Transition? {
+        guard let notificationBatch else { return nil }
+        return AccessibilityTrace.Transition(
+            accessibilityNotifications: stash.resolveAccessibilityNotificationEvidence(
+                notificationBatch.events,
+                in: screen
+            ),
+            accessibilityNotificationGap: notificationBatch.gap
         )
     }
 

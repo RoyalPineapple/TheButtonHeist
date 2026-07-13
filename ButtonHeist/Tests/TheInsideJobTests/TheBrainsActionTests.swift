@@ -1800,6 +1800,111 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertTrue(trace.changeFacts.contains { if case .elementsChanged = $0 { true } else { false } })
     }
 
+    func testHeistScopedAnnouncementWaitStartsAtScopeCursor() async {
+        let isolatedBrains = TheBrains(tripwire: TheTripwire())
+        let notifications = isolatedBrains.stash.accessibilityNotifications
+        let priorHeist = notifications.beginHeistScope()
+        notifications.record(
+            code: 1008,
+            notificationData: CapturedAccessibilityNotificationPayload("Ready" as NSString),
+            associatedElement: .none
+        )
+        priorHeist.cancel()
+        notifications.record(
+            code: 1008,
+            notificationData: CapturedAccessibilityNotificationPayload("Ready" as NSString),
+            associatedElement: .none
+        )
+
+        let currentHeist = notifications.beginHeistScope()
+        defer { currentHeist.cancel() }
+        isolatedBrains.interactionObservation.resetAnnouncementWaitCursorForHeist(
+            to: currentHeist.cursor
+        )
+        let staleReceipt = await isolatedBrains.interactionObservation.waitForPredicate(
+            WaitStep(predicate: .announcement("Ready"), timeout: 0),
+            announcementCursorStrategy: .heistScoped
+        )
+
+        XCTAssertFalse(staleReceipt.actionResult.outcome.isSuccess)
+
+        notifications.record(
+            code: 1008,
+            notificationData: CapturedAccessibilityNotificationPayload("Ready" as NSString),
+            associatedElement: .none
+        )
+        let currentReceipt = await isolatedBrains.interactionObservation.waitForPredicate(
+            WaitStep(predicate: .announcement("Ready"), timeout: 0),
+            announcementCursorStrategy: .heistScoped
+        )
+
+        XCTAssertTrue(currentReceipt.actionResult.outcome.isSuccess)
+        XCTAssertEqual(currentReceipt.actionResult.announcement, "Ready")
+    }
+
+    func testFailedActionBatchBelongsToDiagnosticAndNextActionClaimsOnlyItsBatch() async {
+        let isolatedBrains = TheBrains(tripwire: TheTripwire())
+        let baseline = InterfaceObservation.makeForTests(elements: [
+            (makeElement(label: "Before"), "before"),
+        ])
+        let baselineEvent = isolatedBrains.stash.semanticObservationStream.commitVisibleObservationForTesting(baseline)
+        let before = isolatedBrains.postActionObservation.captureSemanticState(from: baselineEvent.observation)
+        let failedScreen = InterfaceObservation.makeForTests(elements: [
+            (makeElement(label: "Unstable"), "unstable"),
+        ])
+
+        let failedWindow = isolatedBrains.stash.accessibilityNotifications.beginActionWindow()
+        isolatedBrains.stash.accessibilityNotifications.record(
+            code: 1008,
+            notificationData: CapturedAccessibilityNotificationPayload("Action A" as NSString),
+            associatedElement: .none
+        )
+        let failedObservation = await isolatedBrains.stash.semanticObservationStream.settlePostActionObservation(
+            baselineTripwireSignal: before.tripwireSignal,
+            settleOutcome: SettleSession.Outcome(
+                outcome: .timedOut(timeMs: 1),
+                events: [],
+                finalObservation: SettleSessionFinalObservation(screen: failedScreen),
+                elementsByKey: [:]
+            ),
+            notificationWindow: failedWindow
+        )
+        let failedResult = isolatedBrains.postActionObservation.settledObservationResult(
+            before: before,
+            observation: failedObservation
+        )
+
+        XCTAssertEqual(failedResult.accessibilityTrace.capturedAnnouncements.map(\.text), ["Action A"])
+
+        let successfulScreen = InterfaceObservation.makeForTests(elements: [
+            (makeElement(label: "After"), "after"),
+        ])
+        let successfulWindow = isolatedBrains.stash.accessibilityNotifications.beginActionWindow()
+        isolatedBrains.stash.accessibilityNotifications.record(
+            code: 1008,
+            notificationData: CapturedAccessibilityNotificationPayload("Action B" as NSString),
+            associatedElement: .none
+        )
+        isolatedBrains.stash.recordParsedObservedEvidence(successfulScreen)
+        let successfulObservation = await isolatedBrains.stash.semanticObservationStream.settlePostActionObservation(
+            baselineTripwireSignal: before.tripwireSignal,
+            settleOutcome: SettleSession.Outcome(
+                outcome: .settled(timeMs: 1),
+                events: [],
+                finalObservation: SettleSessionFinalObservation(screen: successfulScreen),
+                elementsByKey: [:]
+            ),
+            notificationWindow: successfulWindow
+        )
+
+        guard case .committed(let successfulEvent) = successfulObservation.result else {
+            return XCTFail("Expected action B to commit")
+        }
+        XCTAssertEqual(successfulEvent.trace.capturedAnnouncements.map(\.text), ["Action B"])
+        XCTAssertEqual(failedResult.accessibilityTrace.capturedAnnouncements.map(\.text), ["Action A"])
+        XCTAssertEqual(isolatedBrains.stash.accessibilityNotifications.pendingEvents().map(\.sequence), [1, 2])
+    }
+
     func testActionExpectationWithMatchingInitialTracePollsForSettledMatch() async throws {
         let isolatedBrains = TheBrains(tripwire: TheTripwire())
         defer { isolatedBrains.stopSemanticObservation() }

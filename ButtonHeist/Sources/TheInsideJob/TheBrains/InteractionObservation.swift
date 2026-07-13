@@ -77,8 +77,8 @@ final class InteractionObservation {
         )
     }
 
-    func resetAnnouncementWaitCursorForHeist() {
-        heistAnnouncementCursor = .origin
+    func resetAnnouncementWaitCursorForHeist(to cursor: AccessibilityNotificationCursor) {
+        heistAnnouncementCursor = cursor
     }
 
     func prepareBeforeState(

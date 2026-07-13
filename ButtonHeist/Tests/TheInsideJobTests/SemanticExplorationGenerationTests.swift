@@ -33,6 +33,42 @@ final class SemanticExplorationGenerationTests: XCTestCase {
         XCTAssertNotNil(exploration.screen.findElement(heistId: "new_action"))
     }
 
+    func testExploredReplacementRemainsAuthoritativeWithElementChangedNotification() throws {
+        let brains = TheBrains(tripwire: TheTripwire())
+        let oldScreen = screen(
+            header: "Home",
+            entries: [("Old Action", .button, "old_action")]
+        )
+        let oldEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(oldScreen)
+        let replacement = screen(
+            header: "Settings",
+            entries: [("New Action", .button, "new_action")]
+        )
+        brains.stash.recordParsedObservedEvidence(replacement)
+        var exploration = Navigation.SemanticExploration(baseline: oldScreen)
+        exploration.absorb(replacement)
+        let explored = exploration.finish(startTime: CACurrentMediaTime())
+        let actionWindow = brains.stash.accessibilityNotifications.beginActionWindow()
+        defer { actionWindow.cancel() }
+        brains.stash.accessibilityNotifications.record(
+            code: 1001,
+            notificationData: .none,
+            associatedElement: .none
+        )
+        let notificationBatch = try XCTUnwrap(actionWindow.capture())
+
+        let replacementEvent = try XCTUnwrap(
+            brains.stash.semanticObservationStream.commitExploredDiscoveryObservation(
+                explored,
+                notificationBatch: notificationBatch
+            )
+        )
+
+        XCTAssertNotEqual(replacementEvent.generation, oldEvent.generation)
+        XCTAssertNil(brains.stash.interfaceTree.findElement(heistId: "old_action"))
+        XCTAssertNotNil(brains.stash.interfaceTree.findElement(heistId: "new_action"))
+    }
+
     func testDiagnosticBaselineCannotBecomeCommittedTarget() {
         let brains = TheBrains(tripwire: TheTripwire())
         let diagnostic = screen(

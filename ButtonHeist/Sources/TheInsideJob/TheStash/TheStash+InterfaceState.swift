@@ -104,9 +104,6 @@ extension TheStash {
 
     func recordFailedSettleDiagnosticEvidence(_ screen: InterfaceObservation?) {
         diagnosticObservation = screen
-        if let screen {
-            latestObservation = screen
-        }
         semanticObservationStream.invalidateLatestSettledObservation()
     }
 

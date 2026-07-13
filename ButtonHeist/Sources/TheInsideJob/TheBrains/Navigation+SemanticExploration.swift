@@ -10,6 +10,16 @@ import ThePlans
 
 extension Navigation {
 
+    enum ExplorationGenerationDisposition: Equatable {
+        case preservesGeneration
+        case replacesGeneration(reason: AccessibilityObservationFallbackReason)
+
+        mutating func record(_ classification: ScreenClassifier.Classification) {
+            guard case .inferredScreenChange(let reason) = classification else { return }
+            self = .replacesGeneration(reason: reason)
+        }
+    }
+
     enum SemanticExplorationScope {
         case manifestBoundedDiscovery
         case knownTargetReveal(SemanticObservationDeadline)
@@ -195,10 +205,16 @@ extension Navigation {
     struct ExploredScreen {
         let screen: InterfaceObservation
         let manifest: ScreenManifest
+        let generationDisposition: ExplorationGenerationDisposition
 
-        internal init(screen: InterfaceObservation, manifest: ScreenManifest) {
+        internal init(
+            screen: InterfaceObservation,
+            manifest: ScreenManifest,
+            generationDisposition: ExplorationGenerationDisposition
+        ) {
             self.screen = screen
             self.manifest = manifest
+            self.generationDisposition = generationDisposition
         }
     }
 
@@ -206,6 +222,7 @@ extension Navigation {
         var screen: InterfaceObservation
         var manifest: ScreenManifest
         let scope: SemanticExplorationScope
+        private(set) var generationDisposition = ExplorationGenerationDisposition.preservesGeneration
 
         init(
             baseline: InterfaceObservation,
@@ -252,6 +269,7 @@ extension Navigation {
                 after: ScreenClassifier.snapshot(of: parsed.tree),
                 notifications: []
             )
+            generationDisposition.record(classification)
             if classification.isScreenReplacement {
                 // A replacement starts a new graph, not a new execution budget.
                 let scrollCount = manifest.scrollCount
@@ -263,9 +281,8 @@ extension Navigation {
                 screen = parsed
             } else {
                 do {
-                    screen = try InterfaceObservation.build(
-                        tree: screen.tree.merging(parsed.tree),
-                        dispatchReferences: parsed.liveCapture.dispatchReferences
+                    screen = try parsed.replacingTreeWithCurrentCapture(
+                        screen.tree.merging(parsed.tree)
                     )
                 } catch {
                     preconditionFailure("Exploration observation failed validation: \(error)")
@@ -289,7 +306,11 @@ extension Navigation {
 
         mutating func finish(startTime: CFTimeInterval) -> ExploredScreen {
             manifest.explorationTime = CACurrentMediaTime() - startTime
-            return ExploredScreen(screen: screen, manifest: manifest)
+            return ExploredScreen(
+                screen: screen,
+                manifest: manifest,
+                generationDisposition: generationDisposition
+            )
         }
     }
 }

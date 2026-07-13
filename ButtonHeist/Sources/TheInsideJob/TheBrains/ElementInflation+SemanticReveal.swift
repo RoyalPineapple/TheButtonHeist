@@ -67,23 +67,28 @@ extension ElementInflation {
         if let interruption = semanticRevealInterruption(deadline: deadline) {
             return interruption
         }
-        guard let exploredScreen = await exploration.revealKnownTarget(.init(
-            heistId: treeElement.heistId,
-            deadline: deadline
-        )) else {
-            return semanticRevealInterruption(deadline: deadline)
-                ?? .failed(.noLiveScrollableAncestor)
+        for _ in 0..<2 {
+            guard let exploredScreen = await exploration.revealKnownTarget(.init(
+                heistId: treeElement.heistId,
+                deadline: deadline
+            )) else {
+                return semanticRevealInterruption(deadline: deadline)
+                    ?? .failed(.noLiveScrollableAncestor)
+            }
+            guard stash.semanticObservationStream.commitExploredDiscoveryObservation(exploredScreen) != nil else {
+                continue
+            }
+            if let interruption = semanticRevealInterruption(deadline: deadline) {
+                return interruption
+            }
+            guard let visible = stash.liveInterfaceElement(heistId: treeElement.heistId),
+                  visible.element.representsSameSemanticElement(as: treeElement.element)
+            else {
+                return .failed(.scanDidNotRevealTarget)
+            }
+            return .revealed
         }
-        stash.semanticObservationStream.commitSettledDiscoveryObservation(.explored(exploredScreen))
-        if let interruption = semanticRevealInterruption(deadline: deadline) {
-            return interruption
-        }
-        guard let visible = stash.liveInterfaceElement(heistId: treeElement.heistId),
-              visible.element.representsSameSemanticElement(as: treeElement.element)
-        else {
-            return .failed(.scanDidNotRevealTarget)
-        }
-        return .revealed
+        return .failed(.scanDidNotRevealTarget)
     }
 
     static func semanticRevealTargetOffset(

@@ -154,7 +154,10 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         defer { lock.unlock() }
 
         activeHeistScopes += 1
-        return AccessibilityNotificationHeistScope(bus: self)
+        return AccessibilityNotificationHeistScope(
+            bus: self,
+            cursor: AccessibilityNotificationCursor(sequence: latestSequenceStorage)
+        )
     }
 
     /// Opens the inner attribution window for one dispatched action.
@@ -442,11 +445,14 @@ enum AccessibilityNotificationProvenance: Sendable, Equatable {
 /// `@unchecked Sendable` justification: mutable `bus` access is protected by `lock`;
 /// cancellation may cross task boundaries while closing scoped observation.
 final class AccessibilityNotificationHeistScope: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
+    let cursor: AccessibilityNotificationCursor
+
     private let lock = NSLock()
     private weak var bus: AccessibilityNotificationBus?
 
-    fileprivate init(bus: AccessibilityNotificationBus) {
+    fileprivate init(bus: AccessibilityNotificationBus, cursor: AccessibilityNotificationCursor) {
         self.bus = bus
+        self.cursor = cursor
     }
 
     deinit {
