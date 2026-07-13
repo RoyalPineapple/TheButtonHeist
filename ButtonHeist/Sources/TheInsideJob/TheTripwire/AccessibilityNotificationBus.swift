@@ -11,11 +11,6 @@ import TheScore
 /// `lock`; waiter continuations are resumed outside the lock and timeout
 /// tasks reference the bus weakly.
 final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
-    private struct TransitionWaiter {
-        let afterSequence: UInt64
-        let continuation: TimedOneShot<AccessibilityNotificationCursor?>
-    }
-
     private struct AnnouncementWaiter {
         let afterSequence: UInt64
         let predicate: AnnouncementPredicate
@@ -23,8 +18,6 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
     }
 
     private struct NotificationResumptions {
-        let cursor: AccessibilityNotificationCursor
-        let transitionWaiters: [TransitionWaiter]
         let announcementWaiters: [(AnnouncementWaiter, CapturedAnnouncement)]
     }
 
@@ -33,11 +26,9 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
     private var bufferedEvents: [PendingAccessibilityNotificationEvent] = []
     private var discardedThroughSequenceStorage: UInt64 = 0
     private var latestSequenceStorage: UInt64 = 0
-    private var latestTransitionSequenceStorage: UInt64 = 0
     private var latestScopedScreenChangedSequenceStorage: UInt64 = 0
     private var activeHeistScopes = 0
     private var activeActionWindows = 0
-    private var transitionWaiters = WaiterStore<UInt64, TransitionWaiter>()
     private var announcementWaiters = WaiterStore<UInt64, AnnouncementWaiter>()
 
     var latestSequence: UInt64 {
@@ -52,20 +43,6 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         lock.lock()
         defer { lock.unlock() }
         return latestScopedScreenChangedSequenceStorage
-    }
-
-    var transitionWaiterCount: Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return transitionWaiters.count
-    }
-
-    /// Cursor at the most recent recapture-trigger notification, for use
-    /// with `waitForTransitionEvent(after:timeout:)`.
-    func transitionCursor() -> AccessibilityNotificationCursor {
-        lock.lock()
-        defer { lock.unlock() }
-        return AccessibilityNotificationCursor(sequence: latestTransitionSequenceStorage)
     }
 
     func announcementCursor() -> AccessibilityNotificationCursor {
@@ -132,75 +109,6 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         return result
     }
 
-    /// Suspend until a recapture-trigger notification is recorded after
-    /// `cursor`, or the timeout elapses.
-    ///
-    /// Returns the advanced cursor on a hit (collapsing any backlog to the
-    /// latest transition event), or nil on timeout. Presence of a notification
-    /// is signal; absence proves nothing — callers must treat nil as "fall
-    /// back to polling", never as "no change happened".
-    func waitForTransitionEvent(
-        after cursor: AccessibilityNotificationCursor,
-        timeout: TimeInterval
-    ) async -> AccessibilityNotificationCursor? {
-        let waiterId = reserveTransitionWaiterIdentifier()
-        let continuationBox = TimedOneShot<AccessibilityNotificationCursor?>()
-
-        let result: AccessibilityNotificationCursor? = await withTaskCancellationHandler {
-            await withCheckedContinuation { (continuation: CheckedContinuation<AccessibilityNotificationCursor?, Never>) in
-                if Task.isCancelled {
-                    continuation.resume(returning: nil)
-                    return
-                }
-                guard continuationBox.register(continuation) else {
-                    continuation.resume(returning: nil)
-                    return
-                }
-
-                lock.lock()
-                if latestTransitionSequenceStorage > cursor.sequence {
-                    let latest = latestTransitionSequenceStorage
-                    lock.unlock()
-                    continuationBox.resolve(returning: AccessibilityNotificationCursor(sequence: latest))
-                    return
-                }
-                guard timeout > 0 else {
-                    lock.unlock()
-                    continuationBox.resolve(returning: nil)
-                    return
-                }
-
-                let timeoutMilliseconds = Int64(max(1, timeout * 1_000))
-                transitionWaiters.insert(TransitionWaiter(
-                    afterSequence: cursor.sequence,
-                    continuation: continuationBox
-                ), id: waiterId)
-                continuationBox.armTimeout(after: .milliseconds(timeoutMilliseconds)) { [weak self] in
-                    self?.completeTransitionWaiter(waiterId, returning: nil)
-                }
-                lock.unlock()
-            }
-        } onCancel: {
-            continuationBox.resolve(returning: nil)
-        }
-        completeTransitionWaiter(waiterId, returning: nil)
-        return result
-    }
-
-    private func recordTransitionEventLocked(
-        kind: AccessibilityNotificationKind,
-        sequence: UInt64
-    ) -> [TransitionWaiter] {
-        latestTransitionSequenceStorage = sequence
-        switch kind {
-        case .screenChanged where hasActiveNotificationScopeLocked:
-            latestScopedScreenChangedSequenceStorage = sequence
-        case .screenChanged, .elementChanged, .announcement, .unknown:
-            break
-        }
-        return transitionWaiters.removeAll { $0.afterSequence < sequence }
-    }
-
     private func recordAnnouncementEventLocked(_ event: PendingAccessibilityNotificationEvent) -> [(AnnouncementWaiter, CapturedAnnouncement)] {
         guard let announcement = event.capturedAnnouncement else { return [] }
         let waiters = announcementWaiters.removeAll { waiter in
@@ -219,29 +127,11 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         activeHeistScopes > 0 || activeActionWindows > 0
     }
 
-    private func reserveTransitionWaiterIdentifier() -> UInt64 {
-        lock.lock()
-        defer { lock.unlock() }
-
-        return transitionWaiters.reserveID()
-    }
-
     private func reserveAnnouncementWaiterIdentifier() -> UInt64 {
         lock.lock()
         defer { lock.unlock() }
 
         return announcementWaiters.reserveID()
-    }
-
-    private func completeTransitionWaiter(
-        _ waiterId: UInt64,
-        returning cursor: AccessibilityNotificationCursor?
-    ) {
-        lock.lock()
-        let waiter = transitionWaiters.remove(id: waiterId)
-        lock.unlock()
-
-        waiter?.continuation.resolve(returning: cursor)
     }
 
     private func completeAnnouncementWaiter(
@@ -319,6 +209,9 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
             "Accessibility notification sequence must advance"
         )
         latestSequenceStorage = event.sequence
+        if case .screenChanged = event.kind, hasActiveNotificationScopeLocked {
+            latestScopedScreenChangedSequenceStorage = event.sequence
+        }
         bufferedEvents.append(event)
         if bufferedEvents.count > maxBufferedEvents {
             let removed = bufferedEvents.prefix(bufferedEvents.count - maxBufferedEvents)
@@ -326,16 +219,11 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
             bufferedEvents.removeFirst(removed.count)
         }
         return NotificationResumptions(
-            cursor: AccessibilityNotificationCursor(sequence: event.sequence),
-            transitionWaiters: recordTransitionEventLocked(kind: event.kind, sequence: event.sequence),
             announcementWaiters: recordAnnouncementEventLocked(event)
         )
     }
 
     private func resume(_ resumptions: NotificationResumptions) {
-        for waiter in resumptions.transitionWaiters {
-            waiter.continuation.resolve(returning: resumptions.cursor)
-        }
         for (waiter, announcement) in resumptions.announcementWaiters {
             waiter.continuation.resolve(returning: announcement)
         }

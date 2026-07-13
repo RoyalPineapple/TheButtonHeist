@@ -229,59 +229,6 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertEqual(announcement?.kind, .elementChanged(.layout))
     }
 
-    // MARK: - Transition Waiter
-
-    func testTransitionWaiterResumesWhenTransitionEventRecorded() async {
-        let bus = AccessibilityNotificationBus()
-        let cursor = bus.transitionCursor()
-
-        async let wake = bus.waitForTransitionEvent(after: cursor, timeout: 2.0)
-        bus.record(code: 1001, notificationData: .none, associatedElement: .none)
-
-        let advanced = await wake
-        XCTAssertNotNil(advanced)
-        XCTAssertGreaterThan(advanced?.sequence ?? 0, cursor.sequence)
-    }
-
-    func testTransitionWaiterFastPathReturnsPastEventWithoutSuspending() async {
-        let bus = AccessibilityNotificationBus()
-        let cursor = bus.transitionCursor()
-        bus.record(code: 1000, notificationData: .none, associatedElement: .none)
-
-        let advanced = await bus.waitForTransitionEvent(after: cursor, timeout: 0)
-
-        XCTAssertEqual(advanced?.sequence, bus.transitionCursor().sequence)
-    }
-
-    func testTransitionWaiterTreatsAnnouncementsAndUnknownCodesAsRecaptureTriggers() async {
-        let bus = AccessibilityNotificationBus()
-        let cursor = bus.transitionCursor()
-        bus.record(code: 4002, notificationData: .none, associatedElement: .none)
-
-        bus.record(
-            code: 1008,
-            notificationData: CapturedAccessibilityNotificationPayload("Done" as NSString),
-            associatedElement: .none
-        )
-
-        let advanced = await bus.waitForTransitionEvent(after: cursor, timeout: 0)
-        XCTAssertEqual(advanced, bus.transitionCursor())
-        XCTAssertEqual(bus.pendingEvents().map(\.kind), [.unknown(4002), .announcement])
-        XCTAssertGreaterThan(bus.transitionCursor().sequence, cursor.sequence)
-    }
-
-    func testValueChangedIsElementTransitionEvidence() async {
-        let bus = AccessibilityNotificationBus()
-        let cursor = bus.transitionCursor()
-
-        async let wake = bus.waitForTransitionEvent(after: cursor, timeout: 1.0)
-        bus.record(code: 1005, notificationData: .none, associatedElement: .none)
-
-        let advanced = await wake
-        XCTAssertNotNil(advanced)
-        XCTAssertEqual(bus.pendingEvents().map(\.kind), [.elementChanged(.value)])
-    }
-
     func testUnknownNotificationsPreserveRawCodesAtBoundary() {
         let bus = AccessibilityNotificationBus()
 
@@ -293,48 +240,24 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
             bus.pendingEvents().map(\.kind),
             [.unknown(1009), .unknown(4002)]
         )
-        XCTAssertEqual(bus.transitionCursor().sequence, 2)
     }
 
-    func testTransitionWaiterCancellationReturnsPromptlyAndRemovesWaiter() async {
+    func testOnlyScopedScreenChangedAdvancesInvalidationCursor() {
         let bus = AccessibilityNotificationBus()
-        let cursor = bus.transitionCursor()
-
-        let task = Task {
-            await bus.waitForTransitionEvent(after: cursor, timeout: 5.0)
-        }
-        await waitForTransitionWaiterCount(1, in: bus)
-
-        let cancelledAt = Date()
-        task.cancel()
-        let advanced = await task.value
-
-        XCTAssertNil(advanced)
-        XCTAssertLessThan(Date().timeIntervalSince(cancelledAt), 0.5)
-        await waitForTransitionWaiterCount(0, in: bus)
-    }
-
-    func testTransitionCursorAndScopedScreenChangedSequenceTracking() {
-        let bus = AccessibilityNotificationBus()
-        XCTAssertEqual(bus.transitionCursor().sequence, 0)
         XCTAssertEqual(bus.latestScopedScreenChangedSequence, 0)
-
-        bus.record(code: 1001, notificationData: .none, associatedElement: .none)
-        XCTAssertEqual(bus.transitionCursor().sequence, 1)
-        XCTAssertEqual(bus.latestScopedScreenChangedSequence, 0)
-
-        bus.record(code: 1008, notificationData: .none, associatedElement: .none)
-        XCTAssertEqual(bus.transitionCursor().sequence, 2)
 
         bus.record(code: 1000, notificationData: .none, associatedElement: .none)
-        XCTAssertEqual(bus.transitionCursor().sequence, 3)
         XCTAssertEqual(bus.latestScopedScreenChangedSequence, 0)
 
         let actionWindow = bus.beginActionWindow()
         defer { actionWindow.cancel() }
+        bus.record(code: 1001, notificationData: .none, associatedElement: .none)
+        bus.record(code: 1008, notificationData: .none, associatedElement: .none)
+        bus.record(code: 4002, notificationData: .none, associatedElement: .none)
+        XCTAssertEqual(bus.latestScopedScreenChangedSequence, 0)
+
         bus.record(code: 1000, notificationData: .none, associatedElement: .none)
-        XCTAssertEqual(bus.transitionCursor().sequence, 4)
-        XCTAssertEqual(bus.latestScopedScreenChangedSequence, 4)
+        XCTAssertEqual(bus.latestScopedScreenChangedSequence, 5)
     }
 
     func testExplicitNotificationEventsPreservePublisherSequence() {
@@ -352,7 +275,6 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
 
         XCTAssertEqual(bus.pendingEvents().map(\.sequence), [7, 8])
         XCTAssertEqual(bus.latestSequence, 8)
-        XCTAssertEqual(bus.transitionCursor().sequence, 8)
     }
 
     // MARK: - Settled Observation Invalidation
@@ -493,21 +415,6 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         }
         XCTFail("Timed out waiting for accessibility notification \(String(describing: kind))", file: file, line: line)
         throw WaitError.timedOut(kind)
-    }
-
-    private func waitForTransitionWaiterCount(
-        _ expectedCount: Int,
-        in bus: AccessibilityNotificationBus,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) async {
-        for _ in 0..<100 {
-            if bus.transitionWaiterCount == expectedCount {
-                return
-            }
-            await Task.yield()
-        }
-        XCTAssertEqual(bus.transitionWaiterCount, expectedCount, file: file, line: line)
     }
 
     @MainActor
