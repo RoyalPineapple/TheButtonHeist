@@ -103,21 +103,88 @@ private extension PublicCommandContractFixture {
 
     struct Command: Encodable {
         let name: String
-        let exposedByCLI: Bool
-        let exposedByMCP: Bool
+        let family: String
+        let requiresConnectionBeforeDispatch: Bool
+        let cliExposure: String
+        let mcpExposure: String
         let description: String
+        let timeout: Timeout
+        let responseProjection: String
+        let failureProjection: String
         let inputSchemaSHA256: String
         let mcpAnnotations: MCPAnnotations?
 
         init(_ descriptor: FenceCommandDescriptor) throws {
             name = descriptor.command.rawValue
-            exposedByCLI = descriptor.cliExposure == .directCommand
-            exposedByMCP = descriptor.mcpExposure == .directTool
+            family = descriptor.family.rawValue
+            requiresConnectionBeforeDispatch = descriptor.requiresConnectionBeforeDispatch
+            cliExposure = descriptor.cliExposure.contractValue
+            mcpExposure = descriptor.mcpExposure.contractValue
             description = descriptor.description
+            timeout = Timeout(descriptor.timeout)
+            responseProjection = descriptor.responseProjection.rawValue
+            failureProjection = descriptor.failureProjection.rawValue
             inputSchemaSHA256 = try PublicCommandContractFixture.inputSchemaSHA256(
                 descriptor.inputJSONSchema
             )
             mcpAnnotations = descriptor.mcpAnnotations.map(MCPAnnotations.init)
+        }
+    }
+
+    enum Timeout: Encodable {
+        enum Kind: String, Encodable {
+            case none
+            case fixed
+            case wait
+            case singleStepAction
+            case performStep
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case kind
+            case base
+            case seconds
+        }
+
+        case none
+        case fixed(FenceCommandFixedTimeout)
+        case wait
+        case singleStepAction(FenceCommandFixedTimeout)
+        case performStep
+
+        init(_ timeout: FenceCommandTimeoutSemantics) {
+            switch timeout {
+            case .none:
+                self = .none
+            case .fixed(let base):
+                self = .fixed(base)
+            case .wait:
+                self = .wait
+            case .singleStepAction(let base):
+                self = .singleStepAction(base)
+            case .performStep:
+                self = .performStep
+            }
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            switch self {
+            case .none:
+                try container.encode(Kind.none, forKey: .kind)
+            case .fixed(let base):
+                try container.encode(Kind.fixed, forKey: .kind)
+                try container.encode(base.rawValue, forKey: .base)
+                try container.encode(base.seconds, forKey: .seconds)
+            case .wait:
+                try container.encode(Kind.wait, forKey: .kind)
+            case .singleStepAction(let base):
+                try container.encode(Kind.singleStepAction, forKey: .kind)
+                try container.encode(base.rawValue, forKey: .base)
+                try container.encode(base.seconds, forKey: .seconds)
+            case .performStep:
+                try container.encode(Kind.performStep, forKey: .kind)
+            }
         }
     }
 
@@ -128,6 +195,28 @@ private extension PublicCommandContractFixture {
         init(_ annotations: MCPToolAnnotationSpec) {
             readOnlyHint = annotations.readOnlyHint
             idempotentHint = annotations.idempotentHint
+        }
+    }
+}
+
+private extension CLIExposure {
+    var contractValue: String {
+        switch self {
+        case .directCommand:
+            return "directCommand"
+        case .notExposed:
+            return "notExposed"
+        }
+    }
+}
+
+private extension MCPExposure {
+    var contractValue: String {
+        switch self {
+        case .directTool:
+            return "directTool"
+        case .notExposed:
+            return "notExposed"
         }
     }
 }

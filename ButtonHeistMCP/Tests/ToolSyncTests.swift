@@ -32,8 +32,21 @@ struct ToolSyncTests {
         for command in commands {
             let fields = try #require(command.objectValue)
             let digest = try #require(fields["inputSchemaSHA256"]?.stringValue)
+            let timeout = try #require(fields["timeout"]?.objectValue)
 
             #expect(fields["inputSchema"] == nil)
+            #expect(fields["exposedByCLI"] == nil)
+            #expect(fields["exposedByMCP"] == nil)
+            #expect(fields["family"]?.stringValue != nil)
+            #expect(fields["requiresConnectionBeforeDispatch"] != nil)
+            #expect(fields["cliExposure"]?.stringValue != nil)
+            #expect(fields["mcpExposure"]?.stringValue != nil)
+            #expect(fields["responseProjection"]?.stringValue != nil)
+            #expect(fields["failureProjection"]?.stringValue != nil)
+            let timeoutKind = try #require(timeout["kind"]?.stringValue)
+            let hasFixedBase = timeoutKind == "fixed" || timeoutKind == "singleStepAction"
+            #expect((timeout["base"] != nil) == hasFixedBase)
+            #expect((timeout["seconds"] != nil) == hasFixedBase)
             #expect(digest.utf8.count == 64)
             #expect(digest.unicodeScalars.allSatisfy(lowercaseHex.contains))
         }

@@ -21,12 +21,14 @@ that contract. MCP exposes one tool per exposed command, projected from
 Fence-owned command descriptors.
 
 The typed `FenceCommandDescriptor` values in `TheFence.Command.descriptors`
-solely own public command names, adapter exposure, descriptions, input schemas,
-and MCP annotations. The committed
+solely own public command names, families, connection admission, adapter
+exposure, descriptions, timeout semantics, response and failure projections,
+input schemas, and MCP annotations. The committed
 `tests/fixtures/public-cli-mcp-command-contract.json` is generated from those
 descriptors as a release drift sentinel, not a second schema or an authoring
-surface. Do not hand-edit it. After reviewing an intentional descriptor change,
-regenerate it with:
+surface. It stores those typed facts and a deterministic schema digest, not a
+duplicate schema. Do not hand-edit it. After reviewing an intentional descriptor
+change, regenerate it with:
 
 ```bash
 BUTTONHEIST_UPDATE_PUBLIC_COMMAND_CONTRACT=1 scripts/swift-test-gate.sh \
