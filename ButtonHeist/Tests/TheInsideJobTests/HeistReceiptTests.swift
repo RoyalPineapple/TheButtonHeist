@@ -195,12 +195,27 @@ final class HeistReceiptTests: XCTestCase {
     }
 
     func testRunHeistSyncRecordsXCTestFailureWhenHeistFails() {
-        XCTExpectFailure("runHeistSync reports failed heists through XCTest at the call site") {
-            let heist = runHeistSync("syncFailure") {
+        let expectedFile = String(describing: #filePath)
+        let expectedLine: UInt = 4_241
+        let options = XCTExpectedFailure.Options()
+        options.issueMatcher = { issue in
+            issue.type == .assertionFailure
+                && issue.compactDescription.contains("Heist failed path=$.body[0] kind=fail message=stop")
+                && issue.sourceCodeContext.location?.fileURL.path == expectedFile
+                && issue.sourceCodeContext.location?.lineNumber == Int(expectedLine)
+        }
+        var heist: Heist?
+
+        XCTExpectFailure(
+            "runHeistSync reports failed heists through XCTest at the call site",
+            options: options
+        ) {
+            heist = runHeistSync("syncFailure", file: #filePath, line: expectedLine) {
                 Fail("stop")
             }
-            XCTAssertNil(heist)
         }
+
+        XCTAssertNil(heist)
     }
 
     func testXCTestFailureReporterRecordsAnAssertionAtTheSuppliedCallSite() {
