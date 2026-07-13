@@ -526,7 +526,7 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
             failures.append(
                 file.failure(
                     at: type,
-                    message: "callback without isolation annotation",
+                    message: "callback without isolation annotation: \(identifier.identifier.text)",
                     evidence: ViolationEvidence(
                         observed: "\(identifier.identifier.text): \(type.trimmedDescription)",
                         expectation: "onFoo callbacks declare a global actor or @Sendable in the closure type"
