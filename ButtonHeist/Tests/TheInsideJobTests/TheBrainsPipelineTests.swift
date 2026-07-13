@@ -2180,9 +2180,11 @@ final class TheBrainsPipelineTests: XCTestCase {
             throw XCTSkip("No live labeled element available for target short-circuit test")
         }
 
-        let exploration = await brains.navigation.exploreScreen(
+        guard let exploration = await brains.navigation.exploreScreen(
             target: literalTarget(ElementPredicate(label: .exact(label)))
-        )
+        ) else {
+            return XCTFail("Expected target exploration to settle")
+        }
 
         XCTAssertEqual(exploration.manifest.scrollCount, 0)
         XCTAssertTrue(exploration.manifest.pendingScrollPaths.isEmpty)
@@ -2315,7 +2317,9 @@ final class TheBrainsPipelineTests: XCTestCase {
             throw XCTSkip("No semantic-only scrollable container in host UI")
         }
 
-        let exploration = await brains.navigation.exploreScreen()
+        guard let exploration = await brains.navigation.exploreScreen() else {
+            return XCTFail("Expected swipeable-container exploration to settle")
+        }
         let manifest = exploration.manifest
 
         XCTAssertTrue(manifest.exploredScrollPaths.contains(container.path))
