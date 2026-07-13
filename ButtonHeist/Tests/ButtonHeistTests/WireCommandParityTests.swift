@@ -212,7 +212,10 @@ final class WireCommandParityTests: XCTestCase {
         for descriptor in TheFence.Command.descriptors where descriptor.isPublicRequestContract {
             for parameter in descriptor.parameters where parameter.required {
                 var arguments = sampleArguments(for: descriptor.command)
-                guard arguments.removeValue(forKey: parameter.key) != nil else { continue }
+                XCTAssertNotNil(
+                    arguments.removeValue(forKey: parameter.key),
+                    "Missing required sample for \(descriptor.command.rawValue).\(parameter.key)"
+                )
 
                 XCTAssertThrowsError(
                     try fence.admit(FenceCommandInput(
@@ -220,7 +223,9 @@ final class WireCommandParityTests: XCTestCase {
                         arguments: .init(values: arguments)
                     )),
                     "\(descriptor.command.rawValue).\(parameter.key)"
-                )
+                ) { error in
+                    XCTAssertEqual((error as? SchemaValidationError)?.field, parameter.key)
+                }
             }
         }
     }
@@ -242,6 +247,43 @@ final class WireCommandParityTests: XCTestCase {
                 descriptor.command.rawValue
             ) { error in
                 XCTAssertEqual((error as? SchemaValidationError)?.field, unknownKey)
+            }
+        }
+    }
+
+    @ButtonHeistActor
+    func testCLIAndMCPRoutesDeferEveryRequiredParameterFailureToAdmission() async throws {
+        let (fence, _) = makeConnectedFence()
+
+        for descriptor in TheFence.Command.descriptors where descriptor.isPublicRequestContract {
+            for parameter in descriptor.parameters where parameter.required {
+                var values = sampleArguments(for: descriptor.command)
+                XCTAssertNotNil(
+                    values.removeValue(forKey: parameter.key),
+                    "Missing required sample for \(descriptor.command.rawValue).\(parameter.key)"
+                )
+                var routedInputs: [FenceCommandInput] = []
+
+                if descriptor.mcpExposure == .directTool {
+                    routedInputs.append(try TheFence.Command.routeToolRequest(
+                        named: descriptor.command.rawValue,
+                        arguments: .init(values: values)
+                    ).get())
+                }
+                if descriptor.cliExposure == .directCommand {
+                    values[FenceParameterKey.command.rawValue] = .string(descriptor.command.rawValue)
+                    routedInputs.append(try TheFence.Command.routeCLICommandEnvelope(
+                        .init(values: values),
+                        context: "test"
+                    ).get())
+                }
+
+                XCTAssertFalse(routedInputs.isEmpty, descriptor.command.rawValue)
+                for input in routedInputs {
+                    XCTAssertThrowsError(try fence.admit(input), descriptor.command.rawValue) { error in
+                        XCTAssertEqual((error as? SchemaValidationError)?.field, parameter.key)
+                    }
+                }
             }
         }
     }
