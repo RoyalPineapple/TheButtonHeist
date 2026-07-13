@@ -28,6 +28,7 @@ extension ElementInflation {
         case staleRefresh
         case cancelled
         case geometryNotActionable
+        case invalidTransition
     }
 
     internal struct ElementInflationFailure: Error {
@@ -75,6 +76,12 @@ extension ElementInflation {
             failureKind: TheSafecracker.FailureKind = .actionFailed
         ) -> ElementInflationFailure {
             .init(.geometryNotActionable, failureKind: failureKind, message: message)
+        }
+
+        internal static func invalidTransition(
+            _ rejection: StateTransitionRejection
+        ) -> ElementInflationFailure {
+            .init(.invalidTransition, failureKind: .actionFailed, message: rejection.description)
         }
 
         internal func actionDispatchOutcome(commandMethod: ActionMethod) -> TheSafecracker.ActionDispatchOutcome {

@@ -1,6 +1,7 @@
 #if canImport(UIKit) && DEBUG
 import UIKit
 
+import ButtonHeistSupport
 import TheScore
 import ThePlans
 
@@ -67,6 +68,30 @@ extension ElementInflation {
         case inflated(InflatedElementTarget)
         case failed(ElementInflationFailure)
 
+        internal var phase: StatePhase {
+            switch self {
+            case .resolving:
+                return .resolving
+            case .revealing:
+                return .revealing
+            case .refreshing:
+                return .refreshing
+            case .placing:
+                return .placing
+            case .inflated:
+                return .inflated
+            case .failed:
+                return .failed
+            }
+        }
+
+        internal var isCancellationFailure: Bool {
+            guard case .failed(let failure) = self,
+                  case .cancelled = failure.failedStep
+            else { return false }
+            return true
+        }
+
         internal var description: String {
             switch self {
             case .resolving:
@@ -81,6 +106,86 @@ extension ElementInflation {
                 return "inflated(element: \(inflatedTarget.treeElement.heistId))"
             case .failed(let failure):
                 return "failed(step: \(failure.failedStep.rawValue))"
+            }
+        }
+    }
+
+    internal enum StatePhase: String, CaseIterable, Equatable, Sendable {
+        case resolving
+        case revealing
+        case refreshing
+        case placing
+        case inflated
+        case failed
+    }
+
+    internal enum StateEvent: Equatable, Sendable {
+        case advance(to: StatePhase)
+        case cancelled
+    }
+
+    internal enum StateEffect: Equatable, Sendable {}
+
+    internal struct StateTransitionRejection: Error, Equatable, Sendable, CustomStringConvertible {
+        internal let state: StatePhase
+        internal let event: StateEvent
+
+        internal var description: String {
+            switch event {
+            case .advance(let next):
+                return "cannot transition from \(state.rawValue) to \(next.rawValue)"
+            case .cancelled:
+                return "cannot cancel terminal \(state.rawValue) state"
+            }
+        }
+    }
+
+    internal struct StateMachine: SimpleStateMachine {
+        internal func advance(
+            _ state: StatePhase,
+            with event: StateEvent
+        ) -> StateChange<StatePhase, StateEffect, StateTransitionRejection> {
+            switch event {
+            case .cancelled:
+                switch state {
+                case .resolving, .revealing, .refreshing, .placing:
+                    return .changed(to: .failed)
+                case .inflated, .failed:
+                    return .rejected(.init(state: state, event: event), stayingIn: state)
+                }
+
+            case .advance(let next):
+                switch (state, next) {
+                case (.resolving, .revealing),
+                     (.resolving, .refreshing),
+                     (.resolving, .failed),
+                     (.revealing, .refreshing),
+                     (.revealing, .failed),
+                     (.refreshing, .placing),
+                     (.refreshing, .inflated),
+                     (.refreshing, .failed),
+                     (.placing, .inflated),
+                     (.placing, .failed):
+                    return .changed(to: next)
+
+                case (.resolving, .resolving),
+                     (.resolving, .placing),
+                     (.resolving, .inflated),
+                     (.revealing, .resolving),
+                     (.revealing, .revealing),
+                     (.revealing, .placing),
+                     (.revealing, .inflated),
+                     (.refreshing, .resolving),
+                     (.refreshing, .revealing),
+                     (.refreshing, .refreshing),
+                     (.placing, .resolving),
+                     (.placing, .revealing),
+                     (.placing, .refreshing),
+                     (.placing, .placing),
+                     (.inflated, _),
+                     (.failed, _):
+                    return .rejected(.init(state: state, event: event), stayingIn: state)
+                }
             }
         }
     }

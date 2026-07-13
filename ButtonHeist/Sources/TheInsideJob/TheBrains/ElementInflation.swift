@@ -83,56 +83,56 @@ internal final class ElementInflation {
         while true {
             switch state {
             case .resolving:
-                switch await findTargetInTree(resolvedTarget) {
+                let nextState: State = switch await findTargetInTree(resolvedTarget) {
                 case .success(.visible(let treeElement)):
-                    transition(
-                        &state,
-                        to: .refreshing(
-                            target: resolvedTarget,
-                            treeElement: treeElement,
-                            didReveal: false
-                        )
+                    .refreshing(
+                        target: resolvedTarget,
+                        treeElement: treeElement,
+                        didReveal: false
                     )
                 case .success(.known(let treeElement)):
-                    transition(&state, to: .revealing(treeElement: treeElement))
+                    .revealing(treeElement: treeElement)
                 case .failure(let failure):
-                    transition(&state, to: .failed(failure))
+                    .failed(failure)
+                }
+                if let failure = transition(&state, to: nextState) {
+                    return .failed(failure)
                 }
 
             case .revealing(let treeElement):
-                transition(
-                    &state,
-                    to: await stateAfterReveal(
-                        treeElement,
-                        target: resolvedTarget,
-                        deadline: deadline
-                    )
+                let nextState = await stateAfterReveal(
+                    treeElement,
+                    target: resolvedTarget,
+                    deadline: deadline
                 )
+                if let failure = transition(&state, to: nextState) {
+                    return .failed(failure)
+                }
 
             case .refreshing(let target, let treeElement, let didReveal):
-                transition(
-                    &state,
-                    to: await stateAfterRefresh(
-                        target: target,
-                        treeElement: treeElement,
-                        didReveal: didReveal,
-                        method: method,
-                        deallocatedBoundary: deallocatedBoundary,
-                        activationPointPolicy: activationPointPolicy,
-                        deadline: deadline
-                    )
+                let nextState = await stateAfterRefresh(
+                    target: target,
+                    treeElement: treeElement,
+                    didReveal: didReveal,
+                    method: method,
+                    deallocatedBoundary: deallocatedBoundary,
+                    activationPointPolicy: activationPointPolicy,
+                    deadline: deadline
                 )
+                if let failure = transition(&state, to: nextState) {
+                    return .failed(failure)
+                }
 
             case .placing(let inflatedTarget, let didReveal):
-                transition(
-                    &state,
-                    to: await stateAfterPlacement(
-                        inflatedTarget,
-                        didReveal: didReveal,
-                        method: method,
-                        deadline: deadline
-                    )
+                let nextState = await stateAfterPlacement(
+                    inflatedTarget,
+                    didReveal: didReveal,
+                    method: method,
+                    deadline: deadline
                 )
+                if let failure = transition(&state, to: nextState) {
+                    return .failed(failure)
+                }
 
             case .inflated(let result):
                 return .inflated(result)
@@ -154,13 +154,41 @@ internal final class ElementInflation {
         )
     }
 
-    private func transition(_ state: inout State, to nextState: State) {
-        let currentDescription = state.description
-        let nextDescription = nextState.description
-        insideJobLogger.debug(
-            "inflation: \(currentDescription, privacy: .public) -> \(nextDescription, privacy: .public)"
-        )
-        state = nextState
+    private func transition(
+        _ state: inout State,
+        to proposedState: State
+    ) -> ElementInflationFailure? {
+        let nextState: State
+        let event: StateEvent
+        if proposedState.isCancellationFailure {
+            nextState = proposedState
+            event = .cancelled
+        } else if Task.isCancelled {
+            nextState = .failed(.cancelled(
+                "element inflation was cancelled while \(state.phase.rawValue)"
+            ))
+            event = .cancelled
+        } else {
+            nextState = proposedState
+            event = .advance(to: nextState.phase)
+        }
+
+        switch StateMachine().advance(state.phase, with: event) {
+        case .rejected(let rejection, _):
+            return .invalidTransition(rejection)
+        case .changed(let expectedPhase, _):
+            guard expectedPhase == nextState.phase else {
+                return .invalidTransition(.init(state: state.phase, event: event))
+            }
+
+            let currentDescription = state.description
+            let nextDescription = nextState.description
+            insideJobLogger.debug(
+                "inflation: \(currentDescription, privacy: .public) -> \(nextDescription, privacy: .public)"
+            )
+            state = nextState
+            return nil
+        }
     }
 
     private func refreshLiveCaptureForActivation() {

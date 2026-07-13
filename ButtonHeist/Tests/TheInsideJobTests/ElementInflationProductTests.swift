@@ -1,5 +1,6 @@
 #if canImport(UIKit)
 import XCTest
+import ButtonHeistSupport
 import ThePlans
 
 @testable import AccessibilitySnapshotParser
@@ -23,6 +24,65 @@ final class ElementInflationProductTests: XCTestCase {
         brains?.tripwire.stopPulse()
         brains = nil
         try await super.tearDown()
+    }
+
+    func testElementInflationStateMachineDefinesEveryPhaseTransition() {
+        typealias Phase = ElementInflation.StatePhase
+        let machine = ElementInflation.StateMachine()
+        let legalTransitions: [(from: Phase, to: Phase)] = [
+            (.resolving, .revealing),
+            (.resolving, .refreshing),
+            (.resolving, .failed),
+            (.revealing, .refreshing),
+            (.revealing, .failed),
+            (.refreshing, .placing),
+            (.refreshing, .inflated),
+            (.refreshing, .failed),
+            (.placing, .inflated),
+            (.placing, .failed),
+        ]
+
+        for from in Phase.allCases {
+            for to in Phase.allCases {
+                let change = machine.advance(from, with: .advance(to: to))
+                let isLegal = legalTransitions.contains { $0 == (from, to) }
+                if isLegal {
+                    XCTAssertEqual(change, .changed(to: to), "Expected \(from) -> \(to) to be legal")
+                } else {
+                    XCTAssertEqual(
+                        change,
+                        .rejected(.init(state: from, event: .advance(to: to)), stayingIn: from),
+                        "Expected \(from) -> \(to) to be rejected"
+                    )
+                }
+            }
+        }
+    }
+
+    func testElementInflationCancellationTerminatesEveryAwaitingPhase() {
+        let machine = ElementInflation.StateMachine()
+        let awaitingPhases: [ElementInflation.StatePhase] = [
+            .resolving,
+            .revealing,
+            .refreshing,
+            .placing,
+        ]
+
+        for phase in awaitingPhases {
+            XCTAssertEqual(
+                machine.advance(phase, with: .cancelled),
+                .changed(to: .failed),
+                "Expected cancellation to terminate \(phase)"
+            )
+        }
+
+        for phase in [ElementInflation.StatePhase.inflated, .failed] {
+            XCTAssertEqual(
+                machine.advance(phase, with: .cancelled),
+                .rejected(.init(state: phase, event: .cancelled), stayingIn: phase),
+                "Expected terminal phase \(phase) to reject cancellation"
+            )
+        }
     }
 
     func testMovingGeometryRequiresOneMatchingQuietSample() {
