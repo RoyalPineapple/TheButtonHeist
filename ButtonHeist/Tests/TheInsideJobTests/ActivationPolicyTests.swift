@@ -353,7 +353,11 @@ final class ActivationPolicyTests: XCTestCase {
         resolution: ActionSubjectResolution = ActionSubjectResolution(origin: .visible)
     ) -> ElementInflation.InflatedElementTarget {
         ElementInflation.InflatedElementTarget(
-            target: literalTarget(ElementPredicate(label: liveTarget.treeElement.element.label)),
+            target: literalTarget(
+                ElementPredicate(
+                    label: liveTarget.treeElement.element.label.map(StringMatch.exact)
+                )
+            ),
             treeElement: liveTarget.treeElement,
             liveTarget: liveTarget,
             deadline: SemanticObservationDeadline(

@@ -2388,7 +2388,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         let result = exploration.finish(startTime: CACurrentMediaTime() - 0.01)
 
         XCTAssertGreaterThan(result.manifest.explorationTime, 0)
-        XCTAssertEqual(result.screen, .empty)
+        XCTAssertEqual(result.screen.tree, InterfaceObservation.empty.tree)
+        XCTAssertEqual(result.screen.liveCapture.snapshot, InterfaceObservation.empty.liveCapture.snapshot)
     }
 
     func testExploreScreenExploresSwipeableContainer() async throws {

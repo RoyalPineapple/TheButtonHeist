@@ -35,7 +35,7 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
     func testFirstResponderSnapshotDoesNotRetainUIKitObject() {
         let heistId: HeistId = "email_field"
         var responder: UITextField? = UITextField()
-        weak var releasedResponder: UITextField? = responder
+        weak let releasedResponder: UITextField? = responder
         let capture = InterfaceObservation.makeForTests(
             [
                 InterfaceObservation.TestEntry(
@@ -53,7 +53,7 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
 
         XCTAssertNil(releasedResponder)
         XCTAssertNil(capture.object(for: heistId))
-        XCTAssertNil(capture.firstResponderHeistId)
+        XCTAssertEqual(capture.firstResponderHeistId, heistId)
         XCTAssertEqual(capture.snapshot.firstResponderHeistId, heistId)
     }
 
@@ -61,7 +61,7 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
         let heistId: HeistId = "email_field"
         let brains = TheBrains(tripwire: TheTripwire())
         var original: UITextField? = UITextField()
-        weak var releasedOriginal: UITextField? = original
+        weak let releasedOriginal: UITextField? = original
         let originalScreen = InterfaceObservation.makeForTests(
             [
                 InterfaceObservation.TestEntry(

@@ -60,12 +60,7 @@ struct LiveCapture {
     }
 
     var firstResponderHeistId: HeistId? {
-        snapshot.firstResponderHeistId.flatMap { heistId in
-            guard let reference = dispatchReferences.elementRefs[heistId] else {
-                return heistId
-            }
-            return reference.object == nil ? nil : heistId
-        }
+        snapshot.firstResponderHeistId
     }
 
     var scrollableContainerViewsByPath: [TreePath: ScrollableViewRef] {

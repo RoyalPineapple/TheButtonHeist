@@ -882,7 +882,8 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertNotNil(InterfaceObservationProof.settled(outcome, stash: bagman))
 
         let replacement = InterfaceObservation.makeForTests(elements: [(stableElement, "stable")])
-        XCTAssertEqual(replacement, settled)
+        XCTAssertEqual(replacement.tree, settled.tree)
+        XCTAssertEqual(replacement.liveCapture.snapshot, settled.liveCapture.snapshot)
         XCTAssertNotEqual(replacement.captureToken, settled.captureToken)
         bagman.recordParsedObservedEvidence(replacement)
         XCTAssertNil(InterfaceObservationProof.settled(outcome, stash: bagman))
