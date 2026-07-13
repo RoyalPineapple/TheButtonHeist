@@ -97,14 +97,14 @@ extension ElementInflation {
     }
 
     private func revealScrollContainer(at path: TreePath, depth: Int) async -> Bool {
-        if stash.liveScrollView(forContainerPath: path) != nil {
-            return true
-        }
         guard depth < Self.maxNestedRevealDepth else { return false }
-        guard let container = semanticContainer(at: path),
-              let membership = container.scrollMembership,
-              let observedActivationPoint = container.observedScrollContentActivationPoint
-        else { return false }
+        guard let container = semanticContainer(at: path) else { return false }
+        guard let membership = container.scrollMembership else {
+            return stash.liveScrollView(forContainerPath: path) != nil
+        }
+        guard let observedActivationPoint = container.observedScrollContentActivationPoint else {
+            return false
+        }
         guard await revealScrollContainer(at: membership.containerPath, depth: depth + 1),
               let parentScrollView = stash.liveScrollView(forContainerPath: membership.containerPath)
         else { return false }
