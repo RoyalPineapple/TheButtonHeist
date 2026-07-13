@@ -325,6 +325,24 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         try assertFactsDeriveFromCaptureEdge(facts, trace: trace)
     }
 
+    func testFallbackScreenClassificationOutranksIncidentalElementNotification() {
+        let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Menu"))
+        let after = AccessibilityTrace.Capture(
+            sequence: 2,
+            interface: makeInterface(label: "Checkout"),
+            parentHash: before.hash,
+            transition: AccessibilityTrace.Transition(
+                fallbackReason: .primaryHeaderChanged,
+                accessibilityNotifications: [notification(kind: .elementChanged(.layout), sequence: 1)]
+            )
+        )
+
+        XCTAssertEqual(
+            AccessibilityTrace.ChangeFact.between(before, after).map(\.kind),
+            [.elementsChanged, .screenChanged, .elementsChanged]
+        )
+    }
+
     func testScreenChangedNotificationWinsWhenSettledSnapshotIsUnchanged() throws {
         let notification = notification(kind: .screenChanged, sequence: 1)
         let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Menu"))

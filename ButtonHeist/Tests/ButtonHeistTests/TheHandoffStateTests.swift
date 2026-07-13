@@ -1537,7 +1537,6 @@ final class TheHandoffStateTests: XCTestCase {
     func testTerminalConnectionFailureResolvesAllLiveWaitersForAttempt() async {
         let handoff = TheHandoff()
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
-        let serverError = ServerError(kind: .general, message: "connection failed")
         let mock = MockConnection()
         mock.connectEventsOverride = []
         handoff.makeConnection = { _ in mock }
@@ -1570,6 +1569,7 @@ final class TheHandoffStateTests: XCTestCase {
     func testTerminalAttemptIgnoresLateRequestScopedError() async {
         let handoff = TheHandoff()
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        let serverError = ServerError(kind: .general, message: "connection failed")
         let mock = MockConnection()
         mock.connectEventsOverride = []
         handoff.makeConnection = { _ in mock }

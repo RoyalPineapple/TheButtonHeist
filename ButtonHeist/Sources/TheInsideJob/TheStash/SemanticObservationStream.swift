@@ -116,13 +116,16 @@ struct InterfaceObservationProof {
 
     let screen: InterfaceObservation
     private let generationAdmission: GenerationAdmission
+    let discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy
 
     private init(
         screen: InterfaceObservation,
-        generationAdmission: GenerationAdmission = .classifyAtCommit
+        generationAdmission: GenerationAdmission = .classifyAtCommit,
+        discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy = .mergeIntoInterface
     ) {
         self.screen = screen
         self.generationAdmission = generationAdmission
+        self.discoveryCommitPolicy = discoveryCommitPolicy
     }
 
     var authoritativeReplacementClassification: ScreenClassifier.Classification? {
@@ -157,7 +160,11 @@ struct InterfaceObservationProof {
         case .replacesGeneration(let reason):
             generationAdmission = .replace(reason: reason)
         }
-        return InterfaceObservationProof(screen: exploration.screen, generationAdmission: generationAdmission)
+        return InterfaceObservationProof(
+            screen: exploration.screen,
+            generationAdmission: generationAdmission,
+            discoveryCommitPolicy: exploration.discoveryCommitPolicy
+        )
     }
 
     static func testing(_ screen: InterfaceObservation) -> InterfaceObservationProof {
@@ -281,8 +288,7 @@ private struct SemanticObservationFulfillmentState {
                         ScreenClassifier.snapshot(of: $0.observation.screen.tree)
                     },
                     after: ScreenClassifier.snapshot(of: observation.screen.tree),
-                    notifications: notificationKinds,
-                    notificationGap: notificationBatch.gap
+                    notifications: notificationKinds
                 )
             let fallbackReason = classification.fallbackReason
             if let fallbackReason {
@@ -693,8 +699,7 @@ final class SemanticObservationStream {
                 )
             },
             after: ScreenClassifier.snapshot(of: candidateScreen.tree),
-            notifications: resolvedNotificationBatch.events.map(\.kind),
-            notificationGap: resolvedNotificationBatch.gap
+            notifications: resolvedNotificationBatch.events.map(\.kind)
         )
         let sourceClassification = proof.authoritativeReplacementClassification
             ?? classifiedSource

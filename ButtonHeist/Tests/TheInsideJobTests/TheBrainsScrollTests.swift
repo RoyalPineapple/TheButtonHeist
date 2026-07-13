@@ -75,7 +75,7 @@ final class TheBrainsScrollTests: XCTestCase {
             )
         ])
         let explorationTask = Task { @MainActor in
-            await brains.navigation.exploreScreen(baseline: staleBaseline) != nil
+            await brains.navigation.exploreScreen(baseline: .interfaceMemory(staleBaseline)) != nil
         }
         explorationTask.cancel()
 
@@ -151,6 +151,10 @@ final class TheBrainsScrollTests: XCTestCase {
             return XCTFail("Expected deadline crossed during frame await to fail, got \(state)")
         }
         XCTAssertEqual(failure.failedStep, .timedOut)
+        XCTAssertEqual(failure.failureKind, .timeout)
+        let dispatchOutcome = failure.actionDispatchOutcome(commandMethod: .activate)
+        XCTAssertEqual(dispatchOutcome.failureKind, .timeout)
+        XCTAssertEqual(TheBrains.actionErrorKind(for: dispatchOutcome), .timeout)
     }
 
     func testExploreScreenSkipsUIPageViewControllerQueuingScrollView() async throws {
@@ -968,7 +972,8 @@ final class TheBrainsScrollTests: XCTestCase {
             return Navigation.ExploredScreen(
                 screen: replacement,
                 manifest: .init(),
-                generationDisposition: .preservesGeneration
+                generationDisposition: .preservesGeneration,
+                discoveryCommitPolicy: .mergeIntoInterface
             )
         }
 
@@ -1864,13 +1869,13 @@ final class TheBrainsScrollTests: XCTestCase {
         brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(staleScreen)
 
         guard let exploration = await brains.navigation.exploreScreen(
-            baseline: brains.stash.visibleExplorationBaseline(from: visibleScreen),
+            baseline: .currentViewport(brains.stash.visibleExplorationBaseline(from: visibleScreen)),
             maxScrollsPerContainer: 3,
             maxScrollsPerDiscovery: 3
         ) else {
             return XCTFail("Expected word-list exploration to settle")
         }
-        _ = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(exploration.screen)
+        _ = brains.stash.semanticObservationStream.commitExploredDiscoveryObservation(exploration)
 
         let labels = brains.stash.discoveryInterface().projectedElements.compactMap(\.label)
         XCTAssertGreaterThan(exploration.manifest.scrollCount, 0, "Expected discovery to scroll the word list")

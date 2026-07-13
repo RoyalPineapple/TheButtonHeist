@@ -2097,7 +2097,14 @@ final class TheFenceHandlerTests: XCTestCase {
     func testSchemaValidationReportsBadCoercedValue() async {
         await assertOperationValidationError(
             command: .wait,
-            arguments: ["timeout": .string("forever")],
+            arguments: [
+                "predicate": .object([
+                    "type": .string("changed"),
+                    "scope": .string("elements"),
+                    "assertions": .array([]),
+                ]),
+                "timeout": .string("forever"),
+            ],
             equals: "schema validation failed for timeout: observed string \"forever\"; expected number"
         )
     }

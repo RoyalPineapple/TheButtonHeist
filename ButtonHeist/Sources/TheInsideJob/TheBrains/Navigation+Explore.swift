@@ -17,7 +17,7 @@ extension Navigation {
 
     func exploreScreen(
         target: AccessibilityTarget? = nil,
-        baseline: InterfaceObservation? = nil,
+        baseline: ExplorationBaseline? = nil,
         maxScrollsPerContainer: Int? = nil,
         maxScrollsPerDiscovery: Int? = nil
     ) async -> ExploredScreen? {
@@ -26,7 +26,7 @@ extension Navigation {
         guard let settledPage = await settledExplorationPage(),
               !Task.isCancelled else { return nil }
         var exploration = SemanticExploration(
-            baseline: baseline ?? stash.explorationBaseline(),
+            baseline: baseline ?? .interfaceMemory(stash.explorationBaseline()),
             maxScrollsPerContainer: maxScrollsPerContainer ?? ScreenManifest.maxScrollsPerContainer,
             maxScrollsPerDiscovery: maxScrollsPerDiscovery ?? ScreenManifest.maxScrollsPerDiscovery
         )

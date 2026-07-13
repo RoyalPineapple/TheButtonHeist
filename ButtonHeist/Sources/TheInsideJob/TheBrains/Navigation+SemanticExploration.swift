@@ -10,6 +10,32 @@ import ThePlans
 
 extension Navigation {
 
+    enum ExplorationBaseline {
+        case interfaceMemory(InterfaceObservation)
+        case currentViewport(InterfaceObservation)
+
+        var screen: InterfaceObservation {
+            switch self {
+            case .interfaceMemory(let screen), .currentViewport(let screen):
+                screen
+            }
+        }
+
+        var discoveryCommitPolicy: DiscoveryCommitPolicy {
+            switch self {
+            case .interfaceMemory:
+                .mergeIntoInterface
+            case .currentViewport:
+                .replaceInterface
+            }
+        }
+    }
+
+    enum DiscoveryCommitPolicy: Equatable {
+        case mergeIntoInterface
+        case replaceInterface
+    }
+
     enum ExplorationGenerationDisposition: Equatable {
         case preservesGeneration
         case replacesGeneration(reason: AccessibilityObservationFallbackReason)
@@ -206,15 +232,18 @@ extension Navigation {
         let screen: InterfaceObservation
         let manifest: ScreenManifest
         let generationDisposition: ExplorationGenerationDisposition
+        let discoveryCommitPolicy: DiscoveryCommitPolicy
 
         internal init(
             screen: InterfaceObservation,
             manifest: ScreenManifest,
-            generationDisposition: ExplorationGenerationDisposition
+            generationDisposition: ExplorationGenerationDisposition,
+            discoveryCommitPolicy: DiscoveryCommitPolicy
         ) {
             self.screen = screen
             self.manifest = manifest
             self.generationDisposition = generationDisposition
+            self.discoveryCommitPolicy = discoveryCommitPolicy
         }
     }
 
@@ -222,15 +251,17 @@ extension Navigation {
         var screen: InterfaceObservation
         var manifest: ScreenManifest
         let scope: SemanticExplorationScope
+        let discoveryCommitPolicy: DiscoveryCommitPolicy
         private(set) var generationDisposition = ExplorationGenerationDisposition.preservesGeneration
 
         init(
-            baseline: InterfaceObservation,
+            baseline: ExplorationBaseline,
             maxScrollsPerContainer: Int = ScreenManifest.maxScrollsPerContainer,
             maxScrollsPerDiscovery: Int = ScreenManifest.maxScrollsPerDiscovery
         ) {
-            screen = baseline
+            screen = baseline.screen
             scope = .manifestBoundedDiscovery
+            discoveryCommitPolicy = baseline.discoveryCommitPolicy
             manifest = ScreenManifest(
                 maxScrollsPerContainer: maxScrollsPerContainer,
                 maxScrollsPerDiscovery: maxScrollsPerDiscovery
@@ -240,6 +271,7 @@ extension Navigation {
         init(baseline: InterfaceObservation, knownTargetDeadline: SemanticObservationDeadline) {
             screen = baseline
             scope = .knownTargetReveal(knownTargetDeadline)
+            discoveryCommitPolicy = .mergeIntoInterface
             manifest = ScreenManifest()
         }
 
@@ -262,6 +294,7 @@ extension Navigation {
         }
 
         @discardableResult
+        @MainActor
         mutating func absorb(_ parsed: InterfaceObservation?) -> ScreenClassifier.Classification? {
             guard let parsed else { return nil }
             let classification = ScreenClassifier.classify(
@@ -269,6 +302,31 @@ extension Navigation {
                 after: ScreenClassifier.snapshot(of: parsed.tree),
                 notifications: []
             )
+            return absorb(parsed, classification: classification)
+        }
+
+        @discardableResult
+        @MainActor
+        mutating func absorbScrolledPage(
+            _ parsed: InterfaceObservation?,
+            notificationBatch: AccessibilityNotificationBatch?
+        ) -> ScreenClassifier.Classification? {
+            guard let parsed else { return nil }
+            let classification: ScreenClassifier.Classification = if notificationBatch?.events.contains(where: {
+                if case .screenChanged = $0.kind { return true }
+                return false
+            }) == true {
+                .screenChangedNotification
+            } else {
+                .sameGeneration
+            }
+            return absorb(parsed, classification: classification)
+        }
+
+        private mutating func absorb(
+            _ parsed: InterfaceObservation,
+            classification: ScreenClassifier.Classification
+        ) -> ScreenClassifier.Classification {
             generationDisposition.record(classification)
             if classification.isScreenReplacement {
                 // A replacement starts a new graph, not a new execution budget.
@@ -309,7 +367,8 @@ extension Navigation {
             return ExploredScreen(
                 screen: screen,
                 manifest: manifest,
-                generationDisposition: generationDisposition
+                generationDisposition: generationDisposition,
+                discoveryCommitPolicy: discoveryCommitPolicy
             )
         }
     }

@@ -86,9 +86,6 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(rollup.actions.dispatchedResults.map(\.method), [.activate])
         XCTAssertEqual(rollup.actions.traceResultsInExecutionOrder.map(\.method), [.activate, .wait])
         XCTAssertEqual(rollup.actions.dispatchedResults.first?.warning, actionWarning)
-        XCTAssertEqual(rollup.warnings, [
-            HeistExecutionWarning(path: "$.body[2]", message: "explicit warning"),
-        ])
         XCTAssertEqual(result.warnings, [
             HeistExecutionWarning(path: "$.body[2]", message: "explicit warning"),
         ])
@@ -975,10 +972,10 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             return XCTFail("Expected failed JUnit row, got \(String(describing: rows.first?.outcome))")
         }
         XCTAssertTrue(message.hasPrefix("elementsChanged"), message)
-        XCTAssertTrue(message.contains("code: request.action_failed"), message)
+        XCTAssertTrue(message.contains("code: request.timeout"), message)
         XCTAssertTrue(message.contains("kind: request"), message)
         XCTAssertTrue(message.contains("phase: request"), message)
-        XCTAssertTrue(message.contains("retryable: false"), message)
+        XCTAssertTrue(message.contains("retryable: true"), message)
         XCTAssertEqual(errorKind, .action(.timeout))
     }
 

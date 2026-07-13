@@ -5,24 +5,24 @@ import ButtonHeistSupport
 import TheScore
 import ThePlans
 
+private enum RevealTransactionPhase {
+    case active
+    case committed
+    case rolledBack
+}
+
+private struct RevealMovement {
+    let scrollView: UIScrollView
+    let visualOrigin: CGPoint
+}
+
 extension ElementInflation {
 
     @MainActor
     internal final class RevealTransaction {
-        internal enum Phase: Equatable {
-            case active
-            case committed
-            case rolledBack
-        }
-
-        private struct Movement {
-            let scrollView: UIScrollView
-            let visualOrigin: CGPoint
-        }
-
-        private var movements: [ObjectIdentifier: Movement] = [:]
+        private var movements: [ObjectIdentifier: RevealMovement] = [:]
         private var movementOrder: [ObjectIdentifier] = []
-        private(set) var phase = Phase.active
+        private var phase = RevealTransactionPhase.active
 
         internal func captureScrollableHierarchy(in stash: TheStash) {
             stash.scrollableContainerViewsByPath.values.forEach(recordHierarchy(from:))
@@ -32,7 +32,7 @@ extension ElementInflation {
             guard phase == .active else { return }
             let identifier = ObjectIdentifier(scrollView)
             guard movements[identifier] == nil else { return }
-            movements[identifier] = Movement(
+            movements[identifier] = RevealMovement(
                 scrollView: scrollView,
                 visualOrigin: Navigation.visualOrigin(in: scrollView)
             )

@@ -4,6 +4,7 @@ import XCTest
 import UIKit
 
 @testable import AccessibilitySnapshotParser
+import ButtonHeistSupport
 @testable import TheInsideJob
 import ThePlans
 @testable import TheScore
@@ -13,7 +14,9 @@ final class SemanticExplorationGenerationTests: XCTestCase {
 
     func testSameGenerationPagesUnion() {
         var exploration = Navigation.SemanticExploration(
-            baseline: screen(header: "Catalog", entries: [("Visible", .staticText, "visible")])
+            baseline: .interfaceMemory(
+                screen(header: "Catalog", entries: [("Visible", .staticText, "visible")])
+            )
         )
 
         exploration.absorb(screen(header: "Catalog", entries: [("Discovered", .button, "discovered")]))
@@ -24,11 +27,58 @@ final class SemanticExplorationGenerationTests: XCTestCase {
 
     func testScreenReplacementRemovesOldOnlyNodes() {
         var exploration = Navigation.SemanticExploration(
-            baseline: screen(header: "Home", entries: [("Old Action", .button, "old_action")])
+            baseline: .interfaceMemory(
+                screen(header: "Home", entries: [("Old Action", .button, "old_action")])
+            )
         )
 
         exploration.absorb(screen(header: "Settings", entries: [("New Action", .button, "new_action")]))
 
+        XCTAssertNil(exploration.screen.findElement(heistId: "old_action"))
+        XCTAssertNotNil(exploration.screen.findElement(heistId: "new_action"))
+    }
+
+    func testPlannedScrollDoesNotInferReplacementFromViewportShape() throws {
+        var exploration = Navigation.SemanticExploration(
+            baseline: .interfaceMemory(
+                screen(header: "Home", entries: [("Old Action", .button, "old_action")])
+            )
+        )
+        let notificationBus = AccessibilityNotificationBus()
+        let window = notificationBus.beginActionWindow()
+        defer { window.cancel() }
+
+        let classification = exploration.absorbScrolledPage(
+            screen(header: "Settings", entries: [("New Action", .button, "new_action")]),
+            notificationBatch: try XCTUnwrap(window.capture())
+        )
+
+        XCTAssertEqual(classification, .sameGeneration)
+        XCTAssertNotNil(exploration.screen.findElement(heistId: "old_action"))
+        XCTAssertNotNil(exploration.screen.findElement(heistId: "new_action"))
+    }
+
+    func testPlannedScrollUsesScopedScreenChangedAsReplacementEvidence() throws {
+        var exploration = Navigation.SemanticExploration(
+            baseline: .interfaceMemory(
+                screen(header: "Home", entries: [("Old Action", .button, "old_action")])
+            )
+        )
+        let notificationBus = AccessibilityNotificationBus()
+        let window = notificationBus.beginActionWindow()
+        defer { window.cancel() }
+        notificationBus.record(
+            code: UInt32(UIAccessibility.Notification.screenChanged.rawValue),
+            notificationData: .none,
+            associatedElement: .none
+        )
+
+        let classification = exploration.absorbScrolledPage(
+            screen(header: "Settings", entries: [("New Action", .button, "new_action")]),
+            notificationBatch: try XCTUnwrap(window.capture())
+        )
+
+        XCTAssertEqual(classification, .screenChangedNotification)
         XCTAssertNil(exploration.screen.findElement(heistId: "old_action"))
         XCTAssertNotNil(exploration.screen.findElement(heistId: "new_action"))
     }
@@ -45,7 +95,7 @@ final class SemanticExplorationGenerationTests: XCTestCase {
             entries: [("New Action", .button, "new_action")]
         )
         brains.stash.recordParsedObservedEvidence(replacement)
-        var exploration = Navigation.SemanticExploration(baseline: oldScreen)
+        var exploration = Navigation.SemanticExploration(baseline: .interfaceMemory(oldScreen))
         exploration.absorb(replacement)
         let explored = exploration.finish(startTime: CACurrentMediaTime())
         let actionWindow = brains.stash.accessibilityNotifications.beginActionWindow()
@@ -76,7 +126,7 @@ final class SemanticExplorationGenerationTests: XCTestCase {
             entries: [("Unsettled Purchase", .button, "unsettled_purchase")]
         )
         brains.stash.recordFailedSettleDiagnosticEvidence(diagnostic)
-        var exploration = Navigation.SemanticExploration(baseline: diagnostic)
+        var exploration = Navigation.SemanticExploration(baseline: .interfaceMemory(diagnostic))
         exploration.absorb(screen(header: "Receipt", entries: [("Done", .button, "done")]))
 
         brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(exploration.screen)
@@ -92,7 +142,7 @@ final class SemanticExplorationGenerationTests: XCTestCase {
         let oldPath = TreePath([0])
         let newPath = TreePath([1])
         var exploration = Navigation.SemanticExploration(
-            baseline: screen(header: "Home"),
+            baseline: .interfaceMemory(screen(header: "Home")),
             maxScrollsPerContainer: 2,
             maxScrollsPerDiscovery: 2
         )
@@ -132,13 +182,13 @@ final class SemanticExplorationGenerationTests: XCTestCase {
         header: String,
         entries: [(label: String, traits: UIAccessibilityTraits, heistId: HeistId)] = []
     ) -> InterfaceObservation {
-        let headerEntry = (
-            element: AccessibilityElement.make(label: header, traits: .header),
+        let headerEntry = InterfaceObservation.TestEntry(
+            AccessibilityElement.make(label: header, traits: .header),
             heistId: HeistId(rawValue: "screen_header")
         )
         let elementEntries = entries.map { entry in
-            (
-                element: AccessibilityElement.make(label: entry.label, traits: entry.traits),
+            InterfaceObservation.TestEntry(
+                AccessibilityElement.make(label: entry.label, traits: entry.traits),
                 heistId: entry.heistId
             )
         }

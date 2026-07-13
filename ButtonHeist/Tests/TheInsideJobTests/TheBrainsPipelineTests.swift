@@ -2293,7 +2293,9 @@ final class TheBrainsPipelineTests: XCTestCase {
             respondsToUserInteraction: false
         )
         var exploration = Navigation.SemanticExploration(
-            baseline: InterfaceObservation.makeForTests(elements: [(before, HeistId(rawValue: "total_staticText"))])
+            baseline: .interfaceMemory(
+                InterfaceObservation.makeForTests(elements: [(before, HeistId(rawValue: "total_staticText"))])
+            )
         )
 
         exploration.absorb(InterfaceObservation.makeForTests(elements: [(after, HeistId(rawValue: "total_staticText"))]))
@@ -2317,7 +2319,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         let nestedPath = TreePath([0, 0])
         let outerEntry = semanticContainer(outer, path: outerPath)
         let nestedEntry = semanticContainer(nested, path: nestedPath)
-        var exploration = Navigation.SemanticExploration(baseline: .empty)
+        var exploration = Navigation.SemanticExploration(baseline: .interfaceMemory(.empty))
         exploration.manifest.addPendingContainers([outerEntry])
 
         exploration.markExplored(outerEntry)
@@ -2346,7 +2348,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             ],
             firstResponderHeistId: nil,
         )
-        var exploration = Navigation.SemanticExploration(baseline: .empty)
+        var exploration = Navigation.SemanticExploration(baseline: .interfaceMemory(.empty))
 
         exploration.absorb(page)
 
@@ -2375,7 +2377,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         let outerPath = TreePath([0])
         let nestedPath = TreePath([0, 0])
         let outerEntry = semanticContainer(outer, path: outerPath)
-        var exploration = Navigation.SemanticExploration(baseline: .empty)
+        var exploration = Navigation.SemanticExploration(baseline: .interfaceMemory(.empty))
         exploration.manifest.addPendingContainers([outerEntry])
         exploration.markExplored(outerEntry)
 
@@ -2387,7 +2389,7 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     func testSemanticExplorationFinishOwnsExplorationTimestamp() {
-        var exploration = Navigation.SemanticExploration(baseline: .empty)
+        var exploration = Navigation.SemanticExploration(baseline: .interfaceMemory(.empty))
 
         let result = exploration.finish(startTime: CACurrentMediaTime() - 0.01)
 

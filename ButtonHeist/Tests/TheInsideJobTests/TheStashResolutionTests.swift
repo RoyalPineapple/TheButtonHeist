@@ -1174,20 +1174,22 @@ final class TheStashResolutionTests: XCTestCase {
         let staleExploration = Navigation.ExploredScreen(
             screen: screenA,
             manifest: .init(),
-            generationDisposition: .preservesGeneration
+            generationDisposition: .preservesGeneration,
+            discoveryCommitPolicy: .mergeIntoInterface
         )
         bagman.recordParsedObservedEvidence(screenB)
 
         XCTAssertNil(bagman.semanticObservationStream.commitExploredDiscoveryObservation(staleExploration))
 
-        var currentExploration = Navigation.SemanticExploration(baseline: screenA)
+        var currentExploration = Navigation.SemanticExploration(baseline: .interfaceMemory(screenA))
         currentExploration.absorb(screenB)
         let currentScreen = currentExploration.screen
         let currentResult = bagman.semanticObservationStream.commitExploredDiscoveryObservation(
             Navigation.ExploredScreen(
                 screen: currentScreen,
                 manifest: currentExploration.manifest,
-                generationDisposition: currentExploration.generationDisposition
+                generationDisposition: currentExploration.generationDisposition,
+                discoveryCommitPolicy: currentExploration.discoveryCommitPolicy
             )
         )
 
@@ -1601,11 +1603,12 @@ final class TheStashResolutionTests: XCTestCase {
         var discoveryCount = 0
         bagman.startPassiveSemanticObservation {
             discoveryCount += 1
-            bagman.recordParsedObservedEvidence(second)
+            self.bagman.recordParsedObservedEvidence(second)
             return Navigation.ExploredScreen(
                 screen: second,
                 manifest: .init(),
-                generationDisposition: .preservesGeneration
+                generationDisposition: .preservesGeneration,
+                discoveryCommitPolicy: .mergeIntoInterface
             )
         }
 
@@ -1625,11 +1628,12 @@ final class TheStashResolutionTests: XCTestCase {
         var discoveryCount = 0
         bagman.startPassiveSemanticObservation {
             discoveryCount += 1
-            bagman.recordParsedObservedEvidence(discovery)
+            self.bagman.recordParsedObservedEvidence(discovery)
             return Navigation.ExploredScreen(
                 screen: discovery,
                 manifest: .init(),
-                generationDisposition: .preservesGeneration
+                generationDisposition: .preservesGeneration,
+                discoveryCommitPolicy: .mergeIntoInterface
             )
         }
 
@@ -1716,11 +1720,12 @@ final class TheStashResolutionTests: XCTestCase {
             let screen = discoveryScreen
             discoveryScreen = nil
             return screen.map {
-                bagman.recordParsedObservedEvidence($0)
+                self.bagman.recordParsedObservedEvidence($0)
                 return Navigation.ExploredScreen(
                     screen: $0,
                     manifest: .init(),
-                    generationDisposition: .preservesGeneration
+                    generationDisposition: .preservesGeneration,
+                    discoveryCommitPolicy: .mergeIntoInterface
                 )
             }
         }

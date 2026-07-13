@@ -1012,11 +1012,11 @@ final class WireTypeRoundTripTests: XCTestCase {
         let payload = try JSONProbe(data: data)
         let step = try payload.array("steps")[0]
         let intent = try step.object("intent")
-        let failure = try step.object("outcome").object("failure")
+        let encodedFailure = try step.object("outcome").object("failure")
         XCTAssertEqual(try intent.string("type"), "action")
         XCTAssertEqual(try intent.object("command").string("type"), "activate")
         try intent.assertMissing("target")
-        try failure.assertMissing("activationTrace")
+        try encodedFailure.assertMissing("activationTrace")
     }
 
     func testHeistFailureDetailRejectsRetiredActivationTraceField() throws {

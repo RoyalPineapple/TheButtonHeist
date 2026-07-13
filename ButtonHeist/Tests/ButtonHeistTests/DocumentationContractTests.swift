@@ -171,7 +171,7 @@ final class DocumentationContractTests: XCTestCase {
             XCTUnwrap(hello[safe: 1]),
             onlyJSONBlock(
                 startingAt: "### Authentication",
-                endingAt: "### Unsupported Legacy Auth Messages",
+                endingAt: "### Rejected Auth Tags",
                 in: wireProtocol
             ),
             jsonBlock(

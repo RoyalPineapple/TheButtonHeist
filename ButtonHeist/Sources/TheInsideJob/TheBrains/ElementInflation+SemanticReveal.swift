@@ -183,9 +183,6 @@ extension ElementInflation {
             transaction: transaction
         ) else { return nil }
         guard semanticRevealInterruption(deadline: deadline) == nil else { return nil }
-        if stash.refreshedLiveScrollView(for: container) === parentScrollView {
-            return parentScrollView
-        }
         guard let observedActivationPoint = container.observedScrollContentActivationPoint else {
             return nil
         }

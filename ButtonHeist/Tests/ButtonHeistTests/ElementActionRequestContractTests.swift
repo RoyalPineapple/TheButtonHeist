@@ -362,7 +362,7 @@ private func canonicalSemanticContainerPredicateKindValues() -> [String] {
     [
         SemanticContainerPredicate<String>.label("sample"),
         SemanticContainerPredicate<String>.value("sample"),
-    ].map { wireDiscriminatorValue($0, discriminator: FenceParameterKey.kind.rawValue) }
+    ].map(\.wireKindValue)
 }
 
 private func assertArraySchema(

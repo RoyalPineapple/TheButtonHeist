@@ -365,7 +365,7 @@ Raw heist receipt steps use one tagged `outcome`; status-specific evidence,
 failure, abort path, and children live inside that case:
 
 ```json
-{"path":"$.body[0]","kind":"action","durationMs":12,"outcome":{"type":"passed","evidence":{"action":{"type":"dispatch","command":{"type":"dismiss"},"dispatchResult":{"outcome":{"kind":"success"},"method":"dismiss","evidence":{"observation":{"kind":"none"}}}}},"children":[]}}
+{"path":"$.body[0]","kind":"action","durationMs":12,"outcome":{"type":"passed","evidence":{"action":{"_0":{"type":"dispatch","command":{"type":"dismiss"},"dispatchResult":{"outcome":{"kind":"success"},"method":"dismiss","evidence":{"observation":{"kind":"none"}}}}}},"children":[]}}
 ```
 
 `status`, `evidence`, `failure`, and `children` are outcome-owned and are invalid

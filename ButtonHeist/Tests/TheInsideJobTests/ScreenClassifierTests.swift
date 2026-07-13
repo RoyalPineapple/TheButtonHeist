@@ -16,7 +16,7 @@ final class ScreenClassifierTests: XCTestCase {
         )
     }
 
-    func testElementChangedAndAnnouncementSuppressSnapshotFallback() {
+    func testElementChangedAndAnnouncementDoNotDisproveStructuralScreenChange() {
         let before = screen(elements: [element(label: "Home", traits: .header)])
         let after = screen(elements: [element(label: "Settings", traits: .header)])
 
@@ -27,25 +27,10 @@ final class ScreenClassifierTests: XCTestCase {
         ] {
             XCTAssertEqual(
                 classify(before: before, after: after, notifications: [notification]),
-                .sameGeneration,
+                .inferredScreenChange(reason: .primaryHeaderChanged),
                 "notification: \(notification)"
             )
         }
-    }
-
-    func testNotificationGapDisablesSameScreenSuppression() {
-        let before = screen(elements: [element(label: "Home", traits: .header)])
-        let after = screen(elements: [element(label: "Settings", traits: .header)])
-
-        XCTAssertEqual(
-            ScreenClassifier.classify(
-                before: ScreenClassifier.snapshot(of: before.tree),
-                after: ScreenClassifier.snapshot(of: after.tree),
-                notifications: [.elementChanged(.layout)],
-                notificationGap: AccessibilityNotificationGap(droppedThroughSequence: 1)
-            ),
-            .inferredScreenChange(reason: .primaryHeaderChanged)
-        )
     }
 
     func testUnknownNotificationAllowsLabeledSnapshotFallback() {

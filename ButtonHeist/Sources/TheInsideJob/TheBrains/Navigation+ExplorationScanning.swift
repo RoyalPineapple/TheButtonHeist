@@ -214,15 +214,23 @@ extension Navigation {
             if let reason = exploration.manifest.recordScrollAttempt(in: plan.container.path) {
                 return .limitHit(reason)
             }
-            plan.container.scrollView.setContentOffset(offset, animated: plan.animated)
-            guard !Task.isCancelled, exploration.hasTimeRemaining else { return .exhausted }
-            if plan.animated {
-                _ = await tripwire.waitForAllClear(timeout: exploration.cappedAnimatedWait(0.5))
-            } else {
-                await tripwire.yieldFrames(Self.postScrollLayoutFrames)
+            let classification: ScreenClassifier.Classification?
+            do {
+                let notificationWindow = stash.accessibilityNotifications.beginActionWindow()
+                defer { notificationWindow.cancel() }
+                plan.container.scrollView.setContentOffset(offset, animated: plan.animated)
+                guard !Task.isCancelled, exploration.hasTimeRemaining else { return .exhausted }
+                if plan.animated {
+                    _ = await tripwire.waitForAllClear(timeout: exploration.cappedAnimatedWait(0.5))
+                } else {
+                    await tripwire.yieldFrames(Self.postScrollLayoutFrames)
+                }
+                guard !Task.isCancelled, exploration.hasTimeRemaining else { return .exhausted }
+                classification = await absorbExplorationPage(
+                    in: &exploration,
+                    notificationBatch: notificationWindow.capture()
+                )
             }
-            guard !Task.isCancelled, exploration.hasTimeRemaining else { return .exhausted }
-            let classification = await absorbExplorationPage(in: &exploration)
             guard !Task.isCancelled, exploration.hasTimeRemaining else { return .exhausted }
             if classification?.isScreenReplacement == true { return .screenReplaced }
 
@@ -365,7 +373,8 @@ extension Navigation {
     }
 
     private func absorbExplorationPage(
-        in exploration: inout SemanticExploration
+        in exploration: inout SemanticExploration,
+        notificationBatch: AccessibilityNotificationBatch? = nil
     ) async -> ScreenClassifier.Classification? {
         guard !Task.isCancelled, exploration.hasTimeRemaining else { return nil }
         let page: InterfaceObservation?
@@ -376,6 +385,9 @@ extension Navigation {
             page = await settledKnownTargetPage(deadline: deadline)
         }
         guard !Task.isCancelled, exploration.hasTimeRemaining else { return nil }
+        if let notificationBatch {
+            return exploration.absorbScrolledPage(page, notificationBatch: notificationBatch)
+        }
         return exploration.absorb(page)
     }
 
@@ -384,11 +396,16 @@ extension Navigation {
         savedVisualOrigin: CGPoint,
         exploration: inout SemanticExploration
     ) async -> ScreenClassifier.Classification? {
+        let notificationWindow = stash.accessibilityNotifications.beginActionWindow()
+        defer { notificationWindow.cancel() }
         Self.restoreVisualOrigin(savedVisualOrigin, in: containerExploration.scrollView)
         guard !Task.isCancelled, exploration.hasTimeRemaining else { return nil }
         await tripwire.yieldFrames(Self.postScrollLayoutFrames)
         guard !Task.isCancelled, exploration.hasTimeRemaining else { return nil }
-        return await absorbExplorationPage(in: &exploration)
+        return await absorbExplorationPage(
+            in: &exploration,
+            notificationBatch: notificationWindow.capture()
+        )
     }
 
     private func settledKnownTargetPage(

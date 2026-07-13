@@ -374,7 +374,8 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             before: makeReceiptTestInterface([makeReceiptTestElement(label: "Cart", identifier: "cart_title")]),
             after: destination,
             beforeScreenId: "cart",
-            afterScreenId: "checkout"
+            afterScreenId: "checkout",
+            afterTransition: makeReceiptScreenChangedTransition()
         )
         let response = FenceResponse.action(
             command: .activate,
@@ -422,7 +423,8 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             sequence: 3,
             interface: checkout,
             parentHash: elementChange.hash,
-            context: AccessibilityTrace.Context(screenId: "checkout")
+            context: AccessibilityTrace.Context(screenId: "checkout"),
+            transition: makeReceiptScreenChangedTransition(sequence: 9)
         )
         let trace = AccessibilityTrace(captures: [before, elementChange, after])
         let response = FenceResponse.action(
@@ -611,7 +613,8 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             before: makeReceiptTestInterface([]),
             after: makeReceiptTestInterface(afterRows),
             beforeScreenId: "before",
-            afterScreenId: "checkout"
+            afterScreenId: "checkout",
+            afterTransition: makeReceiptScreenChangedTransition()
         )
         let command = HeistActionCommand.activate(.predicate(ElementPredicateTemplate(label: "Checkout")))
         let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
@@ -753,13 +756,15 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
         let compact = response.compactFormatted()
         let node = try XCTUnwrap(try publicJSONProbe(response).object("report").array("nodes").first)
-        let failureTrace = try node.object("failure").object("activationTrace")
+        let actionResult = try node.object("evidence").object("action").object("result")
+        let renderedActivationTrace = try actionResult.object("activationTrace")
 
-        XCTAssertEqual(try failureTrace.bool("axActivateReturned"), false)
-        XCTAssertEqual(try failureTrace.bool("tapActivationDispatched"), true)
-        XCTAssertEqual(try failureTrace.bool("tapActivationSucceeded"), true)
-        XCTAssertEqual(try failureTrace.object("tapActivationPoint").double("x"), 195)
-        XCTAssertEqual(try failureTrace.object("tapActivationPoint").double("y"), 139)
+        try node.object("failure").assertMissing("activationTrace")
+        XCTAssertEqual(try renderedActivationTrace.bool("axActivateReturned"), false)
+        XCTAssertEqual(try renderedActivationTrace.bool("tapActivationDispatched"), true)
+        XCTAssertEqual(try renderedActivationTrace.bool("tapActivationSucceeded"), true)
+        XCTAssertEqual(try renderedActivationTrace.object("tapActivationPoint").double("x"), 195)
+        XCTAssertEqual(try renderedActivationTrace.object("tapActivationPoint").double("y"), 139)
         XCTAssertTrue(compact.contains("activation: axActivateReturned=false"), compact)
         XCTAssertTrue(compact.contains("tapActivationDispatched=true"), compact)
         XCTAssertTrue(compact.contains("tapActivationSucceeded=true"), compact)

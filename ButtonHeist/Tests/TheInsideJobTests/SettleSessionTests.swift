@@ -31,13 +31,13 @@ final class SettleSessionTests: XCTestCase {
     }
 
     private func makeParseResult(_ elements: [AccessibilityElement]) -> InterfaceObservation {
-        let hierarchy: [AccessibilityHierarchy] = elements.enumerated().map { index, element in
-            .element(element, traversalIndex: index)
-        }
         return InterfaceObservation.makeForTests(
-            elements: [:],
-            hierarchy: hierarchy,
-            firstResponderHeistId: nil,
+            elements.enumerated().map { index, element in
+                InterfaceObservation.TestEntry(
+                    element,
+                    heistId: HeistId(rawValue: "settle_\(index)")
+                )
+            }
         )
     }
 

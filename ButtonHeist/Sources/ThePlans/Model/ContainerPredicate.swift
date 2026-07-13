@@ -42,6 +42,15 @@ public enum SemanticContainerPredicate<Value: StringMatchPayload>: Sendable, Equ
     ) -> String? {
         match.valueIfPresent?.stringMatchLiteralIsEmpty == true ? "\(field) match value must not be empty" : nil
     }
+
+    package var wireKindValue: String {
+        switch self {
+        case .label:
+            "label"
+        case .value:
+            "value"
+        }
+    }
 }
 
 public extension SemanticContainerPredicate where Value == String {

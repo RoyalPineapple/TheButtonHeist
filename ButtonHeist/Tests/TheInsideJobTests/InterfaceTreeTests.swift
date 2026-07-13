@@ -280,12 +280,10 @@ final class InterfaceTreeTests: XCTestCase {
         let header = makeElement(label: "Controls Demo", traits: .header)
         let button = makeElement(label: "Save", traits: .button)
         let screen = InterfaceObservation.makeForTests(
-            elements: [:],
-            hierarchy: [
-                .element(header, traversalIndex: 0),
-                .element(button, traversalIndex: 1),
-            ],
-            firstResponderHeistId: nil,
+            elements: [
+                (header, "controls_header"),
+                (button, "save_button"),
+            ]
         )
         XCTAssertEqual(screen.name, "Controls Demo")
         XCTAssertEqual(screen.id, "controls_demo")
@@ -303,12 +301,10 @@ final class InterfaceTreeTests: XCTestCase {
             shape: .frame(AccessibilityRect(CGRect(x: 120, y: 72, width: 100, height: 44)))
         )
         let screen = InterfaceObservation.makeForTests(
-            elements: [:],
-            hierarchy: [
-                .element(contentHeader, traversalIndex: 0),
-                .element(navigationTitle, traversalIndex: 1),
-            ],
-            firstResponderHeistId: nil,
+            elements: [
+                (contentHeader, "content_header"),
+                (navigationTitle, "navigation_title"),
+            ]
         )
         XCTAssertEqual(screen.name, "Display")
         XCTAssertEqual(screen.id, "display")
@@ -327,12 +323,10 @@ final class InterfaceTreeTests: XCTestCase {
             shape: .frame(AccessibilityRect(CGRect(x: 20, y: 240, width: 200, height: 44)))
         )
         let screen = InterfaceObservation.makeForTests(
-            elements: [:],
-            hierarchy: [
-                .element(navigationTitle, traversalIndex: 0),
-                .element(explicitSummary, traversalIndex: 1),
-            ],
-            firstResponderHeistId: nil,
+            elements: [
+                (navigationTitle, "navigation_title"),
+                (explicitSummary, "messages_summary"),
+            ]
         )
 
         XCTAssertEqual(screen.summaryElement, explicitSummary)
@@ -344,21 +338,17 @@ final class InterfaceTreeTests: XCTestCase {
         let nilHeader = makeElement(label: nil, traits: .header)
         let realHeader = makeElement(label: "Page Title", traits: .header)
         let screen = InterfaceObservation.makeForTests(
-            elements: [:],
-            hierarchy: [
-                .element(nilHeader, traversalIndex: 0),
-                .element(realHeader, traversalIndex: 1),
-            ],
-            firstResponderHeistId: nil,
+            elements: [
+                (nilHeader, "unlabeled_header"),
+                (realHeader, "page_title"),
+            ]
         )
         XCTAssertEqual(screen.name, "Page Title")
     }
 
     func testNameNilWhenNoHeader() {
         let screen = InterfaceObservation.makeForTests(
-            elements: [:],
-            hierarchy: [.element(makeElement(label: "Body"), traversalIndex: 0)],
-            firstResponderHeistId: nil,
+            elements: [(makeElement(label: "Body"), "body")]
         )
         XCTAssertNil(screen.name)
         XCTAssertNil(screen.id)
@@ -477,21 +467,11 @@ final class InterfaceTreeTests: XCTestCase {
     // MARK: - merging — hierarchy / first responder
 
     func testMergingTakesOtherHierarchy() {
-        let oldHierarchy: [AccessibilityHierarchy] = [
-            .element(makeElement(label: "Old"), traversalIndex: 0),
-        ]
-        let newHierarchy: [AccessibilityHierarchy] = [
-            .element(makeElement(label: "New"), traversalIndex: 0),
-        ]
         let lhs = InterfaceObservation.makeForTests(
-            elements: [:],
-            hierarchy: oldHierarchy,
-            firstResponderHeistId: nil,
+            elements: [(makeElement(label: "Old"), "old")]
         )
         let rhs = InterfaceObservation.makeForTests(
-            elements: [:],
-            hierarchy: newHierarchy,
-            firstResponderHeistId: nil,
+            elements: [(makeElement(label: "New"), "new")]
         )
 
         let merged = lhs.tree.merging(rhs.tree)
@@ -639,6 +619,11 @@ final class InterfaceTreeTests: XCTestCase {
     func testInterfaceTreeViewportUpdateDropsDisappearedVisibleScrollElements() {
         let scrolledAway = makeElement(label: "Scrolled Away", traits: .button)
         let visible = makeElement(label: "Visible", traits: .button)
+        let scrollContainer = AccessibilityContainer(
+            type: .none,
+            scrollableContentSize: AccessibilitySize(width: 320, height: 1_200),
+            frame: AccessibilityRect(x: 0, y: 0, width: 320, height: 400)
+        )
         let screen = InterfaceObservation.makeForTests(
             elements: [
                 "button_scrolled_away": InterfaceTree.Element(
@@ -653,11 +638,13 @@ final class InterfaceTreeTests: XCTestCase {
                 )
             ],
             hierarchy: [
-                .element(scrolledAway, traversalIndex: 0),
+                .container(scrollContainer, children: [
+                    .element(scrolledAway, traversalIndex: 0),
+                ]),
                 .element(visible, traversalIndex: 1)
             ],
             heistIdsByPath: [
-                TreePath([0]): "button_scrolled_away",
+                TreePath([0, 0]): "button_scrolled_away",
                 TreePath([1]): "button_visible"
             ],
             firstResponderHeistId: nil,

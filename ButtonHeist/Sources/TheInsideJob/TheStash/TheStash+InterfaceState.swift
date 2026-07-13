@@ -96,7 +96,7 @@ extension TheStash {
         classification: ScreenClassifier.Classification
     ) -> InterfaceObservation {
         let screen = proof.screen
-        interfaceTree = classification.isScreenReplacement
+        interfaceTree = classification.isScreenReplacement || proof.discoveryCommitPolicy == .replaceInterface
             ? screen.tree
             : interfaceTree.merging(screen.tree)
         return finishCommit(observation: screen)

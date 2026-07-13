@@ -214,7 +214,9 @@ final class TheBrains {
         for _ in 0..<2 {
             guard let visibleEvidence = await stash.observeVisibleSemanticEvidence(timeout: 2.0),
                   let exploration = await navigation.exploreScreen(
-                    baseline: stash.visibleExplorationBaseline(from: visibleEvidence.screen),
+                    baseline: .currentViewport(
+                        stash.visibleExplorationBaseline(from: visibleEvidence.screen)
+                    ),
                     maxScrollsPerContainer: query.maxScrollsPerContainer,
                     maxScrollsPerDiscovery: query.maxScrollsPerDiscovery
                   ) else {

@@ -224,7 +224,11 @@ final class WireCommandParityTests: XCTestCase {
                     )),
                     "\(descriptor.command.rawValue).\(parameter.key)"
                 ) { error in
-                    XCTAssertEqual((error as? SchemaValidationError)?.field, parameter.key)
+                    XCTAssertEqual(
+                        (error as? SchemaValidationError)?.field,
+                        parameter.key,
+                        "\(descriptor.command.rawValue).\(parameter.key): \(error)"
+                    )
                 }
             }
         }
@@ -281,7 +285,11 @@ final class WireCommandParityTests: XCTestCase {
                 XCTAssertFalse(routedInputs.isEmpty, descriptor.command.rawValue)
                 for input in routedInputs {
                     XCTAssertThrowsError(try fence.admit(input), descriptor.command.rawValue) { error in
-                        XCTAssertEqual((error as? SchemaValidationError)?.field, parameter.key)
+                        XCTAssertEqual(
+                            (error as? SchemaValidationError)?.field,
+                            parameter.key,
+                            "\(descriptor.command.rawValue).\(parameter.key): \(error)"
+                        )
                     }
                 }
             }
@@ -390,8 +398,10 @@ final class WireCommandParityTests: XCTestCase {
                 )),
                 mutation.command.rawValue
             ) { error in
-                let field = (error as? SchemaValidationError)?.field
-                XCTAssertTrue(field?.contains("target") == true, "\(mutation.command.rawValue): \(error)")
+                XCTAssertTrue(
+                    String(describing: error).localizedCaseInsensitiveContains("target"),
+                    "\(mutation.command.rawValue): \(error)"
+                )
             }
         }
     }

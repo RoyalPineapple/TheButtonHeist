@@ -545,7 +545,8 @@ func makeReceiptTestTrace(
     before beforeInterface: Interface,
     after afterInterface: Interface,
     beforeScreenId: String? = "screen",
-    afterScreenId: String? = "screen"
+    afterScreenId: String? = "screen",
+    afterTransition: AccessibilityTrace.Transition = .init()
 ) -> AccessibilityTrace {
     let beforeCapture = AccessibilityTrace.Capture(
         sequence: 1,
@@ -556,9 +557,22 @@ func makeReceiptTestTrace(
         sequence: 2,
         interface: afterInterface,
         parentHash: beforeCapture.hash,
-        context: AccessibilityTrace.Context(screenId: afterScreenId)
+        context: AccessibilityTrace.Context(screenId: afterScreenId),
+        transition: afterTransition
     )
     return AccessibilityTrace(captures: [beforeCapture, afterCapture])
+}
+
+func makeReceiptScreenChangedTransition(sequence: UInt64 = 1) -> AccessibilityTrace.Transition {
+    AccessibilityTrace.Transition(accessibilityNotifications: [
+        AccessibilityNotificationEvidence(
+            sequence: sequence,
+            kind: .screenChanged,
+            timestamp: Date(timeIntervalSince1970: TimeInterval(sequence)),
+            notificationData: .none,
+            associatedElement: .none
+        ),
+    ])
 }
 
 func makeTestHeistActionStep(

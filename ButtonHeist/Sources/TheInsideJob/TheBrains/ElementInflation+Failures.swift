@@ -73,7 +73,7 @@ extension ElementInflation {
         }
 
         internal static func timedOut(_ message: String) -> ElementInflationFailure {
-            .init(.timedOut, failureKind: .actionFailed, message: message)
+            .init(.timedOut, failureKind: .timeout, message: message)
         }
 
         internal static func geometryNotActionable(

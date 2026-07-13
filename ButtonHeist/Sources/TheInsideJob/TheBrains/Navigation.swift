@@ -30,7 +30,7 @@ final class Navigation {
                 guard let self else { return nil }
                 return await self.exploreScreen(
                     target: target,
-                    baseline: self.stash.actionDiscoveryBaseline()
+                    baseline: .interfaceMemory(self.stash.actionDiscoveryBaseline())
                 )
             },
             revealKnownTarget: { [weak self] request in

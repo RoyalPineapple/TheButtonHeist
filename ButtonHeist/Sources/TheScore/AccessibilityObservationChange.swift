@@ -28,6 +28,9 @@ enum AccessibilityObservationChangeReducer {
         if hasScreenChangedNotification {
             return .screenChanged
         }
+        if after.transition.fallbackReason != nil {
+            return .screenChanged
+        }
         let hasUsableSameScreenNotification = after.transition.accessibilityNotifications.contains { notification in
             switch notification.kind {
             case .elementChanged, .announcement:
@@ -38,9 +41,6 @@ enum AccessibilityObservationChangeReducer {
         }
         if hasUsableSameScreenNotification {
             return .elementChanged
-        }
-        if after.transition.fallbackReason != nil {
-            return .screenChanged
         }
         return .elementChanged
     }

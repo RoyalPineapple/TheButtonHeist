@@ -260,14 +260,3 @@ private let containerPredicateCheckProperties: [FenceParameterSpec] = [
     arrayParam(.values, items: .unconstrained, minItems: 1),
     unconstrainedParam(.value, validation: .customPayload),
 ]
-
-private extension SemanticContainerPredicate {
-    var wireKindValue: String {
-        switch self {
-        case .label:
-            "label"
-        case .value:
-            "value"
-        }
-    }
-}

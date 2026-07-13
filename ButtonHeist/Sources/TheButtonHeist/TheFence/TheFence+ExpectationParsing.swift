@@ -33,7 +33,11 @@ extension TheFence {
         /// `predicate` field). Throws if missing or malformed.
         static func parseRequiredPredicate(_ value: HeistValue?) throws -> AccessibilityPredicate<RootContext> {
             guard let value else {
-                throw FenceError.invalidRequest("wait requires a \"predicate\" object")
+                throw SchemaValidationError(
+                    field: FenceParameterKey.predicate.rawValue,
+                    observed: "missing",
+                    expected: "object"
+                )
             }
             return try parsePredicate(value)
         }

@@ -192,7 +192,7 @@ final class PublicActionResultJSONTests: XCTestCase {
             message: "Delete not found", evidence: .none)
         let response = FenceResponse.heistExecution(
             plan: try minimalPlan(),
-            result: HeistExecutionResult(
+            result: HeistExecutionResult.failed(
                 steps: [
                     .failed(
                         path: "$.body[0]",
@@ -206,7 +206,8 @@ final class PublicActionResultJSONTests: XCTestCase {
                         )
                     ),
                 ],
-                durationMs: 7
+                durationMs: 7,
+                abortedAtPath: "$.body[0]"
             )
         )
 
@@ -236,7 +237,8 @@ final class PublicActionResultJSONTests: XCTestCase {
             before: makeReceiptTestInterface([]),
             after: makeReceiptTestInterface(checkoutRows),
             beforeScreenId: "cart",
-            afterScreenId: "checkout"
+            afterScreenId: "checkout",
+            afterTransition: makeReceiptScreenChangedTransition()
         )
         let actionResult = ActionResult.failure(
             method: .activate,
@@ -246,7 +248,7 @@ final class PublicActionResultJSONTests: XCTestCase {
         )
         let response = FenceResponse.heistExecution(
             plan: try minimalPlan(),
-            result: HeistExecutionResult(
+            result: HeistExecutionResult.failed(
                 steps: [
                     .failed(
                         path: "$.body[0]",
@@ -260,7 +262,8 @@ final class PublicActionResultJSONTests: XCTestCase {
                         )
                     ),
                 ],
-                durationMs: 7
+                durationMs: 7,
+                abortedAtPath: "$.body[0]"
             )
         )
         let narrowProfile = summaryProfile(screenPreviewElements: 1)
@@ -502,9 +505,16 @@ final class PublicActionResultJSONTests: XCTestCase {
                 durationMs: 7,
                 evidence: evidence
             )
+        let execution = status == .failed
+            ? HeistExecutionResult.failed(
+                steps: [step],
+                durationMs: 7,
+                abortedAtPath: step.path
+            )
+            : HeistExecutionResult.passed(steps: [step], durationMs: 7)
         let response = FenceResponse.heistExecution(
             plan: try minimalPlan(),
-            result: HeistExecutionResult(steps: [step], durationMs: 7)
+            result: execution
         )
         let report = try publicHeistReportJSON(response)
         let node = try XCTUnwrap(try report.array("nodes").first)

@@ -180,6 +180,20 @@ extension TheFence {
                     expected: "valid \(command.rawValue) parameter"
                 )
             }
+            for parameter in command.descriptor.parameters {
+                guard let value = arguments.values[parameter.key] else {
+                    guard parameter.required else { continue }
+                    throw SchemaValidationError(
+                        field: arguments.field(forUnknownKey: parameter.key),
+                        observed: "missing",
+                        expected: parameter.expectedTypeDescription
+                    )
+                }
+                try parameter.validatePayload(
+                    value,
+                    field: arguments.field(forUnknownKey: parameter.key)
+                )
+            }
         }
 
         private static func requestId(arguments: CommandArgumentEnvelope) throws -> String {

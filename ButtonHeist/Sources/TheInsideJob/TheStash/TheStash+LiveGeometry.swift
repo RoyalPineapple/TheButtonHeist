@@ -121,14 +121,31 @@ extension TheStash {
         for semanticContainer: InterfaceTree.Container,
         directChildOf parent: UIScrollView? = nil
     ) -> UIScrollView? {
-        let matchingViews = latestObservation.tree.containers.values.compactMap { candidate -> UIScrollView? in
-            guard Self.container(candidate, aliases: semanticContainer) else { return nil }
-            return liveScrollableContainerView(forPath: candidate.path)
+        var matches = latestObservation.tree.containers.values.compactMap { candidate -> LiveContainerMatch? in
+            guard Self.container(candidate, matches: semanticContainer),
+                  let view = liveScrollableContainerView(forPath: candidate.path) else { return nil }
+            return LiveContainerMatch(path: candidate.path, view: view)
         }
-        guard matchingViews.count == 1, let scrollView = matchingViews.first else { return nil }
-        guard let parent else { return scrollView }
-        guard scrollableContainerViewsByPath.values.contains(where: { $0 === parent }) else { return nil }
-        return scrollView.nearestScrollableSuperview === parent ? scrollView : nil
+        if let parent {
+            guard scrollableContainerViewsByPath.values.contains(where: { $0 === parent }) else { return nil }
+            matches = matches.filter { match in
+                match.view.nearestScrollableSuperview === parent
+                    || (match.view === parent && livePathHasAncestor(match.path, backedBy: parent))
+            }
+        }
+        guard matches.count == 1 else { return nil }
+        return matches[0].view
+    }
+
+    private func livePathHasAncestor(_ path: TreePath, backedBy scrollView: UIScrollView) -> Bool {
+        var ancestor = path.parent
+        while let current = ancestor {
+            if liveScrollableContainerView(forPath: current) === scrollView {
+                return true
+            }
+            ancestor = current.parent
+        }
+        return false
     }
 
     private func dispatchObject(for treeElement: InterfaceTree.Element) -> NSObject? {
@@ -160,13 +177,15 @@ extension TheStash {
 
     private static func container(
         _ candidate: InterfaceTree.Container,
-        aliases semanticContainer: InterfaceTree.Container
+        matches semanticContainer: InterfaceTree.Container
     ) -> Bool {
-        if let name = semanticContainer.containerName {
-            return candidate.containerName == name
-        }
-        return candidate.path == semanticContainer.path
-            && candidate.container == semanticContainer.container
+        candidate.container.containerPredicateFacts == semanticContainer.container.containerPredicateFacts
+            && candidate.container.scrollableContentSize == semanticContainer.container.scrollableContentSize
+            && viewportSize(of: candidate) == viewportSize(of: semanticContainer)
+    }
+
+    private static func viewportSize(of container: InterfaceTree.Container) -> CGSize {
+        container.contentFrame?.cgRect.size ?? container.container.frame.cgRect.size
     }
 
     private static func isUsableFrame(_ frame: CGRect) -> Bool {
@@ -181,6 +200,11 @@ extension TheStash {
     private static func isUsablePoint(_ point: CGPoint) -> Bool {
         point.x.isFinite && point.y.isFinite
     }
+}
+
+private struct LiveContainerMatch {
+    let path: TreePath
+    let view: UIScrollView
 }
 
 private extension UIView {
