@@ -13,7 +13,6 @@ package struct HeistExecutionEvidenceRollup: Sendable, Equatable {
     package let events: [HeistExecutionEvidenceEvent]
     package let summary: HeistExecutionEvidenceSummary
     package let actions: HeistExecutionActionEvidenceRollup
-    package let warnings: [HeistExecutionWarning]
     package let metrics: HeistExecutionMetricProjection
     package let firstFailedStep: HeistExecutionStepResult?
     package let failureScreenshotStep: HeistExecutionStepResult?
@@ -67,7 +66,6 @@ package struct HeistExecutionEvidenceRollup: Sendable, Equatable {
             reportedResults: accumulator.reportedResults,
             traceResultsInExecutionOrder: accumulator.traceResultsInExecutionOrder
         )
-        warnings = accumulator.warnings
         metrics = HeistExecutionMetricProjection(
             samples: accumulator.metricBuilder.samples,
             ceilings: accumulator.metricBuilder.ceilings
@@ -129,7 +127,6 @@ package enum HeistExecutionEvidenceEvent: Sendable, Equatable {
 private struct HeistExecutionEvidenceAccumulator {
     var nodes: [HeistExecutionEvidenceNode] = []
     var events: [HeistExecutionEvidenceEvent] = []
-    var warnings: [HeistExecutionWarning] = []
     var firstFailedStep: HeistExecutionStepResult?
     var executedNodeCount = 0
     var expectationsChecked = 0
@@ -184,9 +181,6 @@ private struct HeistExecutionEvidenceAccumulator {
         case .nodeVisited(let node):
             nodes.append(node)
             executedNodeCount += node.isExecuted ? 1 : 0
-            if let warning = node.reportFacts.warning {
-                warnings.append(warning)
-            }
             metricBuilder.appendMetrics(for: node)
         case .dispatchedActionResult(_, let result):
             dispatchedResults.append(result)
@@ -897,6 +891,6 @@ public extension HeistExecutionResult {
 
     /// Warnings emitted by executed `Warn(...)` steps, in execution order.
     var warnings: [HeistExecutionWarning] {
-        evidenceRollup.warnings
+        evidenceRollup.nodes.compactMap(\.reportFacts.warning)
     }
 }

@@ -152,7 +152,7 @@ struct CartView: View {
 
 private struct CartItemRow: View {
     let item: CartItem
-    let onQuantityChange: (Int) -> Void
+    let onQuantityChange: @MainActor (Int) -> Void
 
     var body: some View {
         HStack(spacing: 12) {

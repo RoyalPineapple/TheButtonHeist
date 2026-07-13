@@ -236,7 +236,7 @@ struct ModalPermutationsDemo: View {
 private struct StackedSheetContent: View {
     let level: Int
     let showAlertAtLevel2: Bool
-    let onClose: () -> Void
+    let onClose: @MainActor () -> Void
 
     @State private var nextLevel: Int?
     @State private var showAlert = false

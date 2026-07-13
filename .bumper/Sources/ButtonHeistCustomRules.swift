@@ -765,7 +765,7 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
                 message: "raw [String: HeistValue] in \(enclosingDeclarationDescription(of: node))",
                 evidence: ViolationEvidence(
                     observed: node.trimmedDescription,
-                    expectation: "raw command objects exist only at HeistValue decoding and CommandArgumentEnvelope admission"
+                    expectation: "raw HeistValue objects exist only at named JSON, schema, CLI, and command-admission boundaries"
                 )
             )
         )
@@ -1481,6 +1481,14 @@ private let startupConfigurationBoundaryPath =
 private let heistValueBoundaryPath =
     "ButtonHeist/Sources/TheScore/Wire/HeistValue.swift"
 
+private let rawHeistValueBoundaryPaths: Set<String> = [
+    "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceParameter+Schema.swift",
+    "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+PredicatePayloadValidation.swift",
+    "ButtonHeistCLI/Sources/Support/CLICommandContract.swift",
+    "ButtonHeistCLI/Sources/Support/CLIRequestBuilder.swift",
+    "ButtonHeistCLI/Sources/Support/CLIUtilities.swift",
+]
+
 private let unsafeNonisolatedSPIBoundaryPath =
     "ButtonHeist/Sources/TheInsideJob/TheSafecracker/TheSafecracker+IOHIDEventBuilder.swift"
 
@@ -1966,6 +1974,9 @@ private func isAllowedRawHeistValueDictionary(
 ) -> Bool {
     if path == heistValueBoundaryPath {
         return enclosingNominalType(of: node) == "HeistValue"
+    }
+    if rawHeistValueBoundaryPaths.contains(path) {
+        return true
     }
     guard path == commandArgumentBoundaryPath else { return false }
     return enclosingNominalType(of: node) == "CommandArgumentEnvelope"

@@ -189,7 +189,7 @@ struct PlaylistView: View {
 // MARK: - Library Board
 
 private struct MusicLibraryBoard: View {
-    let onSelect: (LibraryBoardTile) -> Void
+    let onSelect: @MainActor (LibraryBoardTile) -> Void
 
     private let columns = Array(
         repeating: GridItem(.fixed(160), spacing: 12, alignment: .top),
@@ -246,8 +246,8 @@ private struct MusicLibraryBoard: View {
 private struct SongRow: View {
     let song: Song
     let isPlaying: Bool
-    let onTap: () -> Void
-    let onLike: () -> Void
+    let onTap: @MainActor () -> Void
+    let onLike: @MainActor () -> Void
 
     var body: some View {
         Button(action: onTap) {
