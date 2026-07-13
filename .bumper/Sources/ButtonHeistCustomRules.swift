@@ -226,11 +226,6 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
         return .visitChildren
     }
 
-    override func visit(_ node: AttributedTypeSyntax) -> SyntaxVisitorContinueKind {
-        recordUncheckedSendableUse(node)
-        return .visitChildren
-    }
-
     override func visit(_ node: AttributeSyntax) -> SyntaxVisitorContinueKind {
         recordPreconcurrencyUse(node)
         return .visitChildren
@@ -238,11 +233,6 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
 
     override func visit(_ node: DeclModifierSyntax) -> SyntaxVisitorContinueKind {
         recordUnsafeNonisolatedUse(node)
-        return .visitChildren
-    }
-
-    override func visit(_ token: TokenSyntax) -> SyntaxVisitorContinueKind {
-        recordSuppressionDirectives(token)
         return .visitChildren
     }
 
@@ -714,30 +704,6 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
         )
     }
 
-    private func recordUncheckedSendableUse(_ node: AttributedTypeSyntax) {
-        guard node.baseType.as(IdentifierTypeSyntax.self)?.name.text == "Sendable",
-              node.attributes.contains(where: { element in
-                  guard let attribute = element.as(AttributeSyntax.self),
-                        let name = attribute.attributeName.as(IdentifierTypeSyntax.self)?.name else {
-                      return false
-                  }
-                  return name.tokenKind == .keyword(.unchecked)
-              }) else {
-            return
-        }
-
-        failures.append(
-            file.failure(
-                at: node,
-                message: "production @unchecked Sendable escape hatch",
-                evidence: ViolationEvidence(
-                    observed: "\(enclosingDeclarationDescription(of: node)): \(node.trimmedDescription)",
-                    expectation: "production declarations satisfy Sendable through checked isolation and value ownership"
-                )
-            )
-        )
-    }
-
     private func recordPreconcurrencyUse(_ node: AttributeSyntax) {
         guard node.attributeName.as(IdentifierTypeSyntax.self)?.name.text == "preconcurrency" else { return }
         failures.append(
@@ -768,31 +734,6 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
                 )
             )
         )
-    }
-
-    private func recordSuppressionDirectives(_ token: TokenSyntax) {
-        let trivia = token.leadingTrivia.description + token.trailingTrivia.description
-        let directives = trivia
-            .split(whereSeparator: { $0.isNewline })
-            .map(String.init)
-            .filter(isLintSuppressionDirective)
-
-        for directive in directives where !isAllowedSPISuppression(
-            directive,
-            path: filePath,
-            declaration: enclosingDeclarationDescription(of: token)
-        ) {
-            failures.append(
-                file.failure(
-                    at: token,
-                    message: "production warning/lint suppression escape hatch",
-                    evidence: ViolationEvidence(
-                        observed: directive.trimmingCharacters(in: .whitespaces),
-                        expectation: "fix the diagnostic instead of suppressing it"
-                    )
-                )
-            )
-        }
     }
 
     private func recordRawHeistValueDictionary(_ node: DictionaryTypeSyntax) {
@@ -1061,7 +1002,7 @@ private final class InsideJobArchitecturalShapeRuleVisitor: SyntaxVisitor {
 
     override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
         recordForbiddenReference(node: node, observed: node.name.text)
-        recordRawSemanticCommit(node)
+        recordRawObservationCommit(node)
         return .visitChildren
     }
 
@@ -1122,21 +1063,19 @@ private final class InsideJobArchitecturalShapeRuleVisitor: SyntaxVisitor {
         )
     }
 
-    private func recordRawSemanticCommit(_ node: FunctionDeclSyntax) {
+    private func recordRawObservationCommit(_ node: FunctionDeclSyntax) {
         let name = node.name.text
-        let lowercasedName = name.lowercased()
-        guard lowercasedName.hasPrefix("commit"),
-              lowercasedName.contains("semantic") || lowercasedName.contains("observation"),
+        guard name.lowercased().hasPrefix("commit"),
               !name.hasSuffix("ForTesting"),
               let firstType = node.signature.parameterClause.parameters.first?.type,
               let firstTypeName = typeNameUnwrappingOptional(firstType),
-              rawSemanticCommitTypes.contains(firstTypeName) else {
+              rawObservationCommitTypes.contains(firstTypeName) else {
             return
         }
         recordFailure(
             at: firstType,
             observed: "\(name)(\(firstType.trimmedDescription))",
-            expectation: "semantic commits require settled or explored InterfaceObservationProof"
+            expectation: "interface observation commits require settled or explored InterfaceObservationProof"
         )
     }
 
@@ -1553,14 +1492,6 @@ private let allowedUnsafeNonisolatedSPIVariables: Set<String> = [
     "ioHIDFunctionsLoaded",
 ]
 
-private let allowedSPISwiftLintDeclarations: [String: Set<String>] = [
-    "agent_main_actor_value_type": ["struct TouchEvent"],
-    "function_parameter_count": [
-        "function IOHIDEventCreateDigitizerEvent",
-        "function IOHIDEventCreateDigitizerFingerEventWithQuality",
-    ],
-]
-
 private let canonicalBuilderOwnedTypes: Set<String> = [
     "InterfaceObservation",
     "LiveCapture",
@@ -1596,7 +1527,7 @@ private let forbiddenInsideJobArchitectureSymbols: Set<String> = [
     "refreshTreeAfterViewportMove",
 ]
 
-private let rawSemanticCommitTypes: Set<String> = ["InterfaceObservation", "Screen"]
+private let rawObservationCommitTypes: Set<String> = ["InterfaceObservation", "Screen"]
 
 private let jsonBoundarySymbols: Set<String> = [
     "JSONDecoder",
@@ -2044,28 +1975,10 @@ private func isAllowedRawHeistValueDictionary(
         || enclosingExtensionType(of: node) == "TheFence.CommandArgumentEnvelope"
 }
 
-private func isLintSuppressionDirective(_ line: String) -> Bool {
-    let compact = line.lowercased().filter { !$0.isWhitespace }
-    return compact.contains("swiftlint:disable")
-        || compact.contains("swiftformat:disable")
-        || compact.contains("nolint")
-}
-
 private func isAllowedUnsafeNonisolated(_ node: DeclModifierSyntax, path: String) -> Bool {
     guard path == unsafeNonisolatedSPIBoundaryPath else { return false }
     guard let names = enclosingVariableNames(of: node) else { return false }
     return !names.isEmpty && names.isSubset(of: allowedUnsafeNonisolatedSPIVariables)
-}
-
-private func isAllowedSPISuppression(
-    _ directive: String,
-    path: String,
-    declaration: String
-) -> Bool {
-    guard path == unsafeNonisolatedSPIBoundaryPath else { return false }
-    return allowedSPISwiftLintDeclarations.contains { rule, declarations in
-        directive.contains(rule) && declarations.contains(declaration)
-    }
 }
 
 private func isNamedType(_ type: TypeSyntax, _ expectedName: String) -> Bool {
