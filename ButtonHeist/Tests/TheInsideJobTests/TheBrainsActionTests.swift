@@ -34,6 +34,15 @@ private final class ActionActivatingTextField: UITextField {
     }
 }
 
+private final class ResignationTrackingTextField: UITextField {
+    private(set) var resignationCount = 0
+
+    override func resignFirstResponder() -> Bool {
+        resignationCount += 1
+        return super.resignFirstResponder()
+    }
+}
+
 @MainActor
 private final class ActionTextInputKeyboardImpl: NSObject {
     @MainActor
@@ -585,13 +594,14 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testActionsExecuteIncrementUsesMatcherTargetBeforeLiveResolution() async throws {
+        let heistId: HeistId = "quantity_stepper"
         let sourceElement = makeElement(
             label: "Quantity",
             value: "0",
             identifier: "quantity_stepper",
             traits: .adjustable
         )
-        let sourceScreen = InterfaceObservation.makeForTests(elements: [(sourceElement, HeistId(rawValue: "quantity_0"))])
+        let sourceScreen = InterfaceObservation.makeForTests(elements: [(sourceElement, heistId)])
         let currentElement = makeElement(
             label: "Quantity",
             value: "1",
@@ -603,8 +613,8 @@ final class TheBrainsActionTests: XCTestCase {
             activationPoint: CGPoint(x: 170, y: 202)
         )
         brains.stash.installScreenForTesting(.makeForTests(
-            elements: [(currentElement, HeistId(rawValue: "quantity_1"))],
-            objects: [HeistId(rawValue: "quantity_1"): liveObject]
+            elements: [(currentElement, heistId)],
+            objects: [heistId: liveObject]
         ))
         let target = try matcherTarget(label: "Quantity", in: sourceScreen)
 
@@ -616,13 +626,14 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testActionsExecuteIncrementUsesAccessibilityGeometryWhenObjectFrameIsMissing() async throws {
+        let heistId: HeistId = "quantity_stepper"
         let sourceElement = makeElement(
             label: "Quantity",
             value: "0",
             identifier: "quantity_stepper",
             traits: .adjustable
         )
-        let sourceScreen = InterfaceObservation.makeForTests(elements: [(sourceElement, HeistId(rawValue: "quantity_0"))])
+        let sourceScreen = InterfaceObservation.makeForTests(elements: [(sourceElement, heistId)])
         let currentElement = makeElement(
             label: "Quantity",
             value: "1",
@@ -631,8 +642,8 @@ final class TheBrainsActionTests: XCTestCase {
         )
         let liveObject = AdjustableGeometryView(frame: .zero, activationPoint: CGPoint(x: 170, y: 202))
         brains.stash.installScreenForTesting(.makeForTests(
-            elements: [(currentElement, HeistId(rawValue: "quantity_1"))],
-            objects: [HeistId(rawValue: "quantity_1"): liveObject]
+            elements: [(currentElement, heistId)],
+            objects: [heistId: liveObject]
         ))
         let target = try matcherTarget(label: "Quantity", in: sourceScreen)
 
@@ -3266,47 +3277,48 @@ final class TheBrainsActionTests: XCTestCase {
         ])
     }
 
-    func testActionsExecuteIncrementUsesFreshLiveTargetForStaleSemanticCapture() async throws {
-        let rootView = UIView(frame: UIScreen.main.bounds)
-        rootView.backgroundColor = .white
-        let liveObject = AdjustableGeometryView(
-            frame: CGRect(x: 80, y: 180, width: 180, height: 44),
-            activationPoint: CGPoint(x: 170, y: 202)
-        )
-        liveObject.isAccessibilityElement = true
-        liveObject.accessibilityLabel = "Refreshed Slider"
-        liveObject.accessibilityIdentifier = "refreshed_slider"
-        liveObject.accessibilityTraits = .adjustable
-        rootView.addSubview(liveObject)
-
-        let window = try installModalWindow(rootView: rootView)
-        defer {
-            window.rootViewController?.view.accessibilityViewIsModal = false
-            window.isHidden = true
-        }
-        await brains.tripwire.yieldFrames(3)
-
-        let staleElement = AccessibilityElement.make(
+    func testActionsExecuteIncrementReResolvesReplacementObjectForCommittedHeistId() async {
+        let heistId: HeistId = "refreshed_slider"
+        let settledElement = AccessibilityElement.make(
             label: "Refreshed Slider",
             identifier: "refreshed_slider",
             traits: .adjustable,
             frame: CGRect(x: 10, y: 10, width: 120, height: 44),
             respondsToUserInteraction: false
         )
-        brains.stash.installScreenForTesting(.makeForTests(
-            elements: [(staleElement, HeistId(rawValue: "stale_refreshed_slider"))],
-            objects: [HeistId(rawValue: "stale_refreshed_slider"): nil]
-        ))
-        guard let staleResolved = brains.stash.resolveTarget(
+        let refreshedElement = AccessibilityElement.make(
+            label: "Refreshed Slider",
+            identifier: "refreshed_slider",
+            traits: .adjustable,
+            frame: CGRect(x: 80, y: 180, width: 180, height: 44),
+            respondsToUserInteraction: false
+        )
+        let replacementObject = AdjustableGeometryView(
+            frame: refreshedElement.bhFrame,
+            activationPoint: refreshedElement.bhResolvedActivationPoint
+        )
+        do {
+            let deallocatedObject = AdjustableGeometryView(
+                frame: settledElement.bhFrame,
+                activationPoint: settledElement.bhResolvedActivationPoint
+            )
+            installScreen(elements: [(settledElement, heistId)], objects: [heistId: deallocatedObject])
+        }
+
+        guard let committedTarget = brains.stash.resolveTarget(
             literalTarget(ElementPredicate(identifier: "refreshed_slider"))
         ).resolved else {
-            XCTFail("Expected stale semantic target to resolve")
+            XCTFail("Expected committed semantic target to resolve")
             return
         }
-        guard case .objectUnavailable = brains.stash.resolveLiveActionTarget(for: staleResolved) else {
-            XCTFail("Expected stale semantic target to have no live action target")
+        guard case .objectUnavailable = brains.stash.resolveLiveActionTarget(for: committedTarget) else {
+            XCTFail("Expected the settled UIKit evidence to be held weakly")
             return
         }
+        brains.stash.nextVisibleRefreshScreenForTesting = .makeForTests(
+            elements: [(refreshedElement, heistId)],
+            objects: [heistId: replacementObject]
+        )
 
         let result = await brains.actions.executeIncrement(
             literalTarget(ElementPredicate(identifier: "refreshed_slider"))
@@ -3314,37 +3326,32 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertTrue(result.success, result.message ?? "increment failed")
         XCTAssertEqual(result.method, .increment)
-        XCTAssertEqual(liveObject.incrementCount, 1)
+        XCTAssertEqual(committedTarget.heistId, heistId)
+        XCTAssertEqual(result.subjectEvidence?.element.identifier, heistId.rawValue)
+        XCTAssertEqual(replacementObject.incrementCount, 1)
+        XCTAssertEqual(brains.stash.interfaceElement(heistId: heistId)?.element.bhFrame, settledElement.bhFrame)
+        guard case .resolved(let liveTarget) = brains.stash.resolveLiveActionTarget(for: committedTarget) else {
+            XCTFail("Expected replacement live evidence for committed target")
+            return
+        }
+        XCTAssertTrue(liveTarget.object === replacementObject)
+        XCTAssertEqual(liveTarget.frame, refreshedElement.bhFrame)
     }
 
-    func testActionsExecuteActivateRefreshesBeforeSingleActivationAttempt() async throws {
-        let rootView = UIView(frame: UIScreen.main.bounds)
-        rootView.backgroundColor = .white
-        let liveObject = ActionActivationOverrideView(
-            frame: CGRect(x: 80, y: 180, width: 180, height: 44)
+    func testActionsExecuteActivateRefreshesCommittedHeistIdBeforeSingleActivationAttempt() async {
+        let heistId: HeistId = "refresh_activate"
+        let settledElement = AccessibilityElement.make(
+            label: "Refresh Activate",
+            identifier: "refresh_activate",
+            traits: .button,
+            frame: CGRect(x: 40, y: 120, width: 180, height: 44)
         )
-        liveObject.isAccessibilityElement = true
-        liveObject.accessibilityLabel = "Refresh Activate"
-        liveObject.accessibilityIdentifier = "refresh_activate"
-        liveObject.accessibilityTraits = .button
-        rootView.addSubview(liveObject)
-
-        let window = try installModalWindow(rootView: rootView)
-        defer {
-            window.rootViewController?.view.accessibilityViewIsModal = false
-            window.isHidden = true
-        }
-        await brains.tripwire.yieldFrames(3)
-
-        let staleObject = RefusingActivationView()
-        registerScreenElement(
-            heistId: "stale_refresh_activate",
-            element: makeElement(
-                label: "Refresh Activate",
-                identifier: "refresh_activate",
-                traits: .button
-            ),
-            object: staleObject
+        let staleObject = RefusingActivationView(frame: settledElement.bhFrame)
+        let replacementObject = ActionActivationOverrideView(frame: settledElement.bhFrame)
+        installScreen(elements: [(settledElement, heistId)], objects: [heistId: staleObject])
+        brains.stash.nextVisibleRefreshScreenForTesting = .makeForTests(
+            elements: [(settledElement, heistId)],
+            objects: [heistId: replacementObject]
         )
 
         let result = await brains.actions.executeActivate(
@@ -3353,7 +3360,8 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertTrue(result.success, result.message ?? "activate failed")
         XCTAssertEqual(result.method, .activate)
-        XCTAssertEqual(liveObject.activationCount, 1)
+        XCTAssertEqual(result.subjectEvidence?.element.identifier, heistId.rawValue)
+        XCTAssertEqual(replacementObject.activationCount, 1)
         XCTAssertEqual(staleObject.activationCount, 0)
     }
 
@@ -3384,6 +3392,20 @@ final class TheBrainsActionTests: XCTestCase {
         brains.safecracker.keyboardBridgeProvider = { keyboardImpl.bridge() }
         await brains.tripwire.yieldFrames(3)
 
+        let heistId: HeistId = "message_field"
+        let element = AccessibilityElement.make(
+            label: "Message",
+            identifier: heistId.rawValue,
+            traits: .textEntry,
+            frame: textField.frame
+        )
+        let staleTextField = ActionActivatingTextField()
+        installScreen(elements: [(element, heistId)], objects: [heistId: staleTextField])
+        brains.stash.nextVisibleRefreshScreenForTesting = .makeForTests(
+            elements: [(element, heistId)],
+            objects: [heistId: textField]
+        )
+
         XCTAssertFalse(textField.isFirstResponder)
 
         let result = await brains.executeRuntimeAction(.typeText(TypeTextTarget(
@@ -3393,6 +3415,8 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "type_text failed")
         XCTAssertEqual(result.method, .typeText)
+        XCTAssertEqual(result.subjectEvidence?.element.identifier, heistId.rawValue)
+        XCTAssertEqual(staleTextField.activationCount, 0)
         XCTAssertEqual(textField.activationCount, 1)
         XCTAssertTrue(textField.isFirstResponder)
         XCTAssertEqual(textField.text, "hello")
@@ -3479,6 +3503,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "type_text replacement failed")
         XCTAssertEqual(result.method, .typeText)
+        XCTAssertEqual(result.subjectEvidence?.element.identifier, "message_field")
         XCTAssertEqual(textField.text, "b")
         guard case .value(let value) = result.payload else {
             XCTFail("Expected final text value payload, got \(String(describing: result.payload))")
@@ -3523,6 +3548,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "type_text clear failed")
         XCTAssertEqual(result.method, .typeText)
+        XCTAssertEqual(result.subjectEvidence?.element.identifier, "message_field")
         XCTAssertEqual(textField.text, "")
         guard case .value(let value) = result.payload else {
             XCTFail("Expected final text value payload, got \(String(describing: result.payload))")
@@ -3614,6 +3640,8 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .resignFirstResponder)
+        XCTAssertNil(result.subjectEvidence)
+        XCTAssertNil(result.resolvedElementId)
         XCTAssertDiagnostic(result.message, contains: [
             "resign first responder failed",
             "focus=none",
@@ -3621,6 +3649,53 @@ final class TheBrainsActionTests: XCTestCase {
             "activeTextInput=false",
             "try focus a text input before dismissing the keyboard",
         ])
+    }
+
+    func testExecuteResignFirstResponderUsesReplacementObjectForCommittedHeistId() async throws {
+        let rootView = UIView(frame: UIScreen.main.bounds)
+        rootView.backgroundColor = .white
+        let replacementTextField = ResignationTrackingTextField(
+            frame: CGRect(x: 48, y: 180, width: 240, height: 44)
+        )
+        replacementTextField.isAccessibilityElement = true
+        replacementTextField.accessibilityLabel = "Message"
+        replacementTextField.accessibilityIdentifier = "message_field"
+        rootView.addSubview(replacementTextField)
+
+        let window = try installModalWindow(rootView: rootView)
+        defer {
+            window.rootViewController?.view.accessibilityViewIsModal = false
+            window.isHidden = true
+        }
+        XCTAssertTrue(replacementTextField.becomeFirstResponder())
+
+        let heistId: HeistId = "message_field"
+        let element = AccessibilityElement.make(
+            label: "Message",
+            identifier: heistId.rawValue,
+            traits: .textEntry,
+            frame: replacementTextField.frame
+        )
+        let staleTextField = ResignationTrackingTextField(frame: replacementTextField.frame)
+        brains.stash.installScreenForTesting(.makeForTests(
+            elements: [(element, heistId)],
+            objects: [heistId: staleTextField],
+            firstResponderHeistId: heistId
+        ))
+        brains.stash.nextVisibleRefreshScreenForTesting = .makeForTests(
+            elements: [(element, heistId)],
+            objects: [heistId: replacementTextField],
+            firstResponderHeistId: heistId
+        )
+
+        let result = await brains.actions.executeResignFirstResponder()
+
+        XCTAssertTrue(result.success, result.message ?? "resign first responder failed")
+        XCTAssertEqual(result.method, .resignFirstResponder)
+        XCTAssertEqual(staleTextField.resignationCount, 0)
+        XCTAssertEqual(replacementTextField.resignationCount, 1)
+        XCTAssertFalse(replacementTextField.isFirstResponder)
+        XCTAssertEqual(brains.stash.interfaceTree.firstResponderHeistId, heistId)
     }
 
     func testExecuteTapOutsideWindowReportsGestureDispatchState() async {
