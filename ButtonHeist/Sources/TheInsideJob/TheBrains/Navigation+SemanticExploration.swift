@@ -10,6 +10,11 @@ import ThePlans
 
 extension Navigation {
 
+    enum SemanticExplorationScope {
+        case manifestBoundedDiscovery
+        case knownTargetReveal(SemanticObservationDeadline)
+    }
+
     struct ContainerExploration {
         let semanticContainer: InterfaceTree.Container
         let scrollView: UIScrollView
@@ -195,6 +200,7 @@ extension Navigation {
     struct SemanticExploration {
         var screen: InterfaceObservation
         var manifest: ScreenManifest
+        let scope: SemanticExplorationScope
 
         init(
             baseline: InterfaceObservation,
@@ -202,10 +208,35 @@ extension Navigation {
             maxScrollsPerDiscovery: Int = ScreenManifest.maxScrollsPerDiscovery
         ) {
             screen = baseline
+            scope = .manifestBoundedDiscovery
             manifest = ScreenManifest(
                 maxScrollsPerContainer: maxScrollsPerContainer,
                 maxScrollsPerDiscovery: maxScrollsPerDiscovery
             )
+        }
+
+        init(baseline: InterfaceObservation, knownTargetDeadline: SemanticObservationDeadline) {
+            screen = baseline
+            scope = .knownTargetReveal(knownTargetDeadline)
+            manifest = ScreenManifest()
+        }
+
+        var hasTimeRemaining: Bool {
+            switch scope {
+            case .manifestBoundedDiscovery:
+                return true
+            case .knownTargetReveal(let deadline):
+                return deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent())
+            }
+        }
+
+        func cappedAnimatedWait(_ maximum: TimeInterval) -> TimeInterval {
+            switch scope {
+            case .manifestBoundedDiscovery:
+                return maximum
+            case .knownTargetReveal(let deadline):
+                return min(maximum, deadline.remainingSeconds())
+            }
         }
 
         mutating func absorb(_ parsed: InterfaceObservation?) {

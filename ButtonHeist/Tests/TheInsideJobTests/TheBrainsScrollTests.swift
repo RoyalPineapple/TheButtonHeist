@@ -51,6 +51,10 @@ final class TheBrainsScrollTests: XCTestCase {
         return observedPoint
     }
 
+    private func semanticRevealDeadline() -> SemanticObservationDeadline {
+        SemanticObservationDeadline(start: CFAbsoluteTimeGetCurrent(), timeoutSeconds: 10)
+    }
+
     // MARK: - Programmatic Scroll Safety
 
     func testTargetUnavailableScrollFailureMapsToElementNotFoundErrorKind() {
@@ -88,13 +92,25 @@ final class TheBrainsScrollTests: XCTestCase {
                 heistId: staleId
             ),
         ]))
+        let deadline = semanticRevealDeadline()
         let scanTask = Task { @MainActor in
-            await brains.navigation.scanForHeistId(staleId) == nil
+            await brains.navigation.scanForHeistId(staleId, deadline: deadline) == nil
         }
         scanTask.cancel()
 
         let returnedNoProof = await scanTask.value
         XCTAssertTrue(returnedNoProof)
+    }
+
+    func testScanForHeistIdReturnsNoProofWhenDeadlineIsExpired() async {
+        let deadline = SemanticObservationDeadline(
+            start: CFAbsoluteTimeGetCurrent() - 1,
+            timeoutSeconds: 0
+        )
+
+        let result = await brains.navigation.scanForHeistId("stale_action_target", deadline: deadline)
+
+        XCTAssertNil(result)
     }
 
     func testExploreScreenSkipsUIPageViewControllerQueuingScrollView() async throws {
@@ -513,7 +529,9 @@ final class TheBrainsScrollTests: XCTestCase {
         )
         installLiveScrollTarget(visibleEntry, scrollView: scrollView, containerName: "visible_scroll")
 
-        let result = await brains.navigation.elementInflation.revealSemanticTarget(visibleEntry)
+        let result = await brains.navigation.elementInflation.revealSemanticTarget(
+            visibleEntry, deadline: semanticRevealDeadline()
+        )
 
         guard case .alreadyVisible = result else {
             return XCTFail("Expected already-visible no-op, got \(result)")
@@ -554,7 +572,9 @@ final class TheBrainsScrollTests: XCTestCase {
             ]
         ))
 
-        let result = await brains.navigation.elementInflation.revealSemanticTarget(entry)
+        let result = await brains.navigation.elementInflation.revealSemanticTarget(
+            entry, deadline: semanticRevealDeadline()
+        )
 
         guard case .revealed = result else {
             return XCTFail("Expected reused visible id to trigger semantic reveal, got \(result)")
@@ -583,7 +603,9 @@ final class TheBrainsScrollTests: XCTestCase {
         let entry = try XCTUnwrap(
             brains.stash.interfaceTree.findElement(heistId: "settings_button")
         )
-        let result = await brains.navigation.elementInflation.revealSemanticTarget(entry)
+        let result = await brains.navigation.elementInflation.revealSemanticTarget(
+            entry, deadline: semanticRevealDeadline()
+        )
 
         guard case .revealed = result else {
             return XCTFail("Expected semantic reveal to resolve, got \(result)")
@@ -643,7 +665,9 @@ final class TheBrainsScrollTests: XCTestCase {
             scrollView.onSetContentOffset = { scrollOrder.append(ObjectIdentifier($0)) }
         }
 
-        let result = await brains.navigation.elementInflation.revealSemanticTarget(target)
+        let result = await brains.navigation.elementInflation.revealSemanticTarget(
+            target, deadline: semanticRevealDeadline()
+        )
 
         guard case .revealed = result else {
             return XCTFail("Expected exact live containment to reveal the nested target, got \(result)")
@@ -695,7 +719,9 @@ final class TheBrainsScrollTests: XCTestCase {
         )
         brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in nil }
 
-        let result = await brains.navigation.elementInflation.revealSemanticTarget(target)
+        let result = await brains.navigation.elementInflation.revealSemanticTarget(
+            target, deadline: semanticRevealDeadline()
+        )
 
         guard case .failed(.noLiveScrollableAncestor) = result else {
             return XCTFail("Expected the separate-window decoy to fail closed, got \(result)")
@@ -724,7 +750,9 @@ final class TheBrainsScrollTests: XCTestCase {
             ]
         )
 
-        let result = await brains.navigation.elementInflation.revealSemanticTarget(target)
+        let result = await brains.navigation.elementInflation.revealSemanticTarget(
+            target, deadline: semanticRevealDeadline()
+        )
 
         guard case .revealed = result else {
             return XCTFail("Expected duplicate current live identity to preserve the scroll alias, got \(result)")
@@ -770,7 +798,9 @@ final class TheBrainsScrollTests: XCTestCase {
         )
         brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in nil }
 
-        let result = await brains.navigation.elementInflation.revealSemanticTarget(target)
+        let result = await brains.navigation.elementInflation.revealSemanticTarget(
+            target, deadline: semanticRevealDeadline()
+        )
 
         guard case .failed(.noLiveScrollableAncestor) = result else {
             return XCTFail("Expected ambiguous direct children to fail closed, got \(result)")
@@ -802,7 +832,9 @@ final class TheBrainsScrollTests: XCTestCase {
         )
         brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in nil }
 
-        let result = await brains.navigation.elementInflation.revealSemanticTarget(target)
+        let result = await brains.navigation.elementInflation.revealSemanticTarget(
+            target, deadline: semanticRevealDeadline()
+        )
 
         guard case .failed(.noLiveScrollableAncestor) = result else {
             return XCTFail("Expected stale parent evidence to fail closed, got \(result)")
@@ -830,13 +862,91 @@ final class TheBrainsScrollTests: XCTestCase {
         let entry = try XCTUnwrap(
             brains.stash.interfaceTree.findElement(heistId: "settings_button")
         )
-        let result = await brains.navigation.elementInflation.revealSemanticTarget(entry)
+        let result = await brains.navigation.elementInflation.revealSemanticTarget(
+            entry, deadline: semanticRevealDeadline()
+        )
 
         guard case .failed(.noLiveScrollableAncestor) = result else {
             return XCTFail("Expected missing live scroll ancestor failure, got \(result)")
         }
         XCTAssertEqual(scrollView.setContentOffsetAnimations, [])
         XCTAssertEqual(scrollView.contentOffset, .zero)
+    }
+
+    func testKnownTargetRevealReturnsTimedOutInflationFailureBeforeWork() async throws {
+        let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        scrollView.contentSize = CGSize(width: 320, height: 1_600)
+        installScreenWithOffViewport(
+            visible: .init(makeElement(label: "Visible"), heistId: "visible_element"),
+            offscreen: .init(
+                makeElement(label: "Settings"),
+                heistId: "settings_button",
+                contentActivationPoint: CGPoint(x: 0, y: 1_200),
+                scrollView: scrollView
+            ),
+            includeLiveScrollAncestor: false
+        )
+        let entry = try XCTUnwrap(brains.stash.interfaceTree.findElement(heistId: "settings_button"))
+        var knownTargetAttempts = 0
+        brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in
+            knownTargetAttempts += 1
+            return nil
+        }
+        let deadline = SemanticObservationDeadline(
+            start: CFAbsoluteTimeGetCurrent() - 1,
+            timeoutSeconds: 0
+        )
+
+        let state = await brains.navigation.elementInflation.stateAfterReveal(
+            entry,
+            target: literalTarget(ElementPredicate(label: "Settings")),
+            deadline: deadline
+        )
+
+        guard case .failed(let failure) = state else {
+            return XCTFail("Expected typed deadline failure, got \(state)")
+        }
+        XCTAssertEqual(failure.failedStep, .timedOut)
+        XCTAssertEqual(knownTargetAttempts, 0)
+        XCTAssertEqual(scrollView.setContentOffsetAnimations, [])
+    }
+
+    func testKnownTargetRevealReturnsCancelledInflationFailureBeforeWork() async throws {
+        let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        scrollView.contentSize = CGSize(width: 320, height: 1_600)
+        installScreenWithOffViewport(
+            visible: .init(makeElement(label: "Visible"), heistId: "visible_element"),
+            offscreen: .init(
+                makeElement(label: "Settings"),
+                heistId: "settings_button",
+                contentActivationPoint: CGPoint(x: 0, y: 1_200),
+                scrollView: scrollView
+            ),
+            includeLiveScrollAncestor: false
+        )
+        let entry = try XCTUnwrap(brains.stash.interfaceTree.findElement(heistId: "settings_button"))
+        var knownTargetAttempts = 0
+        brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in
+            knownTargetAttempts += 1
+            return nil
+        }
+        let revealTask = Task { @MainActor in
+            await self.brains.navigation.elementInflation.stateAfterReveal(
+                entry,
+                target: literalTarget(ElementPredicate(label: "Settings")),
+                deadline: self.semanticRevealDeadline()
+            )
+        }
+        revealTask.cancel()
+
+        let state = await revealTask.value
+
+        guard case .failed(let failure) = state else {
+            return XCTFail("Expected typed cancellation failure, got \(state)")
+        }
+        XCTAssertEqual(failure.failedStep, .cancelled)
+        XCTAssertEqual(knownTargetAttempts, 0)
+        XCTAssertEqual(scrollView.setContentOffsetAnimations, [])
     }
 
     func testScrollToVisibleUnknownTargetUsesCurrentSemanticDiagnostics() async {

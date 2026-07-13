@@ -27,6 +27,7 @@ extension ElementInflation {
         case noRevealPath
         case staleRefresh
         case cancelled
+        case timedOut
         case geometryNotActionable
         case invalidTransition
     }
@@ -69,6 +70,10 @@ extension ElementInflation {
 
         internal static func cancelled(_ message: String) -> ElementInflationFailure {
             .init(.cancelled, failureKind: .actionFailed, message: message)
+        }
+
+        internal static func timedOut(_ message: String) -> ElementInflationFailure {
+            .init(.timedOut, failureKind: .actionFailed, message: message)
         }
 
         internal static func geometryNotActionable(

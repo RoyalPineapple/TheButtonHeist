@@ -38,8 +38,17 @@ extension ElementInflation {
         }
 
         let settledSequence = stash.latestSettledSemanticObservationEvent?.sequence
-        let reveal = await revealSemanticTarget(treeElement)
-        if case .failed(let failure) = reveal {
+        let reveal = await revealSemanticTarget(treeElement, deadline: deadline)
+        switch reveal {
+        case .cancelled:
+            return .failed(.cancelled(
+                "semantic target reveal was cancelled before the target became actionable"
+            ))
+        case .timedOut:
+            return .failed(.timedOut(
+                "semantic target reveal reached the action deadline before the target became actionable"
+            ))
+        case .failed(let failure):
             switch await awaitTargetRefresh(
                 mode: .revealPath(treeElement: treeElement),
                 after: settledSequence,
@@ -72,6 +81,8 @@ extension ElementInflation {
                         + "; reveal path wait was cancelled before a path appeared"
                 ))
             }
+        case .alreadyVisible, .revealed:
+            break
         }
         return .refreshing(
             target: target,
@@ -134,9 +145,18 @@ extension ElementInflation {
             else { continue }
 
             didAttemptKnownTargetReveal = true
-            let reveal = await revealSemanticTarget(fresh)
-            if case .failed = reveal { continue }
-            return .treeElement(fresh, didReveal: reveal.didReveal)
+            switch await revealSemanticTarget(fresh, deadline: deadline) {
+            case .alreadyVisible:
+                return .treeElement(fresh, didReveal: false)
+            case .revealed:
+                return .treeElement(fresh, didReveal: true)
+            case .failed:
+                continue
+            case .cancelled:
+                return .cancelled
+            case .timedOut:
+                return .timedOut
+            }
         }
 
         return Task.isCancelled ? .cancelled : .timedOut

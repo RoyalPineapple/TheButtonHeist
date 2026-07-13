@@ -33,9 +33,9 @@ final class Navigation {
                     baseline: self.stash.actionDiscoveryBaseline()
                 )
             },
-            revealKnownTarget: { [weak self] heistId in
+            revealKnownTarget: { [weak self] request in
                 guard let self else { return nil }
-                return await self.scanForHeistId(heistId)
+                return await self.scanForHeistId(request.heistId, deadline: request.deadline)
             }
         )
     )

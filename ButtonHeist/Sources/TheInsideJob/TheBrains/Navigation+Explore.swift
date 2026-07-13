@@ -21,8 +21,10 @@ extension Navigation {
         maxScrollsPerContainer: Int? = nil,
         maxScrollsPerDiscovery: Int? = nil
     ) async -> ExploredScreen? {
+        guard !Task.isCancelled else { return nil }
         let startTime = CACurrentMediaTime()
-        guard let settledPage = await settledExplorationPage() else { return nil }
+        guard let settledPage = await settledExplorationPage(),
+              !Task.isCancelled else { return nil }
         var exploration = SemanticExploration(
             baseline: baseline ?? stash.explorationBaseline(),
             maxScrollsPerContainer: maxScrollsPerContainer ?? ScreenManifest.maxScrollsPerContainer,
@@ -37,7 +39,10 @@ extension Navigation {
         }
 
         exploration.addDiscoveredContainers(exploration.screen.orderedContainers.filter { $0.container.isScrollable })
-        if await scanPendingContainers(target: target, exploration: &exploration) != nil {
+        guard !Task.isCancelled else { return nil }
+        let terminal = await scanPendingContainers(target: target, exploration: &exploration)
+        guard !Task.isCancelled else { return nil }
+        if terminal != nil {
             return exploration.finish(startTime: startTime)
         }
 
@@ -72,8 +77,7 @@ extension Navigation {
             start: CFAbsoluteTimeGetCurrent(),
             baselineTripwireSignal: tripwire.tripwireSignal()
         )
-        guard settle.outcome.didSettleCleanly else { return nil }
-        return settle.finalScreen
+        return InterfaceObservationProof.settled(settle, stash: stash)?.screen
     }
 }
 

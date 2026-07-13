@@ -17,9 +17,14 @@ import ThePlans
 @MainActor
 internal final class ElementInflation {
 
+    internal struct KnownTargetRevealRequest {
+        internal let heistId: HeistId
+        internal let deadline: SemanticObservationDeadline
+    }
+
     internal struct Exploration {
         internal var discoverTarget: @MainActor (AccessibilityTarget) async -> Navigation.ExploredScreen?
-        internal var revealKnownTarget: @MainActor (HeistId) async -> Navigation.ExploredScreen?
+        internal var revealKnownTarget: @MainActor (KnownTargetRevealRequest) async -> Navigation.ExploredScreen?
     }
 
     internal struct CommittedElementTarget {
@@ -206,7 +211,7 @@ internal final class ElementInflation {
         return max(2, visited.count + 1)
     }
 
-    private func handoffDeadline(
+    internal func handoffDeadline(
         for treeElement: InterfaceTree.Element
     ) -> SemanticObservationDeadline {
         let tickCount = Self.handoffTickCount(for: treeElement, in: stash.interfaceTree)
