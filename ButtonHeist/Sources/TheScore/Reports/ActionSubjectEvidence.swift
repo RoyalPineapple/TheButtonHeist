@@ -1,6 +1,62 @@
 import ThePlans
 import Foundation
 
+/// Typed account of how the runtime produced the live subject used for dispatch.
+public struct ActionSubjectResolution: Codable, Sendable, Equatable, Hashable {
+    public enum Origin: String, Codable, Sendable, Equatable, Hashable {
+        case visible
+        case known
+        case discovered
+    }
+
+    public enum Adjustment: String, CaseIterable, Codable, Sendable, Equatable, Hashable {
+        case semanticReveal
+        case activationPointPlacement
+        case objectDeallocationRefresh
+        case staleTargetRefresh
+    }
+
+    public let origin: Origin
+    public let adjustments: Set<Adjustment>
+
+    public init(origin: Origin, adjustments: Set<Adjustment> = []) {
+        self.origin = origin
+        self.adjustments = adjustments
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case origin
+        case adjustments
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "ActionSubjectResolution")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let decodedAdjustments = try container.decode([Adjustment].self, forKey: .adjustments)
+        let adjustments = Set(decodedAdjustments)
+        guard adjustments.count == decodedAdjustments.count else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .adjustments,
+                in: container,
+                debugDescription: "ActionSubjectResolution adjustments must be unique"
+            )
+        }
+        self.init(
+            origin: try container.decode(Origin.self, forKey: .origin),
+            adjustments: adjustments
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(origin, forKey: .origin)
+        try container.encode(
+            Adjustment.allCases.filter(adjustments.contains),
+            forKey: .adjustments
+        )
+    }
+}
+
 /// Semantic subject the runtime resolved immediately before dispatching an action.
 ///
 /// This is result evidence, not a replay selector. Offline suggestion tooling can
@@ -20,6 +76,7 @@ public struct ActionSubjectEvidence: Codable, Sendable, Equatable {
     public let phase: Phase
     public let target: AccessibilityTarget
     public let element: HeistElement
+    public let resolution: ActionSubjectResolution
     public let settledObservationSequence: SettledObservationSequence?
 
     public init(
@@ -27,12 +84,14 @@ public struct ActionSubjectEvidence: Codable, Sendable, Equatable {
         phase: Phase = .resolvedBeforeDispatch,
         target: AccessibilityTarget,
         element: HeistElement,
+        resolution: ActionSubjectResolution,
         settledObservationSequence: SettledObservationSequence? = nil
     ) {
         self.source = source
         self.phase = phase
         self.target = target
         self.element = element
+        self.resolution = resolution
         self.settledObservationSequence = settledObservationSequence
     }
 
@@ -41,6 +100,7 @@ public struct ActionSubjectEvidence: Codable, Sendable, Equatable {
         case phase
         case target
         case element
+        case resolution
         case settledObservationSequence
     }
 
@@ -52,6 +112,7 @@ public struct ActionSubjectEvidence: Codable, Sendable, Equatable {
             phase: try container.decode(Phase.self, forKey: .phase),
             target: try container.decode(AccessibilityTarget.self, forKey: .target),
             element: try container.decode(HeistElement.self, forKey: .element),
+            resolution: try container.decode(ActionSubjectResolution.self, forKey: .resolution),
             settledObservationSequence: try container.decodeIfPresent(SettledObservationSequence.self, forKey: .settledObservationSequence)
         )
     }
@@ -62,6 +123,7 @@ public struct ActionSubjectEvidence: Codable, Sendable, Equatable {
         try container.encode(phase, forKey: .phase)
         try container.encode(target, forKey: .target)
         try container.encode(element, forKey: .element)
+        try container.encode(resolution, forKey: .resolution)
         try container.encodeIfPresent(settledObservationSequence, forKey: .settledObservationSequence)
     }
 }

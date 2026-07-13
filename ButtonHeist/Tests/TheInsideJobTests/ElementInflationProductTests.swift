@@ -246,6 +246,10 @@ final class ElementInflationProductTests: XCTestCase {
         XCTAssertEqual(result.method, .activate)
         XCTAssertEqual(result.subjectEvidence?.source, .resolvedSemanticTarget)
         XCTAssertEqual(result.subjectEvidence?.element.identifier, fixture.knownHeistId.rawValue)
+        XCTAssertEqual(
+            result.subjectEvidence?.resolution,
+            ActionSubjectResolution(origin: .known, adjustments: [.semanticReveal])
+        )
         XCTAssertEqual(fixture.target.activationCount, 1)
         XCTAssertTrue(fixture.scrollView.didReceiveRevealRequest)
     }
@@ -321,6 +325,10 @@ final class ElementInflationProductTests: XCTestCase {
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "visible text field activate failed")
         XCTAssertEqual(result.subjectEvidence?.element.identifier, fixture.knownHeistId.rawValue)
+        XCTAssertEqual(
+            result.subjectEvidence?.resolution,
+            ActionSubjectResolution(origin: .visible)
+        )
         XCTAssertTrue(fixture.target.isFirstResponder)
         XCTAssertEqual(fixture.scrollView.revealRequestCount, 0)
         XCTAssertEqual(result.activationTrace?.axActivateReturned, false)
@@ -472,7 +480,7 @@ final class ElementInflationProductTests: XCTestCase {
         let state = await brains.navigation.elementInflation.stateAfterRefresh(
             target: target,
             treeElement: selected,
-            didReveal: false,
+            resolution: ActionSubjectResolution(origin: .visible),
             method: .activate,
             activationPointPolicy: .liveObjectOnly,
             deadline: SemanticObservationDeadline(start: CFAbsoluteTimeGetCurrent(), timeoutSeconds: 1)
@@ -511,7 +519,7 @@ final class ElementInflationProductTests: XCTestCase {
         let state = await brains.navigation.elementInflation.stateAfterRefresh(
             target: target,
             treeElement: selected,
-            didReveal: false,
+            resolution: ActionSubjectResolution(origin: .visible),
             method: .activate,
             activationPointPolicy: .liveObjectOnly,
             deadline: SemanticObservationDeadline(start: CFAbsoluteTimeGetCurrent(), timeoutSeconds: 1)

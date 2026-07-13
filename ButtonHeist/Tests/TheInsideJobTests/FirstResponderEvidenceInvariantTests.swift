@@ -178,7 +178,8 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
             deadline: SemanticObservationDeadline(
                 start: 0,
                 timeoutSeconds: 1
-            )
+            ),
+            resolution: ActionSubjectResolution(origin: .visible)
         )
 
         let result = await brains.navigation.elementInflation.inflateFirstResponder(

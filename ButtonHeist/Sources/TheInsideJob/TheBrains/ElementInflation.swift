@@ -36,16 +36,19 @@ internal final class ElementInflation {
         private let sourceTarget: AccessibilityTarget
         private let resolvedHeistId: HeistId
         private let deadline: SemanticObservationDeadline
+        private let resolution: ActionSubjectResolution
 
         internal init(_ inflatedTarget: InflatedElementTarget) {
             sourceTarget = inflatedTarget.target
             resolvedHeistId = inflatedTarget.treeElement.heistId
             deadline = inflatedTarget.deadline
+            resolution = inflatedTarget.resolution
         }
 
         internal var target: AccessibilityTarget { sourceTarget }
         internal var heistId: HeistId { resolvedHeistId }
         internal var handoffDeadline: SemanticObservationDeadline { deadline }
+        internal var subjectResolution: ActionSubjectResolution { resolution }
     }
 
     internal let stash: TheStash
@@ -109,18 +112,19 @@ internal final class ElementInflation {
             case .resolving:
                 let nextState: State
                 switch await findTargetInTree(target) {
-                case .success(.visible(let treeElement)):
+                case .success(.visible(let treeElement, let resolution)):
                     nextState = .refreshing(
                         target: target,
                         treeElement: treeElement,
                         deadline: handoffDeadline(for: treeElement),
-                        didReveal: false
+                        resolution: resolution
                     )
-                case .success(.known(let treeElement)):
+                case .success(.known(let treeElement, let resolution)):
                     nextState = .revealing(
                         target: target,
                         treeElement: treeElement,
-                        deadline: handoffDeadline(for: treeElement)
+                        deadline: handoffDeadline(for: treeElement),
+                        resolution: resolution
                     )
                 case .failure(let failure):
                     nextState = .failed(failure)
@@ -130,11 +134,12 @@ internal final class ElementInflation {
                     return .failed(failure)
                 }
 
-            case .revealing(let target, let treeElement, let deadline):
+            case .revealing(let target, let treeElement, let deadline, let resolution):
                 let nextState = await stateAfterReveal(
                     treeElement,
                     target: target,
                     deadline: deadline,
+                    resolution: resolution,
                     transaction: revealTransaction
                 )
                 if let failure = transition(&state, to: nextState) {
@@ -142,11 +147,11 @@ internal final class ElementInflation {
                     return .failed(failure)
                 }
 
-            case .refreshing(let target, let treeElement, let deadline, let didReveal):
+            case .refreshing(let target, let treeElement, let deadline, let resolution):
                 let nextState = await stateAfterRefresh(
                     target: target,
                     treeElement: treeElement,
-                    didReveal: didReveal,
+                    resolution: resolution,
                     method: method,
                     activationPointPolicy: activationPointPolicy,
                     deadline: deadline
@@ -156,10 +161,9 @@ internal final class ElementInflation {
                     return .failed(failure)
                 }
 
-            case .placing(let inflatedTarget, let didReveal):
+            case .placing(let inflatedTarget):
                 let nextState = await stateAfterPlacement(
                     inflatedTarget,
-                    didReveal: didReveal,
                     method: method,
                     transaction: revealTransaction
                 )
@@ -204,12 +208,13 @@ internal final class ElementInflation {
                 target: target.target,
                 treeElement: treeElement,
                 deadline: target.handoffDeadline,
-                didReveal: false
+                resolution: target.subjectResolution
             )
             : .revealing(
                 target: target.target,
                 treeElement: treeElement,
-                deadline: target.handoffDeadline
+                deadline: target.handoffDeadline,
+                resolution: target.subjectResolution
             )
         return await runInflation(
             for: target.target,

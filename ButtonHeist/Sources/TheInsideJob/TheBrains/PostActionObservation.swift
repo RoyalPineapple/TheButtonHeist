@@ -533,15 +533,18 @@ final class PostActionObservation {
     struct ActionOutcomeFailure {
         let errorKind: ErrorKind
         let payload: ActionOutcomePayload
+        let subjectEvidence: ActionSubjectEvidence?
         let activationTrace: ActivationTrace?
 
         init(
             errorKind: ErrorKind,
             payload: ActionOutcomePayload = .none,
+            subjectEvidence: ActionSubjectEvidence? = nil,
             activationTrace: ActivationTrace? = nil
         ) {
             self.errorKind = errorKind
             self.payload = payload
+            self.subjectEvidence = subjectEvidence
             self.activationTrace = activationTrace
         }
     }

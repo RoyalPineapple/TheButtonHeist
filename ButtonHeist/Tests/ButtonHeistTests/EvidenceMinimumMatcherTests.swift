@@ -65,6 +65,7 @@ private func semanticActionResult(
                 source: source,
                 target: target,
                 element: subject,
+                resolution: ActionSubjectResolution(origin: .visible),
                 settledObservationSequence: 1
             )
         )

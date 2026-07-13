@@ -854,7 +854,8 @@ final class TheBrainsActionTests: XCTestCase {
                         subjectEvidence: ActionSubjectEvidence(
                             source: .resolvedSemanticTarget,
                             target: target,
-                            element: subject
+                            element: subject,
+                            resolution: ActionSubjectResolution(origin: .visible)
                         ),
                         warning: .activationWeakAffordance(
                             evidence: #"label="Checkout" traits=[staticText] actions=[activate]"#
@@ -898,7 +899,8 @@ final class TheBrainsActionTests: XCTestCase {
                         subjectEvidence: ActionSubjectEvidence(
                             source: .textInputTarget,
                             target: target,
-                            element: subject
+                            element: subject,
+                            resolution: ActionSubjectResolution(origin: .visible)
                         ),
                         warning: .textEntryWeakAffordance(
                             evidence: #"label="Notes" traits=[staticText] actions=[]"#

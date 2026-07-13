@@ -17,10 +17,7 @@ import TheScore
 struct ActivationPolicy {
 
     enum RefreshResult {
-        case resolved(
-            treeElement: InterfaceTree.Element,
-            liveTarget: TheStash.LiveActionTarget
-        )
+        case resolved(ElementInflation.InflatedElementTarget)
         case failure(TheSafecracker.ActionDispatchOutcome)
     }
 
@@ -32,25 +29,27 @@ struct ActivationPolicy {
 
     @MainActor
     func apply(to _: TheStash.LiveActionTarget) async -> TheSafecracker.ActionDispatchOutcome {
-        let treeElement: InterfaceTree.Element
-        let refreshedLiveTarget: TheStash.LiveActionTarget
+        let refreshedTarget: ElementInflation.InflatedElementTarget
         switch await refreshAndResolve() {
-        case .resolved(let resolvedElement, let liveTarget):
-            treeElement = resolvedElement
-            refreshedLiveTarget = liveTarget
+        case .resolved(let target):
+            refreshedTarget = target
         case .failure(let result):
             return result.withActivationTrace(ActivationTrace(.refreshFailed))
         }
+        let treeElement = refreshedTarget.treeElement
+        let refreshedLiveTarget = refreshedTarget.liveTarget
+        let subjectEvidence = refreshedTarget.subjectEvidence(source: .resolvedSemanticTarget)
 
         let activateOutcome = accessibilityActivate(refreshedLiveTarget)
         if activateOutcome == .success {
             showFingerprint(refreshedLiveTarget.activationPoint)
             let trace = ActivationTrace(.accessibilityActivate)
             if let failure = await textEntryActivationFailure(treeElement, trace) {
-                return failure
+                return failure.withSubjectEvidence(subjectEvidence)
             }
             return .success(
                 method: .activate,
+                subjectEvidence: subjectEvidence,
                 activationTrace: trace
             )
         }
@@ -64,14 +63,19 @@ struct ActivationPolicy {
         ))
         if tapActivationSucceeded {
             if let failure = await textEntryActivationFailure(treeElement, trace) {
-                return failure
+                return failure.withSubjectEvidence(subjectEvidence)
             }
-            return .success(method: .activate, activationTrace: trace)
+            return .success(
+                method: .activate,
+                subjectEvidence: subjectEvidence,
+                activationTrace: trace
+            )
         }
 
         return .failure(
             .activate,
             message: activationFailureMessage(treeElement: treeElement, activateOutcome: activateOutcome),
+            subjectEvidence: subjectEvidence,
             activationTrace: trace
         )
     }

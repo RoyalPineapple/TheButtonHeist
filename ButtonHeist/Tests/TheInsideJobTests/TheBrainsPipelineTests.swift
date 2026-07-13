@@ -201,12 +201,14 @@ final class TheBrainsPipelineTests: XCTestCase {
         let originalEvidence = ActionSubjectEvidence(
             source: .resolvedSemanticTarget,
             target: literalTarget(ElementPredicate(label: "Checkout", traits: [.button])),
-            element: element
+            element: element,
+            resolution: ActionSubjectResolution(origin: .visible)
         )
         let replacementEvidence = ActionSubjectEvidence(
             source: .elementGestureTarget,
             target: literalTarget(ElementPredicate(identifier: "checkout_button")),
-            element: element
+            element: element,
+            resolution: ActionSubjectResolution(origin: .visible)
         )
         let activationTrace = ActivationTrace(.activationPointFallback(
             axActivateReturned: false,
@@ -465,6 +467,7 @@ final class TheBrainsPipelineTests: XCTestCase {
                 frameHeight: 44,
                 actions: [.activate]
             ),
+            resolution: ActionSubjectResolution(origin: .visible),
             settledObservationSequence: before.settledObservationSequence
         )
 
@@ -476,6 +479,46 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "action unexpectedly failed")
+        XCTAssertEqual(result.subjectEvidence, evidence)
+    }
+
+    func testActionFailurePreservesResolvedSubjectEvidence() async {
+        let beforeScreen = makeScreen(elements: [("Delete", .button, "delete_button")])
+        brains.stash.installScreenForTesting(beforeScreen)
+        let before = brains.postActionObservation.captureSemanticState()
+        let target = literalTarget(ElementPredicate(label: "Delete", traits: [.button]))
+        let evidence = ActionSubjectEvidence(
+            source: .resolvedSemanticTarget,
+            target: target,
+            element: HeistElement(
+                description: "Delete",
+                label: "Delete",
+                value: nil,
+                identifier: "delete_button",
+                traits: [.button],
+                frameX: 0,
+                frameY: 0,
+                frameWidth: 100,
+                frameHeight: 44,
+                actions: [.activate]
+            ),
+            resolution: ActionSubjectResolution(
+                origin: .known,
+                adjustments: [.staleTargetRefresh]
+            )
+        )
+
+        let result = await brains.interactionObservation.finishAfterAction(
+            method: .activate,
+            outcome: .failure(.init(
+                errorKind: .actionFailed,
+                subjectEvidence: evidence
+            )),
+            before: before,
+            settleOutcome: settledOutcome(finalScreen: beforeScreen)
+        )
+
+        XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.subjectEvidence, evidence)
     }
 
@@ -2539,6 +2582,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             source: .resolvedSemanticTarget,
             target: target,
             element: TheStash.WireConversion.convert(element),
+            resolution: ActionSubjectResolution(origin: .visible),
             settledObservationSequence: settledObservationSequence
         )
     }

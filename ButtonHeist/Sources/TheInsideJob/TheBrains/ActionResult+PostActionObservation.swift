@@ -191,8 +191,8 @@ private extension PostActionObservation.ActionOutcome {
         switch self {
         case .success(let success):
             return success.subjectEvidence
-        case .failure:
-            return nil
+        case .failure(let failure):
+            return failure.subjectEvidence
         }
     }
 

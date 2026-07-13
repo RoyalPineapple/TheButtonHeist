@@ -44,6 +44,12 @@ extension ElementInflation {
             phase = .committed
         }
 
+        internal var didMove: Bool {
+            movements.values.contains { movement in
+                Navigation.visualOrigin(in: movement.scrollView) != movement.visualOrigin
+            }
+        }
+
         internal func rollBack() {
             guard phase == .active else { return }
             phase = .rolledBack
@@ -68,17 +74,20 @@ extension ElementInflation {
         internal let treeElement: InterfaceTree.Element
         internal let liveTarget: TheStash.LiveActionTarget
         internal let deadline: SemanticObservationDeadline
+        internal let resolution: ActionSubjectResolution
 
         internal init(
             target: AccessibilityTarget,
             treeElement: InterfaceTree.Element,
             liveTarget: TheStash.LiveActionTarget,
-            deadline: SemanticObservationDeadline
+            deadline: SemanticObservationDeadline,
+            resolution: ActionSubjectResolution
         ) {
             self.target = target
             self.treeElement = treeElement
             self.liveTarget = liveTarget
             self.deadline = deadline
+            self.resolution = resolution
         }
     }
 
@@ -93,8 +102,8 @@ extension ElementInflation {
     }
 
     internal enum TreeTargetMatch {
-        case visible(InterfaceTree.Element)
-        case known(InterfaceTree.Element)
+        case visible(InterfaceTree.Element, ActionSubjectResolution)
+        case known(InterfaceTree.Element, ActionSubjectResolution)
     }
 
     internal enum RetryReason: String, CustomStringConvertible, Sendable, Equatable {
@@ -113,6 +122,15 @@ extension ElementInflation {
                 return "the live target no longer matched"
             }
         }
+
+        internal var adjustment: ActionSubjectResolution.Adjustment {
+            switch self {
+            case .objectDeallocated:
+                return .objectDeallocationRefresh
+            case .staleTarget:
+                return .staleTargetRefresh
+            }
+        }
     }
 
     internal enum State: CustomStringConvertible {
@@ -120,15 +138,16 @@ extension ElementInflation {
         case revealing(
             target: AccessibilityTarget,
             treeElement: InterfaceTree.Element,
-            deadline: SemanticObservationDeadline
+            deadline: SemanticObservationDeadline,
+            resolution: ActionSubjectResolution
         )
         case refreshing(
             target: AccessibilityTarget,
             treeElement: InterfaceTree.Element,
             deadline: SemanticObservationDeadline,
-            didReveal: Bool
+            resolution: ActionSubjectResolution
         )
-        case placing(inflatedTarget: InflatedElementTarget, didReveal: Bool)
+        case placing(InflatedElementTarget)
         case inflated(InflatedElementTarget)
         case failed(ElementInflationFailure)
 
@@ -160,12 +179,12 @@ extension ElementInflation {
             switch self {
             case .resolving:
                 return "resolving"
-            case .revealing(_, let treeElement, _):
+            case .revealing(_, let treeElement, _, _):
                 return "revealing(element: \(treeElement.heistId))"
-            case .refreshing(_, let treeElement, _, let didReveal):
-                return "refreshing(element: \(treeElement.heistId), didReveal: \(didReveal))"
-            case .placing(let inflatedTarget, let didReveal):
-                return "placing(element: \(inflatedTarget.treeElement.heistId), didReveal: \(didReveal))"
+            case .refreshing(_, let treeElement, _, _):
+                return "refreshing(element: \(treeElement.heistId))"
+            case .placing(let inflatedTarget):
+                return "placing(element: \(inflatedTarget.treeElement.heistId))"
             case .inflated(let inflatedTarget):
                 return "inflated(element: \(inflatedTarget.treeElement.heistId))"
             case .failed(let failure):
@@ -261,7 +280,7 @@ extension ElementInflation {
     }
 
     internal enum TargetRefreshTerminal {
-        case treeElement(InterfaceTree.Element, didReveal: Bool)
+        case treeElement(InterfaceTree.Element, ActionSubjectResolution)
         case inflated(InflatedElementTarget)
         case failure(ElementInflationFailure)
         case timedOut
@@ -270,12 +289,34 @@ extension ElementInflation {
 }
 
 extension ElementInflation.InflatedElementTarget {
+    internal func adding(
+        _ adjustment: ActionSubjectResolution.Adjustment
+    ) -> ElementInflation.InflatedElementTarget {
+        ElementInflation.InflatedElementTarget(
+            target: target,
+            treeElement: treeElement,
+            liveTarget: liveTarget,
+            deadline: deadline,
+            resolution: resolution.adding(adjustment)
+        )
+    }
+
     @MainActor
     internal func subjectEvidence(source: ActionSubjectEvidence.Source) -> ActionSubjectEvidence {
         ActionSubjectEvidence(
             source: source,
             target: target,
-            element: TheStash.WireConversion.convert(treeElement.element)
+            element: TheStash.WireConversion.convert(treeElement.element),
+            resolution: resolution
+        )
+    }
+}
+
+extension ActionSubjectResolution {
+    internal func adding(_ adjustment: Adjustment) -> ActionSubjectResolution {
+        ActionSubjectResolution(
+            origin: origin,
+            adjustments: adjustments.union([adjustment])
         )
     }
 }

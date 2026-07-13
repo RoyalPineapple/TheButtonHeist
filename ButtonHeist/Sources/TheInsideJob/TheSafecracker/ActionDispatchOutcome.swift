@@ -30,8 +30,12 @@ extension TheSafecracker {
         }
 
         var subjectEvidence: ActionSubjectEvidence? {
-            if case .success(let success) = outcome { return success.subjectEvidence }
-            return nil
+            switch outcome {
+            case .success(let success):
+                return success.subjectEvidence
+            case .failure(let failure):
+                return failure.subjectEvidence
+            }
         }
 
         var resolvedElementId: HeistId? {
@@ -109,6 +113,7 @@ extension TheSafecracker {
         static func failure(
             _ method: ActionMethod,
             message: String,
+            subjectEvidence: ActionSubjectEvidence? = nil,
             activationTrace: ActivationTrace? = nil,
             failureKind: FailureKind = .actionFailed
         ) -> ActionDispatchOutcome {
@@ -117,6 +122,7 @@ extension TheSafecracker {
                 outcome: .failure(ActionDispatchFailure(
                     method: method,
                     kind: failureKind,
+                    subjectEvidence: subjectEvidence,
                     activationTrace: activationTrace
                 ))
             )
@@ -130,8 +136,11 @@ extension TheSafecracker {
                     message: message,
                     outcome: .success(success.withSubjectEvidence(evidence))
                 )
-            case .failure:
-                return self
+            case .failure(let failure):
+                return ActionDispatchOutcome(
+                    message: message,
+                    outcome: .failure(failure.withSubjectEvidence(evidence))
+                )
             }
         }
 
@@ -287,27 +296,52 @@ extension TheSafecracker {
         /// user-facing copy, not a control-flow contract).
         let method: ActionMethod
         let kind: FailureKind
+        let subjectEvidence: ActionSubjectEvidence?
         let activationTrace: ActivationTrace?
         let timing: ActionPerformanceTiming?
 
         init(
             method: ActionMethod,
             kind: FailureKind,
+            subjectEvidence: ActionSubjectEvidence? = nil,
             activationTrace: ActivationTrace? = nil,
             timing: ActionPerformanceTiming? = nil
         ) {
             self.method = method
             self.kind = kind
+            self.subjectEvidence = subjectEvidence
             self.activationTrace = activationTrace
             self.timing = timing
         }
 
+        func withSubjectEvidence(_ evidence: ActionSubjectEvidence) -> ActionDispatchFailure {
+            ActionDispatchFailure(
+                method: method,
+                kind: kind,
+                subjectEvidence: evidence,
+                activationTrace: activationTrace,
+                timing: timing
+            )
+        }
+
         func withActivationTrace(_ trace: ActivationTrace) -> ActionDispatchFailure {
-            ActionDispatchFailure(method: method, kind: kind, activationTrace: trace, timing: timing)
+            ActionDispatchFailure(
+                method: method,
+                kind: kind,
+                subjectEvidence: subjectEvidence,
+                activationTrace: trace,
+                timing: timing
+            )
         }
 
         func withTiming(_ timing: ActionPerformanceTiming) -> ActionDispatchFailure {
-            ActionDispatchFailure(method: method, kind: kind, activationTrace: activationTrace, timing: timing)
+            ActionDispatchFailure(
+                method: method,
+                kind: kind,
+                subjectEvidence: subjectEvidence,
+                activationTrace: activationTrace,
+                timing: timing
+            )
         }
     }
 

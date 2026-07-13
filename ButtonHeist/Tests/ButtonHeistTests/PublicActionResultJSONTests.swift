@@ -297,7 +297,8 @@ final class PublicActionResultJSONTests: XCTestCase {
                 subjectEvidence: ActionSubjectEvidence(
                     source: .resolvedSemanticTarget,
                     target: .predicate(ElementPredicateTemplate(label: "Pay")),
-                    element: subject
+                    element: subject,
+                    resolution: ActionSubjectResolution(origin: .visible)
                 )
             )
         )

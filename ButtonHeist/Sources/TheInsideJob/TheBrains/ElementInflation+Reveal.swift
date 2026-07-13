@@ -9,19 +9,29 @@ extension ElementInflation {
     private enum TargetRefreshMode {
         case revealPath(
             treeElement: InterfaceTree.Element,
-            transaction: RevealTransaction
+            transaction: RevealTransaction,
+            resolution: ActionSubjectResolution
         )
         case liveTarget(
             treeElement: InterfaceTree.Element,
             target: AccessibilityTarget,
-            method: ActionMethod
+            method: ActionMethod,
+            resolution: ActionSubjectResolution
         )
+
+        var resolution: ActionSubjectResolution {
+            switch self {
+            case .revealPath(_, _, let resolution), .liveTarget(_, _, _, let resolution):
+                return resolution
+            }
+        }
     }
 
     private enum TargetRefreshResolution {
-        case treeElement(InterfaceTree.Element, didReveal: Bool)
+        case treeElement(InterfaceTree.Element)
         case liveTarget(InflatedElementTarget)
         case failed(ElementInflationFailure)
+        case retry(RetryReason)
         case missing
     }
 
@@ -29,6 +39,7 @@ extension ElementInflation {
         _ treeElement: InterfaceTree.Element,
         target: AccessibilityTarget,
         deadline: SemanticObservationDeadline,
+        resolution: ActionSubjectResolution,
         transaction: RevealTransaction
     ) async -> State {
         if stash.liveContains(heistId: treeElement.heistId),
@@ -37,7 +48,7 @@ extension ElementInflation {
                 target: target,
                 treeElement: committed,
                 deadline: deadline,
-                didReveal: false
+                resolution: resolution
             )
         }
 
@@ -61,16 +72,20 @@ extension ElementInflation {
                 return .failed(.noRevealPath(semanticRevealFailureMessage(failure, entry: treeElement)))
             }
             switch await awaitTargetRefresh(
-                mode: .revealPath(treeElement: treeElement, transaction: transaction),
+                mode: .revealPath(
+                    treeElement: treeElement,
+                    transaction: transaction,
+                    resolution: resolution
+                ),
                 after: settledSequence,
                 deadline: deadline
             ) {
-            case .treeElement(let resolved, let didReveal):
+            case .treeElement(let resolved, let refreshedResolution):
                 return .refreshing(
                     target: target,
                     treeElement: resolved,
                     deadline: deadline,
-                    didReveal: didReveal
+                    resolution: refreshedResolution
                 )
             case .failure(let refreshFailure):
                 return .failed(refreshFailure)
@@ -79,7 +94,7 @@ extension ElementInflation {
                     target: target,
                     treeElement: inflatedTarget.treeElement,
                     deadline: deadline,
-                    didReveal: false
+                    resolution: inflatedTarget.resolution
                 )
             case .timedOut:
                 return .failed(.noRevealPath(
@@ -99,7 +114,9 @@ extension ElementInflation {
             target: target,
             treeElement: treeElement,
             deadline: deadline,
-            didReveal: reveal.didReveal
+            resolution: reveal.didReveal && transaction.didMove
+                ? resolution.adding(.semanticReveal)
+                : resolution
         )
     }
 
@@ -108,10 +125,16 @@ extension ElementInflation {
         treeElement: InterfaceTree.Element,
         method: ActionMethod,
         after settledSequence: SettledObservationSequence?,
-        deadline: SemanticObservationDeadline
+        deadline: SemanticObservationDeadline,
+        resolution: ActionSubjectResolution
     ) async -> TargetRefreshTerminal {
         await awaitTargetRefresh(
-            mode: .liveTarget(treeElement: treeElement, target: target, method: method),
+            mode: .liveTarget(
+                treeElement: treeElement,
+                target: target,
+                method: method,
+                resolution: resolution
+            ),
             after: settledSequence,
             deadline: deadline
         )
@@ -126,6 +149,7 @@ extension ElementInflation {
     ) async -> TargetRefreshTerminal {
         var sequence = settledSequence
         var didAttemptKnownTargetReveal = false
+        var resolution = mode.resolution
 
         while deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) {
             guard !Task.isCancelled else { return .cancelled }
@@ -138,18 +162,24 @@ extension ElementInflation {
             }
             sequence = event.sequence
 
-            switch targetRefreshResolution(mode: mode, deadline: deadline) {
-            case .treeElement(let visible, let didReveal):
-                return .treeElement(visible, didReveal: didReveal)
+            switch targetRefreshResolution(
+                mode: mode,
+                deadline: deadline,
+                resolution: resolution
+            ) {
+            case .treeElement(let visible):
+                return .treeElement(visible, resolution)
             case .liveTarget(let inflatedTarget):
                 return .inflated(inflatedTarget)
             case .failed(let failure):
                 return .failure(failure)
+            case .retry(let reason):
+                resolution = resolution.adding(reason.adjustment)
             case .missing:
                 break
             }
 
-            guard case .revealPath(let treeElement, let transaction) = mode,
+            guard case .revealPath(let treeElement, let transaction, _) = mode,
                   !didAttemptKnownTargetReveal,
                   let fresh = stash.interfaceElement(heistId: treeElement.heistId),
                   fresh.scrollMembership != nil
@@ -162,9 +192,12 @@ extension ElementInflation {
                 transaction: transaction
             ) {
             case .alreadyVisible:
-                return .treeElement(fresh, didReveal: false)
+                return .treeElement(fresh, resolution)
             case .revealed:
-                return .treeElement(fresh, didReveal: true)
+                return .treeElement(
+                    fresh,
+                    transaction.didMove ? resolution.adding(.semanticReveal) : resolution
+                )
             case .failed:
                 continue
             case .cancelled:
@@ -179,28 +212,30 @@ extension ElementInflation {
 
     private func targetRefreshResolution(
         mode: TargetRefreshMode,
-        deadline: SemanticObservationDeadline
+        deadline: SemanticObservationDeadline,
+        resolution: ActionSubjectResolution
     ) -> TargetRefreshResolution {
         switch mode {
-        case .revealPath(let treeElement, _):
+        case .revealPath(let treeElement, _, _):
             guard stash.liveContains(heistId: treeElement.heistId),
                   let committed = stash.interfaceElement(heistId: treeElement.heistId)
             else { return .missing }
-            return .treeElement(committed, didReveal: false)
+            return .treeElement(committed)
 
-        case .liveTarget(let treeElement, let target, let method):
+        case .liveTarget(let treeElement, let target, let method, _):
             switch resolveCurrentLiveElementTarget(
                 treeElement: treeElement,
                 target: target,
                 method: method,
-                deadline: deadline
+                deadline: deadline,
+                resolution: resolution
             ) {
             case .success(let inflatedTarget):
                 return .liveTarget(inflatedTarget)
             case .failure(let failure):
                 return .failed(failure)
-            case .retry:
-                return .missing
+            case .retry(let reason):
+                return .retry(reason)
             }
         }
     }

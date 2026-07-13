@@ -283,7 +283,8 @@ import TheScore
                 subjectEvidence: ActionSubjectEvidence(
                     source: .resolvedSemanticTarget,
                     target: .predicate(.label("Checkout")),
-                    element: element(label: "Checkout", traits: [.button], actions: [.activate])
+                    element: element(label: "Checkout", traits: [.button], actions: [.activate]),
+                    resolution: ActionSubjectResolution(origin: .visible)
                 )
             )
         )
