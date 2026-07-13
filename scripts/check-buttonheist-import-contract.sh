@@ -128,14 +128,19 @@ build_fixture \
     --sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" \
     -Xswiftc -DDEBUG
 
-RAW_DSL_PROBE_DIR="$SCRATCH_PATH/buttonheist-dsl-raw-symbol-probe"
-mkdir -p "$RAW_DSL_PROBE_DIR/Sources/ButtonHeistDSLRawSymbolProbe"
-cat > "$RAW_DSL_PROBE_DIR/Package.swift" <<EOF
+NEGATIVE_DSL_PROBE_DIR="$SCRATCH_PATH/buttonheist-dsl-negative-import-probes"
+NEGATIVE_BUTTONHEIST_PROBE_DIR="$SCRATCH_PATH/buttonheist-negative-import-probes"
+mkdir -p \
+    "$NEGATIVE_DSL_PROBE_DIR/Sources/ButtonHeistDSLRawSymbolProbe" \
+    "$NEGATIVE_DSL_PROBE_DIR/Sources/ButtonHeistDSLNegativeTheScoreImportProbe" \
+    "$NEGATIVE_BUTTONHEIST_PROBE_DIR/Sources/ButtonHeistNegativeTheInsideJobImportProbe" \
+    "$NEGATIVE_BUTTONHEIST_PROBE_DIR/Sources/ButtonHeistNegativeTestingImportProbe"
+cat > "$NEGATIVE_DSL_PROBE_DIR/Package.swift" <<EOF
 // swift-tools-version: 6.0
 import PackageDescription
 
 let package = Package(
-    name: "ButtonHeistDSLRawSymbolProbe",
+    name: "ButtonHeistDSLNegativeImportProbes",
     platforms: [.macOS(.v14)],
     dependencies: [
         .package(name: "ButtonHeist", path: "$REPO_ROOT")
@@ -147,11 +152,46 @@ let package = Package(
                 .product(name: "ButtonHeistDSL", package: "ButtonHeist")
             ],
             swiftSettings: [.swiftLanguageMode(.v6)]
+        ),
+        .executableTarget(
+            name: "ButtonHeistDSLNegativeTheScoreImportProbe",
+            dependencies: [
+                .product(name: "ButtonHeistDSL", package: "ButtonHeist")
+            ],
+            swiftSettings: [.swiftLanguageMode(.v6)]
         )
     ]
 )
 EOF
-cat > "$RAW_DSL_PROBE_DIR/Sources/ButtonHeistDSLRawSymbolProbe/main.swift" <<'EOF'
+cat > "$NEGATIVE_BUTTONHEIST_PROBE_DIR/Package.swift" <<EOF
+// swift-tools-version: 6.0
+import PackageDescription
+
+let package = Package(
+    name: "ButtonHeistNegativeImportProbes",
+    platforms: [.macOS(.v14)],
+    dependencies: [
+        .package(name: "ButtonHeist", path: "$REPO_ROOT")
+    ],
+    targets: [
+        .executableTarget(
+            name: "ButtonHeistNegativeTheInsideJobImportProbe",
+            dependencies: [
+                .product(name: "ButtonHeist", package: "ButtonHeist")
+            ],
+            swiftSettings: [.swiftLanguageMode(.v6)]
+        ),
+        .executableTarget(
+            name: "ButtonHeistNegativeTestingImportProbe",
+            dependencies: [
+                .product(name: "ButtonHeist", package: "ButtonHeist")
+            ],
+            swiftSettings: [.swiftLanguageMode(.v6)]
+        )
+    ]
+)
+EOF
+cat > "$NEGATIVE_DSL_PROBE_DIR/Sources/ButtonHeistDSLRawSymbolProbe/main.swift" <<'EOF'
 import ButtonHeistDSL
 
 let command = HeistActionCommand.takeScreenshot
@@ -160,50 +200,49 @@ let compiler = HeistPlanSourceCompiler()
 let planning = HeistPlanning.rejectRawStructuredJSONIRSourceFieldsResult
 _ = (step, compiler, planning)
 EOF
+cat > "$NEGATIVE_BUTTONHEIST_PROBE_DIR/Sources/ButtonHeistNegativeTheInsideJobImportProbe/main.swift" <<'EOF'
+import TheInsideJob
 
-if build_fixture "negative ButtonHeistDSL raw symbol probe" "$RAW_DSL_PROBE_DIR"; then
-    fail "ButtonHeistDSL import exposed raw ThePlans symbols"
-fi
-
-negative_import_probe() {
-    local product="$1"
-    local disallowed_import="$2"
-    local probe_name="$3"
-    local probe_dir="$SCRATCH_PATH/$probe_name"
-    mkdir -p "$probe_dir/Sources/$probe_name"
-
-    cat > "$probe_dir/Package.swift" <<EOF
-// swift-tools-version: 6.0
-import PackageDescription
-
-let package = Package(
-    name: "$probe_name",
-    platforms: [.macOS(.v14)],
-    dependencies: [
-        .package(name: "ButtonHeist", path: "$REPO_ROOT")
-    ],
-    targets: [
-        .executableTarget(
-            name: "$probe_name",
-            dependencies: [
-                .product(name: "$product", package: "ButtonHeist")
-            ],
-            swiftSettings: [.swiftLanguageMode(.v6)]
-        )
-    ]
-)
+print("TheInsideJob must not be importable through ButtonHeist")
 EOF
-    cat > "$probe_dir/Sources/$probe_name/main.swift" <<EOF
-import $disallowed_import
+cat > "$NEGATIVE_BUTTONHEIST_PROBE_DIR/Sources/ButtonHeistNegativeTestingImportProbe/main.swift" <<'EOF'
+import ButtonHeistTesting
 
-print("$disallowed_import must not be importable through $product")
+print("ButtonHeistTesting must not be importable through ButtonHeist")
+EOF
+cat > "$NEGATIVE_DSL_PROBE_DIR/Sources/ButtonHeistDSLNegativeTheScoreImportProbe/main.swift" <<'EOF'
+import TheScore
+
+print("TheScore must not be importable through ButtonHeistDSL")
 EOF
 
-    if build_fixture "negative $product -> $disallowed_import import probe" "$probe_dir"; then
-        fail "$product exposed disallowed import $disallowed_import"
+negative_probe() {
+    local label="$1"
+    local probe_dir="$2"
+    local target="$3"
+    local failure="$4"
+    if build_fixture "$label" "$probe_dir" --target "$target"; then
+        fail "$failure"
     fi
 }
 
-negative_import_probe "ButtonHeist" "TheInsideJob" "ButtonHeistNegativeTheInsideJobImportProbe"
-negative_import_probe "ButtonHeist" "ButtonHeistTesting" "ButtonHeistNegativeTestingImportProbe"
-negative_import_probe "ButtonHeistDSL" "TheScore" "ButtonHeistDSLNegativeTheScoreImportProbe"
+negative_probe \
+    "negative ButtonHeistDSL raw symbol probe" \
+    "$NEGATIVE_DSL_PROBE_DIR" \
+    "ButtonHeistDSLRawSymbolProbe" \
+    "ButtonHeistDSL import exposed raw ThePlans symbols"
+negative_probe \
+    "negative ButtonHeist -> TheInsideJob import probe" \
+    "$NEGATIVE_BUTTONHEIST_PROBE_DIR" \
+    "ButtonHeistNegativeTheInsideJobImportProbe" \
+    "ButtonHeist exposed disallowed import TheInsideJob"
+negative_probe \
+    "negative ButtonHeist -> ButtonHeistTesting import probe" \
+    "$NEGATIVE_BUTTONHEIST_PROBE_DIR" \
+    "ButtonHeistNegativeTestingImportProbe" \
+    "ButtonHeist exposed disallowed import ButtonHeistTesting"
+negative_probe \
+    "negative ButtonHeistDSL -> TheScore import probe" \
+    "$NEGATIVE_DSL_PROBE_DIR" \
+    "ButtonHeistDSLNegativeTheScoreImportProbe" \
+    "ButtonHeistDSL exposed disallowed import TheScore"
