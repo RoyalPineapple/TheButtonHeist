@@ -110,7 +110,7 @@ struct InterfaceObservationProof {
         self.screen = screen
     }
 
-    static func settled(
+    @MainActor static func settled(
         _ outcome: SettleSession.Outcome,
         stash: TheStash
     ) -> InterfaceObservationProof? {
