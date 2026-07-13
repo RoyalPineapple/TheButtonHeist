@@ -88,6 +88,7 @@ import TheScore
               "kind": "fail",
               "status": "passed",
               "durationMs": 1,
+              "evidence": null,
               "failure": {
                 "category": "explicitFailure",
                 "contract": "Fail",
@@ -104,6 +105,80 @@ import TheScore
             json,
             containing: "Unknown heist execution step result field"
         )
+    }
+
+    @Test func `decode rejects fields incompatible with tagged step outcome`() throws {
+        let invalidOutcomes = [
+            (
+                #"{"type":"passed","failure":{},"children":[]}"#,
+                "passed heist execution step outcome cannot include failure"
+            ),
+            (
+                #"{"type":"failed","abortedAtChildPath":"$.body[0]","failure":{},"children":[]}"#,
+                "failed heist execution step outcome cannot include abortedAtChildPath"
+            ),
+            (
+                #"{"type":"skipped","evidence":{},"children":[]}"#,
+                "skipped heist execution step outcome cannot include evidence"
+            ),
+            (
+                #"{"type":"child_aborted","status":"failed","children":[]}"#,
+                "Unknown heist execution step outcome field \"status\""
+            ),
+        ]
+
+        for (outcome, expectedError) in invalidOutcomes {
+            let json = """
+            {
+              "steps": [
+                {
+                  "path": "$.body[0]",
+                  "kind": "fail",
+                  "durationMs": 1,
+                  "outcome": \(outcome)
+                }
+              ],
+              "durationMs": 1
+            }
+            """
+
+            try expectReceiptDecodeError(json, containing: expectedError)
+        }
+    }
+
+    @Test func `decode rejects malformed action evidence enum shapes`() throws {
+        let data = try HeistReceiptCodec.encode(sampleReceipt(), format: .json)
+        let receipt = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let steps = try #require(receipt["steps"] as? [[String: Any]])
+        let step = try #require(steps.first)
+        let outcome = try #require(step["outcome"] as? [String: Any])
+        let evidence = try #require(outcome["evidence"] as? [String: Any])
+        let action = try #require(evidence["action"] as? [String: Any])
+        let unwrappedAction = try #require(action["_0"] as? [String: Any])
+        var actionWithLegacyField = action
+        actionWithLegacyField["legacy"] = true
+
+        let invalidEvidence = [
+            (unwrappedAction, "Unknown heist step evidence field"),
+            (["action": actionWithLegacyField], "Unknown heist step evidence payload field \"legacy\""),
+            (["action": action, "wait": action], "heist step evidence must contain exactly one evidence case"),
+        ]
+
+        for (replacement, expectedError) in invalidEvidence {
+            var malformedOutcome = outcome
+            malformedOutcome["evidence"] = replacement
+            var malformedStep = step
+            malformedStep["outcome"] = malformedOutcome
+            var malformedSteps = steps
+            malformedSteps[0] = malformedStep
+            var malformedReceipt = receipt
+            malformedReceipt["steps"] = malformedSteps
+
+            try expectReceiptDecodeError(
+                JSONSerialization.data(withJSONObject: malformedReceipt),
+                containing: expectedError
+            )
+        }
     }
 
     @Test func `decode rejects failed step without failure facts`() throws {
@@ -255,8 +330,15 @@ import TheScore
         _ json: String,
         containing substring: String
     ) throws {
+        try expectReceiptDecodeError(Data(json.utf8), containing: substring)
+    }
+
+    private func expectReceiptDecodeError(
+        _ data: Data,
+        containing substring: String
+    ) throws {
         do {
-            _ = try HeistReceiptCodec.decode(Data(json.utf8), format: .json)
+            _ = try HeistReceiptCodec.decode(data, format: .json)
             Issue.record("Expected receipt decode to fail")
         } catch {
             let description = String(describing: error)
