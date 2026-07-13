@@ -88,6 +88,30 @@ final class TheBurglarApplyTests: XCTestCase {
         XCTAssertEqual(screen.liveCapture.hierarchy.count, 1)
     }
 
+    func testBuildObservationKeepsOffscreenFactsOutOfViewportEvidence() {
+        let visible = makeElement(label: "Visible", traits: .button)
+        let offscreen = makeElement(
+            label: "Offscreen",
+            traits: .button,
+            visibility: .offscreen
+        )
+        let result = TheBurglar.ParseResult(
+            hierarchy: [
+                .element(visible, traversalIndex: 0),
+                .element(offscreen, traversalIndex: 1),
+            ]
+        )
+
+        let screen = TheBurglar.buildObservation(from: result)
+
+        XCTAssertEqual(screen.elementIDs, ["visible_button", "offscreen_button"])
+        XCTAssertEqual(screen.viewportElementIDs, ["visible_button"])
+        XCTAssertEqual(screen.liveCapture.heistIds, ["visible_button"])
+        XCTAssertFalse(screen.liveCapture.contains(heistId: "offscreen_button"))
+        XCTAssertEqual(screen.viewportOnly.elementIDs, ["visible_button"])
+        XCTAssertNotNil(screen.findElement(heistId: "offscreen_button"))
+    }
+
     // MARK: - InterfaceObservation name derivation
 
     func testScreenNameFromFirstHeader() {
@@ -499,7 +523,8 @@ final class TheBurglarApplyTests: XCTestCase {
         value: String? = nil,
         traits: UIAccessibilityTraits = .none,
         frame: CGRect = .zero,
-        activationPoint: CGPoint? = nil
+        activationPoint: CGPoint? = nil,
+        visibility: AccessibilityVisibility = .onscreen
     ) -> AccessibilityElement {
         .make(
             label: label,
@@ -507,7 +532,8 @@ final class TheBurglarApplyTests: XCTestCase {
             traits: traits,
             shape: .frame(AccessibilityRect(frame)),
             activationPoint: activationPoint,
-            respondsToUserInteraction: false
+            respondsToUserInteraction: false,
+            visibility: visibility
         )
     }
 }

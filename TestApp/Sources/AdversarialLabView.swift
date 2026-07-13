@@ -37,7 +37,7 @@ struct AdversarialLabView: View {
     }
 }
 
-private struct AdversarialScenarioView: View {
+struct AdversarialScenarioView: View {
     let scenario: AdversarialScenario
 
     var body: some View {

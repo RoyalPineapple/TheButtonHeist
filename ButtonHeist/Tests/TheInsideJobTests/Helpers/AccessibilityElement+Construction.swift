@@ -19,6 +19,7 @@ struct AccessibilityElementBuilder {
     var customContent: [AccessibilityElement.CustomContent]
     var customRotors: [AccessibilityElement.CustomRotor]
     var respondsToUserInteraction: Bool
+    var visibility: AccessibilityVisibility
 
     init(
         description: String? = nil,
@@ -33,7 +34,8 @@ struct AccessibilityElementBuilder {
         customActions: [AccessibilityElement.CustomAction] = [],
         customContent: [AccessibilityElement.CustomContent] = [],
         customRotors: [AccessibilityElement.CustomRotor] = [],
-        respondsToUserInteraction: Bool = true
+        respondsToUserInteraction: Bool = true,
+        visibility: AccessibilityVisibility = .onscreen
     ) {
         self.description = description
         self.label = label
@@ -48,6 +50,7 @@ struct AccessibilityElementBuilder {
         self.customContent = customContent
         self.customRotors = customRotors
         self.respondsToUserInteraction = respondsToUserInteraction
+        self.visibility = visibility
     }
 
     func build() -> AccessibilityElement {
@@ -64,7 +67,8 @@ struct AccessibilityElementBuilder {
             customActions: customActions,
             customContent: customContent,
             customRotors: customRotors,
-            respondsToUserInteraction: respondsToUserInteraction
+            respondsToUserInteraction: respondsToUserInteraction,
+            visibility: visibility
         )
     }
 }
@@ -96,7 +100,8 @@ extension AccessibilityElement {
         customActions: [CustomAction] = [],
         customContent: [CustomContent] = [],
         customRotors: [CustomRotor] = [],
-        respondsToUserInteraction: Bool = true
+        respondsToUserInteraction: Bool = true,
+        visibility: AccessibilityVisibility = .onscreen
     ) -> AccessibilityElement {
         let hasExplicitActivationPoint = activationPoint != nil
         let resolvedActivationPoint = activationPoint ?? shape.defaultActivationPoint
@@ -115,7 +120,8 @@ extension AccessibilityElement {
             customContent: customContent,
             customRotors: customRotors,
             accessibilityLanguage: nil,
-            respondsToUserInteraction: respondsToUserInteraction
+            respondsToUserInteraction: respondsToUserInteraction,
+            visibility: visibility
         )
     }
 

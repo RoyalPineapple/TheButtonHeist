@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RootView: View {
     @Environment(AppSettings.self) private var settings
+    @State private var adversarialRoute: AdversarialRoute?
 
     var body: some View {
         NavigationStack {
@@ -129,6 +130,26 @@ struct RootView: View {
             }
             .navigationTitle("ButtonHeist Demo")
             .listRowInsets(settings.compactMode ? EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16) : nil)
+            .navigationDestination(item: $adversarialRoute) { route in
+                AdversarialScenarioView(scenario: route.scenario)
+                    .id(route.id)
+            }
         }
+        .onOpenURL(perform: openDemoRoute)
     }
+
+    private func openDemoRoute(_ url: URL) {
+        guard url.scheme == "buttonheist-demo",
+              url.host == "adversarial",
+              let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let title = components.queryItems?.first(where: { $0.name == "scenario" })?.value,
+              let scenario = AdversarialScenario.allCases.first(where: { $0.title == title })
+        else { return }
+        adversarialRoute = AdversarialRoute(scenario: scenario)
+    }
+}
+
+private struct AdversarialRoute: Identifiable, Hashable {
+    let id = UUID()
+    let scenario: AdversarialScenario
 }

@@ -44,9 +44,13 @@ internal final class AdversarialScrollEvidenceView: UIScrollView {
 
     internal func beginEvidenceTracking() {
         guard !isTrackingEvidence else { return }
+        resetEvidence()
+        isTrackingEvidence = true
+    }
+
+    internal func resetEvidence() {
         offsetAttemptCount = 0
         offsetMovementCount = 0
-        isTrackingEvidence = true
         publishEvidence()
     }
 
@@ -54,7 +58,9 @@ internal final class AdversarialScrollEvidenceView: UIScrollView {
         attemptEvidenceLabel?.accessibilityValue = String(offsetAttemptCount)
         movementEvidenceLabel?.accessibilityValue = String(offsetMovementCount)
         if let visibilityEvidenceLabel, let observedTarget {
-            visibilityEvidenceLabel.accessibilityValue = bounds.intersects(observedTarget.frame) ? "Visible" : "Offscreen"
+            visibilityEvidenceLabel.accessibilityValue = bounds.intersects(observedTarget.frame)
+                ? "Visible"
+                : "Offscreen"
         }
         onEvidenceChange?(self)
     }
@@ -94,7 +100,18 @@ private final class NestedScrollViewController: UIViewController {
         evidenceStack.axis = .vertical
         evidenceStack.spacing = 4
         evidenceStack.translatesAutoresizingMaskIntoConstraints = false
-        [outerAttemptLabel, outerMovementLabel, innerAttemptLabel, innerMovementLabel, activationCountLabel, selectedLabel]
+        let heading = UILabel()
+        heading.text = "Nested Scroll"
+        heading.accessibilityTraits.insert(.header)
+        [
+            heading,
+            outerAttemptLabel,
+            outerMovementLabel,
+            innerAttemptLabel,
+            innerMovementLabel,
+            activationCountLabel,
+            selectedLabel,
+        ]
             .forEach(evidenceStack.addArrangedSubview)
         view.addSubview(evidenceStack)
 

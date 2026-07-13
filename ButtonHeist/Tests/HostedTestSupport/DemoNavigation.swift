@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+import UIKit
 import ButtonHeistTesting
 
 package enum DemoNavigation {
@@ -30,14 +31,16 @@ package enum DemoNavigation {
             .expect(.changed(.screen([.exists(.label("Menu"))])), timeout: .seconds(8))
     }
 
-    package static let openAdversarialScenario = HeistDef<String>("DemoNavigation.openAdversarialScenario", parameter: "scenario") { scenario in
-        try backToRootIfNeeded()
-
-        Activate(.element(.label("Adversarial Lab"), .traits([.button])))
-            .expect(.exists(.element(.label("Adversarial Lab"), .traits([.header]))), timeout: .seconds(8))
-
-        Activate(.predicate(ElementPredicateTemplate(label: .exact(scenario), traits: [.button])))
-            .expect(.exists(.label(scenario)), timeout: .seconds(8))
+    @MainActor
+    package static func openAdversarialScenario(_ scenario: String) throws {
+        var components = URLComponents()
+        components.scheme = "buttonheist-demo"
+        components.host = "adversarial"
+        components.queryItems = [URLQueryItem(name: "scenario", value: scenario)]
+        guard let url = components.url else {
+            throw DemoNavigationError.adversarialRouteUnavailable(scenario)
+        }
+        UIApplication.shared.open(url, options: [:])
     }
 
     package static let backTo = HeistDef<String>("DemoNavigation.backTo", parameter: "title") { title in
@@ -76,6 +79,10 @@ package enum DemoNavigation {
             Else {}
         }
     }
+}
+
+package enum DemoNavigationError: Error {
+    case adversarialRouteUnavailable(String)
 }
 
 #endif // canImport(UIKit)

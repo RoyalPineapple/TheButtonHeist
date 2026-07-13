@@ -22,9 +22,8 @@ private final class OffscreenCheckoutViewController: UIViewController {
     private let activationCountLabel = UILabel()
     private let statusLabel = UILabel()
     private let detailLabel = UILabel()
-    private let addButton = UIButton(type: .system)
     private let placeOrderButton = UIButton(type: .system)
-    private var selectedEspresso = false
+    private let unavailableOrderButton = UIButton(type: .system)
     private var activationCount = 0
 
     // MARK: - View Lifecycle
@@ -42,7 +41,16 @@ private final class OffscreenCheckoutViewController: UIViewController {
         evidenceStack.axis = .vertical
         evidenceStack.spacing = 4
         evidenceStack.translatesAutoresizingMaskIntoConstraints = false
-        [scrollAttemptLabel, scrollMovementLabel, targetVisibilityLabel, activationCountLabel]
+        let heading = UILabel()
+        heading.text = "Offscreen Checkout"
+        heading.accessibilityTraits.insert(.header)
+        [
+            heading,
+            scrollAttemptLabel,
+            scrollMovementLabel,
+            targetVisibilityLabel,
+            activationCountLabel,
+        ]
             .forEach(evidenceStack.addArrangedSubview)
         view.addSubview(evidenceStack)
 
@@ -57,18 +65,17 @@ private final class OffscreenCheckoutViewController: UIViewController {
         statusLabel.text = "Cart ready"
         scrollView.addSubview(statusLabel)
 
-        addButton.setTitle("Add Espresso", for: .normal)
-        addButton.addTarget(self, action: #selector(toggleEspresso), for: .touchUpInside)
-        scrollView.addSubview(addButton)
-
         detailLabel.text = "Checkout details"
         detailLabel.accessibilityTraits.insert(.header)
         scrollView.addSubview(detailLabel)
 
         placeOrderButton.setTitle("Place order", for: .normal)
-        placeOrderButton.isEnabled = false
         placeOrderButton.addTarget(self, action: #selector(placeOrder), for: .touchUpInside)
         scrollView.addSubview(placeOrderButton)
+
+        unavailableOrderButton.setTitle("Unavailable order", for: .normal)
+        unavailableOrderButton.isEnabled = false
+        scrollView.addSubview(unavailableOrderButton)
 
         NSLayoutConstraint.activate([
             evidenceStack.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 20),
@@ -86,14 +93,14 @@ private final class OffscreenCheckoutViewController: UIViewController {
         let contentHeight = max(900, scrollView.bounds.height + 480)
         scrollView.contentSize = CGSize(width: scrollView.bounds.width, height: contentHeight)
         statusLabel.frame = CGRect(x: 20, y: 20, width: 260, height: 30)
-        addButton.frame = CGRect(x: 20, y: 66, width: 220, height: 44)
         detailLabel.frame = CGRect(
             x: 20,
             y: 150,
             width: 260,
             height: 30
         )
-        placeOrderButton.frame = CGRect(x: 20, y: contentHeight - 70, width: 220, height: 44)
+        placeOrderButton.frame = CGRect(x: 20, y: contentHeight - 124, width: 220, height: 44)
+        unavailableOrderButton.frame = CGRect(x: 20, y: contentHeight - 70, width: 220, height: 44)
         scrollView.publishEvidence()
     }
 
@@ -103,12 +110,6 @@ private final class OffscreenCheckoutViewController: UIViewController {
     }
 
     // MARK: - Checkout Actions
-
-    @objc private func toggleEspresso() {
-        selectedEspresso.toggle()
-        addButton.setTitle(selectedEspresso ? "Remove Espresso" : "Add Espresso", for: .normal)
-        placeOrderButton.isEnabled = selectedEspresso
-    }
 
     @objc private func placeOrder() {
         activationCount += 1

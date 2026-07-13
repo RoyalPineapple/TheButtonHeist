@@ -42,6 +42,11 @@ private final class ModalObstructionViewController: UIViewController {
         rootStack.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(rootStack)
 
+        let heading = UILabel()
+        heading.text = "Modal Obstruction"
+        heading.accessibilityTraits.insert(.header)
+        rootStack.addArrangedSubview(heading)
+
         let reviewButton = UIButton(type: .system)
         reviewButton.setTitle("Review order", for: .normal)
         reviewButton.addTarget(self, action: #selector(presentReview), for: .touchUpInside)
@@ -100,6 +105,7 @@ private final class ModalObstructionViewController: UIViewController {
 
     @objc private func presentReview() {
         guard presentedViewController == nil else { return }
+        scrollView.resetEvidence()
         let review = UIViewController()
         review.view.backgroundColor = .systemGroupedBackground
         review.modalPresentationStyle = .pageSheet

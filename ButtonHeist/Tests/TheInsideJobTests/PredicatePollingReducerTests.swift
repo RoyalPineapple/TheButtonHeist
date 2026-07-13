@@ -3,175 +3,160 @@ import XCTest
 @testable import TheInsideJob
 
 final class PredicatePollingReducerTests: XCTestCase {
-    func testStartTransitionsFromIdleOrExplicitlySkips() {
+    func testStartProducesVisibleStepOrExplicitlyFinishes() throws {
         let reducer = PredicatePollingReducer(timeout: 1, pollWhenTimeoutZero: true)
-        let idleState = PredicatePollingState(
-            observedSequence: 4,
-            initialVisibleFingerprint: .unknown,
-            scope: .visible,
-            needsInitialProbe: false
-        )
         let started = reducer.start(scope: .visible, initialObservedSequence: 4)
+        let visible = try XCTUnwrap(started.immediateVisible)
 
-        XCTAssertNotEqual(started.state, idleState)
-        XCTAssertEqual(started.effect, .observe(.visibleImmediate(after: 4)))
+        XCTAssertEqual(visible.after, 4)
 
         let skippedReducer = PredicatePollingReducer(timeout: 0, pollWhenTimeoutZero: false)
-        let skippedIdleState = PredicatePollingState(
-            observedSequence: nil,
-            initialVisibleFingerprint: .unknown,
-            scope: .discovery,
-            needsInitialProbe: true
-        )
         let skipped = skippedReducer.start(scope: .discovery, initialObservedSequence: nil)
 
-        XCTAssertNotEqual(skipped.state, skippedIdleState)
-        XCTAssertEqual(skipped.state.nextProbe, .discovery)
-        XCTAssertEqual(skipped.effect, .finish(.notPolled))
+        XCTAssertEqual(skipped, .finished(.notPolled))
     }
 
-    func testVisibleObservedTransitionsImmediateAndSettledPhases() {
+    func testVisibleObservationTransitionsImmediateAndSettledSteps() throws {
         let reducer = PredicatePollingReducer(timeout: 1, pollWhenTimeoutZero: true)
-        let immediate = reducer.start(scope: .visible, initialObservedSequence: nil)
-        let settled = reducer.reduce(
-            immediate.state,
-            event: .visibleObserved(
-                PredicatePollingVisibleObservation(
-                    sequence: 1,
-                    fingerprint: .known("visible-a"),
-                    matched: false
-                ),
-                timing: PredicatePollingTickTiming(remaining: 0.9, elapsed: 0.01)
-            )
+        let immediate = try XCTUnwrap(
+            reducer.start(scope: .visible, initialObservedSequence: nil).immediateVisible
+        )
+        let settled = PredicatePollingReducer.observe(
+            immediate,
+            observation: PredicatePollingVisibleObservation(
+                sequence: 1,
+                fingerprint: .known("visible-a"),
+                matched: false
+            ),
+            timing: PredicatePollingTickTiming(remaining: 0.9, elapsed: 0.01)
+        )
+        let settledVisible = try XCTUnwrap(settled.settledVisible)
+
+        XCTAssertEqual(settledVisible.after, 1)
+        XCTAssertEqual(settledVisible.timeout, SemanticObservationTiming.visibleTickIntervalSeconds)
+
+        let visibleFallback = PredicatePollingReducer.observe(
+            settledVisible,
+            observation: nil,
+            timing: PredicatePollingTickTiming(remaining: 0.8, elapsed: 0)
         )
 
-        XCTAssertNotEqual(settled.state, immediate.state)
         XCTAssertEqual(
-            settled.effect,
-            .observe(.visibleSettled(after: 1, timeout: SemanticObservationTiming.visibleTickIntervalSeconds))
+            visibleFallback.sleep?.duration,
+            SemanticObservationTiming.visibleTickIntervalSeconds
         )
 
-        let visibleFallback = reducer.reduce(
-            settled.state,
-            event: .visibleUnavailable(timing: PredicatePollingTickTiming(remaining: 0.8, elapsed: 0))
+        let matched = PredicatePollingReducer.observe(
+            settledVisible,
+            observation: PredicatePollingVisibleObservation(
+                sequence: 2,
+                fingerprint: .known("visible-b"),
+                matched: true
+            ),
+            timing: PredicatePollingTickTiming(remaining: 0.8, elapsed: 0.02)
         )
 
-        XCTAssertNotEqual(visibleFallback.state, settled.state)
-        XCTAssertEqual(
-            visibleFallback.effect,
-            .sleep(PredicatePollingSleep(duration: SemanticObservationTiming.visibleTickIntervalSeconds))
-        )
-
-        let matched = reducer.reduce(
-            settled.state,
-            event: .visibleObserved(
-                PredicatePollingVisibleObservation(
-                    sequence: 2,
-                    fingerprint: .known("visible-b"),
-                    matched: true
-                ),
-                timing: PredicatePollingTickTiming(remaining: 0.8, elapsed: 0.02)
-            )
-        )
-        let expectedFinishedState = PredicatePollingReducer(timeout: 0, pollWhenTimeoutZero: false)
-            .start(scope: .visible, initialObservedSequence: 2)
-            .state
-
-        XCTAssertEqual(matched.state, expectedFinishedState)
-        XCTAssertEqual(matched.effect, .finish(.matched))
+        XCTAssertEqual(matched, .finished(.matched))
     }
 
-    func testVisibleUnavailableTransitionsImmediateAndSettledPhases() {
+    func testVisibleUnavailabilityTransitionsImmediateAndSettledSteps() throws {
         let reducer = PredicatePollingReducer(timeout: 1, pollWhenTimeoutZero: true)
-        let immediate = reducer.start(scope: .visible, initialObservedSequence: 3)
-        let settled = reducer.reduce(
-            immediate.state,
-            event: .visibleUnavailable(timing: PredicatePollingTickTiming(remaining: 0.9, elapsed: 0))
+        let immediate = try XCTUnwrap(
+            reducer.start(scope: .visible, initialObservedSequence: 3).immediateVisible
+        )
+        let settled = PredicatePollingReducer.observe(
+            immediate,
+            observation: nil,
+            timing: PredicatePollingTickTiming(remaining: 0.9, elapsed: 0)
+        )
+        let settledVisible = try XCTUnwrap(settled.settledVisible)
+
+        XCTAssertEqual(settledVisible.after, 3)
+        XCTAssertEqual(settledVisible.timeout, SemanticObservationTiming.visibleTickIntervalSeconds)
+
+        let sleeping = PredicatePollingReducer.observe(
+            settledVisible,
+            observation: nil,
+            timing: PredicatePollingTickTiming(remaining: 0.8, elapsed: 0)
         )
 
-        XCTAssertNotEqual(settled.state, immediate.state)
         XCTAssertEqual(
-            settled.effect,
-            .observe(.visibleSettled(after: 3, timeout: SemanticObservationTiming.visibleTickIntervalSeconds))
+            sleeping.sleep?.duration,
+            SemanticObservationTiming.visibleTickIntervalSeconds
         )
 
-        let sleeping = reducer.reduce(
-            settled.state,
-            event: .visibleUnavailable(timing: PredicatePollingTickTiming(remaining: 0.8, elapsed: 0))
-        )
+        let discovery = try awaitingDiscoveryStep(reducer)
 
-        XCTAssertNotEqual(sleeping.state, settled.state)
-        XCTAssertEqual(
-            sleeping.effect,
-            .sleep(PredicatePollingSleep(duration: SemanticObservationTiming.visibleTickIntervalSeconds))
-        )
-
-        let discovery = awaitingDiscoveryReduction(reducer)
-
-        XCTAssertEqual(discovery.state.nextProbe, .discovery)
-        XCTAssertEqual(discovery.effect, .observe(.discovery(after: nil, timeout: 1)))
+        XCTAssertNil(discovery.after)
+        XCTAssertEqual(discovery.timeout, 1)
     }
 
-    func testDiscoveryEventsTransitionToMatchingOrSleeping() {
+    func testDiscoveryObservationTransitionsToMatchingOrSleeping() throws {
         let reducer = PredicatePollingReducer(timeout: 1, pollWhenTimeoutZero: true)
-        let discovery = awaitingDiscoveryReduction(reducer)
-        let observedNoMatch = reducer.reduce(
-            discovery.state,
-            event: .discoveryObserved(
-                PredicatePollingDiscoveryObservation(sequence: 1, matched: false),
-                timing: PredicatePollingTickTiming(remaining: 0.9, elapsed: 0)
-            )
+        let discovery = try awaitingDiscoveryStep(reducer)
+        let observedNoMatch = PredicatePollingReducer.observe(
+            discovery,
+            observation: PredicatePollingDiscoveryObservation(sequence: 1, matched: false),
+            timing: PredicatePollingTickTiming(remaining: 0.9, elapsed: 0)
         )
 
-        XCTAssertNotEqual(observedNoMatch.state, discovery.state)
-        XCTAssertEqual(observedNoMatch.state.nextProbe, .visible)
         XCTAssertEqual(
-            observedNoMatch.effect,
-            .sleep(PredicatePollingSleep(duration: SemanticObservationTiming.visibleTickIntervalSeconds))
+            observedNoMatch.sleep?.duration,
+            SemanticObservationTiming.visibleTickIntervalSeconds
         )
 
-        let unavailable = reducer.reduce(
-            discovery.state,
-            event: .discoveryUnavailable(timing: PredicatePollingTickTiming(remaining: 0.9, elapsed: 0))
+        let unavailable = PredicatePollingReducer.observe(
+            discovery,
+            observation: nil,
+            timing: PredicatePollingTickTiming(remaining: 0.9, elapsed: 0)
         )
 
-        XCTAssertNotEqual(unavailable.state, discovery.state)
-        XCTAssertEqual(unavailable.state.nextProbe, .discovery)
         XCTAssertEqual(
-            unavailable.effect,
-            .sleep(PredicatePollingSleep(duration: SemanticObservationTiming.visibleTickIntervalSeconds))
+            unavailable.sleep?.duration,
+            SemanticObservationTiming.visibleTickIntervalSeconds
         )
 
-        let matched = reducer.reduce(
-            discovery.state,
-            event: .discoveryObserved(
-                PredicatePollingDiscoveryObservation(sequence: 1, matched: true),
-                timing: PredicatePollingTickTiming(remaining: 0.9, elapsed: 0)
-            )
+        let observedSleep = try XCTUnwrap(observedNoMatch.sleep)
+        let observedImmediate = try XCTUnwrap(
+            PredicatePollingReducer.resume(observedSleep, remaining: 0.8).immediateVisible
         )
-        let expectedMatchedState = PredicatePollingReducer(timeout: 0, pollWhenTimeoutZero: false)
-            .start(
-                scope: .discovery,
-                initialObservedSequence: 1,
-                initialVisibleFingerprint: .known("visible-seed")
-            )
-            .state
+        let observedContinuation = PredicatePollingReducer.observe(
+            observedImmediate,
+            observation: nil,
+            timing: PredicatePollingTickTiming(remaining: 0.8, elapsed: 0)
+        )
+        XCTAssertNotNil(observedContinuation.settledVisible)
 
-        XCTAssertEqual(matched.state, expectedMatchedState)
-        XCTAssertEqual(matched.effect, .finish(.matched))
+        let unavailableSleep = try XCTUnwrap(unavailable.sleep)
+        let unavailableImmediate = try XCTUnwrap(
+            PredicatePollingReducer.resume(unavailableSleep, remaining: 0.8).immediateVisible
+        )
+        let unavailableContinuation = PredicatePollingReducer.observe(
+            unavailableImmediate,
+            observation: nil,
+            timing: PredicatePollingTickTiming(remaining: 0.8, elapsed: 0)
+        )
+        XCTAssertNotNil(unavailableContinuation.discovery)
+
+        let matched = PredicatePollingReducer.observe(
+            discovery,
+            observation: PredicatePollingDiscoveryObservation(sequence: 1, matched: true),
+            timing: PredicatePollingTickTiming(remaining: 0.9, elapsed: 0)
+        )
+
+        XCTAssertEqual(matched, .finished(.matched))
     }
 
-    func testSleepEventsResumeTimeoutOrCancel() {
+    func testSleepStepResumesTimesOutOrCancels() throws {
         let reducer = PredicatePollingReducer(timeout: 1, pollWhenTimeoutZero: true)
-        let discovery = awaitingDiscoveryReduction(reducer)
-        let sleeping = reducer.reduce(
-            discovery.state,
-            event: .discoveryObserved(
-                PredicatePollingDiscoveryObservation(sequence: 1, matched: false),
-                timing: PredicatePollingTickTiming(remaining: 0.9, elapsed: 0)
-            )
+        let discovery = try awaitingDiscoveryStep(reducer)
+        let sleeping = PredicatePollingReducer.observe(
+            discovery,
+            observation: PredicatePollingDiscoveryObservation(sequence: 1, matched: false),
+            timing: PredicatePollingTickTiming(remaining: 0.9, elapsed: 0)
         )
-        let resumed = reducer.reduce(sleeping.state, event: .sleepCompleted(remaining: 0.8))
+        let sleep = try XCTUnwrap(sleeping.sleep)
+        let resumed = PredicatePollingReducer.resume(sleep, remaining: 0.8)
         let expectedResumed = reducer.start(
             scope: .discovery,
             initialObservedSequence: 1,
@@ -179,45 +164,64 @@ final class PredicatePollingReducerTests: XCTestCase {
             discoveryBootstrap: .afterInitialDiscoveryAttempt
         )
 
-        XCTAssertEqual(resumed.state, expectedResumed.state)
-        XCTAssertEqual(resumed.effect, expectedResumed.effect)
+        XCTAssertEqual(resumed, expectedResumed)
 
-        let timedOut = reducer.reduce(sleeping.state, event: .sleepCompleted(remaining: 0))
-        let cancelled = reducer.reduce(sleeping.state, event: .sleepCancelled)
+        let timedOut = PredicatePollingReducer.resume(sleep, remaining: 0)
+        let cancelled = PredicatePollingReducer.resume(sleep, remaining: nil)
 
-        XCTAssertEqual(timedOut.state, cancelled.state)
-        XCTAssertEqual(timedOut.effect, .finish(.timedOut))
-        XCTAssertEqual(cancelled.effect, .finish(.cancelled))
+        XCTAssertEqual(timedOut, .finished(.timedOut))
+        XCTAssertEqual(cancelled, .finished(.cancelled))
     }
 
-    func testTimeoutZeroPollsOnce() {
+    func testTimeoutZeroPollsOnce() throws {
         let reducer = PredicatePollingReducer(timeout: 0, pollWhenTimeoutZero: true)
         let started = reducer.start(scope: .visible, initialObservedSequence: 8)
-        let timedOut = reducer.reduce(
-            started.state,
-            event: .visibleUnavailable(timing: PredicatePollingTickTiming(remaining: 0, elapsed: 0))
+        let visible = try XCTUnwrap(started.immediateVisible)
+        let timedOut = PredicatePollingReducer.observe(
+            visible,
+            observation: nil,
+            timing: PredicatePollingTickTiming(remaining: 0, elapsed: 0)
         )
-        let expectedFinishedState = PredicatePollingReducer(timeout: 0, pollWhenTimeoutZero: false)
-            .start(scope: .visible, initialObservedSequence: 8)
-            .state
 
-        XCTAssertEqual(started.effect, .observe(.visibleImmediate(after: 8)))
-        XCTAssertEqual(timedOut.state, expectedFinishedState)
-        XCTAssertEqual(timedOut.effect, .finish(.timedOut))
+        XCTAssertEqual(visible.after, 8)
+        XCTAssertEqual(timedOut, .finished(.timedOut))
     }
 
-    private func awaitingDiscoveryReduction(
+    private func awaitingDiscoveryStep(
         _ reducer: PredicatePollingReducer
-    ) -> PredicatePollingReduction {
-        let started = reducer.start(
+    ) throws -> PredicatePollingDiscoveryStep {
+        let visible = try XCTUnwrap(reducer.start(
             scope: .discovery,
             initialObservedSequence: nil,
             initialVisibleFingerprint: .known("visible-seed")
-        )
-        return reducer.reduce(
-            started.state,
-            event: .visibleUnavailable(timing: PredicatePollingTickTiming(remaining: 1, elapsed: 0))
-        )
+        ).immediateVisible)
+        return try XCTUnwrap(PredicatePollingReducer.observe(
+            visible,
+            observation: nil,
+            timing: PredicatePollingTickTiming(remaining: 1, elapsed: 0)
+        ).discovery)
+    }
+}
+
+private extension PredicatePollingStep {
+    var immediateVisible: PredicatePollingImmediateVisibleStep? {
+        guard case .observeImmediateVisible(let step) = self else { return nil }
+        return step
+    }
+
+    var settledVisible: PredicatePollingSettledVisibleStep? {
+        guard case .observeSettledVisible(let step) = self else { return nil }
+        return step
+    }
+
+    var discovery: PredicatePollingDiscoveryStep? {
+        guard case .observeDiscovery(let step) = self else { return nil }
+        return step
+    }
+
+    var sleep: PredicatePollingSleepStep? {
+        guard case .sleep(let step) = self else { return nil }
+        return step
     }
 }
 #endif // canImport(UIKit)

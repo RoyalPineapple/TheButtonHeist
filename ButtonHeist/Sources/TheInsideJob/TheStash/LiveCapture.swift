@@ -97,11 +97,11 @@ struct LiveCapture {
     }
 
     var heistIds: Set<HeistId> {
-        elementIndex.heistIds
+        snapshot.heistIds
     }
 
     func contains(heistId: HeistId) -> Bool {
-        elementIndex.contains(heistId: heistId)
+        snapshot.contains(heistId: heistId)
     }
 
     func heistId(forPath path: TreePath) -> HeistId? {
@@ -218,7 +218,10 @@ struct LiveCapture {
         )
 
         var heistIds: Set<HeistId> {
-            Set(heistIdsByPath.values)
+            Set(hierarchy.pathIndexedElements.compactMap { entry in
+                guard entry.element.visibility == .onscreen else { return nil }
+                return heistIdsByPath[entry.path]
+            })
         }
 
         func contains(heistId: HeistId) -> Bool {

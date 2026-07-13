@@ -107,15 +107,7 @@ struct InterfaceObservation {
     }
 
     var viewportOnly: InterfaceObservation {
-        do {
-            return try Self.build(
-                tree: tree.viewportOnly,
-                dispatchReferences: liveCapture.dispatchReferences,
-                captureToken: captureToken
-            )
-        } catch {
-            preconditionFailure("Viewport-only interface observation failed validation: \(error)")
-        }
+        removingElements(withIds: elementIDs.subtracting(viewportElementIDs))
     }
 
     func replacingTreeWithCurrentCapture(_ tree: InterfaceTree) throws -> InterfaceObservation {

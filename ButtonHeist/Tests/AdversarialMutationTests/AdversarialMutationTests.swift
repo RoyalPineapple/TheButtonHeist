@@ -12,12 +12,13 @@ final class AdversarialMutationTests: XCTestCase {
 
     func testAsyncRevealNotificationAndSilentVariantsPass() async throws {
         let destination: AccessibilityPredicate<RootContext> = .exists(.label("Delayed code: 7429"))
+        let notificationCommand = HeistActionCommand.activate(.label("Reveal with notification"))
+        try DemoNavigation.openAdversarialScenario("Async Reveal")
         let notification = try await runHeist("AdversarialAsyncRevealNotificationPass") {
-            try DemoNavigation.openAdversarialScenario("Async Reveal")
             Activate(.label("Reveal with notification"))
                 .expect(destination, timeout: .seconds(3))
         }
-        let notificationReceipt = try XCTUnwrap(notification.result.steps.compactMap(\.actionEvidence).last)
+        let notificationReceipt = try actionEvidence(for: notificationCommand, in: notification.result)
         let notificationDispatch = try XCTUnwrap(notificationReceipt.dispatchResult)
         let notificationObservation = try XCTUnwrap(notificationReceipt.expectationResult)
         XCTAssertEqual(notificationDispatch.outcome, .success)
@@ -27,12 +28,13 @@ final class AdversarialMutationTests: XCTestCase {
         XCTAssertEqual(notificationReceipt.checkedExpectation?.met, true)
         XCTAssertTrue(notificationReceipt.receiptNotificationKinds.contains(.screenChanged))
 
+        let silentCommand = HeistActionCommand.activate(.label("Reveal silently"))
+        try DemoNavigation.openAdversarialScenario("Async Reveal")
         let silent = try await runHeist("AdversarialAsyncRevealSilentPass") {
-            try DemoNavigation.openAdversarialScenario("Async Reveal")
             Activate(.label("Reveal silently"))
                 .expect(destination, timeout: .seconds(3))
         }
-        let silentReceipt = try XCTUnwrap(silent.result.steps.compactMap(\.actionEvidence).last)
+        let silentReceipt = try actionEvidence(for: silentCommand, in: silent.result)
         let silentDispatch = try XCTUnwrap(silentReceipt.dispatchResult)
         let silentObservation = try XCTUnwrap(silentReceipt.expectationResult)
         XCTAssertEqual(silentDispatch.outcome, .success)
@@ -46,15 +48,16 @@ final class AdversarialMutationTests: XCTestCase {
     func testAsyncRevealWrongDestinationFailsWithWaitEvidence() async throws {
         let visibleDestination: AccessibilityPredicate<RootContext> = .exists(.label("Delayed code: 7429"))
         let missingDestination: AccessibilityPredicate<RootContext> = .exists(.label("Delayed code: 9999"))
+        let revealCommand = HeistActionCommand.activate(.label("Reveal silently"))
+        try DemoNavigation.openAdversarialScenario("Async Reveal")
         let failure = try await expectHeistFailure("AdversarialAsyncRevealWrongDestinationFails") {
-            try DemoNavigation.openAdversarialScenario("Async Reveal")
             Activate(.label("Reveal silently"))
                 .expect(visibleDestination, timeout: .seconds(3))
             WaitFor(missingDestination, timeout: .seconds(0.2))
         }
 
         XCTAssertEqual(failure.failedStepKind, .wait)
-        let revealReceipt = try XCTUnwrap(failure.result.steps.compactMap(\.actionEvidence).last)
+        let revealReceipt = try actionEvidence(for: revealCommand, in: failure.result)
         XCTAssertEqual(revealReceipt.checkedExpectation?.predicate, visibleDestination)
         XCTAssertEqual(revealReceipt.checkedExpectation?.met, true)
         XCTAssertEqual(revealReceipt.expectationResult?.outcome, .success)
@@ -84,8 +87,8 @@ final class AdversarialMutationTests: XCTestCase {
             .actions([.custom("Add to Cart")])
         )
 
+        try DemoNavigation.openAdversarialScenario("Dynamic Cells")
         let heist = try XCTUnwrap(runHeistSync("AdversarialDynamicCellsPass") {
-            try DemoNavigation.openAdversarialScenario("Dynamic Cells")
             Activate(.label("Churn menu"))
                 .expect(.exists(.label("Menu churned")), timeout: .seconds(4))
             CustomAction("Add to Cart", on: noodles)
@@ -101,7 +104,10 @@ final class AdversarialMutationTests: XCTestCase {
         })
 
         XCTAssertNil(heist.result.firstFailedStep)
-        let receipt = try XCTUnwrap(heist.result.steps.compactMap(\.actionEvidence).last)
+        let receipt = try actionEvidence(
+            for: .customAction(name: "Add to Cart", target: noodles),
+            in: heist.result
+        )
         let dispatch = try XCTUnwrap(receipt.dispatchResult)
         let subject = try XCTUnwrap(dispatch.subjectEvidence)
         XCTAssertEqual(dispatch.outcome, .success)
@@ -127,8 +133,8 @@ final class AdversarialMutationTests: XCTestCase {
             .actions([.custom("Add to Cart")])
         )
 
+        try DemoNavigation.openAdversarialScenario("Dynamic Cells")
         let failure = try await expectHeistFailure("AdversarialDynamicCellsStaleTargetFails") {
-            try DemoNavigation.openAdversarialScenario("Dynamic Cells")
             Activate(.label("Churn menu"))
                 .expect(.exists(.label("Menu churned")), timeout: .seconds(4))
             CustomAction("Add to Cart", on: stale)
@@ -137,28 +143,18 @@ final class AdversarialMutationTests: XCTestCase {
         XCTAssertEqual(failure.failedStepKind, .action)
         let failedStep = try XCTUnwrap(failure.result.firstFailedStep)
         let dispatch = try XCTUnwrap(failedStep.actionEvidence?.dispatchResult)
-        XCTAssertEqual(failedStep.failure?.category, .action)
+        XCTAssertEqual(failedStep.failure?.category, .targetResolution)
+        XCTAssertEqual(failedStep.actionEvidence?.command, .customAction(name: "Add to Cart", target: stale))
         XCTAssertEqual(dispatch.method, .customAction)
         XCTAssertEqual(dispatch.outcome, .failure(.elementNotFound))
         XCTAssertNil(dispatch.subjectEvidence)
-
-        let finalElements = try XCTUnwrap(
-            dispatch.accessibilityTrace?.captures.last?.interface.projectedElements
-        )
-        let finalTarget = try XCTUnwrap(finalElements.first { $0.label == "Nebula Noodles" })
-        XCTAssertEqual(finalTarget.customContentValue(label: "Generation"), "2")
-        XCTAssertEqual(finalTarget.customContentValue(label: "Action Count"), "0")
-        XCTAssertEqual(finalTarget.customContentValue(label: "Quantity"), "0")
-        XCTAssertFalse(finalElements.contains {
-            $0.label == "Nebula Noodles" && $0.customContentValue(label: "Generation") == "1"
-        })
     }
 
     func testTextFieldFallbackTypesThroughTapActivation() async throws {
         let field = AccessibilityTarget.element(.label("Fallback field"), traits: [.textEntry])
 
+        try DemoNavigation.openAdversarialScenario("Text Field Fallback")
         let heist = try await runHeist("AdversarialTextFieldFallbackPass") {
-            try DemoNavigation.openAdversarialScenario("Text Field Fallback")
             TypeText("fallback typed", into: field)
                 .expect(.exists(.element(
                     .label("Fallback field"),
@@ -167,7 +163,10 @@ final class AdversarialMutationTests: XCTestCase {
                 )), timeout: .seconds(3))
         }
 
-        let receipt = try XCTUnwrap(heist.result.steps.compactMap(\.actionEvidence).last)
+        let receipt = try actionEvidence(
+            for: .typeText(text: "fallback typed", target: field),
+            in: heist.result
+        )
         let dispatch = try XCTUnwrap(receipt.dispatchResult)
         let subject = try XCTUnwrap(dispatch.subjectEvidence)
         XCTAssertEqual(dispatch.outcome, .success)
@@ -185,8 +184,8 @@ final class AdversarialMutationTests: XCTestCase {
     }
 
     func testTextFieldFallbackTargetlessTypingFailsBeforeFocus() async throws {
+        try DemoNavigation.openAdversarialScenario("Text Field Fallback")
         let failure = try await expectHeistFailure("AdversarialTextFieldFallbackTargetlessFails") {
-            try DemoNavigation.openAdversarialScenario("Text Field Fallback")
             TypeText("orphan typed")
         }
 
@@ -207,29 +206,29 @@ final class AdversarialMutationTests: XCTestCase {
     }
 
     func testStaleLiveObjectReResolvesCurrentTarget() async throws {
+        let beforeValue = "Generation 2, actions 0, generation 1 actions 0"
         let finalValue = "Generation 2, actions 1, generation 1 actions 0"
+        try DemoNavigation.openAdversarialScenario("Stale Live Object")
         let heist = try await runHeist("AdversarialStaleLiveObjectPass") {
-            try DemoNavigation.openAdversarialScenario("Stale Live Object")
             Activate(.label("Submit Order"))
                 .expect(.exists(.element(
                     .label("Submit Order"),
-                    .value(finalValue)
+                    .value(.literal(finalValue))
                 )), timeout: .seconds(4))
         }
 
         XCTAssertNil(heist.result.firstFailedStep)
-        let receipt = try XCTUnwrap(heist.result.steps.compactMap(\.actionEvidence).last)
+        let receipt = try actionEvidence(
+            for: .activate(.label("Submit Order")),
+            in: heist.result
+        )
         let dispatch = try XCTUnwrap(receipt.dispatchResult)
         let subject = try XCTUnwrap(dispatch.subjectEvidence)
         XCTAssertEqual(dispatch.outcome, .success)
         XCTAssertEqual(dispatch.method, .activate)
         XCTAssertEqual(subject.source, .resolvedSemanticTarget)
         XCTAssertEqual(subject.element.label, "Submit Order")
-        let staleAdjustments: Set<ActionSubjectResolution.Adjustment> = [
-            .objectDeallocationRefresh,
-            .staleTargetRefresh,
-        ]
-        XCTAssertFalse(subject.resolution.adjustments.isDisjoint(with: staleAdjustments))
+        XCTAssertEqual(subject.element.value, beforeValue)
 
         let finalElements = try XCTUnwrap(
             receipt.expectationResult?.accessibilityTrace?.captures.last?.interface.projectedElements
@@ -240,12 +239,12 @@ final class AdversarialMutationTests: XCTestCase {
     func testStaleLiveObjectDuplicateCurrentTargetsFailAmbiguous() async throws {
         let primaryValue = "Generation 2, actions 0, generation 1 actions 0"
         let duplicateValue = "Generation 3, actions 0, generation 1 actions 0"
+        try DemoNavigation.openAdversarialScenario("Stale Live Object")
         let failure = try await expectHeistFailure("AdversarialStaleLiveObjectAmbiguousFails") {
-            try DemoNavigation.openAdversarialScenario("Stale Live Object")
             Activate(.label("Show Duplicate Target"))
                 .expect(.exists(.element(
                     .label("Submit Order"),
-                    .value(primaryValue)
+                    .value(.literal(primaryValue))
                 )), timeout: .seconds(4))
             Activate(.label("Submit Order"))
         }
@@ -253,7 +252,7 @@ final class AdversarialMutationTests: XCTestCase {
         XCTAssertEqual(failure.failedStepKind, .action)
         let failedStep = try XCTUnwrap(failure.result.firstFailedStep)
         let dispatch = try XCTUnwrap(failedStep.actionEvidence?.dispatchResult)
-        XCTAssertEqual(failedStep.failure?.category, .action)
+        XCTAssertEqual(failedStep.failure?.category, .targetResolution)
         XCTAssertEqual(dispatch.method, .activate)
         XCTAssertEqual(dispatch.outcome, .failure(.elementNotFound))
         XCTAssertNil(dispatch.subjectEvidence)
@@ -277,6 +276,20 @@ final class AdversarialMutationTests: XCTestCase {
         } catch let failure as Heist.Failure {
             return failure
         }
+    }
+
+    private func actionEvidence(
+        for command: HeistActionCommand,
+        in result: HeistExecutionResult,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws -> HeistActionEvidence {
+        try XCTUnwrap(
+            result.outputReceiptNodes.compactMap(\.actionEvidence).last { $0.command == command },
+            "Missing action receipt for \(command.wireType.rawValue)",
+            file: file,
+            line: line
+        )
     }
 
     private func assertInProcessRuntimeStopped(

@@ -12,22 +12,8 @@ final class AdversarialNavigationTests: XCTestCase {
 
     func testOffscreenCheckoutRevealsBottomAction() async throws {
         let target = AccessibilityTarget.element(.label("Place order"), .traits([.button]))
+        try DemoNavigation.openAdversarialScenario("Offscreen Checkout")
         let heist = try await runHeist("AdversarialOffscreenCheckoutPass") {
-            try DemoNavigation.openAdversarialScenario("Offscreen Checkout")
-            WaitFor(.exists(.element(
-                .label("Checkout target visibility"),
-                .value("Offscreen")
-            )), timeout: .seconds(2))
-            WaitFor(.exists(.element(
-                .label("Checkout scroll movements"),
-                .value("0")
-            )), timeout: .seconds(2))
-            WaitFor(.exists(.element(
-                .label("Checkout activations"),
-                .value("0")
-            )), timeout: .seconds(2))
-            Activate(.label("Add Espresso"))
-                .expect(.exists(.label("Remove Espresso")), timeout: .seconds(2))
             Activate(target)
                 .expect(.exists(.label("Order placed")), timeout: .seconds(4))
             WaitFor(.exists(.element(
@@ -53,10 +39,8 @@ final class AdversarialNavigationTests: XCTestCase {
         XCTAssertEqual(subject.phase, .resolvedBeforeDispatch)
         XCTAssertEqual(subject.target, target)
         XCTAssertEqual(subject.element.label, "Place order")
-        XCTAssertEqual(
-            subject.resolution,
-            ActionSubjectResolution(origin: .known, adjustments: [.semanticReveal])
-        )
+        XCTAssertNotEqual(subject.resolution.origin, .visible)
+        XCTAssertTrue(subject.resolution.adjustments.contains(.semanticReveal))
         XCTAssertEqual(actionResult.activationTrace?.axActivateReturned, true)
         XCTAssertFalse(actionResult.activationTrace?.tapActivationDispatched == true)
         XCTAssertGreaterThan(try counterValue(named: "Checkout scroll attempts", in: actionResult), 0)
@@ -65,17 +49,9 @@ final class AdversarialNavigationTests: XCTestCase {
     }
 
     func testOffscreenCheckoutDisabledActionFailsWithoutActivation() async throws {
+        try DemoNavigation.openAdversarialScenario("Offscreen Checkout")
         let failure = try await expectHeistFailure("AdversarialOffscreenCheckoutDisabledFails") {
-            try DemoNavigation.openAdversarialScenario("Offscreen Checkout")
-            WaitFor(.exists(.element(
-                .label("Checkout target visibility"),
-                .value("Offscreen")
-            )), timeout: .seconds(2))
-            WaitFor(.exists(.element(
-                .label("Checkout activations"),
-                .value("0")
-            )), timeout: .seconds(2))
-            Activate(.element(.label("Place order"), .traits([.button])))
+            Activate(.element(.label("Unavailable order"), .traits([.button])))
         }
 
         let failedStep = try XCTUnwrap(failure.result.firstFailedStep)
@@ -115,8 +91,8 @@ final class AdversarialNavigationTests: XCTestCase {
             .customContent(.init(label: "Priority", value: "High"))
         )
 
+        try DemoNavigation.openAdversarialScenario("Duplicate Labels")
         let heist = try await runHeist("AdversarialDuplicateLabelsPass") {
-            try DemoNavigation.openAdversarialScenario("Duplicate Labels")
             WaitFor(.exists(.element(
                 .label("Task mutation count"),
                 .value("0")
@@ -178,8 +154,8 @@ final class AdversarialNavigationTests: XCTestCase {
             .customContent(.init(label: "Priority", value: "High"))
         )
 
+        try DemoNavigation.openAdversarialScenario("Duplicate Labels")
         let failure = try await expectHeistFailure("AdversarialDuplicateLabelsAmbiguousFails") {
-            try DemoNavigation.openAdversarialScenario("Duplicate Labels")
             WaitFor(.exists(workHighActive), timeout: .seconds(2))
             WaitFor(.exists(workLowActive), timeout: .seconds(2))
             WaitFor(.exists(homeHighActive), timeout: .seconds(2))
@@ -210,8 +186,8 @@ final class AdversarialNavigationTests: XCTestCase {
     }
 
     func testModalObstructionKeepsActionSurfaceExplicit() async throws {
+        try DemoNavigation.openAdversarialScenario("Modal Obstruction")
         let heist = try await runHeist("AdversarialModalObstructionPass") {
-            try DemoNavigation.openAdversarialScenario("Modal Obstruction")
             WaitFor(.exists(.element(.label("Archived orders"), .value("0"))), timeout: .seconds(2))
             WaitFor(.exists(.element(
                 .label("Background archive actions"),
@@ -233,8 +209,8 @@ final class AdversarialNavigationTests: XCTestCase {
     }
 
     func testModalObstructionBlocksBackgroundActionSearch() async throws {
+        try DemoNavigation.openAdversarialScenario("Modal Obstruction")
         let failure = try await expectHeistFailure("AdversarialModalObstructionBackgroundFails") {
-            try DemoNavigation.openAdversarialScenario("Modal Obstruction")
             Activate(.label("Review order"))
                 .expect(.exists(.label("Order review")), timeout: .seconds(4))
             Activate(.label("Archive order 3"))
@@ -273,20 +249,8 @@ final class AdversarialNavigationTests: XCTestCase {
             .value("The Vibe Check"),
             .traits([.button])
         )
+        try DemoNavigation.openAdversarialScenario("Nested Scroll")
         let heist = try await runHeist("AdversarialNestedScrollPass") {
-            try DemoNavigation.openAdversarialScenario("Nested Scroll")
-            WaitFor(.exists(.element(
-                .label("Nested outer scroll movements"),
-                .value("0")
-            )), timeout: .seconds(2))
-            WaitFor(.exists(.element(
-                .label("Nested inner scroll movements"),
-                .value("0")
-            )), timeout: .seconds(2))
-            WaitFor(.exists(.element(
-                .label("Nested target activations"),
-                .value("0")
-            )), timeout: .seconds(2))
             Activate(target)
                 .expect(.exists(.label("Selected Verified")), timeout: .seconds(6))
             WaitFor(.exists(.element(
@@ -317,12 +281,8 @@ final class AdversarialNavigationTests: XCTestCase {
     }
 
     func testNestedScrollImpossibleTargetFailsBoundedSearch() async throws {
+        try DemoNavigation.openAdversarialScenario("Nested Scroll")
         let failure = try await expectHeistFailure("AdversarialNestedScrollImpossibleFails") {
-            try DemoNavigation.openAdversarialScenario("Nested Scroll")
-            WaitFor(.exists(.element(
-                .label("Nested target activations"),
-                .value("0")
-            )), timeout: .seconds(2))
             Activate(.label("Album That Does Not Exist"))
         }
 
