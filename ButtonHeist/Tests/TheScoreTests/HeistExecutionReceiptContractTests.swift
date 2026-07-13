@@ -62,6 +62,28 @@ import TheScore
         }
     }
 
+    @Test func `decode rejects evidence with more than one typed owner`() {
+        let receipt = """
+        {
+          "path": "$.body[0]",
+          "kind": "warn",
+          "durationMs": 1,
+          "outcome": {
+            "type": "passed",
+            "evidence": {
+              "warning": {"_0": {"path": "$.body[0]", "message": "notice"}},
+              "action": {"_0": {"path": "$.body[0]", "message": "notice"}}
+            },
+            "children": []
+          }
+        }
+        """
+
+        #expect(throws: DecodingError.self) {
+            _ = try JSONDecoder().decode(HeistExecutionStepResult.self, from: Data(receipt.utf8))
+        }
+    }
+
     @Test func `execution decode rejects missing or stray abort path`() throws {
         let failedStep = HeistExecutionStepResult.failed(
             path: "$.body[0]",
