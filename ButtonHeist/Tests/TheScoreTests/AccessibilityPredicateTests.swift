@@ -418,7 +418,8 @@ final class AccessibilityPredicateTests: XCTestCase {
             sequence: 2,
             interface: after,
             parentHash: first.hash,
-            context: AccessibilityTrace.Context(screenId: "settings")
+            context: AccessibilityTrace.Context(screenId: "settings"),
+            transition: screenChangedTransition()
         )
         let result = ActionResult.success(
             method: .activate,
@@ -1452,7 +1453,20 @@ final class AccessibilityPredicateTests: XCTestCase {
             AccessibilityTrace.Capture(
                 sequence: 2,
                 interface: after,
-                context: AccessibilityTrace.Context(screenId: "after")
+                context: AccessibilityTrace.Context(screenId: "after"),
+                transition: screenChangedTransition()
+            ),
+        ])
+    }
+
+    private func screenChangedTransition() -> AccessibilityTrace.Transition {
+        AccessibilityTrace.Transition(accessibilityNotifications: [
+            AccessibilityNotificationEvidence(
+                sequence: 1,
+                kind: .screenChanged,
+                timestamp: Date(timeIntervalSince1970: 1),
+                notificationData: .none,
+                associatedElement: .none
             ),
         ])
     }

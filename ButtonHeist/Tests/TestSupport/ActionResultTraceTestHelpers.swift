@@ -201,7 +201,16 @@ private enum TestActionResultTrace {
             capture(
                 sequence: 2,
                 interface: replacementInterface,
-                context: AccessibilityTrace.Context(screenId: "after")
+                context: AccessibilityTrace.Context(screenId: "after"),
+                transition: AccessibilityTrace.Transition(accessibilityNotifications: [
+                    AccessibilityNotificationEvidence(
+                        sequence: 1,
+                        kind: .screenChanged,
+                        timestamp: Date(timeIntervalSince1970: 1),
+                        notificationData: .none,
+                        associatedElement: .none
+                    ),
+                ])
             ),
         ])
     }
@@ -209,9 +218,15 @@ private enum TestActionResultTrace {
     private static func capture(
         sequence: Int,
         interface: Interface,
-        context: AccessibilityTrace.Context = .empty
+        context: AccessibilityTrace.Context = .empty,
+        transition: AccessibilityTrace.Transition = .empty
     ) -> AccessibilityTrace.Capture {
-        AccessibilityTrace.Capture(sequence: sequence, interface: interface, context: context)
+        AccessibilityTrace.Capture(
+            sequence: sequence,
+            interface: interface,
+            context: context,
+            transition: transition
+        )
     }
 
     private static func interface(elements: [HeistElement]) -> Interface {
