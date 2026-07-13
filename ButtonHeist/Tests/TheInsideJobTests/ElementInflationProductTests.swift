@@ -351,6 +351,90 @@ final class ElementInflationProductTests: XCTestCase {
         ])
     }
 
+    func testRefreshRetainsSelectedHeistIdWhenPredicateOrderingChanges() async throws {
+        let fixture = try installAmbiguousActivationFixture()
+        defer { fixture.cleanup() }
+        let target = literalTarget(
+            ElementPredicate(label: "Duplicate", traits: [.button]),
+            ordinal: 0
+        )
+        fixture.second.isHidden = true
+        brains.stash.installScreenForTesting(try observation(for: [fixture.first]))
+        brains.stash.clearInstalledVisibleRefreshScreenForTesting()
+        guard case .success(let selected) = brains.navigation.elementInflation.knownSemanticTarget(target) else {
+            return XCTFail("Expected the original element to satisfy the committed predicate")
+        }
+        XCTAssertEqual(selected.heistId, "duplicate_first")
+
+        fixture.second.isHidden = false
+        fixture.first.superview?.insertSubview(fixture.second, belowSubview: fixture.first)
+        fixture.window.layoutIfNeeded()
+        brains.stash.installScreenForTesting(try observation(for: [fixture.second, fixture.first]))
+        brains.stash.clearInstalledVisibleRefreshScreenForTesting()
+
+        let state = await brains.navigation.elementInflation.stateAfterRefresh(
+            target: target,
+            treeElement: selected,
+            didReveal: false,
+            method: .activate,
+            deallocatedBoundary: "predicate retarget test",
+            activationPointPolicy: .liveObjectOnly,
+            deadline: SemanticObservationDeadline(start: CFAbsoluteTimeGetCurrent(), timeoutSeconds: 0)
+        )
+        guard case .inflated(let inflatedTarget) = state else {
+            return XCTFail("Expected refresh to reacquire live evidence for the selected identity, got \(state)")
+        }
+        XCTAssertEqual(inflatedTarget.treeElement.heistId, "duplicate_first")
+        XCTAssertTrue(inflatedTarget.liveTarget.object === fixture.first)
+
+        _ = AccessibilityActionDispatcher().activate(inflatedTarget.liveTarget)
+
+        XCTAssertEqual(fixture.first.activationCount, 1)
+        XCTAssertEqual(fixture.second.activationCount, 0)
+    }
+
+    func testRefreshFailsClosedWhenSelectedHeistIdIsRemoved() async throws {
+        let fixture = try installAmbiguousActivationFixture()
+        defer { fixture.cleanup() }
+        let target = literalTarget(
+            ElementPredicate(label: "Duplicate", traits: [.button]),
+            ordinal: 0
+        )
+        fixture.second.isHidden = true
+        brains.stash.installScreenForTesting(try observation(for: [fixture.first]))
+        brains.stash.clearInstalledVisibleRefreshScreenForTesting()
+        guard case .success(let selected) = brains.navigation.elementInflation.knownSemanticTarget(target) else {
+            return XCTFail("Expected the original element to satisfy the committed predicate")
+        }
+
+        fixture.first.removeFromSuperview()
+        fixture.second.isHidden = false
+        brains.stash.installScreenForTesting(try observation(for: [fixture.second]))
+        brains.stash.clearInstalledVisibleRefreshScreenForTesting()
+
+        let state = await brains.navigation.elementInflation.stateAfterRefresh(
+            target: target,
+            treeElement: selected,
+            didReveal: false,
+            method: .activate,
+            deallocatedBoundary: "predicate identity removal test",
+            activationPointPolicy: .liveObjectOnly,
+            deadline: SemanticObservationDeadline(start: CFAbsoluteTimeGetCurrent(), timeoutSeconds: 0)
+        )
+        switch state {
+        case .failed:
+            break
+        case .inflated(let inflatedTarget):
+            _ = AccessibilityActionDispatcher().activate(inflatedTarget.liveTarget)
+            XCTFail("Refresh retargeted removed identity \(selected.heistId) to \(inflatedTarget.treeElement.heistId)")
+        default:
+            XCTFail("Expected removed selected identity to fail closed, got \(state)")
+        }
+
+        XCTAssertEqual(fixture.first.activationCount, 0)
+        XCTAssertEqual(fixture.second.activationCount, 0)
+    }
+
     func testSemanticActivateFailsAmbiguousDuplicateBeforeReachabilityChoosesCandidate() async throws {
         let fixture = try installOffscreenActivationFixture(
             identifier: "reachable_duplicate_submit",
@@ -831,6 +915,7 @@ final class ElementInflationProductTests: XCTestCase {
             tree: InterfaceTree(elements: elements, containers: screen.tree.containers),
             liveCapture: screen.liveCapture
         ))
+        targetBrains.stash.clearInstalledVisibleRefreshScreenForTesting()
     }
 
     private func seedOffViewportTextInputTarget(
@@ -867,6 +952,7 @@ final class ElementInflationProductTests: XCTestCase {
             tree: InterfaceTree(elements: elements, containers: screen.tree.containers),
             liveCapture: screen.liveCapture
         ))
+        brains.stash.clearInstalledVisibleRefreshScreenForTesting()
     }
 
     private func seedKnownUnreachableDuplicate(
@@ -951,6 +1037,7 @@ final class ElementInflationProductTests: XCTestCase {
             tree: InterfaceTree(elements: elements, containers: containers),
             liveCapture: screen.liveCapture
         ))
+        brains.stash.clearInstalledVisibleRefreshScreenForTesting()
     }
 
     private func observedContentActivationPoint(
@@ -961,6 +1048,23 @@ final class ElementInflationProductTests: XCTestCase {
             x: origin.x + size.width / 2,
             y: origin.y + size.height / 2
         )))
+    }
+
+    private func observation(
+        for views: [SemanticActivationView]
+    ) throws -> InterfaceObservation {
+        InterfaceObservation.makeForTests(try views.map { view in
+            let label = try XCTUnwrap(view.accessibilityLabel)
+            let identifier = try XCTUnwrap(view.accessibilityIdentifier)
+            return InterfaceObservation.TestEntry(
+                label: label,
+                heistId: HeistId(rawValue: identifier),
+                identifier: identifier,
+                traits: .button,
+                frame: view.convert(view.bounds, to: nil),
+                object: view
+            )
+        })
     }
 
     private func firstLiveScrollableContainerPath(in screen: InterfaceObservation) -> TreePath? {
