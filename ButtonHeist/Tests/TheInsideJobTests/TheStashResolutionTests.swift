@@ -507,26 +507,33 @@ final class TheStashResolutionTests: XCTestCase {
 
     func testLiveVisibleEntriesUseFreshObservedRevealMetadataOverSettledCache() throws {
         let row = element(label: "Row", traits: .button)
+        let containerPath = TreePath([0])
+        let rowPath = TreePath([0, 0])
+        let scrollContainer = AccessibilityContainer(
+            type: .none, scrollableContentSize: AccessibilitySize(width: 320, height: 1_000),
+            frame: AccessibilityRect(x: 0, y: 0, width: 320, height: 480)
+        )
         let staleEntry = InterfaceTree.Element(
             heistId: "row",
-            scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: 100),
+            path: rowPath,
+            scrollMembership: InterfaceTree.ScrollMembership(containerPath: containerPath, index: 100),
             element: row
         )
         bagman.semanticObservationStream.commitDiscoveryObservationForTesting(InterfaceObservation.makeForTests(
             elements: ["row": staleEntry],
-            hierarchy: [],
+            hierarchy: [.container(scrollContainer, children: [])],
             firstResponderHeistId: nil,
         ))
 
         let freshEntry = InterfaceTree.Element(
             heistId: "row",
-            scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: 500),
+            scrollMembership: InterfaceTree.ScrollMembership(containerPath: containerPath, index: 500),
             element: row
         )
         bagman.recordParsedObservedEvidence(InterfaceObservation.makeForTests(
             elements: ["row": freshEntry],
-            hierarchy: [.element(row, traversalIndex: 0)],
-            heistIdsByPath: [TreePath([0]): "row"],
+            hierarchy: [.container(scrollContainer, children: [.element(row, traversalIndex: 0)])],
+            heistIdsByPath: [rowPath: "row"],
             firstResponderHeistId: nil,
         ))
 
@@ -1566,26 +1573,33 @@ final class TheStashResolutionTests: XCTestCase {
             traits: .button,
             frame: CGRect(x: 0, y: 0, width: 100, height: 44)
         )
+        let containerPath = TreePath([0])
+        let scrollContainer = AccessibilityContainer(
+            type: .none, scrollableContentSize: AccessibilitySize(width: 320, height: 1_000),
+            frame: AccessibilityRect(x: 0, y: 0, width: 320, height: 480)
+        )
         bagman.installScreenForTesting(InterfaceObservation.makeForTests(
             elements: [
                 "repeat_button_1": InterfaceTree.Element(
                     heistId: "repeat_button_1",
-                    scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: 100),
+                    scrollMembership: InterfaceTree.ScrollMembership(containerPath: containerPath, index: 100),
                     element: repeated
                 ),
                 "repeat_button_2": InterfaceTree.Element(
                     heistId: "repeat_button_2",
-                    scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: 500),
+                    scrollMembership: InterfaceTree.ScrollMembership(containerPath: containerPath, index: 500),
                     element: repeated
                 ),
             ],
             hierarchy: [
-                .element(repeated, traversalIndex: 0),
-                .element(repeated, traversalIndex: 1),
+                .container(scrollContainer, children: [
+                    .element(repeated, traversalIndex: 0),
+                    .element(repeated, traversalIndex: 1),
+                ]),
             ],
             heistIdsByPath: [
-                TreePath([0]): "repeat_button_1",
-                TreePath([1]): "repeat_button_2",
+                TreePath([0, 0]): "repeat_button_1",
+                TreePath([0, 1]): "repeat_button_2",
             ],
             firstResponderHeistId: nil,
         ))
@@ -2090,6 +2104,7 @@ final class TheStashResolutionTests: XCTestCase {
                 containerNamesByPath: [path: "actions"],
                 elementRefs: [:],
                 containerRefsByPath: [:],
+                containerContentFramesByPath: [path: ContentRect(staleFrame)],
                 firstResponderHeistId: nil,
             )
         )
@@ -2111,6 +2126,7 @@ final class TheStashResolutionTests: XCTestCase {
                 containerNamesByPath: [path: "actions"],
                 elementRefs: [:],
                 containerRefsByPath: [path: .init(object: liveObject)],
+                containerContentFramesByPath: [path: ContentRect(freshFrame)],
                 firstResponderHeistId: nil,
             )
         )
@@ -2765,15 +2781,22 @@ final class TheStashResolutionTests: XCTestCase {
         object.accessibilityFrame = CGRect(x: 0, y: 0, width: 100, height: 44)
         object.accessibilityActivationPoint = CGPoint(x: 50, y: 22)
         let scrollView = UIScrollView()
+        let containerPath = TreePath([0])
+        let elementPath = TreePath([0, 0])
+        let scrollContainer = AccessibilityContainer(
+            type: .none, scrollableContentSize: AccessibilitySize(width: 320, height: 1_000),
+            frame: AccessibilityRect(x: 0, y: 0, width: 320, height: 480)
+        )
         let entry = InterfaceTree.Element(
             heistId: "below_fold_button",
-            scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: nil),
+            path: elementPath,
+            scrollMembership: InterfaceTree.ScrollMembership(containerPath: containerPath, index: nil),
             element: offScreen
         )
 
         bagman.installScreenForTesting(InterfaceObservation.makeForTests(
             elements: [entry.heistId: entry],
-            hierarchy: [],
+            hierarchy: [.container(scrollContainer, children: [])],
             firstResponderHeistId: nil,
         ))
 
@@ -2790,8 +2813,8 @@ final class TheStashResolutionTests: XCTestCase {
 
         bagman.installScreenForTesting(InterfaceObservation.makeForTests(
             elements: [entry.heistId: entry],
-            hierarchy: [.element(offScreen, traversalIndex: 0)],
-            heistIdsByPath: [TreePath([0]): entry.heistId],
+            hierarchy: [.container(scrollContainer, children: [.element(offScreen, traversalIndex: 0)])],
+            heistIdsByPath: [elementPath: entry.heistId],
             elementRefs: [
                 entry.heistId: .init(object: object, scrollView: scrollView)
             ],
