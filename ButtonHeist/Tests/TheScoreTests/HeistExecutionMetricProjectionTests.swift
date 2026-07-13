@@ -76,23 +76,20 @@ import TheScore
         #expect(try JSONDecoder().decode(HeistExecutionMetricProjection.self, from: encoded) == projection)
     }
 
-    @Test func `summary excludes flattened failure actions from top level count`() {
-        let bodyStep = HeistExecutionStepResult.passed(
-            path: "$.body[0]",
-            kind: .wait,
-            durationMs: 1
-        )
-        let failureScreenshot = HeistExecutionStepResult.passed(
-            path: "$.body[0].failure.actions[0]",
-            kind: .action,
-            durationMs: 1
-        )
+    @Test func `summary excludes only exact flattened failure hook paths from top level count`() {
         let result = HeistExecutionResult.passed(
-            steps: [bodyStep, failureScreenshot],
-            durationMs: 2
+            steps: [
+                .passed(path: "$.body[0]", kind: .wait, durationMs: 1),
+                .passed(path: "$.body[0].failure.actions[0]", kind: .action, durationMs: 1),
+                .passed(path: "$.body[1].failure.actions[x]", kind: .action, durationMs: 1),
+                .passed(path: "$.body[2].failure.actions[1].body[0]", kind: .action, durationMs: 1),
+                .passed(path: "root.failure.actions[2]", kind: .action, durationMs: 1),
+                .skipped(path: "$.body[3]", kind: .action),
+            ],
+            durationMs: 5
         )
 
-        #expect(result.evidenceRollup.summary.executedTopLevelStepCount == 1)
+        #expect(result.evidenceRollup.summary.executedTopLevelStepCount == 4)
     }
 
     private func metricProjectionFixture() throws -> HeistExecutionResult {

@@ -86,6 +86,9 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(rollup.actions.dispatchedResults.map(\.method), [.activate])
         XCTAssertEqual(rollup.actions.traceResultsInExecutionOrder.map(\.method), [.activate, .wait])
         XCTAssertEqual(rollup.actions.dispatchedResults.first?.warning, actionWarning)
+        XCTAssertEqual(rollup.warnings, [
+            HeistExecutionWarning(path: "$.body[2]", message: "explicit warning"),
+        ])
         XCTAssertEqual(result.warnings, [
             HeistExecutionWarning(path: "$.body[2]", message: "explicit warning"),
         ])
@@ -137,6 +140,12 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             beforeScreenId: "home",
             afterScreenId: "checkout"
         )
+        let finalTrace = makeReceiptTestTrace(
+            before: makeReceiptTestInterface(elementCount: 2),
+            after: makeReceiptTestInterface(elementCount: 3),
+            beforeScreenId: "checkout",
+            afterScreenId: "confirmation"
+        )
         let result = HeistExecutionResult(
             steps: [
                 actionStep(
@@ -146,6 +155,14 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                         evidence: ActionResultSuccessEvidence(observation: .trace(trace))
                     )
                 ),
+                actionStep(
+                    path: "$.body[1]",
+                    command: .activate(.predicate(ElementPredicateTemplate(label: "Confirm"))),
+                    actionResult: ActionResult.success(
+                        method: .activate,
+                        evidence: ActionResultSuccessEvidence(observation: .trace(finalTrace))
+                    )
+                ),
             ],
             durationMs: 12
         )
@@ -153,11 +170,14 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         let summary = result.evidenceRollup.summary
         let projection = HeistReportProjection(result: result, accessibilityTrace: nil, profile: .mcp)
 
-        XCTAssertTrue(result.evidenceRollup.events.contains { event in
-            guard case .finalScreen(let path, let screenId) = event else { return false }
-            return path == "$.body[0]" && screenId == "checkout"
-        })
-        XCTAssertEqual(summary.finalScreenId, "checkout")
+        XCTAssertEqual(result.evidenceRollup.events.compactMap { event in
+            guard case .finalScreen(let path, let screenId) = event else { return nil }
+            return "\(path):\(screenId)"
+        }, [
+            "$.body[0]:checkout",
+            "$.body[1]:confirmation",
+        ])
+        XCTAssertEqual(summary.finalScreenId, "confirmation")
         XCTAssertEqual(projection.summary.finalScreenId, summary.finalScreenId)
     }
 
