@@ -289,6 +289,58 @@ final class WireCommandParityTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testCLIAndMCPRoutesDeferEveryProjectedParameterMutationToAdmission() async throws {
+        let (fence, _) = makeConnectedFence()
+
+        for descriptor in TheFence.Command.descriptors where descriptor.isPublicRequestContract {
+            for parameter in descriptor.parameters {
+                for mutation in invalidValues(for: parameter) {
+                    var values = sampleArguments(for: descriptor.command)
+                    values[parameter.key] = mutation
+                    var routedInputs: [FenceCommandInput] = []
+                    let expectedFailure: Error
+
+                    do {
+                        _ = try fence.admit(FenceCommandInput(
+                            command: descriptor.command,
+                            arguments: .init(values: values)
+                        ))
+                        XCTFail("Expected admission failure for \(descriptor.command.rawValue).\(parameter.key)")
+                        continue
+                    } catch {
+                        expectedFailure = error
+                    }
+
+                    if descriptor.mcpExposure == .directTool {
+                        routedInputs.append(try TheFence.Command.routeToolRequest(
+                            named: descriptor.command.rawValue,
+                            arguments: .init(values: values)
+                        ).get())
+                    }
+                    if descriptor.cliExposure == .directCommand {
+                        values[FenceParameterKey.command.rawValue] = .string(descriptor.command.rawValue)
+                        routedInputs.append(try TheFence.Command.routeCLICommandEnvelope(
+                            .init(values: values),
+                            context: "test"
+                        ).get())
+                    }
+
+                    XCTAssertFalse(routedInputs.isEmpty, descriptor.command.rawValue)
+                    for input in routedInputs {
+                        XCTAssertThrowsError(try fence.admit(input), descriptor.command.rawValue) { error in
+                            XCTAssertEqual(
+                                String(reflecting: type(of: error)),
+                                String(reflecting: type(of: expectedFailure))
+                            )
+                            XCTAssertEqual(String(describing: error), String(describing: expectedFailure))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @ButtonHeistActor
     func testEveryProjectedDefaultIsAcceptedOmittedAndExplicitly() async throws {
         let (fence, _) = makeConnectedFence()
 
