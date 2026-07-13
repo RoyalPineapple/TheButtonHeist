@@ -1,70 +1,187 @@
 import SwiftUI
 import UIKit
 
-internal struct NestedScrollScenarioView: View {
-    private struct Album: Identifiable {
-        let id: String
-        let title: String
-        let artist: String
+internal struct NestedScrollScenarioView: UIViewControllerRepresentable {
+    // MARK: - UIViewControllerRepresentable
+
+    func makeUIViewController(context: Context) -> UIViewController {
+        NestedScrollViewController()
     }
 
-    private let sections: [(String, [Album])] = [
-        ("Recently Played", (1...8).map { Album(id: "recent-\($0)", title: "Recent Track \($0)", artist: "Daily Mix") }),
-        ("Recommended", (1...8).map { Album(id: "recommended-\($0)", title: "Recommended Track \($0)", artist: "Discovery") }),
-        ("Deep Cuts", [
-            Album(id: "deep-1", title: "Almost There", artist: "The Vibe Check"),
-            Album(id: "deep-2", title: "Nearly Verified", artist: "The Vibe Check"),
-            Album(id: "deep-3", title: "Verified by The Vibe Check", artist: "The Vibe Check"),
-        ] + (4...12).map { Album(id: "deep-\($0)", title: "Deep Cut \($0)", artist: "Archive") }),
-    ]
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {}
+}
 
-    @State private var selected: String?
+/// UIScrollView that publishes real offset attempts and movements as accessibility evidence.
+internal final class AdversarialScrollEvidenceView: UIScrollView {
+    // MARK: - Properties
 
-    var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 28) {
-                Text(selected.map { "Selected \($0)" } ?? "No nested selection")
-                    .font(.headline)
-                    .padding(.horizontal)
+    internal weak var attemptEvidenceLabel: UILabel?
+    internal weak var movementEvidenceLabel: UILabel?
+    internal weak var visibilityEvidenceLabel: UILabel?
+    internal weak var observedTarget: UIView?
+    internal var onEvidenceChange: (@MainActor (AdversarialScrollEvidenceView) -> Void)?
+    internal private(set) var offsetAttemptCount = 0
+    internal private(set) var offsetMovementCount = 0
+    private var isTrackingEvidence = false
 
-                ForEach(sections, id: \.0) { section, albums in
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(section)
-                            .font(.title3.bold())
-                            .accessibilityAddTraits(.isHeader)
-                            .padding(.horizontal)
+    override var contentOffset: CGPoint {
+        didSet { publishEvidence() }
+    }
 
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            LazyHStack(spacing: 12) {
-                                ForEach(albums) { album in
-                                    Button {
-                                        selected = album.title == "Verified by The Vibe Check" ? "Verified" : album.title
-                                    } label: {
-                                        VStack(alignment: .leading) {
-                                            Text(album.title)
-                                                .lineLimit(2)
-                                            Text(album.artist)
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
-                                        }
-                                        .frame(width: 180, height: 96, alignment: .leading)
-                                        .padding()
-                                        .background(Color(uiColor: .secondarySystemGroupedBackground))
-                                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                                    }
-                                    .accessibilityElement(children: .ignore)
-                                    .accessibilityLabel(album.title)
-                                    .accessibilityValue(album.artist)
-                                }
-                            }
-                            .padding(.horizontal)
-                        }
-                    }
-                }
-            }
-            .padding(.vertical)
+    // MARK: - Offset Evidence
+
+    override func setContentOffset(_ contentOffset: CGPoint, animated: Bool) {
+        let previousOffset = self.contentOffset
+        if isTrackingEvidence {
+            offsetAttemptCount += 1
         }
-        .navigationTitle("Nested Scroll")
-        .onAppear { selected = nil }
+        super.setContentOffset(contentOffset, animated: animated)
+        if isTrackingEvidence, self.contentOffset != previousOffset {
+            offsetMovementCount += 1
+        }
+        publishEvidence()
+    }
+
+    internal func beginEvidenceTracking() {
+        guard !isTrackingEvidence else { return }
+        offsetAttemptCount = 0
+        offsetMovementCount = 0
+        isTrackingEvidence = true
+        publishEvidence()
+    }
+
+    internal func publishEvidence() {
+        attemptEvidenceLabel?.accessibilityValue = String(offsetAttemptCount)
+        movementEvidenceLabel?.accessibilityValue = String(offsetMovementCount)
+        if let visibilityEvidenceLabel, let observedTarget {
+            visibilityEvidenceLabel.accessibilityValue = bounds.intersects(observedTarget.frame) ? "Visible" : "Offscreen"
+        }
+        onEvidenceChange?(self)
+    }
+}
+
+private final class NestedScrollViewController: UIViewController {
+    // MARK: - Properties
+
+    private let evidenceStack = UIStackView()
+    private let outerScrollView = AdversarialScrollEvidenceView()
+    private let innerScrollView = AdversarialScrollEvidenceView()
+    private let outerAttemptLabel = UILabel()
+    private let outerMovementLabel = UILabel()
+    private let innerAttemptLabel = UILabel()
+    private let innerMovementLabel = UILabel()
+    private let activationCountLabel = UILabel()
+    private let selectedLabel = UILabel()
+    private let deepCutsLabel = UILabel()
+    private let targetButton = UIButton(type: .system)
+    private var targetRevealOffset: CGFloat = 1
+    private var activationCount = 0
+
+    // MARK: - View Lifecycle
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "Nested Scroll"
+        view.backgroundColor = .systemGroupedBackground
+
+        configureEvidenceLabel(outerAttemptLabel, title: "Nested outer scroll attempts")
+        configureEvidenceLabel(outerMovementLabel, title: "Nested outer scroll movements")
+        configureEvidenceLabel(innerAttemptLabel, title: "Nested inner scroll attempts")
+        configureEvidenceLabel(innerMovementLabel, title: "Nested inner scroll movements")
+        configureEvidenceLabel(activationCountLabel, title: "Nested target activations")
+        selectedLabel.text = "No nested selection"
+
+        evidenceStack.axis = .vertical
+        evidenceStack.spacing = 4
+        evidenceStack.translatesAutoresizingMaskIntoConstraints = false
+        [outerAttemptLabel, outerMovementLabel, innerAttemptLabel, innerMovementLabel, activationCountLabel, selectedLabel]
+            .forEach(evidenceStack.addArrangedSubview)
+        view.addSubview(evidenceStack)
+
+        outerScrollView.contentInsetAdjustmentBehavior = .never
+        outerScrollView.translatesAutoresizingMaskIntoConstraints = false
+        outerScrollView.attemptEvidenceLabel = outerAttemptLabel
+        outerScrollView.movementEvidenceLabel = outerMovementLabel
+        view.addSubview(outerScrollView)
+
+        deepCutsLabel.text = "Deep Cuts"
+        deepCutsLabel.accessibilityTraits.insert(.header)
+        outerScrollView.addSubview(deepCutsLabel)
+
+        innerScrollView.contentInsetAdjustmentBehavior = .never
+        innerScrollView.attemptEvidenceLabel = innerAttemptLabel
+        innerScrollView.movementEvidenceLabel = innerMovementLabel
+        innerScrollView.onEvidenceChange = { [weak self] scrollView in
+            guard let self else { return }
+            self.targetButton.isAccessibilityElement = scrollView.contentOffset.x >= self.targetRevealOffset
+        }
+        outerScrollView.addSubview(innerScrollView)
+
+        let nearButton = UIButton(type: .system)
+        nearButton.setTitle("Almost There", for: .normal)
+        nearButton.frame = CGRect(x: 20, y: 32, width: 180, height: 96)
+        innerScrollView.addSubview(nearButton)
+
+        targetButton.setTitle("Verified by The Vibe Check", for: .normal)
+        targetButton.accessibilityValue = "The Vibe Check"
+        targetButton.isAccessibilityElement = false
+        targetButton.addTarget(self, action: #selector(activateTarget), for: .touchUpInside)
+        innerScrollView.addSubview(targetButton)
+
+        NSLayoutConstraint.activate([
+            evidenceStack.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 20),
+            evidenceStack.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -20),
+            evidenceStack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
+            outerScrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            outerScrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            outerScrollView.topAnchor.constraint(equalTo: evidenceStack.bottomAnchor, constant: 12),
+            outerScrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+        ])
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        let outerContentHeight = max(900, outerScrollView.bounds.height + 500)
+        outerScrollView.contentSize = CGSize(width: outerScrollView.bounds.width, height: outerContentHeight)
+        deepCutsLabel.frame = CGRect(
+            x: 20,
+            y: outerContentHeight - 240,
+            width: 260,
+            height: 30
+        )
+        innerScrollView.frame = CGRect(
+            x: 0,
+            y: outerContentHeight - 200,
+            width: outerScrollView.bounds.width,
+            height: 160
+        )
+        let innerContentWidth = max(900, innerScrollView.bounds.width + 520)
+        innerScrollView.contentSize = CGSize(width: innerContentWidth, height: innerScrollView.bounds.height)
+        targetButton.frame = CGRect(x: innerContentWidth - 240, y: 32, width: 220, height: 96)
+        targetRevealOffset = max(1, targetButton.frame.minX - innerScrollView.bounds.width + 40)
+        outerScrollView.publishEvidence()
+        innerScrollView.publishEvidence()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        outerScrollView.beginEvidenceTracking()
+        innerScrollView.beginEvidenceTracking()
+    }
+
+    // MARK: - Target Action
+
+    @objc private func activateTarget() {
+        activationCount += 1
+        activationCountLabel.accessibilityValue = String(activationCount)
+        selectedLabel.text = "Selected Verified"
+    }
+
+    // MARK: - Evidence
+
+    private func configureEvidenceLabel(_ label: UILabel, title: String) {
+        label.text = title
+        label.accessibilityLabel = title
+        label.accessibilityValue = "0"
     }
 }

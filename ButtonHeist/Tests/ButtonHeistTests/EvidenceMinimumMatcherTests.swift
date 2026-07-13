@@ -57,7 +57,7 @@ private func semanticActionResult(
                         before: makeReceiptTestInterface(before),
                         after: makeReceiptTestInterface(after)
                     ),
-                    completeness: .incomplete
+                    completeness: settled ? .complete : .incomplete
                 ),
                 settled ? .settled(durationMs: 0) : .timedOut(durationMs: 0)
             ),

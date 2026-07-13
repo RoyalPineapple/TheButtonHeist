@@ -16,9 +16,15 @@ internal struct DuplicateLabelsScenarioView: View {
     ]
 
     @State private var completedIDs: Set<String> = []
+    @State private var mutationCount = 0
 
     var body: some View {
         List {
+            Section {
+                Text("Task mutation count")
+                    .accessibilityValue(String(mutationCount))
+            }
+
             Section("Tasks") {
                 ForEach(rows) { row in
                     VStack(alignment: .leading) {
@@ -35,15 +41,18 @@ internal struct DuplicateLabelsScenarioView: View {
                     .accessibilityCustomContent(Text("Priority"), Text(row.priority), importance: .high)
                     .accessibilityCustomContent(Text("Notes"), Text(row.notes))
                     .accessibilityAction(named: "Toggle") { toggle(row.id) }
-                    .accessibilityAction(named: "Delete") { completedIDs.remove(row.id) }
                 }
             }
         }
         .navigationTitle("Duplicate Labels")
-        .onAppear { completedIDs = [] }
+        .onAppear {
+            completedIDs = []
+            mutationCount = 0
+        }
     }
 
     private func toggle(_ id: String) {
+        mutationCount += 1
         if completedIDs.contains(id) {
             completedIDs.remove(id)
         } else {

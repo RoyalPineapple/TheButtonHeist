@@ -220,7 +220,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             method: .activate,
             evidence: ActionResultSuccessEvidence(
                 observation: .settledTrace(
-                    makeTestTraceEvidence(trace, completeness: .incomplete),
+                    makeTestTraceEvidence(trace, completeness: .complete),
                     .settled(durationMs: 1)
                 )
             )
@@ -351,7 +351,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                         before: makeReceiptTestInterface(elementCount: 3),
                         after: makeReceiptTestInterface(elementCount: 3)
                     ),
-                    completeness: .incomplete
+                    completeness: .complete
                 ),
                 activationTrace: ActivationTrace(.activationPointFallback(
                     axActivateReturned: false,

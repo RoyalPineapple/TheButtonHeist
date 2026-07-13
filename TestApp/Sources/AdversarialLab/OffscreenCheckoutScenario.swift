@@ -1,58 +1,126 @@
 import SwiftUI
+import UIKit
 
-internal struct OffscreenCheckoutScenarioView: View {
-    private struct Item: Identifiable {
-        let id: String
-        let name: String
+internal struct OffscreenCheckoutScenarioView: UIViewControllerRepresentable {
+    // MARK: - UIViewControllerRepresentable
+
+    func makeUIViewController(context: Context) -> UIViewController {
+        OffscreenCheckoutViewController()
     }
 
-    private let items = [
-        Item(id: "espresso", name: "Espresso"),
-        Item(id: "tea", name: "Tea"),
-        Item(id: "bagel", name: "Bagel"),
-    ]
-    private let filler = (1...36).map { "Checkout detail \($0)" }
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {}
+}
 
-    @State private var selectedItemIDs: Set<String> = []
-    @State private var didCheckout = false
+private final class OffscreenCheckoutViewController: UIViewController {
+    // MARK: - Properties
 
-    private var canCheckout: Bool { !selectedItemIDs.isEmpty }
+    private let evidenceStack = UIStackView()
+    private let scrollView = AdversarialScrollEvidenceView()
+    private let scrollAttemptLabel = UILabel()
+    private let scrollMovementLabel = UILabel()
+    private let targetVisibilityLabel = UILabel()
+    private let activationCountLabel = UILabel()
+    private let statusLabel = UILabel()
+    private let detailLabel = UILabel()
+    private let addButton = UIButton(type: .system)
+    private let placeOrderButton = UIButton(type: .system)
+    private var selectedEspresso = false
+    private var activationCount = 0
 
-    var body: some View {
-        List {
-            Section {
-                Text(didCheckout ? "Order placed" : "Cart ready")
-            }
+    // MARK: - View Lifecycle
 
-            Section("Menu") {
-                ForEach(items) { item in
-                    Button(selectedItemIDs.contains(item.id) ? "Remove \(item.name)" : "Add \(item.name)") {
-                        if selectedItemIDs.contains(item.id) {
-                            selectedItemIDs.remove(item.id)
-                        } else {
-                            selectedItemIDs.insert(item.id)
-                        }
-                    }
-                }
-            }
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "Offscreen Checkout"
+        view.backgroundColor = .systemGroupedBackground
 
-            Section("Details") {
-                ForEach(filler, id: \.self) { detail in
-                    Text(detail)
-                }
-            }
+        configureEvidenceLabel(scrollAttemptLabel, title: "Checkout scroll attempts")
+        configureEvidenceLabel(scrollMovementLabel, title: "Checkout scroll movements")
+        configureEvidenceLabel(targetVisibilityLabel, title: "Checkout target visibility", value: "Offscreen")
+        configureEvidenceLabel(activationCountLabel, title: "Checkout activations")
 
-            Section("Checkout") {
-                Button("Place order") {
-                    didCheckout = true
-                }
-                .disabled(!canCheckout)
-            }
-        }
-        .navigationTitle("Offscreen Checkout")
-        .onAppear {
-            selectedItemIDs = []
-            didCheckout = false
-        }
+        evidenceStack.axis = .vertical
+        evidenceStack.spacing = 4
+        evidenceStack.translatesAutoresizingMaskIntoConstraints = false
+        [scrollAttemptLabel, scrollMovementLabel, targetVisibilityLabel, activationCountLabel]
+            .forEach(evidenceStack.addArrangedSubview)
+        view.addSubview(evidenceStack)
+
+        scrollView.contentInsetAdjustmentBehavior = .never
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.attemptEvidenceLabel = scrollAttemptLabel
+        scrollView.movementEvidenceLabel = scrollMovementLabel
+        scrollView.visibilityEvidenceLabel = targetVisibilityLabel
+        scrollView.observedTarget = placeOrderButton
+        view.addSubview(scrollView)
+
+        statusLabel.text = "Cart ready"
+        scrollView.addSubview(statusLabel)
+
+        addButton.setTitle("Add Espresso", for: .normal)
+        addButton.addTarget(self, action: #selector(toggleEspresso), for: .touchUpInside)
+        scrollView.addSubview(addButton)
+
+        detailLabel.text = "Checkout details"
+        detailLabel.accessibilityTraits.insert(.header)
+        scrollView.addSubview(detailLabel)
+
+        placeOrderButton.setTitle("Place order", for: .normal)
+        placeOrderButton.isEnabled = false
+        placeOrderButton.addTarget(self, action: #selector(placeOrder), for: .touchUpInside)
+        scrollView.addSubview(placeOrderButton)
+
+        NSLayoutConstraint.activate([
+            evidenceStack.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 20),
+            evidenceStack.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -20),
+            evidenceStack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.topAnchor.constraint(equalTo: evidenceStack.bottomAnchor, constant: 12),
+            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+        ])
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        let contentHeight = max(900, scrollView.bounds.height + 480)
+        scrollView.contentSize = CGSize(width: scrollView.bounds.width, height: contentHeight)
+        statusLabel.frame = CGRect(x: 20, y: 20, width: 260, height: 30)
+        addButton.frame = CGRect(x: 20, y: 66, width: 220, height: 44)
+        detailLabel.frame = CGRect(
+            x: 20,
+            y: 150,
+            width: 260,
+            height: 30
+        )
+        placeOrderButton.frame = CGRect(x: 20, y: contentHeight - 70, width: 220, height: 44)
+        scrollView.publishEvidence()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        scrollView.beginEvidenceTracking()
+    }
+
+    // MARK: - Checkout Actions
+
+    @objc private func toggleEspresso() {
+        selectedEspresso.toggle()
+        addButton.setTitle(selectedEspresso ? "Remove Espresso" : "Add Espresso", for: .normal)
+        placeOrderButton.isEnabled = selectedEspresso
+    }
+
+    @objc private func placeOrder() {
+        activationCount += 1
+        activationCountLabel.accessibilityValue = String(activationCount)
+        statusLabel.text = "Order placed"
+    }
+
+    // MARK: - Evidence
+
+    private func configureEvidenceLabel(_ label: UILabel, title: String, value: String = "0") {
+        label.text = title
+        label.accessibilityLabel = title
+        label.accessibilityValue = value
     }
 }
