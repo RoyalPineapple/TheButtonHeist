@@ -22,6 +22,9 @@ final class ElementInflationProductTests: XCTestCase {
     override func tearDown() async throws {
         brains?.stopSemanticObservation()
         brains?.tripwire.stopPulse()
+        if let brains {
+            assertRuntimeStopped(brains)
+        }
         brains = nil
         try await super.tearDown()
     }
@@ -561,6 +564,7 @@ final class ElementInflationProductTests: XCTestCase {
         defer {
             localBrains.stopSemanticObservation()
             localBrains.tripwire.stopPulse()
+            assertRuntimeStopped(localBrains)
         }
         let fixture = try installOffscreenActivationFixture(
             identifier: identifier,
@@ -600,6 +604,20 @@ final class ElementInflationProductTests: XCTestCase {
         ]
         .compactMap(\.self)
         .joined(separator: "; ")
+    }
+
+    private func assertRuntimeStopped(
+        _ brains: TheBrains,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        let observationStream = brains.stash.semanticObservationStream
+        XCTAssertFalse(brains.semanticObservationIsActive, file: file, line: line)
+        XCTAssertFalse(brains.tripwire.isPulseRunning, file: file, line: line)
+        XCTAssertFalse(observationStream.isActive, file: file, line: line)
+        XCTAssertEqual(observationStream.settledWaiterCount, 0, file: file, line: line)
+        XCTAssertEqual(observationStream.cycleWaiterCount, 0, file: file, line: line)
+        XCTAssertEqual(observationStream.activeObservationDemandCount, 0, file: file, line: line)
     }
 
     private func nestedScrollFailureDescription(
