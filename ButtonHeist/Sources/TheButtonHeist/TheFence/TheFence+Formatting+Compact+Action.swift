@@ -76,10 +76,10 @@ extension FenceResponse {
         guard case .unmet = expectation,
               let result,
               result.outcome.isSuccess,
-              let trace = result.accessibilityTrace,
+              let traceEvidence = result.traceEvidence,
               let changeKind = DeltaProjection(
-                  trace: trace,
-                  isComplete: result.settled != false,
+                  trace: traceEvidence.trace,
+                  isComplete: traceEvidence.isComplete,
                   profile: .summary
               )?.kind
         else { return nil }

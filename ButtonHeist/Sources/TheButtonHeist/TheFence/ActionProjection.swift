@@ -92,10 +92,10 @@ struct ActionProjection: Sendable {
     }
 
     var delta: DeltaProjection? {
-        result.accessibilityTrace.flatMap {
+        result.traceEvidence.flatMap {
             DeltaProjection(
-                trace: $0,
-                isComplete: result.settled != false,
+                trace: $0.trace,
+                isComplete: $0.isComplete,
                 profile: profile,
                 includeScreenInterface: true
             )

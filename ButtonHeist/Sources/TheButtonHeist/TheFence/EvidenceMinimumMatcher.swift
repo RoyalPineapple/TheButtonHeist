@@ -22,7 +22,7 @@ enum EvidenceMinimumMatcher {
     }
 
     static func minimumTarget(actionResult: ActionResult) -> AccessibilityTarget? {
-        guard actionResult.settled != false,
+        guard actionResult.traceEvidence?.isComplete == true,
               let evidence = actionResult.subjectEvidence,
               let trace = actionResult.accessibilityTrace,
               let before = trace.captures.first
