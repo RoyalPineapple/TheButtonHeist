@@ -5,7 +5,6 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-SCRIPT_PATH="${SCRIPT_DIR#"$REPO_ROOT"/}/${BASH_SOURCE[0]##*/}"
 cd "$REPO_ROOT"
 
 BASELINE_TAG="${BUTTONHEIST_SWIFT_API_BASELINE_TAG:-}"
@@ -22,8 +21,64 @@ fi
 
 echo "Checking Swift API breakage against $BASELINE_TAG"
 INTENTIONAL_BREAKAGES=(
-    # Add only diagnostics absent from the selected baseline's copy of this gate.
+    # Add only diagnostics absent from the baseline gate.
 )
+
+extract_intentional_breakages() {
+    awk '
+        /^INTENTIONAL_BREAKAGES=\($/ { in_array = 1; found = 1; next }
+        in_array && /^\)$/ { complete = 1; exit }
+        in_array && /^[[:space:]]*(#.*)?$/ { next }
+        in_array && /^[[:space:]]*"[^"]*"[[:space:]]*$/ {
+            line = $0
+            sub(/^[[:space:]]*"/, "", line)
+            sub(/"[[:space:]]*$/, "", line)
+            print line
+            next
+        }
+        in_array { exit 2 }
+        END { if (!found || !complete) exit 2 }
+    '
+}
+
+if [[ "${#INTENTIONAL_BREAKAGES[@]}" -gt 0 ]]; then
+    GATE_PATH="scripts/$(basename "${BASH_SOURCE[0]}")"
+    if ! git rev-parse --verify "${BASELINE_TAG}^{commit}" >/dev/null 2>&1; then
+        echo "Error: Swift API baseline '$BASELINE_TAG' is not a commit."
+        exit 2
+    fi
+
+    baseline_breakages=()
+    if git cat-file -e "$BASELINE_TAG:$GATE_PATH" 2>/dev/null; then
+        if ! baseline_source="$(git show "$BASELINE_TAG:$GATE_PATH")" \
+            || ! baseline_breakage_lines="$(
+                printf '%s\n' "$baseline_source" | extract_intentional_breakages
+            )"; then
+            echo "Error: could not parse Swift API breakage exemptions from $BASELINE_TAG."
+            exit 2
+        fi
+        while IFS= read -r breakage; do
+            [[ -n "$breakage" ]] || continue
+            baseline_breakages+=("$breakage")
+        done <<< "$baseline_breakage_lines"
+    fi
+
+    stale_breakages=()
+    for intentional in "${INTENTIONAL_BREAKAGES[@]}"; do
+        for baseline_breakage in "${baseline_breakages[@]}"; do
+            if [[ "$intentional" == "$baseline_breakage" ]]; then
+                stale_breakages+=("$intentional")
+                break
+            fi
+        done
+    done
+
+    if [[ "${#stale_breakages[@]}" -gt 0 ]]; then
+        echo "Error: stale Swift API breakage exemption inherited from $BASELINE_TAG:"
+        printf '  - %s\n' "${stale_breakages[@]}"
+        exit 2
+    fi
+fi
 
 PUBLIC_PRODUCTS=()
 while IFS= read -r product; do
@@ -45,28 +100,6 @@ case "$MODE" in
         ;;
 esac
 
-for intentional in "${INTENTIONAL_BREAKAGES[@]:-}"; do
-    [[ -n "$intentional" ]] || continue
-    set +e
-    git grep --quiet --fixed-strings -e "\"$intentional\"" \
-        "$BASELINE_TAG" -- "$SCRIPT_PATH"
-    inherited_status=$?
-    set -e
-
-    case "$inherited_status" in
-        0)
-            echo "Error: stale Swift API breakage exemption inherited from $BASELINE_TAG:"
-            echo "  - $intentional"
-            exit 2
-            ;;
-        1) ;;
-        *)
-            echo "Error: could not inspect Swift API breakage exemptions in $BASELINE_TAG."
-            exit 2
-            ;;
-    esac
-done
-
 OUTPUT_FILE="$(mktemp)"
 trap 'rm -f "$OUTPUT_FILE"' EXIT
 
@@ -87,10 +120,12 @@ if [[ "$MODE" == "report" ]]; then
 fi
 
 detected_breakages=()
-while IFS= read -r breakage; do
+while IFS= read -r line; do
+    [[ "$line" == *"API breakage: "* ]] || continue
+    breakage="${line#*"API breakage: "}"
     [[ -n "$breakage" ]] || continue
     detected_breakages+=("$breakage")
-done < <(grep -F "API breakage:" "$OUTPUT_FILE" | sed 's/^.*API breakage: //')
+done < "$OUTPUT_FILE"
 if [[ "${#detected_breakages[@]}" -eq 0 ]]; then
     exit "$status"
 fi
@@ -98,8 +133,7 @@ fi
 unexpected_breakages=()
 for breakage in "${detected_breakages[@]}"; do
     allowed=0
-    for intentional in "${INTENTIONAL_BREAKAGES[@]:-}"; do
-        [[ -n "$intentional" ]] || continue
+    for intentional in "${INTENTIONAL_BREAKAGES[@]}"; do
         if [[ "$breakage" == "$intentional" ]]; then
             allowed=1
             break

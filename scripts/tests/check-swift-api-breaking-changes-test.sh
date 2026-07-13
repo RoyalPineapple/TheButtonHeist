@@ -98,8 +98,8 @@ assert_output_contains "stale Swift API breakage exemption inherited from fixtur
 [[ ! -e "$FIXTURE_ROOT/swift-arguments" ]] \
     || fail "stale exemption reached the Swift API checker"
 
-write_gate "deliberate current-only diagnostic"
-run_gate "API breakage: deliberate current-only diagnostic"
+write_gate "deliberate current-only diagnostic mentioning API breakage: literally"
+run_gate "error: API breakage: deliberate current-only diagnostic mentioning API breakage: literally"
 assert_status 0
 assert_output_contains "Only intentional Swift API breakage detected:"
 
@@ -118,7 +118,11 @@ EOF
 diff -u "$FIXTURE_ROOT/expected-swift-arguments" "$FIXTURE_ROOT/swift-arguments" \
     || fail "the gate did not discover all six public products"
 
-run_gate $'API breakage: deliberate current-only diagnostic\nAPI breakage: unrelated diagnostic'
+run_gate "API breakage: deliberate current-only diagnostic mentioning API breakage: literally with suffix"
+assert_status 1
+assert_output_contains "deliberate current-only diagnostic mentioning API breakage: literally with suffix"
+
+run_gate $'API breakage: deliberate current-only diagnostic mentioning API breakage: literally\nAPI breakage: unrelated diagnostic'
 assert_status 1
 assert_output_contains $'Unexpected Swift API breakage detected:\n  - unrelated diagnostic'
 
