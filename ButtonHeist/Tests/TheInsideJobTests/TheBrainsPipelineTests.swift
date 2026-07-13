@@ -1151,7 +1151,10 @@ final class TheBrainsPipelineTests: XCTestCase {
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
         _ = isolatedBrains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(loadingScreen)
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(emptyScreen)
+        _ = isolatedBrains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
+            emptyScreen,
+            notificationBatch: notificationBatch(kind: .screenChanged)
+        )
 
         let receipt = await receiptTask.value
 
@@ -1755,7 +1758,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertTrue(after.trace.changeFacts.isEmpty)
     }
 
-    func testElementChangedNotificationSuppressesSnapshotFallback() throws {
+    func testElementChangedNotificationDoesNotSuppressSnapshotFallback() throws {
         let before = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
             makeScreen(elements: [("Menu", .header, "menu_header")])
         )
@@ -1764,9 +1767,16 @@ final class TheBrainsPipelineTests: XCTestCase {
             notificationBatch: notificationBatch(kind: .elementChanged(.layout))
         )
 
-        XCTAssertEqual(after.generation, before.generation)
-        XCTAssertNil(after.trace.captures.last?.transition.fallbackReason)
-        XCTAssertEqual(after.trace.changeFacts.map(\.kind), [.elementsChanged])
+        XCTAssertNotEqual(after.generation, before.generation)
+        XCTAssertEqual(after.trace.captures.last?.transition.fallbackReason, .primaryHeaderChanged)
+        XCTAssertEqual(
+            after.trace.captures.last?.transition.accessibilityNotifications.map(\.kind),
+            [.elementChanged(.layout)]
+        )
+        XCTAssertEqual(
+            after.trace.changeFacts.map(\.kind),
+            [.elementsChanged, .screenChanged, .elementsChanged]
+        )
     }
 
     func testNotificationGapFallsBackToSnapshotClassification() throws {
@@ -2381,7 +2391,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         exploration.manifest.addPendingContainers([outerEntry])
         exploration.markExplored(outerEntry)
 
-        exploration.absorb(page)
+        exploration.absorbScrolledPage(page, notificationBatch: nil)
 
         XCTAssertTrue(exploration.manifest.exploredScrollPaths.contains(outerPath))
         XCTAssertFalse(exploration.manifest.pendingScrollPaths.contains(outerPath))
