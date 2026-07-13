@@ -202,6 +202,18 @@ private let screenChangePredicate = AccessibilityPredicate<RootContext>.changed(
     #expect(description.semanticSurface.semanticSurfaces == [.label(exactSemanticString("Pay"))])
 }
 
+@Test func `target discovery dedupes typed facts after ordinal projection`() throws {
+    let description = try HeistPlan(
+        name: "pay",
+        body: [
+            .action(try ActionStep(command: .activate(.target(.label("Pay"), ordinal: 0)))),
+            .action(try ActionStep(command: .activate(.target(.label("Pay"), ordinal: 1)))),
+        ]
+    ).describeHeist(named: "pay")
+
+    #expect(description.semanticSurface.targetPredicates == [.template(.label("Pay"))])
+}
+
 @Test func `list heists cannot be reached for invalid raw plan`() throws {
     let raw = HeistPlanAdmissionCandidate(
         name: "root",

@@ -472,7 +472,7 @@ struct ResolvedCatalogHeist {
 
 private struct HeistSemanticSurfaceBuilder {
     var actionCommands: [HeistActionCommandType] = []
-    var targetPredicates: [AccessibilityTarget] = []
+    var targetPredicateFacts: [HeistTargetPredicateFact] = []
     var waits: [AccessibilityPredicate<RootContext>] = []
     var expectations: [AccessibilityPredicate<RootContext>] = []
     var nestedRunHeists: [HeistInvocationPath] = []
@@ -490,7 +490,7 @@ private struct HeistSemanticSurfaceBuilder {
         )
         return HeistSemanticSurface(
             actionCommands: builder.actionCommands,
-            targetPredicates: builder.targetPredicates.map(\.discoveryFact),
+            targetPredicates: builder.targetPredicateFacts,
             waits: builder.waits,
             expectations: builder.expectations,
             nestedRunHeists: builder.nestedRunHeists,
@@ -680,13 +680,13 @@ private struct HeistSemanticSurfaceBuilder {
 
     mutating func appendTargetPredicate(_ target: AccessibilityTarget) {
         switch target {
-        case .predicate(let predicate, let ordinal):
-            appendUnique(.predicate(predicate, ordinal: ordinal), to: &targetPredicates)
+        case .predicate(let predicate, _):
+            appendUnique(.template(predicate), to: &targetPredicateFacts)
             appendSemanticSurfaces(predicate)
-        case .container:
-            appendUnique(target, to: &targetPredicates)
+        case .container(let predicate, _):
+            appendUnique(.container(predicate), to: &targetPredicateFacts)
         case .ref(let reference):
-            appendUnique(.ref(reference), to: &targetPredicates)
+            appendUnique(.targetReference(reference), to: &targetPredicateFacts)
         case .within(_, let target):
             appendTargetPredicate(target)
         }
@@ -725,21 +725,6 @@ private struct HeistSemanticSurfaceBuilder {
             }
         case .updated(let target, _):
             appendTargetPredicate(target)
-        }
-    }
-}
-
-private extension AccessibilityTarget {
-    var discoveryFact: HeistTargetPredicateFact {
-        switch self {
-        case .predicate(let predicate, _):
-            return .template(predicate)
-        case .container(let predicate, _):
-            return .container(predicate)
-        case .ref(let reference):
-            return .targetReference(reference)
-        case .within(_, let target):
-            return target.discoveryFact
         }
     }
 }
