@@ -48,6 +48,11 @@ only publication owner, and its production commit entry points require an
 `InterfaceObservationProof` produced by a clean settle or a finished
 exploration.
 
+`SemanticObservationRuntimeState` atomically owns the stream lifecycle,
+generation lineage, settled sequence, and notification cursors. Publication
+construction is a pure transform over boundary-resolved evidence; the stream
+performs stash commits, fallback logging, and retained-log publication.
+
 `SemanticObservationLog` is the retained temporal owner. Each
 `ObservationEntry` pairs a settled capture with an initial, same-generation, or
 screen-boundary transition. `ObservationCursor` records generation, scope,

@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 #if DEBUG
 import TheScore
+import ThePlans
 
 internal enum SemanticObservationGenerationClassifier {
     @MainActor
@@ -23,19 +24,13 @@ internal enum SemanticObservationGenerationClassifier {
                 previousInScope.generation.rawValue <= currentGeneration.rawValue,
                 "scoped observation generation cannot lead the stream"
             )
-            if previousInScope.generation == currentGeneration {
-                return ScreenClassifier.classify(
-                    before: ScreenClassifier.snapshot(
-                        of: previousInScope.observation.screen
-                            .semanticObservationProjection(for: scope).tree
-                    ),
-                    after: ScreenClassifier.snapshot(of: candidate.tree),
-                    notifications: notifications
-                )
-            }
         }
-
-        let previousSnapshot = latestSource.map { event in
+        let predecessor = if previousInScope?.generation == currentGeneration {
+            previousInScope
+        } else {
+            latestSource
+        }
+        let previousSnapshot = predecessor.map { event in
             ScreenClassifier.snapshot(
                 of: event.observation.screen
                     .semanticObservationProjection(for: scope).tree
@@ -52,6 +47,12 @@ internal enum SemanticObservationGenerationClassifier {
 /// Builds one publication from the log's latest per-scope events.
 internal struct SemanticObservationPublication {
     internal typealias EventsByScope = [SemanticObservationScope: SettledSemanticObservationEvent]
+
+    internal struct Evidence {
+        internal let interface: Interface
+        internal let accessibilityNotifications: [AccessibilityNotificationEvidence]
+        internal let firstResponder: AccessibilityTarget?
+    }
 
     internal struct Context {
         internal let generationClassification: ScreenClassifier.Classification
@@ -73,6 +74,8 @@ internal struct SemanticObservationPublication {
         sourceEvent.generation
     }
 
+    // MARK: - Init
+
     internal init(
         sourceScope: SemanticObservationScope,
         events: EventsByScope
@@ -82,6 +85,8 @@ internal struct SemanticObservationPublication {
         self.events = events
     }
 
+    // MARK: - Publication
+
     @MainActor
     internal static func make(
         sourceScope: SemanticObservationScope,
@@ -90,8 +95,7 @@ internal struct SemanticObservationPublication {
         screen: InterfaceObservation,
         semanticSignal: TheTripwire.SemanticSignal,
         context: Context,
-        stash: TheStash,
-        notificationIdentityScreen: InterfaceObservation? = nil
+        evidenceByScope: [SemanticObservationScope: Evidence]
     ) -> SemanticObservationPublication {
         let notificationKinds = notificationBatch.events.map(\.kind)
         let eventGeneration = context.generationClassification.isScreenReplacement
@@ -99,6 +103,9 @@ internal struct SemanticObservationPublication {
             : context.generation
         var events: EventsByScope = [:]
         for fulfilledScope in sourceScope.fulfilledScopes {
+            guard let evidence = evidenceByScope[fulfilledScope] else {
+                preconditionFailure("Semantic observation publication has no evidence for fulfilled scope")
+            }
             let previousEvent = context.previousEvents[fulfilledScope]
             let observation = SettledSemanticObservation(
                 sequence: sequence,
@@ -114,23 +121,67 @@ internal struct SemanticObservationPublication {
                 notifications: notificationKinds
             )
             let fallbackReason = classification.fallbackReason
-            if let fallbackReason {
-                AccessibilityObservationFallbackLog.record(
-                    fallbackReason,
-                    source: .settledObservation
-                )
-            }
-            events[fulfilledScope] = SemanticObservationEventFactory.makeEvent(
+            let previousCapture = previousEvent?.trace.captures.last
+            let currentCapture = makeCapture(
                 observation: observation,
-                previous: previousEvent,
+                sequence: previousCapture == nil ? 1 : 2,
+                parentHash: previousCapture?.hash,
                 generation: eventGeneration,
                 notificationBatch: notificationBatch,
-                stash: stash,
-                notificationIdentityScreen: notificationIdentityScreen,
+                evidence: evidence,
                 fallbackReason: fallbackReason
+            )
+            let trace = if let previousCapture {
+                AccessibilityTrace(captures: [previousCapture, currentCapture])
+            } else {
+                AccessibilityTrace(capture: currentCapture)
+            }
+            events[fulfilledScope] = SettledSemanticObservationEvent(
+                generation: eventGeneration,
+                sequence: observation.sequence,
+                scope: observation.scope,
+                observation: observation,
+                previous: previousEvent?.observation,
+                previousCursor: previousEvent?.cursor,
+                notificationSequence: notificationBatch.through.sequence,
+                trace: trace
             )
         }
         return SemanticObservationPublication(sourceScope: sourceScope, events: events)
+    }
+
+    private static func makeCapture(
+        observation: SettledSemanticObservation,
+        sequence: Int,
+        parentHash: String?,
+        generation: ObservationGeneration,
+        notificationBatch: AccessibilityNotificationBatch,
+        evidence: Evidence,
+        fallbackReason: AccessibilityObservationFallbackReason?
+    ) -> AccessibilityTrace.Capture {
+        let windows = observation.semanticSignal.windows.enumerated().map { index, window in
+            AccessibilityTrace.WindowContext(
+                index: index,
+                level: window.level,
+                isKeyWindow: window.isKeyWindow
+            )
+        }
+        return AccessibilityTrace.Capture(
+            sequence: sequence,
+            interface: evidence.interface,
+            parentHash: parentHash,
+            context: AccessibilityTrace.Context(
+                firstResponder: evidence.firstResponder,
+                screenId: observation.screen.id,
+                observationGeneration: generation.rawValue,
+                windowStack: windows
+            ),
+            transition: AccessibilityTrace.Transition(
+                fallbackReason: fallbackReason,
+                accessibilityNotifications: evidence.accessibilityNotifications,
+                accessibilityNotificationGap: notificationBatch.gap
+            )
+        )
     }
 }
 
