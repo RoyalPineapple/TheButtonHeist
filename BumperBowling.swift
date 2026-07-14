@@ -1,6 +1,6 @@
 import BumperBowlingCore
 
-let configuration = BumperConfiguration {
+let bumper = BumperProject {
     Included {
         "ButtonHeist/Sources"
         "ButtonHeistCLI/Sources"
@@ -16,7 +16,7 @@ let configuration = BumperConfiguration {
         "tests/fixtures"
     }
 
-    Architecture {
+    Architecture(ButtonHeistComponent.self) {
         Component(.plans) {
             Owns("ButtonHeist/Sources/ThePlans")
             Modules("ThePlans")
@@ -62,7 +62,11 @@ let configuration = BumperConfiguration {
         Component(.testing) {
             Owns("ButtonHeist/Sources/ButtonHeistTesting")
             Modules("ButtonHeistTesting")
-            MayDependOn(.plans, .dsl, .runtime)
+            MayDependOn(
+                .plans,
+                .dsl,
+                .runtime
+            )
             Applies(.buttonHeistTestingBoundary)
         }
 
@@ -72,28 +76,45 @@ let configuration = BumperConfiguration {
                 "ButtonHeistCLI/Sources"
             )
             Modules("HeistPlanTool", "ButtonHeistCLI")
-            MayDependOn(.plans, .score, .doctor, .runtime)
+            MayDependOn(
+                .plans,
+                .score,
+                .doctor,
+                .runtime
+            )
             Applies(.buttonHeistToolBoundary)
         }
 
         Component(.mcp) {
             Owns("ButtonHeistMCP/Sources")
             Modules("ButtonHeistMCP")
-            MayDependOn(.plans, .score, .runtime, .tools)
+            MayDependOn(
+                .plans,
+                .score,
+                .runtime,
+                .tools
+            )
             Applies(.buttonHeistMCPBoundary)
         }
 
         Component(.demo) {
             Owns("TestApp/Sources")
             Modules("TestApp")
-            MayDependOn(.plans, .score, .dsl, .runtime, .testing)
+            MayDependOn(
+                .plans,
+                .score,
+                .dsl,
+                .runtime,
+                .testing
+            )
             Applies(.buttonHeistDemoSurface)
         }
     }
 
-    Assertions {
-        ApplyAssertions(.buttonHeistGlobal)
+    Rules {
+        DependencyBoundaries(.error)
+        SingleOwner(.error)
+        AcyclicDeclaredDependencies(.error)
+        buttonHeistRules
     }
-
-    CustomRules()
 }

@@ -46,6 +46,12 @@ has already parsed the canonical name into `TheFence.Command`, validated the
 descriptor-owned parameter schema, and converted `FenceCommandInput` into the
 typed `FenceOperationRequest` consumed by execution.
 
+Fence command names are snake case. Inside `HeistActionCommand`, the canonical
+`type` values are the Swift raw values from `HeistActionCommandType`, including
+`performCustomAction`, `oneFingerTap`, `typeText`, `scrollToVisible`,
+`scrollToEdge`, and `resignFirstResponder`. Raw clients must not substitute
+Fence spellings such as `type_text` inside a heist action payload.
+
 ## Transport
 
 - TLS over TCP using Network.framework
@@ -247,7 +253,8 @@ seconds since 2001-01-01 00:00:00 UTC.
 The raw interface tree carries parser values plus path-indexed Button Heist
 annotations. Capture-local `HeistId` values remain inside TheInsideJob and are
 not selectors on this transport. `AccessibilityTarget` is the canonical target
-object for actions, predicates, and `get_interface.query.subtree`. An element
+object for actions, waits, expectations, CLI/MCP projections, and
+`requestInterface.payload.subtree`. An element
 target carries an ordered predicate `checks` chain and optional `ordinal`; a
 container target carries `container` and optional `ordinal`; `container` plus
 `target` expresses a descendant-scoped target; `ref` refers to a scoped heist
@@ -381,7 +388,9 @@ Action responses use `actionResult`:
 {"buttonHeistVersion":"<semver>","type":"actionResult","payload":{"outcome":{"kind":"success"},"method":"activate","evidence":{"observation":{"kind":"none"}}}}
 ```
 
-Action evidence is required and bound to the result outcome. Its `observation`
+App-side dispatch first produces one `ActionDispatchOutcome`; observation adds
+evidence to that result without another intermediate result shape. Action
+evidence is required and bound to the wire result outcome. Its `observation`
 is exactly one tagged case: `none`, `announcement`, `trace`, or `settledTrace`.
 Only `settledTrace` owns the tagged settlement shape
 `{"kind":"settled|timedOut","durationMs":...}`.
@@ -414,25 +423,29 @@ an action is drawn in the [action pipeline diagram](diagrams/action-pipeline.md)
 
 ## Traces, Facts, and Public Deltas
 
-`AccessibilityTrace` stores ordered capture evidence. Proof-backed captures in
-the semantic stream are settled temporal truth, and the runtime derives one
-ordered `ChangeFact` stream from their adjacent edges. A timed-out action may
-return a diagnostic trace in its receipt, but that trace is not committed or
-usable as a settled observation baseline. Predicate evaluation, diagnostics,
-and repair analysis consume the applicable fact stream directly; no separate
-stored or endpoint temporal model exists.
+`SemanticObservationLog` is the in-app temporal owner. It retains settled
+entries with typed lineage and serves replayable cursor-backed sequences. A
+temporal predicate builds one `ObservationWindow` from its immutable baseline
+through the current retained entry; it does not merge a private trace or claim
+notification ownership. Presence predicates read the current tree directly.
 
-Only proof-backed observations become committed captures in the settled
-semantic stream. A raw `InterfaceObservation` is live parser evidence and
-cannot be committed directly. Visible commits require a clean-settle
+`AccessibilityTrace` is the durable wire/receipt evidence materialized from
+that lineage, and the runtime derives ordered `ChangeFact` values from its
+adjacent captures. A timed-out action may return a diagnostic trace in its
+receipt, but that trace is not committed or usable as a settled observation
+baseline. No separate stored or endpoint temporal model exists.
+
+Only proof-backed observations are published and appended to the retained
+semantic observation log. A raw `InterfaceObservation` is live parser evidence
+and cannot be committed directly. Visible commits require a clean-settle
 `InterfaceObservationProof`; discovery commits require the proof made from the
 finished exploration graph after its settled pages have been reduced.
 
 Facts have two kinds: `elementsChanged` and `screenChanged`. A screen boundary
 always derives three ordered facts: old-tree departures, the screen marker,
 then new-tree arrivals. `updated` entries can only be derived from captures in
-the same screen generation. A complete trace with no facts is proof of
-`noChange`; no `noChange` fact is emitted.
+the same screen generation. Only a complete observation window with no facts
+proves `noChange`; no `noChange` fact is emitted.
 
 Scoped notification evidence has one semantic shape: `screenChanged`,
 `elementChanged` with a `layout` or `value` subtype, `announcement`, or
@@ -444,12 +457,17 @@ UIKit does not guarantee delivery of a useful notification for every change;
 absence permits explicit snapshot classification but is not itself evidence of
 either replacement or stability.
 
-A clean post-action commit contributes one captured notification batch. Its
-retained events are strictly after the action window's opening cursor and no
-later than the batch's exact through-cursor. That through-cursor becomes the
-observation's notification cursor. A failed settle cancels the window and does
-not attach its events to settled trace evidence. If the bounded notification
-stream discarded relevant events, the destination capture carries
+A clean post-action commit contributes one checkpointed notification batch.
+`AccessibilityNotificationBus` retains the ingress events; checkpointing never
+clears or transfers ownership of them. The selected events are strictly after
+the action window's opening cursor and no later than the batch's exact
+through-cursor. That through-cursor becomes the observation's notification
+cursor. A failed settle closes the attribution window and does not attach its
+events to that diagnostic trace. The ingress log remains non-destructive:
+because no settled cursor advanced, an eligible scoped event can still be
+claimed by the next clean commit. Ambient events remain outside scoped heist
+evidence. If the bounded notification stream discarded relevant events, the
+destination capture carries
 `transition.accessibilityNotificationGap.droppedThroughSequence`; a gapped edge
 does not claim complete notification evidence. A scoped `screenChanged` after
 batch capture is outside that cursor and still invalidates the committed
@@ -473,25 +491,28 @@ Observed notification evidence and inferred screen classification occupy
 different transition fields. `transition.accessibilityNotifications` retains
 the notification records. `transition.fallbackReason` separately retains the
 typed reason inferred by `ScreenClassifier` from settled snapshots.
-`ScreenClassifier` owns precedence: scoped `screenChanged` is authoritative;
-`elementChanged` and `announcement` suppress replacement inference; and only an
-empty or unknown batch permits snapshot inference. Every inferred replacement
+`ScreenClassifier` owns precedence: scoped `screenChanged` is authoritative.
+Without that notification, every settled pair is still classified from its
+snapshots; `elementChanged` and `announcement` remain notification facts but do
+not veto a replacement proved by the snapshots. Every inferred replacement
 records one of `modalBoundaryChanged`, `selectedTabChanged`,
 `navigationMarkerChanged`, `primaryHeaderChanged`, or `rootShapeChanged` in
 `transition.fallbackReason`. Parsed screen IDs, first-responder state, geometry,
-and observation-generation counters never classify a screen boundary on their
-own.
+and observation-generation counters never originate a screen classification;
+the generation records the classifier's result.
 
 For UIKit value controls, both `elementChanged` subtypes and `announcement` are
 recapture triggers. The notification kind does not assert the new value;
 Button Heist re-reads the delivered node and derives any value update from the
 before/after captures. SwiftUI value notifications use that same path.
 
-Public action JSON retains a compact `delta` field. It is a one-way lossy fold
-over the ordered facts for display and transport. A folded public delta is
-discriminated as `noChange`, `elementsChanged`, or `screenChanged`; it is never
-used to evaluate a predicate. Empty edit and notification collections are
-omitted on the wire.
+Fence JSON projections of action and receipt evidence add a compact `delta`
+field; the raw `actionResult` message carries the source trace evidence instead.
+The delta is a one-way lossy fold over ordered facts. It is discriminated as
+`noChange`, `elementsChanged`, or `screenChanged` and is never used to evaluate
+a predicate. A screen marker dominates the final public delta kind even when
+element facts also occurred. Empty edit and notification collections are
+omitted from the projection.
 
 ## Authentication and Sessions
 

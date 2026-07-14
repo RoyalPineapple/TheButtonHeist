@@ -1,6 +1,6 @@
 import BumperBowlingCore
 
-enum ButtonHeistComponent: String, CaseIterable {
+enum ButtonHeistComponent: String, ComponentKey {
     case plans
     case score
     case dsl
@@ -10,25 +10,6 @@ enum ButtonHeistComponent: String, CaseIterable {
     case tools
     case mcp
     case demo
-
-    var id: ComponentID {
-        guard let id = try? ComponentID(rawValue) else {
-            preconditionFailure("Invalid component id: \(rawValue)")
-        }
-        return id
-    }
-}
-
-extension ComponentID {
-    static let plans = ButtonHeistComponent.plans.id
-    static let score = ButtonHeistComponent.score.id
-    static let dsl = ButtonHeistComponent.dsl.id
-    static let doctor = ButtonHeistComponent.doctor.id
-    static let runtime = ButtonHeistComponent.runtime.id
-    static let testing = ButtonHeistComponent.testing.id
-    static let tools = ButtonHeistComponent.tools.id
-    static let mcp = ButtonHeistComponent.mcp.id
-    static let demo = ButtonHeistComponent.demo.id
 }
 
 extension ComponentShape {
@@ -70,13 +51,5 @@ extension ComponentShape {
 
     static let buttonHeistDemoSurface = ComponentShape {
         MayUse(.foundation, .uiKit, .swiftUI)
-    }
-}
-
-extension AssertionShape {
-    static let buttonHeistGlobal = AssertionShape {
-        DependencyBoundaries(.error)
-        SingleOwner(.error)
-        AcyclicDeclaredDependencies(.error)
     }
 }

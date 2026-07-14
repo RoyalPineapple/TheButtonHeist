@@ -51,7 +51,7 @@ Crew members inside `TheInsideJob` (directories under `ButtonHeist/Sources/TheIn
 | `TheBurglar` | Accessibility hierarchy parsing and semantic observation capture |
 | `TheGetaway` | Message encoding/decoding and transport routing |
 | `TheSafecracker` | Touch injection and text input dispatch |
-| `TheStash` | Interface tree, latest live observation, target resolution, heistId assignment |
+| `TheStash` | Interface tree/graph projection, retained observation log, latest live evidence, target resolution, heistId assignment |
 | `TheTripwire` | UIKit timing signals — animations, layout, window ordering, keyboard state |
 | `Server` | `TheMuscle` admission and sessions, `NWListener`, Bonjour advertisement |
 | `Lifecycle` | App lifecycle coordination and server startup/shutdown |

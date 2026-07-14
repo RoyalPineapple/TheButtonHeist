@@ -97,10 +97,7 @@ Recommended commands:
 tuist test TheScoreTests --no-selective-testing
 tuist test ButtonHeistTests --no-selective-testing
 tuist test TheInsideJobTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
-tuist test DogfoodFeatureFlowTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
-tuist test DogfoodRuntimeContractTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
-tuist test AdversarialMutationTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
-tuist test AdversarialNavigationTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
+tuist test HostedBehaviorTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
 ```
 
 If Tuist reports missing external dependencies, run:
@@ -261,10 +258,7 @@ Before pushing any commit, verify the following:
   tuist test TheScoreTests --no-selective-testing
   tuist test ButtonHeistTests --no-selective-testing
   tuist test TheInsideJobTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
-  tuist test DogfoodFeatureFlowTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
-  tuist test DogfoodRuntimeContractTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
-  tuist test AdversarialMutationTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
-  tuist test AdversarialNavigationTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
+  tuist test HostedBehaviorTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
   ```
 - If tests fail, fix the code or update tests to reflect intentional changes.
 
@@ -294,8 +288,8 @@ Before pushing any commit, verify the following:
 `tuist test` is the one true way to run tests in this repository.
 
 - `TheScoreTests` and `ButtonHeistTests` run as explicit Tuist schemes.
-- The hosted iOS suite is five explicit schemes: core `TheInsideJobTests`, `DogfoodFeatureFlowTests`, `DogfoodRuntimeContractTests`, `AdversarialMutationTests`, and `AdversarialNavigationTests`.
-- All five hosted schemes run via the `BH Demo` test host and require an explicit simulator destination. Running only `TheInsideJobTests` does not run the dogfood or adversarial shards.
+- The hosted iOS suite has two canonical schemes: core `TheInsideJobTests` and aggregate `HostedBehaviorTests`, which owns the dogfood and adversarial targets.
+- Both hosted schemes run via the `BH Demo` test host and require an explicit simulator destination. Running only `TheInsideJobTests` does not run hosted behavior.
 - Use `--no-selective-testing` when you need to force the full suite instead of Tuist's default selective run.
 - Treat `swift test` as a package-debugging tool, not as the source of truth for CI-style verification.
 
@@ -447,14 +441,14 @@ Where `RecordingSession` and `FinalizingSession` are structs carrying exactly th
 
 ## Functional Over Imperative
 
-Swift has first-class support for a functional style — value types, enums with associated data, `map`/`compactMap`/`reduce`, `lazy` sequences, result builders, and strong generics. Use them. The goal is code where correctness is structural: if it compiles and the types line up, it's hard to get wrong.
+Swift has first-class support for a functional style — value types, enums with associated data, `map`/`compactMap`/`reduce`, `lazy` sequences, result builders, and strong generics. Use them where they make ownership and transformation clearer. Functional syntax is not the invariant: prefer a local mutable accumulator when it preserves linear complexity, early exit, or a natural traversal direction. The goal is code where correctness is structural without hiding cost or control flow.
 
 **Use the language:**
 
-- **`map`/`compactMap`/`filter`/`reduce` over `for` loops with mutable accumulators.** A `for` loop that appends to a `var array` is an imperative encoding of a transform. Use the functional version — it's shorter, the compiler can reason about it, and there's no intermediate mutable state to get wrong. Reserve `for` loops for side-effectful iteration (UI updates, network calls).
-- **`lazy` sequences for multi-step pipelines.** When chaining `filter`/`map`/`compactMap`, use `lazy` to avoid allocating intermediate arrays. This is especially relevant for element pipelines where we filter thousands of accessibility elements.
+- **Choose the smallest linear collection operation.** Use `map`/`compactMap`/`filter` when each input independently produces an output. Use `reduce` when the accumulator is the meaning of the operation. Use a local `for` loop or `inout` accumulator when the operation needs early exit, path-dependent state, or would otherwise repeatedly copy accumulated collections.
+- **`lazy` sequences for substantial multi-step pipelines.** When chaining `filter`/`map`/`compactMap` over large element collections, use `lazy` when it avoids intermediate allocations without obscuring the resulting type or control flow.
 - **Enums with associated data as result types.** Instead of returning a tuple of optionals or a struct with fields that are only valid in certain states, return an enum where each case carries exactly its data. `Result<T, E>` is the simplest case; domain-specific enums (like `ResolutionResult`) are better when there are more than two outcomes.
-- **`folded()` / recursive enum traversal over switch-and-recurse.** When walking a recursive enum like `AccessibilityHierarchy`, define a `folded(onElement:onContainer:)` method that does the recursion once. Callers supply closures for each case. This eliminates the repeated `switch` + manual recursion pattern.
+- **One algebraic owner for recursive traversal.** When walking a recursive enum like `AccessibilityHierarchy`, define one canonical fold or traversal operation. Callers provide transformations; they do not switch and recurse independently. Match the algebra to the natural traversal direction and use an internal accumulator when that avoids closure towers or repeated collection concatenation.
 - **Struct tokens over parameter sprawl.** When a function needs to capture a snapshot of state (for before/after comparison, deferred processing, etc.), bundle it into a struct. The struct is the proof that state was captured; its type prevents mixing up arguments. Canonical example: `captureBeforeState()` returns a `BeforeState` struct consumed by `actionResultWithDelta(before:)`, replacing four loose parameters.
 - **Computed properties over synchronized state.** If a value can be derived from other state, make it a computed property. A cache is acceptable when profiling justifies it — but key the cache on source data (fingerprints, hashes), not imperative "dirty" flags.
 
@@ -465,7 +459,10 @@ Swift has first-class support for a functional style — value types, enums with
 - **Declarative predicates over imperative decisions.** Express skip/include/transform decisions as value comparisons (fingerprint equality, set membership), not as stateful flags set at an earlier point. The decision should be auditable from the values alone.
 
 **What to watch for:**
-- A `for` loop building a result array that could be a single `map`/`compactMap`/`reduce` expression.
+- Repeated `array + [element]`, `[element] + descendants`, or nested concatenation while accumulating a result.
+- A closure tower or bottom-up fold used to simulate a naturally top-down traversal.
+- A `map`/`reduce` pipeline that hides early exit, repeatedly copies state, or is harder to audit than one local accumulator.
+- A `for` loop building a result array when a direct `map` or `compactMap` expresses the same one-to-one transform without additional state.
 - Two branches assembling the same return type with overlapping but slightly different logic.
 - Functions that take more than 3-4 parameters of "context" that are really a snapshot of state at a point in time — bundle them into a struct.
 - A `var didX: Bool` that exists only to prevent doing X twice — derive the need from whether X's precondition still holds.

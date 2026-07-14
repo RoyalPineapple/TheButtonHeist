@@ -75,10 +75,11 @@ swift package diagnose-api-breaking-changes "$BASELINE_TAG"
 
 Set `BUTTONHEIST_SWIFT_API_BASELINE_TAG` to compare against a specific release
 tag locally. The script is strict by default. Intentional source-shape
-tightening must be declared as exact SwiftPM breakage lines in the script; any
-extra public break still fails CI without forcing compatibility aliases back
-into the package. `BUTTONHEIST_SWIFT_API_BREAKAGE_MODE=report` is available for
-local investigation only.
+tightening may use one exact baseline-tag waiver for a coordinated breaking
+release. The waiver expires as soon as that release becomes the new baseline,
+without forcing compatibility aliases back into the package.
+`BUTTONHEIST_SWIFT_API_BREAKAGE_MODE=report` is available for local
+investigation only.
 
 ## TheInsideJob
 
@@ -140,10 +141,10 @@ cannot be created.
 
 ## Semantic Targeting
 
-`AccessibilityTarget` is the one target language for semantic actions,
-accessibility predicates, and `get_interface` subtree queries. Callers provide
-semantic identity, not coordinates. The Button Heist owns the element inflation
-loop:
+`AccessibilityTarget` is the one target language for semantic actions, wait and
+action expectations, container queries, descendant scope, CLI/MCP arguments,
+and `get_interface` subtree queries. Callers provide semantic identity, not
+coordinates. The Button Heist owns the element inflation loop:
 
 1. Resolve the semantic target against current accessibility state.
 2. Reveal it if viewport movement is required.
@@ -173,15 +174,17 @@ public transport as a selector. Public actions, predicates, and subtree queries
 use `AccessibilityTarget`. An element target carries
 ordered checks for label, identifier, value, hint, traits, actions, custom
 content, rotors, recursive exclusion, and optional ordinal. A container target
-carries `ContainerPredicateExpr`, and `.within(container:target:)` scopes any
+carries `ContainerPredicate`, and `.within(container:target:)` scopes any
 target to descendants of a matching container. Public target nesting is
 bounded by the shared public JSON input depth limit.
 
 Container identifiers are orthogonal data on every delivered parser container,
 not only semantic-group containers. A container identifier target therefore
 matches any parser container type that carries that identifier. The current
-delivered `Interface` tree is the authority for both element and container
-matches; a flattened element list is not a second query model.
+delivered tree is the authority for both element and container matches.
+TheStash resolves directly against its `InterfaceTree`; a delivered `Interface`
+constructs one validated `InterfaceGraph` for client matching and formatting.
+A flattened element list, screen model, or back map is not a second query model.
 A capture-local `HeistId` is not a replay selector or geometry authority.
 The string fields may be a single StringMatch or an array of StringMatch values
 when one property needs multiple checks; every entry for that property must
@@ -207,25 +210,41 @@ fold to their ASCII equivalents; emoji, accents, and non-Latin scripts pass
 through unchanged). There is no substring fallback — a miss returns structured
 near-miss suggestions through the diagnostic path. Broad matching modes
 (`.contains`, `.prefix`, `.suffix`) are explicit opt-ins with the same
-normalization. See [Heist language spec](HEIST-LANGUAGE-SPEC.md) for the full
-matching contract.
+normalization. `StringMatch` is expressible by string literal, so a string
+argument is exact-match sugar. Expression, core, and resolved matcher storage
+are not public authoring API. See [Heist language spec](HEIST-LANGUAGE-SPEC.md)
+for the full matching contract.
 
 ## Captures, Change Facts, and Public Deltas
 
-`AccessibilityTrace` stores settled captures and is the observation source of
-truth. It derives one ordered stream of `ChangeFact.elementsChanged` and
-`ChangeFact.screenChanged` values. Predicate evaluation and diagnostics consume
-that stream directly; there is no endpoint delta or alternate temporal model.
+`SemanticObservationLog` is the runtime observation owner. It retains settled
+`ObservationEntry` values, each pairing one `SettledCapture` with an initial,
+same-generation, or screen-boundary transition. Consumers read that history
+through cursor-backed `ObservationEntrySequence` values; reads and notification
+checkpoints do not consume shared history.
+
+Temporal evaluation builds one `ObservationWindow` from an immutable baseline
+cursor through the current retained entry. Presence predicates bypass temporal
+history and resolve against the current tree. Change predicates derive their
+ordered `ChangeFact.elementsChanged` and `ChangeFact.screenChanged` values from
+the window's capture lineage. `AccessibilityTrace` is the durable receipt form
+of that evidence, not a second observation pipeline.
 
 A screen boundary emits three ordered facts: all old-tree nodes disappear, the
 screen marker occurs, then all new-tree nodes appear. Element updates exist only
 between captures in the same screen generation. A scoped `screenChanged`
 notification is authoritative replacement evidence. `elementChanged` and
-announcement notifications stay in the same generation; when no usable
-notification exists, a typed snapshot fallback may emit the screen boundary
-and records its reason in the trace.
+announcement notifications remain typed facts but do not veto replacement
+inference from the settled snapshots. A typed snapshot fallback records its
+reason in the trace.
 Notifications are best-effort UIKit evidence, not a delivery guarantee; their
 absence does not by itself prove replacement or stability.
+
+An incomplete window cannot prove `noChange`. A complete window may span
+multiple entries and retains fast intermediate changes until evaluation.
+A settled action's causal trace may satisfy its attached temporal expectation
+immediately. A timed-out diagnostic action trace is receipt evidence only and
+cannot bypass the settled observation window.
 
 Responses may include compact public deltas named `noChange`,
 `elementsChanged`, or `screenChanged`. This `delta` is a one-way temporal fold:
@@ -433,10 +452,13 @@ fixtures, scripts, and replay; internal capture identity is not a public target.
 
 ### ActionResult
 
-`ActionResult` reports a typed `outcome`, the action method used, optional
-command payload, accessibility trace, trace-folded public delta, and expectation
-result when one was requested. Failures carry their typed action error inside
-`outcome.errorKind`.
+`ActionResult` owns a typed `outcome`, the action method used, optional message
+and command payload, and outcome-bound evidence. The app-side dispatch path
+first produces one `ActionDispatchOutcome`; post-action observation adds
+semantic evidence without inventing a parallel result shape. Failures carry
+their typed action error inside `outcome.errorKind`. Fence receipt projections
+add an expectation result when requested and derive a public delta from the
+same trace evidence.
 
 Source construction uses `ActionResultSuccessEvidence` or
 `ActionResultFailureEvidence`, each with one explicit observation case. The
@@ -454,10 +476,10 @@ available.
 
 ### Expectations
 
-Expectations use the context-typed `AccessibilityPredicate<Context>` grammar.
-At the root, the valid forms are `exists`, `missing`, `changed`, `no_change`,
-and `announcement`. `changed` has exactly one scope and always carries an
-`assertions` array:
+Expectations use the concrete `AccessibilityPredicate` root and
+`ChangeDeclaration` assertion types. At the root, the valid forms are `exists`,
+`missing`, `changed`, `no_change`, and `announcement`. `changed` has exactly one
+scope and always carries an `assertions` array:
 
 ```json
 {"type":"changed","scope":"screen","assertions":[{"type":"exists","target":{"checks":[{"kind":"label","match":{"mode":"exact","value":"Receipt"}}]}}]}
@@ -466,7 +488,9 @@ and `announcement`. `changed` has exactly one scope and always carries an
 Screen assertions permit only current-tree `exists` and `missing`. Elements
 assertions additionally permit `appeared`, `disappeared`, and `updated`.
 Current-tree predicates use the same `AccessibilityTarget` object as actions and
-subtree queries. Container presence uses a container target:
+subtree queries. Both `WaitFor` and action `.expect` therefore accept element,
+container, or descendant-scoped presence targets. Container presence uses a
+container target:
 
 ```json
 {"type":"exists","target":{"container":{"checks":[{"kind":"identifier","match":{"mode":"exact","value":"Checkout"}}]}}}

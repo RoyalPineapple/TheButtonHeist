@@ -11,7 +11,7 @@ rendering, or replay MUST be represented as a validated `HeistPlan`.
 Durable heists MAY be authored through canonical ButtonHeist source, trusted
 local Swift DSL that compiles to a `HeistPlan`, or generated `.heist` artifacts.
 The durable artifact format is described in [Heist format](HEIST-FORMAT.md).
-The authoring surface — step types, passables, target forms, and context-typed
+The authoring surface — step types, passables, target forms, and the concrete
 predicate grammar — is drawn in the
 [DSL grammar diagram](diagrams/dsl-grammar.md); the termination guarantees are
 drawn in the [totality diagram](diagrams/totality.md).
@@ -123,8 +123,9 @@ context only; they MUST NOT be promoted into durable selectors.
 
 ## Target durability
 
-`AccessibilityTarget` is the one target language for actions, predicates, and
-`get_interface` subtree queries. Durable targets describe semantic
+`AccessibilityTarget` is the one target language for actions, wait and action
+expectations, control-flow predicates, CLI/MCP arguments, and `get_interface`
+subtree queries. Durable targets describe semantic
 accessibility-node identity, not a captured screen instance. A target is durable
 when it can be re-resolved after storage, packaging, canonical rendering, and
 replay. How a target resolves at runtime — exact-or-miss matching, ordinals,
@@ -159,7 +160,7 @@ Activate(.element(.label("Pay"), .traits([.button])))
 
 Activate(.target(.element(.label("Delete"), .traits([.button])), ordinal: 1))
 
-WaitFor(.element(.label("Total"), .value("$12.00")), timeout: .seconds(2))
+WaitFor(.exists(.element(.label("Total"), .value("$12.00"))), timeout: .seconds(2))
 ```
 
 The following forms are not durable selector or context identity:
@@ -201,12 +202,15 @@ There is no substring fallback. When an exact predicate misses, the resolver
 returns structured diagnostics with near-miss suggestions; it never silently
 widens the match. Broad matching is explicit and opt-in: `.contains`,
 `.prefix`, and `.suffix` apply the same normalization and require non-empty
-patterns.
+patterns. `StringMatch` is expressible by string literal, so a string passed to
+a matcher-bearing API means `.exact(string)`. Expression storage and resolved
+matcher types are implementation details, not authored API.
 
 ## Accessibility predicate grammar
 
-`AccessibilityPredicate<Context>` is one AST whose generic context exposes only
-valid constructors:
+`AccessibilityPredicate` is the concrete root condition. `ChangeDeclaration`
+provides two concrete assertion contexts whose constructors expose only valid
+combinations:
 
 - Root: `.exists(target)`, `.missing(target)`, `.changed(declaration)`,
   `.noChange`, and `.announcement(...)`.
@@ -218,7 +222,7 @@ valid constructors:
 
 `exists` and `missing` always read the current delivered interface tree. They
 use the same `AccessibilityTarget` resolution as actions and subtree queries,
-including container-only and descendant-scoped targets. `appeared`,
+including element, container-only, and descendant-scoped targets. `appeared`,
 `disappeared`, and `updated` read the ordered temporal fact stream. There is no
 root-level generic changed predicate and no alternate spelling.
 
@@ -228,10 +232,11 @@ disappears, the screen marker occurs, and every new-tree node appears. Therefore
 screen boundary. `updated` can only match two captures in the same screen
 generation.
 
-`.noChange` requires a complete observation window with no facts. Screen,
-layout, value, and announcement notifications are edge evidence and prevent
-`noChange`. A transition assertion never passes solely because its implied
-final state is true.
+`.noChange` requires a complete observation window with no facts. Notification
+ingress is retained and cursor-backed; checkpoints do not consume events.
+Screen, layout, value, and announcement notifications are edge evidence and
+prevent `noChange`. A transition assertion never passes solely because its
+implied final state is true.
 
 ## Timeouts
 
@@ -268,7 +273,7 @@ HeistPlan("checkout") {
     Activate(.label("Pay"))
         .expect(.changed(.screen([.exists(.label("Receipt"))])))
 
-    WaitFor(.label("Receipt"), timeout: .seconds(10))
+    WaitFor(.exists(.label("Receipt")), timeout: .seconds(10))
 }
 ```
 

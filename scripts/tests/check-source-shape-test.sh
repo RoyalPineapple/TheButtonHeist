@@ -42,7 +42,7 @@ done < <(find "$REPO_ROOT/.bumper" -type f -print | sort)
 while IFS= read -r owner; do
     copy_fixture_file "$owner"
 done < <(
-    sed -n '/private let architectureCurrencyOwnership:/,/^]/p' \
+    sed -n '/private let architectureCurrencyOwners:/,/^]/p' \
         "$REPO_ROOT/.bumper/Sources/ButtonHeistCustomRules.swift" \
         | sed -n \
             -e 's/.*[.]declaration([^,]*, ownerPath: "\([^"]*\)".*/\1/p' \
@@ -52,8 +52,13 @@ done < <(
 
 mkdir -p \
     "$FIXTURE_REPO/ButtonHeistCLI/Sources/Support" \
+    "$FIXTURE_REPO/ButtonHeist/Sources/ButtonHeistTesting/SourceShapeFixtures" \
     "$FIXTURE_REPO/ButtonHeist/Sources/ThePlans/SourceShapeFixtures" \
-    "$FIXTURE_REPO/ButtonHeist/Sources/TheInsideJob/SourceShapeFixtures"
+    "$FIXTURE_REPO/ButtonHeist/Sources/TheInsideJob/TheBurglar" \
+    "$FIXTURE_REPO/ButtonHeist/Sources/TheInsideJob/TheStash" \
+    "$FIXTURE_REPO/ButtonHeist/Sources/TheInsideJob/SourceShapeFixtures" \
+    "$FIXTURE_REPO/ButtonHeist/Sources/TheScore/Core" \
+    "$FIXTURE_REPO/ButtonHeist/Sources/TheScore/SourceShapeFixtures"
 
 cat > "$FIXTURE_REPO/ButtonHeistCLI/Sources/Support/SourceShapeFixtures.swift" <<'EOF'
 var onActorIsolated: (@MainActor (Int) -> Void)?
@@ -79,6 +84,92 @@ func deriveFacts(from plan: HeistPlan) {
 }
 EOF
 
+cat > "$FIXTURE_REPO/ButtonHeist/Sources/ThePlans/SourceShapeFixtures/ExpressionOwnership.swift" <<'EOF'
+package func retainPackageExpressionTypes(
+    _ expression: Expr<String>,
+    core: StringMatchCore<Expr<String>>
+) {}
+EOF
+
+cat > "$FIXTURE_REPO/ButtonHeist/Sources/ButtonHeistTesting/SourceShapeFixtures/TestSemantics.swift" <<'EOF'
+func retainScriptedStep(
+    _ step: HeistStep,
+    result: HeistExecutionStepResult
+) -> HeistExecutionStepResult {
+    result
+}
+
+func retainScriptedWaitReceipt(_ receipt: HeistWaitReceipt) -> HeistWaitReceipt {
+    receipt
+}
+EOF
+
+cat > "$FIXTURE_REPO/ButtonHeist/Sources/TheInsideJob/SourceShapeFixtures/TargetResolution.swift" <<'EOF'
+func resolveDirectly(
+    _ target: ResolvedAccessibilityTarget,
+    in interface: Interface
+) -> AccessibilityTargetMatchSet {
+    ElementMatchGraph(interface: interface).resolve(target)
+}
+EOF
+
+cat > "$FIXTURE_REPO/ButtonHeist/Sources/TheInsideJob/TheStash/SemanticObservationStream.swift" <<'EOF'
+final class SemanticObservationStreamFixture {
+    let observationLog = SemanticObservationLog()
+}
+EOF
+
+cat > "$FIXTURE_REPO/ButtonHeist/Sources/TheScore/SourceShapeFixtures/HierarchyTraversal.swift" <<'EOF'
+func collectHierarchyFacts(_ hierarchy: AccessibilityHierarchy) {
+    hierarchy.folded(
+        onElement: { _, _ in 1 },
+        onContainer: { _, children in children.reduce(0, +) }
+    )
+}
+
+func inspectOneHierarchyNode(_ hierarchy: AccessibilityHierarchy) -> Bool {
+    switch hierarchy {
+    case .element:
+        return true
+    case .container(_, let children):
+        return children.isEmpty
+    }
+}
+
+indirect enum UnrelatedFixtureTree {
+    case leaf
+    case branch([UnrelatedFixtureTree])
+}
+
+func countUnrelatedFixtureTree(_ tree: UnrelatedFixtureTree) -> Int {
+    switch tree {
+    case .leaf:
+        return 1
+    case .branch(let children):
+        return children.reduce(0) { $0 + countUnrelatedFixtureTree($1) }
+    }
+}
+EOF
+
+cat > "$FIXTURE_REPO/ButtonHeist/Sources/TheScore/SourceShapeFixtures/InterfaceGraph.swift" <<'EOF'
+func useOwnedInterfaceGraph(_ interface: Interface) -> InterfaceGraph {
+    interface.graph
+}
+EOF
+
+cat > "$FIXTURE_REPO/ButtonHeist/Sources/TheScore/Core/AccessibilityHierarchy+Traversal.swift" <<'EOF'
+func canonicalHierarchyWalk(_ hierarchy: AccessibilityHierarchy) {
+    switch hierarchy {
+    case .element:
+        return
+    case .container(_, let children):
+        for child in children {
+            canonicalHierarchyWalk(child)
+        }
+    }
+}
+EOF
+
 run_lint
 [[ "$LINT_STATUS" -eq 0 ]] || fail "source-shape lint rejected valid fixtures: $LINT_OUTPUT"
 
@@ -99,6 +190,79 @@ func collectPlans(_ plan: HeistPlan) {
 }
 EOF
 
+cat > "$FIXTURE_REPO/ButtonHeist/Sources/ThePlans/SourceShapeFixtures/ArchitectureOwnership.swift" <<'EOF'
+struct AccessibilityTarget {}
+
+func constructObservationOutsideOwner() {
+    _ = InterfaceObservation()
+}
+EOF
+
+cat > "$FIXTURE_REPO/ButtonHeist/Sources/ThePlans/SourceShapeFixtures/ExpressionOwnership.swift" <<'EOF'
+internal enum Expr<Value> {}
+public struct AlternateExpr {}
+EOF
+
+cat > "$FIXTURE_REPO/ButtonHeist/Sources/TheInsideJob/TheBurglar/TheBurglar+InterfaceObservationBuilding.swift" <<'EOF'
+func burglarHierarchyWalk(_ hierarchy: AccessibilityHierarchy) {
+    switch hierarchy {
+    case .element:
+        return
+    case .container(_, let children):
+        for child in children {
+            burglarHierarchyWalk(child)
+        }
+    }
+}
+EOF
+
+cat > "$FIXTURE_REPO/ButtonHeist/Sources/TheInsideJob/SourceShapeFixtures/TargetResolution.swift" <<'EOF'
+struct SemanticInterfaceProjection {
+    let elementByProjectedPath: [TreePath: InterfaceTree.Element]
+}
+
+func resolveThroughBackMap(_ projection: SemanticInterfaceProjection) {
+    _ = projection.elementByProjectedPath
+}
+EOF
+
+cat > "$FIXTURE_REPO/ButtonHeist/Sources/TheInsideJob/SourceShapeFixtures/ObservationLog.swift" <<'EOF'
+let alternateObservationLog = SemanticObservationLog()
+
+extension SemanticObservationLog {
+    func clearHistory() {}
+}
+EOF
+
+cat > "$FIXTURE_REPO/ButtonHeist/Sources/TheScore/SourceShapeFixtures/InterfaceGraph.swift" <<'EOF'
+func reconstructInterfaceGraph(_ interface: Interface) throws -> InterfaceGraph {
+    try InterfaceGraph(interface: interface)
+}
+EOF
+
+cat > "$FIXTURE_REPO/ButtonHeist/Sources/ButtonHeistTesting/SourceShapeFixtures/TestSemantics.swift" <<'EOF'
+func emulateExecution(_ step: HeistStep) -> HeistExecutionStepResult {
+    switch step {
+    case .action:
+        return fixtureExecutionResult()
+    default:
+        return fixtureExecutionResult()
+    }
+}
+
+func emulateWait(
+    _ step: ResolvedWaitRuntimeInput,
+    observation: HeistSemanticObservation
+) -> HeistWaitReceipt {
+    _ = PredicateEvaluation.evaluate(
+        step.predicate,
+        expression: step.predicateExpression,
+        in: observation
+    )
+    return fixtureWaitReceipt()
+}
+EOF
+
 run_lint
 [[ "$LINT_STATUS" -ne 0 ]] || fail "source-shape lint accepted invalid fixtures"
 [[ "$LINT_OUTPUT" == *"alternate AccessibilityTarget typealias"* ]] \
@@ -115,5 +279,27 @@ run_lint
     || fail "raw observation commit diagnostic did not require proof: $LINT_OUTPUT"
 [[ "$LINT_OUTPUT" == *"recursive HeistPlan/HeistStep descent outside canonical traversal"* ]] \
     || fail "source-shape lint missed recursive plan descent: $LINT_OUTPUT"
+[[ "$LINT_OUTPUT" == *"recursive AccessibilityHierarchy descent outside canonical traversal ownership"* ]] \
+    || fail "source-shape lint missed recursive accessibility hierarchy descent: $LINT_OUTPUT"
+[[ "$LINT_OUTPUT" == *"buttonheist.canonical_accessibility_hierarchy_traversal"* ]] \
+    || fail "hierarchy traversal violation did not identify its architectural rule: $LINT_OUTPUT"
+[[ "$LINT_OUTPUT" == *"architecture currency symbol must be declared exactly once"* ]] \
+    || fail "source-shape lint missed duplicate typed architecture ownership: $LINT_OUTPUT"
+[[ "$LINT_OUTPUT" == *"pipeline value constructed outside its canonical owner"* ]] \
+    || fail "source-shape lint missed construction outside a typed owner: $LINT_OUTPUT"
+[[ "$LINT_OUTPUT" == *"Expr must be the single package-internal expression declaration"* ]] \
+    || fail "source-shape lint missed non-package Expr ownership: $LINT_OUTPUT"
+[[ "$LINT_OUTPUT" == *"nominal Expr bookkeeping type outside the canonical expression owner"* ]] \
+    || fail "source-shape lint missed nominal Expr bookkeeping: $LINT_OUTPUT"
+[[ "$LINT_OUTPUT" == *"target resolution uses retired SemanticInterfaceProjection/back-map architecture"* ]] \
+    || fail "source-shape lint missed projected back-map target resolution: $LINT_OUTPUT"
+[[ "$LINT_OUTPUT" == *"semantic observation log exposes a destructive clear API"* ]] \
+    || fail "source-shape lint missed destructive observation-log API: $LINT_OUTPUT"
+[[ "$LINT_OUTPUT" == *"InterfaceGraph reconstructed from Interface outside its owner"* ]] \
+    || fail "source-shape lint missed external InterfaceGraph reconstruction: $LINT_OUTPUT"
+[[ "$LINT_OUTPUT" == *"test support implements HeistStep execution semantics"* ]] \
+    || fail "source-shape lint missed test-owned HeistStep execution: $LINT_OUTPUT"
+[[ "$LINT_OUTPUT" == *"test support implements wait predicate semantics"* ]] \
+    || fail "source-shape lint missed test-owned wait predicate evaluation: $LINT_OUTPUT"
 
 echo "PASS: SwiftSyntax source-shape guardrails"

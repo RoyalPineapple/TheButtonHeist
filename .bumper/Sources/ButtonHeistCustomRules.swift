@@ -2,8 +2,8 @@ import BumperBowlingCore
 import Foundation
 import SwiftSyntax
 
-let customRules = CustomRuleSet {
-    CustomRule("buttonheist.thescore.import_allow_list", severity: .error) { context in
+let buttonHeistRules = RuleSet {
+    Rules.repository("buttonheist.thescore.import_allow_list", severity: .error) { context in
         let allowedImports = Set([
             "AccessibilitySnapshotModel",
             "CoreGraphics",
@@ -17,87 +17,112 @@ let customRules = CustomRuleSet {
             "zlib",
         ])
         let allowedDescription = allowedImports.sorted().joined(separator: ", ")
+        let scorePaths = Set(context.files(in: .component(ButtonHeistComponent.score)).map(\.path))
 
-        return context.files(inComponent: "score").flatMap { file in
-            Set(file.imports)
-                .subtracting(allowedImports)
-                .sorted()
-                .map { module in
-                    CustomRuleFailure(
+        return try context.facts(BuiltInFacts.sourceFiles)
+            .filter { scorePaths.contains($0.path) }
+            .flatMap { file in
+                Set(file.imports.map(\.rawValue))
+                    .subtracting(allowedImports)
+                    .sorted()
+                    .map { module in
+                        RuleFailure(
+                            path: file.path,
+                            message: "TheScore imports non-allowlisted module \(module)",
+                            evidence: ViolationEvidence(
+                                observed: module,
+                                expectation: "allowed imports: \(allowedDescription)"
+                            )
+                        )
+                    }
+            }
+    }
+
+    Rules.repository("buttonheist.thescore.folder_import_allow_list", severity: .error) { context in
+        let scorePaths = Set(context.files(in: .component(ButtonHeistComponent.score)).map(\.path))
+        return try context.facts(BuiltInFacts.sourceFiles)
+            .filter { scorePaths.contains($0.path) }
+            .flatMap { file -> [RuleFailure] in
+                guard let allowedImports = scoreFolderAllowedImports(for: file.path.rawValue) else {
+                    return []
+                }
+                let allowedDescription = allowedImports.sorted().joined(separator: ", ")
+                return Set(file.imports.map(\.rawValue))
+                    .subtracting(allowedImports)
+                    .sorted()
+                    .map { module in
+                        RuleFailure(
+                            path: file.path,
+                            message: "TheScore folder imports non-allowlisted module \(module)",
+                            evidence: ViolationEvidence(
+                                observed: module,
+                                expectation: "allowed imports for this TheScore folder/file: \(allowedDescription)"
+                            )
+                        )
+                    }
+            }
+    }
+
+    Rules.repository("buttonheist.framework_import_sandbox", severity: .error) { context in
+        let componentPaths = Set(ButtonHeistComponent.allCases.flatMap { component in
+            context.files(in: .component(component)).map(\.path)
+        })
+        return try context.facts(BuiltInFacts.sourceFiles)
+            .filter { componentPaths.contains($0.path) }
+            .flatMap { file -> [RuleFailure] in
+                file.imports.compactMap { importedModule in
+                    guard let sandbox = frameworkSandbox(for: importedModule.rawValue),
+                          !sandbox.allows(file.path.rawValue) else {
+                        return nil
+                    }
+
+                    return RuleFailure(
                         path: file.path,
-                        message: "TheScore imports non-allowlisted module \(module)",
+                        message: "\(sandbox.displayName) import outside explicit fiefdom",
                         evidence: ViolationEvidence(
-                            observed: module,
-                            expectation: "allowed imports: \(allowedDescription)"
+                            observed: importedModule.rawValue,
+                            expectation: sandbox.expectation
                         )
                     )
                 }
-        }
-    }
-
-    CustomRule("buttonheist.thescore.folder_import_allow_list", severity: .error) { context in
-        context.files(inComponent: "score").flatMap { file -> [CustomRuleFailure] in
-            guard let allowedImports = scoreFolderAllowedImports(for: file.path.rawValue) else {
-                return []
             }
-            let allowedDescription = allowedImports.sorted().joined(separator: ", ")
-            return Set(file.imports)
-                .subtracting(allowedImports)
-                .sorted()
-                .map { module in
-                    CustomRuleFailure(
-                        path: file.path,
-                        message: "TheScore folder imports non-allowlisted module \(module)",
-                        evidence: ViolationEvidence(
-                            observed: module,
-                            expectation: "allowed imports for this TheScore folder/file: \(allowedDescription)"
-                        )
-                    )
-                }
-        }
     }
 
-    CustomRule("buttonheist.framework_import_sandbox", severity: .error) { context in
-        frameworkSandboxComponentIDs.flatMap { componentID in
-            context.files(inComponent: componentID)
-        }.flatMap { file -> [CustomRuleFailure] in
-            file.imports.compactMap { importedModule in
-                guard let sandbox = frameworkSandbox(for: importedModule),
-                      !sandbox.allows(file.path.rawValue) else {
-                    return nil
-                }
-
-                return CustomRuleFailure(
-                    path: file.path,
-                    message: "\(sandbox.displayName) import outside explicit fiefdom",
-                    evidence: ViolationEvidence(
-                        observed: importedModule,
-                        expectation: sandbox.expectation
-                    )
-                )
-            }
-        }
+    Rules.repository("buttonheist.architecture_currency_ownership", severity: .error) { context in
+        try architectureCurrencyOwnershipFailures(in: context)
     }
 
-    CustomRule("buttonheist.architecture_currency_ownership", severity: .error) { context in
-        architectureCurrencyOwnershipFailures(in: context)
-    }
-
-    CustomSyntaxRule("buttonheist.swift_source_shape", severity: .error) { file in
+    Rules.files("buttonheist.swift_source_shape", severity: .error) { file in
         let visitor = ButtonHeistSourceShapeRuleVisitor(file: file, viewMode: .sourceAccurate)
         visitor.walk(file.syntax)
         return visitor.failures
     }
 
-    CustomSyntaxRule("buttonheist.canonical_plan_traversal", severity: .error) { file in
-        guard isPlanTraversalCheckedProductionPath(file.path.rawValue) else { return [] }
+    Rules.files("buttonheist.canonical_plan_traversal", severity: .error) { file in
+        guard isPlanTraversalCheckedProductionPath(file.path.rawValue),
+              containsHeistPlanTreeType(in: file.source) else {
+            return []
+        }
         let visitor = HeistPlanRecursionShapeVisitor(viewMode: .sourceAccurate)
         visitor.walk(file.syntax)
         return visitor.failures(in: file)
     }
 
-    CustomSyntaxRule("buttonheist.insidejob_architectural_shape", severity: .error) { file in
-        guard file.path.rawValue.hasPrefix(insideJobSourcePrefix) else { return [] }
+    Rules.files("buttonheist.canonical_accessibility_hierarchy_traversal", severity: .error) { file in
+        guard isAccessibilityHierarchyTraversalCheckedProductionPath(file.path.rawValue),
+              file.source.contains("AccessibilityHierarchy") else {
+            return []
+        }
+        let visitor = AccessibilityHierarchyRecursionShapeVisitor(viewMode: .sourceAccurate)
+        visitor.walk(file.syntax)
+        return visitor.failures(in: file)
+    }
+
+    Rules.files("buttonheist.insidejob_architectural_shape", severity: .error) { file in
+        guard file.path.rawValue.hasPrefix(insideJobSourcePrefix),
+              containsInsideJobArchitecturalShape(in: file.source) else {
+            return []
+        }
         let visitor = InsideJobArchitecturalShapeRuleVisitor(file: file, viewMode: .sourceAccurate)
         visitor.walk(file.syntax)
         return visitor.failures
@@ -131,7 +156,7 @@ private final class HeistPlanRecursionShapeVisitor: SyntaxVisitor {
         return .visitChildren
     }
 
-    func failures(in file: SourceFileContext) -> [CustomRuleFailure] {
+    func failures(in file: SourceFileContext) -> [RuleFailure] {
         let functionNames = Set(functions.map(\.name))
         let adjacency = Dictionary(grouping: functions.flatMap { function in
             function.calls.compactMap { call in
@@ -183,7 +208,7 @@ private final class HeistPlanFunctionCallVisitor: SyntaxVisitor {
     }
 
     override func visit(_ node: FunctionCallExprSyntax) -> SyntaxVisitorContinueKind {
-        guard let callee = calledConstructorName(node.calledExpression) else { return .visitChildren }
+        guard let callee = locallyDispatchedCallName(node.calledExpression) else { return .visitChildren }
         let structuralChildren = node.arguments.reduce(into: Set<String>()) { children, argument in
             let visitor = HeistPlanStructuralChildVisitor(viewMode: .sourceAccurate)
             visitor.walk(argument.expression)
@@ -210,8 +235,10 @@ private final class HeistPlanStructuralChildVisitor: SyntaxVisitor {
     }
 }
 
-private let heistPlanTraversalOwnerPath =
-    "ButtonHeist/Sources/ThePlans/Model/HeistPlanTraversal.swift"
+private let heistPlanTraversalOwnerPaths: Set<String> = [
+    "ButtonHeist/Sources/ThePlans/Model/HeistPlanTraversal.swift",
+    "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+HeistExecution.swift",
+]
 
 private let heistPlanTreeTypeNames: Set<String> = [
     "ConditionalStep",
@@ -231,7 +258,11 @@ private let heistPlanStructuralChildNames: Set<String> = [
 ]
 
 private func isPlanTraversalCheckedProductionPath(_ path: String) -> Bool {
-    path.hasPrefix("ButtonHeist/Sources/") && path != heistPlanTraversalOwnerPath
+    path.hasPrefix("ButtonHeist/Sources/") && !heistPlanTraversalOwnerPaths.contains(path)
+}
+
+private func containsHeistPlanTreeType(in source: String) -> Bool {
+    heistPlanTreeTypeNames.contains { source.contains($0) }
 }
 
 private func containsHeistPlanTreeType(_ type: TypeSyntax) -> Bool {
@@ -240,46 +271,138 @@ private func containsHeistPlanTreeType(_ type: TypeSyntax) -> Bool {
     }
 }
 
+private final class AccessibilityHierarchyRecursionShapeVisitor: SyntaxVisitor {
+    private struct RecursiveWalk {
+        let functionName: String
+        let syntax: FunctionCallExprSyntax
+    }
+
+    private var recursiveWalks: [RecursiveWalk] = []
+
+    override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
+        guard node.signature.parameterClause.parameters.contains(where: {
+            containsAccessibilityHierarchyType($0.type)
+        }), let body = node.body else { return .visitChildren }
+
+        let visitor = AccessibilityHierarchyRecursiveBodyVisitor(
+            functionName: node.name.text,
+            viewMode: .sourceAccurate
+        )
+        visitor.walk(body)
+        guard visitor.referencesContainerCase else { return .visitChildren }
+        recursiveWalks.append(contentsOf: visitor.selfCalls.map {
+            RecursiveWalk(functionName: node.name.text, syntax: $0)
+        })
+        return .visitChildren
+    }
+
+    func failures(in file: SourceFileContext) -> [RuleFailure] {
+        recursiveWalks.map { walk in
+            file.failure(
+                at: walk.syntax,
+                message: "recursive AccessibilityHierarchy descent outside canonical traversal ownership",
+                evidence: ViolationEvidence(
+                    observed: "\(walk.functionName) handles .container and calls itself",
+                    expectation: "use folded, foldedPreorder, compactingElements, or a path-indexed graph API"
+                )
+            )
+        }
+    }
+}
+
+private final class AccessibilityHierarchyRecursiveBodyVisitor: SyntaxVisitor {
+    private let functionName: String
+    private(set) var referencesContainerCase = false
+    private(set) var selfCalls: [FunctionCallExprSyntax] = []
+
+    init(functionName: String, viewMode: SyntaxTreeViewMode) {
+        self.functionName = functionName
+        super.init(viewMode: viewMode)
+    }
+
+    override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
+        .skipChildren
+    }
+
+    override func visit(_ node: MemberAccessExprSyntax) -> SyntaxVisitorContinueKind {
+        if node.declName.baseName.text == "container" {
+            referencesContainerCase = true
+        }
+        return .visitChildren
+    }
+
+    override func visit(_ node: FunctionCallExprSyntax) -> SyntaxVisitorContinueKind {
+        if locallyDispatchedCallName(node.calledExpression) == functionName {
+            selfCalls.append(node)
+        }
+        return .visitChildren
+    }
+}
+
+private let accessibilityHierarchyTraversalOwnerPaths: Set<String> = [
+    "ButtonHeist/Sources/TheScore/Core/AccessibilityHierarchy+Traversal.swift",
+]
+
+private func isAccessibilityHierarchyTraversalCheckedProductionPath(_ path: String) -> Bool {
+    path.hasPrefix("ButtonHeist/Sources/") && !accessibilityHierarchyTraversalOwnerPaths.contains(path)
+}
+
+private func containsAccessibilityHierarchyType(_ type: TypeSyntax) -> Bool {
+    let tokens = type.tokens(viewMode: .sourceAccurate).map(\.text)
+    return tokens.contains("AccessibilityHierarchy") && !tokens.contains("inout")
+}
+
 private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
     private let file: SourceFileContext
     private let requiresExplicitAccess: Bool
+    private let checksTestSupportSemantics: Bool
     private let filePath: String
-    private(set) var failures: [CustomRuleFailure] = []
+    private(set) var failures: [RuleFailure] = []
 
     init(file: SourceFileContext, viewMode: SyntaxTreeViewMode) {
         self.file = file
         self.filePath = file.path.rawValue
         self.requiresExplicitAccess = explicitAccessRequiredPaths.contains(file.path.rawValue)
+        self.checksTestSupportSemantics = RuleScope.component(ButtonHeistComponent.testing)
+            .includes(file.descriptor)
+            || file.path.rawValue.contains("/Tests/")
         super.init(viewMode: viewMode)
     }
 
     override func visit(_ node: StructDeclSyntax) -> SyntaxVisitorContinueKind {
+        recordExpressionNominal(node: node, modifiers: node.modifiers, name: node.name.text)
         recordExplicitAccess(node: node, modifiers: node.modifiers, name: node.name.text)
         return .visitChildren
     }
 
     override func visit(_ node: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
         recordActionObservationWireShape(node)
+        recordExpressionNominal(node: node, modifiers: node.modifiers, name: node.name.text)
         recordExplicitAccess(node: node, modifiers: node.modifiers, name: node.name.text)
         return .visitChildren
     }
 
     override func visit(_ node: ClassDeclSyntax) -> SyntaxVisitorContinueKind {
+        recordExpressionNominal(node: node, modifiers: node.modifiers, name: node.name.text)
         recordExplicitAccess(node: node, modifiers: node.modifiers, name: node.name.text)
         return .visitChildren
     }
 
     override func visit(_ node: ActorDeclSyntax) -> SyntaxVisitorContinueKind {
+        recordExpressionNominal(node: node, modifiers: node.modifiers, name: node.name.text)
         recordExplicitAccess(node: node, modifiers: node.modifiers, name: node.name.text)
         return .visitChildren
     }
 
     override func visit(_ node: ProtocolDeclSyntax) -> SyntaxVisitorContinueKind {
+        recordExpressionNominal(node: node, modifiers: node.modifiers, name: node.name.text)
         recordExplicitAccess(node: node, modifiers: node.modifiers, name: node.name.text)
         return .visitChildren
     }
 
     override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
+        recordObservationLogDestructiveAPI(node)
+        recordTestOwnedSemantics(node)
         recordRetiredParameterLabels(node.signature.parameterClause.parameters)
         recordContainerSemanticIdentifierAlias(node)
         recordRawExecutableParameters(node)
@@ -383,6 +506,7 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
         recordRetiredCallLabels(node)
         recordOldTraceSettlementJSON(node)
         recordOwnedPipelineConstruction(node)
+        recordExternalInterfaceGraphReconstruction(node)
         recordRawNotificationNormalization(node)
         return .visitChildren
     }
@@ -407,6 +531,122 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
         recordSiblingReceiptWarnings(node)
         recordSettledValueLiveStorage(node)
         return .visitChildren
+    }
+
+    private func recordExpressionNominal(
+        node: some SyntaxProtocol,
+        modifiers: DeclModifierListSyntax,
+        name: String
+    ) {
+        guard filePath.hasPrefix("ButtonHeist/Sources/") else { return }
+        if name == ArchitectureCurrency.expr.rawValue {
+            guard Syntax(node).is(EnumDeclSyntax.self),
+                  filePath == expressionOwnerPath,
+                  hasModifier("package", in: modifiers) else {
+                failures.append(
+                    file.failure(
+                        at: node,
+                        message: "Expr must be the single package-internal expression declaration",
+                        evidence: ViolationEvidence(
+                            observed: "\(name) in \(filePath)",
+                            expectation: "package enum Expr is declared only in \(expressionOwnerPath)"
+                        )
+                    )
+                )
+                return
+            }
+            return
+        }
+        guard name.hasSuffix("Expr") else { return }
+        failures.append(
+            file.failure(
+                at: node,
+                message: "nominal Expr bookkeeping type outside the canonical expression owner",
+                evidence: ViolationEvidence(
+                    observed: name,
+                    expectation: "ThePlans uses only package enum Expr<Value>; public DSL models stay concrete"
+                )
+            )
+        )
+    }
+
+    private func recordObservationLogDestructiveAPI(_ node: FunctionDeclSyntax) {
+        guard enclosingNominalType(of: node) == ArchitectureCurrency.semanticObservationLog.rawValue
+                || enclosingExtensionType(of: node) == ArchitectureCurrency.semanticObservationLog.rawValue,
+              isDestructiveObservationLogAPIName(node.name.text) else {
+            return
+        }
+        failures.append(
+            file.failure(
+                at: node.name,
+                message: "semantic observation log exposes a destructive clear API",
+                evidence: ViolationEvidence(
+                    observed: node.name.text,
+                    expectation: "observation history advances and evicts by retention; callers cannot clear or reset it"
+                )
+            )
+        )
+    }
+
+    private func recordExternalInterfaceGraphReconstruction(_ node: FunctionCallExprSyntax) {
+        guard filePath.hasPrefix("ButtonHeist/Sources/"),
+              filePath != interfaceGraphOwnerPath,
+              calledConstructorName(node.calledExpression) == "InterfaceGraph",
+              node.arguments.contains(where: { $0.label?.text == "interface" }) else {
+            return
+        }
+        failures.append(
+            file.failure(
+                at: node.calledExpression,
+                message: "InterfaceGraph reconstructed from Interface outside its owner",
+                evidence: ViolationEvidence(
+                    observed: "InterfaceGraph(interface:) in \(filePath)",
+                    expectation: "consumers use Interface.graph; only InterfaceGraph's owner defines reconstruction"
+                )
+            )
+        )
+    }
+
+    private func recordTestOwnedSemantics(_ node: FunctionDeclSyntax) {
+        guard checksTestSupportSemantics, let body = node.body else { return }
+        let heistStepParameterNames = Set<String>(node.signature.parameterClause.parameters.compactMap { parameter in
+            guard containsType(named: "HeistStep", in: parameter.type) else { return nil }
+            return parameter.secondName?.text ?? parameter.firstName.text
+        })
+        let visitor = TestOwnedSemanticBodyVisitor(
+            heistStepParameterNames: heistStepParameterNames,
+            viewMode: .sourceAccurate
+        )
+        visitor.walk(body)
+
+        if let returnType = node.signature.returnClause?.type,
+           testExecutionResultTypeNames.contains(where: { containsType(named: $0, in: returnType) }) {
+            failures.append(contentsOf: visitor.heistStepSwitches.map { switchExpression in
+                file.failure(
+                    at: switchExpression,
+                    message: "test support implements HeistStep execution semantics",
+                    evidence: ViolationEvidence(
+                        observed: "switch over a HeistStep parameter in \(node.name.text)",
+                        expectation: "tests script production execution responses instead of interpreting HeistStep"
+                    )
+                )
+            })
+        }
+
+        guard let returnType = node.signature.returnClause?.type,
+              containsType(named: "HeistWaitReceipt", in: returnType) else {
+            return
+        }
+        failures.append(contentsOf: visitor.predicateEvaluations.map { evaluation in
+            file.failure(
+                at: evaluation.calledExpression,
+                message: "test support implements wait predicate semantics",
+                evidence: ViolationEvidence(
+                    observed: "PredicateEvaluation.evaluate in \(node.name.text)",
+                    expectation: "tests feed scripted observations through the production predicate wait"
+                )
+            )
+        })
     }
 
     private func recordRetiredVariableSymbols(_ node: VariableDeclSyntax) {
@@ -637,7 +877,11 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
     }
 
     private func recordAccessibilityTargetAlias(_ node: TypeAliasDeclSyntax) {
+        let isPhaseWitness = filePath == accessibilityPredicateOwnerPath
+            && node.name.text == "Target"
+            && accessibilityPredicatePhaseTypes.contains(enclosingNominalType(of: node) ?? "")
         guard isNamedType(node.initializer.value, "AccessibilityTarget"),
+              !isPhaseWitness,
               !(isButtonHeistDSLFacade(file.path) && node.name.text == "AccessibilityTarget") else {
             return
         }
@@ -812,7 +1056,8 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
 
     private func recordLooseObservationInitializer(_ node: InitializerDeclSyntax) {
         guard let owner = enclosingNominalType(of: node),
-              canonicalBuilderOwnedTypes.contains(owner),
+              let currency = ArchitectureCurrency(rawValue: owner),
+              canonicalBuilderOwnedCurrencies.contains(currency),
               !hasModifier("private", in: node.modifiers) else {
             return
         }
@@ -1015,8 +1260,9 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
     private func recordOwnedPipelineConstruction(_ node: FunctionCallExprSyntax) {
         guard filePath.hasPrefix("ButtonHeist/Sources/"),
               let calledSymbol = calledConstructorName(node.calledExpression),
-              let symbol = calledSymbol == "Self" ? enclosingNominalType(of: node) : calledSymbol,
-              let descriptor = architectureCurrencyOwnershipBySymbol[symbol],
+              let symbolName = calledSymbol == "Self" ? enclosingNominalType(of: node) : calledSymbol,
+              let symbol = ArchitectureCurrency(rawValue: symbolName),
+              let descriptor = architectureCurrencyOwnersBySymbol[symbol],
               let ownership = descriptor.construction,
               !isAllowedPipelineConstruction(symbol: symbol, ownership: ownership, call: node) else {
             return
@@ -1027,7 +1273,7 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
                 at: node.calledExpression,
                 message: "pipeline value constructed outside its canonical owner",
                 evidence: ViolationEvidence(
-                    observed: "\(descriptor.symbol) in \(enclosingDeclarationDescription(of: node))",
+                    observed: "\(symbol.rawValue) in \(enclosingDeclarationDescription(of: node))",
                     expectation: ownership.expectation
                 )
             )
@@ -1035,14 +1281,14 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
     }
 
     private func isAllowedPipelineConstruction(
-        symbol: String,
+        symbol: ArchitectureCurrency,
         ownership: PipelineConstructionOwnership,
         call: FunctionCallExprSyntax
     ) -> Bool {
         guard ownership.allowedPaths.contains(filePath) else { return false }
-        guard canonicalBuilderOwnedTypes.contains(symbol) else { return true }
+        guard canonicalBuilderOwnedCurrencies.contains(symbol) else { return true }
         return enclosingFunctionName(of: call) == "build"
-            && enclosingNominalType(of: call) == symbol
+            && enclosingNominalType(of: call) == symbol.rawValue
     }
 
     private func recordRawNotificationNormalization(_ node: FunctionCallExprSyntax) {
@@ -1110,9 +1356,39 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
     }
 }
 
+private final class TestOwnedSemanticBodyVisitor: SyntaxVisitor {
+    let heistStepParameterNames: Set<String>
+    private(set) var heistStepSwitches: [SwitchExprSyntax] = []
+    private(set) var predicateEvaluations: [FunctionCallExprSyntax] = []
+
+    init(heistStepParameterNames: Set<String>, viewMode: SyntaxTreeViewMode) {
+        self.heistStepParameterNames = heistStepParameterNames
+        super.init(viewMode: viewMode)
+    }
+
+    override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
+        .skipChildren
+    }
+
+    override func visit(_ node: SwitchExprSyntax) -> SyntaxVisitorContinueKind {
+        if let reference = node.subject.as(DeclReferenceExprSyntax.self),
+           heistStepParameterNames.contains(reference.baseName.text) {
+            heistStepSwitches.append(node)
+        }
+        return .visitChildren
+    }
+
+    override func visit(_ node: FunctionCallExprSyntax) -> SyntaxVisitorContinueKind {
+        if isMemberCall(node, named: "evaluate", on: "PredicateEvaluation") {
+            predicateEvaluations.append(node)
+        }
+        return .visitChildren
+    }
+}
+
 private final class InsideJobArchitecturalShapeRuleVisitor: SyntaxVisitor {
     private let file: SourceFileContext
-    private(set) var failures: [CustomRuleFailure] = []
+    private(set) var failures: [RuleFailure] = []
 
     init(file: SourceFileContext, viewMode: SyntaxTreeViewMode) {
         self.file = file
@@ -1197,6 +1473,15 @@ private final class InsideJobArchitecturalShapeRuleVisitor: SyntaxVisitor {
 
     private func recordForbiddenReference(node: some SyntaxProtocol, observed: String) {
         guard isForbiddenInsideJobArchitectureSymbol(observed) else { return }
+        if retiredTargetProjectionSymbols.contains(observed) {
+            recordFailure(
+                at: node,
+                observed: observed,
+                expectation: "TheStash resolves targets directly against InterfaceTree and ElementMatchGraph",
+                message: "target resolution uses retired SemanticInterfaceProjection/back-map architecture"
+            )
+            return
+        }
         recordFailure(
             at: node,
             observed: observed,
@@ -1247,17 +1532,46 @@ private struct PipelineConstructionOwnership {
     let expectation: String
 }
 
-private struct ArchitectureCurrencyOwnership {
-    let symbol: String
+private enum ArchitectureCurrency: String {
+    case accessibilityContainerKind = "AccessibilityContainerKind"
+    case accessibilityPredicate = "AccessibilityPredicate"
+    case accessibilityTarget = "AccessibilityTarget"
+    case accessibilityTrace = "AccessibilityTrace"
+    case actionResultEvidence = "ActionResultEvidence"
+    case changeFact = "ChangeFact"
+    case containerPredicate = "ContainerPredicate"
+    case containerPredicateActions = "ContainerPredicateActions"
+    case containerPredicateCheck = "ContainerPredicateCheck"
+    case containerPredicateCount = "ContainerPredicateCount"
+    case containerPredicateFacts = "ContainerPredicateFacts"
+    case containerPredicateRoleFacts = "ContainerPredicateRoleFacts"
+    case elementMatchGraph = "ElementMatchGraph"
+    case expr = "Expr"
+    case heistExecutionEvidenceRollup = "HeistExecutionEvidenceRollup"
+    case heistExecutionStepReportFacts = "HeistExecutionStepReportFacts"
+    case interfaceObservation = "InterfaceObservation"
+    case interfaceQuery = "InterfaceQuery"
+    case interfaceTree = "InterfaceTree"
+    case liveCapture = "LiveCapture"
+    case observationWindow = "ObservationWindow"
+    case semanticContainerPredicate = "SemanticContainerPredicate"
+    case semanticObservationLog = "SemanticObservationLog"
+    case settleLoopMachine = "SettleLoopMachine"
+    case settleLoopRunner = "SettleLoopRunner"
+    case settlePolicy = "SettlePolicy"
+}
+
+private struct ArchitectureCurrencyOwnerDescriptor {
+    let symbol: ArchitectureCurrency
     let declarationOwnerPath: String?
     let construction: PipelineConstructionOwnership?
 
-    static func declaration(_ symbol: String, ownerPath: String) -> Self {
+    static func declaration(_ symbol: ArchitectureCurrency, ownerPath: String) -> Self {
         Self(symbol: symbol, declarationOwnerPath: ownerPath, construction: nil)
     }
 
     static func construction(
-        _ symbol: String,
+        _ symbol: ArchitectureCurrency,
         declarationOwnerPath: String? = nil,
         allowedPaths: Set<String>,
         expectation: String
@@ -1276,20 +1590,34 @@ private struct ArchitectureCurrencyOwnership {
 private let reportPipelineOwnerPath =
     "ButtonHeist/Sources/TheScore/Reports/HeistExecutionResult+Report.swift"
 
-private let architectureCurrencyOwnership: [ArchitectureCurrencyOwnership] = [
+private let accessibilityPredicateOwnerPath =
+    "ButtonHeist/Sources/ThePlans/Model/AccessibilityPredicate.swift"
+
+private let expressionOwnerPath =
+    "ButtonHeist/Sources/ThePlans/Model/StringExpressions.swift"
+
+private let interfaceGraphOwnerPath =
+    "ButtonHeist/Sources/TheScore/Core/AccessibilityHierarchyGraph.swift"
+
+private let accessibilityPredicatePhaseTypes: Set<String> = [
+    "AuthoredAccessibilityPredicatePhase",
+    "ResolvedAccessibilityPredicatePhase",
+]
+
+private let architectureCurrencyOwners: [ArchitectureCurrencyOwnerDescriptor] = [
     .construction(
-        "HeistExecutionEvidenceRollup",
+        .heistExecutionEvidenceRollup,
         allowedPaths: [reportPipelineOwnerPath],
         expectation: "execution evidence rollup construction stays in \(reportPipelineOwnerPath)"
     ),
     .construction(
-        "HeistExecutionStepReportFacts",
+        .heistExecutionStepReportFacts,
         declarationOwnerPath: "ButtonHeist/Sources/TheScore/Reports/HeistExecutionResult+Report.swift",
         allowedPaths: [reportPipelineOwnerPath],
         expectation: "step report fact construction stays in \(reportPipelineOwnerPath)"
     ),
     .construction(
-        "ActionResultEvidence",
+        .actionResultEvidence,
         declarationOwnerPath: "ButtonHeist/Sources/TheScore/Reports/ActionResultEvidence.swift",
         allowedPaths: [
             "ButtonHeist/Sources/TheInsideJob/TheBrains/PostActionObservation.swift",
@@ -1300,41 +1628,47 @@ private let architectureCurrencyOwnership: [ArchitectureCurrencyOwnership] = [
         expectation: "action result evidence is assembled only by its value owner or runtime evidence producers"
     ),
     .construction(
-        "InterfaceObservation",
+        .interfaceObservation,
         declarationOwnerPath: "ButtonHeist/Sources/TheInsideJob/TheStash/InterfaceObservation.swift",
         allowedPaths: ["ButtonHeist/Sources/TheInsideJob/TheStash/InterfaceObservation.swift"],
         expectation: "production observations enter through InterfaceObservation.build"
     ),
     .construction(
-        "LiveCapture",
+        .liveCapture,
         declarationOwnerPath: "ButtonHeist/Sources/TheInsideJob/TheStash/LiveCapture.swift",
         allowedPaths: ["ButtonHeist/Sources/TheInsideJob/TheStash/LiveCapture.swift"],
         expectation: "production live captures enter through LiveCapture.build"
     ),
-    .declaration("AccessibilityContainerKind", ownerPath: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
-    .declaration("AccessibilityPredicate", ownerPath: "ButtonHeist/Sources/ThePlans/Model/AccessibilityPredicate.swift"),
-    .declaration("AccessibilityTarget", ownerPath: "ButtonHeist/Sources/ThePlans/Model/AccessibilityTarget.swift"),
-    .declaration("ContainerPredicate", ownerPath: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
-    .declaration("ContainerPredicateActions", ownerPath: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
-    .declaration("ContainerPredicateCheck", ownerPath: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
-    .declaration("ContainerPredicateCount", ownerPath: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
-    .declaration("ContainerPredicateExpr", ownerPath: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
-    .declaration("ContainerPredicateFacts", ownerPath: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
-    .declaration("ContainerPredicateRoleFacts", ownerPath: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
-    .declaration("SemanticContainerPredicate", ownerPath: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
-    .declaration("AccessibilityTrace", ownerPath: "ButtonHeist/Sources/TheScore/Evidence/AccessibilityTrace.swift"),
-    .declaration("ChangeFact", ownerPath: "ButtonHeist/Sources/TheScore/Evidence/AccessibilityTrace+ChangeFacts.swift"),
-    .declaration("ElementMatchGraph", ownerPath: "ButtonHeist/Sources/TheScore/Core/ElementPredicate+HeistElement.swift"),
-    .declaration("InterfaceQuery", ownerPath: "ButtonHeist/Sources/TheScore/Wire/InterfaceQuery.swift"),
-    .declaration("ObservationWindow", ownerPath: "ButtonHeist/Sources/TheInsideJob/TheBrains/ObservationWindow.swift"),
-    .declaration("SettleLoopMachine", ownerPath: "ButtonHeist/Sources/TheInsideJob/TheBrains/SettleSession.swift"),
-    .declaration("SettleLoopRunner", ownerPath: "ButtonHeist/Sources/TheInsideJob/TheBrains/SettleSession.swift"),
-    .declaration("SettlePolicy", ownerPath: "ButtonHeist/Sources/TheInsideJob/TheBrains/SettleSession.swift"),
-    .declaration("InterfaceTree", ownerPath: "ButtonHeist/Sources/TheInsideJob/TheStash/InterfaceTree.swift"),
+    .construction(
+        .semanticObservationLog,
+        declarationOwnerPath: "ButtonHeist/Sources/TheInsideJob/TheStash/SemanticObservationLog.swift",
+        allowedPaths: ["ButtonHeist/Sources/TheInsideJob/TheStash/SemanticObservationStream.swift"],
+        expectation: "SemanticObservationStream owns the single semantic observation log"
+    ),
+    .declaration(.accessibilityContainerKind, ownerPath: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
+    .declaration(.accessibilityPredicate, ownerPath: "ButtonHeist/Sources/ThePlans/Model/AccessibilityPredicate.swift"),
+    .declaration(.accessibilityTarget, ownerPath: "ButtonHeist/Sources/ThePlans/Model/AccessibilityTarget.swift"),
+    .declaration(.containerPredicate, ownerPath: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
+    .declaration(.containerPredicateActions, ownerPath: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
+    .declaration(.containerPredicateCheck, ownerPath: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
+    .declaration(.containerPredicateCount, ownerPath: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
+    .declaration(.containerPredicateFacts, ownerPath: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
+    .declaration(.containerPredicateRoleFacts, ownerPath: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
+    .declaration(.semanticContainerPredicate, ownerPath: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
+    .declaration(.expr, ownerPath: "ButtonHeist/Sources/ThePlans/Model/StringExpressions.swift"),
+    .declaration(.accessibilityTrace, ownerPath: "ButtonHeist/Sources/TheScore/Evidence/AccessibilityTrace.swift"),
+    .declaration(.changeFact, ownerPath: "ButtonHeist/Sources/TheScore/Evidence/AccessibilityTrace+ChangeFacts.swift"),
+    .declaration(.elementMatchGraph, ownerPath: "ButtonHeist/Sources/TheScore/Core/ElementPredicate+HeistElement.swift"),
+    .declaration(.interfaceQuery, ownerPath: "ButtonHeist/Sources/TheScore/Wire/InterfaceQuery.swift"),
+    .declaration(.observationWindow, ownerPath: "ButtonHeist/Sources/TheInsideJob/TheBrains/ObservationWindow.swift"),
+    .declaration(.settleLoopMachine, ownerPath: "ButtonHeist/Sources/TheInsideJob/TheBrains/SettleSession.swift"),
+    .declaration(.settleLoopRunner, ownerPath: "ButtonHeist/Sources/TheInsideJob/TheBrains/SettleSession.swift"),
+    .declaration(.settlePolicy, ownerPath: "ButtonHeist/Sources/TheInsideJob/TheBrains/SettleSession.swift"),
+    .declaration(.interfaceTree, ownerPath: "ButtonHeist/Sources/TheInsideJob/TheStash/InterfaceTree.swift"),
 ]
 
-private let architectureCurrencyOwnershipBySymbol = Dictionary(
-    uniqueKeysWithValues: architectureCurrencyOwnership.map { ($0.symbol, $0) }
+private let architectureCurrencyOwnersBySymbol = Dictionary(
+    uniqueKeysWithValues: architectureCurrencyOwners.map { ($0.symbol, $0) }
 )
 
 private let accessibilityNotificationRawCodeOwnerPath =
@@ -1365,8 +1699,6 @@ private func scoreFolderAllowedImports(for path: String) -> Set<String>? {
     }
     return nil
 }
-
-private let frameworkSandboxComponentIDs = ButtonHeistComponent.allCases.map(\.rawValue)
 
 private struct FrameworkImportSandbox {
     let displayName: String
@@ -1546,20 +1878,21 @@ private struct ArchitectureCurrencyDeclaration {
 }
 
 private func architectureCurrencyOwnershipFailures(
-    in context: CustomRuleContext
-) -> [CustomRuleFailure] {
-    let declarationOwnerships = architectureCurrencyOwnership.filter { $0.declarationOwnerPath != nil }
+    in context: RuleContext
+) throws -> [RuleFailure] {
+    let declarationOwnerships = architectureCurrencyOwners.filter { $0.declarationOwnerPath != nil }
+    let nominalTypes = try context.facts(BuiltInFacts.nominalTypes)
     let configuredPathFailures = Set(declarationOwnerships.compactMap(\.declarationOwnerPath))
         .sorted()
-        .compactMap { rawOwnerPath -> CustomRuleFailure? in
+        .compactMap { rawOwnerPath -> RuleFailure? in
             let symbols = declarationOwnerships
                 .filter { $0.declarationOwnerPath == rawOwnerPath }
-                .map(\.symbol)
+                .map(\.symbol.rawValue)
                 .sorted()
                 .joined(separator: ", ")
             guard let ownerPath = try? RelativeFilePath(rawOwnerPath) else {
-                return context.files.first.map { file in
-                    CustomRuleFailure(
+                return context.repository.files.first.map { file in
+                    RuleFailure(
                         path: file.path,
                         message: "configured architecture currency owner path is invalid",
                         evidence: ViolationEvidence(
@@ -1569,8 +1902,8 @@ private func architectureCurrencyOwnershipFailures(
                     )
                 }
             }
-            guard !context.files.contains(where: { $0.path == ownerPath }) else { return nil }
-            return CustomRuleFailure(
+            guard !context.repository.files.contains(where: { $0.path == ownerPath }) else { return nil }
+            return RuleFailure(
                 path: ownerPath,
                 message: "configured architecture currency owner path does not exist",
                 evidence: ViolationEvidence(
@@ -1582,31 +1915,29 @@ private func architectureCurrencyOwnershipFailures(
 
     let missingOwnerPaths = Set(configuredPathFailures.map(\.path))
     let declarationFailures = declarationOwnerships
-        .sorted { $0.symbol < $1.symbol }
-        .flatMap { ownership -> [CustomRuleFailure] in
+        .sorted { $0.symbol.rawValue < $1.symbol.rawValue }
+        .flatMap { ownership -> [RuleFailure] in
             guard let rawOwnerPath = ownership.declarationOwnerPath,
                   let ownerPath = try? RelativeFilePath(rawOwnerPath),
                   !missingOwnerPaths.contains(ownerPath) else {
                 return []
             }
 
-            let declarations = context.files.flatMap { file in
-                file.nominalTypes
-                    .filter { $0.name == ownership.symbol }
-                    .map { declaration in
-                        ArchitectureCurrencyDeclaration(
-                            path: file.path,
-                            location: declaration.location
-                        )
-                    }
-            }
+            let declarations = nominalTypes
+                .filter { $0.type.name.rawValue == ownership.symbol.rawValue }
+                .map { occurrence in
+                    ArchitectureCurrencyDeclaration(
+                        path: occurrence.path,
+                        location: occurrence.type.location
+                    )
+                }
             guard declarations.count == 1 else {
                 return [
-                    CustomRuleFailure(
+                    RuleFailure(
                         path: ownerPath,
                         message: "architecture currency symbol must be declared exactly once",
                         evidence: ViolationEvidence(
-                            observed: "\(ownership.symbol) has \(declarations.count) declarations",
+                            observed: "\(ownership.symbol.rawValue) has \(declarations.count) declarations",
                             expectation: "one declaration in \(rawOwnerPath)"
                         )
                     ),
@@ -1616,13 +1947,13 @@ private func architectureCurrencyOwnershipFailures(
             let declaration = declarations[0]
             guard declaration.path == ownerPath else {
                 return [
-                    CustomRuleFailure(
+                    RuleFailure(
                         path: declaration.path,
                         location: declaration.location,
                         message: "architecture currency declared outside its canonical owner",
                         evidence: ViolationEvidence(
-                            observed: "\(ownership.symbol) in \(declaration.path.rawValue)",
-                            expectation: "\(ownership.symbol) is declared only in \(rawOwnerPath)"
+                            observed: "\(ownership.symbol.rawValue) in \(declaration.path.rawValue)",
+                            expectation: "\(ownership.symbol.rawValue) is declared only in \(rawOwnerPath)"
                         )
                     ),
                 ]
@@ -1648,7 +1979,7 @@ private let rawHeistValueBoundaryPaths: Set<String> = [
     "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceParameter+Schema.swift",
     "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+PredicatePayloadValidation.swift",
     "ButtonHeistCLI/Sources/Support/CLICommandContract.swift",
-    "ButtonHeistCLI/Sources/Support/CLIRequestBuilder.swift",
+    "ButtonHeistCLI/Sources/Support/CLIMachineRequestParser.swift",
     "ButtonHeistCLI/Sources/Support/CLIUtilities.swift",
 ]
 
@@ -1663,9 +1994,9 @@ private let allowedUnsafeNonisolatedSPIVariables: Set<String> = [
     "ioHIDFunctionsLoaded",
 ]
 
-private let canonicalBuilderOwnedTypes: Set<String> = [
-    "InterfaceObservation",
-    "LiveCapture",
+private let canonicalBuilderOwnedCurrencies: Set<ArchitectureCurrency> = [
+    .interfaceObservation,
+    .liveCapture,
 ]
 
 private let settledValueOwnerNames: Set<String> = [
@@ -1693,12 +2024,32 @@ private let retiredProductionSymbols: Set<String> = [
     "runtimeValidatedVersion",
 ]
 
-private let forbiddenInsideJobArchitectureSymbols: Set<String> = [
+private let forbiddenInsideJobArchitectureSymbols = retiredTargetProjectionSymbols.union([
     "refreshCurrentVisibleTree",
     "refreshTreeAfterViewportMove",
+])
+
+private let retiredTargetProjectionSymbols: Set<String> = [
+    "SemanticInterfaceProjection",
+    "containerByProjectedPath",
+    "elementByProjectedPath",
+    "semanticInterfaceProjection",
 ]
 
 private let rawObservationCommitTypes: Set<String> = ["InterfaceObservation", "Screen"]
+
+private func containsInsideJobArchitecturalShape(in source: String) -> Bool {
+    let lowercasedSource = source.lowercased()
+    return forbiddenInsideJobArchitectureSymbols.contains { source.contains($0) }
+        || (lowercasedSource.contains("commit") && rawObservationCommitTypes.contains { source.contains($0) })
+        || (source.contains("InterfaceObservationProof") && source.contains("testing"))
+}
+
+private let testExecutionResultTypeNames: Set<String> = [
+    "ActionResult",
+    "HeistExecutionStepResult",
+    "ServerMessage",
+]
 
 private let jsonBoundarySymbols: Set<String> = [
     "JSONDecoder",
@@ -2159,6 +2510,17 @@ private func isNamedType(_ type: TypeSyntax, _ expectedName: String) -> Bool {
     return type.as(MemberTypeSyntax.self)?.name.text == expectedName
 }
 
+private func containsType(named expectedName: String, in type: TypeSyntax) -> Bool {
+    type.tokens(viewMode: .sourceAccurate).contains { $0.text == expectedName }
+}
+
+private func isDestructiveObservationLogAPIName(_ name: String) -> Bool {
+    let lowercased = name.lowercased()
+    return lowercased.hasPrefix("clear")
+        || lowercased.hasPrefix("reset")
+        || lowercased.hasPrefix("removeall")
+}
+
 private func isStoredBinding(_ binding: PatternBindingSyntax) -> Bool {
     guard let accessors = binding.accessorBlock else { return true }
     let tokens = Set(accessors.tokens(viewMode: .sourceAccurate).map(\.text))
@@ -2201,6 +2563,19 @@ private func calledConstructorName(_ expression: ExprSyntax) -> String? {
     }
     guard let base = member.base else { return "Self" }
     return calledConstructorName(base)
+}
+
+private func locallyDispatchedCallName(_ expression: ExprSyntax) -> String? {
+    if let reference = expression.as(DeclReferenceExprSyntax.self) {
+        return reference.baseName.text
+    }
+    guard let member = expression.as(MemberAccessExprSyntax.self) else { return nil }
+    guard let base = member.base else { return member.declName.baseName.text }
+    guard let reference = base.as(DeclReferenceExprSyntax.self),
+          reference.baseName.text == "self" || reference.baseName.text == "Self" else {
+        return nil
+    }
+    return member.declName.baseName.text
 }
 
 private func isMetatypeReference(_ expression: ExprSyntax, named expectedName: String) -> Bool {
