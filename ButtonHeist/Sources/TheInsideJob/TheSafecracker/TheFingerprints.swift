@@ -37,6 +37,10 @@ private final class FingerprintOverlayModel: ObservableObject {
         fingerprints.removeAll { idSet.contains($0.id) }
     }
 
+    func removeAll() {
+        fingerprints = []
+    }
+
     func setVisibility(for ids: [Int], isVisible: Bool) {
         guard !ids.isEmpty else { return }
         let idSet = Set(ids)
@@ -57,6 +61,29 @@ private final class FingerprintOverlayModel: ObservableObject {
             updatedFingerprints[index].center = point
         }
         fingerprints = updatedFingerprints
+    }
+}
+
+@MainActor
+protocol FingerprintScheduling {
+    var now: CFTimeInterval { get }
+
+    func schedule(
+        after delay: TimeInterval,
+        action: @escaping @MainActor @Sendable () -> Void
+    )
+}
+
+private struct MainQueueFingerprintScheduler: FingerprintScheduling {
+    var now: CFTimeInterval { CACurrentMediaTime() }
+
+    func schedule(
+        after delay: TimeInterval,
+        action: @escaping @MainActor @Sendable () -> Void
+    ) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            action()
+        }
     }
 }
 
@@ -137,33 +164,87 @@ final class TheFingerprints {
     private static let minimumDisplayDuration: TimeInterval = 0.5
     private static let fadeOutDuration: TimeInterval = 0.22
 
-    private var fingerprintWindow: FingerprintWindow?
-    private var hostingController: UIHostingController<FingerprintOverlayView>?
+    private final class OverlayContext {
+        var window: FingerprintWindow
+        var retirements: [Int: [Int]] = [:]
+
+        init(window: FingerprintWindow) {
+            self.window = window
+        }
+    }
+
+    private struct TrackingSession {
+        let context: OverlayContext
+        var fingerprintIDs: [Int]
+        let startedAt: CFTimeInterval
+    }
+
+    private enum Lifecycle {
+        case detached
+        case idle(OverlayContext)
+        case tracking(TrackingSession)
+    }
+
+    enum LifecycleSnapshot: Equatable {
+        case detached
+        case idle(pendingRetirementCount: Int)
+        case tracking(activeFingerprintCount: Int, pendingRetirementCount: Int)
+    }
+
+    private var lifecycle: Lifecycle = .detached
     private let overlayModel = FingerprintOverlayModel()
-    private var activeFingerprintIDs: [Int] = []
     private var nextFingerprintID = 0
-    private var trackingStartTime: CFTimeInterval = 0
+    private var nextRetirementID = 0
 
     private let isEnabled: Bool
+    private let scheduler: any FingerprintScheduling
+    var fingerprintWindow: FingerprintWindow? { currentContext?.window }
+
     var activeFingerprintCenters: [CGPoint] {
-        overlayModel.centers(for: activeFingerprintIDs)
+        guard case let .tracking(session) = lifecycle else { return [] }
+        return overlayModel.centers(for: session.fingerprintIDs)
+    }
+
+    var lifecycleSnapshot: LifecycleSnapshot {
+        switch lifecycle {
+        case .detached:
+            .detached
+        case let .idle(context):
+            .idle(pendingRetirementCount: context.retirements.count)
+        case let .tracking(session):
+            .tracking(
+                activeFingerprintCount: session.fingerprintIDs.count,
+                pendingRetirementCount: session.context.retirements.count
+            )
+        }
     }
 
     init(isEnabled: Bool) {
         self.isEnabled = isEnabled
+        scheduler = MainQueueFingerprintScheduler()
+    }
+
+    init(isEnabled: Bool, scheduler: any FingerprintScheduling) {
+        self.isEnabled = isEnabled
+        self.scheduler = scheduler
     }
 
     func beginTracking(at points: [CGPoint]) {
         guard isEnabled, !points.isEmpty else { return }
-        guard ensureFingerprintRootView() else { return }
+        guard let context = ensureFingerprintRootView() else { return }
 
         removeActiveFingerprints()
         let fingerprints = points.map(makeFingerprint(at:))
-        activeFingerprintIDs = fingerprints.map(\.id)
-        trackingStartTime = CACurrentMediaTime()
+        let fingerprintIDs = fingerprints.map(\.id)
+
+        lifecycle = .tracking(TrackingSession(
+            context: context,
+            fingerprintIDs: fingerprintIDs,
+            startedAt: scheduler.now
+        ))
 
         overlayModel.append(fingerprints)
-        fadeInFingerprints(ids: activeFingerprintIDs)
+        fadeInFingerprints(ids: fingerprintIDs)
     }
 
     func show(at point: CGPoint) {
@@ -182,48 +263,52 @@ final class TheFingerprints {
             removeActiveFingerprints()
             return
         }
-        guard ensureFingerprintRootView() else { return }
+        guard ensureFingerprintRootView() != nil else { return }
 
-        if activeFingerprintIDs.isEmpty {
+        guard case var .tracking(session) = lifecycle else {
             beginTracking(at: points)
             return
         }
 
-        if points.count < activeFingerprintIDs.count {
-            let removedIDs = Array(activeFingerprintIDs.suffix(activeFingerprintIDs.count - points.count))
-            activeFingerprintIDs.removeLast(activeFingerprintIDs.count - points.count)
+        if points.count < session.fingerprintIDs.count {
+            let removedIDs = Array(session.fingerprintIDs.suffix(session.fingerprintIDs.count - points.count))
+            session.fingerprintIDs.removeLast(session.fingerprintIDs.count - points.count)
             overlayModel.remove(ids: removedIDs)
         }
 
-        if points.count > activeFingerprintIDs.count {
-            let fingerprints = points[activeFingerprintIDs.count...].map(makeFingerprint(at:))
+        if points.count > session.fingerprintIDs.count {
+            let fingerprints = points[session.fingerprintIDs.count...].map(makeFingerprint(at:))
             let newIDs = fingerprints.map(\.id)
-            activeFingerprintIDs.append(contentsOf: newIDs)
+            session.fingerprintIDs.append(contentsOf: newIDs)
             overlayModel.append(fingerprints)
             fadeInFingerprints(ids: newIDs)
         }
 
-        overlayModel.updateCenters(for: activeFingerprintIDs, to: points)
+        lifecycle = .tracking(session)
+        overlayModel.updateCenters(for: session.fingerprintIDs, to: points)
     }
 
     func endTracking() {
-        guard isEnabled else { return }
-        let ids = activeFingerprintIDs
-        activeFingerprintIDs = []
-
-        let elapsed = CACurrentMediaTime() - trackingStartTime
+        guard case let .tracking(session) = lifecycle else { return }
+        let ids = session.fingerprintIDs
+        let elapsed = scheduler.now - session.startedAt
         let remainingHold = max(Self.minimumDisplayDuration - elapsed, 0)
-        let overlayModel = overlayModel
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + remainingHold) {
-            withAnimation(.easeOut(duration: Self.fadeOutDuration)) {
-                overlayModel.setVisibility(for: ids, isVisible: false)
-            }
+        nextRetirementID += 1
+        let retirementID = nextRetirementID
+        session.context.retirements[retirementID] = ids
+        lifecycle = .idle(session.context)
 
-            DispatchQueue.main.asyncAfter(deadline: .now() + Self.fadeOutDuration) {
-                overlayModel.remove(ids: ids)
-            }
+        scheduler.schedule(after: remainingHold) { [weak self] in
+            self?.beginFadeOut(retirementID: retirementID)
         }
+    }
+
+    func invalidate() {
+        currentContext?.window.isHidden = true
+        currentContext?.window.rootViewController = nil
+        overlayModel.removeAll()
+        lifecycle = .detached
     }
 
     private func makeFingerprint(at point: CGPoint) -> FingerprintState {
@@ -232,7 +317,7 @@ final class TheFingerprints {
     }
 
     private func fadeInFingerprints(ids: [Int]) {
-        DispatchQueue.main.async { [overlayModel] in
+        scheduler.schedule(after: 0) { [overlayModel] in
             withAnimation(.easeOut(duration: Self.appearDuration)) {
                 overlayModel.setVisibility(for: ids, isVisible: true)
             }
@@ -240,19 +325,40 @@ final class TheFingerprints {
     }
 
     private func removeActiveFingerprints() {
-        overlayModel.remove(ids: activeFingerprintIDs)
-        activeFingerprintIDs = []
+        guard case let .tracking(session) = lifecycle else { return }
+        overlayModel.remove(ids: session.fingerprintIDs)
+        lifecycle = .idle(session.context)
     }
 
-    private func ensureFingerprintRootView() -> Bool {
+    private func beginFadeOut(retirementID: Int) {
+        guard let ids = currentContext?.retirements[retirementID] else { return }
+
+        withAnimation(.easeOut(duration: Self.fadeOutDuration)) {
+            overlayModel.setVisibility(for: ids, isVisible: false)
+        }
+
+        scheduler.schedule(after: Self.fadeOutDuration) { [weak self] in
+            self?.completeRetirement(id: retirementID)
+        }
+    }
+
+    private func completeRetirement(id: Int) {
+        guard let context = currentContext,
+              let ids = context.retirements.removeValue(forKey: id)
+        else { return }
+
+        overlayModel.remove(ids: ids)
+    }
+
+    private func ensureFingerprintRootView() -> OverlayContext? {
         guard let windowScene = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
             .first(where: { $0.activationState == .foregroundActive })
         else {
-            return false
+            return nil
         }
 
-        if fingerprintWindow == nil || fingerprintWindow?.windowScene !== windowScene {
+        if currentContext?.window.windowScene !== windowScene {
             let window = FingerprintWindow(windowScene: windowScene)
             window.frame = windowScene.screen.bounds
             window.backgroundColor = .clear
@@ -272,11 +378,32 @@ final class TheFingerprints {
 
             window.rootViewController = viewController
             window.isHidden = false
-            fingerprintWindow = window
-            hostingController = viewController
+            replaceWindow(window)
         }
 
-        return true
+        return currentContext
+    }
+
+    private var currentContext: OverlayContext? {
+        switch lifecycle {
+        case .detached:
+            nil
+        case let .idle(context):
+            context
+        case let .tracking(session):
+            session.context
+        }
+    }
+
+    private func replaceWindow(_ window: FingerprintWindow) {
+        if let context = currentContext {
+            context.window.isHidden = true
+            context.window.rootViewController = nil
+            context.window = window
+            return
+        }
+
+        lifecycle = .idle(OverlayContext(window: window))
     }
 }
 
