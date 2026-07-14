@@ -44,6 +44,21 @@ extension ElementPredicateCheckCore: Equatable where Text: Equatable {}
 extension ElementPredicateCheckCore: Hashable where Text: Hashable {}
 
 package extension ElementPredicateCheckCore where Text: StringMatchLeaf {
+    var invalidEmptyBroadMode: StringMatch.Mode? {
+        switch self {
+        case .label(let match), .identifier(let match), .value(let match), .hint(let match):
+            return match.invalidEmptyBroadMode
+        case .customContent(let match):
+            return match.label?.invalidEmptyBroadMode ?? match.value?.invalidEmptyBroadMode
+        case .rotors(let matches):
+            return matches.lazy.compactMap(\.invalidEmptyBroadMode).first
+        case .exclude(let check):
+            return check.invalidEmptyBroadMode
+        case .traits, .actions:
+            return nil
+        }
+    }
+
     var hasPredicateLiteral: Bool {
         switch self {
         case .label(let match), .identifier(let match), .value(let match), .hint(let match):
@@ -118,6 +133,12 @@ package struct ElementPredicateCore<Text> {
         _ transform: (Text) throws -> NewText
     ) rethrows -> ElementPredicateCore<NewText> {
         try ElementPredicateCore<NewText>(checks.map { try $0.map(transform) })
+    }
+}
+
+package extension ElementPredicateCore where Text: StringMatchLeaf {
+    var invalidEmptyBroadMode: StringMatch.Mode? {
+        checks.lazy.compactMap(\.invalidEmptyBroadMode).first
     }
 }
 

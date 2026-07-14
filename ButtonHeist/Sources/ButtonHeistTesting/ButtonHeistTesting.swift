@@ -4,10 +4,9 @@ import Foundation
 import os
 
 // Package contract: app-hosted tests import ButtonHeistTesting and author
-// heists directly. Re-exporting the DSL here is intentional and allowlisted by
+// heists directly. Re-exporting ThePlans here is intentional and allowlisted by
 // scripts/check-buttonheist-import-contract.sh.
-@_exported import ButtonHeistDSL
-import ThePlans
+@_exported import ThePlans
 import TheInsideJob
 
 /// Prepared in-process heist execution request used by the testing facade.
@@ -191,9 +190,14 @@ public enum HeistTestReceiptRecording: Sendable, Equatable {
 /// On failure, this records an `XCTFail` at the call site and returns `nil`.
 /// The failure message includes the heist failure description, including the
 /// settled interface dump when one is available.
+///
+/// The asynchronous run is bounded by `timeout`. Reaching that bound cancels
+/// and releases the owned task, records an `XCTFail` at the call site, and
+/// returns `nil`. Invalid bounds fail closed as an immediate timeout.
 @discardableResult
 public func runHeistSync(
     _ name: String,
+    timeout: TimeInterval = 60,
     recordReceipt: HeistTestReceiptRecording = .environment,
     to receiptDirectory: URL? = nil,
     file: StaticString = #filePath,
@@ -202,6 +206,7 @@ public func runHeistSync(
 ) -> Heist? {
     runHeistSyncRequest(
         makeRequest: { try makeRunHeistRequest(name, content) },
+        timeout: timeout,
         recordReceipt: recordReceipt,
         receiptDirectory: receiptDirectory,
         file: file,
@@ -215,6 +220,7 @@ public func runHeistSync(
     _ name: String,
     argument input: String,
     parameter: HeistReferenceName = "input",
+    timeout: TimeInterval = 60,
     recordReceipt: HeistTestReceiptRecording = .environment,
     to receiptDirectory: URL? = nil,
     file: StaticString = #filePath,
@@ -225,6 +231,7 @@ public func runHeistSync(
         makeRequest: {
             try makeRunHeistRequest(name, argument: input, parameter: parameter, content)
         },
+        timeout: timeout,
         recordReceipt: recordReceipt,
         receiptDirectory: receiptDirectory,
         file: file,
@@ -239,6 +246,7 @@ public func runHeistSync(
     _ name: String,
     argument input: AccessibilityTarget,
     parameter: HeistReferenceName = "input",
+    timeout: TimeInterval = 60,
     recordReceipt: HeistTestReceiptRecording = .environment,
     to receiptDirectory: URL? = nil,
     file: StaticString = #filePath,
@@ -249,6 +257,7 @@ public func runHeistSync(
         makeRequest: {
             try makeRunHeistRequest(name, argument: input, parameter: parameter, content)
         },
+        timeout: timeout,
         recordReceipt: recordReceipt,
         receiptDirectory: receiptDirectory,
         file: file,
@@ -373,6 +382,7 @@ private func stopJoinedHeistSession(
 
 private func runHeistSyncRequest(
     makeRequest: () throws -> HeistRunRequest,
+    timeout: TimeInterval,
     recordReceipt: HeistTestReceiptRecording,
     receiptDirectory: URL?,
     file: StaticString,
@@ -395,7 +405,7 @@ private func runHeistSyncRequest(
         return nil
     }
 
-    return runHeistSyncOperation(file: file, line: line) { @MainActor in
+    return runHeistSyncOperation(timeout: timeout, file: file, line: line) { @MainActor in
         do {
             let heist = try await Heist(request.plan, argument: request.argument)
             try recordReceiptIfRequested(
@@ -426,8 +436,10 @@ private func runHeistSyncRequest(
 
 @discardableResult
 func runHeistSyncOperation<Value: Sendable>(
+    timeout: TimeInterval = 60,
     file: StaticString = #filePath,
     line: UInt = #line,
+    waitControl: HeistSyncWaitControl = .mainRunLoop,
     _ operation: @escaping @Sendable () async throws -> Value
 ) -> Value? {
     guard Thread.isMainThread else {
@@ -447,27 +459,75 @@ func runHeistSyncOperation<Value: Sendable>(
             state.finish(.failure(error))
         }
     }
-    state.retain(task)
+    state.attach(task)
 
-    return waitForSynchronousResult(state, file: file, line: line)
+    return waitForSynchronousResult(
+        state,
+        timeout: timeout,
+        waitControl: waitControl,
+        file: file,
+        line: line
+    )
 }
 
-private func waitForSynchronousResult<Value: Sendable>(
+func waitForSynchronousResult<Value: Sendable>(
     _ state: HeistSyncState<Value>,
+    timeout: TimeInterval,
+    waitControl: HeistSyncWaitControl,
     file: StaticString,
     line: UInt
 ) -> Value? {
-    while state.result == nil {
-        _ = RunLoop.current.run(mode: .default, before: Date(timeIntervalSinceNow: 0.05))
-    }
+    let boundedTimeout = timeout.isFinite && timeout > 0 ? timeout : 0
+    let deadline = waitControl.now() + boundedTimeout
 
-    switch state.result {
+    while true {
+        switch state.status {
+        case .running:
+            let remaining = deadline - waitControl.now()
+            guard remaining > 0 else {
+                return resolveHeistSyncDeadline(
+                    state.resolveDeadline(),
+                    timeout: boundedTimeout,
+                    file: file,
+                    line: line
+                )
+            }
+            waitControl.wait(min(remaining, 0.05))
+        case .completed(let result):
+            return resolveHeistSyncResult(result, file: file, line: line)
+        case .timedOut:
+            recordHeistXCTestIssue(.operationTimedOut(boundedTimeout), file: file, line: line)
+            return nil
+        }
+    }
+}
+
+private func resolveHeistSyncResult<Value>(
+    _ result: Result<Value, Error>,
+    file: StaticString,
+    line: UInt
+) -> Value? {
+    switch result {
     case .success(let value):
         return value
     case .failure(let error):
         recordHeistXCTestIssue(.operationFailed(error), file: file, line: line)
         return nil
-    case nil:
+    }
+}
+
+private func resolveHeistSyncDeadline<Value>(
+    _ resolution: HeistSyncDeadlineResolution<Value>,
+    timeout: TimeInterval,
+    file: StaticString,
+    line: UInt
+) -> Value? {
+    switch resolution {
+    case .completed(let result):
+        return resolveHeistSyncResult(result, file: file, line: line)
+    case .timedOut(let task):
+        task?.cancel()
+        recordHeistXCTestIssue(.operationTimedOut(timeout), file: file, line: line)
         return nil
     }
 }
@@ -491,30 +551,104 @@ private func recordReceiptIfRequested(
     )
 }
 
-private final class HeistSyncState<Value: Sendable>: Sendable {
-    private struct State: Sendable {
-        var result: Result<Value, Error>?
-        var task: Task<Void, Never>?
+struct HeistSyncWaitControl {
+    let now: () -> TimeInterval
+    let wait: (_ maximumInterval: TimeInterval) -> Void
+
+    static var mainRunLoop: Self {
+        HeistSyncWaitControl(
+            now: { ProcessInfo.processInfo.systemUptime },
+            wait: { maximumInterval in
+                _ = RunLoop.current.run(
+                    mode: .default,
+                    before: Date(timeIntervalSinceNow: maximumInterval)
+                )
+            }
+        )
+    }
+}
+
+enum HeistSyncStatus<Value: Sendable>: Sendable {
+    case running
+    case completed(Result<Value, Error>)
+    case timedOut
+}
+
+enum HeistSyncDeadlineResolution<Value: Sendable>: Sendable {
+    case completed(Result<Value, Error>)
+    case timedOut(Task<Void, Never>?)
+}
+
+final class HeistSyncState<Value: Sendable>: Sendable {
+    private enum State: Sendable {
+        case starting
+        case running(Task<Void, Never>)
+        case completed(Result<Value, Error>)
+        case timedOut
     }
 
-    private let state = OSAllocatedUnfairLock(initialState: State())
+    private let state = OSAllocatedUnfairLock(initialState: State.starting)
 
-    var result: Result<Value, Error>? {
+    var status: HeistSyncStatus<Value> {
         state.withLock { current in
-            current.result
+            switch current {
+            case .starting, .running:
+                return .running
+            case .completed(let result):
+                return .completed(result)
+            case .timedOut:
+                return .timedOut
+            }
+        }
+    }
+
+    var ownsTask: Bool {
+        state.withLock { current in
+            guard case .running = current else { return false }
+            return true
         }
     }
 
     func finish(_ result: Result<Value, Error>) {
         state.withLock { current in
-            guard case nil = current.result else { return }
-            current.result = result
+            switch current {
+            case .starting, .running:
+                current = .completed(result)
+            case .completed, .timedOut:
+                break
+            }
         }
     }
 
-    func retain(_ task: Task<Void, Never>) {
+    func attach(_ task: Task<Void, Never>) {
         state.withLock { current in
-            current.task = task
+            switch current {
+            case .starting:
+                current = .running(task)
+            case .running:
+                preconditionFailure("HeistSyncState can own only one task")
+            case .completed:
+                break
+            case .timedOut:
+                task.cancel()
+            }
+        }
+    }
+
+    func resolveDeadline() -> HeistSyncDeadlineResolution<Value> {
+        state.withLock { current in
+            switch current {
+            case .starting:
+                current = .timedOut
+                return .timedOut(nil)
+            case .running(let task):
+                current = .timedOut
+                return .timedOut(task)
+            case .completed(let result):
+                return .completed(result)
+            case .timedOut:
+                return .timedOut(nil)
+            }
         }
     }
 }

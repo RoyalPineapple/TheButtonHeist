@@ -12,7 +12,6 @@ flowchart TD
     TESTING["ButtonHeistTesting<br/>runHeist / joinHeist test facade"]
     PLANT["ThePlant<br/>ObjC auto-start loader"]
     BUTTONHEIST["ButtonHeist<br/>TheFence · TheHandoff"]
-    DSL["ButtonHeistDSL<br/>Swift result-builder authoring"]
     INSIDEJOB["TheInsideJob — #if DEBUG<br/>in-app server and crew"]
     SUPPORT["ButtonHeistSupport<br/>shared utilities"]
     AXPARSER["AccessibilitySnapshotParser<br/>accessibility tree walk (fork)"]
@@ -20,19 +19,18 @@ flowchart TD
 
     subgraph wire["Wire layer (Codable)"]
         THESCORE["TheScore<br/>messages · envelopes · HeistElement"]
-        THEPLANS["ThePlans<br/>HeistPlan IR · predicates · targets"]
+        THEPLANS["ThePlans<br/>Swift authoring · HeistPlan IR · predicates · targets"]
         THESCORE --> THEPLANS
     end
 
     CLI --> BUTTONHEIST
     MCPMOD --> BUTTONHEIST
-    TESTING --> DSL
+    TESTING --> THEPLANS
     TESTING --> INSIDEJOB
     PLANT --> INSIDEJOB
     BUTTONHEIST --> SUPPORT
     BUTTONHEIST --> THESCORE
     BUTTONHEIST --> THEPLANS
-    DSL --> THEPLANS
     INSIDEJOB --> SUPPORT
     INSIDEJOB --> THESCORE
     INSIDEJOB --> THEPLANS

@@ -30,13 +30,6 @@ let bumper = BumperProject {
             Applies(.buttonHeistScoreContract)
         }
 
-        Component(.dsl) {
-            Owns("ButtonHeist/Sources/ButtonHeistDSL")
-            Modules("ButtonHeistDSL")
-            MayDependOn(.plans)
-            Applies(.buttonHeistValuePipeline)
-        }
-
         Component(.doctor) {
             Owns(
                 "ButtonHeist/Sources/HeistDoctorCore",
@@ -64,7 +57,6 @@ let bumper = BumperProject {
             Modules("ButtonHeistTesting")
             MayDependOn(
                 .plans,
-                .dsl,
                 .runtime
             )
             Applies(.buttonHeistTestingBoundary)
@@ -103,7 +95,6 @@ let bumper = BumperProject {
             MayDependOn(
                 .plans,
                 .score,
-                .dsl,
                 .runtime,
                 .testing
             )

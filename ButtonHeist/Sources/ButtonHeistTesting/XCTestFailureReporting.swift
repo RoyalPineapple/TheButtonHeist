@@ -1,5 +1,6 @@
 #if canImport(UIKit)
 #if DEBUG
+import Foundation
 import XCTest
 
 enum HeistXCTestIssue: CustomStringConvertible {
@@ -8,6 +9,7 @@ enum HeistXCTestIssue: CustomStringConvertible {
     case synchronousHeistRequiresMainThread
     case synchronousOperationRequiresMainThread
     case operationFailed(Error)
+    case operationTimedOut(TimeInterval)
 
     var description: String {
         switch self {
@@ -21,6 +23,8 @@ enum HeistXCTestIssue: CustomStringConvertible {
             return "runHeistSyncOperation must be called on the main thread so it can pump the main run loop."
         case .operationFailed(let error):
             return String(describing: error)
+        case .operationTimedOut(let timeout):
+            return "runHeistSyncOperation timed out after \(timeout) seconds and cancelled its task."
         }
     }
 }

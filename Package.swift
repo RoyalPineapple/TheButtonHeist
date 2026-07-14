@@ -10,7 +10,6 @@ let package = Package(
     products: [
         .library(name: "ThePlans", targets: ["ThePlans"]),
         .library(name: "TheScore", targets: ["TheScore"]),
-        .library(name: "ButtonHeistDSL", targets: ["ButtonHeistDSL"]),
         .executable(name: "heist-plan", targets: ["HeistPlanTool"]),
         .executable(name: "heist-doctor", targets: ["HeistDoctorTool"]),
         // TheInsideJob with auto-start: includes both Swift implementation and ObjC loader
@@ -45,12 +44,6 @@ let package = Package(
                 .product(name: "AccessibilitySnapshotModel", package: "AccessibilitySnapshotBH"),
             ],
             path: "ButtonHeist/Sources/TheScore",
-            swiftSettings: [.swiftLanguageMode(.v6)]
-        ),
-        .target(
-            name: "ButtonHeistDSL",
-            dependencies: ["ThePlans"],
-            path: "ButtonHeist/Sources/ButtonHeistDSL",
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .executableTarget(
@@ -118,8 +111,8 @@ let package = Package(
         .target(
             name: "ButtonHeistTesting",
             dependencies: [
-                "ButtonHeistDSL",
                 "TheInsideJob",
+                "ThePlans",
             ],
             path: "ButtonHeist/Sources/ButtonHeistTesting",
             swiftSettings: [.swiftLanguageMode(.v6)]
@@ -176,12 +169,6 @@ let package = Package(
                 "TheScore",
             ],
             path: "ButtonHeist/Tests/HeistDoctorCoreTests",
-            swiftSettings: [.swiftLanguageMode(.v6)]
-        ),
-        .testTarget(
-            name: "ButtonHeistDSLTests",
-            dependencies: ["ButtonHeistDSL", "ThePlans", "TheScore"],
-            path: "ButtonHeist/Tests/ButtonHeistDSLTests",
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .testTarget(

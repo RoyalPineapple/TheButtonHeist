@@ -1,8 +1,6 @@
-import ButtonHeistDSL
 import Foundation
 import Testing
 @_spi(ButtonHeistInternals) import ThePlans
-import TheScore
 
 @Test
 func decodedJSONRendersCanonicalSwiftDSLForFullAST() throws {
@@ -146,8 +144,14 @@ private func rootStringPlanFixture() throws -> HeistPlan {
         parameter: .string(name: "term"),
         body: [
             .action(try ActionStep(
-                command: .typeText(text: .ref("term"), target: .label(.contains("Search"))),
-                expectationPolicy: .expect(ActionExpectation(predicate: .exists(.value(.ref("term"))), timeout: 2)))),
+                command: .typeText(
+                    reference: HeistReferenceName(stringLiteral: "term"),
+                    target: .label(.contains("Search"))
+                ),
+                expectationPolicy: .expect(ActionExpectation(
+                    predicate: .exists(.value(HeistReferenceName(stringLiteral: "term"))),
+                    timeout: 2
+                )))),
         ]
     )
     let pressRowDefinition = try HeistPlan(
@@ -159,7 +163,7 @@ private func rootStringPlanFixture() throws -> HeistPlan {
                 expectationPolicy: .expect(ActionExpectation(predicate: .missing(.ref("row")), timeout: 1)))),
         ]
     )
-    let rowPredicate = ElementPredicate.element(
+    let rowPredicate = ElementPredicateTemplate.element(
         .label(.contains("Result")),
         .identifier(.prefix("row")),
         .value(.suffix("available")),
@@ -167,9 +171,9 @@ private func rootStringPlanFixture() throws -> HeistPlan {
         traits: [.button]
     )
     let readyPredicate = ElementPredicateTemplate.element(
-        .label(.contains(.literal("Result"))),
-        .identifier(.prefix(.literal("row"))),
-        .value(.suffix(.literal("ready"))),
+        .label(.contains("Result")),
+        .identifier(.prefix("row")),
+        .value(.suffix("ready")),
         .exclude(.traits([.staticText])),
         traits: [.button]
     )
@@ -181,8 +185,14 @@ private func rootStringPlanFixture() throws -> HeistPlan {
             try HeistPlan(name: "Rows", definitions: [pressRowDefinition], body: []),
         ],
         body: [
-            .invoke(HeistInvocationStep(path: ["Search", "enter"], argument: .string(.ref("query")))),
-            .wait(WaitStep(predicate: .exists(.label(.ref("query"))), timeout: 1)),
+            .invoke(HeistInvocationStep(
+                path: ["Search", "enter"],
+                argument: .string(reference: HeistReferenceName(stringLiteral: "query"))
+            )),
+            .wait(WaitStep(
+                predicate: .exists(.label(HeistReferenceName(stringLiteral: "query"))),
+                timeout: 1
+            )),
             .conditional(try ConditionalStep(
                 cases: [
                     PredicateCase(
@@ -197,8 +207,14 @@ private func rootStringPlanFixture() throws -> HeistPlan {
                 parameter: "item",
                 body: [
                     .action(try ActionStep(
-                        command: .typeText(text: .ref("item"), target: .label(.contains("Search"))),
-                        expectationPolicy: .expect(ActionExpectation(predicate: .exists(.label(.ref("item"))), timeout: 2)))),
+                        command: .typeText(
+                            reference: HeistReferenceName(stringLiteral: "item"),
+                            target: .label(.contains("Search"))
+                        ),
+                        expectationPolicy: .expect(ActionExpectation(
+                            predicate: .exists(.label(HeistReferenceName(stringLiteral: "item"))),
+                            timeout: 2
+                        )))),
                 ]
             )),
             .forEachElement(try ForEachElementStep(

@@ -8,7 +8,7 @@ Author-to-replay: how a heist written in Swift (or in the canonical DSL source f
 ```mermaid
 flowchart TD
     subgraph author["Authoring"]
-        SWIFT["Swift DSL<br/>(ButtonHeistDSL result builders)"]
+        SWIFT["Swift DSL<br/>(ThePlans result builders)"]
         SOURCE["canonical DSL source<br/>(compileHeistPlanSource)"]
     end
 

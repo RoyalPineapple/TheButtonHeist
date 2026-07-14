@@ -25,10 +25,10 @@ public struct WaitFor: HeistContent {
     ) -> WaitFor {
         guard heistSteps.count == 1,
               case .wait(let step) = heistSteps[0] else {
-            preconditionFailure("ButtonHeistDSL WaitFor else requires a WaitFor(predicate, timeout:) gate")
+            preconditionFailure("ThePlans WaitFor else requires a WaitFor(predicate, timeout:) gate")
         }
         guard step.elseBody == nil else {
-            preconditionFailure("ButtonHeistDSL WaitFor accepts at most one else body")
+            preconditionFailure("ThePlans WaitFor accepts at most one else body")
         }
         let content = content()
         return WaitFor(
@@ -79,10 +79,10 @@ public struct RepeatUntil: HeistContent {
     ) -> RepeatUntil {
         guard heistSteps.count == 1,
               case .repeatUntil(let step) = heistSteps[0] else {
-            preconditionFailure("ButtonHeistDSL RepeatUntil else requires a RepeatUntil(predicate, timeout:) loop")
+            preconditionFailure("ThePlans RepeatUntil else requires a RepeatUntil(predicate, timeout:) loop")
         }
         guard step.elseBody == nil else {
-            preconditionFailure("ButtonHeistDSL RepeatUntil accepts at most one else body")
+            preconditionFailure("ThePlans RepeatUntil accepts at most one else body")
         }
         let content = content()
         return RepeatUntil(
@@ -158,10 +158,10 @@ public struct If: HeistContent {
     ) -> If {
         guard heistSteps.count == 1,
               case .conditional(let step) = heistSteps[0] else {
-            preconditionFailure("ButtonHeistDSL If else requires an If(predicate) case body")
+            preconditionFailure("ThePlans If else requires an If(predicate) case body")
         }
         guard step.elseBody == nil else {
-            preconditionFailure("ButtonHeistDSL If accepts at most one else body")
+            preconditionFailure("ThePlans If accepts at most one else body")
         }
         let content = content()
         return If(
@@ -300,6 +300,6 @@ private func makeConditionalStep(
     do {
         return try ConditionalStep(cases: cases, elseBody: elseBody)
     } catch {
-        preconditionFailure("ButtonHeistDSL requires at least one If Case")
+        preconditionFailure("ThePlans requires at least one If Case")
     }
 }

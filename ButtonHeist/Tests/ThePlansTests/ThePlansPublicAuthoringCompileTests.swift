@@ -1,8 +1,8 @@
-import ButtonHeistDSL
+import ThePlans
 import Testing
 
 @Test
-func `public facade authors predicates with concrete types`() throws {
+func `canonical authoring module exposes predicates with concrete types`() throws {
     let literalMatch: StringMatch = "Checkout"
     let element = ElementPredicateTemplate(
         label: literalMatch,
@@ -38,7 +38,7 @@ func `public facade authors predicates with concrete types`() throws {
         ])))
     }
 
-    #expect(plan.body.count == 7)
+    #expect(plan.body.count == 6)
 }
 
 @Test
