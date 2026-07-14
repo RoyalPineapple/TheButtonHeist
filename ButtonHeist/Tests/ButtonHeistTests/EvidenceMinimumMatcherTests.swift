@@ -6,8 +6,8 @@ import TheScore
 
 final class EvidenceMinimumMatcherTests: XCTestCase {
     func testMinimumMatcherUsesSettledBeforeState() throws {
-        let label = makeReceiptTestElement(label: "Delete", traits: [.staticText])
-        let button = makeReceiptTestElement(label: "Delete", traits: [.button])
+        let label = makeTestHeistElement(label: "Delete", traits: [.staticText])
+        let button = makeTestHeistElement(label: "Delete", traits: [.button], actions: [])
         let actionResult = semanticActionResult(
             method: .activate,
             source: .resolvedSemanticTarget,
@@ -24,7 +24,7 @@ final class EvidenceMinimumMatcherTests: XCTestCase {
     }
 
     func testMinimumMatcherRefusesUnsettledEvidence() throws {
-        let button = makeReceiptTestElement(label: "Delete", traits: [.button])
+        let button = makeTestHeistElement(label: "Delete", traits: [.button], actions: [])
         let actionResult = semanticActionResult(
             method: .activate,
             source: .resolvedSemanticTarget,
@@ -53,9 +53,9 @@ private func semanticActionResult(
         evidence: ActionResultSuccessEvidence(
             observation: .settledTrace(
                 makeTestTraceEvidence(
-                    makeReceiptTestTrace(
-                        before: makeReceiptTestInterface(before),
-                        after: makeReceiptTestInterface(after)
+                    makeTestTrace(
+                        before: makeTestInterface(elements: before),
+                        after: makeTestInterface(elements: after)
                     ),
                     completeness: settled ? .complete : .incomplete
                 ),

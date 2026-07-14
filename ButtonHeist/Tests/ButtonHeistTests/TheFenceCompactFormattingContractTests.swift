@@ -35,7 +35,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         for testCase in cases {
             let output = FenceResponse.action(
                 command: testCase.command,
-                result: makeTestActionResult(method: testCase.method)
+                result: HeistReceiptFixture.actionResult(method: testCase.method)
             ).compactFormatted()
 
             XCTAssertEqual(output, testCase.expected)
@@ -45,7 +45,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     func testCompactActionRenderingDoesNotInferCommandFromActionMethod() {
         let output = FenceResponse.action(
             command: .drag,
-            result: makeTestActionResult(method: .syntheticTap)
+            result: HeistReceiptFixture.actionResult(method: .syntheticTap)
         ).compactFormatted()
 
         XCTAssertEqual(output, "drag: ok")
@@ -54,7 +54,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     func testScreenActionHandlerMessageRendersInCompactHumanAndJSON() throws {
         let response = FenceResponse.action(
             command: .perform,
-            result: makeTestActionResult(
+            result: HeistReceiptFixture.actionResult(
                 method: .dismiss,
                 message: "Handler: UINavigationController"
             )
@@ -68,7 +68,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     }
 
     func testExplicitOneFingerTapKeepsMechanicalResultIdentity() {
-        let result = makeTestActionResult(method: .syntheticTap)
+        let result = HeistReceiptFixture.actionResult(method: .syntheticTap)
         let output = FenceResponse.action(command: .oneFingerTap, result: result).compactFormatted()
 
         XCTAssertEqual(result.method, .syntheticTap)
@@ -83,7 +83,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         )
         let response = FenceResponse.action(
             command: .activate,
-            result: makeTestActionResult(
+            result: HeistReceiptFixture.actionResult(
                 succeeded: false,
                 method: .activate,
                 message: "button disabled",
@@ -109,7 +109,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     func testActionFailureProjectionFeedsJSONAndCompactRendering() throws {
         let response = FenceResponse.action(
             command: .wait,
-            result: makeTestActionResult(
+            result: HeistReceiptFixture.actionResult(
                 succeeded: false,
                 method: .wait,
                 message: "timed out after 2s",
@@ -131,7 +131,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     func testActionFailureCodeAndClassAgreeAcrossPublicFormats() throws {
         let response = FenceResponse.action(
             command: .activate,
-            result: makeTestActionResult(
+            result: HeistReceiptFixture.actionResult(
                 succeeded: false,
                 method: .activate,
                 message: "Could not access accessibility tree: no traversable app windows",
@@ -152,11 +152,11 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     }
 
     func testScreenExpectationFailureHintUsesTypedElementChangesRegardlessOfActualText() throws {
-        let trace = makeReceiptTestTrace(
-            before: makeReceiptTestInterface(elementCount: 1),
-            after: makeReceiptTestInterface(elementCount: 2)
+        let trace = makeTestTrace(
+            before: makeTestInterface(elementCount: 1),
+            after: makeTestInterface(elementCount: 2)
         )
-        let result = makeTestActionResult(
+        let result = HeistReceiptFixture.actionResult(
             traceEvidence: makeTestTraceEvidence(trace, completeness: .incomplete)
         )
         let response = FenceResponse.action(
@@ -198,7 +198,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     func testScreenExpectationFailureHintDoesNotTrustElementsChangedActualText() throws {
         let response = FenceResponse.action(
             command: .activate,
-            result: makeTestActionResult(),
+            result: HeistReceiptFixture.actionResult(),
             expectation: ExpectationResult(
                 met: false,
                 predicate: .changed(.screen()),
@@ -214,8 +214,8 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     }
 
     func testActivateNoChangeExpectationFailureUsesTypedSettledTraceRegardlessOfActualText() throws {
-        let unchanged = makeReceiptTestInterface(elementCount: 1)
-        let trace = makeReceiptTestTrace(before: unchanged, after: unchanged)
+        let unchanged = makeTestInterface(elementCount: 1)
+        let trace = makeTestTrace(before: unchanged, after: unchanged)
         let result = ActionResult.success(
             method: .activate,
             evidence: ActionResultSuccessEvidence(
@@ -268,13 +268,13 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     }
 
     func testActivateNoChangeExpectationHintDoesNotTrustNoChangeActualText() throws {
-        let trace = makeReceiptTestTrace(
-            before: makeReceiptTestInterface(elementCount: 1),
-            after: makeReceiptTestInterface(elementCount: 2)
+        let trace = makeTestTrace(
+            before: makeTestInterface(elementCount: 1),
+            after: makeTestInterface(elementCount: 2)
         )
         let response = FenceResponse.action(
             command: .activate,
-            result: makeTestActionResult(
+            result: HeistReceiptFixture.actionResult(
                 method: .activate,
                 traceEvidence: makeTestTraceEvidence(trace, completeness: .incomplete)
             ),
@@ -293,8 +293,8 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     }
 
     func testActivateNoChangeExpectationHintRequiresSuccessfulActivateMethod() {
-        let unchanged = makeReceiptTestInterface(elementCount: 1)
-        let trace = makeReceiptTestTrace(before: unchanged, after: unchanged)
+        let unchanged = makeTestInterface(elementCount: 1)
+        let trace = makeTestTrace(before: unchanged, after: unchanged)
         let observation = ActionResultObservationEvidence.settledTrace(
             makeTestTraceEvidence(trace, completeness: .incomplete),
             .settled(durationMs: 1)
@@ -329,7 +329,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     func testActivateNoChangeWithoutExpectationRemainsSuccessful() throws {
         let response = FenceResponse.action(
             command: .activate,
-            result: makeTestActionResult()
+            result: HeistReceiptFixture.actionResult()
         )
 
         let json = try publicJSONProbe(response)
@@ -344,12 +344,12 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     func testActivateNoChangeCarriesActivationTraceWithoutFailingAction() throws {
         let response = FenceResponse.action(
             command: .activate,
-            result: makeTestActionResult(
+            result: HeistReceiptFixture.actionResult(
                 method: .activate,
                 traceEvidence: makeTestTraceEvidence(
-                    makeReceiptTestTrace(
-                        before: makeReceiptTestInterface(elementCount: 3),
-                        after: makeReceiptTestInterface(elementCount: 3)
+                    makeTestTrace(
+                        before: makeTestInterface(elementCount: 3),
+                        after: makeTestInterface(elementCount: 3)
                     ),
                     completeness: .complete
                 ),
@@ -376,22 +376,22 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     }
 
     func testElementsChangedActionOutputIncludesConcreteElementDelta() throws {
-        let added = makeReceiptTestElement(
+        let added = makeTestHeistElement(
             label: "Barbaresco",
             value: "$55.00",
             identifier: "wine_barbaresco",
             traits: [.staticText]
         )
         let unchanged = (0..<11).map { index in
-            makeReceiptTestElement(label: "Row \(index)", identifier: "row_\(index)")
+            makeTestHeistElement(label: "Row \(index)", identifier: "row_\(index)")
         }
-        let trace = makeReceiptTestTrace(
-            before: makeReceiptTestInterface(unchanged),
-            after: makeReceiptTestInterface(unchanged + [added])
+        let trace = makeTestTrace(
+            before: makeTestInterface(elements: unchanged),
+            after: makeTestInterface(elements: unchanged + [added])
         )
         let response = FenceResponse.action(
             command: .activate,
-            result: makeTestActionResult(
+            result: HeistReceiptFixture.actionResult(
                 traceEvidence: makeTestTraceEvidence(trace, completeness: .incomplete)
             )
         )
@@ -414,9 +414,9 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     }
 
     func testDeltaFoldsFastElementLifecycleWithoutEndpointDiffing() throws {
-        let toast = makeReceiptTestElement(label: "Saved", identifier: "saved_toast", traits: [.staticText])
-        let empty = makeReceiptTestInterface([])
-        let visible = makeReceiptTestInterface([toast])
+        let toast = makeTestHeistElement(label: "Saved", identifier: "saved_toast", traits: [.staticText])
+        let empty = makeTestInterface(elements: [])
+        let visible = makeTestInterface(elements: [toast])
         let trace = AccessibilityTrace(captures: [
             AccessibilityTrace.Capture(sequence: 1, interface: empty),
             AccessibilityTrace.Capture(sequence: 2, interface: visible),
@@ -441,7 +441,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     }
 
     func testNotificationOnlyDeltaPreservesDeduplicatedTemporalEvidence() throws {
-        let interface = makeReceiptTestInterface(elementCount: 1)
+        let interface = makeTestInterface(elementCount: 1)
         let first = AccessibilityNotificationEvidence(
             sequence: 7,
             kind: .elementChanged(.value),
@@ -492,16 +492,16 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     }
 
     func testScreenChangedActionOutputIncludesDestinationSummaryTree() throws {
-        let destination = makeReceiptTestInterface([
-            makeReceiptTestElement(label: "Checkout", identifier: "checkout_title", traits: [.header]),
-            makeReceiptTestElement(label: "Pay", identifier: "pay_button", traits: [.button], actions: [.activate]),
+        let destination = makeTestInterface(elements: [
+            makeTestHeistElement(label: "Checkout", identifier: "checkout_title", traits: [.header]),
+            makeTestHeistElement(label: "Pay", identifier: "pay_button", traits: [.button], actions: [.activate]),
         ])
-        let trace = makeReceiptTestTrace(
-            before: makeReceiptTestInterface([makeReceiptTestElement(label: "Cart", identifier: "cart_title")]),
+        let trace = makeTestTrace(
+            before: makeTestInterface(elements: [makeTestHeistElement(label: "Cart", identifier: "cart_title")]),
             after: destination,
             beforeScreenId: "cart",
             afterScreenId: "checkout",
-            afterTransition: makeReceiptScreenChangedTransition()
+            afterTransition: makeTestScreenChangedTransition()
         )
         let response = FenceResponse.action(
             command: .activate,
@@ -526,13 +526,13 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     }
 
     func testLaterScreenChangeDominatesEarlierElementFactsAndDeduplicatesTransitionEvidence() throws {
-        let toast = makeReceiptTestElement(label: "Saved", identifier: "saved_toast", traits: [.staticText])
-        let cart = makeReceiptTestInterface([
-            makeReceiptTestElement(label: "Cart", identifier: "cart_title", traits: [.header]),
+        let toast = makeTestHeistElement(label: "Saved", identifier: "saved_toast", traits: [.staticText])
+        let cart = makeTestInterface(elements: [
+            makeTestHeistElement(label: "Cart", identifier: "cart_title", traits: [.header]),
         ])
-        let cartWithToast = makeReceiptTestInterface([toast] + cart.projectedElements)
-        let checkout = makeReceiptTestInterface([
-            makeReceiptTestElement(label: "Checkout", identifier: "checkout_title", traits: [.header]),
+        let cartWithToast = makeTestInterface(elements: [toast] + cart.projectedElements)
+        let checkout = makeTestInterface(elements: [
+            makeTestHeistElement(label: "Checkout", identifier: "checkout_title", traits: [.header]),
         ])
         let before = AccessibilityTrace.Capture(
             sequence: 1,
@@ -550,7 +550,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             interface: checkout,
             parentHash: elementChange.hash,
             context: AccessibilityTrace.Context(screenId: "checkout"),
-            transition: makeReceiptScreenChangedTransition(sequence: 9)
+            transition: makeTestScreenChangedTransition(sequence: 9)
         )
         let trace = AccessibilityTrace(captures: [before, elementChange, after])
         let response = FenceResponse.action(
@@ -571,23 +571,23 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
     func testHeistActionStructuredOutputIncludesConcreteElementDeltaWithoutDumpingSuccessCompact() throws {
         let unchanged = (0..<3).map { index in
-            makeReceiptTestElement(label: "Row \(index)", identifier: "row_\(index)")
+            makeTestHeistElement(label: "Row \(index)", identifier: "row_\(index)")
         }
-        let lazyRow = makeReceiptTestElement(
+        let lazyRow = makeTestHeistElement(
             label: "Lazy Row",
             value: "Loaded by scroll",
             identifier: "lazy_row",
             traits: [.staticText]
         )
-        let trace = makeReceiptTestTrace(
-            before: makeReceiptTestInterface(unchanged),
-            after: makeReceiptTestInterface(unchanged + [lazyRow])
+        let trace = makeTestTrace(
+            before: makeTestInterface(elements: unchanged),
+            after: makeTestInterface(elements: unchanged + [lazyRow])
         )
         let command = HeistActionCommand.activate(.predicate(ElementPredicateTemplate(label: "Load More")))
         let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
         let result = HeistExecutionResult(
             steps: [
-                actionReceiptStep(
+                HeistReceiptFixture.action(
                     command: command,
                     result: ActionResult.success(
                         method: .activate,
@@ -652,16 +652,16 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
     func testPublicHeistJSONBoundsActionDeltaAndReportsOmissions() throws {
         let addedRows = (0..<8).map { index in
-            makeReceiptTestElement(
+            makeTestHeistElement(
                 label: "Lazy Row \(index)",
                 value: "Loaded \(index)",
                 identifier: "lazy_row_\(index)",
                 traits: [.staticText]
             )
         }
-        let trace = makeReceiptTestTrace(
-            before: makeReceiptTestInterface([]),
-            after: makeReceiptTestInterface(addedRows)
+        let trace = makeTestTrace(
+            before: makeTestInterface(elements: []),
+            after: makeTestInterface(elements: addedRows)
         )
         let command = HeistActionCommand.activate(.predicate(ElementPredicateTemplate(label: "Load More")))
         let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
@@ -669,7 +669,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             plan: plan,
             result: HeistExecutionResult(
                 steps: [
-                    actionReceiptStep(
+                    HeistReceiptFixture.action(
                         command: command,
                         result: ActionResult.success(
                             method: .activate,
@@ -729,18 +729,18 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
     func testPublicHeistJSONUsesBoundedScreenProjectionForActionDelta() throws {
         let afterRows = (0..<8).map { index in
-            makeReceiptTestElement(
+            makeTestHeistElement(
                 label: "Checkout Row \(index)",
                 identifier: "checkout_row_\(index)",
                 traits: [.staticText]
             )
         }
-        let trace = makeReceiptTestTrace(
-            before: makeReceiptTestInterface([]),
-            after: makeReceiptTestInterface(afterRows),
+        let trace = makeTestTrace(
+            before: makeTestInterface(elements: []),
+            after: makeTestInterface(elements: afterRows),
             beforeScreenId: "before",
             afterScreenId: "checkout",
-            afterTransition: makeReceiptScreenChangedTransition()
+            afterTransition: makeTestScreenChangedTransition()
         )
         let command = HeistActionCommand.activate(.predicate(ElementPredicateTemplate(label: "Checkout")))
         let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
@@ -748,7 +748,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             plan: plan,
             result: HeistExecutionResult(
                 steps: [
-                    actionReceiptStep(
+                    HeistReceiptFixture.action(
                         command: command,
                         result: ActionResult.success(
                             method: .activate,
@@ -803,23 +803,23 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
     func testFailedHeistActionCompactOutputIncludesConcreteElementDeltaEvidence() throws {
         let unchanged = (0..<3).map { index in
-            makeReceiptTestElement(label: "Row \(index)", identifier: "row_\(index)")
+            makeTestHeistElement(label: "Row \(index)", identifier: "row_\(index)")
         }
-        let lazyRow = makeReceiptTestElement(
+        let lazyRow = makeTestHeistElement(
             label: "Lazy Row",
             value: "Loaded by scroll",
             identifier: "lazy_row",
             traits: [.staticText]
         )
-        let trace = makeReceiptTestTrace(
-            before: makeReceiptTestInterface(unchanged),
-            after: makeReceiptTestInterface(unchanged + [lazyRow])
+        let trace = makeTestTrace(
+            before: makeTestInterface(elements: unchanged),
+            after: makeTestInterface(elements: unchanged + [lazyRow])
         )
         let command = HeistActionCommand.activate(.predicate(ElementPredicateTemplate(label: "Load More")))
         let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
         let result = HeistExecutionResult(
             steps: [
-                actionReceiptStep(
+                HeistReceiptFixture.action(
                     command: command,
                     result: ActionResult.failure(
                         method: .activate,
@@ -857,7 +857,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             plan: plan,
             result: HeistExecutionResult(
                 steps: [
-                    actionReceiptStep(
+                    HeistReceiptFixture.action(
                         command: command,
                         result: ActionResult.failure(
                             method: .activate,
@@ -929,15 +929,14 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             PredicateCase(predicate: casePredicate, body: [childAction]),
         ])
         let plan = try HeistPlan(body: [.conditional(conditional)])
-        let childResult = actionReceiptStep(
+        let childResult = HeistReceiptFixture.action(
             path: "$.body[0].conditional.cases[0].body[0]",
             result: ActionResult.success(method: .activate, evidence: .none),
             expectationActionResult: ActionResult.success(method: .wait, evidence: .none),
             expectation: ExpectationResult(met: true, predicate: expected)
         )
         let result = HeistExecutionResult(steps: [
-                caseReceiptStep(
-                    kind: .conditional,
+                HeistReceiptFixture.conditional(
                     status: .passed,
                     selection: HeistCaseSelectionResult(
                         cases: [
@@ -949,6 +948,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                         outcome: .matchedCase(index: 0),
                         elapsedMs: 1
                     ),
+                    durationMs: 3,
                     children: [childResult]
                 ),
             ],
@@ -971,8 +971,8 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         ])
         let result = HeistExecutionResult(
             steps: [
-                warnReceiptStep(path: "$.body[0]", message: "starting checkout"),
-                actionReceiptStep(
+                HeistReceiptFixture.warning(path: "$.body[0]", message: "starting checkout"),
+                HeistReceiptFixture.action(
                     path: "$.body[1]",
                     command: .activate(.predicate(ElementPredicateTemplate(label: "Submit"))),
                     result: ActionResult.success(method: .activate, evidence: .none),
@@ -1016,7 +1016,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         ])
         let result = HeistExecutionResult(
             steps: [
-                actionReceiptStep(
+                HeistReceiptFixture.action(
                     command: command,
                     result: ActionResult.success(
                         method: .activate,
@@ -1064,7 +1064,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         ])
         let result = HeistExecutionResult(
             steps: [
-                actionReceiptStep(
+                HeistReceiptFixture.action(
                     command: .activate(.predicate(ElementPredicateTemplate(label: "Pay"))),
                     result: ActionResult.success(method: .activate, evidence: .none)
                 ),
@@ -1091,16 +1091,16 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             plan: plan,
             result: HeistExecutionResult(
                 steps: [
-                    actionReceiptStep(
+                    HeistReceiptFixture.action(
                         command: .activate(.predicate(ElementPredicateTemplate(label: "Pay"))),
                         result: ActionResult.success(method: .activate, evidence: .none)
                     ),
                 ],
                 durationMs: 3
             ),
-            accessibilityTrace: makeReceiptTestTrace(
-                before: makeReceiptTestInterface(elementCount: 0),
-                after: makeReceiptTestInterface(elementCount: 2)
+            accessibilityTrace: makeTestTrace(
+                before: makeTestInterface(elementCount: 0),
+                after: makeTestInterface(elementCount: 2)
             )
         )
 
@@ -1117,7 +1117,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let plan = try HeistPlan(body: [.fail(FailStep(message: "Unknown screen"))])
         let result = HeistExecutionResult(
             steps: [
-                failReceiptStep(message: "Unknown screen"),
+                HeistReceiptFixture.explicitFailure(message: "Unknown screen"),
             ],
             durationMs: 1,
             abortedAtPath: "$.body[0]"
@@ -1132,7 +1132,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let plan = try HeistPlan(body: [.fail(FailStep(message: "Unknown screen"))])
         let result = HeistExecutionResult(
             steps: [
-                failReceiptStep(message: "Unknown screen"),
+                HeistReceiptFixture.explicitFailure(message: "Unknown screen"),
             ],
             durationMs: 1,
             abortedAtPath: "$.body[0]"
@@ -1158,7 +1158,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         ])
         let result = HeistExecutionResult(
             steps: [
-                warnReceiptStep(path: "$.body[0]", message: "before"),
+                HeistReceiptFixture.warning(path: "$.body[0]", message: "before"),
                 .failed(
                     path: "$.body[1]",
                     kind: .fail,
@@ -1219,7 +1219,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         ])
         let plan = try HeistPlan(body: [.conditional(conditional)])
         let childPath = "$.body[0].conditional.cases[0].body[0]"
-        let childResult = actionReceiptStep(
+        let childResult = HeistReceiptFixture.action(
             path: childPath,
             command: .activate(.predicate(ElementPredicateTemplate(label: "Continue"))),
             result: ActionResult.failure(
@@ -1234,8 +1234,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         )
         let result = HeistExecutionResult(
             steps: [
-                caseReceiptStep(
-                    kind: .conditional,
+                HeistReceiptFixture.conditional(
                     status: .failed,
                     selection: HeistCaseSelectionResult(
                         cases: [
@@ -1247,6 +1246,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                         outcome: .matchedCase(index: 0),
                         elapsedMs: 1
                     ),
+                    durationMs: 3,
                     failure: HeistFailureDetail(
                         category: .invocation,
                         contract: "selected case completes without failure",
@@ -1302,15 +1302,14 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         )
         let plan = try HeistPlan(body: [.conditional(conditional)])
         let childPath = "$.body[0].conditional.else_body[0]"
-        let childResult = actionReceiptStep(
+        let childResult = HeistReceiptFixture.action(
             path: childPath,
             command: .activate(.predicate(ElementPredicateTemplate(label: "Fallback"))),
             result: ActionResult.success(method: .activate, evidence: .none)
         )
         let result = HeistExecutionResult(
             steps: [
-                caseReceiptStep(
-                    kind: .conditional,
+                HeistReceiptFixture.conditional(
                     status: .passed,
                     selection: HeistCaseSelectionResult(
                         cases: [
@@ -1323,6 +1322,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                         elapsedMs: 1,
                         lastObservedSummary: nil
                     ),
+                    durationMs: 3,
                     children: [childResult]
                 ),
             ],
@@ -1352,12 +1352,12 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             body: [try HeistStep.action(ActionStep(command: .typeText(text: .ref("item"), target: nil)))]
         )
         let plan = try HeistPlan(body: [.forEachString(forEach)])
-        let firstIteration = forEachStringIterationReceiptStep(
+        let firstIteration = HeistReceiptFixture.forEachStringIteration(
             ordinal: 0,
             value: "Milk",
             status: .passed,
             children: [
-                actionReceiptStep(
+                HeistReceiptFixture.action(
                     path: "$.body[0].for_each_string.iterations[0].body[0]",
                     command: .typeText(text: .ref("item"), target: nil),
                     result: ActionResult.success(method: .typeText, evidence: .none)
@@ -1365,7 +1365,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             ]
         )
         let failedActionPath = "$.body[0].for_each_string.iterations[1].body[0]"
-        let failedAction = actionReceiptStep(
+        let failedAction = HeistReceiptFixture.action(
             path: failedActionPath,
             command: .typeText(text: .ref("item"), target: nil),
             result: ActionResult.failure(
@@ -1378,7 +1378,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                 observed: "field missing"
             )
         )
-        let secondIteration = forEachStringIterationReceiptStep(
+        let secondIteration = HeistReceiptFixture.forEachStringIteration(
             ordinal: 1,
             value: "Eggs",
             status: .failed,
@@ -1483,10 +1483,10 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     }
 
     func testCompactInterfaceStartsWithSummaryElementLabel() {
-        let interface = makeReceiptTestInterface([
-            makeReceiptTestElement(label: "Inbox", traits: [.header]),
-            makeReceiptTestElement(label: "Messages", traits: [.summaryElement]),
-            makeReceiptTestElement(label: "Search", traits: [.searchField]),
+        let interface = makeTestInterface(elements: [
+            makeTestHeistElement(label: "Inbox", traits: [.header]),
+            makeTestHeistElement(label: "Messages", traits: [.summaryElement]),
+            makeTestHeistElement(label: "Search", traits: [.searchField]),
         ])
 
         let output = FenceResponse.compactInterface(interface, detail: .summary)
@@ -1510,28 +1510,28 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     }
 
     func testCompactInterfaceRendersHorizontalAndBothAxisScrollSummaries() {
-        let horizontal = makeReceiptTestInterface(nodes: [
+        let horizontal = makeTestInterface(nodes: [
             .container(
-                makeReceiptTestScrollableContainer(
+                makeTestScrollableContainer(
                     contentWidth: 1200,
                     contentHeight: 400,
                     frameWidth: 390,
                     frameHeight: 400
                 ),
                 containerName: "horizontal_scroll",
-                children: [.element(makeReceiptTestElement(label: "Right"))]
+                children: [.element(makeTestHeistElement(label: "Right"))]
             ),
         ])
-        let both = makeReceiptTestInterface(nodes: [
+        let both = makeTestInterface(nodes: [
             .container(
-                makeReceiptTestScrollableContainer(
+                makeTestScrollableContainer(
                     contentWidth: 1200,
                     contentHeight: 1200,
                     frameWidth: 390,
                     frameHeight: 400
                 ),
                 containerName: "both_axis_scroll",
-                children: [.element(makeReceiptTestElement(label: "Corner"))]
+                children: [.element(makeTestHeistElement(label: "Corner"))]
             ),
         ])
 
@@ -1561,11 +1561,11 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
     func testCompactInterfaceTruncatesScrollableSubtreeAtVisibleElementBudget() {
         let rows = (0..<4).map { index in
-            ReceiptTestInterfaceNode.element(makeReceiptTestElement(label: "Row \(index)"))
+            TestInterfaceNode.element(makeTestHeistElement(label: "Row \(index)"))
         }
-        let interface = makeReceiptTestInterface(nodes: [
+        let interface = makeTestInterface(nodes: [
             .container(
-                makeReceiptTestScrollableContainer(
+                makeTestScrollableContainer(
                     contentWidth: 390,
                     contentHeight: 1200,
                     frameWidth: 390,
@@ -1574,7 +1574,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                 containerName: "long_scroll",
                 children: rows
             ),
-            .element(makeReceiptTestElement(label: "After")),
+            .element(makeTestHeistElement(label: "After")),
         ])
 
         let output = FenceResponse.compactInterface(
@@ -1597,9 +1597,9 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
     func testCompactInterfaceTruncatesWholeInterfaceAtTotalNodeBudget() {
         let rows = (0..<4).map { index in
-            ReceiptTestInterfaceNode.element(makeReceiptTestElement(label: "Row \(index)"))
+            TestInterfaceNode.element(makeTestHeistElement(label: "Row \(index)"))
         }
-        let interface = makeReceiptTestInterface(nodes: rows)
+        let interface = makeTestInterface(nodes: rows)
 
         let output = FenceResponse.compactInterface(
             interface,
@@ -1618,11 +1618,11 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
     func testCompactInterfaceDoesNotReportScrollBudgetWhenTotalNodeBudgetStopsFirst() {
         let rows = (0..<4).map { index in
-            ReceiptTestInterfaceNode.element(makeReceiptTestElement(label: "Row \(index)"))
+            TestInterfaceNode.element(makeTestHeistElement(label: "Row \(index)"))
         }
-        let interface = makeReceiptTestInterface(nodes: [
+        let interface = makeTestInterface(nodes: [
             .container(
-                makeReceiptTestScrollableContainer(
+                makeTestScrollableContainer(
                     contentWidth: 390,
                     contentHeight: 1_200,
                     frameWidth: 390,
@@ -1648,17 +1648,17 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     }
 
     func testCompactInterfaceTotalNodeBudgetCountsContainers() {
-        let interface = makeReceiptTestInterface(nodes: [
+        let interface = makeTestInterface(nodes: [
             .container(
-                makeReceiptTestSemanticContainer(label: "Outer"),
+                makeTestSemanticContainer(label: "Outer"),
                 containerName: "outer",
                 children: [
                     .container(
-                        makeReceiptTestSemanticContainer(label: "Empty"),
+                        makeTestSemanticContainer(label: "Empty"),
                         containerName: "empty",
                         children: []
                     ),
-                    .element(makeReceiptTestElement(label: "After")),
+                    .element(makeTestHeistElement(label: "After")),
                 ]
             ),
         ])
@@ -1680,9 +1680,9 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     }
 
     func testCompactInterfaceNestedScrollCannotResetParentVisibleElementBudget() {
-        let interface = makeReceiptTestInterface(nodes: [
+        let interface = makeTestInterface(nodes: [
             .container(
-                makeReceiptTestScrollableContainer(
+                makeTestScrollableContainer(
                     contentWidth: 390,
                     contentHeight: 2_000,
                     frameWidth: 390,
@@ -1690,9 +1690,9 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                 ),
                 containerName: "outer_scroll",
                 children: [
-                    .element(makeReceiptTestElement(label: "Row 0")),
+                    .element(makeTestHeistElement(label: "Row 0")),
                     .container(
-                        makeReceiptTestScrollableContainer(
+                        makeTestScrollableContainer(
                             contentWidth: 390,
                             contentHeight: 1_200,
                             frameWidth: 390,
@@ -1700,12 +1700,12 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                         ),
                         containerName: "inner_scroll",
                         children: [
-                            .element(makeReceiptTestElement(label: "Row 1")),
-                            .element(makeReceiptTestElement(label: "Row 2")),
-                            .element(makeReceiptTestElement(label: "Row 3")),
+                            .element(makeTestHeistElement(label: "Row 1")),
+                            .element(makeTestHeistElement(label: "Row 2")),
+                            .element(makeTestHeistElement(label: "Row 3")),
                         ]
                     ),
-                    .element(makeReceiptTestElement(label: "Row 4")),
+                    .element(makeTestHeistElement(label: "Row 4")),
                 ]
             ),
         ])
@@ -1776,9 +1776,9 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             ],
             nextAction: "Retry get_interface with a higher maxScrollsPerDiscovery."
         ))
-        let interface = makeReceiptTestInterface(nodes: [
+        let interface = makeTestInterface(nodes: [
             .container(
-                makeReceiptTestScrollableContainer(
+                makeTestScrollableContainer(
                     contentWidth: 390,
                     contentHeight: 1_200,
                     frameWidth: 390,
@@ -1786,8 +1786,8 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                 ),
                 containerName: "main_scroll",
                 children: [
-                    .element(makeReceiptTestElement(label: "Top")),
-                    .element(makeReceiptTestElement(label: "Bottom")),
+                    .element(makeTestHeistElement(label: "Top")),
+                    .element(makeTestHeistElement(label: "Bottom")),
                 ]
             ),
         ]).withDiagnostics(diagnostics)
@@ -1819,9 +1819,9 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     }
 
     func testPublicInterfaceJSONProjectsScrollableContainerAsScrollable() throws {
-        let interface = makeReceiptTestInterface(nodes: [
+        let interface = makeTestInterface(nodes: [
             .container(
-                makeReceiptTestScrollableContainer(
+                makeTestScrollableContainer(
                     contentWidth: 390,
                     contentHeight: 1_200,
                     frameWidth: 390,
@@ -1829,7 +1829,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                 ),
                 containerName: "main_scroll",
                 children: [
-                    .element(makeReceiptTestElement(label: "Top")),
+                    .element(makeTestHeistElement(label: "Top")),
                 ]
             ),
         ])
@@ -1847,29 +1847,29 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     }
 
     func testPublicInterfaceJSONKeepsNonScrollableContainerTypesDistinct() throws {
-        let interface = makeReceiptTestInterface(nodes: [
+        let interface = makeTestInterface(nodes: [
             .container(
-                makeReceiptTestSemanticContainer(label: "Actions", value: "Primary", identifier: "actions"),
+                makeTestSemanticContainer(label: "Actions", value: "Primary", identifier: "actions"),
                 containerName: "actions_group",
                 children: []
             ),
             .container(
-                makeReceiptTestContainer(type: .list),
+                makeTestAccessibilityContainer(type: .list),
                 containerName: "rows_list",
                 children: []
             ),
             .container(
-                makeReceiptTestContainer(type: .landmark),
+                makeTestAccessibilityContainer(type: .landmark),
                 containerName: "main_landmark",
                 children: []
             ),
             .container(
-                makeReceiptTestContainer(type: .dataTable(rowCount: 3, columnCount: 2, cells: [])),
+                makeTestAccessibilityContainer(type: .dataTable(rowCount: 3, columnCount: 2, cells: [])),
                 containerName: "prices_table",
                 children: []
             ),
             .container(
-                makeReceiptTestContainer(type: .tabBar),
+                makeTestAccessibilityContainer(type: .tabBar),
                 containerName: "primary_tabs",
                 children: []
             ),
@@ -1893,9 +1893,9 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     }
 
     func testPublicInterfaceOutputRendersContainerCustomActions() throws {
-        let interface = makeReceiptTestInterface(nodes: [
+        let interface = makeTestInterface(nodes: [
             .container(
-                makeReceiptTestContainer(
+                makeTestAccessibilityContainer(
                     type: .none,
                     customActions: [AccessibilityElement.CustomAction(name: "Archive")]
                 ),
@@ -1915,11 +1915,11 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
     func testPublicInterfaceJSONTruncatesScrollableSubtreeAtVisibleElementBudget() throws {
         let rows = (0..<4).map { index in
-            ReceiptTestInterfaceNode.element(makeReceiptTestElement(label: "Row \(index)"))
+            TestInterfaceNode.element(makeTestHeistElement(label: "Row \(index)"))
         }
-        let interface = makeReceiptTestInterface(nodes: [
+        let interface = makeTestInterface(nodes: [
             .container(
-                makeReceiptTestScrollableContainer(
+                makeTestScrollableContainer(
                     contentWidth: 390,
                     contentHeight: 1_200,
                     frameWidth: 390,
@@ -1928,7 +1928,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                 containerName: "long_scroll",
                 children: rows
             ),
-            .element(makeReceiptTestElement(label: "After")),
+            .element(makeTestHeistElement(label: "After")),
         ])
 
         let json = try publicInterfaceJSONProbe(
@@ -1962,9 +1962,9 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
     func testPublicInterfaceJSONTruncatesWholeInterfaceAtTotalNodeBudget() throws {
         let rows = (0..<4).map { index in
-            ReceiptTestInterfaceNode.element(makeReceiptTestElement(label: "Row \(index)"))
+            TestInterfaceNode.element(makeTestHeistElement(label: "Row \(index)"))
         }
-        let interface = makeReceiptTestInterface(nodes: rows)
+        let interface = makeTestInterface(nodes: rows)
 
         let json = try publicInterfaceJSONProbe(
             PublicInterface(
@@ -1988,17 +1988,17 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     }
 
     func testPublicInterfaceJSONTotalNodeBudgetCountsContainers() throws {
-        let interface = makeReceiptTestInterface(nodes: [
+        let interface = makeTestInterface(nodes: [
             .container(
-                makeReceiptTestSemanticContainer(label: "Outer"),
+                makeTestSemanticContainer(label: "Outer"),
                 containerName: "outer",
                 children: [
                     .container(
-                        makeReceiptTestSemanticContainer(label: "Empty"),
+                        makeTestSemanticContainer(label: "Empty"),
                         containerName: "empty",
                         children: []
                     ),
-                    .element(makeReceiptTestElement(label: "After")),
+                    .element(makeTestHeistElement(label: "After")),
                 ]
             ),
         ])
@@ -2030,11 +2030,11 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
     func testPublicInterfaceJSONDoesNotReportScrollBudgetWhenTotalNodeBudgetStopsFirst() throws {
         let rows = (0..<4).map { index in
-            ReceiptTestInterfaceNode.element(makeReceiptTestElement(label: "Row \(index)"))
+            TestInterfaceNode.element(makeTestHeistElement(label: "Row \(index)"))
         }
-        let interface = makeReceiptTestInterface(nodes: [
+        let interface = makeTestInterface(nodes: [
             .container(
-                makeReceiptTestScrollableContainer(
+                makeTestScrollableContainer(
                     contentWidth: 390,
                     contentHeight: 1_200,
                     frameWidth: 390,
@@ -2064,16 +2064,16 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     }
 
     func testCompactContainerEscapesLabelsAndContainerNames() {
-        let interface = makeReceiptTestInterface(nodes: [
+        let interface = makeTestInterface(nodes: [
             .container(
-                makeReceiptTestSemanticContainer(
+                makeTestSemanticContainer(
                     label: "Actions \"Primary\"\nPane",
                     value: "hot\u{0001}",
                     identifier: "actions\"id"
                 ),
                 containerName: "semantic\n\"actions",
                 children: [
-                    .element(makeReceiptTestElement(label: "Submit")),
+                    .element(makeTestHeistElement(label: "Submit")),
                 ]
             ),
         ])
@@ -2156,197 +2156,15 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertTrue(output.contains("interface: unavailable"), output)
     }
 
-    private func actionReceiptStep(
-        path: String = "$.body[0]",
-        command: HeistActionCommand? = .activate(.predicate(ElementPredicateTemplate(label: "Button"))),
-        result: ActionResult,
-        expectationActionResult: ActionResult? = nil,
-        expectation: ExpectationResult? = nil,
-        failure: HeistFailureDetail? = nil
-    ) -> HeistExecutionStepResult {
-        let evidence: HeistActionEvidence
-        if let expectationActionResult, let expectation {
-            guard let command else {
-                preconditionFailure("Expectation action evidence requires a command")
-            }
-            evidence = .expectation(
-                command: command,
-                dispatchResult: result,
-                expectationResult: expectationActionResult,
-                expectation: expectation
-            )
-        } else {
-            precondition(expectationActionResult == nil && expectation == nil)
-            evidence = command.map {
-                .dispatch(command: $0, dispatchResult: result)
-            } ?? .commandlessDispatch(dispatchResult: result)
-        }
-
-        let intent = command.map {
-            HeistStepIntent.action(command: $0)
-        }
-        if let failure {
-            return .failed(
-                path: path,
-                receiptKind: .action,
-                durationMs: 1,
-                intent: intent,
-                evidence: evidence,
-                failure: failure
-            )
-        }
-        return .passed(
-            path: path,
-            receiptKind: .action,
-            durationMs: 1,
-            intent: intent,
-            evidence: evidence
-        )
-    }
-
-    private func warnReceiptStep(path: String, message: String) -> HeistExecutionStepResult {
-        .passed(
-            path: path,
-            receiptKind: .warning,
-            durationMs: 1,
-            intent: .warn(message: message),
-            evidence: HeistExecutionWarning(path: path, message: message)
-        )
-    }
-
-    private func failReceiptStep(message: String) -> HeistExecutionStepResult {
-        .failed(
-            path: "$.body[0]",
-            kind: .fail,
-            durationMs: 1,
-            intent: .fail(message: message),
-            failure: HeistFailureDetail(
-                category: .explicitFailure,
-                contract: "explicit heist failure",
-                observed: message
-            )
-        )
-    }
-
-    private func caseReceiptStep(
-        kind: HeistExecutionStepKind,
-        status: HeistExecutionStepStatus,
-        selection: HeistCaseSelectionResult,
-        failure: HeistFailureDetail? = nil,
-        children: [HeistExecutionStepResult]
-    ) -> HeistExecutionStepResult {
-        let evidence = HeistCaseSelectionEvidence(selection: selection)
-        if let abortedAtChildPath = children.firstFailedStep?.path {
-            return .childAborted(
-                path: "$.body[0]",
-                receiptKind: .conditional,
-                durationMs: 3,
-                intent: .conditional,
-                evidence: evidence,
-                failure: failure ?? HeistFailureDetail(
-                    category: .invocation,
-                    contract: "selected case body completes without failure",
-                    observed: "child failed at \(abortedAtChildPath)"
-                ),
-                abortedAtChildPath: abortedAtChildPath,
-                children: children
-            )
-        }
-        if status == .failed {
-            return .failed(
-                path: "$.body[0]",
-                receiptKind: .conditional,
-                durationMs: 3,
-                intent: .conditional,
-                evidence: evidence,
-                failure: failure ?? HeistFailureDetail(
-                    category: .validation,
-                    contract: "conditional branch completes",
-                    observed: "conditional failed"
-                ),
-                children: children
-            )
-        }
-        return .passed(
-            path: "$.body[0]",
-            receiptKind: .conditional,
-            durationMs: 3,
-            intent: .conditional,
-            evidence: evidence,
-            children: children
-        )
-    }
-
-    private func forEachStringIterationReceiptStep(
-        ordinal: Int,
-        value: String,
-        status: HeistExecutionStepStatus,
-        failureReason: String? = nil,
-        children: [HeistExecutionStepResult]
-    ) -> HeistExecutionStepResult {
-        let path = "$.body[0].for_each_string.iterations[\(ordinal)]"
-        let evidence = HeistForEachStringEvidence(
-            parameter: "item",
-            count: 2,
-            iterationCount: 2,
-            iterationOrdinal: ordinal,
-            value: value,
-            failureReason: failureReason
-        )
-        let failure = failureReason.map {
-            HeistFailureDetail(
-                category: .loop,
-                contract: "iteration \(ordinal) completes",
-                observed: $0
-            )
-        }
-        if let abortedAtChildPath = children.firstFailedStep?.path {
-            return .childAborted(
-                path: path,
-                receiptKind: .forEachStringIteration,
-                durationMs: 1,
-                evidence: evidence,
-                failure: failure ?? HeistFailureDetail(
-                    category: .loop,
-                    contract: "iteration \(ordinal) completes",
-                    observed: "child failed at \(abortedAtChildPath)"
-                ),
-                abortedAtChildPath: abortedAtChildPath,
-                children: children
-            )
-        }
-        if status == .failed {
-            return .failed(
-                path: path,
-                receiptKind: .forEachStringIteration,
-                durationMs: 1,
-                evidence: evidence,
-                failure: failure ?? HeistFailureDetail(
-                    category: .loop,
-                    contract: "iteration \(ordinal) completes",
-                    observed: "iteration failed"
-                ),
-                children: children
-            )
-        }
-        return .passed(
-            path: path,
-            receiptKind: .forEachStringIteration,
-            durationMs: 1,
-            evidence: evidence,
-            children: children
-        )
-    }
-
     private func formattingFixtureInterface() -> Interface {
-        let submit = makeReceiptTestElement(label: "Submit", traits: [.button], actions: [.activate])
-        let orderId = makeReceiptTestElement(label: "Order ID", traits: [.staticText])
-        let home = makeReceiptTestElement(label: "Home", traits: [.tabBarItem])
-        let bottom = makeReceiptTestElement(label: "Bottom", traits: [.staticText])
+        let submit = makeTestHeistElement(label: "Submit", traits: [.button], actions: [.activate])
+        let orderId = makeTestHeistElement(label: "Order ID", traits: [.staticText])
+        let home = makeTestHeistElement(label: "Home", traits: [.tabBarItem])
+        let bottom = makeTestHeistElement(label: "Bottom", traits: [.staticText])
 
-        return makeReceiptTestInterface(nodes: [
+        return makeTestInterface(nodes: [
             .container(
-                makeReceiptTestSemanticContainer(
+                makeTestSemanticContainer(
                     label: "Actions",
                     identifier: "actions",
                     frameX: 0,
@@ -2358,7 +2176,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                 children: [
                     .element(submit),
                     .container(
-                        makeReceiptTestContainer(
+                        makeTestAccessibilityContainer(
                             type: .dataTable(rowCount: 3, columnCount: 4, cells: []),
                             frameX: 8,
                             frameY: 52,
@@ -2369,7 +2187,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                         children: [.element(orderId)]
                     ),
                     .container(
-                        makeReceiptTestContainer(
+                        makeTestAccessibilityContainer(
                             type: .tabBar,
                             frameX: 0,
                             frameY: 140,
@@ -2382,7 +2200,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                 ]
             ),
             .container(
-                makeReceiptTestScrollableContainer(
+                makeTestScrollableContainer(
                     contentWidth: 390,
                     contentHeight: 1200,
                     frameX: 0,

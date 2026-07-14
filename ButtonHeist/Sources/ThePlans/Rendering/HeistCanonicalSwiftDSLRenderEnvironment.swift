@@ -2,9 +2,34 @@ import Foundation
 
 struct RenderEnvironment {
     static let empty = RenderEnvironment()
+    static let preservingReferences = RenderEnvironment(referencePolicy: .preserve)
 
     var targetReferences: Set<HeistReferenceName> = []
     var stringReferences: Set<HeistReferenceName> = []
+    private let referencePolicy: ReferencePolicy
+
+    private enum ReferencePolicy {
+        case validate
+        case preserve
+    }
+
+    private init(referencePolicy: ReferencePolicy = .validate) {
+        self.referencePolicy = referencePolicy
+    }
+
+    init(scope: HeistReferenceScope) {
+        targetReferences = scope.targetRefs
+        stringReferences = scope.stringRefs
+        referencePolicy = .validate
+    }
+
+    func accepts(target reference: HeistReferenceName) -> Bool {
+        referencePolicy == .preserve || targetReferences.contains(reference)
+    }
+
+    func accepts(string reference: HeistReferenceName) -> Bool {
+        referencePolicy == .preserve || stringReferences.contains(reference)
+    }
 
     func bindingTargetReference(_ reference: HeistReferenceName) -> RenderEnvironment {
         var copy = self

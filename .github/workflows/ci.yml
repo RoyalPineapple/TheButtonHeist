@@ -69,6 +69,13 @@ jobs:
       - name: Validate adversarial receipt timing parser
         run: python3 scripts/check-e2e-adversarial-lab-timing.py
 
+      - name: Test automation contracts
+        run: |
+          scripts/tests/check-swift-api-breaking-changes-test.sh
+          scripts/tests/generate-project-test.sh
+          scripts/tests/release-automation-test.sh
+          scripts/tests/select-ios-ci-simulator-test.py
+
   submodule-pin:
     runs-on: macos-15
     timeout-minutes: 5
@@ -183,9 +190,7 @@ jobs:
 
       - name: Generate project
         timeout-minutes: 3
-        run: |
-          BUTTONHEIST_TUIST_SKIP_AUTO_CLEAN=1 tuist generate --no-binary-cache --no-open
-          ./scripts/clean-generated-projects.sh
+        run: ./scripts/generate-project.sh --skip-install --no-binary-cache
 
       - name: Run TheScoreTests
         timeout-minutes: 5
@@ -229,17 +234,13 @@ jobs:
         timeout-minutes: 8
         run: scripts/heist-doctor-demo.sh --work-dir "$RUNNER_TEMP/heist-doctor-demo" --format json
 
-      - name: Write heist receipt manifest
+      - name: Finalize heist receipts
         if: always()
-        run: scripts/write-ci-heist-receipt-manifest.sh "$BUTTONHEIST_RECEIPTS_DIR" macos-tests
-
-      - name: Upload heist receipts
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        uses: ./.github/actions/finalize-heist-receipts
         with:
-          name: buttonheist-receipts-macos-tests-${{ github.run_attempt }}
-          path: ${{ env.BUTTONHEIST_RECEIPTS_DIR }}
-          if-no-files-found: error
+          receipt-directory: ${{ env.BUTTONHEIST_RECEIPTS_DIR }}
+          job-label: macos-tests
+          artifact-name: buttonheist-receipts-macos-tests-${{ github.run_attempt }}
           retention-days: 14
 
   ios-test-lanes:
@@ -295,9 +296,7 @@ jobs:
 
       - name: Generate project
         timeout-minutes: 5
-        run: |
-          BUTTONHEIST_TUIST_SKIP_AUTO_CLEAN=1 tuist generate --no-binary-cache --no-open
-          ./scripts/clean-generated-projects.sh
+        run: ./scripts/generate-project.sh --skip-install --no-binary-cache
 
       - name: Build ${{ matrix.scheme }} for iOS
         timeout-minutes: 20
@@ -360,17 +359,13 @@ jobs:
             echo "SIM_UDID is unavailable; skipping iOS heist receipt collection"
           fi
 
-      - name: Write heist receipt manifest
+      - name: Finalize heist receipts
         if: always()
-        run: scripts/write-ci-heist-receipt-manifest.sh "$BUTTONHEIST_CI_RECEIPTS_DIR" "ios-tests-${{ matrix.lane }}"
-
-      - name: Upload heist receipts
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        uses: ./.github/actions/finalize-heist-receipts
         with:
-          name: buttonheist-receipts-ios-tests-${{ matrix.lane }}-${{ github.run_attempt }}
-          path: ${{ env.BUTTONHEIST_CI_RECEIPTS_DIR }}
-          if-no-files-found: error
+          receipt-directory: ${{ env.BUTTONHEIST_CI_RECEIPTS_DIR }}
+          job-label: ios-tests-${{ matrix.lane }}
+          artifact-name: buttonheist-receipts-ios-tests-${{ matrix.lane }}-${{ github.run_attempt }}
           retention-days: 14
 
       - name: Collect iOS test diagnostics
@@ -466,9 +461,7 @@ jobs:
 
       - name: Generate project
         timeout-minutes: 5
-        run: |
-          BUTTONHEIST_TUIST_SKIP_AUTO_CLEAN=1 tuist generate --no-binary-cache --no-open
-          ./scripts/clean-generated-projects.sh
+        run: ./scripts/generate-project.sh --skip-install --no-binary-cache
 
       - name: Build iOS app targets
         timeout-minutes: 12
@@ -562,17 +555,13 @@ jobs:
             fi
           done
 
-      - name: Write heist receipt manifest
+      - name: Finalize heist receipts
         if: always()
-        run: scripts/write-ci-heist-receipt-manifest.sh "$BUTTONHEIST_RECEIPTS_DIR" ios-demo-gates
-
-      - name: Upload heist receipts
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        uses: ./.github/actions/finalize-heist-receipts
         with:
-          name: buttonheist-receipts-ios-demo-gates-${{ github.run_attempt }}
-          path: ${{ env.BUTTONHEIST_RECEIPTS_DIR }}
-          if-no-files-found: error
+          receipt-directory: ${{ env.BUTTONHEIST_RECEIPTS_DIR }}
+          job-label: ios-demo-gates
+          artifact-name: buttonheist-receipts-ios-demo-gates-${{ github.run_attempt }}
           retention-days: 14
 
       - name: Report iOS demo timings

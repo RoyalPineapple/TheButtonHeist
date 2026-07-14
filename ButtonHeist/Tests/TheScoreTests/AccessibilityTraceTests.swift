@@ -4,29 +4,6 @@ import ThePlans
 import AccessibilitySnapshotModel
 @testable import TheScore
 
-private struct CaptureWithoutContextFixture: Encodable {
-    let capture: AccessibilityTrace.Capture
-
-    private enum CodingKeys: String, CodingKey {
-        case sequence
-        case hash
-        case parentHash
-        case interface
-        case transition
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(capture.sequence, forKey: .sequence)
-        try container.encode(capture.hash, forKey: .hash)
-        try container.encodeIfPresent(capture.parentHash, forKey: .parentHash)
-        try container.encode(capture.interface, forKey: .interface)
-        if !capture.transition.isEmpty {
-            try container.encode(capture.transition, forKey: .transition)
-        }
-    }
-}
-
 final class AccessibilityTraceTests: XCTestCase {
 
     func testDecodeRejectsUnknownTraceFields() {
@@ -50,7 +27,9 @@ final class AccessibilityTraceTests: XCTestCase {
 
     func testCaptureDecodeRejectsMissingContext() throws {
         let capture = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface())
-        let data = try JSONEncoder().encode(CaptureWithoutContextFixture(capture: capture))
+        let data = try mutatedTestJSONData(capture) { object in
+            object.removeValue(forKey: "context")
+        }
 
         XCTAssertThrowsError(try JSONDecoder().decode(AccessibilityTrace.Capture.self, from: data)) { error in
             XCTAssertTrue(

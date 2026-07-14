@@ -60,7 +60,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                         predicate: .exists(.label("Ready"))
                     )
                 ),
-                warnStep(path: "$.body[2]", message: "explicit warning"),
+                HeistReceiptFixture.warning(path: "$.body[2]", message: "explicit warning"),
             ],
             durationMs: 42
         )
@@ -98,7 +98,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     path: "root-a",
                     kind: .heist,
                     durationMs: 1,
-                    children: [warnStep(path: "$.body[0]", message: "nested")]
+                    children: [HeistReceiptFixture.warning(path: "$.body[0]", message: "nested")]
                 ),
                 .passed(path: "root-b", kind: .heist, durationMs: 1),
                 .skipped(path: "$.body[1]", kind: .warn),
@@ -131,15 +131,15 @@ final class HeistExecutionReportFactsTests: XCTestCase {
     }
 
     func testReportProjectionFinalScreenIdOriginatesFromScoreSummaryFacts() {
-        let trace = makeReceiptTestTrace(
-            before: makeReceiptTestInterface(elementCount: 1),
-            after: makeReceiptTestInterface(elementCount: 2),
+        let trace = makeTestTrace(
+            before: makeTestInterface(elementCount: 1),
+            after: makeTestInterface(elementCount: 2),
             beforeScreenId: "home",
             afterScreenId: "checkout"
         )
-        let finalTrace = makeReceiptTestTrace(
-            before: makeReceiptTestInterface(elementCount: 2),
-            after: makeReceiptTestInterface(elementCount: 3),
+        let finalTrace = makeTestTrace(
+            before: makeTestInterface(elementCount: 2),
+            after: makeTestInterface(elementCount: 3),
             beforeScreenId: "checkout",
             afterScreenId: "confirmation"
         )
@@ -180,15 +180,15 @@ final class HeistExecutionReportFactsTests: XCTestCase {
 
     func testActionExpectationUsesTypedResultMeaningsAcrossReportFacts() throws {
         let predicate = AccessibilityPredicate<RootContext>.changed(.screen())
-        let dispatchTrace = makeReceiptTestTrace(
-            before: makeReceiptTestInterface(elementCount: 1),
-            after: makeReceiptTestInterface(elementCount: 2),
+        let dispatchTrace = makeTestTrace(
+            before: makeTestInterface(elementCount: 1),
+            after: makeTestInterface(elementCount: 2),
             beforeScreenId: "start",
             afterScreenId: "dispatch"
         )
-        let expectationTrace = makeReceiptTestTrace(
-            before: makeReceiptTestInterface(elementCount: 2),
-            after: makeReceiptTestInterface(elementCount: 3),
+        let expectationTrace = makeTestTrace(
+            before: makeTestInterface(elementCount: 2),
+            after: makeTestInterface(elementCount: 3),
             beforeScreenId: "dispatch",
             afterScreenId: "settled"
         )
@@ -271,15 +271,15 @@ final class HeistExecutionReportFactsTests: XCTestCase {
 
     func testReportProjectionUsesCanonicalActionEvidenceDelta() throws {
         let predicate = AccessibilityPredicate<RootContext>.changed(.screen())
-        let dispatchTrace = makeReceiptTestTrace(
-            before: makeReceiptTestInterface(elementCount: 1),
-            after: makeReceiptTestInterface(elementCount: 2),
+        let dispatchTrace = makeTestTrace(
+            before: makeTestInterface(elementCount: 1),
+            after: makeTestInterface(elementCount: 2),
             beforeScreenId: "start",
             afterScreenId: "dispatch"
         )
-        let expectationTrace = makeReceiptTestTrace(
-            before: makeReceiptTestInterface(elementCount: 2),
-            after: makeReceiptTestInterface(elementCount: 3),
+        let expectationTrace = makeTestTrace(
+            before: makeTestInterface(elementCount: 2),
+            after: makeTestInterface(elementCount: 3),
             beforeScreenId: "dispatch",
             afterScreenId: "settled"
         )
@@ -616,8 +616,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
     func testConditionalSelectedCaseKeepsOnlySelectedChildren() {
         let result = HeistExecutionResult(
             steps: [
-                caseStep(
-                    kind: .conditional,
+                HeistReceiptFixture.conditional(
                     selection: HeistCaseSelectionResult(
                         cases: [
                             HeistCaseMatchResult(
@@ -692,7 +691,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                         handledElseCheck
                     ),
                     children: [
-                        warnStep(path: "$.body[0].wait.else_body[0]", message: "No result"),
+                        HeistReceiptFixture.warning(path: "$.body[0].wait.else_body[0]", message: "No result"),
                     ]
                 ),
             ],
@@ -742,7 +741,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
     func testWarnAndFailAreExecutedNodes() {
         let result = HeistExecutionResult(
             steps: [
-                warnStep(message: "Heads up"),
+                HeistReceiptFixture.warning(message: "Heads up"),
                 .failed(
                     path: "$.body[1]",
                     kind: .fail,
@@ -981,12 +980,12 @@ final class HeistExecutionReportFactsTests: XCTestCase {
 
     func testJUnitFailureIncludesFailureScreenshotInterfaceDump() async {
         let elements = (0..<21).map { index in
-            makeReceiptTestElement(
+            makeTestHeistElement(
                 label: index == 0 ? "No results found" : "Element \(index)",
                 identifier: index == 0 ? "empty_state" : nil
             )
         }
-        let interface = makeReceiptTestInterface(elements)
+        let interface = makeTestInterface(elements: elements)
         let screenshot = ScreenPayload(
             pngData: "png",
             width: 42,
@@ -1043,7 +1042,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
     func testSkippedReceiptNodesDoNotContributeRuntimeEvidence() {
         let result = HeistExecutionResult(
             steps: [
-                warnStep(message: "before"),
+                HeistReceiptFixture.warning(message: "before"),
                 .failed(
                     path: "$.body[1]",
                     kind: .fail,
@@ -1105,7 +1104,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             outcome: .noMatch,
             elapsedMs: 4
         )
-        let step = caseStep(kind: .conditional, selection: selection)
+        let step = HeistReceiptFixture.conditional(selection: selection)
         let response = FenceResponse.heistExecution(
             plan: try evidenceProjectionPlan(),
             result: HeistExecutionResult(steps: [step], durationMs: step.durationMs)
@@ -1301,8 +1300,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         let predicate = AccessibilityPredicate<RootContext>.exists(.label("Ready"))
         return (
             name: "caseSelection",
-            step: caseStep(
-                kind: .conditional,
+            step: HeistReceiptFixture.conditional(
                 selection: HeistCaseSelectionResult(
                     cases: [caseMatch(predicate, met: true)],
                     outcome: .matchedCase(index: 0),
@@ -1549,7 +1547,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
     private func warningEvidenceProjectionCase() -> EvidenceProjectionCase {
         (
             name: "warning",
-            step: warnStep(message: "Heads up"),
+            step: HeistReceiptFixture.warning(message: "Heads up"),
             expectedKey: "warning",
             assertEvidence: { evidence in
                 let warning = try evidence.object("warning")
@@ -1568,43 +1566,14 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         expectation: ExpectationResult? = nil,
         failure: HeistFailureDetail? = nil
     ) -> HeistExecutionStepResult {
-        let evidence: HeistActionEvidence
-        if let expectationActionResult, let expectation {
-            guard let command else {
-                preconditionFailure("Expectation action evidence requires a command")
-            }
-            evidence = .expectation(
-                command: command,
-                dispatchResult: actionResult,
-                expectationResult: expectationActionResult,
-                expectation: expectation
-            )
-        } else {
-            precondition(expectationActionResult == nil && expectation == nil)
-            evidence = command.map {
-                .dispatch(command: $0, dispatchResult: actionResult)
-            } ?? .commandlessDispatch(dispatchResult: actionResult)
-        }
-
-        let intent = command.map {
-            HeistStepIntent.action(command: $0)
-        }
-        if let failure {
-            return .failed(
-                path: path,
-                receiptKind: .action,
-                durationMs: 5,
-                intent: intent,
-                evidence: evidence,
-                failure: failure
-            )
-        }
-        return .passed(
+        HeistReceiptFixture.action(
             path: path,
-            receiptKind: .action,
+            command: command,
+            result: actionResult,
+            expectationActionResult: expectationActionResult,
+            expectation: expectation,
             durationMs: 5,
-            intent: intent,
-            evidence: evidence
+            failure: failure
         )
     }
 
@@ -1617,104 +1586,12 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         ),
         failure: HeistFailureDetail? = nil
     ) -> HeistExecutionStepResult {
-        let waitEvidence: HeistWaitEvidence
-        if failure == nil {
-            guard let metExpectation = ExpectationResult.Met(expectation) else {
-                preconditionFailure("Passed wait test fixture requires a met expectation")
-            }
-            guard let matchedCheck = HeistWaitEvidence.MatchedCheck(
-                actionResult: actionResult,
-                expectation: metExpectation
-            ) else {
-                preconditionFailure("Passed wait test fixture requires a successful action result")
-            }
-            waitEvidence = .matched(matchedCheck)
-        } else {
-            guard let unmatchedCheck = HeistWaitEvidence.UnmatchedCheck(
-                actionResult: actionResult,
-                expectation: expectation
-            ) else {
-                preconditionFailure("Failed wait test fixture requires unmatched wait evidence")
-            }
-            waitEvidence = .failed(unmatchedCheck)
-        }
-        let intentPredicate = expectation.predicate
-            ?? AccessibilityPredicate<RootContext>.exists(.label("predicate"))
-        if let failure {
-            return .failed(
-                path: path,
-                receiptKind: .wait,
-                durationMs: 20,
-                intent: .wait(predicate: intentPredicate, timeout: 0),
-                evidence: waitEvidence,
-                failure: failure
-            )
-        }
-        return .passed(
+        HeistReceiptFixture.wait(
             path: path,
-            receiptKind: .wait,
+            actionResult: actionResult,
+            expectation: expectation,
             durationMs: 20,
-            intent: .wait(predicate: intentPredicate, timeout: 0),
-            evidence: waitEvidence
-        )
-    }
-
-    private func caseStep(
-        kind: HeistExecutionStepKind,
-        status: HeistExecutionStepStatus = .passed,
-        selection: HeistCaseSelectionResult,
-        failure: HeistFailureDetail? = nil,
-        children: [HeistExecutionStepResult] = []
-    ) -> HeistExecutionStepResult {
-        let evidence = HeistCaseSelectionEvidence(selection: selection)
-        if let abortedAtChildPath = children.firstFailedStep?.path {
-            return .childAborted(
-                path: "$.body[0]",
-                receiptKind: .conditional,
-                durationMs: selection.elapsedMs,
-                intent: .conditional,
-                evidence: evidence,
-                failure: failure ?? HeistFailureDetail(
-                    category: .invocation,
-                    contract: "selected case body completes without failure",
-                    observed: "child failed at \(abortedAtChildPath)"
-                ),
-                abortedAtChildPath: abortedAtChildPath,
-                children: children
-            )
-        }
-        if status == .failed {
-            return .failed(
-                path: "$.body[0]",
-                receiptKind: .conditional,
-                durationMs: selection.elapsedMs,
-                intent: .conditional,
-                evidence: evidence,
-                failure: failure ?? HeistFailureDetail(
-                    category: .validation,
-                    contract: "conditional branch completes",
-                    observed: "conditional failed"
-                ),
-                children: children
-            )
-        }
-        return .passed(
-            path: "$.body[0]",
-            receiptKind: .conditional,
-            durationMs: selection.elapsedMs,
-            intent: .conditional,
-            evidence: evidence,
-            children: children
-        )
-    }
-
-    private func warnStep(path: String = "$.body[0]", message: String) -> HeistExecutionStepResult {
-        .passed(
-            path: path,
-            receiptKind: .warning,
-            durationMs: 1,
-            intent: .warn(message: message),
-            evidence: HeistExecutionWarning(path: path, message: message)
+            failure: failure
         )
     }
 

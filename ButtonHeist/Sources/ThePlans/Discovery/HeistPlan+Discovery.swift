@@ -299,82 +299,10 @@ private extension HeistPlan {
     }
 
     func catalogResolvedHeists() throws -> [ResolvedCatalogHeist] {
-        let rootName: String
-        if let name, !name.isEmpty {
-            rootName = name
-        } else {
-            rootName = "entry"
-        }
-        let rootScope = HeistDefinitionScope(definitions: definitions)
-        var heists: [ResolvedCatalogHeist] = [
-            ResolvedCatalogHeist(
-                entry: catalogEntry(name: rootName, role: .entry, parameter: parameter),
-                plan: self,
-                definitionScope: rootScope,
-                rootDefinitionScope: rootScope,
-                environment: Self.discoveryEnvironment(for: parameter),
-                invocationStack: []
-            ),
-        ]
-
-        collectCatalogDefinitions(
-            definitions,
-            pathPrefix: [],
-            rootDefinitionScope: rootScope,
-            into: &heists
-        )
-        try validateUniqueCatalogNames(heists.map(\.entry.name))
-        return heists
-    }
-
-    func collectCatalogDefinitions(
-        _ definitions: [HeistPlan],
-        pathPrefix: [String],
-        rootDefinitionScope: HeistDefinitionScope,
-        into heists: inout [ResolvedCatalogHeist]
-    ) {
-        for definition in definitions {
-            guard let localName = definition.name, !localName.isEmpty else { continue }
-            let namePath = pathPrefix + [localName]
-            let definitionNode = HeistCallGraph.Node(namePath: namePath)
-            let environment = Self.discoveryEnvironment(for: definition.parameter)
-            heists.append(ResolvedCatalogHeist(
-                entry: catalogEntry(
-                    name: definitionNode.name,
-                    role: .capability,
-                    parameter: definition.parameter
-                ),
-                plan: definition,
-                definitionScope: HeistDefinitionScope(definitions: definition.definitions, pathPrefix: namePath),
-                rootDefinitionScope: rootDefinitionScope,
-                environment: environment,
-                invocationStack: [definitionNode]
-            ))
-            collectCatalogDefinitions(
-                definition.definitions,
-                pathPrefix: namePath,
-                rootDefinitionScope: rootDefinitionScope,
-                into: &heists
-            )
-        }
-    }
-
-    static func discoveryEnvironment(for parameter: HeistParameter) -> HeistExecutionEnvironment {
-        HeistReferenceBindingContext.runtimeSafetyPlaceholder(for: parameter).environment
-    }
-
-    func catalogEntry(
-        name: String,
-        role: HeistCatalogRole,
-        parameter: HeistParameter
-    ) -> HeistCatalogEntry {
-        HeistCatalogEntry(
-            name: name,
-            role: role,
-            parameterKind: parameter.kind,
-            requiresArgument: parameter.kind != .none,
-            parameterName: parameter.name
-        )
+        var collector = HeistCatalogCollector()
+        HeistPlanTraversal(expandsInvocations: false).walk(self, visitor: &collector)
+        try validateUniqueCatalogNames(collector.heists.map(\.entry.name))
+        return collector.heists
     }
 
     func validateUniqueCatalogNames(_ names: [String]) throws {
@@ -466,11 +394,66 @@ struct ResolvedCatalogHeist {
     let plan: HeistPlan
     let definitionScope: HeistDefinitionScope
     let rootDefinitionScope: HeistDefinitionScope
-    let environment: HeistExecutionEnvironment
+    let referenceBindings: HeistReferenceBindingContext
     let invocationStack: [HeistCallGraph.Node]
 }
 
-private struct HeistSemanticSurfaceBuilder {
+private struct HeistCatalogCollector: HeistPlanTraversalVisitor {
+    var heists: [ResolvedCatalogHeist] = []
+
+    mutating func visitPlan(_ plan: HeistPlan, context: HeistTraversalContext) {
+        append(
+            plan,
+            name: plan.name?.isEmpty == false ? plan.name ?? "entry" : "entry",
+            role: .entry,
+            definitionPath: [],
+            context: context
+        )
+    }
+
+    mutating func visitDefinition(_ plan: HeistPlan, context: HeistTraversalContext) {
+        guard let localName = plan.name, !localName.isEmpty else { return }
+        let namePath = context.definitionScope.pathPrefix + [localName]
+        append(
+            plan,
+            name: namePath.joined(separator: "."),
+            role: .capability,
+            definitionPath: namePath,
+            context: context
+        )
+    }
+
+    private mutating func append(
+        _ plan: HeistPlan,
+        name: String,
+        role: HeistCatalogRole,
+        definitionPath: [String],
+        context: HeistTraversalContext
+    ) {
+        let invocationStack = definitionPath.isEmpty
+            ? []
+            : [HeistCallGraph.Node(namePath: definitionPath)]
+        heists.append(ResolvedCatalogHeist(
+            entry: HeistCatalogEntry(
+                name: name,
+                role: role,
+                parameterKind: plan.parameter.kind,
+                requiresArgument: plan.parameter.kind != .none,
+                parameterName: plan.parameter.name
+            ),
+            plan: plan,
+            definitionScope: HeistDefinitionScope(
+                definitions: plan.definitions,
+                pathPrefix: definitionPath
+            ),
+            rootDefinitionScope: context.rootDefinitionScope,
+            referenceBindings: context.referenceBindings,
+            invocationStack: invocationStack
+        ))
+    }
+}
+
+private struct HeistSemanticSurfaceBuilder: HeistPlanTraversalVisitor {
     var actionCommands: [HeistActionCommandType] = []
     var targetPredicateFacts: [HeistTargetPredicateFact] = []
     var waits: [AccessibilityPredicate<RootContext>] = []
@@ -481,12 +464,15 @@ private struct HeistSemanticSurfaceBuilder {
 
     static func surface(for resolved: ResolvedCatalogHeist) -> HeistSemanticSurface {
         var builder = Self()
-        builder.collect(
+        HeistPlanTraversal().walk(
             steps: resolved.plan.body,
+            path: .root.child(.body),
+            depth: 1,
+            referenceBindings: resolved.referenceBindings,
             definitionScope: resolved.definitionScope,
             rootDefinitionScope: resolved.rootDefinitionScope,
-            environment: resolved.environment,
-            invocationStack: resolved.invocationStack
+            invocationStack: resolved.invocationStack,
+            visitor: &builder
         )
         return HeistSemanticSurface(
             actionCommands: builder.actionCommands,
@@ -499,165 +485,29 @@ private struct HeistSemanticSurfaceBuilder {
         )
     }
 
-    mutating func collect(
-        steps: [HeistStep],
-        definitionScope: HeistDefinitionScope,
-        rootDefinitionScope: HeistDefinitionScope,
-        environment: HeistExecutionEnvironment,
-        invocationStack: [HeistCallGraph.Node]
-    ) {
-        for step in steps {
-            collect(
-                step: step,
-                definitionScope: definitionScope,
-                rootDefinitionScope: rootDefinitionScope,
-                environment: environment,
-                invocationStack: invocationStack
-            )
+    mutating func visitAction(_ action: ActionStep, context: HeistTraversalContext) {
+        appendUnique(action.command.wireType, to: &actionCommands)
+        collectTargets(from: action.command)
+        if let expectation = action.expectationPolicy.expectedStep {
+            collectExpectation(expectation.predicate)
         }
     }
 
-    mutating func collect(
-        step: HeistStep,
-        definitionScope: HeistDefinitionScope,
-        rootDefinitionScope: HeistDefinitionScope,
-        environment: HeistExecutionEnvironment,
-        invocationStack: [HeistCallGraph.Node]
-    ) {
-        switch step {
-        case .action(let action):
-            appendUnique(action.command.wireType, to: &actionCommands)
-            collectTargets(from: action.command)
-            if let expectation = action.expectationPolicy.expectedStep {
-                collectExpectation(expectation.predicate)
-            }
-
-        case .wait(let wait):
-            collectWait(wait.predicate)
-            if let elseBody = wait.elseBody {
-                collect(
-                    steps: elseBody,
-                    definitionScope: definitionScope,
-                    rootDefinitionScope: rootDefinitionScope,
-                    environment: environment,
-                    invocationStack: invocationStack
-                )
-            }
-
-        case .conditional(let conditional):
-            for predicateCase in conditional.cases {
-                collect(
-                    steps: predicateCase.body,
-                    definitionScope: definitionScope,
-                    rootDefinitionScope: rootDefinitionScope,
-                    environment: environment,
-                    invocationStack: invocationStack
-                )
-            }
-            if let elseBody = conditional.elseBody {
-                collect(
-                    steps: elseBody,
-                    definitionScope: definitionScope,
-                    rootDefinitionScope: rootDefinitionScope,
-                    environment: environment,
-                    invocationStack: invocationStack
-                )
-            }
-
-        case .forEachElement(let forEach):
-            let target = AccessibilityTarget.predicate(ElementPredicateTemplate(forEach.matching))
-            appendTargetPredicate(target)
-            let nestedEnvironment = environment.binding(target: target, to: forEach.parameter)
-            collect(
-                steps: forEach.body,
-                definitionScope: definitionScope,
-                rootDefinitionScope: rootDefinitionScope,
-                environment: nestedEnvironment,
-                invocationStack: invocationStack
-            )
-
-        case .forEachString(let forEach):
-            let nestedEnvironment = environment.binding(string: forEach.values.first ?? "", to: forEach.parameter)
-            collect(
-                steps: forEach.body,
-                definitionScope: definitionScope,
-                rootDefinitionScope: rootDefinitionScope,
-                environment: nestedEnvironment,
-                invocationStack: invocationStack
-            )
-
-        case .repeatUntil(let repeatUntil):
-            collectWait(repeatUntil.predicate)
-            collect(
-                steps: repeatUntil.body,
-                definitionScope: definitionScope,
-                rootDefinitionScope: rootDefinitionScope,
-                environment: environment,
-                invocationStack: invocationStack
-            )
-            if let elseBody = repeatUntil.elseBody {
-                collect(
-                    steps: elseBody,
-                    definitionScope: definitionScope,
-                    rootDefinitionScope: rootDefinitionScope,
-                    environment: environment,
-                    invocationStack: invocationStack
-                )
-            }
-
-        case .warn, .fail:
-            break
-
-        case .heist(let plan):
-            let nestedScope = HeistDefinitionScope(definitions: plan.definitions)
-            collect(
-                steps: plan.body,
-                definitionScope: nestedScope,
-                rootDefinitionScope: nestedScope,
-                environment: environment,
-                invocationStack: invocationStack
-            )
-
-        case .invoke(let invocation):
-            collectInvocation(
-                invocation,
-                definitionScope: definitionScope,
-                rootDefinitionScope: rootDefinitionScope,
-                environment: environment,
-                invocationStack: invocationStack
-            )
-        }
+    mutating func visitWait(_ wait: WaitStep, context: HeistTraversalContext) {
+        guard !context.path.description.hasSuffix(".expectation") else { return }
+        collectWait(wait.predicate)
     }
 
-    mutating func collectInvocation(
-        _ invocation: HeistInvocationStep,
-        definitionScope: HeistDefinitionScope,
-        rootDefinitionScope: HeistDefinitionScope,
-        environment: HeistExecutionEnvironment,
-        invocationStack: [HeistCallGraph.Node]
-    ) {
-        guard let resolved = definitionScope.resolveInvocation(
-            path: invocation.invocationPath,
-            rootScope: rootDefinitionScope
-        ) else { return }
-        let resolvedNode = resolved.callGraphNode
-        appendUnique(HeistInvocationPath.preconditionValidated(dottedName: resolvedNode.name), to: &nestedRunHeists)
-        guard HeistCallGraph.nodeCycle(closing: resolvedNode, in: invocationStack) == nil,
-              let nestedEnvironment = try? environment.binding(
-                argument: invocation.argument,
-                to: resolved.definition.parameter
-              )
-        else { return }
-        collect(
-            steps: resolved.definition.body,
-            definitionScope: HeistDefinitionScope(
-                definitions: resolved.definition.definitions,
-                pathPrefix: resolved.namePath
-            ),
-            rootDefinitionScope: rootDefinitionScope,
-            environment: nestedEnvironment,
-            invocationStack: invocationStack + [resolvedNode]
-        )
+    mutating func visitForEachElement(_ step: ForEachElementStep, context: HeistTraversalContext) {
+        appendTargetPredicate(.predicate(ElementPredicateTemplate(step.matching)))
+    }
+
+    mutating func visitInvoke(_ invocation: HeistInvocationStep, context: HeistTraversalContext) {
+        if let expectation = invocation.expectation {
+            collectExpectation(expectation.predicate)
+        }
+        guard let resolved = context.resolveInvocation(path: invocation.invocationPath) else { return }
+        appendUnique(resolved.invocationPath, to: &nestedRunHeists)
     }
 
     mutating func collectTargets(from command: HeistActionCommand) {

@@ -56,6 +56,56 @@ func hostedTestScheme(name: String) -> Scheme {
     )
 }
 
+struct HostedTestDescriptor {
+    let name: String
+    let bundleId: String
+    let sources: SourceFilesList
+    let runsInBehaviorSuite: Bool
+
+    var target: Target {
+        hostedTestTarget(name: name, bundleId: bundleId, sources: sources)
+    }
+
+    var scheme: Scheme {
+        hostedTestScheme(name: name)
+    }
+}
+
+let hostedTestDescriptors = [
+    HostedTestDescriptor(
+        name: "TheInsideJobTests",
+        bundleId: "com.buttonheist.theinsidejob.tests",
+        sources: ["ButtonHeist/Tests/TheInsideJobTests/**"],
+        runsInBehaviorSuite: false
+    ),
+    HostedTestDescriptor(
+        name: "DogfoodFeatureFlowTests",
+        bundleId: "com.buttonheist.dogfood.feature.tests",
+        sources: ["ButtonHeist/Tests/DogfoodFeatureFlowTests/**"],
+        runsInBehaviorSuite: true
+    ),
+    HostedTestDescriptor(
+        name: "DogfoodRuntimeContractTests",
+        bundleId: "com.buttonheist.dogfood.runtime.tests",
+        sources: ["ButtonHeist/Tests/DogfoodRuntimeContractTests/**"],
+        runsInBehaviorSuite: true
+    ),
+    HostedTestDescriptor(
+        name: "AdversarialMutationTests",
+        bundleId: "com.buttonheist.adversarial.mutation.tests",
+        sources: ["ButtonHeist/Tests/AdversarialMutationTests/**"],
+        runsInBehaviorSuite: true
+    ),
+    HostedTestDescriptor(
+        name: "AdversarialNavigationTests",
+        bundleId: "com.buttonheist.adversarial.navigation.tests",
+        sources: ["ButtonHeist/Tests/AdversarialNavigationTests/**"],
+        runsInBehaviorSuite: true
+    ),
+]
+
+let behaviorTestDescriptors = hostedTestDescriptors.filter(\.runsInBehaviorSuite)
+
 let project = Project(
     name: "ButtonHeist",
     options: .options(
@@ -227,6 +277,7 @@ let project = Project(
             sources: ["ButtonHeist/Tests/HostedTestSupport/**"],
             dependencies: [
                 .target(name: "ButtonHeistTesting"),
+                .target(name: "TheInsideJob"),
                 .target(name: "ThePlans"),
                 .target(name: "TheScore"),
             ],
@@ -317,33 +368,7 @@ let project = Project(
             ]
         ),
 
-        // MARK: - iOS Simulator Tests (hosted in BH Demo)
-        hostedTestTarget(
-            name: "TheInsideJobTests",
-            bundleId: "com.buttonheist.theinsidejob.tests",
-            sources: ["ButtonHeist/Tests/TheInsideJobTests/**"]
-        ),
-        hostedTestTarget(
-            name: "DogfoodFeatureFlowTests",
-            bundleId: "com.buttonheist.dogfood.feature.tests",
-            sources: ["ButtonHeist/Tests/DogfoodFeatureFlowTests/**"]
-        ),
-        hostedTestTarget(
-            name: "DogfoodRuntimeContractTests",
-            bundleId: "com.buttonheist.dogfood.runtime.tests",
-            sources: ["ButtonHeist/Tests/DogfoodRuntimeContractTests/**"]
-        ),
-        hostedTestTarget(
-            name: "AdversarialMutationTests",
-            bundleId: "com.buttonheist.adversarial.mutation.tests",
-            sources: ["ButtonHeist/Tests/AdversarialMutationTests/**"]
-        ),
-        hostedTestTarget(
-            name: "AdversarialNavigationTests",
-            bundleId: "com.buttonheist.adversarial.navigation.tests",
-            sources: ["ButtonHeist/Tests/AdversarialNavigationTests/**"]
-        ),
-    ],
+    ] + hostedTestDescriptors.map(\.target),
     schemes: [
         frameworkScheme(name: "ThePlans"),
         frameworkScheme(name: "TheScore"),
@@ -413,37 +438,15 @@ let project = Project(
                 .testableTarget(target: .target("ButtonHeistTests")),
             ])
         ),
-        hostedTestScheme(name: "TheInsideJobTests"),
-        hostedTestScheme(name: "DogfoodFeatureFlowTests"),
-        hostedTestScheme(name: "DogfoodRuntimeContractTests"),
-        hostedTestScheme(name: "AdversarialMutationTests"),
-        hostedTestScheme(name: "AdversarialNavigationTests"),
+    ] + hostedTestDescriptors.map(\.scheme) + [
         .scheme(
             name: "HostedBehaviorTests",
-            buildAction: .buildAction(targets: [
-                .target("DogfoodFeatureFlowTests"),
-                .target("DogfoodRuntimeContractTests"),
-                .target("AdversarialMutationTests"),
-                .target("AdversarialNavigationTests"),
-            ]),
-            testAction: .targets([
-                .testableTarget(
-                    target: .target("DogfoodFeatureFlowTests"),
-                    parallelization: .enabled
-                ),
-                .testableTarget(
-                    target: .target("DogfoodRuntimeContractTests"),
-                    parallelization: .enabled
-                ),
-                .testableTarget(
-                    target: .target("AdversarialMutationTests"),
-                    parallelization: .enabled
-                ),
-                .testableTarget(
-                    target: .target("AdversarialNavigationTests"),
-                    parallelization: .enabled
-                ),
-            ])
+            buildAction: .buildAction(targets: behaviorTestDescriptors.map { .target($0.name) }),
+            testAction: .targets(
+                behaviorTestDescriptors.map {
+                    .testableTarget(target: .target($0.name), parallelization: .enabled)
+                }
+            )
         ),
     ]
 )

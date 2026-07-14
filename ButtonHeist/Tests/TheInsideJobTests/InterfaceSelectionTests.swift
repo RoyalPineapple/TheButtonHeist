@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+import ButtonHeistTestSupport
 import XCTest
 import ThePlans
 
@@ -120,12 +121,12 @@ final class InterfaceSelectorTests: XCTestCase {
         let primaryGroup = makeActionsContainer(containerName: "semantic_actions__actions")
 
         var nodes: [TestInterfaceNode] = [
-            .heistElement(header),
+            .element(header),
             .container(primaryGroup, containerName: "semantic_actions__actions", children: [
-                .heistElement(submit),
-                .heistElement(cancel),
+                .element(submit),
+                .element(cancel),
             ]),
-            .heistElement(footer),
+            .element(footer),
         ]
 
         if includeDuplicateGroup {
@@ -135,13 +136,13 @@ final class InterfaceSelectorTests: XCTestCase {
                 .container(
                     secondaryGroup,
                     containerName: "semantic_actions__secondary_actions",
-                    children: [.heistElement(archive)]
+                    children: [.element(archive)]
                 ),
                 at: 2
             )
         }
 
-        return TestInterfaceFixture(nodes: nodes).interface
+        return makeTestInterface(nodes: nodes)
     }
 
     private static func makeActionsContainer(containerName _: String, y: Double = 40) -> AccessibilityContainer {

@@ -356,19 +356,5 @@ final class AdversarialNavigationTests: XCTestCase {
         )
     }
 
-    private func expectHeistFailure<Content: HeistContent>(
-        _ name: String,
-        @HeistBuilder content: @escaping () throws -> Content
-    ) async throws -> Heist.Failure {
-        do {
-            _ = try await runHeist(name, content)
-            XCTFail("Expected \(name) to fail")
-            throw ExpectedFailureDidNotFail()
-        } catch let failure as Heist.Failure {
-            return failure
-        }
-    }
 }
-
-private struct ExpectedFailureDidNotFail: Error {}
 #endif // canImport(UIKit)

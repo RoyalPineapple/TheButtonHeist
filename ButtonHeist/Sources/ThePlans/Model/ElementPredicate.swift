@@ -301,7 +301,10 @@ public enum ElementPredicateCheck<Text: StringMatchPayload>: Sendable, Equatable
         case .traits(let traits):
             return traits.isEmpty ? "traits check must not be empty" : nil
         case .actions(let actions):
-            return actions.isEmpty ? "actions check must not be empty" : nil
+            if actions.isEmpty {
+                return "actions check must not be empty"
+            }
+            return actions.invalidElementActionPayloadDescription
         case .customContent(let match):
             if let description = match.label.flatMap({ Self.emptyStringPayloadDescription($0, field: "customContent label") }) {
                 return description

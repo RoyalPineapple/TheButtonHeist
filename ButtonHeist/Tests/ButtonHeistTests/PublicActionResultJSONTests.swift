@@ -231,17 +231,17 @@ final class PublicActionResultJSONTests: XCTestCase {
 
     func testHeistReportProjectionIsDeterministicAcrossInterleavedProfiles() throws {
         let checkoutRows = (0..<4).map { index in
-            makeReceiptTestElement(
+            makeTestHeistElement(
                 label: "Checkout Row \(index)",
                 identifier: "checkout_row_\(index)"
             )
         }
-        let trace = makeReceiptTestTrace(
-            before: makeReceiptTestInterface([]),
-            after: makeReceiptTestInterface(checkoutRows),
+        let trace = makeTestTrace(
+            before: makeTestInterface(elements: []),
+            after: makeTestInterface(elements: checkoutRows),
             beforeScreenId: "cart",
             afterScreenId: "checkout",
-            afterTransition: makeReceiptScreenChangedTransition()
+            afterTransition: makeTestScreenChangedTransition()
         )
         let actionResult = ActionResult.failure(
             method: .activate,
@@ -289,7 +289,7 @@ final class PublicActionResultJSONTests: XCTestCase {
     }
 
     func testNestedHeistActionResultEncodesSubjectEvidenceOmissionReason() throws {
-        let subject = makeReceiptTestElement(label: "Pay", identifier: "pay")
+        let subject = makeTestHeistElement(label: "Pay", identifier: "pay")
         let actionResult = ActionResult.success(
             method: .activate,
             evidence: ActionResultSuccessEvidence(
@@ -314,8 +314,8 @@ final class PublicActionResultJSONTests: XCTestCase {
     }
 
     func testIncompleteFactFreeActionDoesNotProjectNoChange() throws {
-        let interface = makeReceiptTestInterface([
-            makeReceiptTestElement(label: "Ready", identifier: "ready"),
+        let interface = makeTestInterface(elements: [
+            makeTestHeistElement(label: "Ready", identifier: "ready"),
         ])
         let result = try standaloneActionResultJSON(
             result: ActionResult.success(
@@ -323,7 +323,7 @@ final class PublicActionResultJSONTests: XCTestCase {
                 evidence: ActionResultSuccessEvidence(
                     observation: .settledTrace(
                         makeTestTraceEvidence(
-                            makeReceiptTestTrace(before: interface, after: interface),
+                            makeTestTrace(before: interface, after: interface),
                             completeness: .incomplete
                         ),
                         .timedOut(durationMs: 0)
@@ -338,15 +338,15 @@ final class PublicActionResultJSONTests: XCTestCase {
 
     func testNestedHeistActionResultEncodesElementEditOmissions() throws {
         let addedRows = (0..<8).map { index in
-            makeReceiptTestElement(label: "Lazy Row \(index)", identifier: "lazy_row_\(index)")
+            makeTestHeistElement(label: "Lazy Row \(index)", identifier: "lazy_row_\(index)")
         }
         let actionResult = ActionResult.success(
             method: .activate,
             evidence: ActionResultSuccessEvidence(
                 observation: .trace(makeTestTraceEvidence(
-                    makeReceiptTestTrace(
-                        before: makeReceiptTestInterface([]),
-                        after: makeReceiptTestInterface(addedRows)
+                    makeTestTrace(
+                        before: makeTestInterface(elements: []),
+                        after: makeTestInterface(elements: addedRows)
                     ),
                     completeness: .incomplete
                 ))
@@ -370,15 +370,15 @@ final class PublicActionResultJSONTests: XCTestCase {
 
     func testStandaloneAndNestedActionDeltasShareElementEditOmissions() throws {
         let addedRows = (0..<8).map { index in
-            makeReceiptTestElement(label: "Lazy Row \(index)", identifier: "lazy_row_\(index)")
+            makeTestHeistElement(label: "Lazy Row \(index)", identifier: "lazy_row_\(index)")
         }
         let actionResult = ActionResult.success(
             method: .activate,
             evidence: ActionResultSuccessEvidence(
                 observation: .trace(makeTestTraceEvidence(
-                    makeReceiptTestTrace(
-                        before: makeReceiptTestInterface([]),
-                        after: makeReceiptTestInterface(addedRows)
+                    makeTestTrace(
+                        before: makeTestInterface(elements: []),
+                        after: makeTestInterface(elements: addedRows)
                     ),
                     completeness: .incomplete
                 ))
@@ -397,8 +397,8 @@ final class PublicActionResultJSONTests: XCTestCase {
     }
 
     func testNestedHeistActionResultEncodesTransientElementChangeOmissions() throws {
-        let interface = makeReceiptTestInterface([
-            makeReceiptTestElement(label: "Ready", identifier: "ready"),
+        let interface = makeTestInterface(elements: [
+            makeTestHeistElement(label: "Ready", identifier: "ready"),
         ])
         let before = AccessibilityTrace.Capture(
             sequence: 1,
@@ -406,7 +406,7 @@ final class PublicActionResultJSONTests: XCTestCase {
             context: AccessibilityTrace.Context(screenId: "home")
         )
         let transient = (0..<8).map { index in
-            makeReceiptTestElement(label: "Toast \(index)", identifier: "toast_\(index)")
+            makeTestHeistElement(label: "Toast \(index)", identifier: "toast_\(index)")
         }
         let after = AccessibilityTrace.Capture(
             sequence: 2,
@@ -440,8 +440,8 @@ final class PublicActionResultJSONTests: XCTestCase {
     }
 
     func testStandaloneAndNestedActionDeltasShareTransientOmissions() throws {
-        let interface = makeReceiptTestInterface([
-            makeReceiptTestElement(label: "Ready", identifier: "ready"),
+        let interface = makeTestInterface(elements: [
+            makeTestHeistElement(label: "Ready", identifier: "ready"),
         ])
         let before = AccessibilityTrace.Capture(
             sequence: 1,
@@ -449,7 +449,7 @@ final class PublicActionResultJSONTests: XCTestCase {
             context: AccessibilityTrace.Context(screenId: "home")
         )
         let transient = (0..<8).map { index in
-            makeReceiptTestElement(label: "Toast \(index)", identifier: "toast_\(index)")
+            makeTestHeistElement(label: "Toast \(index)", identifier: "toast_\(index)")
         }
         let after = AccessibilityTrace.Capture(
             sequence: 2,

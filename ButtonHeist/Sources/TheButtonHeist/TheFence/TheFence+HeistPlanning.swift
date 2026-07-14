@@ -245,7 +245,6 @@ private extension TheFence {
 
     func decodeRootHeistArgument(from arguments: CommandArgumentEnvelope) throws -> HeistArgument {
         guard let value = arguments.value(for: .argument) else { return .none }
-        try validateRootHeistArgumentPayload(value)
         let data = try JSONEncoder().encode(value)
         switch HeistPlanning.decodeArgumentJSONResult(
             data,
@@ -256,25 +255,6 @@ private extension TheFence {
         case .failure(let diagnostics):
             throw buildDiagnosticFenceError(diagnostics)
         }
-    }
-
-    func validateRootHeistArgumentPayload(_ value: HeistValue) throws {
-        guard case .object(let object) = value,
-              object["type"] == .string(HeistParameterKind.accessibilityTarget.rawValue),
-              let target = object["target"] else {
-            return
-        }
-        try Self.validateElementPredicatePayloadStringMatches(target, field: "argument.target")
-        guard case .object(let targetObject) = target else { return }
-        let allowedTargetKeys = Set(AccessibilityTarget.inlineFieldNames)
-        guard let unknownKey = targetObject.keys.sorted().first(where: { !allowedTargetKeys.contains($0) }) else {
-            return
-        }
-        throw SchemaValidationError(
-            field: "argument.target.\(unknownKey)",
-            observed: targetObject[unknownKey]?.schemaObservedDescription ?? "missing",
-            expected: "valid argument.target property"
-        )
     }
 
     func validateRootHeistArgument(_ argument: HeistArgument, for plan: HeistPlan) throws {

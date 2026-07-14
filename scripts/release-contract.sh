@@ -19,6 +19,24 @@ BUTTONHEIST_MACOS_ARTIFACT_SUFFIX="macos"
 BUTTONHEIST_DEMO_ARTIFACT_PREFIX="bh-demo"
 BUTTONHEIST_DEMO_ARTIFACT_SUFFIX="iphonesimulator"
 
+buttonheist_code_version() {
+    local versions
+    local count
+
+    versions="$(
+        grep -E '^[[:space:]]*public let buttonHeistVersion = "[^"]+"' \
+            "$BUTTONHEIST_CODE_VERSION_FILE" \
+            | sed -E 's/.*"([^"]+)".*/\1/' \
+            || true
+    )"
+    count=$(printf '%s\n' "$versions" | sed '/^$/d' | wc -l | tr -d '[:space:]')
+    if [[ "$count" != "1" ]]; then
+        echo "Error: $BUTTONHEIST_CODE_VERSION_FILE must declare exactly one buttonHeistVersion" >&2
+        return 1
+    fi
+    printf '%s' "$versions"
+}
+
 buttonheist_release_url() {
     local version="$1"
     printf 'https://github.com/%s/releases/download/v%s' "$BUTTONHEIST_GITHUB_REPO" "$version"

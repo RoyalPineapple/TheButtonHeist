@@ -263,19 +263,6 @@ final class AdversarialMutationTests: XCTestCase {
         XCTAssertEqual(Set(targets.compactMap(\.value)), Set([primaryValue, duplicateValue]))
     }
 
-    private func expectHeistFailure<Content: HeistContent>(
-        _ name: String,
-        @HeistBuilder content: @escaping () throws -> Content
-    ) async throws -> Heist.Failure {
-        do {
-            _ = try await runHeist(name, content)
-            XCTFail("Expected \(name) to fail")
-            throw ExpectedFailureDidNotFail()
-        } catch let failure as Heist.Failure {
-            return failure
-        }
-    }
-
     private func actionEvidence(
         for command: HeistActionCommand,
         in result: HeistExecutionResult,
@@ -291,8 +278,6 @@ final class AdversarialMutationTests: XCTestCase {
     }
 
 }
-
-private struct ExpectedFailureDidNotFail: Error {}
 
 private extension HeistActionEvidence {
     var receiptNotificationKinds: [AccessibilityNotificationKind] {

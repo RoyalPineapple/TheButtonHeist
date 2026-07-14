@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+import ButtonHeistTestSupport
 import XCTest
 import ThePlans
 @testable import AccessibilitySnapshotParser
@@ -159,7 +160,10 @@ final class WireConverterTests: XCTestCase {
 
     /// Build a test tree node from a InterfaceTree.Element leaf.
     private func wireLeaf(_ element: InterfaceTree.Element) -> TestInterfaceNode {
-        .treeElement(element)
+        .parsedElement(
+            element.element,
+            actions: TheStash.WireConversion.convert(element.element).actions
+        )
     }
 
     /// Build a test tree container node with a fixed containerName.
@@ -188,7 +192,7 @@ final class WireConverterTests: XCTestCase {
         nodes: [TestInterfaceNode],
         timestamp: Date
     ) -> Interface {
-        TestInterfaceFixture(nodes: nodes, timestamp: timestamp).interface
+        makeTestInterface(nodes: nodes, timestamp: timestamp)
     }
 
     private func computeDelta(

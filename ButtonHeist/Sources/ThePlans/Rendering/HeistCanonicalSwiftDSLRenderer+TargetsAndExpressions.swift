@@ -1,136 +1,15 @@
 import Foundation
 
 extension HeistCanonicalSwiftDSLRenderer {
-    func renderCorrection(target: AccessibilityTarget) -> String {
-        switch target {
-        case .predicate(let predicate, let ordinal):
-            let rendered = renderCorrection(predicate: predicate)
-            return ordinal.map { ".target(\(rendered), ordinal: \($0))" } ?? rendered
-        case .container(let predicate, let ordinal):
-            let rendered = renderCorrection(container: predicate)
-            return ordinal.map { ".container(\(rendered), ordinal: \($0))" } ?? ".container(\(rendered))"
-        case .ref(let reference):
-            return reference.rawValue
-        case .within(let container, let target):
-            return ".within(container: \(renderCorrection(container: container)), \(renderCorrection(target: target)))"
-        }
+    func renderCorrection(target: AccessibilityTarget) throws -> String {
+        try render(target: target, environment: .preservingReferences)
     }
 
-    func renderCorrection(target: AccessibilityTarget, addingOrdinal ordinal: Int) -> String {
-        switch target {
-        case .predicate(let predicate, _):
-            return ".target(\(renderCorrection(predicate: predicate)), ordinal: \(ordinal))"
-        case .container(let predicate, _):
-            return ".container(\(renderCorrection(container: predicate)), ordinal: \(ordinal))"
-        case .ref(let reference):
-            return reference.rawValue
-        case .within(let container, let target):
-            return ".within(container: \(renderCorrection(container: container)), \(renderCorrection(target: target, addingOrdinal: ordinal)))"
-        }
-    }
-
-    func renderCorrection(predicate: ElementPredicateTemplate) -> String {
-        guard predicate.checks.count != 1 else {
-            return renderCorrection(singleCheck: predicate.checks[0])
-        }
-        return ".element(\(predicate.checks.map { renderCorrection(check: $0) }.joined(separator: ", ")))"
-    }
-
-    private func renderCorrection(singleCheck check: ElementPredicateCheck<StringExpr>) -> String {
-        switch check {
-        case .traits:
-            return ".element(\(renderCorrection(check: check)))"
-        default:
-            return renderCorrection(check: check)
-        }
-    }
-
-    private func renderCorrection(check: ElementPredicateCheck<StringExpr>) -> String {
-        switch check {
-        case .label(let match): return ".label(\(renderCorrection(match: match)))"
-        case .identifier(let match): return ".identifier(\(renderCorrection(match: match)))"
-        case .value(let match): return ".value(\(renderCorrection(match: match)))"
-        case .hint(let match): return ".hint(\(renderCorrection(match: match)))"
-        case .traits(let traits): return ".traits(\(renderTraitArray(traits)))"
-        case .actions(let actions): return ".actions(\(renderActionArray(actions)))"
-        case .customContent(let match): return ".customContent(\(renderCorrection(customContent: match)))"
-        case .rotors(let matches): return ".rotors(\(renderCorrection(matches: matches)))"
-        case .exclude(let excluded): return ".exclude(\(renderCorrection(check: excluded)))"
-        }
-    }
-
-    private func renderCorrection(container: ContainerPredicateExpr) -> String {
-        if container.checks.count == 1 {
-            switch container.checks[0] {
-            case .type(let type):
-                if type == .dataTable { return ".dataTable()" }
-                return type == .series ? ".type(.series)" : ".\(type.rawValue)"
-            case .identifier(let match):
-                return ".identifier(\(renderCorrection(match: match)))"
-            case .semantic(let predicate):
-                return renderCorrection(semanticContainer: predicate)
-            case .scrollable(true):
-                return ".scrollable(true)"
-            case .actions(let actions):
-                return ".actions(\(renderContainerActions(actions)))"
-            case .rowCount, .columnCount, .modalBoundary, .scrollable(false):
-                break
-            }
-        }
-        return ".matching(\(container.checks.map { renderCorrection(containerCheck: $0) }.joined(separator: ", ")))"
-    }
-
-    private func renderCorrection(containerCheck check: ContainerPredicateCheck<StringExpr>) -> String {
-        switch check {
-        case .type(let type):
-            return ".type(.\(type.rawValue))"
-        case .identifier(let match):
-            return ".identifier(\(renderCorrection(match: match)))"
-        case .semantic(let predicate):
-            return ".semantic(\(renderCorrection(semanticContainer: predicate)))"
-        case .rowCount(let count): return ".rowCount(.init(\(count.value)))"
-        case .columnCount(let count): return ".columnCount(.init(\(count.value)))"
-        case .modalBoundary(let required): return ".modalBoundary(\(required))"
-        case .scrollable(let required): return ".scrollable(\(required))"
-        case .actions(let actions): return ".actions(\(renderContainerActions(actions)))"
-        }
-    }
-
-    private func renderCorrection(semanticContainer predicate: SemanticContainerPredicate<StringExpr>) -> String {
-        switch predicate {
-        case .label(let match): return ".label(\(renderCorrection(match: match)))"
-        case .value(let match): return ".value(\(renderCorrection(match: match)))"
-        }
-    }
-
-    private func renderCorrection(customContent match: CustomContentMatch<StringExpr>) -> String {
-        let fields = [
-            match.label.map { "label: \(renderCorrection(match: $0))" },
-            match.value.map { "value: \(renderCorrection(match: $0))" },
-            match.isImportant.map { "isImportant: \($0)" },
-        ].compactMap { $0 }
-        return ".init(\(fields.joined(separator: ", ")))"
-    }
-
-    private func renderCorrection(matches: [StringMatch<StringExpr>]) -> String {
-        "[\(matches.map { renderCorrection(match: $0) }.joined(separator: ", "))]"
-    }
-
-    private func renderCorrection(match: StringMatch<StringExpr>) -> String {
-        switch match {
-        case .exact(let string): return renderCorrection(string: string)
-        case .contains(let string): return ".contains(\(renderCorrection(string: string)))"
-        case .prefix(let string): return ".prefix(\(renderCorrection(string: string)))"
-        case .suffix(let string): return ".suffix(\(renderCorrection(string: string)))"
-        case .isEmpty: return ".isEmpty"
-        }
-    }
-
-    private func renderCorrection(string: StringExpr) -> String {
-        switch string {
-        case .literal(let literal): return quote(literal)
-        case .ref(let reference): return reference.rawValue
-        }
+    func renderCorrection(target: AccessibilityTarget, addingOrdinal ordinal: Int) throws -> String {
+        try render(
+            target: target.replacingInnermostOrdinal(with: ordinal),
+            environment: .preservingReferences
+        )
     }
 
     func render(target: AccessibilityTarget, environment: RenderEnvironment) throws -> String {
@@ -143,7 +22,7 @@ extension HeistCanonicalSwiftDSLRenderer {
             let rendered = try render(container: predicate, environment: environment)
             return ordinal.map { ".container(\(rendered), ordinal: \($0))" } ?? ".container(\(rendered))"
         case .ref(let reference):
-            guard environment.targetReferences.contains(reference) else {
+            guard environment.accepts(target: reference) else {
                 throw HeistCanonicalSwiftDSLError.unresolvedTargetReference(reference.rawValue)
             }
             return reference.rawValue
@@ -152,8 +31,8 @@ extension HeistCanonicalSwiftDSLRenderer {
         }
     }
 
-    func render(target: AccessibilityTarget) -> String {
-        renderCorrection(target: target)
+    func render(target: AccessibilityTarget) throws -> String {
+        try renderCorrection(target: target)
     }
 
     func render(container: ContainerPredicate) -> String {
@@ -548,7 +427,7 @@ extension HeistCanonicalSwiftDSLRenderer {
         case .literal(let literal):
             return quote(literal)
         case .ref(let reference):
-            guard environment.stringReferences.contains(reference) else {
+            guard environment.accepts(string: reference) else {
                 throw HeistCanonicalSwiftDSLError.unresolvedStringReference(reference.rawValue)
             }
             return reference.rawValue
@@ -565,5 +444,23 @@ extension HeistCanonicalSwiftDSLRenderer {
 
     func render(duration: GestureDuration) -> String {
         "GestureDuration(seconds: \(decimal(duration.seconds)))"
+    }
+}
+
+private extension AccessibilityTarget {
+    func replacingInnermostOrdinal(with ordinal: Int) -> AccessibilityTarget {
+        switch self {
+        case .predicate(let predicate, _):
+            return .predicate(predicate, ordinal: ordinal)
+        case .container(let predicate, _):
+            return .container(predicate, ordinal: ordinal)
+        case .ref:
+            return self
+        case .within(let container, let target):
+            return .within(
+                container: container,
+                target: target.replacingInnermostOrdinal(with: ordinal)
+            )
+        }
     }
 }

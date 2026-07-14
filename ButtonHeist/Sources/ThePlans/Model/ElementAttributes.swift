@@ -35,6 +35,13 @@ extension ElementAction: Codable {
             let keyed = try decoder.container(keyedBy: CodingKeys.self)
             if keyed.contains(.custom) {
                 let name = try keyed.decode(String.self, forKey: .custom)
+                guard !name.isEmpty else {
+                    throw DecodingError.dataCorruptedError(
+                        forKey: .custom,
+                        in: keyed,
+                        debugDescription: Self.emptyCustomNameDescription
+                    )
+                }
                 self = .custom(name)
                 return
             }
@@ -62,6 +69,15 @@ extension ElementAction: Codable {
             var container = encoder.singleValueContainer()
             try container.encode(description)
         case .custom(let name):
+            guard !name.isEmpty else {
+                throw EncodingError.invalidValue(
+                    self,
+                    .init(
+                        codingPath: encoder.codingPath,
+                        debugDescription: Self.emptyCustomNameDescription
+                    )
+                )
+            }
             var container = encoder.container(keyedBy: CodingKeys.self)
             try container.encode(name, forKey: .custom)
         }
@@ -69,6 +85,10 @@ extension ElementAction: Codable {
 }
 
 package extension Set where Element == ElementAction {
+    var invalidElementActionPayloadDescription: String? {
+        lazy.compactMap(\.invalidPayloadDescription).first
+    }
+
     var canonicalElementActionArray: [ElementAction] {
         sorted { lhs, rhs in
             lhs.canonicalSortKey < rhs.canonicalSortKey
@@ -77,6 +97,13 @@ package extension Set where Element == ElementAction {
 }
 
 package extension ElementAction {
+    static let emptyCustomNameDescription = "custom action name must not be empty"
+
+    var invalidPayloadDescription: String? {
+        guard case .custom(let name) = self, name.isEmpty else { return nil }
+        return Self.emptyCustomNameDescription
+    }
+
     var canonicalSortKey: String {
         switch self {
         case .activate:

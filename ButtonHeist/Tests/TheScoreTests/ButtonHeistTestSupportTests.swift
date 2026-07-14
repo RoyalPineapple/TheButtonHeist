@@ -1,6 +1,9 @@
+import AccessibilitySnapshotModel
 import ButtonHeistTestSupport
 import Foundation
 import Testing
+import ThePlans
+@testable import TheScore
 
 @Suite struct ButtonHeistTestSupportTests {
 
@@ -75,5 +78,121 @@ import Testing
         }
 
         #expect(receiptName == "receipt-passed.json.gz")
+    }
+
+    @Test func `interface fixture owns paths traversal annotations and activation defaults`() throws {
+        let button = makeTestHeistElement(
+            label: "Save",
+            traits: [.button],
+            frameX: 10,
+            frameY: 20,
+            frameWidth: 80,
+            frameHeight: 40
+        )
+        let interface = makeTestInterface(nodes: [
+            .container(
+                makeTestSemanticContainer(label: "Actions", identifier: "actions"),
+                containerName: "actions_group",
+                children: [.element(button)]
+            ),
+        ])
+
+        #expect(interface.annotations.elements == [
+            InterfaceElementAnnotation(path: TreePath([0, 0]), actions: [.activate]),
+        ])
+        #expect(interface.annotations.containers == [
+            InterfaceContainerAnnotation(path: TreePath([0]), containerName: "actions_group"),
+        ])
+        guard case .container(_, let children) = try #require(interface.tree.first),
+              case .element(let element, let traversalIndex) = try #require(children.first) else {
+            Issue.record("Expected nested test element")
+            return
+        }
+        #expect(traversalIndex == 0)
+        #expect(element.usesDefaultActivationPoint)
+        #expect(element.activationPoint == AccessibilityPoint(x: 50, y: 40))
+        #expect(interface.projectedElements.first?.actions == [.activate])
+    }
+
+    @Test func `interface fixture preserves explicit activation and normalizes unavailable evidence`() {
+        let explicit = makeTestAccessibilityElement(makeTestHeistElement(
+            activationPointEvidence: .explicit(ScreenPoint(x: 7, y: 9))
+        ))
+        let unavailable = makeTestAccessibilityElement(makeTestHeistElement(
+            activationPointEvidence: .unavailable
+        ))
+
+        #expect(!explicit.usesDefaultActivationPoint)
+        #expect(explicit.activationPoint == AccessibilityPoint(x: 7, y: 9))
+        #expect(unavailable.usesDefaultActivationPoint)
+        #expect(unavailable.activationPoint == AccessibilityPoint(x: 50, y: 22))
+    }
+
+    @Test func `receipt fixture constructs terminal and child aborted nodes`() {
+        let passed = HeistReceiptFixture.action(
+            command: .dismiss,
+            result: .success(method: .dismiss, evidence: .none)
+        )
+        let failed = HeistReceiptFixture.action(
+            command: .dismiss,
+            result: .failure(
+                method: .dismiss,
+                errorKind: .actionFailed,
+                message: "blocked",
+                evidence: .none
+            )
+        )
+        let warning = HeistReceiptFixture.warning(message: "Heads up")
+        let wait = HeistReceiptFixture.wait()
+        let selection = HeistCaseSelectionResult(
+            cases: [
+                HeistCaseMatchResult(
+                    predicate: AccessibilityPredicate<RootContext>.exists(.label("Ready")),
+                    met: true
+                ),
+            ],
+            outcome: .matchedCase(index: 0),
+            elapsedMs: 1
+        )
+        let conditional = HeistReceiptFixture.conditional(
+            selection: selection,
+            children: [failed]
+        )
+        let iteration = HeistReceiptFixture.forEachStringIteration(
+            ordinal: 0,
+            value: "Milk",
+            status: .failed,
+            failureReason: "child failed",
+            children: [failed]
+        )
+
+        #expect(passed.status == .passed)
+        #expect(failed.status == .failed)
+        #expect(warning.warningEvidence?.message == "Heads up")
+        #expect(wait.waitEvidence?.outcome == .matched)
+        #expect(conditional.abortedAtChildPath == failed.path)
+        #expect(iteration.abortedAtChildPath == failed.path)
+        #expect(HeistReceiptFixture.result(
+            steps: [failed],
+            abortedAtPath: failed.path
+        ).abortedAtPath == failed.path)
+    }
+
+    @Test func `eventually uses a bounded ContinuousClock poll`() async {
+        let probe = EventuallyProbe()
+
+        #expect(await eventually(within: .seconds(1)) {
+            await probe.reachesTwo()
+        })
+        #expect(await eventually(within: .zero) { false } == false)
+    }
+}
+
+private actor EventuallyProbe {
+    private var count = 0
+
+    func reachesTwo() -> Bool {
+        count += 1
+        return count == 2
     }
 }

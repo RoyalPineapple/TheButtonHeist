@@ -513,13 +513,27 @@ public extension HeistPlanning {
         commandName: String,
         fields: Set<HeistPlanRejectedPublicSourceField>
     ) -> ValidationResult<Void, HeistBuildDiagnostic> {
-        do {
-            try rejectRawStructuredJSONIRSourceFields(commandName: commandName, fields: fields)
-            return .success((), diagnostics: [])
-        } catch let error as HeistPlanningError {
-            return .failure(error.diagnostics)
-        } catch {
-            return .failure([HeistPlanningError.invalidPlanSource(String(describing: error)).diagnostic])
+        guard !fields.isEmpty else { return .success((), diagnostics: []) }
+        return .failure([HeistPlanningError.rawStructuredJSONIRFields(
+            commandName: commandName,
+            fields: fields.sorted { $0.rawValue < $1.rawValue }
+        ).diagnostic])
+    }
+
+    static func admittedSourceResult(
+        commandName: String,
+        path: String?,
+        inlineDSL: String?
+    ) -> ValidationResult<HeistPlanSource, HeistBuildDiagnostic> {
+        switch (path, inlineDSL) {
+        case (.some, .some):
+            return .failure([HeistPlanningError.multiplePlanSources(commandName: commandName).diagnostic])
+        case (.none, .none):
+            return .failure([HeistPlanningError.missingPlanSource(commandName: commandName).diagnostic])
+        case (.some(let path), .none):
+            return .success(.artifactPath(path), diagnostics: [])
+        case (.none, .some(let source)):
+            return .success(.inlineDSL(source), diagnostics: [])
         }
     }
 
@@ -529,29 +543,34 @@ public extension HeistPlanning {
         inlineDSL: String?,
         sourcePolicy: HeistPlanSourceAdmissionPolicy = .artifactOrInlineDSL
     ) -> ValidationResult<HeistPlanSourceAdmissionRequest, HeistBuildDiagnostic> {
-        do {
-            return .success(try admissionRequest(
+        admittedSourceResult(commandName: commandName, path: path, inlineDSL: inlineDSL).map {
+            HeistPlanSourceAdmissionRequest(
                 commandName: commandName,
-                path: path,
-                inlineDSL: inlineDSL,
+                source: $0,
                 sourcePolicy: sourcePolicy
-            ), diagnostics: [])
-        } catch let error as HeistPlanningError {
-            return .failure(error.diagnostics)
-        } catch {
-            return .failure([HeistPlanningError.invalidPlanSource(String(describing: error)).diagnostic])
+            )
         }
     }
 
     static func admitPlanSourceResult(
         from request: HeistPlanSourceAdmissionRequest
     ) -> ValidationResult<HeistPlanLoadRequest, HeistBuildDiagnostic> {
-        do {
-            return .success(try admitPlanSource(from: request), diagnostics: [])
-        } catch let error as HeistPlanningError {
-            return .failure(error.diagnostics)
-        } catch {
-            return .failure([HeistPlanningError.invalidPlanSource(String(describing: error)).diagnostic])
+        switch request.source {
+        case .artifactPath(let path):
+            return .success(
+                HeistPlanLoadRequest(commandName: request.commandName, source: .artifactPath(path)),
+                diagnostics: []
+            )
+        case .inlineDSL(let source):
+            guard request.sourcePolicy.acceptsInlineDSL else {
+                return .failure([
+                    HeistPlanningError.inlineSourceNotAccepted(commandName: request.commandName).diagnostic,
+                ])
+            }
+            return .success(
+                HeistPlanLoadRequest(commandName: request.commandName, source: .inlineDSL(source)),
+                diagnostics: []
+            )
         }
     }
 

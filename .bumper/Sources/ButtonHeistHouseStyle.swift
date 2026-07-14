@@ -1,22 +1,34 @@
 import BumperBowlingCore
 
-extension ComponentID {
-    static let plans = checked("plans")
-    static let score = checked("score")
-    static let dsl = checked("dsl")
-    static let doctor = checked("doctor")
-    static let runtime = checked("runtime")
-    static let testing = checked("testing")
-    static let tools = checked("tools")
-    static let mcp = checked("mcp")
-    static let demo = checked("demo")
+enum ButtonHeistComponent: String, CaseIterable {
+    case plans
+    case score
+    case dsl
+    case doctor
+    case runtime
+    case testing
+    case tools
+    case mcp
+    case demo
 
-    private static func checked(_ rawValue: String) -> ComponentID {
+    var id: ComponentID {
         guard let id = try? ComponentID(rawValue) else {
             preconditionFailure("Invalid component id: \(rawValue)")
         }
         return id
     }
+}
+
+extension ComponentID {
+    static let plans = ButtonHeistComponent.plans.id
+    static let score = ButtonHeistComponent.score.id
+    static let dsl = ButtonHeistComponent.dsl.id
+    static let doctor = ButtonHeistComponent.doctor.id
+    static let runtime = ButtonHeistComponent.runtime.id
+    static let testing = ButtonHeistComponent.testing.id
+    static let tools = ButtonHeistComponent.tools.id
+    static let mcp = ButtonHeistComponent.mcp.id
+    static let demo = ButtonHeistComponent.demo.id
 }
 
 extension ComponentShape {

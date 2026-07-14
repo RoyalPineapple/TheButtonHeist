@@ -17,15 +17,7 @@ NEW_VERSION="$1"
 [[ "$NEW_VERSION" =~ $SEMVER_REGEX ]] \
     || { echo "Error: '$NEW_VERSION' is not MAJOR.MINOR.PATCH" >&2; exit 1; }
 
-extract_code_version() {
-    grep -E '^[[:space:]]*public let buttonHeistVersion = "[^"]+"' "$BUTTONHEIST_CODE_VERSION_FILE" \
-        | sed -E 's/.*"([^"]+)".*/\1/'
-}
-
-CURRENT_VERSION=$(extract_code_version)
-CURRENT_COUNT=$(printf '%s\n' "$CURRENT_VERSION" | sed '/^$/d' | wc -l | tr -d '[:space:]')
-[[ "$CURRENT_COUNT" == "1" ]] \
-    || { echo "Error: $BUTTONHEIST_CODE_VERSION_FILE must declare exactly one buttonHeistVersion" >&2; exit 1; }
+CURRENT_VERSION=$(buttonheist_code_version)
 [[ "$CURRENT_VERSION" =~ $SEMVER_REGEX ]] \
     || { echo "Error: canonical version '$CURRENT_VERSION' is not MAJOR.MINOR.PATCH" >&2; exit 1; }
 

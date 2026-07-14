@@ -1,3 +1,4 @@
+import ButtonHeistTestSupport
 import XCTest
 import Network
 @_spi(ButtonHeistTooling) @testable import ButtonHeist
@@ -35,19 +36,6 @@ final class AuthFlowTests: XCTestCase {
         )
     }
 
-    private func encode(_ message: ServerMessage) throws -> Data {
-        try JSONEncoder().encode(ResponseEnvelope(message: message))
-    }
-
-    private func encode(_ message: ServerMessage, buttonHeistVersion version: String) throws -> Data {
-        try JSONEncoder().encode(ResponseEnvelope(buttonHeistVersion: version, message: message))
-    }
-
-    private func rawEnvelope(type: String, payload: String? = nil) -> Data {
-        let payloadFragment = payload.map { #","payload":\#($0)"# } ?? ""
-        return Data(#"{"buttonHeistVersion":"\#(buttonHeistVersion)","type":"\#(type)"\#(payloadFragment)}"#.utf8)
-    }
-
     // MARK: - Tests
 
     @ButtonHeistActor
@@ -62,7 +50,7 @@ final class AuthFlowTests: XCTestCase {
             }
         }
 
-        try conn.handleMessage(encode(.authRequired))
+        try conn.handleMessage(testResponseEnvelopeData(.authRequired))
 
         XCTAssertTrue(receivedAuthRequired)
     }
@@ -85,7 +73,7 @@ final class AuthFlowTests: XCTestCase {
             }
         }
 
-        conn.handleMessage(try encode(.serverHello, buttonHeistVersion: "0.0.0"))
+        conn.handleMessage(try testResponseEnvelopeData(.serverHello, buttonHeistVersion: "0.0.0"))
 
         XCTAssertEqual(protocolMismatchPayload?.serverButtonHeistVersion, "0.0.0")
         XCTAssertEqual(protocolMismatchPayload?.clientButtonHeistVersion, buttonHeistVersion)
@@ -123,7 +111,7 @@ final class AuthFlowTests: XCTestCase {
             listeningPort: 49152,
             tlsActive: true
         )
-        try conn.handleMessage(encode(.info(info)))
+        try conn.handleMessage(testResponseEnvelopeData(.info(info)))
 
         XCTAssertTrue(connectedFired, "onEvent(.connected) should fire after receiving info")
         XCTAssertEqual(receivedInfo?.appName, "TestApp")
@@ -147,7 +135,7 @@ final class AuthFlowTests: XCTestCase {
             }
         }
 
-        try conn.handleMessage(encode(
+        try conn.handleMessage(testResponseEnvelopeData(
             .error(ServerError(kind: .authFailure, message: "Connection denied by user"))
         ))
 
@@ -172,7 +160,7 @@ final class AuthFlowTests: XCTestCase {
             sentMessages.capture(content: content, completion: completion)
         }
 
-        try conn.handleMessage(encode(.authRequired))
+        try conn.handleMessage(testResponseEnvelopeData(.authRequired))
 
         XCTAssertTrue(receivedAuthRequired)
         XCTAssertTrue(sentMessages.messages.isEmpty, "Transport must not own auth replies")

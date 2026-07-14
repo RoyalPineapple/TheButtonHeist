@@ -42,14 +42,17 @@ done < <(find "$REPO_ROOT/.bumper" -type f -print | sort)
 while IFS= read -r owner; do
     copy_fixture_file "$owner"
 done < <(
-    sed -n '/private let architectureCurrencyOwnerPaths:/,/^]/p' \
+    sed -n '/private let architectureCurrencyOwnership:/,/^]/p' \
         "$REPO_ROOT/.bumper/Sources/ButtonHeistCustomRules.swift" \
-        | sed -n 's/^[[:space:]]*"[^"]*": "\([^"]*\)",$/\1/p' \
+        | sed -n \
+            -e 's/.*[.]declaration([^,]*, ownerPath: "\([^"]*\)".*/\1/p' \
+            -e 's/.*declarationOwnerPath: "\([^"]*\)".*/\1/p' \
         | sort -u
 )
 
 mkdir -p \
     "$FIXTURE_REPO/ButtonHeistCLI/Sources/Support" \
+    "$FIXTURE_REPO/ButtonHeist/Sources/ThePlans/SourceShapeFixtures" \
     "$FIXTURE_REPO/ButtonHeist/Sources/TheInsideJob/SourceShapeFixtures"
 
 cat > "$FIXTURE_REPO/ButtonHeistCLI/Sources/Support/SourceShapeFixtures.swift" <<'EOF'
@@ -67,6 +70,15 @@ func commitSettledVisibleObservation(_ proof: InterfaceObservationProof) {}
 func commitSettledDiscoveryObservation(_ proof: InterfaceObservationProof) {}
 EOF
 
+cat > "$FIXTURE_REPO/ButtonHeist/Sources/ThePlans/SourceShapeFixtures/PlanTraversal.swift" <<'EOF'
+struct PlanFacts: HeistPlanTraversalVisitor {}
+
+func deriveFacts(from plan: HeistPlan) {
+    var facts = PlanFacts()
+    HeistPlanTraversal().walk(plan, visitor: &facts)
+}
+EOF
+
 run_lint
 [[ "$LINT_STATUS" -eq 0 ]] || fail "source-shape lint rejected valid fixtures: $LINT_OUTPUT"
 
@@ -79,6 +91,12 @@ EOF
 cat > "$FIXTURE_REPO/ButtonHeist/Sources/TheInsideJob/SourceShapeFixtures/ObservationCommits.swift" <<'EOF'
 func commitVisibleInterface(_ screen: InterfaceObservation) {}
 func commitDiscoveryInterface(_ screen: InterfaceObservation?) {}
+EOF
+
+cat > "$FIXTURE_REPO/ButtonHeist/Sources/ThePlans/SourceShapeFixtures/PlanTraversal.swift" <<'EOF'
+func collectPlans(_ plan: HeistPlan) {
+    collectPlans(plan.definitions[0])
+}
 EOF
 
 run_lint
@@ -95,5 +113,7 @@ run_lint
     || fail "source-shape lint missed commitDiscoveryInterface: $LINT_OUTPUT"
 [[ "$LINT_OUTPUT" == *"interface observation commits require settled or explored InterfaceObservationProof"* ]] \
     || fail "raw observation commit diagnostic did not require proof: $LINT_OUTPUT"
+[[ "$LINT_OUTPUT" == *"recursive HeistPlan/HeistStep descent outside canonical traversal"* ]] \
+    || fail "source-shape lint missed recursive plan descent: $LINT_OUTPUT"
 
 echo "PASS: SwiftSyntax source-shape guardrails"

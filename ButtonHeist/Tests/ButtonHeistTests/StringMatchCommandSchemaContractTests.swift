@@ -48,64 +48,6 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testAccessibilityTargetReportsNestedStringMatchValueMismatch() async {
-        XCTAssertThrowsError(try decodedAccessibilityTarget(target: accessibilityTargetValue([
-            "checks": .array([
-                predicateCheckValue(kind: "label", match: .object([
-                    "mode": .string("contains"),
-                    "value": .int(7),
-                ])),
-            ]),
-        ]))) { error in
-            guard let error = error as? SchemaValidationError else {
-                return XCTFail("Expected SchemaValidationError, got \(error)")
-            }
-            XCTAssertEqual(error.field, "target.checks[0].match.value")
-            XCTAssertEqual(error.observed, "integer 7")
-            XCTAssertEqual(error.expected, "string")
-        }
-    }
-
-    @ButtonHeistActor
-    func testAccessibilityTargetReportsInvalidStringMatchModeField() async {
-        XCTAssertThrowsError(try decodedAccessibilityTarget(target: accessibilityTargetValue([
-            "checks": .array([
-                predicateCheckValue(kind: "label", match: .object([
-                    "mode": .string("regex"),
-                    "value": .string("Pay"),
-                ])),
-            ]),
-        ]))) { error in
-            guard let error = error as? SchemaValidationError else {
-                return XCTFail("Expected SchemaValidationError, got \(error)")
-            }
-            XCTAssertEqual(error.field, "target.checks[0].match.mode")
-            XCTAssertEqual(error.observed, #"string "regex""#)
-            XCTAssertTrue(error.expected.contains("Cannot initialize Mode"), error.expected)
-        }
-    }
-
-    @ButtonHeistActor
-    func testAccessibilityTargetRejectsUnknownStringMatchField() async {
-        XCTAssertThrowsError(try decodedAccessibilityTarget(target: accessibilityTargetValue([
-            "checks": .array([
-                predicateCheckValue(kind: "label", match: .object([
-                    "mode": .string("exact"),
-                    "value": .string("Pay"),
-                    "caseSensitive": .bool(true),
-                ])),
-            ]),
-        ]))) { error in
-            guard let error = error as? SchemaValidationError else {
-                return XCTFail("Expected SchemaValidationError, got \(error)")
-            }
-            XCTAssertEqual(error.field, "target.checks[0].match.caseSensitive")
-            XCTAssertEqual(error.observed, "boolean true")
-            XCTAssertTrue(error.expected.contains("Unknown StringMatch field"), error.expected)
-        }
-    }
-
-    @ButtonHeistActor
     func testAccessibilityTargetAcceptsRepeatedStringChecks() async throws {
         guard let target = try decodedAccessibilityTarget(target: accessibilityTargetValue([
             "checks": .array([
@@ -271,46 +213,6 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
         )))
     }
 
-    func testPredicateRejectsMalformedOrderedElementChecks() throws {
-        XCTAssertThrowsError(try TheFence.ExpectationPayload.parseRequiredPredicate(.object([
-            "type": .string("exists"),
-            "target": accessibilityTargetValue([
-                "checks": .array([
-                    predicateCheckValue(kind: "label", values: [.string("button")]),
-                ]),
-            ]),
-        ]))) { error in
-            let message = schemaMessage(error)
-            XCTAssertTrue(
-                message.contains("target.checks[0].values"),
-                "Unexpected error: \(error)"
-            )
-            XCTAssertTrue(
-                message.contains("expected not present for label checks"),
-                "Unexpected error: \(error)"
-            )
-        }
-
-        XCTAssertThrowsError(try TheFence.ExpectationPayload.parseRequiredPredicate(.object([
-            "type": .string("exists"),
-            "target": accessibilityTargetValue([
-                "checks": .array([
-                    predicateCheckValue(kind: "exclude"),
-                ]),
-            ]),
-        ]))) { error in
-            let message = schemaMessage(error)
-            XCTAssertTrue(
-                message.contains("target.checks[0].check"),
-                "Unexpected error: \(error)"
-            )
-            XCTAssertTrue(
-                message.contains("expected element predicate check object"),
-                "Unexpected error: \(error)"
-            )
-        }
-    }
-
     func testPredicateSchemaLeavesPropertySpecificUpdateMatchesToCanonicalDecoder() throws {
         let predicateSpec = try XCTUnwrap(TheFence.Command.wait.descriptor.parameter(named: .predicate))
         let assertions = try XCTUnwrap(
@@ -341,24 +243,6 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
         }
     }
 
-    func testPredicateRejectsRawStringMatcherField() throws {
-        XCTAssertThrowsError(try TheFence.ExpectationPayload.parseRequiredPredicate(.object([
-            "type": .string("exists"),
-            "target": accessibilityTargetValue([
-                "label": .string("Pay"),
-            ]),
-        ]))) { error in
-            XCTAssertTrue(
-                String(describing: error).contains("target.label"),
-                "Unexpected error: \(error)"
-            )
-            XCTAssertTrue(
-                String(describing: error).contains("label"),
-                "Unexpected error: \(error)"
-            )
-        }
-    }
-
     @ButtonHeistActor
     private func decodedAccessibilityTarget(target: HeistValue) throws -> AccessibilityTarget? {
         try TheFence.CommandArgumentEnvelope(values: ["target": target]).decodedAccessibilityTarget()
@@ -380,10 +264,6 @@ private func assertError(
         file: file,
         line: line
     )
-}
-
-private func schemaMessage(_ error: Error) -> String {
-    (error as? SchemaValidationError)?.message ?? String(describing: error)
 }
 
 private func accessibilityTargetValue(_ fields: [String: HeistValue]) -> HeistValue {

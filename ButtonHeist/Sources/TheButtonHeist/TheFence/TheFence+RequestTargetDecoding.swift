@@ -60,18 +60,10 @@ extension TheFence.CommandArgumentEnvelope {
     }
 
     func decodeAccessibilityTargetPayload() throws -> AccessibilityTarget {
-        try requireObjectStringMatchFields()
-        return try TheFence.HeistValuePayloadDecoder.decode(
+        try TheFence.HeistValuePayloadDecoder.decode(
             objectValue,
             field: argumentFieldPrefix ?? "target",
             as: AccessibilityTarget.self
-        )
-    }
-
-    private func requireObjectStringMatchFields() throws {
-        try TheFence.validateElementPredicatePayloadStringMatches(
-            objectValue,
-            field: argumentFieldPrefix ?? "target"
         )
     }
 

@@ -1,3 +1,4 @@
+import ButtonHeistTestSupport
 import XCTest
 @_spi(ButtonHeistTooling) @testable import ButtonHeist
 import TheScore
@@ -10,8 +11,8 @@ final class GetScreenArtifactResponseTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: tempDirectory) }
 
         let pngBytes = Data([0x89, 0x50, 0x4E, 0x47])
-        let interface = makeReceiptTestInterface([
-            makeReceiptTestElement(label: "Pay", traits: [.button]),
+        let interface = makeTestInterface(elements: [
+            makeTestHeistElement(label: "Pay", traits: [.button], actions: []),
         ])
         let fence = Self.makeFence(
             tempDirectory: tempDirectory,
@@ -48,8 +49,8 @@ final class GetScreenArtifactResponseTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: tempDirectory) }
 
         let pngData = Data([0x89, 0x50, 0x4E, 0x47]).base64EncodedString()
-        let interface = makeReceiptTestInterface([
-            makeReceiptTestElement(label: "Pay", traits: [.button]),
+        let interface = makeTestInterface(elements: [
+            makeTestHeistElement(label: "Pay", traits: [.button], actions: []),
         ])
         let fence = Self.makeFence(tempDirectory: tempDirectory, pngData: pngData, interface: interface)
 
@@ -76,8 +77,8 @@ final class GetScreenArtifactResponseTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: tempDirectory) }
 
         let pngData = Data([0x89, 0x50, 0x4E, 0x47]).base64EncodedString()
-        let interface = makeReceiptTestInterface([
-            makeReceiptTestElement(label: "Pay", traits: [.button]),
+        let interface = makeTestInterface(elements: [
+            makeTestHeistElement(label: "Pay", traits: [.button], actions: []),
         ])
         let config = TheFence.Configuration(artifactBaseDirectory: tempDirectory)
         let (fence, mockConnection) = makeConnectedFence(configuration: config)

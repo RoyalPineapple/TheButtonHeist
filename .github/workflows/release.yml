@@ -21,40 +21,22 @@ jobs:
       HAS_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
 
     steps:
-      - name: Verify CI passed on exact release commit
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          TAG_SHA=$(gh api repos/${{ github.repository }}/git/ref/tags/${{ github.event.inputs.tag || github.ref_name }} --jq '.object.sha' 2>/dev/null \
-            || echo "${{ github.sha }}")
-          COUNT=$(gh run list \
-            --repo ${{ github.repository }} \
-            --workflow CI \
-            --branch main \
-            --commit "$TAG_SHA" \
-            --limit 20 \
-            --json conclusion,event,status \
-            --jq '[.[] | select(.event == "push" and .status == "completed" and .conclusion == "success")] | length')
-          if [[ "$COUNT" -gt 0 ]]; then
-            echo "CI verified green on exact release commit ${TAG_SHA:0:8}"
-            exit 0
-          fi
-          echo "::group::CI runs found for ${TAG_SHA:0:8}"
-          gh run list \
-            --repo ${{ github.repository }} \
-            --workflow CI \
-            --branch main \
-            --commit "$TAG_SHA" \
-            --limit 20 || true
-          echo "::endgroup::"
-          echo "::error::No successful main-branch CI push run found for exact tagged commit $TAG_SHA. Push the release commit to main, wait for CI to pass, then push or re-run the tag release."
-          exit 1
-
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
           submodules: recursive
+
+      - name: Verify CI passed on exact release commit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG_REF="${{ github.event.inputs.tag || github.ref_name }}"
+          TAG_SHA=$(git rev-parse "${TAG_REF}^{}")
+          scripts/require-successful-ci-for-commit.sh \
+            --repo "${{ github.repository }}" \
+            "$TAG_SHA" \
+            "tagged release commit"
 
       - name: Select Xcode 26.3
         run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
@@ -70,8 +52,7 @@ jobs:
           source scripts/release-contract.sh
           TAG_VERSION="${{ steps.version.outputs.version }}"
           FILE_VERSION=$(tr -d '[:space:]' < "$BUTTONHEIST_RELEASE_VERSION_FILE")
-          CODE_VERSION=$(grep -o 'buttonHeistVersion = "[^"]*"' \
-            "$BUTTONHEIST_CODE_VERSION_FILE" | cut -d'"' -f2)
+          CODE_VERSION=$(buttonheist_code_version)
           TAG_SHA=$(git rev-parse "v${TAG_VERSION}^{}")
           HEAD_SHA=$(git rev-parse HEAD)
 
@@ -126,38 +107,14 @@ jobs:
       - name: Install Tuist
         uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151  # v4
 
+      - name: Select iOS simulator
+        run: python3 scripts/select-ios-ci-simulator.py --preferred-device "iPhone 16 Pro" --wait
+
       - name: Build BH Demo for iOS Simulator
         run: |
           set -eo pipefail
-          tuist install
-          BUTTONHEIST_TUIST_SKIP_AUTO_CLEAN=1 tuist generate --no-binary-cache --no-open
-          ./scripts/clean-generated-projects.sh
+          ./scripts/generate-project.sh --no-binary-cache
 
-          read -r SIM_UDID SIM_OS < <(python3 - <<'PYEOF'
-          import json
-          import subprocess
-
-          devices = json.loads(subprocess.check_output(["xcrun", "simctl", "list", "devices", "available", "-j"]))["devices"]
-          runtimes = json.loads(subprocess.check_output(["xcrun", "simctl", "list", "runtimes", "-j"]))["runtimes"]
-          preferred = []
-          fallback = []
-          for rt in sorted(runtimes, key=lambda r: r["version"], reverse=True):
-              if rt["platform"] != "iOS" or not rt["isAvailable"]:
-                  continue
-              for dev in devices.get(rt["identifier"], []):
-                  if not dev["isAvailable"]:
-                      continue
-                  target = (dev["udid"], rt["version"])
-                  if dev["name"] == "iPhone 16 Pro":
-                      preferred.append(target)
-                  elif "iPhone" in dev["name"]:
-                      fallback.append(target)
-          candidates = preferred or fallback
-          if not candidates:
-              raise SystemExit("No available iPhone simulator found")
-          print(*candidates[0])
-          PYEOF
-          )
           DERIVED_DATA_PATH="$RUNNER_TEMP/ButtonHeistDerivedData"
           DEST="platform=iOS Simulator,id=$SIM_UDID"
           echo "Building BH Demo for $DEST (iOS $SIM_OS)"

@@ -23,18 +23,18 @@ extension HeistPlanSourceParser {
             _ = try parseInteger()
             throw error(
                 token,
-                "Ordinal belongs to the target. Use \(actionName)(\(renderTargetCorrection(target, ordinal: 0)))."
+                "Ordinal belongs to the target. Use \(actionName)(\(try renderTargetCorrection(target, ordinal: 0)))."
             )
         }
         throw error(token, "\(actionName)(...) accepts a single AccessibilityTarget")
     }
 
-    func renderTargetCorrection(_ target: AccessibilityTarget) -> String {
-        HeistCanonicalSwiftDSLRenderer().renderCorrection(target: target)
+    func renderTargetCorrection(_ target: AccessibilityTarget) throws -> String {
+        try HeistCanonicalSwiftDSLRenderer().renderCorrection(target: target)
     }
 
-    func renderTargetCorrection(_ target: AccessibilityTarget, ordinal: Int) -> String {
-        HeistCanonicalSwiftDSLRenderer().renderCorrection(target: target, addingOrdinal: ordinal)
+    func renderTargetCorrection(_ target: AccessibilityTarget, ordinal: Int) throws -> String {
+        try HeistCanonicalSwiftDSLRenderer().renderCorrection(target: target, addingOrdinal: ordinal)
     }
 
     mutating func parseTypeTextAction() throws -> HeistActionCommand {

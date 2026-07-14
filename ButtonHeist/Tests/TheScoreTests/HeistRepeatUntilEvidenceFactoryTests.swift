@@ -1,3 +1,4 @@
+import ButtonHeistTestSupport
 import Foundation
 import Testing
 import ThePlans
@@ -150,40 +151,17 @@ import TheScore
             iterationCount: 1,
             expectation: ExpectationResult.Met(predicate: predicate)
         )
-        var invalidFixture = RepeatUntilEvidenceFixture(evidence)
-        invalidFixture.expectation = ExpectationResult(
+        let invalidExpectation = ExpectationResult(
             met: false,
-            predicate: invalidFixture.expectation.predicate,
-            actual: invalidFixture.expectation.actual
+            predicate: evidence.expectation.predicate,
+            actual: evidence.expectation.actual
         )
-        let invalidData = try JSONEncoder().encode(invalidFixture)
+        let invalidData = try mutatedTestJSONData(evidence) { object in
+            object["expectation"] = try testJSONObject(invalidExpectation)
+        }
 
         #expect(throws: DecodingError.self) {
             _ = try JSONDecoder().decode(HeistRepeatUntilEvidence.self, from: invalidData)
         }
-    }
-}
-
-private struct RepeatUntilEvidenceFixture: Codable {
-    var outcome: HeistPredicateEvidenceOutcome
-    var predicate: AccessibilityPredicate<RootContext>
-    var timeout: Double
-    var iterationCount: Int
-    var iterationOrdinal: Int?
-    var expectation: ExpectationResult
-    var actionResult: ActionResult?
-    var lastObservedSummary: String?
-    var failureReason: String?
-
-    init(_ evidence: HeistRepeatUntilEvidence) {
-        outcome = evidence.outcome
-        predicate = evidence.predicate
-        timeout = evidence.timeout
-        iterationCount = evidence.iterationCount
-        iterationOrdinal = evidence.iterationOrdinal
-        expectation = evidence.expectation
-        actionResult = evidence.actionResult
-        lastObservedSummary = evidence.lastObservedSummary
-        failureReason = evidence.failureReason
     }
 }

@@ -255,7 +255,9 @@ public enum ContainerPredicateCheck<Value: StringMatchPayload>: Sendable, Equata
             return Self.invalidStringPayloadDescription(match, field: "container identifier")
         case .semantic(let predicate):
             return predicate.invalidPayloadDescription
-        case .type, .rowCount, .columnCount, .modalBoundary, .scrollable, .actions:
+        case .actions(let actions):
+            return actions.values.invalidElementActionPayloadDescription
+        case .type, .rowCount, .columnCount, .modalBoundary, .scrollable:
             return nil
         }
     }

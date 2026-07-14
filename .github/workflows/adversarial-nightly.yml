@@ -58,9 +58,7 @@ jobs:
 
       - name: Generate project
         timeout-minutes: 5
-        run: |
-          BUTTONHEIST_TUIST_SKIP_AUTO_CLEAN=1 tuist generate --no-binary-cache --no-open
-          ./scripts/clean-generated-projects.sh
+        run: ./scripts/generate-project.sh --skip-install --no-binary-cache
 
       - name: Build BH Demo
         timeout-minutes: 12
@@ -100,15 +98,11 @@ jobs:
               "$BUTTONHEIST_RECEIPTS_DIR/diagnostics/buttonheist-adversarial-nightly-report.json"
           fi
 
-      - name: Write heist receipt manifest
+      - name: Finalize heist receipts
         if: always()
-        run: scripts/write-ci-heist-receipt-manifest.sh "$BUTTONHEIST_RECEIPTS_DIR" adversarial-nightly
-
-      - name: Upload heist receipts
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        uses: ./.github/actions/finalize-heist-receipts
         with:
-          name: buttonheist-receipts-adversarial-nightly-${{ github.run_attempt }}
-          path: ${{ env.BUTTONHEIST_RECEIPTS_DIR }}
-          if-no-files-found: error
+          receipt-directory: ${{ env.BUTTONHEIST_RECEIPTS_DIR }}
+          job-label: adversarial-nightly
+          artifact-name: buttonheist-receipts-adversarial-nightly-${{ github.run_attempt }}
           retention-days: 30

@@ -89,11 +89,154 @@ let customRules = CustomRuleSet {
         return visitor.failures
     }
 
+    CustomSyntaxRule("buttonheist.canonical_plan_traversal", severity: .error) { file in
+        guard isPlanTraversalCheckedProductionPath(file.path.rawValue) else { return [] }
+        let visitor = HeistPlanRecursionShapeVisitor(viewMode: .sourceAccurate)
+        visitor.walk(file.syntax)
+        return visitor.failures(in: file)
+    }
+
     CustomSyntaxRule("buttonheist.insidejob_architectural_shape", severity: .error) { file in
         guard file.path.rawValue.hasPrefix(insideJobSourcePrefix) else { return [] }
         let visitor = InsideJobArchitecturalShapeRuleVisitor(file: file, viewMode: .sourceAccurate)
         visitor.walk(file.syntax)
         return visitor.failures
+    }
+}
+
+private struct HeistPlanTraversalCall {
+    let callee: String
+    let structuralChildren: Set<String>
+    let syntax: FunctionCallExprSyntax
+}
+
+private final class HeistPlanRecursionShapeVisitor: SyntaxVisitor {
+    private struct Function {
+        let name: String
+        let calls: [HeistPlanTraversalCall]
+    }
+
+    private var functions: [Function] = []
+
+    override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
+        guard node.signature.parameterClause.parameters.contains(where: {
+            containsHeistPlanTreeType($0.type)
+        }), let body = node.body else {
+            return .visitChildren
+        }
+
+        let callVisitor = HeistPlanFunctionCallVisitor(viewMode: .sourceAccurate)
+        callVisitor.walk(body)
+        functions.append(Function(name: node.name.text, calls: callVisitor.calls))
+        return .visitChildren
+    }
+
+    func failures(in file: SourceFileContext) -> [CustomRuleFailure] {
+        let functionNames = Set(functions.map(\.name))
+        let adjacency = Dictionary(grouping: functions.flatMap { function in
+            function.calls.compactMap { call in
+                functionNames.contains(call.callee) ? (function.name, call.callee) : nil
+            }
+        }, by: \.0).mapValues { Set($0.map(\.1)) }
+
+        return functions.flatMap { function in
+            function.calls.compactMap { call in
+                guard !call.structuralChildren.isEmpty,
+                      functionNames.contains(call.callee),
+                      closesCycle(from: call.callee, to: function.name, adjacency: adjacency) else {
+                    return nil
+                }
+                let children = call.structuralChildren.sorted().joined(separator: ", ")
+                return file.failure(
+                    at: call.syntax,
+                    message: "recursive HeistPlan/HeistStep descent outside canonical traversal",
+                    evidence: ViolationEvidence(
+                        observed: "\(function.name) -> \(call.callee) through \(children)",
+                        expectation: "HeistPlanTraversal owns recursion; production consumers provide visitor/algebra callbacks"
+                    )
+                )
+            }
+        }
+    }
+
+    private func closesCycle(
+        from start: String,
+        to target: String,
+        adjacency: [String: Set<String>]
+    ) -> Bool {
+        var pending = [start]
+        var visited: Set<String> = []
+        while let current = pending.popLast() {
+            if current == target { return true }
+            guard visited.insert(current).inserted else { continue }
+            pending.append(contentsOf: adjacency[current] ?? [])
+        }
+        return false
+    }
+}
+
+private final class HeistPlanFunctionCallVisitor: SyntaxVisitor {
+    private(set) var calls: [HeistPlanTraversalCall] = []
+
+    override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
+        .skipChildren
+    }
+
+    override func visit(_ node: FunctionCallExprSyntax) -> SyntaxVisitorContinueKind {
+        guard let callee = calledConstructorName(node.calledExpression) else { return .visitChildren }
+        let structuralChildren = node.arguments.reduce(into: Set<String>()) { children, argument in
+            let visitor = HeistPlanStructuralChildVisitor(viewMode: .sourceAccurate)
+            visitor.walk(argument.expression)
+            children.formUnion(visitor.children)
+        }
+        calls.append(HeistPlanTraversalCall(
+            callee: callee,
+            structuralChildren: structuralChildren,
+            syntax: node
+        ))
+        return .visitChildren
+    }
+}
+
+private final class HeistPlanStructuralChildVisitor: SyntaxVisitor {
+    private(set) var children: Set<String> = []
+
+    override func visit(_ node: MemberAccessExprSyntax) -> SyntaxVisitorContinueKind {
+        let name = node.declName.baseName.text
+        if heistPlanStructuralChildNames.contains(name) {
+            children.insert(name)
+        }
+        return .visitChildren
+    }
+}
+
+private let heistPlanTraversalOwnerPath =
+    "ButtonHeist/Sources/ThePlans/Model/HeistPlanTraversal.swift"
+
+private let heistPlanTreeTypeNames: Set<String> = [
+    "ConditionalStep",
+    "ForEachElementStep",
+    "ForEachStringStep",
+    "HeistPlan",
+    "HeistStep",
+    "PredicateCase",
+    "RepeatUntilStep",
+]
+
+private let heistPlanStructuralChildNames: Set<String> = [
+    "body",
+    "cases",
+    "definitions",
+    "elseBody",
+]
+
+private func isPlanTraversalCheckedProductionPath(_ path: String) -> Bool {
+    path.hasPrefix("ButtonHeist/Sources/") && path != heistPlanTraversalOwnerPath
+}
+
+private func containsHeistPlanTreeType(_ type: TypeSyntax) -> Bool {
+    type.tokens(viewMode: .sourceAccurate).contains {
+        heistPlanTreeTypeNames.contains($0.text)
     }
 }
 
@@ -873,7 +1016,8 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
         guard filePath.hasPrefix("ButtonHeist/Sources/"),
               let calledSymbol = calledConstructorName(node.calledExpression),
               let symbol = calledSymbol == "Self" ? enclosingNominalType(of: node) : calledSymbol,
-              let ownership = pipelineConstructionOwnership[symbol],
+              let descriptor = architectureCurrencyOwnershipBySymbol[symbol],
+              let ownership = descriptor.construction,
               !isAllowedPipelineConstruction(symbol: symbol, ownership: ownership, call: node) else {
             return
         }
@@ -883,7 +1027,7 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
                 at: node.calledExpression,
                 message: "pipeline value constructed outside its canonical owner",
                 evidence: ViolationEvidence(
-                    observed: "\(ownership.symbol) in \(enclosingDeclarationDescription(of: node))",
+                    observed: "\(descriptor.symbol) in \(enclosingDeclarationDescription(of: node))",
                     expectation: ownership.expectation
                 )
             )
@@ -1099,27 +1243,54 @@ private final class InsideJobArchitecturalShapeRuleVisitor: SyntaxVisitor {
 }
 
 private struct PipelineConstructionOwnership {
-    let symbol: String
     let allowedPaths: Set<String>
     let expectation: String
+}
+
+private struct ArchitectureCurrencyOwnership {
+    let symbol: String
+    let declarationOwnerPath: String?
+    let construction: PipelineConstructionOwnership?
+
+    static func declaration(_ symbol: String, ownerPath: String) -> Self {
+        Self(symbol: symbol, declarationOwnerPath: ownerPath, construction: nil)
+    }
+
+    static func construction(
+        _ symbol: String,
+        declarationOwnerPath: String? = nil,
+        allowedPaths: Set<String>,
+        expectation: String
+    ) -> Self {
+        Self(
+            symbol: symbol,
+            declarationOwnerPath: declarationOwnerPath,
+            construction: PipelineConstructionOwnership(
+                allowedPaths: allowedPaths,
+                expectation: expectation
+            )
+        )
+    }
 }
 
 private let reportPipelineOwnerPath =
     "ButtonHeist/Sources/TheScore/Reports/HeistExecutionResult+Report.swift"
 
-private let pipelineConstructionOwnership: [String: PipelineConstructionOwnership] = [
-    "HeistExecutionEvidenceRollup": PipelineConstructionOwnership(
-        symbol: "HeistExecutionEvidenceRollup",
+private let architectureCurrencyOwnership: [ArchitectureCurrencyOwnership] = [
+    .construction(
+        "HeistExecutionEvidenceRollup",
         allowedPaths: [reportPipelineOwnerPath],
         expectation: "execution evidence rollup construction stays in \(reportPipelineOwnerPath)"
     ),
-    "HeistExecutionStepReportFacts": PipelineConstructionOwnership(
-        symbol: "HeistExecutionStepReportFacts",
+    .construction(
+        "HeistExecutionStepReportFacts",
+        declarationOwnerPath: "ButtonHeist/Sources/TheScore/Reports/HeistExecutionResult+Report.swift",
         allowedPaths: [reportPipelineOwnerPath],
         expectation: "step report fact construction stays in \(reportPipelineOwnerPath)"
     ),
-    "ActionResultEvidence": PipelineConstructionOwnership(
-        symbol: "ActionResultEvidence",
+    .construction(
+        "ActionResultEvidence",
+        declarationOwnerPath: "ButtonHeist/Sources/TheScore/Reports/ActionResultEvidence.swift",
         allowedPaths: [
             "ButtonHeist/Sources/TheInsideJob/TheBrains/PostActionObservation.swift",
             "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+HeistWaitExecution.swift",
@@ -1128,21 +1299,43 @@ private let pipelineConstructionOwnership: [String: PipelineConstructionOwnershi
         ],
         expectation: "action result evidence is assembled only by its value owner or runtime evidence producers"
     ),
-    "InterfaceObservation": PipelineConstructionOwnership(
-        symbol: "InterfaceObservation",
-        allowedPaths: [
-            "ButtonHeist/Sources/TheInsideJob/TheStash/InterfaceObservation.swift",
-        ],
+    .construction(
+        "InterfaceObservation",
+        declarationOwnerPath: "ButtonHeist/Sources/TheInsideJob/TheStash/InterfaceObservation.swift",
+        allowedPaths: ["ButtonHeist/Sources/TheInsideJob/TheStash/InterfaceObservation.swift"],
         expectation: "production observations enter through InterfaceObservation.build"
     ),
-    "LiveCapture": PipelineConstructionOwnership(
-        symbol: "LiveCapture",
-        allowedPaths: [
-            "ButtonHeist/Sources/TheInsideJob/TheStash/LiveCapture.swift",
-        ],
+    .construction(
+        "LiveCapture",
+        declarationOwnerPath: "ButtonHeist/Sources/TheInsideJob/TheStash/LiveCapture.swift",
+        allowedPaths: ["ButtonHeist/Sources/TheInsideJob/TheStash/LiveCapture.swift"],
         expectation: "production live captures enter through LiveCapture.build"
     ),
+    .declaration("AccessibilityContainerKind", ownerPath: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
+    .declaration("AccessibilityPredicate", ownerPath: "ButtonHeist/Sources/ThePlans/Model/AccessibilityPredicate.swift"),
+    .declaration("AccessibilityTarget", ownerPath: "ButtonHeist/Sources/ThePlans/Model/AccessibilityTarget.swift"),
+    .declaration("ContainerPredicate", ownerPath: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
+    .declaration("ContainerPredicateActions", ownerPath: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
+    .declaration("ContainerPredicateCheck", ownerPath: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
+    .declaration("ContainerPredicateCount", ownerPath: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
+    .declaration("ContainerPredicateExpr", ownerPath: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
+    .declaration("ContainerPredicateFacts", ownerPath: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
+    .declaration("ContainerPredicateRoleFacts", ownerPath: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
+    .declaration("SemanticContainerPredicate", ownerPath: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
+    .declaration("AccessibilityTrace", ownerPath: "ButtonHeist/Sources/TheScore/Evidence/AccessibilityTrace.swift"),
+    .declaration("ChangeFact", ownerPath: "ButtonHeist/Sources/TheScore/Evidence/AccessibilityTrace+ChangeFacts.swift"),
+    .declaration("ElementMatchGraph", ownerPath: "ButtonHeist/Sources/TheScore/Core/ElementPredicate+HeistElement.swift"),
+    .declaration("InterfaceQuery", ownerPath: "ButtonHeist/Sources/TheScore/Wire/InterfaceQuery.swift"),
+    .declaration("ObservationWindow", ownerPath: "ButtonHeist/Sources/TheInsideJob/TheBrains/ObservationWindow.swift"),
+    .declaration("SettleLoopMachine", ownerPath: "ButtonHeist/Sources/TheInsideJob/TheBrains/SettleSession.swift"),
+    .declaration("SettleLoopRunner", ownerPath: "ButtonHeist/Sources/TheInsideJob/TheBrains/SettleSession.swift"),
+    .declaration("SettlePolicy", ownerPath: "ButtonHeist/Sources/TheInsideJob/TheBrains/SettleSession.swift"),
+    .declaration("InterfaceTree", ownerPath: "ButtonHeist/Sources/TheInsideJob/TheStash/InterfaceTree.swift"),
 ]
+
+private let architectureCurrencyOwnershipBySymbol = Dictionary(
+    uniqueKeysWithValues: architectureCurrencyOwnership.map { ($0.symbol, $0) }
+)
 
 private let accessibilityNotificationRawCodeOwnerPath =
     "ButtonHeist/Sources/TheInsideJob/TheTripwire/AccessibilityNotificationBus.swift"
@@ -1173,17 +1366,7 @@ private func scoreFolderAllowedImports(for path: String) -> Set<String>? {
     return nil
 }
 
-private let frameworkSandboxComponentIDs = [
-    "plans",
-    "score",
-    "dsl",
-    "doctor",
-    "runtime",
-    "testing",
-    "tools",
-    "mcp",
-    "demo",
-]
+private let frameworkSandboxComponentIDs = ButtonHeistComponent.allCases.map(\.rawValue)
 
 private struct FrameworkImportSandbox {
     let displayName: String
@@ -1365,12 +1548,13 @@ private struct ArchitectureCurrencyDeclaration {
 private func architectureCurrencyOwnershipFailures(
     in context: CustomRuleContext
 ) -> [CustomRuleFailure] {
-    let configuredPathFailures = Set(architectureCurrencyOwnerPaths.values)
+    let declarationOwnerships = architectureCurrencyOwnership.filter { $0.declarationOwnerPath != nil }
+    let configuredPathFailures = Set(declarationOwnerships.compactMap(\.declarationOwnerPath))
         .sorted()
         .compactMap { rawOwnerPath -> CustomRuleFailure? in
-            let symbols = architectureCurrencyOwnerPaths
-                .filter { $0.value == rawOwnerPath }
-                .keys
+            let symbols = declarationOwnerships
+                .filter { $0.declarationOwnerPath == rawOwnerPath }
+                .map(\.symbol)
                 .sorted()
                 .joined(separator: ", ")
             guard let ownerPath = try? RelativeFilePath(rawOwnerPath) else {
@@ -1397,18 +1581,18 @@ private func architectureCurrencyOwnershipFailures(
         }
 
     let missingOwnerPaths = Set(configuredPathFailures.map(\.path))
-    let declarationFailures = architectureCurrencyOwnerPaths
-        .sorted { $0.key < $1.key }
+    let declarationFailures = declarationOwnerships
+        .sorted { $0.symbol < $1.symbol }
         .flatMap { ownership -> [CustomRuleFailure] in
-            let (symbol, rawOwnerPath) = ownership
-            guard let ownerPath = try? RelativeFilePath(rawOwnerPath),
+            guard let rawOwnerPath = ownership.declarationOwnerPath,
+                  let ownerPath = try? RelativeFilePath(rawOwnerPath),
                   !missingOwnerPaths.contains(ownerPath) else {
                 return []
             }
 
             let declarations = context.files.flatMap { file in
                 file.nominalTypes
-                    .filter { $0.name == symbol }
+                    .filter { $0.name == ownership.symbol }
                     .map { declaration in
                         ArchitectureCurrencyDeclaration(
                             path: file.path,
@@ -1422,7 +1606,7 @@ private func architectureCurrencyOwnershipFailures(
                         path: ownerPath,
                         message: "architecture currency symbol must be declared exactly once",
                         evidence: ViolationEvidence(
-                            observed: "\(symbol) has \(declarations.count) declarations",
+                            observed: "\(ownership.symbol) has \(declarations.count) declarations",
                             expectation: "one declaration in \(rawOwnerPath)"
                         )
                     ),
@@ -1437,8 +1621,8 @@ private func architectureCurrencyOwnershipFailures(
                         location: declaration.location,
                         message: "architecture currency declared outside its canonical owner",
                         evidence: ViolationEvidence(
-                            observed: "\(symbol) in \(declaration.path.rawValue)",
-                            expectation: "\(symbol) is declared only in \(rawOwnerPath)"
+                            observed: "\(ownership.symbol) in \(declaration.path.rawValue)",
+                            expectation: "\(ownership.symbol) is declared only in \(rawOwnerPath)"
                         )
                     ),
                 ]
@@ -1447,33 +1631,6 @@ private func architectureCurrencyOwnershipFailures(
         }
     return configuredPathFailures + declarationFailures
 }
-
-private let architectureCurrencyOwnerPaths: [String: String] = [
-    "AccessibilityContainerKind": "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift",
-    "AccessibilityPredicate": "ButtonHeist/Sources/ThePlans/Model/AccessibilityPredicate.swift",
-    "AccessibilityTarget": "ButtonHeist/Sources/ThePlans/Model/AccessibilityTarget.swift",
-    "ContainerPredicate": "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift",
-    "ContainerPredicateActions": "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift",
-    "ContainerPredicateCheck": "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift",
-    "ContainerPredicateCount": "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift",
-    "ContainerPredicateExpr": "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift",
-    "ContainerPredicateFacts": "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift",
-    "ContainerPredicateRoleFacts": "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift",
-    "SemanticContainerPredicate": "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift",
-    "AccessibilityTrace": "ButtonHeist/Sources/TheScore/Evidence/AccessibilityTrace.swift",
-    "ChangeFact": "ButtonHeist/Sources/TheScore/Evidence/AccessibilityTrace+ChangeFacts.swift",
-    "ElementMatchGraph": "ButtonHeist/Sources/TheScore/Core/ElementPredicate+HeistElement.swift",
-    "ActionResultEvidence": "ButtonHeist/Sources/TheScore/Reports/ActionResultEvidence.swift",
-    "HeistExecutionStepReportFacts": "ButtonHeist/Sources/TheScore/Reports/HeistExecutionResult+Report.swift",
-    "InterfaceQuery": "ButtonHeist/Sources/TheScore/Wire/InterfaceQuery.swift",
-    "ObservationWindow": "ButtonHeist/Sources/TheInsideJob/TheBrains/ObservationWindow.swift",
-    "SettleLoopMachine": "ButtonHeist/Sources/TheInsideJob/TheBrains/SettleSession.swift",
-    "SettleLoopRunner": "ButtonHeist/Sources/TheInsideJob/TheBrains/SettleSession.swift",
-    "SettlePolicy": "ButtonHeist/Sources/TheInsideJob/TheBrains/SettleSession.swift",
-    "InterfaceObservation": "ButtonHeist/Sources/TheInsideJob/TheStash/InterfaceObservation.swift",
-    "InterfaceTree": "ButtonHeist/Sources/TheInsideJob/TheStash/InterfaceTree.swift",
-    "LiveCapture": "ButtonHeist/Sources/TheInsideJob/TheStash/LiveCapture.swift",
-]
 
 private let privateStorageBoundaryPath =
     "ButtonHeist/Sources/TheButtonHeist/Storage/PrivateStorage.swift"

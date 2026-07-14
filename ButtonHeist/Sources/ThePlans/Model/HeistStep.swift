@@ -37,114 +37,106 @@ enum HeistStepWirePayload<Plan> {
 extension HeistStepWirePayload: Sendable where Plan: Sendable {}
 extension HeistStepWirePayload: Equatable where Plan: Equatable {}
 
-extension HeistStepWirePayload: Codable where Plan: Codable {
-    private enum CodingKeys: String, CodingKey, CaseIterable {
-        case type, action, wait, conditional
-        case forEachElement = "for_each_element"
-        case forEachString = "for_each_string"
-        case repeatUntil = "repeat_until"
-        case warn, fail, heist, invoke
-    }
+enum HeistStepWireCodingKey: String, CodingKey, CaseIterable {
+    case type, action, wait, conditional
+    case forEachElement = "for_each_element"
+    case forEachString = "for_each_string"
+    case repeatUntil = "repeat_until"
+    case warn, fail, heist, invoke
+}
 
-    private enum WireType: String, Codable {
-        case action
-        case wait
-        case conditional
-        case forEachElement = "for_each_element"
-        case forEachString = "for_each_string"
-        case repeatUntil = "repeat_until"
-        case warn
-        case fail
-        case heist
-        case invoke
+enum HeistStepWireType: String, Codable {
+    case action
+    case wait
+    case conditional
+    case forEachElement = "for_each_element"
+    case forEachString = "for_each_string"
+    case repeatUntil = "repeat_until"
+    case warn
+    case fail
+    case heist
+    case invoke
 
-        var payloadKey: CodingKeys {
-            switch self {
-            case .action: return .action
-            case .wait: return .wait
-            case .conditional: return .conditional
-            case .forEachElement: return .forEachElement
-            case .forEachString: return .forEachString
-            case .repeatUntil: return .repeatUntil
-            case .warn: return .warn
-            case .fail: return .fail
-            case .heist: return .heist
-            case .invoke: return .invoke
-            }
-        }
-
-        var typeName: String {
-            switch self {
-            case .heist: return "heist group step"
-            default: return "\(rawValue) heist step"
-            }
+    var payloadKey: HeistStepWireCodingKey {
+        switch self {
+        case .action: return .action
+        case .wait: return .wait
+        case .conditional: return .conditional
+        case .forEachElement: return .forEachElement
+        case .forEachString: return .forEachString
+        case .repeatUntil: return .repeatUntil
+        case .warn: return .warn
+        case .fail: return .fail
+        case .heist: return .heist
+        case .invoke: return .invoke
         }
     }
+
+    var typeName: String {
+        switch self {
+        case .heist: return "heist group step"
+        default: return "\(rawValue) heist step"
+        }
+    }
+}
+
+struct HeistStepTaggedEnvelope {
+    let type: HeistStepWireType
+    let container: KeyedDecodingContainer<HeistStepWireCodingKey>
 
     init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        let type = try container.decode(WireType.self, forKey: .type)
+        container = try decoder.container(keyedBy: HeistStepWireCodingKey.self)
+        type = try container.decode(HeistStepWireType.self, forKey: .type)
         try decoder.rejectUnknownKeys(
-            allowed: [CodingKeys.type.stringValue, type.payloadKey.stringValue],
+            allowed: [HeistStepWireCodingKey.type.stringValue, type.payloadKey.stringValue],
             typeName: type.typeName
         )
-        switch type {
-        case .action:
-            self = .action(try container.decode(ActionStep.self, forKey: .action))
-        case .wait:
-            self = .wait(try container.decode(WaitStep.self, forKey: .wait))
-        case .conditional:
-            self = .conditional(try container.decode(ConditionalStep.self, forKey: .conditional))
-        case .forEachElement:
-            self = .forEachElement(try container.decode(ForEachElementStep.self, forKey: .forEachElement))
-        case .forEachString:
-            self = .forEachString(try container.decode(ForEachStringStep.self, forKey: .forEachString))
-        case .repeatUntil:
-            self = .repeatUntil(try container.decode(RepeatUntilStep.self, forKey: .repeatUntil))
-        case .warn:
-            self = .warn(try container.decode(WarnStep.self, forKey: .warn))
-        case .fail:
-            self = .fail(try container.decode(FailStep.self, forKey: .fail))
-        case .heist:
-            self = .heist(try container.decode(Plan.self, forKey: .heist))
-        case .invoke:
-            self = .invoke(try container.decode(HeistInvocationStep.self, forKey: .invoke))
+    }
+
+    func decode<Payload: Decodable>(_ payload: Payload.Type) throws -> Payload {
+        try container.decode(payload, forKey: type.payloadKey)
+    }
+
+    static func encode<Payload: Encodable>(
+        _ type: HeistStepWireType,
+        payload: Payload,
+        to encoder: Encoder
+    ) throws {
+        var container = encoder.container(keyedBy: HeistStepWireCodingKey.self)
+        try container.encode(type, forKey: .type)
+        try container.encode(payload, forKey: type.payloadKey)
+    }
+}
+
+extension HeistStepWirePayload: Codable where Plan: Codable {
+    init(from decoder: Decoder) throws {
+        let envelope = try HeistStepTaggedEnvelope(from: decoder)
+        switch envelope.type {
+        case .action: self = .action(try envelope.decode(ActionStep.self))
+        case .wait: self = .wait(try envelope.decode(WaitStep.self))
+        case .conditional: self = .conditional(try envelope.decode(ConditionalStep.self))
+        case .forEachElement: self = .forEachElement(try envelope.decode(ForEachElementStep.self))
+        case .forEachString: self = .forEachString(try envelope.decode(ForEachStringStep.self))
+        case .repeatUntil: self = .repeatUntil(try envelope.decode(RepeatUntilStep.self))
+        case .warn: self = .warn(try envelope.decode(WarnStep.self))
+        case .fail: self = .fail(try envelope.decode(FailStep.self))
+        case .heist: self = .heist(try envelope.decode(Plan.self))
+        case .invoke: self = .invoke(try envelope.decode(HeistInvocationStep.self))
         }
     }
 
     func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
         switch self {
-        case .action(let step):
-            try container.encode(WireType.action, forKey: .type)
-            try container.encode(step, forKey: .action)
-        case .wait(let step):
-            try container.encode(WireType.wait, forKey: .type)
-            try container.encode(step, forKey: .wait)
-        case .conditional(let step):
-            try container.encode(WireType.conditional, forKey: .type)
-            try container.encode(step, forKey: .conditional)
-        case .forEachElement(let step):
-            try container.encode(WireType.forEachElement, forKey: .type)
-            try container.encode(step, forKey: .forEachElement)
-        case .forEachString(let step):
-            try container.encode(WireType.forEachString, forKey: .type)
-            try container.encode(step, forKey: .forEachString)
-        case .repeatUntil(let step):
-            try container.encode(WireType.repeatUntil, forKey: .type)
-            try container.encode(step, forKey: .repeatUntil)
-        case .warn(let step):
-            try container.encode(WireType.warn, forKey: .type)
-            try container.encode(step, forKey: .warn)
-        case .fail(let step):
-            try container.encode(WireType.fail, forKey: .type)
-            try container.encode(step, forKey: .fail)
-        case .heist(let plan):
-            try container.encode(WireType.heist, forKey: .type)
-            try container.encode(plan, forKey: .heist)
-        case .invoke(let step):
-            try container.encode(WireType.invoke, forKey: .type)
-            try container.encode(step, forKey: .invoke)
+        case .action(let step): try HeistStepTaggedEnvelope.encode(.action, payload: step, to: encoder)
+        case .wait(let step): try HeistStepTaggedEnvelope.encode(.wait, payload: step, to: encoder)
+        case .conditional(let step): try HeistStepTaggedEnvelope.encode(.conditional, payload: step, to: encoder)
+        case .forEachElement(let step): try HeistStepTaggedEnvelope.encode(.forEachElement, payload: step, to: encoder)
+        case .forEachString(let step): try HeistStepTaggedEnvelope.encode(.forEachString, payload: step, to: encoder)
+        case .repeatUntil(let step): try HeistStepTaggedEnvelope.encode(.repeatUntil, payload: step, to: encoder)
+        case .warn(let step): try HeistStepTaggedEnvelope.encode(.warn, payload: step, to: encoder)
+        case .fail(let step): try HeistStepTaggedEnvelope.encode(.fail, payload: step, to: encoder)
+        case .heist(let plan): try HeistStepTaggedEnvelope.encode(.heist, payload: plan, to: encoder)
+        case .invoke(let step): try HeistStepTaggedEnvelope.encode(.invoke, payload: step, to: encoder)
         }
     }
 }

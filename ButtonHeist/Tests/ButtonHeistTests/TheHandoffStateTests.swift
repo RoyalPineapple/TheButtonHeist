@@ -1,21 +1,8 @@
+import ButtonHeistTestSupport
 import Network
 import XCTest
 @_spi(ButtonHeistTooling) @testable import ButtonHeist
 import TheScore
-
-private func waitUntil(
-    timeout: TimeInterval = 1.0,
-    _ condition: @escaping @ButtonHeistActor () -> Bool
-) async -> Bool {
-    let deadline = Date().addingTimeInterval(timeout)
-    while Date() < deadline {
-        if await condition() {
-            return true
-        }
-        await Task.yield()
-    }
-    return await condition()
-}
 
 @ButtonHeistActor
 private final class ManualReconnectSleeper {
@@ -799,7 +786,7 @@ final class TheHandoffStateTests: XCTestCase {
         handoff.setupAutoReconnect(filter: "127.0.0.1:1458")
         handoff.connect(to: device)
 
-        let timedOutAttemptDisconnected = await waitUntil(timeout: 1.0) {
+        let timedOutAttemptDisconnected = await eventually(within: .seconds(1)) {
             connections.count >= 2 && connections[1].disconnectCount > 0
         }
 
@@ -1621,8 +1608,8 @@ final class TheHandoffStateTests: XCTestCase {
         ))
         assertFailed(handoff.connectionPhase, failure: .serverFailure(serverError))
 
-        let interface = makeReceiptTestInterface(
-            [makeReceiptTestElement(label: "Title")],
+        let interface = makeTestInterface(
+            elements: [makeTestHeistElement(label: "Title")],
             timestamp: Date(timeIntervalSince1970: 100)
         )
         mock.onEvent?(.message(
