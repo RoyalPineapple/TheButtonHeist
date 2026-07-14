@@ -10,7 +10,7 @@ extension Actions {
     /// Unified pipeline for gestures that target a screen point:
     /// semantic selector → inflated target (if element target) → point → gesture.
     func performPointAction(
-        selection: GesturePointSelection,
+        selection: ResolvedGesturePointSelection,
         method: ActionMethod,
         action: (CGPoint) async -> Bool
     ) async -> TheSafecracker.ActionDispatchOutcome {
@@ -29,7 +29,7 @@ extension Actions {
 
     // MARK: - Synthetic Gesture Dispatch
 
-    func executeTap(_ target: TapTarget) async -> TheSafecracker.ActionDispatchOutcome {
+    func executeTap(_ target: ResolvedTapTarget) async -> TheSafecracker.ActionDispatchOutcome {
         return await performPointAction(
             selection: target.selection,
             method: .syntheticTap
@@ -38,7 +38,7 @@ extension Actions {
         }
     }
 
-    func executeLongPress(_ target: LongPressTarget) async -> TheSafecracker.ActionDispatchOutcome {
+    func executeLongPress(_ target: ResolvedLongPressTarget) async -> TheSafecracker.ActionDispatchOutcome {
         return await performPointAction(
             selection: target.selection,
             method: .syntheticLongPress
@@ -47,21 +47,22 @@ extension Actions {
         }
     }
 
-    func executeSwipe(_ request: SwipeTarget) async -> TheSafecracker.ActionDispatchOutcome {
+    func executeSwipe(_ request: ResolvedSwipeTarget) async -> TheSafecracker.ActionDispatchOutcome {
+        let duration = request.duration ?? SwipeTarget.defaultDuration
         switch request.selection {
         case .unitElement(let target, let start, let end):
             return await performElementFrameSwipe(
                 target: target,
                 start: start,
                 end: end,
-                duration: request.resolvedDuration
+                duration: duration
             )
         case .elementDirection(let target, let direction):
             return await performElementFrameSwipe(
                 target: target,
                 start: direction.defaultStart,
                 end: direction.defaultEnd,
-                duration: request.resolvedDuration
+                duration: duration
             )
         case .point(let startSelection, let destination):
             let startPoint: CGPoint
@@ -89,14 +90,14 @@ extension Actions {
                 return await performResolvedSwipe(
                     from: startPoint,
                     to: endPoint,
-                    duration: request.resolvedDuration
+                    duration: duration
                 ).withSubjectEvidence(resolvedPoint.subjectEvidence)
             }
         }
     }
 
     private func performElementFrameSwipe(
-        target: AccessibilityTarget,
+        target: ResolvedAccessibilityTarget,
         start: UnitPoint,
         end: UnitPoint,
         duration: GestureDuration
@@ -142,8 +143,8 @@ extension Actions {
         return gestureDispatchResult(method: .syntheticSwipe, diagnosticPoint: startPoint, success: success)
     }
 
-    func executeDrag(_ target: DragTarget) async -> TheSafecracker.ActionDispatchOutcome {
-        let selection: GesturePointSelection
+    func executeDrag(_ target: ResolvedDragTarget) async -> TheSafecracker.ActionDispatchOutcome {
+        let selection: ResolvedGesturePointSelection
         let end: ScreenPoint
         switch target.selection {
         case .elementToPoint(let target, let start, let endPoint):
@@ -165,7 +166,11 @@ extension Actions {
             selection: selection,
             method: .syntheticDrag
         ) { startPoint in
-            await self.safecracker.drag(from: startPoint, to: endPoint, duration: target.resolvedDuration)
+            await self.safecracker.drag(
+                from: startPoint,
+                to: endPoint,
+                duration: target.duration ?? DragTarget.defaultDuration
+            )
         }
     }
 

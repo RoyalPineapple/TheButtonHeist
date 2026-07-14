@@ -113,7 +113,7 @@ import Testing
                 name: "typeQuery",
                 parameter: .string(name: "query"),
                 body: [.action(try ActionStep(command: .typeText(
-                    text: .ref("query"),
+                    reference: "query",
                     target: .label("Search")
                 )))])
         ],
@@ -122,7 +122,7 @@ import Testing
             parameter: "item",
             body: [.invoke(HeistInvocationStep(
                 path: ["typeQuery"],
-                argument: .string(.ref("item"))
+                argument: .string(reference: "item")
             ))]
         ))]
     )
@@ -143,7 +143,7 @@ import Testing
         .decrement(.ref("field")),
         .customAction(name: "Archive", target: .ref("field")),
         .rotor(selection: .named("Links"), target: .ref("field"), direction: .next),
-        .typeText(text: .literal("milk"), target: .ref("field")),
+        .typeText(text: "milk", target: .ref("field")),
         .viewportScrollToVisible(.ref("field")),
     ]
 
@@ -237,7 +237,7 @@ import Testing
         #expect(actualWait == expectedWait, "\(name)")
     }
 
-    let predicate = AccessibilityPredicate<RootContext>.exists(.label("Home"))
+    let predicate = AccessibilityPredicate.exists(.label("Home"))
     let waitTargetCases: [(String, WaitTarget, Double?, Double)] = [
         ("default runtime timeout", WaitTarget(predicate: predicate), nil, defaultWaitTimeout),
         ("explicit runtime timeout", WaitTarget(predicate: predicate, timeout: 12), 12, 12),
@@ -361,7 +361,7 @@ import Testing
       }
     }
     """.utf8))
-    #expect(referenced == .typeText(text: .ref("item"), target: .ref("field")))
+    #expect(referenced == .typeText(reference: "item", target: .ref("field")))
 
 }
 

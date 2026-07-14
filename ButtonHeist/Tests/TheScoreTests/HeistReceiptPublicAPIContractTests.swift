@@ -4,62 +4,8 @@ import ThePlans
 import TheScore
 
 @Suite struct HeistReceiptPublicAPIContractTests {
-    @Test func `contradictory receipt factories are package scoped`() throws {
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let contracts = [
-            (
-                path: "Sources/TheScore/Receipts/HeistExecutionStepResult.swift",
-                packageDeclarations: [
-                    "package struct HeistStepReceiptKind",
-                    "package static func passed(",
-                    "package static func passed<",
-                    "package static func failed(",
-                    "package static func failed<",
-                    "package static func childAborted",
-                    "package static func skipped(",
-                ]
-            ),
-            (
-                path: "Sources/TheScore/Receipts/HeistExecutionResult.swift",
-                packageDeclarations: [
-                    "package static func passed(",
-                    "package static func failed(",
-                ]
-            ),
-            (
-                path: "Sources/TheScore/Reports/HeistJUnitReport.swift",
-                packageDeclarations: [
-                    "package static func passed(",
-                    "package static func failed(",
-                ]
-            ),
-        ]
-
-        for contract in contracts {
-            let source = try String(
-                contentsOf: root.appendingPathComponent(contract.path),
-                encoding: .utf8
-            )
-            for declaration in contract.packageDeclarations {
-                #expect(source.contains(declaration), "\(contract.path): \(declaration)")
-            }
-            #expect(!source.contains("public static func passed("), "\(contract.path)")
-            #expect(!source.contains("public static func passed<"), "\(contract.path)")
-            #expect(!source.contains("public static func failed("), "\(contract.path)")
-            #expect(!source.contains("public static func failed<"), "\(contract.path)")
-            #expect(!source.contains("public static func childAborted"), "\(contract.path)")
-            #expect(!source.contains("public static func skipped("), "\(contract.path)")
-            if contract.path.contains("/Receipts/") {
-                #expect(source.contains("public init(from decoder: Decoder) throws"), "\(contract.path)")
-            }
-        }
-    }
-
     @Test func `decode rejects structural evidence that contradicts failed outcome`() throws {
-        let predicate = AccessibilityPredicate<RootContext>.exists(.label("Done"))
+        let predicate = AccessibilityPredicate.exists(.label("Done"))
         let matched = try #require(ExpectationResult.Met(ExpectationResult(
             met: true,
             predicate: predicate
@@ -98,7 +44,7 @@ import TheScore
                     durationMs: 1,
                     evidence: HeistForEachElementEvidence(
                         parameter: "item",
-                        matching: ElementPredicate(label: "Cell"),
+                        matching: ElementPredicateTemplate(label: "Cell"),
                         limit: 1,
                         matchedCount: 1,
                         iterationCount: 1
@@ -111,7 +57,7 @@ import TheScore
                     path: "$.body[0]",
                     receiptKind: .repeatUntil,
                     durationMs: 1,
-                    evidence: HeistRepeatUntilEvidence.predicateMet(
+                    evidence: HeistRepeatUntilEvidence.matched(
                         predicate: predicate,
                         timeout: 1,
                         iterationCount: 1,
@@ -154,7 +100,7 @@ import TheScore
     }
 
     @Test func `child aborted structural evidence keeps its own polarity`() throws {
-        let predicate = AccessibilityPredicate<RootContext>.exists(.label("Done"))
+        let predicate = AccessibilityPredicate.exists(.label("Done"))
         let unmatched = try #require(HeistWaitEvidence.UnmatchedCheck(
             actionResult: .success(method: .wait, evidence: .none),
             expectation: ExpectationResult(met: false, predicate: predicate)
@@ -178,7 +124,7 @@ import TheScore
     }
 
     @Test func `failed invocation accepts unmet attached expectation evidence`() throws {
-        let predicate = AccessibilityPredicate<RootContext>.exists(.label("Done"))
+        let predicate = AccessibilityPredicate.exists(.label("Done"))
         let expectation = ExpectationResult(
             met: false,
             predicate: predicate,

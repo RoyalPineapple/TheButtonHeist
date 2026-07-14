@@ -34,8 +34,8 @@ enum SocketClientPhase: Equatable, Sendable {
 ///
 /// **Ownership.** Transport source of truth, owned by `SimpleSocketServer`.
 /// Key: `clientId: Int` (this registry allocates it via `nextClientId`).
-/// Lifetime: per socket connection. Invalidation: `remove(_:)` on close,
-/// `drain()` on teardown. It owns `NWConnection` + send-buffer state only — auth
+/// Lifetime: per socket connection. Invalidation: `removeAndCancel(_:)` on close,
+/// `cancelAll()` on teardown. It owns `NWConnection` + send-buffer state only — auth
 /// phase lives in `TheMuscleClientRegistry` under the same key, deliberately
 /// separate so transport never owns auth semantics. See `docs/ARCHITECTURE.md#state-has-one-owner`.
 struct SocketClientRegistry {
@@ -65,14 +65,17 @@ struct SocketClientRegistry {
         return clientId
     }
 
-    mutating func drain() -> [Client] {
-        let removed = Array(clients.values)
-        clients.removeAll()
-        return removed
+    @discardableResult
+    mutating func removeAndCancel(_ clientId: Int) -> Bool {
+        guard let client = clients.removeValue(forKey: clientId) else { return false }
+        client.connection.cancel()
+        return true
     }
 
-    mutating func remove(_ clientId: Int) -> Client? {
-        clients.removeValue(forKey: clientId)
+    mutating func cancelAll() {
+        let connectedClients = Array(clients.values)
+        clients.removeAll()
+        connectedClients.forEach { $0.connection.cancel() }
     }
 
     func client(_ clientId: Int) -> Client? {

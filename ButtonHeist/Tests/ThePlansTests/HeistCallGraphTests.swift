@@ -240,7 +240,7 @@ private struct EncodedInvocationStepContract: Decodable {
     #expect(rootParameter.scope.stringRefs == ["term"])
     #expect(rootParameter.environment.strings["term"] == HeistReferenceBinding.runtimeSafetyStringPlaceholder)
 
-    let invocation = try context.binding(argument: .string(.ref("query")), to: .string(name: "copy"))
+    let invocation = try context.binding(argument: .string(reference: "query"), to: .string(name: "copy"))
     #expect(invocation.invariantFailures.isEmpty)
     #expect(invocation.bindings.last == HeistReferenceBinding(reference: "copy", value: .string("milk")))
     #expect(invocation.scope.stringRefs == ["copy", "query"])

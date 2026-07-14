@@ -56,9 +56,10 @@ case "$subcommand" in
         ;;
     test)
         if [[ "${BUTTONHEIST_TUIST_SKIP_AUTO_CLEAN:-}" != "1" && "$is_help" == false ]]; then
-            PATH="$path_without_shim" "$real_tuist" generate --no-open --no-binary-cache
+            PATH="$path_without_shim" \
+                BUTTONHEIST_TUIST_BIN="$real_tuist" \
+                "$REPO_ROOT/scripts/generate-project.sh" --skip-install --no-binary-cache
             generate_status=$?
-            "$REPO_ROOT/scripts/clean-generated-projects.sh" || clean_status=$?
             if [[ "$generate_status" -ne 0 ]]; then
                 clean_status=$generate_status
             fi

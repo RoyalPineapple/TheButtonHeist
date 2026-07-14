@@ -42,6 +42,30 @@ final class TheBrainsScrollTests: XCTestCase {
         retainLiveObject(NSObject())
     }
 
+    private func resolvedTarget(
+        _ target: AccessibilityTarget
+    ) throws -> ResolvedAccessibilityTarget {
+        try target.resolve(in: .empty)
+    }
+
+    private func resolvedScrollTarget(
+        _ target: ScrollTarget
+    ) throws -> ResolvedScrollTarget {
+        try target.resolve(in: .empty)
+    }
+
+    private func resolvedScrollToEdgeTarget(
+        _ target: ScrollToEdgeTarget
+    ) throws -> ResolvedScrollToEdgeTarget {
+        try target.resolve(in: .empty)
+    }
+
+    private func resolvedScrollToVisibleTarget(
+        _ target: ScrollToVisibleTarget
+    ) throws -> ResolvedAccessibilityTarget {
+        try resolvedTarget(target.target)
+    }
+
     private func observedContentActivationPoint(
         _ point: CGPoint
     ) -> InterfaceTree.ObservedScrollContentActivationPoint {
@@ -60,13 +84,13 @@ final class TheBrainsScrollTests: XCTestCase {
         line: UInt = #line
     ) async {
         let deadline = CFAbsoluteTimeGetCurrent() + 1
-        while brains.stash.semanticObservationStream.settledWaiterCount == 0,
+        while brains.stash.semanticObservationStream.observationReplayWaiterCount == 0,
               CFAbsoluteTimeGetCurrent() < deadline {
             await Task.yield()
             guard await Task.cancellableSleep(for: .milliseconds(5)) else { break }
         }
         XCTAssertEqual(
-            brains.stash.semanticObservationStream.settledWaiterCount,
+            brains.stash.semanticObservationStream.observationReplayWaiterCount,
             1,
             file: file,
             line: line
@@ -82,7 +106,10 @@ final class TheBrainsScrollTests: XCTestCase {
             failureKind: .targetUnavailable
         )
 
-        XCTAssertEqual(TheBrains.actionErrorKind(for: result), .elementNotFound)
+        guard let failureKind = result.failureKind else {
+            return XCTFail("Expected scroll_to_visible failure kind")
+        }
+        XCTAssertEqual(TheBrains.actionErrorKind(for: failureKind), .elementNotFound)
     }
 
     func testExploreScreenReturnsNoProofWhenInitialSettlementIsCancelled() async {
@@ -153,7 +180,7 @@ final class TheBrainsScrollTests: XCTestCase {
             awaitFrame: { now = 101 }
         )
         let inflatedTarget = ElementInflation.InflatedElementTarget(
-            target: literalTarget(ElementPredicate(label: "Deadline Target")),
+            target: try resolvedTarget(.label("Deadline Target")),
             treeElement: treeElement,
             liveTarget: liveTarget,
             deadline: SemanticObservationDeadline(start: 100, timeoutSeconds: 1),
@@ -171,8 +198,11 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(failure.failedStep, .timedOut)
         XCTAssertEqual(failure.failureKind, .timeout)
         let dispatchOutcome = failure.actionDispatchOutcome(commandMethod: .activate)
-        XCTAssertEqual(dispatchOutcome.failureKind, .timeout)
-        XCTAssertEqual(TheBrains.actionErrorKind(for: dispatchOutcome), .timeout)
+        guard let failureKind = dispatchOutcome.failureKind else {
+            return XCTFail("Expected timed-out dispatch failure kind")
+        }
+        XCTAssertEqual(failureKind, .timeout)
+        XCTAssertEqual(TheBrains.actionErrorKind(for: failureKind), .timeout)
     }
 
     func testExploreScreenSkipsUIPageViewControllerQueuingScrollView() async throws {
@@ -1226,7 +1256,7 @@ final class TheBrainsScrollTests: XCTestCase {
 
         let state = await brains.navigation.elementInflation.stateAfterReveal(
             entry,
-            target: literalTarget(ElementPredicate(label: "Settings")),
+            target: try resolvedTarget(.label("Settings")),
             deadline: deadline,
             resolution: ActionSubjectResolution(origin: .known),
             transaction: .init()
@@ -1259,10 +1289,11 @@ final class TheBrainsScrollTests: XCTestCase {
             knownTargetAttempts += 1
             return nil
         }
+        let target = try resolvedTarget(AccessibilityTarget.label("Settings"))
         let revealTask = Task { @MainActor in
             let state = await self.brains.navigation.elementInflation.stateAfterReveal(
                 entry,
-                target: literalTarget(ElementPredicate(label: "Settings")),
+                target: target,
                 deadline: self.semanticRevealDeadline(),
                 resolution: ActionSubjectResolution(origin: .known),
                 transaction: .init()
@@ -1278,14 +1309,16 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(scrollView.setContentOffsetAnimations, [])
     }
 
-    func testScrollToVisibleUnknownTargetUsesCurrentSemanticDiagnostics() async {
+    func testScrollToVisibleUnknownTargetUsesCurrentSemanticDiagnostics() async throws {
         let visible = makeElement(label: "Visible")
         brains.stash.installScreenForTesting(.makeForTests(
             elements: [(visible, HeistId(rawValue: "visible_element"))]
         ))
 
         let result = await brains.navigation.executeScrollToVisible(
-            ScrollToVisibleTarget(target: literalTarget(ElementPredicate(label: "Missing Button")))
+            target: try resolvedScrollToVisibleTarget(
+                ScrollToVisibleTarget(target: .label("Missing Button"))
+            )
         )
 
         XCTAssertFalse(result.success)
@@ -1297,7 +1330,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertFalse(result.message?.contains("get_interface") == true)
     }
 
-    func testElementInflationNamesNoRevealPathFailure() async {
+    func testElementInflationNamesNoRevealPathFailure() async throws {
         let visible = makeElement(label: "Visible")
         let offscreen = makeElement(label: "Offscreen")
         installScreenWithOffViewportEntry(
@@ -1306,7 +1339,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
 
         let result = await brains.navigation.elementInflation.inflate(
-            for: literalTarget(ElementPredicate(label: "Offscreen")),
+            for: try resolvedTarget(.label("Offscreen")),
             method: .activate
         )
 
@@ -1322,7 +1355,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertTrue(failure.message.contains("has no scroll membership"))
     }
 
-    func testInflationRecordsDiscoveredOriginWhenExplorationFindsTarget() async {
+    func testInflationRecordsDiscoveredOriginWhenExplorationFindsTarget() async throws {
         let baselineObject = retainedLiveObject()
         brains.stash.installScreenForTesting(.makeForTests([
             .init(makeElement(label: "Home"), heistId: "home", object: baselineObject),
@@ -1356,7 +1389,7 @@ final class TheBrainsScrollTests: XCTestCase {
         }
 
         let result = await brains.navigation.elementInflation.inflate(
-            for: literalTarget(ElementPredicate(label: "Discovered", traits: [.button])),
+            for: try resolvedTarget(.label("Discovered").and(.traits([.button]))),
             method: .activate
         )
 
@@ -1370,7 +1403,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
     }
 
-    func testInflationUsesNextSettledVisibleEvidenceForCommittedTarget() async {
+    func testInflationUsesNextSettledVisibleEvidenceForCommittedTarget() async throws {
         brains.stopSemanticObservation()
         let targetId: HeistId = "coke_button"
         let staleKnownTarget = makeElement(label: "Coke", traits: .button)
@@ -1404,10 +1437,11 @@ final class TheBrainsScrollTests: XCTestCase {
             brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in nil }
         }
 
+        let target = try resolvedTarget(AccessibilityTarget.label("Coke").and(.traits([.button])))
         let resultBox = InflationResultBox()
         let inflation = Task { @MainActor in
             resultBox.value = await self.brains.navigation.elementInflation.inflate(
-                for: literalTarget(ElementPredicate(label: "Coke", traits: [.button])),
+                for: target,
                 method: .activate
             )
         }
@@ -1425,7 +1459,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(inflatedTarget.liveTarget.activationPoint.y, visibleFrame.midY, accuracy: 0.01)
     }
 
-    func testRevealRetryResolvesTargetFromNextSettledObservation() async {
+    func testRevealRetryResolvesTargetFromNextSettledObservation() async throws {
         brains.stopSemanticObservation()
         let targetId: HeistId = "coke_button"
         let overviewVisible = makeElement(label: "Combo Overview", traits: .header)
@@ -1461,10 +1495,11 @@ final class TheBrainsScrollTests: XCTestCase {
             brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in nil }
         }
 
+        let target = try resolvedTarget(AccessibilityTarget.label("Coke").and(.traits([.button])))
         let resultBox = InflationResultBox()
         let inflation = Task { @MainActor in
             resultBox.value = await self.brains.navigation.elementInflation.inflate(
-                for: literalTarget(ElementPredicate(label: "Coke", traits: [.button])),
+                for: target,
                 method: .activate
             )
         }
@@ -1485,7 +1520,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertTrue(inflatedTarget.liveTarget.object === arrivedObject)
     }
 
-    func testRevealRetryAttemptsFreshKnownTargetOnlyOnce() async {
+    func testRevealRetryAttemptsFreshKnownTargetOnlyOnce() async throws {
         brains.stopSemanticObservation()
         let overviewVisible = makeElement(label: "Combo Overview", traits: .header)
         let staleCoke = makeElement(label: "Coke", traits: .button)
@@ -1515,10 +1550,11 @@ final class TheBrainsScrollTests: XCTestCase {
             brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in nil }
         }
 
+        let target = try resolvedTarget(AccessibilityTarget.label("Coke").and(.traits([.button])))
         let resultBox = InflationResultBox()
         let inflation = Task { @MainActor in
             resultBox.value = await self.brains.navigation.elementInflation.inflate(
-                for: literalTarget(ElementPredicate(label: "Coke", traits: [.button])),
+                for: target,
                 method: .activate
             )
         }
@@ -1539,7 +1575,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(failure.failedStep, .cancelled)
     }
 
-    func testRevealRetryFailsNoRevealPathAtActionDeadline() async {
+    func testRevealRetryFailsNoRevealPathAtActionDeadline() async throws {
         let overviewVisible = makeElement(label: "Combo Overview", traits: .header)
         let staleCoke = makeElement(label: "Coke", traits: .button)
         installScreenWithOffViewportEntry(
@@ -1554,7 +1590,7 @@ final class TheBrainsScrollTests: XCTestCase {
         }
 
         let result = await brains.navigation.elementInflation.inflate(
-            for: literalTarget(ElementPredicate(label: "Coke", traits: [.button])),
+            for: try resolvedTarget(.label("Coke").and(.traits([.button]))),
             method: .activate
         )
 
@@ -1568,7 +1604,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertTrue(failure.message.contains("Coke"))
     }
 
-    func testStaleLiveObjectRawRefreshDoesNotPromoteSemanticTruth() async {
+    func testStaleLiveObjectRawRefreshDoesNotPromoteSemanticTruth() async throws {
         brains.stopSemanticObservation()
         let targetId = HeistId(rawValue: "gone_target")
         let staleTarget = AccessibilityElement.make(
@@ -1594,10 +1630,11 @@ final class TheBrainsScrollTests: XCTestCase {
             )
         ])
 
+        let target = try resolvedTarget(AccessibilityTarget.label("Gone Target").and(.traits([.button])))
         let resultBox = InflationResultBox()
         let inflation = Task { @MainActor in
             resultBox.value = await self.brains.navigation.elementInflation.inflate(
-                for: literalTarget(ElementPredicate(label: "Gone Target", traits: [.button])),
+                for: target,
                 method: .activate
             )
         }
@@ -1619,7 +1656,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(failure.failedStep, .cancelled)
     }
 
-    func testStaleLiveObjectRefreshResolvesNextSettledObservation() async {
+    func testStaleLiveObjectRefreshResolvesNextSettledObservation() async throws {
         brains.stopSemanticObservation()
         let targetId = HeistId(rawValue: "recycled_target")
         let staleFrame = CGRect(x: 40, y: 120, width: 240, height: 44)
@@ -1647,10 +1684,11 @@ final class TheBrainsScrollTests: XCTestCase {
                 object: recoveredObject
             )
         ])
+        let target = try resolvedTarget(AccessibilityTarget.label("Recycled Target").and(.traits([.button])))
         let resultBox = InflationResultBox()
         let inflation = Task { @MainActor in
             resultBox.value = await self.brains.navigation.elementInflation.inflate(
-                for: literalTarget(ElementPredicate(label: "Recycled Target", traits: [.button])),
+                for: target,
                 method: .scrollToVisible
             )
         }
@@ -1681,7 +1719,7 @@ final class TheBrainsScrollTests: XCTestCase {
     func testStaleSemanticTargetRefreshPreservesTypedWitness() async throws {
         brains.stopSemanticObservation()
         let targetId: HeistId = "restored_target"
-        let target = literalTarget(ElementPredicate(label: "Restored Target", traits: [.button]))
+        let target = try resolvedTarget(AccessibilityTarget.label("Restored Target").and(.traits([.button])))
         let originalScreen = InterfaceObservation.makeForTests([
             .init(
                 makeElement(label: "Restored Target", traits: .button),
@@ -1740,7 +1778,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
     }
 
-    func testActivationPointPlacementAddsTypedAdjustment() async {
+    func testActivationPointPlacementAddsTypedAdjustment() async throws {
         brains.stopSemanticObservation()
         let targetId: HeistId = "placed_target"
         let scrollView = RecordingScrollView(frame: ScreenMetrics.current.bounds)
@@ -1789,10 +1827,11 @@ final class TheBrainsScrollTests: XCTestCase {
         }
         XCTAssertTrue(brains.stash.liveScrollView(for: committed) === scrollView)
 
+        let target = try resolvedTarget(AccessibilityTarget.label("Placed Target").and(.traits([.button])))
         let resultBox = InflationResultBox()
         let inflation = Task { @MainActor in
             resultBox.value = await self.brains.navigation.elementInflation.inflate(
-                for: literalTarget(ElementPredicate(label: "Placed Target", traits: [.button])),
+                for: target,
                 method: .activate
             )
         }
@@ -1832,7 +1871,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
     }
 
-    func testOffViewportTargetWithoutLiveScrollParentFailsNoRevealPath() async {
+    func testOffViewportTargetWithoutLiveScrollParentFailsNoRevealPath() async throws {
         let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
         let visible = makeElement(label: "Visible")
@@ -1848,7 +1887,7 @@ final class TheBrainsScrollTests: XCTestCase {
             includeLiveScrollAncestor: false
         )
         let result = await brains.navigation.elementInflation.inflate(
-            for: literalTarget(ElementPredicate(label: "Offscreen")),
+            for: try resolvedTarget(.label("Offscreen")),
             method: .scrollToVisible
         )
 
@@ -1866,7 +1905,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertTrue(failure.message.contains("available live scroll containers: path=[0]"), failure.message)
     }
 
-    func testVisibleTargetOutsideViewportWithoutLiveScrollParentFailsGeometryNotActionable() async {
+    func testVisibleTargetOutsideViewportWithoutLiveScrollParentFailsGeometryNotActionable() async throws {
         let elementFrame = CGRect(
             x: 24,
             y: ScreenMetrics.current.bounds.maxY + 80,
@@ -1896,7 +1935,7 @@ final class TheBrainsScrollTests: XCTestCase {
         ))
 
         let result = await brains.navigation.elementInflation.inflate(
-            for: literalTarget(ElementPredicate(label: "Escaped")),
+            for: try resolvedTarget(.label("Escaped")),
             method: .scrollToVisible
         )
 
@@ -1907,7 +1946,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertTrue(failure.message.contains("element inflation failed [noRevealPath]"))
     }
 
-    func testInflationRequiresActivationPointOnScreenWhenFrameIntersectsViewport() async {
+    func testInflationRequiresActivationPointOnScreenWhenFrameIntersectsViewport() async throws {
         let elementFrame = CGRect(x: 24, y: -24, width: 180, height: 44)
         let object = UIButton(type: .system)
         object.accessibilityLabel = "Escaped"
@@ -1933,7 +1972,7 @@ final class TheBrainsScrollTests: XCTestCase {
         ))
 
         let result = await brains.navigation.elementInflation.inflate(
-            for: literalTarget(ElementPredicate(label: "Escaped")),
+            for: try resolvedTarget(.label("Escaped")),
             method: .scrollToVisible
         )
 
@@ -1944,7 +1983,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertTrue(failure.message.contains("element inflation failed [geometryNotActionable]"))
     }
 
-    func testElementActionsConsumeElementInflationFailureBeforeDispatch() async {
+    func testElementActionsConsumeElementInflationFailureBeforeDispatch() async throws {
         let visible = makeElement(label: "Visible")
         let offscreen = makeElement(label: "Offscreen")
         installScreenWithOffViewportEntry(
@@ -1954,7 +1993,7 @@ final class TheBrainsScrollTests: XCTestCase {
         var didDispatch = false
 
         let result = await brains.actions.performElementAction(
-            target: literalTarget(ElementPredicate(label: "Offscreen")),
+            target: try resolvedTarget(.label("Offscreen")),
             method: .activate,
             requireInteractive: false
         ) { _ in
@@ -1968,7 +2007,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertTrue(result.message?.contains("element inflation failed [noRevealPath]") == true)
     }
 
-    func testElementActionPreservesFinalDispatchSubjectResolution() async {
+    func testElementActionPreservesFinalDispatchSubjectResolution() async throws {
         let frame = CGRect(x: 40, y: 120, width: 240, height: 44)
         let element = makeElement(
             label: "Refreshable",
@@ -1981,7 +2020,7 @@ final class TheBrainsScrollTests: XCTestCase {
         ])
         brains.stash.installScreenForTesting(screen)
         brains.stash.nextVisibleRefreshScreenForTesting = screen
-        let target = literalTarget(ElementPredicate(label: "Refreshable", traits: [.button]))
+        let target = try resolvedTarget(AccessibilityTarget.label("Refreshable").and(.traits([.button])))
         let finalResolution = ActionSubjectResolution(
             origin: .known,
             adjustments: [.staleTargetRefresh]
@@ -2033,7 +2072,9 @@ final class TheBrainsScrollTests: XCTestCase {
         await brains.tripwire.yieldFrames(3)
         brains.stash.clearInstalledVisibleRefreshScreenForTesting()
 
-        let result = await brains.executeRuntimeAction(.activate(literalTarget(ElementPredicate(label: "Old Offscreen"))))
+        let result = await brains.executeRuntimeAction(
+            .activate(try resolvedTarget(.label("Old Offscreen")))
+        )
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .activate)
@@ -2045,7 +2086,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
     }
 
-    func testTargetDiscoveryMissDoesNotRevealStaleOffViewportTarget() async {
+    func testTargetDiscoveryMissDoesNotRevealStaleOffViewportTarget() async throws {
         let staleScrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         staleScrollView.contentSize = CGSize(width: 320, height: 1_600)
         let staleVisible = makeElement(label: "Root Visible")
@@ -2074,7 +2115,7 @@ final class TheBrainsScrollTests: XCTestCase {
         }
 
         let result = await brains.navigation.elementInflation.inflate(
-            for: literalTarget(ElementPredicate(label: "Controls Demo", traits: [.button])),
+            for: try resolvedTarget(.label("Controls Demo").and(.traits([.button]))),
             method: .activate
         )
 
@@ -2090,7 +2131,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
     }
 
-    func testActionTargetDiscoveryStartsFromCurrentVisibleScreen() async {
+    func testActionTargetDiscoveryStartsFromCurrentVisibleScreen() async throws {
         let staleVisible = makeElement(label: "Root Visible")
         let staleRootButton = makeElement(label: "Controls Demo", traits: .button)
         let staleRootScreen = makeScreenWithOffViewportEntry(
@@ -2115,7 +2156,7 @@ final class TheBrainsScrollTests: XCTestCase {
         brains.stash.nextVisibleRefreshScreenForTesting = currentScreen
 
         let discovered = await brains.navigation.elementInflation.exploration.discoverTarget(
-            literalTarget(ElementPredicate(label: "Controls Demo", traits: [.button]))
+            try resolvedTarget(.label("Controls Demo").and(.traits([.button])))
         )
 
         XCTAssertNotNil(discovered?.screen.findElement(heistId: "current_controls_header"))
@@ -2163,6 +2204,7 @@ final class TheBrainsScrollTests: XCTestCase {
         }).first else {
             throw XCTSkip("Parser did not expose the test scroll view as a scroll container")
         }
+        brains.stash.semanticObservationStream.commitVisibleObservationForTesting(visibleScreen)
 
         let staleRootRow = makeElement(label: "Auto-Settle Fixtures", traits: .button)
         let staleEntry = InterfaceTree.Element(
@@ -2186,7 +2228,9 @@ final class TheBrainsScrollTests: XCTestCase {
         ) else {
             return XCTFail("Expected word-list exploration to settle")
         }
-        _ = brains.stash.semanticObservationStream.commitExploredDiscoveryObservation(exploration)
+        guard brains.stash.semanticObservationStream.commitExploredDiscoveryObservation(exploration) != nil else {
+            return XCTFail("Expected current-viewport exploration to produce committable discovery evidence")
+        }
 
         let labels = brains.stash.discoveryInterface().projectedElements.compactMap(\.label)
         XCTAssertGreaterThan(exploration.manifest.scrollCount, 0, "Expected discovery to scroll the word list")
@@ -2235,7 +2279,9 @@ final class TheBrainsScrollTests: XCTestCase {
         _ = brains.stash.refreshLiveCapture()
 
         let result = await brains.navigation.executeScrollToVisible(
-            ScrollToVisibleTarget(target: literalTarget(ElementPredicate(label: "Top Target")))
+            target: try resolvedScrollToVisibleTarget(
+                ScrollToVisibleTarget(target: .label("Top Target"))
+            )
         )
 
         XCTAssertTrue(result.success, "Expected scroll_to_visible to discover the target above; got \(result)")
@@ -2245,7 +2291,7 @@ final class TheBrainsScrollTests: XCTestCase {
         })
     }
 
-    func testKnownSemanticRevealIgnoresStaleDetachedScrollView() async {
+    func testKnownSemanticRevealIgnoresStaleDetachedScrollView() async throws {
         let staleScrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         staleScrollView.contentSize = CGSize(width: 320, height: 1_600)
         let visible = makeElement(label: "Visible")
@@ -2254,7 +2300,9 @@ final class TheBrainsScrollTests: XCTestCase {
         ))
 
         let result = await brains.navigation.executeScrollToVisible(
-            ScrollToVisibleTarget(target: literalTarget(ElementPredicate(label: "Offscreen")))
+            target: try resolvedScrollToVisibleTarget(
+                ScrollToVisibleTarget(target: .label("Offscreen"))
+            )
         )
 
         XCTAssertFalse(result.success)
@@ -2266,7 +2314,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
     }
 
-    func testStaleKnownRevealWaitsForSettledRecoveryWithoutRediscovery() async {
+    func testStaleKnownRevealWaitsForSettledRecoveryWithoutRediscovery() async throws {
         brains.stopSemanticObservation()
         let staleScrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         staleScrollView.contentSize = CGSize(width: 320, height: 1_600)
@@ -2309,10 +2357,11 @@ final class TheBrainsScrollTests: XCTestCase {
             return nil
         }
 
+        let target = try resolvedTarget(AccessibilityTarget.label("Target"))
         let resultBox = InflationResultBox()
         let inflation = Task { @MainActor in
             resultBox.value = await self.brains.navigation.elementInflation.inflate(
-                for: literalTarget(ElementPredicate(label: "Target")),
+                for: target,
                 method: .scrollToVisible
             )
         }
@@ -2331,7 +2380,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(inflatedTarget.liveTarget.activationPoint.y, recoveredFrame.midY, accuracy: 0.01)
     }
 
-    func testKnownTargetWithMissingLiveScrollAncestorRecapturesVisibleActionableTarget() async {
+    func testKnownTargetWithMissingLiveScrollAncestorRecapturesVisibleActionableTarget() async throws {
         brains.stopSemanticObservation()
         let targetId: HeistId = "known_coke_button"
         let staleScrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
@@ -2392,10 +2441,11 @@ final class TheBrainsScrollTests: XCTestCase {
             return nil
         }
 
+        let target = try resolvedTarget(AccessibilityTarget.label("Coke").and(.traits([.button])))
         let resultBox = InflationResultBox()
         let inflation = Task { @MainActor in
             resultBox.value = await self.brains.navigation.elementInflation.inflate(
-                for: literalTarget(ElementPredicate(label: "Coke", traits: [.button])),
+                for: target,
                 method: .activate
             )
         }
@@ -2416,7 +2466,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertFalse(brains.stash.liveScrollView(for: inflatedTarget.treeElement) === staleScrollView)
     }
 
-    func testScrollReturnsReasonInsteadOfRevealingOffViewportTarget() async {
+    func testScrollReturnsReasonInsteadOfRevealingOffViewportTarget() async throws {
         // Contract: Scroll either reveals the requested target or returns a reason it cannot.
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
@@ -2433,7 +2483,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
 
         let result = await brains.navigation.executeScroll(
-            ScrollTarget(target: literalTarget(ElementPredicate(label: "Offscreen")), direction: .down)
+            try resolvedScrollTarget(ScrollTarget(target: .label("Offscreen"), direction: .down))
         )
 
         XCTAssertFalse(result.success)
@@ -2447,7 +2497,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertTrue(result.message?.contains("scroll_to_visible") == true)
     }
 
-    func testScrollToEdgeReturnsReasonInsteadOfRevealingOffViewportTarget() async {
+    func testScrollToEdgeReturnsReasonInsteadOfRevealingOffViewportTarget() async throws {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
         let visible = makeElement(label: "Visible")
@@ -2463,7 +2513,9 @@ final class TheBrainsScrollTests: XCTestCase {
         )
 
         let result = await brains.navigation.executeScrollToEdge(
-            ScrollToEdgeTarget(target: literalTarget(ElementPredicate(label: "Offscreen")), edge: .bottom)
+            try resolvedScrollToEdgeTarget(
+                ScrollToEdgeTarget(target: .label("Offscreen"), edge: .bottom)
+            )
         )
 
         XCTAssertFalse(result.success)
@@ -2477,7 +2529,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertTrue(result.message?.contains("scroll_to_visible") == true)
     }
 
-    func testScrollWithoutElementUsesSingleVisibleContainerAndDefaultsDown() async {
+    func testScrollWithoutElementUsesSingleVisibleContainerAndDefaultsDown() async throws {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
         let container = makeScrollableContainer(contentSize: scrollView.contentSize, frame: scrollView.frame)
@@ -2489,13 +2541,15 @@ final class TheBrainsScrollTests: XCTestCase {
             scrollableContainerViewsByPath: [TreePath([0]): .init(view: scrollView)]
         ))
 
-        let result = await brains.navigation.executeScroll(ScrollTarget())
+        let result = await brains.navigation.executeScroll(
+            try resolvedScrollTarget(ScrollTarget())
+        )
 
         XCTAssertTrue(result.success, "Expected default scroll to pick the only visible container: \(String(describing: result.message))")
         XCTAssertGreaterThan(scrollView.contentOffset.y, 0)
     }
 
-    func testScrollToEdgeWithoutElementDefaultsTop() async {
+    func testScrollToEdgeWithoutElementDefaultsTop() async throws {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
         scrollView.contentOffset.y = 600
@@ -2508,13 +2562,15 @@ final class TheBrainsScrollTests: XCTestCase {
             scrollableContainerViewsByPath: [TreePath([0]): .init(view: scrollView)]
         ))
 
-        let result = await brains.navigation.executeScrollToEdge(ScrollToEdgeTarget())
+        let result = await brains.navigation.executeScrollToEdge(
+            try resolvedScrollToEdgeTarget(ScrollToEdgeTarget())
+        )
 
         XCTAssertTrue(result.success, "Expected default edge scroll to pick the only visible container: \(String(describing: result.message))")
         XCTAssertEqual(scrollView.contentOffset.y, 0, accuracy: 0.01)
     }
 
-    func testScrollToEdgeAlreadyAtRequestedEdgeSucceeds() async {
+    func testScrollToEdgeAlreadyAtRequestedEdgeSucceeds() async throws {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
         let container = makeScrollableContainer(contentSize: scrollView.contentSize, frame: scrollView.frame)
@@ -2526,13 +2582,15 @@ final class TheBrainsScrollTests: XCTestCase {
             scrollableContainerViewsByPath: [TreePath([0]): .init(view: scrollView)]
         ))
 
-        let result = await brains.navigation.executeScrollToEdge(ScrollToEdgeTarget(edge: .top))
+        let result = await brains.navigation.executeScrollToEdge(
+            try resolvedScrollToEdgeTarget(ScrollToEdgeTarget(edge: .top))
+        )
 
         XCTAssertTrue(result.success, "Expected already-at-edge scroll to be idempotent: \(String(describing: result.message))")
         XCTAssertEqual(scrollView.contentOffset.y, 0, accuracy: 0.01)
     }
 
-    func testScrollUsesNamedContainer() async {
+    func testScrollUsesNamedContainer() async throws {
         let firstScrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         firstScrollView.contentSize = CGSize(width: 320, height: 1_600)
         let secondScrollView = UIScrollView(frame: CGRect(x: 0, y: 420, width: 320, height: 400))
@@ -2557,7 +2615,9 @@ final class TheBrainsScrollTests: XCTestCase {
         ))
 
         let result = await brains.navigation.executeScroll(
-            ScrollTarget(selection: .container("second_scroll"), direction: .down)
+            try resolvedScrollTarget(
+                ScrollTarget(selection: .container("second_scroll"), direction: .down)
+            )
         )
 
         XCTAssertTrue(result.success, "Expected named container scroll to succeed: \(String(describing: result.message))")
@@ -2565,7 +2625,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertGreaterThan(secondScrollView.contentOffset.y, 0)
     }
 
-    func testScrollToEdgeUsesNamedContainer() async {
+    func testScrollToEdgeUsesNamedContainer() async throws {
         let firstScrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         firstScrollView.contentSize = CGSize(width: 320, height: 1_600)
         firstScrollView.contentOffset.y = 500
@@ -2592,7 +2652,9 @@ final class TheBrainsScrollTests: XCTestCase {
         ))
 
         let result = await brains.navigation.executeScrollToEdge(
-            ScrollToEdgeTarget(selection: .container("second_scroll"), edge: .top)
+            try resolvedScrollToEdgeTarget(
+                ScrollToEdgeTarget(selection: .container("second_scroll"), edge: .top)
+            )
         )
 
         XCTAssertTrue(result.success, "Expected named container edge scroll to succeed: \(String(describing: result.message))")
@@ -2600,7 +2662,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(secondScrollView.contentOffset.y, 0, accuracy: 0.01)
     }
 
-    func testScrollUsesPathKeyedContainerWhenRepeatedSameSizedScrollViews() async {
+    func testScrollUsesPathKeyedContainerWhenRepeatedSameSizedScrollViews() async throws {
         let firstScrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         firstScrollView.contentSize = CGSize(width: 320, height: 1_600)
         let secondScrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
@@ -2630,7 +2692,9 @@ final class TheBrainsScrollTests: XCTestCase {
         ))
 
         let result = await brains.navigation.executeScroll(
-            ScrollTarget(selection: .container("second_repeated_scroll"), direction: .down)
+            try resolvedScrollTarget(
+                ScrollTarget(selection: .container("second_repeated_scroll"), direction: .down)
+            )
         )
 
         XCTAssertTrue(result.success, "Expected path-keyed named container scroll to succeed: \(String(describing: result.message))")
@@ -2638,7 +2702,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertGreaterThan(secondScrollView.contentOffset.y, 0)
     }
 
-    func testScrollWithoutElementReportsAmbiguousContainers() async {
+    func testScrollWithoutElementReportsAmbiguousContainers() async throws {
         let firstContainer = makeScrollableContainer()
         let secondContainer = makeScrollableContainer(frame: CGRect(x: 0, y: 420, width: 320, height: 400))
         installScrollableContainers([firstContainer, secondContainer])
@@ -2655,7 +2719,9 @@ final class TheBrainsScrollTests: XCTestCase {
             firstResponderHeistId: nil,
         ))
 
-        let result = await brains.navigation.executeScroll(ScrollTarget())
+        let result = await brains.navigation.executeScroll(
+            try resolvedScrollTarget(ScrollTarget())
+        )
 
         XCTAssertFalse(result.success)
         XCTAssertTrue(result.message?.contains("ambiguous") == true)
@@ -2664,7 +2730,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertFalse(result.message?.contains("second_scroll") == true)
     }
 
-    func testScrollToVisibleVisibleAmbiguousMatcherFailsClosed() async {
+    func testScrollToVisibleVisibleAmbiguousMatcherFailsClosed() async throws {
         let first = makeElement(label: "Duplicate", traits: .button)
         let second = makeElement(label: "Duplicate", traits: .button)
         let firstEntry = InterfaceTree.Element(
@@ -2694,7 +2760,9 @@ final class TheBrainsScrollTests: XCTestCase {
         ))
 
         let result = await brains.navigation.executeScrollToVisible(
-            ScrollToVisibleTarget(target: literalTarget(ElementPredicate(label: "Duplicate")))
+            target: try resolvedScrollToVisibleTarget(
+                ScrollToVisibleTarget(target: .label("Duplicate"))
+            )
         )
 
         XCTAssertFalse(result.success)
@@ -2722,7 +2790,9 @@ final class TheBrainsScrollTests: XCTestCase {
         await brains.tripwire.yieldFrames(3)
 
         let result = await brains.navigation.executeScrollToVisible(
-            ScrollToVisibleTarget(target: literalTarget(ElementPredicate(label: "Save"), ordinal: 3))
+            target: try resolvedScrollToVisibleTarget(
+                ScrollToVisibleTarget(target: .target(.label("Save"), ordinal: 3))
+            )
         )
 
         XCTAssertFalse(result.success)
@@ -2761,7 +2831,7 @@ final class TheBrainsScrollTests: XCTestCase {
         })?.path else {
             throw XCTSkip("No live hierarchy available for scroll_to_visible post-reveal regression test")
         }
-        if !brains.stash.matchScreenElements(ElementPredicate(label: "Jump Target"), limit: 1).isEmpty {
+        if !brains.stash.matchScreenElements(ElementPredicate.label("Jump Target"), limit: 1).isEmpty {
             throw XCTSkip("Parser exposed offscreen scroll content before semantic reveal")
         }
 
@@ -2790,7 +2860,7 @@ final class TheBrainsScrollTests: XCTestCase {
         brains.navigation.elementInflation.exploration.discoverTarget = { _ in nil }
 
         let result = await brains.navigation.elementInflation.inflate(
-            for: literalTarget(ElementPredicate(label: "Jump Target")),
+            for: try resolvedTarget(.label("Jump Target")),
             method: .scrollToVisible
         )
 
@@ -2804,7 +2874,7 @@ final class TheBrainsScrollTests: XCTestCase {
 
     // MARK: - Element Scroll Target Resolution
 
-    func testScrollWithVisibleElementReportsMissingScrollableAncestor() async {
+    func testScrollWithVisibleElementReportsMissingScrollableAncestor() async throws {
         let treeElement = InterfaceTree.Element(
             heistId: "item",
             scrollMembership: nil,
@@ -2818,7 +2888,7 @@ final class TheBrainsScrollTests: XCTestCase {
         ))
 
         let result = await brains.navigation.executeScroll(
-            ScrollTarget(target: literalTarget(ElementPredicate(label: "Item")), direction: .down)
+            try resolvedScrollTarget(ScrollTarget(target: .label("Item"), direction: .down))
         )
 
         XCTAssertFalse(result.success)
@@ -2829,7 +2899,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
     }
 
-    func testScrollWithVisibleElementReportsAxisMismatch() async {
+    func testScrollWithVisibleElementReportsAxisMismatch() async throws {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 200))
         scrollView.contentSize = CGSize(width: 400, height: 200)
 
@@ -2841,7 +2911,7 @@ final class TheBrainsScrollTests: XCTestCase {
         installLiveScrollTarget(treeElement, scrollView: scrollView, containerName: "axis_scroll")
 
         let result = await brains.navigation.executeScroll(
-            ScrollTarget(target: literalTarget(ElementPredicate(label: "Item")), direction: .down)
+            try resolvedScrollTarget(ScrollTarget(target: .label("Item"), direction: .down))
         )
 
         XCTAssertFalse(result.success)
@@ -2853,7 +2923,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
     }
 
-    func testScrollWithVisibleElementUsesElementScrollViewWhenAxisMatches() async {
+    func testScrollWithVisibleElementUsesElementScrollViewWhenAxisMatches() async throws {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 200))
         scrollView.contentSize = CGSize(width: 400, height: 1200)
 
@@ -2865,7 +2935,7 @@ final class TheBrainsScrollTests: XCTestCase {
         installLiveScrollTarget(treeElement, scrollView: scrollView, containerName: "vertical_scroll")
 
         let result = await brains.navigation.executeScroll(
-            ScrollTarget(target: literalTarget(ElementPredicate(label: "Item")), direction: .down)
+            try resolvedScrollTarget(ScrollTarget(target: .label("Item"), direction: .down))
         )
 
         XCTAssertTrue(result.success, "Expected element scroll to succeed: \(String(describing: result.message))")

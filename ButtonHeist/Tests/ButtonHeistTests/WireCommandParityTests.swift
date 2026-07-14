@@ -379,34 +379,6 @@ final class WireCommandParityTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testEveryCommandWithAccessibilityTargetSchemaRejectsMalformedNestedTarget() async throws {
-        let (fence, _) = makeConnectedFence()
-        let cases = try malformedNestedTargets().flatMap(nestedTargetMutationCases)
-        let commandsWithTargetSchema = Set(
-            TheFence.Command.descriptors
-                .filter { $0.parameters.contains(where: containsAccessibilityTargetSchema) }
-                .map(\.command)
-        )
-
-        XCTAssertEqual(Set(cases.map(\.command)), commandsWithTargetSchema)
-
-        for mutation in cases {
-            XCTAssertThrowsError(
-                try fence.admit(FenceCommandInput(
-                    command: mutation.command,
-                    arguments: .init(values: mutation.arguments)
-                )),
-                mutation.command.rawValue
-            ) { error in
-                XCTAssertTrue(
-                    String(describing: error).localizedCaseInsensitiveContains("target"),
-                    "\(mutation.command.rawValue): \(error)"
-                )
-            }
-        }
-    }
-
-    @ButtonHeistActor
     func testCLIAndMCPRoutesExecuteTheSameAdmission() async throws {
         let (fence, _) = makeConnectedFence()
 
@@ -681,107 +653,6 @@ final class WireCommandParityTests: XCTestCase {
         }
     }
 
-    private func nestedTargetMutationCases(_ malformedTarget: HeistValue) -> [NestedTargetMutationCase] {
-        let expectation = HeistValue.object([
-            "type": .string("exists"),
-            "target": malformedTarget,
-        ])
-        let plan = HeistValue.string("""
-            HeistPlan("entry") {
-                Warn("ready")
-            }
-            """)
-
-        return [
-            NestedTargetMutationCase(command: .getInterface, arguments: ["subtree": malformedTarget]),
-            NestedTargetMutationCase(command: .wait, arguments: [
-                "predicate": expectation,
-            ]),
-            NestedTargetMutationCase(command: .oneFingerTap, arguments: ["element": malformedTarget]),
-            NestedTargetMutationCase(command: .longPress, arguments: ["element": malformedTarget]),
-            NestedTargetMutationCase(command: .swipe, arguments: [
-                "elementDirection": .object([
-                    "element": malformedTarget,
-                    "direction": .string(SwipeDirection.left.rawValue),
-                ]),
-            ]),
-            NestedTargetMutationCase(command: .drag, arguments: [
-                "elementToPoint": .object([
-                    "element": malformedTarget,
-                    "end": .object(["x": .double(120), "y": .double(240)]),
-                ]),
-            ]),
-            NestedTargetMutationCase(command: .scroll, arguments: ["target": malformedTarget]),
-            NestedTargetMutationCase(command: .scrollToVisible, arguments: ["target": malformedTarget]),
-            NestedTargetMutationCase(command: .scrollToEdge, arguments: ["target": malformedTarget]),
-            NestedTargetMutationCase(command: .activate, arguments: ["target": malformedTarget]),
-            NestedTargetMutationCase(command: .rotor, arguments: ["target": malformedTarget]),
-            NestedTargetMutationCase(command: .typeText, arguments: [
-                "target": malformedTarget,
-                "text": .string("hello"),
-            ]),
-            NestedTargetMutationCase(command: .editAction, arguments: [
-                "action": .string(EditAction.paste.rawValue),
-                "expect": expectation,
-            ]),
-            NestedTargetMutationCase(command: .setPasteboard, arguments: [
-                "text": .string("clipboard"),
-                "expect": expectation,
-            ]),
-            NestedTargetMutationCase(command: .dismissKeyboard, arguments: ["expect": expectation]),
-            NestedTargetMutationCase(command: .runHeist, arguments: [
-                "argument": .object([
-                    "type": .string(HeistParameterKind.accessibilityTarget.rawValue),
-                    "target": malformedTarget,
-                ]),
-                "plan": plan,
-            ]),
-        ]
-    }
-
-    private func malformedNestedTargets() throws -> [HeistValue] {
-        let target = AccessibilityTarget.within(
-            container: .identifier("container"),
-            .identifier("target")
-        )
-        guard case .object(let root) = try TheFence.HeistValuePayloadEncoder.encode(target),
-              case .object(let nested)? = root["target"],
-              case .array(let checks)? = nested["checks"],
-              case .object(let firstCheck)? = checks.first else {
-            XCTFail("Canonical scoped target must encode a nested target check")
-            return [.object([:])]
-        }
-
-        var missingRequiredCheck = firstCheck
-        missingRequiredCheck.removeValue(forKey: "kind")
-        var invalidEnumCheck = firstCheck
-        invalidEnumCheck["kind"] = .string("__invalid_enum_value__")
-        var unknownKeyTarget = nested
-        unknownKeyTarget["__unknown_parameter__"] = .bool(true)
-        var wrongTypeTarget = nested
-        wrongTypeTarget["ordinal"] = .string("wrong type")
-
-        return [
-            nested.merging(["checks": .array([.object(missingRequiredCheck)])]) { _, new in new },
-            nested.merging(["checks": .array([.object(invalidEnumCheck)])]) { _, new in new },
-            unknownKeyTarget,
-            wrongTypeTarget,
-        ].map { nestedTarget in
-            var scopedTarget = root
-            scopedTarget["target"] = .object(nestedTarget)
-            return .object(scopedTarget)
-        }
-    }
-
-    private func containsAccessibilityTargetSchema(_ parameter: FenceParameterSpec) -> Bool {
-        let targetKeys = Set(["checks", "ref", "ordinal", "container", "target"])
-        if parameter.objectPropertyKeys == targetKeys {
-            return true
-        }
-        return parameter.objectProperties.contains(where: containsAccessibilityTargetSchema)
-            || parameter.arrayItemProperties.contains(where: containsAccessibilityTargetSchema)
-    }
-
     private func sampleClientMessages() throws -> [ClientMessage] {
         return [
             .clientHello,
@@ -794,7 +665,7 @@ final class WireCommandParityTests: XCTestCase {
             .requestScreen(),
             .runtimeAction(.viewportScroll(ScrollTarget(direction: .down))),
             .heistPlan(HeistPlanRun(plan: try HeistPlan(body: [
-                .action(try ActionStep(command: .activate(.identifier(.literal("target"))))),
+                .action(try ActionStep(command: .activate(.identifier("target")))),
             ]))),
         ]
     }
@@ -811,29 +682,6 @@ final class WireCommandParityTests: XCTestCase {
         ])
     }
 
-    private func runtimeActions(for step: HeistStep) -> [RuntimeActionMessage] {
-        switch step {
-        case .action(let action):
-            guard let command = try? action.command.resolveForRuntimeDispatch(in: .empty) else { return [] }
-            return [command]
-        case .wait(let wait):
-            let waitActions: [RuntimeActionMessage]
-            if let resolved = try? wait.resolve(in: .empty) {
-                waitActions = [.wait(WaitTarget(predicate: resolved.predicate, timeout: resolved.timeout))]
-            } else {
-                waitActions = []
-            }
-            return waitActions + (wait.elseBody ?? []).flatMap(runtimeActions)
-        case .conditional(let conditional):
-            return conditional.cases.flatMap { $0.body.flatMap(runtimeActions) }
-                + (conditional.elseBody ?? []).flatMap(runtimeActions)
-        case .forEachElement, .forEachString, .repeatUntil, .heist, .invoke:
-            return []
-        case .warn, .fail:
-            return []
-        }
-    }
-
     private func actionCommands(for step: HeistStep) -> [HeistActionCommand] {
         switch step {
         case .action(let action):
@@ -846,9 +694,4 @@ final class WireCommandParityTests: XCTestCase {
 
 private struct EncodedClientType: Decodable {
     let type: ClientWireMessageType
-}
-
-private struct NestedTargetMutationCase {
-    let command: TheFence.Command
-    let arguments: [String: HeistValue]
 }

@@ -1,10 +1,10 @@
 # DSL Grammar
 
 The authoring surface as one picture: step types, action commands, passable
-types, one target language, and one context-typed predicate tree.
+types, one target language, and one concrete predicate tree.
 
 **Illustrates:** [HEIST-LANGUAGE-SPEC.md](../HEIST-LANGUAGE-SPEC.md), [HEIST-FORMAT.md](../HEIST-FORMAT.md), [SWIFT-HEIST-AUTHORING.md](../SWIFT-HEIST-AUTHORING.md)
-**Source of truth:** `ButtonHeist/Sources/ThePlans/Model/HeistStep.swift`, `ButtonHeist/Sources/ThePlans/Model/HeistActionCommand.swift`, `ButtonHeist/Sources/ThePlans/Model/AccessibilityPredicate.swift`, `ButtonHeist/Sources/ThePlans/Model/AccessibilityTarget.swift`
+**Source of truth:** `ButtonHeist/Sources/ThePlans/Model/HeistStep.swift`, `ButtonHeist/Sources/ThePlans/Model/HeistActions.swift`, `ButtonHeist/Sources/ThePlans/Model/HeistActionCommand.swift`, `ButtonHeist/Sources/ThePlans/Model/AccessibilityPredicate.swift`, `ButtonHeist/Sources/ThePlans/Model/AccessibilityTarget.swift`
 
 ```mermaid
 flowchart TD
@@ -29,16 +29,16 @@ flowchart TD
         FAILS ~~~ INVOKE
     end
 
-    subgraph commands["HeistActionCommand"]
-        SEMANTIC["semantic (durable):<br/>activate · increment · decrement ·<br/>customAction · rotor · typeText"]
-        MECH["mechanical (coordinates):<br/>mechanicalTap · mechanicalLongPress ·<br/>mechanicalSwipe · mechanicalDrag"]
-        VIEWPORT["viewport (non-durable):<br/>viewportScroll · viewportScrollToVisible ·<br/>viewportScrollToEdge"]
-        SEMANTIC ~~~ MECH
-        MECH ~~~ VIEWPORT
+    subgraph commands["Public action content"]
+        SEMANTIC["semantic:<br/>Activate · Increment · Decrement · TypeText ·<br/>ClearText · CustomAction · Rotor"]
+        SYSTEM["screen and system:<br/>ScreenActions · Edit · SetPasteboard ·<br/>TakeScreenshot · DismissKeyboard"]
+        MECH["mechanical:<br/>Mechanical.Tap · Mechanical.LongPress ·<br/>Mechanical.Swipe · Mechanical.Drag"]
+        SEMANTIC ~~~ SYSTEM
+        SYSTEM ~~~ MECH
     end
 
     subgraph passables["Passable types"]
-        PSTR["String — StringExpr:<br/>.literal or .ref"]
+        PSTR["String<br/>literal or typed reference"]
         PTGT["AccessibilityTarget:<br/>predicate · container · within · ref"]
         PVOID["Void — no argument"]
         PSTR ~~~ PTGT
@@ -51,28 +51,45 @@ flowchart TD
     INVOKE --> passables
 ```
 
-The predicate contexts:
+The predicate and target contexts:
 
 ```mermaid
 flowchart LR
-    ROOT["AccessibilityPredicate RootContext<br/>exists · missing · changed · noChange · announcement"]
+    ROOT["AccessibilityPredicate<br/>exists · missing · changed · noChange · announcement"]
     CHANGED["changed(ChangeDeclaration)"]
-    SCREEN["ScreenAssertionContext<br/>exists · missing"]
-    ELEMENTS["ElementsAssertionContext<br/>exists · missing · appeared · disappeared · updated"]
-    TREE["current delivered Interface tree"]
-    FACTS["ordered ChangeFact stream"]
+    SCREEN["ChangeDeclaration.ScreenAssertion<br/>exists · missing"]
+    ELEMENTS["ChangeDeclaration.ElementAssertion<br/>exists · missing · appeared · disappeared · updated"]
+    TARGET["AccessibilityTarget"]
+    ELEMENT["element predicate"]
+    CONTAINER["container predicate"]
+    WITHIN["within container"]
+    TREE["current InterfaceTree / InterfaceGraph"]
+    FACTS["observation-window transitions"]
+    RESOLVE["one target resolver"]
     ROOT --> CHANGED
     CHANGED -->|screen| SCREEN
     CHANGED -->|elements| ELEMENTS
+    ROOT -->|exists / missing| TARGET
+    SCREEN -->|exists / missing| TARGET
+    ELEMENTS -->|all assertions| TARGET
+    TARGET --> ELEMENT
+    TARGET --> CONTAINER
+    TARGET --> WITHIN
+    ELEMENT --> RESOLVE
+    CONTAINER --> RESOLVE
+    WITHIN --> RESOLVE
     ROOT -->|exists / missing| TREE
-    SCREEN --> TREE
-    ELEMENTS --> TREE
-    ELEMENTS --> FACTS
+    SCREEN -->|exists / missing| TREE
+    ELEMENTS -->|exists / missing| TREE
+    TREE --> RESOLVE
+    ELEMENTS -->|appeared / disappeared / updated| FACTS
+    FACTS --> RESOLVE
 ```
 
 Notes:
 
 - `invoke(HeistInvocationStep)` is `RunHeist` by name plus an argument — the passable types are what that argument can be.
-- `AccessibilityTarget` is shared by actions and predicates. It can target an element predicate, a container predicate, a scoped descendant, or a reference.
-- Generic predicate contexts make invalid combinations unconstructible. Current-tree existence checks are shared; lifecycle and update assertions are available only inside element change declarations.
+- `AccessibilityTarget` is shared by actions, waits, action expectations, control-flow predicates, CLI/MCP, and `get_interface` subtree selection. It can target an element predicate, a container predicate, a scoped descendant, or a reference.
+- Concrete nested assertion types make invalid combinations unconstructible. Current-tree existence checks are shared; lifecycle and update assertions are available only inside element change declarations.
+- Expression, core, and resolved representations stay behind the public DSL surface.
 - Wire discriminators for the loop steps are snake_case in `plan.json`: `for_each_element`, `for_each_string`, `repeat_until`.

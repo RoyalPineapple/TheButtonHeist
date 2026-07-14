@@ -1,31 +1,17 @@
-// MARK: - Element Property Match Descriptions
-
 extension TraitSetMatch: CustomStringConvertible {
     public var description: String {
-        let includedTraits = include.canonicalHeistTraitArray
-            .map { ".\($0.rawValue)" }
-            .joined(separator: ", ")
-        let excludedTraits = exclude.canonicalHeistTraitArray
-            .map { ".\($0.rawValue)" }
-            .joined(separator: ", ")
-        return ScoreDescription.call("traits", [
-            include.isEmpty ? nil : "include=[\(includedTraits)]",
-            exclude.isEmpty ? nil : "exclude=[\(excludedTraits)]",
+        ScoreDescription.call("traitSet", [
+            ScoreDescription.listField("include", include.isEmpty ? nil : include.canonicalHeistTraitArray),
+            ScoreDescription.listField("exclude", exclude.isEmpty ? nil : exclude.canonicalHeistTraitArray),
         ].compactMap { $0 })
     }
 }
 
 extension ActionSetMatch: CustomStringConvertible {
     public var description: String {
-        let includedActions = include.canonicalElementActionArray
-            .map(\.description)
-            .joined(separator: ", ")
-        let excludedActions = exclude.canonicalElementActionArray
-            .map(\.description)
-            .joined(separator: ", ")
-        return ScoreDescription.call("actions", [
-            include.isEmpty ? nil : "include=[\(includedActions)]",
-            exclude.isEmpty ? nil : "exclude=[\(excludedActions)]",
+        ScoreDescription.call("actionSet", [
+            ScoreDescription.listField("include", include.isEmpty ? nil : include.canonicalElementActionArray),
+            ScoreDescription.listField("exclude", exclude.isEmpty ? nil : exclude.canonicalElementActionArray),
         ].compactMap { $0 })
     }
 }
@@ -33,84 +19,74 @@ extension ActionSetMatch: CustomStringConvertible {
 extension ElementFrameMatch: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("frame", [
-            x.map { "x=\($0)" },
-            y.map { "y=\($0)" },
-            width.map { "width=\($0)" },
-            height.map { "height=\($0)" },
+            ScoreDescription.valueField("x", x), ScoreDescription.valueField("y", y),
+            ScoreDescription.valueField("width", width), ScoreDescription.valueField("height", height),
         ].compactMap { $0 })
     }
 }
 
 extension ElementPointMatch: CustomStringConvertible {
     public var description: String {
-        ScoreDescription.call("activationPoint", [
-            x.map { "x=\($0)" },
-            y.map { "y=\($0)" },
+        ScoreDescription.call("point", [
+            ScoreDescription.valueField("x", x), ScoreDescription.valueField("y", y),
+        ].compactMap { $0 })
+    }
+}
+
+extension CustomContentMatchCore: CustomStringConvertible {
+    package var description: String {
+        ScoreDescription.call("customContent", [
+            label.map { "label=\($0)" },
+            value.map { "value=\($0)" },
+            ScoreDescription.valueField("isImportant", isImportant),
         ].compactMap { $0 })
     }
 }
 
 extension CustomContentMatch: CustomStringConvertible {
-    public var description: String {
-        ScoreDescription.call("customContent", [
-            label.map { "label=\($0)" },
-            value.map { "value=\($0)" },
-            isImportant.map { "isImportant=\($0)" },
-        ].compactMap { $0 })
-    }
+    public var description: String { core.description }
 }
 
-extension RotorSetMatch: CustomStringConvertible {
-    public var description: String {
-        ScoreDescription.call("rotors", [
+extension RotorSetMatchCore: CustomStringConvertible {
+    package var description: String {
+        ScoreDescription.call("rotorSet", [
             include.isEmpty ? nil : "include=[\(include.map(\.description).joined(separator: ", "))]",
             exclude.isEmpty ? nil : "exclude=[\(exclude.map(\.description).joined(separator: ", "))]",
         ].compactMap { $0 })
     }
 }
 
-extension AnyPropertyChange: CustomStringConvertible {
-    public var description: String {
+extension RotorSetMatch: CustomStringConvertible {
+    public var description: String { core.description }
+}
+
+extension ElementPropertyChange: CustomStringConvertible {
+    public var description: String { core.description }
+}
+
+extension ResolvedElementPropertyChange: CustomStringConvertible {
+    public var description: String { core.description }
+}
+
+extension ElementPropertyChangeCore: CustomStringConvertible {
+    package var description: String {
         switch self {
-        case .value(let change): return change.description(name: "value")
-        case .traits(let change): return change.description(name: "traits")
-        case .hint(let change): return change.description(name: "hint")
-        case .actions(let change): return change.description(name: "actions")
-        case .frame(let change): return change.description(name: "frame")
-        case .activationPoint(let change): return change.description(name: "activationPoint")
-        case .customContent(let change): return change.description(name: "customContent")
-        case .rotors(let change): return change.description(name: "rotors")
+        case .value(let change): return change.description(property: .value)
+        case .traits(let change): return change.description(property: .traits)
+        case .hint(let change): return change.description(property: .hint)
+        case .actions(let change): return change.description(property: .actions)
+        case .frame(let change): return change.description(property: .frame)
+        case .activationPoint(let change): return change.description(property: .activationPoint)
+        case .customContent(let change): return change.description(property: .customContent)
+        case .rotors(let change): return change.description(property: .rotors)
         }
     }
 }
 
-extension AnyPropertyChangeExpr: CustomStringConvertible {
-    public var description: String {
-        switch self {
-        case .value(let change): return change.description(name: "value")
-        case .traits(let change): return change.description(name: "traits")
-        case .hint(let change): return change.description(name: "hint")
-        case .actions(let change): return change.description(name: "actions")
-        case .frame(let change): return change.description(name: "frame")
-        case .activationPoint(let change): return change.description(name: "activationPoint")
-        case .customContent(let change): return change.description(name: "customContent")
-        case .rotors(let change): return change.description(name: "rotors")
-        }
-    }
-}
-
-fileprivate extension ElementPropertyChange {
-    func description(name: String) -> String {
-        ScoreDescription.call(name, [
-            before.map { "before=\($0)" },
-            after.map { "after=\($0)" },
-        ].compactMap { $0 })
-    }
-}
-
-fileprivate extension ElementPropertyChangeExpr {
-    func description(name: String) -> String {
-        ScoreDescription.call(name, [
+private extension PropertyChangeCore {
+    func description(property: ElementProperty) -> String {
+        ScoreDescription.call("change", [
+            "property=.\(property.rawValue)",
             before.map { "before=\($0)" },
             after.map { "after=\($0)" },
         ].compactMap { $0 })

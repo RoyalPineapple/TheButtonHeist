@@ -29,7 +29,7 @@ enum EvidenceMinimumMatcher {
         else { return nil }
 
         let elements = before.interface.projectedElements
-        guard let index = contextIndex(for: evidence, in: elements) else { return nil }
+        guard let index = contextIndex(for: evidence, in: before.interface) else { return nil }
         let context = PredicateSelectionContext(
             elements: elements.enumerated().map { offset, element in
                 PredicateSelectionContext.Element(id: contextElementId(forOffset: offset), element: element)
@@ -50,27 +50,18 @@ enum EvidenceMinimumMatcher {
 
     private static func contextIndex(
         for evidence: ActionSubjectEvidence,
-        in elements: [HeistElement]
+        in interface: Interface
     ) -> Int? {
-        if let targetIndex = index(of: evidence.target, in: elements) {
+        let elements = interface.projectedElements
+        if let targetIndex = index(of: evidence.target, in: interface) {
             return targetIndex
         }
         let equalIndices = elements.indices.filter { elements[$0] == evidence.element }
         return equalIndices.count == 1 ? equalIndices[0] : nil
     }
 
-    static func index(of target: AccessibilityTarget, in elements: [HeistElement]) -> Int? {
-        switch target {
-        case .predicate(let template, let ordinal):
-            guard let predicate = try? template.resolve(in: .empty) else { return nil }
-            let matches = ElementMatchGraph(elements: elements).resolve(predicate).matches
-            if let ordinal {
-                guard matches.indices.contains(ordinal) else { return nil }
-                return matches[ordinal].traversalOrder
-            }
-            return matches.count == 1 ? matches[0].traversalOrder : nil
-        case .container, .ref, .within:
-            return nil
-        }
+    static func index(of target: ResolvedAccessibilityTarget, in interface: Interface) -> Int? {
+        let matches = ElementMatchGraph(interface: interface).resolve(target).elements.matches
+        return matches.count == 1 ? matches[0].traversalOrder : nil
     }
 }

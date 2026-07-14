@@ -70,26 +70,19 @@ def is_iphone_type(device_type: dict[str, Any] | None, device_name: str) -> bool
     return device_name.startswith("iPhone")
 
 
-def is_preferred_type(device_type: dict[str, Any] | None, device_name: str, preferred: str) -> bool:
-    return device_name == preferred or (device_type is not None and device_type.get("name") == preferred)
-
-
-def existing_candidates(
+def existing_simulator(
     runtimes: list[dict[str, Any]],
     devices: dict[str, list[dict[str, Any]]],
-    preferred: str,
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    preferred_devices: list[dict[str, Any]] = []
-    fallback_devices: list[dict[str, Any]] = []
-
+    sim_name: str,
+) -> dict[str, str] | None:
     for runtime in runtimes:
         runtime_id = str(runtime["identifier"])
         type_lookup = supported_type_lookup(runtime)
         for device in devices.get(runtime_id, []):
-            if device.get("isAvailable") is not True:
+            if device.get("isAvailable") is not True or device.get("name") != sim_name:
                 continue
             device_type = type_lookup.get(str(device.get("deviceTypeIdentifier", "")))
-            candidate = {
+            return {
                 "source": "existing",
                 "udid": str(device["udid"]),
                 "name": str(device.get("name", "")),
@@ -97,12 +90,7 @@ def existing_candidates(
                 "runtime_id": runtime_id,
                 "runtime_version": str(runtime.get("version", "")),
             }
-            if is_preferred_type(device_type, candidate["name"], preferred):
-                preferred_devices.append(candidate)
-            elif is_iphone_type(device_type, candidate["name"]):
-                fallback_devices.append(candidate)
-
-    return preferred_devices, fallback_devices
+    return None
 
 
 def create_candidates(runtimes: list[dict[str, Any]], preferred: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -137,14 +125,12 @@ def select_or_create_simulator(preferred: str, sim_name: str) -> dict[str, str]:
         raise RuntimeError("No available iOS simulator runtime found")
 
     devices = load_json(["xcrun", "simctl", "list", "devices", "available", "-j"])["devices"]
-    preferred_devices, fallback_devices = existing_candidates(runtimes, devices, preferred)
-    if preferred_devices:
-        return preferred_devices[0]
+    existing = existing_simulator(runtimes, devices, sim_name)
+    if existing:
+        return existing
 
     preferred_types, fallback_types = create_candidates(runtimes, preferred)
     create = preferred_types
-    if not create and fallback_devices:
-        return fallback_devices[0]
     if not create:
         create = fallback_types
     if not create:

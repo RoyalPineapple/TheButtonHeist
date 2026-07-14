@@ -259,7 +259,7 @@ public struct HeistInvocationStep: Codable, Sendable, Equatable {
     /// `invoke`, so a reader can see which capability ran and with what.
     public var runHeistSummary: String {
         let name = "\"\(capabilityName)\""
-        switch argument {
+        switch argument.core {
         case .none:
             return "RunHeist(\(name))"
         case .string(let value):
@@ -269,7 +269,7 @@ public struct HeistInvocationStep: Codable, Sendable, Equatable {
         }
     }
 
-    private static func stringArgumentSummary(_ expr: StringExpr) -> String {
+    private static func stringArgumentSummary(_ expr: Expr<String>) -> String {
         switch expr {
         case .literal(let value):
             return "\"\(value)\""

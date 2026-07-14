@@ -154,8 +154,6 @@ extension HeistTargetPredicateFact {
         switch self {
         case .predicate(let predicate):
             return predicate.description
-        case .template(let predicate):
-            return predicate.description
         case .container(let predicate):
             return predicate.description
         case .targetReference(let reference):

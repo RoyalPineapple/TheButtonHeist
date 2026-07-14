@@ -36,9 +36,11 @@ public enum HeistCaseSelectionOutcome: Codable, Sendable, Equatable {
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist case selection outcome")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        switch try container.decode(Kind.self, forKey: .kind) {
+        let kind = try container.decode(Kind.self, forKey: .kind)
+        let typeName = "\(kind.rawValue) outcome"
+        switch kind {
         case .matchedCase:
-            try Self.rejectIfPresent(.reason, in: container, kind: .matchedCase)
+            try container.rejectIncompatibleFields(allowing: [.kind, .index], typeName: typeName)
             guard let index = try container.decodeIfPresent(Int.self, forKey: .index) else {
                 throw DecodingError.dataCorruptedError(
                     forKey: .index,
@@ -55,17 +57,15 @@ public enum HeistCaseSelectionOutcome: Codable, Sendable, Equatable {
             }
             self = .matchedCase(index: index)
         case .elseBranch:
-            try Self.rejectIfPresent(.index, in: container, kind: .elseBranch)
+            try container.rejectIncompatibleFields(allowing: [.kind, .reason], typeName: typeName)
             self = .elseBranch(
                 reason: try container.decode(HeistCaseSelectionMissReason.self, forKey: .reason)
             )
         case .timedOut:
-            try Self.rejectIfPresent(.index, in: container, kind: .timedOut)
-            try Self.rejectIfPresent(.reason, in: container, kind: .timedOut)
+            try container.rejectIncompatibleFields(allowing: [.kind], typeName: typeName)
             self = .timedOut
         case .noMatch:
-            try Self.rejectIfPresent(.index, in: container, kind: .noMatch)
-            try Self.rejectIfPresent(.reason, in: container, kind: .noMatch)
+            try container.rejectIncompatibleFields(allowing: [.kind], typeName: typeName)
             self = .noMatch
         }
     }
@@ -86,18 +86,6 @@ public enum HeistCaseSelectionOutcome: Codable, Sendable, Equatable {
         }
     }
 
-    private static func rejectIfPresent(
-        _ key: CodingKeys,
-        in container: KeyedDecodingContainer<CodingKeys>,
-        kind: Kind
-    ) throws {
-        guard container.contains(key) else { return }
-        throw DecodingError.dataCorruptedError(
-            forKey: key,
-            in: container,
-            debugDescription: "\(kind.rawValue) outcome must not include \(key.stringValue)"
-        )
-    }
 }
 
 public struct HeistCaseSelectionResult: Codable, Sendable, Equatable {
@@ -179,7 +167,7 @@ public struct HeistCaseSelectionResult: Codable, Sendable, Equatable {
 }
 
 public struct HeistCaseMatchResult: Codable, Sendable, Equatable {
-    public let predicate: AccessibilityPredicate<RootContext>
+    public let predicate: AccessibilityPredicate
     public let met: Bool
     public let actual: String?
 
@@ -188,7 +176,7 @@ public struct HeistCaseMatchResult: Codable, Sendable, Equatable {
     }
 
     public init(
-        predicate: AccessibilityPredicate<RootContext>,
+        predicate: AccessibilityPredicate,
         met: Bool,
         actual: String? = nil
     ) {
@@ -207,7 +195,7 @@ public struct HeistCaseMatchResult: Codable, Sendable, Equatable {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist case match result")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
-            predicate: try container.decode(AccessibilityPredicate<RootContext>.self, forKey: .predicate),
+            predicate: try container.decode(AccessibilityPredicate.self, forKey: .predicate),
             met: try container.decode(Bool.self, forKey: .met),
             actual: try container.decodeIfPresent(String.self, forKey: .actual)
         )

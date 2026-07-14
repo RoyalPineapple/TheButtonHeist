@@ -233,8 +233,12 @@ private struct DeltaFactFold {
 
     func folding(_ facts: [AccessibilityTrace.ChangeFact]) -> DeltaFoldResult {
         facts.reduce(into: DeltaFoldAccumulator()) { accumulator, fact in
-            accumulator.captureEdges.append(contentsOf: fact.metadata.captureEdge.map { [$0] } ?? [])
-            accumulator.interactionDigests.append(contentsOf: fact.metadata.interactionDigest.map { [$0] } ?? [])
+            if let captureEdge = fact.metadata.captureEdge {
+                accumulator.captureEdges.append(captureEdge)
+            }
+            if let interactionDigest = fact.metadata.interactionDigest {
+                accumulator.interactionDigests.append(interactionDigest)
+            }
             accumulator.metadataTransient.append(contentsOf: fact.metadata.transient)
             accumulator.accessibilityNotifications.append(contentsOf: fact.metadata.accessibilityNotifications)
 
@@ -262,9 +266,7 @@ private struct DeltaFactFold {
               let edge,
               let capture = trace.capture(ref: useAfterCapture ? edge.after : edge.before)
         else { return nil }
-        return capture.interface.graph.elementsInTraversalOrder
-            .first { $0.path == node.path }?
-            .projectedElement
+        return capture.interface.graph.element(at: node.path)?.projectedElement
     }
 }
 

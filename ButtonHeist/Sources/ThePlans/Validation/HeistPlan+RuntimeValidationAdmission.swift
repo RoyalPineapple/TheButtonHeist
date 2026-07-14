@@ -131,99 +131,34 @@ package struct HeistStepAdmissionCandidate: Codable, Sendable, Equatable {
     static func forEachString(_ step: HeistForEachStringAdmissionCandidate) -> Self { Self(.forEachString(step)) }
     static func repeatUntil(_ step: HeistRepeatUntilAdmissionCandidate) -> Self { Self(.repeatUntil(step)) }
 
-    private enum CodingKeys: String, CodingKey, CaseIterable {
-        case type, action, wait, conditional
-        case forEachElement = "for_each_element"
-        case forEachString = "for_each_string"
-        case repeatUntil = "repeat_until"
-        case warn, fail, heist, invoke
-    }
-
-    private enum WireType: String, Codable {
-        case action, wait, conditional
-        case forEachElement = "for_each_element"
-        case forEachString = "for_each_string"
-        case repeatUntil = "repeat_until"
-        case warn, fail, heist, invoke
-
-        var payloadKey: CodingKeys {
-            switch self {
-            case .action: return .action
-            case .wait: return .wait
-            case .conditional: return .conditional
-            case .forEachElement: return .forEachElement
-            case .forEachString: return .forEachString
-            case .repeatUntil: return .repeatUntil
-            case .warn: return .warn
-            case .fail: return .fail
-            case .heist: return .heist
-            case .invoke: return .invoke
-            }
-        }
-
-        var typeName: String {
-            self == .heist ? "heist group step" : "\(rawValue) heist step"
-        }
-    }
-
     package init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        let type = try container.decode(WireType.self, forKey: .type)
-        try decoder.rejectUnknownKeys(
-            allowed: [CodingKeys.type.stringValue, type.payloadKey.stringValue],
-            typeName: type.typeName
-        )
-        switch type {
-        case .action: self = .action(try container.decode(ActionStep.self, forKey: .action))
-        case .wait: self = .wait(try container.decode(HeistWaitAdmissionCandidate.self, forKey: .wait))
-        case .conditional:
-            self = .conditional(try container.decode(HeistConditionalAdmissionCandidate.self, forKey: .conditional))
-        case .forEachElement:
-            self = .forEachElement(try container.decode(HeistForEachElementAdmissionCandidate.self, forKey: .forEachElement))
-        case .forEachString:
-            self = .forEachString(try container.decode(HeistForEachStringAdmissionCandidate.self, forKey: .forEachString))
-        case .repeatUntil:
-            self = .repeatUntil(try container.decode(HeistRepeatUntilAdmissionCandidate.self, forKey: .repeatUntil))
-        case .warn: self = .warn(try container.decode(WarnStep.self, forKey: .warn))
-        case .fail: self = .fail(try container.decode(FailStep.self, forKey: .fail))
-        case .heist: self = .heist(try container.decode(HeistPlanAdmissionCandidate.self, forKey: .heist))
-        case .invoke: self = .invoke(try container.decode(HeistInvocationStep.self, forKey: .invoke))
+        let envelope = try HeistStepTaggedEnvelope(from: decoder)
+        switch envelope.type {
+        case .action: self = .action(try envelope.decode(ActionStep.self))
+        case .wait: self = .wait(try envelope.decode(HeistWaitAdmissionCandidate.self))
+        case .conditional: self = .conditional(try envelope.decode(HeistConditionalAdmissionCandidate.self))
+        case .forEachElement: self = .forEachElement(try envelope.decode(HeistForEachElementAdmissionCandidate.self))
+        case .forEachString: self = .forEachString(try envelope.decode(HeistForEachStringAdmissionCandidate.self))
+        case .repeatUntil: self = .repeatUntil(try envelope.decode(HeistRepeatUntilAdmissionCandidate.self))
+        case .warn: self = .warn(try envelope.decode(WarnStep.self))
+        case .fail: self = .fail(try envelope.decode(FailStep.self))
+        case .heist: self = .heist(try envelope.decode(HeistPlanAdmissionCandidate.self))
+        case .invoke: self = .invoke(try envelope.decode(HeistInvocationStep.self))
         }
     }
 
     package func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
         switch payload {
-        case .action(let step):
-            try container.encode(WireType.action, forKey: .type)
-            try container.encode(step, forKey: .action)
-        case .wait(let step):
-            try container.encode(WireType.wait, forKey: .type)
-            try container.encode(step, forKey: .wait)
-        case .conditional(let step):
-            try container.encode(WireType.conditional, forKey: .type)
-            try container.encode(step, forKey: .conditional)
-        case .forEachElement(let step):
-            try container.encode(WireType.forEachElement, forKey: .type)
-            try container.encode(step, forKey: .forEachElement)
-        case .forEachString(let step):
-            try container.encode(WireType.forEachString, forKey: .type)
-            try container.encode(step, forKey: .forEachString)
-        case .repeatUntil(let step):
-            try container.encode(WireType.repeatUntil, forKey: .type)
-            try container.encode(step, forKey: .repeatUntil)
-        case .warn(let step):
-            try container.encode(WireType.warn, forKey: .type)
-            try container.encode(step, forKey: .warn)
-        case .fail(let step):
-            try container.encode(WireType.fail, forKey: .type)
-            try container.encode(step, forKey: .fail)
-        case .heist(let plan):
-            try container.encode(WireType.heist, forKey: .type)
-            try container.encode(plan, forKey: .heist)
-        case .invoke(let step):
-            try container.encode(WireType.invoke, forKey: .type)
-            try container.encode(step, forKey: .invoke)
+        case .action(let step): try HeistStepTaggedEnvelope.encode(.action, payload: step, to: encoder)
+        case .wait(let step): try HeistStepTaggedEnvelope.encode(.wait, payload: step, to: encoder)
+        case .conditional(let step): try HeistStepTaggedEnvelope.encode(.conditional, payload: step, to: encoder)
+        case .forEachElement(let step): try HeistStepTaggedEnvelope.encode(.forEachElement, payload: step, to: encoder)
+        case .forEachString(let step): try HeistStepTaggedEnvelope.encode(.forEachString, payload: step, to: encoder)
+        case .repeatUntil(let step): try HeistStepTaggedEnvelope.encode(.repeatUntil, payload: step, to: encoder)
+        case .warn(let step): try HeistStepTaggedEnvelope.encode(.warn, payload: step, to: encoder)
+        case .fail(let step): try HeistStepTaggedEnvelope.encode(.fail, payload: step, to: encoder)
+        case .heist(let plan): try HeistStepTaggedEnvelope.encode(.heist, payload: plan, to: encoder)
+        case .invoke(let step): try HeistStepTaggedEnvelope.encode(.invoke, payload: step, to: encoder)
         }
     }
 }
@@ -242,7 +177,7 @@ indirect enum HeistStepAdmissionPayload: Sendable, Equatable {
 }
 
 struct HeistWaitAdmissionCandidate: Codable, Sendable, Equatable {
-    let predicate: AccessibilityPredicate<RootContext>
+    let predicate: AccessibilityPredicate
     let timeout: Double
     let elseBody: [HeistStepAdmissionCandidate]?
 
@@ -251,7 +186,7 @@ struct HeistWaitAdmissionCandidate: Codable, Sendable, Equatable {
         case elseBody = "else_body"
     }
 
-    init(predicate: AccessibilityPredicate<RootContext>, timeout: Double, elseBody: [HeistStepAdmissionCandidate]? = nil) {
+    init(predicate: AccessibilityPredicate, timeout: Double, elseBody: [HeistStepAdmissionCandidate]? = nil) {
         self.predicate = predicate
         self.timeout = timeout
         self.elseBody = elseBody
@@ -273,7 +208,7 @@ struct HeistWaitAdmissionCandidate: Codable, Sendable, Equatable {
             )
         }
         self.init(
-            predicate: try container.decode(AccessibilityPredicate<RootContext>.self, forKey: .predicate),
+            predicate: try container.decode(AccessibilityPredicate.self, forKey: .predicate),
             timeout: timeout,
             elseBody: try container.decodeIfPresent([HeistStepAdmissionCandidate].self, forKey: .elseBody)
         )
@@ -311,12 +246,12 @@ struct HeistConditionalAdmissionCandidate: Codable, Sendable, Equatable {
 }
 
 struct HeistPredicateCaseAdmissionCandidate: Codable, Sendable, Equatable {
-    let predicate: AccessibilityPredicate<ScreenAssertionContext>
+    let predicate: ChangeDeclaration.ScreenAssertion
     let body: [HeistStepAdmissionCandidate]
 
     private enum CodingKeys: String, CodingKey, CaseIterable { case predicate, body }
 
-    init(predicate: AccessibilityPredicate<ScreenAssertionContext>, body: [HeistStepAdmissionCandidate]) {
+    init(predicate: ChangeDeclaration.ScreenAssertion, body: [HeistStepAdmissionCandidate]) {
         self.predicate = predicate
         self.body = body
     }
@@ -329,28 +264,33 @@ struct HeistPredicateCaseAdmissionCandidate: Codable, Sendable, Equatable {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "predicate case")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
-            predicate: try container.decode(AccessibilityPredicate<ScreenAssertionContext>.self, forKey: .predicate),
+            predicate: try container.decode(ChangeDeclaration.ScreenAssertion.self, forKey: .predicate),
             body: try container.decode([HeistStepAdmissionCandidate].self, forKey: .body)
         )
     }
 }
 
 struct HeistForEachElementAdmissionCandidate: Codable, Sendable, Equatable {
-    let matching: ElementPredicate
+    let matching: ElementPredicateTemplate
     let limit: Int
     let parameter: HeistReferenceName
     let body: [HeistStepAdmissionCandidate]
 
     private enum CodingKeys: String, CodingKey, CaseIterable { case matching, limit, parameter, body }
 
-    init(matching: ElementPredicate, limit: Int, parameter: HeistReferenceName, body: [HeistStepAdmissionCandidate]) throws {
+    init(
+        matching: ElementPredicateTemplate,
+        limit: Int,
+        parameter: HeistReferenceName,
+        body: [HeistStepAdmissionCandidate]
+    ) throws {
         guard matching.hasPredicates else { throw HeistPlanError.emptyForEachPredicate }
         guard limit > 0 else { throw HeistPlanError.invalidForEachLimit(limit) }
         guard !body.isEmpty else { throw HeistPlanError.emptyForEachSteps }
         let parameter = try HeistParameterName.normalized(parameter.rawValue)
         self.matching = matching
         self.limit = limit
-        self.parameter = HeistReferenceName(rawValue: parameter)
+        self.parameter = try HeistReferenceName(validating: parameter)
         self.body = body
     }
 
@@ -365,7 +305,7 @@ struct HeistForEachElementAdmissionCandidate: Codable, Sendable, Equatable {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "for_each_element step")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         try self.init(
-            matching: container.decode(ElementPredicate.self, forKey: .matching),
+            matching: container.decode(ElementPredicateTemplate.self, forKey: .matching),
             limit: container.decode(Int.self, forKey: .limit),
             parameter: HeistReferenceName.decode(from: container, forKey: .parameter, type: "for_each_element parameter"),
             body: container.decode([HeistStepAdmissionCandidate].self, forKey: .body)
@@ -385,7 +325,7 @@ struct HeistForEachStringAdmissionCandidate: Codable, Sendable, Equatable {
         guard !body.isEmpty else { throw HeistPlanError.emptyForEachSteps }
         let parameter = try HeistParameterName.normalized(parameter.rawValue)
         self.values = values
-        self.parameter = HeistReferenceName(rawValue: parameter)
+        self.parameter = try HeistReferenceName(validating: parameter)
         self.body = body
     }
 
@@ -407,7 +347,7 @@ struct HeistForEachStringAdmissionCandidate: Codable, Sendable, Equatable {
 }
 
 struct HeistRepeatUntilAdmissionCandidate: Codable, Sendable, Equatable {
-    let predicate: AccessibilityPredicate<RootContext>
+    let predicate: AccessibilityPredicate
     let timeout: Double
     let body: [HeistStepAdmissionCandidate]
     let elseBody: [HeistStepAdmissionCandidate]?
@@ -418,7 +358,7 @@ struct HeistRepeatUntilAdmissionCandidate: Codable, Sendable, Equatable {
     }
 
     init(
-        predicate: AccessibilityPredicate<RootContext>,
+        predicate: AccessibilityPredicate,
         timeout: Double,
         body: [HeistStepAdmissionCandidate],
         elseBody: [HeistStepAdmissionCandidate]? = nil
@@ -442,7 +382,7 @@ struct HeistRepeatUntilAdmissionCandidate: Codable, Sendable, Equatable {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "repeat_until step")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         try self.init(
-            predicate: container.decode(AccessibilityPredicate<RootContext>.self, forKey: .predicate),
+            predicate: container.decode(AccessibilityPredicate.self, forKey: .predicate),
             timeout: container.decode(Double.self, forKey: .timeout),
             body: container.decode([HeistStepAdmissionCandidate].self, forKey: .body),
             elseBody: container.decodeIfPresent([HeistStepAdmissionCandidate].self, forKey: .elseBody)
@@ -452,9 +392,10 @@ struct HeistRepeatUntilAdmissionCandidate: Codable, Sendable, Equatable {
 
 extension HeistPlanRuntimeSafetyValidator {
     mutating func validate(_ candidate: HeistPlanAdmissionCandidate) throws -> HeistPlan {
-        inspect(candidate)
+        let plan = try HeistPlan(admitting: candidate)
+        inspect(plan)
         guard failures.isEmpty else { throw HeistPlanRuntimeSafetyError(failures: failures) }
-        return try HeistPlan(admitting: candidate)
+        return plan
     }
 }
 

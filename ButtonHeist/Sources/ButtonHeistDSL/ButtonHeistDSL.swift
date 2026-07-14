@@ -6,29 +6,24 @@ public typealias HeistPlan = ThePlans.HeistPlan
 public typealias HeistContent = ThePlans.HeistContent
 public typealias HeistBuilder = ThePlans.HeistBuilder
 public typealias HeistPlanBuildError = ThePlans.HeistPlanBuildError
-public typealias HeistPlanAdmissionCandidate = ThePlans.HeistPlanAdmissionCandidate
 
 // MARK: - Values And References
 
 public typealias HeistReferenceName = ThePlans.HeistReferenceName
 public typealias HeistArgument = ThePlans.HeistArgument
-public typealias StringExpr = ThePlans.StringExpr
 public typealias StringMatch = ThePlans.StringMatch
-public typealias StringMatchPayload = ThePlans.StringMatchPayload
 
 // MARK: - Targets And Predicates
 
 public typealias HeistTrait = ThePlans.HeistTrait
 public typealias AccessibilityTarget = ThePlans.AccessibilityTarget
-public typealias ElementPredicate = ThePlans.ElementPredicate
 public typealias ElementPredicateTemplate = ThePlans.ElementPredicateTemplate
 public typealias ElementPredicateCheck = ThePlans.ElementPredicateCheck
-public typealias AccessibilityPredicate<Context> = ThePlans.AccessibilityPredicate<Context>
-public typealias RootContext = ThePlans.RootContext
-public typealias ScreenAssertionContext = ThePlans.ScreenAssertionContext
-public typealias ElementsAssertionContext = ThePlans.ElementsAssertionContext
+public typealias ContainerPredicate = ThePlans.ContainerPredicate
+public typealias ContainerPredicateCheck = ThePlans.ContainerPredicateCheck
+public typealias AccessibilityPredicate = ThePlans.AccessibilityPredicate
 public typealias ChangeDeclaration = ThePlans.ChangeDeclaration
-public typealias AnyPropertyChangeExpr = ThePlans.AnyPropertyChangeExpr
+public typealias ElementPropertyChange = ThePlans.ElementPropertyChange
 
 // MARK: - Actions
 
@@ -93,12 +88,14 @@ public func RunHeist(_ path: HeistInvocationPath, _ input: String) -> HeistInvoc
     ThePlans.RunHeist(path, input)
 }
 
-public func RunHeist(_ name: String, _ input: StringExpr) -> HeistInvocationContent {
-    ThePlans.RunHeist(name, input)
+@_disfavoredOverload
+public func RunHeist(_ name: String, _ reference: HeistReferenceName) -> HeistInvocationContent {
+    ThePlans.RunHeist(name, reference)
 }
 
-public func RunHeist(_ path: HeistInvocationPath, _ input: StringExpr) -> HeistInvocationContent {
-    ThePlans.RunHeist(path, input)
+@_disfavoredOverload
+public func RunHeist(_ path: HeistInvocationPath, _ reference: HeistReferenceName) -> HeistInvocationContent {
+    ThePlans.RunHeist(path, reference)
 }
 
 @_disfavoredOverload

@@ -11,9 +11,67 @@ import TheScore
 /// `lock`; waiter continuations are resumed outside the lock and timeout
 /// tasks reference the bus weakly.
 final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
+    private struct IngressLog {
+        let retentionLimit: Int
+        private(set) var retainedEvents: [PendingAccessibilityNotificationEvent] = []
+        private(set) var latestSequence: UInt64 = 0
+        private(set) var latestScopedScreenChangedSequence: UInt64 = 0
+        private var evictedThroughSequence: UInt64 = 0
+        private var evictedScopedThroughSequence: UInt64 = 0
+
+        init(retentionLimit: Int) {
+            precondition(retentionLimit > 0, "Notification retention must be positive")
+            self.retentionLimit = retentionLimit
+        }
+
+        mutating func append(_ event: PendingAccessibilityNotificationEvent) {
+            precondition(
+                event.sequence > latestSequence,
+                "Accessibility notification sequence must advance"
+            )
+            latestSequence = event.sequence
+            if case .screenChanged = event.kind, event.provenance == .scoped {
+                latestScopedScreenChangedSequence = event.sequence
+            }
+            retainedEvents.append(event)
+            guard retainedEvents.count > retentionLimit else { return }
+
+            let overflow = retainedEvents.count - retentionLimit
+            let evicted = retainedEvents.prefix(overflow)
+            evictedThroughSequence = max(evictedThroughSequence, evicted.last?.sequence ?? 0)
+            evictedScopedThroughSequence = max(
+                evictedScopedThroughSequence,
+                evicted.last(where: { $0.provenance == .scoped })?.sequence ?? 0
+            )
+            retainedEvents.removeFirst(overflow)
+        }
+
+        func checkpoint(
+            after cursor: AccessibilityNotificationCursor,
+            selection: AccessibilityNotificationCheckpointSelection
+        ) -> AccessibilityNotificationBatch {
+            let evictedThrough = switch selection {
+            case .all:
+                evictedThroughSequence
+            case .scoped:
+                evictedScopedThroughSequence
+            }
+            return AccessibilityNotificationBatch(
+                events: retainedEvents.filter {
+                    $0.sequence > cursor.sequence && selection.includes($0.provenance)
+                },
+                through: AccessibilityNotificationCursor(sequence: latestSequence),
+                scopedScreenChangedThrough: latestScopedScreenChangedSequence,
+                gap: cursor.sequence < evictedThrough
+                    ? AccessibilityNotificationGap(droppedThroughSequence: evictedThrough)
+                    : nil
+            )
+        }
+    }
+
     private struct AnnouncementWaiter {
         let afterSequence: UInt64
-        let predicate: AnnouncementPredicate
+        let predicate: ResolvedAnnouncementPredicate
         let continuation: TimedOneShot<CapturedAnnouncement?>
     }
 
@@ -21,12 +79,8 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         let announcementWaiters: [(AnnouncementWaiter, CapturedAnnouncement)]
     }
 
-    private let maxBufferedEvents = 64
     private let lock = NSLock()
-    private var bufferedEvents: [PendingAccessibilityNotificationEvent] = []
-    private var discardedScopedThroughSequenceStorage: UInt64 = 0
-    private var latestSequenceStorage: UInt64 = 0
-    private var latestScopedScreenChangedSequenceStorage: UInt64 = 0
+    private var ingressLog = IngressLog(retentionLimit: 64)
     private var activeHeistScopes = 0
     private var activeActionWindows = 0
     private var announcementWaiters = WaiterStore<UInt64, AnnouncementWaiter>()
@@ -34,7 +88,7 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
     var latestSequence: UInt64 {
         lock.lock()
         defer { lock.unlock() }
-        return latestSequenceStorage
+        return ingressLog.latestSequence
     }
 
     /// Sequence of the most recent `screenChanged` notification recorded
@@ -42,27 +96,30 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
     var latestScopedScreenChangedSequence: UInt64 {
         lock.lock()
         defer { lock.unlock() }
-        return latestScopedScreenChangedSequenceStorage
+        return ingressLog.latestScopedScreenChangedSequence
     }
 
     func cursor() -> AccessibilityNotificationCursor {
         lock.lock()
         defer { lock.unlock() }
-        return AccessibilityNotificationCursor(sequence: latestSequenceStorage)
+        return AccessibilityNotificationCursor(sequence: ingressLog.latestSequence)
     }
 
     func announcements(after cursor: AccessibilityNotificationCursor = .origin) -> [CapturedAnnouncement] {
         lock.lock()
         defer { lock.unlock() }
-        return bufferedEvents.compactMap { event in
-            guard event.sequence > cursor.sequence else { return nil }
-            return event.capturedAnnouncement
-        }
+        return ingressLog.checkpoint(after: cursor, selection: .all).events.compactMap(\.capturedAnnouncement)
+    }
+
+    var announcementWaiterCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return announcementWaiters.count
     }
 
     func waitForAnnouncement(
         after cursor: AccessibilityNotificationCursor,
-        matching predicate: AnnouncementPredicate,
+        matching predicate: ResolvedAnnouncementPredicate,
         timeout: TimeInterval
     ) async -> CapturedAnnouncement? {
         let waiterId = reserveAnnouncementWaiterIdentifier()
@@ -147,8 +204,8 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
 
     /// Opens the outer correlation window for a running heist.
     ///
-    /// While this scope is active, action windows may claim attribution, but
-    /// they do not drain the underlying stream. The heist owns stream lifetime.
+    /// While this scope is active, action windows may claim attribution. Scope
+    /// lifetime only tags provenance; retained history belongs to the ingress log.
     func beginHeistScope() -> AccessibilityNotificationHeistScope {
         lock.lock()
         defer { lock.unlock() }
@@ -156,7 +213,7 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         activeHeistScopes += 1
         return AccessibilityNotificationHeistScope(
             bus: self,
-            cursor: AccessibilityNotificationCursor(sequence: latestSequenceStorage)
+            cursor: AccessibilityNotificationCursor(sequence: ingressLog.latestSequence)
         )
     }
 
@@ -171,37 +228,8 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         activeActionWindows += 1
         return AccessibilityNotificationActionWindow(
             bus: self,
-            cursor: AccessibilityNotificationCursor(sequence: latestSequenceStorage)
+            cursor: AccessibilityNotificationCursor(sequence: ingressLog.latestSequence)
         )
-    }
-
-    func record(
-        code: UInt32,
-        notificationData data: CapturedAccessibilityNotificationPayload,
-        associatedElement element: CapturedAccessibilityNotificationPayload
-    ) {
-        lock.lock()
-        let sequence = latestSequenceStorage + 1
-        let event = PendingAccessibilityNotificationEvent(
-            sequence: sequence,
-            rawCode: code,
-            timestamp: Date(),
-            notificationData: data.pendingPayload,
-            associatedElement: element.pendingPayload,
-            provenance: provenanceLocked
-        )
-        let resumptions = recordLocked(event)
-        lock.unlock()
-
-        resume(resumptions)
-    }
-
-    func record(_ event: PendingAccessibilityNotificationEvent) {
-        lock.lock()
-        let resumptions = recordLocked(event)
-        lock.unlock()
-
-        resume(resumptions)
     }
 
     func record(
@@ -227,23 +255,7 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
     }
 
     private func recordLocked(_ event: PendingAccessibilityNotificationEvent) -> NotificationResumptions {
-        precondition(
-            event.sequence > latestSequenceStorage,
-            "Accessibility notification sequence must advance"
-        )
-        latestSequenceStorage = event.sequence
-        if case .screenChanged = event.kind, event.provenance == .scoped {
-            latestScopedScreenChangedSequenceStorage = event.sequence
-        }
-        bufferedEvents.append(event)
-        if bufferedEvents.count > maxBufferedEvents {
-            let removed = bufferedEvents.prefix(bufferedEvents.count - maxBufferedEvents)
-            discardedScopedThroughSequenceStorage = max(
-                discardedScopedThroughSequenceStorage,
-                removed.last(where: { $0.provenance == .scoped })?.sequence ?? 0
-            )
-            bufferedEvents.removeFirst(removed.count)
-        }
+        ingressLog.append(event)
         return NotificationResumptions(
             announcementWaiters: recordAnnouncementEventLocked(event)
         )
@@ -255,31 +267,12 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         }
     }
 
-    func pendingEvents(after cursor: AccessibilityNotificationCursor = .origin) -> [PendingAccessibilityNotificationEvent] {
-        lock.lock()
-        defer { lock.unlock() }
-        return bufferedEvents.filter { $0.sequence > cursor.sequence }
-    }
-
-    func clearPendingEvents() {
-        lock.lock()
-        defer { lock.unlock() }
-        discardBufferedEventsLocked()
-    }
-
-    private func discardBufferedEventsLocked() {
-        discardedScopedThroughSequenceStorage = max(
-            discardedScopedThroughSequenceStorage,
-            bufferedEvents.last(where: { $0.provenance == .scoped })?.sequence ?? 0
-        )
-        bufferedEvents.removeAll()
-    }
-
     private func firstAnnouncementLocked(
         after cursor: AccessibilityNotificationCursor,
-        matching predicate: AnnouncementPredicate
+        matching predicate: ResolvedAnnouncementPredicate
     ) -> CapturedAnnouncement? {
-        for event in bufferedEvents where event.sequence > cursor.sequence {
+        let events = ingressLog.checkpoint(after: cursor, selection: .all).events
+        for event in events {
             guard let announcement = event.capturedAnnouncement,
                   predicate.matches(announcement.text)
             else { continue }
@@ -375,30 +368,13 @@ final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:dis
         return "\(singleLine.prefix(157))..."
     }
 
-    fileprivate func captureActionWindow(after cursor: AccessibilityNotificationCursor) -> AccessibilityNotificationBatch {
+    func checkpoint(
+        after cursor: AccessibilityNotificationCursor,
+        selection: AccessibilityNotificationCheckpointSelection = .scoped
+    ) -> AccessibilityNotificationBatch {
         lock.lock()
         defer { lock.unlock() }
-
-        return batchLocked(after: cursor)
-    }
-
-    func checkpoint(after cursor: AccessibilityNotificationCursor) -> AccessibilityNotificationBatch {
-        lock.lock()
-        defer { lock.unlock() }
-        return batchLocked(after: cursor)
-    }
-
-    private func batchLocked(after cursor: AccessibilityNotificationCursor) -> AccessibilityNotificationBatch {
-        AccessibilityNotificationBatch(
-            events: bufferedEvents.filter {
-                $0.sequence > cursor.sequence && $0.provenance == .scoped
-            },
-            through: AccessibilityNotificationCursor(sequence: latestSequenceStorage),
-            scopedScreenChangedThrough: latestScopedScreenChangedSequenceStorage,
-            gap: cursor.sequence < discardedScopedThroughSequenceStorage
-                ? AccessibilityNotificationGap(droppedThroughSequence: discardedScopedThroughSequenceStorage)
-                : nil
-        )
+        return ingressLog.checkpoint(after: cursor, selection: selection)
     }
 
     fileprivate func cancelActionWindow() {
@@ -427,6 +403,20 @@ struct AccessibilityNotificationCursor: Sendable, Equatable {
     static let origin = AccessibilityNotificationCursor(sequence: 0)
 
     let sequence: UInt64
+}
+
+enum AccessibilityNotificationCheckpointSelection: Sendable {
+    case all
+    case scoped
+
+    fileprivate func includes(_ provenance: AccessibilityNotificationProvenance) -> Bool {
+        switch self {
+        case .all:
+            true
+        case .scoped:
+            provenance == .scoped
+        }
+    }
 }
 
 struct AccessibilityNotificationBatch {
@@ -492,7 +482,7 @@ final class AccessibilityNotificationActionWindow: @unchecked Sendable { // swif
         lock.lock()
         let bus = self.bus
         lock.unlock()
-        return bus?.captureActionWindow(after: cursor)
+        return bus?.checkpoint(after: cursor)
     }
 
     func cancel() {

@@ -226,8 +226,8 @@ struct DoctorDemoFixture {
         return try HeistReceiptCodec.decode(JSONEncoder().encode(fixture))
     }
 
-    private static func menuInterface(primaryAction: String) -> Interface {
-        interface(nodes: [
+    private static func menuInterface(primaryAction: String) throws -> Interface {
+        try interface(nodes: [
             container(children: [
                 element(label: "Menu", traits: [.header], frameY: 0),
                 element(label: "Greek Salad", traits: [.staticText], frameY: 50),
@@ -238,8 +238,8 @@ struct DoctorDemoFixture {
         ])
     }
 
-    private static func confirmationInterface() -> Interface {
-        interface(nodes: [
+    private static func confirmationInterface() throws -> Interface {
+        try interface(nodes: [
             container(children: [
                 element(label: "Review Order", traits: [.header], frameY: 0),
                 element(label: "Greek Salad", traits: [.staticText], frameY: 50),
@@ -249,7 +249,7 @@ struct DoctorDemoFixture {
         ])
     }
 
-    private static func interface(nodes: [FixtureNode]) -> Interface {
+    private static func interface(nodes: [FixtureNode]) throws -> Interface {
         var traversalIndex = 0
         var elementAnnotations: [InterfaceElementAnnotation] = []
         var containerAnnotations: [InterfaceContainerAnnotation] = []
@@ -275,7 +275,7 @@ struct DoctorDemoFixture {
         let tree = nodes.enumerated().map { offset, node in
             convert(node, path: TreePath([offset]))
         }
-        return Interface(
+        return try Interface(
             timestamp: Date(timeIntervalSince1970: 0),
             tree: tree,
             annotations: InterfaceAnnotations(

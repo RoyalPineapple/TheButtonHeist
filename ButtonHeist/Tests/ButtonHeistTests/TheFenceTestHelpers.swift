@@ -2,7 +2,6 @@ import ButtonHeistTestSupport
 import XCTest
 import ThePlans
 import Network
-import AccessibilitySnapshotModel
 @_spi(ButtonHeistTooling) @testable import ButtonHeist
 @_spi(ButtonHeistInternals) import TheScore
 
@@ -127,21 +126,20 @@ extension Array where Element == (ClientMessage, String?) {
         }
     }
 
-    /// The sent heist plan's body resolved back to runtime actions (action and
-    /// wait steps) — what the in-app runtime dispatches after the public wire
-    /// receives a one-step plan.
-    var sentPlanMessages: [RuntimeActionMessage] {
+    var sentWaitSteps: [WaitStep] {
         guard let plan = sentHeistPlan else { return [] }
         return plan.body.compactMap { step in
-            switch step {
-            case .action(let action):
-                return try? action.command.resolveForRuntimeDispatch(in: .empty)
-            case .wait(let wait):
-                guard let resolved = try? wait.resolve(in: .empty) else { return nil }
-                return .wait(WaitTarget(predicate: resolved.predicate, timeout: resolved.timeout))
-            default:
-                return nil
-            }
+            if case .wait(let wait) = step { return wait }
+            return nil
+        }
+    }
+
+    /// The sent heist plan's action steps resolved to runtime commands.
+    var sentPlanMessages: [ResolvedHeistActionCommand] {
+        guard let plan = sentHeistPlan else { return [] }
+        return plan.body.compactMap { step in
+            guard case .action(let action) = step else { return nil }
+            return try? action.command.resolve(in: .empty)
         }
     }
 }
@@ -155,9 +153,9 @@ func semanticTarget(
 ) -> AccessibilityTarget {
     .predicate(
         ElementPredicateTemplate(
-            label: label.map(StringMatch<StringExpr>.literal),
-            identifier: identifier.map(StringMatch<StringExpr>.literal),
-            value: value.map(StringMatch<StringExpr>.literal),
+            label: label.map(StringMatch.exact),
+            identifier: identifier.map(StringMatch.exact),
+            value: value.map(StringMatch.exact),
             traits: traits ?? []
         ),
         ordinal: ordinal
@@ -202,178 +200,6 @@ private func predicateCheckArgumentValue(
     if let values { object["values"] = .array(values) }
     return .object(object)
 }
-
-struct TestHeistElementBuilder {
-    var description: String?
-    var label: String?
-    var value: String?
-    var identifier: String?
-    var hint: String?
-    var traits: [HeistTrait]
-    var frameX: Double
-    var frameY: Double
-    var frameWidth: Double
-    var frameHeight: Double
-    var activationPointEvidence: ActivationPointEvidence?
-    var respondsToUserInteraction: Bool
-    var customContent: [HeistCustomContent]?
-    var rotors: [HeistRotor]?
-    var actions: [ElementAction]?
-
-    init(
-        label: String? = "Element",
-        value: String? = nil,
-        identifier: String? = nil,
-        hint: String? = nil,
-        traits: [HeistTrait] = [.staticText],
-        frameX: Double = 0,
-        frameY: Double = 0,
-        frameWidth: Double = 100,
-        frameHeight: Double = 44,
-        activationPointEvidence: ActivationPointEvidence? = nil,
-        respondsToUserInteraction: Bool = true,
-        customContent: [HeistCustomContent]? = nil,
-        rotors: [HeistRotor]? = nil,
-        actions: [ElementAction]? = nil
-    ) {
-        self.description = label
-        self.label = label
-        self.value = value
-        self.identifier = identifier
-        self.hint = hint
-        self.traits = traits
-        self.frameX = frameX
-        self.frameY = frameY
-        self.frameWidth = frameWidth
-        self.frameHeight = frameHeight
-        self.activationPointEvidence = activationPointEvidence
-        self.respondsToUserInteraction = respondsToUserInteraction
-        self.customContent = customContent
-        self.rotors = rotors
-        self.actions = actions
-    }
-
-    func build() -> HeistElement {
-        HeistElement(
-            description: description ?? label ?? identifier ?? "Element",
-            label: label,
-            value: value,
-            identifier: identifier,
-            hint: hint,
-            traits: traits,
-            frameX: frameX,
-            frameY: frameY,
-            frameWidth: frameWidth,
-            frameHeight: frameHeight,
-            activationPointEvidence: activationPointEvidence ?? .defaultCenter(ScreenPoint(
-                x: frameX + frameWidth / 2,
-                y: frameY + frameHeight / 2
-            )),
-            respondsToUserInteraction: respondsToUserInteraction,
-            customContent: customContent,
-            rotors: rotors,
-            actions: actions ?? defaultActions
-        )
-    }
-
-    private var defaultActions: [ElementAction] {
-        traits.contains(.button) ? [.activate] : []
-    }
-}
-
-struct TestInterfaceBuilder {
-    enum Node {
-        case element(HeistElement)
-        case container(AccessibilityContainer, containerName: ContainerName? = nil, children: [Node])
-    }
-
-    var nodes: [Node]
-    var timestamp: Date
-
-    init(
-        nodes: [Node],
-        timestamp: Date = Date(timeIntervalSince1970: 0)
-    ) {
-        self.nodes = nodes
-        self.timestamp = timestamp
-    }
-
-    init(
-        elements: [HeistElement],
-        timestamp: Date = Date(timeIntervalSince1970: 0)
-    ) {
-        self.init(nodes: elements.map(Node.element), timestamp: timestamp)
-    }
-
-    func build() -> Interface {
-        var traversalIndex = 0
-        var elementAnnotations: [InterfaceElementAnnotation] = []
-        var containerAnnotations: [InterfaceContainerAnnotation] = []
-
-        func convert(_ node: Node, path: TreePath) -> AccessibilityHierarchy {
-            switch node {
-            case .element(let element):
-                let index = traversalIndex
-                traversalIndex += 1
-                elementAnnotations.append(InterfaceElementAnnotation(
-                    path: path,
-                    actions: element.actions
-                ))
-                return .element(Self.accessibilityElement(element), traversalIndex: index)
-
-            case .container(let container, let containerName, let children):
-                containerAnnotations.append(InterfaceContainerAnnotation(path: path, containerName: containerName))
-                return .container(
-                    container,
-                    children: children.enumerated().map { index, child in
-                        convert(child, path: path.appending(index))
-                    }
-                )
-            }
-        }
-
-        return Interface(
-            timestamp: timestamp,
-            tree: nodes.enumerated().map { index, node in
-                convert(node, path: TreePath([index]))
-            },
-            annotations: InterfaceAnnotations(elements: elementAnnotations, containers: containerAnnotations)
-        )
-    }
-
-    private static func accessibilityElement(_ element: HeistElement) -> AccessibilityElement {
-        AccessibilityElement(
-            description: element.description,
-            label: element.label,
-            value: element.value,
-            traits: AccessibilityTraits.fromNames(element.traits.map(\.rawValue)),
-            identifier: element.identifier,
-            hint: element.hint,
-            userInputLabels: nil,
-            shape: .frame(AccessibilityRect(
-                x: element.frameX,
-                y: element.frameY,
-                width: element.frameWidth,
-                height: element.frameHeight
-            )),
-            activationPoint: AccessibilityPoint(x: element.activationPointX, y: element.activationPointY),
-            usesDefaultActivationPoint: true,
-            customActions: [],
-            customContent: element.customContent?.map {
-                AccessibilityElement.CustomContent(
-                    label: $0.label,
-                    value: $0.value,
-                    isImportant: $0.isImportant
-                )
-            } ?? [],
-            customRotors: element.rotors?.map { AccessibilityElement.CustomRotor(name: $0.name) } ?? [],
-            accessibilityLanguage: nil,
-            respondsToUserInteraction: element.respondsToUserInteraction
-        )
-    }
-}
-
-typealias ReceiptTestInterfaceNode = TestInterfaceBuilder.Node
 
 @ButtonHeistActor
 func makeConnectedFence(configuration: TheFence.Configuration = .init()) -> (TheFence, MockConnection) {
@@ -429,201 +255,8 @@ func makeConnectedFence(configuration: TheFence.Configuration = .init()) -> (The
     return (fence, mockConn)
 }
 
-func makeReceiptTestElement(
-    label: String,
-    value: String? = nil,
-    identifier: String? = nil,
-    traits: [HeistTrait] = [.staticText],
-    actions: [ElementAction] = []
-) -> HeistElement {
-    TestHeistElementBuilder(
-        label: label,
-        value: value,
-        identifier: identifier,
-        traits: traits,
-        actions: actions
-    ).build()
-}
-
-func makeReceiptTestInterface(
-    _ elements: [HeistElement],
-    timestamp: Date = Date(timeIntervalSince1970: 0)
-) -> Interface {
-    TestInterfaceBuilder(elements: elements, timestamp: timestamp).build()
-}
-
-func makeReceiptTestInterface(
-    nodes: [ReceiptTestInterfaceNode],
-    timestamp: Date = Date(timeIntervalSince1970: 0)
-) -> Interface {
-    TestInterfaceBuilder(nodes: nodes, timestamp: timestamp).build()
-}
-
-func makeTestInterface(
-    elements: [HeistElement],
-    timestamp: Date = Date(timeIntervalSince1970: 0)
-) -> Interface {
-    makeReceiptTestInterface(elements, timestamp: timestamp)
-}
-
-func makeReceiptTestContainer(
-    type: AccessibilityContainer.ContainerType = .semanticGroup(label: nil, value: nil),
-    identifier: String? = nil,
-    scrollableContentSize: AccessibilitySize? = nil,
-    frameX: Double = 0,
-    frameY: Double = 0,
-    frameWidth: Double = 100,
-    frameHeight: Double = 100,
-    isModalBoundary: Bool = false,
-    customActions: [AccessibilityElement.CustomAction] = []
-) -> AccessibilityContainer {
-    AccessibilityContainer(
-        type: type,
-        identifier: identifier,
-        scrollableContentSize: scrollableContentSize,
-        frame: AccessibilityRect(x: frameX, y: frameY, width: frameWidth, height: frameHeight),
-        isModalBoundary: isModalBoundary,
-        customActions: customActions
-    )
-}
-
-func makeReceiptTestSemanticContainer(
-    label: String? = nil,
-    value: String? = nil,
-    identifier: String? = nil,
-    frameX: Double = 0,
-    frameY: Double = 0,
-    frameWidth: Double = 100,
-    frameHeight: Double = 100,
-    isModalBoundary: Bool = false,
-    customActions: [AccessibilityElement.CustomAction] = []
-) -> AccessibilityContainer {
-    makeReceiptTestContainer(
-        type: .semanticGroup(label: label, value: value), identifier: identifier,
-        frameX: frameX,
-        frameY: frameY,
-        frameWidth: frameWidth,
-        frameHeight: frameHeight,
-        isModalBoundary: isModalBoundary,
-        customActions: customActions
-    )
-}
-
-func makeReceiptTestScrollableContainer(
-    contentWidth: Double,
-    contentHeight: Double,
-    frameX: Double = 0,
-    frameY: Double = 0,
-    frameWidth: Double = 100,
-    frameHeight: Double = 100,
-    isModalBoundary: Bool = false,
-    customActions: [AccessibilityElement.CustomAction] = []
-) -> AccessibilityContainer {
-    makeReceiptTestContainer(
-        type: .none, scrollableContentSize: AccessibilitySize(width: contentWidth, height: contentHeight),
-        frameX: frameX,
-        frameY: frameY,
-        frameWidth: frameWidth,
-        frameHeight: frameHeight,
-        isModalBoundary: isModalBoundary,
-        customActions: customActions
-    )
-}
-
-func makeReceiptTestInterface(
-    elementCount: Int,
-    prefix: String = "element",
-    timestamp: Date = Date(timeIntervalSince1970: 0)
-) -> Interface {
-    makeReceiptTestInterface(
-        (0..<elementCount).map { makeReceiptTestElement(label: "\(prefix) \($0)") },
-        timestamp: timestamp
-    )
-}
-
-func makeReceiptTestTrace(
-    before beforeInterface: Interface,
-    after afterInterface: Interface,
-    beforeScreenId: String? = "screen",
-    afterScreenId: String? = "screen",
-    afterTransition: AccessibilityTrace.Transition = .init()
-) -> AccessibilityTrace {
-    let beforeCapture = AccessibilityTrace.Capture(
-        sequence: 1,
-        interface: beforeInterface,
-        context: AccessibilityTrace.Context(screenId: beforeScreenId)
-    )
-    let afterCapture = AccessibilityTrace.Capture(
-        sequence: 2,
-        interface: afterInterface,
-        parentHash: beforeCapture.hash,
-        context: AccessibilityTrace.Context(screenId: afterScreenId),
-        transition: afterTransition
-    )
-    return AccessibilityTrace(captures: [beforeCapture, afterCapture])
-}
-
-func makeReceiptScreenChangedTransition(sequence: UInt64 = 1) -> AccessibilityTrace.Transition {
-    AccessibilityTrace.Transition(accessibilityNotifications: [
-        AccessibilityNotificationEvidence(
-            sequence: sequence,
-            kind: .screenChanged,
-            timestamp: Date(timeIntervalSince1970: TimeInterval(sequence)),
-            notificationData: .none,
-            associatedElement: .none
-        ),
-    ])
-}
-
-func makeTestHeistActionStep(
-    path: String = "$.body[0]",
-    command: HeistActionCommand? = nil,
-    result: ActionResult = makeTestActionResult(),
-    expectationActionResult: ActionResult? = nil,
-    expectation: ExpectationResult? = nil,
-    durationMs: Int = 1
-) -> HeistExecutionStepResult {
-    let evidence: HeistActionEvidence
-    if let expectationActionResult, let expectation {
-        guard let command else {
-            preconditionFailure("Expectation action evidence requires a command")
-        }
-        evidence = .expectation(
-            command: command,
-            dispatchResult: result,
-            expectationResult: expectationActionResult,
-            expectation: expectation
-        )
-    } else {
-        precondition(expectationActionResult == nil && expectation == nil)
-        evidence = command.map {
-            .dispatch(command: $0, dispatchResult: result)
-        } ?? .commandlessDispatch(dispatchResult: result)
-    }
-
-    guard !result.outcome.isSuccess else {
-        return .passed(
-            path: path,
-            receiptKind: .action,
-            durationMs: durationMs,
-            evidence: evidence
-        )
-    }
-    return .failed(
-        path: path,
-        receiptKind: .action,
-        durationMs: durationMs,
-        evidence: evidence,
-        failure: HeistFailureDetail(
-            category: result.outcome.errorKind == .elementNotFound ? .targetResolution : .action,
-            contract: "action dispatch succeeds",
-            observed: result.message ?? "action failed"
-        )
-    )
-}
-
 func makeBackgroundElementsChangedTrace(elementCount: Int) -> AccessibilityTrace {
-    let interface = makeReceiptTestInterface(elementCount: elementCount)
+    let interface = makeTestInterface(elementCount: elementCount)
     let beforeCapture = AccessibilityTrace.Capture(sequence: 1, interface: interface)
     let afterCapture = AccessibilityTrace.Capture(
         sequence: 2,
@@ -635,9 +268,9 @@ func makeBackgroundElementsChangedTrace(elementCount: Int) -> AccessibilityTrace
 }
 
 func makeBackgroundScreenChangedTrace(elementCount: Int) -> AccessibilityTrace {
-    makeReceiptTestTrace(
-        before: makeReceiptTestInterface(elementCount: 0, prefix: "before"),
-        after: makeReceiptTestInterface(elementCount: elementCount, prefix: "after"),
+    makeTestTrace(
+        before: makeTestInterface(elementCount: 0, prefix: "before"),
+        after: makeTestInterface(elementCount: elementCount, prefix: "after"),
         beforeScreenId: "before",
         afterScreenId: "after"
     )
@@ -704,22 +337,20 @@ private extension HeistStep {
 
 private extension HeistActionCommand {
     var fenceCommandForInspection: TheFence.Command {
-        switch self {
-        case .activate, .increment, .decrement, .customAction:
+        switch wireType {
+        case .activate, .increment, .decrement, .performCustomAction:
             return .activate
         case .rotor:
             return .rotor
-        case .dismiss:
+        case .dismiss, .magicTap:
             return .perform
-        case .magicTap:
-            return .perform
-        case .mechanicalTap:
+        case .oneFingerTap:
             return .oneFingerTap
-        case .mechanicalLongPress:
+        case .longPress:
             return .longPress
-        case .mechanicalSwipe:
+        case .swipe:
             return .swipe
-        case .mechanicalDrag:
+        case .drag:
             return .drag
         case .typeText:
             return .typeText
@@ -729,13 +360,13 @@ private extension HeistActionCommand {
             return .setPasteboard
         case .takeScreenshot:
             return .getScreen
-        case .viewportScroll:
+        case .scroll:
             return .scroll
-        case .viewportScrollToVisible:
+        case .scrollToVisible:
             return .scrollToVisible
-        case .viewportScrollToEdge:
+        case .scrollToEdge:
             return .scrollToEdge
-        case .dismissKeyboard:
+        case .resignFirstResponder:
             return .dismissKeyboard
         }
     }

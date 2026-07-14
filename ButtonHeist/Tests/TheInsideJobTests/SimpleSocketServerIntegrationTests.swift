@@ -1,4 +1,4 @@
-// Integration tests for SimpleSocketServer state machine transitions.
+// Integration tests for the socket listener lifecycle and client transport.
 // Uses real NWListener on loopback and real NWConnection — requires TCP networking.
 
 import XCTest
@@ -90,7 +90,7 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
         XCTAssertEqual(admission.recordCancellation(), .removeRegisteredClient(8))
     }
 
-    // MARK: - ServerPhase transitions
+    // MARK: - Listener lifecycle
 
     func testStartTransitionsToListening() async throws {
         let port = try await server.startPlaintextForTests(port: 0, bindToLoopback: true)

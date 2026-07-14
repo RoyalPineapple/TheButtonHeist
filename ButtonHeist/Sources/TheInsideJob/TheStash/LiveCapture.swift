@@ -12,16 +12,13 @@ import AccessibilitySnapshotParser
 /// Visible live view from the latest observed capture.
 ///
 /// **Ownership.** Owned by `TheStash` as viewport-tied live state; carried by
-/// `InterfaceObservation` only as part of an observed capture. Ephemeral index, not source of
-/// truth: keyed by `TreePath` / `HeistId`, rebuilt wholesale on every parse,
-/// and invalidated by the next parse (last-read-wins).
-/// It carries weak UIKit refs, live geometry, and per-path lookups but is
-/// **never** unioned across exploration pages and must never be treated as
+/// `InterfaceObservation` only as part of an observed capture. `Snapshot` owns
+/// value identity and geometry; `DispatchReferences` owns viewport-local weak
+/// UIKit references. Neither is unioned across exploration pages or treated as
 /// stable identity. See `docs/ARCHITECTURE.md#state-has-one-owner`.
 struct LiveCapture {
     let snapshot: Snapshot
     let dispatchReferences: DispatchReferences
-    private let elementIndex: LiveElementIndex
 
     var hierarchy: [AccessibilityHierarchy] {
         snapshot.hierarchy
@@ -67,31 +64,21 @@ struct LiveCapture {
         dispatchReferences.scrollableContainerViewsByPath
     }
 
-    private init(
-        snapshot: Snapshot,
-        validatedEntries: [LiveElementEntry],
-        dispatchReferences: DispatchReferences
-    ) {
+    private init(snapshot: Snapshot, dispatchReferences: DispatchReferences) {
         self.snapshot = snapshot
         self.dispatchReferences = dispatchReferences
-        elementIndex = LiveElementIndex(
-            validatedEntries: validatedEntries,
-            containerRefsByPath: dispatchReferences.containerRefsByPath,
-            scrollableContainerViewsByPath: dispatchReferences.scrollableContainerViewsByPath
-        )
     }
 
     static func build(
         validating tree: InterfaceTree,
         dispatchReferences: DispatchReferences = .empty
     ) throws -> LiveCapture {
-        let entries = try validatedEntries(
+        try validate(
             validating: tree,
             dispatchReferences: dispatchReferences
         )
         return LiveCapture(
             snapshot: tree.viewportCapture,
-            validatedEntries: entries,
             dispatchReferences: dispatchReferences
         )
     }
@@ -105,35 +92,32 @@ struct LiveCapture {
     }
 
     func heistId(forPath path: TreePath) -> HeistId? {
-        elementIndex.heistId(forPath: path)
+        snapshot.heistIdsByPath[path]
     }
 
     func element(for heistId: HeistId) -> AccessibilityElement? {
-        elementIndex.element(for: heistId)
+        snapshot.element(for: heistId)
     }
 
     func elementEntry(for heistId: HeistId) -> LiveElementEntry? {
-        elementIndex.elementEntry(for: heistId)
-    }
-
-    func orderedElementEntries() -> [LiveElementEntry] {
-        elementIndex.orderedElementEntries
+        guard let path = snapshot.path(for: heistId),
+              case .element(let element, _) = snapshot.hierarchy.node(at: path)
+        else { return nil }
+        return LiveElementEntry(path: path, heistId: heistId, element: element)
     }
 
     func object(for heistId: HeistId) -> NSObject? {
-        elementIndex.object(for: heistId)
+        dispatchReferences.elementRefs[heistId]?.object
     }
 
     func heistId(matching object: NSObject) -> HeistId? {
-        elementIndex.heistId(matching: object)
-    }
-
-    func heistId(matchingObjectIdentifier objectIdentifier: ObjectIdentifier) -> HeistId? {
-        elementIndex.heistId(matchingObjectIdentifier: objectIdentifier)
+        snapshot.orderedHeistIds.first { heistId in
+            dispatchReferences.elementRefs[heistId]?.object === object
+        }
     }
 
     func scrollView(for heistId: HeistId) -> UIScrollView? {
-        elementIndex.scrollView(for: heistId)
+        dispatchReferences.elementRefs[heistId]?.scrollView
     }
 
     func scrollView(for container: InterfaceTree.Container) -> UIScrollView? {
@@ -141,7 +125,7 @@ struct LiveCapture {
     }
 
     func containerObject(forPath path: TreePath) -> NSObject? {
-        elementIndex.containerObject(forPath: path)
+        dispatchReferences.containerRefsByPath[path]?.object
     }
 
     func containerContentFrame(forPath path: TreePath) -> ContentRect? {
@@ -171,7 +155,7 @@ struct LiveCapture {
     }
 
     func scrollView(forContainerPath path: TreePath) -> UIScrollView? {
-        elementIndex.scrollableView(forContainerPath: path)
+        dispatchReferences.scrollableContainerViewsByPath[path]?.view
     }
 
     // MARK: - Snapshot
@@ -229,10 +213,18 @@ struct LiveCapture {
         }
 
         func element(for heistId: HeistId) -> AccessibilityElement? {
-            guard let path = heistIdsByPath.first(where: { $0.value == heistId })?.key,
+            guard let path = path(for: heistId),
                   case .element(let element, _) = hierarchy.node(at: path)
             else { return nil }
             return element
+        }
+
+        fileprivate func path(for heistId: HeistId) -> TreePath? {
+            heistIdsByPath.first { $0.value == heistId }?.key
+        }
+
+        fileprivate var orderedHeistIds: [HeistId] {
+            hierarchy.pathIndexedElements.compactMap { heistIdsByPath[$0.path] }
         }
 
         func containerContentFrame(forPath path: TreePath) -> ContentRect? {
@@ -298,32 +290,14 @@ struct LiveCapture {
 
     struct LiveElementEntry {
         let path: TreePath
-        let treeElement: InterfaceTree.Element
-        let ref: ElementRef?
-
-        fileprivate init(
-            path: TreePath,
-            treeElement: InterfaceTree.Element,
-            ref: ElementRef? = nil
-        ) {
-            self.path = path
-            self.treeElement = treeElement
-            self.ref = ref
-        }
-
-        var heistId: HeistId {
-            treeElement.heistId
-        }
-
-        var element: AccessibilityElement {
-            treeElement.element
-        }
+        let heistId: HeistId
+        let element: AccessibilityElement
     }
 
-    private static func validatedEntries(
+    private static func validate(
         validating tree: InterfaceTree,
         dispatchReferences: DispatchReferences
-    ) throws -> [LiveElementEntry] {
+    ) throws {
         let snapshot = tree.viewportCapture
         let indexedElements = snapshot.hierarchy.pathIndexedElements
         let elementPaths = Set(indexedElements.map(\.path))
@@ -367,7 +341,7 @@ struct LiveCapture {
             pathsByHeistId[heistId] = item.path
         }
 
-        let entries = try indexedElements.map { item -> LiveElementEntry in
+        for item in indexedElements {
             guard let heistId = snapshot.heistIdsByPath[item.path] else {
                 throw ValidationError.missingHeistId(path: item.path)
             }
@@ -390,20 +364,14 @@ struct LiveCapture {
                 observedPoint: treeElement.observedScrollContentActivationPoint,
                 hierarchy: snapshot.hierarchy
             )
-            return LiveElementEntry(
-                path: item.path,
-                treeElement: treeElement,
-                ref: dispatchReferences.elementRefs[heistId]
-            )
         }
 
         try validateContainers(in: tree)
         try validate(
             dispatchReferences: dispatchReferences,
             snapshot: snapshot,
-            liveHeistIds: Set(entries.map(\.heistId))
+            liveHeistIds: Set(pathsByHeistId.keys)
         )
-        return entries
     }
 
     private static func capturedElementsMatch(
@@ -551,10 +519,10 @@ struct LiveCapture {
             switch self {
             case .duplicateHeistId(let heistId, let firstPath, let duplicatePath):
                 return """
-                LiveElementIndex cannot index duplicate live HeistId "\(heistId.rawValue)" \
+                LiveCapture cannot represent duplicate live HeistId "\(heistId.rawValue)" \
                 at paths \(firstPath.liveCaptureDiagnosticDescription) and \
                 \(duplicatePath.liveCaptureDiagnosticDescription); live HeistIds must be \
-                unique before building lookup indexes.
+                unique within a viewport snapshot.
                 """
 
             case .missingHeistId(let path):
@@ -562,13 +530,13 @@ struct LiveCapture {
 
             case .heistIdForMissingPath(let heistId, let path):
                 return """
-                LiveElementIndex cannot attach HeistId "\(heistId.rawValue)" to missing \
+                LiveCapture cannot attach HeistId "\(heistId.rawValue)" to missing \
                 path \(path.liveCaptureDiagnosticDescription).
                 """
 
             case .heistIdForNonElementPath(let heistId, let path):
                 return """
-                LiveElementIndex cannot attach HeistId "\(heistId.rawValue)" to non-element \
+                LiveCapture cannot attach HeistId "\(heistId.rawValue)" to non-element \
                 path \(path.liveCaptureDiagnosticDescription).
                 """
 
@@ -580,20 +548,20 @@ struct LiveCapture {
 
             case .missingTreeElement(let heistId, let path):
                 return """
-                LiveElementIndex cannot find tree element "\(heistId.rawValue)" for viewport \
+                LiveCapture cannot find tree element "\(heistId.rawValue)" for viewport \
                 path \(path.liveCaptureDiagnosticDescription).
                 """
 
             case .treeElementPathMismatch(let heistId, let snapshotPath, let treePath):
                 return """
-                LiveElementIndex cannot pair tree element "\(heistId.rawValue)" at \
+                LiveCapture cannot pair tree element "\(heistId.rawValue)" at \
                 \(treePath.liveCaptureDiagnosticDescription) with viewport path \
                 \(snapshotPath.liveCaptureDiagnosticDescription).
                 """
 
             case .treeElementMismatch(let heistId, let path):
                 return """
-                LiveElementIndex cannot pair tree element "\(heistId.rawValue)" with different \
+                LiveCapture cannot pair tree element "\(heistId.rawValue)" with different \
                 viewport element content at path \(path.liveCaptureDiagnosticDescription).
                 """
 
@@ -629,43 +597,43 @@ struct LiveCapture {
 
             case .strayElementRef(let heistId):
                 return """
-                LiveElementIndex cannot attach stray element ref for HeistId \
-                "\(heistId.rawValue)"; every live element ref must be backed by a live entry.
+                LiveCapture cannot attach stray element ref for HeistId \
+                "\(heistId.rawValue)"; every live element ref must be backed by the snapshot.
                 """
 
             case .invalidFirstResponderHeistId(let heistId):
                 return """
-                LiveElementIndex cannot attach first responder HeistId "\(heistId.rawValue)"; \
-                first responder state must reference a live element entry.
+                LiveCapture cannot attach first responder HeistId "\(heistId.rawValue)"; \
+                first responder state must reference a snapshot element.
                 """
 
             case .containerRefForMissingPath(let path):
                 return """
-                LiveElementIndex cannot attach container ref to missing path \
+                LiveCapture cannot attach container ref to missing path \
                 \(path.liveCaptureDiagnosticDescription).
                 """
 
             case .containerRefForElementPath(let path):
                 return """
-                LiveElementIndex cannot attach container ref to element path \
+                LiveCapture cannot attach container ref to element path \
                 \(path.liveCaptureDiagnosticDescription).
                 """
 
             case .scrollableViewForMissingPath(let path):
                 return """
-                LiveElementIndex cannot attach scrollable view ref to missing path \
+                LiveCapture cannot attach scrollable view ref to missing path \
                 \(path.liveCaptureDiagnosticDescription).
                 """
 
             case .scrollableViewForElementPath(let path):
                 return """
-                LiveElementIndex cannot attach scrollable view ref to element path \
+                LiveCapture cannot attach scrollable view ref to element path \
                 \(path.liveCaptureDiagnosticDescription).
                 """
 
             case .scrollableViewForNonScrollablePath(let path):
                 return """
-                LiveElementIndex cannot attach scrollable view ref to non-scrollable container path \
+                LiveCapture cannot attach scrollable view ref to non-scrollable container path \
                 \(path.liveCaptureDiagnosticDescription).
                 """
             }
@@ -673,80 +641,6 @@ struct LiveCapture {
 
         var errorDescription: String? {
             description
-        }
-    }
-
-    // MARK: - Live Element Index
-
-    struct LiveElementIndex {
-        private let entriesByPath: [TreePath: LiveElementEntry]
-        private let pathsByHeistId: [HeistId: TreePath]
-        private let orderedPaths: [TreePath]
-        private let containerRefsByPath: [TreePath: ContainerRef]
-        private let scrollableContainerViewsByPath: [TreePath: ScrollableViewRef]
-
-        fileprivate init(
-            validatedEntries entries: [LiveElementEntry],
-            containerRefsByPath: [TreePath: ContainerRef],
-            scrollableContainerViewsByPath: [TreePath: ScrollableViewRef]
-        ) {
-            entriesByPath = Dictionary(uniqueKeysWithValues: entries.map { ($0.path, $0) })
-            pathsByHeistId = Dictionary(uniqueKeysWithValues: entries.map { ($0.heistId, $0.path) })
-            orderedPaths = entries.map(\.path)
-            self.containerRefsByPath = containerRefsByPath
-            self.scrollableContainerViewsByPath = scrollableContainerViewsByPath
-        }
-
-        var heistIds: Set<HeistId> {
-            Set(pathsByHeistId.keys)
-        }
-
-        var orderedElementEntries: [LiveElementEntry] {
-            orderedPaths.compactMap { entriesByPath[$0] }
-        }
-
-        func contains(heistId: HeistId) -> Bool {
-            pathsByHeistId[heistId] != nil
-        }
-
-        func heistId(forPath path: TreePath) -> HeistId? {
-            entriesByPath[path]?.heistId
-        }
-
-        func element(for heistId: HeistId) -> AccessibilityElement? {
-            elementEntry(for: heistId)?.element
-        }
-
-        func elementEntry(for heistId: HeistId) -> LiveElementEntry? {
-            pathsByHeistId[heistId].flatMap { entriesByPath[$0] }
-        }
-
-        func object(for heistId: HeistId) -> NSObject? {
-            elementEntry(for: heistId)?.ref?.object
-        }
-
-        func heistId(matching object: NSObject) -> HeistId? {
-            orderedElementEntries.first { entry in
-                entry.ref?.object === object
-            }?.heistId
-        }
-
-        func heistId(matchingObjectIdentifier objectIdentifier: ObjectIdentifier) -> HeistId? {
-            orderedElementEntries.first { entry in
-                entry.ref?.object.map(ObjectIdentifier.init) == objectIdentifier
-            }?.heistId
-        }
-
-        func scrollView(for heistId: HeistId) -> UIScrollView? {
-            elementEntry(for: heistId)?.ref?.scrollView
-        }
-
-        func containerObject(forPath path: TreePath) -> NSObject? {
-            containerRefsByPath[path]?.object
-        }
-
-        func scrollableView(forContainerPath path: TreePath) -> UIScrollView? {
-            scrollableContainerViewsByPath[path]?.view
         }
     }
 

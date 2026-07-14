@@ -4,7 +4,7 @@ import TheScore
 struct ExpectationProjection: Sendable {
     let met: Bool
     let actual: String?
-    let expected: AccessibilityPredicate<RootContext>?
+    let expected: AccessibilityPredicate?
     let hint: String?
 
     init(result: ExpectationResult, hint: String? = nil) {

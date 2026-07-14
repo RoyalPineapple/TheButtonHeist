@@ -1,22 +1,15 @@
 import BumperBowlingCore
 
-extension ComponentID {
-    static let plans = checked("plans")
-    static let score = checked("score")
-    static let dsl = checked("dsl")
-    static let doctor = checked("doctor")
-    static let runtime = checked("runtime")
-    static let testing = checked("testing")
-    static let tools = checked("tools")
-    static let mcp = checked("mcp")
-    static let demo = checked("demo")
-
-    private static func checked(_ rawValue: String) -> ComponentID {
-        guard let id = try? ComponentID(rawValue) else {
-            preconditionFailure("Invalid component id: \(rawValue)")
-        }
-        return id
-    }
+enum ButtonHeistComponent: String, ComponentKey {
+    case plans
+    case score
+    case dsl
+    case doctor
+    case runtime
+    case testing
+    case tools
+    case mcp
+    case demo
 }
 
 extension ComponentShape {
@@ -58,13 +51,5 @@ extension ComponentShape {
 
     static let buttonHeistDemoSurface = ComponentShape {
         MayUse(.foundation, .uiKit, .swiftUI)
-    }
-}
-
-extension AssertionShape {
-    static let buttonHeistGlobal = AssertionShape {
-        DependencyBoundaries(.error)
-        SingleOwner(.error)
-        AcyclicDeclaredDependencies(.error)
     }
 }

@@ -153,7 +153,7 @@ final class ElementInflationProductTests: XCTestCase {
             return XCTFail("Expected committed refresh fixture to have a live target")
         }
         let completedInflation = ElementInflation.InflatedElementTarget(
-            target: literalTarget(ElementPredicate(identifier: .exact(heistId.rawValue))),
+            target: try AccessibilityTarget.identifier(heistId.rawValue).resolve(in: .empty),
             treeElement: treeElement,
             liveTarget: liveTarget,
             deadline: SemanticObservationDeadline(start: 0, timeoutSeconds: 0),
@@ -231,9 +231,9 @@ final class ElementInflationProductTests: XCTestCase {
         }
     }
 
-    func testElementInflationRejectsContainerTargetWithTypedResolutionFailure() async {
+    func testElementInflationRejectsContainerTargetWithTypedResolutionFailure() async throws {
         let result = await brains.navigation.elementInflation.inflate(
-            for: .container(.identifier("content")),
+            for: try AccessibilityTarget.container(.identifier("content")).resolve(in: .empty),
             method: .activate
         )
 
@@ -255,19 +255,6 @@ final class ElementInflationProductTests: XCTestCase {
         CGRect(x: 0, y: 0, width: 320, height: 640)
     }
 
-    func testElementInflationRejectsUnresolvedTargetReferenceWithTypedResolutionFailure() async {
-        let result = await brains.navigation.elementInflation.inflate(
-            for: .ref("row"),
-            method: .activate
-        )
-
-        guard case .failed(let failure) = result else {
-            return XCTFail("Expected unresolved target reference rejection")
-        }
-        XCTAssertEqual(failure.failedStep, .targetResolution)
-        XCTAssertEqual(failure.targetResolutionFailure, .unresolvedReference("row"))
-    }
-
     func testSemanticActivateRevealsOffscreenScrollTargetWithoutManualPreScroll() async throws {
         let fixture = try installOffscreenActivationFixture(
             identifier: "semantic_checkout_submit",
@@ -278,9 +265,11 @@ final class ElementInflationProductTests: XCTestCase {
 
         XCTAssertEqual(fixture.scrollView.contentOffset, .zero)
 
-        let result = await brains.executeRuntimeAction(.activate(
-            literalTarget(ElementPredicate(identifier: "semantic_checkout_submit", traits: [.button]))
-        ))
+        let result = await brains.executeRuntimeAction(
+            try HeistActionCommand.activate(
+                .element(.identifier("semantic_checkout_submit"), traits: [.button])
+            ).resolve(in: .empty)
+        )
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "semantic activate failed")
         guard result.outcome.isSuccess else { return }
@@ -304,9 +293,11 @@ final class ElementInflationProductTests: XCTestCase {
         defer { fixture.cleanup() }
         try seedOffViewportTarget(fixture)
 
-        let result = await brains.executeRuntimeAction(.activate(
-            literalTarget(ElementPredicate(identifier: "nested_semantic_checkout_submit", traits: [.button]))
-        ))
+        let result = await brains.executeRuntimeAction(
+            try HeistActionCommand.activate(
+                .element(.identifier("nested_semantic_checkout_submit"), traits: [.button])
+            ).resolve(in: .empty)
+        )
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "nested semantic activate failed")
         guard result.outcome.isSuccess else { return }
@@ -331,10 +322,12 @@ final class ElementInflationProductTests: XCTestCase {
         XCTAssertEqual(fixture.scrollView.contentOffset, .zero)
         XCTAssertFalse(fixture.target.isFirstResponder)
 
-        let result = await brains.executeRuntimeAction(.typeText(TypeTextTarget(
-            text: "leave at desk",
-            target: literalTarget(ElementPredicate(identifier: .exact(fixture.identifier)))
-        )))
+        let result = await brains.executeRuntimeAction(
+            try HeistActionCommand.typeText(
+                text: "leave at desk",
+                target: .identifier(fixture.identifier)
+            ).resolve(in: .empty)
+        )
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "semantic type_text failed")
         guard result.outcome.isSuccess else { return }
@@ -360,9 +353,11 @@ final class ElementInflationProductTests: XCTestCase {
         XCTAssertEqual(fixture.scrollView.contentOffset, .zero)
         XCTAssertFalse(fixture.target.isFirstResponder)
 
-        let result = await brains.executeRuntimeAction(.activate(
-            literalTarget(ElementPredicate(identifier: .exact(fixture.identifier), traits: [.textEntry]))
-        ))
+        let result = await brains.executeRuntimeAction(
+            try HeistActionCommand.activate(
+                .element(.identifier(fixture.identifier), traits: [.textEntry])
+            ).resolve(in: .empty)
+        )
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "visible text field activate failed")
         XCTAssertEqual(result.subjectEvidence?.element.identifier, fixture.knownHeistId.rawValue)
@@ -395,9 +390,11 @@ final class ElementInflationProductTests: XCTestCase {
         XCTAssertEqual(fixture.outerScrollView.contentOffset, .zero)
         XCTAssertEqual(fixture.innerScrollView.contentOffset, .zero)
 
-        let result = await brains.executeRuntimeAction(.activate(
-            literalTarget(ElementPredicate(identifier: "nested_scroll_checkout_submit", traits: [.button]))
-        ))
+        let result = await brains.executeRuntimeAction(
+            try HeistActionCommand.activate(
+                .element(.identifier("nested_scroll_checkout_submit"), traits: [.button])
+            ).resolve(in: .empty)
+        )
 
         XCTAssertTrue(
             result.outcome.isSuccess,
@@ -428,9 +425,11 @@ final class ElementInflationProductTests: XCTestCase {
         let decoyRevealCount = decoy.scrollView.revealRequestCount
         let decoyOffset = decoy.scrollView.contentOffset
 
-        let result = await brains.executeRuntimeAction(.activate(
-            literalTarget(ElementPredicate(identifier: "nested_scroll_with_decoy_submit", traits: [.button]))
-        ))
+        let result = await brains.executeRuntimeAction(
+            try HeistActionCommand.activate(
+                .element(.identifier("nested_scroll_with_decoy_submit"), traits: [.button])
+            ).resolve(in: .empty)
+        )
 
         XCTAssertTrue(
             result.outcome.isSuccess,
@@ -462,9 +461,11 @@ final class ElementInflationProductTests: XCTestCase {
             2
         )
 
-        let result = await brains.executeRuntimeAction(.activate(
-            literalTarget(ElementPredicate(identifier: .exact(fixture.identifier), traits: [.button]))
-        ))
+        let result = await brains.executeRuntimeAction(
+            try HeistActionCommand.activate(
+                .element(.identifier(fixture.identifier), traits: [.button])
+            ).resolve(in: .empty)
+        )
 
         XCTAssertTrue(
             result.outcome.isSuccess,
@@ -482,9 +483,11 @@ final class ElementInflationProductTests: XCTestCase {
         let fixture = try installAmbiguousActivationFixture()
         defer { fixture.cleanup() }
 
-        let result = await brains.executeRuntimeAction(.activate(
-            literalTarget(ElementPredicate(label: "Duplicate", traits: [.button]))
-        ))
+        let result = await brains.executeRuntimeAction(
+            try HeistActionCommand.activate(
+                .element(.label("Duplicate"), traits: [.button])
+            ).resolve(in: .empty)
+        )
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .activate)
@@ -500,10 +503,10 @@ final class ElementInflationProductTests: XCTestCase {
     func testRefreshRetainsSelectedHeistIdWhenPredicateOrderingChanges() async throws {
         let fixture = try installAmbiguousActivationFixture()
         defer { fixture.cleanup() }
-        let target = literalTarget(
-            ElementPredicate(label: "Duplicate", traits: [.button]),
+        let target = try AccessibilityTarget.target(
+            .element(.label("Duplicate"), traits: [.button]),
             ordinal: 0
-        )
+        ).resolve(in: .empty)
         fixture.second.isHidden = true
         brains.stash.installScreenForTesting(try observation(for: [fixture.first]))
         brains.stash.clearInstalledVisibleRefreshScreenForTesting()
@@ -541,10 +544,10 @@ final class ElementInflationProductTests: XCTestCase {
     func testRefreshFailsClosedWhenSelectedHeistIdIsRemoved() async throws {
         let fixture = try installAmbiguousActivationFixture()
         defer { fixture.cleanup() }
-        let target = literalTarget(
-            ElementPredicate(label: "Duplicate", traits: [.button]),
+        let target = try AccessibilityTarget.target(
+            .element(.label("Duplicate"), traits: [.button]),
             ordinal: 0
-        )
+        ).resolve(in: .empty)
         fixture.second.isHidden = true
         brains.stash.installScreenForTesting(try observation(for: [fixture.first]))
         brains.stash.clearInstalledVisibleRefreshScreenForTesting()
@@ -588,9 +591,11 @@ final class ElementInflationProductTests: XCTestCase {
             heistId: HeistId(rawValue: "stale_\(fixture.knownHeistId.rawValue)")
         )
 
-        let result = await brains.executeRuntimeAction(.activate(
-            literalTarget(ElementPredicate(label: .exact(fixture.label), traits: [.button]))
-        ))
+        let result = await brains.executeRuntimeAction(
+            try HeistActionCommand.activate(
+                .element(.label(fixture.label), traits: [.button])
+            ).resolve(in: .empty)
+        )
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .activate)
@@ -617,9 +622,11 @@ final class ElementInflationProductTests: XCTestCase {
             refreshesFromUIKit: false
         )
 
-        let result = await brains.executeRuntimeAction(.activate(
-            literalTarget(ElementPredicate(identifier: "unrevealable_submit", traits: [.button]))
-        ))
+        let result = await brains.executeRuntimeAction(
+            try HeistActionCommand.activate(
+                .element(.identifier("unrevealable_submit"), traits: [.button])
+            ).resolve(in: .empty)
+        )
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .activate)
@@ -671,10 +678,12 @@ final class ElementInflationProductTests: XCTestCase {
         )
         defer { fixture.cleanup() }
 
-        let result = await brains.executeRuntimeAction(.scroll(ScrollTarget(
-            target: literalTarget(ElementPredicate(identifier: "visible_anchor_explicit_scroll_revealed")),
-            direction: .down
-        )))
+        let result = await brains.executeRuntimeAction(
+            try HeistActionCommand.viewportScroll(ScrollTarget(
+                target: .identifier("visible_anchor_explicit_scroll_revealed"),
+                direction: .down
+            )).resolve(in: .empty)
+        )
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "explicit scroll failed")
         XCTAssertEqual(result.method, .scroll)
@@ -706,15 +715,19 @@ final class ElementInflationProductTests: XCTestCase {
 
         if heist {
             let plan = try HeistPlan(body: [
-                .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(identifier: .exact(.literal(identifier)), traits: [.button]))))),
+                .action(try ActionStep(command: .activate(
+                    .element(.identifier(identifier), traits: [.button])
+                ))),
             ])
             let result = await localBrains.executeHeistPlan(plan)
             return (result, fixture.target.activationCount)
         }
 
-        let result = await localBrains.executeRuntimeAction(.activate(
-            literalTarget(ElementPredicate(identifier: .exact(identifier), traits: [.button]))
-        ))
+        let result = await localBrains.executeRuntimeAction(
+            try HeistActionCommand.activate(
+                .element(.identifier(identifier), traits: [.button])
+            ).resolve(in: .empty)
+        )
         return (result, fixture.target.activationCount)
     }
 
@@ -746,7 +759,7 @@ final class ElementInflationProductTests: XCTestCase {
         XCTAssertFalse(brains.semanticObservationIsActive, file: file, line: line)
         XCTAssertFalse(brains.tripwire.isPulseRunning, file: file, line: line)
         XCTAssertFalse(observationStream.isActive, file: file, line: line)
-        XCTAssertEqual(observationStream.settledWaiterCount, 0, file: file, line: line)
+        XCTAssertEqual(observationStream.observationReplayWaiterCount, 0, file: file, line: line)
         XCTAssertEqual(observationStream.cycleWaiterCount, 0, file: file, line: line)
         XCTAssertEqual(observationStream.activeObservationDemandCount, 0, file: file, line: line)
     }
@@ -1130,11 +1143,11 @@ final class ElementInflationProductTests: XCTestCase {
         var elements = screen.tree.elements
         elements[entry.heistId] = entry
 
-        brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
+        let discoveryObservation = InterfaceObservation.makeForTests(
             tree: InterfaceTree(elements: elements, containers: screen.tree.containers),
             liveCapture: screen.liveCapture
-        ))
-        brains.stash.clearInstalledVisibleRefreshScreenForTesting()
+        )
+        brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(discoveryObservation)
     }
 
     private func seedKnownUnreachableDuplicate(

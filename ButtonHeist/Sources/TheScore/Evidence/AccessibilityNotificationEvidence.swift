@@ -1,4 +1,5 @@
 import Foundation
+import ThePlans
 
 public enum ElementChangeNotification: String, Codable, Sendable, Equatable, Hashable {
     case layout
@@ -38,20 +39,19 @@ public enum AccessibilityNotificationKind: Codable, Sendable, Equatable, Hashabl
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "accessibility notification kind")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let kind = try container.decode(Kind.self, forKey: .type)
+        let typeName = "\(kind.rawValue) accessibility notification kind"
         switch kind {
         case .screenChanged:
-            try Self.rejectIfPresent(.notification, in: container, kind: kind)
-            try Self.rejectIfPresent(.rawCode, in: container, kind: kind)
+            try container.rejectIncompatibleFields(allowing: [.type], typeName: typeName)
             self = .screenChanged
         case .elementChanged:
-            try Self.rejectIfPresent(.rawCode, in: container, kind: kind)
+            try container.rejectIncompatibleFields(allowing: [.type, .notification], typeName: typeName)
             self = .elementChanged(try container.decode(ElementChangeNotification.self, forKey: .notification))
         case .announcement:
-            try Self.rejectIfPresent(.notification, in: container, kind: kind)
-            try Self.rejectIfPresent(.rawCode, in: container, kind: kind)
+            try container.rejectIncompatibleFields(allowing: [.type], typeName: typeName)
             self = .announcement
         case .unknown:
-            try Self.rejectIfPresent(.notification, in: container, kind: kind)
+            try container.rejectIncompatibleFields(allowing: [.type, .rawCode], typeName: typeName)
             self = .unknown(try container.decode(UInt32.self, forKey: .rawCode))
         }
     }
@@ -72,18 +72,6 @@ public enum AccessibilityNotificationKind: Codable, Sendable, Equatable, Hashabl
         }
     }
 
-    private static func rejectIfPresent(
-        _ key: CodingKeys,
-        in container: KeyedDecodingContainer<CodingKeys>,
-        kind: Kind
-    ) throws {
-        guard container.contains(key) else { return }
-        throw DecodingError.dataCorruptedError(
-            forKey: key,
-            in: container,
-            debugDescription: "\(kind.rawValue) accessibility notification kind must not include \(key.stringValue)"
-        )
-    }
 }
 
 extension AccessibilityNotificationKind: CustomStringConvertible {
@@ -252,28 +240,22 @@ public enum AccessibilityNotificationPayload: Codable, Sendable, Equatable, Hash
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "accessibility notification payload")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let type = try container.decode(PayloadType.self, forKey: .type)
+        let typeName = "\(type.rawValue) accessibility notification payload"
         switch type {
         case .none:
-            try Self.rejectIfPresent(.value, in: container, type: type)
-            try Self.rejectIfPresent(.element, in: container, type: type)
-            try Self.rejectIfPresent(.object, in: container, type: type)
+            try container.rejectIncompatibleFields(allowing: [.type], typeName: typeName)
             self = .none
         case .string:
-            try Self.rejectIfPresent(.element, in: container, type: type)
-            try Self.rejectIfPresent(.object, in: container, type: type)
+            try container.rejectIncompatibleFields(allowing: [.type, .value], typeName: typeName)
             self = .string(try container.decode(String.self, forKey: .value))
         case .element:
-            try Self.rejectIfPresent(.value, in: container, type: type)
-            try Self.rejectIfPresent(.object, in: container, type: type)
+            try container.rejectIncompatibleFields(allowing: [.type, .element], typeName: typeName)
             self = .element(try container.decode(AccessibilityNotificationElementReference.self, forKey: .element))
         case .unresolvedObject:
-            try Self.rejectIfPresent(.value, in: container, type: type)
-            try Self.rejectIfPresent(.element, in: container, type: type)
+            try container.rejectIncompatibleFields(allowing: [.type, .object], typeName: typeName)
             self = .unresolvedObject(try container.decode(AccessibilityNotificationObjectPayload.self, forKey: .object))
         case .unresolvedElement:
-            try Self.rejectIfPresent(.value, in: container, type: type)
-            try Self.rejectIfPresent(.element, in: container, type: type)
-            try Self.rejectIfPresent(.object, in: container, type: type)
+            try container.rejectIncompatibleFields(allowing: [.type], typeName: typeName)
             self = .unresolvedElement
         }
     }
@@ -297,18 +279,6 @@ public enum AccessibilityNotificationPayload: Codable, Sendable, Equatable, Hash
         }
     }
 
-    private static func rejectIfPresent(
-        _ key: CodingKeys,
-        in container: KeyedDecodingContainer<CodingKeys>,
-        type: PayloadType
-    ) throws {
-        guard container.contains(key) else { return }
-        throw DecodingError.dataCorruptedError(
-            forKey: key,
-            in: container,
-            debugDescription: "\(type.rawValue) accessibility notification payload must not include \(key.stringValue)"
-        )
-    }
 }
 
 public extension AccessibilityNotificationEvidence {

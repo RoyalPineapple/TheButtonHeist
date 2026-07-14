@@ -30,13 +30,13 @@ import Testing
     let expected = try HeistPlan(body: [
         .action(try ActionStep(command: .activate(.predicate(.identifier(.suffix("field")))))),
         .wait(WaitStep(predicate: .exists(.element(
-            .label(.prefix(.literal("No results"))),
-            .identifier(.contains(.literal("empty_state"))),
-            .value(.suffix(.literal("items"))),
+            .label(.prefix("No results")),
+            .identifier(.contains("empty_state")),
+            .value(.suffix("items")),
             .hint(.isEmpty)
         )), timeout: 2)),
         .action(try ActionStep(command: .typeText(
-            text: .literal("milk"),
+            text: "milk",
             target: .predicate(.value(.prefix("Search")))
         ))),
     ])
@@ -290,14 +290,14 @@ import Testing
 
     let expectedReplacement = try HeistPlan(body: [
         .action(try ActionStep(command: .typeText(
-            text: .literal("b"),
+            text: "b",
             target: .predicate(.identifier("Field")),
             replacingExisting: true
         ))),
     ])
     let expectedClear = try HeistPlan(body: [
         .action(try ActionStep(command: .typeText(
-            text: .literal(""),
+            text: "",
             target: .predicate(.identifier("Field")),
             replacingExisting: true
         ))),
@@ -317,9 +317,9 @@ import Testing
     """))
     let expected = try HeistPlan(body: [
         .action(try ActionStep(command: .activate(.predicate(.element(
-            .label(.prefix(.literal("foo"))),
-            .label(.contains(.literal("bar"))),
-            .label(.suffix(.literal("baz"))),
+            .label(.prefix("foo")),
+            .label(.contains("bar")),
+            .label(.suffix("baz")),
             .traits([.button])
         ))))),
     ])
@@ -373,7 +373,9 @@ import Testing
                     name: "addItem",
                     parameter: .string(name: "item"),
                     body: [
-                        .action(try ActionStep(command: .activate(.predicate(.label(.ref("item")))))),
+                        .action(try ActionStep(command: .activate(.predicate(
+                            .label(HeistReferenceName(stringLiteral: "item"))
+                        )))),
                     ]
                 ),
             ], body: []),
@@ -386,7 +388,7 @@ import Testing
         body: [
             .invoke(HeistInvocationStep(
                 path: ["Cart", "addItem"],
-                argument: .string(.literal("Milk")),
+                argument: .string("Milk"),
                 expectation: WaitStep(
                     predicate: .changed(.elements([.appeared(.label("subtotal"))])),
                     timeout: defaultActionExpectationTimeout
@@ -394,10 +396,10 @@ import Testing
             )),
             .invoke(HeistInvocationStep(
                 path: ["Cart", "addItem"],
-                argument: .string(.literal("Eggs")),
+                argument: .string("Eggs"),
                 expectation: WaitStep(
                     predicate: .changed(.elements([
-                        .updated(.label("subtotal"), .value(after: .contains(.literal("2 items")))),
+                        .updated(.label("subtotal"), .value(after: .contains("2 items"))),
                     ])),
                     timeout: defaultActionExpectationTimeout
                 )
@@ -475,7 +477,7 @@ import Testing
     let expectedScoped = try HeistPlan(body: [
         .action(try ActionStep(
             command: .typeText(
-                text: .literal("Bruschetta"),
+                text: "Bruschetta",
                 target: .predicate(.identifier("Search"))
             ),
             expectationPolicy: .expect(ActionExpectation(predicate: .changed(.elements([
@@ -525,9 +527,9 @@ import Testing
     """#))
     let expected = try HeistPlan(body: [
         .wait(WaitStep(predicate: .changed(.elements([
-            .updated(.identifier("status"), .customContent(after: CustomContentMatch<StringExpr>(
-                label: .exact(.literal("Status")),
-                value: .contains(.literal("Ready")),
+            .updated(.identifier("status"), .customContent(after: CustomContentMatch(
+                label: .exact("Status"),
+                value: .contains("Ready"),
                 isImportant: true
             ))),
         ])))),
@@ -663,7 +665,7 @@ import Testing
             parameter: "item",
             body: [
                 .action(try ActionStep(command: .typeText(
-                    text: .ref("item"),
+                    reference: "item",
                     target: .label("Search")
                 ))),
             ]
@@ -737,7 +739,7 @@ import Testing
             body: [
                 .invoke(HeistInvocationStep(
                     path: ["Cart", "addItem"],
-                    argument: .string(.ref("item"))
+                    argument: .string(reference: "item")
                 )),
             ]
         )),
@@ -972,9 +974,11 @@ import Testing
             parameter: "item",
             body: [
                 .action(try ActionStep(
-                    command: .activate(.predicate(.label(.ref("item")))),
+                    command: .activate(.predicate(
+                        .label(HeistReferenceName(stringLiteral: "item"))
+                    )),
                     expectationPolicy: .expect(ActionExpectation(
-                        predicate: .exists(.label(.ref("item"))),
+                        predicate: .exists(.label(HeistReferenceName(stringLiteral: "item"))),
                         timeout: 1
                     )))),
             ]
@@ -1180,7 +1184,7 @@ import Testing
             values: ["a"],
             parameter: "item",
             body: [
-                .action(try ActionStep(command: .typeText(text: .ref("item"), target: nil))),
+                .action(try ActionStep(command: .typeText(reference: "item", target: nil))),
             ]
         )),
     ])
@@ -1223,7 +1227,7 @@ import Testing
             command: .activate(.predicate(.label("Pay"))),
             expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 0)))),
         .action(try ActionStep(
-            command: .typeText(text: .literal("milk"), target: .predicate(.label("Search"))),
+            command: .typeText(text: "milk", target: .predicate(.label("Search"))),
             expectationPolicy: .expect(ActionExpectation(predicate: .exists(.value("milk")), timeout: 2)))),
         .action(try ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
         .action(try ActionStep(command: .decrement(.predicate(.identifier("quantity"))))),
@@ -1346,7 +1350,7 @@ import Testing
             parameter: "itemName",
             body: [
                 .action(try ActionStep(command: .typeText(
-                    text: .ref("itemName"),
+                    reference: "itemName",
                     target: .predicate(.label("Add item"))
                 ))),
             ]
@@ -1375,7 +1379,9 @@ import Testing
         parameter: .string(name: "item"),
         definitions: [addButtonNamespace],
         body: [
-            .action(try ActionStep(command: .activate(.predicate(.label(.ref("item")))))),
+            .action(try ActionStep(command: .activate(.predicate(
+                .label(HeistReferenceName(stringLiteral: "item"))
+            )))),
             .invoke(HeistInvocationStep(path: ["AddButton", "tap"])),
         ]
     )
@@ -1386,7 +1392,7 @@ import Testing
         body: [
             .invoke(HeistInvocationStep(
                 path: ["LibraryScreen", "addToCart"],
-                argument: .string(.literal("Milk"))
+                argument: .string("Milk")
             )),
         ]
     )
@@ -1417,7 +1423,7 @@ import Testing
 
     let typeText = try HeistPlanSourceCompiler().compile(root(#"TypeText("milk", into: .label("Search"))"#))
     #expect(typeText.body == [
-        .action(try ActionStep(command: .typeText(text: .literal("milk"), target: .predicate(.label("Search"))))),
+        .action(try ActionStep(command: .typeText(text: "milk", target: .predicate(.label("Search"))))),
     ])
 
     let screenshot = try HeistPlanSourceCompiler().compile(root("TakeScreenshot()"))
@@ -1798,7 +1804,7 @@ import Testing
             TypeText(loopItem, into: .label(rootAlias))
         }
 
-        ForEach(.label("Message"), limit: 1) { rowTarget in
+        ForEach(.label(rootAlias), limit: 1) { rowTarget in
             Activate(rowTarget).expect(.missing(rowTarget))
         }
     }
@@ -1814,8 +1820,8 @@ import Testing
     #expect(item.parameter == .string(name: "item"))
     #expect(item.body == [
         .action(try ActionStep(command: .typeText(
-            text: .ref("item"),
-            target: .predicate(.label(.ref("item")))
+            reference: "item",
+            target: .predicate(.label(HeistReferenceName(stringLiteral: "item")))
         ))),
     ])
     #expect(archive.parameter == .accessibilityTarget(name: "message"))
@@ -1825,8 +1831,8 @@ import Testing
     #expect(plan.body == [
         .conditional(try ConditionalStep(cases: [
             PredicateCase(
-                predicate: .exists(.label(.ref("rootValue"))),
-                body: [.action(try ActionStep(command: .typeText(text: .ref("rootValue"), target: nil)))]
+                predicate: .exists(.label(HeistReferenceName(stringLiteral: "rootValue"))),
+                body: [.action(try ActionStep(command: .typeText(reference: "rootValue", target: nil)))]
             ),
         ])),
         .forEachString(try ForEachStringStep(
@@ -1834,13 +1840,13 @@ import Testing
             parameter: "loopItem",
             body: [
                 .action(try ActionStep(command: .typeText(
-                    text: .ref("loopItem"),
-                    target: .predicate(.label(.ref("rootValue")))
+                    reference: "loopItem",
+                    target: .predicate(.label(HeistReferenceName(stringLiteral: "rootValue")))
                 ))),
             ]
         )),
         .forEachElement(try ForEachElementStep(
-            matching: .label("Message"),
+            matching: .label(HeistReferenceName(stringLiteral: "rootValue")),
             limit: 1,
             parameter: "rowTarget",
             body: [

@@ -23,18 +23,20 @@ extension TheBrains {
     ) async -> HeistExecutionStepResult? {
         let start = CFAbsoluteTimeGetCurrent()
         let result = mode == .raw
-            ? await runtime.execute(.takeScreenshot)
+            ? await runtime.execute(.takeScreenshot, nil).result
             : await executeTakeScreenshot(mode: mode)
         guard result.method == .takeScreenshot else { return nil }
         let command = HeistActionCommand.takeScreenshot
         let evidence = HeistActionEvidence.dispatch(command: command, dispatchResult: result)
-        return heistActionReceipt(
+        return heistReceipt(.init(
             path: "\(failedPath).failure.actions[0]",
+            kind: .action,
             durationMs: elapsedMilliseconds(since: start),
             intent: .action(command: command),
             evidence: .action(evidence),
-            failure: failureScreenshotDetail(for: result)
-        )
+            completion: failureScreenshotDetail(for: result)
+                .map(HeistReceiptRequest.Completion.failed) ?? .passed
+        ))
     }
 
     private func failureScreenshotDetail(for result: ActionResult) -> HeistFailureDetail? {

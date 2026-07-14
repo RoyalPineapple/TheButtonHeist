@@ -93,8 +93,8 @@ struct HeistDoctorCommand: ParsableCommand {
             lines.append("step: \(suggestion.stepPath)")
             lines.append("old target: \(suggestion.oldTarget)")
             lines.append("new target: \(suggestion.newTarget)")
-            lines.append("old element: \(elementSummaryLine(suggestion.oldResolvedElement))")
-            lines.append("new element: \(elementSummaryLine(suggestion.newResolvedElement))")
+            lines.append("old element: \(elementContextLine(suggestion.oldResolvedElement))")
+            lines.append("new element: \(elementContextLine(suggestion.newResolvedElement))")
             appendSection("reasons", suggestion.reasons.map(\.reportText), to: &lines)
             appendSection("caveats", suggestion.caveats.map(\.reportText), to: &lines)
         }
@@ -111,7 +111,8 @@ struct HeistDoctorCommand: ParsableCommand {
         lines.append(contentsOf: values.map { "  - \($0)" })
     }
 
-    private static func elementSummaryLine(_ element: ElementSummary) -> String {
+    private static func elementContextLine(_ context: HeistRepairElementContext) -> String {
+        let element = context.element
         let traitSummary = element.traits.map(\.rawValue).joined(separator: ",")
         return [
             element.label.map { "label=\"\($0)\"" },

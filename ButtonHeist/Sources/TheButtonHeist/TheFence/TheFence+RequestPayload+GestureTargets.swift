@@ -67,11 +67,11 @@ private extension SwipeTarget {
     func validatePublicGestureTarget(command: TheFence.Command) throws {
         switch selection {
         case .unitElement(let target, let start, let end):
-            _ = try target.resolvedElementTarget(command: command)
+            _ = try target.validatedElementTarget(command: command)
             try start.validatePublicGestureUnitPoint(field: "elementUnitPoints.start")
             try end.validatePublicGestureUnitPoint(field: "elementUnitPoints.end")
         case .elementDirection(let target, _):
-            _ = try target.resolvedElementTarget(command: command)
+            _ = try target.validatedElementTarget(command: command)
         case .point:
             break
         }
@@ -82,7 +82,7 @@ private extension DragTarget {
     func validatePublicGestureTarget(command: TheFence.Command) throws {
         switch selection {
         case .elementToPoint(let target, let start, _):
-            _ = try target.resolvedElementTarget(command: command)
+            _ = try target.validatedElementTarget(command: command)
             if let start {
                 try start.validatePublicGestureUnitPoint(field: "elementToPoint.start")
             }
@@ -96,7 +96,7 @@ private extension GesturePointSelection {
     func validateElementTarget(command: TheFence.Command) throws {
         switch self {
         case .element(let target), .elementUnitPoint(let target, _):
-            _ = try target.resolvedElementTarget(command: command)
+            _ = try target.validatedElementTarget(command: command)
         case .coordinate:
             break
         }

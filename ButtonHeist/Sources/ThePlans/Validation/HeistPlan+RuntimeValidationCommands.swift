@@ -6,7 +6,7 @@ extension HeistPlanRuntimeSafetyValidator {
         path: String,
         scope: HeistReferenceScope
     ) {
-        switch command {
+        switch command.core {
         case .activate, .increment, .decrement, .viewportScrollToVisible:
             validateActionTargets(in: command, path: path, scope: scope)
         case .customAction(let name, _):

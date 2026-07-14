@@ -2,7 +2,7 @@ import ArgumentParser
 import Foundation
 @_spi(ButtonHeistTooling) import ButtonHeist
 
-struct ScreenshotCommand: AsyncParsableCommand, CLICommandContract {
+struct ScreenshotCommand: OneShotCLICommand {
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Capture a screenshot from the connected device"
@@ -12,26 +12,33 @@ struct ScreenshotCommand: AsyncParsableCommand, CLICommandContract {
 
     @OptionGroup var connection: ConnectionOptions
 
+    var runnerConnection: ConnectionOptions { connection }
+    var runnerFormat: OutputFormat? { .human }
+    var runnerStatusMessage: String? { "Requesting screenshot..." }
+
     @ButtonHeistActor
-    func run() async throws {
-        let commandResultMapper: CLIRunner.CommandResultMapper?
+    func runnerDescriptor() async throws -> CLIRunner.CommandDescriptor {
+        let arguments: TheFence.CommandArgumentEnvelope = try requestArguments()
+        let result: CLIRunner.CommandResultMapper?
         if destination.inline {
-            commandResultMapper = Self.inlineCommandResult(for:)
+            result = { _, response in
+                try Self.inlineCommandResult(for: response)
+            }
         } else {
-            commandResultMapper = nil
+            result = nil
         }
-        try await CLIRunner.run(
+        return CLIRunner.CommandDescriptor(
+            fenceDescriptor: Self.fenceDescriptor,
             connection: connection,
             format: .human,
-            command: Self.fenceCommand,
-            arguments: requestArguments(),
-            statusMessage: "Requesting screenshot...",
-            result: commandResultMapper
+            arguments: arguments,
+            statusMessage: runnerStatusMessage,
+            result: result
         )
     }
 
     func requestArguments() throws -> TheFence.CommandArgumentEnvelope {
-        Self.fenceArguments(CommandArgumentWriter.parameters(try destination.argumentFields()))
+        CommandArgumentEnvelopeBuilder(try destination.argumentFields().map(Optional.some)).build()
     }
 
     static func inlineCommandResult(for response: FenceResponse) throws -> CLIRunner.CommandResult {
@@ -59,17 +66,23 @@ struct ScreenshotDestinationInput: ParsableArguments {
         _ = try argumentFields()
     }
 
-    func argumentFields() throws -> [CommandArgumentWriter.Field] {
+    func argumentFields() throws -> [CommandArgumentEnvelopeBuilder.Field] {
         switch (inline, output) {
         case (true, nil):
             return [
-                CommandArgumentWriter.value(.inlineData, true),
-                CommandArgumentWriter.optional(.mode, accessibility ? ScreenCaptureMode.accessibility.rawValue : nil),
+                CommandArgumentEnvelopeBuilder.value(.inlineData, true),
+                CommandArgumentEnvelopeBuilder.optional(
+                    .mode,
+                    accessibility ? ScreenCaptureMode.accessibility.rawValue : nil
+                ),
             ].compactMap { $0 }
         case (false, let output):
             return [
-                CommandArgumentWriter.optional(.output, output),
-                CommandArgumentWriter.optional(.mode, accessibility ? ScreenCaptureMode.accessibility.rawValue : nil),
+                CommandArgumentEnvelopeBuilder.optional(.output, output),
+                CommandArgumentEnvelopeBuilder.optional(
+                    .mode,
+                    accessibility ? ScreenCaptureMode.accessibility.rawValue : nil
+                ),
             ].compactMap { $0 }
         case (true, .some):
             throw ValidationError("--inline cannot be used with --output")

@@ -27,23 +27,24 @@ extension TheBrains {
     }
 
     internal enum HeistRuntimeWaitRequest: Equatable, Sendable {
-        case standalone(ResolvedWaitStep)
+        case standalone(ResolvedWaitRuntimeInput)
         case actionEndpoint(
-            ResolvedWaitStep,
-            trace: AccessibilityTrace?
+            ResolvedWaitRuntimeInput,
+            trace: AccessibilityTrace?,
+            baseline: SettledCapture?
         )
-        case immediate(ResolvedWaitStep)
+        case immediate(ResolvedWaitRuntimeInput)
         case afterObservation(
-            ResolvedWaitStep,
+            ResolvedWaitRuntimeInput,
             baselineTrace: AccessibilityTrace?,
             sequence: SettledObservationSequence
         )
-        case baselineTraceOnly(ResolvedWaitStep, trace: AccessibilityTrace?)
+        case baselineTraceOnly(ResolvedWaitRuntimeInput, trace: AccessibilityTrace?)
 
-        internal var step: ResolvedWaitStep {
+        internal var step: ResolvedWaitRuntimeInput {
             switch self {
             case .standalone(let step),
-                 .actionEndpoint(let step, _),
+                 .actionEndpoint(let step, _, _),
                  .immediate(let step),
                  .afterObservation(let step, _, _),
                  .baselineTraceOnly(let step, _):
@@ -56,7 +57,7 @@ extension TheBrains {
             case .standalone,
                  .immediate:
                 return nil
-            case .actionEndpoint(_, let trace),
+            case .actionEndpoint(_, let trace, _),
                  .afterObservation(_, let trace, _),
                  .baselineTraceOnly(_, let trace):
                 return trace
@@ -66,12 +67,24 @@ extension TheBrains {
         internal var afterSequence: SettledObservationSequence? {
             switch self {
             case .standalone,
-                 .actionEndpoint,
                  .immediate,
                  .baselineTraceOnly:
                 return nil
+            case .actionEndpoint(_, _, let baseline):
+                return baseline?.cursor.sequence
             case .afterObservation(_, _, let sequence):
                 return sequence
+            }
+        }
+
+        internal var changeBaseline: PredicateChangeBaselineSource {
+            switch self {
+            case .actionEndpoint(_, _, let baseline):
+                .supplied(baseline)
+            case .baselineTraceOnly:
+                .supplied(nil)
+            case .standalone, .immediate, .afterObservation:
+                .establishFromFirstObservation
             }
         }
 
@@ -89,15 +102,21 @@ extension TheBrains {
     }
 
     internal struct HeistExecutionRuntime {
-        internal let execute: @MainActor (RuntimeActionMessage) async -> ActionResult
+        internal let execute: @MainActor (
+            ResolvedHeistActionCommand,
+            SemanticObservationScope?
+        ) async -> RuntimeActionExecution
         internal let wait: @MainActor (HeistRuntimeWaitRequest) async -> HeistWaitReceipt
-        internal let selectPredicateCase: @MainActor ([ResolvedPredicateCase], Double) async -> HeistCaseSelectionResult
+        internal let selectPredicateCase: @MainActor ([ResolvedPredicateCaseRuntimeInput], Double) async -> HeistCaseSelectionResult
         internal let observeSemanticState: @MainActor (SemanticObservationScope, SettledObservationSequence?, Double?) async -> HeistSemanticObservation?
 
         internal init(
-            execute: @escaping @MainActor (RuntimeActionMessage) async -> ActionResult,
+            execute: @escaping @MainActor (
+                ResolvedHeistActionCommand,
+                SemanticObservationScope?
+            ) async -> RuntimeActionExecution,
             wait: @escaping @MainActor (HeistRuntimeWaitRequest) async -> HeistWaitReceipt,
-            selectPredicateCase: @escaping @MainActor ([ResolvedPredicateCase], Double) async -> HeistCaseSelectionResult,
+            selectPredicateCase: @escaping @MainActor ([ResolvedPredicateCaseRuntimeInput], Double) async -> HeistCaseSelectionResult,
             observeSemanticState: @escaping @MainActor (SemanticObservationScope, SettledObservationSequence?, Double?) async -> HeistSemanticObservation?
         ) {
             self.execute = execute
@@ -109,15 +128,19 @@ extension TheBrains {
         @MainActor
         internal static func live(_ brains: TheBrains) -> HeistExecutionRuntime {
             HeistExecutionRuntime(
-                execute: { command in
-                    await brains.executeRuntimeAction(command)
+                execute: { command, expectationBaselineScope in
+                    await brains.executeRuntimeActionWithBaseline(
+                        command,
+                        expectationBaselineScope: expectationBaselineScope
+                    )
                 },
                 wait: { request in
                     let observationPlan = WaitObservationPlan(step: request.step)
                     return await brains.interactionObservation.waitForPredicate(
                         request.step,
                         initialTrace: request.initialTrace,
-                        after: request.afterSequence,
+                        baselineSequence: request.afterSequence,
+                        changeBaseline: request.changeBaseline,
                         observationPlan: observationPlan,
                         announcementCursorStrategy: request.announcementCursorStrategy
                     )
@@ -252,7 +275,7 @@ extension TheBrains {
             switch accumulator.decision(for: stepPath) {
             case .skip(let abortedPath):
                 let transition = accumulator.apply(.skipped(
-                    skippedHeistStep(step, path: stepPath, scope: scope),
+                    skippedHeistReceipt(for: step, path: stepPath),
                     abortedPath: abortedPath
                 ))
                 if case .rejected(let rejection) = transition {
@@ -403,19 +426,20 @@ extension TheBrains {
             ),
             path: "\(path).heist.body"
         )
-        let childExecution = HeistReceiptChildren(children)
-        return heistChildParentReceipt(
+        return heistReceipt(.init(
             path: path,
             kind: .heist,
             durationMs: elapsedMilliseconds(since: start),
             intent: .heist(name: plan.name),
             evidence: .invocation(.heist(
                 name: plan.name.map { "heist \($0)" } ?? "inline heist",
-                childFailedPath: childExecution.abortedAtChildPath
+                childFailedPath: children.firstFailedStep?.path
             )),
-            childFailureCategory: .invocation,
-            children: childExecution
-        )
+            children: children,
+            childFailure: { childPath in
+                self.childFailureDetail(category: .invocation, childPath: childPath)
+            }
+        ))
     }
 
 }

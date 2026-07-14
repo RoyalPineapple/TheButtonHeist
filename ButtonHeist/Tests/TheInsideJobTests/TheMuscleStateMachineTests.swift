@@ -6,8 +6,8 @@ import ButtonHeistSupport
 @testable import TheInsideJob
 
 final class TheMuscleStateMachineTests: XCTestCase {
-    func testSessionAdmissionLocksAddressAfterConfiguredFailures() {
-        var admission = SessionAdmission(
+    func testTokenAdmissionLocksAddressAfterConfiguredFailures() {
+        var admission = TokenAdmission(
             tokenSource: .configured("good-token"),
             maxFailedAttempts: 2,
             lockoutDuration: 30
@@ -83,19 +83,44 @@ final class TheMuscleStateMachineTests: XCTestCase {
         XCTAssertEqual(registry.phase(for: 1), .helloValidated(address: "127.0.0.1"))
     }
 
+    func testClientRemovalClearsAuthenticationAndRateLimitStateTogether() {
+        var registry = TheMuscleClientRegistry()
+        let now = Date(timeIntervalSinceReferenceDate: 1_000)
+        registry.registerAddress(1, address: "127.0.0.1")
+        for _ in 0..<MessageRateLimiter.defaultMaxMessagesPerSecond {
+            XCTAssertEqual(registry.recordMessage(1, at: now), .accepted)
+        }
+        XCTAssertEqual(registry.recordMessage(1, at: now), .rateLimited(shouldNotify: true))
+
+        XCTAssertEqual(registry.remove(1), .connected(address: "127.0.0.1"))
+        XCTAssertFalse(registry.contains(1))
+        XCTAssertNil(registry.phase(for: 1))
+
+        registry.registerAddress(1, address: "127.0.0.1")
+        XCTAssertEqual(registry.recordMessage(1, at: now), .accepted)
+    }
+
     func testSessionLeaseDrainingRejectionUsesOneStructuredDiagnostic() {
         var lease = SessionLease(releaseTimeout: 30)
         let now = Date(timeIntervalSinceReferenceDate: 1_000)
 
-        guard case .accepted(.claimedSession) = lease.acquire(
+        guard case .accepted(let claimEffects) = lease.acquire(
             driverIdentity: "driver:alpha",
             clientId: 1,
             at: now
         ) else {
             return XCTFail("Expected first driver to claim the session")
         }
+        XCTAssertEqual(claimEffects, [.log(.sessionClaimed(clientId: 1))])
 
-        guard case .draining(let releaseDeadline) = lease.removeConnection(1, at: now) else {
+        XCTAssertEqual(
+            lease.removeConnection(1, at: now),
+            [
+                .replaceReleaseTimer(timeout: 30),
+                .log(.releaseTimerStarted(timeout: 30)),
+            ]
+        )
+        guard case .draining(_, let releaseDeadline) = lease.phase else {
             return XCTFail("Expected final connection removal to start draining")
         }
         XCTAssertEqual(releaseDeadline, now.addingTimeInterval(30))
@@ -127,13 +152,14 @@ final class TheMuscleStateMachineTests: XCTestCase {
         var lease = SessionLease(releaseTimeout: 30)
         let now = Date(timeIntervalSinceReferenceDate: 1_000)
 
-        guard case .accepted(.claimedSession) = lease.acquire(
+        guard case .accepted(let claimEffects) = lease.acquire(
             driverIdentity: "driver:alpha",
             clientId: 1,
             at: now
         ) else {
             return XCTFail("Expected first driver to claim the session")
         }
+        XCTAssertEqual(claimEffects, [.log(.sessionClaimed(clientId: 1))])
 
         guard case .rejected(let sameDriverDiagnostic) = lease.acquire(
             driverIdentity: "driver:alpha",
@@ -170,12 +196,11 @@ final class TheMuscleStateMachineTests: XCTestCase {
             return XCTFail("Expected first driver to claim the session")
         }
 
-        guard case .active = lease.removeConnection(2, at: now) else {
-            return XCTFail("Disconnecting a non-session client must not request a release timer")
-        }
+        XCTAssertEqual(lease.removeConnection(2, at: now), [])
         XCTAssertEqual(lease.activeSessionConnections, [1])
 
-        guard case .draining = lease.removeConnection(1, at: now) else {
+        XCTAssertFalse(lease.removeConnection(1, at: now).isEmpty)
+        guard case .draining = lease.phase else {
             return XCTFail("Expected active session connection removal to start draining")
         }
     }
@@ -184,26 +209,35 @@ final class TheMuscleStateMachineTests: XCTestCase {
         var lease = SessionLease(releaseTimeout: 30)
         let now = Date(timeIntervalSinceReferenceDate: 1_000)
 
-        guard case .accepted(.claimedSession) = lease.acquire(
+        guard case .accepted(let claimEffects) = lease.acquire(
             driverIdentity: "driver:alpha",
             clientId: 1,
             at: now
         ) else {
             return XCTFail("Expected first driver to claim the session")
         }
-        guard case .draining = lease.removeConnection(1, at: now) else {
+        XCTAssertEqual(claimEffects, [.log(.sessionClaimed(clientId: 1))])
+        _ = lease.removeConnection(1, at: now)
+        guard case .draining = lease.phase else {
             return XCTFail("Expected final connection removal to start draining")
         }
 
-        guard case .accepted(.rejoinedDuringGracePeriod) = lease.acquire(
+        guard case .accepted(let effects) = lease.acquire(
             driverIdentity: "driver:alpha",
             clientId: 2,
             at: now.addingTimeInterval(5)
         ) else {
             return XCTFail("Expected active driver to rejoin during the grace period")
         }
+        XCTAssertEqual(
+            effects,
+            [
+                .cancelReleaseTimer,
+                .log(.clientRejoinedDuringGracePeriod(clientId: 2)),
+            ]
+        )
         XCTAssertEqual(lease.activeSessionDriverId, "driver:alpha")
-        XCTAssertEqual(lease.exposedActiveDriverId, "alpha")
+        XCTAssertEqual(lease.exposedDriverId, "alpha")
         XCTAssertEqual(lease.activeSessionConnections, [2])
     }
 
@@ -211,25 +245,25 @@ final class TheMuscleStateMachineTests: XCTestCase {
         var lease = SessionLease(releaseTimeout: 30)
         let now = Date(timeIntervalSinceReferenceDate: 1_000)
 
-        XCTAssertEqual(lease.release(), .noActiveSession)
+        XCTAssertEqual(lease.release(), [.cancelReleaseTimer])
 
-        guard case .accepted(.claimedSession) = lease.acquire(
+        guard case .accepted(let claimEffects) = lease.acquire(
             driverIdentity: "driver:alpha",
             clientId: 1,
             at: now
         ) else {
             return XCTFail("Expected first driver to claim the session")
         }
+        XCTAssertEqual(claimEffects, [.log(.sessionClaimed(clientId: 1))])
 
-        XCTAssertEqual(lease.release(), .releasedSession)
+        XCTAssertEqual(lease.release(), [.cancelReleaseTimer, .log(.sessionReleased)])
         XCTAssertNil(lease.activeSessionDriverId)
         XCTAssertEqual(lease.activeSessionConnections, [])
-        XCTAssertEqual(lease.release(), .noActiveSession)
+        XCTAssertEqual(lease.release(), [.cancelReleaseTimer])
     }
 
-    #if canImport(UIKit)
-    func testMuscleSessionMutationsReturnTypedEffects() {
-        var session = TheMuscleSession(releaseTimeout: 30)
+    func testSessionLeaseMutationsReturnRuntimeEffects() {
+        var session = SessionLease(releaseTimeout: 30)
         let now = Date(timeIntervalSinceReferenceDate: 1_000)
 
         guard case .accepted(let claimEffect) = session.acquire(
@@ -279,7 +313,6 @@ final class TheMuscleStateMachineTests: XCTestCase {
             [.cancelReleaseTimer]
         )
     }
-    #endif
 
     func testClientDeliveryReportsUnwiredFailuresAsTypedOutcomes() async {
         let delivery = ClientDelivery.unwired

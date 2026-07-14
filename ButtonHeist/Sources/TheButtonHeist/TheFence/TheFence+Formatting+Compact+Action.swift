@@ -107,7 +107,7 @@ extension FenceResponse {
         guard changeKind == .noChange,
               result.method == .activate,
               let predicate = expectation.predicate,
-              case .changed = predicate.node
+              case .changed = predicate.core
         else { return false }
         return true
     }

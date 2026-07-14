@@ -1,95 +1,110 @@
 # Observation Pipeline
 
-Button Heist retains one settled `InterfaceTree` as current semantic truth and
-settled accessibility captures as temporal truth. It derives one ordered
-`ChangeFact` stream for every temporal consumer. Predicates, receipts,
-diagnostics, and public formatting all start from that stream. The public
-`delta` is a final, lossy fold for display and transport; it is never evaluator
-input.
+Button Heist has one current semantic tree and one retained temporal log.
+Presence reads the current tree. Change evaluation reads a cursor-backed window
+from the retained log. Receipts materialize trace evidence from that same
+lineage, and public `delta` remains a final lossy fold.
 
 **Illustrates:** [ARCHITECTURE.md](../ARCHITECTURE.md),
 [API.md](../API.md), [WIRE-PROTOCOL.md](../WIRE-PROTOCOL.md)
 
 **Source of truth:**
 `ButtonHeist/Sources/TheInsideJob/TheStash/TheStash+InterfaceState.swift`,
+`ButtonHeist/Sources/TheInsideJob/TheStash/SemanticObservationValues.swift`,
+`ButtonHeist/Sources/TheInsideJob/TheStash/SemanticObservationLog.swift`,
+`ButtonHeist/Sources/TheInsideJob/TheStash/ObservationEntrySequence.swift`,
+`ButtonHeist/Sources/TheInsideJob/TheStash/SemanticObservationPublication.swift`,
 `ButtonHeist/Sources/TheInsideJob/TheStash/SemanticObservationStream.swift`,
+`ButtonHeist/Sources/TheInsideJob/TheBrains/InteractionObservation.swift`,
+`ButtonHeist/Sources/TheInsideJob/TheBrains/ObservationWindow.swift`,
+`ButtonHeist/Sources/TheInsideJob/TheBrains/PredicateWait+ObservationStream.swift`,
 `ButtonHeist/Sources/TheInsideJob/TheTripwire/AccessibilityNotificationBus.swift`,
-`ButtonHeist/Sources/TheScore/Evidence/AccessibilityTrace.swift`,
-`ButtonHeist/Sources/TheScore/Evidence/AccessibilityTrace+ChangeFacts.swift`,
-`ButtonHeist/Sources/TheScore/Evidence/AccessibilityTraceDiff.swift`,
 `ButtonHeist/Sources/TheScore/Core/AccessibilityPredicate+Evaluation.swift`,
 `ButtonHeist/Sources/TheButtonHeist/TheFence/DeltaProjection.swift`
 
 ```mermaid
 flowchart TD
-    Signals["Scoped accessibility notifications<br/>screen, layout, value, announcement"] --> Bus["AccessibilityNotificationBus<br/>one ordered bounded stream"]
-    Action["Action begins"] --> Window["Action window<br/>opening cursor"]
-    Bus --> Window
-    Window --> Settle["Settle and parse"]
-    Parse["Parser read<br/>InterfaceObservation + disposable LiveCapture"] --> Settle
-    Parse -- "live object / geometry refresh<br/>for committed HeistIds only" --> Live["TheStash latestObservation<br/>disposable action evidence"]
-    Settle -- "clean InterfaceObservationProof" --> Batch["Capture action window once<br/>or checkpoint non-action commit<br/>exact through-cursor + gap + watermark"]
-    Bus --> Batch
-    Batch --> Tree["TheStash.interfaceTree<br/>sole current semantic truth"]
-    Settle -- "timeout / unavailable<br/>cancel window" --> Diagnostic["diagnosticObservation / receipt trace<br/>not targetable truth"]
-    Tree -- "semantic target selects HeistId" --> Live
-    Tree --> Captures["AccessibilityTrace captures<br/>durable temporal truth"]
-    Batch --> Captures
-    Captures --> Facts["Ordered ChangeFact stream<br/>sole temporal model"]
+    Parser["Parser read<br/>InterfaceObservation plus LiveCapture"] --> Settle["Settle and classify"]
+    Signals["UIKit accessibility notifications"] --> Bus["AccessibilityNotificationBus<br/>one retained ingress log"]
+    Cursor["Heist global sequence cut"] --> Checkpoint["Non-destructive checkpoint"]
+    Action["Temporal action expectation"] --> Exact["Exact discovery SettledCapture<br/>captured before action dispatch"]
+    Bus --> Checkpoint
+    Checkpoint --> Settle
 
-    LaterScreen["Later scoped screenChanged<br/>sequence > committed watermark"] --> Invalid["invalidate fulfilled observation<br/>wait for fresh clean commit"]
+    Settle -->|clean proof| Tree["TheStash InterfaceTree<br/>sole current semantic truth"]
+    Settle -->|timeout or unavailable| Diagnostic["Diagnostic observation<br/>not targetable truth"]
+    Settle -->|typed lineage| Entry["ObservationEntry<br/>SettledCapture plus transition"]
+    Entry --> Log["SemanticObservationLog<br/>bounded retained history"]
 
-    Facts --> Evaluate["AccessibilityPredicate evaluation"]
-    Captures --> Evaluate
-    Evaluate --> Verdict["met or unmet<br/>noChange only for complete fact-free windows"]
+    Log --> Baseline["Resolve exact requested-scope capture<br/>at sequence cut"]
+    Baseline --> Sequence["ObservationEntrySequence<br/>replayable after exact cursor"]
+    Exact --> Sequence
+    Request["Wait or expectation"] --> Kind{"Predicate kind"}
 
-    Facts --> Fold["One-way public delta fold<br/>stack facts in order, then squash"]
-    Captures --> Fold
-    Fold --> Public["noChange, elementsChanged, or screenChanged<br/>screen dominates"]
+    Kind -->|exists or missing| Current["Current InterfaceTree or InterfaceGraph"]
+    Current --> Target["Resolve AccessibilityTarget"]
+    Target --> Element["element predicate"]
+    Target --> Container["container predicate"]
+    Target --> Within["within container"]
+    Element --> Verdict["Predicate verdict"]
+    Container --> Verdict
+    Within --> Verdict
 
-    Public -. "never evaluator input" .-> Stop["No reverse edge"]
+    Kind -->|changed or noChange| Sequence
+    Sequence --> Window["ObservationWindow<br/>baseline through current"]
+    Window --> Complete{"Complete history?"}
+    Complete -->|no| Unmet["Unmet<br/>never noChange"]
+    Complete -->|yes| Facts["Ordered ChangeFact values"]
+    Facts --> Verdict
+
+    Window --> Trace["AccessibilityTrace<br/>durable receipt evidence"]
+    Trace --> Fold["One-way public delta fold"]
+    Fold --> Public["noChange, elementsChanged, or screenChanged"]
+    Public -. "never evaluator input" .-> Sink["Output only"]
 ```
 
-A screen boundary is normalized into the same fact language:
+Publication assigns generations through one scope-aware classifier:
+
+```mermaid
+flowchart TD
+    Candidate["Settled candidate"] --> Notification{"Fresh screen-change notification?"}
+    Notification -->|yes| Advance["Advance generation"]
+    Notification -->|no| Scoped{"Previous capture in this scope?"}
+    Scoped -->|no| Global["Compare with latest global source capture"]
+    Scoped -->|yes, same global generation| Compare["Compare same-scope snapshots"]
+    Scoped -->|yes, older generation| Global
+    Global --> Decision{"Screen replacement?"}
+    Compare --> Decision
+    Decision -->|yes| Advance
+    Decision -->|no| Keep["Keep or catch up to current generation"]
+```
+
+A screen boundary is one typed transition with this fact order:
 
 ```mermaid
 sequenceDiagram
     participant Old as Old generation
-    participant Facts as Ordered ChangeFact stream
+    participant Facts as Ordered facts
     participant New as New generation
 
-    Old->>Facts: elementsChanged(disappeared: every old node)
+    Old->>Facts: elementsChanged with every old node disappeared
     Facts->>Facts: screenChanged marker
-    New->>Facts: elementsChanged(appeared: every new node)
+    New->>Facts: elementsChanged with every new node appeared
 ```
 
 Consequences:
 
 - `changed(.screen(...))` requires the screen marker, then evaluates its
-  `exists` and `missing` assertions against the current delivered tree.
-- `changed(.elements(...))` can match lifecycle facts produced by same-screen
-  edits or by a screen boundary.
-- Identically described nodes on opposite sides of a screen boundary still
-  disappear and appear. They are not updates.
-- `updated` facts can only be constructed while observing two captures in the
-  same screen generation.
-- Any scoped screen, layout, value, or announcement notification is edge
-  evidence. It prevents a fact-free `noChange` verdict even when endpoint
-  captures have equal hashes.
-- Raw parser reads refresh disposable live action evidence for committed
-  `HeistId` values but do not update the settled interface or make new parsed
-  nodes targetable. Failed settles remain diagnostic evidence only.
-- Scoped screen notification is authoritative replacement evidence. Element
-  and announcement notifications stay in-generation; only empty or unknown
-  notification evidence permits snapshot inference. Every inferred replacement
-  stores its typed reason in `transition.fallbackReason`. Notification delivery
-  is best effort; absence is not a classification.
-- A clean action batch contains only retained events after its opening cursor
-  and no later than its exact through-cursor. Overflow is explicit
-  `AccessibilityNotificationGap` evidence. A later scoped `screenChanged`
-  advances beyond the committed scoped-screen watermark and invalidates the
-  fulfilled observation; ambient unscoped notifications do not. A failed settle
-  cancels the window without attaching its events to settled trace evidence.
-- The public fold composes facts like stacked layers, resolves transient
-  appear/disappear pairs, and lets any screen marker dominate the final kind.
-  That convenience projection cannot recover the ordered history it squashed.
+  `exists` and `missing` assertions against the current tree.
+- `changed(.elements(...))` can match same-screen lifecycle changes or the
+  disappearance/appearance facts produced by a screen boundary.
+- `updated` is constructible only from two captures in the same generation.
+  Identically described nodes across a screen boundary disappear and reappear.
+- Notification checkpoints retain their source events. Overflow is explicit
+  `AccessibilityNotificationGap` evidence rather than silent history loss.
+- Presence uses the same `AccessibilityTarget` resolver as actions and
+  `get_interface`, including container and descendant-scoped targets.
+- Only a complete, fact-free window can satisfy `noChange`.
+- Public delta cannot recover the retained transition order it folds and never
+  participates in predicate evaluation. If the window contains a screen marker,
+  `screenChanged` dominates the final public delta kind.

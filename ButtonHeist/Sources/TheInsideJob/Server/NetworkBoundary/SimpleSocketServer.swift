@@ -10,81 +10,17 @@ import TheScore
 /// Actor-isolated — all mutable state is protected by Swift concurrency.
 private let logger = ButtonHeistLog.logger(.handoff(.server))
 
-enum SimpleSocketServerPhase: Equatable, Sendable {
-    case stopped
-    case starting(UUID)
-    case listening(port: UInt16)
-}
-
-struct SimpleSocketServerLifecycleMachine: SimpleStateMachine {
-    enum Event: Equatable, Sendable {
-        case beginStarting(UUID)
-        case finishStarting(UUID, port: UInt16)
-        case failStarting(UUID)
-        case stop
-    }
-
-    enum Effect: Equatable, Sendable {
-        case clearPublishedPort
-        case publishPort(UInt16)
-        case stopRuntime
-    }
-
-    enum Rejection: Equatable, Sendable {
-        case alreadyRunning
-        case staleStartAttempt
-        case alreadyStopped
-    }
-
-    func advance(
-        _ state: SimpleSocketServerPhase,
-        with event: Event
-    ) -> StateChange<SimpleSocketServerPhase, Effect, Rejection> {
-        switch (state, event) {
-        case (.stopped, .beginStarting(let attemptID)):
-            return .changed(to: .starting(attemptID))
-        case (.starting, .beginStarting),
-             (.listening, .beginStarting):
-            return .rejected(.alreadyRunning, stayingIn: state)
-
-        case (.starting(let currentID), .finishStarting(let attemptID, let port)) where currentID == attemptID:
-            return .changed(to: .listening(port: port), effects: [.publishPort(port)])
-        case (.stopped, .finishStarting),
-             (.starting, .finishStarting),
-             (.listening, .finishStarting):
-            return .rejected(.staleStartAttempt, stayingIn: state)
-
-        case (.starting(let currentID), .failStarting(let attemptID)) where currentID == attemptID:
-            return .changed(to: .stopped, effects: [.clearPublishedPort])
-        case (.stopped, .failStarting),
-             (.starting, .failStarting),
-             (.listening, .failStarting):
-            return .rejected(.staleStartAttempt, stayingIn: state)
-
-        case (.stopped, .stop):
-            return .rejected(.alreadyStopped, stayingIn: .stopped)
-        case (.starting, .stop),
-             (.listening, .stop):
-            return .changed(to: .stopped, effects: [.clearPublishedPort, .stopRuntime])
-        }
-    }
-}
-
 actor SimpleSocketServer {
     // MARK: - Actor-isolated mutable state
 
-    private var lifecycle = StateDriver(
-        initial: SimpleSocketServerPhase.stopped,
-        machine: SimpleSocketServerLifecycleMachine()
-    )
-    private var activeListeners: [NWListener] = []
+    private var currentListener: SocketListenerGeneration?
     var clientRegistry = SocketClientRegistry()
 
     /// Tasks that bridge `NWListener` / `NWConnection` callbacks into actor
     /// isolation. Tracked so `stop()` can cancel in-flight work — without
     /// tracking, a torn-down listener could still have callback Tasks running
     /// against the stopped actor.
-    let pendingCallbackTasks = TaskTracker()
+    nonisolated let pendingCallbackTasks = TaskTracker()
 
     private let _syncListeningPort = OSAllocatedUnfairLock<UInt16>(initialState: 0)
 
@@ -92,7 +28,12 @@ actor SimpleSocketServer {
         _syncListeningPort.withLock { $0 }
     }
 
-    var clientLifecycle = SocketClientLifecycle()
+    var callbacks = SocketServerCallbacks()
+
+    #if DEBUG
+    private var listenerRuntimeStartOverride: (@Sendable (SocketListenerGeneration) async throws -> UInt16)?
+    private var listenerRuntimeStopOverride: (@Sendable () async -> Void)?
+    #endif
 
     /// Connection scopes the server will accept. Connections from disallowed scopes are rejected immediately.
     let allowedScopes: Set<ConnectionScope>
@@ -122,13 +63,37 @@ actor SimpleSocketServer {
         self.sendContent = sendContent
     }
 
+    func setCallbacksForTesting(_ callbacks: SocketServerCallbacks) {
+        self.callbacks = callbacks
+    }
+
     #if DEBUG
+    func setListenerRuntimeStartOverrideForTesting(
+        _ start: (@Sendable (SocketListenerGeneration) async throws -> UInt16)?
+    ) {
+        listenerRuntimeStartOverride = start
+    }
+
+    func setListenerRuntimeStopOverrideForTesting(
+        _ stop: (@Sendable () async -> Void)?
+    ) {
+        listenerRuntimeStopOverride = stop
+    }
+
     func insertClientForTesting(connection: NWConnection) -> Int {
         clientRegistry.insert(connection: connection)
     }
 
     func clientPhaseForTesting(_ clientId: Int) -> SocketClientPhase? {
         clientRegistry.phase(for: clientId)
+    }
+
+    var clientCountForTesting: Int {
+        clientRegistry.count
+    }
+
+    nonisolated var pendingCallbackCountForTesting: Int {
+        pendingCallbackTasks.taskCountForTesting
     }
     #endif
 
@@ -184,72 +149,110 @@ actor SimpleSocketServer {
         parameters: NWParameters,
         callbacks: SocketServerCallbacks?
     ) async throws -> UInt16 {
-        let attemptID = UUID()
-        guard case .changed = lifecycle.send(.beginStarting(attemptID)) else {
+        guard currentListener == nil else {
             throw ServerError.alreadyRunning
         }
 
-        if let callbacks { self.clientLifecycle.callbacks = callbacks }
+        let attemptID = UUID()
+        #if DEBUG
+        let runtime = SocketListenerRuntime(stopOverride: listenerRuntimeStopOverride)
+        #else
+        let runtime = SocketListenerRuntime()
+        #endif
+        let generation = SocketListenerGeneration(attemptID: attemptID, runtime: runtime)
+        currentListener = generation
+
+        if let callbacks { self.callbacks = callbacks }
 
         do {
-            let listenerStartup = try await SocketListenerStartup.start(
+            let port = try await startListenerRuntime(
+                generation: generation,
                 port: port,
                 bindToLoopback: bindToLoopback,
                 addressFamily: addressFamily,
                 parameters: parameters,
                 queue: queue
-            ) { [weak self] connection in
-                guard let self else { return }
-                self.spawnTrackedTask { server in
-                    await server.handleNewConnection(connection)
-                }
-            }
+            )
 
-            let completion = lifecycle.send(.finishStarting(attemptID, port: listenerStartup.port))
-            guard case .changed = completion else {
-                listenerStartup.listeners.forEach { $0.cancel() }
+            guard currentListener == generation,
+                  await runtime.isAcceptingConnections()
+            else {
                 throw CancellationError()
             }
 
-            activeListeners = listenerStartup.listeners
-            applyLifecycleEffects(completion.effects)
-
-            return listenerStartup.port
+            _syncListeningPort.withLock { $0 = port }
+            return port
         } catch {
-            applyLifecycleEffects(lifecycle.send(.failStarting(attemptID)).effects)
+            if currentListener == generation {
+                clearListenerGenerationResources()
+            }
+            await runtime.stop()
+            if currentListener == generation {
+                currentListener = nil
+            }
             throw error
         }
     }
 
+    private func startListenerRuntime(
+        generation: SocketListenerGeneration,
+        port: UInt16,
+        bindToLoopback: Bool,
+        addressFamily: ListenerAddressFamily,
+        parameters: NWParameters,
+        queue: DispatchQueue
+    ) async throws -> UInt16 {
+        #if DEBUG
+        if let listenerRuntimeStartOverride {
+            return try await generation.runtime.startForTesting {
+                try await listenerRuntimeStartOverride(generation)
+            }
+        }
+        #endif
+
+        let attemptID = generation.attemptID
+        let runtime = generation.runtime
+        return try await runtime.start(
+            port: port,
+            bindToLoopback: bindToLoopback,
+            addressFamily: addressFamily,
+            parameters: parameters,
+            queue: queue
+        ) { [weak self, weak runtime, attemptID] connection in
+            guard let runtime else {
+                connection.cancel()
+                return
+            }
+            let callbackGeneration = SocketListenerGeneration(
+                attemptID: attemptID,
+                runtime: runtime
+            )
+            guard callbackGeneration.own(connection) else { return }
+            guard let self else {
+                callbackGeneration.cancelIfOwned(connection)
+                return
+            }
+            self.spawnTrackedTask { server in
+                await server.handleNewConnection(connection, generation: callbackGeneration)
+            }
+        }
+    }
+
     /// Stop the server.
-    func stop() {
-        let stop = lifecycle.send(.stop)
-        guard stop.effects.contains(.stopRuntime) else { return }
-        let listeners = activeListeners
-        activeListeners = []
-
-        let allClients = clientRegistry.drain()
-        pendingCallbackTasks.cancelAll()
-        applyLifecycleEffects(stop.effects)
-
-        clientLifecycle.cancelClientsWithoutNotifying(allClients)
-        for listener in listeners {
-            listener.cancel()
+    func stop() async {
+        guard let generation = currentListener else { return }
+        clearListenerGenerationResources()
+        await generation.runtime.stop()
+        if currentListener == generation {
+            currentListener = nil
         }
         logger.info("Server stopped")
     }
 
-    private func applyLifecycleEffects(_ effects: [SimpleSocketServerLifecycleMachine.Effect]) {
-        for effect in effects {
-            switch effect {
-            case .clearPublishedPort:
-                _syncListeningPort.withLock { $0 = 0 }
-            case .publishPort(let port):
-                _syncListeningPort.withLock { $0 = port }
-            case .stopRuntime:
-                continue
-            }
-        }
+    private func clearListenerGenerationResources() {
+        pendingCallbackTasks.cancelAll()
+        _syncListeningPort.withLock { $0 = 0 }
+        clientRegistry.cancelAll()
     }
 
     /// Spawn a Task that bridges an `NWListener` / `NWConnection` callback
@@ -264,25 +267,52 @@ actor SimpleSocketServer {
 
     // MARK: - Private
 
-    private func handleNewConnection(_ connection: NWConnection) {
+    private func handleNewConnection(
+        _ connection: NWConnection,
+        generation: SocketListenerGeneration
+    ) async {
+        guard await isCurrentListeningGeneration(generation) else {
+            if !generation.cancelIfOwned(connection) {
+                connection.cancel()
+            }
+            return
+        }
         let admission = ConnectionAdmission()
-        connection.stateUpdateHandler = { [weak self] state in
-            guard let self else { return }
+        connection.stateUpdateHandler = { [weak self, weak connection] state in
+            guard let connection else { return }
+            guard let self else {
+                if !generation.cancelIfOwned(connection) {
+                    connection.cancel()
+                }
+                return
+            }
             switch state {
             case .ready:
                 self.spawnTrackedTask { server in
                     guard admission.recordReady() == .accept else { return }
-                    let acceptance = await server.acceptReadyConnection(connection)
+                    guard await server.revalidateReadyConnection(
+                        connection,
+                        generation: generation
+                    ) else {
+                        _ = admission.recordAcceptance(.rejected)
+                        return
+                    }
+                    let acceptance = await server.acceptReadyConnection(
+                        connection,
+                        generation: generation
+                    )
                     if case .removeRegisteredClient(let clientId) = admission.recordAcceptance(acceptance) {
                         await server.removeClient(clientId)
                     }
                 }
             case .failed(let error):
                 logger.error("Client connection failed: \(error)")
+                generation.cancelIfOwned(connection)
                 if case .removeRegisteredClient(let clientId) = admission.recordCancellation() {
                     self.spawnTrackedTask { server in await server.removeClient(clientId) }
                 }
             case .cancelled:
+                generation.cancelIfOwned(connection)
                 if case .removeRegisteredClient(let clientId) = admission.recordCancellation() {
                     self.spawnTrackedTask { server in await server.removeClient(clientId) }
                 }
@@ -292,6 +322,25 @@ actor SimpleSocketServer {
         }
 
         connection.start(queue: queue)
+    }
+
+    func isCurrentListeningGeneration(_ generation: SocketListenerGeneration) async -> Bool {
+        guard currentListener == generation else { return false }
+        guard await generation.runtime.isAcceptingConnections() else { return false }
+        return currentListener == generation
+    }
+
+    private func revalidateReadyConnection(
+        _ connection: NWConnection,
+        generation: SocketListenerGeneration
+    ) async -> Bool {
+        guard await isCurrentListeningGeneration(generation) else {
+            if !generation.cancelIfOwned(connection) {
+                connection.cancel()
+            }
+            return false
+        }
+        return true
     }
 
     // MARK: - Errors

@@ -50,12 +50,13 @@ struct HeistTraversalPath: Sendable, Equatable, Hashable, CustomStringConvertibl
     }
 }
 
-struct HeistTraversalContext {
+package struct HeistTraversalContext {
     let path: HeistTraversalPath
     let depth: Int
     let stepIndex: Int?
     let nextStep: HeistStep?
     let referenceBindings: HeistReferenceBindingContext
+    let bindingSamples: [HeistTraversalBindingSample]
     let definitionScope: HeistDefinitionScope
     let rootDefinitionScope: HeistDefinitionScope
     let invocationStack: [HeistCallGraph.Node]
@@ -70,11 +71,40 @@ struct HeistTraversalContext {
     }
 }
 
-protocol HeistPlanTraversalVisitor {
+struct HeistTraversalBindingSample {
+    let referenceBindings: HeistReferenceBindingContext
+    let sourcePath: HeistTraversalPath
+
+    var environment: HeistExecutionEnvironment {
+        referenceBindings.environment
+    }
+
+    func binding(string: String, to parameter: HeistReferenceName) -> Self {
+        Self(
+            referenceBindings: referenceBindings.binding(string: string, to: parameter),
+            sourcePath: sourcePath
+        )
+    }
+
+    func binding(target: ResolvedAccessibilityTarget, to parameter: HeistReferenceName) -> Self {
+        Self(
+            referenceBindings: referenceBindings.binding(target: target, to: parameter),
+            sourcePath: sourcePath
+        )
+    }
+}
+
+package protocol HeistPlanTraversalVisitor {
     mutating func visitPlan(_ plan: HeistPlan, context: HeistTraversalContext)
+    mutating func leavePlan(_ plan: HeistPlan, context: HeistTraversalContext)
     mutating func visitDefinitions(_ definitions: [HeistPlan], context: HeistTraversalContext)
+    mutating func leaveDefinitions(_ definitions: [HeistPlan], context: HeistTraversalContext)
     mutating func visitDefinition(_ plan: HeistPlan, context: HeistTraversalContext)
+    mutating func leaveDefinition(_ plan: HeistPlan, context: HeistTraversalContext)
+    mutating func visitSteps(_ steps: [HeistStep], context: HeistTraversalContext)
+    mutating func leaveSteps(_ steps: [HeistStep], context: HeistTraversalContext)
     mutating func visitStep(_ step: HeistStep, context: HeistTraversalContext)
+    mutating func leaveStep(_ step: HeistStep, context: HeistTraversalContext)
     mutating func visitAction(_ action: ActionStep, context: HeistTraversalContext)
     mutating func visitWait(_ wait: WaitStep, context: HeistTraversalContext)
     mutating func visitConditional(_ conditional: ConditionalStep, context: HeistTraversalContext)
@@ -89,11 +119,17 @@ protocol HeistPlanTraversalVisitor {
     mutating func visitInvoke(_ step: HeistInvocationStep, context: HeistTraversalContext)
 }
 
-extension HeistPlanTraversalVisitor {
+package extension HeistPlanTraversalVisitor {
     mutating func visitPlan(_ plan: HeistPlan, context: HeistTraversalContext) {}
+    mutating func leavePlan(_ plan: HeistPlan, context: HeistTraversalContext) {}
     mutating func visitDefinitions(_ definitions: [HeistPlan], context: HeistTraversalContext) {}
+    mutating func leaveDefinitions(_ definitions: [HeistPlan], context: HeistTraversalContext) {}
     mutating func visitDefinition(_ plan: HeistPlan, context: HeistTraversalContext) {}
+    mutating func leaveDefinition(_ plan: HeistPlan, context: HeistTraversalContext) {}
+    mutating func visitSteps(_ steps: [HeistStep], context: HeistTraversalContext) {}
+    mutating func leaveSteps(_ steps: [HeistStep], context: HeistTraversalContext) {}
     mutating func visitStep(_ step: HeistStep, context: HeistTraversalContext) {}
+    mutating func leaveStep(_ step: HeistStep, context: HeistTraversalContext) {}
     mutating func visitAction(_ action: ActionStep, context: HeistTraversalContext) {}
     mutating func visitWait(_ wait: WaitStep, context: HeistTraversalContext) {}
     mutating func visitConditional(_ conditional: ConditionalStep, context: HeistTraversalContext) {}
@@ -108,13 +144,37 @@ extension HeistPlanTraversalVisitor {
     mutating func visitInvoke(_ step: HeistInvocationStep, context: HeistTraversalContext) {}
 }
 
-struct HeistPlanTraversal {
+package struct HeistPlanTraversal {
     let callGraph: HeistCallGraph?
     let expandsInvocations: Bool
 
     init(callGraph: HeistCallGraph? = nil, expandsInvocations: Bool = true) {
         self.callGraph = callGraph
         self.expandsInvocations = expandsInvocations
+    }
+
+    package static func walk<V: HeistPlanTraversalVisitor>(
+        _ step: HeistStep,
+        visitor: inout V
+    ) {
+        let definitionScope = HeistDefinitionScope(definitions: [])
+        let context = HeistTraversalContext(
+            path: .root,
+            depth: 0,
+            stepIndex: nil,
+            nextStep: nil,
+            referenceBindings: .empty,
+            bindingSamples: [],
+            definitionScope: definitionScope,
+            rootDefinitionScope: definitionScope,
+            invocationStack: [],
+            callGraph: nil
+        )
+        HeistPlanTraversal(expandsInvocations: false).walk(
+            step: step,
+            context: context,
+            visitor: &visitor
+        )
     }
 
     func walk<V: HeistPlanTraversalVisitor>(
@@ -130,6 +190,7 @@ struct HeistPlanTraversal {
             stepIndex: nil,
             nextStep: nil,
             referenceBindings: rootBindings,
+            bindingSamples: [],
             definitionScope: rootDefinitionScope,
             rootDefinitionScope: rootDefinitionScope,
             invocationStack: [],
@@ -150,12 +211,14 @@ struct HeistPlanTraversal {
             path: .root.child(.body),
             depth: 1,
             referenceBindings: rootBindings,
+            bindingSamples: [],
             definitionScope: context.definitionScope,
             rootDefinitionScope: context.rootDefinitionScope,
             invocationStack: [],
             callGraph: callGraph,
             visitor: &visitor
         )
+        visitor.leavePlan(plan, context: context)
     }
 
     func walk<V: HeistPlanTraversalVisitor>(
@@ -163,12 +226,26 @@ struct HeistPlanTraversal {
         path: HeistTraversalPath,
         depth: Int,
         referenceBindings: HeistReferenceBindingContext,
+        bindingSamples: [HeistTraversalBindingSample] = [],
         definitionScope: HeistDefinitionScope,
         rootDefinitionScope: HeistDefinitionScope,
         invocationStack: [HeistCallGraph.Node] = [],
         callGraph: HeistCallGraph? = nil,
         visitor: inout V
     ) {
+        let bodyContext = HeistTraversalContext(
+            path: path,
+            depth: depth,
+            stepIndex: nil,
+            nextStep: nil,
+            referenceBindings: referenceBindings,
+            bindingSamples: bindingSamples,
+            definitionScope: definitionScope,
+            rootDefinitionScope: rootDefinitionScope,
+            invocationStack: invocationStack,
+            callGraph: callGraph
+        )
+        visitor.visitSteps(steps, context: bodyContext)
         for (index, step) in steps.enumerated() {
             let context = HeistTraversalContext(
                 path: path.index(index),
@@ -176,6 +253,7 @@ struct HeistPlanTraversal {
                 stepIndex: index,
                 nextStep: index + 1 < steps.count ? steps[index + 1] : nil,
                 referenceBindings: referenceBindings,
+                bindingSamples: bindingSamples,
                 definitionScope: definitionScope,
                 rootDefinitionScope: rootDefinitionScope,
                 invocationStack: invocationStack,
@@ -183,6 +261,7 @@ struct HeistPlanTraversal {
             )
             walk(step: step, context: context, visitor: &visitor)
         }
+        visitor.leaveSteps(steps, context: bodyContext)
     }
 
     private func walk<V: HeistPlanTraversalVisitor>(
@@ -220,6 +299,7 @@ struct HeistPlanTraversal {
         case .invoke(let invoke):
             walkInvocation(invoke, context: context, visitor: &visitor)
         }
+        visitor.leaveStep(step, context: context)
     }
 
     private func walk<V: HeistPlanTraversalVisitor>(
@@ -247,6 +327,7 @@ struct HeistPlanTraversal {
             path: elseContext.path,
             depth: context.depth + 1,
             referenceBindings: context.referenceBindings,
+            bindingSamples: context.bindingSamples,
             definitionScope: context.definitionScope,
             rootDefinitionScope: context.rootDefinitionScope,
             invocationStack: context.invocationStack,
@@ -267,9 +348,15 @@ struct HeistPlanTraversal {
             path: forEachContext.path.child(.body),
             depth: context.depth + 1,
             referenceBindings: context.referenceBindings.binding(
-                target: .predicate(ElementPredicateTemplate(forEach.matching)),
+                target: HeistReferenceBinding.runtimeSafetyAccessibilityTargetPlaceholder,
                 to: forEach.parameter
             ),
+            bindingSamples: context.bindingSamples.map {
+                $0.binding(
+                    target: HeistReferenceBinding.runtimeSafetyAccessibilityTargetPlaceholder,
+                    to: forEach.parameter
+                )
+            },
             definitionScope: context.definitionScope,
             rootDefinitionScope: context.rootDefinitionScope,
             invocationStack: context.invocationStack,
@@ -285,14 +372,25 @@ struct HeistPlanTraversal {
     ) {
         let forEachContext = context.child(path: context.path.child(.forEachString))
         visitor.visitForEachString(forEach, context: forEachContext)
+        let firstValue = forEach.values.first ?? ""
+        let inheritedSamples = context.bindingSamples.map {
+            $0.binding(string: firstValue, to: forEach.parameter)
+        }
+        let valueSamples = forEach.values.enumerated().map { index, value in
+            HeistTraversalBindingSample(
+                referenceBindings: context.referenceBindings.binding(string: value, to: forEach.parameter),
+                sourcePath: forEachContext.path.child(.values).index(index)
+            )
+        }
         walk(
             steps: forEach.body,
             path: forEachContext.path.child(.body),
             depth: context.depth + 1,
             referenceBindings: context.referenceBindings.binding(
-                string: forEach.values.first ?? "",
+                string: firstValue,
                 to: forEach.parameter
             ),
+            bindingSamples: inheritedSamples + valueSamples,
             definitionScope: context.definitionScope,
             rootDefinitionScope: context.rootDefinitionScope,
             invocationStack: context.invocationStack,
@@ -317,6 +415,7 @@ struct HeistPlanTraversal {
             path: repeatContext.path.child(.body),
             depth: context.depth + 1,
             referenceBindings: context.referenceBindings,
+            bindingSamples: context.bindingSamples,
             definitionScope: context.definitionScope,
             rootDefinitionScope: context.rootDefinitionScope,
             invocationStack: context.invocationStack,
@@ -331,6 +430,7 @@ struct HeistPlanTraversal {
             path: elseContext.path,
             depth: context.depth + 1,
             referenceBindings: context.referenceBindings,
+            bindingSamples: context.bindingSamples,
             definitionScope: context.definitionScope,
             rootDefinitionScope: context.rootDefinitionScope,
             invocationStack: context.invocationStack,
@@ -365,6 +465,7 @@ struct HeistPlanTraversal {
             path: heistContext.path.child(.body),
             depth: context.depth + 1,
             referenceBindings: context.referenceBindings,
+            bindingSamples: context.bindingSamples,
             definitionScope: heistContext.definitionScope,
             rootDefinitionScope: heistContext.rootDefinitionScope,
             invocationStack: context.invocationStack,
@@ -400,6 +501,15 @@ struct HeistPlanTraversal {
             path: invokeContext.path.child(.body),
             depth: context.depth + 1,
             referenceBindings: referenceBindings,
+            bindingSamples: context.bindingSamples.compactMap { sample in
+                try? HeistTraversalBindingSample(
+                    referenceBindings: sample.referenceBindings.binding(
+                        argument: invoke.argument,
+                        to: resolved.definition.parameter
+                    ),
+                    sourcePath: sample.sourcePath
+                )
+            },
             definitionScope: HeistDefinitionScope(definitions: resolved.definition.definitions, pathPrefix: resolved.namePath),
             rootDefinitionScope: context.rootDefinitionScope,
             invocationStack: context.invocationStack + [resolvedNode],
@@ -425,6 +535,7 @@ struct HeistPlanTraversal {
                 path: caseContext.path.child(.body),
                 depth: branchContext.depth + 1,
                 referenceBindings: branchContext.referenceBindings,
+                bindingSamples: branchContext.bindingSamples,
                 definitionScope: branchContext.definitionScope,
                 rootDefinitionScope: branchContext.rootDefinitionScope,
                 invocationStack: branchContext.invocationStack,
@@ -440,6 +551,7 @@ struct HeistPlanTraversal {
                 path: elseContext.path,
                 depth: branchContext.depth + 1,
                 referenceBindings: branchContext.referenceBindings,
+                bindingSamples: branchContext.bindingSamples,
                 definitionScope: branchContext.definitionScope,
                 rootDefinitionScope: branchContext.rootDefinitionScope,
                 invocationStack: branchContext.invocationStack,
@@ -458,7 +570,8 @@ struct HeistPlanTraversal {
         parentContext: HeistTraversalContext,
         visitor: inout V
     ) {
-        visitor.visitDefinitions(definitions, context: parentContext.child(path: path, depth: depth))
+        let definitionsContext = parentContext.child(path: path, depth: depth)
+        visitor.visitDefinitions(definitions, context: definitionsContext)
         for (index, definition) in definitions.enumerated() {
             let currentDefinitionPath = definitionScope.pathPrefix + [definition.name ?? ""]
             let currentDefinitionNode = HeistCallGraph.Node(namePath: currentDefinitionPath)
@@ -469,6 +582,7 @@ struct HeistPlanTraversal {
                 stepIndex: nil,
                 nextStep: nil,
                 referenceBindings: referenceBindings,
+                bindingSamples: [],
                 definitionScope: definitionScope,
                 rootDefinitionScope: rootDefinitionScope,
                 invocationStack: [],
@@ -489,13 +603,16 @@ struct HeistPlanTraversal {
                 path: definitionContext.path.child(.body),
                 depth: depth + 1,
                 referenceBindings: referenceBindings,
+                bindingSamples: [],
                 definitionScope: HeistDefinitionScope(definitions: definition.definitions, pathPrefix: currentDefinitionPath),
                 rootDefinitionScope: rootDefinitionScope,
                 invocationStack: [currentDefinitionNode],
                 callGraph: parentContext.callGraph,
                 visitor: &visitor
             )
+            visitor.leaveDefinition(definition, context: definitionContext)
         }
+        visitor.leaveDefinitions(definitions, context: definitionsContext)
     }
 }
 
@@ -512,6 +629,7 @@ extension HeistTraversalContext {
             stepIndex: stepIndex,
             nextStep: nextStep,
             referenceBindings: referenceBindings,
+            bindingSamples: bindingSamples,
             definitionScope: definitionScope ?? self.definitionScope,
             rootDefinitionScope: rootDefinitionScope ?? self.rootDefinitionScope,
             invocationStack: invocationStack,
@@ -526,6 +644,7 @@ extension HeistTraversalContext {
             stepIndex: stepIndex,
             nextStep: nil,
             referenceBindings: referenceBindings,
+            bindingSamples: bindingSamples,
             definitionScope: definitionScope,
             rootDefinitionScope: rootDefinitionScope,
             invocationStack: invocationStack,

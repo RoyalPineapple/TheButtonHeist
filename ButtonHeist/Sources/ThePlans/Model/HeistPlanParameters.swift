@@ -62,13 +62,35 @@ public enum HeistParameterKind: String, Codable, Sendable, Equatable {
     case accessibilityTarget = "accessibility_target"
 }
 
-public enum HeistArgument: Codable, Sendable, Equatable {
+package enum HeistArgumentCore: Sendable, Equatable {
     case none
-    case string(StringExpr)
+    case string(Expr<String>)
     case accessibilityTarget(AccessibilityTarget)
+}
+
+public struct HeistArgument: Codable, Sendable, Equatable {
+    package let core: HeistArgumentCore
+
+    package init(core: HeistArgumentCore) {
+        self.core = core
+    }
+
+    public static var none: Self { Self(core: .none) }
+
+    public static func string(_ value: String) -> Self {
+        Self(core: .string(.literal(value)))
+    }
+
+    public static func string(reference: HeistReferenceName) -> Self {
+        Self(core: .string(.ref(reference)))
+    }
+
+    public static func accessibilityTarget(_ target: AccessibilityTarget) -> Self {
+        Self(core: .accessibilityTarget(target))
+    }
 
     public var kind: HeistParameterKind {
-        switch self {
+        switch core {
         case .none: return .none
         case .string: return .string
         case .accessibilityTarget: return .accessibilityTarget
@@ -96,7 +118,7 @@ public enum HeistArgument: Codable, Sendable, Equatable {
                     debugDescription: "none heist argument must not include a value"
                 ))
             }
-            self = .none
+            core = .none
         case .string:
             let hasValue = container.contains(.value)
             let hasRef = container.contains(.valueRef)
@@ -106,7 +128,7 @@ public enum HeistArgument: Codable, Sendable, Equatable {
                     debugDescription: "string heist argument requires exactly one of value/value_ref"
                 ))
             }
-            self = hasValue
+            core = hasValue
                 ? .string(.literal(try container.decode(String.self, forKey: .value)))
                 : .string(.ref(try HeistReferenceName.decode(from: container, forKey: .valueRef)))
         case .accessibilityTarget:
@@ -116,14 +138,14 @@ public enum HeistArgument: Codable, Sendable, Equatable {
                     debugDescription: "accessibility_target heist argument requires a target"
                 ))
             }
-            self = .accessibilityTarget(try container.decode(AccessibilityTarget.self, forKey: .target))
+            core = .accessibilityTarget(try container.decode(AccessibilityTarget.self, forKey: .target))
         }
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(kind, forKey: .type)
-        switch self {
+        switch core {
         case .none:
             break
         case .string(let value):

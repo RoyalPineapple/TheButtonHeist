@@ -23,7 +23,7 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
 
     struct ActiveConnection {
         let connection: NWConnection
-        var receiveBuffer: Data = Data()
+        var receiveFramer = NewlineDelimitedFramer()
     }
 
     enum ConnectionState {
@@ -58,7 +58,7 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
     struct RuntimeSession {
         let id: UUID
         let connection: NWConnection
-        var receiveBuffer: Data
+        var receiveFramer: NewlineDelimitedFramer
 
         /// Single consumer Task driving NW callbacks into the actor in order.
         /// Replaced on each `connect()`; cancelled when the owning session exits.
@@ -71,19 +71,19 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
         init(
             id: UUID = UUID(),
             connection: NWConnection,
-            receiveBuffer: Data = Data(),
+            receiveFramer: NewlineDelimitedFramer = NewlineDelimitedFramer(),
             eventConsumerTask: Task<Void, Never>? = nil,
             eventContinuation: AsyncStream<DeviceConnectionEvent>.Continuation? = nil
         ) {
             self.id = id
             self.connection = connection
-            self.receiveBuffer = receiveBuffer
+            self.receiveFramer = receiveFramer
             self.eventConsumerTask = eventConsumerTask
             self.eventContinuation = eventContinuation
         }
 
         var activeConnection: ActiveConnection {
-            ActiveConnection(connection: connection, receiveBuffer: receiveBuffer)
+            ActiveConnection(connection: connection, receiveFramer: receiveFramer)
         }
 
         func cancelOwnedSidecars() {
@@ -106,7 +106,7 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
             case .connected(let active):
                 self = .connected(RuntimeSession(
                     connection: active.connection,
-                    receiveBuffer: active.receiveBuffer
+                    receiveFramer: active.receiveFramer
                 ))
             }
         }

@@ -1,7 +1,7 @@
 import ArgumentParser
 @_spi(ButtonHeistTooling) import ButtonHeist
 
-struct DismissKeyboardCommand: AsyncParsableCommand, CLICommandContract {
+struct DismissKeyboardCommand: ConnectedOneShotCLICommand {
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Dismiss the software keyboard by resigning first responder"
@@ -10,14 +10,5 @@ struct DismissKeyboardCommand: AsyncParsableCommand, CLICommandContract {
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
 
-    @ButtonHeistActor
-    mutating func run() async throws {
-        try await CLIRunner.run(
-            connection: connection,
-            format: output.format,
-            command: Self.fenceCommand,
-            arguments: Self.fenceArguments(),
-            statusMessage: "Dismissing keyboard..."
-        )
-    }
+    var runnerStatusMessage: String? { "Dismissing keyboard..." }
 }

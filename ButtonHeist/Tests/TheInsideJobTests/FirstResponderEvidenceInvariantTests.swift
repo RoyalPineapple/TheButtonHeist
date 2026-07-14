@@ -164,7 +164,8 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
         )
         brains.stash.installScreenForTesting(screen)
         let expectedElement = try XCTUnwrap(brains.stash.interfaceElement(heistId: expected))
-        let expectedTarget = try XCTUnwrap(brains.stash.minimumUniqueTarget(for: expectedElement))
+        let expectedAuthoredTarget = try XCTUnwrap(brains.stash.minimumUniqueTarget(for: expectedElement))
+        let expectedTarget = try expectedAuthoredTarget.resolve(in: .empty)
         let replacementElement = try XCTUnwrap(brains.stash.interfaceElement(heistId: replacement))
         guard case .resolved(let replacementLiveTarget) = brains.stash.resolveLiveActionTarget(
             for: replacementElement
@@ -203,7 +204,7 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
         )
     }
 
-    func testSemanticAndPostActionContextsShareCanonicalFirstResponderTarget() {
+    func testSemanticAndPostActionContextsShareCanonicalFirstResponderTarget() throws {
         let brains = TheBrains(tripwire: TheTripwire())
         let screen = InterfaceObservation.makeForTests(
             elements: [
@@ -212,7 +213,8 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
             ],
             firstResponderHeistId: "email_field"
         )
-        let expected = literalTarget(ElementPredicate(label: "Email"))
+        let expectedAuthoredTarget = AccessibilityTarget.label("Email")
+        let expectedResolvedTarget = literalTarget(ElementPredicate.label("Email"))
 
         let postAction = brains.postActionObservation.captureSemanticState(
             from: screen,
@@ -221,10 +223,13 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
         )
         let semantic = brains.stash.semanticObservationStream
             .commitVisibleObservationForTesting(screen)
+        let authoredTarget = try XCTUnwrap(brains.stash.firstResponderTarget(in: screen.tree))
+        let resolvedTarget = try authoredTarget.resolve(in: .empty)
 
-        XCTAssertEqual(brains.stash.firstResponderTarget(in: screen.tree), expected)
-        XCTAssertEqual(postAction.capture.context.firstResponder, expected)
-        XCTAssertEqual(semantic.trace.captures.last?.context.firstResponder, expected)
+        XCTAssertEqual(authoredTarget, expectedAuthoredTarget)
+        XCTAssertEqual(resolvedTarget, expectedResolvedTarget)
+        XCTAssertEqual(postAction.capture.context.firstResponder, authoredTarget)
+        XCTAssertEqual(semantic.trace.captures.last?.context.firstResponder, authoredTarget)
     }
 
     func testAmbiguousLiveResponderEvidenceIsNotGuessed() {

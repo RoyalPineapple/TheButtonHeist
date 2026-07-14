@@ -1,7 +1,7 @@
 import ArgumentParser
 @_spi(ButtonHeistTooling) import ButtonHeist
 
-struct GetAnnouncementsCommand: AsyncParsableCommand, CLICommandContract {
+struct GetAnnouncementsCommand: ConnectedOneShotCLICommand {
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Read recent accessibility announcements",
@@ -17,14 +17,5 @@ struct GetAnnouncementsCommand: AsyncParsableCommand, CLICommandContract {
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
 
-    @ButtonHeistActor
-    mutating func run() async throws {
-        try await CLIRunner.run(
-            connection: connection,
-            format: output.format,
-            command: Self.fenceCommand,
-            arguments: Self.fenceArguments(),
-            statusMessage: "Reading announcements..."
-        )
-    }
+    var runnerStatusMessage: String? { "Reading announcements..." }
 }

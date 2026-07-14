@@ -45,6 +45,7 @@ final class TheSafecracker {
     }
 
     func waitForActiveTextInput() async -> Bool {
+        if hasActiveTextInput() { return true }
         for _ in 0..<Self.keyboardPollMaxAttempts {
             guard await Task.cancellableSleep(for: Self.keyboardPollInterval) else { return false }
             if hasActiveTextInput() { return true }

@@ -106,7 +106,7 @@ final class TheGetaway {
         }
     }
 
-    private func executeDirectRuntimeAction(_ command: HeistActionCommand) async -> ActionResult {
+    func executeDirectRuntimeAction(_ command: HeistActionCommand) async -> ActionResult {
         let method = actionMethod(for: command)
         guard command.durableHeistActionFailure != nil else {
             return .failure(
@@ -120,7 +120,7 @@ final class TheGetaway {
             return brains.runtimeInactiveResult(method: method)
         }
         do {
-            return await brains.executeRuntimeAction(try command.resolveForRuntimeDispatch(in: .empty))
+            return await brains.executeRuntimeAction(try command.resolve(in: .empty))
         } catch {
             return .failure(
                 method: method,
@@ -132,7 +132,7 @@ final class TheGetaway {
     }
 
     private func actionMethod(for command: HeistActionCommand) -> ActionMethod {
-        switch command {
+        switch command.core {
         case .activate:
             return .activate
         case .increment:

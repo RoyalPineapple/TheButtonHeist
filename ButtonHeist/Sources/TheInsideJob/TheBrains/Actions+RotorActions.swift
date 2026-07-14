@@ -12,20 +12,21 @@ extension Actions {
     private static let rotorStringProfile = ElementDiagnosticSummary.RenderProfile.actionCapability
 
     func executeRotor(
-        _ target: RotorTarget
+        selection: RotorSelection,
+        target: ResolvedAccessibilityTarget,
+        direction: RotorDirection
     ) async -> TheSafecracker.ActionDispatchOutcome {
-        let direction = target.direction
-        let rotor = target.selection.rotorName
-        let rotorIndex = target.selection.rotorIndex
+        let rotor = selection.rotorName
+        let rotorIndex = selection.rotorIndex
         let method: ActionMethod = .rotor
         return await performElementAction(
-            target: target.target,
+            target: target,
             method: method,
             requireInteractive: false,
             activationPointPolicy: .liveObjectOnly
         ) { context in
             let outcome = self.stash.performRotor(
-                selection: target.selection,
+                selection: selection,
                 direction: direction,
                 on: context.liveTarget
             )

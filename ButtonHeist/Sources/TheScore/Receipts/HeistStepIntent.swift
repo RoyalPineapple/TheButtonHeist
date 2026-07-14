@@ -3,11 +3,11 @@ import ThePlans
 
 public enum HeistStepIntent: Codable, Sendable, Equatable {
     case action(command: HeistActionCommand)
-    case wait(predicate: AccessibilityPredicate<RootContext>, timeout: Double)
+    case wait(predicate: AccessibilityPredicate, timeout: Double)
     case conditional
     case forEachString(parameter: HeistReferenceName, count: Int)
-    case forEachElement(parameter: HeistReferenceName, matching: ElementPredicate, limit: Int)
-    case repeatUntil(predicate: AccessibilityPredicate<RootContext>, timeout: Double)
+    case forEachElement(parameter: HeistReferenceName, matching: ElementPredicateTemplate, limit: Int)
+    case repeatUntil(predicate: AccessibilityPredicate, timeout: Double)
     case invoke(path: HeistInvocationPath, argument: HeistArgument)
     case heist(name: String?)
     case warn(message: String)
@@ -45,40 +45,44 @@ public enum HeistStepIntent: Codable, Sendable, Equatable {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist step intent")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let type = try container.decode(IntentType.self, forKey: .type)
+        let typeName = "\(type.rawValue) heist step intent"
         switch type {
         case .action:
-            try Self.rejectFields(except: [.type, .command], in: container, type: type)
+            try container.rejectIncompatibleFields(allowing: [.type, .command], typeName: typeName)
             self = .action(command: try container.decode(HeistActionCommand.self, forKey: .command))
         case .wait:
-            try Self.rejectFields(except: [.type, .predicate, .timeout], in: container, type: type)
+            try container.rejectIncompatibleFields(allowing: [.type, .predicate, .timeout], typeName: typeName)
             self = .wait(
-                predicate: try container.decode(AccessibilityPredicate<RootContext>.self, forKey: .predicate),
+                predicate: try container.decode(AccessibilityPredicate.self, forKey: .predicate),
                 timeout: try container.decode(Double.self, forKey: .timeout)
             )
         case .conditional:
-            try Self.rejectFields(except: [.type], in: container, type: type)
+            try container.rejectIncompatibleFields(allowing: [.type], typeName: typeName)
             self = .conditional
         case .forEachString:
-            try Self.rejectFields(except: [.type, .parameter, .count], in: container, type: type)
+            try container.rejectIncompatibleFields(allowing: [.type, .parameter, .count], typeName: typeName)
             self = .forEachString(
                 parameter: try container.decode(HeistReferenceName.self, forKey: .parameter),
                 count: try container.decode(Int.self, forKey: .count)
             )
         case .forEachElement:
-            try Self.rejectFields(except: [.type, .parameter, .matching, .limit], in: container, type: type)
+            try container.rejectIncompatibleFields(
+                allowing: [.type, .parameter, .matching, .limit],
+                typeName: typeName
+            )
             self = .forEachElement(
                 parameter: try container.decode(HeistReferenceName.self, forKey: .parameter),
-                matching: try container.decode(ElementPredicate.self, forKey: .matching),
+                matching: try container.decode(ElementPredicateTemplate.self, forKey: .matching),
                 limit: try container.decode(Int.self, forKey: .limit)
             )
         case .repeatUntil:
-            try Self.rejectFields(except: [.type, .predicate, .timeout], in: container, type: type)
+            try container.rejectIncompatibleFields(allowing: [.type, .predicate, .timeout], typeName: typeName)
             self = .repeatUntil(
-                predicate: try container.decode(AccessibilityPredicate<RootContext>.self, forKey: .predicate),
+                predicate: try container.decode(AccessibilityPredicate.self, forKey: .predicate),
                 timeout: try container.decode(Double.self, forKey: .timeout)
             )
         case .invoke:
-            try Self.rejectFields(except: [.type, .path, .argument], in: container, type: type)
+            try container.rejectIncompatibleFields(allowing: [.type, .path, .argument], typeName: typeName)
             let components = try container.decode([String].self, forKey: .path)
             do {
                 self = .invoke(
@@ -93,13 +97,13 @@ public enum HeistStepIntent: Codable, Sendable, Equatable {
                 )
             }
         case .heist:
-            try Self.rejectFields(except: [.type, .name], in: container, type: type)
+            try container.rejectIncompatibleFields(allowing: [.type, .name], typeName: typeName)
             self = .heist(name: try container.decodeIfPresent(String.self, forKey: .name))
         case .warn:
-            try Self.rejectFields(except: [.type, .message], in: container, type: type)
+            try container.rejectIncompatibleFields(allowing: [.type, .message], typeName: typeName)
             self = .warn(message: try container.decode(String.self, forKey: .message))
         case .fail:
-            try Self.rejectFields(except: [.type, .message], in: container, type: type)
+            try container.rejectIncompatibleFields(allowing: [.type, .message], typeName: typeName)
             self = .fail(message: try container.decode(String.self, forKey: .message))
         }
     }
@@ -145,17 +149,4 @@ public enum HeistStepIntent: Codable, Sendable, Equatable {
         }
     }
 
-    private static func rejectFields(
-        except allowed: Set<CodingKeys>,
-        in container: KeyedDecodingContainer<CodingKeys>,
-        type: IntentType
-    ) throws {
-        for key in CodingKeys.allCases where !allowed.contains(key) && container.contains(key) {
-            throw DecodingError.dataCorruptedError(
-                forKey: key,
-                in: container,
-                debugDescription: "\(type.rawValue) heist step intent must not include \(key.stringValue)"
-            )
-        }
-    }
 }

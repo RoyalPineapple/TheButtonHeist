@@ -12,17 +12,18 @@ import XCTest
 @MainActor
 final class HeistReceiptTests: XCTestCase {
 
-    func testReceiptHelperBuildsPassedAction() {
+    func testReceiptRequestBuildsPassedAction() {
         let brains = TheBrains(tripwire: TheTripwire())
         let intent = receiptActionIntent()
         let evidence = receiptActionEvidence()
 
-        let receipt = brains.heistActionReceipt(
+        let receipt = brains.heistReceipt(.init(
             path: "$.body[0]",
+            kind: .action,
             durationMs: 12,
             intent: intent,
             evidence: .action(evidence)
-        )
+        ))
 
         XCTAssertEqual(
             receipt,
@@ -36,19 +37,20 @@ final class HeistReceiptTests: XCTestCase {
         )
     }
 
-    func testReceiptHelperBuildsFailedAction() {
+    func testReceiptRequestBuildsFailedAction() {
         let brains = TheBrains(tripwire: TheTripwire())
         let evidence = receiptActionEvidence(success: false)
         let failure = receiptFailure(observed: "expected failure")
         let intent = receiptActionIntent()
 
-        let receipt = brains.heistActionReceipt(
+        let receipt = brains.heistReceipt(.init(
             path: "$.body[0]",
+            kind: .action,
             durationMs: 7,
             intent: intent,
             evidence: .action(evidence),
-            failure: failure
-        )
+            completion: .failed(failure)
+        ))
 
         XCTAssertEqual(
             receipt,
@@ -63,7 +65,7 @@ final class HeistReceiptTests: XCTestCase {
         )
     }
 
-    func testReceiptHelperDerivesChildAbortedLoopFromChildren() {
+    func testReceiptRequestDerivesChildAbortedLoopFromChildren() {
         let brains = TheBrains(tripwire: TheTripwire())
         let failure = receiptFailure(observed: "child failed")
         let child = HeistExecutionStepResult.failed(
@@ -73,7 +75,6 @@ final class HeistReceiptTests: XCTestCase {
             intent: .fail(message: "stop"),
             failure: receiptFailure(observed: "stop")
         )
-        let children = TheBrains.HeistReceiptChildren([child])
         let evidence = HeistStepEvidence.forEachString(HeistForEachStringEvidence(
             parameter: "item",
             count: 1,
@@ -83,15 +84,15 @@ final class HeistReceiptTests: XCTestCase {
             failureReason: "child failed at \(child.path)"
         ))
 
-        let receipt = brains.heistLoopReceipt(
+        let receipt = brains.heistReceipt(.init(
             path: "$.body[0]",
             kind: .forEachIteration,
             durationMs: 9,
             intent: .forEachString(parameter: "item", count: 1),
             evidence: evidence,
-            children: children,
+            children: [child],
             childFailure: { _ in failure }
-        )
+        ))
 
         XCTAssertEqual(
             receipt,
@@ -115,7 +116,7 @@ final class HeistReceiptTests: XCTestCase {
         )
     }
 
-    func testReceiptFolderBuildsSkippedOutcome() {
+    func testReceiptRequestBuildsSkippedOutcome() {
         let brains = TheBrains(tripwire: TheTripwire())
         let child = HeistExecutionStepResult.skipped(
             path: "$.body[0].children[0]",
@@ -123,11 +124,13 @@ final class HeistReceiptTests: XCTestCase {
             durationMs: 1
         )
 
-        let receipt = brains.heistSkippedReceipt(
+        let receipt = brains.heistReceipt(.init(
             path: "$.body[0]",
             kind: .conditional,
+            durationMs: 0,
+            completion: .skipped,
             children: [child]
-        )
+        ))
 
         XCTAssertEqual(
             receipt,
@@ -137,6 +140,42 @@ final class HeistReceiptTests: XCTestCase {
                 children: [child]
             )
         )
+    }
+
+    func testWaitReceiptFactoriesBindCanonicalActionAndExpectationOutcomes() {
+        let predicate = AccessibilityPredicate.exists(.label("Done"))
+        let met = ExpectationResult.Met(predicate: predicate, actual: "found")
+        let unmet = ExpectationResult.Unmet(predicate: predicate, actual: "not found")
+
+        let matched = HeistWaitReceipt.matched(
+            message: "matched",
+            traceEvidence: nil,
+            expectation: met
+        )
+        let timedOut = HeistWaitReceipt.timedOut(
+            message: "timed out",
+            traceEvidence: nil,
+            expectation: unmet
+        )
+        let failed = HeistWaitReceipt.failed(
+            errorKind: .actionFailed,
+            message: "failed",
+            traceEvidence: nil,
+            expectation: unmet
+        )
+
+        XCTAssertTrue(matched.succeeded)
+        XCTAssertTrue(matched.actionResult.outcome.isSuccess)
+        XCTAssertTrue(matched.expectation.met)
+        XCTAssertEqual(matched.actionResult.method, .wait)
+
+        XCTAssertFalse(timedOut.succeeded)
+        XCTAssertEqual(timedOut.actionResult.outcome.errorKind, .timeout)
+        XCTAssertFalse(timedOut.expectation.met)
+
+        XCTAssertFalse(failed.succeeded)
+        XCTAssertEqual(failed.actionResult.outcome.errorKind, .actionFailed)
+        XCTAssertFalse(failed.expectation.met)
     }
 
     private func receiptActionIntent() -> HeistStepIntent {
@@ -255,29 +294,31 @@ final class HeistReceiptTests: XCTestCase {
     }
 
     func testRunHeistTestingFacadeDottedStringArgumentBuildsValidatedInvocation() throws {
+        let input: HeistReferenceName = "input"
         let request = try makeRunHeistRequest("Cart.addItem", argument: "Milk") { _ in
             Warn("adding")
         }
 
         let invocation = try invocationStep(in: request.plan)
         XCTAssertNil(request.plan.name)
-        XCTAssertEqual(request.plan.parameter, .string(name: "input"))
-        XCTAssertEqual(request.argument, .string(.literal("Milk")))
+        XCTAssertEqual(request.plan.parameter, .string(name: input))
+        XCTAssertEqual(request.argument, .string("Milk"))
         XCTAssertEqual(invocation.path, ["Cart", "addItem"])
-        XCTAssertEqual(invocation.argument, .string(.ref("input")))
+        XCTAssertEqual(invocation.argument, .string(reference: input))
     }
 
     func testRunHeistTestingFacadeDottedAccessibilityTargetArgumentBuildsValidatedInvocation() throws {
+        let input: HeistReferenceName = "input"
         let request = try makeRunHeistRequest("Rows.activate", argument: AccessibilityTarget.label("Milk")) { _ in
             Warn("activating")
         }
 
         let invocation = try invocationStep(in: request.plan)
         XCTAssertNil(request.plan.name)
-        XCTAssertEqual(request.plan.parameter, .accessibilityTarget(name: "input"))
+        XCTAssertEqual(request.plan.parameter, .accessibilityTarget(name: input))
         XCTAssertEqual(request.argument, .accessibilityTarget(.label("Milk")))
         XCTAssertEqual(invocation.path, ["Rows", "activate"])
-        XCTAssertEqual(invocation.argument, .accessibilityTarget(.ref("input")))
+        XCTAssertEqual(invocation.argument, .accessibilityTarget(AccessibilityTarget(ref: input)))
     }
 
     func testPrebuiltPlanRunsThroughInAppRuntimeWithoutTransport() async throws {
@@ -345,7 +386,7 @@ final class HeistReceiptTests: XCTestCase {
         }
 
         XCTAssertEqual(heist.result.steps.map(\.kind), [.warn])
-        XCTAssertEqual(capture.argument, .string(.literal("milk")))
+        XCTAssertEqual(capture.argument, .string("milk"))
         XCTAssertEqual(capture.plan?.parameter, .string(name: "input"))
     }
 
@@ -358,7 +399,7 @@ final class HeistReceiptTests: XCTestCase {
         }
 
         XCTAssertEqual(heist.result.steps.map(\.kind), [.warn])
-        XCTAssertEqual(request.argument, .string(.literal("Milk")))
+        XCTAssertEqual(request.argument, .string("Milk"))
         XCTAssertEqual(request.plan.name, "addToCart")
         XCTAssertEqual(request.plan.parameter, .string(name: "input"))
     }
@@ -387,7 +428,7 @@ final class HeistReceiptTests: XCTestCase {
         XCTAssertEqual(request.plan, expectedPlan)
         XCTAssertEqual(request.plan.name, "CartAddItem")
         XCTAssertEqual(request.plan.parameter, .string(name: "input"))
-        XCTAssertEqual(request.argument, .string(.literal("Milk")))
+        XCTAssertEqual(request.argument, .string("Milk"))
     }
 
     func testRunHeistTestingFacadeAccessibilityTargetArgumentLowersLikeNamedHeistPlan() throws {
@@ -681,10 +722,10 @@ private final class ReceiptWaitScript {
         self.states = states
     }
 
-    func receipt(for step: ResolvedWaitStep) -> HeistWaitReceipt {
+    func receipt(for step: ResolvedWaitRuntimeInput) -> HeistWaitReceipt {
         guard !states.isEmpty else {
             let expectation = ExpectationResult.Unmet(
-                predicate: step.predicate,
+                predicate: step.predicateExpression,
                 actual: "no settled semantic observation available"
             )
             return .timedOut(
@@ -702,6 +743,7 @@ private final class ReceiptWaitScript {
 
         let expectation = PredicateEvaluation.evaluate(
             step.predicate,
+            expression: step.predicateExpression,
             in: trace,
             completeness: .complete
         )
@@ -745,10 +787,15 @@ private func observedQuantityState(
 private func repeatUntilRuntime(
     job _: TheInsideJob,
     waitScript: ReceiptWaitScript,
-    execute: @escaping @MainActor (RuntimeActionMessage) async -> ActionResult
+    execute: @escaping @MainActor (ResolvedHeistActionCommand) async -> ActionResult
 ) -> TheBrains.HeistExecutionRuntime {
     TheBrains.HeistExecutionRuntime(
-        execute: execute,
+        execute: { command, _ in
+            RuntimeActionExecution(
+                result: await execute(command),
+                expectationBaseline: nil
+            )
+        },
         wait: { request in
             waitScript.receipt(for: request.step)
         },

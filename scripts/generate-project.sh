@@ -10,21 +10,34 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+install_dependencies=true
+generate_arguments=(--no-open)
+for argument in "$@"; do
+    case "$argument" in
+        --skip-install) install_dependencies=false ;;
+        *) generate_arguments+=("$argument") ;;
+    esac
+done
+
 run_tuist() {
-    if command -v mise >/dev/null 2>&1 && [[ -f mise.toml ]]; then
+    if [[ -n "${BUTTONHEIST_TUIST_BIN:-}" ]]; then
+        "$BUTTONHEIST_TUIST_BIN" "$@"
+    elif command -v mise >/dev/null 2>&1 && [[ -f mise.toml ]]; then
         mise exec -- tuist "$@"
     else
         tuist "$@"
     fi
 }
 
-run_tuist install
+if [[ "$install_dependencies" == true ]]; then
+    run_tuist install
+fi
 
 set +e
-BUTTONHEIST_TUIST_SKIP_AUTO_CLEAN=1 run_tuist generate --no-open
+BUTTONHEIST_TUIST_SKIP_AUTO_CLEAN=1 run_tuist generate "${generate_arguments[@]}"
 generate_status=$?
 set -e
 
-scripts/clean-generated-projects.sh
+"${BUTTONHEIST_GENERATED_PROJECT_CLEANER:-scripts/clean-generated-projects.sh}"
 
 exit "$generate_status"

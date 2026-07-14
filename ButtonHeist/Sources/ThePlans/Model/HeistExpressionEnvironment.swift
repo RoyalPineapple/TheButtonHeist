@@ -2,34 +2,33 @@ import Foundation
 
 // MARK: - Heist Execution Environment
 
-public struct HeistReferenceName: RawRepresentable, Codable, Hashable, Sendable, Equatable, ExpressibleByStringLiteral {
+public struct HeistReferenceName: Codable, Hashable, Sendable, Equatable, ExpressibleByStringLiteral {
     public let rawValue: String
 
-    public init(rawValue: String) {
-        self.rawValue = rawValue
-    }
-
     public init(stringLiteral value: String) {
-        self.init(rawValue: value)
+        guard let normalized = Self.normalizedValue(value) else {
+            preconditionFailure("heist reference must not be empty")
+        }
+        rawValue = normalized
     }
 
     public init(validating value: String, type: String = "heist") throws {
-        guard let normalized = Self.normalized(value) else {
+        guard let normalized = Self.normalizedValue(value) else {
             throw HeistExpressionError.emptyReference(type)
         }
-        self = normalized
+        rawValue = normalized
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         let value = try container.decode(String.self)
-        guard let normalized = Self.normalized(value) else {
+        guard let normalized = Self.normalizedValue(value) else {
             throw DecodingError.dataCorruptedError(
                 in: container,
                 debugDescription: "reference must not be empty"
             )
         }
-        self = normalized
+        rawValue = normalized
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -37,18 +36,18 @@ public struct HeistReferenceName: RawRepresentable, Codable, Hashable, Sendable,
         try container.encode(rawValue)
     }
 
-    public static func normalized(_ value: String) -> HeistReferenceName? {
+    package static func normalized(_ value: String) -> HeistReferenceName? {
+        normalizedValue(value).map { HeistReferenceName(validated: $0) }
+    }
+
+    private static func normalizedValue(_ value: String) -> String? {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
-        return HeistReferenceName(rawValue: trimmed)
+        return trimmed
     }
 
-    public func normalized() -> HeistReferenceName? {
-        Self.normalized(rawValue)
-    }
-
-    public func validated(type: String = "heist") throws -> HeistReferenceName {
-        try Self(validating: rawValue, type: type)
+    private init(validated value: String) {
+        rawValue = value
     }
 }
 
@@ -94,27 +93,30 @@ extension HeistReferenceName {
     }
 }
 
-public struct HeistExecutionEnvironment: Sendable, Equatable {
-    public static let empty = HeistExecutionEnvironment()
+package struct HeistExecutionEnvironment: Sendable, Equatable {
+    package static let empty = HeistExecutionEnvironment()
 
-    public let targets: [HeistReferenceName: AccessibilityTarget]
-    public let strings: [HeistReferenceName: String]
+    package let targets: [HeistReferenceName: ResolvedAccessibilityTarget]
+    package let strings: [HeistReferenceName: String]
 
-    public init(
-        targets: [HeistReferenceName: AccessibilityTarget] = [:],
+    package init(
+        targets: [HeistReferenceName: ResolvedAccessibilityTarget] = [:],
         strings: [HeistReferenceName: String] = [:]
     ) {
         self.targets = targets
         self.strings = strings
     }
 
-    public func binding(target: AccessibilityTarget, to parameter: HeistReferenceName) -> HeistExecutionEnvironment {
+    package func binding(
+        target: ResolvedAccessibilityTarget,
+        to parameter: HeistReferenceName
+    ) -> HeistExecutionEnvironment {
         var targets = self.targets
         targets[parameter] = target
         return HeistExecutionEnvironment(targets: targets, strings: strings)
     }
 
-    public func binding(string: String, to parameter: HeistReferenceName) -> HeistExecutionEnvironment {
+    package func binding(string: String, to parameter: HeistReferenceName) -> HeistExecutionEnvironment {
         var strings = self.strings
         strings[parameter] = string
         return HeistExecutionEnvironment(targets: targets, strings: strings)
@@ -131,11 +133,13 @@ struct HeistReferenceScope: Sendable, Equatable {
 struct HeistReferenceBinding: Sendable, Equatable {
     enum Value: Sendable, Equatable {
         case string(String)
-        case accessibilityTarget(AccessibilityTarget)
+        case accessibilityTarget(ResolvedAccessibilityTarget)
     }
 
     static let runtimeSafetyStringPlaceholder = "__heist_parameter__"
-    static let runtimeSafetyAccessibilityTargetPlaceholder = AccessibilityTarget.predicate(.identifier("__heist_parameter__"))
+    static let runtimeSafetyAccessibilityTargetPlaceholder = ResolvedAccessibilityTarget.predicate(
+        .identifier("__heist_parameter__")
+    )
 
     let reference: HeistReferenceName
     let value: Value
@@ -176,7 +180,7 @@ struct HeistReferenceBindingContext: Sendable, Equatable {
     }
 
     var environment: HeistExecutionEnvironment {
-        var targets: [HeistReferenceName: AccessibilityTarget] = [:]
+        var targets: [HeistReferenceName: ResolvedAccessibilityTarget] = [:]
         var strings: [HeistReferenceName: String] = [:]
         for binding in bindings {
             switch binding.value {
@@ -208,7 +212,10 @@ struct HeistReferenceBindingContext: Sendable, Equatable {
         return failures
     }
 
-    func binding(target: AccessibilityTarget, to parameter: HeistReferenceName) -> HeistReferenceBindingContext {
+    func binding(
+        target: ResolvedAccessibilityTarget,
+        to parameter: HeistReferenceName
+    ) -> HeistReferenceBindingContext {
         binding(HeistReferenceBinding(reference: parameter, value: .accessibilityTarget(target)))
     }
 
@@ -225,7 +232,7 @@ struct HeistReferenceBindingContext: Sendable, Equatable {
         guard argument.kind == parameter.kind else {
             throw HeistExpressionError.parameterArgumentMismatch(parameter: parameter.kind, argument: argument.kind)
         }
-        switch (parameter, argument) {
+        switch (parameter, argument.core) {
         case (.none, .none):
             return self
         case (.string(let name), .string(let value)):
@@ -284,12 +291,12 @@ public enum HeistExpressionError: Error, Sendable, Equatable, CustomStringConver
     }
 }
 
-public extension HeistExecutionEnvironment {
+package extension HeistExecutionEnvironment {
     func binding(argument: HeistArgument, to parameter: HeistParameter) throws -> HeistExecutionEnvironment {
         guard argument.kind == parameter.kind else {
             throw HeistExpressionError.parameterArgumentMismatch(parameter: parameter.kind, argument: argument.kind)
         }
-        switch (parameter, argument) {
+        switch (parameter, argument.core) {
         case (.none, .none):
             return self
         case (.string(let name), .string(let value)):

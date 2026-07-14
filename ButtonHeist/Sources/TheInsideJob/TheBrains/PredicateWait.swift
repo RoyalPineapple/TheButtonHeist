@@ -15,14 +15,26 @@ internal enum AnnouncementWaitCursorStrategy: Sendable, Equatable {
     case heistScoped
 }
 
+internal enum PredicateChangeBaselineSource: Sendable, Equatable {
+    case establishFromFirstObservation
+    case supplied(SettledCapture?)
+
+    internal var capture: SettledCapture? {
+        guard case .supplied(let capture) = self else { return nil }
+        return capture
+    }
+}
+
 internal struct WaitObservationPlan: Sendable, Equatable {
+    internal static let temporalScope = SemanticObservationScope.discovery
+
     internal let scope: SemanticObservationScope
 
-    internal init(predicate _: AccessibilityPredicate<RootContext>) {
-        scope = .discovery
+    internal init(predicate _: ResolvedAccessibilityPredicate) {
+        scope = Self.temporalScope
     }
 
-    internal init(step: ResolvedWaitStep) {
+    internal init(step: ResolvedWaitRuntimeInput) {
         self.init(predicate: step.predicate)
     }
 }
@@ -41,11 +53,11 @@ internal struct WaitObservationPlan: Sendable, Equatable {
         SettledCapture,
         SettledSemanticObservationEvent
     ) -> ObservationWindow?
-    internal typealias PresenceTimeoutMessage = @MainActor (AccessibilityPredicate<RootContext>, String) -> String?
+    internal typealias PresenceTimeoutMessage = @MainActor (ResolvedAccessibilityPredicate, String) -> String?
     internal typealias AnnouncementCursor = @MainActor (AnnouncementWaitCursorStrategy) -> AccessibilityNotificationCursor
     internal typealias AnnouncementWait = @MainActor (
         AccessibilityNotificationCursor,
-        AnnouncementPredicate,
+        ResolvedAnnouncementPredicate,
         Double
     ) async -> CapturedAnnouncement?
     /// Called after an unmatched initial observation is reduced and before polling begins.
@@ -65,7 +77,7 @@ internal struct WaitObservationPlan: Sendable, Equatable {
         latestEvent: @escaping LatestEvent,
         latestSettleFailure: @escaping LatestSettleFailure,
         semanticObservation: @escaping SemanticObserver,
-        buildObservationWindow: @escaping BuildObservationWindow = ObservationWindow.direct,
+        buildObservationWindow: @escaping BuildObservationWindow,
         presenceTimeoutMessage: @escaping PresenceTimeoutMessage,
         announcementCursor: @escaping AnnouncementCursor,
         waitForAnnouncement: @escaping AnnouncementWait
@@ -81,53 +93,17 @@ internal struct WaitObservationPlan: Sendable, Equatable {
     }
 
     internal func wait(
-        for step: WaitStep,
+        for step: ResolvedWaitRuntimeInput,
         initialTrace: AccessibilityTrace? = nil,
         after sequence: SettledObservationSequence? = nil,
-        observationPlan: WaitObservationPlan? = nil,
-        announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly,
-        onReadyToPoll: ReadyToPoll? = nil
-    ) async -> HeistWaitReceipt {
-        do {
-            let resolvedStep = try step.resolve(in: .empty)
-            return await wait(
-                for: resolvedStep,
-                initialTrace: initialTrace,
-                after: sequence,
-                observationPlan: observationPlan ?? WaitObservationPlan(step: resolvedStep),
-                announcementCursorStrategy: announcementCursorStrategy,
-                onReadyToPoll: onReadyToPoll
-            )
-        } catch {
-            let predicate = Self.unresolvedWaitPredicate()
-            let resolvedStep = ResolvedWaitStep(predicate: predicate, timeout: step.timeout)
-            let expectation = ExpectationResult(
-                met: false,
-                predicate: predicate,
-                actual: "\(error)"
-            )
-            return waitReceipt(
-                for: resolvedStep,
-                trace: nil,
-                observationSummary: nil,
-                expectation: expectation,
-                start: CFAbsoluteTimeGetCurrent(),
-                success: false
-            )
-        }
-    }
-
-    internal func wait(
-        for step: ResolvedWaitStep,
-        initialTrace: AccessibilityTrace? = nil,
-        after sequence: SettledObservationSequence? = nil,
+        changeBaseline: PredicateChangeBaselineSource = .establishFromFirstObservation,
         observationPlan: WaitObservationPlan? = nil,
         announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly,
         onReadyToPoll: ReadyToPoll? = nil
     ) async -> HeistWaitReceipt {
         let start = CFAbsoluteTimeGetCurrent()
         let timeout = Self.clampedWaitTimeout(step.timeout)
-        if case .announcement(let announcement) = step.predicate.node {
+        if case .announcement(let announcement) = step.predicate.core {
             return await waitForAnnouncementPredicate(
                 announcement,
                 step: step,
@@ -139,7 +115,7 @@ internal struct WaitObservationPlan: Sendable, Equatable {
         }
 
         if let traceEvaluation = initialTraceChangeEvaluation(
-            for: step.predicate,
+            for: step,
             initialTrace: initialTrace
         ), traceEvaluation.met {
             return waitReceipt(
@@ -165,22 +141,20 @@ internal struct WaitObservationPlan: Sendable, Equatable {
                 initialTrace: initialTrace,
                 start: start,
                 shouldPoll: timeout > 0 && sequence == nil,
-                observationScope: plan.scope
+                observationScope: plan.scope,
+                changeBaseline: changeBaseline
             )
         }
 
-        var state = State(predicate: step.predicate)
+        var state = State(predicate: step.predicateExpression)
         var stream = PredicateObservationStreamState()
-        let reducer = Reducer(
-            step: step,
-            timeout: timeout
-        )
+        let reducer = Reducer()
 
         let initialDecision = initialDecision(
             for: step,
             entry: entry,
             initialTrace: initialTrace,
-            suppliedBaselineSequence: sequence,
+            baselineSource: changeBaseline,
             reducer: reducer,
             stream: &stream,
             state: &state,
@@ -236,45 +210,42 @@ internal struct WaitObservationPlan: Sendable, Equatable {
     }
 
     private func initialDecision(
-        for step: ResolvedWaitStep,
+        for step: ResolvedWaitRuntimeInput,
         entry: HeistSemanticObservation,
         initialTrace: AccessibilityTrace?,
-        suppliedBaselineSequence: SettledObservationSequence?,
+        baselineSource: PredicateChangeBaselineSource,
         reducer: Reducer,
         stream: inout PredicateObservationStreamState,
         state: inout State,
         timeout: Double
     ) -> Decision {
-        if step.predicate.requiresChangeBaseline,
-           let suppliedBaseline = Self.suppliedChangeBaseline(
-               from: initialTrace,
-               sequence: suppliedBaselineSequence,
-               entry: entry.event
-           ) {
-            return observedInitialDecision(
-                for: step,
-                entry: entry,
-                reducer: reducer,
-                stream: &stream,
-                state: state,
-                baselineSeed: .supplied(suppliedBaseline),
-                suppliedTrace: initialTrace,
-                timedOutWhenUnmatched: timeout == 0
-            )
-        }
-
         if step.predicate.requiresChangeBaseline {
-            let reduced = stream.reducing(
-                entry,
-                predicate: step.predicate,
-                baselineSeed: .currentObservation
-            )
-            stream = reduced.state
-            state = reducer.reduce(
-                state,
-                event: .baseline(Snapshot(reduced.reduction))
-            )
-            return timeout == 0 ? reducer.decision(state) : .poll(state)
+            switch baselineSource {
+            case .supplied(let suppliedBaseline):
+                return observedInitialDecision(
+                    for: step,
+                    entry: entry,
+                    reducer: reducer,
+                    stream: &stream,
+                    state: state,
+                    baselineSeed: suppliedBaseline.map(PredicateObservationBaselineSeed.supplied)
+                        ?? .preserve,
+                    timedOutWhenUnmatched: timeout == 0
+                )
+            case .establishFromFirstObservation:
+                let reduced = stream.reducing(
+                    entry,
+                    predicate: step.predicate,
+                    predicateExpression: step.predicateExpression,
+                    baselineSeed: .currentObservation
+                )
+                stream = reduced.state
+                state = reducer.reduce(
+                    state,
+                    event: .baseline(Snapshot(reduced.reduction))
+                )
+                return timeout == 0 ? reducer.decision(state) : .poll(state)
+            }
         }
 
         return observedInitialDecision(
@@ -289,21 +260,20 @@ internal struct WaitObservationPlan: Sendable, Equatable {
     }
 
     private func observedInitialDecision(
-        for step: ResolvedWaitStep,
+        for step: ResolvedWaitRuntimeInput,
         entry: HeistSemanticObservation,
         reducer: Reducer,
         stream: inout PredicateObservationStreamState,
         state: State,
         baselineSeed: PredicateObservationBaselineSeed,
-        suppliedTrace: AccessibilityTrace? = nil,
         timedOutWhenUnmatched: Bool
     ) -> Decision {
         let reduced = reduceObservation(
             entry,
             predicate: step.predicate,
+            predicateExpression: step.predicateExpression,
             baselineSeed: baselineSeed,
-            stream: stream,
-            suppliedTrace: suppliedTrace
+            stream: stream
         )
         stream = reduced.state
         return reducer.decision(
@@ -314,7 +284,7 @@ internal struct WaitObservationPlan: Sendable, Equatable {
     }
 
     private func pollDecision(
-        for step: ResolvedWaitStep,
+        for step: ResolvedWaitRuntimeInput,
         scope: SemanticObservationScope,
         start: CFAbsoluteTime,
         reducer: Reducer,
@@ -337,6 +307,7 @@ internal struct WaitObservationPlan: Sendable, Equatable {
                 let reduced = reduceObservation(
                     observation,
                     predicate: step.predicate,
+                    predicateExpression: step.predicateExpression,
                     baselineSeed: .preserve,
                     stream: stream
                 )
@@ -357,18 +328,19 @@ internal struct WaitObservationPlan: Sendable, Equatable {
 
     internal func reduceObservation(
         _ observation: HeistSemanticObservation,
-        predicate: AccessibilityPredicate<RootContext>,
+        predicate: ResolvedAccessibilityPredicate,
+        predicateExpression: AccessibilityPredicate,
         baselineSeed: PredicateObservationBaselineSeed,
-        stream: PredicateObservationStreamState,
-        suppliedTrace: AccessibilityTrace? = nil
+        stream: PredicateObservationStreamState
     ) -> PredicateObservationStreamReduction {
         let seeded = stream.reducing(
             observation,
             predicate: predicate,
-            baselineSeed: baselineSeed,
-            preserving: suppliedTrace
+            predicateExpression: predicateExpression,
+            baselineSeed: baselineSeed
         )
-        guard let baseline = seeded.state.observationBaseline else { return seeded }
+        guard predicate.requiresChangeBaseline,
+              let baseline = seeded.state.observationBaseline else { return seeded }
         let window = buildObservationWindow(
             baseline,
             observation.event
@@ -376,9 +348,9 @@ internal struct WaitObservationPlan: Sendable, Equatable {
         return stream.reducing(
             observation,
             predicate: predicate,
+            predicateExpression: predicateExpression,
             baselineSeed: .supplied(baseline),
-            observationWindow: window,
-            preserving: suppliedTrace
+            observationWindow: window
         )
     }
 

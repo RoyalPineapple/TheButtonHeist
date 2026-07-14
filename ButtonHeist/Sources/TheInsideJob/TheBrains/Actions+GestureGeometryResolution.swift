@@ -18,7 +18,7 @@ extension Actions {
     }
 
     func resolveGesturePoint(
-        selection: GesturePointSelection,
+        selection: ResolvedGesturePointSelection,
         method: ActionMethod
     ) async -> GestureResolution<ResolvedGesturePoint> {
         let inflatedTarget: ElementInflation.InflatedElementTarget?
@@ -41,7 +41,7 @@ extension Actions {
 
     func resolveGesturePoint(
         from inflatedTarget: ElementInflation.InflatedElementTarget?,
-        selection: GesturePointSelection,
+        selection: ResolvedGesturePointSelection,
         method: ActionMethod
     ) -> GestureResolution<ResolvedGesturePoint> {
         switch selection {

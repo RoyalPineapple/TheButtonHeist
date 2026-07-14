@@ -30,7 +30,7 @@ extension HeistPlanRuntimeSafetyValidator {
     }
 
     mutating func validateString(
-        _ string: StringExpr,
+        _ string: Expr<String>,
         path: String,
         scope: HeistReferenceScope
     ) {
@@ -51,11 +51,11 @@ extension HeistPlanRuntimeSafetyValidator {
     }
 
     mutating func validateString(
-        _ match: StringMatch<StringExpr>,
+        _ match: StringMatchCore<Expr<String>>,
         path: String,
         scope: HeistReferenceScope
     ) {
-        if let value = match.valueIfPresent {
+        if let value = match.payload {
             validateString(value, path: path, scope: scope)
         }
         if match.hasInvalidEmptyBroadLiteral {
@@ -70,41 +70,20 @@ extension HeistPlanRuntimeSafetyValidator {
 
     mutating func validateContainerPredicate(
         _ predicate: ContainerPredicate,
-        path: String
-    ) {
-        for (index, check) in predicate.checks.enumerated() {
-            validateContainerPredicateCheck(check, path: "\(path).checks[\(index)]")
-        }
-    }
-
-    mutating func validateContainerPredicate(
-        _ predicate: ContainerPredicateExpr,
         path: String,
         scope: HeistReferenceScope
     ) {
-        for (index, check) in predicate.checks.enumerated() {
-            validateContainerPredicateCheck(check, path: "\(path).checks[\(index)]", scope: scope)
+        for (index, check) in predicate.core.checks.enumerated() {
+            validateContainerPredicateCheck(
+                check,
+                path: "\(path).checks[\(index)]",
+                scope: scope
+            )
         }
     }
 
-    mutating func validateContainerPredicateCheck(
-        _ check: ContainerPredicateCheck<String>,
-        path: String
-    ) {
-        switch check {
-        case .type, .rowCount, .columnCount, .modalBoundary, .scrollable:
-            return
-        case .identifier(let match):
-            validateString(match, path: "\(path).identifier", role: "container identifier")
-        case .actions(let actions):
-            validateContainerActions(actions.values, path: "\(path).actions")
-        case .semantic(let predicate):
-            validateSemanticContainerPredicate(predicate, path: "\(path).semantic")
-        }
-    }
-
-    mutating func validateContainerPredicateCheck(
-        _ check: ContainerPredicateCheck<StringExpr>,
+    private mutating func validateContainerPredicateCheck(
+        _ check: ContainerPredicateCheckCore<Expr<String>>,
         path: String,
         scope: HeistReferenceScope
     ) {
@@ -120,19 +99,20 @@ extension HeistPlanRuntimeSafetyValidator {
         }
     }
 
-    mutating func validateSemanticContainerPredicate(
-        _ predicate: SemanticContainerPredicate<String>,
-        path: String
+    private mutating func validateSemanticContainerPredicate(
+        _ predicate: SemanticContainerPredicateCore<Expr<String>>,
+        path: String,
+        scope: HeistReferenceScope
     ) {
         switch predicate {
         case .label(let match):
-            validateString(match, path: "\(path).label", role: "container label")
+            validateString(match, path: "\(path).label", scope: scope)
         case .value(let match):
-            validateString(match, path: "\(path).value", role: "container value")
+            validateString(match, path: "\(path).value", scope: scope)
         }
     }
 
-    mutating func validateContainerActions(_ actions: Set<ElementAction>, path: String) {
+    private mutating func validateContainerActions(_ actions: Set<ElementAction>, path: String) {
         guard !actions.isEmpty else {
             fail(
                 path: path,
@@ -154,30 +134,6 @@ extension HeistPlanRuntimeSafetyValidator {
         }
     }
 
-    mutating func validateSemanticContainerPredicate(
-        _ predicate: SemanticContainerPredicate<StringExpr>,
-        path: String,
-        scope: HeistReferenceScope
-    ) {
-        switch predicate {
-        case .label(let match):
-            validateString(match, path: "\(path).label", scope: scope)
-        case .value(let match):
-            validateString(match, path: "\(path).value", scope: scope)
-        }
-    }
-
-    mutating func validateRequiredContainerPredicate(_ predicate: ContainerPredicate, path: String) {
-        if !predicate.hasPredicates {
-            fail(
-                path: path,
-                contract: "container predicate must include at least one field",
-                observed: "empty container predicate",
-                correction: "Use a semantic, type, table, or modal-boundary container check."
-            )
-        }
-    }
-
     mutating func validateOrdinal(_ ordinal: Int?, path: String) {
         guard let ordinal, ordinal < 0 else { return }
         fail(
@@ -186,45 +142,6 @@ extension HeistPlanRuntimeSafetyValidator {
             observed: "\(ordinal)",
             correction: "Use an ordinal of 0 or greater."
         )
-    }
-
-    mutating func validateElementPredicate(
-        _ predicate: ElementPredicate,
-        path: String
-    ) {
-        if let description = predicate.invalidEmptyPayloadDescription {
-            fail(
-                path: path,
-                contract: "element predicate must not be empty",
-                observed: description,
-                correction: "Use a non-empty label, identifier, value, hint, traits, actions, customContent, rotors, or exclude check."
-            )
-        }
-        for (index, check) in predicate.checks.enumerated() {
-            let checkPath = "\(path).checks[\(index)]"
-            validateElementPredicateCheck(check, path: checkPath)
-            switch check {
-            case .label(let match):
-                validateString(match, path: "\(checkPath).label", role: "element label")
-            case .identifier(let match):
-                validateString(match, path: "\(checkPath).identifier", role: "element identifier")
-            case .value(let match):
-                validateString(match, path: "\(checkPath).value", role: "element value")
-            case .hint(let match):
-                validateString(match, path: "\(checkPath).hint", role: "element hint")
-            case .traits:
-                break
-            case .actions:
-                break
-            case .customContent(let match):
-                validateString(match.label, path: "\(checkPath).customContent.label", role: "custom content label")
-                validateString(match.value, path: "\(checkPath).customContent.value", role: "custom content value")
-            case .rotors(let matches):
-                validateStrings(matches, path: "\(checkPath).rotors", role: "element rotor")
-            case .exclude(let check):
-                validateElementPredicate(ElementPredicate([check]), path: "\(checkPath).exclude")
-            }
-        }
     }
 
     mutating func validateElementPredicate(
@@ -240,48 +157,52 @@ extension HeistPlanRuntimeSafetyValidator {
                 correction: "Use a non-empty label, identifier, value, hint, traits, actions, customContent, rotors, or exclude check."
             )
         }
-        for (index, check) in predicate.checks.enumerated() {
-            let checkPath = "\(path).checks[\(index)]"
-            validateElementPredicateCheck(check, path: checkPath)
-            switch check {
-            case .label(let match):
-                validateString(match, path: "\(checkPath).label", scope: scope)
-            case .identifier(let match):
-                validateString(match, path: "\(checkPath).identifier", scope: scope)
-            case .value(let match):
-                validateString(match, path: "\(checkPath).value", scope: scope)
-            case .hint(let match):
-                validateString(match, path: "\(checkPath).hint", scope: scope)
-            case .traits:
-                break
-            case .actions:
-                break
-            case .customContent(let match):
-                if let label = match.label {
-                    validateString(label, path: "\(checkPath).customContent.label", scope: scope)
-                }
-                if let value = match.value {
-                    validateString(value, path: "\(checkPath).customContent.value", scope: scope)
-                }
-            case .rotors(let matches):
-                validateStrings(matches, path: "\(checkPath).rotors", scope: scope)
-            case .exclude(let check):
-                validateElementPredicate(ElementPredicateTemplate([check]), path: "\(checkPath).exclude", scope: scope)
-            }
+        for (index, check) in predicate.core.checks.enumerated() {
+            validateElementPredicateCheck(
+                check,
+                path: "\(path).checks[\(index)]",
+                scope: scope
+            )
         }
     }
 
-    mutating func validateElementPredicateCheck<Text>(
-        _ check: ElementPredicateCheck<Text>,
-        path: String
+    private mutating func validateElementPredicateCheck(
+        _ check: ElementPredicateCheckCore<Expr<String>>,
+        path: String,
+        scope: HeistReferenceScope
     ) {
-        guard let description = check.invalidEmptyPayloadDescription else { return }
-        fail(
-            path: path,
-            contract: "element predicate check payload must not be empty",
-            observed: description,
-            correction: "Use non-empty matcher values and non-empty trait/action/rotor collections."
-        )
+        if let description = check.invalidEmptyPayloadDescription {
+            fail(
+                path: path,
+                contract: "element predicate check payload must not be empty",
+                observed: description,
+                correction: "Use non-empty matcher values and non-empty trait/action/rotor collections."
+            )
+        }
+
+        switch check {
+        case .label(let match):
+            validateString(match, path: "\(path).label", scope: scope)
+        case .identifier(let match):
+            validateString(match, path: "\(path).identifier", scope: scope)
+        case .value(let match):
+            validateString(match, path: "\(path).value", scope: scope)
+        case .hint(let match):
+            validateString(match, path: "\(path).hint", scope: scope)
+        case .traits, .actions:
+            break
+        case .customContent(let match):
+            if let label = match.label {
+                validateString(label, path: "\(path).customContent.label", scope: scope)
+            }
+            if let value = match.value {
+                validateString(value, path: "\(path).customContent.value", scope: scope)
+            }
+        case .rotors(let matches):
+            validateStrings(matches, path: "\(path).rotors", scope: scope)
+        case .exclude(let excluded):
+            validateElementPredicateCheck(excluded, path: "\(path).exclude", scope: scope)
+        }
     }
 
     mutating func validateParameter(_ parameter: String, path: String, role: String) {
@@ -350,27 +271,8 @@ extension HeistPlanRuntimeSafetyValidator {
         }
     }
 
-    mutating func validateString(_ match: StringMatch<String>?, path: String, role: String) {
-        guard let match else { return }
-        addString(match.valueIfPresent, path: path, role: role)
-        if match.hasInvalidEmptyBroadLiteral {
-            fail(
-                path: path,
-                contract: "\(match.mode.rawValue) string match value must not be empty",
-                observed: "empty \(match.mode.rawValue) match",
-                correction: "Use a non-empty string, or an exact match when the empty string is intentional."
-            )
-        }
-    }
-
-    mutating func validateStrings(_ matches: [StringMatch<String>], path: String, role: String) {
-        for (index, match) in matches.enumerated() {
-            validateString(match, path: "\(path)[\(index)]", role: role)
-        }
-    }
-
-    mutating func validateStrings(
-        _ matches: [StringMatch<StringExpr>],
+    private mutating func validateStrings(
+        _ matches: [StringMatchCore<Expr<String>>],
         path: String,
         scope: HeistReferenceScope
     ) {

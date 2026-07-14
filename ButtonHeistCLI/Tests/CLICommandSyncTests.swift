@@ -30,6 +30,17 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(topLevelCommandNames().sorted(), expected)
     }
 
+    @ButtonHeistActor
+    func testOneShotDescriptorsOwnConnectedAndLocalLifecycleModes() async throws {
+        let connected = try await PingCommand.parse([]).runnerDescriptor()
+        let local = try await ListCommand.parse([]).runnerDescriptor()
+
+        XCTAssertEqual(connected.fenceDescriptor.command, .ping)
+        XCTAssertEqual(connected.executionMode, .connected)
+        XCTAssertEqual(local.fenceDescriptor.command, .listDevices)
+        XCTAssertEqual(local.executionMode, .direct)
+    }
+
     func testJSONLinesDefaultOutputIsCanonicalJSON() {
         XCTAssertEqual(JSONLinesDefaults.outputFormat, .json)
     }
@@ -58,8 +69,9 @@ final class CLICommandSyncTests: XCTestCase {
 
         XCTAssertEqual(command.discoveryLimits.maxScrollsPerContainer, 25)
         XCTAssertEqual(command.discoveryLimits.maxScrollsPerDiscovery, 40)
-        XCTAssertEqual(command.discoveryLimits.parameters[.maxScrollsPerContainer], .int(25))
-        XCTAssertEqual(command.discoveryLimits.parameters[.maxScrollsPerDiscovery], .int(40))
+        let arguments = try command.requestArguments()
+        XCTAssertEqual(arguments.value(for: .maxScrollsPerContainer), .int(25))
+        XCTAssertEqual(arguments.value(for: .maxScrollsPerDiscovery), .int(40))
     }
 
     func testGetInterfaceEncodesCanonicalTargetUnderSubtree() throws {
@@ -72,7 +84,10 @@ final class CLICommandSyncTests: XCTestCase {
         let target = try XCTUnwrap(command.subtree.parsedTarget())
         let arguments = try command.requestArguments()
 
-        XCTAssertEqual(arguments.value(for: .subtree), CLIRequestBuilder.targetValue(target))
+        XCTAssertEqual(
+            arguments.value(for: .subtree),
+            try TheFence.HeistValuePayloadEncoder.encode(target)
+        )
         XCTAssertEqual(arguments.value(for: .maxScrollsPerContainer), .int(25))
         XCTAssertNil(arguments.value(for: .target))
         XCTAssertNil(arguments.value(for: .checks))
@@ -104,6 +119,22 @@ final class CLICommandSyncTests: XCTestCase {
         let command = try WaitCommand.parse(["--change", "screen"])
 
         XCTAssertEqual(command.timeout, CLITimeoutDefaults.wait)
+    }
+
+    func testWaitCommandEncodesCanonicalConcreteChangePredicates() throws {
+        let screen = try WaitCommand.parse(["--change", "screen"]).requestArguments()
+        let elements = try WaitCommand.parse(["--change", "elements"]).requestArguments()
+
+        XCTAssertEqual(screen.value(for: .predicate), .object([
+            "type": .string("changed"),
+            "scope": .string("screen"),
+            "assertions": .array([]),
+        ]))
+        XCTAssertEqual(elements.value(for: .predicate), .object([
+            "type": .string("changed"),
+            "scope": .string("elements"),
+            "assertions": .array([]),
+        ]))
     }
 
     func testParsedTimeoutDefaultsComeFromFenceDescriptorsWhenExposed() throws {
@@ -158,9 +189,9 @@ final class CLICommandSyncTests: XCTestCase {
             inline: source
         )
 
-        XCTAssertEqual(arguments[.plan], .string(source))
-        XCTAssertNil(arguments[.version])
-        XCTAssertNil(arguments[.body])
+        XCTAssertEqual(arguments.value(for: .plan), .string(source))
+        XCTAssertNil(arguments.value(for: .version))
+        XCTAssertNil(arguments.value(for: .body))
     }
 
     func testRunHeistRejectsEmptyInlineButtonHeistSource() {
@@ -173,9 +204,9 @@ final class CLICommandSyncTests: XCTestCase {
         let rawJSON = #"{"version":1,"body":[{"type":"warn","warn":{"message":"x"}}]}"#
         let arguments = try RunHeistCommand.planArguments(inline: rawJSON)
 
-        XCTAssertEqual(arguments[.plan], .string(rawJSON))
-        XCTAssertNil(arguments[.version])
-        XCTAssertNil(arguments[.body])
+        XCTAssertEqual(arguments.value(for: .plan), .string(rawJSON))
+        XCTAssertNil(arguments.value(for: .version))
+        XCTAssertNil(arguments.value(for: .body))
     }
 
     func testRunHeistRequiresExactlyOnePlanSource() {
@@ -200,9 +231,9 @@ final class CLICommandSyncTests: XCTestCase {
             entry: nil
         )
 
-        XCTAssertEqual(arguments[.path], .string("Flow.heist"))
-        XCTAssertNil(arguments[.version])
-        XCTAssertNil(arguments[.body])
+        XCTAssertEqual(arguments.value(for: .path), .string("Flow.heist"))
+        XCTAssertNil(arguments.value(for: .version))
+        XCTAssertNil(arguments.value(for: .body))
     }
 
     func testRunHeistForwardsRootArgumentWithPathSource() throws {
@@ -213,8 +244,8 @@ final class CLICommandSyncTests: XCTestCase {
             argument: #"{"type":"string","value":"milk"}"#
         )
 
-        XCTAssertEqual(arguments[.path], .string("Search.heist"))
-        XCTAssertEqual(arguments[.argument], .object([
+        XCTAssertEqual(arguments.value(for: .path), .string("Search.heist"))
+        XCTAssertEqual(arguments.value(for: .argument), .object([
             "type": .string("string"),
             "value": .string("milk"),
         ]))
@@ -233,8 +264,8 @@ final class CLICommandSyncTests: XCTestCase {
             argument: #"{"type":"string","value":"milk"}"#
         )
 
-        XCTAssertEqual(arguments[.plan], .string(source))
-        XCTAssertEqual(arguments[.argument], .object([
+        XCTAssertEqual(arguments.value(for: .plan), .string(source))
+        XCTAssertEqual(arguments.value(for: .argument), .object([
             "type": .string("string"),
             "value": .string("milk"),
         ]))
@@ -266,8 +297,8 @@ final class CLICommandSyncTests: XCTestCase {
             path: prepared.path,
             entry: prepared.entry
         )
-        XCTAssertEqual(arguments[.path], .string(artifactPath))
-        XCTAssertNil(arguments[.version])
+        XCTAssertEqual(arguments.value(for: .path), .string(artifactPath))
+        XCTAssertNil(arguments.value(for: .version))
     }
 
     func testRunHeistSwiftSourceRequiresEntry() async {
@@ -288,9 +319,9 @@ final class CLICommandSyncTests: XCTestCase {
             commandName: "list_heists"
         )
 
-        XCTAssertEqual(arguments[.plan], .string(source))
-        XCTAssertNil(arguments[.version])
-        XCTAssertNil(arguments[.path])
+        XCTAssertEqual(arguments.value(for: .plan), .string(source))
+        XCTAssertNil(arguments.value(for: .version))
+        XCTAssertNil(arguments.value(for: .path))
     }
 
     func testListHeistsDetailFlagDefaultsToSummary() throws {
@@ -318,14 +349,13 @@ final class CLICommandSyncTests: XCTestCase {
             inline: source,
             path: nil,
             entry: nil,
-            commandName: "describe_heist"
-        ).adding(
-            CommandArgumentWriter.value(.heist, "flow")
+            commandName: "describe_heist",
+            additionalFields: [CommandArgumentEnvelopeBuilder.value(.heist, "flow")]
         )
 
-        XCTAssertEqual(arguments[.heist], .string("flow"))
-        XCTAssertEqual(arguments[.plan], .string(source))
-        XCTAssertNil(arguments[.version])
+        XCTAssertEqual(arguments.value(for: .heist), .string("flow"))
+        XCTAssertEqual(arguments.value(for: .plan), .string(source))
+        XCTAssertNil(arguments.value(for: .version))
     }
 
     func testRunHeistRejectsEntryWithoutPath() {
@@ -338,8 +368,8 @@ final class CLICommandSyncTests: XCTestCase {
         }
     }
 
-    func testSharedRequestBuilderParsesCanonicalMachineJSON() throws {
-        let parsed = try CLIRequestBuilder.parsedRequest(
+    func testMachineRequestParserParsesCanonicalMachineJSON() throws {
+        let parsed = try CLIMachineRequestParser.parsedRequest(
             from: #"{"command":"type_text","text":"hello"}"#
         )
 
@@ -347,8 +377,8 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(parsed.argument(.text), .string("hello"))
     }
 
-    func testSharedRequestBuilderParsesStringMachineRequestIdAsMetadata() throws {
-        let parsed = try CLIRequestBuilder.parsedRequest(
+    func testMachineRequestParserParsesStringMachineRequestIdAsMetadata() throws {
+        let parsed = try CLIMachineRequestParser.parsedRequest(
             from: #"{"id":"request-1","command":"type_text","text":"hello"}"#
         )
 
@@ -357,16 +387,16 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(parsed.argument(.text), .string("hello"))
     }
 
-    func testSharedRequestBuilderParsesTypedMachineRequestId() throws {
-        let parsed = try CLIRequestBuilder.parsedRequest(
+    func testMachineRequestParserParsesTypedMachineRequestId() throws {
+        let parsed = try CLIMachineRequestParser.parsedRequest(
             from: #"{"id":9223372036854775807,"command":"type_text","text":"hello"}"#
         )
 
         XCTAssertEqual(parsed.requestId, .signedInteger(Int64.max))
     }
 
-    func testSharedRequestBuilderParsesNullMachineRequestId() throws {
-        let parsed = try CLIRequestBuilder.parsedRequest(
+    func testMachineRequestParserParsesNullMachineRequestId() throws {
+        let parsed = try CLIMachineRequestParser.parsedRequest(
             from: #"{"id":null,"command":"ping"}"#
         )
 
@@ -374,37 +404,37 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(parsed.command, .ping)
     }
 
-    func testSharedRequestBuilderParsesUnsignedMachineRequestId() throws {
-        let parsed = try CLIRequestBuilder.parsedRequest(
+    func testMachineRequestParserParsesUnsignedMachineRequestId() throws {
+        let parsed = try CLIMachineRequestParser.parsedRequest(
             from: #"{"id":18446744073709551615,"command":"ping"}"#
         )
 
         XCTAssertEqual(parsed.requestId, .unsignedInteger(UInt64.max))
     }
 
-    func testSharedRequestBuilderParsesDecimalMachineRequestId() throws {
-        let parsed = try CLIRequestBuilder.parsedRequest(
+    func testMachineRequestParserParsesDecimalMachineRequestId() throws {
+        let parsed = try CLIMachineRequestParser.parsedRequest(
             from: #"{"id":1.25,"command":"ping"}"#
         )
 
         XCTAssertEqual(parsed.requestId, .double(1.25))
     }
 
-    func testSharedRequestBuilderParsesWholeNumberMachineRequestIdAsInteger() throws {
-        let parsed = try CLIRequestBuilder.parsedRequest(
+    func testMachineRequestParserParsesWholeNumberMachineRequestIdAsInteger() throws {
+        let parsed = try CLIMachineRequestParser.parsedRequest(
             from: #"{"id":1.0,"command":"ping"}"#
         )
 
         XCTAssertEqual(parsed.requestId, .signedInteger(1))
     }
 
-    func testSharedRequestBuilderRejectsNonScalarMachineRequestId() {
+    func testMachineRequestParserRejectsNonScalarMachineRequestId() {
         XCTAssertThrowsError(
-            try CLIRequestBuilder.parsedRequest(
+            try CLIMachineRequestParser.parsedRequest(
                 from: #"{"id":{"nested":true},"command":"type_text","text":"hello"}"#
             )
         ) { error in
-            let failure = requestBuildFailure(from: error)
+            let failure = machineRequestFailure(from: error)
             XCTAssertTrue(
                 failure.message.contains("Public JSON request id must be string"),
                 failure.message
@@ -413,13 +443,13 @@ final class CLICommandSyncTests: XCTestCase {
         }
     }
 
-    func testSharedRequestBuilderRejectsBoolMachineRequestId() {
+    func testMachineRequestParserRejectsBoolMachineRequestId() {
         XCTAssertThrowsError(
-            try CLIRequestBuilder.parsedRequest(
+            try CLIMachineRequestParser.parsedRequest(
                 from: #"{"id":true,"command":"ping"}"#
             )
         ) { error in
-            let failure = requestBuildFailure(from: error)
+            let failure = machineRequestFailure(from: error)
             XCTAssertTrue(
                 failure.message.contains("does not support bool"),
                 failure.message
@@ -428,13 +458,13 @@ final class CLICommandSyncTests: XCTestCase {
         }
     }
 
-    func testSharedRequestBuilderRejectsArrayMachineRequestId() {
+    func testMachineRequestParserRejectsArrayMachineRequestId() {
         XCTAssertThrowsError(
-            try CLIRequestBuilder.parsedRequest(
+            try CLIMachineRequestParser.parsedRequest(
                 from: #"{"id":["r1"],"command":"ping"}"#
             )
         ) { error in
-            let failure = requestBuildFailure(from: error)
+            let failure = machineRequestFailure(from: error)
             XCTAssertTrue(
                 failure.message.contains("Public JSON request id"),
                 failure.message
@@ -443,11 +473,11 @@ final class CLICommandSyncTests: XCTestCase {
         }
     }
 
-    func testSharedRequestBuilderRejectsHumanTextInJSONLinesMode() {
+    func testMachineRequestParserRejectsHumanTextInJSONLinesMode() {
         XCTAssertThrowsError(
-            try CLIRequestBuilder.parsedRequest(from: "activate button_save")
+            try CLIMachineRequestParser.parsedRequest(from: "activate button_save")
         ) { error in
-            let failure = requestBuildFailure(from: error)
+            let failure = machineRequestFailure(from: error)
             XCTAssertTrue(
                 failure.message.contains("Expected JSON object input"),
                 failure.message
@@ -456,26 +486,26 @@ final class CLICommandSyncTests: XCTestCase {
         }
     }
 
-    func testSharedRequestBuilderRejectsMalformedMachineJSON() {
+    func testMachineRequestParserRejectsMalformedMachineJSON() {
         XCTAssertThrowsError(
-            try CLIRequestBuilder.parsedRequest(from: #"{"command":"ping","#)
+            try CLIMachineRequestParser.parsedRequest(from: #"{"command":"ping","#)
         ) { error in
-            let failure = requestBuildFailure(from: error)
+            let failure = machineRequestFailure(from: error)
             let message = failure.message
             XCTAssertTrue(message.contains("Public JSON request is not valid JSON"), message)
             XCTAssertEqual(failure.details.code, .requestInvalid)
         }
     }
 
-    func testSharedRequestBuilderAcceptsValidPingRequest() throws {
-        let parsed = try CLIRequestBuilder.parsedRequest(from: #"{"command":"ping"}"#)
+    func testMachineRequestParserAcceptsValidPingRequest() throws {
+        let parsed = try CLIMachineRequestParser.parsedRequest(from: #"{"command":"ping"}"#)
 
         XCTAssertEqual(parsed.command, .ping)
         XCTAssertNil(parsed.requestId)
     }
 
-    func testSharedRequestBuilderAcceptsCanonicalMachineJSONInJSONLinesMode() throws {
-        let parsed = try CLIRequestBuilder.parsedRequest(
+    func testMachineRequestParserAcceptsCanonicalMachineJSONInJSONLinesMode() throws {
+        let parsed = try CLIMachineRequestParser.parsedRequest(
             from: #"{"command":"activate","target":{"checks":[{"kind":"identifier","match":{"mode":"exact","value":"button_save"}}]}}"#
         )
 
@@ -486,8 +516,8 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertNotNil(target["checks"])
     }
 
-    func testSharedRequestBuilderDefersCommandValidationToFenceAdmission() throws {
-        let parsed = try CLIRequestBuilder.parsedRequest(
+    func testMachineRequestParserDefersCommandValidationToFenceAdmission() throws {
+        let parsed = try CLIMachineRequestParser.parsedRequest(
             from: #"{"command":"wait","predicate":{"type":"changed","scope":"screen","assertions":[]},"timeout":0,"unknown":true}"#
         )
 
@@ -495,8 +525,8 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(parsed.argument(FenceParameterKey(rawValue: "unknown")!), .bool(true))
     }
 
-    func testSharedRequestBuilderRoutesValidWaitInJSONLinesMode() throws {
-        let parsed = try CLIRequestBuilder.parsedRequest(
+    func testMachineRequestParserRoutesValidWaitInJSONLinesMode() throws {
+        let parsed = try CLIMachineRequestParser.parsedRequest(
             from: #"{"command":"wait","predicate":{"type":"changed","scope":"screen","assertions":[]},"timeout":5}"#
         )
 
@@ -504,13 +534,13 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(parsed.argument(.timeout), .int(5))
     }
 
-    func testSharedRequestBuilderRejectsMCPOnlyPerformInJSONLinesMode() {
+    func testMachineRequestParserRejectsMCPOnlyPerformInJSONLinesMode() {
         XCTAssertThrowsError(
-            try CLIRequestBuilder.parsedRequest(
+            try CLIMachineRequestParser.parsedRequest(
                 from: #"{"command":"perform","step":"Activate(.label(\"Pay\"))"}"#
             )
         ) { error in
-            let failure = requestBuildFailure(from: error)
+            let failure = machineRequestFailure(from: error)
             let message = failure.message
             XCTAssertTrue(
                 message.contains(#"JSON input command "perform" is not supported"#),
@@ -520,8 +550,8 @@ final class CLICommandSyncTests: XCTestCase {
         }
     }
 
-    func testSharedRequestBuilderAcceptsRunHeistInJSONLinesMode() throws {
-        let parsed = try CLIRequestBuilder.parsedRequest(
+    func testMachineRequestParserAcceptsRunHeistInJSONLinesMode() throws {
+        let parsed = try CLIMachineRequestParser.parsedRequest(
             from: #"{"command":"run_heist","plan":"HeistPlan(\"one\") { Warn(\"check\") }"}"#
         )
 
@@ -529,12 +559,12 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(parsed.argument(.plan), .string(#"HeistPlan("one") { Warn("check") }"#))
     }
 
-    func testSharedRequestBuilderRejectsHugeMachineJSONLineBeforeDecoding() {
+    func testMachineRequestParserRejectsHugeMachineJSONLineBeforeDecoding() {
         let hugeText = String(repeating: "x", count: PublicJSONInputLimits.maxRequestBytes + 1)
         let line = "{\"command\":\"type_text\",\"text\":\"" + hugeText + "\"}"
 
-        XCTAssertThrowsError(try CLIRequestBuilder.parsedRequest(from: line)) { error in
-            let failure = requestBuildFailure(from: error)
+        XCTAssertThrowsError(try CLIMachineRequestParser.parsedRequest(from: line)) { error in
+            let failure = machineRequestFailure(from: error)
             let message = failure.message
             XCTAssertTrue(
                 message.contains("Public JSON request exceeds \(PublicJSONInputLimits.maxRequestBytes) bytes"),
@@ -544,7 +574,7 @@ final class CLICommandSyncTests: XCTestCase {
         }
     }
 
-    func testSharedRequestBuilderRejectsDeeplyNestedMachineJSONBeforeDecoding() {
+    func testMachineRequestParserRejectsDeeplyNestedMachineJSONBeforeDecoding() {
         var payload = "true"
         for index in 0..<PublicJSONInputLimits.maxNestingDepth {
             if index.isMultiple(of: 2) {
@@ -555,8 +585,8 @@ final class CLICommandSyncTests: XCTestCase {
         }
         let line = "{\"command\":\"ping\",\"payload\":\(payload)}"
 
-        XCTAssertThrowsError(try CLIRequestBuilder.parsedRequest(from: line)) { error in
-            let failure = requestBuildFailure(from: error)
+        XCTAssertThrowsError(try CLIMachineRequestParser.parsedRequest(from: line)) { error in
+            let failure = machineRequestFailure(from: error)
             let message = failure.message
             XCTAssertTrue(
                 message.contains(
@@ -568,15 +598,15 @@ final class CLICommandSyncTests: XCTestCase {
         }
     }
 
-    func testSharedRequestBuilderRejectsExcessiveMachineJSONKeyCountBeforeDecoding() {
+    func testMachineRequestParserRejectsExcessiveMachineJSONKeyCountBeforeDecoding() {
         var fields = ["\"command\":\"ping\""]
         for index in 0..<PublicJSONInputLimits.maxTotalObjectKeys {
             fields.append("\"\(index)\":\(index)")
         }
         let line = "{\(fields.joined(separator: ","))}"
 
-        XCTAssertThrowsError(try CLIRequestBuilder.parsedRequest(from: line)) { error in
-            let failure = requestBuildFailure(from: error)
+        XCTAssertThrowsError(try CLIMachineRequestParser.parsedRequest(from: line)) { error in
+            let failure = machineRequestFailure(from: error)
             let message = failure.message
             XCTAssertTrue(
                 message.contains(
@@ -588,14 +618,14 @@ final class CLICommandSyncTests: XCTestCase {
         }
     }
 
-    func testSharedRequestBuilderAttachesDescriptorForCanonicalMachineJSON() throws {
-        let parsed = try CLIRequestBuilder.parsedRequest(from: #"{"command":"type_text","text":"hello"}"#)
+    func testMachineRequestParserAttachesDescriptorForCanonicalMachineJSON() throws {
+        let parsed = try CLIMachineRequestParser.parsedRequest(from: #"{"command":"type_text","text":"hello"}"#)
 
         XCTAssertEqual(parsed.command, .typeText)
         XCTAssertEqual(parsed.argument(.text), .string("hello"))
     }
 
-    func testCLIBuilderCarriesPredicateTargetAsPublicTargetArgument() throws {
+    func testCommandArgumentEnvelopeBuilderCarriesCanonicalTarget() throws {
         let expectedTarget = AccessibilityTarget.predicate(ElementPredicateTemplate(
                 [
                     .label("Rotor Host"),
@@ -606,9 +636,9 @@ final class CLICommandSyncTests: XCTestCase {
             ),
             ordinal: 1
         )
-        let arguments = CLIRequestBuilder.arguments(
-            target: expectedTarget
-        )
+        let arguments = CommandArgumentEnvelopeBuilder(
+            CommandArgumentEnvelopeBuilder.encoded(.target, expectedTarget)
+        ).build()
 
         XCTAssertEqual(arguments.value(for: .target), .object([
             "checks": .array([
@@ -694,19 +724,19 @@ final class CLICommandSyncTests: XCTestCase {
         }
     }
 
-    private func requestBuildFailure(
+    private func machineRequestFailure(
         from error: Error,
         file: StaticString = #filePath,
         line: UInt = #line
     ) -> DiagnosticFailure {
-        guard let buildError = error as? CLIRequestBuildError else {
-            XCTFail("expected CLIRequestBuildError, got \(error)", file: file, line: line)
+        guard let requestError = error as? CLIMachineRequestError else {
+            XCTFail("expected CLIMachineRequestError, got \(error)", file: file, line: line)
             return DiagnosticFailure(
                 message: String(describing: error),
                 details: FailureDetails(code: .clientUnknown)
             )
         }
-        return buildError.diagnosticFailure
+        return requestError.diagnosticFailure
     }
 }
 

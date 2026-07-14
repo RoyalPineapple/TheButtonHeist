@@ -11,10 +11,10 @@ struct PredicateCaseSelection {
     let cases: [HeistCaseMatchResult]
     let selectedCaseIndex: Int?
 
-    static func unevaluated(_ cases: [ResolvedPredicateCase]) -> PredicateCaseSelection {
+    static func unevaluated(_ cases: [ResolvedPredicateCaseRuntimeInput]) -> PredicateCaseSelection {
         PredicateCaseSelection(
             cases: cases.map {
-                let predicate = $0.predicate.rootPredicate
+                let predicate = $0.predicateExpression.rootPredicate
                 return HeistCaseMatchResult(
                     predicate: predicate,
                     met: false,
@@ -26,7 +26,7 @@ struct PredicateCaseSelection {
     }
 
     static func evaluate(
-        _ cases: [ResolvedPredicateCase],
+        _ cases: [ResolvedPredicateCaseRuntimeInput],
         observation: HeistSemanticObservation
     ) -> PredicateCaseSelection {
         let evaluatedCases = cases.map {
@@ -41,27 +41,14 @@ struct PredicateCaseSelection {
         )
     }
 
-    static func evaluate(
-        _ cases: [ResolvedPredicateCase],
-        evidence: PredicateObservationEvidence
-    ) -> PredicateCaseSelection {
-        let evaluatedCases = cases.map {
-            PredicateEvaluation.caseMatch($0, in: evidence)
-        }
-        return PredicateCaseSelection(
-            cases: evaluatedCases,
-            selectedCaseIndex: evaluatedCases.firstIndex(where: \.met)
-        )
-    }
-
     @MainActor static func waitFor(
-        _ cases: [ResolvedPredicateCase],
+        _ cases: [ResolvedPredicateCaseRuntimeInput],
         timeout rawTimeout: Double,
         observeSemanticState: @escaping ObservationSource
     ) async -> HeistCaseSelectionResult {
         let start = CFAbsoluteTimeGetCurrent()
         let scope = cases.observationScope
-        guard let evaluationPredicate = cases.first?.predicate.rootPredicate else {
+        guard !cases.isEmpty else {
             return HeistCaseSelectionResult(
                 cases: [],
                 outcome: .noMatch,
@@ -70,7 +57,6 @@ struct PredicateCaseSelection {
                 lastObservedSummary: nil
             )
         }
-        var stream = PredicateObservationStreamState()
         let pollResult = await PredicatePollingEngine<PredicateCaseSelection>(
             observeSemanticState: observeSemanticState
         ).poll(
@@ -78,15 +64,7 @@ struct PredicateCaseSelection {
             timeout: rawTimeout,
             start: start,
             evaluate: { observation in
-                let reduced = stream.reducing(
-                    observation,
-                    predicate: evaluationPredicate
-                )
-                stream = reduced.state
-                return PredicateCaseSelection.evaluate(
-                    cases,
-                    evidence: reduced.reduction.evidence
-                )
+                PredicateCaseSelection.evaluate(cases, observation: observation)
             },
             isMatched: { $0.selectedCaseIndex != nil }
         )

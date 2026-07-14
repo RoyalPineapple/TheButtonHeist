@@ -32,11 +32,11 @@ final class GesturePayloadDecodingTests: XCTestCase {
             ]
         )
 
-        guard case .swipe(let target) = message,
+        guard case .mechanicalSwipe(let target) = message,
               case .elementDirection(let target, let direction) = target.selection else {
             return XCTFail("Expected elementDirection swipe payload, got \(message)")
         }
-        XCTAssertEqual(target, .predicate(ElementPredicateTemplate(identifier: "row_5")))
+        XCTAssertEqual(target, .predicate(.identifier("row_5")))
         XCTAssertEqual(direction, .left)
     }
 
@@ -53,11 +53,11 @@ final class GesturePayloadDecodingTests: XCTestCase {
             ]
         )
 
-        guard case .swipe(let target) = message,
+        guard case .mechanicalSwipe(let target) = message,
               case .unitElement(let target, let start, let end) = target.selection else {
             return XCTFail("Expected elementUnitPoints swipe payload, got \(message)")
         }
-        XCTAssertEqual(target, .predicate(ElementPredicateTemplate(identifier: "row_5")))
+        XCTAssertEqual(target, .predicate(.identifier("row_5")))
         XCTAssertEqual(start, UnitPoint(x: 0.8, y: 0.5))
         XCTAssertEqual(end, UnitPoint(x: 0.2, y: 0.5))
     }
@@ -74,7 +74,7 @@ final class GesturePayloadDecodingTests: XCTestCase {
             ]
         )
 
-        guard case .swipe(let target) = message,
+        guard case .mechanicalSwipe(let target) = message,
               case .point(let start, let destination) = target.selection else {
             return XCTFail("Expected pointToPoint swipe payload, got \(message)")
         }
@@ -94,7 +94,7 @@ final class GesturePayloadDecodingTests: XCTestCase {
             ]
         )
 
-        guard case .swipe(let target) = message,
+        guard case .mechanicalSwipe(let target) = message,
               case .point(let start, let destination) = target.selection else {
             return XCTFail("Expected pointDirection swipe payload, got \(message)")
         }
@@ -141,11 +141,11 @@ final class GesturePayloadDecodingTests: XCTestCase {
             ]
         )
 
-        guard case .drag(let target) = message,
+        guard case .mechanicalDrag(let target) = message,
               case .elementToPoint(let target, let start, let end) = target.selection else {
             return XCTFail("Expected elementToPoint drag payload, got \(message)")
         }
-        XCTAssertEqual(target, .predicate(ElementPredicateTemplate(identifier: "source")))
+        XCTAssertEqual(target, .predicate(.identifier("source")))
         XCTAssertEqual(start, UnitPoint(x: 0.5, y: 0.5))
         XCTAssertEqual(end, ScreenPoint(x: 100, y: 200))
     }
@@ -162,7 +162,7 @@ final class GesturePayloadDecodingTests: XCTestCase {
             ]
         )
 
-        guard case .drag(let target) = message,
+        guard case .mechanicalDrag(let target) = message,
               case .pointToPoint(let start, let end) = target.selection else {
             return XCTFail("Expected pointToPoint drag payload, got \(message)")
         }
@@ -202,7 +202,7 @@ final class GesturePayloadDecodingTests: XCTestCase {
         arguments: [String: HeistValue],
         file: StaticString = #filePath,
         line: UInt = #line
-    ) async throws -> RuntimeActionMessage {
+    ) async throws -> ResolvedHeistActionCommand {
         let (fence, mockConn) = makeConnectedFence()
         let response = try await fence.execute(command: command, values: arguments)
         if case .error(let failure) = response {

@@ -1,6 +1,8 @@
 import XCTest
 import Network
 import ButtonHeistSupport
+import ButtonHeistTestSupport
+import TheScore
 @_spi(ButtonHeistTooling) @testable import ButtonHeist
 
 final class DeviceConnectionTLSTests: XCTestCase {
@@ -171,6 +173,43 @@ final class DeviceConnectionTLSTests: XCTestCase {
         )
 
         assertDeviceConnectionConnected(connection)
+    }
+
+    @ButtonHeistActor
+    func testReceiveFramesFragmentedAndBatchedMessagesWithOneRetainedRemainder() async throws {
+        let (connection, transportConnection) = makeConnectedConnection()
+        let encodedMessage = try testResponseEnvelopeData(.serverHello)
+        let splitIndex = encodedMessage.count / 2
+        var receivedMessages = 0
+        connection.onEvent = { event in
+            if case .message(.serverHello, _) = event {
+                receivedMessages += 1
+            }
+        }
+
+        connection.handleReceive(
+            .content(Data(encodedMessage.prefix(splitIndex))),
+            connection: transportConnection
+        )
+
+        XCTAssertEqual(receivedMessages, 0)
+
+        var secondBatch = Data(encodedMessage.suffix(from: splitIndex))
+        secondBatch.append(WireFrameLimits.newlineDelimiterByte)
+        secondBatch.append(encodedMessage)
+        secondBatch.append(contentsOf: [
+            WireFrameLimits.newlineDelimiterByte,
+            WireFrameLimits.newlineDelimiterByte,
+        ])
+        secondBatch.append(Data("partial".utf8))
+
+        connection.handleReceive(.content(secondBatch), connection: transportConnection)
+
+        XCTAssertEqual(receivedMessages, 2)
+        guard case .connected(let active) = connection.connectionState else {
+            return XCTFail("Expected connected receive session")
+        }
+        XCTAssertEqual(active.receiveFramer.pendingData, Data("partial".utf8))
     }
 
     @ButtonHeistActor

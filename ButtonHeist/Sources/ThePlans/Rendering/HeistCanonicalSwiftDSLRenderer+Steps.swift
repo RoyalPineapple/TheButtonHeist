@@ -2,51 +2,6 @@ import Foundation
 
 extension HeistCanonicalSwiftDSLRenderer {
     func render(
-        steps: [HeistStep],
-        indent: Int,
-        environment: RenderEnvironment
-    ) throws -> String {
-        try steps.map { try render(step: $0, indent: indent, environment: environment) }
-            .joined(separator: "\n\n")
-    }
-
-    func render(
-        step: HeistStep,
-        indent: Int,
-        environment: RenderEnvironment
-    ) throws -> String {
-        switch step {
-        case .action(let action):
-            return try render(action: action, indent: indent, environment: environment)
-        case .wait(let wait):
-            return try render(wait: wait, indent: indent, environment: environment)
-        case .conditional(let conditional):
-            return try renderConditional(conditional, indent: indent, environment: environment)
-        case .forEachElement(let forEach):
-            return try renderForEachElement(forEach, indent: indent, environment: environment)
-        case .forEachString(let forEach):
-            return try renderForEachString(forEach, indent: indent, environment: environment)
-        case .repeatUntil(let repeatUntil):
-            return try renderRepeatUntil(repeatUntil, indent: indent, environment: environment)
-        case .warn(let warn):
-            return line("Warn(\(quote(warn.message)))", indent)
-        case .fail(let fail):
-            return line("Fail(\(quote(fail.message)))", indent)
-        case .heist(let plan):
-            let environment = try environment.binding(parameter: plan.parameter)
-            let body = try render(steps: plan.body, indent: indent + 1, environment: environment)
-            let header = try renderHeistHeader(plan, callee: "HeistPlan")
-            return """
-            \(line(header, indent))
-            \(body)
-            \(line("}", indent))
-            """
-        case .invoke(let invoke):
-            return try render(invoke: invoke, indent: indent, environment: environment)
-        }
-    }
-
-    func render(
         invoke: HeistInvocationStep,
         indent: Int,
         environment: RenderEnvironment
@@ -69,7 +24,7 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     func render(argument: HeistArgument, environment: RenderEnvironment) throws -> String {
-        switch argument {
+        switch argument.core {
         case .none:
             return ""
         case .string(let value):
@@ -81,6 +36,8 @@ extension HeistCanonicalSwiftDSLRenderer {
 
     func renderConditional(
         _ conditional: ConditionalStep,
+        renderedBodies: [String],
+        renderedElseBody: String?,
         indent: Int,
         environment: RenderEnvironment
     ) throws -> String {
@@ -89,15 +46,16 @@ extension HeistCanonicalSwiftDSLRenderer {
                 callee: "If",
                 predicate: conditional.cases[0].predicate,
                 timeout: nil,
-                body: conditional.cases[0].body,
-                elseBody: conditional.elseBody,
+                renderedBody: renderedBodies[0],
+                renderedElseBody: renderedElseBody,
                 indent: indent,
                 environment: environment
             )
         }
         let cases = try renderCases(
             conditional.cases,
-            elseBody: conditional.elseBody,
+            renderedBodies: renderedBodies,
+            renderedElseBody: renderedElseBody,
             indent: indent + 1,
             environment: environment
         )
@@ -110,6 +68,7 @@ extension HeistCanonicalSwiftDSLRenderer {
 
     func render(
         wait: WaitStep,
+        renderedElseBody: String?,
         indent: Int,
         environment: RenderEnvironment
     ) throws -> String {
@@ -117,11 +76,11 @@ extension HeistCanonicalSwiftDSLRenderer {
             "WaitFor(\(try render(predicate: wait.predicate, environment: environment))\(renderTimeout(wait.timeout)))",
             indent
         )
-        if let elseBody = wait.elseBody {
+        if let renderedElseBody {
             source += "\n"
             source += line(".else {", indent)
             source += "\n"
-            source += try render(steps: elseBody, indent: indent + 1, environment: environment)
+            source += renderedElseBody
             source += "\n"
             source += line("}", indent)
         }
@@ -130,25 +89,24 @@ extension HeistCanonicalSwiftDSLRenderer {
 
     func renderSingleCaseBranches(
         callee: String,
-        predicate: AccessibilityPredicate<ScreenAssertionContext>,
+        predicate: ChangeDeclaration.ScreenAssertion,
         timeout: Double?,
-        body: [HeistStep],
-        elseBody: [HeistStep]?,
+        renderedBody: String,
+        renderedElseBody: String?,
         indent: Int,
         environment: RenderEnvironment
     ) throws -> String {
         let timeoutArgument = timeout.map { "\(renderTimeout($0))" } ?? ""
-        let renderedBody = try render(steps: body, indent: indent + 1, environment: environment)
         var source = """
         \(line("\(callee)(\(try render(predicate: predicate, environment: environment))\(timeoutArgument)) {", indent))
         \(renderedBody)
         \(line("}", indent))
         """
-        if let elseBody {
+        if let renderedElseBody {
             source += "\n"
             source += line(".else {", indent)
             source += "\n"
-            source += try render(steps: elseBody, indent: indent + 1, environment: environment)
+            source += renderedElseBody
             source += "\n"
             source += line("}", indent)
         }
@@ -157,19 +115,23 @@ extension HeistCanonicalSwiftDSLRenderer {
 
     func renderCases(
         _ cases: [PredicateCase],
-        elseBody: [HeistStep]?,
+        renderedBodies: [String],
+        renderedElseBody: String?,
         indent: Int,
         environment: RenderEnvironment
     ) throws -> String {
-        var blocks: [String] = []
-        for predicateCase in cases {
-            blocks.append(try renderCase(predicateCase, indent: indent, environment: environment))
+        var blocks = try zip(cases, renderedBodies).map { predicateCase, renderedBody in
+            try renderCase(
+                predicateCase,
+                renderedBody: renderedBody,
+                indent: indent,
+                environment: environment
+            )
         }
-        if let elseBody {
-            let body = try render(steps: elseBody, indent: indent + 1, environment: environment)
+        if let renderedElseBody {
             blocks.append("""
             \(line("Else {", indent))
-            \(body)
+            \(renderedElseBody)
             \(line("}", indent))
             """)
         }
@@ -178,66 +140,66 @@ extension HeistCanonicalSwiftDSLRenderer {
 
     func renderCase(
         _ predicateCase: PredicateCase,
+        renderedBody: String,
         indent: Int,
         environment: RenderEnvironment
     ) throws -> String {
-        let body = try render(steps: predicateCase.body, indent: indent + 1, environment: environment)
         return """
         \(line("Case(\(try render(predicate: predicateCase.predicate, environment: environment))) {", indent))
-        \(body)
+        \(renderedBody)
         \(line("}", indent))
         """
     }
 
     func renderForEachElement(
         _ forEach: ForEachElementStep,
+        renderedBody: String,
         indent: Int,
         environment: RenderEnvironment
     ) throws -> String {
         try validateParameter(forEach.parameter)
-        let childEnvironment = environment.bindingTargetReference(forEach.parameter)
-        let body = try render(steps: forEach.body, indent: indent + 1, environment: childEnvironment)
+        let predicate = try render(predicate: forEach.matching, environment: environment)
+        let header = "ForEach(\(predicate), limit: \(forEach.limit)) { \(forEach.parameter) in"
         return """
-        \(line("ForEach(\(render(predicate: forEach.matching)), limit: \(forEach.limit)) { \(forEach.parameter) in", indent))
-        \(body)
+        \(line(header, indent))
+        \(renderedBody)
         \(line("}", indent))
         """
     }
 
     func renderForEachString(
         _ forEach: ForEachStringStep,
-        indent: Int,
-        environment: RenderEnvironment
+        renderedBody: String,
+        indent: Int
     ) throws -> String {
         try validateParameter(forEach.parameter)
-        let childEnvironment = environment.bindingStringReference(forEach.parameter)
         let values = forEach.values.map(quote).joined(separator: ", ")
-        let body = try render(steps: forEach.body, indent: indent + 1, environment: childEnvironment)
         return """
         \(line("ForEach(\(values)) { \(forEach.parameter) in", indent))
-        \(body)
+        \(renderedBody)
         \(line("}", indent))
         """
     }
 
     func renderRepeatUntil(
         _ repeatUntil: RepeatUntilStep,
+        renderedBody: String,
+        renderedElseBody: String?,
         indent: Int,
         environment: RenderEnvironment
     ) throws -> String {
-        let body = try render(steps: repeatUntil.body, indent: indent + 1, environment: environment)
         let predicate = try render(predicate: repeatUntil.predicate, environment: environment)
         let timeout = ".seconds(\(decimal(repeatUntil.timeout)))"
         var source = """
         \(line("RepeatUntil(\(predicate), timeout: \(timeout)) {", indent))
-        \(body)
+        \(renderedBody)
         \(line("}", indent))
         """
-        if let elseBody = repeatUntil.elseBody {
+        if let renderedElseBody {
             source += "\n"
             source += line(".else {", indent)
             source += "\n"
-            source += try render(steps: elseBody, indent: indent + 1, environment: environment)
+            source += renderedElseBody
             source += "\n"
             source += line("}", indent)
         }

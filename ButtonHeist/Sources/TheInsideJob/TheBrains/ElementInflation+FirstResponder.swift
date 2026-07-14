@@ -20,11 +20,17 @@ extension ElementInflation {
 
     internal func inflateFirstResponder(
         method: ActionMethod,
-        inflateTarget: @MainActor (AccessibilityTarget, ActionMethod) async -> ElementInflationResult
+        inflateTarget: @MainActor (ResolvedAccessibilityTarget, ActionMethod) async -> ElementInflationResult
     ) async -> FirstResponderInflation {
         guard let firstResponderHeistId = stash.firstResponderHeistId,
               let treeElement = stash.interfaceElement(heistId: firstResponderHeistId),
-              let target = stash.minimumUniqueTarget(for: treeElement) else { return .unavailable }
+              let authoredTarget = stash.minimumUniqueTarget(for: treeElement) else { return .unavailable }
+        let target: ResolvedAccessibilityTarget
+        do {
+            target = try authoredTarget.resolve(in: .empty)
+        } catch {
+            preconditionFailure("Stash-generated target must resolve without references: \(error)")
+        }
         switch await inflateTarget(target, method) {
         case .inflated(let inflatedTarget):
             guard stash.firstResponderHeistId == firstResponderHeistId,

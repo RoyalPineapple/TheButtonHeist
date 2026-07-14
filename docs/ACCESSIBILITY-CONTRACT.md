@@ -21,8 +21,8 @@ read settled accessibility interface
 -> resolve semantic target
 -> perform declared action
 -> wait for settled accessibility interface
--> append capture and scoped notification evidence
--> derive ordered change facts
+-> append to the retained observation and notification logs
+-> evaluate one cursor-backed observation window
 -> assert evidence
 -> fold public receipt summary
 ```
@@ -48,20 +48,20 @@ settled semantic evidence, not a mechanical playback log.
 ```mermaid
 flowchart LR
     Contract["Accessibility contract<br/>what exists, what can act"]
-    Before["Settled accessibility capture<br/>before"]
+    Before["ObservationCursor<br/>plus settled baseline"]
     Action["Declared action<br/>activate, type, rotor, wait"]
-    After["Settled accessibility capture<br/>after"]
-    Facts["Ordered ChangeFact stream<br/>elementsChanged, screenChanged"]
-    Evidence["Predicate evidence<br/>current tree plus facts"]
+    After["Retained settled observations<br/>through current cursor"]
+    Window["ObservationWindow<br/>baseline through current"]
+    Evidence["Predicate evidence<br/>current tree or window transitions"]
     Receipt["Receipt<br/>trace plus folded public delta"]
     Next["Next step"]
 
     Contract --> Before
     Before --> Action
     Action --> After
-    Before --> Facts
-    After --> Facts
-    Facts --> Evidence
+    Before --> Window
+    After --> Window
+    Window --> Evidence
     Evidence --> Receipt
     Receipt --> Next
     Next --> Before
@@ -87,10 +87,12 @@ compose the next heist.
 
 | Boundary | Owns | Refuses to own |
 |----------|------|----------------|
-| `AccessibilityTarget` | One node-target language for actions, predicates, and subtree queries | Live UIKit identity, geometry authority, alternate query projections |
-| `AccessibilityPredicate<Context>` | Context-valid conditions for waits, expectations, and control-flow cases | Target resolution, viewport movement, command execution |
-| `AccessibilityTrace` | Settled captures, capture-chain identity, and the derived ordered `ChangeFact` stream | Alternate temporal projections, repair policy, report formatting |
-| `InteractionObservation` | Before/body/after evidence coordination for actions and waits | Command payload design and report adapters |
+| `AccessibilityTarget` | One node-target language for actions, waits, expectations, CLI/MCP, and subtree queries | Live UIKit identity, geometry authority, alternate query projections |
+| `AccessibilityPredicate` and `ChangeDeclaration` | Concrete conditions for waits, expectations, and control-flow cases | Target resolution, viewport movement, command execution |
+| `SemanticObservationLog` | Retained settled entries, cursor lineage, and replayable observation sequences | Predicate-owned history, destructive reads, report formatting |
+| `ObservationWindow` | One baseline-to-current temporal view with explicit completeness | Independent capture or notification ownership |
+| `AccessibilityTrace` | Durable receipt evidence and derived ordered `ChangeFact` values | A second runtime observation pipeline |
+| `InteractionObservation` | Before/body/after evidence coordination around one `ActionDispatchOutcome` | Command payload design and parallel result shapes |
 | `ElementInflation` | Semantic target to inflated live target | Public viewport instructions, predicate evaluation, durable selector choice |
 | `HeistPlan` | Durable semantic program AST | Arbitrary Swift source, native loop preservation, runtime state |
 | `EvidenceMinimumMatcher` | Offline matcher suggestions from settled result evidence | Runtime execution, storage, or hidden test generation |
@@ -106,9 +108,12 @@ The ownership rules for the remaining evidence boundaries are explicit:
 - `HeistExecutionStepReportFacts` is the one canonical typed report-fact
   projection from `HeistExecutionResult`. Output adapters consume it rather
   than re-deriving report facts.
-- `ActionResult` owns outcome-bound success or failure evidence with one tagged
-  observation case. `PostActionObservation` gathers and coordinates evidence
-  but does not own a parallel result shape.
+- `ActionDispatchOutcome` is the one app-side dispatch result.
+  `PostActionObservation` adds semantic evidence and constructs `ActionResult`,
+  whose success and failure cases permit only their valid evidence.
+- `AccessibilityNotificationBus` retains one bounded ingress log. Cursors and
+  checkpoints select evidence without clearing or stealing it from another
+  consumer.
 - UIKit/ObjC `@unchecked Sendable` is confined to the TheInsideJob platform
   boundary, where each use is allowlisted and justified. Typed core and wire
   values remain checked `Sendable` values.
@@ -125,9 +130,11 @@ All public executable routes enter the same machine:
 3. Element inflation resolves the target, reveals it if needed, acquires fresh
    live inflation evidence, and executes the accessibility operation.
 4. The runtime waits for settled semantic evidence.
-5. The trace derives one ordered `ChangeFact` stream. Screen boundaries become
+5. The runtime appends the settled entry to one retained observation log and
+   extends the applicable cursor-backed window.
+6. Presence predicates evaluate the current delivered tree. Temporal
+   predicates evaluate transitions in that window; screen boundaries become
    old-tree departures, a screen marker, then new-tree arrivals.
-6. Predicates evaluate from the current delivered tree and that fact stream.
 7. Reports, JSON, compact output, and later repair artifacts project from the
    resulting trace and execution result. Public delta is a one-way lossy fold,
    never evaluator input.
@@ -152,8 +159,8 @@ The product contract is healthy when these cases hold:
   viewport, not hypothetical. See [Scope and limits](SCOPE-AND-LIMITS.md).
 - Duplicate labels produce the minimum matcher that disambiguates semantic
   intent.
-- `wait` and action expectations use the same `AccessibilityPredicate`
-  evaluator.
+- `wait` and action expectations use the same concrete
+  `AccessibilityPredicate` evaluator.
 - Actions, predicates, and `get_interface` subtree queries use the same
   `AccessibilityTarget` resolver over the delivered tree, including identifier-
   bearing containers of every parser type.
@@ -165,5 +172,6 @@ The product contract is healthy when these cases hold:
 - Unknown JSON keys fail at the contract boundary.
 - Timeout diagnostics say which contract was not satisfied and what command or
   target shape is valid next.
-- `AccessibilityTrace` captures are the source of truth; ordered change facts
-  are the canonical temporal projection. Public deltas are lossy output folds.
+- One retained cursor-backed observation log is runtime temporal truth;
+  `AccessibilityTrace` is its durable evidence form and public deltas are lossy
+  output folds.

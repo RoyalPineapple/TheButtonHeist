@@ -1,7 +1,25 @@
 #if canImport(UIKit)
 import ButtonHeistTesting
+import TheInsideJob
 import ThePlans
 import TheScore
+
+package enum ExpectedHeistFailureError: Error, Equatable {
+    case heistPassed(String)
+}
+
+@MainActor
+package func expectHeistFailure<Content: HeistContent>(
+    _ name: String,
+    @HeistBuilder content: @escaping () throws -> Content
+) async throws -> Heist.Failure {
+    do {
+        _ = try await runHeist(name, content)
+        throw ExpectedHeistFailureError.heistPassed(name)
+    } catch let failure as Heist.Failure {
+        return failure
+    }
+}
 
 package enum DogfoodHome {
     package static let openScreen = HeistDef<String>("DemoHome.openScreen", parameter: "screen") { screen in
@@ -66,7 +84,7 @@ package enum TodoScreen {
     package static let completeItem = HeistDef<String>("TodoScreen.completeItem", parameter: "item") { item in
         let completedItem = ElementPredicateTemplate(
             label: .exact(item),
-            value: .exact(.literal("Completed"))
+            value: .exact("Completed")
         )
         let visibleItem = ElementPredicateTemplate(label: .exact(item))
 

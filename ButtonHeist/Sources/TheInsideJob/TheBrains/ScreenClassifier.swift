@@ -100,14 +100,18 @@ import AccessibilitySnapshotParser
     private static func classificationHierarchy(
         _ hierarchy: [AccessibilityHierarchy]
     ) -> [AccessibilityHierarchy] {
-        hierarchy.compactMap { node in
-            switch node {
-            case .element(let element, let traversalIndex):
-                guard element.visibility == .onscreen else { return nil }
-                return .element(element, traversalIndex: traversalIndex)
-            case .container(let container, let children):
-                return .container(container, children: classificationHierarchy(children))
-            }
+        var accumulator: Void = ()
+        return hierarchy.compactMap { node in
+            node.compactingElements(
+                context: (),
+                into: &accumulator,
+                onElement: { element, traversalIndex, _, _ in
+                    guard element.visibility == .onscreen else { return nil }
+                    return .element(element, traversalIndex: traversalIndex)
+                },
+                onContainer: { _, _, _ in () },
+                childContext: { _, _, _ in () }
+            )
         }
     }
 
@@ -239,71 +243,52 @@ import AccessibilitySnapshotParser
         var tokens: [RootShapeToken] = []
         let hasMultipleRootNodes = hierarchy.count > 1
         for node in hierarchy {
-            appendShapeTokens(
-                from: node,
-                depth: 0,
-                hasMultipleRootNodes: hasMultipleRootNodes,
-                into: &tokens
+            node.foldedPreorder(
+                context: 0,
+                into: &tokens,
+                onElement: { element, _, depth, tokens in
+                    guard let role = structuralRole(of: element) else { return true }
+                    tokens.append(
+                        RootShapeToken(
+                            kind: .element(role),
+                            depth: depth,
+                            stableIdentifier: stableIdentifier(element.identifier),
+                            state: RootShapeState(
+                                isSelected: element.traits.contains(.selected),
+                                isModal: false,
+                                isScrollable: false
+                            )
+                        )
+                    )
+                    return true
+                },
+                onContainer: { container, _, depth, tokens in
+                    if isTransparentTopLevelWrapper(
+                        container,
+                        depth: depth,
+                        hasMultipleRootNodes: hasMultipleRootNodes
+                    ) {
+                        return (depth, true)
+                    }
+                    let facts = container.containerPredicateFacts
+                    tokens.append(
+                        RootShapeToken(
+                            kind: .container(facts.role.kind),
+                            depth: depth,
+                            stableIdentifier: stableIdentifier(facts.identifier),
+                            state: RootShapeState(
+                                isSelected: false,
+                                isModal: facts.isModalBoundary,
+                                isScrollable: facts.isScrollable
+                            )
+                        )
+                    )
+                    return (depth + 1, true)
+                },
+                descend: { depth, _ in depth }
             )
         }
         return tokens
-    }
-
-    private static func appendShapeTokens(
-        from node: AccessibilityHierarchy,
-        depth: Int,
-        hasMultipleRootNodes: Bool,
-        into tokens: inout [RootShapeToken]
-    ) {
-        switch node {
-        case .element(let element, _):
-            guard let role = structuralRole(of: element) else { return }
-            tokens.append(
-                RootShapeToken(
-                    kind: .element(role),
-                    depth: depth,
-                    stableIdentifier: stableIdentifier(element.identifier),
-                    state: RootShapeState(
-                        isSelected: element.traits.contains(.selected),
-                        isModal: false,
-                        isScrollable: false
-                    )
-                )
-            )
-        case .container(let container, let children):
-            if isTransparentTopLevelWrapper(container, depth: depth, hasMultipleRootNodes: hasMultipleRootNodes) {
-                for child in children {
-                    appendShapeTokens(
-                        from: child,
-                        depth: depth,
-                        hasMultipleRootNodes: hasMultipleRootNodes,
-                        into: &tokens
-                    )
-                }
-                return
-            }
-            let facts = container.containerPredicateFacts
-            tokens.append(
-                RootShapeToken(
-                    kind: .container(facts.role.kind),
-                    depth: depth,
-                    stableIdentifier: stableIdentifier(facts.identifier),
-                    state: RootShapeState(
-                        isSelected: false,
-                        isModal: facts.isModalBoundary,
-                        isScrollable: facts.isScrollable
-                    )
-                )
-            )
-            for child in children {
-                appendShapeTokens(
-                    from: child,
-                    depth: depth + 1,
-                    hasMultipleRootNodes: hasMultipleRootNodes,
-                    into: &tokens
-                )
-            }
-        }
     }
 
     private static func structuralRole(of element: AccessibilityElement) -> ElementRootShapeRole? {

@@ -8,7 +8,7 @@ import os
 import TheScore
 
 /// Orchestrates client registration, admission, delivery, and disconnects.
-private let muscleLogger = ButtonHeistLog.logger(.insideJob(.auth))
+let muscleLogger = ButtonHeistLog.logger(.insideJob(.auth))
 
 private struct SessionReleaseTimer {
     private enum State {
@@ -72,7 +72,7 @@ actor TheMuscle {
 
     private let sessionTokenSource: SessionTokenSource
     private var admission: TheMuscleAdmission
-    private var session: TheMuscleSession
+    private var session: SessionLease
     private var delivery: ClientDelivery = .unwired
     private var sessionReleaseTimer = SessionReleaseTimer()
 
@@ -98,7 +98,7 @@ actor TheMuscle {
             maxFailedAttempts: TheMuscle.maxFailedAttempts,
             lockoutDuration: TheMuscle.lockoutDuration
         )
-        self.session = TheMuscleSession(
+        self.session = SessionLease(
             releaseTimeout: sessionReleaseTimeout
         )
     }
@@ -272,35 +272,35 @@ actor TheMuscle {
     private func logAdmissionEvent(_ event: MuscleAdmissionLogEvent) {
         switch event {
         case .clientAuthenticatedWithToken(let clientId):
-            muscleAuthenticationLogger.info("Client \(clientId) authenticated with token")
+            muscleLogger.info("Client \(clientId) authenticated with token")
         case .sessionLockRejected(let clientId, let message):
-            muscleAuthenticationLogger.warning("Client \(clientId) rejected - \(message, privacy: .public)")
+            muscleLogger.warning("Client \(clientId) rejected - \(message, privacy: .public)")
         case .rateLimited(let clientId):
-            muscleAuthenticationLogger.warning("Client \(clientId) rate limited, handling message")
+            muscleLogger.warning("Client \(clientId) rate limited, handling message")
         case .undecodableUnauthenticatedMessage(let clientId):
-            muscleAuthenticationLogger.warning("Client \(clientId) sent unparsable message before authenticating")
+            muscleLogger.warning("Client \(clientId) sent unparsable message before authenticating")
         case .undecodableAuthenticatedMessage(let clientId):
-            muscleAuthenticationLogger.warning("Authenticated client \(clientId) sent unparsable message")
+            muscleLogger.warning("Authenticated client \(clientId) sent unparsable message")
         case .authenticatedProtocolMessage(let clientId, let wireType):
-            muscleAuthenticationLogger.warning(
+            muscleLogger.warning(
                 "Authenticated client \(clientId) sent protocol message \(wireType.rawValue, privacy: .public) after admission"
             )
         case .unauthenticatedMessage(let clientId, let message):
-            muscleAuthenticationLogger.warning("Client \(clientId) rejected before auth: \(message, privacy: .public)")
+            muscleLogger.warning("Client \(clientId) rejected before auth: \(message, privacy: .public)")
         case .authenticationDeadline(let clientId, let deadlineSeconds):
-            muscleAuthenticationLogger.warning("Client \(clientId) did not authenticate within \(deadlineSeconds)s deadline")
+            muscleLogger.warning("Client \(clientId) did not authenticate within \(deadlineSeconds)s deadline")
         case .versionMismatch(let clientId, let serverVersion, let clientVersion):
-            muscleAuthenticationLogger.warning(
+            muscleLogger.warning(
                 "Client \(clientId) buttonHeistVersion mismatch: server=\(serverVersion), client=\(clientVersion)"
             )
         case .missingRegisteredAddress(let clientId):
-            muscleAuthenticationLogger.warning("Client \(clientId) has no registered address, rejecting auth")
+            muscleLogger.warning("Client \(clientId) has no registered address, rejecting auth")
         case .lockedOut(let clientId, let address):
-            muscleAuthenticationLogger.warning("Client \(clientId) locked out (address: \(address)), rejecting")
+            muscleLogger.warning("Client \(clientId) locked out (address: \(address)), rejecting")
         case .invalidToken(let clientId, let attempts):
-            muscleAuthenticationLogger.warning("Client \(clientId) sent invalid token, rejected (attempt \(attempts))")
+            muscleLogger.warning("Client \(clientId) sent invalid token, rejected (attempt \(attempts))")
         case .lockoutStarted(let address, let attempts):
-            muscleAuthenticationLogger.warning("Address \(address) locked out after \(attempts) failed attempts")
+            muscleLogger.warning("Address \(address) locked out after \(attempts) failed attempts")
         }
     }
 
@@ -353,7 +353,7 @@ actor TheMuscle {
         applySessionEffects(session.release())
     }
 
-    private func applySessionEffects(_ effects: [TheMuscleSession.Effect]) {
+    private func applySessionEffects(_ effects: [SessionLease.Effect]) {
         for effect in effects {
             switch effect {
             case .log(let event):
@@ -366,7 +366,7 @@ actor TheMuscle {
         }
     }
 
-    private func logSessionEvent(_ event: TheMuscleSession.LogEvent) {
+    private func logSessionEvent(_ event: SessionLease.LogEvent) {
         switch event {
         case .sessionClaimed(let clientId):
             muscleLogger.info("Session claimed by client \(clientId)")

@@ -5,14 +5,13 @@ import TheScore
 
 extension ActionResult {
     @MainActor init(
-        postActionMethod method: ActionMethod,
-        outcome: PostActionObservation.ActionOutcome,
-        message: String?,
+        outcome: TheSafecracker.ActionDispatchOutcome,
+        afterStatePayload: ((PostActionPayloadContext) -> ActionResultPayload?)?,
         settledObservation: PostActionObservation.SettledObservationResult
     ) {
         let resultOutcome = settledObservation.resultOutcome(for: outcome)
-        let message = settledObservation.message(explicit: message)
-        let payload = settledObservation.payload(for: outcome)
+        let message = settledObservation.message(explicit: outcome.message)
+        let payload = settledObservation.payload(for: outcome, afterStatePayload: afterStatePayload)
         let settlement: ActionSettlementEvidence = settledObservation.settled
             ? .settled(durationMs: settledObservation.settleTimeMs)
             : .timedOut(durationMs: settledObservation.settleTimeMs)
@@ -26,10 +25,10 @@ extension ActionResult {
                 observation: observation,
                 subjectEvidence: outcome.subjectEvidence,
                 activationTrace: outcome.activationTrace,
-                warning: Self.warning(method: method, subjectEvidence: outcome.subjectEvidence)
+                warning: Self.warning(method: outcome.method, subjectEvidence: outcome.subjectEvidence)
             )
             self = payload.map { ActionResult.success(payload: $0, message: message, evidence: evidence) }
-                ?? ActionResult.success(method: method, message: message, evidence: evidence)
+                ?? ActionResult.success(method: outcome.method, message: message, evidence: evidence)
         case .failure(let errorKind):
             let evidence = ActionResultFailureEvidence(
                 observation: observation,
@@ -38,7 +37,12 @@ extension ActionResult {
             )
             self = payload.map {
                 ActionResult.failure(payload: $0, errorKind: errorKind, message: message, evidence: evidence)
-            } ?? ActionResult.failure(method: method, errorKind: errorKind, message: message, evidence: evidence)
+            } ?? ActionResult.failure(
+                method: outcome.method,
+                errorKind: errorKind,
+                message: message,
+                evidence: evidence
+            )
         }
     }
 
@@ -113,105 +117,33 @@ extension PostActionObservation.SettledObservationResult {
     }
 
     func resultOutcome(
-        for outcome: PostActionObservation.ActionOutcome
+        for outcome: TheSafecracker.ActionDispatchOutcome
     ) -> ActionResultOutcome {
         switch self {
         case .committed, .diagnostic:
-            return outcome.resultOutcome
+            switch outcome.state {
+            case .success:
+                return .success
+            case .failure(let failureKind):
+                return .failure(TheBrains.actionErrorKind(for: failureKind))
+            }
         case .unavailable:
             return .failure(.actionFailed)
         }
     }
 
     func payload(
-        for outcome: PostActionObservation.ActionOutcome
+        for outcome: TheSafecracker.ActionDispatchOutcome,
+        afterStatePayload: ((PostActionPayloadContext) -> ActionResultPayload?)?
     ) -> ActionResultPayload? {
-        switch self {
-        case .committed(_, let finalState, _):
-            return outcome.resolvedPayload(after: finalState)
-        case .diagnostic, .unavailable:
-            return outcome.immediatePayload
-        }
-    }
-}
-
-extension PostActionObservation.ResolvedActionOutcomePayload {
-    var payload: ActionResultPayload? {
-        switch self {
-        case .none:
-            return nil
-        case .payload(let payload):
-            return payload
-        }
-    }
-}
-
-private extension PostActionObservation.ActionOutcomePayload {
-    var immediatePayload: ActionResultPayload? {
-        switch self {
-        case .none, .afterState:
-            return nil
-        case .immediate(let payload):
-            return payload
-        }
-    }
-
-    func resolvedPayload(after state: PostActionObservation.BeforeState) -> ActionResultPayload? {
-        switch self {
-        case .none:
-            return nil
-        case .immediate(let payload):
-            return payload
-        case .afterState(let resolve):
-            return resolve(state).payload
-        }
-    }
-}
-
-private extension PostActionObservation.ActionOutcome {
-    var resultOutcome: ActionResultOutcome {
-        switch self {
-        case .success:
-            return .success
-        case .failure(let failure):
-            return .failure(failure.errorKind)
-        }
-    }
-
-    var immediatePayload: ActionResultPayload? {
-        switch self {
-        case .success(let success):
-            return success.payload.immediatePayload
-        case .failure(let failure):
-            return failure.payload.immediatePayload
-        }
-    }
-
-    var subjectEvidence: ActionSubjectEvidence? {
-        switch self {
-        case .success(let success):
-            return success.subjectEvidence
-        case .failure(let failure):
-            return failure.subjectEvidence
-        }
-    }
-
-    var activationTrace: ActivationTrace? {
-        switch self {
-        case .success(let success):
-            return success.activationTrace
-        case .failure(let failure):
-            return failure.activationTrace
-        }
-    }
-
-    func resolvedPayload(after state: PostActionObservation.BeforeState) -> ActionResultPayload? {
-        switch self {
-        case .success(let success):
-            return success.payload.resolvedPayload(after: state)
-        case .failure(let failure):
-            return failure.payload.immediatePayload
-        }
+        guard case .success(let payload, let resolvedElementId) = outcome.state else { return nil }
+        if let payload { return payload }
+        guard let afterStatePayload else { return nil }
+        guard case .committed(_, let finalState, _) = self else { return nil }
+        return afterStatePayload(PostActionPayloadContext(
+            afterState: finalState,
+            resolvedElementId: resolvedElementId
+        ))
     }
 }
 

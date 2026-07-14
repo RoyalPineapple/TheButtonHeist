@@ -14,7 +14,7 @@ public struct WaitFor: HeistContent {
     public let heistBuildDiagnostics: [HeistBuildDiagnostic]
 
     public init(
-        _ predicate: AccessibilityPredicate<RootContext>,
+        _ predicate: AccessibilityPredicate,
         timeout: Double = defaultWaitTimeout
     ) {
         self.init(predicate: predicate, timeout: timeout, elseBody: nil, definitions: [], diagnostics: [])
@@ -41,7 +41,7 @@ public struct WaitFor: HeistContent {
     }
 
     private init(
-        predicate: AccessibilityPredicate<RootContext>,
+        predicate: AccessibilityPredicate,
         timeout: Double,
         elseBody: [HeistStep]?,
         definitions: [HeistPlanAdmissionCandidate],
@@ -59,7 +59,7 @@ public struct RepeatUntil: HeistContent {
     public let heistBuildDiagnostics: [HeistBuildDiagnostic]
 
     public init(
-        _ predicate: AccessibilityPredicate<RootContext>,
+        _ predicate: AccessibilityPredicate,
         timeout: Double,
         @HeistBuilder _ content: () -> some HeistContent
     ) {
@@ -96,7 +96,7 @@ public struct RepeatUntil: HeistContent {
     }
 
     private init(
-        predicate: AccessibilityPredicate<RootContext>,
+        predicate: AccessibilityPredicate,
         timeout: Double,
         body: [HeistStep],
         elseBody: [HeistStep]?,
@@ -141,7 +141,7 @@ public struct If: HeistContent {
     }
 
     public init(
-        _ predicate: AccessibilityPredicate<ScreenAssertionContext>,
+        _ predicate: ChangeDeclaration.ScreenAssertion,
         @HeistBuilder _ content: () -> some HeistContent
     ) {
         let content = content()
@@ -191,7 +191,7 @@ public struct Case {
     let predicateBranch: PredicateBranch
 
     public init(
-        _ predicate: AccessibilityPredicate<ScreenAssertionContext>,
+        _ predicate: ChangeDeclaration.ScreenAssertion,
         @HeistBuilder _ content: () -> some HeistContent
     ) {
         let content = content()

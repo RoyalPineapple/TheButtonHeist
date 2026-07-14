@@ -385,9 +385,10 @@ extension AccessibilityTrace.ChangeFact: Codable {
                 metadata: metadata
             ))
         case .screenChanged:
-            try Self.rejectIfPresent(.appeared, in: container, kind: kind)
-            try Self.rejectIfPresent(.disappeared, in: container, kind: kind)
-            try Self.rejectIfPresent(.updated, in: container, kind: kind)
+            try container.rejectIncompatibleFields(
+                allowing: [.kind, .metadata],
+                typeName: "\(kind.rawValue) accessibility change fact"
+            )
             self = .screenChanged(AccessibilityTrace.ScreenChangeFact(metadata: metadata))
         }
     }
@@ -411,18 +412,6 @@ extension AccessibilityTrace.ChangeFact: Codable {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "accessibility change fact")
     }
 
-    private static func rejectIfPresent(
-        _ key: CodingKeys,
-        in container: KeyedDecodingContainer<CodingKeys>,
-        kind: AccessibilityTrace.ChangeFactKind
-    ) throws {
-        guard container.contains(key) else { return }
-        throw DecodingError.dataCorruptedError(
-            forKey: key,
-            in: container,
-            debugDescription: "\(kind.rawValue) accessibility change fact must not include \(key.stringValue)"
-        )
-    }
 }
 
 extension AccessibilityTrace.InteractionDigest {

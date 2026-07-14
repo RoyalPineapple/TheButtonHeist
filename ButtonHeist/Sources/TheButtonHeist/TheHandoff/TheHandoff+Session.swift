@@ -51,20 +51,17 @@ extension TheHandoff {
     }
 
     func setupAutoReconnect(filter: String?) {
-        if reconnect.setup(filter: filter) {
-            connectionLifecycle.leaveReconnectIfActive()
-        }
+        _ = connectionLifecycle.setup(filter: filter)
     }
 
     func scheduleAutoReconnectIfNeeded(disconnectedDevice: DiscoveredDevice) {
-        guard let target = reconnect.targetForDisconnectedDevice(disconnectedDevice) else { return }
-        guard let run = reconnect.run(
+        guard let target = connectionLifecycle.targetForDisconnectedDevice(disconnectedDevice) else { return }
+        guard connectionLifecycle.run(
             target: target,
             operation: { [weak self] run in
                 await self?.runAutoReconnect(run: run)
             }
-        ) else { return }
-        connectionLifecycle.markReconnecting(target: target, runID: run.id)
+        ) != nil else { return }
     }
 
     /// Compute display name with disambiguation when multiple devices have the same app.
@@ -90,12 +87,12 @@ extension TheHandoff {
         onStatus?("Device disconnected — watching for reconnection...")
 
         for _ in policy.attempts {
-            guard reconnect.isCurrentRun(run) else { return }
+            guard connectionLifecycle.isCurrentRun(run) else { return }
             connectionLifecycle.markReconnecting(target: target, runID: run.id)
 
             let sleepDuration = policy.sleepDuration(afterConsecutiveDiscoveryMisses: 0)
             guard await reconnectSleeper(sleepDuration) else { return }
-            guard reconnect.isCurrentRun(run) else { return }
+            guard connectionLifecycle.isCurrentRun(run) else { return }
 
             let device = target.device
             onStatus?("Reconnecting to \(device.name)...")
@@ -111,9 +108,9 @@ extension TheHandoff {
                 // The connection phase already recorded the attempt failure; keep retrying until the bounded policy expires.
             }
 
-            guard reconnect.isCurrentRun(run) else { return }
+            guard connectionLifecycle.isCurrentRun(run) else { return }
             if isConnected {
-                guard reconnect.finishSuccess(run) else { return }
+                guard connectionLifecycle.finishSuccess(run) else { return }
                 onStatus?("Reconnected to \(device.name)")
                 return
             }
@@ -121,7 +118,6 @@ extension TheHandoff {
 
         let failure = policy.terminalFailure(targetDisplayName: target.device.name)
         onStatus?(failure.errorDescription ?? "Auto-reconnect gave up")
-        guard reconnect.finishFailure(run, failure: failure) else { return }
-        connectionLifecycle.markFailed(failure)
+        _ = connectionLifecycle.finishFailure(run, failure: failure)
     }
 }

@@ -1,27 +1,26 @@
-// MARK: - Element Property Changes
+/// An authored property change that resolves references before evaluation.
+public struct ElementPropertyChange: Codable, Sendable, Equatable {
+    package let core: ElementPropertyChangeCore<Expr<String>>
 
-/// A before/after predicate for one property. The generic property kind locks
-/// both sides to the same checker type and derives the wire property name.
-public struct ElementPropertyChange<P: ElementPropertyKind>: Sendable, Equatable {
-    public let before: P.Checker?
-    public let after: P.Checker?
-    public var property: ElementProperty { P.property }
+    package init(core: ElementPropertyChangeCore<Expr<String>>) {
+        self.core = core
+    }
 
-    public init(before: P.Checker? = nil, after: P.Checker? = nil) {
-        self.before = before
-        self.after = after
+    public var property: ElementProperty { core.property }
+
+    package func resolve(in environment: HeistExecutionEnvironment) throws -> ResolvedElementPropertyChange {
+        ResolvedElementPropertyChange(core: try core.resolve(in: environment))
     }
 }
 
-/// Source-time variant of `ElementPropertyChange`, preserving string refs until
-/// a heist executes.
-public struct ElementPropertyChangeExpr<P: ElementPropertyKind>: Sendable, Equatable {
-    public let before: P.ExprChecker?
-    public let after: P.ExprChecker?
-    public var property: ElementProperty { P.property }
+/// The execution-phase property change. Its core contains plain `String`
+/// leaves and cannot represent unresolved references.
+public struct ResolvedElementPropertyChange: Codable, Sendable, Equatable {
+    package let core: ElementPropertyChangeCore<String>
 
-    public init(before: P.ExprChecker? = nil, after: P.ExprChecker? = nil) {
-        self.before = before
-        self.after = after
+    package init(core: ElementPropertyChangeCore<String>) {
+        self.core = core
     }
+
+    public var property: ElementProperty { core.property }
 }

@@ -131,7 +131,7 @@ extension Navigation {
     }
 
     func resolveContainerScrollTarget(
-        selection: ScrollContainerSelection,
+        selection: ResolvedScrollContainerSelection,
         axis: ScrollAxis,
         command: ContainerScrollCommand
     ) -> ContainerScrollResolution {
@@ -334,7 +334,7 @@ extension Navigation {
 
     /// Scroll either reveals the requested target or returns a reason it cannot.
     private func liveScrollElementFailure(
-        _ target: AccessibilityTarget,
+        _ target: ResolvedAccessibilityTarget,
         command: ContainerScrollCommand
     ) -> ContainerScrollFailure {
         switch stash.resolveTarget(target) {

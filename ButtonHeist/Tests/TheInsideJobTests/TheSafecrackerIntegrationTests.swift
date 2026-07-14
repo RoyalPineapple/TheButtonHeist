@@ -17,7 +17,9 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
         safecracker = TheSafecracker()
         safecracker.startKeyboardObservation()
 
-        await KeyboardWindowTestHelpers.waitForKeyboardWindowsToRetire()
+        _ = await retireKeyboard {
+            safecracker.resignFirstResponder()
+        }
 
         let windowScene = try requireForegroundWindowScene()
         let viewController = UIViewController()
@@ -35,14 +37,16 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
     }
 
     override func tearDown() async throws {
-        window?.endEditing(true)
+        _ = await retireKeyboard {
+            window?.endEditing(true)
+            return safecracker.resignFirstResponder()
+        }
         safecracker.stopKeyboardObservation()
         safecracker = nil
         hostView = nil
         window?.isHidden = true
         window?.rootViewController = nil
         window = nil
-        await KeyboardWindowTestHelpers.waitForKeyboardWindowsToRetire()
     }
 
     // MARK: - Touch Injection
@@ -106,8 +110,7 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
         textField.accessibilityLabel = "TypeTest"
         hostView.addSubview(textField)
 
-        XCTAssertTrue(textField.becomeFirstResponder())
-        try await waitForActiveTextInput()
+        await activateTextInput(textField)
 
         let result = await safecracker.typeText("hello")
         XCTAssertEqual(result, .dispatched, "typeText should succeed when keyboard is active")
@@ -123,9 +126,7 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
 
         XCTAssertFalse(safecracker.hasActiveTextInput())
 
-        XCTAssertTrue(textField.becomeFirstResponder())
-        try await waitForActiveTextInput()
-        XCTAssertTrue(safecracker.hasActiveTextInput())
+        await activateTextInput(textField)
 
         await teardownKeyboard(textField: textField)
     }
@@ -137,10 +138,12 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
         textField.frame = CGRect(x: 50, y: 500, width: 200, height: 44)
         hostView.addSubview(textField)
 
-        XCTAssertTrue(textField.becomeFirstResponder())
+        await activateTextInput(textField)
         XCTAssertTrue(textField.isFirstResponder)
 
-        let result = safecracker.resignFirstResponder()
+        let result = await retireKeyboard {
+            safecracker.resignFirstResponder()
+        }
         XCTAssertTrue(result)
         XCTAssertFalse(textField.isFirstResponder)
 
@@ -149,17 +152,27 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
 
     // MARK: - Private Helpers
 
-    private func waitForActiveTextInput() async throws {
-        for _ in 0..<20 {
-            if safecracker.hasActiveTextInput() { return }
-            // Polls UIKit's private keyboard delegate state — no public signal to await on.
-            // swiftlint:disable:next agent_test_task_sleep
-            try await Task.sleep(for: .milliseconds(100))
+    private func activateTextInput(_ textField: UITextField) async {
+        XCTAssertTrue(textField.becomeFirstResponder())
+        XCTAssertTrue(textField.isFirstResponder)
+        let didActivate = await safecracker.waitForActiveTextInput()
+        XCTAssertTrue(didActivate)
+    }
+
+    private func retireKeyboard<Result>(
+        perform action: () -> Result
+    ) async -> Result {
+        let hasActiveResponder = safecracker.hasActiveTextInput()
+            || KeyboardWindowTestHelpers.hasFirstResponder(in: hostView)
+
+        let result = action()
+        if hasActiveResponder, KeyboardWindowTestHelpers.hasPassthroughWindow() {
+            await KeyboardWindowTestHelpers.waitForKeyboardWindowsToRetire()
         }
-        guard safecracker.hasActiveTextInput() else {
-            XCTFail("Active text input not available after 2s")
-            return
-        }
+
+        XCTAssertFalse(safecracker.hasActiveTextInput())
+        XCTAssertFalse(KeyboardWindowTestHelpers.hasFirstResponder(in: hostView))
+        return result
     }
 
     private func requireForegroundWindowScene() throws -> UIWindowScene {
@@ -171,16 +184,13 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
         return scene
     }
 
-    /// Resign first responder, remove the text field, and wait for the
-    /// keyboard window to retire from the foreground scene. The keyboard's
-    /// `UIRemoteKeyboardWindow` and `UITextEffectsWindow` are owned by iOS
-    /// and persist beyond `resignFirstResponder()` — without an explicit
-    /// wait they leak across tests and pollute the next setUp's window list.
     private func teardownKeyboard(textField: UITextField) async {
-        textField.resignFirstResponder()
+        _ = await retireKeyboard {
+            textField.resignFirstResponder()
+        }
         textField.removeFromSuperview()
-        await KeyboardWindowTestHelpers.waitForKeyboardWindowsToRetire()
     }
+
 }
 
 #endif // canImport(UIKit)

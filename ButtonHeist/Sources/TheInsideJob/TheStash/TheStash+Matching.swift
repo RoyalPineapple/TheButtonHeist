@@ -5,53 +5,6 @@ import TheScore
 
 import AccessibilitySnapshotParser
 
-// MARK: - Hierarchy-Level Element Matching
-
-/// Matching operates on the canonical accessibility tree — AccessibilityElement
-/// and AccessibilityHierarchy — not on wire types. Trait name strings from
-/// ElementPredicate are resolved to parser trait bitmasks so comparisons
-/// happen at the source data level.
-///
-/// The product contract is exact by default: plain string predicates such as
-/// `.label("Pay")` are exact-or-miss, while authored `StringMatch` modes such
-/// as `.label(.contains("Pay"))` are explicit broad matches. There is no hidden
-/// automatic substring fallback.
-
-extension AccessibilityHierarchy {
-    /// Match a single node against a predicate. For leaf elements, returns the match
-    /// if the element satisfies the predicate. For containers, returns the first
-    /// matching leaf descendant.
-    func matches(_ predicate: ElementPredicate) -> AccessibilityElement? {
-        [self].firstMatch(predicate)
-    }
-}
-
-extension Array where Element == AccessibilityHierarchy {
-
-    /// First leaf element in the tree that satisfies all property predicates.
-    func firstMatch(_ predicate: ElementPredicate) -> AccessibilityElement? {
-        matches(predicate, limit: 1).first
-    }
-
-    /// Leaf elements matching the predicate, stopping after `limit` results.
-    /// Results are in tree traversal order. Use this for early-exit resolution:
-    /// limit 1 for first-match, limit 2 for unique-match, limit N+1 for ordinal N.
-    func matches(
-        _ predicate: ElementPredicate,
-        limit: Int
-    ) -> [AccessibilityElement] {
-        guard limit > 0, predicate.hasPredicates else { return [] }
-        return compactMap(first: limit, context: (), container: { _, _ in () }, element: { element, _, _ in
-            predicate.matches(element) ? element : nil
-        })
-    }
-
-    /// Whether any leaf element in the tree satisfies the property predicates.
-    func hasMatch(_ predicate: ElementPredicate) -> Bool {
-        !matches(predicate, limit: 1).isEmpty
-    }
-}
-
 // MARK: - AccessibilityElement Predicate Conformance
 
 extension AccessibilityElement: PredicateSelectionSubject {
@@ -79,14 +32,14 @@ extension AccessibilityElement: PredicateSelectionSubject {
         required.isSubset(of: predicateActions)
     }
 
-    package func containsCustomContent(matching match: CustomContentMatch<String>) -> Bool {
+    package func containsCustomContent(matching match: CustomContentMatchCore<String>) -> Bool {
         customContent.contains { match.matches($0) }
     }
 
-    package func satisfiesRequiredRotors(_ required: [StringMatch<String>]) -> Bool {
+    package func satisfiesRequiredRotors(_ required: [StringMatchCore<String>]) -> Bool {
         let names = customRotors.map(\.name).filter { !$0.isEmpty }
         return required.allSatisfy { match in
-            names.contains { match.matches($0) }
+            names.contains { ResolvedStringMatch(core: match).matches($0) }
         }
     }
 
@@ -149,20 +102,56 @@ extension TheStash {
         in tree: InterfaceTree
     ) -> [InterfaceTree.Element] {
         guard limit > 0, predicate.hasPredicates else { return [] }
-        let projection = WireConversion.semanticInterfaceProjection(from: tree)
-        let matches = ElementMatchGraph(interface: projection.interface).resolve(predicate)
-        return Array(projection.treeElements(matching: matches).prefix(limit))
+        let interface = WireConversion.toSemanticInterface(from: tree)
+        let matches = ElementMatchGraph(interface: interface).resolve(predicate)
+        return Array(treeElements(matching: matches, in: tree, interface: interface).prefix(limit))
     }
 
     /// All matching screen elements in traversal order. Use when diagnostics
     /// need the exact match-set size rather than an early-exit prefix.
     func matchScreenElements(_ predicate: ElementPredicate, in tree: InterfaceTree) -> [InterfaceTree.Element] {
         guard predicate.hasPredicates else { return [] }
-        let projection = WireConversion.semanticInterfaceProjection(from: tree)
-        let matches = ElementMatchGraph(interface: projection.interface).resolve(predicate)
-        return projection.treeElements(matching: matches)
+        let interface = WireConversion.toSemanticInterface(from: tree)
+        let matches = ElementMatchGraph(interface: interface).resolve(predicate)
+        return treeElements(matching: matches, in: tree, interface: interface)
     }
 
+    func treeElements(
+        matching matchSet: ElementMatchSet,
+        in tree: InterfaceTree,
+        interface: Interface
+    ) -> [InterfaceTree.Element] {
+        let elementsByIdentity = Dictionary(uniqueKeysWithValues: tree.elements.values.map {
+            ($0.heistId.traceElementIdentity, $0)
+        })
+        return matchSet.matches.map { match in
+            guard let identity = interface.graph.traceIdentityByPath[match.path],
+                  let treeElement = elementsByIdentity[identity] else {
+                preconditionFailure("Semantic interface match path is not backed by an interface element")
+            }
+            return treeElement
+        }
+    }
+
+    func treeContainers(
+        matching matchSet: AccessibilityTargetMatchSet,
+        in tree: InterfaceTree,
+        interface: Interface
+    ) -> [InterfaceTree.Container] {
+        let projectedPaths = interface.graph.nodesInPathOrder.compactMap { record -> TreePath? in
+            guard case .container(let container) = record.kind else { return nil }
+            return container.path
+        }
+        let sourceContainers = tree.orderedContainers
+        precondition(projectedPaths.count == sourceContainers.count)
+        let containersByPath = Dictionary(uniqueKeysWithValues: zip(projectedPaths, sourceContainers))
+        return matchSet.containerPaths.map { path in
+            guard let container = containersByPath[path] else {
+                preconditionFailure("Semantic interface match path is not backed by an interface container")
+            }
+            return container
+        }
+    }
 }
 
 struct AccessibilityElementPairingKey: Hashable {
@@ -189,7 +178,7 @@ extension Sequence where Element == AccessibilityElement {
     }
 }
 
-private extension CustomContentMatch where Value == String {
+private extension CustomContentMatchCore where Text == String {
     func matches(_ content: AccessibilityElement.CustomContent) -> Bool {
         label.matches(content.label)
             && value.matches(content.value)
@@ -197,9 +186,9 @@ private extension CustomContentMatch where Value == String {
     }
 }
 
-private extension Optional where Wrapped == StringMatch<String> {
+private extension Optional where Wrapped == StringMatchCore<String> {
     func matches(_ text: String) -> Bool {
-        map { $0.matches(text) } ?? true
+        map { ResolvedStringMatch(core: $0).matches(text) } ?? true
     }
 }
 

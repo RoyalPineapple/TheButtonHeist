@@ -20,12 +20,12 @@ package enum ScoreDescription {
         nonEmpty(value).map { "\(name)=\(quoted($0))" }
     }
 
-    package static func stringMatchField(_ name: String, _ value: StringMatch<String>?) -> String? {
+    package static func stringMatchField(_ name: String, _ value: StringMatchCore<String>?) -> String? {
         guard let value, value.hasPredicateLiteral else { return nil }
         return "\(name)=\(stringMatch(value))"
     }
 
-    package static func stringMatchFields(_ name: String, _ values: [StringMatch<String>]) -> String? {
+    package static func stringMatchFields(_ name: String, _ values: [StringMatchCore<String>]) -> String? {
         let fields = values.compactMap { value -> String? in
             guard value.hasPredicateLiteral else { return nil }
             return "\(name)=\(stringMatch(value))"
@@ -34,7 +34,7 @@ package enum ScoreDescription {
         return fields.joined(separator: " ")
     }
 
-    package static func stringMatch(_ value: StringMatch<String>) -> String {
+    package static func stringMatch(_ value: StringMatchCore<String>) -> String {
         switch value {
         case .exact(let string):
             return quoted(string)
@@ -49,7 +49,7 @@ package enum ScoreDescription {
         }
     }
 
-    package static func predicateCheckField(_ check: ElementPredicateCheck<String>) -> String? {
+    package static func predicateCheckField(_ check: ElementPredicateCheckCore<String>) -> String? {
         switch check {
         case .label(let match):
             guard match.hasPredicateLiteral else { return nil }

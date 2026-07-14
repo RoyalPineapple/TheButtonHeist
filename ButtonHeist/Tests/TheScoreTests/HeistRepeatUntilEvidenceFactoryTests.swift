@@ -1,3 +1,4 @@
+import ButtonHeistTestSupport
 import Foundation
 import Testing
 import ThePlans
@@ -5,7 +6,7 @@ import TheScore
 
 @Suite struct HeistRepeatUntilEvidenceFactoryTests {
     @Test func `expectation result converts to typed predicate checks`() throws {
-        let predicate = AccessibilityPredicate<RootContext>.exists(.label("Done"))
+        let predicate = AccessibilityPredicate.exists(.label("Done"))
         let met = ExpectationResult(met: true, predicate: predicate)
         let unmet = ExpectationResult(met: false, predicate: predicate, actual: "not found")
 
@@ -31,8 +32,8 @@ import TheScore
         #expect(convertedUnmet.result == unmet)
     }
 
-    @Test func `terminal evidence factories return evidence for typed polarity`() throws {
-        let predicate = AccessibilityPredicate<RootContext>.exists(.label("Done"))
+    @Test func `evidence factories align with stored outcomes`() throws {
+        let predicate = AccessibilityPredicate.exists(.label("Done"))
         let met = try #require(ExpectationResult.Met(ExpectationResult(met: true, predicate: predicate)))
         let unmet = try #require(ExpectationResult.Unmet(ExpectationResult(
             met: false,
@@ -40,7 +41,7 @@ import TheScore
             actual: "not found"
         )))
 
-        let predicateMet = HeistRepeatUntilEvidence.predicateMet(
+        let predicateMet = HeistRepeatUntilEvidence.matched(
             predicate: predicate,
             timeout: 1,
             iterationCount: 1,
@@ -49,7 +50,7 @@ import TheScore
         #expect(predicateMet.outcome == .matched)
         #expect(predicateMet.expectation.met)
 
-        let timedOut = HeistRepeatUntilEvidence.timedOut(
+        let failed = HeistRepeatUntilEvidence.failed(
             predicate: predicate,
             timeout: 1,
             iterationCount: 1,
@@ -57,29 +58,11 @@ import TheScore
             lastObservedSummary: "Cart",
             failureReason: "timed out"
         )
-        #expect(timedOut.outcome == .failed)
-        #expect(!timedOut.expectation.met)
+        #expect(failed.outcome == .failed)
+        #expect(!failed.expectation.met)
+        #expect(failed.failureReason == "timed out")
 
-        let bodyFailed = HeistRepeatUntilEvidence.bodyFailed(
-            predicate: predicate,
-            timeout: 1,
-            iterationCount: 1,
-            expectation: unmet,
-            lastObservedSummary: "Cart",
-            failureReason: "body failed"
-        )
-        #expect(bodyFailed.outcome == .failed)
-
-        let unavailable = HeistRepeatUntilEvidence.initialObservationUnavailable(
-            predicate: predicate,
-            timeout: 1,
-            expectation: unmet,
-            lastObservedSummary: nil,
-            failureReason: "unavailable"
-        )
-        #expect(unavailable.outcome == .failed)
-
-        let handledElse = HeistRepeatUntilEvidence.timeoutHandledByElse(
+        let handledElse = HeistRepeatUntilEvidence.handledElse(
             predicate: predicate,
             timeout: 1,
             iterationCount: 1,
@@ -87,21 +70,10 @@ import TheScore
             lastObservedSummary: "Cart"
         )
         #expect(handledElse.outcome == .handledElse)
-
-        let elseFailed = HeistRepeatUntilEvidence.timeoutElseFailed(
-            predicate: predicate,
-            timeout: 1,
-            iterationCount: 1,
-            expectation: unmet,
-            lastObservedSummary: "Cart",
-            failureReason: "else failed"
-        )
-        #expect(elseFailed.outcome == .failed)
-        #expect(elseFailed.failureReason == "else failed")
     }
 
     @Test func `iteration evidence factories return evidence for typed polarity`() throws {
-        let predicate = AccessibilityPredicate<RootContext>.exists(.label("Done"))
+        let predicate = AccessibilityPredicate.exists(.label("Done"))
         let met = try #require(ExpectationResult.Met(ExpectationResult(met: true, predicate: predicate)))
         let unmet = try #require(ExpectationResult.Unmet(ExpectationResult(
             met: false,
@@ -109,7 +81,7 @@ import TheScore
             actual: "not found"
         )))
 
-        let predicateMet = HeistRepeatUntilEvidence.predicateMet(
+        let predicateMet = HeistRepeatUntilEvidence.matched(
             predicate: predicate,
             timeout: 1,
             iterationCount: 1,
@@ -129,7 +101,7 @@ import TheScore
         #expect(continued.outcome == .continued)
         #expect(continued.iterationOrdinal == 0)
 
-        let failed = HeistRepeatUntilEvidence.failedIteration(
+        let failed = HeistRepeatUntilEvidence.failed(
             predicate: predicate,
             timeout: 1,
             iterationCount: 1,
@@ -143,47 +115,24 @@ import TheScore
     }
 
     @Test func `decode rejects invalid repeat until polarity at boundary`() throws {
-        let predicate = AccessibilityPredicate<RootContext>.exists(.label("Done"))
-        let evidence = HeistRepeatUntilEvidence.predicateMet(
+        let predicate = AccessibilityPredicate.exists(.label("Done"))
+        let evidence = HeistRepeatUntilEvidence.matched(
             predicate: predicate,
             timeout: 1,
             iterationCount: 1,
             expectation: ExpectationResult.Met(predicate: predicate)
         )
-        var invalidFixture = RepeatUntilEvidenceFixture(evidence)
-        invalidFixture.expectation = ExpectationResult(
+        let invalidExpectation = ExpectationResult(
             met: false,
-            predicate: invalidFixture.expectation.predicate,
-            actual: invalidFixture.expectation.actual
+            predicate: evidence.expectation.predicate,
+            actual: evidence.expectation.actual
         )
-        let invalidData = try JSONEncoder().encode(invalidFixture)
+        let invalidData = try mutatedTestJSONData(evidence) { object in
+            object["expectation"] = try testJSONObject(invalidExpectation)
+        }
 
         #expect(throws: DecodingError.self) {
             _ = try JSONDecoder().decode(HeistRepeatUntilEvidence.self, from: invalidData)
         }
-    }
-}
-
-private struct RepeatUntilEvidenceFixture: Codable {
-    var outcome: HeistPredicateEvidenceOutcome
-    var predicate: AccessibilityPredicate<RootContext>
-    var timeout: Double
-    var iterationCount: Int
-    var iterationOrdinal: Int?
-    var expectation: ExpectationResult
-    var actionResult: ActionResult?
-    var lastObservedSummary: String?
-    var failureReason: String?
-
-    init(_ evidence: HeistRepeatUntilEvidence) {
-        outcome = evidence.outcome
-        predicate = evidence.predicate
-        timeout = evidence.timeout
-        iterationCount = evidence.iterationCount
-        iterationOrdinal = evidence.iterationOrdinal
-        expectation = evidence.expectation
-        actionResult = evidence.actionResult
-        lastObservedSummary = evidence.lastObservedSummary
-        failureReason = evidence.failureReason
     }
 }

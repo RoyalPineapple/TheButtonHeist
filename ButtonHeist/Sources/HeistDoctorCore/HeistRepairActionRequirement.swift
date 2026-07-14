@@ -1,31 +1,32 @@
-import Foundation
 import ThePlans
 import TheScore
 
-enum RepairActionFamily: Sendable, Equatable {
+enum RepairActionRequirement: Sendable, Equatable {
     case activate
     case increment
     case decrement
-    case customAction(HeistRepairCustomActionIdentity?)
+    case customAction(String)
     case rotor
     case textInput
     case unknown
 
-    init(actionIdentity: HeistRepairActionIdentity) {
-        switch actionIdentity.commandType {
-        case .activate, .oneFingerTap, .longPress:
+    init(command: HeistActionCommand) {
+        switch command.core {
+        case .activate, .mechanicalTap, .mechanicalLongPress:
             self = .activate
         case .increment:
             self = .increment
         case .decrement:
             self = .decrement
-        case .performCustomAction:
-            self = .customAction(actionIdentity.customAction)
+        case .customAction(let name, _):
+            self = .customAction(name)
         case .rotor:
             self = .rotor
         case .typeText:
             self = .textInput
-        default:
+        case .dismiss, .magicTap, .mechanicalSwipe, .mechanicalDrag,
+             .viewportScroll, .viewportScrollToVisible, .viewportScrollToEdge,
+             .editAction, .setPasteboard, .takeScreenshot, .dismissKeyboard:
             self = .unknown
         }
     }
@@ -45,14 +46,10 @@ enum RepairActionFamily: Sendable, Equatable {
         case .decrement:
             return element.actions.contains(.decrement) || element.traits.contains(.adjustable)
         case .customAction(let name):
-            let customActions = element.actions.compactMap { action -> String? in
-                if case .custom(let name) = action { return name }
-                return nil
+            return element.actions.contains { action in
+                guard case .custom(let candidateName) = action else { return false }
+                return ElementPredicate.stringEquals(candidateName, name)
             }
-            guard let name, !name.rawValue.isEmpty else {
-                return !customActions.isEmpty
-            }
-            return customActions.contains { ElementPredicate.stringEquals($0, name.rawValue) }
         case .rotor:
             return element.rotors?.isEmpty == false
         case .textInput:

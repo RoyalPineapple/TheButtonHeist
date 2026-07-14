@@ -11,21 +11,18 @@ internal enum PredicateObservationBaselineSeed {
     case previousObservationIfAvailable
 }
 
-/// Reduces settled observations against one immutable baseline. Historical
-/// edge collection belongs to `ObservationWindow`; this value only remembers
-/// which baseline the predicate owns.
+/// Reduces settled observations against one immutable baseline. The semantic
+/// observation log supplies the complete window for each reduction; this
+/// value does not own or merge history.
 internal struct PredicateObservationStreamState {
     private let baseline: SettledCapture?
-    private let window: ObservationWindow?
 
     internal init() {
         baseline = nil
-        window = nil
     }
 
-    private init(baseline: SettledCapture?, window: ObservationWindow?) {
+    private init(baseline: SettledCapture?) {
         self.baseline = baseline
-        self.window = window
     }
 
     internal var observationBaseline: SettledCapture? {
@@ -34,43 +31,28 @@ internal struct PredicateObservationStreamState {
 
     internal func reducing(
         _ observation: HeistSemanticObservation,
-        predicate: AccessibilityPredicate<RootContext>,
+        predicate: ResolvedAccessibilityPredicate,
+        predicateExpression: AccessibilityPredicate,
         baselineSeed: PredicateObservationBaselineSeed = .preserve,
-        observationWindow suppliedWindow: ObservationWindow? = nil,
-        preserving suppliedTrace: AccessibilityTrace? = nil
+        observationWindow: ObservationWindow? = nil
     ) -> PredicateObservationStreamReduction {
-        let baseline = baseline ?? baselineSeed.baseline(for: observation.event)
-        let candidateWindow = baseline.flatMap { baseline in
-            suppliedWindow ?? ObservationWindow.direct(
-                from: baseline,
-                through: observation.event
-            )
-        }.map { window in
-            suppliedTrace.map(window.preserving) ?? window
-        }
-        let window: ObservationWindow? = switch (window, candidateWindow) {
-        case (.some(let existing), .some(let candidate)):
-            existing.merging(
-                candidate,
-                previousCursor: observation.event.previousCursor
-            )
-        case (.some(let existing), nil):
-            existing
-        case (nil, .some(let candidate)):
-            candidate
-        case (nil, nil):
-            nil
-        }
+        let baseline = predicate.requiresChangeBaseline
+            ? baseline ?? baselineSeed.baseline(for: observation.event)
+            : nil
         let evidence = PredicateObservationEvidence(
             observation: observation,
             baseline: predicate.requiresChangeBaseline ? baseline : nil,
-            window: window
+            window: observationWindow
         )
         return PredicateObservationStreamReduction(
-            state: PredicateObservationStreamState(baseline: baseline, window: window),
+            state: PredicateObservationStreamState(baseline: baseline),
             reduction: PredicateObservationReduction(
                 evidence: evidence,
-                expectation: PredicateEvaluation.evaluate(predicate, in: evidence)
+                expectation: PredicateEvaluation.evaluate(
+                    predicate,
+                    expression: predicateExpression,
+                    in: evidence
+                )
             )
         )
     }

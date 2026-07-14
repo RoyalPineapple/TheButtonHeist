@@ -17,7 +17,7 @@ import Testing
     #expect(plan.body == [
         .invoke(HeistInvocationStep(
             invocationPath: invocationPath,
-            argument: .string(.literal("Milk"))
+            argument: .string("Milk")
         )),
     ])
     #expect(plan.heistDefinition(at: definitionPath.components)?.name == "addItem")

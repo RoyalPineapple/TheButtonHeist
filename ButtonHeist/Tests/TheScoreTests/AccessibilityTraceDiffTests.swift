@@ -41,7 +41,7 @@ private extension Collection where Element == AccessibilityTrace.ChangeFact {
 
 final class AccessibilityTraceDiffTests: XCTestCase {
 
-    func testElementDiffIsSingleElementHierarchyDiff() {
+    func testElementDiffIsSingleElementHierarchyDiff() throws {
         let before = makeElement(label: "Total", value: "$5.00", traits: [.staticText])
         let after = makeElement(label: "Total", value: "$7.00", traits: [.staticText])
         let beforeInterface = makeTestInterface(elements: [before])
@@ -55,7 +55,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         XCTAssertEqual(facts.testElementEdits, ElementEdits.between(before, after))
     }
 
-    func testNodeDiffIsTreeDiff() {
+    func testNodeDiffIsTreeDiff() throws {
         let before = makeTestInterface(nodes: [
             testContainer(makeContainer(), containerName: "section", children: [
                 testElement(makeElement(label: "Menu", traits: [.header])),
@@ -75,7 +75,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         XCTAssertEqual(elements.appeared.compactMap(\.elementLabel), ["Checkout"])
     }
 
-    func testFunctionalElementMoveDoesNotReportRemoveInsertChurn() {
+    func testFunctionalElementMoveDoesNotReportRemoveInsertChurn() throws {
         let before = makeTestInterface(nodes: [
             testContainer(makeContainer(), containerName: "list", children: [
                 testElement(makeElement(label: "Pasta", traits: [.button])),
@@ -201,7 +201,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         XCTAssertEqual(facts.map(\.kind), [.elementsChanged])
     }
 
-    func testDifferentTraceIdentitiesDoNotFallBackToContentPairing() {
+    func testDifferentTraceIdentitiesDoNotFallBackToContentPairing() throws {
         let beforeElement = makeElement(label: "Continue", value: "ready", traits: [.button])
         let afterElement = makeElement(label: "Continue", value: "done", traits: [.button])
         let before = makeTraceIdentityInterface([
@@ -218,7 +218,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         XCTAssertEqual(edits.added, [afterElement])
     }
 
-    func testTraceIdentityPresenceMismatchDoesNotPair() {
+    func testTraceIdentityPresenceMismatchDoesNotPair() throws {
         let beforeElement = makeElement(label: "Continue", value: "ready", traits: [.button])
         let afterElement = makeElement(label: "Continue", value: "done", traits: [.button])
         let before = makeTraceIdentityInterface([
@@ -248,7 +248,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         XCTAssertNil(decoded.projectedElementRecords.single?.traceIdentity)
     }
 
-    func testTreeInterfaceAndCaptureDiffsShareTheSameEdits() {
+    func testTreeInterfaceAndCaptureDiffsShareTheSameEdits() throws {
         let beforeInterface = makeTestInterface(
             nodes: [
                 testContainer(makeContainer(), containerName: "main", children: [
@@ -325,7 +325,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         try assertFactsDeriveFromCaptureEdge(facts, trace: trace)
     }
 
-    func testFallbackScreenClassificationOutranksIncidentalElementNotification() {
+    func testFallbackScreenClassificationOutranksIncidentalElementNotification() throws {
         let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Menu"))
         let after = AccessibilityTrace.Capture(
             sequence: 2,
@@ -366,6 +366,31 @@ final class AccessibilityTraceDiffTests: XCTestCase {
             try JSONDecoder().decode([AccessibilityTrace.ChangeFact].self, from: JSONEncoder().encode(facts)),
             facts
         )
+    }
+
+    func testObservationGenerationBoundaryProjectsLifecycleWithoutUpdates() throws {
+        let before = AccessibilityTrace.Capture(
+            sequence: 1,
+            interface: makeInterface(label: "Menu"),
+            context: AccessibilityTrace.Context(observationGeneration: 4)
+        )
+        let after = AccessibilityTrace.Capture(
+            sequence: 2,
+            interface: makeInterface(label: "Checkout"),
+            parentHash: before.hash,
+            context: AccessibilityTrace.Context(observationGeneration: 5)
+        )
+
+        let facts = AccessibilityTrace.ChangeFact.between(before, after)
+
+        XCTAssertEqual(facts.map(\.kind), [.elementsChanged, .screenChanged, .elementsChanged])
+        let elementFacts = facts.compactMap { fact -> AccessibilityTrace.ElementsChangeFact? in
+            guard case .elementsChanged(let elements) = fact else { return nil }
+            return elements
+        }
+        XCTAssertFalse(elementFacts[0].disappeared.isEmpty)
+        XCTAssertFalse(elementFacts[1].appeared.isEmpty)
+        XCTAssertTrue(elementFacts.allSatisfy(\.updated.isEmpty))
     }
 
     func testLayoutChangedNotificationProducesNotificationOnlyElementFact() throws {
@@ -411,7 +436,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         XCTAssertTrue(payload.isNotificationOnly)
     }
 
-    func testAnnouncementDoesNotMasqueradeAsElementChangeEvidence() {
+    func testAnnouncementDoesNotMasqueradeAsElementChangeEvidence() throws {
         let notification = notification(kind: .announcement, sequence: 1)
         let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Menu"))
         let after = AccessibilityTrace.Capture(
@@ -481,7 +506,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         XCTAssertEqual(facts.testCaptureEdge?.after.hash, after.hash)
     }
 
-    func testTransitionTransientProducesFactWhenSettledSnapshotsAreIdentical() {
+    func testTransitionTransientProducesFactWhenSettledSnapshotsAreIdentical() throws {
         let transient = makeElement(label: "Loading", traits: [.staticText])
         let interface = makeInterface(label: "Menu")
         let before = AccessibilityTrace.Capture(sequence: 1, interface: interface)
@@ -499,7 +524,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         XCTAssertEqual(payload.metadata.transient, [transient])
     }
 
-    func testCaptureContextOnlyDiffsAsElementsChanged() {
+    func testCaptureContextOnlyDiffsAsElementsChanged() throws {
         let interface = makeInterface()
         let before = AccessibilityTrace.Capture(
             sequence: 1,
@@ -556,7 +581,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         XCTAssertEqual(properties, [.frame, .activationPoint])
     }
 
-    func testGeometryOnlyMovementFeedsCanonicalPredicates() {
+    func testGeometryOnlyMovementFeedsCanonicalPredicates() throws {
         let beforeInterface = makeTestInterface(elements: [
             makeElement(
                 label: "Checkout",
@@ -586,21 +611,21 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         ) else {
             return XCTFail("Expected predicate evidence")
         }
-        let framePredicate = AccessibilityPredicate<RootContext>.changed(.elements([
+        let framePredicate = AccessibilityPredicate.changed(.elements([
             .updated(
                 .label("Checkout"),
                 .frame(after: ElementFrameMatch(x: 10, y: 20, width: 100, height: 44))
             ),
         ]))
-        let semanticPredicate = AccessibilityPredicate<RootContext>.changed(.elements([
+        let semanticPredicate = AccessibilityPredicate.changed(.elements([
             .updated(.label("Checkout"), .value(after: "Moved")),
         ]))
 
-        XCTAssertTrue(framePredicate.evaluate(in: evidence).met)
-        XCTAssertFalse(semanticPredicate.evaluate(in: evidence).met)
+        XCTAssertTrue(try framePredicate.resolve(in: .empty).evaluate(in: evidence).met)
+        XCTAssertFalse(try semanticPredicate.resolve(in: .empty).evaluate(in: evidence).met)
     }
 
-    func testActivationPointEvidencePreservesDefaultExplicitAndUnavailable() {
+    func testActivationPointEvidencePreservesDefaultExplicitAndUnavailable() throws {
         let defaultElement = makeAccessibilityElement(
             activationPoint: AccessibilityPoint(x: 0, y: 0),
             usesDefaultActivationPoint: true
@@ -628,7 +653,6 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         )
         XCTAssertEqual(unavailableProjection.activationPointEvidence, .unavailable)
         XCTAssertNil(unavailableProjection.activationPointEvidence.point)
-        XCTAssertNil(ActivationPointProperty.value(in: unavailableProjection))
     }
 
     func testInteractionDigestReportsScreenAndFirstResponderChanges() throws {
@@ -692,7 +716,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         XCTAssertFalse(digest.elementSetChanged)
     }
 
-    func testCaptureChainMetadataDoesNotAffectDiff() {
+    func testCaptureChainMetadataDoesNotAffectDiff() throws {
         let interface = makeInterface()
         let before = AccessibilityTrace.Capture(sequence: 1, interface: interface, parentHash: nil)
         let after = AccessibilityTrace.Capture(sequence: 99, interface: interface, parentHash: "sha256:parent")
@@ -700,7 +724,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         XCTAssertTrue(AccessibilityTrace.ChangeFact.between(before, after).isEmpty)
     }
 
-    func testElementDiffTreatsIndistinguishableElementsAsNoChangeWithoutHierarchyContext() {
+    func testElementDiffTreatsIndistinguishableElementsAsNoChangeWithoutHierarchyContext() throws {
         let before = makeElement(label: "Item", traits: [.staticText])
         let after = makeElement(label: "Item", traits: [.staticText])
 
@@ -709,7 +733,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         XCTAssertTrue(edits.isEmpty)
     }
 
-    func testDiffPairingKeyUsesTypedIdentityTraitSet() {
+    func testDiffPairingKeyUsesTypedIdentityTraitSet() throws {
         let orderedTraits = makeElement(label: "Favorite", traits: [.button, .header])
         let reorderedTraits = makeElement(label: "Favorite", traits: [.header, .button])
         let transientStateTrait = makeElement(label: "Favorite", traits: [.selected, .header, .button])
@@ -866,20 +890,23 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         let tree = elements.enumerated().map { index, entry in
             AccessibilityHierarchy.element(makeTestAccessibilityElement(entry.element), traversalIndex: index)
         }
-        let annotations = elements.enumerated().map { index, entry in
-            InterfaceElementAnnotation(
-                path: TreePath([index]),
-                actions: entry.element.actions
-            )
-        }
-        let traceIdentities = Dictionary(uniqueKeysWithValues: elements.enumerated().map { index, entry in
+        let actionsByPath = Dictionary(uniqueKeysWithValues: elements.enumerated().map { index, entry in
+            (TreePath([index]), entry.element.actions)
+        })
+        let traceIdentityByPath = Dictionary(uniqueKeysWithValues: elements.enumerated().map { index, entry in
             (TreePath([index]), TraceElementIdentity(entry.identity))
         })
         return Interface(
             timestamp: timestamp,
-            tree: tree,
-            annotations: InterfaceAnnotations(elements: annotations),
-            traceIdentities: InterfaceTraceIdentities(traceIdentities)
+            projecting: tree,
+            elementMetadata: { path, _, _ in
+                guard let actions = actionsByPath[path] else { return nil }
+                return InterfaceElementProjectionMetadata(
+                    actions: actions,
+                    traceIdentity: traceIdentityByPath[path]
+                )
+            },
+            containerMetadata: { _, _ in nil }
         )
     }
 

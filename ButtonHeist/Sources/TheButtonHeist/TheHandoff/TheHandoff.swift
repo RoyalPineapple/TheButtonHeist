@@ -12,7 +12,6 @@ final class TheHandoff {
     let connectionLifecycle = HandoffConnectionLifecycle()
     let discoveryLifecycle = HandoffDiscoveryLifecycle()
     var serverMessages = HandoffServerMessageRouter()
-    let reconnect = HandoffReconnectController()
     let keepalive = HandoffKeepalive()
 
     // MARK: - Derived State

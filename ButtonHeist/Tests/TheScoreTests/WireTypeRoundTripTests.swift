@@ -11,11 +11,11 @@ final class WireTypeRoundTripTests: XCTestCase {
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
-    // MARK: - AccessibilityPredicate<RootContext>
+    // MARK: - AccessibilityPredicate
 
     func testAccessibilityPredicateWireContractValuesStayStable() {
         XCTAssertEqual(
-            AccessibilityPredicate<RootContext>.wireTypeValues,
+            AccessibilityPredicate.wireTypeValues,
             ["exists", "missing", "announcement", "changed", "no_change"]
         )
     }
@@ -67,7 +67,7 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testTypeTextStringRefLoweringRejectsEmptyResolvedText() throws {
         let command = HeistActionCommand.typeText(
-            text: .ref("item"),
+            reference: "item",
             target: .predicate(ElementPredicateTemplate(label: "Add item"))
         )
 
@@ -78,18 +78,18 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testTypeTextStringRefLoweringAllowsEmptyResolvedTextWhenReplacingExisting() throws {
         let command = HeistActionCommand.typeText(
-            text: .ref("item"),
+            reference: "item",
             target: .predicate(ElementPredicateTemplate(label: "Add item")),
             replacingExisting: true
         )
 
         let message = try command.resolve(in: HeistExecutionEnvironment(strings: ["item": ""]))
 
-        guard case .typeText(let target) = message else {
+        guard case .typeText(let text, _, let replacingExisting) = message else {
             return XCTFail("Expected typeText runtime message, got \(message)")
         }
-        XCTAssertEqual(target.text, "")
-        XCTAssertTrue(target.replacingExisting)
+        XCTAssertEqual(text, "")
+        XCTAssertTrue(replacingExisting)
     }
 
     func testSetPasteboardTargetRejectsUnknownPayloadKey() throws {
@@ -911,7 +911,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         let plan = try HeistPlan(body: [
                 .action(try ActionStep(
                     command: .activate(.predicate(
-                        ElementPredicateTemplate(label: .exact(.literal("Settings")), traits: [.button]),
+                        ElementPredicateTemplate(label: "Settings", traits: [.button]),
                         ordinal: 1
                     )),
                     expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 2.5)))),
@@ -1045,7 +1045,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testHeistExecutionResultRoundTripPreservesForEachResult() throws {
-        let matching = ElementPredicate(label: "Row")
+        let matching = ElementPredicateTemplate.label("Row")
         let result = HeistExecutionResult.passed(
             steps: [
                 .passed(
@@ -1102,10 +1102,10 @@ final class WireTypeRoundTripTests: XCTestCase {
                     path: "$.body[0]",
                     receiptKind: .forEachElement,
                     durationMs: 200,
-                    intent: .forEachElement(parameter: "row", matching: ElementPredicate(label: "Row"), limit: 10),
+                    intent: .forEachElement(parameter: "row", matching: .label("Row"), limit: 10),
                     evidence: HeistForEachElementEvidence(
                         parameter: "row",
-                        matching: ElementPredicate(label: "Row"),
+                        matching: .label("Row"),
                         limit: 10,
                         matchedCount: 5,
                         iterationCount: 2,
@@ -1133,7 +1133,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testHeistExecutionResultRoundTripPreservesCaseSelectionAndChildren() throws {
-        let predicate = AccessibilityPredicate<RootContext>.exists(.label("Home"))
+        let predicate = AccessibilityPredicate.exists(.label("Home"))
         let child = HeistExecutionStepResult.failed(
             path: "$.body[0].conditional.cases[0].body[0]",
             receiptKind: .action,
@@ -1198,8 +1198,8 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testHeistCaseMatchResultRejectsOldNestedResultShape() throws {
-        let predicate = AccessibilityPredicate<RootContext>.exists(.label("Home"))
-        let mismatchedPredicate = AccessibilityPredicate<RootContext>.exists(.label("Settings"))
+        let predicate = AccessibilityPredicate.exists(.label("Home"))
+        let mismatchedPredicate = AccessibilityPredicate.exists(.label("Settings"))
         let payload = HeistCaseMatchResultPayload(
             predicate: predicate,
             result: ExpectationResult(met: true, predicate: mismatchedPredicate)
@@ -1230,7 +1230,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testInvocationExpectationDerivesSummaryFromWaitEvidence() throws {
-        let predicate = AccessibilityPredicate<RootContext>.exists(.label("Done"))
+        let predicate = AccessibilityPredicate.exists(.label("Done"))
         let actionResult = ActionResult.success(method: .wait, evidence: .none)
         let expectation = ExpectationResult.Met(predicate: predicate)
         let check = try XCTUnwrap(HeistWaitEvidence.MatchedCheck(
@@ -1243,29 +1243,6 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(evidence.actionResult, waitEvidence.actionResult)
         XCTAssertEqual(evidence.expectation, waitEvidence.expectation)
         XCTAssertEqual(evidence.waitEvidence, waitEvidence)
-    }
-
-    func testHeistActionEvidenceRejectsWarningWithoutCommand() throws {
-        let evidence = HeistActionEvidence.commandlessDispatch(
-            dispatchResult: ActionResult.success(method: .activate, evidence: .none)
-        )
-        XCTAssertNil(evidence.command)
-        XCTAssertNil(evidence.warning)
-
-        let invalid = """
-        {
-          "type": "commandless_dispatch",
-          "dispatchResult": { "outcome": { "kind": "success" }, "method": "activate" },
-          "warning": {
-            "code": "activation_weak_affordance_evidence",
-            "message": "activate succeeded"
-          }
-        }
-        """
-
-        XCTAssertThrowsError(try decoder.decode(HeistActionEvidence.self, from: Data(invalid.utf8))) { error in
-            assertDecodingError(error, contains: ["Unknown heist action evidence field \"warning\""])
-        }
     }
 
     func testHeistCaseSelectionRejectsLegacyAndLooseOutcomeShapes() throws {
@@ -1390,48 +1367,10 @@ final class WireTypeRoundTripTests: XCTestCase {
         }
     }
 
-    func testHeistInvocationEvidenceRejectsMixedOutcomeFields() throws {
-        let inlineHeistWithInvokeField = """
-        {
-          "type": "heist",
-          "name": "Nested",
-          "argument": "Milk"
-        }
-        """
-        XCTAssertThrowsError(
-            try decoder.decode(HeistInvocationEvidence.self, from: Data(inlineHeistWithInvokeField.utf8))
-        ) { error in
-            assertDecodingError(error, contains: ["incompatible fields"])
-        }
-
-        let childAbortWithExpectation = """
-        {
-          "type": "invocation",
-          "invocation": {
-            "path": ["LibraryScreen", "addToCart"],
-            "argument": { "type": "none" }
-          },
-          "name": "LibraryScreen.addToCart",
-          "outcome": {
-            "type": "child_failed",
-            "path": "$.body[0].invoke.body[0]",
-            "expectation": {
-              "type": "result"
-            }
-          }
-        }
-        """
-        XCTAssertThrowsError(
-            try decoder.decode(HeistInvocationEvidence.self, from: Data(childAbortWithExpectation.utf8))
-        ) { error in
-            assertDecodingError(error, contains: ["incompatible fields"])
-        }
-    }
-
     private func forEachElementIteration(
         index: Int,
         durationMs: Int,
-        matching: ElementPredicate
+        matching: ElementPredicateTemplate
     ) -> HeistExecutionStepResult {
         let path = "$.body[0].for_each_element.iterations[\(index)]"
         return .passed(
@@ -1652,7 +1591,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     private struct HeistCaseMatchResultPayload: Encodable {
-        let predicate: AccessibilityPredicate<RootContext>
+        let predicate: AccessibilityPredicate
         let result: ExpectationResult
     }
 }

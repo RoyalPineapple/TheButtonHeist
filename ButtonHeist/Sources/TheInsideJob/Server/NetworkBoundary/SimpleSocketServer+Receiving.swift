@@ -8,10 +8,10 @@ private let receiveLogger = ButtonHeistLog.logger(.handoff(.server))
 
 extension SimpleSocketServer {
     func startReceiving(clientId: Int, connection: NWConnection) {
-        receiveNextChunk(clientId: clientId, connection: connection, framer: SocketReceiveFramer())
+        receiveNextChunk(clientId: clientId, connection: connection, framer: NewlineDelimitedFramer())
     }
 
-    private func receiveNextChunk(clientId: Int, connection: NWConnection, framer: SocketReceiveFramer) {
+    private func receiveNextChunk(clientId: Int, connection: NWConnection, framer: NewlineDelimitedFramer) {
         connection.receive(minimumIncompleteLength: 1, maximumLength: WireFrameLimits.receiveChunkBytes) { [weak self] content, _, isComplete, error in
             guard let self else { return }
             self.spawnTrackedTask { server in
@@ -34,7 +34,7 @@ extension SimpleSocketServer {
         content: Data?,
         isComplete: Bool,
         error: NWError?,
-        framer: SocketReceiveFramer
+        framer: NewlineDelimitedFramer
     ) {
         if let error {
             receiveLogger.error("Receive error from client \(clientId): \(error)")
@@ -45,7 +45,8 @@ extension SimpleSocketServer {
         var receiveFramer = framer
         let messageFrames: [Data]
         do {
-            messageFrames = try receiveFramer.append(content)
+            try SocketReceiveBufferPolicy.validate(receiveFramer, appending: content)
+            messageFrames = receiveFramer.append(content ?? Data())
         } catch {
             receiveLogger.error("Client \(clientId) exceeded max buffer size, disconnecting")
             rejectClientWithServerError(
@@ -69,11 +70,7 @@ extension SimpleSocketServer {
 
     private func routeMessageFrame(clientId: Int, messageData: Data) -> Bool {
         guard clientRegistry.client(clientId) != nil else { return false }
-        clientLifecycle.receivedData(
-            clientId: clientId,
-            data: messageData,
-            respond: responseHandler(clientId: clientId)
-        )
+        callbacks.onDataReceived?(clientId, messageData, responseHandler(clientId: clientId))
         return true
     }
 

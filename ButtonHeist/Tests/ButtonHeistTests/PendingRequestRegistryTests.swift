@@ -10,7 +10,8 @@ final class PendingRequestRegistryTests: XCTestCase {
         let registered = expectation(description: "request registered")
 
         let task = Task { @ButtonHeistActor in
-            try await registry.waitForPong(
+            try await registry.waitForResponse(
+                .pong,
                 requestId: "req-mismatch",
                 timeout: 5,
                 afterRegister: { registered.fulfill() }
@@ -49,7 +50,8 @@ final class PendingRequestRegistryTests: XCTestCase {
         let registered = expectation(description: "original request registered")
 
         let actionTask = Task { @ButtonHeistActor in
-            try await registry.waitForAction(
+            try await registry.waitForResponse(
+                .action,
                 requestId: requestId,
                 timeout: 5,
                 afterRegister: { registered.fulfill() }
@@ -60,7 +62,11 @@ final class PendingRequestRegistryTests: XCTestCase {
         await fulfillment(of: [registered], timeout: 1)
 
         do {
-            _ = try await registry.waitForPong(requestId: requestId, timeout: 0.01)
+            _ = try await registry.waitForResponse(
+                .pong,
+                requestId: requestId,
+                timeout: 0.01
+            )
             XCTFail("Expected duplicate request id failure")
         } catch {
             guard case TheFence.PendingRequestError.duplicateRequestId(let duplicateId) = error else {
@@ -83,14 +89,16 @@ final class PendingRequestRegistryTests: XCTestCase {
         let survivingRegistered = expectation(description: "surviving request registered")
 
         let failedTask = Task { @ButtonHeistActor in
-            try await registry.waitForPong(
+            try await registry.waitForResponse(
+                .pong,
                 requestId: "req-failure",
                 timeout: 5,
                 afterRegister: { failedRegistered.fulfill() }
             )
         }
         let survivingTask = Task { @ButtonHeistActor in
-            try await registry.waitForInterface(
+            try await registry.waitForResponse(
+                .interface,
                 requestId: "req-survives",
                 timeout: 5,
                 afterRegister: { survivingRegistered.fulfill() }
@@ -127,20 +135,78 @@ final class PendingRequestRegistryTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testServerErrorPreservesCanonicalPayload() async throws {
+        let registry = TheFence.PendingRequestRegistry()
+        let requestId = "req-server-error"
+        let registered = expectation(description: "request registered")
+        let serverError = ServerError(
+            kind: .general,
+            message: "request failed",
+            recoveryHint: "Try again."
+        )
+
+        let task = Task { @ButtonHeistActor in
+            try await registry.waitForResponse(
+                .pong,
+                requestId: requestId,
+                timeout: 5,
+                afterRegister: { registered.fulfill() }
+            )
+        }
+        defer { task.cancel() }
+
+        await fulfillment(of: [registered], timeout: 1)
+        XCTAssertTrue(registry.resolveTransientResponse(.error(serverError), requestId: requestId))
+
+        do {
+            _ = try await task.value
+            XCTFail("Expected server error")
+        } catch FenceError.serverError(let receivedError) {
+            XCTAssertEqual(receivedError, serverError)
+        } catch {
+            XCTFail("Expected canonical server error, got \(error)")
+        }
+    }
+
+    @ButtonHeistActor
+    func testProtocolTrafficDoesNotConsumePendingResponse() async throws {
+        let registry = TheFence.PendingRequestRegistry()
+        let requestId = "req-protocol-traffic"
+        let registered = expectation(description: "request registered")
+
+        let task = Task { @ButtonHeistActor in
+            try await registry.waitForResponse(
+                .pong,
+                requestId: requestId,
+                timeout: 5,
+                afterRegister: { registered.fulfill() }
+            )
+        }
+        defer { task.cancel() }
+
+        await fulfillment(of: [registered], timeout: 1)
+        XCTAssertFalse(registry.resolveTransientResponse(.serverHello, requestId: requestId))
+        XCTAssertTrue(registry.resolveTransientResponse(.pong(makePong()), requestId: requestId))
+        _ = try await task.value
+    }
+
+    @ButtonHeistActor
     func testCancelAllCancelsOutstandingRequests() async throws {
         let registry = TheFence.PendingRequestRegistry()
         let pongRegistered = expectation(description: "pong request registered")
         let interfaceRegistered = expectation(description: "interface request registered")
 
         let pongTask = Task { @ButtonHeistActor in
-            try await registry.waitForPong(
+            try await registry.waitForResponse(
+                .pong,
                 requestId: "req-pong",
                 timeout: 5,
                 afterRegister: { pongRegistered.fulfill() }
             )
         }
         let interfaceTask = Task { @ButtonHeistActor in
-            try await registry.waitForInterface(
+            try await registry.waitForResponse(
+                .interface,
                 requestId: "req-interface",
                 timeout: 5,
                 afterRegister: { interfaceRegistered.fulfill() }
@@ -172,6 +238,84 @@ final class PendingRequestRegistryTests: XCTestCase {
         } catch {
             XCTFail("Expected notConnected, got \(error)")
         }
+    }
+
+    @ButtonHeistActor
+    func testTimeoutReleasesRequestIdForAReplacementOwner() async throws {
+        let registry = TheFence.PendingRequestRegistry()
+        let requestId = "req-timeout"
+
+        do {
+            _ = try await registry.waitForResponse(
+                .pong,
+                requestId: requestId,
+                timeout: 0
+            )
+            XCTFail("Expected action timeout")
+        } catch FenceError.actionTimeout {
+            // expected
+        } catch {
+            XCTFail("Expected actionTimeout, got \(error)")
+        }
+
+        XCTAssertTrue(registry.resolveTransientResponse(.pong(makePong()), requestId: requestId))
+
+        let replacementRegistered = expectation(description: "replacement request registered")
+        let replacementTask = Task { @ButtonHeistActor in
+            try await registry.waitForResponse(
+                .pong,
+                requestId: requestId,
+                timeout: 5,
+                afterRegister: { replacementRegistered.fulfill() }
+            )
+        }
+        defer { replacementTask.cancel() }
+
+        await fulfillment(of: [replacementRegistered], timeout: 1)
+        XCTAssertTrue(registry.resolveTransientResponse(.pong(makePong()), requestId: requestId))
+        _ = try await replacementTask.value
+    }
+
+    @ButtonHeistActor
+    func testCancellationReleasesOnlyTheCancelledRequestOwner() async throws {
+        let registry = TheFence.PendingRequestRegistry()
+        let requestId = "req-cancelled"
+        let registered = expectation(description: "cancelled request registered")
+
+        let cancelledTask = Task { @ButtonHeistActor in
+            try await registry.waitForResponse(
+                .pong,
+                requestId: requestId,
+                timeout: 5,
+                afterRegister: { registered.fulfill() }
+            )
+        }
+        await fulfillment(of: [registered], timeout: 1)
+        cancelledTask.cancel()
+
+        do {
+            _ = try await cancelledTask.value
+            XCTFail("Expected CancellationError")
+        } catch is CancellationError {
+            // expected
+        } catch {
+            XCTFail("Expected CancellationError, got \(error)")
+        }
+
+        let replacementRegistered = expectation(description: "replacement request registered")
+        let replacementTask = Task { @ButtonHeistActor in
+            try await registry.waitForResponse(
+                .pong,
+                requestId: requestId,
+                timeout: 5,
+                afterRegister: { replacementRegistered.fulfill() }
+            )
+        }
+        defer { replacementTask.cancel() }
+
+        await fulfillment(of: [replacementRegistered], timeout: 1)
+        XCTAssertTrue(registry.resolveTransientResponse(.pong(makePong()), requestId: requestId))
+        _ = try await replacementTask.value
     }
 
     private func assertProtocolMismatch(

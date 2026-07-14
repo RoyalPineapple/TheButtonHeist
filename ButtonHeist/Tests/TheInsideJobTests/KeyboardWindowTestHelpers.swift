@@ -41,6 +41,11 @@ import UIKit
             .filter { !$0.isHidden && $0.bounds.size != .zero }
             .contains(where: TheTripwire.isSystemPassthroughWindow)
     }
+
+    static func hasFirstResponder(in view: UIView?) -> Bool {
+        guard let view else { return false }
+        return view.isFirstResponder || view.subviews.contains(where: hasFirstResponder)
+    }
 }
 
 #endif // canImport(UIKit)

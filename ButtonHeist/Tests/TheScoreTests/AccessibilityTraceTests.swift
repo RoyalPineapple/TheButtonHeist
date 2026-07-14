@@ -4,29 +4,6 @@ import ThePlans
 import AccessibilitySnapshotModel
 @testable import TheScore
 
-private struct CaptureWithoutContextFixture: Encodable {
-    let capture: AccessibilityTrace.Capture
-
-    private enum CodingKeys: String, CodingKey {
-        case sequence
-        case hash
-        case parentHash
-        case interface
-        case transition
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(capture.sequence, forKey: .sequence)
-        try container.encode(capture.hash, forKey: .hash)
-        try container.encodeIfPresent(capture.parentHash, forKey: .parentHash)
-        try container.encode(capture.interface, forKey: .interface)
-        if !capture.transition.isEmpty {
-            try container.encode(capture.transition, forKey: .transition)
-        }
-    }
-}
-
 final class AccessibilityTraceTests: XCTestCase {
 
     func testDecodeRejectsUnknownTraceFields() {
@@ -50,7 +27,9 @@ final class AccessibilityTraceTests: XCTestCase {
 
     func testCaptureDecodeRejectsMissingContext() throws {
         let capture = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface())
-        let data = try JSONEncoder().encode(CaptureWithoutContextFixture(capture: capture))
+        let data = try mutatedTestJSONData(capture) { object in
+            object.removeValue(forKey: "context")
+        }
 
         XCTAssertThrowsError(try JSONDecoder().decode(AccessibilityTrace.Capture.self, from: data)) { error in
             XCTAssertTrue(
@@ -288,7 +267,7 @@ final class AccessibilityTraceTests: XCTestCase {
     func testInterfaceProjectsDuplicateTraversalIndexesByPath() throws {
         let first = makeElement(label: "First", actions: [.activate])
         let second = makeElement(label: "Second", actions: [.increment])
-        let interface = Interface(
+        let interface = try Interface(
             timestamp: Date(timeIntervalSince1970: 0),
             tree: [
                 .element(makeTestAccessibilityElement(first), traversalIndex: 0),
@@ -561,22 +540,20 @@ final class AccessibilityTraceTests: XCTestCase {
     private func makeDuplicateTraversalIndexInterface(secondLabel: String) -> Interface {
         let first = makeElement(label: "First")
         let second = makeElement(label: secondLabel)
+        let actionsByPath = [
+            TreePath([0]): first.actions,
+            TreePath([1]): second.actions,
+        ]
         return Interface(
             timestamp: Date(timeIntervalSince1970: 0),
-            tree: [
+            projecting: [
                 .element(makeTestAccessibilityElement(first), traversalIndex: 0),
                 .element(makeTestAccessibilityElement(second), traversalIndex: 0),
             ],
-            annotations: InterfaceAnnotations(elements: [
-                InterfaceElementAnnotation(
-                    path: TreePath([0]),
-                    actions: first.actions
-                ),
-                InterfaceElementAnnotation(
-                    path: TreePath([1]),
-                    actions: second.actions
-                ),
-            ])
+            elementMetadata: { path, _, _ in
+                actionsByPath[path].map { InterfaceElementProjectionMetadata(actions: $0) }
+            },
+            containerMetadata: { _, _ in nil }
         )
     }
 

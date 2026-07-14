@@ -72,61 +72,6 @@ release_tag_exists() {
     local_release_tag_exists "$version" || remote_release_tag_exists "$version"
 }
 
-ci_push_run_count() {
-    local sha="$1"
-    local jq_filter="$2"
-    gh run list \
-        --repo "$BUTTONHEIST_GITHUB_REPO" \
-        --workflow CI \
-        --branch main \
-        --commit "$sha" \
-        --limit 20 \
-        --json conclusion,event,status \
-        --jq "$jq_filter" 2>/dev/null || echo 0
-}
-
-print_ci_runs_for_commit() {
-    local sha="$1"
-    gh run list \
-        --repo "$BUTTONHEIST_GITHUB_REPO" \
-        --workflow CI \
-        --branch main \
-        --commit "$sha" \
-        --limit 20 || true
-}
-
-wait_for_ci_success() {
-    local sha="$1"
-    local label="${2:-release commit}"
-    local success_count running_count failed_count total_count
-
-    echo "  Waiting for main CI on $label (${sha:0:8})..."
-    for _ in {1..160}; do
-        success_count=$(ci_push_run_count "$sha" '[.[] | select(.event == "push" and .status == "completed" and .conclusion == "success")] | length')
-        if [[ "$success_count" -gt 0 ]]; then
-            echo "  ✓ Main CI passed on ${sha:0:8}"
-            return 0
-        fi
-
-        running_count=$(ci_push_run_count "$sha" '[.[] | select(.event == "push" and .status != "completed")] | length')
-        failed_count=$(ci_push_run_count "$sha" '[.[] | select(.event == "push" and .status == "completed" and .conclusion != "success")] | length')
-        total_count=$(ci_push_run_count "$sha" '[.[] | select(.event == "push")] | length')
-        if [[ "$failed_count" -gt 0 && "$running_count" -eq 0 && "$total_count" -gt 0 ]]; then
-            echo "  ✗ Main CI failed on ${sha:0:8}"
-            print_ci_runs_for_commit "$sha"
-            echo ""
-            echo "  The release source commit is already on main. Fix main before tagging this version."
-            return 1
-        fi
-
-        sleep 15
-    done
-
-    echo "  ✗ Timed out waiting for main CI on ${sha:0:8}"
-    print_ci_runs_for_commit "$sha"
-    return 1
-}
-
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --dry-run)    DRY_RUN=true; shift ;;
@@ -142,7 +87,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Read the canonical current version.
-CURRENT_VERSION=$(grep -o 'buttonHeistVersion = "[^"]*"' "$BUTTONHEIST_CODE_VERSION_FILE" | cut -d'"' -f2)
+CURRENT_VERSION=$(buttonheist_code_version)
 
 if [[ "$TAG_CURRENT" == true ]]; then
     if [[ -n "$BUMP_TYPE" || $# -gt 0 ]]; then
@@ -242,28 +187,12 @@ EOF
     exit 1
 fi
 
-# CI must have passed on this commit — wait up to 20 minutes
+# CI must have passed on this commit — wait up to 20 minutes.
 if [[ "$RUN_TESTS" == false ]]; then
-    echo "  Waiting for CI on $(echo "$LOCAL_SHA" | cut -c1-8)..."
-    CI_DEADLINE=$((SECONDS + 1200))
-    CI_RUN_ID=""
-    while [[ $SECONDS -lt $CI_DEADLINE ]]; do
-        CI_RUN_ID=$(gh run list --repo "$BUTTONHEIST_GITHUB_REPO" --commit "$LOCAL_SHA" --workflow CI --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)
-        if [[ -n "$CI_RUN_ID" && "$CI_RUN_ID" != "null" ]]; then break; fi
-        sleep 5
-    done
-    if [[ -z "$CI_RUN_ID" || "$CI_RUN_ID" == "null" ]]; then
-        echo "Error: no CI run found after 20 minutes"
-        echo "  Check: https://github.com/$BUTTONHEIST_GITHUB_REPO/actions"
-        echo "  Or run with --full to test locally before the main CI release gate"
-        exit 1
-    fi
-    if ! gh run watch "$CI_RUN_ID" --repo "$BUTTONHEIST_GITHUB_REPO" --exit-status; then
-        echo "Error: CI failed on $(echo "$LOCAL_SHA" | cut -c1-8)"
-        echo "  https://github.com/$BUTTONHEIST_GITHUB_REPO/actions/runs/$CI_RUN_ID"
-        exit 1
-    fi
-    echo "  CI: passed on $(echo "$LOCAL_SHA" | cut -c1-8)"
+    "$SCRIPT_DIR/require-successful-ci-for-commit.sh" \
+        --timeout 1200 \
+        "$LOCAL_SHA" \
+        "current source"
 fi
 
 if [[ "$TAG_CURRENT" == true ]]; then
@@ -328,7 +257,7 @@ if [[ "$DRY_RUN" == true ]]; then
     fi
     echo "  2. Build CLI + MCP (parallel)"
     if [[ "$RUN_TESTS" == true ]]; then
-        echo "  3. Run TheScoreTests, ButtonHeistTests, and all five hosted iOS schemes"
+        echo "  3. Run TheScoreTests, ButtonHeistTests, and all five hosted iOS test targets"
     else
         echo "  3. (local tests skipped — main CI gates the exact release commit. Use --full for local preflight)"
     fi
@@ -439,27 +368,16 @@ if [[ "$RUN_TESTS" == true ]]; then
     run_tuist_test ButtonHeistTests --no-selective-testing
     echo "  ✓ ButtonHeistTests"
 
-    # Reuse a persistent release-test simulator instead of create/boot/delete
-    SIM_NAME="release-test"
-    SIM_UDID=$(xcrun simctl list devices | grep "$SIM_NAME" | grep -oE '[0-9A-F-]{36}' | head -1 || true)
-
-    if [[ -z "$SIM_UDID" ]]; then
-        SIM_RUNTIME=$(xcrun simctl list runtimes | grep "iOS 26" | tail -1 | sed 's/.*- //')
-        if [[ -z "$SIM_RUNTIME" ]]; then
-            SIM_RUNTIME=$(xcrun simctl list runtimes | grep "iOS" | tail -1 | sed 's/.*- //')
-        fi
-        SIM_UDID=$(xcrun simctl create "$SIM_NAME" "com.apple.CoreSimulator.SimDeviceType.iPhone-16-Pro" "$SIM_RUNTIME")
-        echo "  Created simulator $SIM_NAME ($SIM_UDID)"
+    SIMULATOR_ENV=$(mktemp)
+    if ! python3 "$SCRIPT_DIR/select-ios-ci-simulator.py" \
+        --sim-name release-test \
+        --github-env "$SIMULATOR_ENV" \
+        --wait; then
+        rm -f "$SIMULATOR_ENV"
+        exit 1
     fi
-
-    # Boot only if not already booted
-    SIM_STATE=$(xcrun simctl list devices | grep "$SIM_UDID" | grep -o '(Booted)' || true)
-    if [[ -z "$SIM_STATE" ]]; then
-        xcrun simctl boot "$SIM_UDID" 2>/dev/null || true
-        echo "  Booted $SIM_NAME"
-    else
-        echo "  Reusing booted $SIM_NAME"
-    fi
+    source "$SIMULATOR_ENV"
+    rm -f "$SIMULATOR_ENV"
 
     run_hosted_release_suite() {
         local suite="$1"
@@ -469,10 +387,7 @@ if [[ "$RUN_TESTS" == true ]]; then
     }
 
     run_hosted_release_suite TheInsideJobTests
-    run_hosted_release_suite DogfoodFeatureFlowTests
-    run_hosted_release_suite DogfoodRuntimeContractTests
-    run_hosted_release_suite AdversarialMutationTests
-    run_hosted_release_suite AdversarialNavigationTests
+    run_hosted_release_suite HostedBehaviorTests
     echo ""
 fi
 
@@ -484,7 +399,10 @@ if [[ "$TAG_CURRENT" == true ]]; then
     echo "==> Phase 5: Verifying and tagging current release"
     "$SCRIPT_DIR/validate-release-contract.sh"
     RELEASE_SHA=$(git rev-parse HEAD)
-    wait_for_ci_success "$RELEASE_SHA" "current release source"
+    "$SCRIPT_DIR/require-successful-ci-for-commit.sh" \
+        --timeout 2400 \
+        "$RELEASE_SHA" \
+        "current release source"
     git tag "v$NEW_VERSION"
     git push origin "v$NEW_VERSION"
     echo "  ✓ Tagged green HEAD as v$NEW_VERSION and pushed"
@@ -520,7 +438,10 @@ else
     git push origin HEAD:main
     echo "  ✓ Published release source commit ${RELEASE_SHA:0:8} to main"
 
-    wait_for_ci_success "$RELEASE_SHA" "release source"
+    "$SCRIPT_DIR/require-successful-ci-for-commit.sh" \
+        --timeout 2400 \
+        "$RELEASE_SHA" \
+        "release source"
 
     git tag "v$NEW_VERSION"
     git push origin "v$NEW_VERSION"

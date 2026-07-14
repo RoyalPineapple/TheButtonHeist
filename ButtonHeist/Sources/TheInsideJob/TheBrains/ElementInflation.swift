@@ -23,7 +23,7 @@ internal final class ElementInflation {
     }
 
     internal struct Exploration {
-        internal var discoverTarget: @MainActor (AccessibilityTarget) async -> Navigation.ExploredScreen?
+        internal var discoverTarget: @MainActor (ResolvedAccessibilityTarget) async -> Navigation.ExploredScreen?
         internal var revealKnownTarget: @MainActor (KnownTargetRevealRequest) async -> Navigation.ExploredScreen?
     }
 
@@ -33,7 +33,7 @@ internal final class ElementInflation {
     }
 
     internal struct CommittedElementTarget {
-        private let sourceTarget: AccessibilityTarget
+        private let sourceTarget: ResolvedAccessibilityTarget
         private let resolvedHeistId: HeistId
         private let resolution: ActionSubjectResolution
 
@@ -43,7 +43,7 @@ internal final class ElementInflation {
             resolution = inflatedTarget.resolution
         }
 
-        internal var target: AccessibilityTarget { sourceTarget }
+        internal var target: ResolvedAccessibilityTarget { sourceTarget }
         internal var heistId: HeistId { resolvedHeistId }
         internal var subjectResolution: ActionSubjectResolution { resolution }
     }
@@ -74,28 +74,28 @@ internal final class ElementInflation {
     }
 
     internal func inflate(
-        for target: AccessibilityTarget,
+        for target: ResolvedAccessibilityTarget,
         method: ActionMethod,
         activationPointPolicy: ActivationPointPolicy = .requireOnscreen
     ) async -> ElementInflationResult {
         guard !Task.isCancelled else {
             return .failed(.cancelled("element inflation was cancelled before resolution"))
         }
-        let resolvedTarget: AccessibilityTarget
+        let validatedTarget: ResolvedAccessibilityTarget
         do {
-            resolvedTarget = try target.validatedForElementAction()
+            validatedTarget = try target.validatedForElementAction()
         } catch {
             return .failed(.targetResolution(error))
         }
         return await runInflation(
-            for: resolvedTarget,
+            for: validatedTarget,
             method: method,
             activationPointPolicy: activationPointPolicy
         )
     }
 
     private func runInflation(
-        for target: AccessibilityTarget,
+        for target: ResolvedAccessibilityTarget,
         method: ActionMethod,
         activationPointPolicy: ActivationPointPolicy,
         initialState: State = .resolving

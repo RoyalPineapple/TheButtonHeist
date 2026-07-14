@@ -53,9 +53,7 @@ extension TheHandoff {
     }
 
     func disableAutoReconnect() {
-        if reconnect.disable() {
-            connectionLifecycle.leaveReconnectIfActive()
-        }
+        _ = connectionLifecycle.disable()
     }
 
     func waitForConnectionResult(timeout: TimeInterval) async throws {
@@ -89,9 +87,13 @@ extension TheHandoff {
 
     @discardableResult
     func tickKeepalive(expectedAttemptID: UUID? = nil) -> Int {
-        connectionLifecycle.tickKeepalive(expectedAttemptID: expectedAttemptID) {
+        let missedPongCount = connectionLifecycle.recordKeepaliveTick(
+            expectedAttemptID: expectedAttemptID
+        )
+        if missedPongCount > 0 {
             connectionLifecycle.activeConnection?.send(.ping, requestId: nil)
         }
+        return missedPongCount
     }
 
     private func handleConnectionEvent(
@@ -186,9 +188,7 @@ extension TheHandoff {
     ) {
         let hadActiveAttempt = connectionLifecycle.activeAttemptID != nil
         if cancelAutoReconnect {
-            if reconnect.cancel(clearTarget: true) {
-                connectionLifecycle.leaveReconnectIfActive()
-            }
+            _ = connectionLifecycle.cancel(clearTarget: true)
         }
         if hadActiveAttempt, let replacementReason {
             let connection = connectionLifecycle.activeConnection

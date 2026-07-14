@@ -66,7 +66,7 @@ final class ActivationPolicyTests: XCTestCase {
         XCTAssertEqual(result.failureKind, .actionFailed)
     }
 
-    func testRefreshReresolveActivateSuccessStopsPolicy() async {
+    func testRefreshReresolveActivateSuccessStopsPolicy() async throws {
         let initialTarget = makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
         let refreshedTarget = makeLiveTarget(
             heistId: "refreshed",
@@ -76,6 +76,13 @@ final class ActivationPolicyTests: XCTestCase {
         var events: [String] = []
         var dispatchedPoints: [CGPoint] = []
         var fingerprintPoints: [CGPoint] = []
+        let inflatedTarget = try makeInflatedTarget(
+            refreshedTarget,
+            resolution: ActionSubjectResolution(
+                origin: .known,
+                adjustments: [.semanticReveal, .staleTargetRefresh]
+            )
+        )
 
         let result = await makePolicy(
             accessibilityActivate: { target in
@@ -84,13 +91,7 @@ final class ActivationPolicyTests: XCTestCase {
             },
             refreshAndResolve: {
                 events.append("refresh")
-                return .resolved(self.makeInflatedTarget(
-                    refreshedTarget,
-                    resolution: ActionSubjectResolution(
-                        origin: .known,
-                        adjustments: [.semanticReveal, .staleTargetRefresh]
-                    )
-                ))
+                return .resolved(inflatedTarget)
             },
             activationPointDispatch: { point in
                 dispatchedPoints.append(point)
@@ -145,11 +146,12 @@ final class ActivationPolicyTests: XCTestCase {
         XCTAssertNil(result.subjectEvidence)
     }
 
-    func testActivationPointDispatchCanCompleteActivate() async {
+    func testActivationPointDispatchCanCompleteActivate() async throws {
         let initialTarget = makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
         let refreshedTarget = makeLiveTarget(heistId: "refreshed", activationPoint: CGPoint(x: 30, y: 40))
         var activateCount = 0
         var dispatchedPoints: [CGPoint] = []
+        let inflatedTarget = try makeInflatedTarget(refreshedTarget)
 
         let result = await makePolicy(
             accessibilityActivate: { _ in
@@ -157,7 +159,7 @@ final class ActivationPolicyTests: XCTestCase {
                 return .refused
             },
             refreshAndResolve: {
-                .resolved(self.makeInflatedTarget(refreshedTarget))
+                .resolved(inflatedTarget)
             },
             activationPointDispatch: { point in
                 dispatchedPoints.append(point)
@@ -176,7 +178,7 @@ final class ActivationPolicyTests: XCTestCase {
         )))
     }
 
-    func testTextEntryActivationPointDispatchRequiresFocusConfirmation() async {
+    func testTextEntryActivationPointDispatchRequiresFocusConfirmation() async throws {
         let initialTarget = makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
         let refreshedTarget = makeLiveTarget(
             heistId: "refreshed",
@@ -184,11 +186,12 @@ final class ActivationPolicyTests: XCTestCase {
             activationPoint: CGPoint(x: 30, y: 40)
         )
         var focusConfirmationTrace: ActivationTrace?
+        let inflatedTarget = try makeInflatedTarget(refreshedTarget)
 
         let result = await makePolicy(
             accessibilityActivate: { _ in .refused },
             refreshAndResolve: {
-                .resolved(self.makeInflatedTarget(refreshedTarget))
+                .resolved(inflatedTarget)
             },
             activationPointDispatch: { _ in true },
             textEntryActivationFailure: { _, trace in
@@ -208,7 +211,7 @@ final class ActivationPolicyTests: XCTestCase {
         XCTAssertEqual(focusConfirmationTrace, expectedTrace)
     }
 
-    func testNonTextEntryActivationPointDispatchDoesNotRequireFocusConfirmation() async {
+    func testNonTextEntryActivationPointDispatchDoesNotRequireFocusConfirmation() async throws {
         let initialTarget = makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
         let refreshedTarget = makeLiveTarget(
             heistId: "refreshed",
@@ -216,11 +219,12 @@ final class ActivationPolicyTests: XCTestCase {
             activationPoint: CGPoint(x: 30, y: 40)
         )
         var focusConfirmationCount = 0
+        let inflatedTarget = try makeInflatedTarget(refreshedTarget)
 
         let result = await makePolicy(
             accessibilityActivate: { _ in .refused },
             refreshAndResolve: {
-                .resolved(self.makeInflatedTarget(refreshedTarget))
+                .resolved(inflatedTarget)
             },
             activationPointDispatch: { _ in true },
             textEntryActivationFailure: { _, _ in
@@ -233,7 +237,7 @@ final class ActivationPolicyTests: XCTestCase {
         XCTAssertEqual(focusConfirmationCount, 0)
     }
 
-    func testFinalFailureUsesRefreshedTargetAndFreshActivationPoint() async {
+    func testFinalFailureUsesRefreshedTargetAndFreshActivationPoint() async throws {
         let initialTarget = makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
         let refreshedTarget = makeLiveTarget(
             heistId: "refreshed",
@@ -244,6 +248,13 @@ final class ActivationPolicyTests: XCTestCase {
         )
         var activateCount = 0
         var dispatchedPoints: [CGPoint] = []
+        let inflatedTarget = try makeInflatedTarget(
+            refreshedTarget,
+            resolution: ActionSubjectResolution(
+                origin: .discovered,
+                adjustments: [.objectDeallocationRefresh]
+            )
+        )
 
         let result = await makePolicy(
             accessibilityActivate: { _ in
@@ -251,13 +262,7 @@ final class ActivationPolicyTests: XCTestCase {
                 return .refused
             },
             refreshAndResolve: {
-                .resolved(self.makeInflatedTarget(
-                    refreshedTarget,
-                    resolution: ActionSubjectResolution(
-                        origin: .discovered,
-                        adjustments: [.objectDeallocationRefresh]
-                    )
-                ))
+                .resolved(inflatedTarget)
             },
             activationPointDispatch: { point in
                 dispatchedPoints.append(point)
@@ -351,13 +356,13 @@ final class ActivationPolicyTests: XCTestCase {
     private func makeInflatedTarget(
         _ liveTarget: TheStash.LiveActionTarget,
         resolution: ActionSubjectResolution = ActionSubjectResolution(origin: .visible)
-    ) -> ElementInflation.InflatedElementTarget {
-        ElementInflation.InflatedElementTarget(
-            target: literalTarget(
-                ElementPredicate(
-                    label: liveTarget.treeElement.element.label.map(StringMatch.exact)
-                )
-            ),
+    ) throws -> ElementInflation.InflatedElementTarget {
+        let label = try XCTUnwrap(
+            liveTarget.treeElement.element.label,
+            "Activation-policy fixtures must have an authored label target"
+        )
+        return ElementInflation.InflatedElementTarget(
+            target: try AccessibilityTarget.label(label).resolve(in: .empty),
             treeElement: liveTarget.treeElement,
             liveTarget: liveTarget,
             deadline: SemanticObservationDeadline(

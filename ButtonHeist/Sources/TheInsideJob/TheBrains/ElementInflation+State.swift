@@ -70,14 +70,14 @@ extension ElementInflation {
     }
 
     internal struct InflatedElementTarget {
-        internal let target: AccessibilityTarget
+        internal let target: ResolvedAccessibilityTarget
         internal let treeElement: InterfaceTree.Element
         internal let liveTarget: TheStash.LiveActionTarget
         internal let deadline: SemanticObservationDeadline
         internal let resolution: ActionSubjectResolution
 
         internal init(
-            target: AccessibilityTarget,
+            target: ResolvedAccessibilityTarget,
             treeElement: InterfaceTree.Element,
             liveTarget: TheStash.LiveActionTarget,
             deadline: SemanticObservationDeadline,
@@ -136,13 +136,13 @@ extension ElementInflation {
     internal enum State: CustomStringConvertible {
         case resolving
         case revealing(
-            target: AccessibilityTarget,
+            target: ResolvedAccessibilityTarget,
             treeElement: InterfaceTree.Element,
             deadline: SemanticObservationDeadline,
             resolution: ActionSubjectResolution
         )
         case refreshing(
-            target: AccessibilityTarget,
+            target: ResolvedAccessibilityTarget,
             treeElement: InterfaceTree.Element,
             deadline: SemanticObservationDeadline,
             resolution: ActionSubjectResolution

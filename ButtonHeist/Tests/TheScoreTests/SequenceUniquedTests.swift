@@ -1,8 +1,8 @@
 import Testing
 @testable import TheScore
 
-@Test func `uniqued keeps the first occurrence of equatable values`() {
-    struct Value: Equatable {
+@Test func `uniqued keeps the first occurrence of hashable values`() {
+    struct Value: Hashable {
         let raw: Int
     }
 

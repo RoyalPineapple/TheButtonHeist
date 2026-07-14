@@ -7,11 +7,45 @@ enum CLIRunner {
 
     // MARK: - Nested Types
 
-    typealias CommandResultMapper = (FenceResponse) throws -> CommandResult
+    typealias CommandResultMapper = @ButtonHeistActor (TheFence, FenceResponse) throws -> CommandResult
 
-    struct CommandExecution {
-        let fence: TheFence
-        let response: FenceResponse
+    enum ExecutionMode: Equatable {
+        case connected
+        case direct
+    }
+
+    struct CommandDescriptor {
+        let fenceDescriptor: FenceCommandDescriptor
+        let connection: ConnectionOptions
+        let format: OutputFormat?
+        let arguments: TheFence.CommandArgumentEnvelope
+        let executionMode: ExecutionMode
+        let statusMessage: String?
+        let configuration: EnvironmentConfig?
+        let cleanup: () -> Void
+        let result: CommandResultMapper?
+
+        init(
+            fenceDescriptor: FenceCommandDescriptor,
+            connection: ConnectionOptions,
+            format: OutputFormat?,
+            arguments: TheFence.CommandArgumentEnvelope,
+            executionMode: ExecutionMode = .connected,
+            statusMessage: String? = nil,
+            configuration: EnvironmentConfig? = nil,
+            cleanup: @escaping () -> Void = {},
+            result: CommandResultMapper? = nil
+        ) {
+            self.fenceDescriptor = fenceDescriptor
+            self.connection = connection
+            self.format = format
+            self.arguments = arguments
+            self.executionMode = executionMode
+            self.statusMessage = statusMessage
+            self.configuration = configuration
+            self.cleanup = cleanup
+            self.result = result
+        }
     }
 
     struct ResponseEnvelope {
@@ -72,26 +106,28 @@ enum CLIRunner {
     /// `ExitCode.failure` propagates up through ArgumentParser so the process exits
     /// with status 1 — but unwinds normally so any caller `defer` blocks still fire.
     @ButtonHeistActor
-    static func run(
-        connection: ConnectionOptions,
-        format: OutputFormat?,
-        command: TheFence.Command,
-        arguments: TheFence.CommandArgumentEnvelope,
-        statusMessage: String? = nil,
-        result: CommandResultMapper? = nil
-    ) async throws {
-        let fallbackFormat = format ?? .auto
+    static func run(_ descriptor: CommandDescriptor) async throws {
+        defer { descriptor.cleanup() }
+        let fallbackFormat = descriptor.format ?? .auto
         let fence: TheFence
         let response: FenceResponse
         do {
-            let execution = try await execute(
-                connection: connection,
-                command: command,
-                arguments: arguments,
-                statusMessage: statusMessage
-            )
-            fence = execution.fence
-            response = execution.response
+            fence = try makeFence(descriptor: descriptor)
+            do {
+                if descriptor.executionMode == .connected {
+                    try await fence.start()
+                }
+                if let statusMessage = descriptor.statusMessage, !descriptor.connection.quiet {
+                    logStatus(statusMessage)
+                }
+                response = try await fence.execute(try fence.admit(FenceCommandInput(
+                    command: descriptor.fenceDescriptor.command,
+                    arguments: descriptor.arguments
+                )))
+            } catch {
+                fence.stop()
+                throw error
+            }
         } catch {
             output(.response(FormattedResponse(response: .failure(error), format: fallbackFormat)))
             throw ExitCode.failure
@@ -100,8 +136,8 @@ enum CLIRunner {
 
         let commandResult: CommandResult
         do {
-            if let result {
-                commandResult = try result(response)
+            if let result = descriptor.result {
+                commandResult = try result(fence, response)
             } else {
                 commandResult = .response(FormattedResponse(response: response, format: fallbackFormat))
             }
@@ -115,57 +151,7 @@ enum CLIRunner {
         }
     }
 
-    /// Execute a single TheFence command and return the raw FenceResponse
-    /// for commands that need custom post-processing (e.g., saving files).
-    ///
-    /// Caller is responsible for calling `fence.stop()` when done. The fence is
-    /// stopped automatically if `start` or `execute` throws.
-    @ButtonHeistActor
-    static func execute(
-        connection: ConnectionOptions,
-        command: TheFence.Command,
-        arguments: TheFence.CommandArgumentEnvelope,
-        statusMessage: String? = nil
-    ) async throws -> CommandExecution {
-        let fence = try await connect(connection: connection, statusMessage: statusMessage)
-        do {
-            let response = try await fence.execute(try fence.admit(FenceCommandInput(command: command, arguments: arguments)))
-            return CommandExecution(fence: fence, response: response)
-        } catch {
-            fence.stop()
-            throw error
-        }
-    }
-
-    /// Connect a fence without dispatching any command, for callers that drive
-    /// TheFence's higher-level primitives directly (e.g. `recordToCompletion`).
-    ///
-    /// Caller is responsible for calling `fence.stop()` when done. The fence is
-    /// stopped automatically if `start` throws.
-    @ButtonHeistActor
-    static func connect(
-        connection: ConnectionOptions,
-        statusMessage: String? = nil
-    ) async throws -> TheFence {
-        let fence = try makeFence(connection: connection)
-        do {
-            try await fence.start()
-            if let statusMessage, !connection.quiet {
-                logStatus(statusMessage)
-            }
-            return fence
-        } catch {
-            fence.stop()
-            throw error
-        }
-    }
-
     // MARK: - Output Formatting
-
-    @ButtonHeistActor
-    static func outputResponse(_ response: FenceResponse, format: OutputFormat) {
-        output(.response(FormattedResponse(response: response, format: format)))
-    }
 
     @ButtonHeistActor
     static func output(_ result: CommandResult) {
@@ -214,13 +200,19 @@ enum CLIRunner {
     // MARK: - Private Helpers
 
     @ButtonHeistActor
-    private static func makeFence(connection: ConnectionOptions) throws -> TheFence {
-        let config = try EnvironmentConfig.resolve(
-            deviceFilter: connection.device,
-            token: connection.token,
-            connectionTimeout: connection.connectTimeout,
-            autoReconnect: false
-        )
+    private static func makeFence(descriptor: CommandDescriptor) throws -> TheFence {
+        let connection = descriptor.connection
+        let config: EnvironmentConfig
+        if let configuration = descriptor.configuration {
+            config = configuration
+        } else {
+            config = try EnvironmentConfig.resolve(
+                deviceFilter: connection.device,
+                token: connection.token,
+                connectionTimeout: connection.connectTimeout,
+                autoReconnect: false
+            )
+        }
         let fence = TheFence(configuration: config.fenceConfiguration)
         let quiet = connection.quiet
         fence.onStatus = { message in

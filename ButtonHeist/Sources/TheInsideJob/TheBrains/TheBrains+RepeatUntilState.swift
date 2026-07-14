@@ -161,14 +161,13 @@ extension TheBrains.RepeatUntil {
             guard case .timedOut(let observation, let expectation, let iterationCount, let iterationNodes) = terminal else {
                 return state
             }
-            let childExecution = TheBrains.HeistReceiptChildren(children)
-            if let abortedAtChildPath = childExecution.abortedAtChildPath {
+            if let abortedAtChildPath = children.firstFailedStep?.path {
                 return .terminal(.timeoutElseFailed(
                     observation: observation,
                     expectation: expectation,
                     iterationCount: iterationCount,
                     iterationNodes: iterationNodes,
-                    elseChildren: childExecution.children,
+                    elseChildren: children,
                     childPath: abortedAtChildPath
                 ))
             }
@@ -177,7 +176,7 @@ extension TheBrains.RepeatUntil {
                 expectation: expectation,
                 iterationCount: iterationCount,
                 iterationNodes: iterationNodes,
-                elseChildren: childExecution.children
+                elseChildren: children
             ))
         }
     }

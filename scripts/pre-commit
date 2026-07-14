@@ -5,14 +5,6 @@ tuist_available() {
     command -v mise >/dev/null 2>&1 || command -v tuist >/dev/null 2>&1
 }
 
-run_tuist() {
-    if command -v mise >/dev/null 2>&1 && [[ -f mise.toml ]]; then
-        mise exec -- tuist "$@"
-    else
-        tuist "$@"
-    fi
-}
-
 # --- Submodule freshness check ---
 # Warn if AccessibilitySnapshotBH doesn't track the tip of main.
 # .gitmodules declares branch = main; this fetches to check, but does NOT
@@ -27,17 +19,7 @@ fi
 
 # --- Tuist project freshness check ---
 if tuist_available; then
-    # Ensure external dependencies are fetched before generating
-    run_tuist install >/dev/null 2>&1 || true
-    if BUTTONHEIST_TUIST_SKIP_AUTO_CLEAN=1 run_tuist generate --no-open --no-binary-cache >/dev/null 2>&1; then
-        # Auto-clean pbxproj noise that tuist (and Xcode UI edits) leak in:
-        # hardcoded SRCROOT, duplicated header search paths, etc.
-        #
-        # PR #328 M3: cleaner failures propagate via `set -e`. The earlier
-        # `|| echo` swallowed real script errors (Python tracebacks, missing
-        # files) and let the commit proceed with un-stripped noise.
-        scripts/clean-generated-projects.sh >/dev/null
-
+    if scripts/generate-project.sh --no-binary-cache >/dev/null 2>&1; then
         dirty=$(git diff --name-only -- '*.pbxproj' '*.xcworkspacedata' '*.xcscheme')
         if [[ -n "$dirty" ]]; then
             echo "error: tuist generate produced uncommitted project changes:"
@@ -46,8 +28,7 @@ if tuist_available; then
             exit 1
         fi
     else
-        scripts/clean-generated-projects.sh >/dev/null || true
-        echo "warning: tuist generate failed, skipping project freshness check"
+        echo "warning: project generation failed, skipping project freshness check"
     fi
 fi
 
@@ -70,16 +51,3 @@ fi
 # Lint the entire repo — matches CI behavior.
 # Staged-only lint misses pre-existing violations in unmodified files.
 swiftlint lint --strict --quiet
-
-# If Tuist config files are staged, regenerate ignored project files as a sanity check.
-tuist_files=$(git diff --cached --name-only --diff-filter=ACM -- 'Project.swift' '*/Project.swift' 'Workspace.swift' 'Tuist.swift' 'Tuist/Package.swift')
-if [[ -n "$tuist_files" ]]; then
-    echo "Tuist config changed — regenerating ignored project files..."
-    run_tuist install >/dev/null 2>&1 || true
-    if BUTTONHEIST_TUIST_SKIP_AUTO_CLEAN=1 run_tuist generate --no-open --no-binary-cache >/dev/null 2>&1; then
-        scripts/clean-generated-projects.sh >/dev/null
-    else
-        scripts/clean-generated-projects.sh >/dev/null || true
-        echo "warning: tuist generate failed; run scripts/generate-project.sh manually"
-    fi
-fi

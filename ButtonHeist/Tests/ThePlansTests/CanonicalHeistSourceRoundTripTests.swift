@@ -10,10 +10,10 @@ struct CanonicalHeistSourceRoundTripTests {
                 command: .activate(.predicate(.label("Pay"))),
                 expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 0)))),
             .action(try ActionStep(
-                command: .typeText(text: .literal("milk"), target: .predicate(.label("Search"))),
+                command: .typeText(text: "milk", target: .predicate(.label("Search"))),
                 expectationPolicy: .expect(ActionExpectation(predicate: .exists(.element(.label("Search"), .value("milk"))), timeout: 2)))),
             .action(try ActionStep(
-                command: .typeText(text: .literal("Bruschetta"), target: .predicate(.identifier("Search"))),
+                command: .typeText(text: "Bruschetta", target: .predicate(.identifier("Search"))),
                 expectationPolicy: .expect(ActionExpectation(predicate: .changed(.elements([
                     .updated(.identifier("Search"), .value(after: "Bruschetta")),
                 ])))))),
@@ -28,7 +28,7 @@ struct CanonicalHeistSourceRoundTripTests {
                     .disappeared(.identifier("row-1")),
                 ])))))),
             .action(try ActionStep(
-                command: .typeText(text: .literal("milk"), target: .predicate(.identifier("Search"))),
+                command: .typeText(text: "milk", target: .predicate(.identifier("Search"))),
                 expectationPolicy: .expect(ActionExpectation(predicate: .changed(.elements([
                     .updated(.identifier("Search"), .value(before: "", after: "milk")),
                 ])))))),
@@ -114,6 +114,39 @@ struct CanonicalHeistSourceRoundTripTests {
         """)
     }
 
+    @Test("authored references render through one canonical source spelling")
+    func authoredReferencesRenderCanonically() throws {
+        let item: HeistReferenceName = "item"
+        let plan = try HeistPlan(
+            name: "search",
+            parameter: .string(name: item),
+            body: [
+                .action(try ActionStep(
+                    command: .typeText(
+                        reference: item,
+                        target: .label(.contains(item))
+                    ),
+                    expectationPolicy: .expect(ActionExpectation(
+                        predicate: .exists(.within(
+                            container: .identifier(item),
+                            .label(item)
+                        )),
+                        timeout: 1
+                    ))
+                )),
+            ]
+        )
+
+        let source = try plan.canonicalSwiftDSL()
+        #expect(source == """
+        HeistPlan("search", parameter: "item") { item in
+            TypeText(item, into: .label(.contains(item)))
+                .expect(.exists(.within(container: .identifier(item), .label(item))))
+        }
+        """)
+        #expect(try HeistPlanSourceCompiler().compile(source) == plan)
+    }
+
     @Test("durable mechanical actions round trip")
     func durableMechanicalActionsRoundTrip() throws {
         try assertRoundTrip(try HeistPlan(body: [
@@ -170,7 +203,7 @@ struct CanonicalHeistSourceRoundTripTests {
                 parameter: "item",
                 body: [
                     .action(try ActionStep(command: .typeText(
-                        text: .ref("item"),
+                        reference: "item",
                         target: .predicate(.label("Add item"))
                     ))),
                 ]
@@ -203,7 +236,7 @@ struct CanonicalHeistSourceRoundTripTests {
             definitions: [addButtonNamespace],
             body: [
                 .action(try ActionStep(
-                    command: .activate(.predicate(.label(.ref("item")))),
+                    command: .activate(.predicate(.label(HeistReferenceName(stringLiteral: "item")))),
                     expectationPolicy: .expect(ActionExpectation(predicate: .exists(.label("Added")), timeout: 2)))),
                 .invoke(HeistInvocationStep(path: ["AddButton", "tap"])),
             ]
@@ -222,7 +255,7 @@ struct CanonicalHeistSourceRoundTripTests {
             body: [
                 .invoke(HeistInvocationStep(
                     path: ["LibraryScreen", "addToCart"],
-                    argument: .string(.literal("Milk"))
+                    argument: .string("Milk")
                 )),
                 .invoke(HeistInvocationStep(
                     path: ["LibraryScreen", "archive"],

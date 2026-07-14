@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+import ButtonHeistTestSupport
 import XCTest
 import ThePlans
 @testable import AccessibilitySnapshotParser
@@ -159,7 +160,10 @@ final class WireConverterTests: XCTestCase {
 
     /// Build a test tree node from a InterfaceTree.Element leaf.
     private func wireLeaf(_ element: InterfaceTree.Element) -> TestInterfaceNode {
-        .treeElement(element)
+        .parsedElement(
+            element.element,
+            actions: TheStash.WireConversion.convert(element.element).actions
+        )
     }
 
     /// Build a test tree container node with a fixed containerName.
@@ -188,7 +192,7 @@ final class WireConverterTests: XCTestCase {
         nodes: [TestInterfaceNode],
         timestamp: Date
     ) -> Interface {
-        TestInterfaceFixture(nodes: nodes, timestamp: timestamp).interface
+        makeTestInterface(nodes: nodes, timestamp: timestamp)
     }
 
     private func computeDelta(
@@ -224,12 +228,12 @@ final class WireConverterTests: XCTestCase {
 
     // MARK: - Trait Mapping
 
-    func testSingleTraitMapped() {
+    func testSingleTraitMapped() throws {
         let traits = AccessibilityTraits.button.heistTraits
         XCTAssertEqual(traits, [.button])
     }
 
-    func testMultipleTraitsMapped() {
+    func testMultipleTraitsMapped() throws {
         let traits: AccessibilityTraits = [.button, .selected]
         let heistTraits = traits.heistTraits
         XCTAssertTrue(heistTraits.contains(.button))
@@ -237,17 +241,17 @@ final class WireConverterTests: XCTestCase {
         XCTAssertEqual(heistTraits.count, 2)
     }
 
-    func testBackButtonPrivateTraitMapped() {
+    func testBackButtonPrivateTraitMapped() throws {
         let traits = AccessibilityTraits(rawValue: 1 << 27).heistTraits
         XCTAssertEqual(traits, [.backButton])
     }
 
-    func testNoTraitsReturnsEmpty() {
+    func testNoTraitsReturnsEmpty() throws {
         let traits = AccessibilityTraits().heistTraits
         XCTAssertTrue(traits.isEmpty)
     }
 
-    func testTraitMappingDeclarationOrder() {
+    func testTraitMappingDeclarationOrder() throws {
         let traits: AccessibilityTraits = [.button, .selected]
         let heistTraits = traits.heistTraits
         XCTAssertEqual(heistTraits[0], .button)
@@ -256,7 +260,7 @@ final class WireConverterTests: XCTestCase {
 
     // MARK: - Trait Name Sync
 
-    func testHeistTraitAllCasesMatchParser() {
+    func testHeistTraitAllCasesMatchParser() throws {
         let parserNames = AccessibilityTraits.knownTraitNames
         let wireNames = Set(HeistTrait.allCases.map(\.rawValue))
         XCTAssertEqual(wireNames, parserNames,
@@ -266,7 +270,7 @@ final class WireConverterTests: XCTestCase {
     /// Wire payload regression: a secure text field must emit `"secureTextField"` exactly once
     /// in its `traits` array. A duplicate row in the parser's `knownTraits` table caused
     /// `traits: ["secureTextField", "secureTextField"]` to ship to every client.
-    func testSecureTextFieldEmitsSecureTraitOnce() {
+    func testSecureTextFieldEmitsSecureTraitOnce() throws {
         let traits = AccessibilityTraits.secureTextField.heistTraits
         let secureCount = traits.filter { $0 == .secureTextField }.count
         XCTAssertEqual(secureCount, 1,
@@ -275,7 +279,7 @@ final class WireConverterTests: XCTestCase {
 
     /// Every known trait in `HeistTrait.allCases` must round-trip through `AccessibilityTraits.heistTraits`
     /// without duplication. Generalises the secure-text-field regression across the table.
-    func testAllKnownTraitsRoundTripWithoutDuplicates() {
+    func testAllKnownTraitsRoundTripWithoutDuplicates() throws {
         for trait in HeistTrait.allCases {
             let bitmask = UIAccessibilityTraits.fromNames([trait.rawValue])
             let wire = AccessibilityTraits(bitmask).heistTraits
@@ -289,7 +293,7 @@ final class WireConverterTests: XCTestCase {
     /// Trait bits outside the current contract do not become public trait
     /// values. The parser may observe them, but the wire model exposes only
     /// named `HeistTrait` cases.
-    func testUnknownTraitBitDoesNotBecomeWireTrait() {
+    func testUnknownTraitBitDoesNotBecomeWireTrait() throws {
         let unknownBit: UInt64 = 1 << 42
         let traits = UIAccessibilityTraits(rawValue: unknownBit)
         let wire = AccessibilityTraits(traits).heistTraits
@@ -298,14 +302,14 @@ final class WireConverterTests: XCTestCase {
 
     /// Mixing a known trait with an unknown bit emits only the known name from
     /// the current contract.
-    func testKnownPlusUnknownTraitMixEmitsKnownTraitOnly() {
+    func testKnownPlusUnknownTraitMixEmitsKnownTraitOnly() throws {
         let mixed = UIAccessibilityTraits(rawValue: UIAccessibilityTraits.button.rawValue | (1 << 42))
         let wire = AccessibilityTraits(mixed).heistTraits
         XCTAssertEqual(wire, [.button], "Only named contract traits should appear, got: \(wire)")
     }
 
     /// All known bits stay in the named contract.
-    func testAllKnownTraitsRoundTripThroughCurrentContract() {
+    func testAllKnownTraitsRoundTripThroughCurrentContract() throws {
         for trait in HeistTrait.allCases {
             let bitmask = UIAccessibilityTraits.fromNames([trait.rawValue])
             let wire = AccessibilityTraits(bitmask).heistTraits
@@ -315,7 +319,7 @@ final class WireConverterTests: XCTestCase {
 
     // MARK: - Action Conversion
 
-    func testToInterfaceDoesNotInferElementActionsFromLiveObject() {
+    func testToInterfaceDoesNotInferElementActionsFromLiveObject() throws {
         let element = makeElement(
             label: "Plain action",
             respondsToUserInteraction: false
@@ -332,7 +336,7 @@ final class WireConverterTests: XCTestCase {
         XCTAssertEqual(annotations.first?.actions, [])
     }
 
-    func testToWireIncludesActivateFromParsedInteractivity() {
+    func testToWireIncludesActivateFromParsedInteractivity() throws {
         let element = makeScreenElement(
             heistId: "button",
             label: "Button",
@@ -344,7 +348,7 @@ final class WireConverterTests: XCTestCase {
         XCTAssertEqual(wire.actions, [.activate])
     }
 
-    func testToWireIncludesTypeTextForEveryTextInputTrait() {
+    func testToWireIncludesTypeTextForEveryTextInputTrait() throws {
         for trait in [.textEntry, .searchField, .secureTextField, .textArea] as [HeistTrait] {
             let element = makeScreenElement(
                 heistId: HeistId(rawValue: trait.rawValue),
@@ -360,7 +364,7 @@ final class WireConverterTests: XCTestCase {
         }
     }
 
-    func testToWireDoesNotInferTypeTextFromUnrelatedTraits() {
+    func testToWireDoesNotInferTypeTextFromUnrelatedTraits() throws {
         let element = makeScreenElement(
             heistId: "button",
             label: "Button",
@@ -373,7 +377,7 @@ final class WireConverterTests: XCTestCase {
 
     // MARK: - Tree Conversion
 
-    func testToWireTreePreservesParserModalBoundary() {
+    func testToWireTreePreservesParserModalBoundary() throws {
         let element = makeElement(label: "Confirm", traits: [.button])
         let container = AccessibilityContainer(
             type: .semanticGroup(label: "Alert", value: nil), identifier: nil,
@@ -461,7 +465,8 @@ final class WireConverterTests: XCTestCase {
         )
 
         let interface = WireConversion.toSemanticInterface(from: screen.tree)
-        let predicate = AccessibilityPredicate<RootContext>.exists(.container(.identifier(containerIdentifier)))
+        let expression = AccessibilityPredicate.exists(.container(.identifier(containerIdentifier)))
+        let predicate = try expression.resolve(in: .empty)
         let evidence = try XCTUnwrap(AccessibilityTraceEvidence(
             trace: AccessibilityTrace(captures: [
                 AccessibilityTrace.Capture(sequence: 1, interface: interface),
@@ -470,7 +475,7 @@ final class WireConverterTests: XCTestCase {
         ))
         let result = predicate.evaluate(in: evidence)
 
-        XCTAssertEqual(result, ExpectationResult(met: true, predicate: predicate))
+        XCTAssertEqual(result, PredicateEvaluationResult(met: true))
         XCTAssertEqual(Set(interface.projectedElements.compactMap(\.label)), ["First row", "Second row"])
     }
 
@@ -545,7 +550,8 @@ final class WireConverterTests: XCTestCase {
         )
 
         let interface = WireConversion.toSemanticInterface(from: screen.tree)
-        let predicate = AccessibilityPredicate<RootContext>.exists(.container(.identifier(orderIdentifier)))
+        let expression = AccessibilityPredicate.exists(.container(.identifier(orderIdentifier)))
+        let predicate = try expression.resolve(in: .empty)
         let evidence = try XCTUnwrap(AccessibilityTraceEvidence(
             trace: AccessibilityTrace(captures: [
                 AccessibilityTrace.Capture(sequence: 1, interface: interface),
@@ -554,10 +560,10 @@ final class WireConverterTests: XCTestCase {
         ))
         let result = predicate.evaluate(in: evidence)
 
-        XCTAssertEqual(result, ExpectationResult(met: true, predicate: predicate))
+        XCTAssertEqual(result, PredicateEvaluationResult(met: true))
         XCTAssertEqual(interface.annotations.containers.count, 4)
         XCTAssertEqual(interface.projectedElements.single?.label, "Search all items")
-        XCTAssertNoThrow(try InterfaceGraph(interface: interface))
+        XCTAssertEqual(interface.graph.nodesInPathOrder.count, 5)
     }
 
     func testInterfaceSelectionPreservesTraceIdentityAnnotations() throws {
@@ -695,7 +701,7 @@ final class WireConverterTests: XCTestCase {
         XCTAssertEqual(selectedProjection.label, "zymurgy")
     }
 
-    func testDiscoveryInterfaceDoesNotRegraftOffscreenElementsAlreadyInFullTreeCapture() {
+    func testDiscoveryInterfaceDoesNotRegraftOffscreenElementsAlreadyInFullTreeCapture() throws {
         let visible = makeElement(label: "Visible", traits: [.staticText])
         let offscreen = AccessibilityElement.make(
             label: "Offscreen",
@@ -968,7 +974,7 @@ final class WireConverterTests: XCTestCase {
 
     // MARK: - Delta: Identical Snapshots
 
-    func testIdenticalSnapshotsReturnNoChange() {
+    func testIdenticalSnapshotsReturnNoChange() throws {
         let elements = [makeScreenElement(heistId: "button_ok", label: "OK", traits: [.button])]
         let delta = computeDelta(
             before: elements, after: elements, afterTree: [], isScreenChange: false
@@ -981,7 +987,7 @@ final class WireConverterTests: XCTestCase {
         XCTAssertNil(delta.testEdits.updatedOptional)
     }
 
-    func testEmptySnapshotsReturnNoChange() {
+    func testEmptySnapshotsReturnNoChange() throws {
         let empty: [InterfaceTree.Element] = []
         let delta = computeDelta(
             before: empty, after: empty, afterTree: [], isScreenChange: false
@@ -993,7 +999,7 @@ final class WireConverterTests: XCTestCase {
 
     // MARK: - Delta: Element Added
 
-    func testElementAddedProducesElementsChanged() {
+    func testElementAddedProducesElementsChanged() throws {
         let before = [makeScreenElement(heistId: "button_ok", label: "OK", traits: [.button])]
         let added = makeScreenElement(heistId: "button_cancel", label: "Cancel", traits: [.button])
         let after = before + [added]
@@ -1010,7 +1016,7 @@ final class WireConverterTests: XCTestCase {
 
     // MARK: - Delta: Element Removed
 
-    func testElementRemovedProducesElementsChanged() {
+    func testElementRemovedProducesElementsChanged() throws {
         let before = [
             makeScreenElement(heistId: "button_ok", label: "OK", traits: [.button]),
             makeScreenElement(heistId: "button_cancel", label: "Cancel", traits: [.button]),
@@ -1028,7 +1034,7 @@ final class WireConverterTests: XCTestCase {
 
     // MARK: - Delta: Property Changes
 
-    func testValueChangeProducesUpdate() {
+    func testValueChangeProducesUpdate() throws {
         let before = [makeScreenElement(heistId: "slider", value: "50%")]
         let after = [makeScreenElement(heistId: "slider", value: "75%")]
 
@@ -1044,7 +1050,7 @@ final class WireConverterTests: XCTestCase {
         XCTAssertEqual(change?.newDisplayText, "75%")
     }
 
-    func testTraitsChangeProducesUpdate() {
+    func testTraitsChangeProducesUpdate() throws {
         let before = [makeScreenElement(heistId: "btn", traits: [.button])]
         let after = [makeScreenElement(heistId: "btn", traits: [.button, .selected])]
 
@@ -1059,7 +1065,7 @@ final class WireConverterTests: XCTestCase {
         XCTAssertEqual(change?.newDisplayText, "button, selected")
     }
 
-    func testHintChangeProducesUpdate() {
+    func testHintChangeProducesUpdate() throws {
         let before = [makeScreenElement(heistId: "btn", hint: "Tap to continue")]
         let after = [makeScreenElement(heistId: "btn", hint: "Tap to go back")]
 
@@ -1074,7 +1080,7 @@ final class WireConverterTests: XCTestCase {
         XCTAssertEqual(change?.newDisplayText, "Tap to go back")
     }
 
-    func testActionsChangeProducesUpdate() {
+    func testActionsChangeProducesUpdate() throws {
         // Same identity (label/identifier/non-transient traits unchanged) so the
         // elements pair; toggling interactivity flips the `.activate` action,
         // producing an `.actions` update rather than a remove+add.
@@ -1091,7 +1097,7 @@ final class WireConverterTests: XCTestCase {
         XCTAssertEqual(change?.property, .actions)
     }
 
-    func testFrameChangeProducesUpdate() {
+    func testFrameChangeProducesUpdate() throws {
         let before = [makeScreenElement(heistId: "box", frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 50)]
         let after = [makeScreenElement(heistId: "box", frameX: 10, frameY: 20, frameWidth: 100, frameHeight: 50)]
 
@@ -1106,7 +1112,7 @@ final class WireConverterTests: XCTestCase {
         XCTAssertEqual(change?.newDisplayText, "10,20,100,50")
     }
 
-    func testActivationPointChangeProducesUpdate() {
+    func testActivationPointChangeProducesUpdate() throws {
         let before = [makeScreenElement(heistId: "btn", activationPoint: CGPoint(x: 50, y: 25))]
         let after = [makeScreenElement(heistId: "btn", activationPoint: CGPoint(x: 75, y: 40))]
 
@@ -1121,7 +1127,7 @@ final class WireConverterTests: XCTestCase {
         XCTAssertEqual(change?.newDisplayText, "75,40")
     }
 
-    func testMultiplePropertyChangesOnSameElement() {
+    func testMultiplePropertyChangesOnSameElement() throws {
         let before = [makeScreenElement(heistId: "slider", value: "50%", hint: "Volume")]
         let after = [makeScreenElement(heistId: "slider", value: "75%", hint: "Music Volume")]
 
@@ -1136,7 +1142,7 @@ final class WireConverterTests: XCTestCase {
 
     // MARK: - Delta: Label Change = Add + Remove
 
-    func testLabelChangeProducesAddAndRemove() {
+    func testLabelChangeProducesAddAndRemove() throws {
         let before = [makeScreenElement(heistId: "button_ok", label: "OK", traits: [.button])]
         let after = [makeScreenElement(heistId: "button_done", label: "Done", traits: [.button])]
 
@@ -1152,7 +1158,7 @@ final class WireConverterTests: XCTestCase {
 
     // MARK: - Delta: InterfaceObservation Change
 
-    func testScreenChangeReturnsFull() {
+    func testScreenChangeReturnsFull() throws {
         let before = [makeScreenElement(heistId: "button_ok")]
         let afterElement = makeScreenElement(heistId: "header_settings", label: "Settings", traits: [.header])
         let after = [afterElement]
@@ -1170,7 +1176,7 @@ final class WireConverterTests: XCTestCase {
         XCTAssertEqual(delta.current?.projectedElements.count, 1)
     }
 
-    func testTreeOnlyChangeProducesDeliveredNodeLifecycleFacts() {
+    func testTreeOnlyChangeProducesDeliveredNodeLifecycleFacts() throws {
         let element = makeScreenElement(heistId: "button_ok", label: "OK", traits: [.button])
         let beforeTree = [wireLeaf(element)]
         let afterTree = [
@@ -1197,7 +1203,7 @@ final class WireConverterTests: XCTestCase {
         XCTAssertTrue(fact.appeared.contains { $0.kind == .container })
     }
 
-    func testTreeReorderDoesNotProduceExistenceOrUpdateFacts() {
+    func testTreeReorderDoesNotProduceExistenceOrUpdateFacts() throws {
         let first = makeScreenElement(heistId: "first", label: "First")
         let second = makeScreenElement(heistId: "second", label: "Second")
         let beforeTree = [
@@ -1221,7 +1227,7 @@ final class WireConverterTests: XCTestCase {
         XCTAssertTrue(delta.changeFacts.isEmpty)
     }
 
-    func testMovedIdenticalElementWithSiblingReorderReportsFrameUpdate() {
+    func testMovedIdenticalElementWithSiblingReorderReportsFrameUpdate() throws {
         // Same content (label + non-transient `.button`), only the frame and
         // activation point move. Under content-signature pairing these elements
         // pair instead of churning, so the move surfaces as a `.frame` update on
@@ -1269,7 +1275,7 @@ final class WireConverterTests: XCTestCase {
         XCTAssertTrue(update?.changes.contains { $0.property == .frame } == true)
     }
 
-    func testStableMatchWithStateChangeReturnsElementUpdate() {
+    func testStableMatchWithStateChangeReturnsElementUpdate() throws {
         let beforeElement = makeScreenElement(
             heistId: "favorite_button",
             label: "Favorite",
@@ -1314,7 +1320,7 @@ final class WireConverterTests: XCTestCase {
         XCTAssertTrue(update?.changes.contains { $0.property == .traits } == true)
     }
 
-    func testMovedIdenticalElementReportsFrameUpdate() {
+    func testMovedIdenticalElementReportsFrameUpdate() throws {
         // A lone element with identical content moves to a new frame/activation
         // point. Content-signature pairing keeps it paired, so the move is a
         // single `.frame` update rather than a remove+add.
@@ -1353,7 +1359,7 @@ final class WireConverterTests: XCTestCase {
         XCTAssertTrue(update?.changes.contains { $0.property == .frame } == true)
     }
 
-    func testElementDeletionReturnsRemovedId() {
+    func testElementDeletionReturnsRemovedId() throws {
         let first = makeScreenElement(heistId: "first", label: "First")
         let second = makeScreenElement(heistId: "second", label: "Second")
         let beforeTree = [
@@ -1377,7 +1383,7 @@ final class WireConverterTests: XCTestCase {
 
     // MARK: - Delta: Duplicate heistId Pairing
 
-    func testDuplicateHeistIdPairedByIndex() {
+    func testDuplicateHeistIdPairedByIndex() throws {
         let before = [
             makeScreenElement(heistId: "cell_1", value: "A"),
             makeScreenElement(heistId: "cell_1", value: "B"),
@@ -1397,7 +1403,7 @@ final class WireConverterTests: XCTestCase {
         XCTAssertNil(delta.testEdits.removedOptional)
     }
 
-    func testDuplicateHeistIdExcessGoesToAddedRemoved() {
+    func testDuplicateHeistIdExcessGoesToAddedRemoved() throws {
         let before = [
             makeScreenElement(heistId: "cell", value: "A"),
             makeScreenElement(heistId: "cell", value: "B"),
@@ -1418,7 +1424,7 @@ final class WireConverterTests: XCTestCase {
 
     // MARK: - Delta: Empty Diff Coerced to noChange
 
-    func testNoDifferencesCoercedToNoChange() {
+    func testNoDifferencesCoercedToNoChange() throws {
         let treeElement = makeScreenElement(heistId: "btn", label: "OK", traits: [.button])
 
         let delta = computeDelta(
@@ -1430,7 +1436,7 @@ final class WireConverterTests: XCTestCase {
 
     // MARK: - Custom Content Conversion
 
-    func testCustomContentConvertedToWire() {
+    func testCustomContentConvertedToWire() throws {
         let content: [AccessibilityElement.CustomContent] = [
             .init(label: "Size", value: "2.4 MB", isImportant: false),
             .init(label: "Type", value: "PDF", isImportant: true),
@@ -1447,13 +1453,13 @@ final class WireConverterTests: XCTestCase {
         XCTAssertTrue(wire.customContent?[1].isImportant ?? false)
     }
 
-    func testEmptyCustomContentConvertedToNil() {
+    func testEmptyCustomContentConvertedToNil() throws {
         let element = makeElement(label: "Button", customContent: [])
         let wire = WireConversion.convert(element)
         XCTAssertNil(wire.customContent)
     }
 
-    func testEmptyLabelAndValueCustomContentFilteredOut() {
+    func testEmptyLabelAndValueCustomContentFilteredOut() throws {
         let content: [AccessibilityElement.CustomContent] = [
             .init(label: "", value: "", isImportant: false),
             .init(label: "Size", value: "2.4 MB", isImportant: false),
@@ -1464,7 +1470,7 @@ final class WireConverterTests: XCTestCase {
         XCTAssertEqual(wire.customContent?.first?.label, "Size")
     }
 
-    func testAllEmptyCustomContentConvertedToNil() {
+    func testAllEmptyCustomContentConvertedToNil() throws {
         let content: [AccessibilityElement.CustomContent] = [
             .init(label: "", value: "", isImportant: false),
         ]
@@ -1475,7 +1481,7 @@ final class WireConverterTests: XCTestCase {
 
     // MARK: - Custom Rotor Conversion
 
-    func testCustomRotorsConvertedToWire() {
+    func testCustomRotorsConvertedToWire() throws {
         let element = makeElement(
             label: "Validation Results",
             customRotors: [
@@ -1492,7 +1498,7 @@ final class WireConverterTests: XCTestCase {
         ])
     }
 
-    func testEmptyCustomRotorNamesFilteredOut() {
+    func testEmptyCustomRotorNamesFilteredOut() throws {
         let element = makeElement(
             label: "Validation Results",
             customRotors: [
@@ -1506,13 +1512,13 @@ final class WireConverterTests: XCTestCase {
         XCTAssertEqual(wire.rotors, [HeistRotor(name: "Errors")])
     }
 
-    func testNoCustomRotorsConvertedToNil() {
+    func testNoCustomRotorsConvertedToNil() throws {
         let element = makeElement(label: "Validation Results")
         let wire = WireConversion.convert(element)
         XCTAssertNil(wire.rotors)
     }
 
-    func testCustomRotorChangeProducesUpdate() {
+    func testCustomRotorChangeProducesUpdate() throws {
         let before = [makeScreenElement(heistId: "results", label: "Validation Results")]
         let after = [makeScreenElement(
             heistId: "results",
@@ -1533,7 +1539,7 @@ final class WireConverterTests: XCTestCase {
 
     // MARK: - Delta: Custom Content Changes
 
-    func testCustomContentChangeProducesUpdate() {
+    func testCustomContentChangeProducesUpdate() throws {
         let before = [makeScreenElement(
             heistId: "file_report",
             label: "Report",
@@ -1556,7 +1562,7 @@ final class WireConverterTests: XCTestCase {
         XCTAssertEqual(change?.newDisplayText, "Size: 3.1 MB")
     }
 
-    func testCustomContentAddedProducesUpdate() {
+    func testCustomContentAddedProducesUpdate() throws {
         let before = [makeScreenElement(heistId: "card", label: "Item")]
         let after = [makeScreenElement(
             heistId: "card",
@@ -1575,7 +1581,7 @@ final class WireConverterTests: XCTestCase {
         XCTAssertEqual(change?.newDisplayText, "Price: $9.99")
     }
 
-    func testCustomContentRemovedProducesUpdate() {
+    func testCustomContentRemovedProducesUpdate() throws {
         let before = [makeScreenElement(
             heistId: "card",
             label: "Item",
@@ -1594,7 +1600,7 @@ final class WireConverterTests: XCTestCase {
         XCTAssertNil(change?.newDisplayText)
     }
 
-    func testMultipleCustomContentItemsFormattedCorrectly() {
+    func testMultipleCustomContentItemsFormattedCorrectly() throws {
         let before = [makeScreenElement(heistId: "weather", label: "Portland")]
         let after = [makeScreenElement(
             heistId: "weather",
@@ -1614,7 +1620,7 @@ final class WireConverterTests: XCTestCase {
 
     // MARK: - Custom Content: Importance Preserved
 
-    func testImportanceFlagPreservedInConversion() {
+    func testImportanceFlagPreservedInConversion() throws {
         let content: [AccessibilityElement.CustomContent] = [
             .init(label: "Price", value: "$79.99", isImportant: true),
             .init(label: "Rating", value: "4.5", isImportant: false),
@@ -1631,7 +1637,7 @@ final class WireConverterTests: XCTestCase {
 
     // MARK: - Custom Content: Partial Label/Value
 
-    func testLabelOnlyCustomContentPreserved() {
+    func testLabelOnlyCustomContentPreserved() throws {
         let content: [AccessibilityElement.CustomContent] = [
             .init(label: "Featured", value: "", isImportant: true),
         ]
@@ -1642,7 +1648,7 @@ final class WireConverterTests: XCTestCase {
         XCTAssertEqual(wire.customContent?.first?.value, "")
     }
 
-    func testValueOnlyCustomContentPreserved() {
+    func testValueOnlyCustomContentPreserved() throws {
         let content: [AccessibilityElement.CustomContent] = [
             .init(label: "", value: "Available", isImportant: false),
         ]
@@ -1655,7 +1661,7 @@ final class WireConverterTests: XCTestCase {
 
     // MARK: - Custom Content: Order Preserved
 
-    func testCustomContentOrderPreserved() {
+    func testCustomContentOrderPreserved() throws {
         let content: [AccessibilityElement.CustomContent] = [
             .init(label: "Author", value: "Jordan", isImportant: false),
             .init(label: "Type", value: "PDF", isImportant: true),
@@ -1674,7 +1680,7 @@ final class WireConverterTests: XCTestCase {
 
     // MARK: - Custom Content: Mixed Filter
 
-    func testMixedValidAndEmptyContentFiltersCorrectly() {
+    func testMixedValidAndEmptyContentFiltersCorrectly() throws {
         let content: [AccessibilityElement.CustomContent] = [
             .init(label: "", value: "", isImportant: false),
             .init(label: "Price", value: "$9.99", isImportant: true),
@@ -1692,7 +1698,7 @@ final class WireConverterTests: XCTestCase {
 
     // MARK: - Delta: Custom Content Unchanged
 
-    func testIdenticalCustomContentProducesNoChange() {
+    func testIdenticalCustomContentProducesNoChange() throws {
         let content: [AccessibilityElement.CustomContent] = [
             .init(label: "Size", value: "2.4 MB", isImportant: false),
         ]
@@ -1711,7 +1717,7 @@ final class WireConverterTests: XCTestCase {
 
     // MARK: - Delta: Importance Change
 
-    func testImportanceChangeProducesUpdate() {
+    func testImportanceChangeProducesUpdate() throws {
         let before = [makeScreenElement(
             heistId: "file",
             label: "Report",
@@ -1734,7 +1740,7 @@ final class WireConverterTests: XCTestCase {
 
     // MARK: - Delta: Custom Content with Other Changes
 
-    func testCustomContentChangeAlongsideValueChange() {
+    func testCustomContentChangeAlongsideValueChange() throws {
         let before = [makeScreenElement(
             heistId: "product",
             label: "Headphones",
@@ -1760,7 +1766,7 @@ final class WireConverterTests: XCTestCase {
 
     // MARK: - Delta: Custom Content Label-Only Format
 
-    func testDeltaFormatWithLabelOnly() {
+    func testDeltaFormatWithLabelOnly() throws {
         let before = [makeScreenElement(heistId: "item", label: "Item")]
         let after = [makeScreenElement(
             heistId: "item",
@@ -1776,7 +1782,7 @@ final class WireConverterTests: XCTestCase {
         XCTAssertEqual(change?.newDisplayText, "Featured")
     }
 
-    func testDeltaFormatWithValueOnly() {
+    func testDeltaFormatWithValueOnly() throws {
         let before = [makeScreenElement(heistId: "item", label: "Item")]
         let after = [makeScreenElement(
             heistId: "item",

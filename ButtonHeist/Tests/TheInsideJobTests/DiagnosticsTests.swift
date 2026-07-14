@@ -12,30 +12,24 @@ final class DiagnosticsTests: XCTestCase {
 
     // MARK: - formatMatcher
 
-    func testFormatMatcherLabelOnly() {
-        let matcher = ElementPredicate(label: "Submit")
+    func testFormatMatcherLabelOnly() throws {
+        let matcher = try resolvedPredicate(.label("Submit"))
         let formatted = Diagnostics.formatMatcher(matcher)
         XCTAssertEqual(formatted, "label=\"Submit\"")
     }
 
-    func testFormatMatcherMultipleFields() {
-        let matcher = ElementPredicate(
-            label: "Save",
-            identifier: "save-btn",
-            value: "enabled",
+    func testFormatMatcherMultipleFields() throws {
+        let matcher = try resolvedPredicate(.element(
+            .label("Save"),
+            .identifier("save-btn"),
+            .value("enabled"),
             traits: [.button]
-        )
+        ))
         let formatted = Diagnostics.formatMatcher(matcher)
         XCTAssertTrue(formatted.contains("label=\"Save\""))
         XCTAssertTrue(formatted.contains("identifier=\"save-btn\""))
         XCTAssertTrue(formatted.contains("value=\"enabled\""))
         XCTAssertTrue(formatted.contains("traits=[button]"))
-    }
-
-    func testFormatMatcherEmpty() {
-        let matcher = ElementPredicate()
-        let formatted = Diagnostics.formatMatcher(matcher)
-        XCTAssertTrue(formatted.isEmpty)
     }
 
     // MARK: - compactElementSummary
@@ -69,7 +63,7 @@ final class DiagnosticsTests: XCTestCase {
 
     // MARK: - failureInterfaceSuggestion
 
-    func testFailureInterfaceSuggestionUsesCapturedElementsForContainsSearch() {
+    func testFailureInterfaceSuggestionUsesCapturedElementsForContainsSearch() throws {
         let element = HeistElement(
             description: "Save Draft",
             label: "Save Draft",
@@ -81,7 +75,7 @@ final class DiagnosticsTests: XCTestCase {
         )
 
         let suggestion = Diagnostics.failureInterfaceSuggestion(
-            for: ElementPredicate(label: "Save", traits: [.button]),
+            for: try resolvedPredicate(.element(.label("Save"), traits: [.button])),
             elements: [element]
         )
 
@@ -91,7 +85,7 @@ final class DiagnosticsTests: XCTestCase {
         XCTAssertTrue(suggestion?.contains(#"predicate(label=contains("Save") traits=[button])"#) == true, suggestion ?? "")
     }
 
-    func testFailureInterfaceSuggestionDoesNotRewriteAlreadyExplicitContainsPredicate() {
+    func testFailureInterfaceSuggestionDoesNotRewriteAlreadyExplicitContainsPredicate() throws {
         let element = HeistElement(
             description: "Save Draft",
             label: "Save Draft",
@@ -103,7 +97,7 @@ final class DiagnosticsTests: XCTestCase {
         )
 
         let suggestion = Diagnostics.failureInterfaceSuggestion(
-            for: .label(.contains("Save")),
+            for: try resolvedPredicate(.label(.contains("Save"))),
             elements: [element]
         )
 
@@ -114,6 +108,14 @@ final class DiagnosticsTests: XCTestCase {
 
     private func makeElement(label: String) -> AccessibilityElement {
         .make(label: label, respondsToUserInteraction: false)
+    }
+
+    private func resolvedPredicate(_ authored: AccessibilityTarget) throws -> ElementPredicate {
+        let resolved = try authored.resolve(in: .empty)
+        guard case .predicate(let predicate, ordinal: nil) = resolved else {
+            return try XCTUnwrap(nil as ElementPredicate?, "Expected an unqualified element predicate")
+        }
+        return predicate
     }
 }
 

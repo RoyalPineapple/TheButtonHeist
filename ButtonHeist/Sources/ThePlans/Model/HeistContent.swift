@@ -25,22 +25,22 @@ public extension HeistPlan {
 
     init(
         parameter: HeistReferenceName,
-        @HeistBuilder _ content: (StringExpr) throws -> some HeistContent
+        @HeistBuilder _ content: (HeistReferenceName) throws -> some HeistContent
     ) throws {
-        let reference = try parameter.validated(type: "parameter")
+        let reference = parameter
         try self.init(dslName: nil, rootParameter: .string(name: reference)) {
-            try content(try StringExpr(ref: reference))
+            try content(reference)
         }
     }
 
     init(
         _ name: String,
         parameter: HeistReferenceName,
-        @HeistBuilder _ content: (StringExpr) throws -> some HeistContent
+        @HeistBuilder _ content: (HeistReferenceName) throws -> some HeistContent
     ) throws {
-        let reference = try parameter.validated(type: "parameter")
+        let reference = parameter
         try self.init(dslName: name, rootParameter: .string(name: reference)) {
-            try content(try StringExpr(ref: reference))
+            try content(reference)
         }
     }
 
@@ -48,9 +48,9 @@ public extension HeistPlan {
         targetParameter: HeistReferenceName,
         @HeistBuilder _ content: (AccessibilityTarget) throws -> some HeistContent
     ) throws {
-        let reference = try targetParameter.validated(type: "target")
+        let reference = targetParameter
         try self.init(dslName: nil, rootParameter: .accessibilityTarget(name: reference)) {
-            try content(try AccessibilityTarget(ref: reference))
+            try content(AccessibilityTarget(ref: reference))
         }
     }
 
@@ -59,9 +59,9 @@ public extension HeistPlan {
         targetParameter: HeistReferenceName,
         @HeistBuilder _ content: (AccessibilityTarget) throws -> some HeistContent
     ) throws {
-        let reference = try targetParameter.validated(type: "target")
+        let reference = targetParameter
         try self.init(dslName: name, rootParameter: .accessibilityTarget(name: reference)) {
-            try content(try AccessibilityTarget(ref: reference))
+            try content(AccessibilityTarget(ref: reference))
         }
     }
 }
@@ -251,7 +251,7 @@ public struct HeistDef<Input>: Sendable {
     public init<Content: HeistContent>(
         _ path: String,
         parameter: HeistReferenceName = "input",
-        @HeistBuilder _ content: @escaping (StringExpr) throws -> Content
+        @HeistBuilder _ content: @escaping (HeistReferenceName) throws -> Content
     ) where Input == String {
         let reference = parameter
         self.parameter = .string(name: reference)
@@ -259,7 +259,7 @@ public struct HeistDef<Input>: Sendable {
         case .success(let components, _):
             self.path = components
             self.definitionResult = Self.buildDefinition(path: components, parameter: self.parameter) {
-                try content(try StringExpr(ref: reference))
+                try content(reference)
             }
         case .failure(let diagnostics):
             self.path = []
@@ -270,13 +270,13 @@ public struct HeistDef<Input>: Sendable {
     public init<Content: HeistContent>(
         _ path: HeistDefinitionPath,
         parameter: HeistReferenceName = "input",
-        @HeistBuilder _ content: @escaping (StringExpr) throws -> Content
+        @HeistBuilder _ content: @escaping (HeistReferenceName) throws -> Content
     ) where Input == String {
         let reference = parameter
         self.parameter = .string(name: reference)
         self.path = path.components
         self.definitionResult = Self.buildDefinition(path: path.components, parameter: self.parameter) {
-            try content(try StringExpr(ref: reference))
+            try content(reference)
         }
     }
 
@@ -291,7 +291,7 @@ public struct HeistDef<Input>: Sendable {
         case .success(let components, _):
             self.path = components
             self.definitionResult = Self.buildDefinition(path: components, parameter: self.parameter) {
-                try content(try AccessibilityTarget(ref: reference))
+                try content(AccessibilityTarget(ref: reference))
             }
         case .failure(let diagnostics):
             self.path = []
@@ -308,7 +308,7 @@ public struct HeistDef<Input>: Sendable {
         self.parameter = .accessibilityTarget(name: reference)
         self.path = path.components
         self.definitionResult = Self.buildDefinition(path: path.components, parameter: self.parameter) {
-            try content(try AccessibilityTarget(ref: reference))
+            try content(AccessibilityTarget(ref: reference))
         }
     }
 
@@ -449,7 +449,7 @@ public struct HeistInvocationContent: HeistContent {
 
 public extension HeistInvocationContent {
     func expect(
-        _ predicate: AccessibilityPredicate<RootContext>,
+        _ predicate: AccessibilityPredicate,
         timeout: Double? = nil
     ) -> HeistInvocationContent {
         guard emitsInvocationStep else { return self }
@@ -508,11 +508,12 @@ extension HeistDef: HeistContent {
 
 public extension HeistDef where Input == String {
     func callAsFunction(_ input: String) throws -> HeistInvocationContent {
-        try invocation(argument: .string(.literal(input)))
+        try invocation(argument: .string(input))
     }
 
-    func callAsFunction(_ input: StringExpr) throws -> HeistInvocationContent {
-        try invocation(argument: .string(input))
+    @_disfavoredOverload
+    func callAsFunction(_ reference: HeistReferenceName) throws -> HeistInvocationContent {
+        try invocation(argument: .string(reference: reference))
     }
 }
 
@@ -540,19 +541,21 @@ public func RunHeist(_ path: HeistInvocationPath) -> HeistInvocationContent {
 }
 
 public func RunHeist(_ name: String, _ input: String) -> HeistInvocationContent {
-    runHeistInvocation(name, argument: .string(.literal(input)))
-}
-
-public func RunHeist(_ path: HeistInvocationPath, _ input: String) -> HeistInvocationContent {
-    runHeistInvocation(path, argument: .string(.literal(input)))
-}
-
-public func RunHeist(_ name: String, _ input: StringExpr) -> HeistInvocationContent {
     runHeistInvocation(name, argument: .string(input))
 }
 
-public func RunHeist(_ path: HeistInvocationPath, _ input: StringExpr) -> HeistInvocationContent {
+public func RunHeist(_ path: HeistInvocationPath, _ input: String) -> HeistInvocationContent {
     runHeistInvocation(path, argument: .string(input))
+}
+
+@_disfavoredOverload
+public func RunHeist(_ name: String, _ reference: HeistReferenceName) -> HeistInvocationContent {
+    runHeistInvocation(name, argument: .string(reference: reference))
+}
+
+@_disfavoredOverload
+public func RunHeist(_ path: HeistInvocationPath, _ reference: HeistReferenceName) -> HeistInvocationContent {
+    runHeistInvocation(path, argument: .string(reference: reference))
 }
 
 public func RunHeist(_ name: String, _ input: AccessibilityTarget) -> HeistInvocationContent {
@@ -590,13 +593,12 @@ public struct ForEach<Content: HeistContent>: HeistContent {
     private init(
         values: [String],
         parameter: HeistReferenceName = "item",
-        @HeistBuilder content: (StringExpr) throws -> Content
+        @HeistBuilder content: (HeistReferenceName) throws -> Content
     ) {
         do {
             let parameter = try HeistParameterName.normalized(parameter.rawValue)
-            let reference = HeistReferenceName(rawValue: parameter)
-            let item = try StringExpr(ref: reference)
-            let content = try content(item)
+            let reference = try HeistReferenceName(validating: parameter, type: "for_each string parameter")
+            let content = try content(reference)
             let step = try ForEachStringStep(
                 values: values,
                 parameter: reference,
@@ -619,21 +621,21 @@ public struct ForEach<Content: HeistContent>: HeistContent {
         _ first: String,
         _ rest: String...,
         parameter: HeistReferenceName = "item",
-        @HeistBuilder content: (StringExpr) throws -> Content
+        @HeistBuilder content: (HeistReferenceName) throws -> Content
     ) {
         self.init(values: [first] + rest, parameter: parameter, content: content)
     }
 
     public init(
-        _ predicate: ElementPredicate,
+        _ predicate: ElementPredicateTemplate,
         limit: Int = 20,
         parameter: HeistReferenceName = "target",
         @HeistBuilder _ content: (AccessibilityTarget) throws -> Content
     ) {
         do {
             let parameter = try HeistParameterName.normalized(parameter.rawValue)
-            let reference = HeistReferenceName(rawValue: parameter)
-            let target = try AccessibilityTarget(ref: reference)
+            let reference = try HeistReferenceName(validating: parameter, type: "for_each target parameter")
+            let target = AccessibilityTarget(ref: reference)
             let content = try content(target)
             let step = try ForEachElementStep(
                 matching: predicate,

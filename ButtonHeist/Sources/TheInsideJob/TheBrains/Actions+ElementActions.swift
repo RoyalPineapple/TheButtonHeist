@@ -14,7 +14,7 @@ extension Actions {
     /// Unified pipeline for actions that target an element:
     /// find target in tree → resolve that tree entry to something touchable.
     func performElementAction(
-        target: AccessibilityTarget,
+        target: ResolvedAccessibilityTarget,
         method: ActionMethod,
         requireInteractive: Bool = true,
         activationPointPolicy: ElementInflation.ActivationPointPolicy = .requireOnscreen,
@@ -96,7 +96,7 @@ extension Actions {
     /// Deliver `activate` through the accessibility contract:
     /// semantic target -> reveal -> activation refresh ->
     /// one `accessibilityActivate()` -> activation-point dispatch if UIKit declines.
-    func executeActivate(_ target: AccessibilityTarget) async -> TheSafecracker.ActionDispatchOutcome {
+    func executeActivate(_ target: ResolvedAccessibilityTarget) async -> TheSafecracker.ActionDispatchOutcome {
         return await performElementAction(
             target: target,
             method: .activate
@@ -141,7 +141,7 @@ extension Actions {
         return nil
     }
 
-    func executeIncrement(_ target: AccessibilityTarget) async -> TheSafecracker.ActionDispatchOutcome {
+    func executeIncrement(_ target: ResolvedAccessibilityTarget) async -> TheSafecracker.ActionDispatchOutcome {
         return await performElementAction(
             target: target,
             method: .increment,
@@ -165,7 +165,7 @@ extension Actions {
         )
     }
 
-    func executeDecrement(_ target: AccessibilityTarget) async -> TheSafecracker.ActionDispatchOutcome {
+    func executeDecrement(_ target: ResolvedAccessibilityTarget) async -> TheSafecracker.ActionDispatchOutcome {
         return await performElementAction(
             target: target,
             method: .decrement,
@@ -190,16 +190,17 @@ extension Actions {
     }
 
     func executeCustomAction(
-        _ target: CustomActionTarget
+        name: String,
+        target: ResolvedAccessibilityTarget
     ) async -> TheSafecracker.ActionDispatchOutcome {
         await performElementAction(
-            target: target.target,
+            target: target,
             method: .customAction
         ) { context in
             let dispatchContext: ElementInflation.InflatedElementTarget
             switch await self.customActionDispatchContext(
                 context,
-                actionName: target.actionName
+                actionName: name
             ) {
             case .resolved(let context):
                 dispatchContext = context
@@ -209,14 +210,14 @@ extension Actions {
             let treeElement = dispatchContext.treeElement
             let liveTarget = dispatchContext.liveTarget
             let result: TheSafecracker.ActionDispatchOutcome
-            switch self.accessibilityActions.performCustomAction(named: target.actionName, on: liveTarget) {
+            switch self.accessibilityActions.performCustomAction(named: name, on: liveTarget) {
             case .deallocated:
                 result = .failure(.customAction, message: "custom action failed")
             case .noSuchAction:
                 result = .failure(
                     .customAction,
                     message: ActionCapabilityDiagnostic.missingCustomAction(
-                        target.actionName,
+                        name,
                         element: treeElement
                     )
                 )
@@ -224,7 +225,7 @@ extension Actions {
                 result = .failure(
                     .customAction,
                     message: ActionCapabilityDiagnostic.declinedCustomAction(
-                        target.actionName,
+                        name,
                         element: treeElement
                     )
                 )

@@ -1,6 +1,5 @@
 // MARK: - Element Property Match Payloads
 
-/// Required and forbidden traits in a property's trait set.
 public struct TraitSetMatch: Sendable, Equatable {
     public let include: Set<HeistTrait>
     public let exclude: Set<HeistTrait>
@@ -11,7 +10,6 @@ public struct TraitSetMatch: Sendable, Equatable {
     }
 }
 
-/// Required and forbidden actions in an element's action list.
 public struct ActionSetMatch: Sendable, Equatable {
     public let include: Set<ElementAction>
     public let exclude: Set<ElementAction>
@@ -22,7 +20,6 @@ public struct ActionSetMatch: Sendable, Equatable {
     }
 }
 
-/// Integer geometry checker for a captured accessibility frame.
 public struct ElementFrameMatch: Sendable, Equatable {
     public let x: Int?
     public let y: Int?
@@ -37,7 +34,6 @@ public struct ElementFrameMatch: Sendable, Equatable {
     }
 }
 
-/// Integer geometry checker for a captured accessibility activation point.
 public struct ElementPointMatch: Sendable, Equatable {
     public let x: Int?
     public let y: Int?
@@ -48,15 +44,14 @@ public struct ElementPointMatch: Sendable, Equatable {
     }
 }
 
-/// Field-level checker for one custom-content item in the element's custom content list.
-public struct CustomContentMatch<Value: StringMatchPayload>: Sendable, Equatable, Hashable where Value: Codable {
-    public let label: StringMatch<Value>?
-    public let value: StringMatch<Value>?
-    public let isImportant: Bool?
+package struct CustomContentMatchCore<Text> {
+    package let label: StringMatchCore<Text>?
+    package let value: StringMatchCore<Text>?
+    package let isImportant: Bool?
 
-    public init(
-        label: StringMatch<Value>? = nil,
-        value: StringMatch<Value>? = nil,
+    package init(
+        label: StringMatchCore<Text>? = nil,
+        value: StringMatchCore<Text>? = nil,
         isImportant: Bool? = nil
     ) {
         self.label = label
@@ -64,16 +59,10 @@ public struct CustomContentMatch<Value: StringMatchPayload>: Sendable, Equatable
         self.isImportant = isImportant
     }
 
-    public var hasPredicateLiteral: Bool {
-        label?.hasPredicateLiteral == true
-            || value?.hasPredicateLiteral == true
-            || isImportant != nil
-    }
-
-    public func map<NewValue: StringMatchPayload>(
-        _ transform: (Value) throws -> NewValue
-    ) rethrows -> CustomContentMatch<NewValue> where NewValue: Codable {
-        try CustomContentMatch<NewValue>(
+    package func map<NewText>(
+        _ transform: (Text) throws -> NewText
+    ) rethrows -> CustomContentMatchCore<NewText> {
+        try CustomContentMatchCore<NewText>(
             label: label?.map(transform),
             value: value?.map(transform),
             isImportant: isImportant
@@ -81,22 +70,91 @@ public struct CustomContentMatch<Value: StringMatchPayload>: Sendable, Equatable
     }
 }
 
-/// Required and forbidden rotor names in an element's rotor list.
-public struct RotorSetMatch<Value: StringMatchPayload>: Sendable, Equatable where Value: Codable {
-    public let include: [StringMatch<Value>]
-    public let exclude: [StringMatch<Value>]
+extension CustomContentMatchCore: Sendable where Text: Sendable {}
+extension CustomContentMatchCore: Equatable where Text: Equatable {}
+extension CustomContentMatchCore: Hashable where Text: Hashable {}
 
-    public init(include: [StringMatch<Value>] = [], exclude: [StringMatch<Value>] = []) {
+package extension CustomContentMatchCore where Text: StringMatchLeaf {
+    var hasPredicateLiteral: Bool {
+        label?.hasPredicateLiteral == true
+            || value?.hasPredicateLiteral == true
+            || isImportant != nil
+    }
+}
+
+public struct CustomContentMatch: Codable, Sendable, Equatable, Hashable {
+    package let core: CustomContentMatchCore<Expr<String>>
+
+    package init(core: CustomContentMatchCore<Expr<String>>) {
+        self.core = core
+    }
+
+    public init(
+        label: StringMatch? = nil,
+        value: StringMatch? = nil,
+        isImportant: Bool? = nil
+    ) {
+        core = CustomContentMatchCore(
+            label: label?.core,
+            value: value?.core,
+            isImportant: isImportant
+        )
+    }
+
+    public var hasPredicateLiteral: Bool { core.hasPredicateLiteral }
+    public var label: StringMatch? { core.label.map { StringMatch(core: $0) } }
+    public var value: StringMatch? { core.value.map { StringMatch(core: $0) } }
+    public var isImportant: Bool? { core.isImportant }
+
+    package func resolve(in environment: HeistExecutionEnvironment) throws -> CustomContentMatchCore<String> {
+        try core.map { try $0.resolve(in: environment) }
+    }
+}
+
+package struct RotorSetMatchCore<Text> {
+    package let include: [StringMatchCore<Text>]
+    package let exclude: [StringMatchCore<Text>]
+
+    package init(
+        include: [StringMatchCore<Text>] = [],
+        exclude: [StringMatchCore<Text>] = []
+    ) {
         self.include = include
         self.exclude = exclude
     }
 
-    public func map<NewValue: StringMatchPayload>(
-        _ transform: (Value) throws -> NewValue
-    ) rethrows -> RotorSetMatch<NewValue> where NewValue: Codable {
-        try RotorSetMatch<NewValue>(
+    package func map<NewText>(
+        _ transform: (Text) throws -> NewText
+    ) rethrows -> RotorSetMatchCore<NewText> {
+        try RotorSetMatchCore<NewText>(
             include: include.map { try $0.map(transform) },
             exclude: exclude.map { try $0.map(transform) }
         )
+    }
+}
+
+extension RotorSetMatchCore: Sendable where Text: Sendable {}
+extension RotorSetMatchCore: Equatable where Text: Equatable {}
+extension RotorSetMatchCore: Hashable where Text: Hashable {}
+
+public struct RotorSetMatch: Codable, Sendable, Equatable, Hashable {
+    package let core: RotorSetMatchCore<Expr<String>>
+
+    package init(core: RotorSetMatchCore<Expr<String>>) {
+        self.core = core
+    }
+
+    public init(include: [StringMatch] = [], exclude: [StringMatch] = []) {
+        core = RotorSetMatchCore(
+            include: include.map(\.core),
+            exclude: exclude.map(\.core)
+        )
+    }
+
+    public var include: [StringMatch] { core.include.map { StringMatch(core: $0) } }
+    public var exclude: [StringMatch] { core.exclude.map { StringMatch(core: $0) } }
+
+    package func resolve(in environment: HeistExecutionEnvironment) throws -> RotorSetMatchCore<String> {
+        try core.map { try $0.resolve(in: environment) }
     }
 }

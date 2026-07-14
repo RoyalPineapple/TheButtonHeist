@@ -10,8 +10,8 @@ Architecture diagrams for Button Heist, one file per concern. Every diagram is M
 
 ## The runtime loop
 
-- [action-pipeline.md](action-pipeline.md) — one action end to end: dispatch, resolution, activation, settle, facts, receipt
-- [observation-pipeline.md](observation-pipeline.md) — captures as truth, ordered facts, screen-boundary normalization, predicate evaluation, and the public fold
+- [action-pipeline.md](action-pipeline.md) — one action end to end: target resolution, one dispatch outcome, settle, evidence, receipt
+- [observation-pipeline.md](observation-pipeline.md) — current tree, retained cursor-backed observations, screen boundaries, predicate evaluation, and the public fold
 - [settle-loop.md](settle-loop.md) — the tripwire and the settle loop; what "settled" means, with the constants
 - [activation-policy.md](activation-policy.md) — the `activate` decision tree in VoiceOver order
 - [element-inflation.md](element-inflation.md) — `AccessibilityTarget` resolution: elements, containers, scope, diagnostics, auto-reveal
@@ -20,7 +20,7 @@ Architecture diagrams for Button Heist, one file per concern. Every diagram is M
 ## The language
 
 - [heist-lifecycle.md](heist-lifecycle.md) — author → `HeistPlan` IR → `.heist` artifact → replay → receipt
-- [dsl-grammar.md](dsl-grammar.md) — step types, action commands, passables, and context-typed predicates
+- [dsl-grammar.md](dsl-grammar.md) — step types, action commands, passables, one target language, and concrete predicates
 - [totality.md](totality.md) — why every heist halts: structural bounds and watchdog timeouts
 
 ## Connection and sessions

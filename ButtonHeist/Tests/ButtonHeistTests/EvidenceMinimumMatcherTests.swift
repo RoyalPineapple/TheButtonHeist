@@ -6,9 +6,9 @@ import TheScore
 
 final class EvidenceMinimumMatcherTests: XCTestCase {
     func testMinimumMatcherUsesSettledBeforeState() throws {
-        let label = makeReceiptTestElement(label: "Delete", traits: [.staticText])
-        let button = makeReceiptTestElement(label: "Delete", traits: [.button])
-        let actionResult = semanticActionResult(
+        let label = makeTestHeistElement(label: "Delete", traits: [.staticText])
+        let button = makeTestHeistElement(label: "Delete", traits: [.button], actions: [])
+        let actionResult = try semanticActionResult(
             method: .activate,
             source: .resolvedSemanticTarget,
             target: .predicate(ElementPredicateTemplate(label: "Delete"), ordinal: 1),
@@ -24,8 +24,8 @@ final class EvidenceMinimumMatcherTests: XCTestCase {
     }
 
     func testMinimumMatcherRefusesUnsettledEvidence() throws {
-        let button = makeReceiptTestElement(label: "Delete", traits: [.button])
-        let actionResult = semanticActionResult(
+        let button = makeTestHeistElement(label: "Delete", traits: [.button], actions: [])
+        let actionResult = try semanticActionResult(
             method: .activate,
             source: .resolvedSemanticTarget,
             target: .predicate(ElementPredicateTemplate(label: "Delete")),
@@ -47,15 +47,15 @@ private func semanticActionResult(
     before: [HeistElement],
     after: [HeistElement],
     settled: Bool = true
-) -> ActionResult {
+) throws -> ActionResult {
     ActionResult.success(
         method: method,
         evidence: ActionResultSuccessEvidence(
             observation: .settledTrace(
                 makeTestTraceEvidence(
-                    makeReceiptTestTrace(
-                        before: makeReceiptTestInterface(before),
-                        after: makeReceiptTestInterface(after)
+                    makeTestTrace(
+                        before: makeTestInterface(elements: before),
+                        after: makeTestInterface(elements: after)
                     ),
                     completeness: settled ? .complete : .incomplete
                 ),
@@ -63,7 +63,7 @@ private func semanticActionResult(
             ),
             subjectEvidence: ActionSubjectEvidence(
                 source: source,
-                target: target,
+                target: try target.resolve(in: .empty),
                 element: subject,
                 resolution: ActionSubjectResolution(origin: .visible),
                 settledObservationSequence: 1

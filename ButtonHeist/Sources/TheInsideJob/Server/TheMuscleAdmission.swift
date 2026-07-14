@@ -59,10 +59,11 @@ enum MuscleAdmissionDecision {
 struct TheMuscleAdmission {
     typealias ResponseHandler = SocketResponseHandler
 
-    private var authentication: MuscleAuthenticationFlow
+    private var clientRegistry = TheMuscleClientRegistry()
+    private var tokenAdmission: TokenAdmission
 
     init(tokenSource: SessionTokenSource, maxFailedAttempts: Int, lockoutDuration: TimeInterval) {
-        self.authentication = MuscleAuthenticationFlow(
+        self.tokenAdmission = TokenAdmission(
             tokenSource: tokenSource,
             maxFailedAttempts: maxFailedAttempts,
             lockoutDuration: lockoutDuration
@@ -70,15 +71,15 @@ struct TheMuscleAdmission {
     }
 
     mutating func registerClientAddress(_ clientId: Int, address: String) {
-        authentication.registerClientAddress(clientId, address: address)
+        clientRegistry.registerAddress(clientId, address: address)
     }
 
     mutating func removeAllClients() {
-        authentication.removeAllClients()
+        clientRegistry.removeAll()
     }
 
     func contains(_ clientId: Int) -> Bool {
-        authentication.contains(clientId)
+        clientRegistry.contains(clientId)
     }
 
     mutating func admitClientMessage(
@@ -87,16 +88,59 @@ struct TheMuscleAdmission {
         respond: @escaping ResponseHandler,
         at now: Date = Date()
     ) -> MuscleAdmissionDecision {
-        authentication.admitClientMessage(
+        if let rateLimitEffect = rateLimitEffect(clientId, respond: respond, at: now) {
+            return .handled(rateLimitEffect)
+        }
+
+        guard let envelope = MuscleAuthenticationRequestDecoder.decode(data) else {
+            let effect = clientRegistry.phase(for: clientId)?.isAuthenticated == true
+                ? MuscleAuthenticationRejection.undecodableAuthenticatedMessage(clientId, respond: respond)
+                : MuscleAuthenticationRejection.undecodableUnauthenticatedMessage(clientId, respond: respond)
+            return .handled(effect)
+        }
+
+        guard clientRegistry.phase(for: clientId)?.isAuthenticated != true else {
+            return MuscleAuthenticatedCommandPhase.admit(clientId, envelope: envelope, respond: respond)
+        }
+
+        return MuscleHandshakePhase.handle(
             clientId,
-            data: data,
+            envelope: envelope,
             respond: respond,
-            at: now
+            clientRegistry: &clientRegistry,
+            tokenAdmission: &tokenAdmission
         )
     }
 
     mutating func completeAuthentication(_ authentication: MuscleAuthentication) -> [MuscleAdmissionEffect] {
-        self.authentication.completeAuthentication(authentication)
+        switch clientRegistry.completeAuthentication(authentication.clientId) {
+        case .advanced(_, effect: .authenticated):
+            break
+        case .advanced(_, effect: .helloValidated):
+            preconditionFailure("Authentication completion cannot emit hello validation.")
+        case .missingClient:
+            return [
+                .log(.missingRegisteredAddress(clientId: authentication.clientId)),
+                .sendResponse(
+                    .error(ServerError(kind: .authFailure, message: "Connection rejected.")),
+                    requestId: nil,
+                    respond: authentication.respond
+                ),
+                .delayedDisconnect(clientId: authentication.clientId),
+            ]
+        case .rejected:
+            return MuscleAuthenticationRejection.unauthenticatedMessage(
+                authentication.clientId,
+                message: "Authentication requires clientHello first.",
+                requestId: nil,
+                respond: authentication.respond
+            )
+        }
+
+        switch authentication.source {
+        case .token:
+            return [.log(.clientAuthenticatedWithToken(clientId: authentication.clientId))]
+        }
     }
 
     func rejectForSessionLock(
@@ -104,15 +148,48 @@ struct TheMuscleAdmission {
         diagnostic: SessionLease.SessionLockDiagnostic,
         respond: @escaping ResponseHandler
     ) -> [MuscleAdmissionEffect] {
-        authentication.rejectForSessionLock(clientId, diagnostic: diagnostic, respond: respond)
+        let payload = diagnostic.payload()
+        return [
+            .log(.sessionLockRejected(clientId: clientId, message: payload.message)),
+            .sendResponse(.sessionLocked(payload), requestId: nil, respond: respond),
+            .delayedDisconnect(clientId: clientId),
+        ]
     }
 
     mutating func removeClient(_ clientId: Int) -> [MuscleAdmissionEffect] {
-        authentication.removeClient(clientId)
+        _ = clientRegistry.remove(clientId)
+        return []
     }
 
     func authenticationDeadline(_ clientId: Int, deadlineSeconds: UInt64) -> [MuscleAdmissionEffect] {
-        authentication.authenticationDeadline(clientId, deadlineSeconds: deadlineSeconds)
+        MuscleAuthenticationDeadlinePhase.effect(
+            clientId: clientId,
+            phase: clientRegistry.phase(for: clientId),
+            deadlineSeconds: deadlineSeconds
+        )
+    }
+
+    private mutating func rateLimitEffect(
+        _ clientId: Int,
+        respond: @escaping ResponseHandler,
+        at now: Date
+    ) -> [MuscleAdmissionEffect]? {
+        switch clientRegistry.recordMessage(clientId, at: now) {
+        case .accepted:
+            return nil
+        case .rateLimited(shouldNotify: false):
+            return [.log(.rateLimited(clientId: clientId))]
+        case .rateLimited(shouldNotify: true):
+            let message = "Rate limited: max \(MessageRateLimiter.defaultMaxMessagesPerSecond) messages per second"
+            return [
+                .log(.rateLimited(clientId: clientId)),
+                .sendResponse(
+                    .error(ServerError(kind: .general, message: message)),
+                    requestId: nil,
+                    respond: respond
+                ),
+            ]
+        }
     }
 }
 #endif // DEBUG

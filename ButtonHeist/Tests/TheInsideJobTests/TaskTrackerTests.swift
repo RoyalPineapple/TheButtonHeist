@@ -1,3 +1,4 @@
+import ButtonHeistTestSupport
 import XCTest
 @testable import TheInsideJob
 
@@ -10,24 +11,6 @@ import XCTest
 /// and bounded polling on the watcher Task's eventual removal, never wall
 /// clock sleeps.
 final class TaskTrackerTests: XCTestCase {
-
-    // MARK: - Helpers
-
-    /// Poll `condition` until it returns `true` or `timeout` elapses. The
-    /// watcher Task spawned by `record(_:)` removes a completed Task on the
-    /// global cooperative pool; we yield until the removal lands rather than
-    /// racing on a fixed sleep.
-    private func waitUntil(
-        timeout: TimeInterval = 5.0,
-        _ condition: @Sendable () async -> Bool
-    ) async -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if await condition() { return true }
-            await Task.yield()
-        }
-        return await condition()
-    }
 
     // MARK: - Completion path
 
@@ -44,7 +27,7 @@ final class TaskTrackerTests: XCTestCase {
         // task.value` resolves and they can take the lock to self-remove.
         for task in tasks { await task.value }
 
-        let drained = await waitUntil { tracker.taskCountForTesting == 0 }
+        let drained = await eventually(within: .seconds(5)) { tracker.taskCountForTesting == 0 }
         XCTAssertTrue(drained,
                       "Completed Tasks must self-remove; observed \(tracker.taskCountForTesting) lingering")
     }
@@ -55,7 +38,7 @@ final class TaskTrackerTests: XCTestCase {
             tracker.spawn { /* completes immediately */ }
         }
 
-        let drained = await waitUntil { tracker.taskCountForTesting == 0 }
+        let drained = await eventually(within: .seconds(5)) { tracker.taskCountForTesting == 0 }
         XCTAssertTrue(drained,
                       "spawn(_:) completions must drain; observed \(tracker.taskCountForTesting) lingering")
     }
@@ -111,7 +94,7 @@ final class TaskTrackerTests: XCTestCase {
         // The watcher Task captures `[weak self, task]`, so the only strong
         // refs are the tracked Task (still parked) and the watcher's own weak
         // self — which doesn't retain. The tracker should be released.
-        let released = await waitUntil { holder.isNil }
+        let released = await eventually(within: .seconds(5)) { holder.isNil }
         XCTAssertTrue(released, "TaskTracker leaked despite weak self in watcher")
 
         // Let the long-running Task finish so the watcher's `await task.value`
@@ -138,7 +121,7 @@ final class TaskTrackerTests: XCTestCase {
 
         for task in tasks { await task.value }
 
-        let drained = await waitUntil(timeout: 10.0) {
+        let drained = await eventually(within: .seconds(10)) {
             tracker.taskCountForTesting == 0
         }
         XCTAssertTrue(drained,

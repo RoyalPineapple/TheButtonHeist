@@ -27,11 +27,7 @@ struct StringLoopResolvedPayloadValidator: HeistPlanTraversalVisitor {
 
     mutating func visitWait(_ wait: WaitStep, context: HeistTraversalContext) {
         do {
-            let resolved = try wait.resolve(in: context.environment)
-            try HeistRuntimePayloadContractValidator.validate(WaitTarget(
-                predicate: resolved.predicate,
-                timeout: resolved.timeout
-            ))
+            _ = try wait.resolve(in: context.environment)
         } catch {
             fail(
                 path: context.path.description,

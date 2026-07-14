@@ -10,7 +10,8 @@ extension SimpleSocketServer {
     private static let errorFlushGracePeriod: Duration = .milliseconds(100)
 
     func removeClient(_ clientId: Int) {
-        clientLifecycle.removeClient(clientId, from: &clientRegistry)
+        guard clientRegistry.removeAndCancel(clientId) else { return }
+        callbacks.onClientDisconnected?(clientId)
     }
 
     func rejectClientWithServerError(_ clientId: Int, kind: ErrorKind, message: String) {

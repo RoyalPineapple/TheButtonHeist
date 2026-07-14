@@ -112,7 +112,7 @@ enum PrivateStorage {
                 try fileManager.setAttributes(attributes.foundationAttributes, ofItemAtPath: url.path)
                 if let contents {
                     let handle = try FileHandle(forWritingTo: url)
-                    defer { StorageCleanup.close(handle) }
+                    defer { try? handle.close() }
                     try handle.truncate(atOffset: 0)
                     try handle.write(contentsOf: contents)
                 }
@@ -169,7 +169,7 @@ enum PrivateStorage {
             try fileManager.moveItem(at: temporaryURL, to: url)
             try fileManager.setAttributes(attributes.foundationAttributes, ofItemAtPath: url.path)
         } catch {
-            StorageCleanup.removeTemporaryItem(at: temporaryURL, operation: .removeTemporaryFile)
+            try? fileManager.removeItem(at: temporaryURL)
             throw error
         }
     }

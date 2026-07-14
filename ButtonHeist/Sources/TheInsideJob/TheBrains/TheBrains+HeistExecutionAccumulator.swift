@@ -221,73 +221,123 @@ extension TheBrains {
     private func heistTransitionRejectionResult(
         _ rejection: HeistExecutionTransitionRejection
     ) -> HeistExecutionStepResult {
-        heistExplicitFailureReceipt(
+        heistReceipt(.init(
             path: rejection.path,
+            kind: .fail,
             durationMs: 0,
             intent: .fail(message: rejection.reason),
-            failure: HeistFailureDetail(
+            completion: .failed(HeistFailureDetail(
                 category: .validation,
                 contract: "heist execution state transitions are valid",
                 observed: rejection.reason
-            )
-        )
+            ))
+        ))
     }
 
-    internal func skippedHeistStep(
-        _ step: HeistStep,
-        path: String,
-        scope: HeistExecutionScope
+    internal func skippedHeistReceipt(
+        for step: HeistStep,
+        path: String
     ) -> HeistExecutionStepResult {
-        let kind: HeistExecutionStepKind
-        let children: [HeistExecutionStepResult]
-
-        switch step {
-        case .action:
-            kind = .action
-            children = []
-        case .wait:
-            kind = .wait
-            children = []
-        case .conditional:
-            kind = .conditional
-            children = []
-        case .forEachElement:
-            kind = .forEachElement
-            children = []
-        case .forEachString:
-            kind = .forEachString
-            children = []
-        case .repeatUntil:
-            kind = .repeatUntil
-            children = []
-        case .warn:
-            kind = .warn
-            children = []
-        case .fail:
-            kind = .fail
-            children = []
-        case .heist(let plan):
-            kind = .heist
-            children = skippedHeistSteps(plan.body, path: "\(path).heist.body", scope: scope)
-        case .invoke:
-            kind = .invoke
-            children = []
-        }
-
-        return heistSkippedReceipt(
-            path: path,
-            kind: kind,
-            children: children
+        var algebra = SkippedHeistReceiptAlgebra(
+            rootPath: path,
+            makeReceipt: { [self] path, kind, children in
+                heistReceipt(.init(
+                    path: path,
+                    kind: kind,
+                    durationMs: 0,
+                    completion: .skipped,
+                    children: children
+                ))
+            }
         )
+        HeistPlanTraversal.walk(step, visitor: &algebra)
+        return algebra.receipt
+    }
+}
+
+private struct SkippedHeistReceiptAlgebra: HeistPlanTraversalVisitor {
+    private struct Frame {
+        let path: String?
+        let kind: HeistExecutionStepKind
+        var children: [HeistExecutionStepResult] = []
     }
 
-    private func skippedHeistSteps(
-        _ steps: [HeistStep],
-        path: String,
-        scope: HeistExecutionScope
-    ) -> [HeistExecutionStepResult] {
-        steps.enumerated().map { index, step in
-            skippedHeistStep(step, path: "\(path)[\(index)]", scope: scope)
+    private let rootPath: String
+    private let makeReceipt: (
+        _ path: String,
+        _ kind: HeistExecutionStepKind,
+        _ children: [HeistExecutionStepResult]
+    ) -> HeistExecutionStepResult
+    private var frames: [Frame] = []
+    private var definitionsDepth = 0
+    private var rootReceipt: HeistExecutionStepResult?
+
+    init(
+        rootPath: String,
+        makeReceipt: @escaping (
+            _ path: String,
+            _ kind: HeistExecutionStepKind,
+            _ children: [HeistExecutionStepResult]
+        ) -> HeistExecutionStepResult
+    ) {
+        self.rootPath = rootPath
+        self.makeReceipt = makeReceipt
+    }
+
+    var receipt: HeistExecutionStepResult {
+        guard let rootReceipt else {
+            preconditionFailure("Skipped heist receipt traversal must produce a root receipt")
+        }
+        return rootReceipt
+    }
+
+    fileprivate mutating func visitDefinitions(_: [HeistPlan], context _: HeistTraversalContext) {
+        definitionsDepth += 1
+    }
+
+    fileprivate mutating func leaveDefinitions(_: [HeistPlan], context _: HeistTraversalContext) {
+        definitionsDepth -= 1
+    }
+
+    fileprivate mutating func visitStep(_ step: HeistStep, context _: HeistTraversalContext) {
+        let path: String?
+        if frames.isEmpty {
+            path = rootPath
+        } else if definitionsDepth == 0,
+                  let parentPath = frames[frames.count - 1].path,
+                  frames[frames.count - 1].kind == .heist {
+            path = "\(parentPath).heist.body[\(frames[frames.count - 1].children.count)]"
+        } else {
+            path = nil
+        }
+        frames.append(Frame(path: path, kind: step.receiptKind))
+    }
+
+    fileprivate mutating func leaveStep(_: HeistStep, context _: HeistTraversalContext) {
+        let frame = frames.removeLast()
+        guard let path = frame.path else { return }
+        let receipt = makeReceipt(path, frame.kind, frame.children)
+        guard !frames.isEmpty else {
+            rootReceipt = receipt
+            return
+        }
+        frames[frames.count - 1].children.append(receipt)
+    }
+}
+
+private extension HeistStep {
+    var receiptKind: HeistExecutionStepKind {
+        switch self {
+        case .action: .action
+        case .wait: .wait
+        case .conditional: .conditional
+        case .forEachElement: .forEachElement
+        case .forEachString: .forEachString
+        case .repeatUntil: .repeatUntil
+        case .warn: .warn
+        case .fail: .fail
+        case .heist: .heist
+        case .invoke: .invoke
         }
     }
 }

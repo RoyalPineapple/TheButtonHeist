@@ -32,17 +32,12 @@ read_version_file() {
     sed -E 's/[[:space:]]//g' "$BUTTONHEIST_RELEASE_VERSION_FILE" | sed '/^$/d'
 }
 
-extract_code_version() {
-    grep -E '^[[:space:]]*public let buttonHeistVersion = "[^"]+"' "$BUTTONHEIST_CODE_VERSION_FILE" \
-        | sed -E 's/.*"([^"]+)".*/\1/'
-}
-
 extract_formula_version() {
     grep -E '^[[:space:]]*version "[^"]+"' "$BUTTONHEIST_FORMULA_TEMPLATE" \
         | sed -E 's/.*"([^"]+)".*/\1/'
 }
 
-CANONICAL_VERSION=$(single_value "$BUTTONHEIST_CODE_VERSION_FILE buttonHeistVersion" "$(extract_code_version || true)")
+CANONICAL_VERSION=$(buttonheist_code_version)
 RELEASE_VERSION_MIRROR=$(single_value "$BUTTONHEIST_RELEASE_VERSION_FILE" "$(read_version_file || true)")
 FORMULA_VERSION_MIRROR=$(single_value "$BUTTONHEIST_FORMULA_TEMPLATE version" "$(extract_formula_version || true)")
 
@@ -125,8 +120,10 @@ if grep -Fq 'ButtonHeistFrameworks' .github/workflows/release.yml; then
 fi
 grep -Fq 'Verify CI passed on exact release commit' .github/workflows/release.yml \
     || fail ".github/workflows/release.yml must gate releases on exact release-commit CI"
-grep -Fq -- '--branch main' .github/workflows/release.yml \
-    || fail ".github/workflows/release.yml release CI guard must check main-branch CI"
+grep -Fq 'scripts/require-successful-ci-for-commit.sh' .github/workflows/release.yml \
+    || fail ".github/workflows/release.yml must delegate to the canonical exact-commit CI guard"
+grep -Fq -- '--branch main' scripts/require-successful-ci-for-commit.sh \
+    || fail "the exact-commit CI guard must check main-branch CI"
 if grep -Fq 'parents[0]' .github/workflows/release.yml; then
     fail ".github/workflows/release.yml must not accept parent-commit CI for release publishing"
 fi

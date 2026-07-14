@@ -40,7 +40,6 @@ final class AdversarialNavigationTests: XCTestCase {
         let subject = try XCTUnwrap(actionResult.subjectEvidence)
         XCTAssertEqual(subject.source, .resolvedSemanticTarget)
         XCTAssertEqual(subject.phase, .resolvedBeforeDispatch)
-        XCTAssertEqual(subject.target, target)
         XCTAssertEqual(subject.element.label, "Place order")
         XCTAssertNotEqual(subject.resolution.origin, .visible)
         XCTAssertTrue(subject.resolution.adjustments.contains(.semanticReveal))
@@ -126,7 +125,6 @@ final class AdversarialNavigationTests: XCTestCase {
         )
         let subject = try XCTUnwrap(actionResult.subjectEvidence)
         XCTAssertEqual(subject.source, .resolvedSemanticTarget)
-        XCTAssertEqual(subject.target, workHigh)
         XCTAssertEqual(subject.element.label, "Review PR")
         XCTAssertEqual(subject.element.value, "Active")
         XCTAssertEqual(subject.resolution, ActionSubjectResolution(origin: .visible))
@@ -273,7 +271,6 @@ final class AdversarialNavigationTests: XCTestCase {
         )
         let subject = try XCTUnwrap(actionResult.subjectEvidence)
         XCTAssertEqual(subject.source, .resolvedSemanticTarget)
-        XCTAssertEqual(subject.target, target)
         XCTAssertEqual(subject.element.label, "Verified by The Vibe Check")
         XCTAssertEqual(subject.resolution.origin, .discovered)
         XCTAssertTrue(subject.resolution.adjustments.contains(.semanticReveal))
@@ -356,19 +353,5 @@ final class AdversarialNavigationTests: XCTestCase {
         )
     }
 
-    private func expectHeistFailure<Content: HeistContent>(
-        _ name: String,
-        @HeistBuilder content: @escaping () throws -> Content
-    ) async throws -> Heist.Failure {
-        do {
-            _ = try await runHeist(name, content)
-            XCTFail("Expected \(name) to fail")
-            throw ExpectedFailureDidNotFail()
-        } catch let failure as Heist.Failure {
-            return failure
-        }
-    }
 }
-
-private struct ExpectedFailureDidNotFail: Error {}
 #endif // canImport(UIKit)

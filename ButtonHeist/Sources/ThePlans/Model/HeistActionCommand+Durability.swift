@@ -35,13 +35,14 @@ package struct HeistActionCommandTargetOccurrence: Sendable, Equatable {
     }
 
     package var reportTarget: AccessibilityTarget? {
-        try? target.resolve(in: .empty)
+        guard (try? target.resolve(in: .empty)) != nil else { return nil }
+        return target
     }
 }
 
 extension HeistActionCommand {
     package var targetOccurrences: [HeistActionCommandTargetOccurrence] {
-        switch self {
+        switch core {
         case .activate(let target), .increment(let target), .decrement(let target):
             return [.semantic(target)]
         case .customAction(_, let target), .rotor(_, let target, _):
@@ -70,7 +71,7 @@ extension HeistActionCommand {
 
 public extension HeistActionCommand {
     var durableHeistActionFailure: String? {
-        switch self {
+        switch core {
         case .rotor(let selection, _, _):
             if case .named = selection { return nil }
             return "rotor selection \(selection) is not a durable heist action"

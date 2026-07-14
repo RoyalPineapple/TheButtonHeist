@@ -4,6 +4,11 @@ import Foundation
 import ThePlans
 import TheScore
 
+struct PostActionPayloadContext {
+    let afterState: PostActionObservation.BeforeState
+    let resolvedElementId: HeistId?
+}
+
 /// Owns the before/body/after observation contract for executable interactions.
 ///
 /// It coordinates settled semantic evidence. It does not choose command
@@ -93,6 +98,18 @@ final class InteractionObservation {
         }
     }
 
+    func captureSettledBaseline(
+        scope: SemanticObservationScope?,
+        timeout: Double = InteractionObservation.defaultVisibleStateTimeout
+    ) async -> SettledCapture? {
+        guard let scope else { return nil }
+        return await stash.observeSettledSemanticObservation(
+            scope: scope,
+            after: nil,
+            timeout: timeout
+        )?.settledCapture
+    }
+
     func observeVisibleState(timeout: Double? = InteractionObservation.defaultVisibleStateTimeout) async -> PostActionObservation.BeforeState? {
         baselineState(from: await stash.observeVisibleSemanticEvidence(timeout: timeout))
     }
@@ -118,9 +135,8 @@ final class InteractionObservation {
     }
 
     func finishAfterAction(
-        method: ActionMethod,
-        outcome: PostActionObservation.ActionOutcome,
-        message: String? = nil,
+        outcome: TheSafecracker.ActionDispatchOutcome,
+        afterStatePayload: ((PostActionPayloadContext) -> ActionResultPayload?)? = nil,
         before: PostActionObservation.BeforeState,
         postActionCommitScope: SemanticObservationScope = .visible,
         settleOutcome: SettleSession.Outcome? = nil,
@@ -141,9 +157,8 @@ final class InteractionObservation {
 
         let receiptStart = CFAbsoluteTimeGetCurrent()
         let result = ActionResult(
-            postActionMethod: method,
             outcome: outcome,
-            message: message,
+            afterStatePayload: afterStatePayload,
             settledObservation: settledResult
         )
         return result.withTiming(ActionPerformanceTiming(
@@ -157,43 +172,39 @@ final class InteractionObservation {
     }
 
     func waitForPredicate(
-        _ step: WaitStep,
+        _ step: ResolvedWaitRuntimeInput,
         initialTrace: AccessibilityTrace? = nil,
-        after sequence: SettledObservationSequence? = nil,
+        baselineSequence: SettledObservationSequence? = nil,
+        changeBaseline: PredicateChangeBaselineSource = .establishFromFirstObservation,
         observationPlan: WaitObservationPlan? = nil,
         announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly,
         onReadyToPoll: PredicateWait.ReadyToPoll? = nil
     ) async -> HeistWaitReceipt {
-        await predicateWait.wait(
+        let plan = observationPlan ?? WaitObservationPlan(step: step)
+        let baselineSource: PredicateChangeBaselineSource
+        switch (changeBaseline, baselineSequence) {
+        case (.establishFromFirstObservation, .some(let sequence)):
+            baselineSource = .supplied(stash.semanticObservationStream.settledCapture(
+                scope: plan.scope,
+                at: sequence
+            ))
+        case (.establishFromFirstObservation, .none), (.supplied, _):
+            baselineSource = changeBaseline
+        }
+        let baseline = baselineSource.capture
+        return await predicateWait.wait(
             for: step,
             initialTrace: initialTrace,
-            after: sequence,
-            observationPlan: observationPlan,
-            announcementCursorStrategy: announcementCursorStrategy,
-            onReadyToPoll: onReadyToPoll
-        )
-    }
-
-    func waitForPredicate(
-        _ step: ResolvedWaitStep,
-        initialTrace: AccessibilityTrace? = nil,
-        after sequence: SettledObservationSequence? = nil,
-        observationPlan: WaitObservationPlan? = nil,
-        announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly,
-        onReadyToPoll: PredicateWait.ReadyToPoll? = nil
-    ) async -> HeistWaitReceipt {
-        await predicateWait.wait(
-            for: step,
-            initialTrace: initialTrace,
-            after: sequence,
-            observationPlan: observationPlan,
+            after: baseline?.cursor.sequence ?? baselineSequence,
+            changeBaseline: baselineSource,
+            observationPlan: plan,
             announcementCursorStrategy: announcementCursorStrategy,
             onReadyToPoll: onReadyToPoll
         )
     }
 
     func waitForPredicateCases(
-        _ cases: [ResolvedPredicateCase],
+        _ cases: [ResolvedPredicateCaseRuntimeInput],
         timeout rawTimeout: Double
     ) async -> HeistCaseSelectionResult {
         await PredicateCaseSelection.waitFor(

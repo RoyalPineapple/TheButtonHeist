@@ -1,7 +1,7 @@
 import ArgumentParser
 @_spi(ButtonHeistTooling) import ButtonHeist
 
-struct SetPasteboardCommand: AsyncParsableCommand, CLICommandContract {
+struct SetPasteboardCommand: ConnectedOneShotCLICommand {
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Write text to the general pasteboard",
@@ -21,14 +21,9 @@ struct SetPasteboardCommand: AsyncParsableCommand, CLICommandContract {
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
 
-    @ButtonHeistActor
-    mutating func run() async throws {
-        try await CLIRunner.run(
-            connection: connection,
-            format: output.format,
-            command: Self.fenceCommand,
-            arguments: Self.fenceArguments(CommandArgumentWriter.value(.text, text)),
-            statusMessage: "Writing to pasteboard..."
-        )
+    var runnerStatusMessage: String? { "Writing to pasteboard..." }
+
+    func requestArguments() throws -> TheFence.CommandArgumentEnvelope {
+        Self.fenceArguments(CommandArgumentEnvelopeBuilder.value(.text, text))
     }
 }

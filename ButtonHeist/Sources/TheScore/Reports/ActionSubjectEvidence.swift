@@ -74,7 +74,7 @@ public struct ActionSubjectEvidence: Codable, Sendable, Equatable {
 
     public let source: Source
     public let phase: Phase
-    public let target: AccessibilityTarget
+    public let target: ResolvedAccessibilityTarget
     public let element: HeistElement
     public let resolution: ActionSubjectResolution
     public let settledObservationSequence: SettledObservationSequence?
@@ -82,7 +82,7 @@ public struct ActionSubjectEvidence: Codable, Sendable, Equatable {
     public init(
         source: Source,
         phase: Phase = .resolvedBeforeDispatch,
-        target: AccessibilityTarget,
+        target: ResolvedAccessibilityTarget,
         element: HeistElement,
         resolution: ActionSubjectResolution,
         settledObservationSequence: SettledObservationSequence? = nil
@@ -110,7 +110,7 @@ public struct ActionSubjectEvidence: Codable, Sendable, Equatable {
         self.init(
             source: try container.decode(Source.self, forKey: .source),
             phase: try container.decode(Phase.self, forKey: .phase),
-            target: try container.decode(AccessibilityTarget.self, forKey: .target),
+            target: try container.decode(ResolvedAccessibilityTarget.self, forKey: .target),
             element: try container.decode(HeistElement.self, forKey: .element),
             resolution: try container.decode(ActionSubjectResolution.self, forKey: .resolution),
             settledObservationSequence: try container.decodeIfPresent(SettledObservationSequence.self, forKey: .settledObservationSequence)

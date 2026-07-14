@@ -56,10 +56,29 @@ final class SocketClientRegistryTests: XCTestCase {
         guard case .accepted = registry.reserveSend(clientId: clientId, byteCount: 10) else {
             return XCTFail("Expected accepted send reservation")
         }
-        _ = registry.remove(clientId)
+        XCTAssertTrue(registry.removeAndCancel(clientId))
 
         XCTAssertFalse(registry.completeSend(clientId: clientId, byteCount: 10))
         XCTAssertNil(registry.phase(for: clientId))
+    }
+
+    func testRemoveAndCancelIsTotalForRegisteredAndMissingClients() {
+        var registry = SocketClientRegistry()
+        let clientId = registry.insert(connection: makeConnection())
+
+        XCTAssertTrue(registry.removeAndCancel(clientId))
+        XCTAssertFalse(registry.removeAndCancel(clientId))
+        XCTAssertEqual(registry.count, 0)
+    }
+
+    func testCancelAllClearsEveryOwnedSocket() {
+        var registry = SocketClientRegistry()
+        _ = registry.insert(connection: makeConnection())
+        _ = registry.insert(connection: makeConnection())
+
+        registry.cancelAll()
+
+        XCTAssertEqual(registry.count, 0)
     }
 
     private func makeConnection() -> NWConnection {

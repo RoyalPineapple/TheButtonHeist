@@ -3,26 +3,21 @@ import TheScore
 
 // MARK: - Repair Screen
 
+private typealias RepairPredicateElement = PredicateSelectionSubjectElement<HeistElement>
+private typealias RepairPredicateGraph = ElementPredicateGraph<PredicateSelectionElementId, RepairPredicateElement>
+
 struct RepairScreen {
     struct Element: Sendable, Equatable {
         let id: PredicateSelectionElementId
         let element: HeistElement
         let path: TreePath
         let traversalIndex: Int
-        let ordinal: Int
         let siblingText: [String]
         let headerText: [String]
 
-        var summary: ElementSummary {
-            ElementSummary(
-                description: element.description,
-                label: nonEmpty(element.label),
-                value: nonEmpty(element.value),
-                identifier: stableIdentifier(element.identifier),
-                hint: nonEmpty(element.hint),
-                traits: element.traits,
-                actions: element.actions,
-                rotors: element.rotors?.map { HeistRepairRotorIdentity(rawValue: $0.name) } ?? [],
+        var repairContext: HeistRepairElementContext {
+            HeistRepairElementContext(
+                element: element,
                 siblingText: siblingText,
                 headerText: headerText
             )
@@ -30,41 +25,49 @@ struct RepairScreen {
     }
 
     let elements: [Element]
+    private let predicateGraph: RepairPredicateGraph
+    private let predicateSelectionElements: [RepairPredicateElement]
 
     init(interface: Interface) {
-        let indexed = interface.projectedElementRecords.enumerated().map { ordinal, record in
+        let indexed = interface.graph.elementsInTraversalOrder.enumerated().map { ordinal, record in
             ElementCore(
                 id: PredicateSelectionElementId(rawValue: "element-\(ordinal)"),
-                element: record.element,
+                element: record.projectedElement,
                 path: record.path,
                 traversalIndex: record.traversalIndex,
-                ordinal: ordinal
+                primaryText: primaryText(record.projectedElement)
             )
         }
-        let siblingsByParent = Dictionary(grouping: indexed) { parentPath($0.path) }
+        let siblingGroups = Dictionary(grouping: indexed) { parentPath($0.path) }
+            .mapValues { SiblingTextGroup($0) }
         var headers: [String] = []
         var elements: [Element] = []
         elements.reserveCapacity(indexed.count)
 
         for core in indexed {
-            let siblings = (siblingsByParent[parentPath(core.path)] ?? [])
-                .filter { $0.id != core.id }
-                .compactMap { primaryText($0.element) }
             let element = Element(
                 id: core.id,
                 element: core.element,
                 path: core.path,
                 traversalIndex: core.traversalIndex,
-                ordinal: core.ordinal,
-                siblingText: siblings.uniqued(on: \.self),
+                siblingText: siblingGroups[parentPath(core.path)]?.excluding(core.primaryText) ?? [],
                 headerText: Array(headers.suffix(3))
             )
-            if core.element.traits.contains(.header), let header = primaryText(core.element) {
+            if core.element.traits.contains(.header), let header = core.primaryText {
                 headers.append(header)
             }
             elements.append(element)
         }
+
+        let predicateSelectionElements = elements.map {
+            PredicateSelectionSubjectElement(id: $0.id, element: $0.element)
+        }
         self.elements = elements
+        self.predicateGraph = ElementPredicateGraph(
+            subjects: predicateSelectionElements,
+            identity: \.id
+        )
+        self.predicateSelectionElements = predicateSelectionElements
     }
 
     func resolve(_ target: AccessibilityTarget) -> RepairTargetResolution {
@@ -76,7 +79,7 @@ struct RepairScreen {
             } catch {
                 return .unsupportedTarget(.unresolvedExpression)
             }
-            let matches = ElementMatchGraph(elements: elements.map(\.element))
+            let matches = predicateGraph
                 .resolve(resolvedPredicate)
                 .matches
                 .map { elements[$0.traversalOrder] }
@@ -103,12 +106,12 @@ struct RepairScreen {
         }
     }
 
-    func selectionContext() -> PredicateSelectionContext {
-        PredicateSelectionContext(
-            elements: elements.map {
-                PredicateSelectionContext.Element(id: $0.id, element: $0.element)
-            },
-            scope: .discovery
+    func minimumUniquePredicate(
+        for elementId: PredicateSelectionElementId
+    ) -> MinimumPredicateSelection? {
+        MinimumPredicateSelector.minimumUniquePredicate(
+            for: elementId,
+            in: predicateSelectionElements
         )
     }
 }
@@ -118,7 +121,37 @@ private struct ElementCore {
     let element: HeistElement
     let path: TreePath
     let traversalIndex: Int
-    let ordinal: Int
+    let primaryText: String?
+}
+
+private struct SiblingTextGroup {
+    private let orderedUniqueText: [String]
+    private let occurrenceCount: [String: Int]
+
+    init(_ elements: [ElementCore]) {
+        var orderedUniqueText: [String] = []
+        var occurrenceCount: [String: Int] = [:]
+        orderedUniqueText.reserveCapacity(elements.count)
+        occurrenceCount.reserveCapacity(elements.count)
+
+        for text in elements.compactMap(\.primaryText) {
+            let count = occurrenceCount[text, default: 0]
+            if count == 0 {
+                orderedUniqueText.append(text)
+            }
+            occurrenceCount[text] = count + 1
+        }
+
+        self.orderedUniqueText = orderedUniqueText
+        self.occurrenceCount = occurrenceCount
+    }
+
+    func excluding(_ text: String?) -> [String] {
+        guard let text, occurrenceCount[text] == 1 else {
+            return orderedUniqueText
+        }
+        return orderedUniqueText.filter { $0 != text }
+    }
 }
 
 enum RepairTargetResolution {

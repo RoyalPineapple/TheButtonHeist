@@ -117,7 +117,7 @@ public struct HeistForEachStringEvidence: Codable, Sendable, Equatable {
 
 public struct HeistForEachElementEvidence: Codable, Sendable, Equatable {
     public let parameter: HeistReferenceName
-    public let matching: ElementPredicate
+    public let matching: ElementPredicateTemplate
     public let limit: Int
     public let matchedCount: Int
     public let iterationCount: Int
@@ -153,7 +153,7 @@ public struct HeistForEachElementEvidence: Codable, Sendable, Equatable {
 
     public init(
         parameter: HeistReferenceName,
-        matching: ElementPredicate,
+        matching: ElementPredicateTemplate,
         limit: Int,
         matchedCount: Int,
         iterationCount: Int,
@@ -169,7 +169,7 @@ public struct HeistForEachElementEvidence: Codable, Sendable, Equatable {
 
     public init(
         parameter: HeistReferenceName,
-        matching: ElementPredicate,
+        matching: ElementPredicateTemplate,
         limit: Int,
         matchedCount: Int,
         iterationCount: Int,
@@ -225,7 +225,7 @@ public struct HeistForEachElementEvidence: Codable, Sendable, Equatable {
         case (.some(let iterationOrdinal), .some(let targetOrdinal), .some(let targetSummary)):
             self.init(
                 parameter: try container.decode(HeistReferenceName.self, forKey: .parameter),
-                matching: try container.decode(ElementPredicate.self, forKey: .matching),
+                matching: try container.decode(ElementPredicateTemplate.self, forKey: .matching),
                 limit: try container.decode(Int.self, forKey: .limit),
                 matchedCount: try container.decode(Int.self, forKey: .matchedCount),
                 iterationCount: try container.decode(Int.self, forKey: .iterationCount),
@@ -237,7 +237,7 @@ public struct HeistForEachElementEvidence: Codable, Sendable, Equatable {
         case (nil, nil, nil):
             self.init(
                 parameter: try container.decode(HeistReferenceName.self, forKey: .parameter),
-                matching: try container.decode(ElementPredicate.self, forKey: .matching),
+                matching: try container.decode(ElementPredicateTemplate.self, forKey: .matching),
                 limit: try container.decode(Int.self, forKey: .limit),
                 matchedCount: try container.decode(Int.self, forKey: .matchedCount),
                 iterationCount: try container.decode(Int.self, forKey: .iterationCount),
@@ -266,7 +266,7 @@ public struct HeistForEachElementEvidence: Codable, Sendable, Equatable {
 }
 
 public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
-    public let predicate: AccessibilityPredicate<RootContext>
+    public let predicate: AccessibilityPredicate
     public let timeout: Double
     public let iterationCount: Int
     public let lastObservedSummary: String?
@@ -352,7 +352,7 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
     }
 
     private init(
-        predicate: AccessibilityPredicate<RootContext>,
+        predicate: AccessibilityPredicate,
         timeout: Double,
         iterationCount: Int = 0,
         lastObservedSummary: String?,
@@ -365,8 +365,8 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         self.storage = storage
     }
 
-    public static func predicateMet(
-        predicate: AccessibilityPredicate<RootContext>,
+    public static func matched(
+        predicate: AccessibilityPredicate,
         timeout: Double,
         iterationCount: Int,
         iterationOrdinal: Int? = nil,
@@ -374,7 +374,7 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         actionResult: ActionResult? = nil,
         lastObservedSummary: String? = nil
     ) -> HeistRepeatUntilEvidence {
-        return HeistRepeatUntilEvidence(
+        HeistRepeatUntilEvidence(
             predicate: predicate,
             timeout: timeout,
             iterationCount: iterationCount,
@@ -388,7 +388,7 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
     }
 
     public static func continued(
-        predicate: AccessibilityPredicate<RootContext>,
+        predicate: AccessibilityPredicate,
         timeout: Double,
         iterationCount: Int,
         iterationOrdinal: Int,
@@ -396,7 +396,7 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         actionResult: ActionResult? = nil,
         lastObservedSummary: String? = nil
     ) -> HeistRepeatUntilEvidence {
-        return HeistRepeatUntilEvidence(
+        HeistRepeatUntilEvidence(
             predicate: predicate,
             timeout: timeout,
             iterationCount: iterationCount,
@@ -409,99 +409,15 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         )
     }
 
-    public static func timedOut(
-        predicate: AccessibilityPredicate<RootContext>,
-        timeout: Double,
-        iterationCount: Int,
-        expectation: ExpectationResult.Unmet,
-        lastObservedSummary: String?,
-        failureReason: String
-    ) -> HeistRepeatUntilEvidence {
-        return HeistRepeatUntilEvidence(
-            predicate: predicate,
-            timeout: timeout,
-            iterationCount: iterationCount,
-            lastObservedSummary: lastObservedSummary,
-            storage: .failed(
-                iterationOrdinal: nil,
-                expectation: expectation,
-                failureReason: failureReason
-            )
-        )
-    }
-
-    public static func bodyFailed(
-        predicate: AccessibilityPredicate<RootContext>,
-        timeout: Double,
-        iterationCount: Int,
-        expectation: ExpectationResult.Unmet,
-        lastObservedSummary: String?,
-        failureReason: String
-    ) -> HeistRepeatUntilEvidence {
-        return HeistRepeatUntilEvidence(
-            predicate: predicate,
-            timeout: timeout,
-            iterationCount: iterationCount,
-            lastObservedSummary: lastObservedSummary,
-            storage: .failed(
-                iterationOrdinal: nil,
-                expectation: expectation,
-                failureReason: failureReason
-            )
-        )
-    }
-
-    public static func initialObservationUnavailable(
-        predicate: AccessibilityPredicate<RootContext>,
-        timeout: Double,
-        expectation: ExpectationResult.Unmet,
-        lastObservedSummary: String?,
-        failureReason: String
-    ) -> HeistRepeatUntilEvidence {
-        return HeistRepeatUntilEvidence(
-            predicate: predicate,
-            timeout: timeout,
-            iterationCount: 0,
-            lastObservedSummary: lastObservedSummary,
-            storage: .failed(
-                iterationOrdinal: nil,
-                expectation: expectation,
-                failureReason: failureReason
-            )
-        )
-    }
-
-    public static func failedIteration(
-        predicate: AccessibilityPredicate<RootContext>,
-        timeout: Double,
-        iterationCount: Int,
-        iterationOrdinal: Int,
-        expectation: ExpectationResult.Unmet,
-        lastObservedSummary: String?,
-        failureReason: String
-    ) -> HeistRepeatUntilEvidence {
-        return HeistRepeatUntilEvidence(
-            predicate: predicate,
-            timeout: timeout,
-            iterationCount: iterationCount,
-            lastObservedSummary: lastObservedSummary,
-            storage: .failed(
-                iterationOrdinal: iterationOrdinal,
-                expectation: expectation,
-                failureReason: failureReason
-            )
-        )
-    }
-
-    public static func timeoutHandledByElse(
-        predicate: AccessibilityPredicate<RootContext>,
+    public static func handledElse(
+        predicate: AccessibilityPredicate,
         timeout: Double,
         iterationCount: Int,
         expectation: ExpectationResult.Unmet,
         lastObservedSummary: String?,
         failureReason: String? = nil
     ) -> HeistRepeatUntilEvidence {
-        return HeistRepeatUntilEvidence(
+        HeistRepeatUntilEvidence(
             predicate: predicate,
             timeout: timeout,
             iterationCount: iterationCount,
@@ -513,21 +429,22 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         )
     }
 
-    public static func timeoutElseFailed(
-        predicate: AccessibilityPredicate<RootContext>,
+    public static func failed(
+        predicate: AccessibilityPredicate,
         timeout: Double,
         iterationCount: Int,
+        iterationOrdinal: Int? = nil,
         expectation: ExpectationResult.Unmet,
         lastObservedSummary: String?,
         failureReason: String
     ) -> HeistRepeatUntilEvidence {
-        return HeistRepeatUntilEvidence(
+        HeistRepeatUntilEvidence(
             predicate: predicate,
             timeout: timeout,
             iterationCount: iterationCount,
             lastObservedSummary: lastObservedSummary,
             storage: .failed(
-                iterationOrdinal: nil,
+                iterationOrdinal: iterationOrdinal,
                 expectation: expectation,
                 failureReason: failureReason
             )
@@ -550,7 +467,7 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "repeat_until evidence")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let outcome = try container.decode(HeistPredicateEvidenceOutcome.self, forKey: .outcome)
-        let predicate = try container.decode(AccessibilityPredicate<RootContext>.self, forKey: .predicate)
+        let predicate = try container.decode(AccessibilityPredicate.self, forKey: .predicate)
         let timeout = try container.decode(Double.self, forKey: .timeout)
         let iterationCount = try container.decode(Int.self, forKey: .iterationCount)
         let iterationOrdinal = try container.decodeIfPresent(Int.self, forKey: .iterationOrdinal)

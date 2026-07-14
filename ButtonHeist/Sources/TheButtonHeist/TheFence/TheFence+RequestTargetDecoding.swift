@@ -26,7 +26,7 @@ extension TheFence.CommandArgumentEnvelope {
         guard let target = try decodedAccessibilityTarget() else {
             throw TheFence.MissingAccessibilityTarget(command: command)
         }
-        return try target.resolvedElementTarget(command: command)
+        return try target.validatedElementTarget(command: command)
     }
 
     @ButtonHeistActor
@@ -42,7 +42,7 @@ extension TheFence.CommandArgumentEnvelope {
             return .container(containerName)
         }
         if let target = try decodedAccessibilityTarget() {
-            return .element(try target.resolvedElementTarget(command: .scroll))
+            return .element(try target.validatedElementTarget(command: .scroll))
         }
         return .visibleContainer
     }
@@ -60,40 +60,32 @@ extension TheFence.CommandArgumentEnvelope {
     }
 
     func decodeAccessibilityTargetPayload() throws -> AccessibilityTarget {
-        try requireObjectStringMatchFields()
-        return try TheFence.HeistValuePayloadDecoder.decode(
+        try TheFence.HeistValuePayloadDecoder.decode(
             objectValue,
             field: argumentFieldPrefix ?? "target",
             as: AccessibilityTarget.self
         )
     }
 
-    private func requireObjectStringMatchFields() throws {
-        try TheFence.validateElementPredicatePayloadStringMatches(
-            objectValue,
-            field: argumentFieldPrefix ?? "target"
-        )
-    }
-
 }
 
 extension AccessibilityTarget {
-    func resolvedElementTarget(command: TheFence.Command) throws -> AccessibilityTarget {
+    func validatedElementTarget(command: TheFence.Command) throws -> AccessibilityTarget {
         let resolved = try resolve(in: .empty)
         guard resolved.selectsElement else {
             throw TheFence.ContainerTargetRequiresElement(command: command)
         }
-        return resolved
+        return self
     }
+}
 
+private extension ResolvedAccessibilityTarget {
     var selectsElement: Bool {
         switch self {
         case .predicate:
             return true
         case .container:
             return false
-        case .ref:
-            preconditionFailure("resolved accessibility targets cannot contain refs")
         case .within(_, let target):
             return target.selectsElement
         }

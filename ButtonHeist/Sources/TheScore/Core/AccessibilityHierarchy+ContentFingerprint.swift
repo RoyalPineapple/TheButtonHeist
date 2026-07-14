@@ -41,23 +41,35 @@ package extension AccessibilityHierarchy {
     /// Content-only fingerprint for a hierarchy node. Ignores traversal indices.
     var contentFingerprint: Int {
         folded(
-            onElement: { element, _ in
-                var hasher = Hasher()
-                hasher.combine(0)
-                hasher.combine(element.contentFingerprint)
-                return hasher.finalize()
-            },
+            onElement: { element, _ in hierarchyContentFingerprint(for: element) },
             onContainer: { container, childFingerprints in
-                var hasher = Hasher()
-                hasher.combine(1)
-                hasher.combine(container)
-                for childFingerprint in childFingerprints {
-                    hasher.combine(childFingerprint)
-                }
-                return hasher.finalize()
+                hierarchyContentFingerprint(
+                    for: container,
+                    childFingerprints: childFingerprints
+                )
             }
         )
     }
+}
+
+package func hierarchyContentFingerprint(for element: AccessibilityElement) -> Int {
+    var hasher = Hasher()
+    hasher.combine(0)
+    hasher.combine(element.contentFingerprint)
+    return hasher.finalize()
+}
+
+package func hierarchyContentFingerprint(
+    for container: AccessibilityContainer,
+    childFingerprints: [Int]
+) -> Int {
+    var hasher = Hasher()
+    hasher.combine(1)
+    hasher.combine(container)
+    for childFingerprint in childFingerprints {
+        hasher.combine(childFingerprint)
+    }
+    return hasher.finalize()
 }
 
 package func contentFingerprints(

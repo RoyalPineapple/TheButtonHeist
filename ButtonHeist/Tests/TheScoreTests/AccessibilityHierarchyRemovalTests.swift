@@ -71,6 +71,38 @@ final class AccessibilityHierarchyRemovalTests: XCTestCase {
         XCTAssertEqual(removal.hierarchy, [.element(unknown, traversalIndex: 0)])
     }
 
+    func testRemovalRetainsEmptyContainersAndDistinguishesDuplicateSemanticNodesByPath() {
+        let duplicate = makeTestAccessibilityElement(element(label: "Duplicate"))
+        let list = makeTestAccessibilityContainer(type: .list)
+        let empty = makeTestAccessibilityContainer(type: .semanticGroup(label: "Empty", value: nil))
+        let tree: [AccessibilityHierarchy] = [
+            .container(list, children: [
+                .element(duplicate, traversalIndex: 0),
+                .container(empty, children: []),
+                .element(duplicate, traversalIndex: 0),
+            ]),
+        ]
+
+        let removal = tree.removingElements(
+            withIds: Set(["remove"]),
+            idsByPath: [
+                TreePath([0, 0]): "remove",
+                TreePath([0, 2]): "keep",
+            ]
+        )
+
+        XCTAssertEqual(removal.hierarchy, [
+            .container(list, children: [
+                .container(empty, children: []),
+                .element(duplicate, traversalIndex: 0),
+            ]),
+        ])
+        XCTAssertNil(removal.pathMap[TreePath([0, 0])])
+        XCTAssertEqual(removal.pathMap[TreePath([0, 1])], TreePath([0, 0]))
+        XCTAssertEqual(removal.pathMap[TreePath([0, 2])], TreePath([0, 1]))
+        XCTAssertEqual(removal.idsByPath, [TreePath([0, 1]): "keep"])
+    }
+
     private func element(label: String) -> HeistElement {
         let frameX = 0.0
         let frameY = 0.0

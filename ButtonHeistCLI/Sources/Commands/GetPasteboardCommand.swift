@@ -1,7 +1,7 @@
 import ArgumentParser
 @_spi(ButtonHeistTooling) import ButtonHeist
 
-struct GetPasteboardCommand: AsyncParsableCommand, CLICommandContract {
+struct GetPasteboardCommand: ConnectedOneShotCLICommand {
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Read text from the general pasteboard",
@@ -18,14 +18,5 @@ struct GetPasteboardCommand: AsyncParsableCommand, CLICommandContract {
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
 
-    @ButtonHeistActor
-    mutating func run() async throws {
-        try await CLIRunner.run(
-            connection: connection,
-            format: output.format,
-            command: Self.fenceCommand,
-            arguments: Self.fenceArguments(),
-            statusMessage: "Reading pasteboard..."
-        )
-    }
+    var runnerStatusMessage: String? { "Reading pasteboard..." }
 }

@@ -81,23 +81,27 @@ public enum HeistActionEvidence: Codable, Sendable, Equatable {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist action evidence")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let type = try container.decode(EvidenceType.self, forKey: .type)
+        let typeName = "\(type.rawValue) heist action evidence"
         switch type {
         case .commandResolutionFailure:
             self = .commandResolutionFailure(
                 command: try container.decode(HeistActionCommand.self, forKey: .command)
             )
-            try Self.rejectFields(except: [.type, .command], in: container, type: type)
+            try container.rejectIncompatibleFields(allowing: [.type, .command], typeName: typeName)
         case .dispatch:
             self = .dispatch(
                 command: try container.decode(HeistActionCommand.self, forKey: .command),
                 dispatchResult: try container.decode(ActionResult.self, forKey: .dispatchResult)
             )
-            try Self.rejectFields(except: [.type, .command, .dispatchResult], in: container, type: type)
+            try container.rejectIncompatibleFields(
+                allowing: [.type, .command, .dispatchResult],
+                typeName: typeName
+            )
         case .commandlessDispatch:
             self = .commandlessDispatch(
                 dispatchResult: try container.decode(ActionResult.self, forKey: .dispatchResult)
             )
-            try Self.rejectFields(except: [.type, .dispatchResult], in: container, type: type)
+            try container.rejectIncompatibleFields(allowing: [.type, .dispatchResult], typeName: typeName)
         case .expectation:
             self = .expectation(
                 command: try container.decode(HeistActionCommand.self, forKey: .command),
@@ -105,10 +109,9 @@ public enum HeistActionEvidence: Codable, Sendable, Equatable {
                 expectationResult: try container.decode(ActionResult.self, forKey: .expectationResult),
                 expectation: try container.decode(ExpectationResult.self, forKey: .expectation)
             )
-            try Self.rejectFields(
-                except: [.type, .command, .dispatchResult, .expectationResult, .expectation],
-                in: container,
-                type: type
+            try container.rejectIncompatibleFields(
+                allowing: [.type, .command, .dispatchResult, .expectationResult, .expectation],
+                typeName: typeName
             )
         }
     }
@@ -135,24 +138,11 @@ public enum HeistActionEvidence: Codable, Sendable, Equatable {
         }
     }
 
-    private static func rejectFields(
-        except allowed: Set<CodingKeys>,
-        in container: KeyedDecodingContainer<CodingKeys>,
-        type: EvidenceType
-    ) throws {
-        for key in CodingKeys.allCases where !allowed.contains(key) && container.contains(key) {
-            throw DecodingError.dataCorruptedError(
-                forKey: key,
-                in: container,
-                debugDescription: "\(type.rawValue) heist action evidence cannot include \(key.stringValue)"
-            )
-        }
-    }
 }
 
 extension HeistActionCommand {
     var actionResultMethod: ActionMethod {
-        switch self {
+        switch core {
         case .activate: .activate
         case .increment: .increment
         case .decrement: .decrement

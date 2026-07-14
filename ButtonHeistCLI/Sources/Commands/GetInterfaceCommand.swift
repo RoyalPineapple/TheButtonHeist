@@ -2,7 +2,7 @@ import ArgumentParser
 import Foundation
 @_spi(ButtonHeistTooling) import ButtonHeist
 
-struct GetInterfaceCommand: AsyncParsableCommand, CLICommandContract {
+struct GetInterfaceCommand: ConnectedOneShotCLICommand {
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Read the app accessibility hierarchy from the connected device"
@@ -16,22 +16,18 @@ struct GetInterfaceCommand: AsyncParsableCommand, CLICommandContract {
 
     @OptionGroup var discoveryLimits: InterfaceDiscoveryLimitOptions
 
-    @ButtonHeistActor
-    mutating func run() async throws {
-        try await CLIRunner.run(
-            connection: connection,
-            format: output.format,
-            command: Self.fenceCommand,
-            arguments: try requestArguments(),
-            statusMessage: "Reading interface..."
-        )
-    }
+    var runnerStatusMessage: String? { "Reading interface..." }
 
     func requestArguments() throws -> TheFence.CommandArgumentEnvelope {
-        let subtreeValue = try subtree.parsedTarget().map(CLIRequestBuilder.targetValue)
         return Self.fenceArguments(
-            discoveryLimits.parameters.adding(
-                CommandArgumentWriter.optional(.subtree, subtreeValue)
+            CommandArgumentEnvelopeBuilder.optionalEncoded(.subtree, try subtree.parsedTarget()),
+            CommandArgumentEnvelopeBuilder.optional(
+                .maxScrollsPerContainer,
+                discoveryLimits.maxScrollsPerContainer
+            ),
+            CommandArgumentEnvelopeBuilder.optional(
+                .maxScrollsPerDiscovery,
+                discoveryLimits.maxScrollsPerDiscovery
             )
         )
     }
@@ -43,11 +39,4 @@ struct InterfaceDiscoveryLimitOptions: ParsableArguments {
 
     @Option(name: .long, help: "Maximum total page-scroll attempts during interface discovery.")
     var maxScrollsPerDiscovery: Int?
-
-    var parameters: CLIRequestFields {
-        CommandArgumentWriter.parameters(
-            CommandArgumentWriter.optional(.maxScrollsPerContainer, maxScrollsPerContainer),
-            CommandArgumentWriter.optional(.maxScrollsPerDiscovery, maxScrollsPerDiscovery)
-        )
-    }
 }

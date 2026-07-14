@@ -52,11 +52,8 @@ import TheScore
         named name: String,
         arguments: TheFence.CommandArgumentEnvelope
     ) -> Result<FenceCommandInput, FenceOperationRoutingError> {
-        switch routeToolCall(named: name) {
-        case .success(let command):
-            return .success(FenceCommandInput(command: command, arguments: arguments))
-        case .failure(let error):
-            return .failure(error)
+        routeToolCall(named: name).map { command in
+            FenceCommandInput(command: command, arguments: arguments)
         }
     }
 

@@ -98,7 +98,7 @@ extension HeistExecutionStepResult {
 
         switch outcome {
         case .passed(let passed):
-            if let failedChildPath = firstFailedPath(in: passed.children) {
+            if let failedChildPath = passed.children.firstFailedStepInReceiptOrder?.path {
                 throw receiptError(
                     "passed heist execution step must not contain failed child \(failedChildPath)",
                     codingPath: codingPath + [HeistExecutionStepOutcome.CodingKeys.children]
@@ -107,22 +107,18 @@ extension HeistExecutionStepResult {
         case .failed(let failed):
             try validateChildAbortPath(
                 nil,
-                failedChildPath: firstFailedPath(in: failed.children),
+                failedChildPath: failed.children.firstFailedStepInReceiptOrder?.path,
                 codingPath: codingPath
             )
         case .childAborted(let aborted):
             try validateChildAbortPath(
                 aborted.abortedAtChildPath,
-                failedChildPath: firstFailedPath(in: aborted.children),
+                failedChildPath: aborted.children.firstFailedStepInReceiptOrder?.path,
                 codingPath: codingPath
             )
         case .skipped:
             break
         }
-    }
-
-    private static func firstFailedPath(in children: [HeistExecutionStepResult]) -> String? {
-        children.lazy.compactMap(\.firstFailedStepPathForReceiptValidation).first
     }
 
     private static func validateEvidence(
@@ -455,13 +451,6 @@ extension HeistExecutionStepResult {
 
     private static func receiptError(_ message: String, codingPath: [CodingKey]) -> DecodingError {
         .dataCorrupted(.init(codingPath: codingPath, debugDescription: message))
-    }
-}
-
-package extension HeistExecutionStepResult {
-    var firstFailedStepPathForReceiptValidation: String? {
-        children.lazy.compactMap(\.firstFailedStepPathForReceiptValidation).first
-            ?? (status == .failed ? path : nil)
     }
 }
 

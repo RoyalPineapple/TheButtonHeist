@@ -1,21 +1,8 @@
+import ButtonHeistTestSupport
 import Network
 import XCTest
 @_spi(ButtonHeistTooling) @testable import ButtonHeist
 import TheScore
-
-private func waitUntil(
-    timeout: TimeInterval = 1.0,
-    _ condition: @escaping @ButtonHeistActor () -> Bool
-) async -> Bool {
-    let deadline = Date().addingTimeInterval(timeout)
-    while Date() < deadline {
-        if await condition() {
-            return true
-        }
-        await Task.yield()
-    }
-    return await condition()
-}
 
 @ButtonHeistActor
 private final class ManualReconnectSleeper {
@@ -430,84 +417,90 @@ final class TheHandoffStateTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testReconnectControllerRejectsStaleTargetCompletion() async {
-        let controller = HandoffReconnectController()
+    func testConnectionLifecycleCancelsReplacedRunAndRejectsStaleCompletion() async {
+        let lifecycle = HandoffConnectionLifecycle()
         let oldDevice = DiscoveredDevice(host: "127.0.0.1", port: 1111)
         let newDevice = DiscoveredDevice(host: "127.0.0.1", port: 2222)
 
-        XCTAssertTrue(controller.setup(filter: "OldApp"))
-        guard let oldTarget = controller.targetForDisconnectedDevice(oldDevice) else {
+        XCTAssertTrue(lifecycle.setup(filter: "OldApp"))
+        guard let oldTarget = lifecycle.targetForDisconnectedDevice(oldDevice) else {
             return XCTFail("Expected old reconnect target")
         }
-        guard let oldRun = controller.run(target: oldTarget, operation: { _ in }) else {
+        guard let oldRun = lifecycle.run(target: oldTarget, operation: { _ in }) else {
             return XCTFail("Expected old reconnect run")
         }
+        XCTAssertTrue(lifecycle.isReconnectRunning)
 
-        XCTAssertTrue(controller.setup(filter: "NewApp"))
-        guard let newTarget = controller.targetForDisconnectedDevice(newDevice) else {
+        XCTAssertTrue(lifecycle.setup(filter: "NewApp"))
+        XCTAssertFalse(lifecycle.isReconnectRunning)
+        XCTAssertFalse(lifecycle.finishSuccess(oldRun))
+        XCTAssertFalse(lifecycle.finishFailure(oldRun, failure: .connectionFailed("stale")))
+
+        guard let newTarget = lifecycle.targetForDisconnectedDevice(newDevice) else {
             return XCTFail("Expected new reconnect target")
         }
-        guard let newRun = controller.run(target: newTarget, operation: { _ in }) else {
+        guard let newRun = lifecycle.run(target: newTarget, operation: { _ in }) else {
             return XCTFail("Expected new reconnect run")
         }
 
-        XCTAssertFalse(controller.finishSuccess(oldRun))
-        XCTAssertFalse(controller.finishFailure(oldRun, failure: .connectionFailed("stale")))
-        XCTAssertTrue(controller.finishSuccess(newRun))
+        XCTAssertTrue(lifecycle.finishSuccess(newRun))
     }
 
     @ButtonHeistActor
-    func testReconnectControllerRejectsDuplicateRunWhileRunning() async {
-        let controller = HandoffReconnectController()
+    func testConnectionLifecycleRejectsDuplicateReconnectRun() async {
+        let lifecycle = HandoffConnectionLifecycle()
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
 
-        XCTAssertTrue(controller.setup(filter: nil))
-        guard let target = controller.targetForDisconnectedDevice(device) else {
+        XCTAssertTrue(lifecycle.setup(filter: nil))
+        guard let target = lifecycle.targetForDisconnectedDevice(device) else {
             return XCTFail("Expected reconnect target")
         }
 
-        XCTAssertNotNil(controller.run(target: target, operation: { _ in }))
-        XCTAssertNil(controller.run(target: target, operation: { _ in }))
+        XCTAssertNotNil(lifecycle.run(target: target, operation: { _ in }))
+        XCTAssertNil(lifecycle.run(target: target, operation: { _ in }))
     }
 
     @ButtonHeistActor
-    func testReconnectTerminalFailureRequiresExplicitSetupBeforeRearming() async {
-        let controller = HandoffReconnectController()
+    func testConnectionLifecycleReconnectExhaustionRequiresExplicitRearming() async {
+        let lifecycle = HandoffConnectionLifecycle()
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        let failure = HandoffConnectionError.connectionFailed("gave up")
 
-        XCTAssertTrue(controller.setup(filter: nil))
-        guard let target = controller.targetForDisconnectedDevice(device) else {
+        XCTAssertTrue(lifecycle.setup(filter: nil))
+        guard let target = lifecycle.targetForDisconnectedDevice(device) else {
             return XCTFail("Expected reconnect target")
         }
-        guard let run = controller.run(target: target, operation: { _ in }) else {
+        guard let run = lifecycle.run(target: target, operation: { _ in }) else {
             return XCTFail("Expected reconnect run")
         }
 
-        XCTAssertTrue(controller.finishFailure(run, failure: .connectionFailed("gave up")))
-        XCTAssertFalse(controller.finishSuccess(run))
-        XCTAssertFalse(controller.finishFailure(run, failure: .connectionFailed("again")))
-        XCTAssertNil(controller.targetForDisconnectedDevice(device))
+        XCTAssertTrue(lifecycle.finishFailure(run, failure: failure))
+        assertFailed(lifecycle.phase, failure: failure)
+        XCTAssertFalse(lifecycle.isReconnectRunning)
+        XCTAssertFalse(lifecycle.finishSuccess(run))
+        XCTAssertFalse(lifecycle.finishFailure(run, failure: .connectionFailed("again")))
+        XCTAssertNil(lifecycle.targetForDisconnectedDevice(device))
 
-        XCTAssertTrue(controller.setup(filter: nil))
-        XCTAssertNotNil(controller.targetForDisconnectedDevice(device))
+        XCTAssertTrue(lifecycle.setup(filter: nil))
+        XCTAssertNotNil(lifecycle.targetForDisconnectedDevice(device))
     }
 
     @ButtonHeistActor
-    func testReconnectSuccessDoesNotRetainTargetForLaterDisconnect() async {
-        let controller = HandoffReconnectController()
+    func testConnectionLifecycleReconnectSuccessRetainsOnlyFilterPolicy() async {
+        let lifecycle = HandoffConnectionLifecycle()
         let firstDevice = DiscoveredDevice(host: "127.0.0.1", port: 1111)
         let secondDevice = DiscoveredDevice(host: "127.0.0.1", port: 2222)
 
-        XCTAssertTrue(controller.setup(filter: nil))
-        guard let firstTarget = controller.targetForDisconnectedDevice(firstDevice),
-              let firstRun = controller.run(target: firstTarget, operation: { _ in })
+        XCTAssertTrue(lifecycle.setup(filter: nil))
+        guard let firstTarget = lifecycle.targetForDisconnectedDevice(firstDevice),
+              let firstRun = lifecycle.run(target: firstTarget, operation: { _ in })
         else {
             return XCTFail("Expected first reconnect run")
         }
 
-        XCTAssertTrue(controller.finishSuccess(firstRun))
+        XCTAssertTrue(lifecycle.finishSuccess(firstRun))
 
-        guard let secondTarget = controller.targetForDisconnectedDevice(secondDevice) else {
+        guard let secondTarget = lifecycle.targetForDisconnectedDevice(secondDevice) else {
             return XCTFail("Expected rearmed reconnect target")
         }
         XCTAssertEqual(secondTarget.device, secondDevice)
@@ -549,20 +542,48 @@ final class TheHandoffStateTests: XCTestCase {
         let lifecycle = HandoffConnectionLifecycle()
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
         let target = HandoffReconnectTarget(filter: nil, device: device)
-        let firstRunID = UUID()
-        let secondRunID = UUID()
         var phases: [HandoffConnectionPhase] = []
         lifecycle.onPhaseChanged = { phases.append($0) }
 
-        lifecycle.markReconnecting(target: target, runID: firstRunID)
-        lifecycle.markReconnecting(target: target, runID: secondRunID)
-
-        XCTAssertEqual(phases.count, 2)
-        guard case .reconnecting(let attempt) = phases.last else {
-            return XCTFail("Expected reconnecting phase")
+        XCTAssertTrue(lifecycle.setup(filter: nil))
+        guard let firstRun = lifecycle.run(target: target, operation: { _ in }) else {
+            return XCTFail("Expected first reconnect run")
         }
-        XCTAssertEqual(attempt.runID, secondRunID)
-        XCTAssertEqual(attempt.target, target)
+        XCTAssertTrue(lifecycle.finishSuccess(firstRun))
+        guard let secondRun = lifecycle.run(target: target, operation: { _ in }) else {
+            return XCTFail("Expected second reconnect run")
+        }
+
+        let reconnectRuns = phases.compactMap { phase -> HandoffReconnectRunContext? in
+            guard case .reconnecting(let run) = phase else { return nil }
+            return run
+        }
+        XCTAssertEqual(reconnectRuns.map(\.id), [firstRun.id, secondRun.id])
+        XCTAssertEqual(reconnectRuns.map(\.target), [target, target])
+    }
+
+    @ButtonHeistActor
+    func testReconnectAttemptFailurePreservesRunWithoutRepeatingPhaseNotification() async {
+        let lifecycle = HandoffConnectionLifecycle()
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        let target = HandoffReconnectTarget(filter: nil, device: device)
+        let failure = HandoffConnectionError.connectionFailed("retry failed")
+        var phases: [HandoffConnectionPhase] = []
+        lifecycle.onPhaseChanged = { phases.append($0) }
+
+        XCTAssertTrue(lifecycle.setup(filter: nil))
+        guard let run = lifecycle.run(target: target, operation: { _ in }) else {
+            return XCTFail("Expected reconnect run")
+        }
+
+        lifecycle.recordAttemptFailure(failure)
+
+        assertReconnecting(lifecycle.phase, device: device)
+        XCTAssertEqual(lifecycle.diagnosticFailure, failure)
+        XCTAssertEqual(phases.compactMap { phase -> UUID? in
+            guard case .reconnecting(let context) = phase else { return nil }
+            return context.id
+        }, [run.id])
     }
 
     @ButtonHeistActor
@@ -799,7 +820,7 @@ final class TheHandoffStateTests: XCTestCase {
         handoff.setupAutoReconnect(filter: "127.0.0.1:1458")
         handoff.connect(to: device)
 
-        let timedOutAttemptDisconnected = await waitUntil(timeout: 1.0) {
+        let timedOutAttemptDisconnected = await eventually(within: .seconds(1)) {
             connections.count >= 2 && connections[1].disconnectCount > 0
         }
 
@@ -1621,8 +1642,8 @@ final class TheHandoffStateTests: XCTestCase {
         ))
         assertFailed(handoff.connectionPhase, failure: .serverFailure(serverError))
 
-        let interface = makeReceiptTestInterface(
-            [makeReceiptTestElement(label: "Title")],
+        let interface = makeTestInterface(
+            elements: [makeTestHeistElement(label: "Title")],
             timestamp: Date(timeIntervalSince1970: 100)
         )
         mock.onEvent?(.message(

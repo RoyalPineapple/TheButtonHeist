@@ -10,7 +10,7 @@ struct CLIParsedRequest {
     }
 }
 
-struct CLIRequestBuildError: Error, CustomStringConvertible {
+struct CLIMachineRequestError: Error, CustomStringConvertible {
     let diagnosticFailure: DiagnosticFailure
     let requestId: PublicRequestId?
 
@@ -26,31 +26,15 @@ struct CLIRequestBuildError: Error, CustomStringConvertible {
     var description: String { diagnosticFailure.displayMessage }
 }
 
-enum CLIRequestBuilder {
-
-    static func arguments(
-        parameters: CLIRequestFields = CLIRequestFields(),
-        target: AccessibilityTarget? = nil
-    ) -> TheFence.CommandArgumentEnvelope {
-        var parameters = parameters
-        if let target {
-            parameters.set(.target, targetObject(target))
-        }
-        return TheFence.CommandArgumentEnvelope(values: parameters.rawValues)
-    }
-
+enum CLIMachineRequestParser {
     static func parsedRequest(from line: String) throws -> CLIParsedRequest {
-        try parseMachineRequest(line)
-    }
-
-    static func parseMachineRequest(_ line: String) throws -> CLIParsedRequest {
         let envelope: CLIMachineRequestEnvelope
         do {
             envelope = try CLIMachineRequestEnvelope.decode(from: line)
-        } catch let error as CLIRequestBuildError {
+        } catch let error as CLIMachineRequestError {
             throw error
         } catch {
-            throw CLIRequestBuildError(
+            throw CLIMachineRequestError(
                 diagnosticFailure: diagnosticFailure(for: error),
                 requestId: nil
             )
@@ -60,7 +44,7 @@ enum CLIRequestBuilder {
         case .success(let input):
             return CLIParsedRequest(input: input, requestId: requestId)
         case .failure(let error):
-            throw CLIRequestBuildError(
+            throw CLIMachineRequestError(
                 diagnosticFailure: DiagnosticFailure(message: error.message, details: error.details),
                 requestId: requestId
             )
@@ -71,8 +55,8 @@ enum CLIRequestBuilder {
         for error: Error,
         details: FailureDetails = FailureDetails(code: .requestInvalid)
     ) -> DiagnosticFailure {
-        if let buildError = error as? CLIRequestBuildError {
-            return buildError.diagnosticFailure
+        if let requestError = error as? CLIMachineRequestError {
+            return requestError.diagnosticFailure
         }
         if let inputError = error as? PublicJSONInputError {
             return DiagnosticFailure(message: inputError.message, details: details)
@@ -80,27 +64,6 @@ enum CLIRequestBuilder {
         let description = String(describing: error)
         let message = description.isEmpty ? error.localizedDescription : description
         return DiagnosticFailure(message: message, details: details)
-    }
-
-    static func targetValue(_ target: AccessibilityTarget) -> HeistValue {
-        do {
-            return try TheFence.HeistValuePayloadEncoder.encode(target)
-        } catch {
-            preconditionFailure("Failed to encode canonical AccessibilityTarget payload: \(error)")
-        }
-    }
-
-    static func targetObject(_ target: AccessibilityTarget) -> CLIRequestFields {
-        guard case .object(let fields) = targetValue(target) else {
-            preconditionFailure("Canonical AccessibilityTarget payload did not encode as an object")
-        }
-
-        return CLIRequestFields(fields.map { rawKey, value in
-            guard let key = FenceParameterKey(rawValue: rawKey) else {
-                preconditionFailure("Canonical AccessibilityTarget payload emitted unknown key \(rawKey)")
-            }
-            return (key, value)
-        })
     }
 }
 
@@ -118,13 +81,13 @@ private struct CLIMachineRequestEnvelope: Decodable {
                 rootMismatchMessage: "Expected JSON object input"
             )
         } catch let error as DecodingError {
-            throw CLIRequestBuildError(
-                diagnosticFailure: CLIRequestBuilder.diagnosticFailure(for: error),
+            throw CLIMachineRequestError(
+                diagnosticFailure: CLIMachineRequestParser.diagnosticFailure(for: error),
                 requestId: nil
             )
         } catch {
-            throw CLIRequestBuildError(
-                diagnosticFailure: CLIRequestBuilder.diagnosticFailure(for: error),
+            throw CLIMachineRequestError(
+                diagnosticFailure: CLIMachineRequestParser.diagnosticFailure(for: error),
                 requestId: nil
             )
         }

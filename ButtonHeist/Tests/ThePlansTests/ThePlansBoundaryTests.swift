@@ -621,7 +621,7 @@ func `heist artifact accepts parameterized root entry through validation contrac
         name: "search",
         parameter: .string(name: "query"),
         body: [.action(try ActionStep(command: .typeText(
-            text: .ref("query"),
+            reference: "query",
             target: .label("Search")
         )))]
     )

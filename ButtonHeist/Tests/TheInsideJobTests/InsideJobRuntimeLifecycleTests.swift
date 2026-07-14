@@ -251,7 +251,7 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
                 XCTAssertEqual(runtimeToken, token, file: file, line: line)
                 XCTAssertEqual(runtimeScopes, scopes, file: file, line: line)
                 let transport = ServerTransport(token: token, allowedScopes: scopes)
-                transport.startOverride = { requestedPort, bindToLoopback in
+                transport.startOverride = { _, requestedPort, bindToLoopback in
                     harnessState.startCount += 1
                     XCTAssertEqual(requestedPort, 0, file: file, line: line)
                     XCTAssertTrue(bindToLoopback, file: file, line: line)

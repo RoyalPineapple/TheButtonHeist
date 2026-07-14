@@ -40,18 +40,15 @@ enum HeistRepairSuggestionRenderer {
         tiedBestCount: Int
     ) -> RepairSuggestionValidation {
         let currentScreen = analysis.currentScreen
-        let selectionContext = currentScreen.selectionContext()
-        guard let selection = MinimumPredicateSelector.minimumUniquePredicate(
-            for: candidate.element.id,
-            in: selectionContext
-        ),
+        guard let selection = currentScreen.minimumUniquePredicate(for: candidate.element.id),
               case .resolved(let validation, _) = currentScreen.resolve(selection.target),
               validation.id == candidate.element.id
         else {
             return .rejected(.noUniqueDurableMatcher)
         }
 
-        if analysis.actionFamily.isKnown, !analysis.actionFamily.isSupported(by: candidate.element.element) {
+        if analysis.actionRequirement.isKnown,
+           !analysis.actionRequirement.isSupported(by: candidate.element.element) {
             return .rejected(.unsupportedActionFamily)
         }
 
@@ -80,9 +77,9 @@ enum HeistRepairSuggestionRenderer {
             stepPath: request.currentFailure.stepPath,
             failureKind: analysis.failureKind,
             oldTarget: request.lastSuccess.target,
-            oldResolvedElement: analysis.oldResolved.summary,
+            oldResolvedElement: analysis.oldResolved.repairContext,
             newTarget: selection.target,
-            newResolvedElement: candidate.element.summary,
+            newResolvedElement: candidate.element.repairContext,
             confidence: confidence(
                 score: candidate.score,
                 selection: selection,
@@ -99,8 +96,8 @@ enum HeistRepairSuggestionRenderer {
         failureKind: HeistRepairFailureKind,
         currentResolution: RepairTargetResolution,
         selection: MinimumPredicateSelection,
-        lastSuccess: HeistPassedStepRepairEvidence,
-        currentFailure: HeistFailedStepRepairEvidence
+        lastSuccess: HeistRepairEvidence,
+        currentFailure: HeistRepairEvidence
     ) -> [RepairSuggestionReason] {
         var reasons: [RepairSuggestionReason] = [
             .oldTargetResolvedInLastSuccessfulSnapshot,
@@ -132,15 +129,15 @@ enum HeistRepairSuggestionRenderer {
     }
 
     private static func afterEvidenceReasons(
-        lastSuccess: HeistPassedStepRepairEvidence,
-        currentFailure: HeistFailedStepRepairEvidence
+        lastSuccess: HeistRepairEvidence,
+        currentFailure: HeistRepairEvidence
     ) -> [RepairSuggestionReason] {
         var reasons = changeFactReasons(source: .lastSuccess, facts: lastSuccess.changeFacts)
         reasons.append(contentsOf: changeFactReasons(source: .currentFailure, facts: currentFailure.changeFacts))
-        if let expectation = lastSuccess.result.expectation, expectation.met {
+        if let expectation = lastSuccess.expectation, expectation.met {
             reasons.append(.lastSuccessfulExpectationMet)
         }
-        if let expectation = currentFailure.result.expectation, !expectation.met {
+        if let expectation = currentFailure.expectation, !expectation.met {
             reasons.append(.currentFailureExpectationUnmet)
         }
         return reasons

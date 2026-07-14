@@ -4,128 +4,195 @@ import Foundation
 import ThePlans
 import TheScore
 
-extension TheBrains {
-    struct PostActionPayloadContext {
-        let afterState: PostActionObservation.BeforeState
-        let resolvedElementId: HeistId?
-    }
+internal struct RuntimeActionExecution: Sendable, Equatable {
+    internal let result: ActionResult
+    internal let expectationBaseline: SettledCapture?
+}
 
+extension TheBrains {
     // MARK: - Command Dispatch
 
     /// Execute a command through the full interaction pipeline:
     /// refresh → snapshot → execute → settle → semantic observation → delta → result.
     /// Returns the ActionResult for TheInsideJob to send.
-    func executeRuntimeAction(_ message: RuntimeActionMessage) async -> ActionResult {
+    func executeRuntimeAction(_ command: ResolvedHeistActionCommand) async -> ActionResult {
+        await executeRuntimeActionWithBaseline(command).result
+    }
+
+    func executeRuntimeActionWithBaseline(
+        _ command: ResolvedHeistActionCommand,
+        expectationBaselineScope: SemanticObservationScope? = nil
+    ) async -> RuntimeActionExecution {
+        let expectationBaseline = await interactionObservation.captureSettledBaseline(
+            scope: expectationBaselineScope
+        )
+
         // Rotor mode holds a single cursor only while consecutive rotor steps
         // run on the same host. Any other interaction exits rotor mode and drops
         // the held cursor.
-        if case .rotor = message {} else {
-            stash.clearRotorCursor()
-        }
-        switch message {
+        clearRotorCursorBeforeNonRotorAction(command)
+        let result: ActionResult
+        switch command {
         case .activate(let target):
-            return await performInteraction(method: .activate) {
+            result = await performInteraction(method: .activate) {
                 await self.actions.executeActivate(target)
             }
         case .increment(let target):
-            return await performInteraction(method: .increment, observationScope: .discovery) {
+            result = await performInteraction(method: .increment, observationScope: .discovery) {
                 await self.actions.executeIncrement(target)
             }
         case .decrement(let target):
-            return await performInteraction(method: .decrement, observationScope: .discovery) {
+            result = await performInteraction(method: .decrement, observationScope: .discovery) {
                 await self.actions.executeDecrement(target)
             }
-        case .performCustomAction(let target):
-            return await performInteraction(method: .customAction, observationScope: .discovery) {
-                await self.actions.executeCustomAction(target)
+        case .customAction(let name, let target):
+            result = await performInteraction(method: .customAction, observationScope: .discovery) {
+                await self.actions.executeCustomAction(name: name, target: target)
             }
         case .dismiss:
-            return await performInteraction(method: .dismiss) { await self.actions.executeDismiss() }
+            result = await performInteraction(method: .dismiss) { await self.actions.executeDismiss() }
         case .magicTap:
-            return await performInteraction(method: .magicTap) { await self.actions.executeMagicTap() }
-        case .rotor(let target):
-            return await performRotor(target)
+            result = await performInteraction(method: .magicTap) { await self.actions.executeMagicTap() }
+        case .rotor(let selection, let target, let direction):
+            result = await performRotor(selection: selection, target: target, direction: direction)
         case .editAction(let target):
-            return await performInteraction(method: .editAction) { await self.actions.executeEditAction(target) }
+            result = await performInteraction(method: .editAction) { await self.actions.executeEditAction(target) }
         case .setPasteboard(let target):
-            return await performInteraction(method: .setPasteboard) { await self.actions.executeSetPasteboard(target) }
+            result = await performInteraction(method: .setPasteboard) {
+                await self.actions.executeSetPasteboard(target)
+            }
         case .takeScreenshot:
-            return await executeTakeScreenshot()
-        case .resignFirstResponder:
-            return await performInteraction(method: .resignFirstResponder) { await self.actions.executeResignFirstResponder() }
-        case .oneFingerTap(let target):
-            return await performInteraction(method: .syntheticTap, observationScope: observationScope(for: target)) {
+            result = await executeTakeScreenshot()
+        case .dismissKeyboard:
+            result = await performInteraction(method: .resignFirstResponder) {
+                await self.actions.executeResignFirstResponder()
+            }
+        case .mechanicalTap(let target):
+            result = await performInteraction(
+                method: .syntheticTap,
+                observationScope: observationScope(for: target)
+            ) {
                 await self.actions.executeTap(target)
             }
-        case .longPress(let target):
-            return await performInteraction(method: .syntheticLongPress, observationScope: observationScope(for: target)) {
+        case .mechanicalLongPress(let target):
+            result = await performInteraction(
+                method: .syntheticLongPress,
+                observationScope: observationScope(for: target)
+            ) {
                 await self.actions.executeLongPress(target)
             }
-        case .swipe(let target):
-            return await performInteraction(method: .syntheticSwipe, observationScope: observationScope(for: target)) {
+        case .mechanicalSwipe(let target):
+            result = await performInteraction(
+                method: .syntheticSwipe,
+                observationScope: observationScope(for: target)
+            ) {
                 await self.actions.executeSwipe(target)
             }
-        case .drag(let target):
-            return await performInteraction(method: .syntheticDrag, observationScope: observationScope(for: target)) {
+        case .mechanicalDrag(let target):
+            result = await performInteraction(
+                method: .syntheticDrag,
+                observationScope: observationScope(for: target)
+            ) {
                 await self.actions.executeDrag(target)
             }
-        case .typeText(let target):
-            return await performInteraction(
-                method: .typeText,
-                observationScope: .discovery,
-                afterStatePayload: { context in
-                    guard let resolvedElementId = context.resolvedElementId,
-                          let payload = self.actions.typeTextPayload(
-                              resolvedElementId: resolvedElementId,
-                              in: context.afterState
-                          ) else {
-                        return .none
-                    }
-                    return .payload(payload)
-                },
-                interaction: { await self.actions.executeTypeText(target) }
+        case .typeText(let text, let target, let replacingExisting):
+            result = await performTypeText(
+                text: text,
+                target: target,
+                replacingExisting: replacingExisting
             )
-        case .scroll(let target):
-            return await performInteraction(
-                method: .scroll,
-                observationScope: .discovery,
-                postActionCommitScope: .discovery
-            ) {
-                await self.navigation.executeScroll(target)
+        case .viewportScroll(let target):
+            result = await performViewportScroll(target)
+        case .viewportScrollToVisible(let target):
+            result = await performViewportScrollToVisible(target)
+        case .viewportScrollToEdge(let target):
+            result = await performViewportScrollToEdge(target)
+        }
+        return RuntimeActionExecution(
+            result: result,
+            expectationBaseline: expectationBaseline
+        )
+    }
+
+    private func clearRotorCursorBeforeNonRotorAction(_ command: ResolvedHeistActionCommand) {
+        if case .rotor = command {} else {
+            stash.clearRotorCursor()
+        }
+    }
+
+    private func performTypeText(
+        text: String,
+        target: ResolvedAccessibilityTarget?,
+        replacingExisting: Bool
+    ) async -> ActionResult {
+        await performInteraction(
+            method: .typeText,
+            observationScope: .discovery,
+            afterStatePayload: { context in
+                guard let resolvedElementId = context.resolvedElementId else {
+                    return nil
+                }
+                return self.actions.typeTextPayload(
+                    resolvedElementId: resolvedElementId,
+                    in: context.afterState
+                )
+            },
+            interaction: {
+                await self.actions.executeTypeText(
+                    text: text,
+                    target: target,
+                    replacingExisting: replacingExisting
+                )
             }
-        case .scrollToVisible(let target):
-            return await performInteraction(
-                method: .scrollToVisible,
-                observationScope: .discovery,
-                postActionCommitScope: .discovery
-            ) {
-                await self.navigation.executeScrollToVisible(target)
-            }
-        case .scrollToEdge(let target):
-            return await performInteraction(
-                method: .scrollToEdge,
-                observationScope: .discovery,
-                postActionCommitScope: .discovery
-            ) {
-                await self.navigation.executeScrollToEdge(target)
-            }
-        case .wait(let target):
-            return await performWait(target: target)
+        )
+    }
+
+    private func performViewportScroll(_ target: ResolvedScrollTarget) async -> ActionResult {
+        await performInteraction(
+            method: .scroll,
+            observationScope: .discovery,
+            postActionCommitScope: .discovery
+        ) {
+            await self.navigation.executeScroll(target)
+        }
+    }
+
+    private func performViewportScrollToVisible(
+        _ target: ResolvedAccessibilityTarget
+    ) async -> ActionResult {
+        await performInteraction(
+            method: .scrollToVisible,
+            observationScope: .discovery,
+            postActionCommitScope: .discovery
+        ) {
+            await self.navigation.executeScrollToVisible(target: target)
+        }
+    }
+
+    private func performViewportScrollToEdge(
+        _ target: ResolvedScrollToEdgeTarget
+    ) async -> ActionResult {
+        await performInteraction(
+            method: .scrollToEdge,
+            observationScope: .discovery,
+            postActionCommitScope: .discovery
+        ) {
+            await self.navigation.executeScrollToEdge(target)
         }
     }
 
     func executePasteboardRead() -> ActionResult {
         let result = actions.executeGetPasteboard()
-        switch result.outcome {
-        case .success(let success):
-            guard let payload = success.payload else {
+        switch result.state {
+        case .success(let payload, _):
+            guard let payload else {
                 return .success(method: result.method, message: result.message, evidence: .none)
             }
             return .success(payload: payload, message: result.message, evidence: .none)
-        case .failure(let failure):
+        case .failure(let failureKind):
             return .failure(
                 method: result.method,
-                errorKind: Self.actionErrorKind(for: failure.kind),
+                errorKind: Self.actionErrorKind(for: failureKind),
                 message: result.message,
                 evidence: .none
             )
@@ -139,7 +206,7 @@ extension TheBrains {
         observationScope: SemanticObservationScope = .visible,
         beforeStateScope: SemanticObservationScope = .visible,
         postActionCommitScope: SemanticObservationScope = .visible,
-        afterStatePayload: ((PostActionPayloadContext) -> PostActionObservation.ResolvedActionOutcomePayload)? = nil,
+        afterStatePayload: ((PostActionPayloadContext) -> ActionResultPayload?)? = nil,
         interaction: () async -> TheSafecracker.ActionDispatchOutcome
     ) async -> ActionResult {
         guard semanticObservationIsActive else {
@@ -161,39 +228,10 @@ extension TheBrains {
         let interactionStart = CFAbsoluteTimeGetCurrent()
         let result = await interaction()
         let interactionMs = elapsedMilliseconds(since: interactionStart)
-        let postActionOutcome: PostActionObservation.ActionOutcome
-        switch result.outcome {
-        case .success(let success):
-            let payload: PostActionObservation.ActionOutcomePayload
-            if let immediatePayload = success.payload {
-                payload = .immediate(immediatePayload)
-            } else if let afterStatePayload {
-                payload = .afterState { afterState in
-                    afterStatePayload(PostActionPayloadContext(
-                        afterState: afterState,
-                        resolvedElementId: success.resolvedElementId
-                    ))
-                }
-            } else {
-                payload = .none
-            }
-            postActionOutcome = .success(.init(
-                payload: payload,
-                subjectEvidence: success.subjectEvidence,
-                activationTrace: success.activationTrace
-            ))
-        case .failure(let failure):
-            postActionOutcome = .failure(.init(
-                errorKind: Self.actionErrorKind(for: failure.kind),
-                subjectEvidence: failure.subjectEvidence,
-                activationTrace: failure.activationTrace
-            ))
-        }
 
         let actionResult = await interactionObservation.finishAfterAction(
-            method: result.method,
-            outcome: postActionOutcome,
-            message: result.message,
+            outcome: result,
+            afterStatePayload: afterStatePayload,
             before: before,
             postActionCommitScope: postActionCommitScope,
             notificationWindow: notificationWindow
@@ -207,17 +245,20 @@ extension TheBrains {
         ))
     }
 
-    func performRotor(_ target: RotorTarget) async -> ActionResult {
+    private func performRotor(
+        selection: RotorSelection,
+        target: ResolvedAccessibilityTarget,
+        direction: RotorDirection
+    ) async -> ActionResult {
         return await performInteraction(method: .rotor, observationScope: .discovery) {
-            await self.actions.executeRotor(target)
+            await self.actions.executeRotor(selection: selection, target: target, direction: direction)
         }
     }
 
-    func performWait(target: WaitTarget) async -> ActionResult {
+    func performWait(step: ResolvedWaitRuntimeInput) async -> ActionResult {
         guard semanticObservationIsActive else {
             return runtimeInactiveResult(method: .wait)
         }
-        let step = ResolvedWaitStep(predicate: target.predicate, timeout: target.resolvedTimeout)
         let observationPlan = WaitObservationPlan(step: step)
         let demand = stash.beginSemanticObservationDemand(scope: observationPlan.scope)
         defer { demand.cancel() }
@@ -229,16 +270,7 @@ extension TheBrains {
         return receipt.actionResult
     }
 
-    static func actionErrorKind(for result: TheSafecracker.ActionDispatchOutcome) -> ErrorKind? {
-        switch result.outcome {
-        case .success:
-            return nil
-        case .failure(let failure):
-            return actionErrorKind(for: failure.kind)
-        }
-    }
-
-    static func actionErrorKind(for failureKind: TheSafecracker.FailureKind) -> ErrorKind {
+    nonisolated static func actionErrorKind(for failureKind: TheSafecracker.FailureKind) -> ErrorKind {
         switch failureKind {
         case .actionFailed:
             return .actionFailed
@@ -253,15 +285,15 @@ extension TheBrains {
         }
     }
 
-    private func observationScope(for target: TapTarget) -> SemanticObservationScope {
+    private func observationScope(for target: ResolvedTapTarget) -> SemanticObservationScope {
         observationScope(for: target.selection)
     }
 
-    private func observationScope(for target: LongPressTarget) -> SemanticObservationScope {
+    private func observationScope(for target: ResolvedLongPressTarget) -> SemanticObservationScope {
         observationScope(for: target.selection)
     }
 
-    private func observationScope(for target: SwipeTarget) -> SemanticObservationScope {
+    private func observationScope(for target: ResolvedSwipeTarget) -> SemanticObservationScope {
         switch target.selection {
         case .unitElement, .elementDirection:
             return .discovery
@@ -270,11 +302,16 @@ extension TheBrains {
         }
     }
 
-    private func observationScope(for target: DragTarget) -> SemanticObservationScope {
-        observationScope(for: target.start)
+    private func observationScope(for target: ResolvedDragTarget) -> SemanticObservationScope {
+        switch target.selection {
+        case .elementToPoint:
+            return .discovery
+        case .pointToPoint:
+            return .visible
+        }
     }
 
-    private func observationScope(for selection: GesturePointSelection) -> SemanticObservationScope {
+    private func observationScope(for selection: ResolvedGesturePointSelection) -> SemanticObservationScope {
         switch selection {
         case .element, .elementUnitPoint:
             return .discovery

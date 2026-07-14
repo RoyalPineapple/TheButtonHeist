@@ -111,15 +111,15 @@ import TheScore
         let invalidOutcomes = [
             (
                 #"{"type":"passed","failure":{},"children":[]}"#,
-                "passed heist execution step outcome cannot include failure"
+                "passed heist execution step outcome must not include failure"
             ),
             (
                 #"{"type":"failed","abortedAtChildPath":"$.body[0]","failure":{},"children":[]}"#,
-                "failed heist execution step outcome cannot include abortedAtChildPath"
+                "failed heist execution step outcome must not include abortedAtChildPath"
             ),
             (
                 #"{"type":"skipped","evidence":{},"children":[]}"#,
-                "skipped heist execution step outcome cannot include evidence"
+                "skipped heist execution step outcome must not include evidence"
             ),
             (
                 #"{"type":"child_aborted","status":"failed","children":[]}"#,

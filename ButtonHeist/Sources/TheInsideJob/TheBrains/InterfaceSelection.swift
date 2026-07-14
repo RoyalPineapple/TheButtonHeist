@@ -7,12 +7,15 @@ import TheScore
 import AccessibilitySnapshotModel
 
 enum InterfaceSelectionError: Error, Equatable {
+    case invalidSubtree(String)
     case subtreeNotFound
     case subtreeOrdinalOutOfRange(ordinal: Int, candidateCount: Int, candidates: [String])
     case ambiguousSubtree(candidateCount: Int, candidates: [String])
 
     var message: String {
         switch self {
+        case .invalidSubtree(let reason):
+            return "get_interface subtree could not be resolved: \(reason)"
         case .subtreeNotFound:
             return """
                 get_interface subtree matched no nodes; refine subtree using a container \
@@ -44,10 +47,16 @@ struct InterfaceSelector {
 
     func select(_ query: InterfaceQuery) throws(InterfaceSelectionError) -> Interface {
         guard let subtree = query.subtree else { return interface }
-        return try select(subtree)
+        do {
+            return try select(subtree.resolve(in: .empty))
+        } catch let error as InterfaceSelectionError {
+            throw error
+        } catch {
+            throw .invalidSubtree(String(describing: error))
+        }
     }
 
-    private func select(_ subtree: AccessibilityTarget) throws(InterfaceSelectionError) -> Interface {
+    private func select(_ subtree: ResolvedAccessibilityTarget) throws(InterfaceSelectionError) -> Interface {
         let graph = interface.graph
         let resolution = InterfaceSubtreeResolution(subtree)
         let selectedTargetPaths = ElementMatchGraph(interface: interface).resolve(resolution.target).paths
@@ -98,12 +107,26 @@ struct InterfaceSelector {
     }
 
     private func selectedInterface(for candidate: InterfaceSubtreeCandidate) -> Interface {
-        Interface(
+        let annotations = annotations(for: candidate)
+        let traceIdentities = traceIdentities(for: candidate)
+        return Interface(
             timestamp: interface.timestamp,
-            tree: [candidate.node],
-            annotations: annotations(for: candidate),
+            projecting: [candidate.node],
             diagnostics: interface.diagnostics,
-            traceIdentities: traceIdentities(for: candidate)
+            elementMetadata: { path, _, _ in
+                guard let annotation = annotations.elementByPath[path] else { return nil }
+                return InterfaceElementProjectionMetadata(
+                    actions: annotation.actions,
+                    traceIdentity: traceIdentities[path]
+                )
+            },
+            containerMetadata: { path, _ in
+                guard let annotation = annotations.containerByPath[path] else { return nil }
+                return InterfaceContainerProjectionMetadata(
+                    containerName: annotation.containerName,
+                    scrollInventory: annotation.scrollInventory
+                )
+            }
         )
     }
 
@@ -117,10 +140,10 @@ struct InterfaceSelector {
 }
 
 private struct InterfaceSubtreeResolution {
-    let target: AccessibilityTarget
+    let target: ResolvedAccessibilityTarget
     let ordinal: Int?
 
-    init(_ target: AccessibilityTarget) {
+    init(_ target: ResolvedAccessibilityTarget) {
         switch target {
         case .predicate(let predicate, let ordinal):
             self.target = .predicate(predicate)
@@ -128,7 +151,7 @@ private struct InterfaceSubtreeResolution {
         case .container(let predicate, let ordinal):
             self.target = .container(predicate)
             self.ordinal = ordinal
-        case .ref, .within:
+        case .within:
             self.target = target
             self.ordinal = nil
         }

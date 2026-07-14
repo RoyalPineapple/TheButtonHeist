@@ -41,7 +41,7 @@ extension ScrollContainerSelection {
     }
 }
 
-struct ScrollCommand: AsyncParsableCommand, CLICommandContract {
+struct ScrollCommand: ConnectedOneShotCLICommand {
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Scroll a scroll view by one page",
@@ -69,16 +69,7 @@ struct ScrollCommand: AsyncParsableCommand, CLICommandContract {
     @OptionGroup var output: OutputOptions
     @OptionGroup var timeoutOption: TimeoutOption
 
-    @ButtonHeistActor
-    mutating func run() async throws {
-        try await CLIRunner.run(
-            connection: connection,
-            format: output.format,
-            command: Self.fenceCommand,
-            arguments: try requestArguments(),
-            statusMessage: "Sending scroll..."
-        )
-    }
+    var runnerStatusMessage: String? { "Sending scroll..." }
 
     func requestArguments() throws -> TheFence.CommandArgumentEnvelope {
         guard let scrollDirection = Self.catalogCanonicalValue(direction, for: FenceParameters.scrollDirection) else {
@@ -88,9 +79,9 @@ struct ScrollCommand: AsyncParsableCommand, CLICommandContract {
         let scrollSelection = try selection.scrollSelection()
         return Self.fenceArguments(
             target: scrollSelection.cliTarget,
-            CommandArgumentWriter.value(FenceParameters.scrollDirection, scrollDirection),
-            CommandArgumentWriter.value(.timeout, timeoutOption.timeout),
-            CommandArgumentWriter.optional(.containerName, scrollSelection.cliContainerName?.rawValue)
+            CommandArgumentEnvelopeBuilder.value(FenceParameters.scrollDirection, scrollDirection),
+            CommandArgumentEnvelopeBuilder.value(.timeout, timeoutOption.timeout),
+            CommandArgumentEnvelopeBuilder.optional(.containerName, scrollSelection.cliContainerName?.rawValue)
         )
     }
 }

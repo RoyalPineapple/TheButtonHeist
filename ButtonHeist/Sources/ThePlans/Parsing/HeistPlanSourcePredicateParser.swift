@@ -11,13 +11,13 @@ struct IncludeExcludeFields<Value> {
 }
 
 extension HeistPlanSourceParser {
-    mutating func parseAccessibilityPredicateExpr() throws -> AccessibilityPredicate<RootContext> {
+    mutating func parseAccessibilityPredicateExpr() throws -> AccessibilityPredicate {
         let name = try parseDotCallName(allowedPrefixes: [])
         switch name {
         case "changed":
             try expectSymbol("(")
             let scopeName = try parseDotCallName(allowedPrefixes: [])
-            let predicate: AccessibilityPredicate<RootContext>
+            let predicate: AccessibilityPredicate
             switch scopeName {
             case "screen": predicate = .changed(try parseScreenDelta())
             case "elements": predicate = .changed(try parseElementsDelta())
@@ -30,26 +30,26 @@ extension HeistPlanSourceParser {
         case "announcement":
             return try parseAnnouncementPredicate()
         case "exists", "missing":
-            return try parseCurrentTreePredicate(name: name)
+            let target = try parseCurrentTreeTarget()
+            return name == "exists" ? .exists(target) : .missing(target)
         default:
             throw error(previous, "unsupported accessibility predicate '.\(name)'")
         }
     }
 
-    mutating func parseAnnouncementPredicate() throws -> AccessibilityPredicate<RootContext> {
+    mutating func parseAnnouncementPredicate() throws -> AccessibilityPredicate {
         guard consumeSymbol("(") else { return .announcement }
         if consumeSymbol(")") {
             throw error(previous, "empty announcement predicate must use .announcement")
         }
         let expression = try parseStringMatchCallArgument(field: "announcement")
-        let match = try expression.resolve(in: .empty)
         try expectSymbol(")")
-        return .announcement(match)
+        return .announcement(expression)
     }
 
     mutating func parseScreenDelta() throws -> ChangeDeclaration {
         try expectSymbol("(")
-        var assertions: [AccessibilityPredicate<ScreenAssertionContext>] = []
+        var assertions: [ChangeDeclaration.ScreenAssertion] = []
         if !consumeSymbol(")") {
             try expectSymbol("[")
             repeat {
@@ -57,7 +57,8 @@ extension HeistPlanSourceParser {
                 guard name == "exists" || name == "missing" else {
                     throw error(previous, "screen assertions accept only .exists and .missing")
                 }
-                assertions.append(try parseCurrentTreePredicate(name: name))
+                let target = try parseCurrentTreeTarget()
+                assertions.append(name == "exists" ? .exists(target) : .missing(target))
             } while consumeSymbol(",")
             try expectSymbol("]")
             try expectSymbol(")")
@@ -67,7 +68,7 @@ extension HeistPlanSourceParser {
 
     mutating func parseElementsDelta() throws -> ChangeDeclaration {
         try expectSymbol("(")
-        var assertions: [AccessibilityPredicate<ElementsAssertionContext>] = []
+        var assertions: [ChangeDeclaration.ElementAssertion] = []
         if !consumeSymbol(")") {
             try expectSymbol("[")
             repeat {
@@ -79,32 +80,32 @@ extension HeistPlanSourceParser {
         return .elements(assertions)
     }
 
-    mutating func parseCurrentTreePredicate<Context>(
-        name: String
-    ) throws -> AccessibilityPredicate<Context> {
+    mutating func parseCurrentTreeTarget() throws -> AccessibilityTarget {
         try expectSymbol("(")
         let target = try parseTargetExpr()
         try expectSymbol(")")
-        return name == "exists" ? .exists(target) : .missing(target)
+        return target
     }
 
-    mutating func parseScreenAssertion() throws -> AccessibilityPredicate<ScreenAssertionContext> {
+    mutating func parseScreenAssertion() throws -> ChangeDeclaration.ScreenAssertion {
         let name = try parseDotCallName(allowedPrefixes: [])
         guard name == "exists" || name == "missing" else {
             throw error(previous, "screen assertion accepts only .exists and .missing")
         }
-        return try parseCurrentTreePredicate(name: name)
+        let target = try parseCurrentTreeTarget()
+        return name == "exists" ? .exists(target) : .missing(target)
     }
 
-    mutating func parseElementsAssertion() throws -> AccessibilityPredicate<ElementsAssertionContext> {
+    mutating func parseElementsAssertion() throws -> ChangeDeclaration.ElementAssertion {
         let name = try parseDotCallName(allowedPrefixes: [])
         switch name {
         case "exists", "missing":
-            return try parseCurrentTreePredicate(name: name)
+            let target = try parseCurrentTreeTarget()
+            return name == "exists" ? .exists(target) : .missing(target)
         case "appeared":
-            return try parseTemporalTarget(constructor: AccessibilityPredicate.appeared)
+            return try parseTemporalTarget(constructor: ChangeDeclaration.ElementAssertion.appeared)
         case "disappeared":
-            return try parseTemporalTarget(constructor: AccessibilityPredicate.disappeared)
+            return try parseTemporalTarget(constructor: ChangeDeclaration.ElementAssertion.disappeared)
         case "updated":
             return try parseUpdatedAssertion()
         default:
@@ -116,15 +117,15 @@ extension HeistPlanSourceParser {
     }
 
     mutating func parseTemporalTarget(
-        constructor: (AccessibilityTarget) -> AccessibilityPredicate<ElementsAssertionContext>
-    ) throws -> AccessibilityPredicate<ElementsAssertionContext> {
+        constructor: (AccessibilityTarget) -> ChangeDeclaration.ElementAssertion
+    ) throws -> ChangeDeclaration.ElementAssertion {
         try expectSymbol("(")
         let target = try parseTargetExpr()
         try expectSymbol(")")
         return constructor(target)
     }
 
-    mutating func parseUpdatedAssertion() throws -> AccessibilityPredicate<ElementsAssertionContext> {
+    mutating func parseUpdatedAssertion() throws -> ChangeDeclaration.ElementAssertion {
         try expectSymbol("(")
         let target = try parseTargetExpr()
         try expectSymbol(",")
@@ -132,10 +133,10 @@ extension HeistPlanSourceParser {
         try expectSymbol(")")
         return .updated(target, change)
     }
-    mutating func parsePropertyChangeExpr() throws -> AnyPropertyChangeExpr {
+    mutating func parsePropertyChangeExpr() throws -> ElementPropertyChange {
         let name = try parseDotCallName(allowedPrefixes: [])
         try expectSymbol("(")
-        let change: AnyPropertyChangeExpr
+        let change: ElementPropertyChange
         switch name {
         case "value":
             let fields = try parseStringPropertyChangeFields(property: "value", allowsUnlabeledAfter: true)
@@ -181,9 +182,9 @@ extension HeistPlanSourceParser {
     mutating func parseStringPropertyChangeFields(
         property: String,
         allowsUnlabeledAfter: Bool = false
-    ) throws -> PropertyChangeFields<StringMatch<StringExpr>> {
-        var before: StringMatch<StringExpr>?
-        var after: StringMatch<StringExpr>?
+    ) throws -> PropertyChangeFields<StringMatch> {
+        var before: StringMatch?
+        var after: StringMatch?
         if currentToken.isSymbol(")") {
             return PropertyChangeFields(before: nil, after: nil)
         }
@@ -415,10 +416,10 @@ extension HeistPlanSourceParser {
         return Int(value)
     }
 
-    mutating func parseCustomContentMatch(role: String) throws -> CustomContentMatch<StringExpr> {
+    mutating func parseCustomContentMatch(role: String) throws -> CustomContentMatch {
         try expectContextualInitializer(role: "custom content match")
-        var label: StringMatch<StringExpr>?
-        var value: StringMatch<StringExpr>?
+        var label: StringMatch?
+        var value: StringMatch?
         var isImportant: Bool?
         if !currentToken.isSymbol(")") {
             while true {
@@ -457,7 +458,7 @@ extension HeistPlanSourceParser {
         return match
     }
 
-    mutating func parseRotorSetMatch(role: String) throws -> RotorSetMatch<StringExpr> {
+    mutating func parseRotorSetMatch(role: String) throws -> RotorSetMatch {
         try expectContextualInitializer(role: "rotor set match")
         let fields = try parseIncludeExcludeFields(
             role: role,
@@ -510,9 +511,9 @@ extension HeistPlanSourceParser {
         return IncludeExcludeFields(include: include, exclude: exclude)
     }
 
-    mutating func parseStringMatchArray(role: String) throws -> [StringMatch<StringExpr>] {
+    mutating func parseStringMatchArray(role: String) throws -> [StringMatch] {
         try expectSymbol("[")
-        var matches: [StringMatch<StringExpr>] = []
+        var matches: [StringMatch] = []
         if !consumeSymbol("]") {
             repeat {
                 matches.append(try parseStringMatchFieldValue(field: role))

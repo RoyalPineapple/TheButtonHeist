@@ -3,7 +3,7 @@ import ArgumentParser
 import Foundation
 import ThePlans
 
-struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
+struct RunHeistCommand: ConnectedOneShotCLICommand {
     typealias SwiftHeistCompiler = @Sendable (_ source: URL, _ entry: String) async -> ValidationResult<HeistPlan, HeistBuildDiagnostic>
 
     static let configuration = CommandConfiguration(
@@ -43,42 +43,62 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
     var junit: String?
 
     @ButtonHeistActor
-    mutating func run() async throws {
+    func runnerDescriptor() async throws -> CLIRunner.CommandDescriptor {
         // Swift DSL source is compiled to a temporary .heist package up front,
         // so every run dispatches a .heist the fence reads — the plan is never
         // re-encoded through a lossy parameter round-trip.
         let prepared = try await Self.prepareInput(path: path, entry: entry)
-        defer { prepared.cleanup() }
-
-        let request = try Self.planArguments(
-            inline: plan,
-            path: prepared.path,
-            entry: prepared.entry,
-            argument: argument
-        )
-
-        guard let junitPath = junit else {
-            try await CLIRunner.run(
+        do {
+            let arguments = try Self.planArguments(
+                inline: plan,
+                path: prepared.path,
+                entry: prepared.entry,
+                argument: argument
+            )
+            let heistPath = prepared.path
+            let format = output.format ?? .auto
+            let result: CLIRunner.CommandResultMapper?
+            if let junitPath = junit {
+                let junitResult: CLIRunner.CommandResultMapper = { fence, response in
+                    try Self.writeJUnit(
+                        fence: fence,
+                        response: response,
+                        junitPath: junitPath,
+                        heistPath: heistPath,
+                        format: format
+                    )
+                }
+                result = junitResult
+            } else {
+                result = nil
+            }
+            return CLIRunner.CommandDescriptor(
+                fenceDescriptor: Self.fenceDescriptor,
                 connection: connection,
                 format: output.format,
-                command: Self.fenceCommand,
-                arguments: Self.fenceArguments(request),
-                statusMessage: "Running heist..."
+                arguments: arguments,
+                statusMessage: "Running heist...",
+                cleanup: prepared.cleanup,
+                result: result
             )
-            return
+        } catch {
+            prepared.cleanup()
+            throw error
         }
+    }
 
-        let execution = try await CLIRunner.execute(
-            connection: connection,
-            command: Self.fenceCommand,
-            arguments: Self.fenceArguments(request)
-        )
-        defer { execution.fence.stop() }
-
-        if case .heistExecution(_, let result, _) = execution.response {
-            let name = prepared.path
+    @ButtonHeistActor
+    private static func writeJUnit(
+        fence: TheFence,
+        response: FenceResponse,
+        junitPath: String,
+        heistPath: String?,
+        format: OutputFormat
+    ) throws -> CLIRunner.CommandResult {
+        if case .heistExecution(_, let result, _) = response {
+            let name = heistPath
                 .map { URL(fileURLWithPath: $0).deletingPathExtension().lastPathComponent } ?? "heist"
-            let report = execution.fence.junitReport(
+            let report = fence.junitReport(
                 for: result,
                 heistName: name,
                 totalTimeSeconds: Double(result.durationMs) / 1000
@@ -88,11 +108,7 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
         } else {
             logStatus("Warning: --junit requested but run_heist did not produce a report")
         }
-
-        CLIRunner.outputResponse(execution.response, format: output.format ?? .auto)
-        if execution.response.isFailure {
-            throw ExitCode.failure
-        }
+        return .response(CLIRunner.FormattedResponse(response: response, format: format))
     }
 
     struct PreparedInput {
@@ -146,7 +162,7 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
         })
     }
 
-    static func planArguments(inline: String?) throws -> CLIRequestFields {
+    static func planArguments(inline: String?) throws -> TheFence.CommandArgumentEnvelope {
         try planArguments(inline: inline, path: nil, entry: nil)
     }
 
@@ -161,8 +177,9 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
         path: String?,
         entry: String?,
         argument: String? = nil,
-        commandName: String = Self.cliCommandName
-    ) throws -> CLIRequestFields {
+        commandName: String = Self.cliCommandName,
+        additionalFields: [CommandArgumentEnvelopeBuilder.Field] = []
+    ) throws -> TheFence.CommandArgumentEnvelope {
         let suppliedSources = [inline != nil, path != nil].filter { $0 }.count
         guard suppliedSources == 1 else {
             if suppliedSources == 0 {
@@ -183,10 +200,12 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
                 )
             }
             // Forward the artifact path; the fence reads the package into a HeistPlan.
-            return CommandArgumentWriter.parameters(
-                CommandArgumentWriter.value(.path, path),
-                CommandArgumentWriter.optional(.argument, try argument.map(parseRootArgument))
+            var builder = CommandArgumentEnvelopeBuilder(
+                CommandArgumentEnvelopeBuilder.value(.path, path),
+                CommandArgumentEnvelopeBuilder.optional(.argument, try argument.map(parseRootArgument))
             )
+            builder.set(additionalFields.map(Optional.some))
+            return builder.build()
         }
 
         if entry != nil {
@@ -199,10 +218,12 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
         guard !inline.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw ValidationError("--plan must be ButtonHeist DSL source")
         }
-        return CommandArgumentWriter.parameters(
-            CommandArgumentWriter.value(.plan, inline),
-            CommandArgumentWriter.optional(.argument, try argument.map(parseRootArgument))
+        var builder = CommandArgumentEnvelopeBuilder(
+            CommandArgumentEnvelopeBuilder.value(.plan, inline),
+            CommandArgumentEnvelopeBuilder.optional(.argument, try argument.map(parseRootArgument))
         )
+        builder.set(additionalFields.map(Optional.some))
+        return builder.build()
     }
 
     private static func parseRootArgument(_ rawValue: String) throws -> HeistValue {

@@ -6,16 +6,7 @@ import TheScore
 
 extension PredicateWait {
     internal struct Reducer: Sendable, Equatable {
-        private let step: ResolvedWaitStep
-        private let timeout: Double
-
-        internal init(
-            step: ResolvedWaitStep,
-            timeout: Double
-        ) {
-            self.step = step
-            self.timeout = timeout
-        }
+        internal init() {}
 
         internal func reduce(
             _ state: State,
@@ -56,7 +47,7 @@ extension PredicateWait {
         case unobserved(ExpectationResult)
         case observed(Snapshot)
 
-        internal init(predicate: AccessibilityPredicate<RootContext>) {
+        internal init(predicate: AccessibilityPredicate) {
             self = .unobserved(ExpectationResult(
                 met: false,
                 predicate: predicate,

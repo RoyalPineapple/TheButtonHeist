@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+import ButtonHeistTestSupport
 import Testing
 import UIKit
 @testable import AccessibilitySnapshotParser
@@ -10,7 +11,7 @@ import TheScore
 @Suite("LiveCapture")
 struct LiveCaptureTests {
 
-    @Test func `rejects duplicate live HeistIds before indexing`() {
+    @Test func `rejects duplicate live HeistIds in one snapshot`() {
         let first = AccessibilityElement.make(label: "First", traits: .button)
         let second = AccessibilityElement.make(label: "Second", traits: .button)
         let snapshot = LiveCapture.Snapshot(
@@ -461,7 +462,6 @@ struct LiveCaptureTests {
         #expect(capture.object(for: "save_button") === saveObject)
         #expect(capture.heistId(matching: saveObject) == "save_button")
         #expect(capture.scrollView(for: "save_button") === saveScrollView)
-        #expect(capture.orderedElementEntries().map(\.heistId) == ["cancel_button", "save_button"])
         #expect(capture.firstResponderHeistId == "save_button")
     }
 
@@ -483,7 +483,33 @@ struct LiveCaptureTests {
 
         #expect(capture.heistId(forPath: TreePath([0])) == "repeat_button_1")
         #expect(capture.heistId(forPath: TreePath([1])) == "repeat_button_2")
-        #expect(capture.orderedElementEntries().map(\.heistId) == ["repeat_button_1", "repeat_button_2"])
+        #expect(capture.element(for: "repeat_button_1") == repeated)
+        #expect(capture.element(for: "repeat_button_2") == repeated)
+    }
+
+    @Test func `dispatch references stay weak`() throws {
+        var object: NSObject? = NSObject()
+        var scrollView: UIScrollView? = UIScrollView()
+        let capture = try InterfaceObservation.build(
+            tree: makeSingleElementTree(),
+            dispatchReferences: LiveCapture.DispatchReferences(
+                elementRefs: [
+                    "save_button": LiveCapture.ElementRef(
+                        object: object,
+                        scrollView: scrollView
+                    )
+                ]
+            )
+        ).liveCapture
+
+        #expect(capture.object(for: "save_button") === object)
+        #expect(capture.scrollView(for: "save_button") === scrollView)
+
+        object = nil
+        scrollView = nil
+
+        #expect(capture.object(for: "save_button") == nil)
+        #expect(capture.scrollView(for: "save_button") == nil)
     }
 
     private func expectValidationError(

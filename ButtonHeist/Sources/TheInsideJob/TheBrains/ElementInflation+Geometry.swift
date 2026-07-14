@@ -329,7 +329,7 @@ extension ElementInflation {
     }
 
     private func stableActionTarget(
-        target: AccessibilityTarget,
+        target: ResolvedAccessibilityTarget,
         treeElement: InterfaceTree.Element,
         deadline: SemanticObservationDeadline,
         resolution: ActionSubjectResolution

@@ -12,7 +12,7 @@ public struct PredicateEvaluationResult: Sendable, Equatable {
         self.actual = actual
     }
 
-    public func expectation(for predicate: AccessibilityPredicate<RootContext>?) -> ExpectationResult {
+    public func expectation(for predicate: AccessibilityPredicate?) -> ExpectationResult {
         ExpectationResult(met: met, predicate: predicate, actual: actual)
     }
 }
@@ -80,10 +80,10 @@ public struct AccessibilityTraceEvidence: Codable, Sendable, Equatable {
 /// interface or transition delta.
 public enum ExpectationResult: Codable, Sendable, Equatable {
     public struct Met: Sendable, Equatable {
-        public let predicate: AccessibilityPredicate<RootContext>?
+        public let predicate: AccessibilityPredicate?
         public let actual: String?
 
-        public init(predicate: AccessibilityPredicate<RootContext>?, actual: String? = nil) {
+        public init(predicate: AccessibilityPredicate?, actual: String? = nil) {
             self.predicate = predicate
             self.actual = actual
         }
@@ -97,10 +97,10 @@ public enum ExpectationResult: Codable, Sendable, Equatable {
     }
 
     public struct Unmet: Sendable, Equatable {
-        public let predicate: AccessibilityPredicate<RootContext>?
+        public let predicate: AccessibilityPredicate?
         public let actual: String?
 
-        public init(predicate: AccessibilityPredicate<RootContext>?, actual: String? = nil) {
+        public init(predicate: AccessibilityPredicate?, actual: String? = nil) {
             self.predicate = predicate
             self.actual = actual
         }
@@ -122,13 +122,13 @@ public enum ExpectationResult: Codable, Sendable, Equatable {
         case actual
     }
 
-    public init(met: Bool, predicate: AccessibilityPredicate<RootContext>?, actual: String? = nil) {
+    public init(met: Bool, predicate: AccessibilityPredicate?, actual: String? = nil) {
         self = met
             ? .met(Met(predicate: predicate, actual: actual))
             : .unmet(Unmet(predicate: predicate, actual: actual))
     }
 
-    public init(_ result: PredicateEvaluationResult, predicate: AccessibilityPredicate<RootContext>?) {
+    public init(_ result: PredicateEvaluationResult, predicate: AccessibilityPredicate?) {
         self.init(met: result.met, predicate: predicate, actual: result.actual)
     }
 
@@ -137,7 +137,7 @@ public enum ExpectationResult: Codable, Sendable, Equatable {
         return false
     }
 
-    public var predicate: AccessibilityPredicate<RootContext>? {
+    public var predicate: AccessibilityPredicate? {
         switch self {
         case .met(let evidence): evidence.predicate
         case .unmet(let evidence): evidence.predicate
@@ -157,7 +157,7 @@ public enum ExpectationResult: Codable, Sendable, Equatable {
         self.init(
             met: try container.decode(Bool.self, forKey: .met),
             predicate: try container.decodeIfPresent(
-                AccessibilityPredicate<RootContext>.self,
+                AccessibilityPredicate.self,
                 forKey: .predicate
             ),
             actual: try container.decodeIfPresent(String.self, forKey: .actual)
