@@ -21,6 +21,91 @@ struct PublicHeistDescriptionResponse: FencePublicJSONResponse {
     }
 }
 
+struct PublicHeistValidationResponse: FencePublicJSONResponse {
+    let status = PublicStatus.ok
+    let admissible: Bool
+    let plan: PublicHeistPlanValidation
+    let invocation: PublicHeistInvocationValidation
+    let lint: PublicHeistLintReport
+    let buildDiagnostics: [PublicHeistBuildDiagnostic]
+    let canonicalPlan: String?
+
+    init(report: HeistValidationReport) {
+        admissible = report.admissible
+        plan = PublicHeistPlanValidation(report.plan)
+        invocation = PublicHeistInvocationValidation(report.invocation)
+        lint = PublicHeistLintReport(report.lint)
+        buildDiagnostics = report.plan.diagnostics.map(PublicHeistBuildDiagnostic.init)
+        canonicalPlan = report.canonicalPlan
+    }
+}
+
+struct PublicHeistPlanValidation: Encodable {
+    let valid: Bool
+    let version: Int?
+    let name: String?
+    let parameter: HeistParameter?
+    let definitionCount: Int?
+    let topLevelStepCount: Int?
+
+    init(_ validation: HeistPlanValidation) {
+        switch validation {
+        case .valid(let summary):
+            valid = true
+            version = summary.version
+            name = summary.name
+            parameter = summary.parameter
+            definitionCount = summary.definitionCount
+            topLevelStepCount = summary.topLevelStepCount
+        case .invalid:
+            valid = false
+            version = nil
+            name = nil
+            parameter = nil
+            definitionCount = nil
+            topLevelStepCount = nil
+        }
+    }
+}
+
+struct PublicHeistInvocationValidation: Encodable {
+    let state: String
+    let argumentProvided: Bool
+    let diagnostics: [PublicHeistBuildDiagnostic]
+
+    init(_ validation: HeistInvocationValidation) {
+        state = validation.state.rawValue
+        argumentProvided = validation.argumentProvided
+        diagnostics = validation.diagnostics.map(PublicHeistBuildDiagnostic.init)
+    }
+}
+
+struct PublicHeistLintReport: Encodable {
+    let mode: String
+    let state: String
+    let findings: [PublicHeistLintFinding]
+
+    init(_ report: HeistLintReport) {
+        mode = report.mode.rawValue
+        state = report.state.rawValue
+        findings = report.findings.map(PublicHeistLintFinding.init)
+    }
+}
+
+struct PublicHeistLintFinding: Encodable {
+    let severity: String
+    let path: String
+    let message: String
+    let suggestion: String?
+
+    init(_ finding: HeistPlanLintFinding) {
+        severity = finding.severity.rawValue
+        path = finding.path
+        message = finding.message
+        suggestion = finding.suggestion
+    }
+}
+
 private struct PublicHeistCatalogEntry: Encodable {
     let name: String
     let role: HeistCatalogRole

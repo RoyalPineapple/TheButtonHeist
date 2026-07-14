@@ -254,6 +254,7 @@ public enum FenceResponse {
         result: HeistExecutionResult,
         accessibilityTrace: AccessibilityTrace? = nil
     )
+    case heistValidation(HeistValidationReport)
     case heistCatalog(HeistDiscoveryCatalog)
     case heistDescription(HeistDescription)
     case sessionState(payload: SessionStatePayload)
@@ -281,7 +282,7 @@ public enum FenceResponse {
     public var isFailure: Bool {
         switch self {
         case .ok, .status, .pong, .devices, .interface, .announcements, .screenshot, .screenshotData,
-             .heistCatalog, .heistDescription,
+             .heistValidation, .heistCatalog, .heistDescription,
              .sessionState, .targets:
             return false
         case .error:

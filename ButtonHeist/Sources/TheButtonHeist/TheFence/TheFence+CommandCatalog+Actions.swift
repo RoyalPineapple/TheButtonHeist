@@ -59,7 +59,7 @@ extension TheFence.Command {
         case .ping, .listDevices, .getInterface, .getScreen, .getPasteboard, .getAnnouncements,
              .getSessionState, .connect, .listTargets, .wait, .scroll, .scrollToVisible, .scrollToEdge,
              .activate, .rotor, .typeText, .editAction, .setPasteboard, .dismissKeyboard,
-             .perform, .runHeist, .listHeists, .describeHeist:
+             .perform, .runHeist, .validateHeist, .listHeists, .describeHeist:
             preconditionFailure("\(rawValue) is not a spatial action command")
         }
     }
@@ -113,7 +113,7 @@ extension TheFence.Command {
         case .ping, .listDevices, .getInterface, .getScreen, .getPasteboard, .getAnnouncements,
              .getSessionState, .connect, .listTargets, .wait, .oneFingerTap, .longPress, .swipe, .drag,
              .activate, .rotor, .typeText, .editAction, .setPasteboard, .dismissKeyboard,
-             .perform, .runHeist, .listHeists, .describeHeist:
+             .perform, .runHeist, .validateHeist, .listHeists, .describeHeist:
             preconditionFailure("\(rawValue) is not a viewport debug command")
         }
     }
@@ -193,7 +193,8 @@ extension TheFence.Command {
             )
         case .ping, .listDevices, .getInterface, .getScreen, .getPasteboard, .getAnnouncements,
              .getSessionState, .connect, .listTargets, .wait, .oneFingerTap, .longPress, .swipe, .drag,
-             .scroll, .scrollToVisible, .scrollToEdge, .perform, .runHeist, .listHeists, .describeHeist:
+             .scroll, .scrollToVisible, .scrollToEdge, .perform, .runHeist, .validateHeist,
+             .listHeists, .describeHeist:
             preconditionFailure("\(rawValue) is not a semantic action command")
         }
     }
