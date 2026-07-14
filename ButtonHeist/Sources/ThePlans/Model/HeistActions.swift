@@ -22,7 +22,7 @@ public extension HeistActionContent {
     }
 
     func expect(
-        _ predicate: AccessibilityPredicate<RootContext>,
+        _ predicate: AccessibilityPredicate,
         timeout: Double? = nil
     ) -> ActionContent {
         let priorExplicitTimeout = (self as? ActionContent)?.explicitExpectationTimeout
@@ -65,7 +65,7 @@ public extension HeistActionContent {
     }
 
     func until(
-        _ predicate: AccessibilityPredicate<RootContext>,
+        _ predicate: AccessibilityPredicate,
         timeout: Double = defaultWaitTimeout
     ) -> RepeatActionUntilContent {
         RepeatActionUntilContent(
@@ -102,7 +102,7 @@ public struct RepeatActionUntilContent: HeistContent {
     public let command: HeistActionCommand
     public let expectationPolicy: ActionExpectationPolicy
     public let expectationValidationDiagnostics: [HeistBuildDiagnostic]
-    public let predicate: AccessibilityPredicate<RootContext>
+    public let predicate: AccessibilityPredicate
     public let timeout: Double
 
     public var heistSteps: [HeistStep] {
@@ -199,48 +199,26 @@ public struct TypeText: HeistActionContent {
         into target: AccessibilityTarget? = nil,
         replacingExisting: Bool
     ) {
-        self.init(.literal(text), into: target, replacingExisting: replacingExisting)
-    }
-
-    public init(_ text: StringExpr, into target: AccessibilityTarget) {
-        self.init(text, into: target, replacingExisting: false)
-    }
-
-    public init(
-        _ text: StringExpr,
-        into target: AccessibilityTarget,
-        replacingExisting: Bool
-    ) {
-        self.init(command: .typeText(text: text, target: target, replacingExisting: replacingExisting))
+        self.init(command: .typeText(
+            text: text,
+            target: target,
+            replacingExisting: replacingExisting
+        ))
     }
 
     @_disfavoredOverload
-    public init(_ text: String, into target: AccessibilityTarget) {
-        self.init(text, into: target, replacingExisting: false)
+    public init(_ reference: HeistReferenceName, into target: AccessibilityTarget? = nil) {
+        self.init(reference, into: target, replacingExisting: false)
     }
 
     @_disfavoredOverload
     public init(
-        _ text: String,
-        into target: AccessibilityTarget,
-        replacingExisting: Bool
-    ) {
-        self.init(.literal(text), into: target, replacingExisting: replacingExisting)
-    }
-
-    @_disfavoredOverload
-    public init(_ text: StringExpr, into target: AccessibilityTarget? = nil) {
-        self.init(text, into: target, replacingExisting: false)
-    }
-
-    @_disfavoredOverload
-    public init(
-        _ text: StringExpr,
+        _ reference: HeistReferenceName,
         into target: AccessibilityTarget? = nil,
         replacingExisting: Bool
     ) {
         self.init(command: .typeText(
-            text: text,
+            reference: reference,
             target: target,
             replacingExisting: replacingExisting
         ))
@@ -258,7 +236,7 @@ public struct ClearText: HeistActionContent {
 
     public init(_ target: AccessibilityTarget) {
         self.init(command: .typeText(
-            text: .literal(""),
+            text: "",
             target: target,
             replacingExisting: true
         ))
@@ -550,13 +528,13 @@ func composeExpectationTimeout(
 }
 
 struct ExpectationPredicateComposition {
-    let predicate: AccessibilityPredicate<RootContext>
+    let predicate: AccessibilityPredicate
     let diagnostics: [HeistBuildDiagnostic]
 }
 
 func composeExpectationPredicates(
-    existing: AccessibilityPredicate<RootContext>,
-    next: AccessibilityPredicate<RootContext>
+    existing: AccessibilityPredicate,
+    next: AccessibilityPredicate
 ) -> ExpectationPredicateComposition {
     if let composed = composeScreenDeltaAndCurrentTree(existing, next)
         ?? composeScreenDeltaAndCurrentTree(next, existing) {
@@ -574,16 +552,16 @@ func composeExpectationPredicates(
 }
 
 private func composeScreenDeltaAndCurrentTree(
-    _ changed: AccessibilityPredicate<RootContext>,
-    _ currentTree: AccessibilityPredicate<RootContext>
-) -> AccessibilityPredicate<RootContext>? {
-    guard case .changed(.screen(let assertions)) = changed.node else { return nil }
-    switch currentTree.node {
-    case .exists, .missing:
-        return AccessibilityPredicate<RootContext>(
-            node: .changed(.screen(assertions + [currentTree.node]))
+    _ changed: AccessibilityPredicate,
+    _ currentTree: AccessibilityPredicate
+) -> AccessibilityPredicate? {
+    guard case .changed(.screen(let assertions)) = changed.core else { return nil }
+    switch currentTree.core {
+    case .presence(let presence):
+        return AccessibilityPredicate(
+            core: .changed(.screen(assertions + [.presence(presence)]))
         )
-    case .announcement, .changed, .noChange, .screen, .elements, .appeared, .disappeared, .updated:
+    case .announcement, .changed, .noChange:
         return nil
     }
 

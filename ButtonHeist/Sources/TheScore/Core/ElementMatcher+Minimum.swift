@@ -266,7 +266,7 @@ public enum MinimumPredicateSelector {
             if matches.count == 1 {
                 return MinimumPredicateSelection(
                     contextElementId: contextElementId,
-                    target: .predicate(ElementPredicateTemplate(candidate.predicate)),
+                    target: .predicate(authoredTemplate(candidate.predicate)),
                     candidate: candidate
                 )
             }
@@ -288,7 +288,7 @@ public enum MinimumPredicateSelector {
         )
         return MinimumPredicateSelection(
             contextElementId: contextElementId,
-            target: .predicate(ElementPredicateTemplate(strongestSemanticCandidate.predicate), ordinal: ordinal),
+            target: .predicate(authoredTemplate(strongestSemanticCandidate.predicate), ordinal: ordinal),
             candidate: ordinalCandidate
         )
     }
@@ -315,20 +315,24 @@ public enum MinimumPredicateSelector {
     private static func predicate(for fact: AccessibilityMatcherFact) -> ElementPredicate? {
         switch fact {
         case .identifier(let identifier):
-            return ElementPredicate(identifier: .exact(identifier))
+            return .identifier(identifier)
         case .label(let label):
-            return ElementPredicate(label: .exact(label))
+            return .label(label)
         case .value(let value):
-            return ElementPredicate(value: .exact(value))
+            return .value(value)
         case .trait(let trait):
-            return ElementPredicate([.traits([trait])])
+            return .traits([trait])
         case .excludedTrait(let trait):
             return ElementPredicate([.exclude(.traits([trait]))])
         }
     }
 
     private static func combinedPredicate(from atoms: [MatcherAtom]) -> ElementPredicate {
-        ElementPredicate(atoms.flatMap { $0.predicate.checks })
+        ElementPredicate(atoms.flatMap { $0.predicate.core.checks })
+    }
+
+    private static func authoredTemplate(_ predicate: ElementPredicate) -> ElementPredicateTemplate {
+        ElementPredicateTemplate(core: predicate.core.map { .literal($0) })
     }
 
     private static func tier(for atoms: [MatcherAtom]) -> CandidateTier {

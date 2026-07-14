@@ -1,13 +1,11 @@
 import Foundation
 
 public struct AnnouncementPredicate: Codable, Sendable, Equatable, Hashable {
-    public let match: StringMatch<String>?
+    public let match: StringMatch?
 
-    private enum CodingKeys: String, CodingKey, CaseIterable {
-        case match
-    }
+    private enum CodingKeys: String, CodingKey, CaseIterable { case match }
 
-    public init(match: StringMatch<String>? = nil) {
+    public init(match: StringMatch? = nil) {
         self.match = match
     }
 
@@ -15,14 +13,14 @@ public struct AnnouncementPredicate: Codable, Sendable, Equatable, Hashable {
         self.init(match: .exact(text))
     }
 
-    public func matches(_ text: String) -> Bool {
-        match?.matches(text) ?? true
+    package func resolve(in environment: HeistExecutionEnvironment) throws -> ResolvedAnnouncementPredicate {
+        ResolvedAnnouncementPredicate(match: try match?.resolve(in: environment))
     }
 
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "announcement predicate")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.init(match: try container.decodeIfPresent(StringMatch<String>.self, forKey: .match))
+        match = try container.decodeIfPresent(StringMatch.self, forKey: .match)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -35,5 +33,24 @@ extension AnnouncementPredicate: CustomStringConvertible {
     public var description: String {
         guard let match else { return "announcement" }
         return ScoreDescription.call("announcement", [match.description])
+    }
+}
+
+public struct ResolvedAnnouncementPredicate: Sendable, Equatable, Hashable {
+    package let match: ResolvedStringMatch?
+
+    package init(match: ResolvedStringMatch?) {
+        self.match = match
+    }
+
+    public func matches(_ text: String) -> Bool {
+        match?.matches(text) ?? true
+    }
+}
+
+extension ResolvedAnnouncementPredicate: CustomStringConvertible {
+    public var description: String {
+        guard let match else { return "announcement" }
+        return ScoreDescription.call("announcement", [match.core.description])
     }
 }

@@ -2,130 +2,16 @@ import ArgumentParser
 @_spi(ButtonHeistTooling) import ButtonHeist
 import ThePlans
 
-struct CLIPointArgument: Equatable {
-    let x: Double
-    let y: Double
-
-    static func required(x: Double?, y: Double?, label: String) throws -> Self {
-        guard let x, let y else {
-            throw ValidationError("Must specify \(label) x/y coordinates together")
-        }
-        return Self(x: x, y: y)
+private func requiredScreenPoint(x: Double?, y: Double?, label: String) throws -> ScreenPoint {
+    guard let x, let y else {
+        throw ValidationError("Must specify \(label) x/y coordinates together")
     }
-
-    var object: CLIRequestFields {
-        CommandArgumentWriter.object(
-            CommandArgumentWriter.value(.x, x),
-            CommandArgumentWriter.value(.y, y)
-        )
-    }
-
-    var value: HeistValue {
-        object.heistValue
-    }
-}
-
-struct CLIGesturePayload: Equatable {
-    let key: FenceParameterKey
-    let object: CLIRequestFields
-
-    static func element(_ target: AccessibilityTarget) -> Self {
-        Self(key: .element, object: CLIRequestBuilder.targetObject(target))
-    }
-
-    static func point(_ point: CLIPointArgument) -> Self {
-        Self(key: .point, object: point.object)
-    }
-
-    static func elementUnitPoints(
-        element: AccessibilityTarget,
-        start: CLIPointArgument,
-        end: CLIPointArgument
-    ) -> Self {
-        Self(
-            key: .elementUnitPoints,
-            object: CommandArgumentWriter.object(
-                CommandArgumentWriter.value(.element, CLIRequestBuilder.targetValue(element)),
-                CommandArgumentWriter.value(.start, start.value),
-                CommandArgumentWriter.value(.end, end.value)
-            )
-        )
-    }
-
-    static func elementDirection(element: AccessibilityTarget, direction: SwipeDirection) -> Self {
-        Self(
-            key: .elementDirection,
-            object: CommandArgumentWriter.object(
-                CommandArgumentWriter.value(.element, CLIRequestBuilder.targetValue(element)),
-                CommandArgumentWriter.value(FenceParameters.swipeDirection, direction)
-            )
-        )
-    }
-
-    static func pointDirection(start: CLIPointArgument, direction: SwipeDirection) -> Self {
-        Self(
-            key: .pointDirection,
-            object: CommandArgumentWriter.object(
-                CommandArgumentWriter.value(.start, start.value),
-                CommandArgumentWriter.value(FenceParameters.swipeDirection, direction)
-            )
-        )
-    }
-
-    static func pointToPoint(start: CLIPointArgument, end: CLIPointArgument) -> Self {
-        Self(
-            key: .pointToPoint,
-            object: CommandArgumentWriter.object(
-                CommandArgumentWriter.value(.start, start.value),
-                CommandArgumentWriter.value(.end, end.value)
-            )
-        )
-    }
-
-    static func elementToPoint(element: AccessibilityTarget, end: CLIPointArgument) -> Self {
-        Self(
-            key: .elementToPoint,
-            object: CommandArgumentWriter.object(
-                CommandArgumentWriter.value(.element, CLIRequestBuilder.targetValue(element)),
-                CommandArgumentWriter.value(.end, end.value)
-            )
-        )
-    }
-}
-
-extension GestureCLICommandContract {
-    static func gestureRequest(
-        parameters: CLIRequestFields = CLIRequestFields(),
-        _ payloads: CLIGesturePayload...
-    ) throws -> TheFence.CommandArgumentEnvelope {
-        fenceArguments(parameters.adding(payloads.map { payload in
-            CommandArgumentWriter.value(payload.key, payload.object)
-        }))
-    }
-
-    static func elementObject(_ target: AccessibilityTarget) -> CLIRequestFields {
-        CLIRequestBuilder.targetObject(target)
-    }
-
-    @ButtonHeistActor
-    static func sendGesture(
-        _ arguments: TheFence.CommandArgumentEnvelope,
-        connection: ConnectionOptions,
-        output: OutputOptions
-    ) async throws {
-        try await CLIRunner.run(
-            connection: connection,
-            format: output.format,
-            command: fenceCommand,
-            arguments: arguments,
-            statusMessage: "Sending gesture..."
-        )
-    }
+    return ScreenPoint(x: x, y: y)
 }
 
 // MARK: - Tap
 
-struct TapSubcommand: AsyncParsableCommand, GestureCLICommandContract {
+struct TapSubcommand: ConnectedOneShotCLICommand {
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Explicit mechanical/spatial one-finger tap",
@@ -151,25 +37,26 @@ struct TapSubcommand: AsyncParsableCommand, GestureCLICommandContract {
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
 
-    @ButtonHeistActor
-    mutating func run() async throws {
+    var runnerStatusMessage: String? { "Sending gesture..." }
+
+    func requestArguments() throws -> TheFence.CommandArgumentEnvelope {
         guard (try element.hasTarget) || (x != nil && y != nil) else {
             throw ValidationError("Must specify --identifier, -l, or --x/--y coordinates")
         }
 
-        let request: TheFence.CommandArgumentEnvelope
+        let selection: GesturePointSelection
         if let target = try element.parsedTarget() {
-            request = try Self.gestureRequest(.element(target))
+            selection = .element(target)
         } else {
-            request = try Self.gestureRequest(.point(CLIPointArgument.required(x: x, y: y, label: "--x/--y")))
+            selection = .coordinate(try requiredScreenPoint(x: x, y: y, label: "--x/--y"))
         }
-        try await Self.sendGesture(request, connection: connection, output: output)
+        return Self.fenceArguments(payload: TapTarget(selection: selection))
     }
 }
 
 // MARK: - Long Press
 
-struct LongPressSubcommand: AsyncParsableCommand, GestureCLICommandContract {
+struct LongPressSubcommand: ConnectedOneShotCLICommand {
     static let configuration = CommandConfiguration(commandName: Self.cliCommandName, abstract: "Long press at a point or element")
 
     @OptionGroup var element: AccessibilityTargetOptions
@@ -186,34 +73,29 @@ struct LongPressSubcommand: AsyncParsableCommand, GestureCLICommandContract {
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
 
-    @ButtonHeistActor
-    mutating func run() async throws {
+    var runnerStatusMessage: String? { "Sending gesture..." }
+
+    func requestArguments() throws -> TheFence.CommandArgumentEnvelope {
         guard (try element.hasTarget) || (x != nil && y != nil) else {
             throw ValidationError("Must specify --identifier, -l, or --x/--y coordinates")
         }
 
-        let request: TheFence.CommandArgumentEnvelope
-        let parameters = CommandArgumentWriter.parameters(
-            CommandArgumentWriter.value(.duration, duration)
-        )
+        let selection: GesturePointSelection
         if let target = try element.parsedTarget() {
-            request = try Self.gestureRequest(
-                parameters: parameters,
-                .element(target)
-            )
+            selection = .element(target)
         } else {
-            request = try Self.gestureRequest(
-                parameters: parameters,
-                .point(CLIPointArgument.required(x: x, y: y, label: "--x/--y"))
-            )
+            selection = .coordinate(try requiredScreenPoint(x: x, y: y, label: "--x/--y"))
         }
-        try await Self.sendGesture(request, connection: connection, output: output)
+        return Self.fenceArguments(payload: LongPressTarget(
+            selection: selection,
+            duration: try GestureDuration(validatingSeconds: duration)
+        ))
     }
 }
 
 // MARK: - Swipe
 
-struct SwipeSubcommand: AsyncParsableCommand, GestureCLICommandContract {
+struct SwipeSubcommand: ConnectedOneShotCLICommand {
     static let configuration = CommandConfiguration(commandName: Self.cliCommandName, abstract: "Swipe between two points or in a direction")
 
     @OptionGroup var element: AccessibilityTargetOptions
@@ -251,8 +133,9 @@ struct SwipeSubcommand: AsyncParsableCommand, GestureCLICommandContract {
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
 
-    @ButtonHeistActor
-    mutating func run() async throws {
+    var runnerStatusMessage: String? { "Sending gesture..." }
+
+    func requestArguments() throws -> TheFence.CommandArgumentEnvelope {
         let hasUnitStart = startUnitX != nil && startUnitY != nil
         let hasUnitEnd = endUnitX != nil && endUnitY != nil
 
@@ -292,52 +175,40 @@ struct SwipeSubcommand: AsyncParsableCommand, GestureCLICommandContract {
             swipeDirection = nil
         }
 
-        let parameters = CommandArgumentWriter.parameters(
-            CommandArgumentWriter.optional(.duration, duration)
-        )
-        let request: TheFence.CommandArgumentEnvelope
+        let selection: SwipeGestureSelection
         if let startUnitX, let startUnitY, let endUnitX, let endUnitY {
             let target = try element.requireTarget()
-            request = try Self.gestureRequest(
-                parameters: parameters,
-                .elementUnitPoints(
-                    element: target,
-                    start: CLIPointArgument(x: startUnitX, y: startUnitY),
-                    end: CLIPointArgument(x: endUnitX, y: endUnitY)
-                )
+            selection = .unitElement(
+                target,
+                start: UnitPoint(x: startUnitX, y: startUnitY),
+                end: UnitPoint(x: endUnitX, y: endUnitY)
             )
         } else if let target = try element.parsedTarget() {
             guard let swipeDirection else {
                 throw ValidationError("Element swipe requires --direction")
             }
-            request = try Self.gestureRequest(
-                parameters: parameters,
-                .elementDirection(element: target, direction: swipeDirection)
-            )
+            selection = .elementDirection(target, swipeDirection)
         } else if let swipeDirection {
-            request = try Self.gestureRequest(
-                parameters: parameters,
-                .pointDirection(
-                    start: CLIPointArgument.required(x: fromX, y: fromY, label: "--from-x/--from-y"),
-                    direction: swipeDirection
-                )
+            selection = .point(
+                start: .coordinate(try requiredScreenPoint(x: fromX, y: fromY, label: "--from-x/--from-y")),
+                destination: .direction(swipeDirection)
             )
         } else {
-            request = try Self.gestureRequest(
-                parameters: parameters,
-                .pointToPoint(
-                    start: CLIPointArgument.required(x: fromX, y: fromY, label: "--from-x/--from-y"),
-                    end: CLIPointArgument.required(x: toX, y: toY, label: "--to-x/--to-y")
-                )
+            selection = .point(
+                start: .coordinate(try requiredScreenPoint(x: fromX, y: fromY, label: "--from-x/--from-y")),
+                destination: .coordinate(try requiredScreenPoint(x: toX, y: toY, label: "--to-x/--to-y"))
             )
         }
-        try await Self.sendGesture(request, connection: connection, output: output)
+        return Self.fenceArguments(payload: SwipeTarget(
+            selection: selection,
+            duration: try duration.map(GestureDuration.init(validatingSeconds:))
+        ))
     }
 }
 
 // MARK: - Drag
 
-struct DragSubcommand: AsyncParsableCommand, GestureCLICommandContract {
+struct DragSubcommand: ConnectedOneShotCLICommand {
     static let configuration = CommandConfiguration(commandName: Self.cliCommandName, abstract: "Drag from one point to another")
 
     @OptionGroup var element: AccessibilityTargetOptions
@@ -360,36 +231,29 @@ struct DragSubcommand: AsyncParsableCommand, GestureCLICommandContract {
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
 
-    @ButtonHeistActor
-    mutating func run() async throws {
+    var runnerStatusMessage: String? { "Sending gesture..." }
+
+    func requestArguments() throws -> TheFence.CommandArgumentEnvelope {
         guard (try element.hasTarget) || (fromX != nil && fromY != nil) else {
             throw ValidationError("Must specify --identifier, -l, or --from-x/--from-y coordinates")
         }
 
-        let parameters = CommandArgumentWriter.parameters(
-            CommandArgumentWriter.optional(.duration, duration)
-        )
-        let request: TheFence.CommandArgumentEnvelope
+        let selection: DragGestureSelection
+        let end = ScreenPoint(x: toX, y: toY)
         if let target = try element.parsedTarget() {
             guard fromX == nil, fromY == nil else {
                 throw ValidationError("Element drag cannot mix with --from-x/--from-y coordinates")
             }
-            request = try Self.gestureRequest(
-                parameters: parameters,
-                .elementToPoint(
-                    element: target,
-                    end: CLIPointArgument(x: toX, y: toY)
-                )
-            )
+            selection = .elementToPoint(target, start: nil, end: end)
         } else {
-            request = try Self.gestureRequest(
-                parameters: parameters,
-                .pointToPoint(
-                    start: CLIPointArgument.required(x: fromX, y: fromY, label: "--from-x/--from-y"),
-                    end: CLIPointArgument(x: toX, y: toY)
-                )
+            selection = .pointToPoint(
+                start: try requiredScreenPoint(x: fromX, y: fromY, label: "--from-x/--from-y"),
+                end: end
             )
         }
-        try await Self.sendGesture(request, connection: connection, output: output)
+        return Self.fenceArguments(payload: DragTarget(
+            selection: selection,
+            duration: try duration.map(GestureDuration.init(validatingSeconds:))
+        ))
     }
 }

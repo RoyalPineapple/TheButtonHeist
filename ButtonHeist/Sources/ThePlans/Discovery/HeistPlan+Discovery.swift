@@ -27,9 +27,8 @@ public enum HeistCatalogTag: String, Codable, Sendable, Equatable {
 }
 
 public enum HeistTargetPredicateFact: Sendable, Equatable, Hashable {
-    case predicate(ElementPredicate)
-    case template(ElementPredicateTemplate)
-    case container(ContainerPredicateExpr)
+    case predicate(ElementPredicateTemplate)
+    case container(ContainerPredicate)
     case targetReference(HeistReferenceName)
 }
 
@@ -56,7 +55,7 @@ public struct HeistSemanticCustomContentMatch: Sendable, Equatable, Hashable {
         self.isImportant = isImportant
     }
 
-    init(_ match: CustomContentMatch<StringExpr>) {
+    init(_ match: CustomContentMatchCore<Expr<String>>) {
         self.label = match.label.map(HeistSemanticStringMatch.init)
         self.value = match.value.map(HeistSemanticStringMatch.init)
         self.isImportant = match.isImportant
@@ -64,15 +63,15 @@ public struct HeistSemanticCustomContentMatch: Sendable, Equatable, Hashable {
 }
 
 public struct HeistSemanticStringMatch: Sendable, Equatable, Hashable {
-    public let mode: StringMatch<String>.Mode
+    public let mode: StringMatch.Mode
     public let value: HeistSemanticStringValue?
 
-    public init(mode: StringMatch<String>.Mode, value: HeistSemanticStringValue?) {
+    public init(mode: StringMatch.Mode, value: HeistSemanticStringValue?) {
         self.mode = mode
         self.value = value
     }
 
-    init(_ match: StringMatch<StringExpr>) {
+    init(_ match: StringMatchCore<Expr<String>>) {
         switch match.mode {
         case .exact:
             self.mode = .exact
@@ -85,7 +84,7 @@ public struct HeistSemanticStringMatch: Sendable, Equatable, Hashable {
         case .isEmpty:
             self.mode = .isEmpty
         }
-        self.value = match.valueIfPresent.map(HeistSemanticStringValue.init)
+        self.value = match.payload.map(HeistSemanticStringValue.init)
     }
 }
 
@@ -93,7 +92,7 @@ public enum HeistSemanticStringValue: Sendable, Equatable, Hashable {
     case literal(String)
     case reference(HeistReferenceName)
 
-    init(_ expression: StringExpr) {
+    init(_ expression: Expr<String>) {
         switch expression {
         case .literal(let literal):
             self = .literal(literal)
@@ -178,19 +177,19 @@ public struct HeistCatalog: Codable, Sendable, Equatable {
 public struct HeistSemanticSurface: Sendable, Equatable {
     public let actionCommands: [HeistActionCommandType]
     public let targetPredicates: [HeistTargetPredicateFact]
-    public let waits: [AccessibilityPredicate<RootContext>]
-    public let expectations: [AccessibilityPredicate<RootContext>]
+    package let waits: [AccessibilityPredicate]
+    package let expectations: [AccessibilityPredicate]
     public let nestedRunHeists: [HeistInvocationPath]
-    public let expectedEffects: [AccessibilityPredicate<RootContext>]
+    package let expectedEffects: [AccessibilityPredicate]
     public let semanticSurfaces: [HeistSemanticSurfaceFact]
 
-    public init(
+    package init(
         actionCommands: [HeistActionCommandType] = [],
         targetPredicates: [HeistTargetPredicateFact] = [],
-        waits: [AccessibilityPredicate<RootContext>] = [],
-        expectations: [AccessibilityPredicate<RootContext>] = [],
+        waits: [AccessibilityPredicate] = [],
+        expectations: [AccessibilityPredicate] = [],
         nestedRunHeists: [HeistInvocationPath] = [],
-        expectedEffects: [AccessibilityPredicate<RootContext>] = [],
+        expectedEffects: [AccessibilityPredicate] = [],
         semanticSurfaces: [HeistSemanticSurfaceFact] = []
     ) {
         self.actionCommands = actionCommands
@@ -456,11 +455,11 @@ private struct HeistCatalogCollector: HeistPlanTraversalVisitor {
 private struct HeistSemanticSurfaceBuilder: HeistPlanTraversalVisitor {
     var actionCommands: [HeistActionCommandType] = []
     var targetPredicateFacts: [HeistTargetPredicateFact] = []
-    var waits: [AccessibilityPredicate<RootContext>] = []
-    var expectations: [AccessibilityPredicate<RootContext>] = []
+    var waits: [AccessibilityPredicate] = []
+    var expectations: [AccessibilityPredicate] = []
     var nestedRunHeists: [HeistInvocationPath] = []
-    var expectedEffects: [AccessibilityPredicate<RootContext>] = []
-    var semanticFacets: [ElementPredicateCheck<StringExpr>] = []
+    var expectedEffects: [AccessibilityPredicate] = []
+    var semanticFacets: [ElementPredicateCheckCore<Expr<String>>] = []
 
     static func surface(for resolved: ResolvedCatalogHeist) -> HeistSemanticSurface {
         var builder = Self()
@@ -499,7 +498,7 @@ private struct HeistSemanticSurfaceBuilder: HeistPlanTraversalVisitor {
     }
 
     mutating func visitForEachElement(_ step: ForEachElementStep, context: HeistTraversalContext) {
-        appendTargetPredicate(.predicate(ElementPredicateTemplate(step.matching)))
+        appendTargetPredicate(.predicate(step.matching))
     }
 
     mutating func visitInvoke(_ invocation: HeistInvocationStep, context: HeistTraversalContext) {
@@ -516,13 +515,13 @@ private struct HeistSemanticSurfaceBuilder: HeistPlanTraversalVisitor {
         }
     }
 
-    mutating func collectWait(_ predicate: AccessibilityPredicate<RootContext>) {
+    mutating func collectWait(_ predicate: AccessibilityPredicate) {
         appendUnique(predicate, to: &waits)
         appendUnique(predicate, to: &expectedEffects)
         appendPredicateTargets(predicate)
     }
 
-    mutating func collectExpectation(_ predicate: AccessibilityPredicate<RootContext>) {
+    mutating func collectExpectation(_ predicate: AccessibilityPredicate) {
         appendUnique(predicate, to: &expectations)
         appendUnique(predicate, to: &expectedEffects)
         appendPredicateTargets(predicate)
@@ -531,7 +530,7 @@ private struct HeistSemanticSurfaceBuilder: HeistPlanTraversalVisitor {
     mutating func appendTargetPredicate(_ target: AccessibilityTarget) {
         switch target {
         case .predicate(let predicate, _):
-            appendUnique(.template(predicate), to: &targetPredicateFacts)
+            appendUnique(.predicate(predicate), to: &targetPredicateFacts)
             appendSemanticSurfaces(predicate)
         case .container(let predicate, _):
             appendUnique(.container(predicate), to: &targetPredicateFacts)
@@ -547,32 +546,71 @@ private struct HeistSemanticSurfaceBuilder: HeistPlanTraversalVisitor {
     }
 
     mutating func appendSemanticSurfaces(_ predicate: ElementPredicateTemplate) {
-        for check in predicate.checks where check.hasPredicateLiteral {
+        for check in predicate.core.checks where check.hasPredicateLiteral {
             appendUnique(check, to: &semanticFacets)
         }
     }
 
-    mutating func appendPredicateTargets<Context>(
-        _ predicate: AccessibilityPredicate<Context>
-    ) {
-        appendPredicateTargets(predicate.node)
+    mutating func appendPredicateTargets(_ predicate: AccessibilityPredicate) {
+        appendPredicateTargets(predicate.core)
     }
 
-    mutating func appendPredicateTargets(_ node: AccessibilityPredicateNode) {
-        switch node {
-        case .exists(let target), .missing(let target),
-             .appeared(let target), .disappeared(let target):
-            appendTargetPredicate(target)
+    mutating func appendPredicateTargets(
+        _ core: AccessibilityPredicateCore<AuthoredAccessibilityPredicatePhase>
+    ) {
+        switch core {
+        case .presence(let presence):
+            appendPredicateTargets(presence)
         case .announcement:
             break
-        case .changed(let predicate):
-            appendPredicateTargets(predicate)
+        case .changed(let declaration):
+            appendPredicateTargets(declaration)
         case .noChange:
             break
-        case .screen(let assertions), .elements(let assertions):
+        }
+    }
+
+    mutating func appendPredicateTargets(
+        _ core: PresencePredicateCore<AuthoredAccessibilityPredicatePhase>
+    ) {
+        switch core {
+        case .exists(let target), .missing(let target):
+            appendTargetPredicate(target)
+        }
+    }
+
+    mutating func appendPredicateTargets(
+        _ core: ChangeDeclarationCore<AuthoredAccessibilityPredicatePhase>
+    ) {
+        switch core {
+        case .screen(let assertions):
             for assertion in assertions {
                 appendPredicateTargets(assertion)
             }
+        case .elements(let assertions):
+            for assertion in assertions {
+                appendPredicateTargets(assertion)
+            }
+        }
+    }
+
+    mutating func appendPredicateTargets(
+        _ core: ScreenAssertionCore<AuthoredAccessibilityPredicatePhase>
+    ) {
+        switch core {
+        case .presence(let presence):
+            appendPredicateTargets(presence)
+        }
+    }
+
+    mutating func appendPredicateTargets(
+        _ core: ElementAssertionCore<AuthoredAccessibilityPredicatePhase>
+    ) {
+        switch core {
+        case .presence(let presence):
+            appendPredicateTargets(presence)
+        case .appeared(let target), .disappeared(let target):
+            appendTargetPredicate(target)
         case .updated(let target, _):
             appendTargetPredicate(target)
         }
@@ -580,7 +618,7 @@ private struct HeistSemanticSurfaceBuilder: HeistPlanTraversalVisitor {
 }
 
 private extension HeistSemanticSurfaceFact {
-    init(_ check: ElementPredicateCheck<StringExpr>) {
+    init(_ check: ElementPredicateCheckCore<Expr<String>>) {
         switch check {
         case .label(let match):
             self = .label(HeistSemanticStringMatch(match))

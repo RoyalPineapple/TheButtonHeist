@@ -106,7 +106,7 @@ final class DogfoodFeatureFlowTests: XCTestCase {
 
     func testTextEditingPasteboardAndElementForEachUseDemoApp() async throws {
         let heist = try await runHeist("DogfoodTextEditingPasteboardAndElementForEach") {
-            let activeFixBug = ElementPredicate(
+            let activeFixBug = ElementPredicateTemplate(
                 label: "Fix bug, High priority",
                 value: "Active"
             )

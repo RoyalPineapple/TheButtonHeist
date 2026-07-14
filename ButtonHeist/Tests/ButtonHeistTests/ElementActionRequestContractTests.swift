@@ -102,7 +102,7 @@ final class ElementActionRequestContractTests: XCTestCase {
     }
 
     func testHeistValuePayloadEncoderBridgesEncodableContracts() throws {
-        let value = try TheFence.HeistValuePayloadEncoder.encode(AccessibilityPredicate<RootContext>.exists(.label("Pay")))
+        let value = try TheFence.HeistValuePayloadEncoder.encode(AccessibilityPredicate.exists(.label("Pay")))
 
         guard case .object(let object) = value else {
             return XCTFail("Expected object bridge output")
@@ -243,7 +243,7 @@ private func assertStringMatchObjectSchema(
     }
     XCTAssertEqual(properties["mode"], .object([
         "type": .string("string"),
-        "enum": .array(StringMatch<String>.Mode.allCases.map { .string($0.rawValue) }),
+        "enum": .array(StringMatch.Mode.allCases.map { .string($0.rawValue) }),
     ]), file: file, line: line)
     XCTAssertEqual(properties["value"], .object(["type": .string("string")]), file: file, line: line)
 }
@@ -270,7 +270,7 @@ private func assertPredicateChecksSchema(
     }
     XCTAssertEqual(properties["kind"], .object([
         "type": .string("string"),
-        "enum": .array(ElementPredicateCheck<String>.Kind.allCases.map { .string($0.rawValue) }),
+        "enum": .array(ElementPredicateCheckCore<Expr<String>>.Kind.allCases.map { .string($0.rawValue) }),
     ]), file: file, line: line)
 
     guard case .object? = properties["match"] else {
@@ -312,7 +312,7 @@ private func assertContainerPredicateSchema(
     }
     XCTAssertEqual(checkProperties["kind"], .object([
         "type": .string("string"),
-        "enum": .array(ContainerPredicateCheck<String>.wireKindValues.map { .string($0) }),
+        "enum": .array(ContainerPredicateCheck.wireKindValues.map { .string($0) }),
     ]), file: file, line: line)
     XCTAssertEqual(checkProperties["type"], .object([
         "type": .string("string"),
@@ -360,9 +360,9 @@ private func arrayItemProperties(
 
 private func canonicalSemanticContainerPredicateKindValues() -> [String] {
     [
-        SemanticContainerPredicate<String>.label("sample"),
-        SemanticContainerPredicate<String>.value("sample"),
-    ].map(\.wireKindValue)
+        SemanticContainerPredicate.label("sample"),
+        SemanticContainerPredicate.value("sample"),
+    ].map { $0.core.wireKindValue }
 }
 
 private func assertArraySchema(

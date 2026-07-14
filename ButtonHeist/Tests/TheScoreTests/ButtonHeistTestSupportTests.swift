@@ -147,7 +147,7 @@ import ThePlans
         let selection = HeistCaseSelectionResult(
             cases: [
                 HeistCaseMatchResult(
-                    predicate: AccessibilityPredicate<RootContext>.exists(.label("Ready")),
+                    predicate: AccessibilityPredicate.exists(.label("Ready")),
                     met: true
                 ),
             ],

@@ -8,13 +8,13 @@ import Testing
 struct RenderResponseTests {
 
     @Test("inline screenshot render includes image content and interface text")
-    func inlineScreenshotRenderIncludesImageAndInterfaceText() {
+    func inlineScreenshotRenderIncludesImageAndInterfaceText() throws {
         let response = FenceResponse.screenshotData(
             payload: ScreenPayload(
                 pngData: "abc",
                 width: 100,
                 height: 200,
-                interface: Self.interfaceFixture()
+                interface: try Self.interfaceFixture()
             ),
             options: .init(includeInterface: true)
         )
@@ -43,8 +43,8 @@ struct RenderResponseTests {
             value: "Loaded by scroll",
             identifier: "lazy_row"
         )
-        let trace = AccessibilityTrace(first: Self.interface([row]))
-            .appending(Self.interface([row, lazyRow]))
+        let trace = AccessibilityTrace(first: try Self.interface([row]))
+            .appending(try Self.interface([row, lazyRow]))
         let command = HeistActionCommand.activate(.predicate(ElementPredicateTemplate(label: "Load More")))
         let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
         let response = FenceResponse.heistExecution(
@@ -201,7 +201,7 @@ struct RenderResponseTests {
         #expect(details["retryable"] == Value.bool(false))
     }
 
-    private static func interfaceFixture() -> Interface {
+    private static func interfaceFixture() throws -> Interface {
         var elementAnnotations: [InterfaceElementAnnotation] = []
         let button = AccessibilityElement(
             description: "Submit",
@@ -227,7 +227,7 @@ struct RenderResponseTests {
             identifier: "actions",
             frame: AccessibilityRect(x: 0, y: 40, width: 200, height: 100)
         )
-        return Interface(
+        return try Interface(
             timestamp: Date(timeIntervalSince1970: 0),
             tree: [
                 .container(container, children: [
@@ -285,8 +285,8 @@ struct RenderResponseTests {
         return try #require(object as? [String: Any])
     }
 
-    private static func interface(_ elements: [AccessibilityElement]) -> Interface {
-        Interface(
+    private static func interface(_ elements: [AccessibilityElement]) throws -> Interface {
+        try Interface(
             timestamp: Date(timeIntervalSince1970: 0),
             tree: elements.enumerated().map { index, element in
                 .element(element, traversalIndex: index)

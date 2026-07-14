@@ -136,7 +136,7 @@ extension HeistJUnitReport {
             var name = "[\(index)] \(command)"
             if case .predicate(let template, _)? = target,
                let predicate = try? template.resolve(in: .empty) {
-                if let summary = predicate.checks.compactMap(ScoreDescription.predicateCheckField).first {
+                if let summary = predicate.core.checks.compactMap(ScoreDescription.predicateCheckField).first {
                     name += " \(summary)"
                 }
             }
@@ -246,7 +246,7 @@ extension HeistJUnitReport {
             var parts: [String] = []
             if case .predicate(let template, _) = target,
                let predicate = try? template.resolve(in: .empty) {
-                parts = predicate.checks.compactMap(ScoreDescription.predicateCheckField)
+                parts = predicate.core.checks.compactMap(ScoreDescription.predicateCheckField)
             }
             if !parts.isEmpty {
                 body += "target: \(parts.joined(separator: ", "))\n"

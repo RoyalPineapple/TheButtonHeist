@@ -59,11 +59,6 @@ enum TargetResolutionDiagnostics {
 
     private static func notFoundMessage(_ facts: TheStash.TargetNotFoundFacts) -> String {
         switch facts.reason {
-        case .ordinalNegative(let ordinal):
-            return """
-                ordinal must be non-negative, got \(ordinal)
-                Next: remove ordinal, or use ordinal 0 after the target query resolves candidates.
-                """
         case .ordinalOutOfRange(let requested, let matchCount):
             let nextMove: String
             if matchCount == 0 {
@@ -110,8 +105,6 @@ enum TargetResolutionDiagnostics {
 
     private static func containerNotFoundMessage(_ facts: TheStash.ContainerNotFoundFacts) -> String {
         switch facts.reason {
-        case .emptyPredicate:
-            return "container target needs semantic scope: use type, label, value, identifier, or target an element inside the intended region"
         case .ordinalOutOfRange(let requested, let matchCount):
             return "container target ordinal \(requested) is outside \(matchCount) matching container(s); "
                 + "narrow the container predicate or target an element inside the intended region"

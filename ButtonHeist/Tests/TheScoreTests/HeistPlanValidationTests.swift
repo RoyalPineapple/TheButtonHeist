@@ -189,7 +189,7 @@ func lintFlagsMechanicalCommands() throws {
 @Test
 func lintReportsTypeTextWithoutTarget() throws {
     let plan = try HeistPlan(body: [
-        .action(try ActionStep(command: .typeText(text: .literal("milk"), target: nil))),
+        .action(try ActionStep(command: .typeText(text: "milk", target: nil))),
     ])
 
     let findings = plan.lint(.compositionQuality)
@@ -245,47 +245,23 @@ func runtimeSafetyRejectsInvalidRefs() throws {
     let tooLong = String(repeating: "a", count: HeistPlanRuntimeSafetyLimits.standard.maxParameterBytes + 1)
     let cases: [(String, HeistPlanAdmissionCandidate, String)] = [
         (
-            "empty target ref",
-            HeistPlanAdmissionCandidate(body: [.action(try ActionStep(command: .activate(.ref(""))))]),
-            "target ref"
-        ),
-        (
-            "whitespace target ref",
-            HeistPlanAdmissionCandidate(body: [.action(try ActionStep(command: .activate(.ref(" "))))]),
-            "target ref"
-        ),
-        (
             "unknown target ref",
             HeistPlanAdmissionCandidate(body: [.action(try ActionStep(command: .activate(.ref("target"))))]),
             "target ref must resolve"
         ),
         (
-            "empty text ref",
-            HeistPlanAdmissionCandidate(body: [.action(try ActionStep(command: .typeText(
-                text: .ref(""),
-                target: .predicate(.label("Search"))
-            )))]),
-            "text_ref"
-        ),
-        (
-            "whitespace text ref",
-            HeistPlanAdmissionCandidate(body: [.action(try ActionStep(command: .typeText(
-                text: .ref(" "),
-                target: .predicate(.label("Search"))
-            )))]),
-            "text_ref"
-        ),
-        (
             "unknown text ref",
             HeistPlanAdmissionCandidate(body: [.action(try ActionStep(command: .typeText(
-                text: .ref("item"),
+                reference: "item",
                 target: .predicate(.label("Search"))
             )))]),
             "text_ref must resolve"
         ),
         (
             "long target ref",
-            HeistPlanAdmissionCandidate(body: [.action(try ActionStep(command: .activate(.ref(HeistReferenceName(rawValue: tooLong)))))]),
+            HeistPlanAdmissionCandidate(body: [.action(try ActionStep(command: .activate(.ref(
+                try HeistReferenceName(validating: tooLong)
+            ))))]),
             "max parameter/ref length"
         ),
     ]
@@ -361,7 +337,7 @@ func runtimeSafetyRejectsRefsOutsideTheirLoopScope() throws {
             body: [.warn(WarnStep(message: "inside string loop"))]
         )),
         .action(try ActionStep(command: .typeText(
-            text: .ref("item"),
+            reference: "item",
             target: .predicate(.label("Search"))
         ))),
         .forEachElement(try ForEachElementStep(
@@ -393,7 +369,7 @@ func runtimeSafetyRejectsStringRefThatLowersToInvalidCommandPayload() throws {
             parameter: "item",
             body: [
                 .action(try ActionStep(command: .typeText(
-                    text: .ref("item"),
+                    reference: "item",
                     target: .predicate(.label("Search"))
                 ))),
             ]
@@ -502,7 +478,7 @@ func runtimeSafetyEnforcesBounds() throws {
         maxTotalStringBytes: 10,
         maxParameterBytes: 4
     )
-    let deepPredicate = AccessibilityPredicate<RootContext>.changed(.elements([
+    let deepPredicate = AccessibilityPredicate.changed(.elements([
         .exists(.label("Nested")),
         .exists(.label("Sibling")),
     ]))
@@ -830,10 +806,13 @@ func runtimeSafetyEnforcesBoundsOnCollectionLoopsInsideControlFlow() throws {
 
 @Test
 func runtimeSafetyRejectsInvalidHeistDefinitionsAndInvocations() throws {
+    let itemReference: HeistReferenceName = "item"
     let definition = HeistPlanAdmissionCandidate(
         name: "addToCart",
         parameter: .string(name: "item"),
-        body: [.action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.ref("item")))))))]
+        body: [.action(try ActionStep(command: .activate(.predicate(
+            ElementPredicateTemplate(label: .exact(itemReference))
+        ))))]
     )
     let cases: [(HeistPlanAdmissionCandidate, String)] = [
         (
@@ -855,7 +834,7 @@ func runtimeSafetyRejectsInvalidHeistDefinitionsAndInvocations() throws {
             HeistPlanAdmissionCandidate(definitions: [definition], body: [
                 .invoke(HeistInvocationStep(
                     path: ["missing"],
-                    argument: .string(.literal("Milk"))
+                    argument: .string("Milk")
                 )),
             ]),
             "heist run path must resolve"
@@ -1009,7 +988,7 @@ func runtimeSafetyAcceptsParameterizedRootAndScratchRootCaller() throws {
         name: "search",
         parameter: .string(name: "query"),
         body: [.action(try ActionStep(command: .typeText(
-            text: .ref("query"),
+            reference: "query",
             target: .predicate(.label("Search"))
         )))]
     )
@@ -1019,36 +998,39 @@ func runtimeSafetyAcceptsParameterizedRootAndScratchRootCaller() throws {
         definitions: [
             HeistPlanAdmissionCandidate(name: "search", parameter: .string(name: "query"), body: [
                 .action(try ActionStep(command: .typeText(
-                    text: .ref("query"),
+                    reference: "query",
                     target: .predicate(.label("Search"))
                 ))),
             ]),
         ],
-        body: [.invoke(HeistInvocationStep(path: ["search"], argument: .string(.literal("Milk"))))]
+        body: [.invoke(HeistInvocationStep(path: ["search"], argument: .string("Milk")))]
     )
     _ = try validatedPlan(scratchRoot)
 }
 
 @Test
 func runtimeSafetyUsesInvokedDefinitionScopeForHelperDependencies() throws {
+    let itemReference: HeistReferenceName = "item"
     let raw = HeistPlanAdmissionCandidate(definitions: [
         HeistPlanAdmissionCandidate(
             name: "addToCart",
             parameter: .string(name: "item"),
             definitions: [
                 HeistPlanAdmissionCandidate(name: "tapAddButton", body: [
-                    .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal("Add to Cart"))))))),
+                    .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: "Add to Cart"))))),
                 ]),
             ],
             body: [
-                .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.ref("item"))))))),
+                .action(try ActionStep(command: .activate(.predicate(
+                    ElementPredicateTemplate(label: .exact(itemReference))
+                )))),
                 .invoke(HeistInvocationStep(path: ["tapAddButton"])),
             ]
         ),
     ], body: [
         .invoke(HeistInvocationStep(
             path: ["addToCart"],
-            argument: .string(.literal("Milk"))
+            argument: .string("Milk")
         )),
     ])
 
@@ -1084,7 +1066,7 @@ func runtimeSafetyValidatesInvokedBodiesWithBoundArguments() throws {
             parameter: .string(name: "query"),
             body: [
                 .action(try ActionStep(command: .typeText(
-                    text: .ref("query"),
+                    reference: "query",
                     target: .predicate(.label("Search"))
                 ))),
             ]
@@ -1092,7 +1074,7 @@ func runtimeSafetyValidatesInvokedBodiesWithBoundArguments() throws {
     ], body: [
         .invoke(HeistInvocationStep(
             path: ["typeSearch"],
-            argument: .string(.literal(""))
+            argument: .string("")
         )),
     ])
 
@@ -1104,6 +1086,7 @@ func runtimeSafetyValidatesInvokedBodiesWithBoundArguments() throws {
 
 @Test
 func runtimeSafetyAcceptsRepresentativeCanonicalPlan() throws {
+    let itemReference: HeistReferenceName = "item"
     let plan = try HeistPlan(body: [
         .action(try ActionStep(
             command: .activate(.predicate(.label("Sign In"))),
@@ -1133,9 +1116,9 @@ func runtimeSafetyAcceptsRepresentativeCanonicalPlan() throws {
             parameter: "item",
             body: [
                 .action(try ActionStep(
-                    command: .typeText(text: .ref("item"), target: .predicate(.label("Add item"))),
+                    command: .typeText(reference: itemReference, target: .predicate(.label("Add item"))),
                     expectationPolicy: .expect(ActionExpectation(
-                        predicate: .exists(.predicate(ElementPredicateTemplate(label: .exact(.ref("item"))))),
+                        predicate: .exists(.predicate(ElementPredicateTemplate(label: .exact(itemReference)))),
                         timeout: 2
                     )))),
             ]

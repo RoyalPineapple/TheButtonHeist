@@ -15,11 +15,11 @@ private func exactSemanticString(_ value: String) -> HeistSemanticStringMatch {
     HeistSemanticStringMatch(mode: .exact, value: .literal(value))
 }
 
-private func existsLabel(_ label: String) -> AccessibilityPredicate<RootContext> {
+private func existsLabel(_ label: String) -> AccessibilityPredicate {
     .exists(.label(label))
 }
 
-private let screenChangePredicate = AccessibilityPredicate<RootContext>.changed(.screen())
+private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
 
 @Test func `list heists includes root only entry`() throws {
     let catalog = try HeistPlan(
@@ -69,7 +69,9 @@ private let screenChangePredicate = AccessibilityPredicate<RootContext>.changed(
                 name: "addToCart",
                 parameter: .string(name: "item"),
                 body: [
-                    .action(try ActionStep(command: .activate(.predicate(.label(.ref("item")))))),
+                    .action(try ActionStep(command: .activate(.predicate(
+                        .label(HeistReferenceName(stringLiteral: "item"))
+                    )))),
                 ]
             ),
         ],
@@ -167,8 +169,8 @@ private let screenChangePredicate = AccessibilityPredicate<RootContext>.changed(
 
 @Test func `semantic discovery structurally dedupes before catalog projection`() throws {
     let duplicateTemplate = ElementPredicateTemplate([
-        .label(.literal("Pay")),
-        .label(.literal("Pay")),
+        .label("Pay"),
+        .label("Pay"),
         .traits([.link, .button]),
         .traits([.button, .link]),
     ])
@@ -189,7 +191,7 @@ private let screenChangePredicate = AccessibilityPredicate<RootContext>.changed(
     #expect(pay.tags == [.entry, .semanticAction])
 }
 
-@Test func `target discovery dedupes resolved and template predicates structurally`() throws {
+@Test func `target discovery dedupes authored predicates structurally`() throws {
     let description = try HeistPlan(
         name: "pay",
         body: [
@@ -198,7 +200,7 @@ private let screenChangePredicate = AccessibilityPredicate<RootContext>.changed(
         ]
     ).describeHeist(named: "pay")
 
-    #expect(description.semanticSurface.targetPredicates == [.template(.label("Pay"))])
+    #expect(description.semanticSurface.targetPredicates == [.predicate(.label("Pay"))])
     #expect(description.semanticSurface.semanticSurfaces == [.label(exactSemanticString("Pay"))])
 }
 
@@ -211,7 +213,7 @@ private let screenChangePredicate = AccessibilityPredicate<RootContext>.changed(
         ]
     ).describeHeist(named: "pay")
 
-    #expect(description.semanticSurface.targetPredicates == [.template(.label("Pay"))])
+    #expect(description.semanticSurface.targetPredicates == [.predicate(.label("Pay"))])
 }
 
 @Test func `list heists cannot be reached for invalid raw plan`() throws {
@@ -235,7 +237,7 @@ private let screenChangePredicate = AccessibilityPredicate<RootContext>.changed(
         parameter: .string(name: "item"),
         body: [
             .action(try ActionStep(command: .typeText(
-                text: .ref("item"),
+                reference: "item",
                 target: .label("Search")
             ))),
         ]
@@ -272,7 +274,9 @@ private let screenChangePredicate = AccessibilityPredicate<RootContext>.changed(
                 name: "addToCart",
                 parameter: .string(name: "item"),
                 body: [
-                    .action(try ActionStep(command: .activate(.predicate(.label(.ref("item")))))),
+                    .action(try ActionStep(command: .activate(.predicate(
+                        .label(HeistReferenceName(stringLiteral: "item"))
+                    )))),
                 ]
             ),
         ],
@@ -309,23 +313,23 @@ private let screenChangePredicate = AccessibilityPredicate<RootContext>.changed(
 
     #expect(description.semanticSurface.nestedRunHeists == [invocation("checkout.confirm")])
     #expect(description.semanticSurface.actionCommands == [.activate])
-    #expect(description.semanticSurface.targetPredicates.contains(.template(.label("Confirm"))))
+    #expect(description.semanticSurface.targetPredicates.contains(.predicate(.label("Confirm"))))
 }
 
 @Test func `describe action targets and predicates`() throws {
     let description = try HeistPlan(
         name: "activateSave",
         body: [
-            .action(try ActionStep(command: .activate(.predicate(.identifier(.literal("save_button")))))),
+            .action(try ActionStep(command: .activate(.predicate(.identifier("save_button"))))),
         ]
     ).describeHeist(named: "activateSave")
 
     #expect(description.semanticSurface.actionCommands == [.activate])
-    #expect(description.semanticSurface.targetPredicates == [.template(.identifier(.literal("save_button")))])
+    #expect(description.semanticSurface.targetPredicates == [.predicate(.identifier("save_button"))])
 }
 
 @Test func `describe waits expectations and expected effects`() throws {
-    let announcement = AccessibilityPredicate<RootContext>.announcement(.contains("saved"))
+    let announcement = AccessibilityPredicate.announcement(.contains("saved"))
     let description = try HeistPlan(
         name: "submit",
         body: [
@@ -394,7 +398,7 @@ private func detailedSurfacePlan() throws -> HeistPlan {
                         name: "confirm",
                         body: [
                             .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(
-                                identifier: .exact(.literal("confirmation_button")),
+                                identifier: .exact("confirmation_button"),
                                 traits: [.button]
                             ))))),
                         ]

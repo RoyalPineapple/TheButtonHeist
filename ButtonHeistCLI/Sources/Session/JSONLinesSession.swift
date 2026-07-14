@@ -72,8 +72,8 @@ final class JSONLinesSession {
     private func processLine(_ line: String) async -> CLIRunner.ResponseEnvelope {
         let parsedRequest: CLIParsedRequest
         do {
-            parsedRequest = try CLIRequestBuilder.parsedRequest(from: line)
-        } catch let error as CLIRequestBuildError {
+            parsedRequest = try CLIMachineRequestParser.parsedRequest(from: line)
+        } catch let error as CLIMachineRequestError {
             return CLIRunner.ResponseEnvelope(
                 response: .error(error.diagnosticFailure),
                 requestId: error.requestId

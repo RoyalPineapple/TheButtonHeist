@@ -216,7 +216,7 @@ extension TheStash {
         diagnosticObservation = nil
         interfaceTree = .empty
         nextVisibleRefreshScreenForTesting = nil
-        semanticObservationStream.clearSettledObservationHistory()
+        semanticObservationStream.requireScreenReplacement()
     }
 
     private func recordParsedObservedEvidence(from screen: InterfaceObservation) {

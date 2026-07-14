@@ -2,7 +2,7 @@ import ArgumentParser
 @_spi(ButtonHeistTooling) import ButtonHeist
 
 /// Connect (or reconnect) to an iOS app with Button Heist enabled.
-struct ConnectCommand: AsyncParsableCommand, CLICommandContract {
+struct ConnectCommand: ConnectedOneShotCLICommand {
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Connect to an iOS app with Button Heist enabled",
@@ -24,7 +24,7 @@ struct ConnectCommand: AsyncParsableCommand, CLICommandContract {
     @OptionGroup var output: OutputOptions
 
     @ButtonHeistActor
-    mutating func run() async throws {
+    func runnerDescriptor() async throws -> CLIRunner.CommandDescriptor {
         // Peek at the resolved environment before invoking TheFence so we can
         // produce a clear error naming what was checked. EnvironmentConfig
         // drops to nil when nothing is configured, and TheFence's own error
@@ -47,21 +47,13 @@ struct ConnectCommand: AsyncParsableCommand, CLICommandContract {
                 BUTTONHEIST_DEVICE, or add a default target to .buttonheist.json.
                 """)
         }
-
-        let quiet = connection.quiet
-        let fence = TheFence(configuration: resolved.fenceConfiguration)
-        fence.onStatus = { message in
-            if !quiet { logStatus(message) }
-        }
-        defer { fence.stop() }
-
-        let response = try await fence.execute(try fence.admit(FenceCommandInput(
-            command: Self.fenceCommand,
-            arguments: Self.fenceArguments()
-        )))
-        CLIRunner.outputResponse(response, format: output.format ?? .auto)
-        if response.isFailure {
-            throw ExitCode.failure
-        }
+        return CLIRunner.CommandDescriptor(
+            fenceDescriptor: Self.fenceDescriptor,
+            connection: connection,
+            format: output.format,
+            arguments: Self.fenceArguments(),
+            executionMode: .direct,
+            configuration: resolved
+        )
     }
 }

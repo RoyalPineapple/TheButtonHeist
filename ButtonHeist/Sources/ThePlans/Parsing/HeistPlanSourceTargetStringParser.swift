@@ -25,7 +25,7 @@ extension HeistPlanSourceParser {
             return .predicate(try parseElementPredicateTemplate(named: name))
         case "container":
             try expectSymbol("(")
-            let predicate = try parseContainerPredicateExpr()
+            let predicate = try parseContainerPredicate()
             let ordinal: Int?
             if consumeSymbol(",") {
                 try expectIdentifier("ordinal")
@@ -56,7 +56,7 @@ extension HeistPlanSourceParser {
             try expectSymbol("(")
             try expectIdentifier("container")
             try expectSymbol(":")
-            let container = try parseContainerPredicateExpr()
+            let container = try parseContainerPredicate()
             try expectSymbol(",")
             if lookaheadLabel("target") {
                 throw error(currentToken, ".within(...) target argument is unlabeled")
@@ -86,13 +86,8 @@ extension HeistPlanSourceParser {
         ])
     }
 
-    mutating func parseElementPredicate() throws -> ElementPredicate {
-        let template = try parseElementPredicateTemplate()
-        return try concretePredicate(from: template)
-    }
-
     mutating func parseElementPredicateTemplateFields() throws -> ElementPredicateTemplate {
-        var checks: [ElementPredicateCheck<StringExpr>] = []
+        var checks: [ElementPredicateCheck] = []
         if currentToken.isSymbol(")") {
             throw error(currentToken, ".element(...) requires at least one non-empty predicate check")
         }
@@ -121,7 +116,7 @@ extension HeistPlanSourceParser {
         return ElementPredicateTemplate(checks)
     }
 
-    mutating func parseElementPredicateCheck() throws -> ElementPredicateCheck<StringExpr> {
+    mutating func parseElementPredicateCheck() throws -> ElementPredicateCheck {
         let token = currentToken
         let name = try parseDotCallName(allowedPrefixes: [])
         return try parseElementPredicateCheck(named: name, token: token)
@@ -130,7 +125,7 @@ extension HeistPlanSourceParser {
     private mutating func parseElementPredicateCheck(
         named name: String,
         token: HeistPlanSourceToken
-    ) throws -> ElementPredicateCheck<StringExpr> {
+    ) throws -> ElementPredicateCheck {
         switch name {
         case "label":
             try expectSymbol("(")
@@ -185,7 +180,7 @@ extension HeistPlanSourceParser {
         }
     }
 
-    mutating func parseContainerPredicateExpr() throws -> ContainerPredicateExpr {
+    mutating func parseContainerPredicate() throws -> ContainerPredicate {
         let token = currentToken
         switch try parseDotCallName(allowedPrefixes: []) {
         case "label":
@@ -229,7 +224,7 @@ extension HeistPlanSourceParser {
             try expectSymbol(")")
             return .actions(actions)
         case "dataTable":
-            return try parseDataTableContainerPredicateExpr()
+            return try parseDataTableContainerPredicate()
         case "modalBoundary":
             return .modalBoundary
         case "matching":
@@ -238,12 +233,14 @@ extension HeistPlanSourceParser {
                 throw error(previous, "container matching predicate requires at least one check")
             }
             let first = try parseContainerPredicateCheckExpr()
-            var rest: [ContainerPredicateCheck<StringExpr>] = []
+            var rest: [ContainerPredicateCheck] = []
             while consumeSymbol(",") {
                 rest.append(try parseContainerPredicateCheckExpr())
             }
             try expectSymbol(")")
-            return ContainerPredicateExpr(checks: NonEmptyArray(first, rest: rest))
+            return ContainerPredicate(core: ContainerPredicateCore(
+                checks: NonEmptyArray(first.core, rest: rest.map(\.core))
+            ))
         default:
             throw error(
                 token,
@@ -254,7 +251,7 @@ extension HeistPlanSourceParser {
         }
     }
 
-    mutating func parseSemanticContainerPredicateExpr() throws -> SemanticContainerPredicate<StringExpr> {
+    mutating func parseSemanticContainerPredicate() throws -> SemanticContainerPredicate {
         let token = currentToken
         switch try parseDotCallName(allowedPrefixes: []) {
         case "label":
@@ -272,7 +269,7 @@ extension HeistPlanSourceParser {
         }
     }
 
-    mutating func parseContainerPredicateCheckExpr() throws -> ContainerPredicateCheck<StringExpr> {
+    mutating func parseContainerPredicateCheckExpr() throws -> ContainerPredicateCheck {
         let token = currentToken
         switch try parseDotCallName(allowedPrefixes: []) {
         case "type":
@@ -287,7 +284,7 @@ extension HeistPlanSourceParser {
             return .identifier(match)
         case "semantic":
             try expectSymbol("(")
-            let predicate = try parseSemanticContainerPredicateExpr()
+            let predicate = try parseSemanticContainerPredicate()
             try expectSymbol(")")
             return .semantic(predicate)
         case "rowCount":
@@ -324,7 +321,7 @@ extension HeistPlanSourceParser {
         }
     }
 
-    mutating func parseDataTableContainerPredicateExpr() throws -> ContainerPredicateExpr {
+    mutating func parseDataTableContainerPredicate() throws -> ContainerPredicate {
         try expectSymbol("(")
         var rowCount: ContainerPredicateCount?
         var columnCount: ContainerPredicateCount?
@@ -402,72 +399,7 @@ extension HeistPlanSourceParser {
         throw error(previous, "\(role) predicate payload must not be empty")
     }
 
-    mutating func concretePredicate(from template: ElementPredicateTemplate) throws -> ElementPredicate {
-        return ElementPredicate(try template.checks.map { try concreteCheck($0) })
-    }
-
-    mutating func concreteCheck(_ check: ElementPredicateCheck<StringExpr>) throws -> ElementPredicateCheck<String> {
-        switch check {
-        case .label(let match):
-            return try .label(concreteStringMatch(match, role: "label"))
-        case .identifier(let match):
-            return try .identifier(concreteStringMatch(match, role: "identifier"))
-        case .value(let match):
-            return try .value(concreteStringMatch(match, role: "value"))
-        case .hint(let match):
-            return try .hint(concreteStringMatch(match, role: "hint"))
-        case .traits(let traits):
-            return .traits(traits)
-        case .actions(let actions):
-            return .actions(actions)
-        case .customContent(let match):
-            return try .customContent(match.map { try concreteString($0, role: "custom content") })
-        case .rotors(let matches):
-            return try .rotors(matches.map { try concreteStringMatch($0, role: "rotors") })
-        case .exclude(let check):
-            return try .exclude(concreteCheck(check))
-        }
-    }
-
-    mutating func concreteStringMatch(
-        _ match: StringMatch<StringExpr>,
-        role: String
-    ) throws -> StringMatch<String> {
-        let result = try match.map { try concreteString($0, role: role) }
-        if result.valueIfPresent?.isEmpty == true {
-            throw error(currentToken, "\(role) match value must not be empty")
-        }
-        return result
-    }
-
-    mutating func concreteStringMatch(
-        _ match: StringMatch<StringExpr>?,
-        role: String
-    ) throws -> StringMatch<String>? {
-        guard let match else { return nil }
-        let result = try match.map { try concreteString($0, role: role) }
-        if result.valueIfPresent?.isEmpty == true {
-            throw error(currentToken, "\(role) match value must not be empty")
-        }
-        return result
-    }
-
-    func concreteString(_ string: StringExpr, role: String) throws -> String {
-        switch string {
-        case .literal(let value):
-            return value
-        case .ref:
-            throw HeistPlanSourceCompilerError(
-                message: "\(role) refs are not supported in this predicate position",
-                sourceName: sourceName,
-                offset: currentToken.marker.offset,
-                line: currentToken.marker.line,
-                column: currentToken.marker.column
-            )
-        }
-    }
-
-    mutating func parseStringMatchCallArgument(field: String) throws -> StringMatch<StringExpr> {
+    mutating func parseStringMatchCallArgument(field: String) throws -> StringMatch {
         if lookaheadExactStringMatchCall {
             throw error(currentToken, "exact \(field) matches use the literal form: .\(field)(\"...\")")
         }
@@ -480,18 +412,18 @@ extension HeistPlanSourceParser {
         return try validatedStringMatch(.exact, value: try parseStringExpr(), field: field, token: previous)
     }
 
-    mutating func parseStringMatchFieldValue(field: String) throws -> StringMatch<StringExpr> {
+    mutating func parseStringMatchFieldValue(field: String) throws -> StringMatch {
         try parseStringMatchFieldValue(field: field, emptyLiteralPolicy: .reject)
     }
 
-    mutating func parseStringPropertyUpdateFieldValue(field: String) throws -> StringMatch<StringExpr> {
+    mutating func parseStringPropertyUpdateFieldValue(field: String) throws -> StringMatch {
         try parseStringMatchFieldValue(field: field, emptyLiteralPolicy: .allowExact)
     }
 
     private mutating func parseStringMatchFieldValue(
         field: String,
         emptyLiteralPolicy: StringMatchEmptyLiteralPolicy
-    ) throws -> StringMatch<StringExpr> {
+    ) throws -> StringMatch {
         if lookaheadExactStringMatchCall {
             throw error(currentToken, "exact \(field) matches use the literal form: \(field): \"...\"")
         }
@@ -513,7 +445,7 @@ extension HeistPlanSourceParser {
     private mutating func parseStringMatchDotCall(
         field: String,
         emptyLiteralPolicy: StringMatchEmptyLiteralPolicy = .reject
-    ) throws -> StringMatch<StringExpr> {
+    ) throws -> StringMatch {
         let token = currentToken
         let name = try parseDotCallName(allowedPrefixes: [])
         guard let mode = stringMatchMode(named: name) else {
@@ -553,29 +485,37 @@ extension HeistPlanSourceParser {
     }
 
     var stringMatchModeNames: Set<String> {
-        Set(StringMatch<StringExpr>.Mode.sourceCallModes.map(\.rawValue))
+        Set(StringMatch.Mode.sourceCallModes.map(\.rawValue))
     }
 
-    func stringMatchMode(named name: String) -> StringMatch<StringExpr>.Mode? {
-        StringMatch<StringExpr>.Mode(rawValue: name)
+    func stringMatchMode(named name: String) -> StringMatch.Mode? {
+        StringMatch.Mode(rawValue: name)
     }
 
     private func validatedStringMatch(
-        _ mode: StringMatch<StringExpr>.Mode,
-        value: StringExpr,
+        _ mode: StringMatch.Mode,
+        value: Expr<String>,
         field: String,
         token: HeistPlanSourceToken,
         emptyLiteralPolicy: StringMatchEmptyLiteralPolicy = .reject
-    ) throws -> StringMatch<StringExpr> {
-        let match = StringMatch(mode: mode, value: value)
-        if match.valueIfPresent?.stringMatchLiteralIsEmpty == true,
+    ) throws -> StringMatch {
+        let core: StringMatchCore<Expr<String>>
+        switch mode {
+        case .exact: core = .exact(value)
+        case .contains: core = .contains(value)
+        case .prefix: core = .prefix(value)
+        case .suffix: core = .suffix(value)
+        case .isEmpty: core = .isEmpty
+        }
+        let match = StringMatch(core: core)
+        if match.core.payload?.stringMatchLiteralIsEmpty == true,
            !(emptyLiteralPolicy == .allowExact && mode == .exact) {
             throw error(token, "\(field) match value must not be empty")
         }
         return match
     }
 
-    mutating func parseStringExpr() throws -> StringExpr {
+    mutating func parseStringExpr() throws -> Expr<String> {
         if let string = try parseStringExprIfPresent() {
             return string
         }
@@ -588,7 +528,7 @@ extension HeistPlanSourceParser {
         throw error(currentToken, "expected a string literal or scoped string reference")
     }
 
-    mutating func parseStringExprIfPresent() throws -> StringExpr? {
+    mutating func parseStringExprIfPresent() throws -> Expr<String>? {
         if case .string(let value) = currentToken.kind {
             advance()
             return .literal(value)
@@ -618,13 +558,13 @@ extension HeistPlanSourceParser {
         return false
     }
 
-    mutating func parseCustomContentMatchArgument(role: String) throws -> CustomContentMatch<StringExpr> {
+    mutating func parseCustomContentMatchArgument(role: String) throws -> CustomContentMatch {
         if currentToken.isSymbol(".") {
             return try parseCustomContentMatch(role: role)
         }
 
-        var label: StringMatch<StringExpr>?
-        var value: StringMatch<StringExpr>?
+        var label: StringMatch?
+        var value: StringMatch?
         var isImportant: Bool?
         if !currentToken.isSymbol(")") {
             while true {

@@ -15,9 +15,11 @@ extension TheBrains {
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {
-        let resolvedCases: [ResolvedPredicateCase]
+        let resolvedCases: [ResolvedPredicateCaseRuntimeInput]
         do {
-            resolvedCases = try step.cases.map { try $0.resolve(in: environment) }
+            resolvedCases = try step.cases.map {
+                try ResolvedPredicateCaseRuntimeInput(resolving: $0, in: environment)
+            }
         } catch {
             return caseResolutionFailure(index: index, path: path, kind: .conditional, start: start, error: error)
         }
@@ -61,15 +63,16 @@ extension TheBrains {
 
         case .elseBranch, .timedOut, .noMatch:
             guard let elseBody = dispatch.elseBody else {
-                return heistChildParentReceipt(
+                return heistReceipt(.init(
                     path: dispatch.path,
                     kind: dispatch.kind,
                     durationMs: elapsedMilliseconds(since: dispatch.start),
                     intent: dispatch.intent,
                     evidence: .caseSelection(HeistCaseSelectionEvidence(selection: dispatch.selection)),
-                    childFailureCategory: .invocation,
-                    children: .empty
-                )
+                    childFailure: { childPath in
+                        self.childFailureDetail(category: .invocation, childPath: childPath)
+                    }
+                ))
             }
 
             let selection = dispatch.selection.selectingElseBranch()
@@ -89,15 +92,17 @@ extension TheBrains {
         selection: HeistCaseSelectionResult,
         children: [HeistExecutionStepResult]
     ) -> HeistExecutionStepResult {
-        heistChildParentReceipt(
+        heistReceipt(.init(
             path: dispatch.path,
             kind: dispatch.kind,
             durationMs: elapsedMilliseconds(since: dispatch.start),
             intent: dispatch.intent,
             evidence: .caseSelection(HeistCaseSelectionEvidence(selection: selection)),
-            childFailureCategory: .invocation,
-            children: HeistReceiptChildren(children)
-        )
+            children: children,
+            childFailure: { childPath in
+                self.childFailureDetail(category: .invocation, childPath: childPath)
+            }
+        ))
     }
 
     private func caseResolutionFailure(
@@ -107,22 +112,22 @@ extension TheBrains {
         start: CFAbsoluteTime,
         error: Error
     ) -> HeistExecutionStepResult {
-        heistFailedReceipt(
+        heistReceipt(.init(
             path: path,
             kind: kind,
             durationMs: elapsedMilliseconds(since: start),
             intent: .conditional,
-            failure: HeistFailureDetail(
+            completion: .failed(HeistFailureDetail(
                 category: .validation,
                 contract: "case predicates resolve before evaluation",
                 observed: "could not resolve heist case predicate: \(error)"
-            )
-        )
+            ))
+        ))
     }
 
 }
 
-extension Array where Element == ResolvedPredicateCase {
+extension Array where Element == ResolvedPredicateCaseRuntimeInput {
     var observationScope: SemanticObservationScope {
         map(\.predicate.observationScope).max() ?? .visible
     }
@@ -130,7 +135,7 @@ extension Array where Element == ResolvedPredicateCase {
 
 private struct PredicateCaseDispatch {
     let selection: HeistCaseSelectionResult
-    let cases: [ResolvedPredicateCase]
+    let cases: [ResolvedPredicateCaseRuntimeInput]
     let elseBody: [HeistStep]?
     let path: String
     let kind: HeistExecutionStepKind

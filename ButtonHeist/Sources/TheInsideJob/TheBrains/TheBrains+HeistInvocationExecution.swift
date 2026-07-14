@@ -53,17 +53,14 @@ extension TheBrains {
     }
 
     internal struct InvocationExpectationContext {
-        internal let source: WaitStep
-        internal let resolved: ResolvedWaitStep
+        internal let input: ResolvedWaitRuntimeInput
         internal let baseline: HeistWaitReceipt
 
         internal init(
-            source: WaitStep,
-            resolved: ResolvedWaitStep,
+            input: ResolvedWaitRuntimeInput,
             baseline: HeistWaitReceipt
         ) {
-            self.source = source
-            self.resolved = resolved
+            self.input = input
             self.baseline = baseline
         }
     }
@@ -144,15 +141,14 @@ extension TheBrains {
             ),
             path: "\(path).invoke.body"
         )
-        let childExecution = HeistReceiptChildren(children)
         let expectationOutcome = await evaluateInvocationExpectation(
             expectationContext,
             runtime: runtime,
-            childExecution: childExecution
+            childExecution: children
         )
         return completedInvocationResult(
             context: context,
-            childExecution: childExecution,
+            childExecution: children,
             expectationContext: expectationContext,
             expectationOutcome: expectationOutcome
         )
@@ -192,9 +188,9 @@ extension TheBrains {
         runtime: HeistExecutionRuntime
     ) async -> InvocationExpectationPreparation {
         guard let expectation = context.invoke.expectation else { return .none }
-        let resolved: ResolvedWaitStep
+        let input: ResolvedWaitRuntimeInput
         do {
-            resolved = try expectation.resolve(in: environment)
+            input = try ResolvedWaitRuntimeInput(resolving: expectation, in: environment)
         } catch {
             return .failed(invocationExpectationResolutionFailureResult(
                 context: context,
@@ -203,11 +199,10 @@ extension TheBrains {
             ))
         }
         let baseline = await runtime.wait(
-            .immediate(ResolvedWaitStep(predicate: resolved.predicate, timeout: immediateTimeout))
+            .immediate(input.replacingTimeout(immediateTimeout))
         )
         return .prepared(InvocationExpectationContext(
-            source: expectation,
-            resolved: resolved,
+            input: input,
             baseline: baseline
         ))
     }
@@ -215,30 +210,33 @@ extension TheBrains {
     private func evaluateInvocationExpectation(
         _ context: InvocationExpectationContext?,
         runtime: HeistExecutionRuntime,
-        childExecution: HeistReceiptChildren
+        childExecution: [HeistExecutionStepResult]
     ) async -> InvocationExpectationOutcome {
-        guard childExecution.abortedAtChildPath == nil, let context else { return .notEvaluated }
+        guard childExecution.firstFailedStep == nil, let context else { return .notEvaluated }
         let receipt: HeistWaitReceipt
         if let observedSequence = context.baseline.observedSequence {
             receipt = await runtime.wait(.afterObservation(
-                context.resolved,
+                context.input,
                 baselineTrace: context.baseline.actionResult.accessibilityTrace,
                 sequence: observedSequence
             ))
         } else {
             receipt = await runtime.wait(.baselineTraceOnly(
-                context.resolved,
+                context.input,
                 trace: context.baseline.actionResult.accessibilityTrace
             ))
         }
-        guard let failure = invocationExpectationFailure(expectation: context.source, receipt: receipt) else {
+        guard let failure = invocationExpectationFailure(
+            predicateExpression: context.input.predicateExpression,
+            receipt: receipt
+        ) else {
             return .matched(receipt)
         }
         return .failed(receipt: receipt, detail: failure)
     }
 
     private func invocationExpectationFailure(
-        expectation: WaitStep,
+        predicateExpression: AccessibilityPredicate,
         receipt: HeistWaitReceipt
     ) -> HeistFailureDetail? {
         guard !receipt.actionResult.outcome.isSuccess || !receipt.expectation.met else { return nil }
@@ -246,7 +244,7 @@ extension TheBrains {
             category: .expectation,
             contract: "heist invocation expectation is met",
             observed: invocationExpectationObserved(receipt),
-            expected: expectation.predicate.description
+            expected: predicateExpression.description
         )
     }
 

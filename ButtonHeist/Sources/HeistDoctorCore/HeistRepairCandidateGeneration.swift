@@ -7,9 +7,9 @@ enum RepairCandidateGenerator {
         currentScreen: RepairScreen,
         preferredCandidates: Set<PredicateSelectionElementId>,
         failureKind: HeistRepairFailureKind,
-        actionFamily: RepairActionFamily,
-        lastSuccess: HeistPassedStepRepairEvidence,
-        currentFailure: HeistFailedStepRepairEvidence
+        actionRequirement: RepairActionRequirement,
+        lastSuccess: HeistRepairEvidence,
+        currentFailure: HeistRepairEvidence
     ) -> [ScoredCandidate] {
         let old = oldResolved.element
         let context = CandidateScoringContext(
@@ -19,15 +19,15 @@ enum RepairCandidateGenerator {
             oldHeaderText: normalizedSet(oldResolved.headerText),
             afterEvidence: changeFactEvidenceText(lastSuccess.changeFacts)
                 .union(changeFactEvidenceText(currentFailure.changeFacts)),
-            expectationEvidence: expectationEvidenceText(lastSuccess.result.expectation)
-                .union(expectationEvidenceText(currentFailure.result.expectation)),
+            expectationEvidence: expectationEvidenceText(lastSuccess.expectation)
+                .union(expectationEvidenceText(currentFailure.expectation)),
             compatibleCandidateCount: currentScreen.elements
-                .filter { !actionFamily.isKnown || actionFamily.isSupported(by: $0.element) }
+                .filter { !actionRequirement.isKnown || actionRequirement.isSupported(by: $0.element) }
                 .count,
             currentElementCount: currentScreen.elements.count,
             preferredCandidates: preferredCandidates,
             failureKind: failureKind,
-            actionFamily: actionFamily
+            actionRequirement: actionRequirement
         )
 
         return currentScreen.elements.compactMap { RepairCandidateScorer.scoredCandidate($0, context: context) }

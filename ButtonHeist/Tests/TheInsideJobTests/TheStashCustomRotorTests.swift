@@ -91,7 +91,7 @@ final class TheStashRotorTests: XCTestCase {
         }
         stash.installScreenForTesting(screen)
 
-        let resolvedHost = stash.resolveTarget(literalTarget(ElementPredicate(identifier: "rotor_host"))).resolved
+        let resolvedHost = stash.resolveTarget(literalTarget(ElementPredicate.identifier("rotor_host"))).resolved
         guard let resolvedHost else {
             XCTFail("Expected rotor host to resolve")
             return
@@ -151,7 +151,7 @@ final class TheStashRotorTests: XCTestCase {
         }
         stash.installScreenForTesting(screen)
 
-        let resolvedHost = stash.resolveTarget(literalTarget(ElementPredicate(identifier: "system_rotor_host"))).resolved
+        let resolvedHost = stash.resolveTarget(literalTarget(ElementPredicate.identifier("system_rotor_host"))).resolved
         guard let resolvedHost else {
             XCTFail("Expected rotor host to resolve")
             return
@@ -220,10 +220,9 @@ final class TheStashRotorTests: XCTestCase {
             brains.tripwire.stopPulse()
         }
         let searchResult = await brains.executeRuntimeAction(.rotor(
-            RotorTarget(
-                target: literalTarget(ElementPredicate(identifier: "virtual_activation_rotor_host")),
-                selection: .named("Primary Action")
-            )
+            selection: .named("Primary Action"),
+            target: literalTarget(ElementPredicate.identifier("virtual_activation_rotor_host")),
+            direction: .next
         ))
 
         XCTAssertFalse(searchResult.outcome.isSuccess)
@@ -290,10 +289,9 @@ final class TheStashRotorTests: XCTestCase {
         ))
 
         let search = await brains.actions.executeRotor(
-            RotorTarget(
-                target: literalTarget(ElementPredicate(identifier: "cached_rotor_host")),
-                selection: .named("Cached Items")
-            )
+            selection: .named("Cached Items"),
+            target: literalTarget(ElementPredicate.identifier("cached_rotor_host")),
+            direction: .next
         )
 
         XCTAssertFalse(search.success)

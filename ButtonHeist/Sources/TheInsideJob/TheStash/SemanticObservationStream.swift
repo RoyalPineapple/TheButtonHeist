@@ -67,34 +67,62 @@ internal final class SemanticObservationStream {
         }
     }
 
+    private enum GenerationLineage {
+        case continuous(ObservationGeneration)
+        case replacementRequired(ObservationGeneration)
+
+        fileprivate var generation: ObservationGeneration {
+            switch self {
+            case .continuous(let generation), .replacementRequired(let generation):
+                generation
+            }
+        }
+
+        fileprivate mutating func requireReplacement() {
+            self = .replacementRequired(generation)
+        }
+
+        fileprivate func admitting(
+            _ classification: ScreenClassifier.Classification
+        ) -> ScreenClassifier.Classification {
+            switch self {
+            case .continuous:
+                classification
+            case .replacementRequired:
+                .screenChangedNotification
+            }
+        }
+
+        fileprivate mutating func committed(_ generation: ObservationGeneration) {
+            self = .continuous(generation)
+        }
+    }
+
     private weak var stash: TheStash?
     private let tripwire: TheTripwire
     // MARK: - Observation Bookkeeping
 
     private var scopePressure = SemanticObservationScopePressure()
-    private let settledWaiters = SemanticObservationSettledWaiters()
     private let cycles = SemanticObservationCycles()
+    private let observationLog = SemanticObservationLog()
 
     // MARK: - Subscriber-Facing Settled Observation History
 
     private var settledSequence: SettledObservationSequence = 0
-    private var observationGeneration = ObservationGeneration.initial
-    private var eventHistory: [SemanticObservationScope: [SettledSemanticObservationEvent]] = [:]
-    private static let eventHistoryLimit = 256
-    private var fulfillmentState = SemanticObservationFulfillmentState()
+    private var generationLineage = GenerationLineage.continuous(.initial)
     private var lastCommittedNotificationCursor = AccessibilityNotificationCursor.origin
     /// Bus sequence of the most recent scoped `screenChanged` at the latest
     /// settled commit; a later scoped `screenChanged` marks that commit as
     /// replaced.
     private var lastCommittedScopedScreenChangedSequence: UInt64 = 0
     internal var latestEvent: SettledSemanticObservationEvent? {
-        fulfillmentState.latestSourceEvent
+        observationLog.latestSourceEvent
     }
     /// Invalidates only latest fulfilled events as clean waiter results.
     /// Settled semantic truth remains in `TheStash` until the next explicit
     /// commit.
     internal var latestSettledObservationInvalidated: Bool {
-        fulfillmentState.latestSettledObservationInvalidated
+        observationLog.latestSettledObservationInvalidated
     }
     internal private(set) var latestSettleFailureDiagnostic: String?
 
@@ -103,15 +131,15 @@ internal final class SemanticObservationStream {
     private var passiveObservationState: PassiveObservationState = .stopped
 
     internal var latestObservation: SettledSemanticObservation? {
-        fulfillmentState.latestObservation
+        observationLog.latestObservation
     }
 
     internal var isActive: Bool {
         passiveObservationState.isRunning
     }
 
-    internal var settledWaiterCount: Int {
-        settledWaiters.count
+    internal var observationReplayWaiterCount: Int {
+        observationLog.waiterCount
     }
 
     internal var cycleWaiterCount: Int {
@@ -143,7 +171,7 @@ internal final class SemanticObservationStream {
         if let stash {
             AccessibilityNotificationObserver.shared.subscribe(stash.accessibilityNotifications)
         }
-        fulfillmentState.invalidate()
+        observationLog.invalidateCurrentPublication()
         let task = Task { [weak self] in
             guard let self else { return }
             while !Task.isCancelled {
@@ -157,11 +185,10 @@ internal final class SemanticObservationStream {
         passiveObservationState.task?.cancel()
         passiveObservationState = .stopped
         cycles.cancelRunningCycle()
-        settledWaiters.cancelAll()
         cycles.completeAllWaiters()
+        observationLog.cancelAllWaiters()
         if let stash {
             AccessibilityNotificationObserver.shared.unsubscribe(stash.accessibilityNotifications)
-            stash.accessibilityNotifications.clearPendingEvents()
         }
     }
 
@@ -187,6 +214,38 @@ internal final class SemanticObservationStream {
         scopePressure.subscribedObservationScope()
     }
 
+    internal func observationEntries(
+        after cursor: ObservationCursor,
+        scope: SemanticObservationScope
+    ) -> ObservationEntrySequence {
+        observationLog.entries(after: cursor, scope: scope)
+    }
+
+    internal func observationEntries(
+        scope: SemanticObservationScope
+    ) -> ObservationEntrySequence {
+        observationLog.entries(scope: scope)
+    }
+
+    internal func latestObservationCursor(
+        scope: SemanticObservationScope
+    ) -> ObservationCursor? {
+        observationLog.latestCursor(scope: scope)
+    }
+
+    internal func retainedObservationEntries(
+        scope: SemanticObservationScope
+    ) -> [ObservationEntry] {
+        observationLog.retainedEntries(scope: scope)
+    }
+
+    internal func settledCapture(
+        scope: SemanticObservationScope,
+        at sequence: SettledObservationSequence
+    ) -> SettledCapture? {
+        observationLog.settledCapture(scope: scope, at: sequence)
+    }
+
     internal func settledEvent(
         scope: SemanticObservationScope,
         after sequence: SettledObservationSequence?,
@@ -200,26 +259,15 @@ internal final class SemanticObservationStream {
 
         if timeout == 0 {
             guard isActive else { return nil }
-            if scope == .visible {
-                return cleanEvent(scope: scope, after: requiredSequence)
+            if scope == .discovery {
+                await cycles.waitForNextCycle(scope: scope, after: cycles.cursor())
             }
-            await cycles.waitForNextCycle(scope: scope, after: cycles.cursor())
             return cleanEvent(scope: scope, after: requiredSequence)
         }
 
-        if sequence == nil, scope == .visible {
-            if isActive {
-                await cycles.waitForNextCycle(scope: scope, after: cycles.cursor())
-            } else {
-                return await waitForNextSettledEvent(
-                    scope: scope,
-                    after: latestObservation?.sequence,
-                    timeout: timeout
-                )
-            }
-        }
-
-        if let latest = cleanEvent(scope: scope, after: requiredSequence) {
+        let requiresFreshVisibleObservation = sequence == nil && scope == .visible && isActive
+        if !requiresFreshVisibleObservation,
+           let latest = cleanEvent(scope: scope, after: requiredSequence) {
             return latest
         }
 
@@ -350,13 +398,12 @@ internal final class SemanticObservationStream {
         let resolvedNotificationBatch = notificationBatch
             ?? stash.accessibilityNotifications.checkpoint(after: lastCommittedNotificationCursor)
         let candidateScreen = proof.screen.semanticObservationProjection(for: scope)
-        let classifiedSource = ScreenClassifier.classify(
-            before: fulfillmentState.previousEvent(for: scope).map {
-                ScreenClassifier.snapshot(
-                    of: $0.observation.screen.semanticObservationProjection(for: scope).tree
-                )
-            },
-            after: ScreenClassifier.snapshot(of: candidateScreen.tree),
+        let classifiedSource = SemanticObservationGenerationClassifier.classify(
+            currentGeneration: generationLineage.generation,
+            previousInScope: observationLog.previousEvent(for: scope),
+            latestSource: observationLog.latestSourceEvent,
+            candidate: candidateScreen,
+            scope: scope,
             notifications: resolvedNotificationBatch.events.map(\.kind)
         )
         let sourceClassification = proof.authoritativeReplacementClassification
@@ -474,19 +521,15 @@ internal final class SemanticObservationStream {
         )
     }
 
-    internal func clearSettledObservationHistory() {
-        fulfillmentState.clear()
-        observationGeneration = observationGeneration.advanced()
-        eventHistory.removeAll()
+    internal func requireScreenReplacement() {
+        observationLog.beginScreenReplacement()
+        generationLineage.requireReplacement()
         passiveObservationState.updateSettledReading(nil)
         latestSettleFailureDiagnostic = nil
-        if let stash {
-            lastCommittedNotificationCursor = stash.accessibilityNotifications.cursor()
-        }
     }
 
     internal func invalidateLatestSettledObservation() {
-        fulfillmentState.invalidate()
+        observationLog.invalidateCurrentPublication()
     }
 
     /// A scoped `screenChanged` notification recorded after the latest settled
@@ -507,7 +550,7 @@ internal final class SemanticObservationStream {
               stash.accessibilityNotifications.latestScopedScreenChangedSequence
               > lastCommittedScopedScreenChangedSequence
         else { return }
-        fulfillmentState.invalidate()
+        observationLog.invalidateCurrentPublication()
     }
 
     private func publishCurrentSettledObservation(
@@ -524,97 +567,105 @@ internal final class SemanticObservationStream {
         } catch {
             preconditionFailure("Published semantic observation failed validation: \(error)")
         }
-        let publication = fulfillmentState.publish(
+        let admittedClassification = generationLineage.admitting(sourceClassification)
+        let publication = SemanticObservationPublication.make(
             sourceScope: scope,
-            sourceClassification: sourceClassification,
             sequence: settledSequence,
-            generation: observationGeneration,
             notificationBatch: notificationBatch,
             screen: settledScreen,
             semanticSignal: tripwire.tripwireSignal().semanticValue,
+            context: SemanticObservationPublication.Context(
+                generationClassification: admittedClassification,
+                generation: generationLineage.generation,
+                previousEvents: observationLog.latestEventsByScope
+            ),
             stash: stash,
             notificationIdentityScreen: notificationIdentityScreen
         )
-        guard let sourceEvent = publication.events[scope] else {
-            preconditionFailure("Semantic observation scope did not fulfill itself")
+        do {
+            try observationLog.publish(publication)
+        } catch {
+            preconditionFailure("Semantic observation log rejected publication: \(error)")
         }
-        observationGeneration = publication.generation
-        if publication.startsNewGeneration {
-            eventHistory.removeAll()
-        }
-        recordHistory(publication.events.values)
+        generationLineage.committed(publication.generation)
         lastCommittedScopedScreenChangedSequence = notificationBatch.scopedScreenChangedThrough
         lastCommittedNotificationCursor = notificationBatch.through
         latestSettleFailureDiagnostic = nil
         passiveObservationState.updateSettledReading(tripwire.latestReading)
-        settledWaiters.completeWaiters(with: Array(publication.events.values))
-        return sourceEvent
+        return publication.sourceEvent
     }
 
     internal func observationWindow(
         from baseline: SettledCapture,
         through currentEvent: SettledSemanticObservationEvent
     ) -> ObservationWindow? {
-        guard let current = currentEvent.settledCapture else { return nil }
-        let gapReason: ObservationGap.Reason? = if baseline.cursor.scope != current.cursor.scope {
-            .scopeChanged
-        } else if current.cursor.sequence <= baseline.cursor.sequence {
-            .noObservationAfterBaseline
-        } else {
-            nil
+        let projectedCurrentEvent = observationLog.event(
+            scope: baseline.cursor.scope,
+            sequence: currentEvent.sequence
+        ) ?? currentEvent
+        guard let currentCursor = projectedCurrentEvent.cursor,
+              let current = observationLog.event(at: currentCursor)?.settledCapture else { return nil }
+        guard baseline.cursor.scope == current.cursor.scope else {
+            return ObservationWindow.incomplete(
+                baseline: baseline,
+                current: current,
+                retainedEntries: [],
+                gap: ObservationGap(
+                    reason: .scopeChanged,
+                    baseline: baseline.cursor,
+                    current: current.cursor
+                )
+            )
+        }
+        guard current.cursor.sequence > baseline.cursor.sequence else {
+            return ObservationWindow.incomplete(
+                baseline: baseline,
+                current: current,
+                retainedEntries: [],
+                gap: ObservationGap(
+                    reason: .noObservationAfterBaseline,
+                    baseline: baseline.cursor,
+                    current: current.cursor
+                )
+            )
         }
 
-        let history = eventHistory[current.cursor.scope] ?? []
-        let baselineIsRetained = history.contains {
-            $0.sequence == baseline.cursor.sequence && $0.cursor?.captureHash == baseline.cursor.captureHash
+        let scopeEntries = observationLog.retainedEntries(scope: current.cursor.scope)
+        let retainedEntries = scopeEntries.filter {
+            $0.cursor.sequence > baseline.cursor.sequence
+                && $0.cursor.sequence <= current.cursor.sequence
         }
-        let directLineage = currentEvent.previousCursor?.sequence == baseline.cursor.sequence
-            && currentEvent.previousCursor?.captureHash == baseline.cursor.captureHash
-        let currentIsRetained = history.contains {
-            $0.sequence == current.cursor.sequence && $0.cursor?.captureHash == current.cursor.captureHash
-        }
-        let completeness: Completeness
-        if let gapReason {
-            completeness = .incomplete(ObservationGap(
-                reason: gapReason,
-                baseline: baseline.cursor,
-                current: current.cursor
-            ))
-        } else if (baselineIsRetained || directLineage) && currentIsRetained {
-            completeness = .complete
-        } else {
-            completeness = .incomplete(ObservationGap(
-                reason: .historyUnavailable,
-                baseline: baseline.cursor,
-                current: current.cursor
-            ))
-        }
-
-        let captures = [baseline] + history.lazy
-            .filter {
-                $0.scope == current.cursor.scope
-                    && $0.sequence > baseline.cursor.sequence
-                    && $0.sequence <= current.cursor.sequence
+        let baselineIsRetained = scopeEntries.contains { $0.cursor == baseline.cursor }
+        let currentIsRetained = retainedEntries.last?.cursor == current.cursor
+        let retainedLineageStartsAtBaseline = retainedEntries.first?.transition.previousCursor == baseline.cursor
+        if currentIsRetained,
+           baselineIsRetained || retainedLineageStartsAtBaseline {
+            do {
+                return try ObservationWindow(
+                    baseline: baseline,
+                    retainedEntries: retainedEntries
+                )
+            } catch {
+                preconditionFailure("Observation log admitted discontinuous retained lineage: \(error)")
             }
-            .compactMap(\.settledCapture)
-        let windowCaptures = captures.count > 1 ? captures : [baseline, current]
-        return ObservationWindow(
+        }
+
+        let reason: ObservationGap.Reason = if let first = scopeEntries.first,
+                                              baseline.cursor.sequence < first.cursor.sequence {
+            .historyEvicted
+        } else {
+            .historyUnavailable
+        }
+        return ObservationWindow.incomplete(
             baseline: baseline,
             current: current,
-            captures: windowCaptures,
-            completeness: completeness
+            retainedEntries: retainedEntries,
+            gap: ObservationGap(
+                reason: reason,
+                baseline: baseline.cursor,
+                current: current.cursor
+            )
         )
-    }
-
-    private func recordHistory(_ events: Dictionary<SemanticObservationScope, SettledSemanticObservationEvent>.Values) {
-        for event in events {
-            var history = eventHistory[event.scope] ?? []
-            history.append(event)
-            if history.count > Self.eventHistoryLimit {
-                history.removeFirst(history.count - Self.eventHistoryLimit)
-            }
-            eventHistory[event.scope] = history
-        }
     }
 
     private func waitForNextSettledEvent(
@@ -628,14 +679,60 @@ internal final class SemanticObservationStream {
             return latest
         }
 
-        return await settledWaiters.wait(
-            scope: scope,
-            afterSequence: requiredSequence,
-            timeout: timeout,
-            currentEvent: {
-                self.cleanEvent(scope: scope, after: requiredSequence)
+        let deadline = timeout.map {
+            SemanticObservationDeadline(
+                start: CFAbsoluteTimeGetCurrent(),
+                timeoutSeconds: $0
+            )
+        }
+        var cursor = observationLog.latestCursor(scope: scope)
+        while deadline?.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) != false {
+            let remainingTimeout = deadline?.remainingSeconds()
+            guard let entry = await nextObservationEntry(
+                scope: scope,
+                after: cursor,
+                timeout: remainingTimeout
+            ) else { return nil }
+            if let latest = cleanEvent(scope: scope, after: requiredSequence) {
+                return latest
             }
-        )
+            cursor = entry.cursor
+        }
+        return nil
+    }
+
+    private func nextObservationEntry(
+        scope: SemanticObservationScope,
+        after cursor: ObservationCursor?,
+        timeout: Double?
+    ) async -> ObservationEntry? {
+        let sequence = if let cursor {
+            observationLog.entries(after: cursor, scope: scope)
+        } else {
+            observationLog.entries(scope: scope)
+        }
+        return await withTaskGroup(of: ObservationEntry?.self) { group in
+            group.addTask {
+                var iterator = sequence.makeAsyncIterator()
+                return try? await iterator.next()
+            }
+            if let timeoutDuration = Self.observationWaitTimeout(timeout) {
+                group.addTask {
+                    guard await Task.cancellableSleep(for: timeoutDuration) else { return nil }
+                    return nil
+                }
+            }
+            let result = await group.next() ?? nil
+            group.cancelAll()
+            return result
+        }
+    }
+
+    private static func observationWaitTimeout(_ timeout: Double?) -> Duration? {
+        guard let timeout else { return nil }
+        guard timeout > 0 else { return .zero }
+        let nanoseconds = UInt64((timeout * 1_000_000_000).rounded(.up))
+        return .nanoseconds(nanoseconds)
     }
 
     private static func timeoutMilliseconds(from timeout: Double?) -> Int {
@@ -665,7 +762,7 @@ internal final class SemanticObservationStream {
         scope: SemanticObservationScope,
         after sequence: SettledObservationSequence?
     ) -> SettledSemanticObservationEvent? {
-        fulfillmentState.cleanEvent(scope: scope, after: sequence)
+        observationLog.cleanEvent(scope: scope, after: sequence)
     }
 
     private func runPassiveObservationCycle() async {

@@ -14,7 +14,7 @@ private func exactSemanticString(_ value: String) -> HeistSemanticStringMatch {
     HeistSemanticStringMatch(mode: .exact, value: .literal(value))
 }
 
-private func existsLabel(_ label: String) -> AccessibilityPredicate<RootContext> {
+private func existsLabel(_ label: String) -> AccessibilityPredicate {
     .exists(.label(label))
 }
 
@@ -1319,14 +1319,15 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testRunHeistDecodesComposableInlinePlan() async throws {
         let fence = TheFence(configuration: .init())
+        let item: HeistReferenceName = "item"
         // Nested definitions + invoke + a string parameter all round-trip.
         let definition = try HeistPlan(
             name: "addToCart",
             parameter: .string(name: "item"),
-            body: [.action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.ref("item")))))))]
+            body: [.action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .exact(item))))))]
         )
         let plan = try HeistPlan(definitions: [definition], body: [
-            .invoke(HeistInvocationStep(path: ["addToCart"], argument: .string(.literal("Milk")))),
+            .invoke(HeistInvocationStep(path: ["addToCart"], argument: .string("Milk"))),
         ])
 
         let request = try fence.decodeRunHeistRequest(try Self.planSourceArguments(for: plan))
@@ -1357,7 +1358,7 @@ final class TheFenceHandlerTests: XCTestCase {
             name: "search",
             parameter: .string(name: "query"),
             body: [.action(try ActionStep(command: .typeText(
-                text: .ref("query"),
+                reference: "query",
                 target: .predicate(.label("Search"))
             )))]
         )
@@ -1370,7 +1371,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let request = try fence.decodeRunHeistRequest(TheFence.CommandArgumentEnvelope(values: arguments))
 
         XCTAssertEqual(request.plan, plan)
-        XCTAssertEqual(request.argument, .string(.literal("milk")))
+        XCTAssertEqual(request.argument, .string("milk"))
     }
 
     @ButtonHeistActor
@@ -1380,7 +1381,7 @@ final class TheFenceHandlerTests: XCTestCase {
             name: "search",
             parameter: .string(name: "query"),
             body: [.action(try ActionStep(command: .typeText(
-                text: .ref("query"),
+                reference: "query",
                 target: .predicate(.label("Search"))
             )))]
         )
@@ -1424,7 +1425,7 @@ final class TheFenceHandlerTests: XCTestCase {
             name: "search",
             parameter: .string(name: "query"),
             body: [.action(try ActionStep(command: .typeText(
-                text: .ref("query"),
+                reference: "query",
                 target: .predicate(.label("Search"))
             )))]
         )
@@ -1468,7 +1469,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let plan = try HeistPlan(
             name: "flow",
             definitions: [definition],
-            body: [.invoke(HeistInvocationStep(path: ["addToCart"], argument: .string(.literal("Milk"))))]
+            body: [.invoke(HeistInvocationStep(path: ["addToCart"], argument: .string("Milk")))]
         )
         XCTAssertThrowsError(try fence.parseRequest(command: .runHeist, arguments: try Self.inlineArguments(for: plan)))
         XCTAssertNoThrow(try fence.parseRequest(
@@ -1480,10 +1481,11 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testListHeistsReturnsCatalogFromValidatedInlinePlan() async throws {
         let fence = TheFence(configuration: .init())
+        let item: HeistReferenceName = "item"
         let definition = try HeistPlan(
             name: "addToCart",
             parameter: .string(name: "item"),
-            body: [.action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.ref("item")))))))]
+            body: [.action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .exact(item))))))]
         )
         let plan = try HeistPlan(
             name: "shop",
@@ -1539,6 +1541,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testDiscoveryCommandsUseSamePureRuntimeSourceAsRunHeist() async throws {
         let fence = TheFence(configuration: .init())
+        let item: HeistReferenceName = "item"
         let sourceArguments = TheFence.CommandArgumentEnvelope(values: [
             "plan": .string(Self.pureRuntimeHeistSource),
             "detail": .string("detailed"),
@@ -1567,7 +1570,7 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(description.name, "Cart.addItem")
         XCTAssertEqual(description.parameterKind, .string)
         XCTAssertEqual(description.semanticSurface.actionCommands, [.activate])
-        XCTAssertEqual(description.semanticSurface.targetPredicates, [.template(.label(.ref("item")))])
+        XCTAssertEqual(description.semanticSurface.targetPredicates, [.predicate(.label(item))])
     }
 
     @ButtonHeistActor
@@ -1601,7 +1604,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 try HeistPlan(
                     name: "confirm",
                     body: [
-                        .action(try ActionStep(command: .activate(.predicate(.identifier(.literal("confirm_button")))))),
+                        .action(try ActionStep(command: .activate(.predicate(.identifier("confirm_button"))))),
                     ]
                 ),
             ],
@@ -1729,8 +1732,8 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(description.semanticSurface.actionCommands, [.activate])
         XCTAssertEqual(description.semanticSurface.expectations, [existsLabel("Done")])
         XCTAssertEqual(description.semanticSurface.targetPredicates, [
-            .template(.label("Checkout")),
-            .template(.label("Done")),
+            .predicate(.label("Checkout")),
+            .predicate(.label("Done")),
         ])
     }
 
@@ -1760,8 +1763,8 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(description.name, "checkout")
         XCTAssertEqual(description.semanticSurface.actionCommands, [.activate])
         XCTAssertEqual(description.semanticSurface.targetPredicates, [
-            .template(.label("Checkout")),
-            .template(.label("Done")),
+            .predicate(.label("Checkout")),
+            .predicate(.label("Done")),
         ])
     }
 
@@ -2308,12 +2311,12 @@ final class TheFenceHandlerTests: XCTestCase {
             ]),
         ])
         guard let message = mockConn.sent.sentPlanMessages.last,
-              case .swipe(let target) = message,
+              case .mechanicalSwipe(let target) = message,
               case .elementDirection(let target, let direction) = target.selection else {
             XCTFail("Expected element direction swipe to lower to element direction swipe")
             return
         }
-        XCTAssertEqual(target, .predicate(ElementPredicateTemplate(identifier: "row_5")))
+        XCTAssertEqual(target, .predicate(.identifier("row_5")))
         XCTAssertEqual(direction, .left)
     }
 
@@ -2384,12 +2387,13 @@ final class TheFenceHandlerTests: XCTestCase {
                 ]),
             ])
         guard let message = mockConn.sent.sentPlanMessages.last,
-              case .drag(let target) = message else {
+              case .mechanicalDrag(let target) = message,
+              case .pointToPoint(let start, let end) = target.selection else {
             XCTFail("Expected drag message")
             return
         }
-        XCTAssertEqual(target.start, .coordinate(ScreenPoint(x: 100.0, y: 300.0)))
-        XCTAssertEqual(target.end, ScreenPoint(x: 300.0, y: 600.0))
+        XCTAssertEqual(start, ScreenPoint(x: 100.0, y: 300.0))
+        XCTAssertEqual(end, ScreenPoint(x: 300.0, y: 600.0))
     }
 
     @ButtonHeistActor
@@ -2826,12 +2830,12 @@ final class TheFenceHandlerTests: XCTestCase {
 
         XCTAssertNotNil(response.leafAction, "Expected single-step action response, got \(response)")
         guard let message = mockConn.sent.sentPlanMessages.last,
-              case .typeText(let target) = message else {
+              case .typeText(let text, let target, let replacingExisting) = message else {
             return XCTFail("Expected typeText message, got \(String(describing: mockConn.sent.sentPlanMessages.last))")
         }
-        XCTAssertEqual(target.text, "hello")
-        XCTAssertEqual(target.target, .predicate(ElementPredicateTemplate(identifier: "search_field")))
-        XCTAssertFalse(target.replacingExisting)
+        XCTAssertEqual(text, "hello")
+        XCTAssertEqual(target, .predicate(.identifier("search_field")))
+        XCTAssertFalse(replacingExisting)
     }
 
     @ButtonHeistActor
@@ -2846,12 +2850,12 @@ final class TheFenceHandlerTests: XCTestCase {
 
         XCTAssertNotNil(response.leafAction, "Expected single-step action response, got \(response)")
         guard let message = mockConn.sent.sentPlanMessages.last,
-              case .typeText(let target) = message else {
+              case .typeText(let text, let target, let replacingExisting) = message else {
             return XCTFail("Expected typeText message, got \(String(describing: mockConn.sent.sentPlanMessages.last))")
         }
-        XCTAssertEqual(target.text, "")
-        XCTAssertEqual(target.target, .predicate(ElementPredicateTemplate(identifier: "search_field")))
-        XCTAssertTrue(target.replacingExisting)
+        XCTAssertEqual(text, "")
+        XCTAssertEqual(target, .predicate(.identifier("search_field")))
+        XCTAssertTrue(replacingExisting)
     }
 
     @ButtonHeistActor
@@ -3145,21 +3149,17 @@ final class TheFenceHandlerTests: XCTestCase {
             ]),
             "timeout": .double(8.0),
         ])
-        guard let message = mockConn.sent.sentPlanMessages.last,
-              case .wait(let target) = message else {
-            return XCTFail("Expected wait message")
+        guard let step = mockConn.sent.sentWaitSteps.last else {
+            return XCTFail("Expected wait step")
         }
-        XCTAssertEqual(target.predicate, .changed(.screen()))
-        XCTAssertEqual(target.timeout, 8.0)
+        XCTAssertEqual(step.predicate, .changed(.screen()))
+        XCTAssertEqual(step.timeout, 8.0)
     }
 
     @ButtonHeistActor
     func testDirectWaitReturnsHeistExecutionBeforeFormatting() async throws {
         let (fence, mockConn) = makeConnectedFence()
-        mockConn.runtimeActionResponse = { message in
-            guard case .wait = message else {
-                return .actionResult(ActionResult.success(method: .activate, evidence: .none))
-            }
+        mockConn.resolvedWaitResponse = { _ in
             return .actionResult(ActionResult.success(
                 method: .wait,
                 evidence: ActionResultSuccessEvidence(
@@ -3191,10 +3191,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testWaitChangedRequiresTraceDerivedExpectationMatch() async throws {
         let (fence, mockConn) = makeConnectedFence()
-        mockConn.runtimeActionResponse = { message in
-            guard case .wait = message else {
-                return .actionResult(ActionResult.success(method: .activate, evidence: .none))
-            }
+        mockConn.resolvedWaitResponse = { _ in
             return .actionResult(ActionResult.success(
                 method: .wait,
                 message: "expectation met after observed change",
@@ -3226,10 +3223,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testWaitChangedTimeoutDoesNotClaimExpectationMet() async throws {
         let (fence, mockConn) = makeConnectedFence()
-        mockConn.runtimeActionResponse = { message in
-            guard case .wait = message else {
-                return .actionResult(ActionResult.success(method: .activate, evidence: .none))
-            }
+        mockConn.resolvedWaitResponse = { _ in
             return .actionResult(ActionResult.failure(
                 method: .wait,
                 errorKind: .timeout,
@@ -3279,7 +3273,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testActionExpectationExecutesAsServerSideExpectationStep() async throws {
         let (fence, mockConn) = makeConnectedFence()
-        let predicate = AccessibilityPredicate<RootContext>.exists(.label("Home"))
+        let predicate = AccessibilityPredicate.exists(.label("Home"))
         let interface = makeTestInterface(elements: [
             makeTestHeistElement(label: "Home"),
         ])
@@ -3292,15 +3286,18 @@ final class TheFenceHandlerTests: XCTestCase {
                     method: .activate,
                     evidence: ActionResultSuccessEvidence(observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete)))
                 ))
-            case .wait:
-                return .actionResult(ActionResult.success(
-                    method: .wait,
-                    message: "expectation met after observed change",
-                    evidence: ActionResultSuccessEvidence(observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete)))
-                ))
             default:
                 return .actionResult(ActionResult.success(method: .activate, evidence: .none))
             }
+        }
+        mockConn.resolvedWaitResponse = { _ in
+            .actionResult(ActionResult.success(
+                method: .wait,
+                message: "expectation met after observed change",
+                evidence: ActionResultSuccessEvidence(
+                    observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
+                )
+            ))
         }
 
         let response = try await fence.execute(command: .activate, values: [
@@ -3388,11 +3385,11 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testHeistPlanCarriesTypedActionExpectation() async throws {
-        let expectation = AccessibilityPredicate<RootContext>.changed(.elements([
+        let expectation = AccessibilityPredicate.changed(.elements([
             .updated(.identifier("counter"), .value(after: "5")),
         ]))
         let sourceStep = HeistStep.action(try ActionStep(
-            command: .activate(.predicate(ElementPredicateTemplate(identifier: .exact(.literal("counter"))))),
+            command: .activate(.predicate(ElementPredicateTemplate(identifier: .exact("counter")))),
             expectationPolicy: .expect(ActionExpectation(predicate: expectation, timeout: 10))))
         let plan = try HeistPlan(body: [sourceStep])
         guard case .action(let action)? = plan.body.first else {
@@ -3494,13 +3491,14 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testParseExpectationResolvesTargetRefsAtRuntimeBoundary() async {
-        XCTAssertThrowsError(try parseTypedExpectation(.object([
+    func testParseExpectationPreservesTargetRefsForExecutionResolution() async throws {
+        let item: HeistReferenceName = "item"
+        let result = try parseTypedExpectation(.object([
             "type": .string("exists"),
             "target": .object(["ref": .string("item")]),
-        ]))) { error in
-            XCTAssertEqual(error as? HeistExpressionError, .unresolvedTargetReference("item"))
-        }
+        ]))
+
+        XCTAssertEqual(result, .exists(.ref(item)))
     }
 
     @ButtonHeistActor
@@ -3666,14 +3664,27 @@ final class TheFenceHandlerTests: XCTestCase {
             case .requestInterface:
                 let source = self.selectionTestInterface()
                 let selectedNode = source.tree[1]
+                let annotations = source.annotations(
+                    forSubtree: selectedNode,
+                    originalPath: TreePath([1]),
+                    rootPath: TreePath([0])
+                )
                 return .interface(Interface(
                     timestamp: source.timestamp,
-                    tree: [selectedNode],
-                    annotations: source.annotations(
-                        forSubtree: selectedNode,
-                        originalPath: TreePath([1]),
-                        rootPath: TreePath([0])
-                    )
+                    projecting: [selectedNode],
+                    elementMetadata: { path, _, _ in
+                        annotations.elementByPath[path].map {
+                            InterfaceElementProjectionMetadata(actions: $0.actions)
+                        }
+                    },
+                    containerMetadata: { path, _ in
+                        annotations.containerByPath[path].map {
+                            InterfaceContainerProjectionMetadata(
+                                containerName: $0.containerName,
+                                scrollInventory: $0.scrollInventory
+                            )
+                        }
+                    }
                 ))
             default:
                 return .actionResult(ActionResult.success(method: .activate, evidence: .none))
@@ -3906,7 +3917,7 @@ private func assertCompactHeistSummary(
     XCTAssertEqual(lines.last, stepLine, file: file, line: line)
 }
 
-private func parseTypedExpectation(_ expectation: HeistValue?) throws -> AccessibilityPredicate<RootContext>? {
+private func parseTypedExpectation(_ expectation: HeistValue?) throws -> AccessibilityPredicate? {
     var values: [String: HeistValue] = [:]
     if let expectation {
         values["expect"] = expectation

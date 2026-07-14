@@ -24,7 +24,7 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     func render(argument: HeistArgument, environment: RenderEnvironment) throws -> String {
-        switch argument {
+        switch argument.core {
         case .none:
             return ""
         case .string(let value):
@@ -89,7 +89,7 @@ extension HeistCanonicalSwiftDSLRenderer {
 
     func renderSingleCaseBranches(
         callee: String,
-        predicate: AccessibilityPredicate<ScreenAssertionContext>,
+        predicate: ChangeDeclaration.ScreenAssertion,
         timeout: Double?,
         renderedBody: String,
         renderedElseBody: String?,
@@ -154,11 +154,14 @@ extension HeistCanonicalSwiftDSLRenderer {
     func renderForEachElement(
         _ forEach: ForEachElementStep,
         renderedBody: String,
-        indent: Int
+        indent: Int,
+        environment: RenderEnvironment
     ) throws -> String {
         try validateParameter(forEach.parameter)
+        let predicate = try render(predicate: forEach.matching, environment: environment)
+        let header = "ForEach(\(predicate), limit: \(forEach.limit)) { \(forEach.parameter) in"
         return """
-        \(line("ForEach(\(render(predicate: forEach.matching)), limit: \(forEach.limit)) { \(forEach.parameter) in", indent))
+        \(line(header, indent))
         \(renderedBody)
         \(line("}", indent))
         """

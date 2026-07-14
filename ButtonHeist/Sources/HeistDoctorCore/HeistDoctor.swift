@@ -9,9 +9,9 @@ public enum HeistDoctor {
     ) throws -> HeistRepairDiagnosis {
         let currentStep = try selectedCurrentFailure(in: newFail, stepPath: requestedStepPath)
         let lastStep = try selectedLastSuccess(in: lastPass, matching: currentStep.path)
-        let request = HeistRepairRequest(
-            lastSuccess: try passedRepairEvidence(from: lastStep),
-            currentFailure: try failedRepairEvidence(from: currentStep)
+        let request = try HeistRepairRequest(
+            lastSuccess: repairEvidence(from: lastStep),
+            currentFailure: repairEvidence(from: currentStep)
         )
         return HeistRepairSuggester.diagnosis(for: request)
     }

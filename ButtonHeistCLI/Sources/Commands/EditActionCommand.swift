@@ -2,7 +2,7 @@ import ArgumentParser
 @_spi(ButtonHeistTooling) import ButtonHeist
 import ThePlans
 
-struct EditActionCommand: AsyncParsableCommand, CLICommandContract {
+struct EditActionCommand: ConnectedOneShotCLICommand {
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Perform an edit menu action on the current first responder",
@@ -28,16 +28,12 @@ struct EditActionCommand: AsyncParsableCommand, CLICommandContract {
         _ = try Self.canonicalAction(action)
     }
 
-    @ButtonHeistActor
-    mutating func run() async throws {
-        let editAction = try Self.canonicalAction(action)
+    var runnerStatusMessage: String? { "Sending \(action)..." }
 
-        try await CLIRunner.run(
-            connection: connection,
-            format: output.format,
-            command: Self.fenceCommand,
-            arguments: Self.fenceArguments(CommandArgumentWriter.value(FenceParameters.editAction, editAction)),
-            statusMessage: "Sending \(action)..."
+    func requestArguments() throws -> TheFence.CommandArgumentEnvelope {
+        let editAction = try Self.canonicalAction(action)
+        return Self.fenceArguments(
+            CommandArgumentEnvelopeBuilder.value(FenceParameters.editAction, editAction)
         )
     }
 

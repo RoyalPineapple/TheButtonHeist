@@ -16,7 +16,15 @@ enum AccessibilityObservationChange: Equatable, Sendable {
 }
 
 enum AccessibilityObservationChangeReducer {
-    static func reduce(after: AccessibilityTrace.Capture) -> AccessibilityObservationChange {
+    static func reduce(
+        between before: AccessibilityTrace.Capture,
+        and after: AccessibilityTrace.Capture
+    ) -> AccessibilityObservationChange {
+        if let beforeGeneration = before.context.observationGeneration,
+           let afterGeneration = after.context.observationGeneration,
+           beforeGeneration != afterGeneration {
+            return .screenChanged
+        }
         let hasScreenChangedNotification = after.transition.accessibilityNotifications.contains { notification in
             switch notification.kind {
             case .screenChanged:

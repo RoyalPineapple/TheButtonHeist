@@ -317,12 +317,13 @@ public struct InterfaceElementAnnotation: Codable, Equatable, Hashable, Sendable
 }
 
 extension InterfaceElementAnnotation {
-    private enum CodingKeys: String, CodingKey {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
         case path
         case actions
     }
 
     public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "interface element annotation")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
             path: try container.decode(TreePath.self, forKey: .path),
@@ -598,7 +599,11 @@ public struct Interface: Codable, Equatable, Sendable {
 
     package var graph: InterfaceGraph {
         do {
-            return try InterfaceGraph(interface: self)
+            return try InterfaceGraph(
+                tree: tree,
+                annotations: annotations,
+                traceIdentities: traceIdentities
+            )
         } catch {
             preconditionFailure("Invalid Interface graph: \(error)")
         }
@@ -616,46 +621,45 @@ public struct Interface: Codable, Equatable, Sendable {
     public init(
         timestamp: Date,
         tree: [AccessibilityHierarchy],
-        annotations: InterfaceAnnotations = .empty,
         diagnostics: InterfaceDiagnostics? = nil
     ) {
         self.init(
-            timestamp: timestamp,
+            validatedTimestamp: timestamp,
             tree: tree,
-            annotations: annotations,
+            annotations: .empty,
             diagnostics: diagnostics,
-            screenActions: []
+            screenActions: [],
+            traceIdentities: .empty
         )
     }
 
     public init(
         timestamp: Date,
         tree: [AccessibilityHierarchy],
-        annotations: InterfaceAnnotations = .empty,
-        diagnostics: InterfaceDiagnostics? = nil,
-        screenActions: [ScreenAction] = []
-    ) {
-        self.timestamp = timestamp
-        self.tree = tree
-        self.annotations = annotations
-        self.diagnostics = diagnostics
-        self.screenActions = screenActions.sorted()
-        self.traceIdentities = .empty
-    }
-
-    package init(
-        timestamp: Date,
-        tree: [AccessibilityHierarchy],
-        annotations: InterfaceAnnotations = .empty,
-        diagnostics: InterfaceDiagnostics? = nil,
-        traceIdentities: InterfaceTraceIdentities
-    ) {
-        self.init(
+        annotations: InterfaceAnnotations,
+        diagnostics: InterfaceDiagnostics? = nil
+    ) throws {
+        try self.init(
             timestamp: timestamp,
             tree: tree,
             annotations: annotations,
             diagnostics: diagnostics,
             screenActions: [],
+            traceIdentities: .empty
+        )
+    }
+
+    package init(
+        timestamp: Date,
+        tree: [AccessibilityHierarchy],
+        diagnostics: InterfaceDiagnostics? = nil,
+        traceIdentities: InterfaceTraceIdentities
+    ) throws(InterfaceGraphValidationError) {
+        try self.init(
+            timestamp: timestamp,
+            tree: tree,
+            annotations: .empty,
+            diagnostics: diagnostics,
             traceIdentities: traceIdentities
         )
     }
@@ -663,9 +667,62 @@ public struct Interface: Codable, Equatable, Sendable {
     package init(
         timestamp: Date,
         tree: [AccessibilityHierarchy],
-        annotations: InterfaceAnnotations = .empty,
+        annotations: InterfaceAnnotations,
         diagnostics: InterfaceDiagnostics? = nil,
         screenActions: [ScreenAction] = [],
+        traceIdentities: InterfaceTraceIdentities
+    ) throws(InterfaceGraphValidationError) {
+        _ = try InterfaceGraph(
+            tree: tree,
+            annotations: annotations,
+            traceIdentities: traceIdentities
+        )
+
+        self.init(
+            validatedTimestamp: timestamp,
+            tree: tree,
+            annotations: annotations,
+            diagnostics: diagnostics,
+            screenActions: screenActions,
+            traceIdentities: traceIdentities
+        )
+    }
+
+    package init(
+        timestamp: Date,
+        projecting tree: [AccessibilityHierarchy],
+        diagnostics: InterfaceDiagnostics? = nil,
+        screenActions: [ScreenAction] = [],
+        elementMetadata: (TreePath, AccessibilityElement, Int) -> InterfaceElementProjectionMetadata?,
+        containerMetadata: (TreePath, AccessibilityContainer) -> InterfaceContainerProjectionMetadata?
+    ) {
+        let graph = InterfaceGraph(
+            projecting: tree,
+            elementMetadata: elementMetadata,
+            containerMetadata: containerMetadata
+        )
+        let annotations = InterfaceAnnotations(
+            elements: graph.elementAnnotationByPath.values.sorted { $0.path < $1.path },
+            containers: graph.containerAnnotationByPath.values.sorted { $0.path < $1.path }
+        )
+        let traceIdentities = InterfaceTraceIdentities(graph.traceIdentityByPath)
+
+        self.init(
+            validatedTimestamp: timestamp,
+            tree: tree,
+            annotations: annotations,
+            diagnostics: diagnostics,
+            screenActions: screenActions,
+            traceIdentities: traceIdentities
+        )
+    }
+
+    private init(
+        validatedTimestamp timestamp: Date,
+        tree: [AccessibilityHierarchy],
+        annotations: InterfaceAnnotations,
+        diagnostics: InterfaceDiagnostics?,
+        screenActions: [ScreenAction],
         traceIdentities: InterfaceTraceIdentities
     ) {
         self.timestamp = timestamp
@@ -686,7 +743,7 @@ public struct Interface: Codable, Equatable, Sendable {
 
     public func withDiagnostics(_ diagnostics: InterfaceDiagnostics?) -> Interface {
         Interface(
-            timestamp: timestamp,
+            validatedTimestamp: timestamp,
             tree: tree,
             annotations: annotations,
             diagnostics: diagnostics,
@@ -697,7 +754,7 @@ public struct Interface: Codable, Equatable, Sendable {
 
     public func withScreenActions(_ screenActions: [ScreenAction]) -> Interface {
         Interface(
-            timestamp: timestamp,
+            validatedTimestamp: timestamp,
             tree: tree,
             annotations: annotations,
             diagnostics: diagnostics,
@@ -712,14 +769,6 @@ public struct Interface: Codable, Equatable, Sendable {
         rootPath: TreePath
     ) -> InterfaceAnnotations {
         graph.annotationsForSubtree(originalPath: originalPath, rootPath: rootPath)
-    }
-
-    package func traceIdentities(
-        forSubtree node: AccessibilityHierarchy,
-        originalPath: TreePath,
-        rootPath: TreePath
-    ) -> InterfaceTraceIdentities {
-        graph.traceIdentitiesForSubtree(originalPath: originalPath, rootPath: rootPath)
     }
 
 }

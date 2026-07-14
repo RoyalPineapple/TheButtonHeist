@@ -19,25 +19,19 @@ struct ContainerPredicateInvariantTests {
         }
         #expect(throws: DecodingError.self) {
             _ = try JSONDecoder().decode(
-                ContainerPredicateExpr.self,
-                from: Data(#"{"checks":[]}"#.utf8)
-            )
-        }
-        #expect(throws: DecodingError.self) {
-            _ = try JSONDecoder().decode(
-                ContainerPredicateCheck<String>.self,
+                ContainerPredicateCheck.self,
                 from: Data(#"{"kind":"rowCount","value":-1}"#.utf8)
             )
         }
         #expect(throws: DecodingError.self) {
             _ = try JSONDecoder().decode(
-                ContainerPredicateCheck<StringExpr>.self,
+                ContainerPredicateCheck.self,
                 from: Data(#"{"kind":"columnCount","value":-1}"#.utf8)
             )
         }
         #expect(throws: DecodingError.self) {
             _ = try JSONDecoder().decode(
-                ContainerPredicateCheck<String>.self,
+                ContainerPredicateCheck.self,
                 from: Data(#"{"kind":"actions","values":[]}"#.utf8)
             )
         }
@@ -53,7 +47,7 @@ struct ContainerPredicateInvariantTests {
         }
         #expect(throws: DecodingError.self) {
             _ = try JSONDecoder().decode(
-                ContainerPredicateCheck<String>.self,
+                ContainerPredicateCheck.self,
                 from: Data(
                     (#"{"kind":"semantic","semantic":{"kind":"identifier","# +
                         #""match":{"mode":"exact","value":"orders"}}}"#).utf8
@@ -62,7 +56,7 @@ struct ContainerPredicateInvariantTests {
         }
         #expect(throws: DecodingError.self) {
             _ = try JSONDecoder().decode(
-                ContainerPredicateCheck<String>.self,
+                ContainerPredicateCheck.self,
                 from: Data(#"{"kind":"type","type":"scrollable"}"#.utf8)
             )
         }
@@ -77,35 +71,35 @@ struct ContainerPredicateInvariantTests {
     func rejectsCrossKindPayloadKeys(source: String) {
         #expect(throws: DecodingError.self) {
             _ = try JSONDecoder().decode(
-                ContainerPredicateCheck<String>.self,
+                ContainerPredicateCheck.self,
                 from: Data(source.utf8)
             )
         }
     }
 
     @Test("semantic fields belong only to semantic roles")
-    func semanticRole() {
+    func semanticRole() throws {
         let semantic = ContainerPredicateFacts(
             role: .semanticGroup(label: "Checkout", value: "Ready")
         )
         let list = ContainerPredicateFacts(role: .list)
 
-        #expect(ContainerPredicate.label("Checkout").matches(semantic))
-        #expect(ContainerPredicate.value("Ready").matches(semantic))
-        #expect(!ContainerPredicate.label("Checkout").matches(list))
-        #expect(!ContainerPredicate.value("Ready").matches(list))
+        #expect(try ContainerPredicate.label("Checkout").resolve(in: .empty).matches(semantic))
+        #expect(try ContainerPredicate.value("Ready").resolve(in: .empty).matches(semantic))
+        #expect(!(try ContainerPredicate.label("Checkout").resolve(in: .empty).matches(list)))
+        #expect(!(try ContainerPredicate.value("Ready").resolve(in: .empty).matches(list)))
     }
 
     @Test("identifier and scrollability are orthogonal to role")
-    func orthogonalFacts() {
+    func orthogonalFacts() throws {
         let facts = ContainerPredicateFacts(
             role: .list,
             identifier: "orders",
             isScrollable: true
         )
 
-        #expect(ContainerPredicate.identifier("orders").matches(facts))
-        #expect(ContainerPredicate.type(.list).matches(facts))
-        #expect(ContainerPredicate.scrollable(true).matches(facts))
+        #expect(try ContainerPredicate.identifier("orders").resolve(in: .empty).matches(facts))
+        #expect(try ContainerPredicate.type(.list).resolve(in: .empty).matches(facts))
+        #expect(try ContainerPredicate.scrollable(true).resolve(in: .empty).matches(facts))
     }
 }

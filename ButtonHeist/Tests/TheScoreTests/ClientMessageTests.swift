@@ -110,7 +110,7 @@ final class ClientMessageTests: XCTestCase {
             .requestScreen(),
             .heistPlan(HeistPlanRun(plan: try HeistPlan(body: [
                 .action(try ActionStep(
-                    command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal("Save")))))
+                    command: .activate(.predicate(ElementPredicateTemplate(label: "Save")))
                 )),
             ]))),
         ]
@@ -175,11 +175,10 @@ final class ClientMessageTests: XCTestCase {
         XCTAssertEqual(decodedRun.argument, HeistArgument.none)
         XCTAssertEqual(decodedPlan.body.count, 3)
         guard case .action(let decodedAction) = decodedPlan.body[0],
-              case .activate(let decodedTarget) = decodedAction.command,
               decodedAction.expectationPolicy.expectedStep?.predicate == .changed(.screen()) else {
             return XCTFail("Expected activate command with screen change predicate")
         }
-        XCTAssertEqual(decodedTarget, saveTarget)
+        XCTAssertEqual(decodedAction.command, .activate(saveTarget))
     }
 
     func testHeistPlanClientMessageRoundTripPreservesRootArgument() throws {
@@ -188,14 +187,14 @@ final class ClientMessageTests: XCTestCase {
             parameter: .string(name: "query"),
             body: [
                 .action(try ActionStep(command: .typeText(
-                    text: .ref("query"),
+                    reference: "query",
                     target: .predicate(.label("Search"))
                 ))),
             ]
         )
         let message = ClientMessage.heistPlan(HeistPlanRun(
             plan: plan,
-            argument: .string(.literal("milk"))
+            argument: .string("milk")
         ))
 
         let data = try JSONEncoder().encode(message)
@@ -205,15 +204,15 @@ final class ClientMessageTests: XCTestCase {
             return XCTFail("Expected heistPlan, got \(decoded)")
         }
         XCTAssertEqual(decodedRun.plan, plan)
-        XCTAssertEqual(decodedRun.argument, .string(.literal("milk")))
+        XCTAssertEqual(decodedRun.argument, .string("milk"))
     }
 
     func testHeistPlanEnvelopeRoundTrip() throws {
         let plan = try HeistPlan(body: [
             .action(try ActionStep(
                 command: .typeText(
-                    text: .literal("hello"),
-                    target: .predicate(ElementPredicateTemplate(identifier: .exact(.literal("nameField"))))
+                    text: "hello",
+                    target: .predicate(ElementPredicateTemplate(identifier: "nameField"))
                 )
             )),
         ])
@@ -229,18 +228,20 @@ final class ClientMessageTests: XCTestCase {
         guard case .heistPlan(let decodedRun) = decoded.message,
               let step = decodedRun.plan.body.first,
               case .action(let action) = step,
-              case .typeText(let text, let target, let replacingExisting) = action.command,
               action.expectationPolicy.expectedStep == nil else {
             return XCTFail("Expected heistPlan envelope, got \(decoded.message)")
         }
-        XCTAssertEqual(text, StringExpr.literal("hello"))
-        XCTAssertEqual(target, AccessibilityTarget.identifier("nameField"))
+        guard case .typeText(let text, let target, let replacingExisting) = try action.command.resolve(in: .empty) else {
+            return XCTFail("Expected resolved typeText command")
+        }
+        XCTAssertEqual(text, "hello")
+        XCTAssertEqual(target, .predicate(.identifier("nameField")))
         XCTAssertFalse(replacingExisting)
     }
 
     func testHeistActionDescriptionUsesNormalCommandIdentity() throws {
         let step = try ActionStep(
-            command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal("Save"))))),
+            command: .activate(.predicate(ElementPredicateTemplate(label: "Save"))),
             expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 10)))
 
         XCTAssertEqual(
@@ -293,7 +294,7 @@ final class ClientMessageTests: XCTestCase {
     func testSingleActivateWireShapeIsHeistPlan() throws {
         let plan = try HeistPlan(body: [
             .action(try ActionStep(
-                command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal("Log In")))))
+                command: .activate(.predicate(ElementPredicateTemplate(label: "Log In")))
             )),
         ])
         let message = ClientMessage.heistPlan(HeistPlanRun(plan: plan))
@@ -428,11 +429,10 @@ final class ClientMessageTests: XCTestCase {
 
         XCTAssertEqual(decoded.requestId, "pb-set")
         guard case .heistPlan(let run) = decoded.message,
-              case .action(let step)? = run.plan.body.first,
-              case .setPasteboard(let target) = step.command else {
+              case .action(let step)? = run.plan.body.first else {
             return XCTFail("Expected heistPlan setPasteboard, got \(decoded.message)")
         }
-        XCTAssertEqual(target.text, "hello")
+        XCTAssertEqual(step.command, .setPasteboard(SetPasteboardTarget(text: "hello")))
     }
 
     // MARK: - GetPasteboard Tests

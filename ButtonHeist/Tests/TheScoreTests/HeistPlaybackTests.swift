@@ -8,7 +8,7 @@ final class HeistPlanTests: XCTestCase {
     func testHeistPlanRoundTrip() throws {
         let heist = try HeistPlan(body: [
             try activateStep(label: "Login", traits: [.button]),
-            .action(try ActionStep(command: .typeText(text: .literal("user@example.com"), target: nil))),
+            .action(try ActionStep(command: .typeText(text: "user@example.com", target: nil))),
             try activateStep(label: "Submit", traits: [.button]),
         ])
 
@@ -332,7 +332,7 @@ final class HeistPlanTests: XCTestCase {
 
     func testActionStepDescriptionComposesCommandAndExpectation() throws {
         let step = try ActionStep(
-            command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal("Save")), traits: [.button]))),
+            command: .activate(.predicate(ElementPredicateTemplate(label: "Save", traits: [.button]))),
             expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 2)))
 
         XCTAssertEqual(
@@ -344,7 +344,7 @@ final class HeistPlanTests: XCTestCase {
     func testAccessibilityTargetSugarHashMatchesCanonicalValue() {
         let target = AccessibilityTarget.target(.label("Save"), ordinal: 1)
         let template = AccessibilityTarget.predicate(
-            ElementPredicateTemplate(label: .exact(.literal("Save"))),
+            ElementPredicateTemplate(label: "Save"),
             ordinal: 1
         )
 
@@ -355,8 +355,8 @@ final class HeistPlanTests: XCTestCase {
     // MARK: - ForEach
 
     func testForEachElementStepStoresRefBackedBodyAST() throws {
-        let matching = ElementPredicate(label: "Cell", traits: [.button])
-        let target = try AccessibilityTarget(ref: HeistReferenceName(rawValue: "target"))
+        let matching = ElementPredicateTemplate(label: "Cell", traits: [.button])
+        let target = AccessibilityTarget(ref: "target")
         let step = try ForEachElementStep(
             matching: matching,
             limit: 5,
@@ -387,14 +387,14 @@ final class HeistPlanTests: XCTestCase {
     }
 
     func testForEachElementEncodesDurableBodyAST() throws {
-        let matching = ElementPredicate(label: "Cell", traits: [.button])
+        let matching = ElementPredicateTemplate(label: "Cell", traits: [.button])
         let plan = try HeistPlan(body: [
             .forEachElement(try ForEachElementStep(
                 matching: matching,
                 limit: 5,
                 parameter: "target",
                 body: [.action(try ActionStep(
-                    command: .activate(try AccessibilityTarget(ref: HeistReferenceName(rawValue: "target")))
+                    command: .activate(AccessibilityTarget(ref: "target"))
                 ))]
             )),
         ])
@@ -538,7 +538,7 @@ final class HeistPlanTests: XCTestCase {
             durationMs: 100,
             evidence: HeistForEachElementEvidence(
                 parameter: "target",
-                matching: ElementPredicate(label: "Cell"),
+                matching: ElementPredicateTemplate(label: "Cell"),
                 limit: 10,
                 matchedCount: 3,
                 iterationCount: 2,
@@ -561,7 +561,7 @@ final class HeistPlanTests: XCTestCase {
             durationMs: 100,
             evidence: HeistForEachElementEvidence(
                 parameter: "target",
-                matching: ElementPredicate(label: "Cell"),
+                matching: ElementPredicateTemplate(label: "Cell"),
                 limit: 10,
                 matchedCount: 3,
                 iterationCount: 3
@@ -601,6 +601,6 @@ private func activateStep(
     traits: [HeistTrait] = []
 ) throws -> HeistStep {
     .action(try ActionStep(
-        command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal(label)), traits: traits)))
+        command: .activate(.predicate(ElementPredicateTemplate(label: .exact(label), traits: traits)))
     ))
 }

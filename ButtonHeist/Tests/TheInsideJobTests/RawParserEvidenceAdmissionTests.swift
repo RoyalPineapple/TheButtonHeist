@@ -32,15 +32,16 @@ final class RawParserEvidenceAdmissionTests: XCTestCase {
         try await super.tearDown()
     }
 
-    func testRawRefreshCannotAdmitNewTargetForAction() async {
+    func testRawRefreshCannotAdmitNewTargetForAction() async throws {
         let settledA = observation(label: "Screen A", heistId: "screen_a")
         brains.stash.semanticObservationStream.commitVisibleObservationForTesting(settledA)
 
         let rawObject = RawEvidenceAdjustableView()
         let rawB = observation(label: "Screen B", heistId: "screen_b", object: rawObject)
         brains.stash.nextVisibleRefreshScreenForTesting = rawB
+        let screenBTarget = try resolvedTarget(label: "Screen B")
 
-        let beforeRefresh = await brains.actions.executeIncrement(target(label: "Screen B"))
+        let beforeRefresh = await brains.actions.executeIncrement(screenBTarget)
 
         XCTAssertFalse(beforeRefresh.success)
         XCTAssertEqual(brains.stash.latestObservation.orderedElements.first?.element.label, "Screen A")
@@ -49,9 +50,9 @@ final class RawParserEvidenceAdmissionTests: XCTestCase {
         XCTAssertNotNil(brains.stash.refreshLiveCapture())
         XCTAssertEqual(brains.stash.latestObservation.orderedElements.first?.element.label, "Screen B")
         XCTAssertEqual(brains.stash.interfaceTree.orderedElements.first?.element.label, "Screen A")
-        XCTAssertNil(brains.stash.resolveVisibleTarget(target(label: "Screen B")).resolved)
+        XCTAssertNil(brains.stash.resolveVisibleTarget(screenBTarget).resolved)
 
-        let afterRefresh = await brains.actions.executeIncrement(target(label: "Screen B"))
+        let afterRefresh = await brains.actions.executeIncrement(screenBTarget)
 
         XCTAssertFalse(afterRefresh.success)
         XCTAssertEqual(rawObject.incrementCount, 0)
@@ -59,6 +60,7 @@ final class RawParserEvidenceAdmissionTests: XCTestCase {
 
     func testSettledIdentityUsesOnlyRefAndGeometryFromRawRefresh() async throws {
         let heistId: HeistId = "shared_control"
+        let sharedControlTarget = try resolvedTarget(label: "Shared Control")
         let settledFrame = CGRect(x: 10, y: 20, width: 100, height: 44)
         let settled = observation(
             label: "Shared Control",
@@ -80,7 +82,7 @@ final class RawParserEvidenceAdmissionTests: XCTestCase {
         XCTAssertNotNil(brains.stash.refreshLiveCapture())
 
         let semanticTarget = try XCTUnwrap(
-            brains.stash.resolveVisibleTarget(target(label: "Shared Control")).resolved
+            brains.stash.resolveVisibleTarget(sharedControlTarget).resolved
         )
         XCTAssertEqual(semanticTarget.element.value, "settled")
         XCTAssertEqual(semanticTarget.element.bhFrame, settledFrame)
@@ -93,12 +95,12 @@ final class RawParserEvidenceAdmissionTests: XCTestCase {
         XCTAssertEqual(liveTarget.element.value, "settled")
         XCTAssertEqual(liveTarget.frame, refreshedFrame)
 
-        let result = await brains.actions.executeIncrement(target(label: "Shared Control"))
+        let result = await brains.actions.executeIncrement(sharedControlTarget)
 
         XCTAssertTrue(result.success, result.message ?? "increment failed")
         XCTAssertEqual(refreshedObject.incrementCount, 1)
         XCTAssertEqual(
-            brains.stash.resolveVisibleTarget(target(label: "Shared Control")).resolved?.element.value,
+            brains.stash.resolveVisibleTarget(sharedControlTarget).resolved?.element.value,
             "settled"
         )
     }
@@ -106,11 +108,12 @@ final class RawParserEvidenceAdmissionTests: XCTestCase {
     func testMatchingRawIdentityCannotStealResolvedAction() throws {
         let committedId: HeistId = "committed_control"
         let rawId: HeistId = "raw_control"
+        let sharedControlTarget = try resolvedTarget(label: "Shared Control")
         brains.stash.semanticObservationStream.commitVisibleObservationForTesting(
             observation(label: "Shared Control", heistId: committedId)
         )
         let resolvedActionTarget = try XCTUnwrap(
-            brains.stash.resolveVisibleTarget(target(label: "Shared Control")).resolved
+            brains.stash.resolveVisibleTarget(sharedControlTarget).resolved
         )
 
         let rawObject = RawEvidenceAdjustableView()
@@ -125,7 +128,7 @@ final class RawParserEvidenceAdmissionTests: XCTestCase {
         XCTAssertEqual(brains.stash.latestObservation.orderedElements.first?.heistId, rawId)
         XCTAssertNil(brains.stash.interfaceElement(heistId: rawId))
         XCTAssertEqual(
-            brains.stash.resolveVisibleTarget(target(label: "Shared Control")).resolved?.heistId,
+            brains.stash.resolveVisibleTarget(sharedControlTarget).resolved?.heistId,
             committedId
         )
         guard case .objectUnavailable = brains.stash.resolveLiveActionTarget(for: resolvedActionTarget) else {
@@ -136,11 +139,12 @@ final class RawParserEvidenceAdmissionTests: XCTestCase {
 
     func testReusedCommittedHeistIdCannotDispatchDifferentRawElement() throws {
         let sharedId: HeistId = "shared_control"
+        let quantityTarget = try resolvedTarget(label: "Quantity")
         brains.stash.semanticObservationStream.commitVisibleObservationForTesting(
             observation(label: "Quantity", heistId: sharedId)
         )
         let committedTarget = try XCTUnwrap(
-            brains.stash.resolveVisibleTarget(target(label: "Quantity")).resolved
+            brains.stash.resolveVisibleTarget(quantityTarget).resolved
         )
 
         let replacementObject = RawEvidenceAdjustableView()
@@ -157,30 +161,32 @@ final class RawParserEvidenceAdmissionTests: XCTestCase {
         XCTAssertEqual(replacementObject.incrementCount, 0)
     }
 
-    func testSettledCommitAdmitsPreviouslyRawTarget() async {
+    func testSettledCommitAdmitsPreviouslyRawTarget() async throws {
         brains.stash.semanticObservationStream.commitVisibleObservationForTesting(
             observation(label: "Screen A", heistId: "screen_a")
         )
 
         let object = RawEvidenceAdjustableView()
         let screenB = observation(label: "Screen B", heistId: "screen_b", object: object)
+        let screenBTarget = try resolvedTarget(label: "Screen B")
         brains.stash.nextVisibleRefreshScreenForTesting = screenB
         XCTAssertNotNil(brains.stash.refreshLiveCapture())
-        XCTAssertNil(brains.stash.resolveVisibleTarget(target(label: "Screen B")).resolved)
+        XCTAssertNil(brains.stash.resolveVisibleTarget(screenBTarget).resolved)
 
         brains.stash.semanticObservationStream.commitVisibleObservationForTesting(screenB)
 
         XCTAssertEqual(
-            brains.stash.resolveVisibleTarget(target(label: "Screen B")).resolved?.heistId,
+            brains.stash.resolveVisibleTarget(screenBTarget).resolved?.heistId,
             "screen_b"
         )
-        let result = await brains.actions.executeIncrement(target(label: "Screen B"))
+        let result = await brains.actions.executeIncrement(screenBTarget)
         XCTAssertTrue(result.success, result.message ?? "increment failed")
         XCTAssertEqual(object.incrementCount, 1)
     }
 
-    private func target(label: String) -> AccessibilityTarget {
-        literalTarget(ElementPredicate(label: .exact(label), traits: [.adjustable]))
+    private func resolvedTarget(label: String) throws -> ResolvedAccessibilityTarget {
+        let authoredTarget = AccessibilityTarget.element(.label(label), traits: [.adjustable])
+        return try authoredTarget.resolve(in: .empty)
     }
 
     private func observation(

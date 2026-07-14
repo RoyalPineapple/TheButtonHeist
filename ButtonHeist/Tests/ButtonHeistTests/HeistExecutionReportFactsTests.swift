@@ -10,7 +10,7 @@ import TheScore
 final class HeistExecutionReportFactsTests: XCTestCase {
 
     func testActionWithExpectationReportsActionAndExpectation() {
-        let expectationPredicate = AccessibilityPredicate<RootContext>.exists(.label("Done"))
+        let expectationPredicate = AccessibilityPredicate.exists(.label("Done"))
         let result = HeistExecutionResult(
             steps: [
                 actionStep(
@@ -179,7 +179,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
     }
 
     func testActionExpectationUsesTypedResultMeaningsAcrossReportFacts() throws {
-        let predicate = AccessibilityPredicate<RootContext>.changed(.screen())
+        let predicate = AccessibilityPredicate.changed(.screen())
         let dispatchTrace = makeTestTrace(
             before: makeTestInterface(elementCount: 1),
             after: makeTestInterface(elementCount: 2),
@@ -270,7 +270,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
     }
 
     func testReportProjectionUsesCanonicalActionEvidenceDelta() throws {
-        let predicate = AccessibilityPredicate<RootContext>.changed(.screen())
+        let predicate = AccessibilityPredicate.changed(.screen())
         let dispatchTrace = makeTestTrace(
             before: makeTestInterface(elementCount: 1),
             after: makeTestInterface(elementCount: 2),
@@ -387,7 +387,10 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(result.steps.map(\.path), ["$.body[9]"])
         XCTAssertEqual(result.steps.first?.reportFacts.kind, .action)
         XCTAssertEqual(result.steps.first?.reportFacts.command, .activate)
-        XCTAssertEqual(result.steps.first?.reportFacts.target, .predicate(ElementPredicateTemplate(label: "Delete")))
+        XCTAssertEqual(
+            result.steps.first?.reportFacts.target,
+            AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
+        )
     }
 
     func testReportFactsCarryStepStoryForProjectionAdapters() {
@@ -421,7 +424,10 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(report.kind, .action)
         XCTAssertNil(report.invocationDisplayName)
         XCTAssertEqual(report.command, .activate)
-        XCTAssertEqual(report.target, .predicate(ElementPredicateTemplate(label: "Delete")))
+        XCTAssertEqual(
+            report.target,
+            AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
+        )
         XCTAssertEqual(report.status, .failed)
         XCTAssertEqual(report.message, "Delete not found")
         XCTAssertEqual(report.failureMessage, "Delete not found")
@@ -461,7 +467,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
     }
 
     func testWaitReportsWaitEvidenceWithoutDispatchedActionResult() {
-        let predicate = AccessibilityPredicate<RootContext>.exists(.label("Done"))
+        let predicate = AccessibilityPredicate.exists(.label("Done"))
         let result = HeistExecutionResult(
             steps: [
                 waitStep(
@@ -564,7 +570,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
     }
 
     func testReportFailureFactsDeriveFromTypedOutcome() {
-        let predicate = AccessibilityPredicate<RootContext>.changed(.screen())
+        let predicate = AccessibilityPredicate.changed(.screen())
         let failure = HeistFailureDetail(
             category: .expectation,
             contract: "action expectation is met",
@@ -645,7 +651,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
     }
 
     func testWaitForTimeoutWithoutElseReportsWaitFailure() {
-        let predicate = AccessibilityPredicate<RootContext>.exists(.label("Done"))
+        let predicate = AccessibilityPredicate.exists(.label("Done"))
         let failure = HeistFailureDetail(
             category: .wait,
             contract: "wait predicate is met before timeout",
@@ -672,7 +678,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
     }
 
     func testWaitForTimeoutWithElseReportsElseChildrenAsHandled() {
-        let predicate = AccessibilityPredicate<RootContext>.exists(.label("Done"))
+        let predicate = AccessibilityPredicate.exists(.label("Done"))
         let expectation = ExpectationResult(met: false, predicate: predicate, actual: "timed out after 2s")
         guard let handledElseCheck = HeistWaitEvidence.UnmatchedCheck(
             actionResult: ActionResult.failure(method: .wait, errorKind: .timeout, message: "timed out after 2s", evidence: .none),
@@ -769,7 +775,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
     func testInvokeNodeCarriesCapabilityFrameAndArgument() {
         let invocation = HeistInvocationStep(
             path: ["LibraryScreen", "addToCart"],
-            argument: .string(.literal("Milk"))
+            argument: .string("Milk")
         )
         let child = actionStep(
             path: "$.body[0].invoke.body[0]",
@@ -791,7 +797,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     durationMs: 5,
                     intent: .invoke(
                         path: HeistInvocationPath.preconditionValidated(dottedName: "LibraryScreen.addToCart"),
-                        argument: .string(.literal("Milk"))
+                        argument: .string("Milk")
                     ),
                     evidence: .invocation(
                         invocation: invocation,
@@ -929,7 +935,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
     }
 
     func testJUnitExpectationFailureUsesExpectationReceiptFact() async {
-        let predicate = AccessibilityPredicate<RootContext>.changed(.screen())
+        let predicate = AccessibilityPredicate.changed(.screen())
         let result = HeistExecutionResult(
             steps: [
                 .failed(
@@ -1131,7 +1137,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
     }
 
     func testPublicForEachSummaryEvidenceOmitsIterationFields() throws {
-        let matching = ElementPredicate(label: "Row")
+        let matching = ElementPredicateTemplate.label("Row")
         let steps: [HeistExecutionStepResult] = [
             .passed(
                 path: "$.body[0]",
@@ -1241,7 +1247,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         ])
     }
 
-    private func evidenceProjectionPredicate() -> AccessibilityPredicate<RootContext> {
+    private func evidenceProjectionPredicate() -> AccessibilityPredicate {
         .exists(.label("Ready"))
     }
 
@@ -1297,7 +1303,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
     }
 
     private func caseSelectionEvidenceProjectionCase() -> EvidenceProjectionCase {
-        let predicate = AccessibilityPredicate<RootContext>.exists(.label("Ready"))
+        let predicate = AccessibilityPredicate.exists(.label("Ready"))
         return (
             name: "caseSelection",
             step: HeistReceiptFixture.conditional(
@@ -1363,10 +1369,14 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 path: "$.body[0]",
                 receiptKind: .forEachElement,
                 durationMs: 5,
-                intent: .forEachElement(parameter: "row", matching: ElementPredicate(label: "Row"), limit: 3),
+                intent: .forEachElement(
+                    parameter: "row",
+                    matching: ElementPredicateTemplate.label("Row"),
+                    limit: 3
+                ),
                 evidence: HeistForEachElementEvidence(
                     parameter: "row",
-                    matching: ElementPredicate(label: "Row"),
+                    matching: ElementPredicateTemplate.label("Row"),
                     limit: 3,
                     matchedCount: 2,
                     iterationCount: 2,
@@ -1404,7 +1414,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 receiptKind: .repeatUntil,
                 durationMs: 6,
                 intent: .repeatUntil(predicate: predicate, timeout: 2),
-                evidence: HeistRepeatUntilEvidence.predicateMet(
+                evidence: HeistRepeatUntilEvidence.matched(
                     predicate: predicate,
                     timeout: 2,
                     iterationCount: 1,
@@ -1456,7 +1466,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
     private func invokeInvocationEvidenceProjectionCase() -> EvidenceProjectionCase {
         let invocation = HeistInvocationStep(
             path: ["LibraryScreen", "addToCart"],
-            argument: .string(.literal("Milk"))
+            argument: .string("Milk")
         )
         let predicate = evidenceProjectionPredicate()
         let expectation = ExpectationResult(met: true, predicate: predicate, actual: "Ready")
@@ -1473,7 +1483,10 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 path: "$.body[0]",
                 receiptKind: .invocation,
                 durationMs: 8,
-                intent: .invoke(path: HeistInvocationPath.preconditionValidated(dottedName: "LibraryScreen.addToCart"), argument: .string(.literal("Milk"))),
+                intent: .invoke(
+                    path: HeistInvocationPath.preconditionValidated(dottedName: "LibraryScreen.addToCart"),
+                    argument: .string("Milk")
+                ),
                 evidence: .invocation(
                     invocation: invocation,
                     name: "LibraryScreen.addToCart",
@@ -1508,7 +1521,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
     private func invokeResultInvocationEvidenceProjectionCase() -> EvidenceProjectionCase {
         let invocation = HeistInvocationStep(
             path: ["LibraryScreen", "addToCart"],
-            argument: .string(.literal("Milk"))
+            argument: .string("Milk")
         )
         let predicate = evidenceProjectionPredicate()
         return (
@@ -1519,7 +1532,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 durationMs: 8,
                 intent: .invoke(
                     path: HeistInvocationPath.preconditionValidated(dottedName: "LibraryScreen.addToCart"),
-                    argument: .string(.literal("Milk"))
+                    argument: .string("Milk")
                 ),
                 evidence: .invocation(
                     invocation: invocation,
@@ -1612,7 +1625,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             children: [
                 actionStep(
                     path: "$.body[0].for_each_string.iterations[0].body[0]",
-                    command: .typeText(text: .literal("Milk"), target: nil),
+                    command: .typeText(text: "Milk", target: nil),
                     actionResult: ActionResult.success(method: .typeText, evidence: .none)
                 ),
             ]
@@ -1639,7 +1652,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             children: [
                 actionStep(
                     path: failedActionPath,
-                    command: .typeText(text: .literal("Eggs"), target: nil),
+                    command: .typeText(text: "Eggs", target: nil),
                     actionResult: ActionResult.failure(
                         method: .typeText,
                         errorKind: .elementNotFound,
@@ -1730,7 +1743,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             children: [
                 actionStep(
                     path: actionPath,
-                    command: .typeText(text: .literal(value), target: nil),
+                    command: .typeText(text: value, target: nil),
                     actionResult: ActionResult.success(method: .typeText, evidence: .none)
                 ),
             ]
@@ -1738,7 +1751,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
     }
 
     private func caseMatch(
-        _ predicate: AccessibilityPredicate<RootContext>,
+        _ predicate: AccessibilityPredicate,
         met: Bool
     ) -> HeistCaseMatchResult {
         HeistCaseMatchResult(

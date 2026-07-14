@@ -60,10 +60,16 @@ public enum HeistInvocationEvidence: Codable, Sendable, Equatable {
                     actionResult: try container.decode(ActionResult.self, forKey: .actionResult),
                     expectation: try container.decode(ExpectationResult.self, forKey: .expectation)
                 )
-                try Self.rejectFields(except: [.type, .actionResult, .expectation], in: container)
+                try container.rejectIncompatibleFields(
+                    allowing: [.type, .actionResult, .expectation],
+                    typeName: "result invocation expectation evidence"
+                )
             case .wait:
                 self = .wait(try container.decode(HeistWaitEvidence.self, forKey: .waitEvidence))
-                try Self.rejectFields(except: [.type, .waitEvidence], in: container)
+                try container.rejectIncompatibleFields(
+                    allowing: [.type, .waitEvidence],
+                    typeName: "wait invocation expectation evidence"
+                )
             }
         }
 
@@ -80,19 +86,6 @@ public enum HeistInvocationEvidence: Codable, Sendable, Equatable {
             }
         }
 
-        private static func rejectFields(
-            except allowed: Set<InvocationExpectationEvidenceCodingKey>,
-            in container: KeyedDecodingContainer<InvocationExpectationEvidenceCodingKey>
-        ) throws {
-            for key in InvocationExpectationEvidenceCodingKey.allCases
-                where !allowed.contains(key) && container.contains(key) {
-                throw DecodingError.dataCorruptedError(
-                    forKey: key,
-                    in: container,
-                    debugDescription: "invocation expectation evidence contains incompatible fields"
-                )
-            }
-        }
     }
 
     public enum InvocationOutcome: Codable, Sendable, Equatable {
@@ -107,10 +100,16 @@ public enum HeistInvocationEvidence: Codable, Sendable, Equatable {
                 self = .completed(
                     expectation: try container.decodeIfPresent(InvocationExpectationEvidence.self, forKey: .expectation)
                 )
-                try Self.rejectFields(except: [.type, .expectation], in: container)
+                try container.rejectIncompatibleFields(
+                    allowing: [.type, .expectation],
+                    typeName: "completed invocation outcome"
+                )
             case .childFailed:
                 self = .childFailed(path: try container.decode(String.self, forKey: .path))
-                try Self.rejectFields(except: [.type, .path], in: container)
+                try container.rejectIncompatibleFields(
+                    allowing: [.type, .path],
+                    typeName: "child_failed invocation outcome"
+                )
             }
         }
 
@@ -126,18 +125,6 @@ public enum HeistInvocationEvidence: Codable, Sendable, Equatable {
             }
         }
 
-        private static func rejectFields(
-            except allowed: Set<InvocationOutcomeCodingKey>,
-            in container: KeyedDecodingContainer<InvocationOutcomeCodingKey>
-        ) throws {
-            for key in InvocationOutcomeCodingKey.allCases where !allowed.contains(key) && container.contains(key) {
-                throw DecodingError.dataCorruptedError(
-                    forKey: key,
-                    in: container,
-                    debugDescription: "invocation outcome contains incompatible fields"
-                )
-            }
-        }
     }
 
     case heist(name: String?, childFailedPath: String?)
@@ -219,7 +206,10 @@ public enum HeistInvocationEvidence: Codable, Sendable, Equatable {
                 name: try container.decodeIfPresent(String.self, forKey: .name),
                 childFailedPath: try container.decodeIfPresent(String.self, forKey: .childFailedPath)
             )
-            try Self.rejectFields(except: [.type, .name, .childFailedPath], in: container)
+            try container.rejectIncompatibleFields(
+                allowing: [.type, .name, .childFailedPath],
+                typeName: "heist invocation evidence"
+            )
         case .invocation:
             self = .invocation(
                 invocation: try container.decode(HeistInvocationStep.self, forKey: .invocation),
@@ -227,7 +217,10 @@ public enum HeistInvocationEvidence: Codable, Sendable, Equatable {
                 argument: try container.decodeIfPresent(String.self, forKey: .argument),
                 outcome: try container.decode(InvocationOutcome.self, forKey: .outcome)
             )
-            try Self.rejectFields(except: [.type, .invocation, .name, .argument, .outcome], in: container)
+            try container.rejectIncompatibleFields(
+                allowing: [.type, .invocation, .name, .argument, .outcome],
+                typeName: "invocation evidence"
+            )
         }
     }
 
@@ -247,16 +240,4 @@ public enum HeistInvocationEvidence: Codable, Sendable, Equatable {
         }
     }
 
-    private static func rejectFields(
-        except allowed: Set<CodingKeys>,
-        in container: KeyedDecodingContainer<CodingKeys>
-    ) throws {
-        for key in CodingKeys.allCases where !allowed.contains(key) && container.contains(key) {
-            throw DecodingError.dataCorruptedError(
-                forKey: key,
-                in: container,
-                debugDescription: "heist invocation evidence contains incompatible fields"
-            )
-        }
-    }
 }

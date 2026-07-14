@@ -9,7 +9,7 @@ import ThePlans
 
 extension Navigation {
 
-    func executeScroll(_ target: ScrollTarget) async -> TheSafecracker.ActionDispatchOutcome {
+    func executeScroll(_ target: ResolvedScrollTarget) async -> TheSafecracker.ActionDispatchOutcome {
         await executeScroll(
             selection: target.selection,
             direction: target.direction
@@ -17,7 +17,7 @@ extension Navigation {
     }
 
     func executeScroll(
-        selection: ScrollContainerSelection,
+        selection: ResolvedScrollContainerSelection,
         direction: ScrollDirection
     ) async -> TheSafecracker.ActionDispatchOutcome {
         stash.refreshLiveCapture()
@@ -45,7 +45,7 @@ extension Navigation {
         }
     }
 
-    func executeScrollToEdge(_ target: ScrollToEdgeTarget) async -> TheSafecracker.ActionDispatchOutcome {
+    func executeScrollToEdge(_ target: ResolvedScrollToEdgeTarget) async -> TheSafecracker.ActionDispatchOutcome {
         await executeScrollToEdge(
             selection: target.selection,
             edge: target.edge
@@ -53,7 +53,7 @@ extension Navigation {
     }
 
     func executeScrollToEdge(
-        selection: ScrollContainerSelection,
+        selection: ResolvedScrollContainerSelection,
         edge: ScrollEdge
     ) async -> TheSafecracker.ActionDispatchOutcome {
         stash.refreshLiveCapture()

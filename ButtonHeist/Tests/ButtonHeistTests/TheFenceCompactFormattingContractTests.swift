@@ -919,12 +919,12 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     }
 
     func testHumanHeistFormattingCountsNestedProjectedExpectations() throws {
-        let expected = AccessibilityPredicate<RootContext>.exists(.label("Done"))
+        let expected = AccessibilityPredicate.exists(.label("Done"))
         let childAction = try HeistStep.action(ActionStep(
-            command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal("Submit"))))),
+            command: .activate(.predicate(ElementPredicateTemplate(label: .exact("Submit")))),
             expectationPolicy: .expect(ActionExpectation(predicate: expected, timeout: 1))))
-        let casePredicate = AccessibilityPredicate<ScreenAssertionContext>.exists(.label("Home"))
-        let casePredicateRuntime = AccessibilityPredicate<RootContext>.exists(.label("Home"))
+        let casePredicate = ChangeDeclaration.ScreenAssertion.exists(.label("Home"))
+        let casePredicateRuntime = AccessibilityPredicate.exists(.label("Home"))
         let conditional = try ConditionalStep(cases: [
             PredicateCase(predicate: casePredicate, body: [childAction]),
         ])
@@ -961,7 +961,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     }
 
     func testHeistExpectationCountsAgreeAcrossPublicFormats() throws {
-        let expected = AccessibilityPredicate<RootContext>.exists(.label("Done"))
+        let expected = AccessibilityPredicate.exists(.label("Done"))
         let action = try HeistStep.action(ActionStep(
             command: .activate(.predicate(ElementPredicateTemplate(label: "Submit"))),
             expectationPolicy: .expect(ActionExpectation(predicate: expected, timeout: 1))))
@@ -1006,7 +1006,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     }
 
     func testPublicHeistJSONIncludesScoreMetricProjection() throws {
-        let expected = AccessibilityPredicate<RootContext>.exists(.label("Done"))
+        let expected = AccessibilityPredicate.exists(.label("Done"))
         let command = HeistActionCommand.activate(.predicate(ElementPredicateTemplate(label: "Submit")))
         let plan = try HeistPlan(body: [
             .action(ActionStep(command: command, expectationPolicy: .expect(ActionExpectation(
@@ -1212,8 +1212,8 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let childAction = try HeistStep.action(ActionStep(
             command: .activate(.predicate(ElementPredicateTemplate(label: "Continue")))
         ))
-        let casePredicate = AccessibilityPredicate<ScreenAssertionContext>.exists(.label("Ready"))
-        let casePredicateRuntime = AccessibilityPredicate<RootContext>.exists(.label("Ready"))
+        let casePredicate = ChangeDeclaration.ScreenAssertion.exists(.label("Ready"))
+        let casePredicateRuntime = AccessibilityPredicate.exists(.label("Ready"))
         let conditional = try ConditionalStep(cases: [
             PredicateCase(predicate: casePredicate, body: [childAction]),
         ])
@@ -1289,8 +1289,8 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let elseStep = try HeistStep.action(ActionStep(
             command: .activate(.predicate(ElementPredicateTemplate(label: "Fallback")))
         ))
-        let predicate = AccessibilityPredicate<ScreenAssertionContext>.exists(.label("Home"))
-        let runtimePredicate = AccessibilityPredicate<RootContext>.exists(.label("Home"))
+        let predicate = ChangeDeclaration.ScreenAssertion.exists(.label("Home"))
+        let runtimePredicate = AccessibilityPredicate.exists(.label("Home"))
         let conditional = try ConditionalStep(
             cases: [
                 PredicateCase(
@@ -1349,7 +1349,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let forEach = try ForEachStringStep(
             values: ["Milk", "Eggs"],
             parameter: "item",
-            body: [try HeistStep.action(ActionStep(command: .typeText(text: .ref("item"), target: nil)))]
+            body: [try HeistStep.action(ActionStep(command: .typeText(reference: "item", target: nil)))]
         )
         let plan = try HeistPlan(body: [.forEachString(forEach)])
         let firstIteration = HeistReceiptFixture.forEachStringIteration(
@@ -1359,7 +1359,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             children: [
                 HeistReceiptFixture.action(
                     path: "$.body[0].for_each_string.iterations[0].body[0]",
-                    command: .typeText(text: .ref("item"), target: nil),
+                    command: .typeText(reference: "item", target: nil),
                     result: ActionResult.success(method: .typeText, evidence: .none)
                 ),
             ]
@@ -1367,7 +1367,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let failedActionPath = "$.body[0].for_each_string.iterations[1].body[0]"
         let failedAction = HeistReceiptFixture.action(
             path: failedActionPath,
-            command: .typeText(text: .ref("item"), target: nil),
+            command: .typeText(reference: "item", target: nil),
             result: ActionResult.failure(
                 method: .typeText,
                 errorKind: .elementNotFound,
@@ -1725,6 +1725,149 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertTrue(output.contains(#"── container "inner_scroll" 3 elements ──"#), output)
         XCTAssertTrue(output.contains("⋮ 2 more"), output)
         XCTAssertTrue(output.contains("⋮ 3 more"), output)
+    }
+
+    func testInterfaceProjectionPreservesDeepWideOrderAndPathDistinctDuplicates() throws {
+        let depth = 20
+        let width = 24
+        let repeated = makeTestHeistElement(label: "Repeated")
+        var deepNode = TestInterfaceNode.element(repeated)
+        for level in (0..<depth).reversed() {
+            deepNode = .container(
+                makeTestSemanticContainer(label: "Depth \(level)"),
+                containerName: ContainerName(rawValue: "depth_\(level)"),
+                children: [deepNode]
+            )
+        }
+        let wideNodes = (0..<width).map { index in
+            TestInterfaceNode.element(makeTestHeistElement(label: "Wide \(index)"))
+        }
+        let interface = makeTestInterface(nodes: [deepNode] + wideNodes + [.element(repeated)])
+
+        let compact = FenceResponse.compactInterface(
+            interface,
+            detail: .summary,
+            visibleElementBudget: 100,
+            totalNodeBudget: 100
+        )
+        let json = try publicInterfaceJSONProbe(PublicInterface(
+            interface: interface,
+            detail: .summary,
+            visibleElementBudget: 100,
+            totalNodeBudget: 100
+        ))
+        let tree = try json.array("tree")
+
+        XCTAssertEqual(try json.object("rendering").int("renderedElementCount"), width + 2)
+        XCTAssertEqual(tree.count, width + 2)
+        XCTAssertEqual(compact.components(separatedBy: #""Repeated" staticText"#).count - 1, 2)
+        XCTAssertTrue(compact.contains(#"[0] "Repeated" staticText"#), compact)
+        XCTAssertTrue(compact.contains("[\(width + 1)] \"Repeated\" staticText"), compact)
+
+        var deepJSONNode = tree[0]
+        for level in 0..<depth {
+            let container = try deepJSONNode.object("container")
+            XCTAssertEqual(try container.string("containerName"), "depth_\(level)")
+            deepJSONNode = try XCTUnwrap(try container.array("children").first)
+        }
+        let firstRepeated = try deepJSONNode.object("element")
+        let firstWide = try tree[1].object("element")
+        let lastRepeated = try XCTUnwrap(tree.last).object("element")
+        XCTAssertEqual(try firstRepeated.string("label"), "Repeated")
+        XCTAssertEqual(try firstRepeated.int("order"), 0)
+        XCTAssertEqual(try firstWide.string("label"), "Wide 0")
+        XCTAssertEqual(try firstWide.int("order"), 1)
+        XCTAssertEqual(try lastRepeated.string("label"), "Repeated")
+        XCTAssertEqual(try lastRepeated.int("order"), width + 1)
+    }
+
+    func testInterfaceProjectionKeepsNestedScrollElementAndNodeBudgetParity() throws {
+        let rows = (1...3).map { index in
+            TestInterfaceNode.element(makeTestHeistElement(label: "Row \(index)"))
+        }
+        let interface = makeTestInterface(nodes: [
+            .container(
+                makeTestScrollableContainer(
+                    contentWidth: 390,
+                    contentHeight: 2_000,
+                    frameWidth: 390,
+                    frameHeight: 400
+                ),
+                containerName: "outer_scroll",
+                children: [
+                    .element(makeTestHeistElement(label: "Row 0")),
+                    .container(
+                        makeTestScrollableContainer(
+                            contentWidth: 390,
+                            contentHeight: 1_200,
+                            frameWidth: 390,
+                            frameHeight: 400
+                        ),
+                        containerName: "inner_scroll",
+                        children: rows
+                    ),
+                    .element(makeTestHeistElement(label: "Row 4")),
+                ]
+            ),
+            .element(makeTestHeistElement(label: "After")),
+        ])
+
+        let elementLimitedCompact = FenceResponse.compactInterface(
+            interface,
+            detail: .summary,
+            visibleElementBudget: 2,
+            totalNodeBudget: 100
+        )
+        let elementLimitedJSON = try publicInterfaceJSONProbe(PublicInterface(
+            interface: interface,
+            detail: .summary,
+            visibleElementBudget: 2,
+            totalNodeBudget: 100
+        ))
+        let elementRendering = try elementLimitedJSON.object("rendering")
+        let elementTree = try elementLimitedJSON.array("tree")
+        let outer = try elementTree[0].object("container")
+        let outerChildren = try outer.array("children")
+        let inner = try outerChildren[1].object("container")
+
+        XCTAssertEqual(try elementRendering.string("reasonCode"), "scroll-subtree-element-budget")
+        XCTAssertEqual(try elementRendering.int("observedElementCount"), 6)
+        XCTAssertEqual(try elementRendering.int("renderedElementCount"), 3)
+        XCTAssertEqual(try elementRendering.int("omittedElementCount"), 3)
+        XCTAssertEqual(try outer.object("truncation").int("omittedElementCount"), 3)
+        XCTAssertEqual(try inner.object("truncation").int("omittedElementCount"), 2)
+        XCTAssertEqual(try elementTree[1].object("element").int("order"), 5)
+        XCTAssertTrue(elementLimitedCompact.contains("⋮ 2 more"), elementLimitedCompact)
+        XCTAssertTrue(elementLimitedCompact.contains("⋮ 3 more"), elementLimitedCompact)
+        XCTAssertTrue(elementLimitedCompact.contains(#"[5] "After" staticText"#), elementLimitedCompact)
+
+        let nodeLimitedCompact = FenceResponse.compactInterface(
+            interface,
+            detail: .summary,
+            visibleElementBudget: 2,
+            totalNodeBudget: 3
+        )
+        let nodeLimitedJSON = try publicInterfaceJSONProbe(PublicInterface(
+            interface: interface,
+            detail: .summary,
+            visibleElementBudget: 2,
+            totalNodeBudget: 3
+        ))
+        let nodeRendering = try nodeLimitedJSON.object("rendering")
+        let nodeOuter = try nodeLimitedJSON.array("tree")[0].object("container")
+        let nodeInner = try nodeOuter.array("children")[1].object("container")
+
+        XCTAssertEqual(try nodeRendering.string("reasonCode"), "total-node-budget")
+        XCTAssertEqual(try nodeRendering.int("renderedElementCount"), 1)
+        XCTAssertEqual(try nodeRendering.int("omittedElementCount"), 5)
+        try nodeRendering.assertMissing("visibleElementBudget")
+        try nodeOuter.assertMissing("truncation")
+        try nodeInner.assertMissing("truncation")
+        XCTAssertFalse(nodeLimitedCompact.contains("⋮"), nodeLimitedCompact)
+        XCTAssertTrue(
+            nodeLimitedCompact.contains("omitted 5 observed elements (totalNodeBudget=3)"),
+            nodeLimitedCompact
+        )
     }
 
     func testPublicInterfaceJSONRendersScrollSummaryFields() throws {

@@ -6,19 +6,16 @@ import TheScore
 
 extension PredicateWait {
     internal func waitReceiptWithoutInitialObservation(
-        for step: ResolvedWaitStep,
+        for step: ResolvedWaitRuntimeInput,
         initialTrace: AccessibilityTrace?,
         start: CFAbsoluteTime,
         shouldPoll: Bool,
-        observationScope: SemanticObservationScope
+        observationScope: SemanticObservationScope,
+        changeBaseline: PredicateChangeBaselineSource
     ) async -> HeistWaitReceipt {
-        var state = State(predicate: step.predicate)
+        var state = State(predicate: step.predicateExpression)
         var stream = PredicateObservationStreamState()
-        let timeout = Self.clampedWaitTimeout(step.timeout)
-        let reducer = Reducer(
-            step: step,
-            timeout: timeout
-        )
+        let reducer = Reducer()
 
         if shouldPoll {
             var waitState = state
@@ -32,12 +29,22 @@ extension PredicateWait {
                 pollWhenTimeoutZero: false,
                 discoveryBootstrap: .afterInitialDiscoveryAttempt,
                 evaluate: { observation in
-                    let baselineSeed: PredicateObservationBaselineSeed = stream.observationBaseline == nil
-                        ? .previousObservationIfAvailable
-                        : .preserve
+                    let baselineSeed: PredicateObservationBaselineSeed
+                    if stream.observationBaseline != nil {
+                        baselineSeed = .preserve
+                    } else {
+                        switch changeBaseline {
+                        case .establishFromFirstObservation:
+                            baselineSeed = .previousObservationIfAvailable
+                        case .supplied(let suppliedBaseline):
+                            baselineSeed = suppliedBaseline.map(PredicateObservationBaselineSeed.supplied)
+                                ?? .preserve
+                        }
+                    }
                     let reduced = reduceObservation(
                         observation,
                         predicate: step.predicate,
+                        predicateExpression: step.predicateExpression,
                         baselineSeed: baselineSeed,
                         stream: stream
                     )
@@ -71,7 +78,7 @@ extension PredicateWait {
         }
 
         if let traceEvaluation = initialTraceChangeEvaluation(
-            for: step.predicate,
+            for: step,
             initialTrace: initialTrace
         ) {
             return waitReceipt(
@@ -88,7 +95,7 @@ extension PredicateWait {
 
     internal func terminalReceipt(
         for decision: Decision,
-        step: ResolvedWaitStep,
+        step: ResolvedWaitRuntimeInput,
         state: inout State,
         start: CFAbsoluteTime
     ) -> HeistWaitReceipt? {
@@ -104,8 +111,8 @@ extension PredicateWait {
     }
 
     internal func waitForAnnouncementPredicate(
-        _ predicate: AnnouncementPredicate,
-        step: ResolvedWaitStep,
+        _ predicate: ResolvedAnnouncementPredicate,
+        step: ResolvedWaitRuntimeInput,
         initialTrace: AccessibilityTrace?,
         start: CFAbsoluteTime,
         timeout: Double,
@@ -124,7 +131,7 @@ extension PredicateWait {
         guard let announcement = await waitForAnnouncement(cursor, predicate, timeout) else {
             let message = Self.announcementTimeoutMessage(predicate, timeout: timeout)
             let expectation = ExpectationResult.Unmet(
-                predicate: step.predicate,
+                predicate: step.predicateExpression,
                 actual: message
             )
             return .timedOut(
@@ -136,7 +143,7 @@ extension PredicateWait {
 
         let elapsed = Self.elapsedSeconds(since: start)
         let expectation = ExpectationResult.Met(
-            predicate: step.predicate,
+            predicate: step.predicateExpression,
             actual: announcement.text
         )
         return .matched(
@@ -148,8 +155,8 @@ extension PredicateWait {
     }
 
     private func announcementReceiptFromInitialTrace(
-        _ predicate: AnnouncementPredicate,
-        step: ResolvedWaitStep,
+        _ predicate: ResolvedAnnouncementPredicate,
+        step: ResolvedWaitRuntimeInput,
         trace: AccessibilityTrace,
         start: CFAbsoluteTime
     ) -> HeistWaitReceipt {
@@ -159,7 +166,7 @@ extension PredicateWait {
                 message: message,
                 traceEvidence: Self.incompleteTraceEvidence(trace),
                 expectation: ExpectationResult.Unmet(
-                    predicate: step.predicate,
+                    predicate: step.predicateExpression,
                     actual: message
                 )
             )
@@ -175,7 +182,7 @@ extension PredicateWait {
                 message: message,
                 traceEvidence: Self.incompleteTraceEvidence(trace),
                 expectation: ExpectationResult.Unmet(
-                    predicate: step.predicate,
+                    predicate: step.predicateExpression,
                     actual: message
                 ),
                 announcement: announcement.text
@@ -189,7 +196,7 @@ extension PredicateWait {
             ),
             traceEvidence: Self.incompleteTraceEvidence(trace),
             expectation: ExpectationResult.Met(
-                predicate: step.predicate,
+                predicate: step.predicateExpression,
                 actual: announcement.text
             ),
             announcement: announcement.text
@@ -197,7 +204,7 @@ extension PredicateWait {
     }
 
     internal func waitReceipt(
-        for step: ResolvedWaitStep,
+        for step: ResolvedWaitRuntimeInput,
         trace: AccessibilityTrace? = nil,
         observationSummary: String? = nil,
         expectation: ExpectationResult,
@@ -236,7 +243,7 @@ extension PredicateWait {
     }
 
     internal func waitReceipt(
-        for step: ResolvedWaitStep,
+        for step: ResolvedWaitRuntimeInput,
         state: State,
         start: CFAbsoluteTime,
         success: Bool
@@ -258,10 +265,6 @@ extension PredicateWait {
         max(immediateTimeout, min(timeout, defaultWaitTimeout))
     }
 
-    internal static func unresolvedWaitPredicate() -> AccessibilityPredicate<RootContext> {
-        .missing(.identifier("__unresolved_heist_predicate__"))
-    }
-
     internal static let changePredicateNeedsFutureObservationMessage =
         PredicateObservationDiagnostics.changePredicateNeedsFutureObservationMessage
 
@@ -270,7 +273,7 @@ extension PredicateWait {
     }
 
     private static func waitReceipt(
-        for step: ResolvedWaitStep,
+        for step: ResolvedWaitRuntimeInput,
         traceEvidence: AccessibilityTraceEvidence?,
         observationSummary: String?,
         expectation: ExpectationResult,
@@ -315,13 +318,13 @@ extension PredicateWait {
     }
 
     private static func waitSuccessMessage(
-        for predicate: AccessibilityPredicate<RootContext>,
+        for predicate: ResolvedAccessibilityPredicate,
         elapsed: String
     ) -> String {
-        switch predicate.node {
-        case .exists:
+        switch predicate.core {
+        case .presence(.exists):
             return elapsed == "0.0" ? "matched immediately" : "matched after \(elapsed)s"
-        case .missing:
+        case .presence(.missing):
             return "absent confirmed after \(elapsed)s"
         default:
             return "predicate met after \(elapsed)s"
@@ -346,25 +349,25 @@ extension PredicateWait {
         return elapsed == "0.0" ? message : "\(message) after \(elapsed)s"
     }
 
-    private static func missingActionAnnouncementMessage(_ predicate: AnnouncementPredicate) -> String {
+    private static func missingActionAnnouncementMessage(_ predicate: ResolvedAnnouncementPredicate) -> String {
         "expected \(expectedActionAnnouncement(predicate)) but none was posted"
     }
 
     private static func mismatchedActionAnnouncementMessage(
-        _ predicate: AnnouncementPredicate,
+        _ predicate: ResolvedAnnouncementPredicate,
         actual: String
     ) -> String {
         "expected \(expectedActionAnnouncement(predicate)) but got '\(singleQuoted(actual))'"
     }
 
     private static func announcementTimeoutMessage(
-        _ predicate: AnnouncementPredicate,
+        _ predicate: ResolvedAnnouncementPredicate,
         timeout: Double
     ) -> String {
         "no \(matchingAnnouncement(predicate)) within \(String(format: "%.1f", timeout))s"
     }
 
-    private static func expectedActionAnnouncement(_ predicate: AnnouncementPredicate) -> String {
+    private static func expectedActionAnnouncement(_ predicate: ResolvedAnnouncementPredicate) -> String {
         announcementMatchDescription(
             predicate,
             any: "an announcement",
@@ -374,7 +377,7 @@ extension PredicateWait {
         )
     }
 
-    private static func matchingAnnouncement(_ predicate: AnnouncementPredicate) -> String {
+    private static func matchingAnnouncement(_ predicate: ResolvedAnnouncementPredicate) -> String {
         announcementMatchDescription(
             predicate,
             any: "announcement",
@@ -385,22 +388,22 @@ extension PredicateWait {
     }
 
     private static func announcementMatchDescription(
-        _ predicate: AnnouncementPredicate,
+        _ predicate: ResolvedAnnouncementPredicate,
         any: String,
         exact: (String) -> String,
         contains: (String) -> String,
         empty: String
     ) -> String {
         guard let match = predicate.match else { return any }
-        switch match.mode {
-        case .exact:
-            return exact(singleQuoted(match.value))
-        case .contains:
-            return contains(singleQuoted(match.value))
-        case .prefix:
-            return "announcement prefixed by '\(singleQuoted(match.value))'"
-        case .suffix:
-            return "announcement suffixed by '\(singleQuoted(match.value))'"
+        switch match.core {
+        case .exact(let value):
+            return exact(singleQuoted(value))
+        case .contains(let value):
+            return contains(singleQuoted(value))
+        case .prefix(let value):
+            return "announcement prefixed by '\(singleQuoted(value))'"
+        case .suffix(let value):
+            return "announcement suffixed by '\(singleQuoted(value))'"
         case .isEmpty:
             return empty
         }
@@ -411,7 +414,7 @@ extension PredicateWait {
     }
 
     private static func waitTimeoutMessage(
-        for step: ResolvedWaitStep,
+        for step: ResolvedWaitRuntimeInput,
         expectation: ExpectationResult,
         observationSummary: String?,
         elapsed: String,

@@ -14,7 +14,7 @@ extension ElementInflation {
         )
         case liveTarget(
             treeElement: InterfaceTree.Element,
-            target: AccessibilityTarget,
+            target: ResolvedAccessibilityTarget,
             method: ActionMethod,
             resolution: ActionSubjectResolution
         )
@@ -37,7 +37,7 @@ extension ElementInflation {
 
     internal func stateAfterReveal(
         _ treeElement: InterfaceTree.Element,
-        target: AccessibilityTarget,
+        target: ResolvedAccessibilityTarget,
         deadline: SemanticObservationDeadline,
         resolution: ActionSubjectResolution,
         transaction: RevealTransaction
@@ -121,7 +121,7 @@ extension ElementInflation {
     }
 
     internal func awaitLiveTargetRefresh(
-        for target: AccessibilityTarget,
+        for target: ResolvedAccessibilityTarget,
         treeElement: InterfaceTree.Element,
         method: ActionMethod,
         after settledSequence: SettledObservationSequence?,

@@ -1,4 +1,5 @@
 import Foundation
+import ThePlans
 
 /// Optional local timing breakdown for one observed action pipeline.
 public struct ActionPerformanceTiming: Codable, Sendable, Equatable {
@@ -101,10 +102,16 @@ public enum ActionResultObservationEvidence: Codable, Sendable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         switch try container.decode(Kind.self, forKey: .kind) {
         case .none:
-            try Self.rejectFields(except: [.kind], in: container, kind: .none)
+            try container.rejectIncompatibleFields(
+                allowing: [.kind],
+                typeName: "none action observation"
+            )
             self = .none
         case .announcement:
-            try Self.rejectFields(except: [.kind, .announcement], in: container, kind: .announcement)
+            try container.rejectIncompatibleFields(
+                allowing: [.kind, .announcement],
+                typeName: "announcement action observation"
+            )
             let text = try container.decode(String.self, forKey: .announcement)
             guard !text.isEmpty else {
                 throw DecodingError.dataCorruptedError(
@@ -115,13 +122,15 @@ public enum ActionResultObservationEvidence: Codable, Sendable, Equatable {
             }
             self = .announcement(text)
         case .trace:
-            try Self.rejectFields(except: [.kind, .traceEvidence], in: container, kind: .trace)
+            try container.rejectIncompatibleFields(
+                allowing: [.kind, .traceEvidence],
+                typeName: "trace action observation"
+            )
             self = .trace(try container.decode(AccessibilityTraceEvidence.self, forKey: .traceEvidence))
         case .settledTrace:
-            try Self.rejectFields(
-                except: [.kind, .traceEvidence, .settlement],
-                in: container,
-                kind: .settledTrace
+            try container.rejectIncompatibleFields(
+                allowing: [.kind, .traceEvidence, .settlement],
+                typeName: "settledTrace action observation"
             )
             self = .settledTrace(
                 try container.decode(AccessibilityTraceEvidence.self, forKey: .traceEvidence),
@@ -148,17 +157,4 @@ public enum ActionResultObservationEvidence: Codable, Sendable, Equatable {
         }
     }
 
-    private static func rejectFields(
-        except allowed: Set<CodingKeys>,
-        in container: KeyedDecodingContainer<CodingKeys>,
-        kind: Kind
-    ) throws {
-        for key in CodingKeys.allCases where !allowed.contains(key) && container.contains(key) {
-            throw DecodingError.dataCorruptedError(
-                forKey: key,
-                in: container,
-                debugDescription: "\(kind.rawValue) action observation cannot include \(key.stringValue)"
-            )
-        }
-    }
 }

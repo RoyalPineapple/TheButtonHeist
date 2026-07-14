@@ -1,4 +1,5 @@
 import AccessibilitySnapshotModel
+import ButtonHeistTestSupport
 import XCTest
 
 @testable import TheScore
@@ -20,6 +21,27 @@ final class AccessibilityHierarchyReconciliationTests: XCTestCase {
             makeElement(label: "Cell", y: 0).contentFingerprint,
             makeElement(label: "Cell", y: 44).contentFingerprint
         )
+    }
+
+    func testNestedContentFingerprintIgnoresTraversalIndexesAndPreservesChildOrder() {
+        let container = makeTestAccessibilityContainer(type: .list)
+        let save = makeElement(label: "Save")
+        let cancel = makeElement(label: "Cancel")
+        let original = AccessibilityHierarchy.container(container, children: [
+            .element(save, traversalIndex: 0),
+            .element(cancel, traversalIndex: 1),
+        ])
+        let reindexed = AccessibilityHierarchy.container(container, children: [
+            .element(save, traversalIndex: 12),
+            .element(cancel, traversalIndex: 4),
+        ])
+        let reordered = AccessibilityHierarchy.container(container, children: [
+            .element(cancel, traversalIndex: 1),
+            .element(save, traversalIndex: 0),
+        ])
+
+        XCTAssertEqual(original.contentFingerprint, reindexed.contentFingerprint)
+        XCTAssertNotEqual(original.contentFingerprint, reordered.contentFingerprint)
     }
 
     func testOverlapFindsForwardScrollIntersection() {

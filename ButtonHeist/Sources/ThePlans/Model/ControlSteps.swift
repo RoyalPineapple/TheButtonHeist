@@ -32,10 +32,10 @@ public struct PredicateCase: Codable, Sendable, Equatable {
         case predicate, body
     }
 
-    public let predicate: AccessibilityPredicate<ScreenAssertionContext>
+    public let predicate: ChangeDeclaration.ScreenAssertion
     public let body: [HeistStep]
 
-    public init(predicate: AccessibilityPredicate<ScreenAssertionContext>, body: [HeistStep]) {
+    public init(predicate: ChangeDeclaration.ScreenAssertion, body: [HeistStep]) {
         self.predicate = predicate
         self.body = body
     }
@@ -44,22 +44,8 @@ public struct PredicateCase: Codable, Sendable, Equatable {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "predicate case")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
-            predicate: try container.decode(AccessibilityPredicate<ScreenAssertionContext>.self, forKey: .predicate),
+            predicate: try container.decode(ChangeDeclaration.ScreenAssertion.self, forKey: .predicate),
             body: try container.decode([HeistStep].self, forKey: .body)
         )
     }
-}
-
-public extension PredicateCase {
-    func resolve(in environment: HeistExecutionEnvironment) throws -> ResolvedPredicateCase {
-        ResolvedPredicateCase(
-            predicate: try predicate.resolve(in: environment),
-            body: body
-        )
-    }
-}
-
-public struct ResolvedPredicateCase: Sendable, Equatable {
-    public let predicate: AccessibilityPredicate<ScreenAssertionContext>
-    public let body: [HeistStep]
 }

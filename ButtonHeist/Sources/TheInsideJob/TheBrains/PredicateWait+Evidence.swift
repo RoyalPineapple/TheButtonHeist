@@ -6,64 +6,19 @@ import TheScore
 
 extension PredicateWait {
     internal func initialTraceChangeEvaluation(
-        for predicate: AccessibilityPredicate<RootContext>,
+        for step: ResolvedWaitRuntimeInput,
         initialTrace: AccessibilityTrace?
     ) -> ExpectationResult? {
-        guard predicate.requiresChangeBaseline,
+        guard step.predicate.requiresChangeBaseline,
               let initialTrace,
               let evidence = AccessibilityTraceEvidence(
                   trace: initialTrace,
                   completeness: .incomplete
-              )
+        )
         else { return nil }
-        return predicate.evaluate(in: evidence)
+        return step.predicate.evaluate(in: evidence).expectation(for: step.predicateExpression)
     }
 
-    internal nonisolated static func suppliedChangeBaseline(
-        from trace: AccessibilityTrace?,
-        sequence: SettledObservationSequence?,
-        entry: SettledSemanticObservationEvent
-    ) -> SettledCapture? {
-        guard let capture = trace?.captures.first else { return nil }
-        if let sequence {
-            let cursor = entry.previousCursor?.sequence == sequence
-                ? entry.previousCursor
-                : ObservationCursor(
-                    generation: entry.generation,
-                    scope: entry.scope,
-                    sequence: sequence,
-                    captureHash: capture.hash,
-                    notificationSequence: 0
-                )
-            return cursor.map { SettledCapture(cursor: $0, capture: capture) }
-        }
-        if entry.cursor?.captureHash == capture.hash,
-           let cursor = entry.cursor {
-            return SettledCapture(cursor: cursor, capture: capture)
-        }
-        if entry.previousCursor?.captureHash == capture.hash,
-           let cursor = entry.previousCursor {
-            return SettledCapture(cursor: cursor, capture: capture)
-        }
-        let cursor = entry.previousCursor.map {
-            ObservationCursor(
-                generation: $0.generation,
-                scope: $0.scope,
-                sequence: $0.sequence,
-                captureHash: capture.hash,
-                notificationSequence: $0.notificationSequence
-            )
-        } ?? entry.cursor.map {
-            ObservationCursor(
-                generation: $0.generation,
-                scope: $0.scope,
-                sequence: $0.sequence,
-                captureHash: capture.hash,
-                notificationSequence: $0.notificationSequence
-            )
-        }
-        return cursor.map { SettledCapture(cursor: $0, capture: capture) }
-    }
 }
 
 internal struct PredicateObservationEvidence {
@@ -86,28 +41,31 @@ internal struct PredicateObservationEvidence {
         snapshot.observation
     }
 
-    internal func evaluate(_ predicate: AccessibilityPredicate<RootContext>) -> ExpectationResult {
+    internal func evaluate(
+        _ predicate: ResolvedAccessibilityPredicate,
+        expression: AccessibilityPredicate
+    ) -> ExpectationResult {
         if predicate.requiresChangeBaseline {
             guard baseline != nil else {
-                return ExpectationResult(met: false, predicate: predicate, actual: "noTrace")
+                return ExpectationResult(met: false, predicate: expression, actual: "noTrace")
             }
             guard let window else {
                 return ExpectationResult(
                     met: false,
-                    predicate: predicate,
+                    predicate: expression,
                     actual: PredicateObservationDiagnostics.changePredicateNeedsFutureObservationMessage
                 )
             }
-            return predicate.evaluate(in: window.traceEvidence)
+            return predicate.evaluate(in: window.traceEvidence).expectation(for: expression)
         }
 
         guard let evidence = AccessibilityTraceEvidence(
             trace: snapshot.trace,
             completeness: .incomplete
         ) else {
-            return ExpectationResult(met: false, predicate: predicate, actual: "noTrace")
+            return ExpectationResult(met: false, predicate: expression, actual: "noTrace")
         }
-        return predicate.evaluate(in: evidence)
+        return predicate.evaluate(in: evidence).expectation(for: expression)
     }
 }
 

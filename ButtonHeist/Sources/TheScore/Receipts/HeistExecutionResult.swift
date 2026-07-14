@@ -162,7 +162,7 @@ public struct HeistExecutionResult: Codable, Sendable, Equatable {
     }
 
     private static func firstFailedPath(in steps: [HeistExecutionStepResult]) -> String? {
-        steps.lazy.compactMap(\.firstFailedStepPathForReceiptValidation).first
+        steps.firstFailedStepInReceiptOrder?.path
     }
 
     private static func receiptError(_ message: String, codingPath: [CodingKey]) -> DecodingError {

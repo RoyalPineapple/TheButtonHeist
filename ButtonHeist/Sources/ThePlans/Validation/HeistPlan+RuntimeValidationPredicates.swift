@@ -1,36 +1,73 @@
 import Foundation
 
 extension HeistPlanRuntimeSafetyValidator {
-    mutating func validatePredicate<Context>(
-        _ predicate: AccessibilityPredicate<Context>,
+    mutating func validatePredicate(
+        _ predicate: AccessibilityPredicate,
         path: String,
         depth: Int,
         scope: HeistReferenceScope
     ) {
-        validatePredicateNode(predicate.node, path: path, depth: depth, scope: scope)
+        validatePredicateCore(predicate.core, path: path, depth: depth, scope: scope)
     }
 
-    mutating func validatePredicateNode(
-        _ node: AccessibilityPredicateNode,
+    mutating func validatePredicate(
+        _ predicate: ChangeDeclaration.ScreenAssertion,
+        path: String,
+        depth: Int,
+        scope: HeistReferenceScope
+    ) {
+        validateScreenAssertionCore(predicate.core, path: path, depth: depth, scope: scope)
+    }
+
+    private mutating func validatePredicateCore(
+        _ core: AccessibilityPredicateCore<AuthoredAccessibilityPredicatePhase>,
         path: String,
         depth: Int,
         scope: HeistReferenceScope
     ) {
         checkPredicateDepth(depth, path: path)
-        switch node {
-        case .exists(let target), .missing(let target),
-             .appeared(let target), .disappeared(let target):
-            validateTarget(target, path: "\(path).target", scope: scope)
+        switch core {
+        case .presence(let presence):
+            validatePresenceCore(presence, path: path, scope: scope)
         case .announcement(let announcement):
-            validateString(announcement.match, path: "\(path).match", role: "announcement")
-        case .changed(let predicate):
-            validatePredicateNode(predicate, path: "\(path).changed", depth: depth + 1, scope: scope)
+            if let match = announcement.match {
+                validateString(match.core, path: "\(path).match", scope: scope)
+            }
+        case .changed(let declaration):
+            validateChangeCore(declaration, path: "\(path).changed", depth: depth + 1, scope: scope)
         case .noChange:
             break
+        }
+    }
+
+    private mutating func validatePresenceCore(
+        _ core: PresencePredicateCore<AuthoredAccessibilityPredicatePhase>,
+        path: String,
+        scope: HeistReferenceScope
+    ) {
+        switch core {
+        case .exists(let target), .missing(let target):
+            validateTarget(target, path: "\(path).target", scope: scope)
+        }
+    }
+
+    private mutating func validateChangeCore(
+        _ core: ChangeDeclarationCore<AuthoredAccessibilityPredicatePhase>,
+        path: String,
+        depth: Int,
+        scope: HeistReferenceScope
+    ) {
+        checkPredicateDepth(depth, path: path)
+        switch core {
         case .screen(let assertions):
             validateAllChildCount(assertions.count, path: "\(path).assertions")
+        case .elements(let assertions):
+            validateAllChildCount(assertions.count, path: "\(path).assertions")
+        }
+        switch core {
+        case .screen(let assertions):
             for (index, assertion) in assertions.enumerated() {
-                validatePredicateNode(
+                validateScreenAssertionCore(
                     assertion,
                     path: "\(path).assertions[\(index)]",
                     depth: depth + 1,
@@ -38,76 +75,70 @@ extension HeistPlanRuntimeSafetyValidator {
                 )
             }
         case .elements(let assertions):
-            validateAllChildCount(assertions.count, path: "\(path).assertions")
             for (index, assertion) in assertions.enumerated() {
-                validatePredicateNode(
+                validateElementAssertionCore(
                     assertion,
                     path: "\(path).assertions[\(index)]",
                     depth: depth + 1,
                     scope: scope
                 )
             }
+        }
+    }
+
+    private mutating func validateScreenAssertionCore(
+        _ core: ScreenAssertionCore<AuthoredAccessibilityPredicatePhase>,
+        path: String,
+        depth: Int,
+        scope: HeistReferenceScope
+    ) {
+        checkPredicateDepth(depth, path: path)
+        switch core {
+        case .presence(let presence):
+            validatePresenceCore(presence, path: path, scope: scope)
+        }
+    }
+
+    private mutating func validateElementAssertionCore(
+        _ core: ElementAssertionCore<AuthoredAccessibilityPredicatePhase>,
+        path: String,
+        depth: Int,
+        scope: HeistReferenceScope
+    ) {
+        checkPredicateDepth(depth, path: path)
+        switch core {
+        case .presence(let presence):
+            validatePresenceCore(presence, path: path, scope: scope)
+        case .appeared(let target), .disappeared(let target):
+            validateTarget(target, path: "\(path).target", scope: scope)
         case .updated(let target, let change):
             validateTarget(target, path: "\(path).target", scope: scope)
             validatePropertyChange(change, path: "\(path).change", scope: scope)
         }
     }
-    mutating func validatePropertyChange(
-        _ change: AnyPropertyChange?,
-        path: String
-    ) {
-        guard let change else { return }
-        switch change {
-        case .value(let change):
-            validateStringPropertyChange(change, path: path)
-        case .traits:
-            break
-        case .hint(let change):
-            validateStringPropertyChange(change, path: path)
-        case .actions, .frame, .activationPoint:
-            break
-        case .customContent(let change):
-            validateNestedStringPropertyChange(change, path: path)
-        case .rotors(let change):
-            validateNestedStringPropertyChange(change, path: path)
-        }
-    }
 
-    mutating func validateStringPropertyChange<P: ElementPropertyKind>(
-        _ change: ElementPropertyChange<P>,
-        path: String
-    ) where P.Checker == StringMatch<String> {
-        validateString(change.before, path: "\(path).before", role: "element update before value")
-        validateString(change.after, path: "\(path).after", role: "element update after value")
-    }
-
-    mutating func validatePropertyChange(
-        _ change: AnyPropertyChangeExpr?,
+    private mutating func validatePropertyChange(
+        _ change: ElementPropertyChange,
         path: String,
         scope: HeistReferenceScope
     ) {
-        guard let change else { return }
-        switch change {
-        case .value(let change):
+        switch change.core {
+        case .value(let change), .hint(let change):
             validateStringPropertyChange(change, path: path, scope: scope)
-        case .traits:
-            break
-        case .hint(let change):
-            validateStringPropertyChange(change, path: path, scope: scope)
-        case .actions, .frame, .activationPoint:
+        case .traits, .actions, .frame, .activationPoint:
             break
         case .customContent(let change):
-            validateNestedStringPropertyChange(change, path: path, scope: scope)
+            validateCustomContentPropertyChange(change, path: path, scope: scope)
         case .rotors(let change):
-            validateNestedStringPropertyChange(change, path: path, scope: scope)
+            validateRotorPropertyChange(change, path: path, scope: scope)
         }
     }
 
-    mutating func validateStringPropertyChange<P: ElementPropertyKind>(
-        _ change: ElementPropertyChangeExpr<P>,
+    private mutating func validateStringPropertyChange(
+        _ change: PropertyChangeCore<StringMatchCore<Expr<String>>>,
         path: String,
         scope: HeistReferenceScope
-    ) where P.ExprChecker == StringMatch<StringExpr> {
+    ) {
         if let before = change.before {
             validateString(before, path: "\(path).before", scope: scope)
         }
@@ -116,47 +147,55 @@ extension HeistPlanRuntimeSafetyValidator {
         }
     }
 
-    private mutating func validateNestedStringPropertyChange<P: ElementPropertyKind>(
-        _ change: ElementPropertyChange<P>,
-        path: String
-    ) where P.Checker: NestedStringMatchContainer, P.Checker.Payload == String {
-        if let before = change.before {
-            validateNestedStrings(before, path: "\(path).before")
-        }
-        if let after = change.after {
-            validateNestedStrings(after, path: "\(path).after")
-        }
-    }
-
-    private mutating func validateNestedStrings<Container: NestedStringMatchContainer>(
-        _ container: Container,
-        path: String
-    ) where Container.Payload == String {
-        for nested in container.nestedStringMatches {
-            validateString(nested.match, path: "\(path).\(nested.path)", role: nested.role)
-        }
-    }
-
-    private mutating func validateNestedStringPropertyChange<P: ElementPropertyKind>(
-        _ change: ElementPropertyChangeExpr<P>,
+    private mutating func validateCustomContentPropertyChange(
+        _ change: PropertyChangeCore<CustomContentMatchCore<Expr<String>>>,
         path: String,
         scope: HeistReferenceScope
-    ) where P.ExprChecker: NestedStringMatchContainer, P.ExprChecker.Payload == StringExpr {
+    ) {
         if let before = change.before {
-            validateNestedStrings(before, path: "\(path).before", scope: scope)
+            validateCustomContent(before, path: "\(path).before", scope: scope)
         }
         if let after = change.after {
-            validateNestedStrings(after, path: "\(path).after", scope: scope)
+            validateCustomContent(after, path: "\(path).after", scope: scope)
         }
     }
 
-    private mutating func validateNestedStrings<Container: NestedStringMatchContainer>(
-        _ container: Container,
+    private mutating func validateCustomContent(
+        _ match: CustomContentMatchCore<Expr<String>>,
         path: String,
         scope: HeistReferenceScope
-    ) where Container.Payload == StringExpr {
-        for nested in container.nestedStringMatches {
-            validateString(nested.match, path: "\(path).\(nested.path)", scope: scope)
+    ) {
+        if let label = match.label {
+            validateString(label, path: "\(path).label", scope: scope)
+        }
+        if let value = match.value {
+            validateString(value, path: "\(path).value", scope: scope)
+        }
+    }
+
+    private mutating func validateRotorPropertyChange(
+        _ change: PropertyChangeCore<RotorSetMatchCore<Expr<String>>>,
+        path: String,
+        scope: HeistReferenceScope
+    ) {
+        if let before = change.before {
+            validateRotorSet(before, path: "\(path).before", scope: scope)
+        }
+        if let after = change.after {
+            validateRotorSet(after, path: "\(path).after", scope: scope)
+        }
+    }
+
+    private mutating func validateRotorSet(
+        _ match: RotorSetMatchCore<Expr<String>>,
+        path: String,
+        scope: HeistReferenceScope
+    ) {
+        for (index, include) in match.include.enumerated() {
+            validateString(include, path: "\(path).include[\(index)]", scope: scope)
+        }
+        for (index, exclude) in match.exclude.enumerated() {
+            validateString(exclude, path: "\(path).exclude[\(index)]", scope: scope)
         }
     }
 
@@ -179,38 +218,6 @@ extension HeistPlanRuntimeSafetyValidator {
                 observed: "\(count) children",
                 correction: "Use \(limits.maxAllPredicateChildren) child predicates or fewer."
             )
-        }
-    }
-
-}
-
-private struct NestedStringMatch<Payload: StringMatchPayload & Codable> {
-    let path: String
-    let role: String
-    let match: StringMatch<Payload>
-}
-
-private protocol NestedStringMatchContainer {
-    associatedtype Payload: StringMatchPayload & Codable
-
-    var nestedStringMatches: [NestedStringMatch<Payload>] { get }
-}
-
-extension CustomContentMatch: NestedStringMatchContainer {
-    fileprivate var nestedStringMatches: [NestedStringMatch<Value>] {
-        [
-            label.map { NestedStringMatch(path: "label", role: "custom content label", match: $0) },
-            value.map { NestedStringMatch(path: "value", role: "custom content value", match: $0) },
-        ].compactMap { $0 }
-    }
-}
-
-extension RotorSetMatch: NestedStringMatchContainer {
-    fileprivate var nestedStringMatches: [NestedStringMatch<Value>] {
-        include.enumerated().map { index, match in
-            NestedStringMatch(path: "include[\(index)]", role: "rotor include", match: match)
-        } + exclude.enumerated().map { index, match in
-            NestedStringMatch(path: "exclude[\(index)]", role: "rotor exclude", match: match)
         }
     }
 }

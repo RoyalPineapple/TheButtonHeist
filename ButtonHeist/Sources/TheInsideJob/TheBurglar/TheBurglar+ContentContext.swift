@@ -9,176 +9,135 @@ import AccessibilitySnapshotParser
 
 extension TheBurglar {
 
-    // MARK: - Container Content-Frame Building
+    // MARK: - Hierarchy Identity
 
-    /// Walk the hierarchy tree to compute each container's accessibility frame
-    /// and whether it is nested under a scrollable ancestor. Container identity
-    /// is semantic parser evidence; live scroll-view conversion is dispatch
-    /// evidence and must not feed generated container names or interface hashes.
-    struct ContainerIdentityContext {
-        let contentFramesByPath: [TreePath: ContentRect]
-        let scrollMembershipsByPath: [TreePath: InterfaceTree.ScrollMembership]
-        let nestedInScrollViewPaths: Set<TreePath>
-    }
-
-    private struct ContainerIdentityAccumulator {
-        var contentFramesByPath: [TreePath: ContentRect] = [:]
-        var scrollMembershipsByPath: [TreePath: InterfaceTree.ScrollMembership] = [:]
-        var nestedInScrollViewPaths = Set<TreePath>()
-    }
-
-    static func buildContainerIdentityContext(
-        hierarchy: [AccessibilityHierarchy],
-        scrollableContainerPaths: Set<TreePath> = []
-    ) -> ContainerIdentityContext {
-        var accumulator = ContainerIdentityAccumulator()
-        for (index, node) in hierarchy.enumerated() {
-            collectContainerContentFrames(
-                node: node,
-                path: TreePath([index]),
-                parentScrollContext: nil,
-                scrollableContainerPaths: scrollableContainerPaths,
-                accumulator: &accumulator
-            )
-        }
-        return ContainerIdentityContext(
-            contentFramesByPath: accumulator.contentFramesByPath,
-            scrollMembershipsByPath: accumulator.scrollMembershipsByPath,
-            nestedInScrollViewPaths: accumulator.nestedInScrollViewPaths
-        )
-    }
-
-    private static func collectContainerContentFrames(
-        node: AccessibilityHierarchy,
-        path: TreePath,
-        parentScrollContext: ScrollContext?,
-        scrollableContainerPaths: Set<TreePath>,
-        accumulator: inout ContainerIdentityAccumulator
-    ) {
-        guard case .container(let container, let children) = node else { return }
-
-        let frame = container.frame.cgRect
+    struct HierarchyContainerIdentity {
+        let path: TreePath
+        let container: AccessibilityContainer
+        let children: [AccessibilityHierarchy]
         let contentFrame: ContentRect
-        if let parentScrollContext {
-            contentFrame = ContentRect(CGRect(origin: .zero, size: frame.size))
-            accumulator.scrollMembershipsByPath[path] = InterfaceTree.ScrollMembership(
-                containerPath: parentScrollContext.containerPath,
-                index: nil
-            )
-            accumulator.nestedInScrollViewPaths.insert(path)
-        } else {
-            contentFrame = ContentRect(frame)
-        }
-        accumulator.contentFramesByPath[path] = contentFrame
+        let scrollMembership: InterfaceTree.ScrollMembership?
 
-        if scrollableContainerPaths.contains(path) {
-            let childScrollContext = ScrollContext(containerPath: path)
-            for (index, child) in children.enumerated() {
-                collectContainerContentFrames(
-                    node: child,
-                    path: path.appending(index),
-                    parentScrollContext: childScrollContext,
-                    scrollableContainerPaths: scrollableContainerPaths,
-                    accumulator: &accumulator
-                )
-            }
-        } else {
-            for (index, child) in children.enumerated() {
-                collectContainerContentFrames(
-                    node: child,
-                    path: path.appending(index),
-                    parentScrollContext: parentScrollContext,
-                    scrollableContainerPaths: scrollableContainerPaths,
-                    accumulator: &accumulator
-                )
-            }
+        var subtree: AccessibilityHierarchy {
+            .container(container, children: children)
         }
     }
 
-    // MARK: - Element Context Building
-
-    struct ElementContext {
+    struct HierarchyElementIdentity {
+        let path: TreePath
+        let element: AccessibilityElement
+        let traversalIndex: Int
         let scrollMembership: InterfaceTree.ScrollMembership?
     }
 
-    private struct ScrollContext {
-        let containerPath: TreePath
-    }
+    /// Path-distinct identity facts derived from one hierarchy traversal.
+    /// Container geometry and scroll membership are durable value evidence;
+    /// live UIKit conversion remains outside this context.
+    struct HierarchyIdentityContext {
+        let hierarchy: [AccessibilityHierarchy]
+        let scrollableContainerPaths: Set<TreePath>
+        let containers: [HierarchyContainerIdentity]
+        let elements: [HierarchyElementIdentity]
 
-    /// Walk the hierarchy tree to gather per-element scroll membership from
-    /// typed scroll-container facts.
-    static func buildElementContexts(
-        hierarchy: [AccessibilityHierarchy],
-        scrollableContainerPaths: Set<TreePath> = []
-    ) -> [AccessibilityElement: ElementContext] {
-        let byPath = buildElementContextsByPath(
-            hierarchy: hierarchy,
-            scrollableContainerPaths: scrollableContainerPaths
-        )
-        return Dictionary(
-            byPath.compactMap { path, context in
-                guard case .element(let element, _) = hierarchy.node(at: path) else { return nil }
-                return (element, context)
-            },
-            uniquingKeysWith: { _, latest in latest }
-        )
-    }
-
-    static func buildElementContextsByPath(
-        hierarchy: [AccessibilityHierarchy],
-        scrollableContainerPaths: Set<TreePath> = []
-    ) -> [TreePath: ElementContext] {
-        var contexts: [AccessibilityElement: ElementContext] = [:]
-        var contextsByPath: [TreePath: ElementContext] = [:]
-        for (index, node) in hierarchy.enumerated() {
-            collectElementContexts(
-                node: node,
-                path: TreePath([index]),
-                parentScrollContext: nil,
-                scrollableContainerPaths: scrollableContainerPaths,
-                into: &contexts,
-                byPath: &contextsByPath
-            )
+        var contentFramesByPath: [TreePath: ContentRect] {
+            Dictionary(uniqueKeysWithValues: containers.map { ($0.path, $0.contentFrame) })
         }
-        return contextsByPath
-    }
 
-    private static func collectElementContexts(
-        node: AccessibilityHierarchy,
-        path: TreePath,
-        parentScrollContext: ScrollContext?,
-        scrollableContainerPaths: Set<TreePath>,
-        into contexts: inout [AccessibilityElement: ElementContext],
-        byPath contextsByPath: inout [TreePath: ElementContext]
-    ) {
-        switch node {
-        case .element(let element, _):
-            let context = ElementContext(
-                scrollMembership: parentScrollContext.map {
-                    InterfaceTree.ScrollMembership(containerPath: $0.containerPath, index: nil)
+        var scrollMembershipsByPath: [TreePath: InterfaceTree.ScrollMembership] {
+            Dictionary(
+                uniqueKeysWithValues: containers.compactMap { identity in
+                    identity.scrollMembership.map { (identity.path, $0) }
                 }
             )
-            contexts[element] = context
-            contextsByPath[path] = context
-        case .container(_, let children):
-            let childScrollContext: ScrollContext?
-            if scrollableContainerPaths.contains(path) {
-                childScrollContext = ScrollContext(containerPath: path)
-            } else {
-                childScrollContext = parentScrollContext
-            }
-
-            for (index, child) in children.enumerated() {
-                collectElementContexts(
-                    node: child,
-                    path: path.appending(index),
-                    parentScrollContext: childScrollContext,
-                    scrollableContainerPaths: scrollableContainerPaths,
-                    into: &contexts,
-                    byPath: &contextsByPath
-                )
-            }
         }
+
+        var nestedInScrollViewPaths: Set<TreePath> {
+            Set(containers.compactMap { $0.scrollMembership == nil ? nil : $0.path })
+        }
+    }
+
+    private struct HierarchyIdentityTraversalContext {
+        let path: TreePath
+        let parentScrollContainerPath: TreePath?
+    }
+
+    private struct HierarchyIdentityAccumulator {
+        var containers: [HierarchyContainerIdentity] = []
+        var elements: [HierarchyElementIdentity] = []
+    }
+
+    static func buildHierarchyIdentityContext(
+        hierarchy: [AccessibilityHierarchy],
+        scrollableContainerPaths: Set<TreePath> = []
+    ) -> HierarchyIdentityContext {
+        var accumulator = HierarchyIdentityAccumulator()
+        for (rootIndex, root) in hierarchy.enumerated() {
+            root.foldedPreorder(
+                context: HierarchyIdentityTraversalContext(
+                    path: TreePath([rootIndex]),
+                    parentScrollContainerPath: nil
+                ),
+                into: &accumulator,
+                onElement: { element, traversalIndex, context, accumulator in
+                    accumulator.elements.append(
+                        HierarchyElementIdentity(
+                            path: context.path,
+                            element: element,
+                            traversalIndex: traversalIndex,
+                            scrollMembership: context.parentScrollContainerPath.map {
+                                InterfaceTree.ScrollMembership(containerPath: $0, index: nil)
+                            }
+                        )
+                    )
+                    return true
+                },
+                onContainer: { container, children, context, accumulator in
+                    let membership = context.parentScrollContainerPath.map {
+                        InterfaceTree.ScrollMembership(containerPath: $0, index: nil)
+                    }
+                    let frame = container.frame.cgRect
+                    let contentFrame = membership == nil
+                        ? ContentRect(frame)
+                        : ContentRect(CGRect(origin: .zero, size: frame.size))
+                    accumulator.containers.append(
+                        HierarchyContainerIdentity(
+                            path: context.path,
+                            container: container,
+                            children: children,
+                            contentFrame: contentFrame,
+                            scrollMembership: membership
+                        )
+                    )
+                    let childScrollContainerPath = scrollableContainerPaths.contains(context.path)
+                        ? context.path
+                        : context.parentScrollContainerPath
+                    return (
+                        HierarchyIdentityTraversalContext(
+                            path: context.path,
+                            parentScrollContainerPath: childScrollContainerPath
+                        ),
+                        true
+                    )
+                },
+                descend: { context, childIndex in
+                    HierarchyIdentityTraversalContext(
+                        path: context.path.appending(childIndex),
+                        parentScrollContainerPath: context.parentScrollContainerPath
+                    )
+                }
+            )
+        }
+        return HierarchyIdentityContext(
+            hierarchy: hierarchy,
+            scrollableContainerPaths: scrollableContainerPaths,
+            containers: accumulator.containers,
+            elements: accumulator.elements.sorted { lhs, rhs in
+                if lhs.traversalIndex != rhs.traversalIndex {
+                    return lhs.traversalIndex < rhs.traversalIndex
+                }
+                return lhs.path < rhs.path
+            }
+        )
     }
 
     // MARK: - Container Naming

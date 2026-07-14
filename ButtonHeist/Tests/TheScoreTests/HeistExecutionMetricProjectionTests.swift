@@ -133,7 +133,7 @@ import TheScore
     }
 
     private func metricProjectionFixture() throws -> HeistExecutionResult {
-        let predicate = AccessibilityPredicate<RootContext>.exists(.label("Done"))
+        let predicate = AccessibilityPredicate.exists(.label("Done"))
         return HeistExecutionResult.passed(
             steps: [
                 actionStep(predicate: predicate),
@@ -145,7 +145,7 @@ import TheScore
         )
     }
 
-    private func actionStep(predicate: AccessibilityPredicate<RootContext>) -> HeistExecutionStepResult {
+    private func actionStep(predicate: AccessibilityPredicate) -> HeistExecutionStepResult {
         let command = HeistActionCommand.activate(.predicate(ElementPredicateTemplate(label: "Pay")))
         return HeistExecutionStepResult.passed(
             path: "$.body[0]",
@@ -185,7 +185,7 @@ import TheScore
         )
     }
 
-    private func waitStep(predicate: AccessibilityPredicate<RootContext>) throws -> HeistExecutionStepResult {
+    private func waitStep(predicate: AccessibilityPredicate) throws -> HeistExecutionStepResult {
         let check = try #require(HeistWaitEvidence.MatchedCheck(
             actionResult: .success(
                 method: .wait,
@@ -211,13 +211,13 @@ import TheScore
         )
     }
 
-    private func repeatStep(predicate: AccessibilityPredicate<RootContext>) throws -> HeistExecutionStepResult {
+    private func repeatStep(predicate: AccessibilityPredicate) throws -> HeistExecutionStepResult {
         HeistExecutionStepResult.passed(
             path: "$.body[2]",
             receiptKind: .repeatUntil,
             durationMs: 60,
             intent: .repeatUntil(predicate: predicate, timeout: 0.05),
-            evidence: HeistRepeatUntilEvidence.predicateMet(
+            evidence: HeistRepeatUntilEvidence.matched(
                 predicate: predicate,
                 timeout: 0.05,
                 iterationCount: 1,

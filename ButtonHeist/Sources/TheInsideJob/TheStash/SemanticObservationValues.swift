@@ -2,8 +2,207 @@
 #if DEBUG
 import TheScore
 
+internal struct ObservationGeneration: RawRepresentable, Sendable, Equatable, Hashable {
+    internal static let initial = ObservationGeneration(rawValue: 0)
+
+    internal let rawValue: UInt64
+
+    internal func advanced() -> ObservationGeneration {
+        ObservationGeneration(rawValue: rawValue + 1)
+    }
+}
+
+internal struct ObservationCursor: Sendable, Equatable, Hashable {
+    internal let generation: ObservationGeneration
+    internal let scope: SemanticObservationScope
+    internal let sequence: SettledObservationSequence
+    internal let captureHash: String
+    internal let notificationSequence: UInt64
+}
+
+internal struct SettledCapture: Sendable, Equatable {
+    internal let cursor: ObservationCursor
+    internal let capture: AccessibilityTrace.Capture
+
+    internal init(cursor: ObservationCursor, capture: AccessibilityTrace.Capture) {
+        precondition(cursor.captureHash == capture.hash, "settled capture cursor must identify its capture")
+        self.cursor = cursor
+        self.capture = capture
+    }
+
+    internal init?(previousOf event: SettledSemanticObservationEvent) {
+        guard let cursor = event.previousCursor,
+              let capture = event.trace.captures.first,
+              capture.hash == cursor.captureHash
+        else { return nil }
+        self.init(cursor: cursor, capture: capture)
+    }
+}
+
+internal struct ObservationGap: Sendable, Equatable {
+    internal enum Reason: Sendable, Equatable {
+        case noObservationAfterBaseline
+        case scopeChanged
+        case historyUnavailable
+        case historyEvicted
+    }
+
+    internal let reason: Reason
+    internal let baseline: ObservationCursor
+    internal let current: ObservationCursor
+}
+
+internal enum ObservationTransitionValidationError: Error, Sendable, Equatable {
+    case scopeMismatch(from: SemanticObservationScope, to: SemanticObservationScope)
+    case sequenceDidNotAdvance(from: SettledObservationSequence, to: SettledObservationSequence)
+    case generationMismatch(from: ObservationGeneration, to: ObservationGeneration)
+    case replacementGenerationDidNotAdvance(from: ObservationGeneration, to: ObservationGeneration)
+}
+
+private enum ObservationTransitionLineage {
+    static func validate(
+        from previousCursor: ObservationCursor,
+        to currentCursor: ObservationCursor
+    ) throws(ObservationTransitionValidationError) {
+        guard currentCursor.scope == previousCursor.scope else {
+            throw ObservationTransitionValidationError.scopeMismatch(
+                from: previousCursor.scope,
+                to: currentCursor.scope
+            )
+        }
+        guard currentCursor.sequence > previousCursor.sequence else {
+            throw ObservationTransitionValidationError.sequenceDidNotAdvance(
+                from: previousCursor.sequence,
+                to: currentCursor.sequence
+            )
+        }
+    }
+}
+
+internal struct SameGenerationTransition: Sendable, Equatable {
+    internal let previousCursor: ObservationCursor
+
+    internal init(
+        from previousCursor: ObservationCursor,
+        to currentCursor: ObservationCursor
+    ) throws(ObservationTransitionValidationError) {
+        try ObservationTransitionLineage.validate(
+            from: previousCursor,
+            to: currentCursor
+        )
+        guard currentCursor.generation == previousCursor.generation else {
+            throw ObservationTransitionValidationError.generationMismatch(
+                from: previousCursor.generation,
+                to: currentCursor.generation
+            )
+        }
+        self.previousCursor = previousCursor
+    }
+}
+
+internal struct ScreenBoundaryTransition: Sendable, Equatable {
+    internal let previousCursor: ObservationCursor
+
+    internal init(
+        from previousCursor: ObservationCursor,
+        to currentCursor: ObservationCursor
+    ) throws(ObservationTransitionValidationError) {
+        try ObservationTransitionLineage.validate(
+            from: previousCursor,
+            to: currentCursor
+        )
+        guard currentCursor.generation.rawValue > previousCursor.generation.rawValue else {
+            throw ObservationTransitionValidationError.replacementGenerationDidNotAdvance(
+                from: previousCursor.generation,
+                to: currentCursor.generation
+            )
+        }
+        self.previousCursor = previousCursor
+    }
+}
+
+internal enum ObservationTransition: Sendable, Equatable {
+    case initial
+    case sameGeneration(SameGenerationTransition)
+    case screenBoundary(ScreenBoundaryTransition)
+
+    internal var previousCursor: ObservationCursor? {
+        switch self {
+        case .initial:
+            nil
+        case .sameGeneration(let transition):
+            transition.previousCursor
+        case .screenBoundary(let transition):
+            transition.previousCursor
+        }
+    }
+}
+
+/// One retained settled event and the typed edge that admitted it.
+internal struct ObservationEntry: Sendable, Equatable {
+    internal let event: SettledSemanticObservationEvent
+    internal let transition: ObservationTransition
+
+    internal var settledCapture: SettledCapture {
+        Self.settledCapture(for: event)
+    }
+
+    internal var cursor: ObservationCursor {
+        settledCapture.cursor
+    }
+
+    internal static func initial(_ event: SettledSemanticObservationEvent) -> ObservationEntry {
+        ObservationEntry(event: event, transition: .initial)
+    }
+
+    internal static func sameGeneration(
+        _ event: SettledSemanticObservationEvent,
+        after previousCursor: ObservationCursor
+    ) throws(ObservationTransitionValidationError) -> ObservationEntry {
+        let transition = try SameGenerationTransition(
+            from: previousCursor,
+            to: settledCapture(for: event).cursor
+        )
+        return ObservationEntry(
+            event: event,
+            transition: .sameGeneration(transition)
+        )
+    }
+
+    internal static func screenBoundary(
+        _ event: SettledSemanticObservationEvent,
+        replacing previousCursor: ObservationCursor
+    ) throws(ObservationTransitionValidationError) -> ObservationEntry {
+        let transition = try ScreenBoundaryTransition(
+            from: previousCursor,
+            to: settledCapture(for: event).cursor
+        )
+        return ObservationEntry(
+            event: event,
+            transition: .screenBoundary(transition)
+        )
+    }
+
+    private init(
+        event: SettledSemanticObservationEvent,
+        transition: ObservationTransition
+    ) {
+        self.event = event
+        self.transition = transition
+    }
+
+    private static func settledCapture(
+        for event: SettledSemanticObservationEvent
+    ) -> SettledCapture {
+        guard let capture = event.settledCapture else {
+            preconditionFailure("Published semantic observation has no settled capture")
+        }
+        return capture
+    }
+}
+
 /// A settled semantic tree and the signal that admitted it.
-internal struct SettledSemanticObservation: Sendable {
+internal struct SettledSemanticObservation: Sendable, Equatable {
     internal let sequence: SettledObservationSequence
     internal let scope: SemanticObservationScope
     internal let semanticSignal: TheTripwire.SemanticSignal
@@ -31,7 +230,7 @@ internal struct SettledSemanticObservation: Sendable {
 }
 
 /// One published settled observation with its generation and evidence lineage.
-internal struct SettledSemanticObservationEvent: Sendable {
+internal struct SettledSemanticObservationEvent: Sendable, Equatable {
     internal let generation: ObservationGeneration
     internal let sequence: SettledObservationSequence
     internal let scope: SemanticObservationScope

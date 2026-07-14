@@ -2,7 +2,7 @@ import ArgumentParser
 @_spi(ButtonHeistTooling) import ButtonHeist
 import ThePlans
 
-struct RotorCommand: AsyncParsableCommand, CLICommandContract {
+struct RotorCommand: ConnectedOneShotCLICommand {
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Move through an accessibility rotor",
@@ -37,8 +37,9 @@ struct RotorCommand: AsyncParsableCommand, CLICommandContract {
     )
     var direction: String = Self.catalogDefaultArgument(for: FenceParameters.rotorDirection)
 
-    @ButtonHeistActor
-    mutating func run() async throws {
+    var runnerStatusMessage: String? { "Moving rotor..." }
+
+    func requestArguments() throws -> TheFence.CommandArgumentEnvelope {
         let target = try element.requireTarget()
         if let rotorIndex, rotorIndex < 0 {
             throw ValidationError("rotor-index must be non-negative")
@@ -47,18 +48,12 @@ struct RotorCommand: AsyncParsableCommand, CLICommandContract {
             throw ValidationError("Invalid direction '\(direction)'. Valid: \(Self.catalogAllowedValuesDescription(for: FenceParameters.rotorDirection))")
         }
 
-        try await CLIRunner.run(
-            connection: connection,
-            format: output.format,
-            command: Self.fenceCommand,
-            arguments: Self.fenceArguments(
-                target: target,
-                CommandArgumentWriter.value(FenceParameters.rotorDirection, rotorDirection),
-                CommandArgumentWriter.optional(.rotor, rotor),
-                CommandArgumentWriter.optional(.rotorIndex, rotorIndex),
-                CommandArgumentWriter.value(.timeout, timeoutOption.timeout)
-            ),
-            statusMessage: "Moving rotor..."
+        return Self.fenceArguments(
+            target: target,
+            CommandArgumentEnvelopeBuilder.value(FenceParameters.rotorDirection, rotorDirection),
+            CommandArgumentEnvelopeBuilder.optional(.rotor, rotor),
+            CommandArgumentEnvelopeBuilder.optional(.rotorIndex, rotorIndex),
+            CommandArgumentEnvelopeBuilder.value(.timeout, timeoutOption.timeout)
         )
     }
 }

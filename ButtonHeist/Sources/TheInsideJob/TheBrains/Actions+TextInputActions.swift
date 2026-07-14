@@ -94,36 +94,38 @@ extension Actions {
     // MARK: - Text Entry
 
     func executeTypeText(
-        _ request: TypeTextTarget
+        text: String,
+        target: ResolvedAccessibilityTarget?,
+        replacingExisting: Bool
     ) async -> TheSafecracker.ActionDispatchOutcome {
-        guard request.replacingExisting || !request.text.isEmpty else {
+        guard replacingExisting || !text.isEmpty else {
             return .failure(.typeText, message: "type_text requires non-empty text")
         }
-        let target = request.target
         let focusResult = await focusTextInput(target)
         switch focusResult {
         case .alreadyFocused:
-            return await executeTypeText(request, using: nil)
+            return await executeTypeText(text: text, replacingExisting: replacingExisting, using: nil)
         case .focused(let input):
-            return await executeTypeText(request, using: input)
+            return await executeTypeText(text: text, replacingExisting: replacingExisting, using: input)
         case .failed(let failure):
             return failure
         }
     }
 
     private func executeTypeText(
-        _ target: TypeTextTarget,
+        text: String,
+        replacingExisting: Bool,
         using focusedInput: FocusedTextInput?
     ) async -> TheSafecracker.ActionDispatchOutcome {
-        if target.replacingExisting {
+        if replacingExisting {
             let clearResult = await safecracker.clearText(existingValue: focusedInput?.currentValue)
             if let diagnostic = clearResult.diagnostic {
                 return .failure(.typeText, message: typeTextInjectionFailureMessage(for: diagnostic, operation: "clearing"))
             }
         }
 
-        if !target.text.isEmpty {
-            let typingResult = await safecracker.typeText(target.text)
+        if !text.isEmpty {
+            let typingResult = await safecracker.typeText(text)
             if let diagnostic = typingResult.diagnostic {
                 return .failure(.typeText, message: typeTextInjectionFailureMessage(for: diagnostic, operation: "typing"))
             }
@@ -179,7 +181,7 @@ extension Actions {
     }
 
     private func focusTextInput(
-        _ target: AccessibilityTarget?
+        _ target: ResolvedAccessibilityTarget?
     ) async -> TextInputFocusResult {
         guard let target else {
             guard safecracker.hasActiveTextInput() else {

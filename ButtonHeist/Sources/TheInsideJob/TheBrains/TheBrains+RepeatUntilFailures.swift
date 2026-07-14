@@ -11,7 +11,7 @@ extension TheBrains.RepeatUntil.Terminal {
         receipt: HeistWaitReceipt
     ) -> ExpectationResult.Unmet {
         ExpectationResult.Unmet(receipt.expectation) ?? ExpectationResult.Unmet(
-            predicate: step.predicate,
+            predicate: step.predicateExpression,
             actual: "initial observation unavailable"
         )
     }
@@ -46,18 +46,18 @@ extension TheBrains {
         step: ResolvedRepeatUntilStep,
         observed: String
     ) -> HeistExecutionStepResult {
-        heistFailedReceipt(
+        heistReceipt(.init(
             path: context.path,
             kind: .repeatUntil,
             durationMs: elapsedMilliseconds(since: context.start),
             intent: .repeatUntil(predicate: step.predicateExpression, timeout: step.timeout),
-            failure: HeistFailureDetail(
+            completion: .failed(HeistFailureDetail(
                 category: .loop,
                 contract: "repeat_until execution reaches a terminal state",
                 observed: observed,
                 expected: "terminal repeat_until state"
-            )
-        )
+            ))
+        ))
     }
 
     internal func repeatUntilResolutionFailure(
@@ -66,18 +66,18 @@ extension TheBrains {
         start: CFAbsoluteTime,
         error: Error
     ) -> HeistExecutionStepResult {
-        heistFailedReceipt(
+        heistReceipt(.init(
             path: path,
             kind: .repeatUntil,
             durationMs: elapsedMilliseconds(since: start),
             intent: .repeatUntil(predicate: step.predicate, timeout: step.timeout),
-            failure: HeistFailureDetail(
+            completion: .failed(HeistFailureDetail(
                 category: .validation,
                 contract: "repeat_until predicate resolves before evaluation",
                 observed: "could not resolve heist repeat_until predicate: \(error)",
                 expected: step.predicate.description
-            )
-        )
+            ))
+        ))
     }
 }
 

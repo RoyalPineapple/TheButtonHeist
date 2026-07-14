@@ -17,35 +17,26 @@ struct SessionLease {
         case removeConnection(clientId: Int, at: Date)
     }
 
-    private enum Effect: Equatable, Sendable {
-        case acquisition(AcquisitionEffect)
-        case release(ReleaseEffect)
-        case connectionRemoval(ConnectionRemoval)
-    }
-
     private enum Rejection: Equatable, Sendable {
         case acquisition(SessionLockDiagnostic)
     }
 
     enum Acquisition: Equatable, Sendable {
-        case accepted(AcquisitionEffect)
+        case accepted([Effect])
         case rejected(SessionLockDiagnostic)
     }
 
-    enum AcquisitionEffect: Equatable, Sendable {
-        case claimedSession
-        case rejoinedDuringGracePeriod
+    enum LogEvent: Equatable, Sendable {
+        case sessionClaimed(clientId: Int)
+        case clientRejoinedDuringGracePeriod(clientId: Int)
+        case sessionReleased
+        case releaseTimerStarted(timeout: TimeInterval)
     }
 
-    enum ConnectionRemoval: Equatable, Sendable {
-        case unchanged
-        case active
-        case draining(releaseDeadline: Date)
-    }
-
-    enum ReleaseEffect: Equatable, Sendable {
-        case releasedSession
-        case noActiveSession
+    enum Effect: Equatable, Sendable {
+        case log(LogEvent)
+        case cancelReleaseTimer
+        case replaceReleaseTimer(timeout: TimeInterval)
     }
 
     enum OwnerDriverIdentity: Equatable, Sendable {
@@ -102,10 +93,7 @@ struct SessionLease {
     }
 
     private var driver: StateDriver<Machine>
-    let releaseTimeout: TimeInterval
-
     init(releaseTimeout: TimeInterval) {
-        self.releaseTimeout = releaseTimeout
         self.driver = StateDriver(
             initial: .idle,
             machine: Machine(releaseTimeout: releaseTimeout)
@@ -123,7 +111,7 @@ struct SessionLease {
         }
     }
 
-    var exposedActiveDriverId: String? {
+    var exposedDriverId: String? {
         activeSessionDriverId.flatMap { Self.exposedDriverId(from: $0) }
     }
 
@@ -144,36 +132,27 @@ struct SessionLease {
         let change = driver.send(.acquire(driverIdentity: driverIdentity, clientId: clientId, at: now))
         switch change {
         case .changed:
-            guard case .acquisition(let effect)? = change.singleEffect else {
-                preconditionFailure("SessionLease acquire emitted unexpected effect")
-            }
-            return .accepted(effect)
+            return .accepted(change.effects)
         case .rejected(.acquisition(let diagnostic), _):
             return .rejected(diagnostic)
         }
     }
 
-    mutating func release() -> ReleaseEffect {
+    mutating func release() -> [Effect] {
         let change = driver.send(.release)
         switch change {
         case .changed:
-            guard case .release(let effect)? = change.singleEffect else {
-                preconditionFailure("SessionLease release emitted unexpected effect")
-            }
-            return effect
+            return change.effects
         case .rejected(let rejection, _):
             preconditionFailure("SessionLease release emitted unexpected rejection: \(rejection)")
         }
     }
 
-    mutating func removeConnection(_ clientId: Int, at now: Date) -> ConnectionRemoval {
+    mutating func removeConnection(_ clientId: Int, at now: Date) -> [Effect] {
         let change = driver.send(.removeConnection(clientId: clientId, at: now))
         switch change {
         case .changed:
-            guard case .connectionRemoval(let removal)? = change.singleEffect else {
-                preconditionFailure("SessionLease removeConnection emitted unexpected effect")
-            }
-            return removal
+            return change.effects
         case .rejected(let rejection, _):
             preconditionFailure("SessionLease removeConnection emitted unexpected rejection: \(rejection)")
         }
@@ -200,7 +179,7 @@ struct SessionLease {
             case (.idle, .acquire(let driverIdentity, let clientId, _)):
                 return .changed(
                     to: .active(driverId: driverIdentity, clientId: clientId),
-                    effects: [.acquisition(.claimedSession)]
+                    effects: [.log(.sessionClaimed(clientId: clientId))]
                 )
 
             case (.active(let activeId, _), .acquire(let driverIdentity, _, _)) where driverIdentity == activeId:
@@ -213,7 +192,10 @@ struct SessionLease {
                 where driverIdentity == activeId:
                 return .changed(
                     to: .active(driverId: activeId, clientId: clientId),
-                    effects: [.acquisition(.rejoinedDuringGracePeriod)]
+                    effects: [
+                        .cancelReleaseTimer,
+                        .log(.clientRejoinedDuringGracePeriod(clientId: clientId)),
+                    ]
                 )
 
             case (.active(let driverId, _), .acquire):
@@ -232,24 +214,30 @@ struct SessionLease {
                 )
 
             case (.idle, .release):
-                return .changed(to: .idle, effects: [.release(.noActiveSession)])
+                return .changed(to: .idle, effects: [.cancelReleaseTimer])
 
             case (.active, .release), (.draining, .release):
-                return .changed(to: .idle, effects: [.release(.releasedSession)])
+                return .changed(
+                    to: .idle,
+                    effects: [.cancelReleaseTimer, .log(.sessionReleased)]
+                )
 
             case (.idle, .removeConnection), (.draining, .removeConnection):
-                return .changed(to: state, effects: [.connectionRemoval(.unchanged)])
+                return .changed(to: state)
 
             case (.active(let driverId, let activeClientId), .removeConnection(let clientId, let now))
                 where activeClientId == clientId:
                 let releaseDeadline = now.addingTimeInterval(releaseTimeout)
                 return .changed(
                     to: .draining(driverId: driverId, releaseDeadline: releaseDeadline),
-                    effects: [.connectionRemoval(.draining(releaseDeadline: releaseDeadline))]
+                    effects: [
+                        .replaceReleaseTimer(timeout: releaseTimeout),
+                        .log(.releaseTimerStarted(timeout: releaseTimeout)),
+                    ]
                 )
 
             case (.active, .removeConnection):
-                return .changed(to: state, effects: [.connectionRemoval(.active)])
+                return .changed(to: state)
             }
         }
     }

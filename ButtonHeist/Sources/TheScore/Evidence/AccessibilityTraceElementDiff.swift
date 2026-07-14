@@ -127,14 +127,35 @@ private func appendSemanticChanges(
     new: HeistElement,
     to changes: inout [PropertyChange]
 ) {
-    appendChangeIfNeeded(LabelProperty.self, old: old, new: new, to: &changes)
-    appendChangeIfNeeded(IdentifierProperty.self, old: old, new: new, to: &changes)
-    appendChangeIfNeeded(ValueProperty.self, old: old, new: new, to: &changes)
-    appendChangeIfNeeded(TraitsProperty.self, old: old, new: new, to: &changes)
-    appendChangeIfNeeded(HintProperty.self, old: old, new: new, to: &changes)
-    appendChangeIfNeeded(ActionsProperty.self, old: old, new: new, to: &changes)
-    appendChangeIfNeeded(CustomContentProperty.self, old: old, new: new, to: &changes)
-    appendChangeIfNeeded(RotorsProperty.self, old: old, new: new, to: &changes)
+    appendChangeIfNeeded(old.label, new.label, change: PropertyChange.label, to: &changes)
+    appendChangeIfNeeded(old.identifier, new.identifier, change: PropertyChange.identifier, to: &changes)
+    appendChangeIfNeeded(old.value, new.value, change: PropertyChange.value, to: &changes)
+    appendChangeIfNeeded(
+        old.traits,
+        new.traits,
+        valuesEqual: { Set($0) == Set($1) },
+        change: PropertyChange.traits,
+        to: &changes
+    )
+    appendChangeIfNeeded(old.hint, new.hint, change: PropertyChange.hint, to: &changes)
+    appendChangeIfNeeded(
+        ElementActionSet(old.actions),
+        ElementActionSet(new.actions),
+        change: PropertyChange.actions,
+        to: &changes
+    )
+    appendChangeIfNeeded(
+        semanticCustomContent(old),
+        semanticCustomContent(new),
+        change: PropertyChange.customContent,
+        to: &changes
+    )
+    appendChangeIfNeeded(
+        semanticRotors(old),
+        semanticRotors(new),
+        change: PropertyChange.rotors,
+        to: &changes
+    )
 }
 
 private func appendGeometryChanges(
@@ -142,20 +163,56 @@ private func appendGeometryChanges(
     new: HeistElement,
     to changes: inout [PropertyChange]
 ) {
-    appendChangeIfNeeded(FrameProperty.self, old: old, new: new, to: &changes)
-    appendChangeIfNeeded(ActivationPointProperty.self, old: old, new: new, to: &changes)
+    appendChangeIfNeeded(
+        ElementPropertyFrame(old.screenFrame),
+        ElementPropertyFrame(new.screenFrame),
+        change: PropertyChange.frame,
+        to: &changes
+    )
+    appendChangeIfNeeded(
+        old.activationPointEvidence.point.map(ElementPropertyPoint.init),
+        new.activationPointEvidence.point.map(ElementPropertyPoint.init),
+        change: PropertyChange.activationPoint,
+        to: &changes
+    )
 }
 
-private func appendChangeIfNeeded<P: ElementPropertyValueKind>(
-    _ property: P.Type,
-    old: HeistElement,
-    new: HeistElement,
+private func appendChangeIfNeeded<Value: Equatable>(
+    _ old: Value,
+    _ new: Value,
+    valuesEqual: (Value, Value) -> Bool = (==),
+    change: (Value, Value) -> PropertyChange,
     to changes: inout [PropertyChange]
 ) {
-    let oldValue = P.value(in: old)
-    let newValue = P.value(in: new)
-    guard !P.valuesEqual(oldValue, newValue) else { return }
-    changes.append(P.change(old: oldValue, new: newValue))
+    guard !valuesEqual(old, new) else { return }
+    changes.append(change(old, new))
+}
+
+private func semanticCustomContent(_ element: HeistElement) -> [HeistCustomContent]? {
+    let content = element.customContent?.filter { !$0.label.isEmpty || !$0.value.isEmpty } ?? []
+    return content.isEmpty ? nil : content
+}
+
+private func semanticRotors(_ element: HeistElement) -> [HeistRotor]? {
+    let rotors = element.rotors?.filter { !$0.name.isEmpty } ?? []
+    return rotors.isEmpty ? nil : rotors
+}
+
+private extension ElementPropertyFrame {
+    init(_ frame: ScreenRect) {
+        self.init(
+            x: Int(frame.x),
+            y: Int(frame.y),
+            width: Int(frame.width),
+            height: Int(frame.height)
+        )
+    }
+}
+
+private extension ElementPropertyPoint {
+    init(_ point: ScreenPoint) {
+        self.init(x: Int(point.x), y: Int(point.y))
+    }
 }
 
 // MARK: - Diff Pairing Key

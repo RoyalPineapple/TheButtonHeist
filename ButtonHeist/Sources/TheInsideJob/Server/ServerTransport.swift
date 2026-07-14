@@ -28,97 +28,61 @@ enum ServerTransportError: Error, LocalizedError, Equatable, Sendable {
     }
 }
 
-private struct ServerTransportStopAttempt: Equatable, Sendable {
+private struct ServerTransportStopOperation: Equatable, Sendable {
     let id: UUID
     let task: Task<Void, Never>
 
-    static func == (lhs: ServerTransportStopAttempt, rhs: ServerTransportStopAttempt) -> Bool {
+    static func == (lhs: ServerTransportStopOperation, rhs: ServerTransportStopOperation) -> Bool {
         lhs.id == rhs.id
     }
 }
 
-private struct ServerTransportStartAttempt: Equatable, Sendable {
-    let id: UUID
-}
-
-private enum ServerTransportRuntimePhase: Equatable, Sendable {
-    case idle
-    case starting(ServerTransportStartAttempt)
-    case running
-    case stopping(ServerTransportStopAttempt)
-}
-
-private struct ServerTransportLifecycleMachine: SimpleStateMachine {
-    enum Event: Equatable, Sendable {
-        case beginStarting(ServerTransportStartAttempt)
-        case finishStarting(UUID)
-        case failStarting(UUID)
-        case beginStopping(ServerTransportStopAttempt?)
-        case finishStopping(UUID)
+@MainActor
+private final class ServerTransportStartCompletion {
+    private enum State {
+        case pending([CheckedContinuation<Void, Never>])
+        case finished
     }
 
-    enum Effect: Equatable, Sendable {}
+    private var state = State.pending([])
 
-    enum Rejection: Equatable, Sendable {
-        case alreadyRunning
-        case stopped
-        case staleStartAttempt
-        case missingStopAttempt
-        case staleStopAttempt
-    }
-
-    func advance(
-        _ state: ServerTransportRuntimePhase,
-        with event: Event
-    ) -> StateChange<ServerTransportRuntimePhase, Effect, Rejection> {
-        switch (state, event) {
-        case (.idle, .beginStarting(let attempt)):
-            return .changed(to: .starting(attempt))
-        case (.starting, .beginStarting),
-             (.running, .beginStarting):
-            return .rejected(.alreadyRunning, stayingIn: state)
-        case (.stopping, .beginStarting):
-            return .rejected(.stopped, stayingIn: state)
-
-        case (.starting(let attempt), .finishStarting(let id)) where attempt.id == id:
-            return .changed(to: .running)
-        case (.idle, .finishStarting),
-             (.starting, .finishStarting),
-             (.running, .finishStarting),
-             (.stopping, .finishStarting):
-            return .rejected(.staleStartAttempt, stayingIn: state)
-
-        case (.starting(let attempt), .failStarting(let id)) where attempt.id == id:
-            return .changed(to: .idle)
-        case (.idle, .failStarting),
-             (.starting, .failStarting),
-             (.running, .failStarting),
-             (.stopping, .failStarting):
-            return .rejected(.staleStartAttempt, stayingIn: state)
-
-        case (.idle, .beginStopping(nil)):
-            return .changed(to: .idle)
-        case (.starting, .beginStopping):
-            return .changed(to: .idle)
-        case (.idle, .beginStopping):
-            return .rejected(.missingStopAttempt, stayingIn: state)
-        case (.running, .beginStopping(.some(let attempt))):
-            return .changed(to: .stopping(attempt))
-        case (.running, .beginStopping(nil)):
-            return .rejected(.missingStopAttempt, stayingIn: state)
-        case (.stopping, .beginStopping):
-            return .changed(to: state)
-
-        case (.stopping(let attempt), .finishStopping(let id)) where attempt.id == id:
-            return .changed(to: .idle)
-        case (.stopping, .finishStopping):
-            return .rejected(.staleStopAttempt, stayingIn: state)
-        case (.idle, .finishStopping),
-             (.starting, .finishStopping),
-             (.running, .finishStopping):
-            return .changed(to: state)
+    func wait() async {
+        guard case .pending = state else { return }
+        await withCheckedContinuation { continuation in
+            switch state {
+            case .pending(var waiters):
+                waiters.append(continuation)
+                state = .pending(waiters)
+            case .finished:
+                continuation.resume()
+            }
         }
     }
+
+    func finish() {
+        switch state {
+        case .pending(let waiters):
+            state = .finished
+            waiters.forEach { $0.resume() }
+        case .finished:
+            return
+        }
+    }
+}
+
+private struct ServerTransportStartOperation: Equatable {
+    let id: UUID
+    let completion: ServerTransportStartCompletion
+
+    static func == (lhs: ServerTransportStartOperation, rhs: ServerTransportStartOperation) -> Bool {
+        lhs.id == rhs.id
+    }
+}
+
+private enum ServerTransportOperation: Equatable {
+    case none
+    case start(ServerTransportStartOperation)
+    case stop(ServerTransportStopOperation)
 }
 
 /// TLS-gated TCP transport plus one ordered event stream.
@@ -136,13 +100,9 @@ final class ServerTransport {
     /// Token used to derive TLS pre-shared key material. Nil is accepted only for inert tests.
     private nonisolated let token: String?
 
-    /// Runtime lifecycle. `stop()` is an intentional listener boundary: it
-    /// stops the current sockets and Bonjour advertisement, then returns to
-    /// idle so the same transport can publish a replacement listener.
-    @MainActor private var lifecycle = StateDriver(
-        initial: ServerTransportRuntimePhase.idle,
-        machine: ServerTransportLifecycleMachine()
-    )
+    /// Tracks only in-flight transport operations. Listener state and resources
+    /// belong to `SocketListenerRuntime`.
+    @MainActor private var operation = ServerTransportOperation.none
 
     /// Bonjour advertisement lifecycle and TXT record state.
     @MainActor private let advertisement = BonjourAdvertisement()
@@ -158,9 +118,15 @@ final class ServerTransport {
     nonisolated let events: AsyncStream<TransportEvent>
     private nonisolated let eventStream: TransportEventStream
 
-    /// Test hook for deterministic listener-start failures after TLS setup.
-    @MainActor var startOverride: ((_ port: UInt16, _ bindToLoopback: Bool) async throws -> UInt16)?
-    @MainActor var stopOverride: (() async -> Void)?
+    #if DEBUG
+    /// Test hooks installed on each `SocketListenerRuntime` before it starts.
+    @MainActor var startOverride: (@MainActor @Sendable (
+        _ generation: SocketListenerGeneration,
+        _ port: UInt16,
+        _ bindToLoopback: Bool
+    ) async throws -> UInt16)?
+    @MainActor var stopOverride: (@MainActor @Sendable () async -> Void)?
+    #endif
 
     @MainActor
     func setEventBacklogOverflowHandler(
@@ -206,19 +172,16 @@ final class ServerTransport {
         bindToLoopback: Bool = false,
         addressFamily: ListenerAddressFamily = .dualStack
     ) async throws -> UInt16 {
-        if case .stopping(let attempt) = lifecycle.state {
+        if case .stop(let attempt) = operation {
             await attempt.task.value
-            lifecycle.send(.finishStopping(attempt.id))
         }
 
-        switch lifecycle.state {
-        case .idle:
+        switch operation {
+        case .none:
             break
-        case .starting:
+        case .start:
             throw ServerTransportError.alreadyRunning
-        case .running:
-            throw ServerTransportError.alreadyRunning
-        case .stopping:
+        case .stop:
             throw ServerTransportError.stopped
         }
 
@@ -226,24 +189,35 @@ final class ServerTransport {
             throw ServerTransportError.tlsTokenRequired
         }
         let params = ButtonHeistTLSPreSharedKey.networkParameters(from: token)
-        let attempt = ServerTransportStartAttempt(id: UUID())
-        lifecycle.send(.beginStarting(attempt))
+        let attempt = ServerTransportStartOperation(
+            id: UUID(),
+            completion: ServerTransportStartCompletion()
+        )
+        operation = .start(attempt)
+        defer { finishStarting(attempt) }
 
+        #if DEBUG
         if let startOverride {
-            do {
-                let actualPort = try await startOverride(port, bindToLoopback)
-                let finish = lifecycle.send(.finishStarting(attempt.id))
-                guard finish.state == .running else {
-                    throw ServerTransportError.stopped
-                }
-                return actualPort
-            } catch {
-                _ = lifecycle.send(.failStarting(attempt.id))
-                throw error
+            await server.setListenerRuntimeStartOverrideForTesting { generation in
+                try await startOverride(generation, port, bindToLoopback)
             }
+        } else {
+            await server.setListenerRuntimeStartOverrideForTesting(nil)
         }
+        if let stopOverride {
+            await server.setListenerRuntimeStopOverrideForTesting {
+                await stopOverride()
+            }
+        } else {
+            await server.setListenerRuntimeStopOverrideForTesting(nil)
+        }
+        #endif
+
         let callbacks = makeCallbacks()
         do {
+            guard operation == .start(attempt) else {
+                throw ServerTransportError.stopped
+            }
             let actualPort = try await server.startAsync(
                 port: port,
                 bindToLoopback: bindToLoopback,
@@ -251,14 +225,17 @@ final class ServerTransport {
                 tlsParameters: params,
                 callbacks: callbacks
             )
-            let finish = lifecycle.send(.finishStarting(attempt.id))
-            guard finish.state == .running else {
+            guard operation == .start(attempt) else {
                 await server.stop()
                 throw ServerTransportError.stopped
             }
             return actualPort
+        } catch SimpleSocketServer.ServerError.alreadyRunning {
+            throw ServerTransportError.alreadyRunning
         } catch {
-            _ = lifecycle.send(.failStarting(attempt.id))
+            if case .stop = operation, error is CancellationError {
+                throw ServerTransportError.stopped
+            }
             throw error
         }
     }
@@ -276,44 +253,63 @@ final class ServerTransport {
     func stop() async {
         advertisement.stop()
 
-        switch lifecycle.state {
-        case .idle:
-            lifecycle.send(.beginStopping(nil))
+        switch operation {
+        case .start(let startOperation):
+            beginStopping(waitingFor: startOperation.completion)
             return
-        case .starting:
-            lifecycle.send(.beginStopping(nil))
+        case .stop(let stopOperation):
+            await stopOperation.task.value
             return
-        case .stopping(let attempt):
-            await attempt.task.value
-            lifecycle.send(.finishStopping(attempt.id))
-            return
-        case .running:
-            break
+        case .none:
+            let stopOperation = beginStopping(waitingFor: nil)
+            await stopOperation.task.value
         }
-
-        let task: Task<Void, Never>
-        if let stopOverride {
-            task = Task { await stopOverride() }
-        } else {
-            task = Task { [server] in
-                await server.stop()
-            }
-        }
-        let attempt = ServerTransportStopAttempt(id: UUID(), task: task)
-        lifecycle.send(.beginStopping(attempt))
-        await task.value
-        lifecycle.send(.finishStopping(attempt.id))
     }
 
     /// Await completion of any in-flight stop operation.
     @MainActor
     func waitForStopped() async {
-        if case .starting = lifecycle.state {
-            lifecycle.send(.beginStopping(nil))
-        } else if case .stopping(let attempt) = lifecycle.state {
-            await attempt.task.value
-            lifecycle.send(.finishStopping(attempt.id))
+        if case .start = operation {
+            await stop()
         }
+        if case .stop(let attempt) = operation {
+            await attempt.task.value
+        }
+    }
+
+    @MainActor
+    private func finishStarting(_ startOperation: ServerTransportStartOperation) {
+        startOperation.completion.finish()
+        guard case .start(let currentOperation) = operation,
+              currentOperation == startOperation
+        else { return }
+        operation = .none
+    }
+
+    @MainActor
+    @discardableResult
+    private func beginStopping(
+        waitingFor startCompletion: ServerTransportStartCompletion?
+    ) -> ServerTransportStopOperation {
+        let id = UUID()
+        let task = Task { @MainActor [weak self, server] in
+            await server.stop()
+            if let startCompletion {
+                await startCompletion.wait()
+            }
+            self?.finishStopping(id: id)
+        }
+        let stopOperation = ServerTransportStopOperation(id: id, task: task)
+        operation = .stop(stopOperation)
+        return stopOperation
+    }
+
+    @MainActor
+    private func finishStopping(id: UUID) {
+        guard case .stop(let stopOperation) = operation,
+              stopOperation.id == id
+        else { return }
+        operation = .none
     }
 
     // MARK: - Bonjour Advertisement

@@ -1,10 +1,29 @@
 import XCTest
 import Network
 import ButtonHeistSupport
+import os
 
 @testable import TheInsideJob
 
 final class SimpleSocketServerDeliveryTests: XCTestCase {
+    func testRemoveClientNotifiesExactlyOnceAfterRegistryRemoval() async {
+        let disconnectedClientIds = OSAllocatedUnfairLock<[Int]>(initialState: [])
+        let server = SimpleSocketServer()
+        await server.setCallbacksForTesting(SocketServerCallbacks(
+            onClientDisconnected: { clientId in
+                disconnectedClientIds.withLock { $0.append(clientId) }
+            }
+        ))
+        let clientId = await server.insertClientForTesting(connection: makeConnection())
+
+        await server.removeClient(clientId)
+        await server.removeClient(clientId)
+
+        let clientPhase = await server.clientPhaseForTesting(clientId)
+        XCTAssertNil(clientPhase)
+        XCTAssertEqual(disconnectedClientIds.withLock { $0 }, [clientId])
+    }
+
     func testSendSuccessWaitsForContentProcessedCompletion() async {
         let server = SimpleSocketServer()
         let gate = SendCompletionGate()

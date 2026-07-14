@@ -177,7 +177,7 @@ indirect enum HeistStepAdmissionPayload: Sendable, Equatable {
 }
 
 struct HeistWaitAdmissionCandidate: Codable, Sendable, Equatable {
-    let predicate: AccessibilityPredicate<RootContext>
+    let predicate: AccessibilityPredicate
     let timeout: Double
     let elseBody: [HeistStepAdmissionCandidate]?
 
@@ -186,7 +186,7 @@ struct HeistWaitAdmissionCandidate: Codable, Sendable, Equatable {
         case elseBody = "else_body"
     }
 
-    init(predicate: AccessibilityPredicate<RootContext>, timeout: Double, elseBody: [HeistStepAdmissionCandidate]? = nil) {
+    init(predicate: AccessibilityPredicate, timeout: Double, elseBody: [HeistStepAdmissionCandidate]? = nil) {
         self.predicate = predicate
         self.timeout = timeout
         self.elseBody = elseBody
@@ -208,7 +208,7 @@ struct HeistWaitAdmissionCandidate: Codable, Sendable, Equatable {
             )
         }
         self.init(
-            predicate: try container.decode(AccessibilityPredicate<RootContext>.self, forKey: .predicate),
+            predicate: try container.decode(AccessibilityPredicate.self, forKey: .predicate),
             timeout: timeout,
             elseBody: try container.decodeIfPresent([HeistStepAdmissionCandidate].self, forKey: .elseBody)
         )
@@ -246,12 +246,12 @@ struct HeistConditionalAdmissionCandidate: Codable, Sendable, Equatable {
 }
 
 struct HeistPredicateCaseAdmissionCandidate: Codable, Sendable, Equatable {
-    let predicate: AccessibilityPredicate<ScreenAssertionContext>
+    let predicate: ChangeDeclaration.ScreenAssertion
     let body: [HeistStepAdmissionCandidate]
 
     private enum CodingKeys: String, CodingKey, CaseIterable { case predicate, body }
 
-    init(predicate: AccessibilityPredicate<ScreenAssertionContext>, body: [HeistStepAdmissionCandidate]) {
+    init(predicate: ChangeDeclaration.ScreenAssertion, body: [HeistStepAdmissionCandidate]) {
         self.predicate = predicate
         self.body = body
     }
@@ -264,28 +264,33 @@ struct HeistPredicateCaseAdmissionCandidate: Codable, Sendable, Equatable {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "predicate case")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
-            predicate: try container.decode(AccessibilityPredicate<ScreenAssertionContext>.self, forKey: .predicate),
+            predicate: try container.decode(ChangeDeclaration.ScreenAssertion.self, forKey: .predicate),
             body: try container.decode([HeistStepAdmissionCandidate].self, forKey: .body)
         )
     }
 }
 
 struct HeistForEachElementAdmissionCandidate: Codable, Sendable, Equatable {
-    let matching: ElementPredicate
+    let matching: ElementPredicateTemplate
     let limit: Int
     let parameter: HeistReferenceName
     let body: [HeistStepAdmissionCandidate]
 
     private enum CodingKeys: String, CodingKey, CaseIterable { case matching, limit, parameter, body }
 
-    init(matching: ElementPredicate, limit: Int, parameter: HeistReferenceName, body: [HeistStepAdmissionCandidate]) throws {
+    init(
+        matching: ElementPredicateTemplate,
+        limit: Int,
+        parameter: HeistReferenceName,
+        body: [HeistStepAdmissionCandidate]
+    ) throws {
         guard matching.hasPredicates else { throw HeistPlanError.emptyForEachPredicate }
         guard limit > 0 else { throw HeistPlanError.invalidForEachLimit(limit) }
         guard !body.isEmpty else { throw HeistPlanError.emptyForEachSteps }
         let parameter = try HeistParameterName.normalized(parameter.rawValue)
         self.matching = matching
         self.limit = limit
-        self.parameter = HeistReferenceName(rawValue: parameter)
+        self.parameter = try HeistReferenceName(validating: parameter)
         self.body = body
     }
 
@@ -300,7 +305,7 @@ struct HeistForEachElementAdmissionCandidate: Codable, Sendable, Equatable {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "for_each_element step")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         try self.init(
-            matching: container.decode(ElementPredicate.self, forKey: .matching),
+            matching: container.decode(ElementPredicateTemplate.self, forKey: .matching),
             limit: container.decode(Int.self, forKey: .limit),
             parameter: HeistReferenceName.decode(from: container, forKey: .parameter, type: "for_each_element parameter"),
             body: container.decode([HeistStepAdmissionCandidate].self, forKey: .body)
@@ -320,7 +325,7 @@ struct HeistForEachStringAdmissionCandidate: Codable, Sendable, Equatable {
         guard !body.isEmpty else { throw HeistPlanError.emptyForEachSteps }
         let parameter = try HeistParameterName.normalized(parameter.rawValue)
         self.values = values
-        self.parameter = HeistReferenceName(rawValue: parameter)
+        self.parameter = try HeistReferenceName(validating: parameter)
         self.body = body
     }
 
@@ -342,7 +347,7 @@ struct HeistForEachStringAdmissionCandidate: Codable, Sendable, Equatable {
 }
 
 struct HeistRepeatUntilAdmissionCandidate: Codable, Sendable, Equatable {
-    let predicate: AccessibilityPredicate<RootContext>
+    let predicate: AccessibilityPredicate
     let timeout: Double
     let body: [HeistStepAdmissionCandidate]
     let elseBody: [HeistStepAdmissionCandidate]?
@@ -353,7 +358,7 @@ struct HeistRepeatUntilAdmissionCandidate: Codable, Sendable, Equatable {
     }
 
     init(
-        predicate: AccessibilityPredicate<RootContext>,
+        predicate: AccessibilityPredicate,
         timeout: Double,
         body: [HeistStepAdmissionCandidate],
         elseBody: [HeistStepAdmissionCandidate]? = nil
@@ -377,7 +382,7 @@ struct HeistRepeatUntilAdmissionCandidate: Codable, Sendable, Equatable {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "repeat_until step")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         try self.init(
-            predicate: container.decode(AccessibilityPredicate<RootContext>.self, forKey: .predicate),
+            predicate: container.decode(AccessibilityPredicate.self, forKey: .predicate),
             timeout: container.decode(Double.self, forKey: .timeout),
             body: container.decode([HeistStepAdmissionCandidate].self, forKey: .body),
             elseBody: container.decodeIfPresent([HeistStepAdmissionCandidate].self, forKey: .elseBody)

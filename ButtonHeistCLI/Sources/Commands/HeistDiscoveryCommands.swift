@@ -2,7 +2,7 @@ import ArgumentParser
 @_spi(ButtonHeistTooling) import ButtonHeist
 import ThePlans
 
-struct ListHeistsCommand: AsyncParsableCommand, CLICommandContract {
+struct ListHeistsCommand: LocalOneShotCLICommand {
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "List reusable heists in a .heist artifact or inline ButtonHeist source",
@@ -28,25 +28,20 @@ struct ListHeistsCommand: AsyncParsableCommand, CLICommandContract {
     @Flag(name: .long, help: "Include derived command names, nested heist calls, counts, and safe semantic surface summaries.")
     var detail = false
 
-    @ButtonHeistActor
-    mutating func run() async throws {
-        let request = try RunHeistCommand.planArguments(
+    func requestArguments() throws -> TheFence.CommandArgumentEnvelope {
+        try RunHeistCommand.planArguments(
             inline: plan,
             path: path,
             entry: nil,
-            commandName: Self.cliCommandName
-        ).adding(
-            detail ? CommandArgumentWriter.value(FenceParameters.heistCatalogDetail, .detailed) : nil
-        )
-        try await Self.runLocal(
-            command: Self.fenceCommand,
-            arguments: Self.fenceArguments(request),
-            format: output.format
+            commandName: Self.cliCommandName,
+            additionalFields: detail ? [
+                CommandArgumentEnvelopeBuilder.value(FenceParameters.heistCatalogDetail, .detailed),
+            ] : []
         )
     }
 }
 
-struct DescribeHeistCommand: AsyncParsableCommand, CLICommandContract {
+struct DescribeHeistCommand: LocalOneShotCLICommand {
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Describe one reusable heist in a .heist artifact or inline ButtonHeist source",
@@ -71,37 +66,13 @@ struct DescribeHeistCommand: AsyncParsableCommand, CLICommandContract {
     @Option(name: .long, help: "Inline canonical ButtonHeist DSL source.")
     var plan: String?
 
-    @ButtonHeistActor
-    mutating func run() async throws {
-        let request = try RunHeistCommand.planArguments(
+    func requestArguments() throws -> TheFence.CommandArgumentEnvelope {
+        try RunHeistCommand.planArguments(
             inline: plan,
             path: path,
             entry: nil,
-            commandName: Self.cliCommandName
-        ).adding(
-            CommandArgumentWriter.value(.heist, name)
+            commandName: Self.cliCommandName,
+            additionalFields: [CommandArgumentEnvelopeBuilder.value(.heist, name)]
         )
-        try await Self.runLocal(
-            command: Self.fenceCommand,
-            arguments: Self.fenceArguments(request),
-            format: output.format
-        )
-    }
-}
-
-private extension CLICommandContract {
-    @ButtonHeistActor
-    static func runLocal(
-        command: TheFence.Command,
-        arguments: TheFence.CommandArgumentEnvelope,
-        format: OutputFormat?
-    ) async throws {
-        let fence = TheFence(configuration: try EnvironmentConfig.resolve(autoReconnect: false).fenceConfiguration)
-        defer { fence.stop() }
-        let response = try await fence.execute(try fence.admit(FenceCommandInput(command: command, arguments: arguments)))
-        CLIRunner.outputResponse(response, format: format ?? .auto)
-        if response.isFailure {
-            throw ExitCode.failure
-        }
     }
 }

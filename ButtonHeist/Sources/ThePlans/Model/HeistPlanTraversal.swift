@@ -50,7 +50,7 @@ struct HeistTraversalPath: Sendable, Equatable, Hashable, CustomStringConvertibl
     }
 }
 
-struct HeistTraversalContext {
+package struct HeistTraversalContext {
     let path: HeistTraversalPath
     let depth: Int
     let stepIndex: Int?
@@ -86,7 +86,7 @@ struct HeistTraversalBindingSample {
         )
     }
 
-    func binding(target: AccessibilityTarget, to parameter: HeistReferenceName) -> Self {
+    func binding(target: ResolvedAccessibilityTarget, to parameter: HeistReferenceName) -> Self {
         Self(
             referenceBindings: referenceBindings.binding(target: target, to: parameter),
             sourcePath: sourcePath
@@ -94,7 +94,7 @@ struct HeistTraversalBindingSample {
     }
 }
 
-protocol HeistPlanTraversalVisitor {
+package protocol HeistPlanTraversalVisitor {
     mutating func visitPlan(_ plan: HeistPlan, context: HeistTraversalContext)
     mutating func leavePlan(_ plan: HeistPlan, context: HeistTraversalContext)
     mutating func visitDefinitions(_ definitions: [HeistPlan], context: HeistTraversalContext)
@@ -119,7 +119,7 @@ protocol HeistPlanTraversalVisitor {
     mutating func visitInvoke(_ step: HeistInvocationStep, context: HeistTraversalContext)
 }
 
-extension HeistPlanTraversalVisitor {
+package extension HeistPlanTraversalVisitor {
     mutating func visitPlan(_ plan: HeistPlan, context: HeistTraversalContext) {}
     mutating func leavePlan(_ plan: HeistPlan, context: HeistTraversalContext) {}
     mutating func visitDefinitions(_ definitions: [HeistPlan], context: HeistTraversalContext) {}
@@ -144,13 +144,37 @@ extension HeistPlanTraversalVisitor {
     mutating func visitInvoke(_ step: HeistInvocationStep, context: HeistTraversalContext) {}
 }
 
-struct HeistPlanTraversal {
+package struct HeistPlanTraversal {
     let callGraph: HeistCallGraph?
     let expandsInvocations: Bool
 
     init(callGraph: HeistCallGraph? = nil, expandsInvocations: Bool = true) {
         self.callGraph = callGraph
         self.expandsInvocations = expandsInvocations
+    }
+
+    package static func walk<V: HeistPlanTraversalVisitor>(
+        _ step: HeistStep,
+        visitor: inout V
+    ) {
+        let definitionScope = HeistDefinitionScope(definitions: [])
+        let context = HeistTraversalContext(
+            path: .root,
+            depth: 0,
+            stepIndex: nil,
+            nextStep: nil,
+            referenceBindings: .empty,
+            bindingSamples: [],
+            definitionScope: definitionScope,
+            rootDefinitionScope: definitionScope,
+            invocationStack: [],
+            callGraph: nil
+        )
+        HeistPlanTraversal(expandsInvocations: false).walk(
+            step: step,
+            context: context,
+            visitor: &visitor
+        )
     }
 
     func walk<V: HeistPlanTraversalVisitor>(
@@ -324,12 +348,12 @@ struct HeistPlanTraversal {
             path: forEachContext.path.child(.body),
             depth: context.depth + 1,
             referenceBindings: context.referenceBindings.binding(
-                target: .predicate(ElementPredicateTemplate(forEach.matching)),
+                target: HeistReferenceBinding.runtimeSafetyAccessibilityTargetPlaceholder,
                 to: forEach.parameter
             ),
             bindingSamples: context.bindingSamples.map {
                 $0.binding(
-                    target: .predicate(ElementPredicateTemplate(forEach.matching)),
+                    target: HeistReferenceBinding.runtimeSafetyAccessibilityTargetPlaceholder,
                     to: forEach.parameter
                 )
             },

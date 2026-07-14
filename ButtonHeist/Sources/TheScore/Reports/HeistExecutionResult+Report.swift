@@ -41,12 +41,10 @@ package struct HeistExecutionEvidenceRollup: Sendable, Equatable {
         durationMs: Int,
         failureScreenshotStep: HeistExecutionStepResult?
     ) {
-        let rootNodes = steps.map(Self.node(from:))
+        let rootNodes = steps.map(HeistExecutionEvidenceNode.init(step:))
         let reportRootNodes = rootNodes.dropLast(failureScreenshotStep == nil ? 0 : 1)
         var accumulator = HeistExecutionEvidenceAccumulator(durationMs: durationMs)
-        for node in rootNodes {
-            accumulator.visit(node)
-        }
+        steps.walk(enter: { accumulator.enter($0) }, leave: { accumulator.leave($0) })
 
         self.rootNodes = rootNodes
         nodes = accumulator.nodes
@@ -73,13 +71,6 @@ package struct HeistExecutionEvidenceRollup: Sendable, Equatable {
         firstFailedStep = accumulator.firstFailedStep
         self.failureScreenshotStep = failureScreenshotStep
     }
-
-    private static func node(from step: HeistExecutionStepResult) -> HeistExecutionEvidenceNode {
-        HeistExecutionEvidenceNode(
-            step: step,
-            children: step.children.map(Self.node(from:))
-        )
-    }
 }
 
 private extension HeistExecutionResult {
@@ -96,16 +87,15 @@ private extension HeistExecutionResult {
 
 package struct HeistExecutionEvidenceNode: Sendable, Equatable {
     package let step: HeistExecutionStepResult
-    package let children: [HeistExecutionEvidenceNode]
     package let reportFacts: HeistExecutionStepReportFacts
 
-    package init(
-        step: HeistExecutionStepResult,
-        children: [HeistExecutionEvidenceNode] = []
-    ) {
+    package init(step: HeistExecutionStepResult) {
         self.step = step
-        self.children = children
         reportFacts = step.reportFacts
+    }
+
+    package var children: [HeistExecutionEvidenceNode] {
+        step.children.map(HeistExecutionEvidenceNode.init(step:))
     }
 
     package var isExecuted: Bool {
@@ -136,6 +126,7 @@ private struct HeistExecutionEvidenceAccumulator {
     var reportedResults: [ActionResult] = []
     var traceResultsInExecutionOrder: [ActionResult] = []
     var metricBuilder: HeistExecutionMetricProjectionBuilder
+    private var failureEventInsertionIndices: [Int] = []
 
     init(durationMs: Int) {
         var metricBuilder = HeistExecutionMetricProjectionBuilder()
@@ -143,7 +134,8 @@ private struct HeistExecutionEvidenceAccumulator {
         self.metricBuilder = metricBuilder
     }
 
-    mutating func visit(_ node: HeistExecutionEvidenceNode) {
+    mutating func enter(_ step: HeistExecutionStepResult) {
+        let node = HeistExecutionEvidenceNode(step: step)
         record(.nodeVisited(node))
         let results = node.reportFacts.results
         if let dispatchResult = results.dispatchedActionResult {
@@ -165,18 +157,25 @@ private struct HeistExecutionEvidenceAccumulator {
             }
         }
 
-        let firstFailureEventIndex = events.count
-        for child in node.children {
-            visit(child)
-        }
-        if firstFailedStep == nil, node.step.status == .failed {
-            firstFailedStep = node.step
-            events.insert(.firstFailure(node.step), at: firstFailureEventIndex)
+        failureEventInsertionIndices.append(events.count)
+    }
+
+    mutating func leave(_ step: HeistExecutionStepResult) {
+        let firstFailureEventIndex = failureEventInsertionIndices.removeLast()
+        if firstFailedStep == nil, step.status == .failed {
+            record(.firstFailure(step), at: firstFailureEventIndex)
         }
     }
 
-    private mutating func record(_ event: HeistExecutionEvidenceEvent) {
-        events.append(event)
+    private mutating func record(
+        _ event: HeistExecutionEvidenceEvent,
+        at insertionIndex: Int? = nil
+    ) {
+        if let insertionIndex {
+            events.insert(event, at: insertionIndex)
+        } else {
+            events.append(event)
+        }
         switch event {
         case .nodeVisited(let node):
             nodes.append(node)
@@ -701,16 +700,11 @@ public extension HeistExecutionStepResult {
     }
 
     var isFailure: Bool {
-        switch outcome {
-        case .failed, .childAborted:
-            return true
-        case .passed, .skipped:
-            return children.contains(where: \.isFailure)
-        }
+        firstFailedStepInReceiptOrder != nil
     }
 
     var firstFailedStep: HeistExecutionStepResult? {
-        HeistExecutionEvidenceRollup(steps: [self]).firstFailedStep
+        firstFailedStepInReceiptOrder
     }
 
     var actionEvidence: HeistActionEvidence? {
@@ -811,7 +805,7 @@ public extension HeistExecutionStepResult {
 
 public extension Array where Element == HeistExecutionStepResult {
     var firstFailedStep: HeistExecutionStepResult? {
-        HeistExecutionEvidenceRollup(steps: self).firstFailedStep
+        firstFailedStepInReceiptOrder
     }
 }
 

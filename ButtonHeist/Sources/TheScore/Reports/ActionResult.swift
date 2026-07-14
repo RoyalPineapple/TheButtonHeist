@@ -173,28 +173,31 @@ extension ActionResultObservationEvidence {
     }
 }
 
-extension ActionResultSuccessEvidence {
-    fileprivate func mergingTiming(_ timing: ActionPerformanceTiming) -> ActionResultSuccessEvidence {
-        ActionResultSuccessEvidence(
-            observation: observation.replacingSettlementDuration(timing.settleMs),
-            subjectEvidence: subjectEvidence,
-            activationTrace: activationTrace,
-            timing: self.timing?.merging(timing).replacingSettleMs(nil)
-                ?? timing.replacingSettleMs(nil),
-            warning: warning
-        )
-    }
-}
-
-extension ActionResultFailureEvidence {
-    fileprivate func mergingTiming(_ timing: ActionPerformanceTiming) -> ActionResultFailureEvidence {
-        ActionResultFailureEvidence(
+extension ActionResultEvidenceBody {
+    fileprivate func mergingTiming(_ timing: ActionPerformanceTiming) -> ActionResultEvidenceBody {
+        ActionResultEvidenceBody(
             observation: observation.replacingSettlementDuration(timing.settleMs),
             subjectEvidence: subjectEvidence,
             activationTrace: activationTrace,
             timing: self.timing?.merging(timing).replacingSettleMs(nil)
                 ?? timing.replacingSettleMs(nil)
         )
+    }
+}
+
+extension ActionResultEvidence {
+    fileprivate func mergingTiming(_ timing: ActionPerformanceTiming) -> ActionResultEvidence {
+        switch self {
+        case .success(let evidence):
+            return .success(ActionResultSuccessEvidence(
+                body: evidence.body.mergingTiming(timing),
+                warning: evidence.warning
+            ))
+        case .failure(let errorKind, let evidence):
+            return .failure(errorKind, ActionResultFailureEvidence(
+                body: evidence.body.mergingTiming(timing)
+            ))
+        }
     }
 }
 
@@ -243,39 +246,15 @@ public struct ActionResult: Codable, Sendable, Equatable {
         }
     }
 
-    private enum OutcomeAndEvidence: Sendable, Equatable {
-        case success(ActionResultSuccessEvidence)
-        case failure(ErrorKind, ActionResultFailureEvidence)
-
-        var outcome: ActionResultOutcome {
-            switch self {
-            case .success:
-                return .success
-            case .failure(let errorKind, _):
-                return .failure(errorKind)
-            }
-        }
-
-        var evidence: ActionResultEvidence {
-            switch self {
-            case .success(let evidence):
-                return .success(evidence)
-            case .failure(_, let evidence):
-                return .failure(evidence)
-            }
-        }
-    }
-
-    private let outcomeAndEvidence: OutcomeAndEvidence
     private let methodAndPayload: MethodAndPayload
-    public var outcome: ActionResultOutcome { outcomeAndEvidence.outcome }
+    public var outcome: ActionResultOutcome { evidence.outcome }
 
     /// Identifies the delivered action behavior. Activation-point delivery for
     /// `activate` still reports `.activate`.
     /// Explicit mechanical tap commands report the mechanical tap method.
     public var method: ActionMethod { methodAndPayload.method }
     public let message: String?
-    public var evidence: ActionResultEvidence { outcomeAndEvidence.evidence }
+    public let evidence: ActionResultEvidence
     public var warning: HeistActionWarning? { evidence.warning }
     public var announcement: String? { evidence.announcement }
     public var capturedAnnouncement: CapturedAnnouncement? {
@@ -317,7 +296,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
         make(
             methodAndPayload: .methodOnly(method),
             message: message,
-            outcomeAndEvidence: .success(evidence)
+            evidence: .success(evidence)
         )
     }
 
@@ -329,7 +308,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
         make(
             methodAndPayload: .payload(payload),
             message: message,
-            outcomeAndEvidence: .success(evidence)
+            evidence: .success(evidence)
         )
     }
 
@@ -342,7 +321,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
         make(
             methodAndPayload: .methodOnly(method),
             message: message,
-            outcomeAndEvidence: .failure(errorKind, evidence)
+            evidence: .failure(errorKind, evidence)
         )
     }
 
@@ -355,35 +334,35 @@ public struct ActionResult: Codable, Sendable, Equatable {
         make(
             methodAndPayload: .payload(payload),
             message: message,
-            outcomeAndEvidence: .failure(errorKind, evidence)
+            evidence: .failure(errorKind, evidence)
         )
     }
 
     private init(
         methodAndPayload: MethodAndPayload,
         message: String?,
-        outcomeAndEvidence: OutcomeAndEvidence
+        evidence: ActionResultEvidence
     ) {
-        self.outcomeAndEvidence = outcomeAndEvidence
         self.methodAndPayload = methodAndPayload
         self.message = message
+        self.evidence = evidence
     }
 
     private static func make(
         methodAndPayload: MethodAndPayload,
         message: String?,
-        outcomeAndEvidence: OutcomeAndEvidence
+        evidence: ActionResultEvidence
     ) -> ActionResult {
         if let validationMessage = evidenceValidationMessage(
             method: methodAndPayload.method,
-            evidence: outcomeAndEvidence.evidence
+            evidence: evidence
         ) {
             preconditionFailure(validationMessage)
         }
         return ActionResult(
             methodAndPayload: methodAndPayload,
             message: message,
-            outcomeAndEvidence: outcomeAndEvidence
+            evidence: evidence
         )
     }
 
@@ -407,21 +386,21 @@ public struct ActionResult: Codable, Sendable, Equatable {
             codingPath: container.codingPath + [CodingKeys.payload]
         )
 
-        let outcomeAndEvidence: OutcomeAndEvidence
+        let evidence: ActionResultEvidence
         switch outcome {
         case .success:
-            outcomeAndEvidence = .success(
+            evidence = .success(
                 try container.decode(ActionResultSuccessEvidence.self, forKey: .evidence)
             )
         case .failure(let errorKind):
-            outcomeAndEvidence = .failure(
+            evidence = .failure(
                 errorKind,
                 try container.decode(ActionResultFailureEvidence.self, forKey: .evidence)
             )
         }
         if let validationMessage = Self.evidenceValidationMessage(
             method: methodAndPayload.method,
-            evidence: outcomeAndEvidence.evidence
+            evidence: evidence
         ) {
             throw DecodingError.dataCorruptedError(
                 forKey: .evidence,
@@ -433,7 +412,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
         self.init(
             methodAndPayload: methodAndPayload,
             message: try container.decodeIfPresent(String.self, forKey: .message),
-            outcomeAndEvidence: outcomeAndEvidence
+            evidence: evidence
         )
     }
 
@@ -443,7 +422,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
         try container.encode(method, forKey: .method)
         try container.encodeIfPresent(message, forKey: .message)
         try container.encodeIfPresent(payload, forKey: .payload)
-        switch outcomeAndEvidence {
+        switch evidence {
         case .success(let evidence):
             try container.encode(evidence, forKey: .evidence)
         case .failure(_, let evidence):
@@ -453,14 +432,11 @@ public struct ActionResult: Codable, Sendable, Equatable {
 
     public func withTiming(_ timing: ActionPerformanceTiming?) -> ActionResult {
         guard let timing else { return self }
-        let merged: OutcomeAndEvidence
-        switch outcomeAndEvidence {
-        case .success(let evidence):
-            merged = .success(evidence.mergingTiming(timing))
-        case .failure(let errorKind, let evidence):
-            merged = .failure(errorKind, evidence.mergingTiming(timing))
-        }
-        return ActionResult(methodAndPayload: methodAndPayload, message: message, outcomeAndEvidence: merged)
+        return ActionResult(
+            methodAndPayload: methodAndPayload,
+            message: message,
+            evidence: evidence.mergingTiming(timing)
+        )
     }
 
     private static func evidenceValidationMessage(

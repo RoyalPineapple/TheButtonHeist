@@ -84,7 +84,7 @@ final class SemanticExplorationGenerationTests: XCTestCase {
         let notificationBus = AccessibilityNotificationBus()
         let window = notificationBus.beginActionWindow()
         defer { window.cancel() }
-        notificationBus.record(
+        notificationBus.recordForTesting(
             code: UInt32(UIAccessibility.Notification.screenChanged.rawValue),
             notificationData: .none,
             associatedElement: .none
@@ -117,7 +117,7 @@ final class SemanticExplorationGenerationTests: XCTestCase {
         let explored = exploration.finish(startTime: CACurrentMediaTime())
         let actionWindow = brains.stash.accessibilityNotifications.beginActionWindow()
         defer { actionWindow.cancel() }
-        brains.stash.accessibilityNotifications.record(
+        brains.stash.accessibilityNotifications.recordForTesting(
             code: 1001,
             notificationData: .none,
             associatedElement: .none
@@ -148,11 +148,11 @@ final class SemanticExplorationGenerationTests: XCTestCase {
 
         brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(exploration.screen)
 
-        let staleTarget = literalTarget(ElementPredicate(label: "Unsettled Purchase"))
+        let staleTarget = literalTarget(ElementPredicate.label("Unsettled Purchase"))
         guard case .notFound = brains.stash.resolveTarget(staleTarget) else {
             return XCTFail("Failed-settle diagnostic element became committed targetable state")
         }
-        XCTAssertNotNil(brains.stash.resolveTarget(literalTarget(ElementPredicate(label: "Done"))).resolved)
+        XCTAssertNotNil(brains.stash.resolveTarget(literalTarget(ElementPredicate.label("Done"))).resolved)
     }
 
     func testScreenReplacementResetsGraphWithoutResettingDiscoveryBound() {

@@ -348,10 +348,10 @@ final class HeistJUnitReportTests: XCTestCase {
 
     private func semanticTarget(label: String? = nil, identifier: String? = nil) -> AccessibilityTarget {
         .predicate(
-            ElementPredicateTemplate(ElementPredicate(
+            ElementPredicateTemplate(
                 label: label.map(StringMatch.exact),
                 identifier: identifier.map(StringMatch.exact)
-            ))
+            )
         )
     }
 }

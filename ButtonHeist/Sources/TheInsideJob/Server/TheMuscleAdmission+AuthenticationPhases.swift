@@ -9,7 +9,7 @@ struct MuscleTokenAuthenticationPhase {
         _ clientId: Int,
         address: String,
         payload: AuthenticatePayload,
-        tokenAdmission: inout SessionAdmission,
+        tokenAdmission: inout TokenAdmission,
         respond: @escaping TheMuscleAdmission.ResponseHandler
     ) -> MuscleAdmissionDecision {
         switch tokenAdmission.decideToken(payload.token, driverId: payload.driverId, address: address) {

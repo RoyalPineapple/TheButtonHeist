@@ -151,7 +151,7 @@ package enum HeistReceiptFixture {
         }
 
         let predicate = expectation.predicate
-            ?? AccessibilityPredicate<RootContext>.exists(.label("predicate"))
+            ?? AccessibilityPredicate.exists(.label("predicate"))
         let intent = HeistStepIntent.wait(predicate: predicate, timeout: 0)
         if let failure {
             return .failed(

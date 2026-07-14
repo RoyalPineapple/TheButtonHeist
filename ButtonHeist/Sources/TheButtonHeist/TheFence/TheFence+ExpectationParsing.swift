@@ -5,10 +5,10 @@ import TheScore
 extension TheFence {
 
     struct ExpectationPayload: Sendable {
-        let expectation: AccessibilityPredicate<RootContext>?
+        let expectation: AccessibilityPredicate?
         let timeout: Double?
 
-        init(expectation: AccessibilityPredicate<RootContext>?, timeout: Double?) {
+        init(expectation: AccessibilityPredicate?, timeout: Double?) {
             self.expectation = expectation
             self.timeout = timeout
         }
@@ -24,14 +24,14 @@ extension TheFence {
             expectation == nil ? nil : timeout ?? defaultActionExpectationTimeout
         }
 
-        static func parseExpectation(_ value: HeistValue?) throws -> AccessibilityPredicate<RootContext>? {
+        static func parseExpectation(_ value: HeistValue?) throws -> AccessibilityPredicate? {
             guard let value else { return nil }
             return try parsePredicate(value)
         }
 
         /// Parse a required `AccessibilityPredicate` object (the `wait`
         /// `predicate` field). Throws if missing or malformed.
-        static func parseRequiredPredicate(_ value: HeistValue?) throws -> AccessibilityPredicate<RootContext> {
+        static func parseRequiredPredicate(_ value: HeistValue?) throws -> AccessibilityPredicate {
             guard let value else {
                 throw SchemaValidationError(
                     field: FenceParameterKey.predicate.rawValue,
@@ -42,15 +42,14 @@ extension TheFence {
             return try parsePredicate(value)
         }
 
-        static func parsePredicate(_ value: HeistValue) throws -> AccessibilityPredicate<RootContext> {
-            let predicate = try TheFence.HeistValuePayloadDecoder.decode(
+        static func parsePredicate(_ value: HeistValue) throws -> AccessibilityPredicate {
+            return try TheFence.HeistValuePayloadDecoder.decode(
                 value,
                 field: "expect",
-                as: AccessibilityPredicate<RootContext>.self,
+                as: AccessibilityPredicate.self,
                 includesRootInField: false,
                 dataCorruptedHandling: .invalidRequest
             )
-            return try predicate.resolve(in: .empty)
         }
 
     }

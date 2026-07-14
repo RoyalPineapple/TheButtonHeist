@@ -173,14 +173,14 @@ func `predicate case wire boundary decodes only snapshot predicates`() throws {
 @Test
 func `durable element predicate JSON requires canonical checks`() throws {
     #expect(throws: DecodingError.self) {
-        _ = try JSONDecoder().decode(ElementPredicate.self, from: Data("""
+        _ = try JSONDecoder().decode(ElementPredicateTemplate.self, from: Data("""
         {
           "label": "Receipt"
         }
         """.utf8))
     }
 
-    let predicate = try JSONDecoder().decode(ElementPredicate.self, from: Data("""
+    let predicate = try JSONDecoder().decode(ElementPredicateTemplate.self, from: Data("""
     {
       "checks": [
         { "kind": "label", "match": { "mode": "exact", "value": "Receipt" } }
@@ -298,7 +298,7 @@ func `element update property checkers reject unknown fields`() {
     }
 
     expectUnknownField("nested frame update", contains: #"Unknown frame match field "unexpected""#) {
-        _ = try JSONDecoder().decode(AccessibilityPredicate<ElementsAssertionContext>.self, from: Data("""
+        _ = try JSONDecoder().decode(ChangeDeclaration.ElementAssertion.self, from: Data("""
         {
           "type": "updated",
           "target": {
@@ -485,7 +485,7 @@ private func representativeAllStepKindsPlan() throws -> HeistPlan {
         parameter: .string(name: "query"),
         body: [
             .action(try ActionStep(command: .typeText(
-                text: .ref("query"),
+                reference: "query",
                 target: .predicate(.label("Search"))
             ))),
         ]
@@ -524,7 +524,7 @@ private func representativeAllStepKindsPlan() throws -> HeistPlan {
                 parameter: "item",
                 body: [
                     .action(try ActionStep(command: .typeText(
-                        text: .ref("item"),
+                        reference: "item",
                         target: .predicate(.label("Search"))
                     ))),
                 ]
@@ -546,7 +546,7 @@ private func representativeAllStepKindsPlan() throws -> HeistPlan {
             ])),
             .invoke(HeistInvocationStep(
                 path: ["Search"],
-                argument: .string(.literal("Milk"))
+                argument: .string("Milk")
             )),
         ]
     )

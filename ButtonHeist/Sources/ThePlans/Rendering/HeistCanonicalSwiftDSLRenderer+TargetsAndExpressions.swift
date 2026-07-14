@@ -20,57 +20,37 @@ extension HeistCanonicalSwiftDSLRenderer {
             return ".target(\(renderedPredicate), ordinal: \(ordinal))"
         case .container(let predicate, let ordinal):
             let rendered = try render(container: predicate, environment: environment)
-            return ordinal.map { ".container(\(rendered), ordinal: \($0))" } ?? ".container(\(rendered))"
+            return ordinal.map { ".container(\(rendered), ordinal: \($0))" }
+                ?? ".container(\(rendered))"
         case .ref(let reference):
             guard environment.accepts(target: reference) else {
                 throw HeistCanonicalSwiftDSLError.unresolvedTargetReference(reference.rawValue)
             }
             return reference.rawValue
         case .within(let container, let target):
-            return try ".within(container: \(render(container: container, environment: environment)), \(render(target: target, environment: environment)))"
+            return try ".within(container: \(render(container: container, environment: environment)), "
+                + "\(render(target: target, environment: environment)))"
         }
     }
 
-    func render(target: AccessibilityTarget) throws -> String {
-        try renderCorrection(target: target)
+    func render(container: ContainerPredicate, environment: RenderEnvironment) throws -> String {
+        let checks = container.core.checks
+        if let shorthand = try renderSingleContainerCheck(checks, environment: environment) {
+            return shorthand
+        }
+        if let dataTable = renderDataTable(checks) {
+            return dataTable
+        }
+        let rendered = try checks.map {
+            try renderContainerCheck($0, environment: environment)
+        }
+        return ".matching(\(rendered.joined(separator: ", ")))"
     }
 
-    func render(container: ContainerPredicate) -> String {
-        if let shorthand = renderSingleContainerCheck(container.checks) { return shorthand }
-        if let dataTable = renderDataTable(container.checks) { return dataTable }
-        return ".matching(\(container.checks.map(renderContainerCheck).joined(separator: ", ")))"
-    }
-
-    func render(container: ContainerPredicateExpr, environment: RenderEnvironment) throws -> String {
-        if let shorthand = try renderSingleContainerCheck(container.checks, environment: environment) { return shorthand }
-        if let dataTable = renderDataTable(container.checks) { return dataTable }
-        return try ".matching(\(container.checks.map { try renderContainerCheck($0, environment: environment) }.joined(separator: ", ")))"
-    }
-
-    func renderSingleContainerCheck(_ checks: NonEmptyArray<ContainerPredicateCheck<String>>) -> String? {
-        renderSingleContainerCheck(
-            checks,
-            renderIdentifier: { renderCallArgument($0) },
-            renderSemantic: { renderSemanticContainerPredicate($0) }
-        )
-    }
-
-    func renderSingleContainerCheck(
-        _ checks: NonEmptyArray<ContainerPredicateCheck<StringExpr>>,
+    private func renderSingleContainerCheck(
+        _ checks: NonEmptyArray<ContainerPredicateCheckCore<Expr<String>>>,
         environment: RenderEnvironment
     ) throws -> String? {
-        try renderSingleContainerCheck(
-            checks,
-            renderIdentifier: { try renderCallArgument($0, environment: environment) },
-            renderSemantic: { try renderSemanticContainerPredicate($0, environment: environment) }
-        )
-    }
-
-    private func renderSingleContainerCheck<Value: StringMatchPayload>(
-        _ checks: NonEmptyArray<ContainerPredicateCheck<Value>>,
-        renderIdentifier: (StringMatch<Value>) throws -> String,
-        renderSemantic: (SemanticContainerPredicate<Value>) throws -> String
-    ) rethrows -> String? {
         guard checks.count == 1 else { return nil }
         switch checks[0] {
         case .type(.none):
@@ -88,103 +68,62 @@ extension HeistCanonicalSwiftDSLRenderer {
         case .type(.series):
             return ".type(.series)"
         case .identifier(let match):
-            return try ".identifier(\(renderIdentifier(match)))"
+            return try ".identifier(\(renderCallArgument(match, environment: environment)))"
         case .semantic(let predicate):
-            return try renderSemantic(predicate)
+            return try renderSemanticContainerPredicate(predicate, environment: environment)
         case .scrollable(true):
             return ".scrollable(true)"
         case .actions(let actions):
             return ".actions(\(renderContainerActions(actions)))"
-        case .rowCount, .columnCount, .modalBoundary:
-            return nil
-        case .scrollable(false):
+        case .rowCount, .columnCount, .modalBoundary, .scrollable(false):
             return nil
         }
     }
 
-    func renderDataTable(_ checks: NonEmptyArray<ContainerPredicateCheck<String>>) -> String? {
-        renderDataTable(rowCount: rowCount(in: checks), columnCount: columnCount(in: checks), hasOnlyTableChecks: hasOnlyDataTableChecks(checks))
-    }
-
-    func renderDataTable(_ checks: NonEmptyArray<ContainerPredicateCheck<StringExpr>>) -> String? {
-        renderDataTable(rowCount: rowCount(in: checks), columnCount: columnCount(in: checks), hasOnlyTableChecks: hasOnlyDataTableChecks(checks))
-    }
-
-    private func renderDataTable(rowCount: UInt?, columnCount: UInt?, hasOnlyTableChecks: Bool) -> String? {
-        guard hasOnlyTableChecks else { return nil }
-        var arguments: [String] = []
-        if let rowCount { arguments.append("rowCount: .init(\(rowCount))") }
-        if let columnCount { arguments.append("columnCount: .init(\(columnCount))") }
-        return ".dataTable(\(arguments.joined(separator: ", ")))"
-    }
-
-    private func hasOnlyDataTableChecks<Value: StringMatchPayload>(
-        _ checks: NonEmptyArray<ContainerPredicateCheck<Value>>
-    ) -> Bool {
-        let hasDataTableType = checks.contains { check in
-            if case .type(.dataTable) = check { return true }
+    private func renderDataTable(
+        _ checks: NonEmptyArray<ContainerPredicateCheckCore<Expr<String>>>
+    ) -> String? {
+        let hasDataTableType = checks.contains {
+            if case .type(.dataTable) = $0 { return true }
             return false
         }
-        let containsOnlyDataTableChecks = checks.allSatisfy { check in
-            switch check {
+        let hasOnlyTableChecks = checks.allSatisfy {
+            switch $0 {
             case .type(.dataTable), .rowCount, .columnCount:
                 return true
             case .type, .identifier, .semantic, .modalBoundary, .scrollable, .actions:
                 return false
             }
         }
-        return hasDataTableType && containsOnlyDataTableChecks
-    }
+        guard hasDataTableType, hasOnlyTableChecks else { return nil }
 
-    private func rowCount<Value: StringMatchPayload>(
-        in checks: NonEmptyArray<ContainerPredicateCheck<Value>>
-    ) -> UInt? {
-        checks.compactMap {
+        var arguments: [String] = []
+        if let rowCount = checks.compactMap({
             if case .rowCount(let count) = $0 { return count.value }
             return nil
-        }.first
-    }
-
-    private func columnCount<Value: StringMatchPayload>(
-        in checks: NonEmptyArray<ContainerPredicateCheck<Value>>
-    ) -> UInt? {
-        checks.compactMap {
+        }).first {
+            arguments.append("rowCount: .init(\(rowCount))")
+        }
+        if let columnCount = checks.compactMap({
             if case .columnCount(let count) = $0 { return count.value }
             return nil
-        }.first
+        }).first {
+            arguments.append("columnCount: .init(\(columnCount))")
+        }
+        return ".dataTable(\(arguments.joined(separator: ", ")))"
     }
 
-    func renderContainerCheck(_ check: ContainerPredicateCheck<String>) -> String {
-        renderContainerCheck(
-            check,
-            renderIdentifier: { renderCallArgument($0) },
-            renderSemantic: { renderSemanticContainerPredicate($0) }
-        )
-    }
-
-    func renderContainerCheck(
-        _ check: ContainerPredicateCheck<StringExpr>,
+    private func renderContainerCheck(
+        _ check: ContainerPredicateCheckCore<Expr<String>>,
         environment: RenderEnvironment
     ) throws -> String {
-        try renderContainerCheck(
-            check,
-            renderIdentifier: { try renderCallArgument($0, environment: environment) },
-            renderSemantic: { try renderSemanticContainerPredicate($0, environment: environment) }
-        )
-    }
-
-    private func renderContainerCheck<Value: StringMatchPayload>(
-        _ check: ContainerPredicateCheck<Value>,
-        renderIdentifier: (StringMatch<Value>) throws -> String,
-        renderSemantic: (SemanticContainerPredicate<Value>) throws -> String
-    ) rethrows -> String {
         switch check {
         case .type(let type):
             return ".type(.\(type.rawValue))"
         case .identifier(let match):
-            return try ".identifier(\(renderIdentifier(match)))"
+            return try ".identifier(\(renderCallArgument(match, environment: environment)))"
         case .semantic(let predicate):
-            return try ".semantic(\(renderSemantic(predicate)))"
+            return try ".semantic(\(renderSemanticContainerPredicate(predicate, environment: environment)))"
         case .rowCount(let count):
             return ".rowCount(.init(\(count.value)))"
         case .columnCount(let count):
@@ -198,17 +137,8 @@ extension HeistCanonicalSwiftDSLRenderer {
         }
     }
 
-    func renderSemanticContainerPredicate(_ predicate: SemanticContainerPredicate<String>) -> String {
-        switch predicate {
-        case .label(let match):
-            return ".label(\(renderCallArgument(match)))"
-        case .value(let match):
-            return ".value(\(renderCallArgument(match)))"
-        }
-    }
-
-    func renderSemanticContainerPredicate(
-        _ predicate: SemanticContainerPredicate<StringExpr>,
+    private func renderSemanticContainerPredicate(
+        _ predicate: SemanticContainerPredicateCore<Expr<String>>,
         environment: RenderEnvironment
     ) throws -> String {
         switch predicate {
@@ -224,59 +154,34 @@ extension HeistCanonicalSwiftDSLRenderer {
         return ".init(\(values.map(render(action:)).joined(separator: ", ")))"
     }
 
-    func renderTargetPredicate(_ predicate: ElementPredicate) -> String {
-        if let shorthand = renderSingleCheckTarget(predicate.checks) { return shorthand }
-        return ".element(\(renderElementPredicateChecks(predicate)))"
-    }
-
-    func render(predicate: ElementPredicate) -> String {
-        if let shorthand = renderSingleCheckTarget(predicate.checks) { return shorthand }
-        return ".element(\(renderElementPredicateChecks(predicate)))"
-    }
-
-    func render(predicate: ElementPredicateTemplate, environment: RenderEnvironment) throws -> String {
-        if let shorthand = try renderSingleCheckTarget(predicate.checks, environment: environment) { return shorthand }
-        return ".element(\(try renderElementPredicateTemplateChecks(predicate, environment: environment)))"
-    }
-
-    func renderSingleCheckTarget(_ checks: [ElementPredicateCheck<String>]) -> String? {
-        guard checks.count == 1 else { return nil }
-        switch checks[0] {
-        case .label(let match):
-            return ".label(\(renderCallArgument(match)))"
-        case .identifier(let match):
-            return ".identifier(\(renderCallArgument(match)))"
-        case .value(let match):
-            return ".value(\(renderCallArgument(match)))"
-        case .hint(let match):
-            return ".hint(\(renderCallArgument(match)))"
-        case .actions(let actions):
-            return ".actions(\(renderActionArray(actions)))"
-        case .customContent(let match):
-            return ".customContent(\(render(customContent: match)))"
-        case .rotors(let matches):
-            return ".rotors(\(renderStringMatchArray(matches)))"
-        case .exclude(let check):
-            return ".exclude(\(renderPredicateCheck(check)))"
-        case .traits:
-            return nil
+    func render(
+        predicate: ElementPredicateTemplate,
+        environment: RenderEnvironment
+    ) throws -> String {
+        let checks = predicate.core.checks
+        if let shorthand = try renderSingleCheckTarget(checks, environment: environment) {
+            return shorthand
         }
+        let rendered = try checks.map {
+            try renderPredicateCheck($0, environment: environment)
+        }
+        return ".element(\(rendered.joined(separator: ", ")))"
     }
 
-    func renderSingleCheckTarget(
-        _ checks: [ElementPredicateCheck<StringExpr>],
+    private func renderSingleCheckTarget(
+        _ checks: [ElementPredicateCheckCore<Expr<String>>],
         environment: RenderEnvironment
     ) throws -> String? {
         guard checks.count == 1 else { return nil }
         switch checks[0] {
         case .label(let match):
-            return ".label(\(try renderCallArgument(match, environment: environment)))"
+            return try ".label(\(renderCallArgument(match, environment: environment)))"
         case .identifier(let match):
-            return ".identifier(\(try renderCallArgument(match, environment: environment)))"
+            return try ".identifier(\(renderCallArgument(match, environment: environment)))"
         case .value(let match):
-            return ".value(\(try renderCallArgument(match, environment: environment)))"
+            return try ".value(\(renderCallArgument(match, environment: environment)))"
         case .hint(let match):
-            return ".hint(\(try renderCallArgument(match, environment: environment)))"
+            return try ".hint(\(renderCallArgument(match, environment: environment)))"
         case .actions(let actions):
             return ".actions(\(renderActionArray(actions)))"
         case .customContent(let match):
@@ -290,55 +195,19 @@ extension HeistCanonicalSwiftDSLRenderer {
         }
     }
 
-    func renderElementPredicateChecks(_ predicate: ElementPredicate) -> String {
-        predicate.checks.map(renderPredicateCheck).joined(separator: ", ")
-    }
-
-    func renderElementPredicateTemplateChecks(
-        _ predicate: ElementPredicateTemplate,
-        environment: RenderEnvironment
-    ) throws -> String {
-        try predicate.checks.map {
-            try renderPredicateCheck($0, environment: environment)
-        }.joined(separator: ", ")
-    }
-
-    func renderPredicateCheck(_ check: ElementPredicateCheck<String>) -> String {
-        switch check {
-        case .label(let match):
-            return ".label(\(renderCallArgument(match)))"
-        case .identifier(let match):
-            return ".identifier(\(renderCallArgument(match)))"
-        case .value(let match):
-            return ".value(\(renderCallArgument(match)))"
-        case .hint(let match):
-            return ".hint(\(renderCallArgument(match)))"
-        case .traits(let traits):
-            return ".traits(\(renderTraitArray(traits)))"
-        case .actions(let actions):
-            return ".actions(\(renderActionArray(actions)))"
-        case .customContent(let match):
-            return ".customContent(\(render(customContent: match)))"
-        case .rotors(let matches):
-            return ".rotors(\(renderStringMatchArray(matches)))"
-        case .exclude(let check):
-            return ".exclude(\(renderPredicateCheck(check)))"
-        }
-    }
-
-    func renderPredicateCheck(
-        _ check: ElementPredicateCheck<StringExpr>,
+    private func renderPredicateCheck(
+        _ check: ElementPredicateCheckCore<Expr<String>>,
         environment: RenderEnvironment
     ) throws -> String {
         switch check {
         case .label(let match):
-            return ".label(\(try renderCallArgument(match, environment: environment)))"
+            return try ".label(\(renderCallArgument(match, environment: environment)))"
         case .identifier(let match):
-            return ".identifier(\(try renderCallArgument(match, environment: environment)))"
+            return try ".identifier(\(renderCallArgument(match, environment: environment)))"
         case .value(let match):
-            return ".value(\(try renderCallArgument(match, environment: environment)))"
+            return try ".value(\(renderCallArgument(match, environment: environment)))"
         case .hint(let match):
-            return ".hint(\(try renderCallArgument(match, environment: environment)))"
+            return try ".hint(\(renderCallArgument(match, environment: environment)))"
         case .traits(let traits):
             return ".traits(\(renderTraitArray(traits)))"
         case .actions(let actions):
@@ -356,73 +225,39 @@ extension HeistCanonicalSwiftDSLRenderer {
         "[\(traits.canonicalHeistTraitArray.map { ".\($0.rawValue)" }.joined(separator: ", "))]"
     }
 
-    func renderCallArgument(_ match: StringMatch<String>) -> String {
-        switch match {
-        case .exact(let value):
-            return quote(value)
-        case .contains(let value):
-            return ".contains(\(quote(value)))"
-        case .prefix(let value):
-            return ".prefix(\(quote(value)))"
-        case .suffix(let value):
-            return ".suffix(\(quote(value)))"
-        case .isEmpty:
-            return ".isEmpty"
-        }
-    }
-
-    func renderFieldArgument(_ match: StringMatch<String>) -> String {
-        switch match {
-        case .exact(let value):
-            return quote(value)
-        case .contains(let value):
-            return ".contains(\(quote(value)))"
-        case .prefix(let value):
-            return ".prefix(\(quote(value)))"
-        case .suffix(let value):
-            return ".suffix(\(quote(value)))"
-        case .isEmpty:
-            return ".isEmpty"
-        }
-    }
-
     func renderCallArgument(
-        _ match: StringMatch<StringExpr>,
+        _ match: StringMatchCore<Expr<String>>,
         environment: RenderEnvironment
     ) throws -> String {
-        switch match {
-        case .exact(let value):
-            return try render(string: value, environment: environment)
-        case .contains(let value):
-            return ".contains(\(try render(string: value, environment: environment)))"
-        case .prefix(let value):
-            return ".prefix(\(try render(string: value, environment: environment)))"
-        case .suffix(let value):
-            return ".suffix(\(try render(string: value, environment: environment)))"
-        case .isEmpty:
-            return ".isEmpty"
-        }
+        try renderStringMatch(match, environment: environment)
     }
 
     func renderFieldArgument(
-        _ match: StringMatch<StringExpr>,
+        _ match: StringMatchCore<Expr<String>>,
+        environment: RenderEnvironment
+    ) throws -> String {
+        try renderStringMatch(match, environment: environment)
+    }
+
+    private func renderStringMatch(
+        _ match: StringMatchCore<Expr<String>>,
         environment: RenderEnvironment
     ) throws -> String {
         switch match {
         case .exact(let value):
             return try render(string: value, environment: environment)
         case .contains(let value):
-            return ".contains(\(try render(string: value, environment: environment)))"
+            return try ".contains(\(render(string: value, environment: environment)))"
         case .prefix(let value):
-            return ".prefix(\(try render(string: value, environment: environment)))"
+            return try ".prefix(\(render(string: value, environment: environment)))"
         case .suffix(let value):
-            return ".suffix(\(try render(string: value, environment: environment)))"
+            return try ".suffix(\(render(string: value, environment: environment)))"
         case .isEmpty:
             return ".isEmpty"
         }
     }
 
-    func render(string: StringExpr, environment: RenderEnvironment) throws -> String {
+    func render(string: Expr<String>, environment: RenderEnvironment) throws -> String {
         switch string {
         case .literal(let literal):
             return quote(literal)

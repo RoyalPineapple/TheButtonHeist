@@ -1,25 +1,28 @@
 import Foundation
 
-// MARK: - Element Predicate Templates
-
+/// An authored predicate that resolves references into an `ElementPredicate`.
 public struct ElementPredicateTemplate: Codable, Sendable, Equatable, Hashable {
-    public let checks: [ElementPredicateCheck<StringExpr>]
+    package let core: ElementPredicateCore<Expr<String>>
 
-    public init(_ checks: [ElementPredicateCheck<StringExpr>] = []) {
-        self.checks = checks
+    package init(core: ElementPredicateCore<Expr<String>>) {
+        self.core = core
+    }
+
+    public init(_ checks: [ElementPredicateCheck] = []) {
+        core = ElementPredicateCore(checks.map(\.core))
     }
 
     public init(
-        label: StringMatch<StringExpr>? = nil,
-        identifier: StringMatch<StringExpr>? = nil,
-        value: StringMatch<StringExpr>? = nil,
+        label: StringMatch? = nil,
+        identifier: StringMatch? = nil,
+        value: StringMatch? = nil,
         traits: [HeistTrait] = [],
-        hint: StringMatch<StringExpr>? = nil,
+        hint: StringMatch? = nil,
         actions: [ElementAction] = [],
-        customContent: CustomContentMatch<StringExpr>? = nil,
-        rotors: [StringMatch<StringExpr>] = []
+        customContent: CustomContentMatch? = nil,
+        rotors: [StringMatch] = []
     ) {
-        self.init(Self.checks(
+        core = ElementPredicateCore(Self.checks(
             label: label,
             identifier: identifier,
             value: value,
@@ -32,73 +35,58 @@ public struct ElementPredicateTemplate: Codable, Sendable, Equatable, Hashable {
     }
 
     public init(
-        _ checks: [ElementPredicateCheck<StringExpr>],
+        _ checks: [ElementPredicateCheck],
         traits: [HeistTrait] = [],
         actions: [ElementAction] = []
     ) {
-        self.init(checks + Self.setChecks(
-            traits: traits,
-            actions: actions
-        ))
+        core = ElementPredicateCore(
+            checks.map(\.core) + Self.setChecks(traits: traits, actions: actions)
+        )
     }
 
-    public init(_ predicate: ElementPredicate) {
-        self.init(predicate.checks.map { $0.map(StringExpr.literal) })
+    public var checks: [ElementPredicateCheck] {
+        core.checks.map { ElementPredicateCheck(core: $0) }
     }
 
-    public var hasPredicates: Bool {
-        checks.contains { $0.hasPredicateLiteral }
-    }
+    public var hasPredicates: Bool { core.hasPredicates }
+    public var invalidEmptyPayloadDescription: String? { core.invalidEmptyPayloadDescription }
 
-    public var invalidEmptyPayloadDescription: String? {
-        if let description = checks.lazy.compactMap(\.invalidEmptyPayloadDescription).first {
-            return description
-        }
-        return hasPredicates ? nil : AccessibilityTargetGrammarError.emptyPredicate.diagnosticDescription
-    }
-
-    public func resolve(in environment: HeistExecutionEnvironment) throws -> ElementPredicate {
-        let predicate = ElementPredicate(try checks.map { try $0.resolve(in: environment) })
-        if let description = predicate.invalidEmptyPayloadDescription {
+    package func resolve(in environment: HeistExecutionEnvironment) throws -> ElementPredicate {
+        let resolved = ElementPredicate(core: try core.map { try $0.resolve(in: environment) })
+        if let description = resolved.invalidEmptyPayloadDescription {
             throw InvalidResolvedElementPredicateError(reason: description)
         }
-        return predicate
+        return resolved
     }
 
     private static func checks(
-        label: StringMatch<StringExpr>?,
-        identifier: StringMatch<StringExpr>?,
-        value: StringMatch<StringExpr>?,
+        label: StringMatch?,
+        identifier: StringMatch?,
+        value: StringMatch?,
         traits: [HeistTrait],
-        hint: StringMatch<StringExpr>?,
+        hint: StringMatch?,
         actions: [ElementAction],
-        customContent: CustomContentMatch<StringExpr>?,
-        rotors: [StringMatch<StringExpr>]
-    ) -> [ElementPredicateCheck<StringExpr>] {
-        var checks: [ElementPredicateCheck<StringExpr>] = []
-        if let label { checks.append(.label(label)) }
-        if let identifier { checks.append(.identifier(identifier)) }
-        if let value { checks.append(.value(value)) }
-        if let hint { checks.append(.hint(hint)) }
-        if let customContent { checks.append(.customContent(customContent)) }
-        if !rotors.isEmpty { checks.append(.rotors(rotors)) }
-        checks += setChecks(
-            traits: traits,
-            actions: actions
-        )
-        return checks
+        customContent: CustomContentMatch?,
+        rotors: [StringMatch]
+    ) -> [ElementPredicateCheckCore<Expr<String>>] {
+        [
+            label.map { .label($0.core) },
+            identifier.map { .identifier($0.core) },
+            value.map { .value($0.core) },
+            hint.map { .hint($0.core) },
+            customContent.map { .customContent($0.core) },
+            rotors.isEmpty ? nil : .rotors(rotors.map(\.core)),
+        ].compactMap { $0 } + setChecks(traits: traits, actions: actions)
     }
 
     private static func setChecks(
         traits: [HeistTrait],
         actions: [ElementAction]
-    ) -> [ElementPredicateCheck<StringExpr>] {
-        var checks: [ElementPredicateCheck<StringExpr>] = []
-        let traits = traits.heistTraitSet
-        if !traits.isEmpty { checks.append(.traits(traits)) }
-        let actions = Set(actions)
-        if !actions.isEmpty { checks.append(.actions(actions)) }
-        return checks
+    ) -> [ElementPredicateCheckCore<Expr<String>>] {
+        [
+            traits.isEmpty ? nil : .traits(traits.heistTraitSet),
+            actions.isEmpty ? nil : .actions(Set(actions)),
+        ].compactMap { $0 }
     }
 
     enum CodingKeys: String, CodingKey, CaseIterable {
@@ -117,7 +105,9 @@ public struct ElementPredicateTemplate: Codable, Sendable, Equatable, Hashable {
     }
 
     init(container: KeyedDecodingContainer<CodingKeys>, requiresNonEmpty: Bool) throws {
-        checks = try container.decodeIfPresent([ElementPredicateCheck<StringExpr>].self, forKey: .checks) ?? []
+        core = ElementPredicateCore(
+            try container.decodeIfPresent([ElementPredicateCheckCore<Expr<String>>].self, forKey: .checks) ?? []
+        )
         if requiresNonEmpty, let description = invalidEmptyPayloadDescription {
             throw DecodingError.dataCorrupted(.init(
                 codingPath: container.codingPath + [CodingKeys.checks],
@@ -128,44 +118,18 @@ public struct ElementPredicateTemplate: Codable, Sendable, Equatable, Hashable {
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        if !checks.isEmpty { try container.encode(checks, forKey: .checks) }
+        if !core.checks.isEmpty {
+            try container.encode(core.checks, forKey: .checks)
+        }
     }
-
 }
 
 extension ElementPredicateTemplate: CustomStringConvertible {
     public var description: String {
-        ScoreDescription.call("predicate", checks.compactMap(Self.checkField))
-    }
-
-    private static func checkField(_ check: ElementPredicateCheck<StringExpr>) -> String? {
-        switch check {
-        case .label(let match):
-            guard match.hasPredicateLiteral else { return nil }
-            return "label=\(match)"
-        case .identifier(let match):
-            guard match.hasPredicateLiteral else { return nil }
-            return "identifier=\(match)"
-        case .value(let match):
-            guard match.hasPredicateLiteral else { return nil }
-            return "value=\(match)"
-        case .hint(let match):
-            guard match.hasPredicateLiteral else { return nil }
-            return "hint=\(match)"
-        case .traits(let traits):
-            let traits = traits.canonicalHeistTraitArray
-            return ScoreDescription.listField("traits", traits.isEmpty ? nil : traits)
-        case .actions(let actions):
-            return ScoreDescription.listField("actions", actions.isEmpty ? nil : actions.canonicalElementActionArray)
-        case .customContent(let match):
-            guard match.hasPredicateLiteral else { return nil }
-            return "customContent=\(match)"
-        case .rotors(let matches):
-            return matches.isEmpty ? nil : "rotors=[\(matches.map(\.description).joined(separator: ", "))]"
-        case .exclude(let check):
-            guard let field = checkField(check) else { return nil }
-            return "exclude(\(field))"
-        }
+        ScoreDescription.call(
+            "predicate",
+            core.checks.map { $0.map(\.description).description }
+        )
     }
 }
 
@@ -174,30 +138,5 @@ private struct InvalidResolvedElementPredicateError: Error, Sendable, Equatable,
 
     var description: String {
         "resolved element predicate is invalid: \(reason)"
-    }
-}
-
-private extension ElementPredicateCheck where Text == StringExpr {
-    func resolve(in environment: HeistExecutionEnvironment) throws -> ElementPredicateCheck<String> {
-        switch self {
-        case .label(let match):
-            return try .label(match.resolve(in: environment))
-        case .identifier(let match):
-            return try .identifier(match.resolve(in: environment))
-        case .value(let match):
-            return try .value(match.resolve(in: environment))
-        case .hint(let match):
-            return try .hint(match.resolve(in: environment))
-        case .traits(let traits):
-            return .traits(traits)
-        case .actions(let actions):
-            return .actions(actions)
-        case .customContent(let match):
-            return try .customContent(match.map { try $0.resolve(in: environment) })
-        case .rotors(let matches):
-            return try .rotors(matches.map { try $0.resolve(in: environment) })
-        case .exclude(let check):
-            return try .exclude(check.resolve(in: environment))
-        }
     }
 }

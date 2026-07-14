@@ -486,8 +486,13 @@ final class PostActionObservation {
         for reference: AccessibilityNotificationElementReference,
         in state: BeforeState
     ) -> HeistId? {
-        TheStash.WireConversion.semanticInterfaceProjection(from: state.screen.tree)
-            .heistId(for: reference)
+        let interface = TheStash.WireConversion.toSemanticInterface(from: state.screen.tree)
+        guard let record = interface.graph.elementsInTraversalOrder.first(where: {
+            $0.path == reference.path && $0.traversalIndex == reference.traversalIndex
+        }), let identity = record.traceIdentity else { return nil }
+        return state.screen.tree.elements.values.first {
+            $0.heistId.traceElementIdentity == identity
+        }?.heistId
     }
 
     private static func accessibilityNotificationElementReference(
@@ -495,8 +500,15 @@ final class PostActionObservation {
         in state: BeforeState,
         resolution: AccessibilityNotificationElementResolution
     ) -> AccessibilityNotificationElementReference? {
-        TheStash.WireConversion.semanticInterfaceProjection(from: state.screen.tree)
-            .accessibilityNotificationElementReference(for: heistId, resolution: resolution)
+        let interface = TheStash.WireConversion.toSemanticInterface(from: state.screen.tree)
+        guard let record = interface.graph.elementsInTraversalOrder.first(where: {
+            $0.traceIdentity == heistId.traceElementIdentity
+        }) else { return nil }
+        return AccessibilityNotificationElementReference(
+            path: record.path,
+            traversalIndex: record.traversalIndex,
+            resolution: resolution
+        )
     }
 
     private func makeCaptureContext(
@@ -517,59 +529,6 @@ final class PostActionObservation {
             screenId: screenId ?? stash.lastScreenId,
             windowStack: windows
         )
-    }
-
-    // MARK: - Result Building
-
-    enum ActionOutcome {
-        case success(ActionOutcomeSuccess)
-        case failure(ActionOutcomeFailure)
-    }
-
-    enum ActionOutcomePayload {
-        case none
-        case immediate(ActionResultPayload)
-        case afterState((BeforeState) -> ResolvedActionOutcomePayload)
-    }
-
-    enum ResolvedActionOutcomePayload {
-        case none
-        case payload(ActionResultPayload)
-    }
-
-    struct ActionOutcomeSuccess {
-        let payload: ActionOutcomePayload
-        let subjectEvidence: ActionSubjectEvidence?
-        let activationTrace: ActivationTrace?
-
-        init(
-            payload: ActionOutcomePayload = .none,
-            subjectEvidence: ActionSubjectEvidence? = nil,
-            activationTrace: ActivationTrace? = nil
-        ) {
-            self.payload = payload
-            self.subjectEvidence = subjectEvidence
-            self.activationTrace = activationTrace
-        }
-    }
-
-    struct ActionOutcomeFailure {
-        let errorKind: ErrorKind
-        let payload: ActionOutcomePayload
-        let subjectEvidence: ActionSubjectEvidence?
-        let activationTrace: ActivationTrace?
-
-        init(
-            errorKind: ErrorKind,
-            payload: ActionOutcomePayload = .none,
-            subjectEvidence: ActionSubjectEvidence? = nil,
-            activationTrace: ActivationTrace? = nil
-        ) {
-            self.errorKind = errorKind
-            self.payload = payload
-            self.subjectEvidence = subjectEvidence
-            self.activationTrace = activationTrace
-        }
     }
 
     // MARK: - Observation Helpers

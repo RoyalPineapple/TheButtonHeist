@@ -36,46 +36,39 @@ package struct AccessibilityHierarchyGraph: Equatable, Sendable {
     private let nodesByPath: [TreePath: AccessibilityHierarchy]
 
     package init(tree: [AccessibilityHierarchy]) {
-        var nodesInPathOrder: [AccessibilityNodeRecord] = []
-        var elements: [AccessibilityElementNodeRecord] = []
-        var nodesByPath: [TreePath: AccessibilityHierarchy] = [:]
-
-        func visit(_ node: AccessibilityHierarchy, path: TreePath) {
-            let traversalIndex: Int?
-            switch node {
-            case .element(_, let index):
-                traversalIndex = index
-            case .container:
-                traversalIndex = nil
-            }
-
-            if nodesByPath.updateValue(node, forKey: path) != nil {
-                preconditionFailure("AccessibilityHierarchyGraph cannot index duplicate path \(path.diagnosticDescription)")
-            }
-            nodesInPathOrder.append(AccessibilityNodeRecord(
-                path: path,
-                node: node,
-                traversalIndex: traversalIndex
-            ))
-
+        let records: [(
+            node: AccessibilityNodeRecord,
+            element: AccessibilityElementNodeRecord?
+        )] = tree.pathIndexedSubtrees.map { subtree in
+            let node = subtree.hierarchy
             switch node {
             case .element(let element, let traversalIndex):
-                elements.append(AccessibilityElementNodeRecord(
-                    path: path,
-                    element: element,
-                    traversalIndex: traversalIndex
-                ))
-
-            case .container(_, let children):
-                for (index, child) in children.enumerated() {
-                    visit(child, path: path.appending(index))
-                }
+                return (
+                    node: AccessibilityNodeRecord(
+                        path: subtree.path,
+                        node: node,
+                        traversalIndex: traversalIndex
+                    ),
+                    element: AccessibilityElementNodeRecord(
+                        path: subtree.path,
+                        element: element,
+                        traversalIndex: traversalIndex
+                    )
+                )
+            case .container:
+                return (
+                    node: AccessibilityNodeRecord(
+                        path: subtree.path,
+                        node: node,
+                        traversalIndex: nil
+                    ),
+                    element: nil
+                )
             }
         }
-
-        for (index, root) in tree.enumerated() {
-            visit(root, path: TreePath([index]))
-        }
+        let nodesInPathOrder = records.map(\.node)
+        let elements = records.compactMap(\.element)
+        let nodesByPath = Dictionary(uniqueKeysWithValues: nodesInPathOrder.map { ($0.path, $0.node) })
 
         self.nodesInPathOrder = nodesInPathOrder
         self.elementsInTraversalOrder = elements.sorted {
@@ -206,6 +199,26 @@ package struct InterfaceGraphNodeRecord: Equatable, Sendable {
     }
 }
 
+package struct InterfaceElementProjectionMetadata: Equatable, Sendable {
+    package let actions: [ElementAction]
+    package let traceIdentity: TraceElementIdentity?
+
+    package init(actions: [ElementAction], traceIdentity: TraceElementIdentity? = nil) {
+        self.actions = actions
+        self.traceIdentity = traceIdentity
+    }
+}
+
+package struct InterfaceContainerProjectionMetadata: Equatable, Sendable {
+    package let containerName: ContainerName?
+    package let scrollInventory: ScrollInventory?
+
+    package init(containerName: ContainerName?, scrollInventory: ScrollInventory? = nil) {
+        self.containerName = containerName
+        self.scrollInventory = scrollInventory
+    }
+}
+
 package struct InterfaceGraph: Equatable, Sendable {
     package let hierarchy: AccessibilityHierarchyGraph
     package let elementAnnotationByPath: [TreePath: InterfaceElementAnnotation]
@@ -214,11 +227,42 @@ package struct InterfaceGraph: Equatable, Sendable {
     package let elementsInTraversalOrder: [InterfaceGraphElementRecord]
     package let nodesInPathOrder: [InterfaceGraphNodeRecord]
 
-    package init(interface: Interface) throws(InterfaceGraphValidationError) {
-        try self.init(
-            tree: interface.tree,
-            annotations: interface.annotations,
-            traceIdentities: interface.traceIdentities
+    private let elementRecordByPath: [TreePath: InterfaceGraphElementRecord]
+
+    package init(
+        projecting tree: [AccessibilityHierarchy],
+        elementMetadata: (TreePath, AccessibilityElement, Int) -> InterfaceElementProjectionMetadata?,
+        containerMetadata: (TreePath, AccessibilityContainer) -> InterfaceContainerProjectionMetadata?
+    ) {
+        let hierarchy = AccessibilityHierarchyGraph(tree: tree)
+        var elementAnnotationByPath: [TreePath: InterfaceElementAnnotation] = [:]
+        var containerAnnotationByPath: [TreePath: InterfaceContainerAnnotation] = [:]
+        var traceIdentityByPath: [TreePath: TraceElementIdentity] = [:]
+
+        for record in hierarchy.nodesInPathOrder {
+            switch record.node {
+            case .element(let element, let traversalIndex):
+                guard let metadata = elementMetadata(record.path, element, traversalIndex) else { continue }
+                elementAnnotationByPath[record.path] = InterfaceElementAnnotation(
+                    path: record.path,
+                    actions: metadata.actions
+                )
+                traceIdentityByPath[record.path] = metadata.traceIdentity
+            case .container(let container, _):
+                guard let metadata = containerMetadata(record.path, container) else { continue }
+                containerAnnotationByPath[record.path] = InterfaceContainerAnnotation(
+                    path: record.path,
+                    containerName: metadata.containerName,
+                    scrollInventory: metadata.scrollInventory
+                )
+            }
+        }
+
+        self.init(
+            hierarchy: hierarchy,
+            elementAnnotationByPath: elementAnnotationByPath,
+            containerAnnotationByPath: containerAnnotationByPath,
+            traceIdentityByPath: traceIdentityByPath
         )
     }
 
@@ -236,15 +280,20 @@ package struct InterfaceGraph: Equatable, Sendable {
         try Self.validateContainerAnnotations(containerAnnotationByPath, in: hierarchy)
         try Self.validateTraceIdentities(traceIdentityByPath, in: hierarchy)
 
-        let elementRecords = hierarchy.elementsInTraversalOrder.map { record in
-            InterfaceGraphElementRecord(
-                path: record.path,
-                traversalIndex: record.traversalIndex,
-                accessibilityElement: record.element,
-                annotation: elementAnnotationByPath[record.path],
-                traceIdentity: traceIdentityByPath[record.path]
-            )
-        }
+        self.init(
+            hierarchy: hierarchy,
+            elementAnnotationByPath: elementAnnotationByPath,
+            containerAnnotationByPath: containerAnnotationByPath,
+            traceIdentityByPath: traceIdentityByPath
+        )
+    }
+
+    private init(
+        hierarchy: AccessibilityHierarchyGraph,
+        elementAnnotationByPath: [TreePath: InterfaceElementAnnotation],
+        containerAnnotationByPath: [TreePath: InterfaceContainerAnnotation],
+        traceIdentityByPath: [TreePath: TraceElementIdentity]
+    ) {
         let nodeRecords = hierarchy.nodesInPathOrder.map { record in
             let kind: InterfaceGraphNodeKind
             switch record.node {
@@ -271,6 +320,16 @@ package struct InterfaceGraph: Equatable, Sendable {
                 kind: kind
             )
         }
+        let elementRecords = nodeRecords.compactMap { record -> InterfaceGraphElementRecord? in
+            guard case .element(let element) = record.kind else { return nil }
+            return element
+        }.sorted {
+            if $0.traversalIndex != $1.traversalIndex {
+                return $0.traversalIndex < $1.traversalIndex
+            }
+            return $0.path < $1.path
+        }
+        let elementRecordByPath = Dictionary(uniqueKeysWithValues: elementRecords.map { ($0.path, $0) })
 
         self.hierarchy = hierarchy
         self.elementAnnotationByPath = elementAnnotationByPath
@@ -278,10 +337,15 @@ package struct InterfaceGraph: Equatable, Sendable {
         self.traceIdentityByPath = traceIdentityByPath
         self.elementsInTraversalOrder = elementRecords
         self.nodesInPathOrder = nodeRecords
+        self.elementRecordByPath = elementRecordByPath
     }
 
     package func node(at path: TreePath) -> AccessibilityHierarchy? {
         hierarchy.node(at: path)
+    }
+
+    package func element(at path: TreePath) -> InterfaceGraphElementRecord? {
+        elementRecordByPath[path]
     }
 
     package func annotationsForSubtree(

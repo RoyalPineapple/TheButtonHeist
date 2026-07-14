@@ -5,33 +5,34 @@ import ThePlans
 import TheScore
 @testable import HeistDoctorCore
 
+private func reportElement(label: String) -> HeistElement {
+    HeistElement(
+        description: label,
+        label: label,
+        value: nil,
+        identifier: nil,
+        traits: [.button],
+        frameX: 0,
+        frameY: 0,
+        frameWidth: 100,
+        frameHeight: 44,
+        actions: [.activate]
+    )
+}
+
 private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
     HeistRepairSuggestion(
         stepPath: "$.body[0]",
         failureKind: .missingTarget,
         oldTarget: .predicate(ElementPredicateTemplate(label: "Delete")),
-        oldResolvedElement: ElementSummary(
-            description: "Delete",
-            label: "Delete",
-            value: nil,
-            identifier: nil,
-            hint: nil,
-            traits: [.button],
-            actions: [.activate],
-            rotors: [],
+        oldResolvedElement: HeistRepairElementContext(
+            element: reportElement(label: "Delete"),
             siblingText: ["Milk"],
             headerText: []
         ),
         newTarget: .predicate(ElementPredicateTemplate(label: "Remove")),
-        newResolvedElement: ElementSummary(
-            description: "Remove",
-            label: "Remove",
-            value: nil,
-            identifier: nil,
-            hint: nil,
-            traits: [.button],
-            actions: [.activate],
-            rotors: [],
+        newResolvedElement: HeistRepairElementContext(
+            element: reportElement(label: "Remove"),
             siblingText: ["Milk"],
             headerText: []
         ),
@@ -43,94 +44,6 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
         caveats: []
     ),
 ])
-
-private let expectedRepairJSONReportJSON = """
-{
-  "status" : "alpha",
-  "suggestions" : [
-    {
-      "caveats" : [
-
-      ],
-      "confidence" : "medium",
-      "failureKind" : "missingTarget",
-      "newResolvedElement" : {
-        "actions" : [
-          "activate"
-        ],
-        "description" : "Remove",
-        "headerText" : [
-
-        ],
-        "label" : "Remove",
-        "rotors" : [
-
-        ],
-        "siblingText" : [
-          "Milk"
-        ],
-        "traits" : [
-          "button"
-        ]
-      },
-      "newTarget" : {
-        "checks" : [
-          {
-            "kind" : "label",
-            "match" : {
-              "mode" : "exact",
-              "value" : "Remove"
-            }
-          }
-        ]
-      },
-      "oldResolvedElement" : {
-        "actions" : [
-          "activate"
-        ],
-        "description" : "Delete",
-        "headerText" : [
-
-        ],
-        "label" : "Delete",
-        "rotors" : [
-
-        ],
-        "siblingText" : [
-          "Milk"
-        ],
-        "traits" : [
-          "button"
-        ]
-      },
-      "oldTarget" : {
-        "checks" : [
-          {
-            "kind" : "label",
-            "match" : {
-              "mode" : "exact",
-              "value" : "Delete"
-            }
-          }
-        ]
-      },
-      "reasons" : [
-        {
-          "oldTargetResolvedInLastSuccessfulSnapshot" : {
-
-          }
-        },
-        {
-          "suggestedMatcherResolvesExactlyOneElement" : {
-
-          }
-        }
-      ],
-      "stepPath" : "$.body[0]"
-    }
-  ]
-}
-"""
 
 @Suite struct HeistRepairSuggesterTests {
     @Test func `container-only targets are refused without element coercion`() {
@@ -170,7 +83,7 @@ private let expectedRepairJSONReportJSON = """
             ])
         )
 
-        #expect(HeistRepairSuggester.suggestions(for: HeistRepairRequest(lastSuccess: last, currentFailure: current)).isEmpty)
+        #expect(HeistRepairSuggester.suggestions(for: request(last, current)).isEmpty)
     }
 
     @Test("Last success missing target returns no suggestion")
@@ -322,7 +235,7 @@ private let expectedRepairJSONReportJSON = """
 
         #expect(suggestion.failureKind == .missingTarget)
         #expect(suggestion.newTarget == .predicate(ElementPredicateTemplate(label: "Remove")))
-        #expect(suggestion.newResolvedElement.label == "Remove")
+        #expect(suggestion.newResolvedElement.element.label == "Remove")
         #expect(suggestion.newResolvedElement.siblingText == ["Milk"])
         #expect(suggestion.confidence == .medium)
         #expect(suggestion.reasons.contains(.scoring(.siblingRowContextPreserved)))
@@ -415,7 +328,7 @@ private let expectedRepairJSONReportJSON = """
         let suggestion = try #require(HeistRepairSuggester.suggestions(for: request(last, current)).first)
 
         #expect(suggestion.failureKind == .missingTarget)
-        #expect(suggestion.newResolvedElement.label == "Remove")
+        #expect(suggestion.newResolvedElement.element.label == "Remove")
         #expect(suggestion.newResolvedElement.siblingText == ["Milk"])
         #expect(suggestion.reasons.contains(.scoring(.siblingRowContextPreserved)))
         #expect(resolvedCount(suggestion.newTarget, in: current.beforeSnapshot) == 1)
@@ -475,7 +388,7 @@ private let expectedRepairJSONReportJSON = """
         let suggestion = try #require(HeistRepairSuggester.suggestions(for: request(last, current)).first)
 
         #expect(suggestion.newTarget == .predicate(ElementPredicateTemplate(label: "Go to Checkout")))
-        #expect(suggestion.newResolvedElement.label == "Go to Checkout")
+        #expect(suggestion.newResolvedElement.element.label == "Go to Checkout")
         #expect(suggestion.reasons.contains(.scoring(.labelSemanticRename)))
     }
 
@@ -529,14 +442,14 @@ private let expectedRepairJSONReportJSON = """
     func wrongActionCapabilityBlocksUnsupportedSuggestions() {
         let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Quantity"))
         let last = passedEvidence(
-            actionIdentity: HeistRepairActionIdentity(commandType: .increment),
+            command: .increment(target),
             target: target,
             before: makeTestInterface(elements: [
                 element(label: "Quantity", traits: [.adjustable], actions: [.increment, .decrement]),
             ])
         )
         let current = failedEvidence(
-            actionIdentity: HeistRepairActionIdentity(commandType: .increment),
+            command: .increment(target),
             target: target,
             before: makeTestInterface(elements: [
                 element(label: "Quantity", traits: [.staticText], actions: []),
@@ -550,14 +463,14 @@ private let expectedRepairJSONReportJSON = """
     func wrongActionCapabilityCanSuggestACompatibleSuccessorWithLoweredConfidence() throws {
         let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Quantity"))
         let last = passedEvidence(
-            actionIdentity: HeistRepairActionIdentity(commandType: .increment),
+            command: .increment(target),
             target: target,
             before: makeTestInterface(elements: [
                 element(label: "Quantity", value: "1", traits: [.adjustable], actions: [.increment, .decrement]),
             ])
         )
         let current = failedEvidence(
-            actionIdentity: HeistRepairActionIdentity(commandType: .increment),
+            command: .increment(target),
             target: target,
             before: makeTestInterface(elements: [
                 element(label: "Quantity", value: "1", traits: [.staticText], actions: []),
@@ -574,67 +487,47 @@ private let expectedRepairJSONReportJSON = """
         #expect(resolvedCount(suggestion.newTarget, in: current.beforeSnapshot) == 1)
     }
 
-    @Test("Suggested payload excludes geometry and runtime identifiers")
-    func suggestedPayloadExcludesGeometryAndRuntimeIdentifiers() throws {
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
-        let runtimeIdentifier = "view-A1B2C3D4-E5F6-7890-ABCD-EF1234567890"
-        let last = passedEvidence(
-            target: target,
-            before: makeTestInterface(nodes: [
-                testContainer(makeTestAccessibilityContainer(), children: [
-                    testElement(element(label: "Milk", traits: [.staticText])),
-                    testElement(element(
-                        label: "Delete",
-                        identifier: runtimeIdentifier,
-                        traits: [.button],
-                        actions: [.activate]
-                    )),
-                ]),
-            ])
-        )
-        let current = failedEvidence(
-            target: target,
-            before: makeTestInterface(nodes: [
-                testContainer(makeTestAccessibilityContainer(), children: [
-                    testElement(element(label: "Milk", traits: [.staticText])),
-                    testElement(element(
-                        label: "Remove",
-                        identifier: runtimeIdentifier,
-                        traits: [.button],
-                        actions: [.activate]
-                    )),
-                ]),
-            ])
-        )
-
-        let suggestion = try #require(HeistRepairSuggester.suggestions(for: request(last, current)).first)
-        let data = try JSONEncoder().encode(suggestion)
-        let json = try #require(String(data: data, encoding: .utf8))
-
-        #expect(!json.contains("frameX"))
-        #expect(!json.contains("frameY"))
-        #expect(!json.contains("activationPoint"))
-        #expect(!json.contains("capture"))
-        #expect(!json.contains("containerHandle"))
-        #expect(!json.contains(runtimeIdentifier))
-        #expect(suggestion.newResolvedElement.identifier == nil)
-        #expect(resolvedCount(suggestion.newTarget, in: current.beforeSnapshot) == 1)
-    }
-
-    @Test("JSON report encode shape stays stable")
-    func jsonReportEncodeShapeStaysStable() throws {
+    @Test("JSON report stores canonical elements inside Doctor context")
+    func jsonReportStoresCanonicalElementsInsideDoctorContext() throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
 
         let data = try encoder.encode(repairJSONReportFixture)
-        let json = try #require(String(data: data, encoding: .utf8))
         let probe = try JSONProbe(data: data).object()
         let decodedReport = try JSONDecoder().decode(HeistDoctorReport.self, from: data)
+        let suggestions = try probe.array("suggestions")
+        let suggestion = try #require(suggestions.first)
+        let context = try suggestion.object("newResolvedElement")
+        let element = try context.object("element")
 
-        #expect(json == expectedRepairJSONReportJSON)
         #expect(try probe.string("status") == HeistDoctorFeatureStatus.alpha.rawValue)
+        #expect(try context.array("siblingText").count == 1)
+        #expect(try element.string("description") == "Remove")
+        #expect(try element.string("label") == "Remove")
+        #expect(try element.double("frameWidth") == 100)
         try probe.assertRecursivelyMissingKeys(["featureStatus", "action" + "Kind"])
         #expect(decodedReport == repairJSONReportFixture)
+    }
+
+    @Test("Repair request round trips one evidence body and rejects reversed outcomes")
+    func repairRequestRoundTripsOneEvidenceBodyAndRejectsReversedOutcomes() throws {
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Pay"))
+        let interface = makeTestInterface(elements: [
+            element(label: "Pay", traits: [.button], actions: [.activate]),
+        ])
+        let last = passedEvidence(target: target, before: interface)
+        let current = failedEvidence(target: target, before: interface)
+        let repairRequest = try HeistRepairRequest(lastSuccess: last, currentFailure: current)
+
+        let data = try JSONEncoder().encode(repairRequest)
+        let decoded = try JSONDecoder().decode(HeistRepairRequest.self, from: data)
+
+        #expect(decoded == repairRequest)
+        #expect(decoded.lastSuccess.command == .activate(target))
+        #expect(decoded.currentFailure.command == .activate(target))
+        #expect(throws: (any Error).self) {
+            _ = try HeistRepairRequest(lastSuccess: current, currentFailure: last)
+        }
     }
 
     @Test
@@ -712,6 +605,84 @@ private let expectedRepairJSONReportJSON = """
         #expect(tiedBest.map(\.element.traversalIndex) == [1, 3])
         #expect(tiedBest.allSatisfy { $0.reasons.contains(.labelSemanticRename) })
         #expect(tiedBest.allSatisfy { $0.reasons.contains(.siblingRowContextPreserved) })
+    }
+
+    @Test("Repair screen keeps duplicate semantic nodes path-distinct across matching and selection")
+    func repairScreenKeepsDuplicateSemanticNodesPathDistinct() throws {
+        let screen = RepairScreen(interface: listInterface(rows: [
+            ("Milk", "Remove"),
+            ("Bread", "Remove"),
+        ]))
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Remove"))
+
+        guard case .ambiguous(let matches, let matchCount) = screen.resolve(target) else {
+            Issue.record("Expected duplicate labels to remain ambiguous")
+            return
+        }
+
+        #expect(matchCount == 2)
+        #expect(Set(matches.map(\.path)).count == 2)
+        #expect(matches.map(\.siblingText) == [["Milk"], ["Bread"]])
+
+        let second = try #require(matches.last)
+        let selection = try #require(screen.minimumUniquePredicate(for: second.id))
+        guard case .resolved(let resolved, let selectedMatchCount) = screen.resolve(selection.target) else {
+            Issue.record("Expected generated target to resolve")
+            return
+        }
+
+        #expect(selection.target == .predicate(
+            ElementPredicateTemplate(label: "Remove", traits: [.button]),
+            ordinal: 1
+        ))
+        #expect(selectedMatchCount == 2)
+        #expect(resolved.id == second.id)
+        #expect(resolved.path == second.path)
+    }
+
+    @Test("One screen context preserves scoring and output order across repair rules")
+    func oneScreenContextPreservesScoringAndOutputOrderAcrossRepairRules() throws {
+        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete item"))
+        let last = passedEvidence(
+            target: target,
+            before: sectionInterface(primaryAction: "Delete item")
+        )
+        let current = failedEvidence(
+            target: target,
+            before: sectionInterface(primaryAction: "Delete item now")
+        )
+
+        guard case .suggested(let diagnosis) = HeistRepairSuggester.diagnosis(for: request(last, current)) else {
+            Issue.record("Expected a repair suggestion")
+            return
+        }
+        let candidate = try #require(diagnosis.candidates.first)
+        let suggestion = try #require(diagnosis.suggestions.first)
+
+        #expect(candidate.reasons == [
+            .labelSemanticRename,
+            .controlRoleTraitsCompatible,
+            .elementActionsCompatible,
+            .siblingRowContextPreserved,
+            .headerContextPreserved,
+            .elementSupportsSameActionFamily,
+        ])
+        #expect(suggestion.newResolvedElement.siblingText == ["Milk"])
+        #expect(suggestion.newResolvedElement.headerText == ["Cart"])
+        #expect(suggestion.reasons == [
+            .oldTargetResolvedInLastSuccessfulSnapshot,
+            .oldTargetCurrentMatchCount(0),
+            .suggestedMatcherResolvesExactlyOneElement,
+            .missingTargetSuccessorSelected,
+            .scoring(.labelSemanticRename),
+            .scoring(.controlRoleTraitsCompatible),
+            .scoring(.elementActionsCompatible),
+            .scoring(.siblingRowContextPreserved),
+            .scoring(.headerContextPreserved),
+            .scoring(.elementSupportsSameActionFamily),
+            .changeFact(.lastSuccess, .noSemanticChange),
+            .changeFact(.currentFailure, .noSemanticChange),
+        ])
     }
 
     @Test("Ordered change facts explain value changes without requiring full after snapshot")
@@ -859,7 +830,7 @@ private let expectedRepairJSONReportJSON = """
         ])
         let dispatchTrace = AccessibilityTrace(first: before).appending(dispatchAfter)
         let expectationTrace = AccessibilityTrace(first: dispatchAfter).appending(expectationAfter)
-        let predicate = AccessibilityPredicate<RootContext>.changed(.screen())
+        let predicate = AccessibilityPredicate.changed(.screen())
         let failure = HeistFailureDetail(
             category: .expectation,
             contract: "action expectation is met",
@@ -892,14 +863,19 @@ private let expectedRepairJSONReportJSON = """
             failure: failure
         )
 
-        let repairEvidence = try HeistDoctor.failedRepairEvidence(from: step)
+        let repairEvidence = try HeistDoctor.repairEvidence(from: step)
 
         #expect(repairEvidence.beforeSnapshot == before)
         #expect(repairEvidence.changeFacts == dispatchTrace.changeFacts)
-        #expect(repairEvidence.result.method == .activate)
-        #expect(repairEvidence.result.errorKind == .timeout)
-        #expect(repairEvidence.result.message == "timed out waiting for checkout")
-        #expect(repairEvidence.result.expectation?.met == false)
+        #expect(repairEvidence.command == .activate(target))
+        #expect(repairEvidence.method == .activate)
+        #expect(repairEvidence.expectation?.met == false)
+        guard case .failed(let errorKind, let message) = repairEvidence.outcome else {
+            Issue.record("Expected failed repair evidence")
+            return
+        }
+        #expect(errorKind == .timeout)
+        #expect(message == "timed out waiting for checkout")
     }
 
     @Test("Doctor returns an error when no safe successor exists")
@@ -1054,15 +1030,18 @@ private let expectedRepairJSONReportJSON = """
     }
 
     private func request(
-        _ last: HeistPassedStepRepairEvidence,
-        _ current: HeistFailedStepRepairEvidence
+        _ last: HeistRepairEvidence,
+        _ current: HeistRepairEvidence
     ) -> HeistRepairRequest {
-        HeistRepairRequest(lastSuccess: last, currentFailure: current)
+        guard let request = try? HeistRepairRequest(lastSuccess: last, currentFailure: current) else {
+            preconditionFailure("repair request fixture requires passed then failed evidence")
+        }
+        return request
     }
 
     private func rankedCandidates(
-        last: HeistPassedStepRepairEvidence,
-        current: HeistFailedStepRepairEvidence,
+        last: HeistRepairEvidence,
+        current: HeistRepairEvidence,
         failureKind: HeistRepairFailureKind
     ) -> [ScoredCandidate] {
         let lastScreen = RepairScreen(interface: last.beforeSnapshot)
@@ -1071,13 +1050,13 @@ private let expectedRepairJSONReportJSON = """
             return []
         }
         let currentScreen = RepairScreen(interface: current.beforeSnapshot)
-        let actionFamily = RepairActionFamily(actionIdentity: current.actionIdentity)
+        let actionRequirement = RepairActionRequirement(command: current.command)
         return RepairCandidateGenerator.rankedSuccessorCandidates(
             oldResolved: oldResolved,
             currentScreen: currentScreen,
             preferredCandidates: [],
             failureKind: failureKind,
-            actionFamily: actionFamily,
+            actionRequirement: actionRequirement,
             lastSuccess: last,
             currentFailure: current
         )
@@ -1086,47 +1065,46 @@ private let expectedRepairJSONReportJSON = """
     private func passedEvidence(
         heistFingerprint: String? = nil,
         stepPath: String = "$.steps[0]",
-        actionIdentity: HeistRepairActionIdentity = HeistRepairActionIdentity(commandType: .activate),
+        command: HeistActionCommand? = nil,
         target: AccessibilityTarget,
         before: Interface,
         changeFacts: [AccessibilityTrace.ChangeFact] = [],
         expectation: ExpectationResult? = nil
-    ) -> HeistPassedStepRepairEvidence {
-        HeistPassedStepRepairEvidence(
+    ) -> HeistRepairEvidence {
+        let command = command ?? .activate(target)
+        return HeistRepairEvidence(
             heistFingerprint: heistFingerprint,
             stepPath: stepPath,
-            actionIdentity: actionIdentity,
+            command: command,
             target: target,
             beforeSnapshot: before,
             changeFacts: changeFacts,
-            result: RepairPassEvidence(
-                method: method(for: actionIdentity),
-                expectation: expectation
-            )
+            method: method(for: command),
+            expectation: expectation,
+            outcome: .passed
         )
     }
 
     private func failedEvidence(
         heistFingerprint: String? = nil,
         stepPath: String = "$.steps[0]",
-        actionIdentity: HeistRepairActionIdentity = HeistRepairActionIdentity(commandType: .activate),
+        command: HeistActionCommand? = nil,
         target: AccessibilityTarget,
         before: Interface,
         changeFacts: [AccessibilityTrace.ChangeFact] = [],
         expectation: ExpectationResult? = nil
-    ) -> HeistFailedStepRepairEvidence {
-        HeistFailedStepRepairEvidence(
+    ) -> HeistRepairEvidence {
+        let command = command ?? .activate(target)
+        return HeistRepairEvidence(
             heistFingerprint: heistFingerprint,
             stepPath: stepPath,
-            actionIdentity: actionIdentity,
+            command: command,
             target: target,
             beforeSnapshot: before,
             changeFacts: changeFacts,
-            result: RepairFailureEvidence(
-                method: method(for: actionIdentity),
-                errorKind: .elementNotFound,
-                expectation: expectation
-            )
+            method: method(for: command),
+            expectation: expectation,
+            outcome: .failed(errorKind: .elementNotFound, message: nil)
         )
     }
 
@@ -1145,8 +1123,8 @@ private let expectedRepairJSONReportJSON = """
         .changeFacts
     }
 
-    private func method(for actionIdentity: HeistRepairActionIdentity) -> ActionMethod? {
-        switch actionIdentity.commandType {
+    private func method(for command: HeistActionCommand) -> ActionMethod? {
+        switch command.wireType {
         case .activate:
             return .activate
         case .increment:
@@ -1163,6 +1141,20 @@ private let expectedRepairJSONReportJSON = """
                 testElement(element(label: action, traits: [.button], actions: [.activate])),
             ])
         })
+    }
+
+    private func sectionInterface(primaryAction: String) -> Interface {
+        makeTestInterface(nodes: [
+            testElement(element(label: "Cart", traits: [.header])),
+            testContainer(makeTestAccessibilityContainer(), children: [
+                testElement(element(label: "Milk", traits: [.staticText])),
+                testElement(element(label: primaryAction, traits: [.button], actions: [.activate])),
+            ]),
+            testContainer(makeTestAccessibilityContainer(), children: [
+                testElement(element(label: "Bread", traits: [.staticText])),
+                testElement(element(label: "Archive", traits: [.button], actions: [.activate])),
+            ]),
+        ])
     }
 
     private func broadMenuInterface(primaryAction: String?) -> Interface {

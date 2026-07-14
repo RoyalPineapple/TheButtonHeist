@@ -367,7 +367,7 @@ struct HeistCompilerTests {
     }
 
     @Test
-    func `conditionals accept only snapshot predicate types`() async throws {
+    func `conditionals compile with concrete screen assertions`() async throws {
         let temp = try CompilerTemporaryDirectory()
         let validSource = try temp.writeSwiftSource(
             named: "SnapshotConditional.swift",
@@ -389,55 +389,12 @@ struct HeistCompilerTests {
             }
             """
         )
-        let invalidIfSource = try temp.writeSwiftSource(
-            named: "TransitionIf.swift",
-            """
-            import ThePlans
-
-            func heist() throws -> HeistPlan {
-                try HeistPlan("TransitionIf") {
-                    If(.updated(.value("Ready"))) {
-                        Warn("ready")
-                    }
-                }
-            }
-            """
-        )
-        let invalidCaseSource = try temp.writeSwiftSource(
-            named: "TransitionCase.swift",
-            """
-            import ThePlans
-
-            func heist() throws -> HeistPlan {
-                try HeistPlan("TransitionCase") {
-                    If {
-                        Case(.appeared(.label("Ready"))) {
-                            Warn("ready")
-                        }
-                    }
-                }
-            }
-            """
-        )
-
         let (plan, _) = try await requireSuccess(HeistCompiler().compileFile(validSource))
         #expect(plan.body.count == 2)
-
-        let invalidIfDiagnostics = try await requireFailure(HeistCompiler().compileFile(invalidIfSource))
-        let invalidIfText = invalidIfDiagnostics.map(\.description).joined(separator: "\n")
-        #expect(invalidIfText.contains(
-            "requires the types 'ScreenAssertionContext' and 'ElementsAssertionContext' be equivalent"
-        ))
-
-        let invalidCaseDiagnostics = try await requireFailure(HeistCompiler().compileFile(invalidCaseSource))
-        let invalidCaseText = invalidCaseDiagnostics.map(\.description).joined(separator: "\n")
-        #expect(invalidCaseText.contains(
-            "requires the types 'ScreenAssertionContext' and 'ElementsAssertionContext' be equivalent"
-        ))
     }
 
     @Test
-    func `predicate composition shape is enforced by Swift types`() async throws {
+    func `canonical predicate composition compiles`() async throws {
         let temp = try CompilerTemporaryDirectory()
         let validSource = try temp.writeSwiftSource(
             named: "PredicateComposition.swift",
@@ -459,57 +416,8 @@ struct HeistCompilerTests {
             }
             """
         )
-        let emptyAllSource = try temp.writeSwiftSource(
-            named: "EmptyAll.swift",
-            """
-            import ThePlans
-
-            func heist() throws -> HeistPlan {
-                try HeistPlan("EmptyAll") {
-                    WaitFor(.changed())
-                }
-            }
-            """
-        )
-        let rawEmptyAllSource = try temp.writeSwiftSource(
-            named: "RawEmptyAll.swift",
-            """
-            import ThePlans
-
-            func heist() throws -> HeistPlan {
-                try HeistPlan("RawEmptyAll") {
-                    WaitFor(.changed(.screen([.screen([])])))
-                }
-            }
-            """
-        )
-        let nestedAnySource = try temp.writeSwiftSource(
-            named: "NestedAny.swift",
-            """
-            import ThePlans
-
-            func heist() throws -> HeistPlan {
-                try HeistPlan("NestedAny") {
-                    WaitFor(.changed(.all(.screen(), .elements())))
-                }
-            }
-            """
-        )
-
         let (plan, _) = try await requireSuccess(HeistCompiler().compileFile(validSource))
         #expect(plan.body.count == 4)
-
-        let emptyAllDiagnostics = try await requireFailure(HeistCompiler().compileFile(emptyAllSource))
-        let emptyAllText = emptyAllDiagnostics.map(\.description).joined(separator: "\n")
-        #expect(emptyAllText.contains("missing argument"))
-
-        let rawEmptyAllDiagnostics = try await requireFailure(HeistCompiler().compileFile(rawEmptyAllSource))
-        let rawEmptyAllText = rawEmptyAllDiagnostics.map(\.description).joined(separator: "\n")
-        #expect(rawEmptyAllText.contains("AccessibilityPredicate<ScreenAssertionContext>') has no member 'screen'"))
-
-        let nestedAnyDiagnostics = try await requireFailure(HeistCompiler().compileFile(nestedAnySource))
-        let nestedAnyText = nestedAnyDiagnostics.map(\.description).joined(separator: "\n")
-        #expect(nestedAnyText.contains("type 'ChangeDeclaration' has no member 'all'"))
     }
 
     @Test

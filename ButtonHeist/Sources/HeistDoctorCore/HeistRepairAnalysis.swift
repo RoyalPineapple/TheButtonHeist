@@ -28,17 +28,15 @@ enum HeistRepairAnalysis {
             return .ineligible(.oldTargetDidNotResolveExactlyOnce)
         }
 
-        let actionFamily = RepairActionFamily(
-            actionIdentity: request.currentFailure.actionIdentity
-        )
+        let actionRequirement = RepairActionRequirement(command: request.currentFailure.command)
         let currentResolution = currentScreen.resolve(request.lastSuccess.target)
         let failureKind: HeistRepairFailureKind
         let preferredCandidates: Set<PredicateSelectionElementId>
 
         switch currentResolution {
         case .resolved(let element, _):
-            guard actionFamily.isKnown,
-                  !actionFamily.isSupported(by: element.element)
+            guard actionRequirement.isKnown,
+                  !actionRequirement.isSupported(by: element.element)
             else {
                 return .ineligible(.oldTargetStillResolvesAndSupportsRequestedAction)
             }
@@ -62,17 +60,16 @@ enum HeistRepairAnalysis {
             currentScreen: currentScreen,
             preferredCandidates: preferredCandidates,
             failureKind: failureKind,
-            actionFamily: actionFamily,
+            actionRequirement: actionRequirement,
             lastSuccess: request.lastSuccess,
             currentFailure: request.currentFailure
         )
 
         return .eligible(HeistEligibleRepairAnalysis(
-            lastScreen: lastScreen,
             currentScreen: currentScreen,
             oldResolved: oldResolved,
             currentResolution: currentResolution,
-            actionFamily: actionFamily,
+            actionRequirement: actionRequirement,
             failureKind: failureKind,
             preferredCandidates: preferredCandidates,
             rankedCandidates: rankedCandidates
@@ -96,11 +93,10 @@ private extension UnsupportedRepairTargetKind {
 }
 
 struct HeistEligibleRepairAnalysis {
-    let lastScreen: RepairScreen
     let currentScreen: RepairScreen
     let oldResolved: RepairScreen.Element
     let currentResolution: RepairTargetResolution
-    let actionFamily: RepairActionFamily
+    let actionRequirement: RepairActionRequirement
     let failureKind: HeistRepairFailureKind
     let preferredCandidates: Set<PredicateSelectionElementId>
     let rankedCandidates: [ScoredCandidate]

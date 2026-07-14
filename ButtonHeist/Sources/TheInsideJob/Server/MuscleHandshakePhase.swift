@@ -8,7 +8,7 @@ struct MuscleHandshakePhase {
         envelope: RequestEnvelope,
         respond: @escaping TheMuscleAdmission.ResponseHandler,
         clientRegistry: inout TheMuscleClientRegistry,
-        tokenAdmission: inout SessionAdmission
+        tokenAdmission: inout TokenAdmission
     ) -> MuscleAdmissionDecision {
         guard envelope.buttonHeistVersion == buttonHeistVersion else {
             return .handled([
@@ -86,7 +86,7 @@ struct MuscleHandshakePhase {
         payload: AuthenticatePayload,
         respond: @escaping TheMuscleAdmission.ResponseHandler,
         clientRegistry: inout TheMuscleClientRegistry,
-        tokenAdmission: inout SessionAdmission
+        tokenAdmission: inout TokenAdmission
     ) -> MuscleAdmissionDecision {
         guard clientRegistry.phase(for: clientId)?.hasCompletedHello == true else {
             return .handled(MuscleAuthenticationRejection.unauthenticatedMessage(

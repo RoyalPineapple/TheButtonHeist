@@ -223,7 +223,7 @@ struct PublicRotorTextRange: Encodable {
 struct PublicExpectationResult: Encodable {
     let met: Bool
     let actual: String?
-    let expected: AccessibilityPredicate<RootContext>?
+    let expected: AccessibilityPredicate?
     let hint: String?
 
     init(projection: ExpectationProjection) {
@@ -589,7 +589,7 @@ struct PublicHeistCaseSelectionEvidence: Encodable {
 
 struct PublicHeistRepeatUntilEvidence: Encodable {
     let outcome: HeistPredicateEvidenceOutcome
-    let predicate: AccessibilityPredicate<RootContext>
+    let predicate: AccessibilityPredicate
     let timeout: Double
     let iterationCount: Int
     let iterationOrdinal: Int?

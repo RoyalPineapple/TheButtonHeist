@@ -126,21 +126,20 @@ extension Array where Element == (ClientMessage, String?) {
         }
     }
 
-    /// The sent heist plan's body resolved back to runtime actions (action and
-    /// wait steps) — what the in-app runtime dispatches after the public wire
-    /// receives a one-step plan.
-    var sentPlanMessages: [RuntimeActionMessage] {
+    var sentWaitSteps: [WaitStep] {
         guard let plan = sentHeistPlan else { return [] }
         return plan.body.compactMap { step in
-            switch step {
-            case .action(let action):
-                return try? action.command.resolveForRuntimeDispatch(in: .empty)
-            case .wait(let wait):
-                guard let resolved = try? wait.resolve(in: .empty) else { return nil }
-                return .wait(WaitTarget(predicate: resolved.predicate, timeout: resolved.timeout))
-            default:
-                return nil
-            }
+            if case .wait(let wait) = step { return wait }
+            return nil
+        }
+    }
+
+    /// The sent heist plan's action steps resolved to runtime commands.
+    var sentPlanMessages: [ResolvedHeistActionCommand] {
+        guard let plan = sentHeistPlan else { return [] }
+        return plan.body.compactMap { step in
+            guard case .action(let action) = step else { return nil }
+            return try? action.command.resolve(in: .empty)
         }
     }
 }
@@ -154,9 +153,9 @@ func semanticTarget(
 ) -> AccessibilityTarget {
     .predicate(
         ElementPredicateTemplate(
-            label: label.map(StringMatch<StringExpr>.literal),
-            identifier: identifier.map(StringMatch<StringExpr>.literal),
-            value: value.map(StringMatch<StringExpr>.literal),
+            label: label.map(StringMatch.exact),
+            identifier: identifier.map(StringMatch.exact),
+            value: value.map(StringMatch.exact),
             traits: traits ?? []
         ),
         ordinal: ordinal
@@ -338,22 +337,20 @@ private extension HeistStep {
 
 private extension HeistActionCommand {
     var fenceCommandForInspection: TheFence.Command {
-        switch self {
-        case .activate, .increment, .decrement, .customAction:
+        switch wireType {
+        case .activate, .increment, .decrement, .performCustomAction:
             return .activate
         case .rotor:
             return .rotor
-        case .dismiss:
+        case .dismiss, .magicTap:
             return .perform
-        case .magicTap:
-            return .perform
-        case .mechanicalTap:
+        case .oneFingerTap:
             return .oneFingerTap
-        case .mechanicalLongPress:
+        case .longPress:
             return .longPress
-        case .mechanicalSwipe:
+        case .swipe:
             return .swipe
-        case .mechanicalDrag:
+        case .drag:
             return .drag
         case .typeText:
             return .typeText
@@ -363,13 +360,13 @@ private extension HeistActionCommand {
             return .setPasteboard
         case .takeScreenshot:
             return .getScreen
-        case .viewportScroll:
+        case .scroll:
             return .scroll
-        case .viewportScrollToVisible:
+        case .scrollToVisible:
             return .scrollToVisible
-        case .viewportScrollToEdge:
+        case .scrollToEdge:
             return .scrollToEdge
-        case .dismissKeyboard:
+        case .resignFirstResponder:
             return .dismissKeyboard
         }
     }

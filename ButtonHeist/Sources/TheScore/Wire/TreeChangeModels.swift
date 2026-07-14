@@ -165,89 +165,22 @@ public enum ElementPropertyValue: Codable, Sendable, Equatable {
 
 }
 
-public protocol ElementPropertyValueKind: ElementPropertyKind {
-    associatedtype Value: Codable, Sendable, Equatable
+public struct ElementPropertyValueChange<Value: Codable & Sendable & Equatable>: Codable, Sendable, Equatable {
+    public let old: Value?
+    public let new: Value?
 
-    static func value(in element: HeistElement) -> Value?
-    static func expectedChange(from change: AnyPropertyChange) -> ElementPropertyChange<Self>?
-    static func valuesEqual(_ lhs: Value?, _ rhs: Value?) -> Bool
-    static func displayText(for value: Value) -> String
-    static func matches(_ checker: Checker, value: Value?) -> Bool
-    static func erasedValue(_ value: Value) -> ElementPropertyValue
-    static func change(old: Value?, new: Value?) -> PropertyChange
-}
-
-public extension ElementPropertyValueKind {
-    static func valuesEqual(_ lhs: Value?, _ rhs: Value?) -> Bool {
-        lhs == rhs
-    }
-}
-
-public protocol ElementTextPropertyValueKind: ElementPropertyValueKind where Value == String, Checker == StringMatch<String> {}
-
-public extension ElementTextPropertyValueKind {
-    static func displayText(for value: String) -> String {
-        value
-    }
-
-    static func matches(_ checker: StringMatch<String>, value: String?) -> Bool {
-        checker.matches(optional: value)
-    }
-
-    static func erasedValue(_ value: String) -> ElementPropertyValue {
-        .text(value)
-    }
-}
-
-public struct ElementPropertyValueChange<P: ElementPropertyValueKind>: Codable, Sendable {
-    public let old: P.Value?
-    public let new: P.Value?
-
-    public init(old: P.Value?, new: P.Value?) {
-        precondition(
-            !P.valuesEqual(old, new),
-            "\(P.property.rawValue) property changes must carry different old and new values"
-        )
+    public init(old: Value?, new: Value?) {
+        precondition(old != new, "property changes must carry different old and new values")
         self.old = old
         self.new = new
     }
 
-    public var oldValue: ElementPropertyValue? {
-        old.map(P.erasedValue)
-    }
-
-    public var newValue: ElementPropertyValue? {
-        new.map(P.erasedValue)
-    }
-
-    public var oldDisplayText: String? {
-        old.map { P.displayText(for: $0) }
-    }
-
-    public var newDisplayText: String? {
-        new.map { P.displayText(for: $0) }
-    }
-}
-
-extension ElementPropertyValueChange: Equatable {
-    public static func == (lhs: Self, rhs: Self) -> Bool {
-        P.valuesEqual(lhs.old, rhs.old) && P.valuesEqual(lhs.new, rhs.new)
-    }
-}
-
-extension ElementPropertyValueChange {
-    func satisfies(_ expected: AnyPropertyChange) -> Bool {
-        guard let expected = P.expectedChange(from: expected) else { return false }
-        return satisfies(expected)
-    }
-
-    func satisfies(_ expected: ElementPropertyChange<P>) -> Bool {
-        if let before = expected.before {
-            guard P.matches(before, value: old) else { return false }
-        }
-        if let after = expected.after {
-            guard P.matches(after, value: new) else { return false }
-        }
+    fileprivate func satisfies<Checker>(
+        _ expected: PropertyChangeCore<Checker>,
+        matches: (Checker, Value?) -> Bool
+    ) -> Bool {
+        if let before = expected.before, !matches(before, old) { return false }
+        if let after = expected.after, !matches(after, new) { return false }
         return true
     }
 }
@@ -255,16 +188,16 @@ extension ElementPropertyValueChange {
 /// A single typed property change. Each case pins the property to the only
 /// value type it can carry.
 public enum PropertyChange: Sendable, Equatable {
-    case label(ElementPropertyValueChange<LabelProperty>)
-    case identifier(ElementPropertyValueChange<IdentifierProperty>)
-    case value(ElementPropertyValueChange<ValueProperty>)
-    case traits(ElementPropertyValueChange<TraitsProperty>)
-    case hint(ElementPropertyValueChange<HintProperty>)
-    case actions(ElementPropertyValueChange<ActionsProperty>)
-    case frame(ElementPropertyValueChange<FrameProperty>)
-    case activationPoint(ElementPropertyValueChange<ActivationPointProperty>)
-    case customContent(ElementPropertyValueChange<CustomContentProperty>)
-    case rotors(ElementPropertyValueChange<RotorsProperty>)
+    case label(ElementPropertyValueChange<String>)
+    case identifier(ElementPropertyValueChange<String>)
+    case value(ElementPropertyValueChange<String>)
+    case traits(ElementPropertyValueChange<[HeistTrait]>)
+    case hint(ElementPropertyValueChange<String>)
+    case actions(ElementPropertyValueChange<ElementActionSet>)
+    case frame(ElementPropertyValueChange<ElementPropertyFrame>)
+    case activationPoint(ElementPropertyValueChange<ElementPropertyPoint>)
+    case customContent(ElementPropertyValueChange<[HeistCustomContent]>)
+    case rotors(ElementPropertyValueChange<[HeistRotor]>)
 
     public static func label(old: String?, new: String?) -> Self {
         .label(ElementPropertyValueChange(old: old, new: new))
@@ -279,7 +212,9 @@ public enum PropertyChange: Sendable, Equatable {
     }
 
     public static func traits(old: [HeistTrait]?, new: [HeistTrait]?) -> Self {
-        .traits(ElementPropertyValueChange(old: old, new: new))
+        let old = old.map(Self.canonicalTraits)
+        let new = new.map(Self.canonicalTraits)
+        return .traits(ElementPropertyValueChange(old: old, new: new))
     }
 
     public static func hint(old: String?, new: String?) -> Self {
@@ -315,127 +250,51 @@ public enum PropertyChange: Sendable, Equatable {
 
     public var property: ElementProperty {
         switch self {
-        case .label:
-            return LabelProperty.property
-        case .identifier:
-            return IdentifierProperty.property
-        case .value:
-            return ValueProperty.property
-        case .traits:
-            return TraitsProperty.property
-        case .hint:
-            return HintProperty.property
-        case .actions:
-            return ActionsProperty.property
-        case .frame:
-            return FrameProperty.property
-        case .activationPoint:
-            return ActivationPointProperty.property
-        case .customContent:
-            return CustomContentProperty.property
-        case .rotors:
-            return RotorsProperty.property
+        case .label: return .label
+        case .identifier: return .identifier
+        case .value: return .value
+        case .traits: return .traits
+        case .hint: return .hint
+        case .actions: return .actions
+        case .frame: return .frame
+        case .activationPoint: return .activationPoint
+        case .customContent: return .customContent
+        case .rotors: return .rotors
         }
     }
 
     public var oldValue: ElementPropertyValue? {
         switch self {
-        case .label(let change):
-            return change.oldValue
-        case .identifier(let change):
-            return change.oldValue
-        case .value(let change):
-            return change.oldValue
-        case .traits(let change):
-            return change.oldValue
-        case .hint(let change):
-            return change.oldValue
-        case .actions(let change):
-            return change.oldValue
-        case .frame(let change):
-            return change.oldValue
-        case .activationPoint(let change):
-            return change.oldValue
-        case .customContent(let change):
-            return change.oldValue
-        case .rotors(let change):
-            return change.oldValue
+        case .label(let change), .identifier(let change), .value(let change), .hint(let change):
+            return change.old.map(ElementPropertyValue.text)
+        case .traits(let change): return change.old.map(ElementPropertyValue.traits)
+        case .actions(let change): return change.old.map(ElementPropertyValue.actions)
+        case .frame(let change): return change.old.map(ElementPropertyValue.frame)
+        case .activationPoint(let change): return change.old.map(ElementPropertyValue.activationPoint)
+        case .customContent(let change): return change.old.map(ElementPropertyValue.customContent)
+        case .rotors(let change): return change.old.map(ElementPropertyValue.rotors)
         }
     }
 
     public var newValue: ElementPropertyValue? {
         switch self {
-        case .label(let change):
-            return change.newValue
-        case .identifier(let change):
-            return change.newValue
-        case .value(let change):
-            return change.newValue
-        case .traits(let change):
-            return change.newValue
-        case .hint(let change):
-            return change.newValue
-        case .actions(let change):
-            return change.newValue
-        case .frame(let change):
-            return change.newValue
-        case .activationPoint(let change):
-            return change.newValue
-        case .customContent(let change):
-            return change.newValue
-        case .rotors(let change):
-            return change.newValue
+        case .label(let change), .identifier(let change), .value(let change), .hint(let change):
+            return change.new.map(ElementPropertyValue.text)
+        case .traits(let change): return change.new.map(ElementPropertyValue.traits)
+        case .actions(let change): return change.new.map(ElementPropertyValue.actions)
+        case .frame(let change): return change.new.map(ElementPropertyValue.frame)
+        case .activationPoint(let change): return change.new.map(ElementPropertyValue.activationPoint)
+        case .customContent(let change): return change.new.map(ElementPropertyValue.customContent)
+        case .rotors(let change): return change.new.map(ElementPropertyValue.rotors)
         }
     }
 
     public var oldDisplayText: String? {
-        switch self {
-        case .label(let change):
-            return change.oldDisplayText
-        case .identifier(let change):
-            return change.oldDisplayText
-        case .value(let change):
-            return change.oldDisplayText
-        case .traits(let change):
-            return change.oldDisplayText
-        case .hint(let change):
-            return change.oldDisplayText
-        case .actions(let change):
-            return change.oldDisplayText
-        case .frame(let change):
-            return change.oldDisplayText
-        case .activationPoint(let change):
-            return change.oldDisplayText
-        case .customContent(let change):
-            return change.oldDisplayText
-        case .rotors(let change):
-            return change.oldDisplayText
-        }
+        oldValue?.displayText
     }
 
     public var newDisplayText: String? {
-        switch self {
-        case .label(let change):
-            return change.newDisplayText
-        case .identifier(let change):
-            return change.newDisplayText
-        case .value(let change):
-            return change.newDisplayText
-        case .traits(let change):
-            return change.newDisplayText
-        case .hint(let change):
-            return change.newDisplayText
-        case .actions(let change):
-            return change.newDisplayText
-        case .frame(let change):
-            return change.newDisplayText
-        case .activationPoint(let change):
-            return change.newDisplayText
-        case .customContent(let change):
-            return change.newDisplayText
-        case .rotors(let change):
-            return change.newDisplayText
-        }
+        newValue?.displayText
     }
 
     public var displayTransition: String {
@@ -455,25 +314,25 @@ extension PropertyChange: Codable {
         let property = try container.decode(ElementProperty.self, forKey: .property)
         switch property {
         case .label:
-            self = .label(try Self.decodeChange(LabelProperty.self, from: container))
+            self = .label(try Self.decodeChange(String.self, from: container))
         case .identifier:
-            self = .identifier(try Self.decodeChange(IdentifierProperty.self, from: container))
+            self = .identifier(try Self.decodeChange(String.self, from: container))
         case .value:
-            self = .value(try Self.decodeChange(ValueProperty.self, from: container))
+            self = .value(try Self.decodeChange(String.self, from: container))
         case .traits:
-            self = .traits(try Self.decodeChange(TraitsProperty.self, from: container))
+            self = .traits(try Self.decodeTraitsChange(from: container))
         case .hint:
-            self = .hint(try Self.decodeChange(HintProperty.self, from: container))
+            self = .hint(try Self.decodeChange(String.self, from: container))
         case .actions:
-            self = .actions(try Self.decodeChange(ActionsProperty.self, from: container))
+            self = .actions(try Self.decodeChange(ElementActionSet.self, from: container))
         case .frame:
-            self = .frame(try Self.decodeChange(FrameProperty.self, from: container))
+            self = .frame(try Self.decodeChange(ElementPropertyFrame.self, from: container))
         case .activationPoint:
-            self = .activationPoint(try Self.decodeChange(ActivationPointProperty.self, from: container))
+            self = .activationPoint(try Self.decodeChange(ElementPropertyPoint.self, from: container))
         case .customContent:
-            self = .customContent(try Self.decodeChange(CustomContentProperty.self, from: container))
+            self = .customContent(try Self.decodeChange([HeistCustomContent].self, from: container))
         case .rotors:
-            self = .rotors(try Self.decodeChange(RotorsProperty.self, from: container))
+            self = .rotors(try Self.decodeChange([HeistRotor].self, from: container))
         }
     }
 
@@ -504,25 +363,25 @@ extension PropertyChange: Codable {
         }
     }
 
-    private static func encodeChange<P: ElementPropertyValueKind>(
-        _ change: ElementPropertyValueChange<P>,
+    private static func encodeChange<Value>(
+        _ change: ElementPropertyValueChange<Value>,
         to container: inout KeyedEncodingContainer<CodingKeys>
-    ) throws {
+    ) throws where Value: Codable & Sendable & Equatable {
         try container.encodeIfPresent(change.old, forKey: .old)
         try container.encodeIfPresent(change.new, forKey: .new)
     }
 
-    private static func decodeChange<P: ElementPropertyValueKind>(
-        _ property: P.Type,
+    private static func decodeChange<Value>(
+        _ value: Value.Type,
         from container: KeyedDecodingContainer<CodingKeys>
-    ) throws -> ElementPropertyValueChange<P> {
-        let old = try container.decodeIfPresent(P.Value.self, forKey: .old)
-        let new = try container.decodeIfPresent(P.Value.self, forKey: .new)
-        guard !P.valuesEqual(old, new) else {
+    ) throws -> ElementPropertyValueChange<Value> where Value: Codable & Sendable & Equatable {
+        let old = try container.decodeIfPresent(Value.self, forKey: .old)
+        let new = try container.decodeIfPresent(Value.self, forKey: .new)
+        guard old != new else {
             throw DecodingError.dataCorruptedError(
                 forKey: .property,
                 in: container,
-                debugDescription: "\(P.property.rawValue) property change must carry different old and new values"
+                debugDescription: "property change must carry different old and new values"
             )
         }
         return ElementPropertyValueChange(
@@ -530,183 +389,63 @@ extension PropertyChange: Codable {
             new: new
         )
     }
+
+    private static func decodeTraitsChange(
+        from container: KeyedDecodingContainer<CodingKeys>
+    ) throws -> ElementPropertyValueChange<[HeistTrait]> {
+        let old = try container.decodeIfPresent([HeistTrait].self, forKey: .old).map(Self.canonicalTraits)
+        let new = try container.decodeIfPresent([HeistTrait].self, forKey: .new).map(Self.canonicalTraits)
+        guard old != new else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .property,
+                in: container,
+                debugDescription: "property change must carry different old and new values"
+            )
+        }
+        return ElementPropertyValueChange(old: old, new: new)
+    }
+
+    private static func canonicalTraits(_ traits: [HeistTrait]) -> [HeistTrait] {
+        Set(traits).sorted { $0.rawValue < $1.rawValue }
+    }
 }
 
 extension PropertyChange {
-    package func satisfies(_ expected: AnyPropertyChange) -> Bool {
-        switch self {
-        case .label(let observed):
-            return observed.satisfies(expected)
-        case .identifier(let observed):
-            return observed.satisfies(expected)
-        case .value(let observed):
-            return observed.satisfies(expected)
-        case .traits(let observed):
-            return observed.satisfies(expected)
-        case .hint(let observed):
-            return observed.satisfies(expected)
-        case .actions(let observed):
-            return observed.satisfies(expected)
-        case .frame(let observed):
-            return observed.satisfies(expected)
-        case .activationPoint(let observed):
-            return observed.satisfies(expected)
-        case .customContent(let observed):
-            return observed.satisfies(expected)
-        case .rotors(let observed):
-            return observed.satisfies(expected)
+    package func satisfies(_ expected: ResolvedElementPropertyChange) -> Bool {
+        switch (self, expected.core) {
+        case (.value(let observed), .value(let change)), (.hint(let observed), .hint(let change)):
+            return observed.satisfies(change) { ResolvedStringMatch(core: $0).matches(optional: $1) }
+        case (.traits(let observed), .traits(let change)):
+            return observed.satisfies(change, matches: Self.matchesTraits)
+        case (.actions(let observed), .actions(let change)):
+            return observed.satisfies(change, matches: Self.matchesActions)
+        case (.frame(let observed), .frame(let change)):
+            return observed.satisfies(change, matches: Self.matchesFrame)
+        case (.activationPoint(let observed), .activationPoint(let change)):
+            return observed.satisfies(change, matches: Self.matchesPoint)
+        case (.customContent(let observed), .customContent(let change)):
+            return observed.satisfies(change, matches: Self.matchesCustomContent)
+        case (.rotors(let observed), .rotors(let change)):
+            return observed.satisfies(change, matches: Self.matchesRotors)
+        default:
+            return false
         }
     }
-}
 
-extension ValueProperty: ElementTextPropertyValueKind {
-    public static func value(in element: HeistElement) -> String? {
-        element.value
-    }
-
-    public static func expectedChange(from change: AnyPropertyChange) -> ElementPropertyChange<Self>? {
-        guard case .value(let expected) = change else { return nil }
-        return expected
-    }
-
-    public static func change(old: String?, new: String?) -> PropertyChange {
-        .value(old: old, new: new)
-    }
-}
-
-extension LabelProperty: ElementTextPropertyValueKind {
-    public static func value(in element: HeistElement) -> String? {
-        element.label
-    }
-
-    public static func expectedChange(from _: AnyPropertyChange) -> ElementPropertyChange<Self>? {
-        nil
-    }
-
-    public static func change(old: String?, new: String?) -> PropertyChange {
-        .label(old: old, new: new)
-    }
-}
-
-extension IdentifierProperty: ElementTextPropertyValueKind {
-    public static func value(in element: HeistElement) -> String? {
-        element.identifier
-    }
-
-    public static func expectedChange(from _: AnyPropertyChange) -> ElementPropertyChange<Self>? {
-        nil
-    }
-
-    public static func change(old: String?, new: String?) -> PropertyChange {
-        .identifier(old: old, new: new)
-    }
-}
-
-extension TraitsProperty: ElementPropertyValueKind {
-    public typealias Value = [HeistTrait]
-
-    public static func value(in element: HeistElement) -> [HeistTrait]? {
-        element.traits
-    }
-
-    public static func expectedChange(from change: AnyPropertyChange) -> ElementPropertyChange<Self>? {
-        guard case .traits(let expected) = change else { return nil }
-        return expected
-    }
-
-    public static func valuesEqual(_ lhs: [HeistTrait]?, _ rhs: [HeistTrait]?) -> Bool {
-        lhs.map(Set.init) == rhs.map(Set.init)
-    }
-
-    public static func displayText(for value: [HeistTrait]) -> String {
-        value.orderedByRawValue.map(\.rawValue).joined(separator: ", ")
-    }
-
-    public static func matches(_ checker: TraitSetMatch, value: [HeistTrait]?) -> Bool {
+    private static func matchesTraits(_ checker: TraitSetMatch, _ value: [HeistTrait]?) -> Bool {
         guard let value else { return false }
         let traits = Set(value)
         return checker.include.isSubset(of: traits)
             && checker.exclude.isDisjoint(with: traits)
     }
 
-    public static func erasedValue(_ value: [HeistTrait]) -> ElementPropertyValue {
-        .traits(value.orderedByRawValue)
-    }
-
-    public static func change(old: [HeistTrait]?, new: [HeistTrait]?) -> PropertyChange {
-        .traits(old: old, new: new)
-    }
-}
-
-extension HintProperty: ElementTextPropertyValueKind {
-    public static func value(in element: HeistElement) -> String? {
-        element.hint
-    }
-
-    public static func expectedChange(from change: AnyPropertyChange) -> ElementPropertyChange<Self>? {
-        guard case .hint(let expected) = change else { return nil }
-        return expected
-    }
-
-    public static func change(old: String?, new: String?) -> PropertyChange {
-        .hint(old: old, new: new)
-    }
-}
-
-extension ActionsProperty: ElementPropertyValueKind {
-    public typealias Value = ElementActionSet
-
-    public static func value(in element: HeistElement) -> ElementActionSet? {
-        ElementActionSet(element.actions)
-    }
-
-    public static func expectedChange(from change: AnyPropertyChange) -> ElementPropertyChange<Self>? {
-        guard case .actions(let expected) = change else { return nil }
-        return expected
-    }
-
-    public static func displayText(for value: ElementActionSet) -> String {
-        value.displayText
-    }
-
-    public static func matches(_ checker: ActionSetMatch, value: ElementActionSet?) -> Bool {
+    private static func matchesActions(_ checker: ActionSetMatch, _ value: ElementActionSet?) -> Bool {
         guard let value else { return false }
         return checker.include.isSubset(of: value.actions)
             && checker.exclude.isDisjoint(with: value.actions)
     }
 
-    public static func erasedValue(_ value: ElementActionSet) -> ElementPropertyValue {
-        .actions(value)
-    }
-
-    public static func change(old: ElementActionSet?, new: ElementActionSet?) -> PropertyChange {
-        .actions(old: old, new: new)
-    }
-}
-
-extension FrameProperty: ElementPropertyValueKind {
-    public typealias Value = ElementPropertyFrame
-
-    public static func value(in element: HeistElement) -> ElementPropertyFrame? {
-        let frame = element.screenFrame
-        return ElementPropertyFrame(
-            x: Int(frame.x),
-            y: Int(frame.y),
-            width: Int(frame.width),
-            height: Int(frame.height)
-        )
-    }
-
-    public static func expectedChange(from change: AnyPropertyChange) -> ElementPropertyChange<Self>? {
-        guard case .frame(let expected) = change else { return nil }
-        return expected
-    }
-
-    public static func displayText(for value: ElementPropertyFrame) -> String {
-        value.displayText
-    }
-
-    public static func matches(_ checker: ElementFrameMatch, value: ElementPropertyFrame?) -> Bool {
+    private static func matchesFrame(_ checker: ElementFrameMatch, _ value: ElementPropertyFrame?) -> Bool {
         guard let value else { return false }
         return checker.x.map { $0 == value.x } ?? true
             && checker.y.map { $0 == value.y } ?? true
@@ -714,122 +453,29 @@ extension FrameProperty: ElementPropertyValueKind {
             && checker.height.map { $0 == value.height } ?? true
     }
 
-    public static func erasedValue(_ value: ElementPropertyFrame) -> ElementPropertyValue {
-        .frame(value)
-    }
-
-    public static func change(old: ElementPropertyFrame?, new: ElementPropertyFrame?) -> PropertyChange {
-        .frame(old: old, new: new)
-    }
-}
-
-extension ActivationPointProperty: ElementPropertyValueKind {
-    public typealias Value = ElementPropertyPoint
-
-    public static func value(in element: HeistElement) -> ElementPropertyPoint? {
-        guard let point = element.activationPointEvidence.point else { return nil }
-        return ElementPropertyPoint(
-            x: Int(point.x),
-            y: Int(point.y)
-        )
-    }
-
-    public static func expectedChange(from change: AnyPropertyChange) -> ElementPropertyChange<Self>? {
-        guard case .activationPoint(let expected) = change else { return nil }
-        return expected
-    }
-
-    public static func displayText(for value: ElementPropertyPoint) -> String {
-        value.displayText
-    }
-
-    public static func matches(_ checker: ElementPointMatch, value: ElementPropertyPoint?) -> Bool {
+    private static func matchesPoint(_ checker: ElementPointMatch, _ value: ElementPropertyPoint?) -> Bool {
         guard let value else { return false }
         return checker.x.map { $0 == value.x } ?? true
             && checker.y.map { $0 == value.y } ?? true
     }
 
-    public static func erasedValue(_ value: ElementPropertyPoint) -> ElementPropertyValue {
-        .activationPoint(value)
-    }
-
-    public static func change(old: ElementPropertyPoint?, new: ElementPropertyPoint?) -> PropertyChange {
-        .activationPoint(old: old, new: new)
-    }
-}
-
-extension CustomContentProperty: ElementPropertyValueKind {
-    public typealias Value = [HeistCustomContent]
-
-    public static func value(in element: HeistElement) -> [HeistCustomContent]? {
-        let content = element.customContent?.filter { !$0.label.isEmpty || !$0.value.isEmpty } ?? []
-        return content.isEmpty ? nil : content
-    }
-
-    public static func expectedChange(from change: AnyPropertyChange) -> ElementPropertyChange<Self>? {
-        guard case .customContent(let expected) = change else { return nil }
-        return expected
-    }
-
-    public static func displayText(for value: [HeistCustomContent]) -> String {
-        value.compactMap { item -> String? in
-            switch (item.label.isEmpty, item.value.isEmpty) {
-            case (false, false): return "\(item.label): \(item.value)"
-            case (false, true): return item.label
-            case (true, false): return item.value
-            case (true, true): return nil
-            }
-        }.joined(separator: "; ")
-    }
-
-    public static func matches(_ checker: CustomContentMatch<String>, value: [HeistCustomContent]?) -> Bool {
+    private static func matchesCustomContent(
+        _ checker: CustomContentMatchCore<String>,
+        _ value: [HeistCustomContent]?
+    ) -> Bool {
         guard let value else { return false }
         return value.contains { checker.matches($0) }
     }
 
-    public static func erasedValue(_ value: [HeistCustomContent]) -> ElementPropertyValue {
-        .customContent(value)
-    }
-
-    public static func change(old: [HeistCustomContent]?, new: [HeistCustomContent]?) -> PropertyChange {
-        .customContent(old: old, new: new)
-    }
-}
-
-extension RotorsProperty: ElementPropertyValueKind {
-    public typealias Value = [HeistRotor]
-
-    public static func value(in element: HeistElement) -> [HeistRotor]? {
-        let rotors = element.rotors?.filter { !$0.name.isEmpty } ?? []
-        return rotors.isEmpty ? nil : rotors
-    }
-
-    public static func expectedChange(from change: AnyPropertyChange) -> ElementPropertyChange<Self>? {
-        guard case .rotors(let expected) = change else { return nil }
-        return expected
-    }
-
-    public static func displayText(for value: [HeistRotor]) -> String {
-        value.map(\.name).joined(separator: ", ")
-    }
-
-    public static func matches(_ checker: RotorSetMatch<String>, value: [HeistRotor]?) -> Bool {
+    private static func matchesRotors(_ checker: RotorSetMatchCore<String>, _ value: [HeistRotor]?) -> Bool {
         guard let value else { return false }
         let rotorNames = value.map(\.name)
         return checker.include.allSatisfy { rotorNames.contains(matching: $0) }
             && checker.exclude.allSatisfy { !rotorNames.contains(matching: $0) }
     }
-
-    public static func erasedValue(_ value: [HeistRotor]) -> ElementPropertyValue {
-        .rotors(value)
-    }
-
-    public static func change(old: [HeistRotor]?, new: [HeistRotor]?) -> PropertyChange {
-        .rotors(old: old, new: new)
-    }
 }
 
-private extension CustomContentMatch where Value == String {
+private extension CustomContentMatchCore where Text == String {
     func matches(_ content: HeistCustomContent) -> Bool {
         label.matches(content.label)
             && value.matches(content.value)
@@ -837,21 +483,15 @@ private extension CustomContentMatch where Value == String {
     }
 }
 
-private extension Optional where Wrapped == StringMatch<String> {
+private extension Optional where Wrapped == StringMatchCore<String> {
     func matches(_ text: String) -> Bool {
-        map { $0.matches(text) } ?? true
+        map { ResolvedStringMatch(core: $0).matches(text) } ?? true
     }
 }
 
 private extension Collection where Element == String {
-    func contains(matching match: StringMatch<String>) -> Bool {
-        contains { match.matches($0) }
-    }
-}
-
-private extension Sequence where Element == HeistTrait {
-    var orderedByRawValue: [HeistTrait] {
-        sorted { $0.rawValue < $1.rawValue }
+    func contains(matching match: StringMatchCore<String>) -> Bool {
+        contains { ResolvedStringMatch(core: match).matches($0) }
     }
 }
 

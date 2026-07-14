@@ -17,12 +17,18 @@ extension TheBurglar {
     /// resolves context, computes container names, and applies live facts.
     static func buildObservation(from result: ParseResult) -> InterfaceObservation {
         let hierarchy = screenCoordinateHierarchy(from: result)
+        let identityContext = buildHierarchyIdentityContext(
+            hierarchy: hierarchy,
+            scrollableContainerPaths: InterfaceObservationBuildFacts.scrollContextContainerPaths(
+                from: result
+            )
+        )
         let facts = InterfaceObservationBuildFacts.extract(
             from: result,
-            screenCoordinateHierarchy: hierarchy
+            identityContext: identityContext
         )
         let projection = buildObservationProjection(
-            hierarchy: hierarchy,
+            identityContext: identityContext,
             facts: facts
         )
         logObservationBuildEvents(projection.logEvents)
@@ -35,8 +41,12 @@ extension TheBurglar {
     /// Entry used by focused tests with synthetic facts. Projection stays pure;
     /// live refs are attached afterward at the live-capture boundary.
     static func buildObservation(from result: ParseResult, facts: InterfaceObservationBuildFacts) -> InterfaceObservation {
-        let projection = buildObservationProjection(
+        let identityContext = buildHierarchyIdentityContext(
             hierarchy: screenCoordinateHierarchy(from: result),
+            scrollableContainerPaths: facts.scroll.contextContainerPaths
+        )
+        let projection = buildObservationProjection(
+            identityContext: identityContext,
             facts: facts
         )
         return buildObservation(
@@ -46,21 +56,17 @@ extension TheBurglar {
     }
 
     private static func buildObservationProjection(
-        hierarchy: [AccessibilityHierarchy],
+        identityContext: HierarchyIdentityContext,
         facts: InterfaceObservationBuildFacts
     ) -> InterfaceObservationBuildProjection {
-        let indexedElements = hierarchy.pathIndexedElements
-        let identityContext = buildContainerIdentityContext(
-            hierarchy: hierarchy,
-            scrollableContainerPaths: facts.scroll.contextContainerPaths
-        )
         let containerNamesByPath = buildContainerNamesByPath(
-            hierarchy: hierarchy,
             identityContext: identityContext
         )
+        let containerContentFramesByPath = identityContext.contentFramesByPath
+        let containerScrollMembershipsByPath = identityContext.scrollMembershipsByPath
 
         let entries = buildObservationEntries(
-            indexedElements: indexedElements,
+            indexedElements: identityContext.elements,
             facts: facts
         )
 
@@ -91,11 +97,11 @@ extension TheBurglar {
             uniqueKeysWithValues: entries.map { ($0.path, $0.heistId) }
         )
         let snapshot = LiveCapture.Snapshot(
-            hierarchy: hierarchy,
+            hierarchy: identityContext.hierarchy,
             containerNamesByPath: containerNamesByPath,
             heistIdsByPath: heistIdsByPath,
-            containerContentFramesByPath: identityContext.contentFramesByPath,
-            containerScrollMembershipsByPath: identityContext.scrollMembershipsByPath,
+            containerContentFramesByPath: containerContentFramesByPath,
+            containerScrollMembershipsByPath: containerScrollMembershipsByPath,
             containerObservedScrollContentActivationPointsByPath: facts.scroll.containerObservedScrollContentActivationPointsByPath,
             scrollInventoriesByPath: facts.scroll.inventoriesByPath,
             firstResponderHeistId: firstResponderHeistId
@@ -105,10 +111,10 @@ extension TheBurglar {
                 uniqueKeysWithValues: entries.map { ($0.heistId, $0.treeElement) }
             ),
             containers: semanticContainers(
-                hierarchy: hierarchy,
+                identityContext: identityContext,
                 containerNamesByPath: containerNamesByPath,
-                containerContentFramesByPath: identityContext.contentFramesByPath,
-                containerScrollMembershipsByPath: identityContext.scrollMembershipsByPath,
+                containerContentFramesByPath: containerContentFramesByPath,
+                containerScrollMembershipsByPath: containerScrollMembershipsByPath,
                 containerObservedScrollContentActivationPointsByPath: facts.scroll.containerObservedScrollContentActivationPointsByPath,
                 scrollInventoriesByPath: facts.scroll.inventoriesByPath
             ),
@@ -151,7 +157,7 @@ extension TheBurglar {
     }
 
     private static func buildObservationEntries(
-        indexedElements: [PathIndexedAccessibilityElement],
+        indexedElements: [HierarchyElementIdentity],
         facts: InterfaceObservationBuildFacts
     ) -> [InterfaceObservationBuildEntry] {
         let heistIds = TheStash.IdAssignment.assign(indexedElements.map(\.element))
@@ -178,7 +184,7 @@ extension TheBurglar {
     }
 
     private static func semanticContainers(
-        hierarchy: [AccessibilityHierarchy],
+        identityContext: HierarchyIdentityContext,
         containerNamesByPath: [TreePath: ContainerName],
         containerContentFramesByPath: [TreePath: ContentRect],
         containerScrollMembershipsByPath: [TreePath: InterfaceTree.ScrollMembership],
@@ -186,17 +192,17 @@ extension TheBurglar {
         scrollInventoriesByPath: [TreePath: ScrollInventory]
     ) -> [TreePath: InterfaceTree.Container] {
         Dictionary(
-            uniqueKeysWithValues: hierarchy.pathIndexedContainers.map { item in
+            uniqueKeysWithValues: identityContext.containers.map { identity in
                 (
-                    item.path,
+                    identity.path,
                     InterfaceTree.Container(
-                        container: item.container,
-                        path: item.path,
-                        containerName: containerNamesByPath[item.path],
-                        contentRect: containerContentFramesByPath[item.path],
-                        scrollMembership: containerScrollMembershipsByPath[item.path],
-                        observedScrollContentActivationPoint: containerObservedScrollContentActivationPointsByPath[item.path],
-                        scrollInventory: scrollInventoriesByPath[item.path]
+                        container: identity.container,
+                        path: identity.path,
+                        containerName: containerNamesByPath[identity.path],
+                        contentRect: containerContentFramesByPath[identity.path],
+                        scrollMembership: containerScrollMembershipsByPath[identity.path],
+                        observedScrollContentActivationPoint: containerObservedScrollContentActivationPointsByPath[identity.path],
+                        scrollInventory: scrollInventoriesByPath[identity.path]
                     )
                 )
             }
@@ -208,43 +214,58 @@ extension TheBurglar {
     /// surfaces need UIKit accessibility screen coordinates, so restore those by
     /// applying each parse root's screen offset at the parser boundary.
     private static func screenCoordinateHierarchy(from result: ParseResult) -> [AccessibilityHierarchy] {
-        result.hierarchy.enumerated().map { index, node in
-            screenCoordinateNode(
-                node,
-                path: TreePath([index]),
-                inheritedOffset: .zero,
-                screenCoordinateOffsetsByPath: result.screenCoordinateOffsetsByPath
-            )
-        }
-    }
-
-    private static func screenCoordinateNode(
-        _ node: AccessibilityHierarchy,
-        path: TreePath,
-        inheritedOffset: CGPoint,
-        screenCoordinateOffsetsByPath: [TreePath: CGPoint]
-    ) -> AccessibilityHierarchy {
-        let offset = screenCoordinateOffsetsByPath[path] ?? inheritedOffset
-        switch node {
-        case .element(let element, let traversalIndex):
-            return .element(
-                element.translatedBy(x: offset.x, y: offset.y),
-                traversalIndex: traversalIndex
-            )
-
-        case .container(let container, let children):
-            let mappedChildren = children.enumerated().map { childIndex, child in
-                screenCoordinateNode(
-                    child,
-                    path: path.appending(childIndex),
-                    inheritedOffset: offset,
-                    screenCoordinateOffsetsByPath: screenCoordinateOffsetsByPath
+        var offsetsByPath: [TreePath: CGPoint] = [:]
+        var records: [ScreenCoordinateNodeRecord] = []
+        for subtree in result.hierarchy.pathIndexedSubtrees {
+            let inheritedOffset = subtree.path.parent.flatMap { offsetsByPath[$0] } ?? .zero
+            let offset = result.screenCoordinateOffsetsByPath[subtree.path] ?? inheritedOffset
+            offsetsByPath[subtree.path] = offset
+            let content: ScreenCoordinateNodeContent
+            switch subtree.hierarchy {
+            case .element(let element, let traversalIndex):
+                content = .element(
+                    element.translatedBy(x: offset.x, y: offset.y),
+                    traversalIndex: traversalIndex
+                )
+            case .container(let container, let children):
+                content = .container(
+                    container.translatedBy(x: offset.x, y: offset.y),
+                    childCount: children.count
                 )
             }
-            return .container(
-                container.translatedBy(x: offset.x, y: offset.y),
-                children: mappedChildren
-            )
+            records.append(ScreenCoordinateNodeRecord(path: subtree.path, content: content))
+        }
+
+        var translatedNodesByPath: [TreePath: AccessibilityHierarchy] = [:]
+        for record in records.reversed() {
+            switch record.content {
+            case .element(let element, let traversalIndex):
+                translatedNodesByPath[record.path] = .element(
+                    element,
+                    traversalIndex: traversalIndex
+                )
+            case .container(let container, let childCount):
+                let children = (0..<childCount).map { childIndex in
+                    let childPath = record.path.appending(childIndex)
+                    guard let child = translatedNodesByPath[childPath] else {
+                        preconditionFailure(
+                            "Missing translated hierarchy child at path \(childPath.indices)"
+                        )
+                    }
+                    return child
+                }
+                translatedNodesByPath[record.path] = .container(
+                    container,
+                    children: children
+                )
+            }
+        }
+        return result.hierarchy.indices.map { rootIndex in
+            let path = TreePath([rootIndex])
+            guard let root = translatedNodesByPath[path] else {
+                preconditionFailure("Missing translated hierarchy root at path \(path.indices)")
+            }
+            return root
         }
     }
 
@@ -275,20 +296,16 @@ extension TheBurglar {
     // MARK: - Container Name Index
 
     private static func buildContainerNamesByPath(
-        hierarchy: [AccessibilityHierarchy],
-        identityContext: ContainerIdentityContext
+        identityContext: HierarchyIdentityContext
     ) -> [TreePath: ContainerName] {
-        let candidates = hierarchy.compactMapSubtrees { node, path -> ContainerNameCandidate? in
-            guard case .container(let container, _) = node else { return nil }
-            let contentFrame = identityContext.contentFramesByPath[path]
-                ?? ContentRect(container.frame.cgRect)
+        let candidates = identityContext.containers.map { identity in
             let readableName = containerName(
-                for: container,
-                contentFrame: contentFrame
+                for: identity.container,
+                contentFrame: identity.contentFrame
             )
             return ContainerNameCandidate(
-                path: path,
-                node: node,
+                path: identity.path,
+                node: identity.subtree,
                 readableName: readableName
             )
         }
@@ -355,6 +372,16 @@ extension TheBurglar {
     private struct ContainerIdentityPayload: Encodable {
         let path: [Int]
         let subtree: AccessibilityHierarchy
+    }
+
+    private enum ScreenCoordinateNodeContent {
+        case element(AccessibilityElement, traversalIndex: Int)
+        case container(AccessibilityContainer, childCount: Int)
+    }
+
+    private struct ScreenCoordinateNodeRecord {
+        let path: TreePath
+        let content: ScreenCoordinateNodeContent
     }
 
     private struct InterfaceObservationBuildEntry: Equatable {

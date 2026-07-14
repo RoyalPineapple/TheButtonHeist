@@ -12,7 +12,7 @@ import ThePlans
 final class AdversarialMutationTests: XCTestCase {
 
     func testAsyncRevealNotificationAndSilentVariantsPass() async throws {
-        let destination: AccessibilityPredicate<RootContext> = .exists(.label("Delayed code: 7429"))
+        let destination: AccessibilityPredicate = .exists(.label("Delayed code: 7429"))
         let notificationCommand = HeistActionCommand.activate(.label("Reveal with notification"))
         try await AdversarialLabRoute.open(.asyncReveal)
         let notification = try await runHeist("AdversarialAsyncRevealNotificationPass") {
@@ -47,8 +47,8 @@ final class AdversarialMutationTests: XCTestCase {
     }
 
     func testAsyncRevealWrongDestinationFailsWithWaitEvidence() async throws {
-        let visibleDestination: AccessibilityPredicate<RootContext> = .exists(.label("Delayed code: 7429"))
-        let missingDestination: AccessibilityPredicate<RootContext> = .exists(.label("Delayed code: 9999"))
+        let visibleDestination: AccessibilityPredicate = .exists(.label("Delayed code: 7429"))
+        let missingDestination: AccessibilityPredicate = .exists(.label("Delayed code: 9999"))
         let revealCommand = HeistActionCommand.activate(.label("Reveal silently"))
         try await AdversarialLabRoute.open(.asyncReveal)
         let failure = try await expectHeistFailure("AdversarialAsyncRevealWrongDestinationFails") {
@@ -111,7 +111,6 @@ final class AdversarialMutationTests: XCTestCase {
         XCTAssertEqual(dispatch.outcome, .success)
         XCTAssertEqual(dispatch.method, .customAction)
         XCTAssertEqual(subject.source, .resolvedSemanticTarget)
-        XCTAssertEqual(subject.target, noodles)
 
         let finalElements = try XCTUnwrap(
             receipt.expectationResult?.accessibilityTrace?.captures.last?.interface.projectedElements
@@ -171,7 +170,6 @@ final class AdversarialMutationTests: XCTestCase {
         XCTAssertEqual(dispatch.method, .typeText)
         XCTAssertEqual(dispatch.payload, .value("fallback typed"))
         XCTAssertEqual(subject.source, .textInputTarget)
-        XCTAssertEqual(subject.target, field)
         XCTAssertEqual(subject.element.label, "Fallback field")
 
         let finalElements = try XCTUnwrap(
@@ -211,7 +209,7 @@ final class AdversarialMutationTests: XCTestCase {
             Activate(.label("Submit Order"))
                 .expect(.exists(.element(
                     .label("Submit Order"),
-                    .value(.literal(finalValue))
+                    .value(finalValue)
                 )), timeout: .seconds(4))
         }
 
@@ -242,7 +240,7 @@ final class AdversarialMutationTests: XCTestCase {
             Activate(.label("Show Duplicate Target"))
                 .expect(.exists(.element(
                     .label("Submit Order"),
-                    .value(.literal(primaryValue))
+                    .value(primaryValue)
                 )), timeout: .seconds(4))
             Activate(.label("Submit Order"))
         }

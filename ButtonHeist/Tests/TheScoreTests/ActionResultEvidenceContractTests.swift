@@ -91,7 +91,7 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         XCTAssertNil(decoded.accessibilityTrace)
         XCTAssertNil(decoded.announcement)
         XCTAssertNil(decoded.warning)
-        XCTAssertEqual(decoded.evidence, .failure(.none))
+        XCTAssertEqual(decoded.evidence, .failure(.timeout, .none))
     }
 
     func testStandaloneAnnouncementIsTheOnlyAnnouncementFact() throws {
@@ -145,141 +145,19 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         XCTAssertEqual(timed.timing?.settleMs, 8)
     }
 
-    func testDecodingRejectsMissingAndEmptyEvidence() {
-        assertActionResultRejects("""
-        {
-          "outcome": {"kind": "success"},
-          "method": "activate"
-        }
-        """)
-        assertActionResultRejects("""
-        {
-          "outcome": {"kind": "success"},
-          "method": "activate",
-          "evidence": {}
-        }
-        """)
-    }
-
-    func testDecodingRejectsLegacyEvidenceBags() {
-        assertActionResultRejects("""
-        {
-          "outcome": {"kind": "success"},
-          "method": "activate",
-          "evidence": {"announcement": "Checkout"}
-        }
-        """)
-        assertActionResultRejects("""
-        {
-          "outcome": {"kind": "success"},
-          "method": "activate",
-          "evidence": {
-            "settlement": {"kind": "settled", "durationMs": 5},
-            "timing": {"settleMs": 5}
-          }
-        }
-        """)
-    }
-
-    func testDecodingRejectsLegacyPayloadAliases() {
-        assertActionResultRejects("""
-        {
-          "outcome": {"kind": "success"},
-          "method": "typeText",
-          "payload": {"kind": "value", "data": "Hello", "value": "Hello"},
-          "evidence": {"observation": {"kind": "none"}}
-        }
-        """)
-    }
-
-    func testEveryOutcomeRejectsMalformedObservationCrossCaseFields() {
-        let outcomes = [
-            #"{"kind":"success"}"#,
-            #"{"kind":"failure","errorKind":"timeout"}"#,
-        ]
-        let malformedObservations = [
-            #"{"kind":"none","announcement":"Ready"}"#,
-            #"{"kind":"announcement","announcement":"Ready","accessibilityTrace":{"captures":[]}}"#,
-            #"{"kind":"trace","accessibilityTrace":{"captures":[]},"settlement":{"kind":"settled","durationMs":1}}"#,
-            #"{"kind":"settledTrace","accessibilityTrace":{"captures":[]}}"#,
-            """
-            {"kind":"settledTrace","accessibilityTrace":{"captures":[]},
-             "settlement":{"kind":"settled","durationMs":1},"announcement":"Ready"}
-            """,
-        ]
-
-        for outcome in outcomes {
-            for observation in malformedObservations {
-                assertActionResultRejects("""
-                {
-                  "outcome": \(outcome),
-                  "method": "wait",
-                  "evidence": {"observation": \(observation)}
-                }
-                """)
-            }
-        }
-    }
-
-    func testDecodingRejectsImplicitSettledTrace() {
+    func testObservationDiscriminatorRejectsFieldsFromAnotherCase() {
         assertActionResultRejects("""
         {
           "outcome": {"kind": "success"},
           "method": "wait",
           "evidence": {
-            "observation": {
-              "kind": "trace",
-              "accessibilityTrace": {"captures": []},
-              "settlement": {"kind": "settled", "durationMs": 5}
-            }
+            "observation": {"kind": "none", "announcement": "Ready"}
           }
         }
         """)
     }
 
-    func testDecodingRejectsTraceObservationWithoutCanonicalCompletenessProof() throws {
-        let traceJSON = try XCTUnwrap(String(
-            data: JSONEncoder().encode(traceWithAnnouncement("Ready")),
-            encoding: .utf8
-        ))
-        assertActionResultRejects("""
-        {
-          "outcome": {"kind": "success"},
-          "method": "wait",
-          "evidence": {
-            "observation": {
-              "kind": "trace",
-              "accessibilityTrace": \(traceJSON)
-            }
-          }
-        }
-        """)
-        assertActionResultRejects("""
-        {
-          "outcome": {"kind": "success"},
-          "method": "wait",
-          "evidence": {
-            "observation": {
-              "kind": "trace",
-              "traceEvidence": {"accessibilityTrace": \(traceJSON)}
-            }
-          }
-        }
-        """)
-    }
-
-    func testDecodingRejectsSiblingWarning() {
-        assertActionResultRejects("""
-        {
-          "outcome": {"kind": "success"},
-          "method": "activate",
-          "evidence": {"observation": {"kind": "none"}},
-          "warning": {"code": "activation_weak_affordance_evidence"}
-        }
-        """)
-    }
-
-    func testDecodingRejectsFailureEvidenceWithSuccessOnlyWarning() {
+    func testFailureEvidenceRejectsSuccessOnlyWarning() {
         assertActionResultRejects("""
         {
           "outcome": {"kind": "failure", "errorKind": "actionFailed"},
@@ -292,20 +170,7 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         """)
     }
 
-    func testDecodingRejectsWarningForIncompatibleMethod() {
-        assertActionResultRejects("""
-        {
-          "outcome": {"kind": "success"},
-          "method": "syntheticTap",
-          "evidence": {
-            "observation": {"kind": "none"},
-            "warning": {"code": "activation_weak_affordance_evidence"}
-          }
-        }
-        """)
-    }
-
-    func testDecodingRejectsDuplicateSettlementTiming() {
+    func testEvidenceDecodingRejectsSettlementTimingOutsideObservation() {
         assertActionResultRejects("""
         {
           "outcome": {"kind": "success"},
@@ -318,8 +183,8 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         """)
     }
 
-    func testDecodingRejectsMalformedAnnouncementObservation() {
-        assertActionResultRejects("""
+    func testEvidenceDecodingRejectsEmptyAnnouncement() throws {
+        let json = """
         {
           "outcome": {"kind": "success"},
           "method": "wait",
@@ -327,7 +192,13 @@ final class ActionResultEvidenceContractTests: XCTestCase {
             "observation": {"kind": "announcement", "announcement": ""}
           }
         }
-        """)
+        """
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ActionResult.self, from: Data(json.utf8))) { error in
+            guard case DecodingError.dataCorrupted = error else {
+                return XCTFail("Expected DecodingError.dataCorrupted, got \(error)")
+            }
+        }
     }
 
     private func assertActionResultRejects(

@@ -7,7 +7,7 @@ import ThePlans
 extension ElementInflation {
 
     internal func stateAfterRefresh(
-        target: AccessibilityTarget,
+        target: ResolvedAccessibilityTarget,
         treeElement: InterfaceTree.Element,
         resolution: ActionSubjectResolution,
         method: ActionMethod,
@@ -82,7 +82,7 @@ extension ElementInflation {
     }
 
     internal func findTargetInTree(
-        _ target: AccessibilityTarget
+        _ target: ResolvedAccessibilityTarget
     ) async -> Result<TreeTargetMatch, ElementInflationFailure> {
         switch visibleTargetResolution(target) {
         case .success(let visible):
@@ -123,7 +123,7 @@ extension ElementInflation {
     }
 
     internal func knownSemanticTarget(
-        _ target: AccessibilityTarget
+        _ target: ResolvedAccessibilityTarget
     ) -> Result<InterfaceTree.Element, ElementInflationFailure> {
         switch stash.resolveTarget(target) {
         case .resolved(let treeElement):
@@ -136,7 +136,7 @@ extension ElementInflation {
     }
 
     internal func visibleTargetResolution(
-        _ target: AccessibilityTarget
+        _ target: ResolvedAccessibilityTarget
     ) -> Result<InterfaceTree.Element, ElementInflationFailure>? {
         switch stash.resolveVisibleTarget(target) {
         case .resolved(let treeElement):
@@ -150,7 +150,7 @@ extension ElementInflation {
 
     internal func resolveCurrentLiveElementTarget(
         treeElement: InterfaceTree.Element,
-        target: AccessibilityTarget,
+        target: ResolvedAccessibilityTarget,
         method: ActionMethod,
         deadline: SemanticObservationDeadline,
         resolution: ActionSubjectResolution
@@ -181,7 +181,7 @@ extension ElementInflation {
     }
 
     private func resolveFreshElementTarget(
-        target: AccessibilityTarget,
+        target: ResolvedAccessibilityTarget,
         treeElement: InterfaceTree.Element,
         method: ActionMethod,
         deadline: SemanticObservationDeadline,
@@ -197,7 +197,7 @@ extension ElementInflation {
     }
 
     private func resolveLiveElementTarget(
-        target: AccessibilityTarget,
+        target: ResolvedAccessibilityTarget,
         treeElement: InterfaceTree.Element,
         method: ActionMethod,
         deadline: SemanticObservationDeadline,

@@ -9,7 +9,7 @@ struct MuscleAuthenticationRequestDecoder {
         do {
             return try RequestEnvelope.decoded(from: data)
         } catch {
-            muscleAuthenticationLogger.error("Failed to decode client message: \(error)")
+            muscleLogger.error("Failed to decode client message: \(error)")
             return nil
         }
     }

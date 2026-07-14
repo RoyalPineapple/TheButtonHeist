@@ -84,7 +84,7 @@ package enum TodoScreen {
     package static let completeItem = HeistDef<String>("TodoScreen.completeItem", parameter: "item") { item in
         let completedItem = ElementPredicateTemplate(
             label: .exact(item),
-            value: .exact(.literal("Completed"))
+            value: .exact("Completed")
         )
         let visibleItem = ElementPredicateTemplate(label: .exact(item))
 

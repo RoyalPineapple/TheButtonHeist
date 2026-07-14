@@ -186,7 +186,7 @@ final class InterfaceComputedTests: XCTestCase {
     }
 
     func testAccessibilityPredicateDescriptionComposesPredicate() {
-        let predicate = AccessibilityPredicate<RootContext>.exists(.element(.label("Done"), traits: [.button]))
+        let predicate = AccessibilityPredicate.exists(.element(.label("Done"), traits: [.button]))
 
         XCTAssertEqual(
             predicate.description,

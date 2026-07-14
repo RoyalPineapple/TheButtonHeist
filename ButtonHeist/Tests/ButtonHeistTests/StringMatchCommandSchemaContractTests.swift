@@ -236,7 +236,7 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
 
             XCTAssertEqual(
                 specsByKey["type"]?.enumValues,
-                AccessibilityPredicate<RootContext>.wireTypeValues
+                AccessibilityPredicate.wireTypeValues
             )
             XCTAssertEqual(specsByKey["match"]?.type, .stringMatch)
             XCTAssertEqual(specsByKey["match"]?.required, false)

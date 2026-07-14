@@ -27,8 +27,8 @@ final class AccessibilityTargetOptionsTests: XCTestCase {
             .predicate(
                 ElementPredicateTemplate(
                     [
-                        .label(.literal("Save")),
-                        .identifier(.literal("saveButton")),
+                        .label("Save"),
+                        .identifier("saveButton"),
                         .traits([.button]),
                         .exclude(.traits([.notEnabled])),
                     ]
@@ -38,127 +38,61 @@ final class AccessibilityTargetOptionsTests: XCTestCase {
         )
     }
 
-    func testGestureElementObjectUsesCanonicalCodableTargetBridge() throws {
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Save", identifier: "saveButton", value: "1", traits: [.button])
+    func testTapOptionsEncodeCanonicalTapTarget() throws {
+        let command = try TapSubcommand.parse(["--label", "Save"])
+
+        try assertCanonicalArguments(
+            try command.requestArguments(),
+            equalTo: TapTarget(selection: .element(.label("Save")))
         )
-        let object = TapSubcommand.elementObject(target)
-        let semanticArguments = CLIRequestBuilder.arguments(target: target)
-        guard case .object(let semanticObject)? = semanticArguments.value(for: .target) else {
-            return XCTFail("Expected semantic target object")
-        }
-
-        XCTAssertEqual(object.heistValue, try TheFence.HeistValuePayloadEncoder.encode(target))
-        XCTAssertEqual(object.heistValue, .object(semanticObject))
-        XCTAssertEqual(object[.checks], .array([
-            .object([
-                "kind": .string("label"),
-                "match": .object([
-                    "mode": .string("exact"),
-                    "value": .string("Save"),
-                ]),
-            ]),
-            .object([
-                "kind": .string("identifier"),
-                "match": .object([
-                    "mode": .string("exact"),
-                    "value": .string("saveButton"),
-                ]),
-            ]),
-            .object([
-                "kind": .string("value"),
-                "match": .object([
-                    "mode": .string("exact"),
-                    "value": .string("1"),
-                ]),
-            ]),
-            .object([
-                "kind": .string("traits"),
-                "values": .array([.string("button")]),
-            ]),
-        ]))
     }
 
-    func testScopedTargetBridgeIncludesContainerScrollableAndActionsChecks() throws {
-        let target = AccessibilityTarget.within(
-            container: .matching(
-                .type(.list),
-                .identifier("orders"),
-                .scrollable(true),
-                .actions(.init(.custom("Sub"), .activate))
-            ),
-            .predicate(ElementPredicateTemplate(label: "Checkout"))
+    func testLongPressOptionsEncodeCanonicalLongPressTarget() throws {
+        let command = try LongPressSubcommand.parse(["--x", "12", "--y", "34", "--duration", "1.25"])
+
+        try assertCanonicalArguments(
+            try command.requestArguments(),
+            equalTo: LongPressTarget(
+                selection: .coordinate(ScreenPoint(x: 12, y: 34)),
+                duration: try GestureDuration(validatingSeconds: 1.25)
+            )
         )
-
-        let object = CLIRequestBuilder.targetObject(target)
-
-        XCTAssertEqual(object.heistValue, try TheFence.HeistValuePayloadEncoder.encode(target))
-        XCTAssertEqual(object[.container], .object([
-            "checks": .array([
-                .object([
-                    "kind": .string("type"),
-                    "type": .string("list"),
-                ]),
-                .object([
-                    "kind": .string("identifier"),
-                    "match": .object([
-                        "mode": .string("exact"),
-                        "value": .string("orders"),
-                    ]),
-                ]),
-                .object([
-                    "kind": .string("scrollable"),
-                    "value": .bool(true),
-                ]),
-                .object([
-                    "kind": .string("actions"),
-                    "values": .array([
-                        .string("activate"),
-                        .object(["custom": .string("Sub")]),
-                    ]),
-                ]),
-            ]),
-        ]))
     }
 
-    func testCLIRequestFieldsAccumulateRepeatedTypedKeysBeforeWireRendering() {
-        var object = CLIRequestFields()
-
-        object.appendOneOrMany(.string("button"), for: .traits)
-        object.appendOneOrMany(.string("selected"), for: .traits)
-
-        XCTAssertEqual(object[.traits], .array([.string("button"), .string("selected")]))
-        XCTAssertEqual(object.rawValues, [
-            FenceParameterKey.traits.rawValue: .array([.string("button"), .string("selected")]),
+    func testSwipeOptionsEncodeCanonicalSwipeTarget() throws {
+        let command = try SwipeSubcommand.parse([
+            "--label", "Map",
+            "--start-x", "0.8",
+            "--start-y", "0.5",
+            "--end-x", "0.2",
+            "--end-y", "0.5",
         ])
-    }
 
-    func testCLIRequestFieldsSetNestedValuesThroughTypedKeys() {
-        let targetObject = CLIRequestFields([
-            (.label, .object([
-                FenceParameterKey.mode.rawValue: .string("exact"),
-                FenceParameterKey.value.rawValue: .string("Save"),
-            ])),
-        ])
-        var parameters = CLIRequestFields()
-
-        parameters.set(.target, targetObject)
-
-        XCTAssertEqual(parameters[.target], targetObject.heistValue)
-        XCTAssertEqual(parameters.rawValues, [
-            FenceParameterKey.target.rawValue: targetObject.heistValue,
-        ])
-    }
-
-    func testCommandArgumentWriterBuildsTypedParametersAndSkipsNilFields() {
-        let parameters = CommandArgumentWriter.parameters(
-            CommandArgumentWriter.value(.text, "hello"),
-            CommandArgumentWriter.value(.timeout, 2.5),
-            CommandArgumentWriter.optional(.rotor, Optional<String>.none)
+        try assertCanonicalArguments(
+            try command.requestArguments(),
+            equalTo: SwipeTarget(selection: .unitElement(
+                .label("Map"),
+                start: UnitPoint(x: 0.8, y: 0.5),
+                end: UnitPoint(x: 0.2, y: 0.5)
+            ))
         )
+    }
 
-        XCTAssertEqual(parameters[.text], .string("hello"))
-        XCTAssertEqual(parameters[.timeout], .double(2.5))
-        XCTAssertNil(parameters[.rotor])
+    func testDragOptionsEncodeCanonicalDragTarget() throws {
+        let command = try DragSubcommand.parse([
+            "--from-x", "10",
+            "--from-y", "20",
+            "--to-x", "30",
+            "--to-y", "40",
+        ])
+
+        try assertCanonicalArguments(
+            try command.requestArguments(),
+            equalTo: DragTarget(selection: .pointToPoint(
+                start: ScreenPoint(x: 10, y: 20),
+                end: ScreenPoint(x: 30, y: 40)
+            ))
+        )
     }
 
     func testOrdinalOnlyIsRejectedAtTypedTargetBoundary() throws {
@@ -186,5 +120,23 @@ final class AccessibilityTargetOptionsTests: XCTestCase {
                 "Unexpected error: \(error)"
             )
         }
+    }
+}
+
+private func assertCanonicalArguments<Payload: Encodable>(
+    _ arguments: TheFence.CommandArgumentEnvelope,
+    equalTo payload: Payload,
+    file: StaticString = #filePath,
+    line: UInt = #line
+) throws {
+    guard case .object(let expected) = try TheFence.HeistValuePayloadEncoder.encode(payload) else {
+        return XCTFail("Expected canonical payload to encode as an object", file: file, line: line)
+    }
+    for (rawKey, value) in expected {
+        guard let key = FenceParameterKey(rawValue: rawKey) else {
+            XCTFail("Expected non-empty canonical payload key", file: file, line: line)
+            continue
+        }
+        XCTAssertEqual(arguments.value(for: key), value, file: file, line: line)
     }
 }

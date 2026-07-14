@@ -206,11 +206,11 @@ extension EditActionTarget: CustomStringConvertible {
 /// ride through intermediate settled states until the requested change is met.
 public struct WaitTarget: Codable, Sendable, Equatable {
     /// The predicate to wait on.
-    public let predicate: AccessibilityPredicate<RootContext>
+    public let predicate: AccessibilityPredicate
     /// Maximum time to wait in seconds (default: 30, max: 30).
     public let timeout: Double?
 
-    public init(predicate: AccessibilityPredicate<RootContext>, timeout: Double? = nil) {
+    public init(predicate: AccessibilityPredicate, timeout: Double? = nil) {
         self.predicate = predicate
         self.timeout = timeout
     }
@@ -224,7 +224,7 @@ public struct WaitTarget: Codable, Sendable, Equatable {
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "wait target")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.predicate = try container.decode(AccessibilityPredicate<RootContext>.self, forKey: .predicate)
+        self.predicate = try container.decode(AccessibilityPredicate.self, forKey: .predicate)
         self.timeout = try container.decodeIfPresent(Double.self, forKey: .timeout)
     }
 

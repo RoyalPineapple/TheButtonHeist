@@ -81,15 +81,6 @@ struct InterfaceContainerProjection: Sendable {
 indirect enum InterfaceNodeProjection: Sendable {
     case element(InterfaceElementProjection)
     case container(InterfaceContainerProjection)
-
-    var elementCount: Int {
-        switch self {
-        case .element:
-            return 1
-        case .container(let container):
-            return container.children.reduce(0) { $0 + $1.elementCount }
-        }
-    }
 }
 
 struct InterfaceProjection: Sendable {
@@ -118,146 +109,205 @@ struct InterfaceProjection: Sendable {
         navigation = InterfaceNavigationProjection(screenTitle: screenTitle, elements: projectedElements)
         elementCount = projectedElementRecords.count
 
-        var accumulator = InterfaceProjectionAccumulator(totalNodeBudget: profile.limits.totalNodeBudget)
-        let context = InterfaceProjectionContext(
-            detail: profile.interfaceDetail,
+        var builder = InterfaceProjectionBuilder(
+            graph: interface.graph,
             visibleElementBudget: profile.limits.visibleElementBudget,
-            elementsByPath: Dictionary(uniqueKeysWithValues: projectedElementRecords.map { ($0.path, $0.element) }),
-            containerAnnotations: interface.annotations.containerByPath
+            totalNodeBudget: profile.limits.totalNodeBudget
         )
-        var counter = 0
-        var remainingElements: Int?
-        tree = interface.tree.enumerated().compactMap { index, node in
-            Self.project(
-                InterfaceNodeProjectionRequest(
-                    node: node,
-                    path: TreePath([index])
-                ),
-                context: context,
-                accumulator: &accumulator,
-                counter: &counter,
-                remainingElements: &remainingElements
-            )
-        }
-        rendering = accumulator.rendering(
+        tree = builder.build()
+        rendering = builder.rendering(
             observedElementCount: elementCount,
             visibleElementBudget: profile.limits.visibleElementBudget,
             totalNodeBudget: profile.limits.totalNodeBudget
         )
     }
+}
 
-    private static func project(
-        _ request: InterfaceNodeProjectionRequest,
-        context: InterfaceProjectionContext,
-        accumulator: inout InterfaceProjectionAccumulator,
-        counter: inout Int,
-        remainingElements: inout Int?
-    ) -> InterfaceNodeProjection? {
-        switch request.node {
-        case .element:
-            let order = counter
-            counter += 1
-            if let remaining = remainingElements {
-                guard remaining > 0 else { return nil }
-            }
-            guard accumulator.consumeNode() else { return nil }
-            if let remaining = remainingElements {
-                remainingElements = remaining - 1
-            }
-            accumulator.recordRenderedElement()
-            guard let projected = context.elementsByPath[request.path] else {
-                preconditionFailure("InterfaceProjection missing projected element at path \(request.path.indices)")
-            }
-            return .element(InterfaceElementProjection(element: projected, order: order))
+private struct InterfaceProjectionBuilder {
+    private let graph: InterfaceGraph
+    private let visibleElementBudget: Int
+    private let measurements: InterfaceProjectionMeasurements
 
-        case .container(let container, let children):
-            let observedElementCount = children.reduce(0) { $0 + $1.pathIndexedElements().count }
-            if let remaining = remainingElements, remaining <= 0 {
-                counter += observedElementCount
-                return nil
-            }
-            guard accumulator.consumeNode() else {
-                counter += observedElementCount
-                return nil
-            }
+    private var accumulator: InterfaceProjectionAccumulator
+    private var rootChildren: [InterfaceNodeProjection] = []
+    private var containerFrames: [InterfaceContainerProjectionFrame] = []
+    private var suppressedSubtreePath: TreePath?
+    private var elementOrder = 0
 
-            let scrollPolicy = ScrollSubtreeProjectionPolicy(
-                container: container,
-                observedElementCount: observedElementCount,
-                visibleElementBudget: context.visibleElementBudget,
-                parentRemainingElementBudget: remainingElements
-            )
-            let childResult = projectChildren(
-                InterfaceChildrenProjectionRequest(
-                    children: children,
-                    parentPath: request.path,
-                    remainingElementBudget: scrollPolicy.childRemainingElementBudget
-                ),
-                context: context,
-                accumulator: &accumulator,
-                counter: &counter
-            )
-            remainingElements = scrollPolicy.parentRemainingElementBudget(after: childResult)
-            let truncation = scrollPolicy.truncation(after: childResult, accumulator: &accumulator)
-
-            return .container(InterfaceContainerProjection(
-                container: container,
-                containerName: context.containerAnnotations[request.path]?.containerName?.rawValue,
-                scrollInventory: context.containerAnnotations[request.path]?.scrollInventory,
-                observedElementCount: observedElementCount,
-                truncation: truncation,
-                children: childResult.children
-            ))
-        }
+    init(graph: InterfaceGraph, visibleElementBudget: Int, totalNodeBudget: Int) {
+        self.graph = graph
+        self.visibleElementBudget = visibleElementBudget
+        measurements = InterfaceProjectionMeasurements(nodes: graph.nodesInPathOrder)
+        accumulator = InterfaceProjectionAccumulator(totalNodeBudget: totalNodeBudget)
     }
 
-    private static func projectChildren(
-        _ request: InterfaceChildrenProjectionRequest,
-        context: InterfaceProjectionContext,
-        accumulator: inout InterfaceProjectionAccumulator,
-        counter: inout Int
-    ) -> InterfaceChildrenProjectionResult {
-        var remainingElementBudget = request.remainingElementBudget
-        let children = request.children.enumerated().compactMap { index, child in
-            project(
-                InterfaceNodeProjectionRequest(
-                    node: child,
-                    path: request.parentPath.appending(index)
-                ),
-                context: context,
-                accumulator: &accumulator,
-                counter: &counter,
-                remainingElements: &remainingElementBudget
-            )
+    mutating func build() -> [InterfaceNodeProjection] {
+        for record in graph.nodesInPathOrder {
+            closeContainers(outside: record.path)
+
+            if let suppressedSubtreePath,
+               record.path.hasPrefix(suppressedSubtreePath) {
+                if case .element = record.kind {
+                    elementOrder += 1
+                }
+                continue
+            }
+            suppressedSubtreePath = nil
+
+            switch record.kind {
+            case .element(let element):
+                project(element)
+            case .container(let container):
+                begin(container)
+            }
         }
-        return InterfaceChildrenProjectionResult(
-            children: children,
-            remainingElementBudget: remainingElementBudget
+        closeContainers(outside: nil)
+        return rootChildren
+    }
+
+    func rendering(
+        observedElementCount: Int,
+        visibleElementBudget: Int,
+        totalNodeBudget: Int
+    ) -> InterfaceRenderingProjection {
+        accumulator.rendering(
+            observedElementCount: observedElementCount,
+            visibleElementBudget: visibleElementBudget,
+            totalNodeBudget: totalNodeBudget
         )
     }
+
+    private mutating func project(_ record: InterfaceGraphElementRecord) {
+        let order = elementOrder
+        elementOrder += 1
+        if let remainingElementBudget, remainingElementBudget <= 0 {
+            return
+        }
+        guard accumulator.consumeNode() else { return }
+        if let remainingElementBudget {
+            self.remainingElementBudget = remainingElementBudget - 1
+        }
+        accumulator.recordRenderedElement()
+        append(.element(InterfaceElementProjection(
+            element: record.projectedElement,
+            order: order
+        )))
+    }
+
+    private mutating func begin(_ record: InterfaceGraphContainerRecord) {
+        if let remainingElementBudget, remainingElementBudget <= 0 {
+            suppressedSubtreePath = record.path
+            return
+        }
+        guard accumulator.consumeNode() else {
+            suppressedSubtreePath = record.path
+            return
+        }
+
+        let observedElementCount = measurements.elementCount(at: record.path)
+        let scrollPolicy = ScrollSubtreeProjectionPolicy(
+            container: record.container,
+            observedElementCount: observedElementCount,
+            visibleElementBudget: visibleElementBudget,
+            parentRemainingElementBudget: remainingElementBudget
+        )
+        containerFrames.append(InterfaceContainerProjectionFrame(
+            path: record.path,
+            container: record.container,
+            containerName: record.annotation?.containerName?.rawValue,
+            scrollInventory: record.annotation?.scrollInventory,
+            observedElementCount: observedElementCount,
+            scrollPolicy: scrollPolicy,
+            remainingElementBudget: scrollPolicy.childRemainingElementBudget
+        ))
+    }
+
+    private mutating func closeContainers(outside path: TreePath?) {
+        while let frame = containerFrames.last,
+              path.map({ !$0.hasPrefix(frame.path) }) ?? true {
+            closeContainer()
+        }
+    }
+
+    private mutating func closeContainer() {
+        let frame = containerFrames.removeLast()
+        let parentRemainingElementBudget = frame.scrollPolicy.parentRemainingElementBudget(
+            after: frame.remainingElementBudget
+        )
+        if !containerFrames.isEmpty {
+            containerFrames[containerFrames.count - 1].remainingElementBudget = parentRemainingElementBudget
+        } else {
+            precondition(parentRemainingElementBudget == nil, "top-level projection budget must be unbounded")
+        }
+        let truncation = frame.scrollPolicy.truncation(
+            after: frame.remainingElementBudget,
+            accumulator: &accumulator
+        )
+        append(.container(InterfaceContainerProjection(
+            container: frame.container,
+            containerName: frame.containerName,
+            scrollInventory: frame.scrollInventory,
+            observedElementCount: frame.observedElementCount,
+            truncation: truncation,
+            children: frame.children
+        )))
+    }
+
+    private mutating func append(_ node: InterfaceNodeProjection) {
+        guard !containerFrames.isEmpty else {
+            rootChildren.append(node)
+            return
+        }
+        containerFrames[containerFrames.count - 1].children.append(node)
+    }
+
+    private var remainingElementBudget: Int? {
+        get { containerFrames.last?.remainingElementBudget }
+        set {
+            precondition(!containerFrames.isEmpty, "top-level projection budget must be unbounded")
+            containerFrames[containerFrames.count - 1].remainingElementBudget = newValue
+        }
+    }
 }
 
-private struct InterfaceProjectionContext {
-    let detail: InterfaceDetail
-    let visibleElementBudget: Int
-    let elementsByPath: [TreePath: HeistElement]
-    let containerAnnotations: [TreePath: InterfaceContainerAnnotation]
+private struct InterfaceProjectionMeasurements {
+    private let elementCountByPath: [TreePath: Int]
+
+    init(nodes: [InterfaceGraphNodeRecord]) {
+        var elementCountByPath: [TreePath: Int] = [:]
+        for record in nodes.reversed() {
+            let elementCount: Int
+            switch record.kind {
+            case .element:
+                elementCount = 1
+            case .container:
+                elementCount = elementCountByPath[record.path, default: 0]
+            }
+            elementCountByPath[record.path] = elementCount
+            if let parent = record.path.parent {
+                elementCountByPath[parent, default: 0] += elementCount
+            }
+        }
+        self.elementCountByPath = elementCountByPath
+    }
+
+    func elementCount(at path: TreePath) -> Int {
+        guard let elementCount = elementCountByPath[path] else {
+            preconditionFailure("InterfaceProjection missing measured path \(path.indices)")
+        }
+        return elementCount
+    }
 }
 
-private struct InterfaceNodeProjectionRequest {
-    let node: AccessibilityHierarchy
+private struct InterfaceContainerProjectionFrame {
     let path: TreePath
-}
-
-private struct InterfaceChildrenProjectionRequest {
-    let children: [AccessibilityHierarchy]
-    let parentPath: TreePath
-    let remainingElementBudget: Int?
-}
-
-private struct InterfaceChildrenProjectionResult {
-    let children: [InterfaceNodeProjection]
-    let remainingElementBudget: Int?
+    let container: AccessibilityContainer
+    let containerName: String?
+    let scrollInventory: ScrollInventory?
+    let observedElementCount: Int
+    let scrollPolicy: ScrollSubtreeProjectionPolicy
+    var remainingElementBudget: Int?
+    var children: [InterfaceNodeProjection] = []
 }
 
 private struct ScrollSubtreeProjectionPolicy {
@@ -283,21 +333,21 @@ private struct ScrollSubtreeProjectionPolicy {
         return effectiveElementBudget
     }
 
-    func parentRemainingElementBudget(after result: InterfaceChildrenProjectionResult) -> Int? {
-        guard isActive else { return result.remainingElementBudget }
+    func parentRemainingElementBudget(after remainingElementBudget: Int?) -> Int? {
+        guard isActive else { return remainingElementBudget }
         guard let parentRemainingElementBudget else { return nil }
-        return max(0, parentRemainingElementBudget - renderedElementCount(after: result))
+        return max(0, parentRemainingElementBudget - renderedElementCount(after: remainingElementBudget))
     }
 
     func truncation(
-        after result: InterfaceChildrenProjectionResult,
+        after remainingElementBudget: Int?,
         accumulator: inout InterfaceProjectionAccumulator
     ) -> InterfaceSubtreeTruncationProjection? {
         guard isActive else { return nil }
 
-        let renderedElementCount = renderedElementCount(after: result)
+        let renderedElementCount = renderedElementCount(after: remainingElementBudget)
         let omittedElementCount = max(0, observedElementCount - renderedElementCount)
-        let scrollBudgetHit = (result.remainingElementBudget ?? 0) <= 0
+        let scrollBudgetHit = (remainingElementBudget ?? 0) <= 0
         guard scrollBudgetHit, omittedElementCount > 0 else { return nil }
 
         accumulator.recordTruncatedScrollContainer()
@@ -314,8 +364,8 @@ private struct ScrollSubtreeProjectionPolicy {
         min(parentRemainingElementBudget ?? visibleElementBudget, visibleElementBudget)
     }
 
-    private func renderedElementCount(after result: InterfaceChildrenProjectionResult) -> Int {
-        max(0, effectiveElementBudget - (result.remainingElementBudget ?? 0))
+    private func renderedElementCount(after remainingElementBudget: Int?) -> Int {
+        max(0, effectiveElementBudget - (remainingElementBudget ?? 0))
     }
 
     private static func isScrollable(_ container: AccessibilityContainer) -> Bool {

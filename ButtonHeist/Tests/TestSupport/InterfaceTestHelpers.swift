@@ -103,12 +103,24 @@ package func makeTestInterface(
         return .element(element, traversalIndex: index)
     }
 
+    let tree = nodes.enumerated().map { offset, node in
+        convert(node, path: TreePath([offset]))
+    }
+    let annotations = InterfaceAnnotations(elements: elementAnnotations, containers: containerAnnotations)
     return Interface(
         timestamp: timestamp,
-        tree: nodes.enumerated().map { offset, node in
-            convert(node, path: TreePath([offset]))
+        projecting: tree,
+        elementMetadata: { path, _, _ in
+            guard let annotation = annotations.elementByPath[path] else { return nil }
+            return InterfaceElementProjectionMetadata(actions: annotation.actions)
         },
-        annotations: InterfaceAnnotations(elements: elementAnnotations, containers: containerAnnotations)
+        containerMetadata: { path, _ in
+            guard let annotation = annotations.containerByPath[path] else { return nil }
+            return InterfaceContainerProjectionMetadata(
+                containerName: annotation.containerName,
+                scrollInventory: annotation.scrollInventory
+            )
+        }
     )
 }
 

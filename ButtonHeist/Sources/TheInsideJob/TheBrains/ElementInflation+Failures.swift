@@ -8,14 +8,11 @@ extension ElementInflation {
 
     internal enum ElementActionTargetResolutionFailure: Error, Equatable, CustomStringConvertible {
         case containerTarget
-        case unresolvedReference(HeistReferenceName)
 
         internal var description: String {
             switch self {
             case .containerTarget:
                 return "container targets are not valid for element actions"
-            case .unresolvedReference(let reference):
-                return "target reference \(reference) was not resolved before element action dispatch"
             }
         }
     }
@@ -132,17 +129,15 @@ extension ElementInflation {
     }
 }
 
-extension AccessibilityTarget {
+extension ResolvedAccessibilityTarget {
     internal func validatedForElementAction() throws(
         ElementInflation.ElementActionTargetResolutionFailure
-    ) -> AccessibilityTarget {
+    ) -> ResolvedAccessibilityTarget {
         switch self {
         case .predicate:
             return self
         case .container:
             throw .containerTarget
-        case .ref(let reference):
-            throw .unresolvedReference(reference)
         case .within(_, let target):
             _ = try target.validatedForElementAction()
             return self

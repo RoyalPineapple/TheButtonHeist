@@ -1,261 +1,131 @@
-// MARK: - Erased Element Property Changes
+package enum ElementPropertyChangeCore<Text> {
+    case value(PropertyChangeCore<StringMatchCore<Text>>)
+    case traits(PropertyChangeCore<TraitSetMatch>)
+    case hint(PropertyChangeCore<StringMatchCore<Text>>)
+    case actions(PropertyChangeCore<ActionSetMatch>)
+    case frame(PropertyChangeCore<ElementFrameMatch>)
+    case activationPoint(PropertyChangeCore<ElementPointMatch>)
+    case customContent(PropertyChangeCore<CustomContentMatchCore<Text>>)
+    case rotors(PropertyChangeCore<RotorSetMatchCore<Text>>)
 
-public enum AnyPropertyChange: Sendable, Equatable {
-    case value(ElementPropertyChange<ValueProperty>)
-    case traits(ElementPropertyChange<TraitsProperty>)
-    case hint(ElementPropertyChange<HintProperty>)
-    case actions(ElementPropertyChange<ActionsProperty>)
-    case frame(ElementPropertyChange<FrameProperty>)
-    case activationPoint(ElementPropertyChange<ActivationPointProperty>)
-    case customContent(ElementPropertyChange<CustomContentProperty>)
-    case rotors(ElementPropertyChange<RotorsProperty>)
-
-    public var property: ElementProperty {
+    package var property: ElementProperty {
         switch self {
-        case .value: return ValueProperty.property
-        case .traits: return TraitsProperty.property
-        case .hint: return HintProperty.property
-        case .actions: return ActionsProperty.property
-        case .frame: return FrameProperty.property
-        case .activationPoint: return ActivationPointProperty.property
-        case .customContent: return CustomContentProperty.property
-        case .rotors: return RotorsProperty.property
+        case .value: return .value
+        case .traits: return .traits
+        case .hint: return .hint
+        case .actions: return .actions
+        case .frame: return .frame
+        case .activationPoint: return .activationPoint
+        case .customContent: return .customContent
+        case .rotors: return .rotors
+        }
+    }
+}
+
+extension ElementPropertyChangeCore: Sendable where Text: Sendable {}
+extension ElementPropertyChangeCore: Equatable where Text: Equatable {}
+
+package extension ElementPropertyChangeCore where Text == Expr<String> {
+    func resolve(in environment: HeistExecutionEnvironment) throws -> ElementPropertyChangeCore<String> {
+        switch self {
+        case .value(let change):
+            return try .value(change.map { try resolve($0, in: environment) })
+        case .traits(let change):
+            return .traits(change)
+        case .hint(let change):
+            return try .hint(change.map { try resolve($0, in: environment) })
+        case .actions(let change):
+            return .actions(change)
+        case .frame(let change):
+            return .frame(change)
+        case .activationPoint(let change):
+            return .activationPoint(change)
+        case .customContent(let change):
+            return try .customContent(change.map { try $0.map { try $0.resolve(in: environment) } })
+        case .rotors(let change):
+            return try .rotors(change.map { try $0.map { try $0.resolve(in: environment) } })
         }
     }
 
-    public static func value(
-        before: StringMatch<String>? = nil,
-        after: StringMatch<String>? = nil
+    private func resolve(
+        _ match: StringMatchCore<Expr<String>>,
+        in environment: HeistExecutionEnvironment
+    ) throws -> StringMatchCore<String> {
+        let resolved = try match.map { try $0.resolve(in: environment) }
+        if resolved.hasInvalidEmptyBroadLiteral {
+            throw HeistExpressionError.invalidStringMatch(mode: resolved.mode.rawValue)
+        }
+        return resolved
+    }
+}
+
+public extension ElementPropertyChange {
+    static func value(
+        before: StringMatch? = nil,
+        after: StringMatch? = nil
     ) -> Self {
-        .value(ElementPropertyChange(before: before, after: after))
+        Self(core: .value(PropertyChangeCore(before: before?.core, after: after?.core)))
     }
 
     @_disfavoredOverload
-    public static func value(_ after: StringMatch<String>) -> Self {
+    static func value(_ after: StringMatch) -> Self {
         .value(after: after)
     }
 
-    public static func value(_ after: String) -> Self {
+    static func value(_ after: String) -> Self {
         .value(after: .exact(after))
     }
 
-    public static func traits(
+    static func value(reference: HeistReferenceName) -> Self {
+        .value(after: .exact(reference))
+    }
+
+    static func traits(
         before: TraitSetMatch? = nil,
         after: TraitSetMatch? = nil
     ) -> Self {
-        .traits(ElementPropertyChange(before: before, after: after))
+        Self(core: .traits(PropertyChangeCore(before: before, after: after)))
     }
 
-    public static func hint(
-        before: StringMatch<String>? = nil,
-        after: StringMatch<String>? = nil
+    static func hint(
+        before: StringMatch? = nil,
+        after: StringMatch? = nil
     ) -> Self {
-        .hint(ElementPropertyChange(before: before, after: after))
+        Self(core: .hint(PropertyChangeCore(before: before?.core, after: after?.core)))
     }
 
-    public static func actions(
+    static func actions(
         before: ActionSetMatch? = nil,
         after: ActionSetMatch? = nil
     ) -> Self {
-        .actions(ElementPropertyChange(before: before, after: after))
+        Self(core: .actions(PropertyChangeCore(before: before, after: after)))
     }
 
-    public static func frame(
+    static func frame(
         before: ElementFrameMatch? = nil,
         after: ElementFrameMatch? = nil
     ) -> Self {
-        .frame(ElementPropertyChange(before: before, after: after))
+        Self(core: .frame(PropertyChangeCore(before: before, after: after)))
     }
 
-    public static func activationPoint(
+    static func activationPoint(
         before: ElementPointMatch? = nil,
         after: ElementPointMatch? = nil
     ) -> Self {
-        .activationPoint(ElementPropertyChange(before: before, after: after))
+        Self(core: .activationPoint(PropertyChangeCore(before: before, after: after)))
     }
 
-    public static func customContent(
-        before: CustomContentMatch<String>? = nil,
-        after: CustomContentMatch<String>? = nil
+    static func customContent(
+        before: CustomContentMatch? = nil,
+        after: CustomContentMatch? = nil
     ) -> Self {
-        .customContent(ElementPropertyChange(before: before, after: after))
+        Self(core: .customContent(PropertyChangeCore(before: before?.core, after: after?.core)))
     }
 
-    public static func rotors(
-        before: RotorSetMatch<String>? = nil,
-        after: RotorSetMatch<String>? = nil
+    static func rotors(
+        before: RotorSetMatch? = nil,
+        after: RotorSetMatch? = nil
     ) -> Self {
-        .rotors(ElementPropertyChange(before: before, after: after))
-    }
-}
-
-public enum AnyPropertyChangeExpr: Sendable, Equatable {
-    case value(ElementPropertyChangeExpr<ValueProperty>)
-    case traits(ElementPropertyChangeExpr<TraitsProperty>)
-    case hint(ElementPropertyChangeExpr<HintProperty>)
-    case actions(ElementPropertyChangeExpr<ActionsProperty>)
-    case frame(ElementPropertyChangeExpr<FrameProperty>)
-    case activationPoint(ElementPropertyChangeExpr<ActivationPointProperty>)
-    case customContent(ElementPropertyChangeExpr<CustomContentProperty>)
-    case rotors(ElementPropertyChangeExpr<RotorsProperty>)
-
-    public var property: ElementProperty {
-        switch self {
-        case .value: return ValueProperty.property
-        case .traits: return TraitsProperty.property
-        case .hint: return HintProperty.property
-        case .actions: return ActionsProperty.property
-        case .frame: return FrameProperty.property
-        case .activationPoint: return ActivationPointProperty.property
-        case .customContent: return CustomContentProperty.property
-        case .rotors: return RotorsProperty.property
-        }
-    }
-
-    public init(_ change: AnyPropertyChange) {
-        switch change {
-        case .value(let change):
-            self = .value(ElementPropertyChangeExpr(
-                before: change.before?.map(StringExpr.literal),
-                after: change.after?.map(StringExpr.literal)
-            ))
-        case .traits(let change):
-            self = .traits(ElementPropertyChangeExpr(before: change.before, after: change.after))
-        case .hint(let change):
-            self = .hint(ElementPropertyChangeExpr(
-                before: change.before?.map(StringExpr.literal),
-                after: change.after?.map(StringExpr.literal)
-            ))
-        case .actions(let change):
-            self = .actions(ElementPropertyChangeExpr(before: change.before, after: change.after))
-        case .frame(let change):
-            self = .frame(ElementPropertyChangeExpr(before: change.before, after: change.after))
-        case .activationPoint(let change):
-            self = .activationPoint(ElementPropertyChangeExpr(before: change.before, after: change.after))
-        case .customContent(let change):
-            self = .customContent(ElementPropertyChangeExpr(
-                before: change.before?.map(StringExpr.literal),
-                after: change.after?.map(StringExpr.literal)
-            ))
-        case .rotors(let change):
-            self = .rotors(ElementPropertyChangeExpr(
-                before: change.before?.map(StringExpr.literal),
-                after: change.after?.map(StringExpr.literal)
-            ))
-        }
-    }
-
-    public func resolve(in environment: HeistExecutionEnvironment) throws -> AnyPropertyChange {
-        switch self {
-        case .value(let change):
-            return .value(ElementPropertyChange(
-                before: try change.before?.resolve(in: environment),
-                after: try change.after?.resolve(in: environment)
-            ))
-        case .traits(let change):
-            return .traits(ElementPropertyChange(before: change.before, after: change.after))
-        case .hint(let change):
-            return .hint(ElementPropertyChange(
-                before: try change.before?.resolve(in: environment),
-                after: try change.after?.resolve(in: environment)
-            ))
-        case .actions(let change):
-            return .actions(ElementPropertyChange(before: change.before, after: change.after))
-        case .frame(let change):
-            return .frame(ElementPropertyChange(before: change.before, after: change.after))
-        case .activationPoint(let change):
-            return .activationPoint(ElementPropertyChange(before: change.before, after: change.after))
-        case .customContent(let change):
-            return .customContent(ElementPropertyChange(
-                before: try change.before?.resolve(in: environment),
-                after: try change.after?.resolve(in: environment)
-            ))
-        case .rotors(let change):
-            return .rotors(ElementPropertyChange(
-                before: try change.before?.resolve(in: environment),
-                after: try change.after?.resolve(in: environment)
-            ))
-        }
-    }
-
-    public static func value(
-        before: StringMatch<StringExpr>? = nil,
-        after: StringMatch<StringExpr>? = nil
-    ) -> Self {
-        .value(ElementPropertyChangeExpr(before: before, after: after))
-    }
-
-    @_disfavoredOverload
-    public static func value(_ after: StringMatch<StringExpr>) -> Self {
-        .value(after: after)
-    }
-
-    public static func value(_ after: StringExpr) -> Self {
-        .value(after: .exact(after))
-    }
-
-    public static func value(_ after: String) -> Self {
-        .value(.literal(after))
-    }
-
-    public static func traits(
-        before: TraitSetMatch? = nil,
-        after: TraitSetMatch? = nil
-    ) -> Self {
-        .traits(ElementPropertyChangeExpr(before: before, after: after))
-    }
-
-    public static func hint(
-        before: StringMatch<StringExpr>? = nil,
-        after: StringMatch<StringExpr>? = nil
-    ) -> Self {
-        .hint(ElementPropertyChangeExpr(before: before, after: after))
-    }
-
-    public static func actions(
-        before: ActionSetMatch? = nil,
-        after: ActionSetMatch? = nil
-    ) -> Self {
-        .actions(ElementPropertyChangeExpr(before: before, after: after))
-    }
-
-    public static func frame(
-        before: ElementFrameMatch? = nil,
-        after: ElementFrameMatch? = nil
-    ) -> Self {
-        .frame(ElementPropertyChangeExpr(before: before, after: after))
-    }
-
-    public static func activationPoint(
-        before: ElementPointMatch? = nil,
-        after: ElementPointMatch? = nil
-    ) -> Self {
-        .activationPoint(ElementPropertyChangeExpr(before: before, after: after))
-    }
-
-    public static func customContent(
-        before: CustomContentMatch<StringExpr>? = nil,
-        after: CustomContentMatch<StringExpr>? = nil
-    ) -> Self {
-        .customContent(ElementPropertyChangeExpr(before: before, after: after))
-    }
-
-    public static func rotors(
-        before: RotorSetMatch<StringExpr>? = nil,
-        after: RotorSetMatch<StringExpr>? = nil
-    ) -> Self {
-        .rotors(ElementPropertyChangeExpr(before: before, after: after))
-    }
-}
-
-fileprivate extension CustomContentMatch where Value == StringExpr {
-    func resolve(in environment: HeistExecutionEnvironment) throws -> CustomContentMatch<String> {
-        try map { try $0.resolve(in: environment) }
-    }
-}
-
-fileprivate extension RotorSetMatch where Value == StringExpr {
-    func resolve(in environment: HeistExecutionEnvironment) throws -> RotorSetMatch<String> {
-        try map { try $0.resolve(in: environment) }
+        Self(core: .rotors(PropertyChangeCore(before: before?.core, after: after?.core)))
     }
 }

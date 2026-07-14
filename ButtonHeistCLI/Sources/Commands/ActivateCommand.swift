@@ -1,7 +1,7 @@
 import ArgumentParser
 @_spi(ButtonHeistTooling) import ButtonHeist
 
-struct ActivateCommand: AsyncParsableCommand, CLICommandContract {
+struct ActivateCommand: ConnectedOneShotCLICommand {
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Perform primary accessibility activation on a semantic UI element",
@@ -35,20 +35,16 @@ struct ActivateCommand: AsyncParsableCommand, CLICommandContract {
     @Option(name: .long, help: "Named action: increment, decrement, or a custom action name from the element's actions array")
     var action: String?
 
-    @ButtonHeistActor
-    mutating func run() async throws {
-        let target = try element.requireTarget()
+    var runnerStatusMessage: String? {
+        action.map { "Sending \($0)..." } ?? "Activating element..."
+    }
 
-        try await CLIRunner.run(
-            connection: connection,
-            format: output.format,
-            command: Self.fenceCommand,
-            arguments: Self.fenceArguments(
-                target: target,
-                CommandArgumentWriter.optional(.action, action),
-                CommandArgumentWriter.value(.timeout, timeoutOption.timeout)
-            ),
-            statusMessage: action.map { "Sending \($0)..." } ?? "Activating element..."
+    func requestArguments() throws -> TheFence.CommandArgumentEnvelope {
+        let target = try element.requireTarget()
+        return Self.fenceArguments(
+            target: target,
+            CommandArgumentEnvelopeBuilder.optional(.action, action),
+            CommandArgumentEnvelopeBuilder.value(.timeout, timeoutOption.timeout)
         )
     }
 }

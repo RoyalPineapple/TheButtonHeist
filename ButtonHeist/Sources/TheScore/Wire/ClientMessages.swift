@@ -38,7 +38,7 @@ public struct RequestEnvelope: Codable, Sendable {
 /// observation reads, non-durable transient direct runtime actions, and
 /// `heistPlan`.
 /// Durable UI mutation is compiled into `HeistPlan` at the public boundary and
-/// dispatched inside the runtime as `RuntimeActionMessage`; transient commands
+/// dispatched inside the runtime as `ResolvedHeistActionCommand`; transient commands
 /// can use `runtimeAction` without creating a heist.
 public enum ClientMessage: Codable, Sendable, Equatable {
     // MARK: - Transport / Session

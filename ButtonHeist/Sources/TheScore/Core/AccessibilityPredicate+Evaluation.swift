@@ -1,33 +1,33 @@
 import ThePlans
 import Foundation
 
-public extension AccessibilityPredicate where Context == RootContext {
-    func evaluate(in evidence: AccessibilityTraceEvidence) -> ExpectationResult {
-        evaluateNode(node, evidence: evidence).expectation(for: self)
+package extension ResolvedAccessibilityPredicate {
+    func evaluate(in evidence: AccessibilityTraceEvidence) -> PredicateEvaluationResult {
+        evaluateNode(core, evidence: evidence)
     }
 
-    func validate(against result: ActionResult) -> ExpectationResult {
+    func validate(against result: ActionResult) -> PredicateEvaluationResult {
         guard let evidence = result.traceEvidence else {
-            return ExpectationResult(
-                met: false,
-                predicate: self,
-                actual: "no observed accessibility trace"
-            )
+            return PredicateEvaluationResult(met: false, actual: "no observed accessibility trace")
         }
         return evaluate(in: evidence)
     }
 }
 
-private extension AccessibilityPredicate where Context == RootContext {
+private extension ResolvedAccessibilityPredicate {
+    typealias Node = AccessibilityPredicateCore<ResolvedAccessibilityPredicatePhase>
+    typealias ScreenAssertion = ScreenAssertionCore<ResolvedAccessibilityPredicatePhase>
+    typealias ElementAssertion = ElementAssertionCore<ResolvedAccessibilityPredicatePhase>
+
     func evaluateNode(
-        _ node: AccessibilityPredicateNode,
+        _ node: Node,
         evidence: AccessibilityTraceEvidence
     ) -> PredicateEvaluationResult {
         let current = ElementMatchGraph(interface: evidence.currentInterface)
         switch node {
-        case .exists(let target):
+        case .presence(.exists(let target)):
             return currentResult(target, shouldExist: true, graph: current)
-        case .missing(let target):
+        case .presence(.missing(let target)):
             return currentResult(target, shouldExist: false, graph: current)
         case .changed(.screen(let assertions)):
             return evaluateScreen(assertions, evidence: evidence, current: current)
@@ -47,13 +47,11 @@ private extension AccessibilityPredicate where Context == RootContext {
                 met: false,
                 actual: "announcement predicates require spoken accessibility text evidence"
             )
-        case .changed, .screen, .elements, .appeared, .disappeared, .updated:
-            return PredicateEvaluationResult(met: false, actual: "invalid root predicate")
         }
     }
 
     func evaluateScreen(
-        _ assertions: [AccessibilityPredicateNode],
+        _ assertions: [ScreenAssertion],
         evidence: AccessibilityTraceEvidence,
         current: ElementMatchGraph
     ) -> PredicateEvaluationResult {
@@ -72,7 +70,7 @@ private extension AccessibilityPredicate where Context == RootContext {
     }
 
     func evaluateElements(
-        _ assertions: [AccessibilityPredicateNode],
+        _ assertions: [ElementAssertion],
         evidence: AccessibilityTraceEvidence,
         current: ElementMatchGraph
     ) -> PredicateEvaluationResult {
@@ -97,29 +95,27 @@ private extension AccessibilityPredicate where Context == RootContext {
     }
 
     func evaluateCurrentAssertion(
-        _ assertion: AccessibilityPredicateNode,
+        _ assertion: ScreenAssertion,
         graph: ElementMatchGraph
     ) -> PredicateEvaluationResult {
         switch assertion {
-        case .exists(let target):
+        case .presence(.exists(let target)):
             return currentResult(target, shouldExist: true, graph: graph)
-        case .missing(let target):
+        case .presence(.missing(let target)):
             return currentResult(target, shouldExist: false, graph: graph)
-        default:
-            return PredicateEvaluationResult(met: false, actual: "invalid screen assertion")
         }
     }
 
     func evaluateElementAssertion(
-        _ assertion: AccessibilityPredicateNode,
+        _ assertion: ElementAssertion,
         facts: [AccessibilityTrace.ElementsChangeFact],
         evidence: AccessibilityTraceEvidence,
         current: ElementMatchGraph
     ) -> PredicateEvaluationResult {
         switch assertion {
-        case .exists(let target):
+        case .presence(.exists(let target)):
             return currentResult(target, shouldExist: true, graph: current)
-        case .missing(let target):
+        case .presence(.missing(let target)):
             return currentResult(target, shouldExist: false, graph: current)
         case .appeared(let target):
             let met = facts.contains {
@@ -139,13 +135,11 @@ private extension AccessibilityPredicate where Context == RootContext {
             )
         case .updated(let target, let change):
             return evaluateUpdated(target: target, change: change, facts: facts, trace: evidence.trace)
-        default:
-            return PredicateEvaluationResult(met: false, actual: "invalid elements assertion")
         }
     }
 
     func currentResult(
-        _ target: AccessibilityTarget,
+        _ target: ResolvedAccessibilityTarget,
         shouldExist: Bool,
         graph: ElementMatchGraph
     ) -> PredicateEvaluationResult {
@@ -164,7 +158,7 @@ private extension AccessibilityPredicate where Context == RootContext {
     }
 
     func lifecycleMatches(
-        _ target: AccessibilityTarget,
+        _ target: ResolvedAccessibilityTarget,
         nodes: [AccessibilityTrace.InterfaceChangeNode],
         side: CaptureSide,
         metadata: AccessibilityTrace.ChangeFactMetadata,
@@ -176,14 +170,11 @@ private extension AccessibilityPredicate where Context == RootContext {
     }
 
     func evaluateUpdated(
-        target: AccessibilityTarget,
-        change: AnyPropertyChangeExpr,
+        target: ResolvedAccessibilityTarget,
+        change: ResolvedElementPropertyChange,
         facts: [AccessibilityTrace.ElementsChangeFact],
         trace: AccessibilityTrace
     ) -> PredicateEvaluationResult {
-        guard let expected = try? change.resolve(in: .empty) else {
-            return PredicateEvaluationResult(met: false, actual: "unresolved update assertion")
-        }
         let matches = facts.lazy.flatMap { fact -> [MatchedElementUpdate] in
             guard let before = interface(for: .before, metadata: fact.metadata, trace: trace),
                   let after = interface(for: .after, metadata: fact.metadata, trace: trace)
@@ -192,7 +183,7 @@ private extension AccessibilityPredicate where Context == RootContext {
             let afterElements = ElementMatchGraph(interface: after).resolve(target).elements.elements
             return fact.updated.compactMap { update in
                 guard beforeElements.contains(update.before) || afterElements.contains(update.after) else { return nil }
-                let changes = update.changes.filter { $0.satisfies(expected) }
+                let changes = update.changes.filter { $0.satisfies(change) }
                 return changes.isEmpty ? nil : MatchedElementUpdate(update: update, changes: changes)
             }
         }

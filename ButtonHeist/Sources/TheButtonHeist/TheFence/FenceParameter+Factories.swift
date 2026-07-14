@@ -160,7 +160,7 @@ internal func stringMatchParam(
     required: Bool = false,
     allowsArray: Bool = false
 ) -> FenceParameterSpec {
-    let modeValues = StringMatch<String>.Mode.allCases.map(\.rawValue)
+    let modeValues = StringMatch.Mode.allCases.map(\.rawValue)
     let description = "StringMatch object with mode \(modeValues.joined(separator: "/")) and optional value. " +
         "Use mode exact for exact matching. Broad modes require a non-empty value; isEmpty must omit value." +
         (allowsArray
@@ -224,7 +224,7 @@ internal func predicateChecksParam(_ key: FenceParameterKey) -> FenceParameterSp
             properties: [
                 param(
                     .kind, .string, required: true,
-                    enumValues: ElementPredicateCheck<String>.Kind.allCases.map(\.rawValue)
+                    enumValues: ElementPredicateCheckCore<Expr<String>>.Kind.allCases.map(\.rawValue)
                 ),
                 stringMatchParam(.match),
                 arrayParam(.values, items: .unconstrained),
@@ -241,14 +241,14 @@ private let semanticContainerPredicateProperties: [FenceParameterSpec] = [
 ]
 
 private let semanticContainerPredicateKindValues: [String] = [
-    SemanticContainerPredicate<String>.label("sample"),
-    SemanticContainerPredicate<String>.value("sample"),
-].map(\.wireKindValue)
+    SemanticContainerPredicate.label("sample"),
+    SemanticContainerPredicate.value("sample"),
+].map { $0.core.wireKindValue }
 
 private let containerPredicateCheckProperties: [FenceParameterSpec] = [
     param(
         .kind, .string, required: true,
-        enumValues: ContainerPredicateCheck<String>.wireKindValues
+        enumValues: ContainerPredicateCheck.wireKindValues
     ),
     param(.type, .string, enumValues: AccessibilityContainerKind.allCases.map(\.rawValue)),
     stringMatchParam(.match),

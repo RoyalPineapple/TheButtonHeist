@@ -194,18 +194,19 @@ extension TheBrains {
         let remaining = deadline - CFAbsoluteTimeGetCurrent()
         guard remaining > 0 else {
             return .deadlineElapsed(ExpectationResult.Unmet(
-                predicate: step.predicate,
+                predicate: step.predicateExpression,
                 actual: "repeat_until deadline elapsed"
             ))
         }
         let progressTimeout = min(defaultActionExpectationTimeout, remaining)
         let receipt = await context.runtime.wait(.afterObservation(
-            ResolvedWaitStep(predicate: .changed(.elements()), timeout: progressTimeout),
+            .changedElements(timeout: progressTimeout),
             baselineTrace: observation.trace,
             sequence: observation.sequence
         ))
         let expectation = repeatUntilStopExpectation(
-            step.predicate,
+            authored: step.predicateExpression,
+            resolved: step.predicate,
             evidence: receipt.traceEvidence,
             fallback: receipt.message ?? receipt.expectation.actual
         )
@@ -219,7 +220,7 @@ extension TheBrains {
             switch stopCheck {
             case .met(let metExpectation):
                 noProgressExpectation = ExpectationResult.Unmet(
-                    predicate: step.predicate,
+                    predicate: step.predicateExpression,
                     actual: receipt.observedSequence == nil
                         ? "repeat_until post-body check matched without settled observation"
                         : (metExpectation.result.actual ?? "repeat_until post-body check made no progress")
@@ -254,7 +255,8 @@ extension TheBrains {
         guard let traceEvidence = result.traceEvidence else { return nil }
         let trace = traceEvidence.trace
         let stopExpectation = repeatUntilStopExpectation(
-            step.predicate,
+            authored: step.predicateExpression,
+            resolved: step.predicate,
             evidence: traceEvidence,
             fallback: result.message
         )
@@ -321,7 +323,8 @@ extension TheBrains {
     }
 
     private func repeatUntilStopExpectation(
-        _ predicate: AccessibilityPredicate<RootContext>,
+        authored predicate: AccessibilityPredicate,
+        resolved: ResolvedAccessibilityPredicate,
         evidence: AccessibilityTraceEvidence?,
         fallback: String?
     ) -> ExpectationResult {
@@ -332,7 +335,7 @@ extension TheBrains {
                 actual: fallback ?? "no observed accessibility trace"
             )
         }
-        return predicate.evaluate(in: evidence)
+        return ExpectationResult(resolved.evaluate(in: evidence), predicate: predicate)
     }
 }
 

@@ -5,20 +5,21 @@ import ThePlans
 final class ElementPredicateTests: XCTestCase {
 
     func testHasPredicatesIgnoresEmptyTraitArrays() {
-        XCTAssertFalse(ElementPredicate(traits: []).hasPredicates)
-        XCTAssertFalse(ElementPredicate.exclude(.traits([])).hasPredicates)
-        XCTAssertFalse(ElementPredicate.element(.exclude(.traits([])), traits: []).hasPredicates)
-        XCTAssertTrue(ElementPredicate(label: "Save", traits: []).hasPredicates)
+        XCTAssertFalse(ElementPredicateTemplate(traits: []).hasPredicates)
+        XCTAssertFalse(ElementPredicateTemplate.exclude(.traits([])).hasPredicates)
+        XCTAssertFalse(ElementPredicateTemplate.element(.exclude(.traits([])), traits: []).hasPredicates)
+        XCTAssertTrue(ElementPredicateTemplate(label: "Save", traits: []).hasPredicates)
     }
 
-    func testNonEmptyReturnsNilForEmptyPredicate() {
-        XCTAssertNil(ElementPredicate().nonEmpty)
-        XCTAssertNil(ElementPredicate(traits: []).nonEmpty)
-        XCTAssertEqual(ElementPredicate(label: "Save").nonEmpty, ElementPredicate(label: "Save"))
+    func testAuthoredPredicateMustResolveBeforeMatching() throws {
+        XCTAssertThrowsError(try ElementPredicateTemplate().resolve(in: .empty))
+
+        let authored = ElementPredicateTemplate.label("Save")
+        XCTAssertEqual(try authored.resolve(in: .empty), .label("Save"))
     }
 
-    func testElementPredicateDescriptionComposesFields() {
-        let predicate = ElementPredicate.element(
+    func testElementPredicateDescriptionComposesFields() throws {
+        let predicate = ElementPredicateTemplate.element(
             .label(#"Save "Now""#),
             .identifier("primary.save"),
             .value("Ready"),
@@ -30,11 +31,12 @@ final class ElementPredicateTests: XCTestCase {
             predicate.description,
             #"predicate(label="Save \"Now\"" identifier="primary.save" value="Ready" exclude(traits=[notEnabled]) traits=[button, selected])"#
         )
+        XCTAssertEqual(try predicate.resolve(in: .empty).description, predicate.description)
     }
 
     func testElementPredicateTraitPayloadsAreStoredAsSets() {
-        let first = ElementPredicate(traits: [.selected, .button])
-        let second = ElementPredicate(traits: [.button, .selected, .button])
+        let first = ElementPredicateTemplate(traits: [.selected, .button])
+        let second = ElementPredicateTemplate(traits: [.button, .selected, .button])
 
         XCTAssertEqual(first, second)
         XCTAssertEqual(first.description, "predicate(traits=[button, selected])")
@@ -42,10 +44,10 @@ final class ElementPredicateTests: XCTestCase {
     }
 
     func testElementPredicateTraitEncodingUsesCanonicalArrays() throws {
-        let predicate = ElementPredicate.element(
+        let predicate = try ElementPredicateTemplate.element(
             .traits([.selected, .button, .button]),
             .exclude(.traits([.notEnabled, .header, .notEnabled]))
-        )
+        ).resolve(in: .empty)
 
         let encoded = try JSONEncoder().encode(predicate)
         let wire = try JSONDecoder().decode(EncodedPredicateWire.self, from: encoded)
@@ -80,7 +82,6 @@ final class ElementPredicateTests: XCTestCase {
         )
 
         XCTAssertEqual(first, second)
-        XCTAssertEqual(first.description, "traits(include=[.button, .selected] exclude=[.header, .notEnabled])")
 
         let encoded = try JSONEncoder().encode(first)
         let wire = try JSONDecoder().decode(EncodedTraitSetMatchWire.self, from: encoded)
@@ -88,10 +89,10 @@ final class ElementPredicateTests: XCTestCase {
         XCTAssertEqual(wire.exclude, ["header", "notEnabled"])
     }
 
-    func testElementPredicateDescriptionTreatsEmptyStringsAsUnset() {
-        let predicate = ElementPredicate(label: "", identifier: "", value: "", traits: [])
+    func testElementPredicateRejectsEmptyAuthoredStringsAtResolution() {
+        let predicate = ElementPredicateTemplate(label: "", identifier: "", value: "", traits: [])
 
-        XCTAssertEqual(predicate.description, "predicate(*)")
+        XCTAssertThrowsError(try predicate.resolve(in: .empty))
     }
 
     func testElementPredicateRejectsUnknownFields() {
@@ -167,13 +168,13 @@ final class ElementPredicateTests: XCTestCase {
     // MARK: - Codable Round-Trip
 
     func testEncodeDecodeAllFields() throws {
-        let predicate = ElementPredicate.element(
+        let predicate = try ElementPredicateTemplate.element(
             .label("Save"),
             .identifier("saveBtn"),
             .value("active"),
             .exclude(.traits([.notEnabled])),
             traits: [.button]
-        )
+        ).resolve(in: .empty)
         let data = try JSONEncoder().encode(predicate)
         let decoded = try JSONDecoder().decode(ElementPredicate.self, from: data)
         XCTAssertEqual(predicate, decoded)
@@ -191,46 +192,25 @@ final class ElementPredicateTests: XCTestCase {
         """
         let data = Data(json.utf8)
         let predicate = try JSONDecoder().decode(ElementPredicate.self, from: data)
-        XCTAssertEqual(predicate.checks, [
-            .label(.exact("Settings")),
-            .traits([.header, .button]),
-            .exclude(.traits([.notEnabled])),
-        ])
+        XCTAssertEqual(
+            predicate,
+            try ElementPredicateTemplate([
+                .label("Settings"),
+                .traits([.header, .button]),
+                .exclude(.traits([.notEnabled])),
+            ]).resolve(in: .empty)
+        )
     }
 
     // MARK: - Empty String Handling
 
-    func testEmptyStringLabelHasNoPredicates() {
-        let predicate = ElementPredicate(label: "")
-        XCTAssertFalse(predicate.hasPredicates)
-        XCTAssertNil(predicate.nonEmpty)
-    }
-
-    func testEmptyStringIdentifierHasNoPredicates() {
-        let predicate = ElementPredicate(identifier: "")
-        XCTAssertFalse(predicate.hasPredicates)
-    }
-
-    func testEmptyStringValueHasNoPredicates() {
-        let predicate = ElementPredicate(value: "")
-        XCTAssertFalse(predicate.hasPredicates)
-    }
-
-    func testEmptyStringLabelMatchesNothing() {
-        let element = HeistElement.stub(label: "Save")
-        let predicate = ElementPredicate(label: "")
-        XCTAssertFalse(element.matches(predicate), "Empty-string label should match nothing")
-    }
-
-    func testEmptyStringPredicateTreatedAsNoPredicate() {
-        let predicate = ElementPredicate(label: "", identifier: "", value: "")
-        XCTAssertFalse(predicate.hasPredicates, "All-empty-string predicate should have no predicates")
-        XCTAssertNil(predicate.nonEmpty, "All-empty-string predicate should be nonEmpty == nil")
-    }
-
-    func testEmptyStringTemplatePredicateTreatedAsNoPredicate() {
-        let predicate = ElementPredicateTemplate(label: "", identifier: "", value: "")
-        XCTAssertFalse(predicate.hasPredicates, "All-empty-string template predicate should have no predicates")
+    func testEmptyStringTemplatesCannotProduceResolvedPredicates() {
+        XCTAssertThrowsError(try ElementPredicateTemplate.label("").resolve(in: .empty))
+        XCTAssertThrowsError(try ElementPredicateTemplate.identifier("").resolve(in: .empty))
+        XCTAssertThrowsError(try ElementPredicateTemplate.value("").resolve(in: .empty))
+        XCTAssertThrowsError(
+            try ElementPredicateTemplate(label: "", identifier: "", value: "").resolve(in: .empty)
+        )
     }
 
     // MARK: - String Matching
@@ -241,21 +221,21 @@ final class ElementPredicateTests: XCTestCase {
 
     func testExactLabelMatches() {
         let element = HeistElement.stub(label: "Save")
-        XCTAssertTrue(element.matches(ElementPredicate(label: "Save")))
+        XCTAssertTrue(element.matches(ElementPredicate.label("Save")))
     }
 
     func testStringMatchUnlabeledInitializerDefaultsToExact() {
-        XCTAssertEqual(StringMatch<String>("Save"), .exact("Save"))
+        XCTAssertEqual(StringMatch("Save"), .exact("Save"))
     }
 
     func testStringMatchStringLiteralSugarStillCreatesExactMatch() {
-        let match: StringMatch<String> = "Save"
+        let match: StringMatch = "Save"
 
         XCTAssertEqual(match, .exact("Save"))
     }
 
     func testStringMatchCanonicalObjectJSONRoundTrips() throws {
-        let cases: [(json: String, match: StringMatch<String>)] = [
+        let cases: [(json: String, match: StringMatch)] = [
             (#"{"mode":"exact","value":"Save"}"#, .exact("Save")),
             (#"{"mode":"contains","value":"Save"}"#, .contains("Save")),
             (#"{"mode":"prefix","value":"Save"}"#, .prefix("Save")),
@@ -267,7 +247,7 @@ final class ElementPredicateTests: XCTestCase {
 
         for testCase in cases {
             let decoded = try JSONDecoder().decode(
-                StringMatch<String>.self,
+                StringMatch.self,
                 from: Data(testCase.json.utf8)
             )
             XCTAssertEqual(decoded, testCase.match)
@@ -275,7 +255,7 @@ final class ElementPredicateTests: XCTestCase {
             let encoded = try XCTUnwrap(String(data: encoder.encode(decoded), encoding: .utf8))
             XCTAssertEqual(encoded, testCase.json)
             XCTAssertEqual(
-                try JSONDecoder().decode(StringMatch<String>.self, from: Data(encoded.utf8)),
+                try JSONDecoder().decode(StringMatch.self, from: Data(encoded.utf8)),
                 testCase.match
             )
         }
@@ -283,33 +263,33 @@ final class ElementPredicateTests: XCTestCase {
 
     func testStringMatchRejectsRawStringJSON() {
         XCTAssertThrowsError(
-            try JSONDecoder().decode(StringMatch<String>.self, from: Data(#""Save""#.utf8))
+            try JSONDecoder().decode(StringMatch.self, from: Data(#""Save""#.utf8))
         )
     }
 
     func testCaseInsensitiveLabelMatches() {
         let element = HeistElement.stub(label: "Save")
-        XCTAssertTrue(element.matches(ElementPredicate(label: "save")))
-        XCTAssertTrue(element.matches(ElementPredicate(label: "SAVE")))
+        XCTAssertTrue(element.matches(ElementPredicate.label("save")))
+        XCTAssertTrue(element.matches(ElementPredicate.label("SAVE")))
     }
 
     func testSubstringPartialDoesNotMatch() {
         // Exact-or-miss: "Sav" must not match "Save".
         let element = HeistElement.stub(label: "Save")
-        XCTAssertFalse(element.matches(ElementPredicate(label: "Sav")))
-        XCTAssertFalse(element.matches(ElementPredicate(label: "ave")))
+        XCTAssertFalse(element.matches(ElementPredicate.label("Sav")))
+        XCTAssertFalse(element.matches(ElementPredicate.label("ave")))
     }
 
     func testSupersetLabelNoLongerMatches() {
         // "Save" is a substring of "Save Draft" — under substring matching the
         // pattern "Save" would have hit "Save Draft". Now it must not.
         let element = HeistElement.stub(label: "Save Draft")
-        XCTAssertFalse(element.matches(ElementPredicate(label: "Save")))
+        XCTAssertFalse(element.matches(ElementPredicate.label("Save")))
         // The full label still matches.
-        XCTAssertTrue(element.matches(ElementPredicate(label: "Save Draft")))
+        XCTAssertTrue(element.matches(ElementPredicate.label("Save Draft")))
     }
 
-    func testExplicitBroadStringMatchesLabelIdentifierAndValue() {
+    func testExplicitBroadStringMatchesLabelIdentifierAndValue() throws {
         let element = HeistElement(
             description: "No results found",
             label: "No results found",
@@ -320,20 +300,20 @@ final class ElementPredicateTests: XCTestCase {
             actions: []
         )
 
-        XCTAssertTrue(element.matches(ElementPredicate(label: .contains("results"))))
-        XCTAssertTrue(element.matches(ElementPredicate(label: .prefix("No results"))))
-        XCTAssertTrue(element.matches(ElementPredicate(label: .suffix("found"))))
-        XCTAssertTrue(element.matches(ElementPredicate(identifier: .contains("search_results"))))
-        XCTAssertTrue(element.matches(ElementPredicate(identifier: .prefix("empty"))))
-        XCTAssertTrue(element.matches(ElementPredicate(identifier: .suffix("message"))))
-        XCTAssertTrue(element.matches(ElementPredicate(value: .contains("0 result"))))
-        XCTAssertTrue(element.matches(ElementPredicate(value: .prefix("0"))))
-        XCTAssertTrue(element.matches(ElementPredicate(value: .suffix("results"))))
-        XCTAssertFalse(element.matches(ElementPredicate(label: "results")))
-        XCTAssertFalse(element.matches(ElementPredicate(value: "0 result")))
+        XCTAssertTrue(element.matches(try ElementPredicateTemplate(label: .contains("results")).resolve(in: .empty)))
+        XCTAssertTrue(element.matches(try ElementPredicateTemplate(label: .prefix("No results")).resolve(in: .empty)))
+        XCTAssertTrue(element.matches(try ElementPredicateTemplate(label: .suffix("found")).resolve(in: .empty)))
+        XCTAssertTrue(element.matches(try ElementPredicateTemplate(identifier: .contains("search_results")).resolve(in: .empty)))
+        XCTAssertTrue(element.matches(try ElementPredicateTemplate(identifier: .prefix("empty")).resolve(in: .empty)))
+        XCTAssertTrue(element.matches(try ElementPredicateTemplate(identifier: .suffix("message")).resolve(in: .empty)))
+        XCTAssertTrue(element.matches(try ElementPredicateTemplate(value: .contains("0 result")).resolve(in: .empty)))
+        XCTAssertTrue(element.matches(try ElementPredicateTemplate(value: .prefix("0")).resolve(in: .empty)))
+        XCTAssertTrue(element.matches(try ElementPredicateTemplate(value: .suffix("results")).resolve(in: .empty)))
+        XCTAssertFalse(element.matches(ElementPredicate.label("results")))
+        XCTAssertFalse(element.matches(ElementPredicate.value("0 result")))
     }
 
-    func testIsEmptyStringMatchMatchesNilAndEmptyStrings() {
+    func testIsEmptyStringMatchMatchesNilAndEmptyStrings() throws {
         let valuedElement = HeistElement(
             description: "Delete",
             label: "Delete",
@@ -344,15 +324,17 @@ final class ElementPredicateTests: XCTestCase {
             actions: [.activate]
         )
 
-        XCTAssertTrue(HeistElement.stub(label: "").matches(ElementPredicate(label: .isEmpty)))
-        XCTAssertFalse(HeistElement.stub(label: "Save").matches(ElementPredicate(label: .isEmpty)))
-        XCTAssertTrue(HeistElement.stub().matches(ElementPredicate(label: .isEmpty)))
-        XCTAssertTrue(ElementPredicate(label: .isEmpty).hasPredicates)
-        XCTAssertTrue(valuedElement.matches(ElementPredicate.exclude(.value(.isEmpty))))
-        XCTAssertFalse(HeistElement.stub(label: "Delete").matches(ElementPredicate.exclude(.value(.isEmpty))))
+        let emptyLabel = try ElementPredicateTemplate(label: .isEmpty).resolve(in: .empty)
+        let nonEmptyValue = try ElementPredicateTemplate.exclude(.value(.isEmpty)).resolve(in: .empty)
+        XCTAssertTrue(HeistElement.stub(label: "").matches(emptyLabel))
+        XCTAssertFalse(HeistElement.stub(label: "Save").matches(emptyLabel))
+        XCTAssertTrue(HeistElement.stub().matches(emptyLabel))
+        XCTAssertTrue(emptyLabel.hasPredicates)
+        XCTAssertTrue(valuedElement.matches(nonEmptyValue))
+        XCTAssertFalse(HeistElement.stub(label: "Delete").matches(nonEmptyValue))
     }
 
-    func testSemanticSurfacePredicatesMatchHintActionsCustomContentAndRotors() {
+    func testSemanticSurfacePredicatesMatchHintActionsCustomContentAndRotors() throws {
         let element = HeistElement(
             description: "Combo row",
             label: "Coke",
@@ -373,37 +355,32 @@ final class ElementPredicateTests: XCTestCase {
             actions: [.activate, .custom("Modify")]
         )
 
-        XCTAssertTrue(element.matches(ElementPredicate.hint(.contains("edit"))))
-        XCTAssertTrue(element.matches(ElementPredicate.actions([.custom("Modify")])))
-        XCTAssertTrue(element.matches(ElementPredicate.exclude(.actions([.custom("Sub")]))))
-        XCTAssertTrue(element.matches(ElementPredicate.customContent(.init(label: "Slot", value: "Main"))))
-        XCTAssertTrue(element.matches(ElementPredicate.exclude(.customContent(.init(label: "Discount")))))
-        XCTAssertTrue(element.matches(ElementPredicate.rotors(["Actions"])))
-        XCTAssertTrue(element.matches(ElementPredicate.exclude(.rotors(["Headings"]))))
-        XCTAssertFalse(element.matches(ElementPredicate.exclude(.actions([.custom("Modify")]))))
-        XCTAssertFalse(element.matches(ElementPredicate.customContent(.init(label: "Slot", value: "Side"))))
-        XCTAssertFalse(element.matches(ElementPredicate.rotors(["Headings"])))
+        XCTAssertTrue(element.matches(try ElementPredicateTemplate.hint(.contains("edit")).resolve(in: .empty)))
+        XCTAssertTrue(element.matches(try ElementPredicateTemplate.actions([.custom("Modify")]).resolve(in: .empty)))
+        XCTAssertTrue(element.matches(try ElementPredicateTemplate.exclude(.actions([.custom("Sub")])).resolve(in: .empty)))
+        XCTAssertTrue(element.matches(try ElementPredicateTemplate.customContent(.init(label: "Slot", value: "Main")).resolve(in: .empty)))
+        XCTAssertTrue(element.matches(try ElementPredicateTemplate.exclude(.customContent(.init(label: "Discount"))).resolve(in: .empty)))
+        XCTAssertTrue(element.matches(try ElementPredicateTemplate.rotors(["Actions"]).resolve(in: .empty)))
+        XCTAssertTrue(element.matches(try ElementPredicateTemplate.exclude(.rotors(["Headings"])).resolve(in: .empty)))
+        XCTAssertFalse(element.matches(try ElementPredicateTemplate.exclude(.actions([.custom("Modify")])).resolve(in: .empty)))
+        XCTAssertFalse(element.matches(try ElementPredicateTemplate.customContent(.init(label: "Slot", value: "Side")).resolve(in: .empty)))
+        XCTAssertFalse(element.matches(try ElementPredicateTemplate.rotors(["Headings"]).resolve(in: .empty)))
     }
 
-    func testMultipleStringMatchesForSamePropertyMustAllMatch() {
+    func testMultipleStringMatchesForSamePropertyMustAllMatch() throws {
         let element = HeistElement.stub(label: "foobarbaz")
-        let predicate = ElementPredicate.element(
+        let predicate = try ElementPredicateTemplate.element(
             .label(.prefix("foo")),
             .label(.contains("bar")),
             .label(.suffix("baz"))
-        )
+        ).resolve(in: .empty)
 
         XCTAssertTrue(element.matches(predicate))
-        XCTAssertEqual(predicate.checks, [
-            .label(.prefix("foo")),
-            .label(.contains("bar")),
-            .label(.suffix("baz")),
-        ])
-        XCTAssertFalse(element.matches(ElementPredicate.element(
+        XCTAssertFalse(element.matches(try ElementPredicateTemplate.element(
             .label(.prefix("foo")),
             .label(.contains("bar")),
             .label(.suffix("qux"))
-        )))
+        ).resolve(in: .empty)))
         XCTAssertFalse(HeistElement.stub(label: "foobarqux").matches(predicate))
     }
 
@@ -421,12 +398,15 @@ final class ElementPredicateTests: XCTestCase {
 
         let predicate = try JSONDecoder().decode(ElementPredicate.self, from: data)
 
-        XCTAssertEqual(predicate.checks, [
-            .label(.prefix("foo")),
-            .label(.contains("bar")),
-            .label(.suffix("baz")),
-            .traits([.button]),
-        ])
+        XCTAssertEqual(
+            predicate,
+            try ElementPredicateTemplate([
+                .label(.prefix("foo")),
+                .label(.contains("bar")),
+                .label(.suffix("baz")),
+                .traits([.button]),
+            ]).resolve(in: .empty)
+        )
         XCTAssertTrue(HeistElement.stub(label: "foobarbaz", traits: [.button]).matches(predicate))
 
         let encoded = try JSONEncoder().encode(predicate)
@@ -469,23 +449,23 @@ final class ElementPredicateTests: XCTestCase {
     func testTypographyFoldingOnLabel() {
         // Smart apostrophe in label, ASCII apostrophe in pattern — must match.
         let element = HeistElement.stub(label: "Don\u{2019}t skip")
-        XCTAssertTrue(element.matches(ElementPredicate(label: "Don't skip")))
+        XCTAssertTrue(element.matches(ElementPredicate.label("Don't skip")))
     }
 
     func testTypographyFoldingOnPattern() {
         // ASCII apostrophe in label, smart apostrophe in pattern — must match.
         let element = HeistElement.stub(label: "Don't skip")
-        XCTAssertTrue(element.matches(ElementPredicate(label: "Don\u{2019}t skip")))
+        XCTAssertTrue(element.matches(ElementPredicate.label("Don\u{2019}t skip")))
     }
 
     func testEmDashFoldingOnLabel() {
         let element = HeistElement.stub(label: "wait \u{2014} stop")
-        XCTAssertTrue(element.matches(ElementPredicate(label: "wait - stop")))
+        XCTAssertTrue(element.matches(ElementPredicate.label("wait - stop")))
     }
 
     func testEllipsisFolding() {
         let element = HeistElement.stub(label: "Loading\u{2026}")
-        XCTAssertTrue(element.matches(ElementPredicate(label: "Loading...")))
+        XCTAssertTrue(element.matches(ElementPredicate.label("Loading...")))
     }
 
     func testIdentifierExactMatch() {
@@ -494,9 +474,9 @@ final class ElementPredicateTests: XCTestCase {
             identifier: "save_btn", traits: [],
             frameX: 0, frameY: 0, frameWidth: 0, frameHeight: 0, actions: []
         )
-        XCTAssertTrue(element.matches(ElementPredicate(identifier: "save_btn")))
-        XCTAssertFalse(element.matches(ElementPredicate(identifier: "save")))
-        XCTAssertFalse(element.matches(ElementPredicate(identifier: "save_btn_extra")))
+        XCTAssertTrue(element.matches(ElementPredicate.identifier("save_btn")))
+        XCTAssertFalse(element.matches(ElementPredicate.identifier("save")))
+        XCTAssertFalse(element.matches(ElementPredicate.identifier("save_btn_extra")))
     }
 
     func testValueExactMatch() {
@@ -505,42 +485,45 @@ final class ElementPredicateTests: XCTestCase {
             identifier: nil, traits: [],
             frameX: 0, frameY: 0, frameWidth: 0, frameHeight: 0, actions: []
         )
-        XCTAssertTrue(element.matches(ElementPredicate(value: "50%")))
-        XCTAssertFalse(element.matches(ElementPredicate(value: "5")))
+        XCTAssertTrue(element.matches(ElementPredicate.value("50%")))
+        XCTAssertFalse(element.matches(ElementPredicate.value("5")))
     }
 
     func testTraitsStillExactBitmaskComparison() {
         let element = HeistElement.stub(label: "Submit", traits: [.button])
-        XCTAssertTrue(element.matches(ElementPredicate(traits: [.button])))
-        XCTAssertFalse(element.matches(ElementPredicate(traits: [.button, .selected])))
+        XCTAssertTrue(element.matches(ElementPredicate.traits([.button])))
+        XCTAssertFalse(element.matches(ElementPredicate.traits([.button, .selected])))
     }
 
-    func testExcludePredicateWorksForTraits() {
+    func testExcludePredicateWorksForTraits() throws {
         let enabled = HeistElement.stub(label: "Submit", traits: [.button])
         let disabled = HeistElement.stub(label: "Submit", traits: [.button, .notEnabled])
-        let predicate = ElementPredicate([.label("Submit"), .exclude(.traits([.notEnabled]))])
+        let predicate = try ElementPredicateTemplate([
+            .label("Submit"),
+            .exclude(.traits([.notEnabled])),
+        ]).resolve(in: .empty)
         XCTAssertTrue(enabled.matches(predicate))
         XCTAssertFalse(disabled.matches(predicate))
     }
 
-    func testCompoundPredicateAllFieldsExact() {
+    func testCompoundPredicateAllFieldsExact() throws {
         let element = HeistElement(
             description: "Dark Mode", label: "Dark Mode", value: "ON",
             identifier: "darkModeToggle", traits: [.button, .selected],
             frameX: 0, frameY: 0, frameWidth: 0, frameHeight: 0, actions: []
         )
-        let predicate = ElementPredicate(
+        let predicate = try ElementPredicateTemplate(
             label: "Dark Mode",
             identifier: "darkModeToggle",
             value: "ON",
             traits: [.button, .selected]
-        )
+        ).resolve(in: .empty)
         XCTAssertTrue(element.matches(predicate))
         // Wrong value — must miss
-        let wrongValue = ElementPredicate(
+        let wrongValue = try ElementPredicateTemplate(
             label: "Dark Mode", identifier: "darkModeToggle", value: "OFF",
             traits: [.button, .selected]
-        )
+        ).resolve(in: .empty)
         XCTAssertFalse(element.matches(wrongValue))
     }
 

@@ -93,34 +93,19 @@ extension TheBurglar.InterfaceObservationBuildFacts {
     /// coordinate conversion here rather than in projection.
     static func extract(
         from result: TheBurglar.ParseResult,
-        screenCoordinateHierarchy hierarchy: [AccessibilityHierarchy]
+        identityContext: TheBurglar.HierarchyIdentityContext
     ) -> TheBurglar.InterfaceObservationBuildFacts {
-        let scrollContextContainerPaths = Set(
-            result.scrollViewsByPath.compactMap { path, scrollView in
-                scrollView.bhIsUnsafeForProgrammaticScrolling ? nil : path
-            }
-        )
-        let identityContext = TheBurglar.buildContainerIdentityContext(
-            hierarchy: hierarchy,
-            scrollableContainerPaths: scrollContextContainerPaths
-        )
-        let elementContextsByPath = TheBurglar.buildElementContextsByPath(
-            hierarchy: hierarchy,
-            scrollableContainerPaths: scrollContextContainerPaths
-        )
         let elementScrollExtraction = elementScrollFacts(
-            hierarchy: hierarchy,
-            elementContextsByPath: elementContextsByPath,
+            identityContext: identityContext,
             objectsByPath: result.objectsByPath,
             scrollViewsByPath: result.scrollViewsByPath
         )
 
         return TheBurglar.InterfaceObservationBuildFacts(
             scroll: TheBurglar.InterfaceObservationBuildScrollFacts(
-                contextContainerPaths: scrollContextContainerPaths,
+                contextContainerPaths: identityContext.scrollableContainerPaths,
                 elementsByPath: elementScrollExtraction.elementsByPath,
                 containerObservedScrollContentActivationPointsByPath: containerObservedScrollContentActivationPoints(
-                    hierarchy: hierarchy,
                     identityContext: identityContext,
                     scrollViewsByPath: result.scrollViewsByPath
                 ),
@@ -132,6 +117,16 @@ extension TheBurglar.InterfaceObservationBuildFacts {
             focus: TheBurglar.InterfaceObservationBuildFocusFacts(
                 firstResponderPaths: firstResponderPaths(in: result.objectsByPath)
             )
+        )
+    }
+
+    static func scrollContextContainerPaths(
+        from result: TheBurglar.ParseResult
+    ) -> Set<TreePath> {
+        Set(
+            result.scrollViewsByPath.compactMap { path, scrollView in
+                scrollView.bhIsUnsafeForProgrammaticScrolling ? nil : path
+            }
         )
     }
 
@@ -149,44 +144,32 @@ extension TheBurglar.InterfaceObservationBuildFacts {
     }
 
     private static func elementScrollFacts(
-        hierarchy: [AccessibilityHierarchy],
-        elementContextsByPath: [TreePath: TheBurglar.ElementContext],
+        identityContext: TheBurglar.HierarchyIdentityContext,
         objectsByPath: [TreePath: NSObject],
         scrollViewsByPath: [TreePath: UIScrollView]
     ) -> ElementScrollFactsExtraction {
-        let indexedElementsByPath = Dictionary(
-            uniqueKeysWithValues: hierarchy.pathIndexedElements.map { ($0.path, $0.element) }
-        )
-        var elementPathsByContainerPath: [TreePath: [TreePath]] = [:]
-        for (path, context) in elementContextsByPath {
-            guard let membership = context.scrollMembership else { continue }
-            elementPathsByContainerPath[membership.containerPath, default: []].append(path)
-        }
-
         var elementsByPath: [TreePath: TheBurglar.InterfaceObservationBuildElementScrollFacts] = [:]
         var visibleIndicesByContainerPath: [TreePath: Set<Int>] = [:]
 
-        for (containerPath, scrollView) in scrollViewsByPath {
-            for path in elementPathsByContainerPath[containerPath, default: []] {
-                guard let element = indexedElementsByPath[path],
-                      let membership = elementContextsByPath[path]?.scrollMembership
-                else { continue }
+        for identity in identityContext.elements {
+            guard let membership = identity.scrollMembership,
+                  let scrollView = scrollViewsByPath[membership.containerPath]
+            else { continue }
 
-                let index = scrollIndex(of: objectsByPath[path], in: scrollView)
-                if let index {
-                    visibleIndicesByContainerPath[containerPath, default: []].insert(index)
-                }
-                elementsByPath[path] = TheBurglar.InterfaceObservationBuildElementScrollFacts(
-                    membership: InterfaceTree.ScrollMembership(
-                        containerPath: membership.containerPath,
-                        index: index
-                    ),
-                    observedScrollContentActivationPoint: observedScrollContentActivationPoint(
-                        for: element,
-                        in: scrollView
-                    )
-                )
+            let index = scrollIndex(of: objectsByPath[identity.path], in: scrollView)
+            if let index {
+                visibleIndicesByContainerPath[membership.containerPath, default: []].insert(index)
             }
+            elementsByPath[identity.path] = TheBurglar.InterfaceObservationBuildElementScrollFacts(
+                membership: InterfaceTree.ScrollMembership(
+                    containerPath: membership.containerPath,
+                    index: index
+                ),
+                observedScrollContentActivationPoint: observedScrollContentActivationPoint(
+                    for: identity.element,
+                    in: scrollView
+                )
+            )
         }
 
         return ElementScrollFactsExtraction(
@@ -237,24 +220,22 @@ extension TheBurglar.InterfaceObservationBuildFacts {
     }
 
     private static func containerObservedScrollContentActivationPoints(
-        hierarchy: [AccessibilityHierarchy],
-        identityContext: TheBurglar.ContainerIdentityContext,
+        identityContext: TheBurglar.HierarchyIdentityContext,
         scrollViewsByPath: [TreePath: UIScrollView]
     ) -> [TreePath: InterfaceTree.ObservedScrollContentActivationPoint] {
         Dictionary(
-            uniqueKeysWithValues: hierarchy.compactMapSubtrees { node, path -> (TreePath, InterfaceTree.ObservedScrollContentActivationPoint)? in
-                guard case .container(let container, _) = node,
-                      let membership = identityContext.scrollMembershipsByPath[path],
+            uniqueKeysWithValues: identityContext.containers.compactMap { identity in
+                guard let membership = identity.scrollMembership,
                       let scrollView = scrollViewsByPath[membership.containerPath]
                 else { return nil }
-                let frame = container.frame.cgRect
+                let frame = identity.container.frame.cgRect
                 let activationPoint = CGPoint(x: frame.midX, y: frame.midY)
                 guard activationPoint.x.isFinite, activationPoint.y.isFinite,
                       let observedPoint = InterfaceTree.ObservedScrollContentActivationPoint(
                           scrollView.convert(activationPoint, from: nil)
                       )
                 else { return nil }
-                return (path, observedPoint)
+                return (identity.path, observedPoint)
             }
         )
     }

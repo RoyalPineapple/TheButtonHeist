@@ -41,7 +41,6 @@ extension TheStash {
     }
 
     enum TargetNotFoundReason: Equatable {
-        case ordinalNegative(Int)
         case ordinalOutOfRange(requested: Int, matchCount: Int)
         case noMatches
     }
@@ -63,20 +62,19 @@ extension TheStash {
     }
 
     enum ContainerNotFoundReason: Equatable {
-        case emptyPredicate
         case ordinalOutOfRange(requested: Int, matchCount: Int)
         case noMatches
     }
 
     struct ContainerNotFoundFacts {
-        let predicate: ContainerPredicate
+        let predicate: ResolvedContainerPredicate
         let ordinal: Int?
         let reason: ContainerNotFoundReason
         let resolutionScope: ResolutionScope
     }
 
     struct ContainerAmbiguityFacts {
-        let predicate: ContainerPredicate
+        let predicate: ResolvedContainerPredicate
         let candidates: [InterfaceTree.Container]
         let matchedCount: Int
         let resolutionScope: ResolutionScope
@@ -125,12 +123,12 @@ extension TheStash {
     /// Resolution reads the interface tree. If an element is absent,
     /// resolution fails with a near-miss suggestion. Live coordinate
     /// revalidation happens later in action execution.
-    func resolveTarget(_ target: AccessibilityTarget) -> TargetResolution {
+    func resolveTarget(_ target: ResolvedAccessibilityTarget) -> TargetResolution {
         resolveTarget(target, in: interfaceTree, resolutionScope: .interface)
     }
 
     /// Resolve a target against a caller-provided tree during exploration.
-    func resolveTarget(_ target: AccessibilityTarget, in tree: InterfaceTree) -> TargetResolution {
+    func resolveTarget(_ target: ResolvedAccessibilityTarget, in tree: InterfaceTree) -> TargetResolution {
         resolveTarget(target, in: tree, resolutionScope: .provided)
     }
 
@@ -139,38 +137,29 @@ extension TheStash {
     /// A fresh parser read may supply UIKit evidence for an already-settled
     /// identity, but it cannot make new semantic state actionable before the
     /// observation stream commits it.
-    func resolveVisibleTarget(_ target: AccessibilityTarget) -> TargetResolution {
+    func resolveVisibleTarget(_ target: ResolvedAccessibilityTarget) -> TargetResolution {
         resolveTarget(target, in: interfaceTree.viewportOnly, resolutionScope: .viewport)
     }
 
-    func resolveContainerTarget(_ predicate: ContainerPredicate, ordinal: Int?) -> ContainerTargetResolution {
-        resolveContainerTarget(
-            predicate,
-            ordinal: ordinal,
-            in: WireConversion.semanticInterfaceProjection(from: interfaceTree),
-            resolutionScope: .interface
-        )
+    func resolveContainerTarget(_ target: ResolvedAccessibilityTarget) -> ContainerTargetResolution {
+        resolveContainerTarget(target, in: interfaceTree, resolutionScope: .interface)
     }
 
     private func resolveContainerTarget(
-        _ predicate: ContainerPredicate,
-        ordinal: Int?,
-        in projection: SemanticInterfaceProjection,
+        _ target: ResolvedAccessibilityTarget,
+        in tree: InterfaceTree,
         resolutionScope: ResolutionScope
     ) -> ContainerTargetResolution {
-        guard predicate.hasPredicates else {
-            return .notFound(ContainerNotFoundFacts(
-                predicate: predicate,
-                ordinal: ordinal,
-                reason: .emptyPredicate,
-                resolutionScope: resolutionScope
-            ))
+        guard let selection = target.terminalContainerSelection else {
+            preconditionFailure("container resolution requires a resolved container target")
         }
-        let matches = projection.containers(matching: predicate)
-        if let ordinal {
+        let interface = WireConversion.toSemanticInterface(from: tree)
+        let matchSet = ElementMatchGraph(interface: interface).resolve(target.withoutTerminalOrdinal)
+        let matches = treeContainers(matching: matchSet, in: tree, interface: interface)
+        if let ordinal = selection.ordinal {
             guard matches.indices.contains(ordinal) else {
                 return .notFound(ContainerNotFoundFacts(
-                    predicate: predicate,
+                    predicate: selection.predicate,
                     ordinal: ordinal,
                     reason: .ordinalOutOfRange(requested: ordinal, matchCount: matches.count),
                     resolutionScope: resolutionScope
@@ -183,14 +172,14 @@ extension TheStash {
             return .resolved(matches[0])
         case 0:
             return .notFound(ContainerNotFoundFacts(
-                predicate: predicate,
+                predicate: selection.predicate,
                 ordinal: nil,
                 reason: .noMatches,
                 resolutionScope: resolutionScope
             ))
         default:
             return .ambiguous(ContainerAmbiguityFacts(
-                predicate: predicate,
+                predicate: selection.predicate,
                 candidates: matches,
                 matchedCount: matches.count,
                 resolutionScope: resolutionScope
@@ -223,7 +212,7 @@ extension TheStash {
     }
 
     /// Resolve a target using first-match semantics against the committed viewport.
-    func resolveFirstVisibleMatch(_ target: AccessibilityTarget) -> InterfaceTree.Element? {
+    func resolveFirstVisibleMatch(_ target: ResolvedAccessibilityTarget) -> InterfaceTree.Element? {
         resolveVisibleTarget(target.firstMatchTarget).resolved
     }
 
@@ -244,43 +233,22 @@ extension TheStash {
 private extension TheStash {
 
     func resolveTarget(
-        _ target: AccessibilityTarget,
+        _ target: ResolvedAccessibilityTarget,
         in tree: InterfaceTree,
         resolutionScope: ResolutionScope
     ) -> TargetResolution {
-        let projection = WireConversion.semanticInterfaceProjection(from: tree)
-        return resolveTarget(target, in: projection, tree: tree, resolutionScope: resolutionScope)
-    }
-
-    func resolveTarget(
-        _ target: AccessibilityTarget,
-        in projection: SemanticInterfaceProjection,
-        tree: InterfaceTree,
-        resolutionScope: ResolutionScope
-    ) -> TargetResolution {
-        let treeElements = projection.treeElements(scopedBy: target)
-        guard let selection = target.terminalSelection else {
-            return .notFound(TargetNotFoundFacts(
-                predicate: ElementPredicate(),
-                ordinal: nil,
-                reason: .noMatches,
-                resolutionScope: resolutionScope,
-                treeElements: treeElements,
-                visibleHeistIds: tree.viewportElementIDs
-            ))
+        guard let selection = target.terminalElementSelection else {
+            preconditionFailure("element resolution requires a resolved element target")
         }
-        if let ordinal = selection.ordinal, ordinal < 0 {
-            return .notFound(TargetNotFoundFacts(
-                predicate: selection.predicate,
-                ordinal: ordinal,
-                reason: .ordinalNegative(ordinal),
-                resolutionScope: resolutionScope,
-                treeElements: treeElements,
-                visibleHeistIds: tree.viewportElementIDs
-            ))
-        }
-
-        let matches = treeElements.filter { selection.predicate.matches($0.element) }
+        let interface = WireConversion.toSemanticInterface(from: tree)
+        let graph = ElementMatchGraph(interface: interface)
+        let candidates = treeElements(
+            matching: graph.elementCandidates(in: target),
+            in: tree,
+            interface: interface
+        )
+        let matchSet = graph.resolve(target.withoutTerminalOrdinal)
+        let matches = treeElements(matching: matchSet.elements, in: tree, interface: interface)
         if let ordinal = selection.ordinal {
             guard matches.indices.contains(ordinal) else {
                 return .notFound(TargetNotFoundFacts(
@@ -288,7 +256,7 @@ private extension TheStash {
                     ordinal: ordinal,
                     reason: .ordinalOutOfRange(requested: ordinal, matchCount: matches.count),
                     resolutionScope: resolutionScope,
-                    treeElements: matches,
+                    treeElements: candidates,
                     visibleHeistIds: tree.viewportElementIDs
                 ))
             }
@@ -301,7 +269,7 @@ private extension TheStash {
                 ordinal: nil,
                 reason: .noMatches,
                 resolutionScope: resolutionScope,
-                treeElements: treeElements,
+                treeElements: candidates,
                 visibleHeistIds: tree.viewportElementIDs
             ))
         case 1:
@@ -319,39 +287,61 @@ private extension TheStash {
     }
 }
 
-private struct TargetTerminalSelection {
+private struct TargetTerminalElementSelection {
     let predicate: ElementPredicate
     let ordinal: Int?
 }
 
-private extension AccessibilityTarget {
-    var terminalSelection: TargetTerminalSelection? {
+private struct TargetTerminalContainerSelection {
+    let predicate: ResolvedContainerPredicate
+    let ordinal: Int?
+}
+
+private extension ResolvedAccessibilityTarget {
+    var terminalElementSelection: TargetTerminalElementSelection? {
         switch self {
-        case .predicate(let template, let ordinal):
-            guard let predicate = try? template.resolve(in: .empty) else { return nil }
-            return TargetTerminalSelection(
+        case .predicate(let predicate, let ordinal):
+            return TargetTerminalElementSelection(
                 predicate: predicate,
                 ordinal: ordinal
             )
         case .within(_, let nestedTarget):
-            guard let nestedSelection = nestedTarget.terminalSelection else { return nil }
-            return TargetTerminalSelection(
-                predicate: nestedSelection.predicate,
-                ordinal: nestedSelection.ordinal
-            )
-        case .container, .ref:
+            return nestedTarget.terminalElementSelection
+        case .container:
             return nil
         }
     }
 
-    var firstMatchTarget: AccessibilityTarget {
+    var terminalContainerSelection: TargetTerminalContainerSelection? {
+        switch self {
+        case .container(let predicate, let ordinal):
+            return TargetTerminalContainerSelection(predicate: predicate, ordinal: ordinal)
+        case .within(_, let nestedTarget):
+            return nestedTarget.terminalContainerSelection
+        case .predicate:
+            return nil
+        }
+    }
+
+    var firstMatchTarget: ResolvedAccessibilityTarget {
         switch self {
         case .predicate(let predicate, _):
             return .predicate(predicate, ordinal: 0)
         case .within(let container, let target):
             return .within(container: container, target: target.firstMatchTarget)
-        case .container, .ref:
+        case .container:
             return self
+        }
+    }
+
+    var withoutTerminalOrdinal: ResolvedAccessibilityTarget {
+        switch self {
+        case .predicate(let predicate, _):
+            return .predicate(predicate)
+        case .container(let predicate, _):
+            return .container(predicate)
+        case .within(let container, let target):
+            return .within(container: container, target: target.withoutTerminalOrdinal)
         }
     }
 }

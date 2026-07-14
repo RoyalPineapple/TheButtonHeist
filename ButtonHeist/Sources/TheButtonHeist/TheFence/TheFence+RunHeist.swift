@@ -175,16 +175,16 @@ extension TheFence {
     }
 
     private func performActionCommand(for action: HeistActionCommand) -> Command {
-        switch action {
+        switch action.wireType {
         case .typeText:
             return .typeText
-        case .mechanicalTap:
+        case .oneFingerTap:
             return .oneFingerTap
-        case .mechanicalLongPress:
+        case .longPress:
             return .longPress
-        case .mechanicalSwipe:
+        case .swipe:
             return .swipe
-        case .mechanicalDrag:
+        case .drag:
             return .drag
         case .rotor:
             return .rotor
@@ -192,10 +192,10 @@ extension TheFence {
             return .editAction
         case .setPasteboard:
             return .setPasteboard
-        case .dismissKeyboard:
+        case .resignFirstResponder:
             return .dismissKeyboard
-        case .activate, .increment, .decrement, .customAction, .dismiss, .magicTap, .takeScreenshot,
-             .viewportScroll, .viewportScrollToVisible, .viewportScrollToEdge:
+        case .activate, .increment, .decrement, .performCustomAction, .dismiss, .magicTap, .takeScreenshot,
+             .scroll, .scrollToVisible, .scrollToEdge:
             return .activate
         }
     }

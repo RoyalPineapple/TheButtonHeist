@@ -8,61 +8,26 @@ extension TheFence {
     // MARK: - Send Action
 
     func sendAndAwaitAction(_ message: ClientMessage, timeout: TimeInterval) async throws -> ActionResult {
-        guard handoff.isConnected else { throw FenceError.notConnected }
-        let requestId = UUID().uuidString
-        return try await pendingRequests.waitForAction(
-            requestId: requestId,
-            timeout: timeout
-        ) {
-            self.sendClientMessage(message, requestId: requestId)
-        }
+        try await sendAndAwait(message, expecting: .action, timeout: timeout)
     }
 
     func sendAndAwaitPong(timeout: TimeInterval) async throws -> PongPayload {
-        guard handoff.isConnected else { throw FenceError.notConnected }
-        let requestId = UUID().uuidString
-        return try await pendingRequests.waitForPong(
-            requestId: requestId,
-            timeout: timeout
-        ) {
-            self.sendClientMessage(.ping, requestId: requestId)
-        }
+        try await sendAndAwait(.ping, expecting: .pong, timeout: timeout)
     }
 
     func sendAndAwaitInterface(_ message: ClientMessage, timeout: TimeInterval) async throws -> Interface {
-        guard handoff.isConnected else { throw FenceError.notConnected }
-        let requestId = UUID().uuidString
-        return try await pendingRequests.waitForInterface(
-            requestId: requestId,
-            timeout: timeout
-        ) {
-            self.sendClientMessage(message, requestId: requestId)
-        }
+        try await sendAndAwait(message, expecting: .interface, timeout: timeout)
     }
 
     func sendAndAwaitScreen(
         _ message: ClientMessage,
         timeout: TimeInterval
     ) async throws -> ScreenPayload {
-        guard handoff.isConnected else { throw FenceError.notConnected }
-        let requestId = UUID().uuidString
-        return try await pendingRequests.waitForScreen(
-            requestId: requestId,
-            timeout: timeout
-        ) {
-            self.sendClientMessage(message, requestId: requestId)
-        }
+        try await sendAndAwait(message, expecting: .screen, timeout: timeout)
     }
 
     func sendAndAwaitAnnouncements(timeout: TimeInterval) async throws -> AnnouncementListPayload {
-        guard handoff.isConnected else { throw FenceError.notConnected }
-        let requestId = UUID().uuidString
-        return try await pendingRequests.waitForAnnouncements(
-            requestId: requestId,
-            timeout: timeout
-        ) {
-            self.sendClientMessage(.getAnnouncements, requestId: requestId)
-        }
+        try await sendAndAwait(.getAnnouncements, expecting: .announcements, timeout: timeout)
     }
 
     func sendAndAwaitHeistExecution(
@@ -70,19 +35,28 @@ extension TheFence {
         argument: HeistArgument = .none,
         timeout: TimeInterval
     ) async throws -> HeistExecutionResult {
-        guard handoff.isConnected else { throw FenceError.notConnected }
         let message = ClientMessage.heistPlan(HeistPlanRun(plan: plan, argument: argument))
+        return try await sendAndAwait(message, expecting: .heistExecution, timeout: timeout)
+    }
+
+    func cancelAllPendingRequests(error: Error = FenceError.actionTimeout) {
+        pendingRequests.cancelAll(error: error)
+    }
+
+    private func sendAndAwait<Response: Sendable>(
+        _ message: ClientMessage,
+        expecting expectation: PendingResponseExpectation<Response>,
+        timeout: TimeInterval
+    ) async throws -> Response {
+        guard handoff.isConnected else { throw FenceError.notConnected }
         let requestId = UUID().uuidString
-        return try await pendingRequests.waitForHeistExecution(
+        return try await pendingRequests.waitForResponse(
+            expectation,
             requestId: requestId,
             timeout: timeout
         ) {
             self.sendClientMessage(message, requestId: requestId)
         }
-    }
-
-    func cancelAllPendingRequests(error: Error = FenceError.actionTimeout) {
-        pendingRequests.cancelAll(error: error)
     }
 
     private func sendClientMessage(

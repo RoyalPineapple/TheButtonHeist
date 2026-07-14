@@ -319,9 +319,9 @@ extension TheFence {
             return try TheFence.appInteractionDispatch(
                 .typeText,
                 .typeText(
-                    text: .literal(text),
+                    text: text,
                     target: try arguments.decodedAccessibilityTarget().map {
-                        try $0.resolvedElementTarget(command: .typeText)
+                        try $0.validatedElementTarget(command: .typeText)
                     },
                     replacingExisting: replacingExisting
                 ),

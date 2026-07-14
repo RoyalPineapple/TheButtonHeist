@@ -3,17 +3,6 @@ import ButtonHeistSupport
 import Network
 import TheScore
 
-enum DeviceReceiveFraming {
-    static let maxBufferSize = WireFrameLimits.serverToClientMaxBufferedBytes
-
-    static func nextFrame(from buffer: inout Data) -> Data? {
-        guard let newlineIndex = buffer.firstIndex(of: WireFrameLimits.newlineDelimiterByte) else { return nil }
-        let messageData = buffer.prefix(upTo: newlineIndex)
-        buffer = Data(buffer.suffix(from: buffer.index(after: newlineIndex)))
-        return Data(messageData)
-    }
-}
-
 enum DeviceReceiveEvent: Sendable {
     case failed(NWError)
     case content(Data)
@@ -96,17 +85,25 @@ extension DeviceConnection {
         _ content: Data,
         into session: inout RuntimeSession
     ) -> Bool {
-        session.receiveBuffer.append(content)
-
-        if session.receiveBuffer.count > DeviceReceiveFraming.maxBufferSize {
+        let (bufferedByteCount, overflowed) = session.receiveFramer.pendingByteCount.addingReportingOverflow(
+            content.count
+        )
+        if overflowed || bufferedByteCount > WireFrameLimits.serverToClientMaxBufferedBytes {
             deviceConnectionLogger.error("Server exceeded max buffer size, disconnecting")
             disconnect()
             onEvent?(.disconnected(.bufferOverflow))
             return false
         }
 
+        let messageFrames = session.receiveFramer.append(content)
         updateConnectedSession(session)
-        processBuffer(sessionID: session.id)
+        for messageData in messageFrames {
+            guard connectedSession(matching: session.id, connection: session.connection) != nil else {
+                return false
+            }
+            handleMessage(messageData)
+        }
+
         guard let latest = connectedSession(matching: session.id, connection: session.connection) else {
             return false
         }
@@ -119,16 +116,5 @@ extension DeviceConnection {
         deviceConnectionLogger.info("Connection closed by server")
         disconnectConnectedSession(session)
         onEvent?(.disconnected(.serverClosed))
-    }
-
-    private func processBuffer(sessionID: UUID) {
-        while true {
-            guard var session = connectedSession(matching: sessionID) else { return }
-            guard let messageData = DeviceReceiveFraming.nextFrame(from: &session.receiveBuffer) else { return }
-            updateConnectedSession(session)
-            if !messageData.isEmpty {
-                handleMessage(messageData)
-            }
-        }
     }
 }

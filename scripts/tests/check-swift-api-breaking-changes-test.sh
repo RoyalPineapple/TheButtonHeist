@@ -44,11 +44,11 @@ run_gate() {
 }
 
 run_gate v0.6.29 strict 1
-[[ "$STATUS" -eq 1 ]] || fail "current strict baseline accepted native breakage: $OUTPUT"
-
-run_gate v0.6.28 strict 1
 [[ "$STATUS" -eq 0 ]] || fail "scoped architecture baseline waiver failed: $OUTPUT"
 [[ "$OUTPUT" == *"exemption expires"* ]] || fail "waiver did not explain its scope: $OUTPUT"
+
+run_gate v0.6.28 strict 1
+[[ "$STATUS" -eq 1 ]] || fail "expired baseline waiver accepted native breakage: $OUTPUT"
 
 run_gate v0.6.29 report 1
 [[ "$STATUS" -eq 0 ]] || fail "report mode rejected native diagnostics: $OUTPUT"

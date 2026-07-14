@@ -94,13 +94,13 @@ extension HeistPlanSourceParser {
         ))
     }
 
-    mutating func parseElementLoopPredicate() throws -> ElementPredicate {
+    mutating func parseElementLoopPredicate() throws -> ElementPredicateTemplate {
         try expectSymbol(".")
         let name = try parseIdentifier()
         if name == "matching" {
             throw error(previous, #"ForEach element loops use direct predicates like `ForEach(.label("x"))`, not `.matching(...)`"#)
         }
-        return try concretePredicate(from: parseElementPredicateTemplate(named: name))
+        return try parseElementPredicateTemplate(named: name)
     }
 
     mutating func parseRunHeist() throws -> HeistStep {
@@ -134,7 +134,7 @@ extension HeistPlanSourceParser {
             switch chain {
             case "expect":
                 try expectSymbol("(")
-                let predicate: AccessibilityPredicate<RootContext>
+                let predicate: AccessibilityPredicate
                 let timeout: Double?
                 if currentToken.isSymbol(")") {
                     throw error(currentToken, ".expect(...) requires a canonical predicate")
@@ -169,7 +169,7 @@ extension HeistPlanSourceParser {
 
     mutating func parseHeistArgument() throws -> HeistArgument {
         if let string = try parseStringExprIfPresent() {
-            return .string(string)
+            return HeistArgument(core: .string(string))
         }
         return .accessibilityTarget(try parseTargetExpr())
     }
@@ -221,7 +221,7 @@ extension HeistPlanSourceParser {
     }
 
     mutating func parseSinglePredicateBranches(
-        predicate: AccessibilityPredicate<ScreenAssertionContext>,
+        predicate: ChangeDeclaration.ScreenAssertion,
         chainContext: String
     ) throws -> ParsedPredicateBranches {
         let body = try parseHeistBlock()
@@ -256,7 +256,7 @@ extension HeistPlanSourceParser {
         try expectSymbol("{")
         let localName = try parseIdentifier()
         try expectIdentifier("in")
-        let referenceName = HeistReferenceName(rawValue: localName)
+        let referenceName = try HeistReferenceName(validating: localName)
         let previousScope = currentScope()
         defer { restoreScope(previousScope) }
         bindScopedReference(binding, localName: localName, referenceName: referenceName)

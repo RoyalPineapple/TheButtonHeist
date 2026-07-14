@@ -11,14 +11,14 @@ final class InterfaceSelectorTests: XCTestCase {
 
     func testElementSubtreeSelectsMatchingLeaf() throws {
         let interface = try select(InterfaceQuery(
-            subtree: literalTarget(ElementPredicate(identifier: "submit_button"))
+            subtree: .identifier("submit_button")
         ))
         XCTAssertEqual(interface.projectedElements.map(\.label), ["Submit"])
     }
 
     func testElementSubtreeSelectsPredicateLeaf() throws {
         let interface = try select(InterfaceQuery(
-            subtree: literalTarget(ElementPredicate(identifier: "cancel_button"))
+            subtree: .identifier("cancel_button")
         ))
         XCTAssertEqual(interface.projectedElements.map(\.label), ["Cancel"])
         XCTAssertEqual(interface.annotations.elements.count, 1)

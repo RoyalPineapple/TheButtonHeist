@@ -22,9 +22,9 @@ struct HeistRunRequest: Equatable, Sendable {
 
 @MainActor
 @discardableResult
-public func runHeist<Content: HeistContent>(
+public func runHeist(
     _ name: String,
-    @HeistBuilder _ content: @escaping () throws -> Content
+    @HeistBuilder _ content: @escaping () throws -> some HeistContent
 ) async throws -> Heist {
     let request = try makeRunHeistRequest(name, content)
     return try await Heist(request.plan, argument: request.argument)
@@ -40,9 +40,9 @@ public func runHeist(
     try await Heist(plan, argument: argument)
 }
 
-func makeRunHeistRequest<Content: HeistContent>(
+func makeRunHeistRequest(
     _ name: String,
-    @HeistBuilder _ content: @escaping () throws -> Content
+    @HeistBuilder _ content: @escaping () throws -> some HeistContent
 ) throws -> HeistRunRequest {
     guard shouldWrapDottedCapability(name) else {
         return HeistRunRequest(
@@ -61,11 +61,11 @@ func makeRunHeistRequest<Content: HeistContent>(
 
 @MainActor
 @discardableResult
-public func runHeist<Content: HeistContent>(
+public func runHeist(
     _ name: String,
     argument input: String,
     parameter: HeistReferenceName = "input",
-    @HeistBuilder _ content: @escaping (StringExpr) throws -> Content
+    @HeistBuilder _ content: @escaping (HeistReferenceName) throws -> some HeistContent
 ) async throws -> Heist {
     let request = try makeRunHeistRequest(
         name,
@@ -76,26 +76,26 @@ public func runHeist<Content: HeistContent>(
     return try await Heist(request.plan, argument: request.argument)
 }
 
-func makeRunHeistRequest<Content: HeistContent>(
+func makeRunHeistRequest(
     _ name: String,
     argument input: String,
     parameter: HeistReferenceName = "input",
-    @HeistBuilder _ content: @escaping (StringExpr) throws -> Content
+    @HeistBuilder _ content: @escaping (HeistReferenceName) throws -> some HeistContent
 ) throws -> HeistRunRequest {
     HeistRunRequest(
         plan: try makeRunHeistPlan(name, parameter: parameter, content: content),
-        argument: .string(.literal(input))
+        argument: .string(input)
     )
 }
 
 @_disfavoredOverload
 @MainActor
 @discardableResult
-public func runHeist<Content: HeistContent>(
+public func runHeist(
     _ name: String,
     argument input: AccessibilityTarget,
     parameter: HeistReferenceName = "input",
-    @HeistBuilder _ content: @escaping (AccessibilityTarget) throws -> Content
+    @HeistBuilder _ content: @escaping (AccessibilityTarget) throws -> some HeistContent
 ) async throws -> Heist {
     let request = try makeRunHeistRequest(
         name,
@@ -107,11 +107,11 @@ public func runHeist<Content: HeistContent>(
 }
 
 @_disfavoredOverload
-func makeRunHeistRequest<Content: HeistContent>(
+func makeRunHeistRequest(
     _ name: String,
     argument input: AccessibilityTarget,
     parameter: HeistReferenceName = "input",
-    @HeistBuilder _ content: @escaping (AccessibilityTarget) throws -> Content
+    @HeistBuilder _ content: @escaping (AccessibilityTarget) throws -> some HeistContent
 ) throws -> HeistRunRequest {
     let plan = try makeRunHeistPlan(name, targetParameter: parameter, content: content)
     return HeistRunRequest(
@@ -120,10 +120,10 @@ func makeRunHeistRequest<Content: HeistContent>(
     )
 }
 
-private func makeRunHeistPlan<Content: HeistContent>(
+private func makeRunHeistPlan(
     _ name: String,
     parameter: HeistReferenceName,
-    content: @escaping (StringExpr) throws -> Content
+    content: @escaping (HeistReferenceName) throws -> some HeistContent
 ) throws -> HeistPlan {
     guard shouldWrapDottedCapability(name) else {
         return try HeistPlan(name, parameter: parameter, content)
@@ -134,10 +134,10 @@ private func makeRunHeistPlan<Content: HeistContent>(
     }
 }
 
-private func makeRunHeistPlan<Content: HeistContent>(
+private func makeRunHeistPlan(
     _ name: String,
     targetParameter parameter: HeistReferenceName,
-    content: @escaping (AccessibilityTarget) throws -> Content
+    content: @escaping (AccessibilityTarget) throws -> some HeistContent
 ) throws -> HeistPlan {
     guard shouldWrapDottedCapability(name) else {
         return try HeistPlan(name, targetParameter: parameter, content)
@@ -192,13 +192,13 @@ public enum HeistTestReceiptRecording: Sendable, Equatable {
 /// The failure message includes the heist failure description, including the
 /// settled interface dump when one is available.
 @discardableResult
-public func runHeistSync<Content: HeistContent>(
+public func runHeistSync(
     _ name: String,
     recordReceipt: HeistTestReceiptRecording = .environment,
     to receiptDirectory: URL? = nil,
     file: StaticString = #filePath,
     line: UInt = #line,
-    @HeistBuilder _ content: @escaping () throws -> Content
+    @HeistBuilder _ content: @escaping () throws -> some HeistContent
 ) -> Heist? {
     runHeistSyncRequest(
         makeRequest: { try makeRunHeistRequest(name, content) },
@@ -211,7 +211,7 @@ public func runHeistSync<Content: HeistContent>(
 
 /// Synchronously runs a string-argument heist from a plain XCTest method.
 @discardableResult
-public func runHeistSync<Content: HeistContent>(
+public func runHeistSync(
     _ name: String,
     argument input: String,
     parameter: HeistReferenceName = "input",
@@ -219,7 +219,7 @@ public func runHeistSync<Content: HeistContent>(
     to receiptDirectory: URL? = nil,
     file: StaticString = #filePath,
     line: UInt = #line,
-    @HeistBuilder _ content: @escaping (StringExpr) throws -> Content
+    @HeistBuilder _ content: @escaping (HeistReferenceName) throws -> some HeistContent
 ) -> Heist? {
     runHeistSyncRequest(
         makeRequest: {
@@ -235,7 +235,7 @@ public func runHeistSync<Content: HeistContent>(
 /// Synchronously runs an accessibility-target heist from a plain XCTest method.
 @_disfavoredOverload
 @discardableResult
-public func runHeistSync<Content: HeistContent>(
+public func runHeistSync(
     _ name: String,
     argument input: AccessibilityTarget,
     parameter: HeistReferenceName = "input",
@@ -243,7 +243,7 @@ public func runHeistSync<Content: HeistContent>(
     to receiptDirectory: URL? = nil,
     file: StaticString = #filePath,
     line: UInt = #line,
-    @HeistBuilder _ content: @escaping (AccessibilityTarget) throws -> Content
+    @HeistBuilder _ content: @escaping (AccessibilityTarget) throws -> some HeistContent
 ) -> Heist? {
     runHeistSyncRequest(
         makeRequest: {

@@ -8,7 +8,7 @@ final class EvidenceMinimumMatcherTests: XCTestCase {
     func testMinimumMatcherUsesSettledBeforeState() throws {
         let label = makeTestHeistElement(label: "Delete", traits: [.staticText])
         let button = makeTestHeistElement(label: "Delete", traits: [.button], actions: [])
-        let actionResult = semanticActionResult(
+        let actionResult = try semanticActionResult(
             method: .activate,
             source: .resolvedSemanticTarget,
             target: .predicate(ElementPredicateTemplate(label: "Delete"), ordinal: 1),
@@ -25,7 +25,7 @@ final class EvidenceMinimumMatcherTests: XCTestCase {
 
     func testMinimumMatcherRefusesUnsettledEvidence() throws {
         let button = makeTestHeistElement(label: "Delete", traits: [.button], actions: [])
-        let actionResult = semanticActionResult(
+        let actionResult = try semanticActionResult(
             method: .activate,
             source: .resolvedSemanticTarget,
             target: .predicate(ElementPredicateTemplate(label: "Delete")),
@@ -47,7 +47,7 @@ private func semanticActionResult(
     before: [HeistElement],
     after: [HeistElement],
     settled: Bool = true
-) -> ActionResult {
+) throws -> ActionResult {
     ActionResult.success(
         method: method,
         evidence: ActionResultSuccessEvidence(
@@ -63,7 +63,7 @@ private func semanticActionResult(
             ),
             subjectEvidence: ActionSubjectEvidence(
                 source: source,
-                target: target,
+                target: try target.resolve(in: .empty),
                 element: subject,
                 resolution: ActionSubjectResolution(origin: .visible),
                 settledObservationSequence: 1

@@ -229,7 +229,8 @@ private struct HeistCanonicalSwiftDSLRenderAlgebra: HeistPlanTraversalVisitor {
             return try renderer.renderForEachElement(
                 forEach,
                 renderedBody: renderedBodies[path.child(.forEachElement).child(.body)] ?? "",
-                indent: indent
+                indent: indent,
+                environment: environment
             )
         case .forEachString(let forEach):
             return try renderer.renderForEachString(

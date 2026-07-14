@@ -5,27 +5,34 @@ import ThePlans
 
 enum PredicateEvaluation {
     static func evaluate(
-        _ predicate: AccessibilityPredicate<RootContext>,
+        _ predicate: ResolvedAccessibilityPredicate,
+        expression: AccessibilityPredicate,
         in evidence: PredicateObservationEvidence
     ) -> ExpectationResult {
-        evidence.evaluate(predicate)
+        evidence.evaluate(predicate, expression: expression)
     }
 
     static func evaluate(
-        _ predicate: AccessibilityPredicate<RootContext>,
+        _ predicate: ResolvedAccessibilityPredicate,
+        expression: AccessibilityPredicate,
         in observation: HeistSemanticObservation
     ) -> ExpectationResult {
         guard let evidence = AccessibilityTraceEvidence(
             trace: observation.accessibilityTrace,
             completeness: .incomplete
         ) else {
-            return ExpectationResult(met: false, predicate: predicate, actual: "no observed accessibility trace")
+            return ExpectationResult(
+                met: false,
+                predicate: expression,
+                actual: "no observed accessibility trace"
+            )
         }
-        return predicate.evaluate(in: evidence)
+        return predicate.evaluate(in: evidence).expectation(for: expression)
     }
 
     static func evaluate(
-        _ predicate: AccessibilityPredicate<RootContext>,
+        _ predicate: ResolvedAccessibilityPredicate,
+        expression: AccessibilityPredicate,
         in trace: AccessibilityTrace,
         completeness: AccessibilityTraceEvidence.Completeness
     ) -> ExpectationResult {
@@ -33,48 +40,38 @@ enum PredicateEvaluation {
             trace: trace,
             completeness: completeness
         ) else {
-            return ExpectationResult(met: false, predicate: predicate, actual: "no observed accessibility trace")
+            return ExpectationResult(
+                met: false,
+                predicate: expression,
+                actual: "no observed accessibility trace"
+            )
         }
-        return predicate.evaluate(in: evidence)
+        return predicate.evaluate(in: evidence).expectation(for: expression)
     }
 
     static func caseMatch(
-        _ predicateCase: ResolvedPredicateCase,
+        _ predicateCase: ResolvedPredicateCaseRuntimeInput,
         in observation: HeistSemanticObservation
     ) -> HeistCaseMatchResult {
-        let predicate = predicateCase.predicate.rootPredicate
-        let result = evaluate(predicate, in: observation)
-        return HeistCaseMatchResult(
-            predicate: predicate,
-            met: result.met,
-            actual: result.actual
+        caseMatchResult(
+            predicateCase,
+            result: evaluate(
+                predicateCase.predicate.rootPredicate,
+                expression: predicateCase.predicateExpression.rootPredicate,
+                in: observation
+            )
         )
     }
 
-    static func caseMatch(
-        _ predicateCase: ResolvedPredicateCase,
-        in evidence: PredicateObservationEvidence
+    private static func caseMatchResult(
+        _ predicateCase: ResolvedPredicateCaseRuntimeInput,
+        result: ExpectationResult
     ) -> HeistCaseMatchResult {
-        let predicate = predicateCase.predicate.rootPredicate
-        let result = evaluate(predicate, in: evidence)
-        return HeistCaseMatchResult(
-            predicate: predicate,
+        HeistCaseMatchResult(
+            predicate: predicateCase.predicateExpression.rootPredicate,
             met: result.met,
             actual: result.actual
         )
-    }
-}
-
-extension AccessibilityPredicate where Context == RootContext {
-    var requiresChangeBaseline: Bool {
-        switch node {
-        case .changed, .noChange:
-            return true
-        case .exists, .missing, .announcement:
-            return false
-        case .screen, .elements, .appeared, .disappeared, .updated:
-            return false
-        }
     }
 }
 

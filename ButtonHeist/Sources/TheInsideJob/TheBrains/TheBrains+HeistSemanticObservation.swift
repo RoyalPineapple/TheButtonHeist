@@ -3,30 +3,26 @@
 import TheScore
 import ThePlans
 
-extension ConditionalStep {
+extension ResolvedScreenAssertion {
     var observationScope: SemanticObservationScope {
-        cases
-            .compactMap { try? $0.predicate.resolve(in: .empty).observationScope }
-            .max() ?? .visible
+        core.observationScope
     }
 }
 
-extension AccessibilityPredicate {
+extension ResolvedAccessibilityPredicate {
     var observationScope: SemanticObservationScope {
-        node.observationScope
+        core.observationScope
     }
 }
 
-private extension AccessibilityPredicateNode {
+private extension AccessibilityPredicateCore where Phase == ResolvedAccessibilityPredicatePhase {
     var observationScope: SemanticObservationScope {
         switch self {
-        case .exists(let target), .missing(let target), .appeared(let target), .disappeared(let target):
-            return target.observationScope
-        case .updated(let target, _):
-            return target.observationScope
-        case .changed(let child):
-            return child.observationScope
-        case .screen(let assertions), .elements(let assertions):
+        case .presence(let presence):
+            return presence.observationScope
+        case .changed(.screen(let assertions)):
+            return assertions.map(\.observationScope).max() ?? .visible
+        case .changed(.elements(let assertions)):
             return assertions.map(\.observationScope).max() ?? .visible
         case .noChange, .announcement:
             return .visible
@@ -34,10 +30,39 @@ private extension AccessibilityPredicateNode {
     }
 }
 
-private extension AccessibilityTarget {
+private extension ScreenAssertionCore where Phase == ResolvedAccessibilityPredicatePhase {
     var observationScope: SemanticObservationScope {
         switch self {
-        case .predicate, .ref:
+        case .presence(let presence):
+            return presence.observationScope
+        }
+    }
+}
+
+private extension ElementAssertionCore where Phase == ResolvedAccessibilityPredicatePhase {
+    var observationScope: SemanticObservationScope {
+        switch self {
+        case .presence(let presence):
+            return presence.observationScope
+        case .appeared(let target), .disappeared(let target), .updated(let target, _):
+            return target.observationScope
+        }
+    }
+}
+
+private extension PresencePredicateCore where Phase == ResolvedAccessibilityPredicatePhase {
+    var observationScope: SemanticObservationScope {
+        switch self {
+        case .exists(let target), .missing(let target):
+            return target.observationScope
+        }
+    }
+}
+
+private extension ResolvedAccessibilityTarget {
+    var observationScope: SemanticObservationScope {
+        switch self {
+        case .predicate:
             return .visible
         case .container, .within:
             return .discovery

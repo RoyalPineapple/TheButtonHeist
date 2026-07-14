@@ -1,7 +1,7 @@
 import ArgumentParser
 @_spi(ButtonHeistTooling) import ButtonHeist
 
-struct TypeCommand: AsyncParsableCommand, CLICommandContract {
+struct TypeCommand: ConnectedOneShotCLICommand {
     private static let defaultTimeout: Double = {
         guard let seconds = TheFence.Command.typeText.descriptor.timeout.singleStepBaseSeconds else {
             preconditionFailure("type_text descriptor must expose a single-step action timeout")
@@ -38,20 +38,14 @@ struct TypeCommand: AsyncParsableCommand, CLICommandContract {
         }
     }
 
-    @ButtonHeistActor
-    mutating func run() async throws {
-        let target = try element.parsedTarget()
+    var runnerStatusMessage: String? { "Sending type command..." }
 
-        try await CLIRunner.run(
-            connection: connection,
-            format: output.format,
-            command: Self.fenceCommand,
-            arguments: Self.fenceArguments(
-                target: target,
-                CommandArgumentWriter.value(.timeout, timeout),
-                CommandArgumentWriter.value(.text, text)
-            ),
-            statusMessage: "Sending type command..."
+    func requestArguments() throws -> TheFence.CommandArgumentEnvelope {
+        let target = try element.parsedTarget()
+        return Self.fenceArguments(
+            target: target,
+            CommandArgumentEnvelopeBuilder.value(.timeout, timeout),
+            CommandArgumentEnvelopeBuilder.value(.text, text)
         )
     }
 }

@@ -84,7 +84,7 @@ final class DogfoodRuntimeContractTests: XCTestCase {
 
             Warn("wait case matched Controls Demo")
 
-            ForEach(ElementPredicate(label: "Text Input", traits: [.button]), limit: 1) { target in
+            ForEach(ElementPredicateTemplate(label: "Text Input", traits: [.button]), limit: 1) { target in
                 WaitFor(.exists(target), timeout: .seconds(1))
             }
 
@@ -258,7 +258,7 @@ private func executeDirectRuntimeActions(_ commands: [HeistActionCommand]) async
     try await withDirectRuntimeSession { job in
         var results: [ActionResult] = []
         for command in commands {
-            let result = await job.brains.executeRuntimeAction(try command.resolveForRuntimeDispatch(in: .empty))
+            let result = await job.getaway.executeDirectRuntimeAction(command)
             results.append(result)
         }
         return results

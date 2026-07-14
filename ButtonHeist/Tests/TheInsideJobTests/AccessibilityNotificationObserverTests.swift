@@ -140,12 +140,12 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
 
     func testActionWindowReadsOnlyEventsAfterCursorWithoutDrainingHistory() throws {
         let bus = AccessibilityNotificationBus()
-        bus.record(code: 1001, notificationData: .none, associatedElement: .none)
+        bus.recordForTesting(code: 1001, notificationData: .none, associatedElement: .none)
 
         let action = bus.beginActionWindow()
         XCTAssertEqual(action.cursor.sequence, 1)
-        bus.record(code: 1005, notificationData: .none, associatedElement: .none)
-        bus.record(
+        bus.recordForTesting(code: 1005, notificationData: .none, associatedElement: .none)
+        bus.recordForTesting(
             code: 1008,
             notificationData: CapturedAccessibilityNotificationPayload("Done" as NSString),
             associatedElement: .none
@@ -159,7 +159,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertEqual(batch.through.sequence, 3)
         XCTAssertNil(batch.gap)
         XCTAssertEqual(
-            bus.pendingEvents().map(\.kind),
+            bus.checkpoint(after: .origin, selection: .all).events.map(\.kind),
             [.elementChanged(.layout), .elementChanged(.value), .announcement]
         )
     }
@@ -169,11 +169,14 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         let action = bus.beginActionWindow()
 
         for _ in 0..<65 {
-            bus.record(code: 1001, notificationData: .none, associatedElement: .none)
+            bus.recordForTesting(code: 1001, notificationData: .none, associatedElement: .none)
         }
 
         let batch = try XCTUnwrap(action.capture())
-        let retainedSequences = bus.pendingEvents().map(\.sequence)
+        let retainedSequences = bus.checkpoint(
+            after: .origin,
+            selection: .all
+        ).events.map(\.sequence)
         action.cancel()
 
         XCTAssertEqual(action.cursor.sequence, 0)
@@ -183,27 +186,44 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertEqual(retainedSequences, batch.events.map(\.sequence))
     }
 
-    func testClearingPendingEventsReportsGapToOpenActionWindow() throws {
+    func testRawCheckpointReportsOnlyRetentionEvictionAsGap() {
         let bus = AccessibilityNotificationBus()
-        let action = bus.beginActionWindow()
-        bus.record(code: 1001, notificationData: .none, associatedElement: .none)
-        bus.record(code: 1005, notificationData: .none, associatedElement: .none)
+        for _ in 0..<65 {
+            bus.recordForTesting(code: 1001, notificationData: .none, associatedElement: .none)
+        }
 
-        bus.clearPendingEvents()
+        let raw = bus.checkpoint(after: .origin, selection: .all)
+        let scoped = bus.checkpoint(after: .origin)
 
-        let batch = try XCTUnwrap(action.capture())
-        action.cancel()
-        XCTAssertTrue(batch.events.isEmpty)
-        XCTAssertEqual(batch.through.sequence, 2)
-        XCTAssertEqual(batch.gap, AccessibilityNotificationGap(droppedThroughSequence: 2))
+        XCTAssertEqual(raw.gap, AccessibilityNotificationGap(droppedThroughSequence: 1))
+        XCTAssertEqual(raw.events.map(\.sequence), Array(UInt64(2)...UInt64(65)))
+        XCTAssertNil(scoped.gap)
+        XCTAssertTrue(scoped.events.isEmpty)
+    }
+
+    func testStoppingSemanticObservationDoesNotClearNotificationHistory() {
+        let stash = TheStash(tripwire: TheTripwire())
+        let heist = stash.accessibilityNotifications.beginHeistScope()
+        stash.accessibilityNotifications.recordForTesting(
+            code: 1001,
+            notificationData: .none,
+            associatedElement: .none
+        )
+        heist.cancel()
+
+        stash.semanticObservationStream.stop()
+
+        let batch = stash.accessibilityNotifications.checkpoint(after: .origin)
+        XCTAssertEqual(batch.events.map(\.kind), [.elementChanged(.layout)])
+        XCTAssertNil(batch.gap)
     }
 
     func testEndingHeistScopePreservesEventsForOpenActionWindow() throws {
         let bus = AccessibilityNotificationBus()
         let heist = bus.beginHeistScope()
         let action = bus.beginActionWindow()
-        bus.record(code: 1001, notificationData: .none, associatedElement: .none)
-        bus.record(code: 1005, notificationData: .none, associatedElement: .none)
+        bus.recordForTesting(code: 1001, notificationData: .none, associatedElement: .none)
+        bus.recordForTesting(code: 1005, notificationData: .none, associatedElement: .none)
 
         heist.cancel()
 
@@ -217,17 +237,17 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
     func testStringPayloadsFromPublicNotificationsAreCapturedAsAnnouncements() {
         let bus = AccessibilityNotificationBus()
 
-        bus.record(
+        bus.recordForTesting(
             code: 1008,
             notificationData: CapturedAccessibilityNotificationPayload("Item deleted" as NSString),
             associatedElement: .none
         )
-        bus.record(
+        bus.recordForTesting(
             code: 1001,
             notificationData: CapturedAccessibilityNotificationPayload("3 items selected" as NSString),
             associatedElement: .none
         )
-        bus.record(
+        bus.recordForTesting(
             code: 1000,
             notificationData: CapturedAccessibilityNotificationPayload("Checkout" as NSString),
             associatedElement: .none
@@ -244,10 +264,12 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
 
         async let result = bus.waitForAnnouncement(
             after: cursor,
-            matching: AnnouncementPredicate(match: .contains("selected")),
+            matching: ResolvedAnnouncementPredicate(
+                match: ResolvedStringMatch(core: .contains("selected"))
+            ),
             timeout: 1.0
         )
-        bus.record(
+        bus.recordForTesting(
             code: 1001,
             notificationData: CapturedAccessibilityNotificationPayload("3 items selected" as NSString),
             associatedElement: .none
@@ -258,15 +280,116 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertEqual(announcement?.kind, .elementChanged(.layout))
     }
 
+    func testOverlappingConsumersProjectTheSameRetainedEvents() async throws {
+        let bus = AccessibilityNotificationBus()
+        let heist = bus.beginHeistScope()
+        let action = bus.beginActionWindow()
+        let announcementCursor = bus.cursor()
+        let announcementTask = Task {
+            await bus.waitForAnnouncement(
+                after: announcementCursor,
+                matching: ResolvedAnnouncementPredicate(
+                    match: ResolvedStringMatch(core: .exact("Done"))
+                ),
+                timeout: 1
+            )
+        }
+        await waitForAnnouncementWaiterCount(1, in: bus)
+
+        bus.recordForTesting(code: 1001, notificationData: .none, associatedElement: .none)
+        bus.recordForTesting(code: 1005, notificationData: .none, associatedElement: .none)
+        bus.recordForTesting(
+            code: 1008,
+            notificationData: CapturedAccessibilityNotificationPayload("Done" as NSString),
+            associatedElement: .none
+        )
+
+        let announcement = await announcementTask.value
+        let actionBatch = try XCTUnwrap(action.capture())
+        let heistBatch = bus.checkpoint(after: heist.cursor)
+        let announcementProjection = bus.announcements(after: announcementCursor)
+        action.cancel()
+        heist.cancel()
+
+        let expectedKinds: [AccessibilityNotificationKind] = [
+            .elementChanged(.layout),
+            .elementChanged(.value),
+            .announcement,
+        ]
+        XCTAssertEqual(actionBatch.events.map(\.kind), expectedKinds)
+        XCTAssertEqual(heistBatch.events.map(\.kind), expectedKinds)
+        XCTAssertEqual(announcement?.sequence, 3)
+        XCTAssertEqual(announcementProjection.map(\.sequence), [3])
+        XCTAssertEqual(
+            bus.checkpoint(after: .origin, selection: .all).events.map(\.kind),
+            expectedKinds
+        )
+    }
+
+    func testCancellingAnnouncementWaitRemovesOnlyItsWaiter() async {
+        let bus = AccessibilityNotificationBus()
+        let task = Task {
+            await bus.waitForAnnouncement(
+                after: bus.cursor(),
+                matching: ResolvedAnnouncementPredicate(
+                    match: ResolvedStringMatch(core: .exact("Never"))
+                ),
+                timeout: 60
+            )
+        }
+        await waitForAnnouncementWaiterCount(1, in: bus)
+
+        task.cancel()
+        let result = await task.value
+
+        XCTAssertNil(result)
+        XCTAssertEqual(bus.announcementWaiterCount, 0)
+    }
+
+    func testObserverPublishesOneMonotonicPayloadSequenceToEverySubscriber() throws {
+        var callback: AccessibilityNotificationCallback?
+        let observer = AccessibilityNotificationObserver(
+            installCallbackForTesting: { callback = $0 },
+            uninstallCallbackForTesting: {}
+        )
+        defer { observer.uninstall() }
+        let first = AccessibilityNotificationBus()
+        let second = AccessibilityNotificationBus()
+        observer.subscribe(first)
+        observer.subscribe(second)
+        let publish = try XCTUnwrap(callback)
+
+        publish(1001, nil, nil)
+        publish(1005, "75%" as NSString, nil)
+        publish(1008, "Done" as NSString, nil)
+
+        let firstEvents = first.checkpoint(after: .origin, selection: .all).events
+        let secondEvents = second.checkpoint(after: .origin, selection: .all).events
+        XCTAssertEqual(firstEvents.map(\.sequence), [1, 2, 3])
+        XCTAssertEqual(secondEvents.map(\.sequence), [1, 2, 3])
+        XCTAssertEqual(
+            firstEvents.map(\.kind),
+            [.elementChanged(.layout), .elementChanged(.value), .announcement]
+        )
+        XCTAssertEqual(secondEvents.map(\.kind), firstEvents.map(\.kind))
+        XCTAssertEqual(observer.latestSequence, 3)
+        guard case .string(let firstValue) = firstEvents[1].notificationData,
+              case .string(let secondValue) = secondEvents[1].notificationData else {
+            return XCTFail("Expected both subscribers to receive the captured string payload")
+        }
+        XCTAssertEqual(firstValue, "75%")
+        XCTAssertEqual(secondValue, firstValue)
+    }
+
     func testUnknownNotificationsPreserveRawCodesAtBoundary() {
         let bus = AccessibilityNotificationBus()
 
-        bus.record(code: 1009, notificationData: .none, associatedElement: .none)
-        bus.record(code: 4002, notificationData: .none, associatedElement: .none)
+        bus.recordForTesting(code: 1009, notificationData: .none, associatedElement: .none)
+        bus.recordForTesting(code: 4002, notificationData: .none, associatedElement: .none)
 
         XCTAssertEqual(bus.latestSequence, 2)
         XCTAssertEqual(
-            bus.pendingEvents().map(\.kind),
+            bus.checkpoint(after: .origin, selection: .all).events.map(\.kind),
             [.unknown(1009), .unknown(4002)]
         )
     }
@@ -275,45 +398,45 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         let bus = AccessibilityNotificationBus()
         XCTAssertEqual(bus.latestScopedScreenChangedSequence, 0)
 
-        bus.record(code: 1000, notificationData: .none, associatedElement: .none)
+        bus.recordForTesting(code: 1000, notificationData: .none, associatedElement: .none)
         XCTAssertEqual(bus.latestScopedScreenChangedSequence, 0)
 
         let actionWindow = bus.beginActionWindow()
         defer { actionWindow.cancel() }
-        bus.record(code: 1001, notificationData: .none, associatedElement: .none)
-        bus.record(code: 1008, notificationData: .none, associatedElement: .none)
-        bus.record(code: 4002, notificationData: .none, associatedElement: .none)
+        bus.recordForTesting(code: 1001, notificationData: .none, associatedElement: .none)
+        bus.recordForTesting(code: 1008, notificationData: .none, associatedElement: .none)
+        bus.recordForTesting(code: 4002, notificationData: .none, associatedElement: .none)
         XCTAssertEqual(bus.latestScopedScreenChangedSequence, 0)
 
-        bus.record(code: 1000, notificationData: .none, associatedElement: .none)
+        bus.recordForTesting(code: 1000, notificationData: .none, associatedElement: .none)
         XCTAssertEqual(bus.latestScopedScreenChangedSequence, 5)
     }
 
     func testExplicitNotificationEventsPreservePublisherSequence() {
         let bus = AccessibilityNotificationBus()
-        let event = PendingAccessibilityNotificationEvent(
+        bus.record(
             sequence: 7,
-            kind: .elementChanged(.value),
+            rawCode: 1005,
             timestamp: Date(timeIntervalSince1970: 0),
             notificationData: .none,
-            associatedElement: .none,
-            provenance: .ambient
+            associatedElement: .none
         )
+        bus.recordForTesting(code: 1001, notificationData: .none, associatedElement: .none)
 
-        bus.record(event)
-        bus.record(code: 1001, notificationData: .none, associatedElement: .none)
-
-        XCTAssertEqual(bus.pendingEvents().map(\.sequence), [7, 8])
+        XCTAssertEqual(
+            bus.checkpoint(after: .origin, selection: .all).events.map(\.sequence),
+            [7, 8]
+        )
         XCTAssertEqual(bus.latestSequence, 8)
     }
 
     func testCheckpointIncludesScopedEventsAndExcludesAmbientEvents() {
         let bus = AccessibilityNotificationBus()
-        bus.record(code: 1000, notificationData: .none, associatedElement: .none)
+        bus.recordForTesting(code: 1000, notificationData: .none, associatedElement: .none)
         let heist = bus.beginHeistScope()
-        bus.record(code: 1001, notificationData: .none, associatedElement: .none)
+        bus.recordForTesting(code: 1001, notificationData: .none, associatedElement: .none)
         heist.cancel()
-        bus.record(code: 1000, notificationData: .none, associatedElement: .none)
+        bus.recordForTesting(code: 1000, notificationData: .none, associatedElement: .none)
 
         let batch = bus.checkpoint(after: .origin)
 
@@ -347,7 +470,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         // replaced and must not be served to the next read.
         let actionWindow = brains.stash.accessibilityNotifications.beginActionWindow()
         defer { actionWindow.cancel() }
-        brains.stash.accessibilityNotifications.record(
+        brains.stash.accessibilityNotifications.recordForTesting(
             code: 1000,
             notificationData: .none,
             associatedElement: .none
@@ -391,7 +514,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         ])
         let staleEvent = brains.stash.semanticObservationStream.commitVisibleObservationForTesting(staleScreen)
 
-        brains.stash.accessibilityNotifications.record(
+        brains.stash.accessibilityNotifications.recordForTesting(
             code: 1000,
             notificationData: .none,
             associatedElement: .none
@@ -420,12 +543,12 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
 
     func testHeistScopeKeepsActionClaimsInBoundedTaggedStreamAfterScopeEnds() {
         let bus = AccessibilityNotificationBus()
-        bus.record(code: 1001, notificationData: .none, associatedElement: .none)
+        bus.recordForTesting(code: 1001, notificationData: .none, associatedElement: .none)
 
         let heist = bus.beginHeistScope()
         let action = bus.beginActionWindow()
-        bus.record(code: 1005, notificationData: .none, associatedElement: .none)
-        bus.record(
+        bus.recordForTesting(code: 1005, notificationData: .none, associatedElement: .none)
+        bus.recordForTesting(
             code: 1008,
             notificationData: CapturedAccessibilityNotificationPayload("Done" as NSString),
             associatedElement: .none
@@ -436,14 +559,14 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
 
         XCTAssertEqual(claimed.map(\.kind), [.elementChanged(.value), .announcement])
         XCTAssertEqual(
-            bus.pendingEvents().map(\.kind),
+            bus.checkpoint(after: .origin, selection: .all).events.map(\.kind),
             [.elementChanged(.layout), .elementChanged(.value), .announcement],
             "Action attribution must not drain the heist-scoped notification stream."
         )
 
         heist.cancel()
         XCTAssertEqual(
-            bus.pendingEvents().map(\.kind),
+            bus.checkpoint(after: .origin, selection: .all).events.map(\.kind),
             [.elementChanged(.layout), .elementChanged(.value), .announcement]
         )
     }
@@ -456,7 +579,10 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         line: UInt = #line
     ) async throws -> PendingAccessibilityNotificationEvent {
         for _ in 0..<100 {
-            if let event = bus.pendingEvents(after: cursor).first(where: { $0.kind == kind }) {
+            if let event = bus.checkpoint(
+                after: cursor,
+                selection: .all
+            ).events.first(where: { $0.kind == kind }) {
                 return event
             }
             await Task.yield()
@@ -464,6 +590,17 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         }
         XCTFail("Timed out waiting for accessibility notification \(String(describing: kind))", file: file, line: line)
         throw WaitError.timedOut(kind)
+    }
+
+    private func waitForAnnouncementWaiterCount(
+        _ expectedCount: Int,
+        in bus: AccessibilityNotificationBus
+    ) async {
+        for _ in 0..<1_000 {
+            guard bus.announcementWaiterCount != expectedCount else { return }
+            await Task.yield()
+        }
+        XCTFail("Timed out waiting for \(expectedCount) announcement waiters")
     }
 
     @MainActor

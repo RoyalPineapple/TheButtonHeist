@@ -17,7 +17,7 @@ enum RepairCandidateScorer {
         scoreCapabilityOverlap(element, context: context, into: &score)
         scoreNeighborContext(candidate, context: context, into: &score)
         scoreOutcomeEvidence(element, context: context, into: &score)
-        scoreActionFamily(element, context: context, into: &score)
+        scoreActionRequirement(element, context: context, into: &score)
 
         if context.failureKind == .wrongCapability, element == context.old {
             score.add(-30)
@@ -119,8 +119,8 @@ enum RepairCandidateScorer {
             score.add(10, reason: .elementActionsCompatible)
         }
 
-        let oldRotors = Set((context.old.rotors ?? []).map { HeistRepairRotorIdentity(rawValue: $0.name) })
-        let currentRotors = Set((element.rotors ?? []).map { HeistRepairRotorIdentity(rawValue: $0.name) })
+        let oldRotors = Set(context.old.rotors ?? [])
+        let currentRotors = Set(element.rotors ?? [])
         let rotorOverlap = oldRotors.intersection(currentRotors)
         if !rotorOverlap.isEmpty {
             score.add(5, reason: .rotorCapabilityCompatible)
@@ -171,24 +171,24 @@ enum RepairCandidateScorer {
         }
     }
 
-    private static func scoreActionFamily(
+    private static func scoreActionRequirement(
         _ element: HeistElement,
         context: CandidateScoringContext,
         into score: inout CandidateScore
     ) {
-        if context.actionFamily.isKnown {
-            scoreKnownActionFamily(element, context: context, into: &score)
+        if context.actionRequirement.isKnown {
+            scoreKnownActionRequirement(element, context: context, into: &score)
         } else if context.failureKind == .missingTarget, context.currentElementCount == 1 {
             score.add(25, reason: .onlyCurrentSemanticCandidate)
         }
     }
 
-    private static func scoreKnownActionFamily(
+    private static func scoreKnownActionRequirement(
         _ element: HeistElement,
         context: CandidateScoringContext,
         into score: inout CandidateScore
     ) {
-        guard context.actionFamily.isSupported(by: element) else {
+        guard context.actionRequirement.isSupported(by: element) else {
             score.add(-40)
             score.caveats.append(.candidateDoesNotExposeSameActionFamily)
             return
@@ -211,7 +211,7 @@ struct CandidateScoringContext: Sendable, Equatable {
     let currentElementCount: Int
     let preferredCandidates: Set<PredicateSelectionElementId>
     let failureKind: HeistRepairFailureKind
-    let actionFamily: RepairActionFamily
+    let actionRequirement: RepairActionRequirement
 }
 
 struct RepairSemanticEvidence: Sendable, Equatable {

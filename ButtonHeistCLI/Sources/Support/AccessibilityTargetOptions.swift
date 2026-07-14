@@ -26,10 +26,10 @@ struct AccessibilityTargetOptions: ParsableArguments {
         let hasFields = identifier != nil || label != nil || value != nil
             || !traits.isEmpty || !excludedTraits.isEmpty
         guard hasFields else { return nil }
-        var checks: [ElementPredicateCheck<StringExpr>] = []
-        if let label { checks.append(.label(.literal(label))) }
-        if let identifier { checks.append(.identifier(.literal(identifier))) }
-        if let value { checks.append(.value(.literal(value))) }
+        var checks: [ElementPredicateCheck] = []
+        if let label { checks.append(.label(label)) }
+        if let identifier { checks.append(.identifier(identifier)) }
+        if let value { checks.append(.value(value)) }
         let requiredTraits = Set(try parseTraits(traits, label: "trait"))
         if !requiredTraits.isEmpty { checks.append(.traits(requiredTraits)) }
         let excludedTraits = Set(try parseTraits(excludedTraits, label: "excluded trait"))

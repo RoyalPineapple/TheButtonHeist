@@ -38,15 +38,10 @@ final class ScrollToVisibleTests: XCTestCase {
         let message = ClientMessage.runtimeAction(.viewportScrollToVisible(target.target))
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
-        guard case .runtimeAction(let action) = decoded,
-              case .viewportScrollToVisible(let decodedTarget) = action,
-              case .predicate(let matcher, _) = try decodedTarget.resolve(in: .empty) else {
+        guard case .runtimeAction(let action) = decoded else {
             return XCTFail("Expected runtimeAction with scrollToVisible action")
         }
-        XCTAssertEqual(matcher.checks, [
-            .label(.exact("Settings")),
-            .traits([.header]),
-        ])
+        XCTAssertEqual(action, .viewportScrollToVisible(target.target))
     }
 
     func testScrollToVisibleTargetRejectsUnknownPayloadKey() throws {

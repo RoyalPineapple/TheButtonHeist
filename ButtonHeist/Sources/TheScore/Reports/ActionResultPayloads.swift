@@ -29,13 +29,14 @@ public struct ServerError: Codable, Sendable, Equatable {
         self.recoveryHint = recoveryHint
     }
 
-    private enum CodingKeys: String, CodingKey {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
         case kind
         case message
         case recoveryHint
     }
 
     public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "server error")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let kind = try container.decode(ErrorKind.self, forKey: .kind)
         let message = try container.decode(String.self, forKey: .message)
@@ -188,13 +189,10 @@ public enum ActionResultOutcome: Codable, Sendable, Equatable {
 
         switch try container.decode(Kind.self, forKey: .kind) {
         case .success:
-            if let errorKind = try container.decodeIfPresent(ErrorKind.self, forKey: .errorKind) {
-                throw DecodingError.dataCorruptedError(
-                    forKey: .errorKind,
-                    in: container,
-                    debugDescription: "successful ActionResult outcome must not include errorKind \(errorKind.rawValue)"
-                )
-            }
+            try container.rejectIncompatibleFields(
+                allowing: [.kind],
+                typeName: "successful ActionResult outcome"
+            )
             self = .success
         case .failure:
             guard let errorKind = try container.decodeIfPresent(ErrorKind.self, forKey: .errorKind) else {

@@ -25,16 +25,16 @@ private struct Relaxation {
 extension TheStash {
 
     func presenceWaitTimeoutMessage(
-        for predicate: AccessibilityPredicate<RootContext>,
+        for predicate: ResolvedAccessibilityPredicate,
         elapsed: String
     ) -> String? {
-        let target: AccessibilityTarget
+        let target: ResolvedAccessibilityTarget
         let absent: Bool
-        switch predicate.node {
-        case .exists(let accessibilityTarget):
+        switch predicate.core {
+        case .presence(.exists(let accessibilityTarget)):
             target = accessibilityTarget
             absent = false
-        case .missing(let accessibilityTarget):
+        case .presence(.missing(let accessibilityTarget)):
             target = accessibilityTarget
             absent = true
         default:
@@ -45,11 +45,9 @@ extension TheStash {
         let reason = absent ? "element still present" : "element not found"
         let diagnostics: String
         switch target {
-        case .container(let expression, let ordinal):
-            diagnostics = (try? expression.resolve(in: .empty))
-                .map { resolveContainerTarget($0, ordinal: ordinal).diagnostics }
-                ?? "container target expression is unresolved"
-        case .predicate, .within, .ref:
+        case .container:
+            diagnostics = resolveContainerTarget(target).diagnostics
+        case .predicate, .within:
             diagnostics = resolveTarget(target).diagnostics
         }
         var parts = [
@@ -72,10 +70,9 @@ extension TheStash {
         return parts.joined(separator: "; ")
     }
 
-    private func waitForTargetDescription(_ target: AccessibilityTarget) -> String {
+    private func waitForTargetDescription(_ target: ResolvedAccessibilityTarget) -> String {
         switch target {
-        case .predicate(let template, let ordinal):
-            guard let predicate = try? template.resolve(in: .empty) else { return target.description }
+        case .predicate(let predicate, let ordinal):
             var description = Diagnostics.formatMatcher(predicate)
             if let ordinal {
                 description += " ordinal=\(ordinal)"
@@ -86,8 +83,6 @@ extension TheStash {
         case .container(let container, let ordinal):
             guard let ordinal else { return "container \(container)" }
             return "container \(container) ordinal=\(ordinal)"
-        case .ref(let reference):
-            return "target reference \(reference)"
         }
     }
 
@@ -118,14 +113,14 @@ extension TheStash {
 
     /// Format a predicate's fields as a human-readable query string.
     static func formatMatcher(_ predicate: ElementPredicate) -> String {
-        predicate.checks.compactMap(formatCheck).joined(separator: " ")
+        predicate.core.checks.compactMap(formatCheck).joined(separator: " ")
     }
 
-    private static func formatCheck(_ check: ElementPredicateCheck<String>) -> String? {
+    private static func formatCheck(_ check: ElementPredicateCheckCore<String>) -> String? {
         ScoreDescription.predicateCheckField(check)
     }
 
-    private static func checkName(_ check: ElementPredicateCheck<String>) -> String {
+    private static func checkName(_ check: ElementPredicateCheckCore<String>) -> String {
         switch check {
         case .label:
             return "label"
@@ -148,7 +143,9 @@ extension TheStash {
         }
     }
 
-    private static func actualValueReader(for check: ElementPredicateCheck<String>) -> (AccessibilityElement) -> String {
+    private static func actualValueReader(
+        for check: ElementPredicateCheckCore<String>
+    ) -> (AccessibilityElement) -> String {
         switch check {
         case .label:
             return { $0.label ?? "(nil)" }
@@ -205,11 +202,11 @@ extension TheStash {
         in treeElements: [InterfaceTree.Element],
         visibleHeistIds: Set<HeistId>
     ) -> String? {
-        let relaxations = predicate.checks.enumerated().compactMap { index, check -> Relaxation? in
+        let relaxations = predicate.core.checks.enumerated().compactMap { index, check -> Relaxation? in
             guard check.hasPredicateLiteral else { return nil }
             return Relaxation(
                 field: "check \(index + 1) (\(checkName(check)))",
-                relaxed: ElementPredicate(predicate.checks.enumerated().compactMap { offset, candidate in
+                relaxed: ElementPredicate(predicate.core.checks.enumerated().compactMap { offset, candidate in
                     offset == index ? nil : candidate
                 }),
                 actual: actualValueReader(for: check)
@@ -261,7 +258,7 @@ extension TheStash {
     }
 
     private static func diagnosticContainsPredicate(from predicate: ElementPredicate) -> ElementPredicate? {
-        let diagnostic = ElementPredicate(predicate.checks.map { check in
+        let diagnostic = ElementPredicate(predicate.core.checks.map { check in
             switch check {
             case .label(let match):
                 return .label(diagnosticContainsMatch(from: match))
@@ -286,9 +283,15 @@ extension TheStash {
         return diagnostic == predicate ? nil : diagnostic
     }
 
-    private static func diagnosticContainsMatch(from match: StringMatch<String>) -> StringMatch<String> {
-        guard let value = match.valueIfPresent, !value.isEmpty else { return match }
-        return .contains(value)
+    private static func diagnosticContainsMatch(
+        from match: StringMatchCore<String>
+    ) -> StringMatchCore<String> {
+        switch match {
+        case .exact(let value), .contains(let value), .prefix(let value), .suffix(let value):
+            return value.isEmpty ? match : .contains(value)
+        case .isEmpty:
+            return match
+        }
     }
 
     private static func failureInterfaceSuggestionValue(
@@ -308,7 +311,7 @@ extension TheStash {
     }
 
     private static func exactPredicateDescription(_ failedPredicate: ElementPredicate, element: HeistElement) -> String {
-        ElementPredicate(failedPredicate.checks.compactMap { check in
+        ElementPredicate(failedPredicate.core.checks.compactMap { check in
             switch check {
             case .label:
                 return element.label.map { .label(.exact($0)) }
@@ -420,7 +423,7 @@ private enum DiagnosticPredicateCheckKind {
 
 private extension ElementPredicate {
     func includesCheck(_ kind: DiagnosticPredicateCheckKind) -> Bool {
-        checks.contains { check in
+        core.checks.contains { check in
             switch (kind, check) {
             case (.label, .label), (.identifier, .identifier), (.value, .value), (.hint, .hint):
                 return true

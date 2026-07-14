@@ -3,129 +3,46 @@ import ArgumentParser
 import Foundation
 import ThePlans
 
-struct CLIRequestFields: Equatable {
-    private var values: [FenceParameterKey: HeistValue]
-
-    init() {
-        values = [:]
-    }
-
-    init(_ fields: [(FenceParameterKey, HeistValue)]) {
-        values = Dictionary(fields, uniquingKeysWith: { _, newest in newest })
-    }
-
-    subscript(_ key: FenceParameterKey) -> HeistValue? {
-        get { values[key] }
-        set { values[key] = newValue }
-    }
-
-    var rawValues: [String: HeistValue] {
-        Dictionary(
-            values.map { ($0.key.rawValue, $0.value) },
-            uniquingKeysWith: { _, newest in newest }
-        )
-    }
-
-    var heistValue: HeistValue {
-        .object(rawValues)
-    }
-
-    mutating func set(_ key: FenceParameterKey, _ value: HeistValue) {
-        values[key] = value
-    }
-
-    mutating func set(_ key: FenceParameterKey, _ value: Self) {
-        set(key, value.heistValue)
-    }
-
-    mutating func set(_ key: FenceParameterKey, _ value: String) {
-        set(key, .string(value))
-    }
-
-    mutating func set(_ key: FenceParameterKey, _ value: Int) {
-        set(key, .int(value))
-    }
-
-    mutating func set(_ key: FenceParameterKey, _ value: Double) {
-        set(key, .double(value))
-    }
-
-    mutating func set(_ key: FenceParameterKey, _ value: Bool) {
-        set(key, .bool(value))
-    }
-
-    mutating func set(_ key: FenceParameterKey, _ value: [String]) {
-        set(key, .array(value.map(HeistValue.string)))
-    }
-
-    func adding(_ field: CommandArgumentWriter.Field?) -> Self {
-        adding([field])
-    }
-
-    func adding(_ fields: [CommandArgumentWriter.Field]) -> Self {
-        adding(fields.map(Optional.some))
-    }
-
-    func adding(_ fields: [CommandArgumentWriter.Field?]) -> Self {
-        var copy = self
-        for field in fields.compactMap({ $0 }) {
-            copy[field.key] = field.value
-        }
-        return copy
-    }
-
-    mutating func appendOneOrMany(_ value: HeistValue, for key: FenceParameterKey) {
-        switch values[key] {
-        case nil:
-            values[key] = value
-        case .array(let existing)?:
-            values[key] = .array(existing + [value])
-        case let existing?:
-            values[key] = .array([existing, value])
-        }
-    }
-}
-
-enum CommandArgumentWriter {
-    struct Field: Equatable {
+struct CommandArgumentEnvelopeBuilder {
+    struct Field {
         let key: FenceParameterKey
         let value: HeistValue
     }
 
-    static func parameters(_ fields: Field?...) -> CLIRequestFields {
-        parameters(fields)
+    private var values: [String: HeistValue]
+
+    init(_ fields: Field?...) {
+        self.init(fields)
     }
 
-    static func parameters(_ fields: [Field]) -> CLIRequestFields {
-        parameters(fields.map(Optional.some))
-    }
-
-    static func parameters(_ fields: [Field?]) -> CLIRequestFields {
-        CLIRequestFields(fields.compactMap { field in
-            field.map { ($0.key, $0.value) }
+    init(_ fields: [Field?]) {
+        values = Dictionary(uniqueKeysWithValues: fields.compactMap { field in
+            field.map { ($0.key.rawValue, $0.value) }
         })
     }
 
-    static func object(_ fields: Field?...) -> CLIRequestFields {
-        object(fields)
+    init<Payload: Encodable>(payload: Payload) {
+        guard case .object(let values) = Self.encodedValue(payload) else {
+            preconditionFailure("Command argument payload must encode as an object")
+        }
+        self.values = values
     }
 
-    static func object(_ fields: [Field]) -> CLIRequestFields {
-        object(fields.map(Optional.some))
+    mutating func set(_ field: Field?) {
+        guard let field else { return }
+        values[field.key.rawValue] = field.value
     }
 
-    static func object(_ fields: [Field?]) -> CLIRequestFields {
-        CLIRequestFields(fields.compactMap { field in
-            field.map { ($0.key, $0.value) }
-        })
+    mutating func set(_ fields: [Field?]) {
+        fields.forEach { set($0) }
+    }
+
+    func build() -> TheFence.CommandArgumentEnvelope {
+        TheFence.CommandArgumentEnvelope(values: values)
     }
 
     static func value(_ key: FenceParameterKey, _ value: HeistValue) -> Field {
         Field(key: key, value: value)
-    }
-
-    static func value(_ key: FenceParameterKey, _ value: CLIRequestFields) -> Field {
-        self.value(key, value.heistValue)
     }
 
     static func value(_ key: FenceParameterKey, _ value: String) -> Field {
@@ -144,19 +61,15 @@ enum CommandArgumentWriter {
         self.value(key, .bool(value))
     }
 
-    static func value(_ key: FenceParameterKey, _ value: [String]) -> Field {
-        self.value(key, .array(value.map(HeistValue.string)))
-    }
-
     static func value<Value>(_ parameter: FenceParameter<Value>, _ value: Value) -> Field {
         self.value(parameter.key, parameter.heistValue(for: value))
     }
 
-    static func optional(_ key: FenceParameterKey, _ value: HeistValue?) -> Field? {
-        value.map { self.value(key, $0) }
+    static func encoded<Value: Encodable>(_ key: FenceParameterKey, _ value: Value) -> Field {
+        self.value(key, encodedValue(value))
     }
 
-    static func optional(_ key: FenceParameterKey, _ value: CLIRequestFields?) -> Field? {
+    static func optional(_ key: FenceParameterKey, _ value: HeistValue?) -> Field? {
         value.map { self.value(key, $0) }
     }
 
@@ -176,12 +89,20 @@ enum CommandArgumentWriter {
         value.map { self.value(key, $0) }
     }
 
-    static func optional(_ key: FenceParameterKey, _ value: [String]?) -> Field? {
-        value.map { self.value(key, $0) }
-    }
-
     static func optional<Value>(_ parameter: FenceParameter<Value>, _ value: Value?) -> Field? {
         value.map { self.value(parameter, $0) }
+    }
+
+    static func optionalEncoded<Value: Encodable>(_ key: FenceParameterKey, _ value: Value?) -> Field? {
+        value.map { self.encoded(key, $0) }
+    }
+
+    private static func encodedValue<Value: Encodable>(_ value: Value) -> HeistValue {
+        do {
+            return try TheFence.HeistValuePayloadEncoder.encode(value)
+        } catch {
+            preconditionFailure("Failed to encode command argument payload: \(error)")
+        }
     }
 }
 
@@ -191,7 +112,63 @@ enum CommandArgumentWriter {
 /// command types should not own or override Fence command identity.
 protocol CLICommandContract: ParsableCommand {}
 
-protocol GestureCLICommandContract: CLICommandContract {}
+protocol OneShotCLICommand: AsyncParsableCommand, CLICommandContract {
+    var runnerConnection: ConnectionOptions { get }
+    var runnerFormat: OutputFormat? { get }
+    var runnerExecutionMode: CLIRunner.ExecutionMode { get }
+    var runnerStatusMessage: String? { get }
+
+    func requestArguments() throws -> TheFence.CommandArgumentEnvelope
+
+    @ButtonHeistActor
+    func runnerDescriptor() async throws -> CLIRunner.CommandDescriptor
+}
+
+protocol ConnectedOneShotCLICommand: OneShotCLICommand {
+    var connection: ConnectionOptions { get }
+    var output: OutputOptions { get }
+}
+
+protocol LocalOneShotCLICommand: OneShotCLICommand {
+    var output: OutputOptions { get }
+}
+
+extension OneShotCLICommand {
+    var runnerExecutionMode: CLIRunner.ExecutionMode { .connected }
+    var runnerStatusMessage: String? { nil }
+
+    func requestArguments() throws -> TheFence.CommandArgumentEnvelope {
+        Self.fenceArguments()
+    }
+
+    @ButtonHeistActor
+    func runnerDescriptor() async throws -> CLIRunner.CommandDescriptor {
+        CLIRunner.CommandDescriptor(
+            fenceDescriptor: Self.fenceDescriptor,
+            connection: runnerConnection,
+            format: runnerFormat,
+            arguments: try requestArguments(),
+            executionMode: runnerExecutionMode,
+            statusMessage: runnerStatusMessage
+        )
+    }
+
+    @ButtonHeistActor
+    mutating func run() async throws {
+        try await CLIRunner.run(try await runnerDescriptor())
+    }
+}
+
+extension ConnectedOneShotCLICommand {
+    var runnerConnection: ConnectionOptions { connection }
+    var runnerFormat: OutputFormat? { output.format }
+}
+
+extension LocalOneShotCLICommand {
+    var runnerConnection: ConnectionOptions { ConnectionOptions() }
+    var runnerFormat: OutputFormat? { output.format }
+    var runnerExecutionMode: CLIRunner.ExecutionMode { .direct }
+}
 
 struct CLICommandAdapter {
     let commandType: ParsableCommand.Type
@@ -291,12 +268,15 @@ enum CLICommandAdapterCatalog {
 }
 
 extension CLICommandContract {
-    static var fenceCommand: TheFence.Command {
-        guard let command = CLICommandAdapterCatalog.descriptor(for: Self.self)?.command else {
+    static var fenceDescriptor: FenceCommandDescriptor {
+        guard let descriptor = CLICommandAdapterCatalog.descriptor(for: Self.self) else {
             fatalError("No Fence command descriptor registered for CLI adapter \(Self.self)")
         }
+        return descriptor
+    }
 
-        return command
+    static var fenceCommand: TheFence.Command {
+        fenceDescriptor.command
     }
 
     static var cliCommandName: String {
@@ -304,24 +284,20 @@ extension CLICommandContract {
     }
 
     static func fenceArguments(
-        _ parameters: CLIRequestFields = CLIRequestFields(),
-        target: AccessibilityTarget? = nil
+        target: AccessibilityTarget? = nil,
+        _ fields: CommandArgumentEnvelopeBuilder.Field?...
     ) -> TheFence.CommandArgumentEnvelope {
-        CLIRequestBuilder.arguments(parameters: parameters, target: target)
+        var builder = CommandArgumentEnvelopeBuilder(fields)
+        builder.set(CommandArgumentEnvelopeBuilder.optionalEncoded(.target, target))
+        return builder.build()
     }
 
-    static func fenceArguments(
-        target: AccessibilityTarget? = nil,
-        _ fields: CommandArgumentWriter.Field?...
-    ) -> TheFence.CommandArgumentEnvelope {
-        CLIRequestBuilder.arguments(
-            parameters: CommandArgumentWriter.parameters(fields),
-            target: target
-        )
+    static func fenceArguments<Payload: Encodable>(payload: Payload) -> TheFence.CommandArgumentEnvelope {
+        CommandArgumentEnvelopeBuilder(payload: payload).build()
     }
 
     static func catalogDefaultValue<Value>(for parameter: FenceParameter<Value>) -> Value {
-        fenceCommand.descriptor.requiredDefaultValue(for: parameter)
+        fenceDescriptor.requiredDefaultValue(for: parameter)
     }
 
     static func catalogDefaultArgument<Value>(for parameter: FenceParameter<Value>) -> String
@@ -330,14 +306,14 @@ extension CLICommandContract {
     }
 
     static func catalogAllowedValuesDescription<Value>(for parameter: FenceParameter<Value>) -> String {
-        fenceCommand.descriptor.allowedRawValues(for: parameter).joined(separator: ", ")
+        fenceDescriptor.allowedRawValues(for: parameter).joined(separator: ", ")
     }
 
     static func catalogCanonicalValue<Value>(
         _ rawValue: String,
         for parameter: FenceParameter<Value>
     ) -> Value? where Value: RawRepresentable, Value.RawValue == String {
-        let values = fenceCommand.descriptor.allowedRawValues(for: parameter)
+        let values = fenceDescriptor.allowedRawValues(for: parameter)
         guard values.contains(rawValue) else { return nil }
         return Value(rawValue: rawValue)
     }

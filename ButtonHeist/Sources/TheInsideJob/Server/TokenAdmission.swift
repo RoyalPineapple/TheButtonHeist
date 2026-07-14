@@ -4,7 +4,7 @@ import ButtonHeistSupport
 import TheScore
 
 /// Owns token policy and per-address auth admission state for `TheMuscle`.
-struct SessionAdmission {
+struct TokenAdmission {
     enum TokenDecision: Equatable, Sendable {
         case accepted(driverIdentity: String)
         case rejected(TokenRejection)

@@ -6,13 +6,13 @@ import Testing
 struct CanonicalAccessibilityPredicateTests {
     @Test("screen JSON includes required empty assertions")
     func screenJSON() throws {
-        let predicate = AccessibilityPredicate<RootContext>.changed(.screen())
+        let predicate = AccessibilityPredicate.changed(.screen())
         #expect(try json(predicate) == #"{"assertions":[],"scope":"screen","type":"changed"}"#)
     }
 
     @Test("elements JSON uses one canonical target and assertion language")
     func elementsJSON() throws {
-        let predicate = AccessibilityPredicate<RootContext>.changed(.elements([
+        let predicate = AccessibilityPredicate.changed(.elements([
             .exists(.label("Current")),
             .missing(.label("Gone")),
             .appeared(.label("New")),
@@ -21,16 +21,48 @@ struct CanonicalAccessibilityPredicateTests {
         ]))
 
         let decoded = try JSONDecoder().decode(
-            AccessibilityPredicate<RootContext>.self,
+            AccessibilityPredicate.self,
             from: JSONEncoder().encode(predicate)
         )
         #expect(decoded == predicate)
     }
 
+    @Test("concrete assertion types share the canonical wire codec")
+    func assertionJSON() throws {
+        let root = AccessibilityPredicate.missing(.label("Loading"))
+        let screen = ChangeDeclaration.ScreenAssertion.missing(.label("Loading"))
+        let elementPresence = ChangeDeclaration.ElementAssertion.missing(.label("Loading"))
+        let elementUpdate = ChangeDeclaration.ElementAssertion.updated(
+            .identifier("count"),
+            .value(before: "1", after: "2")
+        )
+
+        let presenceJSON = #"{"target":{"checks":[{"kind":"label","match":{"mode":"exact","value":"Loading"}}]},"type":"missing"}"#
+        #expect(try json(root) == presenceJSON)
+        #expect(try json(screen) == presenceJSON)
+        #expect(try json(elementPresence) == presenceJSON)
+        #expect(try JSONDecoder().decode(
+            AccessibilityPredicate.self,
+            from: JSONEncoder().encode(root)
+        ) == root)
+        #expect(try JSONDecoder().decode(
+            ChangeDeclaration.ScreenAssertion.self,
+            from: JSONEncoder().encode(screen)
+        ) == screen)
+        #expect(try JSONDecoder().decode(
+            ChangeDeclaration.ElementAssertion.self,
+            from: JSONEncoder().encode(elementPresence)
+        ) == elementPresence)
+        #expect(try JSONDecoder().decode(
+            ChangeDeclaration.ElementAssertion.self,
+            from: JSONEncoder().encode(elementUpdate)
+        ) == elementUpdate)
+    }
+
     @Test("announcement JSON is canonical and root only")
     func announcementJSON() throws {
-        let any = AccessibilityPredicate<RootContext>.announcement
-        let matching = AccessibilityPredicate<RootContext>.announcement(.contains("processed"))
+        let any = AccessibilityPredicate.announcement
+        let matching = AccessibilityPredicate.announcement(.contains("processed"))
 
         #expect(try json(any) == #"{"type":"announcement"}"#)
         #expect(
@@ -39,41 +71,44 @@ struct CanonicalAccessibilityPredicateTests {
         )
         #expect(
             try JSONDecoder().decode(
-                AccessibilityPredicate<RootContext>.self,
+                AccessibilityPredicate.self,
                 from: Data(#"{"match":{"mode":"contains","value":"processed"},"type":"announcement"}"#.utf8)
             ) == matching
         )
         #expect(throws: DecodingError.self) {
             _ = try JSONDecoder().decode(
-                AccessibilityPredicate<ScreenAssertionContext>.self,
+                ChangeDeclaration.ScreenAssertion.self,
                 from: Data(#"{"type":"announcement"}"#.utf8)
             )
         }
         #expect(throws: DecodingError.self) {
             _ = try JSONDecoder().decode(
-                AccessibilityPredicate<ElementsAssertionContext>.self,
+                ChangeDeclaration.ElementAssertion.self,
                 from: Data(#"{"type":"announcement"}"#.utf8)
             )
         }
         #expect(throws: DecodingError.self) {
             _ = try JSONDecoder().decode(
-                AccessibilityPredicate<RootContext>.self,
+                AccessibilityPredicate.self,
                 from: Data(#"{"type":"announcement","target":{"ref":"row"}}"#.utf8)
             )
         }
     }
 
-    @Test("screen assertions widen to root without changing their node")
-    func screenAssertionRootPredicate() {
-        let assertion = AccessibilityPredicate<ScreenAssertionContext>.exists(.label("Receipt"))
+    @Test("screen presence projects through distinct authored and resolved types")
+    func screenAssertionRootPredicate() throws {
+        let assertion = ChangeDeclaration.ScreenAssertion.exists(.label("Receipt"))
+        let root = AccessibilityPredicate.exists(.label("Receipt"))
+        let resolvedAssertion: ResolvedScreenAssertion = try assertion.resolve(in: .empty)
+        let resolvedRoot: ResolvedAccessibilityPredicate = try root.resolve(in: .empty)
 
-        #expect(assertion.rootPredicate == AccessibilityPredicate<RootContext>.exists(.label("Receipt")))
-        #expect(assertion.rootPredicate.node == assertion.node)
+        #expect(assertion.rootPredicate == root)
+        #expect(resolvedAssertion.rootPredicate == resolvedRoot)
     }
 
     @Test("container-only targets use the canonical target slot")
     func containerTargetJSON() throws {
-        let predicate = AccessibilityPredicate<RootContext>.exists(
+        let predicate = AccessibilityPredicate.exists(
             .container(.identifier("Checkout"), ordinal: 1)
         )
         let data = try JSONEncoder().encode(predicate)
@@ -88,18 +123,15 @@ struct CanonicalAccessibilityPredicateTests {
         #expect(target["container"] != nil)
         #expect(target["ordinal"] as? Int == 1)
         #expect(predicate.description.contains("ordinal=1"))
-        #expect(try JSONDecoder().decode(AccessibilityPredicate<RootContext>.self, from: data) == predicate)
+        #expect(try JSONDecoder().decode(AccessibilityPredicate.self, from: data) == predicate)
     }
 
     @Test(
-        "legacy and malformed changed JSON is rejected",
+        "malformed changed JSON is rejected",
         arguments: [
-            #"{"type":"change"}"#,
-            #"{"type":"change","scopes":[]}"#,
             #"{"type":"changed","scope":"screen"}"#,
-            #"{"type":"changed","scope":"screen","assertions":[],"scopes":[]}"#,
-            #"{"type":"changed","scope":"all","assertions":[]}"#,
-            #"{"type":"changed","scopes":[{"type":"screen","assertions":[]}]}"#,
+            #"{"type":"changed","scope":"screen","assertions":[],"unexpected":true}"#,
+            #"{"type":"changed","scope":"invalid","assertions":[]}"#,
             #"{"type":"changed","scope":"screen","assertions":[{"type":"updated","# +
                 #""target":{"checks":[{"identifier":{"mode":"exact","value":"count"}}]},"# +
                 #""property":"value","after":{"mode":"exact","value":"2"}}]}"#,
@@ -115,10 +147,10 @@ struct CanonicalAccessibilityPredicateTests {
                 #"{"kind":"label","match":{"mode":"exact","value":"Pay"}}]},"ordinal":1}}"#,
         ]
     )
-    func rejectsLegacyAndMalformedJSON(source: String) {
+    func rejectsMalformedJSON(source: String) {
         #expect(throws: (any Error).self) {
             _ = try JSONDecoder().decode(
-                AccessibilityPredicate<RootContext>.self,
+                AccessibilityPredicate.self,
                 from: Data(source.utf8)
             )
         }
@@ -149,24 +181,9 @@ struct CanonicalAccessibilityPredicateTests {
         #expect(try plan.canonicalSwiftDSL().contains(".container(.identifier(\"Checkout\"), ordinal: 1)"))
     }
 
-    @Test("source parser rejects old and combined spellings", arguments: [
-        "WaitFor(.change(.screen()))",
-        "WaitFor(.screenChanged)",
-        "WaitFor(.changed())",
-        "WaitFor(.changed(.screen(), .elements()))",
-        "WaitFor(.changed(.all(.screen(), .elements())))",
-        "WaitFor(.exists(.container(.identifier(\"Checkout\"), 1)))",
-        "WaitFor(.exists(.target(.container(.identifier(\"Checkout\")), ordinal: 1)))",
-    ])
-    func rejectsOldSource(source: String) {
-        #expect(throws: (any Error).self) {
-            _ = try HeistPlanSourceCompiler().compile(source)
-        }
-    }
-
-    private func json(_ predicate: AccessibilityPredicate<RootContext>) throws -> String {
+    private func json(_ value: some Encodable) throws -> String {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
-        return try #require(String(data: encoder.encode(predicate), encoding: .utf8))
+        return try #require(String(data: encoder.encode(value), encoding: .utf8))
     }
 }

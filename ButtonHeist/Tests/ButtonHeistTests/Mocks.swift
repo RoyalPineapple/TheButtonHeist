@@ -199,7 +199,8 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
     }
 
     var autoResponse: ((ClientMessage) -> ServerMessage)?
-    var runtimeActionResponse: ((RuntimeActionMessage) -> ServerMessage)?
+    var runtimeActionResponse: ((ResolvedHeistActionCommand) -> ServerMessage)?
+    var resolvedWaitResponse: ((ResolvedWaitStep) -> ServerMessage)?
 
     private func heistExecutionResponse(for message: ClientMessage) -> ServerMessage? {
         guard case .heistPlan(let run) = message else { return nil }
@@ -237,7 +238,7 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
         for step: HeistStep,
         index: Int,
         path: String,
-        handler: ((RuntimeActionMessage) -> ServerMessage)?
+        handler: ((ResolvedHeistActionCommand) -> ServerMessage)?
     ) -> HeistExecutionStepResult {
         switch step {
         case .action(let action):
@@ -329,9 +330,9 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
         for action: ActionStep,
         index: Int,
         path: String,
-        handler: ((RuntimeActionMessage) -> ServerMessage)?
+        handler: ((ResolvedHeistActionCommand) -> ServerMessage)?
     ) -> HeistExecutionStepResult {
-        guard let command = try? action.command.resolveForRuntimeDispatch(in: .empty) else {
+        guard let command = try? action.command.resolve(in: .empty) else {
             return .failed(
                 path: path,
                 receiptKind: .action,
@@ -381,7 +382,7 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
         for wait: WaitStep,
         index: Int,
         path: String,
-        handler: ((RuntimeActionMessage) -> ServerMessage)?
+        handler: ((ResolvedHeistActionCommand) -> ServerMessage)?
     ) -> HeistExecutionStepResult {
         guard let resolved = try? wait.resolve(in: .empty) else {
             return .failed(
@@ -397,11 +398,8 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
                 )
             )
         }
-        let result = actionResult(
-            for: .wait(WaitTarget(predicate: resolved.predicate, timeout: resolved.timeout)),
-            handler: handler
-        )
-        let expectation = resolved.predicate.validate(against: result)
+        let result = waitResult(for: resolved)
+        let expectation = resolved.predicate.validate(against: result).expectation(for: wait.predicate)
         let failure = (!result.outcome.isSuccess || !expectation.met)
             ? HeistFailureDetail(
                 category: .wait,
@@ -515,14 +513,13 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
         index _: Int,
         path: String
     ) -> HeistExecutionStepResult {
-        let predicate = (try? repeatUntil.predicate.resolve(in: .empty))
-            ?? .exists(.label("unresolved"))
+        let predicate = repeatUntil.predicate
         return .passed(
             path: path,
             receiptKind: .repeatUntil,
             durationMs: heistStepDurationMs,
             intent: .repeatUntil(predicate: predicate, timeout: repeatUntil.timeout),
-            evidence: HeistRepeatUntilEvidence.predicateMet(
+            evidence: HeistRepeatUntilEvidence.matched(
                 predicate: predicate,
                 timeout: repeatUntil.timeout,
                 iterationCount: 0,
@@ -533,9 +530,7 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
 
     private func mockCaseResults(for cases: [PredicateCase]) -> [HeistCaseMatchResult] {
         cases.map {
-            let screenPredicate = (try? $0.predicate.resolve(in: .empty))
-                ?? AccessibilityPredicate<ScreenAssertionContext>.exists(.label("unresolved"))
-            let predicate = screenPredicate.rootPredicate
+            let predicate = $0.predicate.rootPredicate
             return HeistCaseMatchResult(
                 predicate: predicate,
                 met: false,
@@ -546,7 +541,7 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
 
     private func heistExpectation(
         for expectation: WaitStep?,
-        handler: ((RuntimeActionMessage) -> ServerMessage)?
+        handler: ((ResolvedHeistActionCommand) -> ServerMessage)?
     ) -> (actionResult: ActionResult, result: ExpectationResult)? {
         guard let expectation else { return nil }
         guard let resolved = try? expectation.resolve(in: .empty) else {
@@ -563,11 +558,11 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
                 )
             )
         }
-        let waitResult = actionResult(
-            for: .wait(WaitTarget(predicate: resolved.predicate, timeout: resolved.timeout)),
-            handler: handler
+        let waitResult = waitResult(for: resolved)
+        return (
+            waitResult,
+            resolved.predicate.validate(against: waitResult).expectation(for: expectation.predicate)
         )
-        return (waitResult, resolved.predicate.validate(against: waitResult))
     }
 
     private func mockActionIntent(_ command: HeistActionCommand) -> HeistStepIntent {
@@ -608,8 +603,8 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
     }
 
     private func actionResult(
-        for command: RuntimeActionMessage,
-        handler: ((RuntimeActionMessage) -> ServerMessage)?
+        for command: ResolvedHeistActionCommand,
+        handler: ((ResolvedHeistActionCommand) -> ServerMessage)?
     ) -> ActionResult {
         switch handler?(command) {
         case .actionResult(let result):
@@ -624,28 +619,43 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
         }
     }
 
-    private func actionMethod(for command: RuntimeActionMessage) -> ActionMethod {
+    private func waitResult(for step: ResolvedWaitStep) -> ActionResult {
+        switch resolvedWaitResponse?(step) {
+        case .actionResult(let result):
+            return result
+        case .error(let error):
+            return ActionResult.failure(
+                method: .wait,
+                errorKind: .general,
+                message: error.message,
+                evidence: .none
+            )
+        default:
+            return ActionResult.success(method: .wait, evidence: .none)
+        }
+    }
+
+    private func actionMethod(for command: ResolvedHeistActionCommand) -> ActionMethod {
         switch command {
         case .activate: return .activate
         case .increment: return .increment
         case .decrement: return .decrement
-        case .performCustomAction: return .customAction
+        case .customAction: return .customAction
         case .rotor: return .rotor
         case .dismiss: return .dismiss
         case .magicTap: return .magicTap
         case .editAction: return .editAction
         case .setPasteboard: return .setPasteboard
         case .takeScreenshot: return .takeScreenshot
-        case .resignFirstResponder: return .resignFirstResponder
-        case .oneFingerTap: return .syntheticTap
-        case .longPress: return .syntheticLongPress
-        case .swipe: return .syntheticSwipe
-        case .drag: return .syntheticDrag
+        case .dismissKeyboard: return .resignFirstResponder
+        case .mechanicalTap: return .syntheticTap
+        case .mechanicalLongPress: return .syntheticLongPress
+        case .mechanicalSwipe: return .syntheticSwipe
+        case .mechanicalDrag: return .syntheticDrag
         case .typeText: return .typeText
-        case .scroll: return .scroll
-        case .scrollToVisible: return .scrollToVisible
-        case .scrollToEdge: return .scrollToEdge
-        case .wait: return .wait
+        case .viewportScroll: return .scroll
+        case .viewportScrollToVisible: return .scrollToVisible
+        case .viewportScrollToEdge: return .scrollToEdge
         }
     }
 }

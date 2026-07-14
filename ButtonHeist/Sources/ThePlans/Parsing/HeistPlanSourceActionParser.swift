@@ -67,14 +67,18 @@ extension HeistPlanSourceParser {
             }
         }
         try expectSymbol(")")
-        return .typeText(text: text, target: target, replacingExisting: replacingExisting)
+        return HeistActionCommand(core: .typeText(
+            text: text,
+            target: target,
+            replacingExisting: replacingExisting
+        ))
     }
 
     mutating func parseClearTextAction() throws -> HeistActionCommand {
         try expectSymbol("(")
         let target = try parseTargetExpr()
         try expectSymbol(")")
-        return .typeText(text: .literal(""), target: target, replacingExisting: true)
+        return .typeText(text: "", target: target, replacingExisting: true)
     }
 
     mutating func parseCustomAction() throws -> HeistActionCommand {
@@ -155,7 +159,7 @@ extension HeistPlanSourceParser {
         if tokenIsIdentifier(currentToken, "ScreenPoint") {
             selection = .coordinate(try parseScreenPoint())
         } else {
-            let target = try parseConcreteElementTarget()
+            let target = try parseTargetExpr()
             if consumeSymbol(",") {
                 try expectIdentifier("at")
                 try expectSymbol(":")
@@ -175,7 +179,7 @@ extension HeistPlanSourceParser {
         if tokenIsIdentifier(currentToken, "ScreenPoint") {
             selection = .coordinate(try parseScreenPoint())
         } else {
-            let target = try parseConcreteElementTarget()
+            let target = try parseTargetExpr()
             if currentToken.isSymbol(","), lookaheadIdentifier(1, "at") {
                 try expectSymbol(",")
                 try expectIdentifier("at")
@@ -211,7 +215,7 @@ extension HeistPlanSourceParser {
                 selection = .point(start: .coordinate(start), destination: .direction(direction))
             }
         } else {
-            let target = try parseConcreteElementTarget()
+            let target = try parseTargetExpr()
             try expectSymbol(",")
             if lookaheadLabel("from") {
                 try expectIdentifier("from")
@@ -241,7 +245,7 @@ extension HeistPlanSourceParser {
             try expectSymbol(":")
             selection = .pointToPoint(start: start, end: try parseScreenPoint())
         } else {
-            let target = try parseConcreteElementTarget()
+            let target = try parseTargetExpr()
             try expectSymbol(",")
             let start: UnitPoint?
             if lookaheadLabel("from") {
@@ -258,14 +262,6 @@ extension HeistPlanSourceParser {
         }
         try expectSymbol(")")
         return .mechanicalDrag(DragTarget(selection: selection))
-    }
-
-    mutating func parseConcreteElementTarget() throws -> AccessibilityTarget {
-        try parseTargetExpr()
-    }
-
-    mutating func concreteElementTarget(from expr: AccessibilityTarget) throws -> AccessibilityTarget {
-        expr
     }
 
     mutating func parseXYArguments() throws -> ScreenPoint {
@@ -319,7 +315,7 @@ extension HeistPlanSourceParser {
             switch chain {
             case "expect":
                 try expectSymbol("(")
-                let predicate: AccessibilityPredicate<RootContext>
+                let predicate: AccessibilityPredicate
                 let timeout: Double?
                 if currentToken.isSymbol(")") {
                     throw error(currentToken, ".expect(...) requires a canonical predicate")

@@ -267,7 +267,7 @@ final class AccessibilityTraceTests: XCTestCase {
     func testInterfaceProjectsDuplicateTraversalIndexesByPath() throws {
         let first = makeElement(label: "First", actions: [.activate])
         let second = makeElement(label: "Second", actions: [.increment])
-        let interface = Interface(
+        let interface = try Interface(
             timestamp: Date(timeIntervalSince1970: 0),
             tree: [
                 .element(makeTestAccessibilityElement(first), traversalIndex: 0),
@@ -540,22 +540,20 @@ final class AccessibilityTraceTests: XCTestCase {
     private func makeDuplicateTraversalIndexInterface(secondLabel: String) -> Interface {
         let first = makeElement(label: "First")
         let second = makeElement(label: secondLabel)
+        let actionsByPath = [
+            TreePath([0]): first.actions,
+            TreePath([1]): second.actions,
+        ]
         return Interface(
             timestamp: Date(timeIntervalSince1970: 0),
-            tree: [
+            projecting: [
                 .element(makeTestAccessibilityElement(first), traversalIndex: 0),
                 .element(makeTestAccessibilityElement(second), traversalIndex: 0),
             ],
-            annotations: InterfaceAnnotations(elements: [
-                InterfaceElementAnnotation(
-                    path: TreePath([0]),
-                    actions: first.actions
-                ),
-                InterfaceElementAnnotation(
-                    path: TreePath([1]),
-                    actions: second.actions
-                ),
-            ])
+            elementMetadata: { path, _, _ in
+                actionsByPath[path].map { InterfaceElementProjectionMetadata(actions: $0) }
+            },
+            containerMetadata: { _, _ in nil }
         )
     }
 

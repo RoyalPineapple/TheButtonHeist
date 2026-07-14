@@ -665,7 +665,7 @@ final class WireCommandParityTests: XCTestCase {
             .requestScreen(),
             .runtimeAction(.viewportScroll(ScrollTarget(direction: .down))),
             .heistPlan(HeistPlanRun(plan: try HeistPlan(body: [
-                .action(try ActionStep(command: .activate(.identifier(.literal("target"))))),
+                .action(try ActionStep(command: .activate(.identifier("target")))),
             ]))),
         ]
     }
@@ -680,29 +680,6 @@ final class WireCommandParityTests: XCTestCase {
             "type": .string(type),
             type: .object(payload),
         ])
-    }
-
-    private func runtimeActions(for step: HeistStep) -> [RuntimeActionMessage] {
-        switch step {
-        case .action(let action):
-            guard let command = try? action.command.resolveForRuntimeDispatch(in: .empty) else { return [] }
-            return [command]
-        case .wait(let wait):
-            let waitActions: [RuntimeActionMessage]
-            if let resolved = try? wait.resolve(in: .empty) {
-                waitActions = [.wait(WaitTarget(predicate: resolved.predicate, timeout: resolved.timeout))]
-            } else {
-                waitActions = []
-            }
-            return waitActions + (wait.elseBody ?? []).flatMap(runtimeActions)
-        case .conditional(let conditional):
-            return conditional.cases.flatMap { $0.body.flatMap(runtimeActions) }
-                + (conditional.elseBody ?? []).flatMap(runtimeActions)
-        case .forEachElement, .forEachString, .repeatUntil, .heist, .invoke:
-            return []
-        case .warn, .fail:
-            return []
-        }
     }
 
     private func actionCommands(for step: HeistStep) -> [HeistActionCommand] {

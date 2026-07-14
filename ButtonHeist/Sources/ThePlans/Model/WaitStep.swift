@@ -9,13 +9,13 @@ public struct WaitStep: Codable, Sendable, Equatable {
         case elseBody = "else_body"
     }
 
-    public let predicate: AccessibilityPredicate<RootContext>
+    public let predicate: AccessibilityPredicate
     /// Seconds. `0` means immediate predicate evaluation.
     public let timeout: Double
     public let elseBody: [HeistStep]?
 
     public init(
-        predicate: AccessibilityPredicate<RootContext>,
+        predicate: AccessibilityPredicate,
         timeout: Double = defaultWaitTimeout,
         elseBody: [HeistStep]? = nil
     ) {
@@ -36,7 +36,7 @@ public struct WaitStep: Codable, Sendable, Equatable {
             )
         }
         self.init(
-            predicate: try container.decode(AccessibilityPredicate<RootContext>.self, forKey: .predicate),
+            predicate: try container.decode(AccessibilityPredicate.self, forKey: .predicate),
             timeout: decodedTimeout,
             elseBody: try container.decodeIfPresent([HeistStep].self, forKey: .elseBody)
         )
@@ -50,17 +50,17 @@ public struct WaitStep: Codable, Sendable, Equatable {
     }
 }
 
-public struct ResolvedWaitStep: Sendable, Equatable {
-    public let predicate: AccessibilityPredicate<RootContext>
-    public let timeout: Double
+package struct ResolvedWaitStep: Sendable, Equatable {
+    package let predicate: ResolvedAccessibilityPredicate
+    package let timeout: Double
 
-    public init(predicate: AccessibilityPredicate<RootContext>, timeout: Double = defaultWaitTimeout) {
+    package init(predicate: ResolvedAccessibilityPredicate, timeout: Double = defaultWaitTimeout) {
         self.predicate = predicate
         self.timeout = timeout
     }
 }
 
-public extension WaitStep {
+package extension WaitStep {
     func resolve(in environment: HeistExecutionEnvironment) throws -> ResolvedWaitStep {
         ResolvedWaitStep(predicate: try predicate.resolve(in: environment), timeout: timeout)
     }

@@ -3,7 +3,7 @@ import Foundation
 import AccessibilitySnapshotModel
 
 extension Interface {
-    private enum CodingKeys: String, CodingKey {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
         case timestamp
         case tree
         case annotations
@@ -12,15 +12,32 @@ extension Interface {
     }
 
     public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "interface")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        timestamp = try container.decode(Date.self, forKey: .timestamp)
-        tree = try container
+        let timestamp = try container.decode(Date.self, forKey: .timestamp)
+        let tree = try container
             .decode([InterfaceTreeWireNode].self, forKey: .tree)
             .map { $0.hierarchy }
-        annotations = try container.decode(InterfaceAnnotations.self, forKey: .annotations)
-        diagnostics = try container.decodeIfPresent(InterfaceDiagnostics.self, forKey: .diagnostics)
-        screenActions = try container.decodeIfPresent([ScreenAction].self, forKey: .screenActions) ?? []
-        traceIdentities = .empty
+        let annotations = try container.decode(InterfaceAnnotations.self, forKey: .annotations)
+        let diagnostics = try container.decodeIfPresent(InterfaceDiagnostics.self, forKey: .diagnostics)
+        let screenActions = try container.decodeIfPresent([ScreenAction].self, forKey: .screenActions) ?? []
+        do {
+            try self.init(
+                timestamp: timestamp,
+                tree: tree,
+                annotations: annotations,
+                diagnostics: diagnostics,
+                screenActions: screenActions,
+                traceIdentities: .empty
+            )
+        } catch {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath,
+                debugDescription: "Invalid Interface graph: \(error)",
+                underlyingError: error
+            ))
+        }
+
     }
 
     public func encode(to encoder: Encoder) throws {

@@ -284,7 +284,9 @@ final class ServerMessageTests: XCTestCase {
     }
 
     func testActionResultSubjectEvidenceWireShape() throws {
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete", traits: [.button]))
+        let target = try AccessibilityTarget
+            .predicate(ElementPredicateTemplate(label: "Delete", traits: [.button]))
+            .resolve(in: .empty)
         let element = HeistElement(
             description: "Delete",
             label: "Delete",

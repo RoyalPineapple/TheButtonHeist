@@ -6,7 +6,7 @@ import TheScore
 
 @Suite struct HeistWaitEvidenceFactoryTests {
     @Test func `wait evidence factories bind outcome to result polarity`() throws {
-        let predicate = AccessibilityPredicate<RootContext>.exists(.label("Done"))
+        let predicate = AccessibilityPredicate.exists(.label("Done"))
         let met = ExpectationResult.Met(predicate: predicate)
         let unmet = ExpectationResult.Unmet(predicate: predicate, actual: "not found")
         let success = ActionResult.success(method: .wait, evidence: .none)
@@ -41,7 +41,7 @@ import TheScore
     }
 
     @Test func `decode rejects invalid wait evidence polarity at boundary`() throws {
-        let predicate = AccessibilityPredicate<RootContext>.exists(.label("Done"))
+        let predicate = AccessibilityPredicate.exists(.label("Done"))
         let check = try #require(HeistWaitEvidence.MatchedCheck(
             actionResult: .success(method: .wait, evidence: .none),
             expectation: ExpectationResult.Met(predicate: predicate)

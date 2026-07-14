@@ -34,60 +34,56 @@ public struct Heist: Sendable {
     }
 
     @MainActor
-    public init<Content: HeistContent>(
-        @HeistBuilder _ content: () throws -> Content
+    public init(
+        @HeistBuilder _ content: () throws -> some HeistContent
     ) async throws {
         let plan = try HeistPlan(content)
         self.result = try await Self.execute(plan, argument: .none, runtime: .shared)
     }
 
     @MainActor
-    init<Content: HeistContent>(
+    init(
         runtime: InAppHeistRuntime,
-        @HeistBuilder _ content: () throws -> Content
+        @HeistBuilder _ content: () throws -> some HeistContent
     ) async throws {
         let plan = try HeistPlan(content)
         self.result = try await Self.execute(plan, argument: .none, runtime: runtime)
     }
 
     @MainActor
-    public init<Content: HeistContent>(
+    public init(
         _ input: String,
         parameter: HeistReferenceName = "input",
-        @HeistBuilder _ content: (StringExpr) throws -> Content
+        @HeistBuilder _ content: (HeistReferenceName) throws -> some HeistContent
     ) async throws {
-        let plan = try Self.plan(parameter: .string(name: parameter)) {
-            try content(try StringExpr(ref: parameter))
-        }
+        let plan = try HeistPlan(parameter: parameter, content)
         self.result = try await Self.execute(
             plan,
-            argument: .string(.literal(input)),
+            argument: .string(input),
             runtime: .shared
         )
     }
 
     @MainActor
-    init<Content: HeistContent>(
+    init(
         _ input: String,
         parameter: HeistReferenceName = "input",
         runtime: InAppHeistRuntime,
-        @HeistBuilder _ content: (StringExpr) throws -> Content
+        @HeistBuilder _ content: (HeistReferenceName) throws -> some HeistContent
     ) async throws {
-        let plan = try Self.plan(parameter: .string(name: parameter)) {
-            try content(try StringExpr(ref: parameter))
-        }
+        let plan = try HeistPlan(parameter: parameter, content)
         self.result = try await Self.execute(
             plan,
-            argument: .string(.literal(input)),
+            argument: .string(input),
             runtime: runtime
         )
     }
 
     @MainActor
-    public init<Content: HeistContent>(
+    public init(
         _ input: AccessibilityTarget,
         parameter: HeistReferenceName = "input",
-        @HeistBuilder _ content: (AccessibilityTarget) throws -> Content
+        @HeistBuilder _ content: (AccessibilityTarget) throws -> some HeistContent
     ) async throws {
         try await self.init(
             input,
@@ -98,33 +94,18 @@ public struct Heist: Sendable {
     }
 
     @MainActor
-    init<Content: HeistContent>(
+    init(
         _ input: AccessibilityTarget,
         parameter: HeistReferenceName = "input",
         runtime: InAppHeistRuntime,
-        @HeistBuilder _ content: (AccessibilityTarget) throws -> Content
+        @HeistBuilder _ content: (AccessibilityTarget) throws -> some HeistContent
     ) async throws {
-        let plan = try Self.plan(parameter: .accessibilityTarget(name: parameter)) {
-            try content(try AccessibilityTarget(ref: parameter))
-        }
-        let target = try input.resolve(in: .empty)
+        let plan = try HeistPlan(targetParameter: parameter, content)
         self.result = try await Self.execute(
             plan,
-            argument: .accessibilityTarget(target),
+            argument: .accessibilityTarget(input),
             runtime: runtime
         )
-    }
-
-    private static func plan<Content: HeistContent>(
-        parameter: HeistParameter,
-        @HeistBuilder _ content: () throws -> Content
-    ) throws -> HeistPlan {
-        let content = try content()
-        return try HeistPlanAdmissionCandidate(
-            parameter: parameter,
-            definitions: content.heistDefinitions,
-            body: content.heistSteps.map(HeistStepAdmissionCandidate.init)
-        ).validatedSemantics()
     }
 
     @MainActor

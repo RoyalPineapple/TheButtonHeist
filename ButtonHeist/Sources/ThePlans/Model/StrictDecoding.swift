@@ -37,3 +37,20 @@ public extension Decoder {
         ))
     }
 }
+
+public extension KeyedDecodingContainer where Key: CaseIterable & Hashable {
+    func rejectIncompatibleFields(
+        allowing allowedKeys: Set<Key>,
+        typeName: String
+    ) throws {
+        guard let incompatibleKey = Key.allCases.first(where: {
+            !allowedKeys.contains($0) && contains($0)
+        }) else { return }
+
+        throw DecodingError.dataCorruptedError(
+            forKey: incompatibleKey,
+            in: self,
+            debugDescription: "\(typeName) must not include \(incompatibleKey.stringValue)"
+        )
+    }
+}

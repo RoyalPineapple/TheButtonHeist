@@ -1,10 +1,6 @@
-package extension Sequence where Element: Equatable {
+package extension Sequence where Element: Hashable {
     func uniqued() -> [Element] {
-        reduce(into: []) { elements, element in
-            if !elements.contains(element) {
-                elements.append(element)
-            }
-        }
+        uniqued(on: \.self)
     }
 }
 

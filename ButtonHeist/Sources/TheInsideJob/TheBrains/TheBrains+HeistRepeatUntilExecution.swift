@@ -30,7 +30,10 @@ extension TheBrains {
         }
 
         let initialReceipt = await runtime.wait(
-            .immediate(ResolvedWaitStep(predicate: resolved.predicate, timeout: immediateTimeout))
+            .immediate(ResolvedWaitRuntimeInput(
+                repeatUntil: resolved,
+                timeout: immediateTimeout
+            ))
         )
         var state = RepeatUntil.LoopState.reduce(
             .awaitingInitial,
@@ -42,7 +45,7 @@ extension TheBrains {
             state = RepeatUntil.LoopState.reduce(
                 state,
                 event: .deadlineElapsed(ExpectationResult.Unmet(
-                    predicate: resolved.predicate,
+                    predicate: resolved.predicateExpression,
                     actual: "repeat_until deadline elapsed"
                 ))
             )
@@ -136,7 +139,7 @@ extension TheBrains {
             state = RepeatUntil.LoopState.reduce(
                 state,
                 event: .deadlineElapsed(ExpectationResult.Unmet(
-                    predicate: step.predicate,
+                    predicate: step.predicateExpression,
                     actual: "repeat_until deadline elapsed"
                 ))
             )
@@ -167,7 +170,7 @@ extension TheBrains {
             postBody = nil
         }
         let failureExpectation = ExpectationResult.Unmet(
-            predicate: step.predicate,
+            predicate: step.predicateExpression,
             actual: "iteration body failed before predicate evaluation"
         )
         let predicateMetIterationNode = repeatUntilIterationResult(

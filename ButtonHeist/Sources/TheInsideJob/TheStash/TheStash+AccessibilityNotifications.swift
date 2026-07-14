@@ -87,8 +87,15 @@ extension TheStash {
         in screen: InterfaceObservation,
         resolution: AccessibilityNotificationElementResolution
     ) -> AccessibilityNotificationElementReference? {
-        WireConversion.semanticInterfaceProjection(from: screen.tree)
-            .accessibilityNotificationElementReference(for: heistId, resolution: resolution)
+        let interface = WireConversion.toSemanticInterface(from: screen.tree)
+        guard let record = interface.graph.elementsInTraversalOrder.first(where: {
+            $0.traceIdentity == heistId.traceElementIdentity
+        }) else { return nil }
+        return AccessibilityNotificationElementReference(
+            path: record.path,
+            traversalIndex: record.traversalIndex,
+            resolution: resolution
+        )
     }
 
     private func uniqueTraceElementReference(
@@ -96,8 +103,9 @@ extension TheStash {
         in screen: InterfaceObservation,
         resolution: AccessibilityNotificationElementResolution
     ) -> AccessibilityNotificationElementReference? {
-        WireConversion.semanticInterfaceProjection(from: screen.tree)
-            .accessibilityNotificationElementReference(matching: parsedElement, resolution: resolution)
+        let matches = screen.tree.elements.values.filter { $0.element == parsedElement }
+        guard matches.count == 1, let match = matches.first else { return nil }
+        return traceElementReference(for: match.heistId, in: screen, resolution: resolution)
     }
 }
 

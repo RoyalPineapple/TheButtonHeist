@@ -2,7 +2,7 @@ import ArgumentParser
 @_spi(ButtonHeistTooling) import ButtonHeist
 import ThePlans
 
-struct ScrollToEdgeCommand: AsyncParsableCommand, CLICommandContract {
+struct ScrollToEdgeCommand: ConnectedOneShotCLICommand {
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Scroll to the edge of a scroll view",
@@ -30,16 +30,7 @@ struct ScrollToEdgeCommand: AsyncParsableCommand, CLICommandContract {
     @OptionGroup var output: OutputOptions
     @OptionGroup var timeoutOption: TimeoutOption
 
-    @ButtonHeistActor
-    mutating func run() async throws {
-        try await CLIRunner.run(
-            connection: connection,
-            format: output.format,
-            command: Self.fenceCommand,
-            arguments: try requestArguments(),
-            statusMessage: "Sending scroll_to_edge..."
-        )
-    }
+    var runnerStatusMessage: String? { "Sending scroll_to_edge..." }
 
     func requestArguments() throws -> TheFence.CommandArgumentEnvelope {
         guard let scrollEdge = Self.catalogCanonicalValue(edge, for: FenceParameters.scrollEdge) else {
@@ -49,9 +40,9 @@ struct ScrollToEdgeCommand: AsyncParsableCommand, CLICommandContract {
         let scrollSelection = try selection.scrollSelection()
         return Self.fenceArguments(
             target: scrollSelection.cliTarget,
-            CommandArgumentWriter.value(FenceParameters.scrollEdge, scrollEdge),
-            CommandArgumentWriter.value(.timeout, timeoutOption.timeout),
-            CommandArgumentWriter.optional(.containerName, scrollSelection.cliContainerName?.rawValue)
+            CommandArgumentEnvelopeBuilder.value(FenceParameters.scrollEdge, scrollEdge),
+            CommandArgumentEnvelopeBuilder.value(.timeout, timeoutOption.timeout),
+            CommandArgumentEnvelopeBuilder.optional(.containerName, scrollSelection.cliContainerName?.rawValue)
         )
     }
 }

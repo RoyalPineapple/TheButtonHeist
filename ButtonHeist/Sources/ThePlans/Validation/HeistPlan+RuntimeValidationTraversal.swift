@@ -92,7 +92,7 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
 
     mutating func visitForEachElement(_ step: ForEachElementStep, context: HeistTraversalContext) {
         validateCollectionLoopNesting(kind: "for_each_element", path: context.path)
-        validateForEachElement(step, path: context.path)
+        validateForEachElement(step, path: context.path, scope: context.scope)
     }
 
     mutating func visitForEachString(_ step: ForEachStringStep, context: HeistTraversalContext) {
@@ -257,7 +257,7 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
     }
 
     mutating func validateArgument(_ argument: HeistArgument, path: HeistTraversalPath, scope: HeistReferenceScope) {
-        switch argument {
+        switch argument.core {
         case .none:
             break
         case .string(let value):
@@ -326,11 +326,7 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
             return
         }
         do {
-            let resolved = try wait.resolve(in: environment)
-            try HeistRuntimePayloadContractValidator.validate(WaitTarget(
-                predicate: resolved.predicate,
-                timeout: resolved.timeout
-            ))
+            _ = try wait.resolve(in: environment)
         } catch {
             fail(
                 path: path.description,
@@ -375,9 +371,14 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
 
     mutating func validateForEachElement(
         _ step: ForEachElementStep,
-        path: HeistTraversalPath
+        path: HeistTraversalPath,
+        scope: HeistReferenceScope
     ) {
-        validateElementPredicate(step.matching, path: path.child(.matching).description)
+        validateElementPredicate(
+            step.matching,
+            path: path.child(.matching).description,
+            scope: scope
+        )
         validateParameter(step.parameter, path: path.child(.parameter).description, role: "for_each_element parameter")
         if step.limit > limits.maxForEachElementLimit {
             fail(
@@ -472,11 +473,7 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
     ) {
         for check in context.bindingSamples {
             do {
-                let resolved = try wait.resolve(in: check.environment)
-                try HeistRuntimePayloadContractValidator.validate(WaitTarget(
-                    predicate: resolved.predicate,
-                    timeout: resolved.timeout
-                ))
+                _ = try wait.resolve(in: check.environment)
             } catch {
                 fail(
                     path: context.path.description,

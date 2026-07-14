@@ -303,7 +303,9 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         child: HeistExecutionStepResult,
         remainingChildren: [HeistExecutionStepResult] = []
     ) -> HeistExecutionStepResult {
-        childAborted(
+        var children = [child]
+        children.append(contentsOf: remainingChildren)
+        return childAborted(
             path: path,
             receiptKind: receiptKind,
             durationMs: durationMs,
@@ -311,7 +313,7 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
             evidence: evidence,
             failure: failure,
             abortedAtChildPath: child.path,
-            children: [child] + remainingChildren
+            children: children
         )
     }
 
@@ -395,6 +397,44 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         try container.encode(outcome, forKey: .outcome)
     }
 
+    package func walk(
+        enter: (HeistExecutionStepResult) throws -> Void,
+        leave: (HeistExecutionStepResult) throws -> Void
+    ) rethrows {
+        try enter(self)
+        for child in children {
+            try child.walk(enter: enter, leave: leave)
+        }
+        try leave(self)
+    }
+
+    package var firstFailedStepInReceiptOrder: HeistExecutionStepResult? {
+        var firstFailure: HeistExecutionStepResult?
+        walk(
+            enter: { _ in },
+            leave: { step in
+                if firstFailure == nil, step.status == .failed {
+                    firstFailure = step
+                }
+            }
+        )
+        return firstFailure
+    }
+}
+
+package extension Sequence where Element == HeistExecutionStepResult {
+    func walk(
+        enter: (HeistExecutionStepResult) throws -> Void,
+        leave: (HeistExecutionStepResult) throws -> Void
+    ) rethrows {
+        for step in self {
+            try step.walk(enter: enter, leave: leave)
+        }
+    }
+
+    var firstFailedStepInReceiptOrder: HeistExecutionStepResult? {
+        lazy.compactMap(\.firstFailedStepInReceiptOrder).first
+    }
 }
 
 public enum HeistExecutionStepOutcome: Codable, Sendable, Equatable {
@@ -423,13 +463,19 @@ public enum HeistExecutionStepOutcome: Codable, Sendable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         switch try container.decode(OutcomeType.self, forKey: .type) {
         case .passed:
-            try Self.rejectFields(except: [.type, .evidence, .children], in: container, type: .passed)
+            try container.rejectIncompatibleFields(
+                allowing: [.type, .evidence, .children],
+                typeName: "passed heist execution step outcome"
+            )
             self = .passed(HeistExecutionStepPassedOutcome(
                 evidence: try container.decodeIfPresent(HeistStepEvidence.self, forKey: .evidence),
                 children: try container.decode([HeistExecutionStepResult].self, forKey: .children)
             ))
         case .failed:
-            try Self.rejectFields(except: [.type, .evidence, .failure, .children], in: container, type: .failed)
+            try container.rejectIncompatibleFields(
+                allowing: [.type, .evidence, .failure, .children],
+                typeName: "failed heist execution step outcome"
+            )
             guard let failure = try container.decodeIfPresent(HeistFailureDetail.self, forKey: .failure) else {
                 throw DecodingError.dataCorruptedError(
                     forKey: .failure,
@@ -443,10 +489,9 @@ public enum HeistExecutionStepOutcome: Codable, Sendable, Equatable {
                 children: try container.decode([HeistExecutionStepResult].self, forKey: .children)
             ))
         case .childAborted:
-            try Self.rejectFields(
-                except: [.type, .evidence, .failure, .abortedAtChildPath, .children],
-                in: container,
-                type: .childAborted
+            try container.rejectIncompatibleFields(
+                allowing: [.type, .evidence, .failure, .abortedAtChildPath, .children],
+                typeName: "child_aborted heist execution step outcome"
             )
             self = .childAborted(HeistExecutionStepChildAbortedOutcome(
                 evidence: try container.decode(HeistStepEvidence.self, forKey: .evidence),
@@ -455,24 +500,13 @@ public enum HeistExecutionStepOutcome: Codable, Sendable, Equatable {
                 children: try container.decode([HeistExecutionStepResult].self, forKey: .children)
             ))
         case .skipped:
-            try Self.rejectFields(except: [.type, .children], in: container, type: .skipped)
+            try container.rejectIncompatibleFields(
+                allowing: [.type, .children],
+                typeName: "skipped heist execution step outcome"
+            )
             self = .skipped(HeistExecutionStepSkippedOutcome(
                 children: try container.decode([HeistExecutionStepResult].self, forKey: .children)
             ))
-        }
-    }
-
-    private static func rejectFields(
-        except allowed: Set<CodingKeys>,
-        in container: KeyedDecodingContainer<CodingKeys>,
-        type: OutcomeType
-    ) throws {
-        for key in CodingKeys.allCases where !allowed.contains(key) && container.contains(key) {
-            throw DecodingError.dataCorruptedError(
-                forKey: key,
-                in: container,
-                debugDescription: "\(type.rawValue) heist execution step outcome cannot include \(key.stringValue)"
-            )
         }
     }
 

@@ -5,10 +5,9 @@ import XCTest
 import ThePlans
 import TheScore
 
-/// Direct tests for `TheBurglar.buildContainerIdentityContext` — the
-/// parent-scrollable-threading walk that keeps container identity derived from
-/// hierarchy structure and accessibility size, not live scroll-view coordinate
-/// conversion or moving viewport origin.
+/// Direct tests for the one hierarchy identity fold. Container and element
+/// context stays derived from hierarchy structure and accessibility size, not
+/// live scroll-view coordinate conversion or moving viewport origin.
 @MainActor
 final class TheBurglarContainerFramesTests: XCTestCase {
 
@@ -26,7 +25,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
             .container(container, children: [.element(element, traversalIndex: 0)])
         ]
 
-        let result = TheBurglar.buildContainerIdentityContext(
+        let result = TheBurglar.buildHierarchyIdentityContext(
             hierarchy: hierarchy,
         )
 
@@ -51,7 +50,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
             ])
         ]
 
-        let result = TheBurglar.buildContainerIdentityContext(
+        let result = TheBurglar.buildHierarchyIdentityContext(
             hierarchy: hierarchy,
             scrollableContainerPaths: [scrollContainerPath]
         )
@@ -85,7 +84,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
             type: .list,
             frame: AccessibilityRect(x: 0, y: 200, width: 320, height: 200)
         )
-        let result1 = TheBurglar.buildContainerIdentityContext(
+        let result1 = TheBurglar.buildHierarchyIdentityContext(
             hierarchy: [.container(outer, children: [
                 .container(innerParse1, children: [.element(makeElement(), traversalIndex: 0)])
             ])],
@@ -99,7 +98,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
             type: .list,
             frame: AccessibilityRect(x: 0, y: -800, width: 320, height: 200)
         )
-        let result2 = TheBurglar.buildContainerIdentityContext(
+        let result2 = TheBurglar.buildHierarchyIdentityContext(
             hierarchy: [.container(outer, children: [
                 .container(innerParse2, children: [.element(makeElement(), traversalIndex: 0)])
             ])],
@@ -111,6 +110,68 @@ final class TheBurglarContainerFramesTests: XCTestCase {
                        "Inner container identity must be invariant under outer scroll")
         XCTAssertTrue(result1.nestedInScrollViewPaths.contains(TreePath([0, 0])))
         XCTAssertTrue(result2.nestedInScrollViewPaths.contains(TreePath([0, 0])))
+    }
+
+    func testOneFoldKeepsNestedScrollAndDuplicateElementContextsPathDistinct() {
+        let outerPath = TreePath([0])
+        let groupPath = TreePath([0, 0])
+        let outerElementPath = TreePath([0, 0, 0])
+        let innerPath = TreePath([0, 1])
+        let innerElementPath = TreePath([0, 1, 0])
+        let repeated = makeElement(label: "Repeated")
+        let outer = AccessibilityContainer(
+            type: .none,
+            scrollableContentSize: AccessibilitySize(width: 320, height: 2_000),
+            frame: AccessibilityRect(x: 0, y: 0, width: 320, height: 480)
+        )
+        let group = AccessibilityContainer(
+            type: .list,
+            frame: AccessibilityRect(x: 0, y: 40, width: 320, height: 100)
+        )
+        let inner = AccessibilityContainer(
+            type: .none,
+            scrollableContentSize: AccessibilitySize(width: 320, height: 800),
+            frame: AccessibilityRect(x: 0, y: 200, width: 320, height: 200)
+        )
+        let result = TheBurglar.buildHierarchyIdentityContext(
+            hierarchy: [
+                .container(outer, children: [
+                    .container(group, children: [
+                        .element(repeated, traversalIndex: 0),
+                    ]),
+                    .container(inner, children: [
+                        .element(repeated, traversalIndex: 1),
+                    ]),
+                ]),
+            ],
+            scrollableContainerPaths: [outerPath, innerPath]
+        )
+        let elementsByPath = Dictionary(uniqueKeysWithValues: result.elements.map { ($0.path, $0) })
+
+        XCTAssertEqual(result.containers.count, 3)
+        XCTAssertEqual(result.elements.count, 2)
+        XCTAssertEqual(
+            result.scrollMembershipsByPath[groupPath]?.containerPath,
+            outerPath
+        )
+        XCTAssertEqual(
+            result.scrollMembershipsByPath[innerPath]?.containerPath,
+            outerPath,
+            "A nested scroll container is itself content of its enclosing scroll container"
+        )
+        XCTAssertEqual(
+            elementsByPath[outerElementPath]?.scrollMembership?.containerPath,
+            outerPath
+        )
+        XCTAssertEqual(
+            elementsByPath[innerElementPath]?.scrollMembership?.containerPath,
+            innerPath,
+            "Element membership uses the nearest scroll container"
+        )
+        XCTAssertEqual(elementsByPath[outerElementPath]?.element, repeated)
+        XCTAssertEqual(elementsByPath[innerElementPath]?.element, repeated)
+        XCTAssertEqual(result.contentFramesByPath[groupPath]?.origin, .zero)
+        XCTAssertEqual(result.contentFramesByPath[innerPath]?.origin, .zero)
     }
 
     /// `coarseFrameHash` is a wire-format heistId fragment for container

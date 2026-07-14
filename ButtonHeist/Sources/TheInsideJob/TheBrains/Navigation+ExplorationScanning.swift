@@ -40,7 +40,7 @@ extension Navigation {
     }
 
     func scanPendingContainers(
-        target: AccessibilityTarget?,
+        target: ResolvedAccessibilityTarget?,
         targetHeistId: HeistId? = nil,
         exploration: inout SemanticExploration
     ) async -> ScrollTraversalTerminal? {
@@ -131,7 +131,7 @@ extension Navigation {
 
     private func scanContainer(
         _ containerExploration: ContainerExploration,
-        target: AccessibilityTarget?,
+        target: ResolvedAccessibilityTarget?,
         targetHeistId: HeistId?,
         exploration: inout SemanticExploration
     ) async -> ScrollContainerScanResult {
@@ -190,7 +190,7 @@ extension Navigation {
         Self.restoreVisualOrigin(savedVisualOrigin, in: containerExploration.scrollView)
     }
 
-    private func scanGoal(target: AccessibilityTarget?, targetHeistId: HeistId?) -> ScrollScanGoal {
+    private func scanGoal(target: ResolvedAccessibilityTarget?, targetHeistId: HeistId?) -> ScrollScanGoal {
         if let target {
             return .findTarget(target)
         }
@@ -400,10 +400,10 @@ extension Navigation {
         guard let path = hierarchy.pathIndexedContainers.first(where: { $0.container == container })?.path else {
             return false
         }
-        return hasContentBeyondFrame(of: path, in: hierarchy, tolerance: tolerance)
+        return hasDescendantBeyondFrame(of: path, in: hierarchy, tolerance: tolerance)
     }
 
-    static func hasContentBeyondFrame(
+    private static func hasDescendantBeyondFrame(
         of containerPath: TreePath,
         in hierarchy: [AccessibilityHierarchy],
         tolerance: CGFloat = 1
