@@ -18,9 +18,12 @@ struct ToolRoutingTests {
 
     @Test("tool routing exposure matches descriptors")
     func toolRoutingExposureMatchesDescriptors() throws {
+        let arguments = try MCPValueBridge.commandEnvelope(from: [:])
         for descriptor in TheFence.Command.descriptors {
-            let request = try MCPToolRequest(name: descriptor.command.rawValue, arguments: [:])
-            let result = ButtonHeistMCPServer.routedToolRequest(request)
+            let result = TheFence.Command.routeToolRequest(
+                named: descriptor.command.rawValue,
+                arguments: arguments
+            )
 
             switch (descriptor.mcpExposure, result) {
             case (.directTool, .success(let input)):
@@ -145,7 +148,7 @@ struct ToolRoutingTests {
         let nested = Self.nestedMCPValueOverLimit()
 
         do {
-            _ = try MCPToolRequest(name: "not_a_tool", arguments: ["argument": nested])
+            _ = try MCPValueBridge.commandEnvelope(from: ["argument": nested])
             Issue.record("Expected MCP argument depth limit error")
         } catch {
             #expect(
@@ -160,7 +163,7 @@ struct ToolRoutingTests {
         let oversizedText = String(repeating: "x", count: PublicJSONInputLimits.maxRequestBytes + 1)
 
         do {
-            _ = try MCPToolRequest(name: "not_a_tool", arguments: ["text": .string(oversizedText)])
+            _ = try MCPValueBridge.commandEnvelope(from: ["text": .string(oversizedText)])
             Issue.record("Expected MCP argument byte limit error")
         } catch {
             #expect(
@@ -175,7 +178,7 @@ struct ToolRoutingTests {
         let excessiveKeys = Self.mcpObjectWithEnoughKeysToExceedLimitFromRoot()
 
         do {
-            _ = try MCPToolRequest(name: "not_a_tool", arguments: ["argument": .object(excessiveKeys)])
+            _ = try MCPValueBridge.commandEnvelope(from: ["argument": .object(excessiveKeys)])
             Issue.record("Expected MCP argument object key limit error")
         } catch {
             #expect(
@@ -185,25 +188,24 @@ struct ToolRoutingTests {
         }
     }
 
-    @Test func `MCP tool request rejects null before routing`() {
+    @Test func `MCP tool arguments reject null before routing`() {
         do {
-            _ = try MCPToolRequest(
-                name: "not_a_tool",
-                arguments: ["argument": .null]
-            )
+            _ = try MCPValueBridge.commandEnvelope(from: ["argument": .null])
             Issue.record("Expected MCP argument null rejection")
         } catch {
             #expect(String(describing: error).contains("MCP arguments contains null"))
         }
     }
 
-    @Test func `MCP tool request routes after typed argument boundary`() throws {
-        let request = try MCPToolRequest(
-            name: "not_a_tool",
-            arguments: ["argument": .string("accepted")]
+    @Test func `MCP tool routes after typed argument boundary`() throws {
+        let arguments = try MCPValueBridge.commandEnvelope(
+            from: ["argument": .string("accepted")]
         )
 
-        let result = ButtonHeistMCPServer.routedToolRequest(request)
+        let result = TheFence.Command.routeToolRequest(
+            named: "not_a_tool",
+            arguments: arguments
+        )
 
         guard case .failure(let error) = result else {
             Issue.record("Expected routing failure after argument boundary")
@@ -214,9 +216,8 @@ struct ToolRoutingTests {
 
     @Test func `MCP tool arguments reject binary data before command envelopes`() {
         do {
-            _ = try MCPToolRequest(
-                name: "not_a_tool",
-                arguments: ["attachment": .data(mimeType: "application/octet-stream", Data([0]))]
+            _ = try MCPValueBridge.commandEnvelope(
+                from: ["attachment": .data(mimeType: "application/octet-stream", Data([0]))]
             )
             Issue.record("Expected MCP argument binary data rejection")
         } catch {
@@ -276,8 +277,8 @@ struct ToolRoutingTests {
         _ name: String,
         _ arguments: [String: Argument]
     ) throws -> RoutedCommand {
-        let request = try MCPToolRequest(name: name, arguments: arguments)
-        switch ButtonHeistMCPServer.routedToolRequest(request) {
+        let envelope = try MCPValueBridge.commandEnvelope(from: arguments)
+        switch TheFence.Command.routeToolRequest(named: name, arguments: envelope) {
         case .success(let request):
             return request
         case .failure(let error):

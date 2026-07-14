@@ -3,7 +3,7 @@ import MCP
 @_spi(ButtonHeistInternals) @_spi(ButtonHeistTooling) import ButtonHeist
 
 enum MCPValueBridge {
-    static func commandEnvelope(from arguments: MCPRawArgumentObject?) throws -> TheFence.CommandArgumentEnvelope {
+    static func commandEnvelope(from arguments: [String: Value]?) throws -> TheFence.CommandArgumentEnvelope {
         try validateArgumentObject(arguments)
         return TheFence.CommandArgumentEnvelope(
             values: try (arguments ?? [:]).mapValues { try heistValue(from: $0) }
@@ -11,7 +11,7 @@ enum MCPValueBridge {
     }
 
     static func validateArgumentObject(
-        _ arguments: MCPRawArgumentObject?,
+        _ arguments: [String: Value]?,
         context: String = "MCP arguments",
         maxBytes: Int = PublicJSONInputLimits.maxRequestBytes,
         maxNestingDepth: Int = PublicJSONInputLimits.maxNestingDepth,
