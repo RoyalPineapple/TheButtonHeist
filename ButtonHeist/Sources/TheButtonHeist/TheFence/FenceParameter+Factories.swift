@@ -14,6 +14,10 @@ import TheScore
         defaultValue: .summary
     )
     public static let heistName = FenceParameter<String>.string(.heist, required: true)
+    public static let heistValidationLint = FenceParameter<HeistValidationLintMode>.enumValue(
+        .lint,
+        defaultValue: .compositionQuality
+    )
     public static let gestureDuration = FenceParameter<GestureDuration>.gestureDuration(.duration)
     public static let inlineData = FenceParameter<Bool>.boolean(.inlineData, defaultValue: false)
     public static let inlinePlan = FenceParameter<String>.string(.plan)

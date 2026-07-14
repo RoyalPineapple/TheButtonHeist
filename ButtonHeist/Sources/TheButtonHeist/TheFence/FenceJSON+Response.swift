@@ -147,6 +147,8 @@ struct PublicResponseModel: FencePublicJSONResponse {
                 accessibilityTrace: accessibilityTrace,
                 profile: profile
             )).encode(to: encoder)
+        case .heistValidation(let report):
+            try PublicHeistValidationResponse(report: report).encode(to: encoder)
         case .heistCatalog(let catalog):
             try PublicHeistCatalogResponse(catalog: catalog).encode(to: encoder)
         case .heistDescription(let description):

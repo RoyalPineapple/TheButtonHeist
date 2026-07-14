@@ -62,6 +62,8 @@ extension FenceResponse {
                 accessibilityTrace: accessibilityTrace,
                 profile: profile
             ))
+        case .heistValidation(let report):
+            return compactHeistValidation(report)
         case .heistCatalog(let catalog):
             return compactHeistCatalog(catalog)
         case .heistDescription(let description):

@@ -69,7 +69,7 @@ extension TheFence.Command {
         case .ping, .listDevices, .getSessionState, .connect, .listTargets, .wait,
              .oneFingerTap, .longPress, .swipe, .drag, .scroll, .scrollToVisible, .scrollToEdge,
              .activate, .rotor, .typeText, .editAction, .setPasteboard, .dismissKeyboard,
-             .perform, .runHeist, .listHeists, .describeHeist:
+             .perform, .runHeist, .validateHeist, .listHeists, .describeHeist:
             preconditionFailure("\(rawValue) is not an observation command")
         }
     }

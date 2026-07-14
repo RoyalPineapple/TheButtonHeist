@@ -416,6 +416,19 @@ struct ToolSyncTests {
         #expect(schemaValue(at: ["allOf"], in: tool.inputSchema) == nil)
     }
 
+    @Test("validate_heist is offline and exposes canonical sources, argument, and lint")
+    func validateHeistSchema() throws {
+        let tool = try #require(ToolDefinitions.all.first { $0.name == "validate_heist" })
+
+        for field in ["path", "plan", "argument", "lint"] {
+            #expect(schemaValue(at: ["properties", field], in: tool.inputSchema) != nil)
+        }
+        for field in ["version", "name", "parameter", "definitions", "body"] {
+            #expect(schemaValue(at: ["properties", field], in: tool.inputSchema) == nil)
+        }
+        #expect(schemaValue(at: ["properties", "lint", "default"], in: tool.inputSchema) == .string("composition_quality"))
+    }
+
     @Test("perform schema exposes one step source without plan IR")
     func performSchemaExposesOneStepSourceWithoutPlanIR() throws {
         let tool = try #require(ToolDefinitions.all.first { $0.name == "perform" })

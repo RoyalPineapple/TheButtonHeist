@@ -191,6 +191,17 @@ HEIST_THEPLANS_BUILD_DIR=.build/debug \
 Artifact resolution options and diagnostics are covered in
 [Swift heist authoring](SWIFT-HEIST-AUTHORING.md#compilation-boundary).
 
+Validate the generated artifact without booting a simulator or establishing a
+Button Heist session:
+
+```bash
+buttonheist validate_heist --path Checkout.heist --lint strict_test --format json
+```
+
+The command exits nonzero when the plan or root invocation is inadmissible, or
+when the selected lint mode emits an error. Lint warnings do not change the
+exit status. The same command is available through JSON-lines and MCP.
+
 ## Which topology when
 
 | Situation | Topology |

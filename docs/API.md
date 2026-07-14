@@ -345,6 +345,10 @@ surfaces are projected from the Fence command descriptors.
 - `run_heist` accepts a durable source plan string or generated `.heist`
   package at public boundaries; execution uses the typed `HeistPlan` contract
   after source/package loading.
+- `validate_heist` applies the same plan and root-argument admission entirely
+  offline. It returns plan, invocation, and lint results plus canonical source
+  for admitted plans. Invalid candidates are typed validation responses, not
+  transport failures.
 - Commands that support `expect` validate the expectation against the action
   result and report the observed outcome.
 - Typed responses serialize to human, compact, and JSON forms from the same
@@ -403,6 +407,8 @@ Runtime behavior:
   response as MCP `structuredContent`
 - Returns screenshots as artifact paths by default
 - Requires explicit, size-bounded inline screenshot opt-ins
+- Exposes `validate_heist` without requiring a configured device, connection,
+  or Button Heist session
 
 Environment variables:
 

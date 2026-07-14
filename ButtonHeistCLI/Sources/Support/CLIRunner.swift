@@ -84,6 +84,9 @@ enum CLIRunner {
         var isFailure: Bool {
             switch self {
             case .response(let formatted):
+                if case .heistValidation(let report) = formatted.envelope.response {
+                    return !report.commandPassed
+                }
                 return formatted.envelope.response.isFailure
             case .binary:
                 return false
@@ -117,7 +120,7 @@ enum CLIRunner {
                 if descriptor.executionMode == .connected {
                     try await fence.start()
                 }
-                if let statusMessage = descriptor.statusMessage, !descriptor.connection.quiet {
+                if let statusMessage = descriptor.statusMessage, !isQuiet(descriptor) {
                     logStatus(statusMessage)
                 }
                 response = try await fence.execute(try fence.admit(FenceCommandInput(
@@ -201,11 +204,13 @@ enum CLIRunner {
 
     @ButtonHeistActor
     private static func makeFence(descriptor: CommandDescriptor) throws -> TheFence {
-        let connection = descriptor.connection
         let config: EnvironmentConfig
         if let configuration = descriptor.configuration {
             config = configuration
+        } else if descriptor.executionMode == .direct {
+            config = try EnvironmentConfig.resolve(autoReconnect: false)
         } else {
+            let connection = descriptor.connection
             config = try EnvironmentConfig.resolve(
                 deviceFilter: connection.device,
                 token: connection.token,
@@ -214,10 +219,14 @@ enum CLIRunner {
             )
         }
         let fence = TheFence(configuration: config.fenceConfiguration)
-        let quiet = connection.quiet
+        let quiet = isQuiet(descriptor)
         fence.onStatus = { message in
             if !quiet { logStatus(message) }
         }
         return fence
+    }
+
+    private static func isQuiet(_ descriptor: CommandDescriptor) -> Bool {
+        descriptor.executionMode == .direct || descriptor.connection.quiet
     }
 }

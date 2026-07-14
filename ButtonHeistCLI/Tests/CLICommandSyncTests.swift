@@ -19,6 +19,7 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertTrue(help.contains("activate"))
         XCTAssertTrue(help.contains("get_interface"))
         XCTAssertTrue(help.contains("run_heist"))
+        XCTAssertTrue(help.contains("validate_heist"))
         XCTAssertTrue(help.contains("list_heists"))
         XCTAssertTrue(help.contains("describe_heist"))
     }
@@ -358,6 +359,20 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertNil(arguments.value(for: .version))
     }
 
+    func testValidateHeistBuildsOfflineRequestWithTypedLint() throws {
+        let source = #"HeistPlan { Warn("Check") }"#
+        let command = try ValidateHeistCommand.parse([
+            "--plan", source,
+            "--lint", "strict_test",
+        ])
+
+        let arguments = try command.requestArguments()
+
+        XCTAssertEqual(arguments.value(for: .plan), .string(source))
+        XCTAssertEqual(arguments.value(for: .lint), .string("strict_test"))
+        XCTAssertNil(arguments.value(for: .path))
+    }
+
     func testRunHeistRejectsEntryWithoutPath() {
         XCTAssertThrowsError(try RunHeistCommand.planArguments(
             inline: #"HeistPlan { Warn("x") }"#,
@@ -557,6 +572,15 @@ final class CLICommandSyncTests: XCTestCase {
 
         XCTAssertEqual(parsed.command, .runHeist)
         XCTAssertEqual(parsed.argument(.plan), .string(#"HeistPlan("one") { Warn("check") }"#))
+    }
+
+    func testMachineRequestParserAcceptsValidateHeistInJSONLinesMode() throws {
+        let parsed = try CLIMachineRequestParser.parsedRequest(
+            from: #"{"command":"validate_heist","plan":"HeistPlan { Warn(\"check\") }","lint":"strict_test"}"#
+        )
+
+        XCTAssertEqual(parsed.command, .validateHeist)
+        XCTAssertEqual(parsed.argument(.lint), .string("strict_test"))
     }
 
     func testMachineRequestParserRejectsHugeMachineJSONLineBeforeDecoding() {

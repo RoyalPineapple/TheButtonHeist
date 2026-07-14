@@ -215,6 +215,7 @@ enum CLICommandAdapterCatalog {
         .getAnnouncements: GetAnnouncementsCommand.self,
         .dismissKeyboard: DismissKeyboardCommand.self,
         .runHeist: RunHeistCommand.self,
+        .validateHeist: ValidateHeistCommand.self,
         .listHeists: ListHeistsCommand.self,
         .describeHeist: DescribeHeistCommand.self,
         .getSessionState: GetSessionStateCommand.self,

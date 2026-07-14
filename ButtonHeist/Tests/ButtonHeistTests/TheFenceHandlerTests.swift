@@ -999,6 +999,80 @@ final class TheFenceHandlerTests: XCTestCase {
     // MARK: - Run Heist Input Loading
 
     @ButtonHeistActor
+    func testValidateHeistAdmitsCanonicalPlanWithoutConnection() async throws {
+        let fence = TheFence(configuration: .init())
+
+        let response = try await fence.execute(command: .validateHeist, values: [
+            "plan": .string("HeistPlan { Warn(\"Check\") }"),
+        ])
+
+        guard case .heistValidation(let report) = response else {
+            return XCTFail("Expected heistValidation response, got \(response)")
+        }
+        XCTAssertTrue(report.admissible)
+        XCTAssertTrue(report.commandPassed)
+        XCTAssertEqual(report.invocation.state, .valid)
+        XCTAssertEqual(report.lint.mode, .compositionQuality)
+        XCTAssertNotNil(report.canonicalPlan)
+        XCTAssertFalse(fence.handoff.isConnected)
+    }
+
+    @ButtonHeistActor
+    func testValidateHeistReturnsInvalidPlanAsNormalValidationResponse() async throws {
+        let fence = TheFence(configuration: .init())
+
+        let response = try await fence.execute(command: .validateHeist, values: [
+            "plan": .string("HeistPlan { Activate( }"),
+        ])
+
+        guard case .heistValidation(let report) = response else {
+            return XCTFail("Expected heistValidation response, got \(response)")
+        }
+        XCTAssertFalse(response.isFailure)
+        XCTAssertFalse(report.admissible)
+        XCTAssertFalse(report.commandPassed)
+        XCTAssertFalse(report.plan.diagnostics.isEmpty)
+        XCTAssertEqual(report.invocation.state, .notEvaluated)
+        XCTAssertEqual(report.lint.state, .notEvaluated)
+        XCTAssertNil(report.canonicalPlan)
+    }
+
+    @ButtonHeistActor
+    func testValidateHeistReportsMissingParameterizedRootArgument() async throws {
+        let fence = TheFence(configuration: .init())
+        let response = try await fence.execute(command: .validateHeist, values: [
+            "plan": .string("HeistPlan(\"search\", parameter: \"query\") { query in Warn(\"Check\") }"),
+        ])
+
+        guard case .heistValidation(let report) = response else {
+            return XCTFail("Expected heistValidation response, got \(response)")
+        }
+        XCTAssertTrue(report.plan.isValid)
+        XCTAssertEqual(report.invocation.state, .invalid)
+        XCTAssertFalse(report.invocation.argumentProvided)
+        XCTAssertFalse(report.invocation.diagnostics.isEmpty)
+        XCTAssertFalse(report.admissible)
+    }
+
+    @ButtonHeistActor
+    func testValidateHeistStrictLintCanFailOtherwiseAdmissiblePlan() async throws {
+        let fence = TheFence(configuration: .init())
+        let response = try await fence.execute(command: .validateHeist, values: [
+            "plan": .string("HeistPlan { Activate(.label(\"Save\")) }"),
+            "lint": .string("strict_test"),
+        ])
+
+        guard case .heistValidation(let report) = response else {
+            return XCTFail("Expected heistValidation response, got \(response)")
+        }
+        XCTAssertTrue(report.admissible)
+        XCTAssertFalse(report.commandPassed)
+        XCTAssertEqual(report.lint.state, .findings)
+        XCTAssertTrue(report.lint.hasErrors)
+        XCTAssertEqual(report.lint.findings.map(\.message), ["Semantic action has no expectation"])
+    }
+
+    @ButtonHeistActor
     func testRunHeistReadsPlanFromArtifactPathIntoSwiftObjects() async throws {
         let fence = TheFence(configuration: .init())
         let temp = FileManager.default.temporaryDirectory

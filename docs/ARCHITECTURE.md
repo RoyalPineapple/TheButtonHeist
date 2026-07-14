@@ -319,6 +319,7 @@ flowchart TD
     Author["Authoring surface<br/>Swift DSL or runtime heist source"] --> Compile["Parse / build<br/>HeistPlanAdmissionCandidate"]
     Compile --> Validate["Admit once<br/>semantic validation + runtime bounds"]
     Validate --> Plan["Validated HeistPlan"]
+    Validate --> OfflineReport["validate_heist<br/>plan + invocation + lint report"]
     Plan --> FenceCommand["Fence command<br/>run_heist / perform / wait"]
     FenceCommand --> HandoffSocket["Handoff socket<br/>client version == app version"]
     HandoffSocket --> Executor["TheBrains executor"]

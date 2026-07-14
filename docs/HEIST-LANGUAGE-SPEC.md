@@ -75,6 +75,17 @@ The checked-plan pipeline is:
 4. Admit only a validated `HeistPlan` to storage, catalog discovery, rendering,
    replay, or execution.
 
+`validate_heist` exposes this admission boundary without opening a device
+connection or creating a session. It accepts exactly one canonical source:
+inline ButtonHeist `plan` text or a generated `.heist` `path`. It separately
+reports plan admission, root invocation argument validity, and optional lint.
+An invalid candidate is a successful validation response with
+`admissible: false`; malformed command arguments remain request errors.
+
+Validation cannot prove that a live accessibility target exists or that an
+expectation will be satisfied. `run_heist` MUST repeat admission at execution
+time rather than trusting an earlier validation report.
+
 The full author-to-replay pipeline, including where admission can reject, is
 drawn in the [heist lifecycle diagram](diagrams/heist-lifecycle.md).
 
