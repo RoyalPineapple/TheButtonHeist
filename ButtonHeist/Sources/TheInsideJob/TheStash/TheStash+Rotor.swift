@@ -23,6 +23,7 @@ extension TheStash {
         case noRotors
         case noSuchRotor(available: [String])
         case ambiguousRotor(available: [String])
+        case continuationInvalidated
         case currentItemUnavailable(String)
         case continuationTextRangeUnavailable
         case noResult(String)
@@ -72,14 +73,35 @@ extension TheStash {
 
         let predicate = UIAccessibilityCustomRotorSearchPredicate()
         predicate.searchDirection = direction.uiAccessibilityDirection
-        // Cycle from the held cursor when we are continuing rotor mode on the
-        // same host + rotor and the selection object is still alive; otherwise
-        // leave `currentItem` nil so the search enters at index 0.
+        // A different host or rotor starts a new traversal. A continuation on
+        // the same host and rotor must resolve against the current observation;
+        // losing that evidence is an explicit failure, never an implicit reset.
         if let cursor = rotorCursor,
            cursor.hostHeistId == hostHeistId,
-           cursor.rotorName == rotorName,
-           let currentObject = cursor.currentSelection {
-            predicate.currentItem = UIAccessibilityCustomRotorItemResult(targetElement: currentObject, targetRange: nil)
+           cursor.rotorName == rotorName {
+            guard cursor.generation == currentRotorGeneration else {
+                rotorCursor = nil
+                return .continuationInvalidated
+            }
+            guard let currentObject = currentLiveCapture.object(for: cursor.selectionHeistId) else {
+                rotorCursor = nil
+                return .currentItemUnavailable(cursor.selectionHeistId.rawValue)
+            }
+            let currentRange: UITextRange?
+            if let reference = cursor.textRange {
+                guard let input = currentObject as? UITextInput,
+                      let range = textRange(from: reference, in: input) else {
+                    rotorCursor = nil
+                    return .continuationTextRangeUnavailable
+                }
+                currentRange = range
+            } else {
+                currentRange = nil
+            }
+            predicate.currentItem = UIAccessibilityCustomRotorItemResult(
+                targetElement: currentObject,
+                targetRange: currentRange
+            )
         }
 
         guard let result = selection.itemSearchBlock(predicate) else {
@@ -91,16 +113,35 @@ extension TheStash {
             return .resultTargetUnavailable(rotorName)
         }
         let parsed = parseRotorResultObject(resultObject)
-        guard parsed != nil || textRange != nil else {
+        guard let parsed else {
             return .resultTargetNotParsed(rotorName)
         }
-        // Hold the new selection as the rotor cursor for the next step.
-        rotorCursor = RotorCursor(hostHeistId: hostHeistId, rotorName: rotorName, currentSelection: resultObject)
+        let cursorTextRange: TextRangeReference?
+        if let targetRange = result.targetRange {
+            guard let reference = describeTextRangeReference(targetRange, in: resultObject) else {
+                rotorCursor = nil
+                return .continuationTextRangeUnavailable
+            }
+            cursorTextRange = reference
+        } else {
+            cursorTextRange = nil
+        }
+        rotorCursor = RotorCursor(
+            hostHeistId: hostHeistId,
+            rotorName: rotorName,
+            generation: currentRotorGeneration,
+            selectionHeistId: parsed.heistId,
+            textRange: cursorTextRange
+        )
         return .succeeded(RotorHit(rotor: rotorName, treeElement: parsed, textRange: textRange))
     }
 }
 
 private extension TheStash {
+
+    var currentRotorGeneration: ObservationGeneration {
+        latestSettledSemanticObservationEvent?.generation ?? .initial
+    }
 
     /// Return the known `InterfaceTree.Element` corresponding to a UIKit accessibility
     /// object by live object identity.
@@ -150,6 +191,14 @@ private extension TheStash {
             startOffset: startOffset,
             endOffset: endOffset,
             rangeDescription: "[\(startOffset)..<\(endOffset)]"
+        )
+    }
+
+    func describeTextRangeReference(_ range: UITextRange, in object: NSObject) -> TextRangeReference? {
+        guard let input = object as? UITextInput else { return nil }
+        return TextRangeReference(
+            startOffset: input.offset(from: input.beginningOfDocument, to: range.start),
+            endOffset: input.offset(from: input.beginningOfDocument, to: range.end)
         )
     }
 }

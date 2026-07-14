@@ -112,6 +112,17 @@ extension Actions {
                                 rotor: rotor, rotorIndex: rotorIndex, direction: direction,
                                 element: element, liveObject: liveObject,
                                 suggestion: "specify rotorIndex or an exact rotor name")
+        case .continuationInvalidated:
+            return rotorFailure(
+                observed: "rotor continuation belongs to a replaced screen generation",
+                rotor: rotor,
+                rotorIndex: rotorIndex,
+                direction: direction,
+                element: element,
+                liveObject: liveObject,
+                suggestion: "start a new rotor traversal on the current screen",
+                failureKind: .targetUnavailable
+            )
         case .currentItemUnavailable(let heistId):
             return rotorFailure(
                 observed: "rotor continuation target \(rotorStringProfile.renderString(heistId)) is not available",
