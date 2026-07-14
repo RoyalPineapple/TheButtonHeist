@@ -235,6 +235,57 @@ final class TheBrainsScrollTests: XCTestCase {
         )
     }
 
+    // MARK: - Exploration Scan Geometry (Pure Math)
+
+    func testExplorationScanRecomputesNextOffsetFromExpandedContentExtent() throws {
+        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 500))
+        scrollView.contentSize = CGSize(width: 320, height: 1_000)
+        scrollView.contentOffset = CGPoint(x: 0, y: 500)
+
+        XCTAssertNil(
+            Navigation.nextExplorationScanOffset(
+                in: scrollView,
+                axis: .vertical,
+                direction: .forward
+            )
+        )
+
+        scrollView.contentSize = CGSize(width: 320, height: 1_800)
+
+        let next = try XCTUnwrap(
+            Navigation.nextExplorationScanOffset(
+                in: scrollView,
+                axis: .vertical,
+                direction: .forward
+            )
+        )
+        XCTAssertEqual(next.y, 900, accuracy: 0.01)
+    }
+
+    func testExplorationScanCompletesOnlyAtLatestContentEdge() throws {
+        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 500))
+        scrollView.contentSize = CGSize(width: 320, height: 1_800)
+        scrollView.contentOffset = CGPoint(x: 0, y: 1_100)
+
+        let edge = try XCTUnwrap(
+            Navigation.nextExplorationScanOffset(
+                in: scrollView,
+                axis: .vertical,
+                direction: .forward
+            )
+        )
+        XCTAssertEqual(edge.y, 1_300, accuracy: 0.01)
+
+        scrollView.contentOffset = edge
+        XCTAssertNil(
+            Navigation.nextExplorationScanOffset(
+                in: scrollView,
+                axis: .vertical,
+                direction: .forward
+            )
+        )
+    }
+
     // MARK: - semanticRevealTargetOffset (Pure Math)
 
     func testScrollTargetOffsetCentersOnContentPoint() {

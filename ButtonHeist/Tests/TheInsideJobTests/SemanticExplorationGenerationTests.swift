@@ -58,6 +58,23 @@ final class SemanticExplorationGenerationTests: XCTestCase {
         XCTAssertNotNil(exploration.screen.findElement(heistId: "new_action"))
     }
 
+    func testPlannedScrollWithoutNotificationBatchDoesNotInferReplacementFromViewportShape() {
+        var exploration = Navigation.SemanticExploration(
+            baseline: .interfaceMemory(
+                screen(header: "Home", entries: [("Old Action", .staticText, "old_action")])
+            )
+        )
+
+        let classification = exploration.absorbScrolledPage(
+            screen(header: "Settings", entries: [("New Action", .button, "new_action")]),
+            notificationBatch: nil
+        )
+
+        XCTAssertEqual(classification, .sameGeneration)
+        XCTAssertNotNil(exploration.screen.findElement(heistId: "old_action"))
+        XCTAssertNotNil(exploration.screen.findElement(heistId: "new_action"))
+    }
+
     func testPlannedScrollUsesScopedScreenChangedAsReplacementEvidence() throws {
         var exploration = Navigation.SemanticExploration(
             baseline: .interfaceMemory(

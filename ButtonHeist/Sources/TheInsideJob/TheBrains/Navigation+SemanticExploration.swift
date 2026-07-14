@@ -308,10 +308,9 @@ extension Navigation {
         @discardableResult
         @MainActor
         mutating func absorbScrolledPage(
-            _ parsed: InterfaceObservation?,
+            _ parsed: InterfaceObservation,
             notificationBatch: AccessibilityNotificationBatch?
-        ) -> ScreenClassifier.Classification? {
-            guard let parsed else { return nil }
+        ) -> ScreenClassifier.Classification {
             let classification: ScreenClassifier.Classification = if notificationBatch?.events.contains(where: {
                 if case .screenChanged = $0.kind { return true }
                 return false

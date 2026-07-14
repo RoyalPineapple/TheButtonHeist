@@ -35,19 +35,16 @@ internal final class ElementInflation {
     internal struct CommittedElementTarget {
         private let sourceTarget: AccessibilityTarget
         private let resolvedHeistId: HeistId
-        private let deadline: SemanticObservationDeadline
         private let resolution: ActionSubjectResolution
 
         internal init(_ inflatedTarget: InflatedElementTarget) {
             sourceTarget = inflatedTarget.target
             resolvedHeistId = inflatedTarget.treeElement.heistId
-            deadline = inflatedTarget.deadline
             resolution = inflatedTarget.resolution
         }
 
         internal var target: AccessibilityTarget { sourceTarget }
         internal var heistId: HeistId { resolvedHeistId }
-        internal var handoffDeadline: SemanticObservationDeadline { deadline }
         internal var subjectResolution: ActionSubjectResolution { resolution }
     }
 
@@ -190,12 +187,6 @@ internal final class ElementInflation {
         guard !Task.isCancelled else {
             return .failed(.cancelled("element inflation was cancelled before committed target refresh"))
         }
-        guard target.handoffDeadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) else {
-            return .failed(.staleRefresh(
-                "committed target \(target.heistId) reached the action deadline before refresh",
-                failureKind: .targetUnavailable
-            ))
-        }
         stash.refreshLiveCapture()
         guard let treeElement = stash.interfaceElement(heistId: target.heistId) else {
             return .failed(.staleRefresh(
@@ -203,17 +194,18 @@ internal final class ElementInflation {
                 failureKind: .targetUnavailable
             ))
         }
+        let deadline = handoffDeadline(for: treeElement)
         let initialState: State = stash.liveContains(heistId: target.heistId)
             ? .refreshing(
                 target: target.target,
                 treeElement: treeElement,
-                deadline: target.handoffDeadline,
+                deadline: deadline,
                 resolution: target.subjectResolution
             )
             : .revealing(
                 target: target.target,
                 treeElement: treeElement,
-                deadline: target.handoffDeadline,
+                deadline: deadline,
                 resolution: target.subjectResolution
             )
         return await runInflation(
@@ -241,7 +233,7 @@ internal final class ElementInflation {
     ) -> SemanticObservationDeadline {
         let tickCount = Self.handoffTickCount(for: treeElement, in: stash.interfaceTree)
         return SemanticObservationDeadline(
-            start: CFAbsoluteTimeGetCurrent(),
+            start: geometryEnvironment.now(),
             timeoutSeconds: Double(tickCount) * SemanticObservationTiming.defaultTimeout
         )
     }
