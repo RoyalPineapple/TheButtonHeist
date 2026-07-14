@@ -97,6 +97,7 @@ Recommended commands:
 tuist test TheScoreTests --no-selective-testing
 tuist test ButtonHeistTests --no-selective-testing
 tuist test TheInsideJobTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
+tuist test TheInsideJobIntegrationTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
 tuist test HostedBehaviorTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
 ```
 
@@ -258,6 +259,7 @@ Before pushing any commit, verify the following:
   tuist test TheScoreTests --no-selective-testing
   tuist test ButtonHeistTests --no-selective-testing
   tuist test TheInsideJobTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
+  tuist test TheInsideJobIntegrationTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
   tuist test HostedBehaviorTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
   ```
 - If tests fail, fix the code or update tests to reflect intentional changes.
@@ -288,8 +290,8 @@ Before pushing any commit, verify the following:
 `tuist test` is the one true way to run tests in this repository.
 
 - `TheScoreTests` and `ButtonHeistTests` run as explicit Tuist schemes.
-- The hosted iOS suite has two canonical schemes: core `TheInsideJobTests` and aggregate `HostedBehaviorTests`, which owns the dogfood and adversarial targets.
-- Both hosted schemes run via the `BH Demo` test host and require an explicit simulator destination. Running only `TheInsideJobTests` does not run hosted behavior.
+- The hosted iOS suite has three canonical schemes: core `TheInsideJobTests`, isolated `TheInsideJobIntegrationTests`, and aggregate `HostedBehaviorTests`, which owns the dogfood and adversarial targets.
+- All three hosted schemes run via the `BH Demo` test host and require an explicit simulator destination. Running only `TheInsideJobTests` skips integration and hosted behavior.
 - Use `--no-selective-testing` when you need to force the full suite instead of Tuist's default selective run.
 - Treat `swift test` as a package-debugging tool, not as the source of truth for CI-style verification.
 

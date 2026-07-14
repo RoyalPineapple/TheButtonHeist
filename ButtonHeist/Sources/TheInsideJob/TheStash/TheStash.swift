@@ -3,6 +3,7 @@
 import UIKit
 
 import TheScore
+import ThePlans
 
 import AccessibilitySnapshotParser
 
@@ -61,24 +62,18 @@ final class TheStash {
 
     // MARK: - Interaction Cursor State
 
-    /// Held rotor cursor — the single current selection while in rotor mode.
-    /// Entering rotor mode on a host starts at index 0; subsequent steps cycle
-    /// this held selection. Any non-rotor action clears it (rotor mode exit).
+    /// Held rotor cursor — the single semantic selection while in rotor mode.
+    /// Entering rotor mode on a host starts at index 0; subsequent steps
+    /// reacquire live evidence for this value cursor. Any non-rotor action
+    /// clears it (rotor mode exit).
     var rotorCursor: RotorCursor?
 
-    /// The in-memory rotor cursor. `currentSelection` is held **weakly** — rotor
-    /// items are live UIKit objects we must not retain across the session; if it
-    /// deallocates between steps the cursor is treated as lost and we re-enter at 0.
-    final class RotorCursor {
+    struct RotorCursor {
         let hostHeistId: HeistId
         let rotorName: String
-        weak var currentSelection: NSObject?
-
-        init(hostHeistId: HeistId, rotorName: String, currentSelection: NSObject?) {
-            self.hostHeistId = hostHeistId
-            self.rotorName = rotorName
-            self.currentSelection = currentSelection
-        }
+        let generation: ObservationGeneration
+        let selectionHeistId: HeistId
+        let textRange: TextRangeReference?
     }
 
     /// Drop rotor mode. Called when any non-rotor interaction runs.

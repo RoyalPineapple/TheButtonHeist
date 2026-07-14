@@ -1,8 +1,6 @@
-import ButtonHeistDSL
 import Foundation
 import Testing
 @_spi(ButtonHeistInternals) import ThePlans
-import TheScore
 
 private func validatedDefinitions(_ definitions: [HeistPlanAdmissionCandidate]) throws -> [HeistPlan] {
     try HeistPlanAdmissionCandidate(
@@ -37,9 +35,9 @@ func actionTargetSupportsRepeatedStringChecksForOneProperty() throws {
 
     #expect(try heist == HeistPlan(body: [
         .action(try ActionStep(command: .activate(.predicate(.element(
-            .label(.prefix(.literal("foo"))),
-            .label(.contains(.literal("bar"))),
-            .label(.suffix(.literal("baz"))),
+            .label(.prefix("foo")),
+            .label(.contains("bar")),
+            .label(.suffix("baz")),
             traits: [.button]
         ))))),
     ]))
@@ -69,7 +67,7 @@ func actionUntilBuildsRepeatUntilWithDefaultProgressExpectation() throws {
     #expect(try heist == HeistPlan(body: [
         .repeatUntil(try RepeatUntilStep(
             predicate: .exists(.element(.label("Volume"), .value("100"))),
-            timeout: ButtonHeistDSL.defaultWaitTimeout,
+            timeout: ThePlans.defaultWaitTimeout,
             body: [
                 .action(try ActionStep(
                     command: .increment(.label("Volume")))),
@@ -90,7 +88,7 @@ func actionExpectationSupportsScopedPropertyUpdateDelta() throws {
     #expect(try heist == HeistPlan(body: [
         .action(try ActionStep(
             command: .typeText(
-                text: .literal("Bruschetta"),
+                text: "Bruschetta",
                 target: .identifier("Search")
             ),
             expectationPolicy: .expect(ActionExpectation(predicate: .changed(.elements([
@@ -143,7 +141,7 @@ func actionExpectationUsesCanonicalElementChangeAssertions() throws {
     #expect(try updated == HeistPlan(body: [
         .action(try ActionStep(
             command: .typeText(
-                text: .literal("Bruschetta"),
+                text: "Bruschetta",
                 target: .identifier("Search")
             ),
             expectationPolicy: .expect(ActionExpectation(predicate: .changed(.elements([
@@ -206,7 +204,7 @@ func forEachInfersStringValuesAndElementPredicates() throws {
             parameter: "item",
             body: [
                 .action(try ActionStep(command: .typeText(
-                    text: .ref("item"),
+                    reference: HeistReferenceName(stringLiteral: "item"),
                     target: .label("Search")
                 ))),
             ]
@@ -357,12 +355,20 @@ func `string heist search flow preserves query ref in composed post activation e
 
     #expect(searchDefinition.body == [
         .action(try ActionStep(
-            command: .typeText(text: .ref("query"), target: .label("Search")),
-            expectationPolicy: .expect(ActionExpectation(predicate: .exists(.value(.ref("query"))), timeout: 1)))),
+            command: .typeText(
+                reference: HeistReferenceName(stringLiteral: "query"),
+                target: .label("Search")
+            ),
+            expectationPolicy: .expect(ActionExpectation(
+                predicate: .exists(.value(HeistReferenceName(stringLiteral: "query"))),
+                timeout: 1
+            )))),
         .action(try ActionStep(
             command: .activate(.label("Search")),
             expectationPolicy: .expect(ActionExpectation(
-                predicate: .changed(.screen([.exists(.label(.ref("query")))])),
+                predicate: .changed(.screen([
+                    .exists(.label(HeistReferenceName(stringLiteral: "query"))),
+                ])),
                 timeout: 5
             )))),
     ])
@@ -734,11 +740,11 @@ func heistDefinitionsCompileToInvocationsWithLocalDefinitions() throws {
     #expect(heist.body == [
         .invoke(HeistInvocationStep(
             path: ["LibraryScreen", "addToCart"],
-            argument: .string(.literal("Milk"))
+            argument: .string("Milk")
         )),
         .invoke(HeistInvocationStep(
             path: ["LibraryScreen", "addToCart"],
-            argument: .string(.literal("Bread"))
+            argument: .string("Bread")
         )),
     ])
     #expect(try heist.definitions == validatedDefinitions([
@@ -747,10 +753,15 @@ func heistDefinitionsCompileToInvocationsWithLocalDefinitions() throws {
                 name: "addToCart",
                 parameter: .string(name: "item"),
                 body: [
-                    .action(try ActionStep(command: .activate(.label(.ref("item"))))),
+                    .action(try ActionStep(command: .activate(
+                        .label(HeistReferenceName(stringLiteral: "item"))
+                    ))),
                     .action(try ActionStep(
                         command: .activate(.label("Add to Cart")),
-                        expectationPolicy: .expect(ActionExpectation(predicate: .exists(.label(.ref("item"))), timeout: 2)))),
+                        expectationPolicy: .expect(ActionExpectation(
+                            predicate: .exists(.label(HeistReferenceName(stringLiteral: "item"))),
+                            timeout: 2
+                        )))),
                 ]
             ),
         ], body: []),
@@ -774,7 +785,10 @@ func `string heist definitions default parameter to input`() throws {
                 parameter: .string(name: "input"),
                 body: [
                     .action(try ActionStep(
-                        command: .typeText(text: .ref("input"), target: .label("Search"))
+                        command: .typeText(
+                            reference: HeistReferenceName(stringLiteral: "input"),
+                            target: .label("Search")
+                        )
                     )),
                 ]
             ),
@@ -866,7 +880,9 @@ func heistDefinitionsCarryLocalDependenciesInDefinitionScope() throws {
                     ], body: []),
                 ],
                 body: [
-                    .action(try ActionStep(command: .activate(.label(.ref("item"))))),
+                    .action(try ActionStep(command: .activate(
+                        .label(HeistReferenceName(stringLiteral: "item"))
+                    ))),
                     .invoke(HeistInvocationStep(path: ["AddButton", "tap"])),
                 ]
             ),
@@ -894,31 +910,31 @@ func rawHeistPlanContentCarriesDefinitions() throws {
 
 @Test
 func runHeistBuildsHeistRunSteps() throws {
-    let stringRun = ButtonHeistDSL.RunHeist("LibraryScreen.addToCart", "Milk")
+    let stringRun = ThePlans.RunHeist("LibraryScreen.addToCart", "Milk")
     #expect(stringRun.heistSteps == [
-        .invoke(HeistInvocationStep(path: ["LibraryScreen", "addToCart"], argument: .string(.literal("Milk")))),
+        .invoke(HeistInvocationStep(path: ["LibraryScreen", "addToCart"], argument: .string("Milk"))),
     ])
 
-    let noArgRun = ButtonHeistDSL.RunHeist("CartScreen.checkout")
+    let noArgRun = ThePlans.RunHeist("CartScreen.checkout")
     #expect(noArgRun.heistSteps == [
         .invoke(HeistInvocationStep(path: ["CartScreen", "checkout"], argument: .none)),
     ])
 
-    let targetRun = ButtonHeistDSL.RunHeist("Rows.activate", AccessibilityTarget.label("Row 1"))
+    let targetRun = ThePlans.RunHeist("Rows.activate", AccessibilityTarget.label("Row 1"))
     #expect(targetRun.heistSteps == [
         .invoke(HeistInvocationStep(path: ["Rows", "activate"], argument: .accessibilityTarget(.label("Row 1")))),
     ])
 
     let expectedSubtotal = WaitStep(
         predicate: .changed(.elements([.appeared(.label("subtotal"))])),
-        timeout: ButtonHeistDSL.defaultActionExpectationTimeout
+        timeout: ThePlans.defaultActionExpectationTimeout
     )
-    let expectedRun = ButtonHeistDSL.RunHeist("Cart.addItem", "Milk")
+    let expectedRun = ThePlans.RunHeist("Cart.addItem", "Milk")
         .expect(.changed(.elements([.appeared(.label("subtotal"))])))
     #expect(expectedRun.heistSteps == [
         .invoke(HeistInvocationStep(
             path: ["Cart", "addItem"],
-            argument: .string(.literal("Milk")),
+            argument: .string("Milk"),
             expectation: expectedSubtotal
         )),
     ])
@@ -927,25 +943,25 @@ func runHeistBuildsHeistRunSteps() throws {
         predicate: .changed(.elements([
             .updated(.label("subtotal"), .value(after: .contains("2 items"))),
         ])),
-        timeout: ButtonHeistDSL.defaultActionExpectationTimeout
+        timeout: ThePlans.defaultActionExpectationTimeout
     )
-    let updatedRun = ButtonHeistDSL.RunHeist("Cart.addItem", "Eggs")
+    let updatedRun = ThePlans.RunHeist("Cart.addItem", "Eggs")
         .expect(.changed(.elements([
             .updated(.label("subtotal"), .value(.contains("2 items"))),
         ])))
     #expect(updatedRun.heistSteps == [
         .invoke(HeistInvocationStep(
             path: ["Cart", "addItem"],
-            argument: .string(.literal("Eggs")),
+            argument: .string("Eggs"),
             expectation: expectedStatus
         )),
     ])
 
     let expectedCompletion = WaitStep(
         predicate: .exists(.label("Payment Complete")),
-        timeout: ButtonHeistDSL.defaultActionExpectationTimeout
+        timeout: ThePlans.defaultActionExpectationTimeout
     )
-    let snapshotRun = ButtonHeistDSL.RunHeist("Checkout.pay")
+    let snapshotRun = ThePlans.RunHeist("Checkout.pay")
         .expect(.exists(.label("Payment Complete")))
     #expect(snapshotRun.heistSteps == [
         .invoke(HeistInvocationStep(
@@ -956,9 +972,9 @@ func runHeistBuildsHeistRunSteps() throws {
 
     let expectedReceipt = WaitStep(
         predicate: .changed(.screen([.exists(.label("Receipt"))])),
-        timeout: ButtonHeistDSL.defaultActionExpectationTimeout
+        timeout: ThePlans.defaultActionExpectationTimeout
     )
-    let screenRun = ButtonHeistDSL.RunHeist("Checkout.pay")
+    let screenRun = ThePlans.RunHeist("Checkout.pay")
         .expect(.changed(.screen([.exists(.label("Receipt"))])))
     #expect(screenRun.heistSteps == [
         .invoke(HeistInvocationStep(
@@ -1038,7 +1054,7 @@ func runHeistRendersAsRunHeistInCanonicalSwift() throws {
         ],
         body: [.invoke(HeistInvocationStep(
             path: ["CartScreen", "checkout"],
-            expectation: WaitStep(predicate: .changed(.screen()), timeout: ButtonHeistDSL.defaultActionExpectationTimeout)
+            expectation: WaitStep(predicate: .changed(.screen()), timeout: ThePlans.defaultActionExpectationTimeout)
         ))]
     )
     let rendered = try plan.canonicalSwiftDSL()
@@ -1078,7 +1094,7 @@ func heistDefinitionsCanBeInvokedFromForEachBodies() throws {
             body: [
                 .invoke(HeistInvocationStep(
                     path: ["LibraryScreen", "addToCart"],
-                    argument: .string(.ref("item"))
+                    argument: .string(reference: HeistReferenceName(stringLiteral: "item"))
                 )),
             ]
         )),
@@ -1111,9 +1127,12 @@ func stringForEachBuildsRuntimeStringLoop() throws {
             parameter: "item",
             body: [
                 .action(try ActionStep(
-                    command: .typeText(text: .ref("item"), target: .label("Add item")),
+                    command: .typeText(
+                        reference: HeistReferenceName(stringLiteral: "item"),
+                        target: .label("Add item")
+                    ),
                     expectationPolicy: .expect(ActionExpectation(
-                        predicate: .exists(.label(.ref("item"))),
+                        predicate: .exists(.label(HeistReferenceName(stringLiteral: "item"))),
                         timeout: 2
                     )))),
             ]
@@ -1155,9 +1174,12 @@ func namedHeistPlanCanDeclareSingularStringRootParameter() throws {
     #expect(heist.parameter == .string(name: "query"))
     #expect(heist.body == [
         .action(try ActionStep(
-            command: .typeText(text: .ref("query"), target: .label("Search")),
+            command: .typeText(
+                reference: HeistReferenceName(stringLiteral: "query"),
+                target: .label("Search")
+            ),
             expectationPolicy: .expect(ActionExpectation(
-                predicate: .exists(.value(.ref("query"))),
+                predicate: .exists(.value(HeistReferenceName(stringLiteral: "query"))),
                 timeout: 2
             )))),
     ])
@@ -1171,7 +1193,7 @@ func namedHeistPlanCanDeclareSingularStringRootParameter() throws {
 
 @Test
 func semanticForEachCallsBodyWithRuntimeIterationTarget() throws {
-    let matching = ElementPredicate.label("Delete")
+    let matching = ElementPredicateTemplate.label("Delete")
     let heist = try HeistPlan {
         ForEach(matching, limit: 20) { element in
             Activate(element)
@@ -1265,7 +1287,7 @@ private func expectInvalidRunHeistName(
     expectedPath: String?,
     expectedMessage: String
 ) throws {
-    let content = ButtonHeistDSL.RunHeist(name)
+    let content = ThePlans.RunHeist(name)
     let contentDiagnostic = try #require(content.heistBuildDiagnostics.first)
     #expect(content.heistBuildDiagnostics.count == 1)
     #expect(contentDiagnostic.code == .dslInvalidInvocationPath)

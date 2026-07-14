@@ -99,27 +99,29 @@ scripts/collect-ios-heist-receipts.sh "$SIM_UDID" "$BUTTONHEIST_CI_RECEIPTS_DIR"
 scripts/write-ci-heist-receipt-manifest.sh "$BUTTONHEIST_CI_RECEIPTS_DIR" ios-tests
 ```
 
-Button Heist owns five explicit `BH Demo`-hosted schemes. Target membership is
+Button Heist owns six explicit `BH Demo`-hosted schemes. Target membership is
 the coverage contract; CI does not partition these suites with test selectors:
 
 | Scheme | Coverage |
 |--------|----------|
-| `TheInsideJobTests` | Core runtime, protocol, and hosted integration tests |
+| `TheInsideJobTests` | Deterministic core runtime and protocol tests |
+| `TheInsideJobIntegrationTests` | Real loopback, TLS, live-window, gesture, and settle integration tests |
 | `DogfoodFeatureFlowTests` | Forms, list/calculator, controls/presentation, repeat-until, and text/paste/foreach flows |
 | `DogfoodRuntimeContractTests` | Advanced actions, public roots/prebuilt plans, runtime control flow, viewport commands, lifecycle, and failed receipts |
 | `AdversarialMutationTests` | Async reveal, dynamic cells, stale live objects, and text-field fallback |
 | `AdversarialNavigationTests` | Offscreen checkout, duplicate labels, modal obstruction, and nested scrolling |
 
 `HostedBehaviorTests` combines the four dogfood and adversarial schemes. CI runs
-two lanes: `TheInsideJobTests` stays serial, while `HostedBehaviorTests` uses two
-Xcode-managed simulator workers. Two workers let the isolated behavior suites
-overlap without multiplying GitHub-hosted runners or overloading one runner
-with four simulators.
+three lanes: `TheInsideJobTests` and `TheInsideJobIntegrationTests` stay serial,
+while `HostedBehaviorTests` uses two Xcode-managed simulator workers. Two workers
+let the isolated behavior suites overlap without multiplying GitHub-hosted
+runners or overloading one runner with four simulators.
 
-Run the core and combined behavior schemes for complete hosted coverage:
+Run the core, integration, and combined behavior schemes for complete hosted coverage:
 
 ```bash
 tuist test TheInsideJobTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
+tuist test TheInsideJobIntegrationTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
 tuist test HostedBehaviorTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
 ```
 

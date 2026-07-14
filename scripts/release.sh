@@ -387,6 +387,7 @@ if [[ "$RUN_TESTS" == true ]]; then
     }
 
     run_hosted_release_suite TheInsideJobTests
+    run_hosted_release_suite TheInsideJobIntegrationTests
     run_hosted_release_suite HostedBehaviorTests
     echo ""
 fi

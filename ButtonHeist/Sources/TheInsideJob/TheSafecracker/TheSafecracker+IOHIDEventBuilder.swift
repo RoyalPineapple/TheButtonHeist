@@ -3,14 +3,8 @@
 import UIKit
 
 // This file bridges to IOKit's private HID event API. Raw SPI names, framework
-// paths, dlsym, and typed C casts live in `ButtonHeistPrivateSPI`; the
-// file-private `nonisolated(unsafe)` globals below only cache resolved function
-// pointers written once on first use and read thereafter. Swift has no
-// structured way to express "write-once, lazily-initialised C function pointer"
-// for synchronous C entry points called from gesture hot paths. This unsafe
-// storage is narrowly scoped to the IOKit bridge; do not introduce further
-// `nonisolated(unsafe)` declarations elsewhere without a comparable
-// justification.
+// paths, dlsym, and typed C casts live in `ButtonHeistPrivateSPI`. The immutable
+// function table below is loaded once on the main actor before touch assembly.
 
 extension TheSafecracker {
 
@@ -85,11 +79,14 @@ extension TheSafecracker {
 @MainActor
 private final class SafecrackerIOHIDEventBuilder {
 
+    private static let functions = SafecrackerIOHIDFunctions.load()
+
     static func createEvent(for fingers: [TheSafecracker.SyntheticTouch]) -> TheSafecracker.HIDEvent? {
+        guard let functions else { return nil }
         let timestamp = mach_absolute_time()
         let anyTouching = fingers.contains { $0.phase != .ended && $0.phase != .cancelled }
 
-        guard let handEvent = IOHIDEventCreateDigitizerEvent(
+        guard let handEvent = functions.createDigitizerEvent(
             kCFAllocatorDefault,
             timestamp,
             UInt32(kIOHIDDigitizerTransducerTypeHand),
@@ -106,7 +103,7 @@ private final class SafecrackerIOHIDEventBuilder {
             0       // options
         ) else { return nil }
 
-        IOHIDEventSetFloatValue(handEvent, UInt32(kIOHIDEventFieldDigitizerIsDisplayIntegrated), 1.0)
+        functions.setFloatValue(handEvent, UInt32(kIOHIDEventFieldDigitizerIsDisplayIntegrated), 1.0)
 
         for (index, finger) in fingers.enumerated() {
             let isTouching = finger.phase == .began || finger.phase == .moved || finger.phase == .stationary
@@ -114,7 +111,7 @@ private final class SafecrackerIOHIDEventBuilder {
                 ? kIOHIDDigitizerEventPosition
                 : (kIOHIDDigitizerEventRange | kIOHIDDigitizerEventTouch)
 
-            let fingerEvent = IOHIDEventCreateDigitizerFingerEventWithQuality(
+            let fingerEvent = functions.createDigitizerFingerEventWithQuality(
                 kCFAllocatorDefault,
                 timestamp,
                 UInt32(index + 1),        // index (1-based position)
@@ -136,8 +133,8 @@ private final class SafecrackerIOHIDEventBuilder {
             )
 
             if let fingerEvent = fingerEvent {
-                IOHIDEventSetFloatValue(fingerEvent, UInt32(kIOHIDEventFieldDigitizerIsDisplayIntegrated), 1.0)
-                IOHIDEventAppendEvent(handEvent, fingerEvent, 0)
+                functions.setFloatValue(fingerEvent, UInt32(kIOHIDEventFieldDigitizerIsDisplayIntegrated), 1.0)
+                functions.appendEvent(handEvent, fingerEvent, 0)
             }
         }
 
@@ -155,109 +152,60 @@ private let kIOHIDEventFieldDigitizerIsDisplayIntegrated: Int = 0x00050001
 
 // MARK: - Dynamic Loading of IOKit Functions
 
-nonisolated(unsafe) private var _IOHIDEventCreateDigitizerEvent:
-    ButtonHeistPrivateSPI.IOHIDEventCreateDigitizerEventFunction = { _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _ in nil }
+@MainActor
+private final class SafecrackerIOHIDFunctions {
+    let createDigitizerEvent: ButtonHeistPrivateSPI.IOHIDEventCreateDigitizerEventFunction
+    let createDigitizerFingerEventWithQuality:
+        ButtonHeistPrivateSPI.IOHIDEventCreateDigitizerFingerEventWithQualityFunction
+    let appendEvent: ButtonHeistPrivateSPI.IOHIDEventAppendEventFunction
+    let setFloatValue: ButtonHeistPrivateSPI.IOHIDEventSetFloatValueFunction
 
-nonisolated(unsafe) private var _IOHIDEventCreateDigitizerFingerEventWithQuality:
-    ButtonHeistPrivateSPI.IOHIDEventCreateDigitizerFingerEventWithQualityFunction = { _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _ in nil }
+    private let libraryHandle: ButtonHeistPrivateSPI.LibraryHandle
 
-nonisolated(unsafe) private var _IOHIDEventAppendEvent:
-    ButtonHeistPrivateSPI.IOHIDEventAppendEventFunction = { _, _, _ in }
-
-nonisolated(unsafe) private var _IOHIDEventSetFloatValue:
-    ButtonHeistPrivateSPI.IOHIDEventSetFloatValueFunction = { _, _, _ in }
-
-nonisolated(unsafe) private var ioHIDFunctionsLoaded = false
-
-private func loadIOHIDFunctions() {
-    guard !ioHIDFunctionsLoaded else { return }
-    ioHIDFunctionsLoaded = true
-
-    guard let handle = ButtonHeistPrivateSPI.open(.ioKit) else {
-        insideJobLogger.error("Failed to load IOKit")
-        return
+    private init(
+        libraryHandle: ButtonHeistPrivateSPI.LibraryHandle,
+        createDigitizerEvent: @escaping ButtonHeistPrivateSPI.IOHIDEventCreateDigitizerEventFunction,
+        createDigitizerFingerEventWithQuality:
+            @escaping ButtonHeistPrivateSPI.IOHIDEventCreateDigitizerFingerEventWithQualityFunction,
+        appendEvent: @escaping ButtonHeistPrivateSPI.IOHIDEventAppendEventFunction,
+        setFloatValue: @escaping ButtonHeistPrivateSPI.IOHIDEventSetFloatValueFunction
+    ) {
+        self.libraryHandle = libraryHandle
+        self.createDigitizerEvent = createDigitizerEvent
+        self.createDigitizerFingerEventWithQuality = createDigitizerFingerEventWithQuality
+        self.appendEvent = appendEvent
+        self.setFloatValue = setFloatValue
     }
 
-    if let function = ButtonHeistPrivateSPI.function(.ioHIDEventCreateDigitizerEvent, in: handle) {
-        _IOHIDEventCreateDigitizerEvent = function
+    static func load() -> SafecrackerIOHIDFunctions? {
+        guard let handle = ButtonHeistPrivateSPI.open(.ioKit) else {
+            insideJobLogger.error("Failed to load IOKit")
+            return nil
+        }
+        guard let createDigitizerEvent = ButtonHeistPrivateSPI.function(
+            .ioHIDEventCreateDigitizerEvent,
+            in: handle
+        ), let createDigitizerFingerEventWithQuality = ButtonHeistPrivateSPI.function(
+            .ioHIDEventCreateDigitizerFingerEventWithQuality,
+            in: handle
+        ), let appendEvent = ButtonHeistPrivateSPI.function(
+            .ioHIDEventAppendEvent,
+            in: handle
+        ), let setFloatValue = ButtonHeistPrivateSPI.function(
+            .ioHIDEventSetFloatValue,
+            in: handle
+        ) else {
+            insideJobLogger.error("Failed to resolve required IOKit HID functions")
+            return nil
+        }
+        return SafecrackerIOHIDFunctions(
+            libraryHandle: handle,
+            createDigitizerEvent: createDigitizerEvent,
+            createDigitizerFingerEventWithQuality: createDigitizerFingerEventWithQuality,
+            appendEvent: appendEvent,
+            setFloatValue: setFloatValue
+        )
     }
-
-    if let function = ButtonHeistPrivateSPI.function(.ioHIDEventCreateDigitizerFingerEventWithQuality, in: handle) {
-        _IOHIDEventCreateDigitizerFingerEventWithQuality = function
-    }
-
-    if let function = ButtonHeistPrivateSPI.function(.ioHIDEventAppendEvent, in: handle) {
-        _IOHIDEventAppendEvent = function
-    }
-
-    if let function = ButtonHeistPrivateSPI.function(.ioHIDEventSetFloatValue, in: handle) {
-        _IOHIDEventSetFloatValue = function
-    }
-}
-
-// swiftlint:disable:next function_parameter_count
-private func IOHIDEventCreateDigitizerEvent(
-    _ allocator: CFAllocator?,
-    _ timestamp: UInt64,
-    _ transducerType: UInt32,
-    _ index: UInt32,
-    _ identity: UInt32,
-    _ eventMask: UInt32,
-    _ buttonMask: UInt32,
-    _ x: Float,
-    _ y: Float,
-    _ z: Float,
-    _ tipPressure: Float,
-    _ barrelPressure: Float,
-    _ twist: Float,
-    _ range: Bool,
-    _ touch: Bool,
-    _ options: UInt32
-) -> UnsafeMutableRawPointer? {
-    loadIOHIDFunctions()
-    return _IOHIDEventCreateDigitizerEvent(
-        allocator, timestamp, transducerType, index, identity, eventMask, buttonMask,
-        x, y, z, tipPressure, barrelPressure, twist, range, touch, options
-    )
-}
-
-// swiftlint:disable:next function_parameter_count
-private func IOHIDEventCreateDigitizerFingerEventWithQuality(
-    _ allocator: CFAllocator?,
-    _ timestamp: UInt64,
-    _ index: UInt32,
-    _ identity: UInt32,
-    _ eventMask: UInt32,
-    _ x: Float,
-    _ y: Float,
-    _ z: Float,
-    _ tipPressure: Float,
-    _ twist: Float,
-    _ majorRadius: Float,
-    _ minorRadius: Float,
-    _ quality: Float,
-    _ density: Float,
-    _ irregularity: Float,
-    _ range: Bool,
-    _ touch: Bool,
-    _ options: UInt32
-) -> UnsafeMutableRawPointer? {
-    loadIOHIDFunctions()
-    return _IOHIDEventCreateDigitizerFingerEventWithQuality(
-        allocator, timestamp, index, identity, eventMask,
-        x, y, z, tipPressure, twist, majorRadius, minorRadius,
-        quality, density, irregularity, range, touch, options
-    )
-}
-
-private func IOHIDEventAppendEvent(_ parent: UnsafeMutableRawPointer, _ child: UnsafeMutableRawPointer, _ options: UInt32) {
-    loadIOHIDFunctions()
-    _IOHIDEventAppendEvent(parent, child, options)
-}
-
-private func IOHIDEventSetFloatValue(_ event: UnsafeMutableRawPointer, _ field: UInt32, _ value: Float) {
-    loadIOHIDFunctions()
-    _IOHIDEventSetFloatValue(event, field, value)
 }
 
 #endif // DEBUG

@@ -30,13 +30,18 @@ sequenceDiagram
     participant RL as main RunLoop
     participant Task as main-actor Task
 
-    Test->>Sync: runHeistSync(name) { steps }
+    Test->>Sync: runHeistSync(name, timeout) { steps }
     Sync->>Task: spawn async run, retain in HeistSyncState
-    loop while state.result == nil
+    loop while state is running and before deadline
         Sync->>RL: RunLoop.current.run(mode .default, 0.05 s slices)
         Note over RL: run loop keeps turning —<br/>timers and callbacks still fire
     end
-    Task-->>Sync: result stored (NSLock-guarded)
+    alt task completes
+        Task-->>Sync: completed(result), task released
+    else deadline expires
+        Sync->>Task: cancel and release task
+        Sync->>Sync: record dedicated XCTest timeout failure
+    end
     Sync-->>Test: Heist? — control returns to the test
 ```
 
@@ -80,7 +85,7 @@ sequenceDiagram
 Notes:
 
 - `runHeist` and `runHeistSync` run the plan in-process; `joinHeist` and `withJoinedHeistSession` start a `TheInsideJob` server inside the test host so an **external** agent can connect (observation and control come from outside, over the same wire as any other client).
-- `runHeistSync` exists so the test method itself can stay synchronous: it polls `HeistSyncState` in 0.05 s run-loop slices until the main-actor task publishes a result.
+- `runHeistSync` exists so the test method itself can stay synchronous: it polls the explicit `HeistSyncState` in run-loop slices until the task publishes a result or the configurable deadline expires. Completion and timeout are terminal states, and either transition releases the owned task.
 - Every XCTest-facing synchronous failure preserves the public caller location and routes through `recordHeistXCTestIssue`, the single `XCTFail` emission path.
 - Bare `joinHeist` never returns — it is for interactive sessions only. Under CI, test watchdogs will kill a parked test; use `withJoinedHeistSession` when the join must end.
 - Receipts can be recorded per run via `HeistTestReceiptRecording` (`.environment`, `.failures`, `.always`).

@@ -54,7 +54,7 @@ public extension HeistActionContent {
         do {
             waiver = try ActionExpectationWaiver(reason)
         } catch {
-            preconditionFailure("ButtonHeistDSL constructed unsupported expectation waiver: \(error)")
+            preconditionFailure("ThePlans constructed unsupported expectation waiver: \(error)")
         }
         return ActionContent(
             command: command,
@@ -128,7 +128,7 @@ public struct RepeatActionUntilContent: HeistContent {
                 )),
             ]
         } catch {
-            preconditionFailure("ButtonHeistDSL constructed unsupported action .until: \(error)")
+            preconditionFailure("ThePlans constructed unsupported action .until: \(error)")
         }
     }
 
@@ -481,7 +481,7 @@ private func makeActionStep(
             expectationPolicy: expectationPolicy
         ))
     } catch {
-        preconditionFailure("ButtonHeistDSL constructed unsupported action command: \(command.wireType.rawValue)")
+        preconditionFailure("ThePlans constructed unsupported action command: \(command.wireType.rawValue)")
     }
 }
 

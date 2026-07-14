@@ -6,7 +6,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 FIXTURE_DIR="$REPO_ROOT/tests/fixtures/buttonheist-external-import-contract"
-DSL_FIXTURE_DIR="$REPO_ROOT/tests/fixtures/buttonheist-dsl-import-contract"
+AUTHORING_FIXTURE_DIR="$REPO_ROOT/tests/fixtures/theplans-authoring-import-contract"
 PUBLIC_PRODUCTS_FIXTURE_DIR="$REPO_ROOT/tests/fixtures/buttonheist-public-products-import-contract"
 IOS_PUBLIC_PRODUCTS_FIXTURE_DIR="$REPO_ROOT/tests/fixtures/buttonheist-ios-public-products-import-contract"
 IOS_SIMULATOR_TRIPLE="${BUTTONHEIST_SWIFT_API_IOS_SIMULATOR_TRIPLE:-arm64-apple-ios17.0-simulator}"
@@ -17,9 +17,15 @@ fail() {
 }
 
 [[ -f "$FIXTURE_DIR/Package.swift" ]] || fail "missing external import fixture Package.swift"
-[[ -f "$DSL_FIXTURE_DIR/Package.swift" ]] || fail "missing DSL import fixture Package.swift"
+[[ -f "$AUTHORING_FIXTURE_DIR/Package.swift" ]] || fail "missing ThePlans authoring import fixture Package.swift"
 [[ -f "$PUBLIC_PRODUCTS_FIXTURE_DIR/Package.swift" ]] || fail "missing public products import fixture Package.swift"
 [[ -f "$IOS_PUBLIC_PRODUCTS_FIXTURE_DIR/Package.swift" ]] || fail "missing iOS public products import fixture Package.swift"
+
+if grep -n 'ButtonHeistDSL' "$REPO_ROOT/Package.swift" "$REPO_ROOT/Project.swift"; then
+    fail "ButtonHeistDSL must not remain a product, target, or scheme; import ThePlans directly"
+fi
+[[ ! -e "$REPO_ROOT/ButtonHeist/Sources/ButtonHeistDSL" ]] \
+    || fail "removed ButtonHeistDSL source facade directory still exists"
 
 "$SCRIPT_DIR/check-source-shape.sh"
 
@@ -31,7 +37,7 @@ normalize_exported_imports() {
 
 EXPORTED_IMPORTS="$(grep -R -nE '^[[:space:]]*@_exported[[:space:]]+import[[:space:]]+' "$REPO_ROOT/ButtonHeist/Sources" | normalize_exported_imports || true)"
 EXPECTED_EXPORTED_IMPORTS="$(cat <<EOF
-ButtonHeist/Sources/ButtonHeistTesting/ButtonHeistTesting.swift:ButtonHeistDSL
+ButtonHeist/Sources/ButtonHeistTesting/ButtonHeistTesting.swift:ThePlans
 ButtonHeist/Sources/TheButtonHeist/Exports.swift:ThePlans
 ButtonHeist/Sources/TheButtonHeist/Exports.swift:TheScore
 ButtonHeist/Sources/TheInsideJob/Heist.swift:TheScore
@@ -54,20 +60,20 @@ if grep -nE 'product:[[:space:]]*"ThePlans"|name:[[:space:]]*"ThePlans"' "$FIXTU
     fail "external import fixture must depend on the ButtonHeist product only, not ThePlans"
 fi
 
-DSL_IMPORTS="$(grep -R -nE '^[[:space:]]*import[[:space:]]+' "$DSL_FIXTURE_DIR/Sources" || true)"
-[[ -n "$DSL_IMPORTS" ]] || fail "DSL import fixture must import ButtonHeistDSL"
-if printf '%s\n' "$DSL_IMPORTS" \
-    | grep -vE '^[^:]+:[0-9]+:[[:space:]]*import[[:space:]]+ButtonHeistDSL([[:space:]]|$)'
+AUTHORING_IMPORTS="$(grep -R -nE '^[[:space:]]*import[[:space:]]+' "$AUTHORING_FIXTURE_DIR/Sources" || true)"
+[[ -n "$AUTHORING_IMPORTS" ]] || fail "authoring import fixture must import ThePlans"
+if printf '%s\n' "$AUTHORING_IMPORTS" \
+    | grep -vE '^[^:]+:[0-9]+:[[:space:]]*import[[:space:]]+ThePlans([[:space:]]|$)'
 then
-    fail "DSL import fixture must import ButtonHeistDSL only"
+    fail "authoring import fixture must import ThePlans only"
 fi
 
-if grep -nE 'product:[[:space:]]*"ThePlans"|name:[[:space:]]*"ThePlans"' "$DSL_FIXTURE_DIR/Package.swift"; then
-    fail "DSL import fixture must depend on the ButtonHeistDSL product only, not ThePlans"
+if grep -nE 'product:[[:space:]]*"ButtonHeistDSL"|name:[[:space:]]*"ButtonHeistDSL"' "$AUTHORING_FIXTURE_DIR/Package.swift"; then
+    fail "authoring import fixture must depend on ThePlans directly, not the removed ButtonHeistDSL facade"
 fi
 
 PUBLIC_PRODUCT_IMPORTS="$(grep -R -nE '^[[:space:]]*import[[:space:]]+' "$PUBLIC_PRODUCTS_FIXTURE_DIR/Sources" || true)"
-for product in ThePlans TheScore ButtonHeistDSL ButtonHeist; do
+for product in ThePlans TheScore ButtonHeist; do
     if ! printf '%s\n' "$PUBLIC_PRODUCT_IMPORTS" \
         | grep -Eq "^[^:]+:[0-9]+:[[:space:]]*import[[:space:]]+$product([[:space:]]|$)"
     then
@@ -96,7 +102,7 @@ cleanup() {
     rm -rf "$SCRATCH_PATH"
     rm -rf "$SWIFT_CACHE_PATH"
     rm -f "$FIXTURE_DIR/Package.resolved"
-    rm -f "$DSL_FIXTURE_DIR/Package.resolved"
+    rm -f "$AUTHORING_FIXTURE_DIR/Package.resolved"
     rm -f "$PUBLIC_PRODUCTS_FIXTURE_DIR/Package.resolved"
     rm -f "$IOS_PUBLIC_PRODUCTS_FIXTURE_DIR/Package.resolved"
 }
@@ -119,7 +125,7 @@ build_fixture() {
 }
 
 build_fixture "external ButtonHeist import contract fixture" "$FIXTURE_DIR"
-build_fixture "external ButtonHeistDSL import contract fixture" "$DSL_FIXTURE_DIR"
+build_fixture "external ThePlans authoring import contract fixture" "$AUTHORING_FIXTURE_DIR"
 build_fixture "external public Swift product import contract fixture" "$PUBLIC_PRODUCTS_FIXTURE_DIR"
 build_fixture \
     "iOS DEBUG public products import contract fixture" \
@@ -128,35 +134,27 @@ build_fixture \
     --sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" \
     -Xswiftc -DDEBUG
 
-NEGATIVE_DSL_PROBE_DIR="$SCRATCH_PATH/buttonheist-dsl-negative-import-probes"
+NEGATIVE_THEPLANS_PROBE_DIR="$SCRATCH_PATH/theplans-negative-import-probes"
 NEGATIVE_BUTTONHEIST_PROBE_DIR="$SCRATCH_PATH/buttonheist-negative-import-probes"
 mkdir -p \
-    "$NEGATIVE_DSL_PROBE_DIR/Sources/ButtonHeistDSLRawSymbolProbe" \
-    "$NEGATIVE_DSL_PROBE_DIR/Sources/ButtonHeistDSLNegativeTheScoreImportProbe" \
+    "$NEGATIVE_THEPLANS_PROBE_DIR/Sources/ThePlansNegativeTheScoreImportProbe" \
     "$NEGATIVE_BUTTONHEIST_PROBE_DIR/Sources/ButtonHeistNegativeTheInsideJobImportProbe" \
     "$NEGATIVE_BUTTONHEIST_PROBE_DIR/Sources/ButtonHeistNegativeTestingImportProbe"
-cat > "$NEGATIVE_DSL_PROBE_DIR/Package.swift" <<EOF
+cat > "$NEGATIVE_THEPLANS_PROBE_DIR/Package.swift" <<EOF
 // swift-tools-version: 6.0
 import PackageDescription
 
 let package = Package(
-    name: "ButtonHeistDSLNegativeImportProbes",
+    name: "ThePlansNegativeImportProbes",
     platforms: [.macOS(.v14)],
     dependencies: [
         .package(name: "ButtonHeist", path: "$REPO_ROOT")
     ],
     targets: [
         .executableTarget(
-            name: "ButtonHeistDSLRawSymbolProbe",
+            name: "ThePlansNegativeTheScoreImportProbe",
             dependencies: [
-                .product(name: "ButtonHeistDSL", package: "ButtonHeist")
-            ],
-            swiftSettings: [.swiftLanguageMode(.v6)]
-        ),
-        .executableTarget(
-            name: "ButtonHeistDSLNegativeTheScoreImportProbe",
-            dependencies: [
-                .product(name: "ButtonHeistDSL", package: "ButtonHeist")
+                .product(name: "ThePlans", package: "ButtonHeist")
             ],
             swiftSettings: [.swiftLanguageMode(.v6)]
         )
@@ -191,15 +189,6 @@ let package = Package(
     ]
 )
 EOF
-cat > "$NEGATIVE_DSL_PROBE_DIR/Sources/ButtonHeistDSLRawSymbolProbe/main.swift" <<'EOF'
-import ButtonHeistDSL
-
-let command = HeistActionCommand.takeScreenshot
-let step = try ActionStep(command: command)
-let compiler = HeistPlanSourceCompiler()
-let planning = HeistPlanning.rejectRawStructuredJSONIRSourceFieldsResult
-_ = (step, compiler, planning)
-EOF
 cat > "$NEGATIVE_BUTTONHEIST_PROBE_DIR/Sources/ButtonHeistNegativeTheInsideJobImportProbe/main.swift" <<'EOF'
 import TheInsideJob
 
@@ -210,10 +199,10 @@ import ButtonHeistTesting
 
 print("ButtonHeistTesting must not be importable through ButtonHeist")
 EOF
-cat > "$NEGATIVE_DSL_PROBE_DIR/Sources/ButtonHeistDSLNegativeTheScoreImportProbe/main.swift" <<'EOF'
+cat > "$NEGATIVE_THEPLANS_PROBE_DIR/Sources/ThePlansNegativeTheScoreImportProbe/main.swift" <<'EOF'
 import TheScore
 
-print("TheScore must not be importable through ButtonHeistDSL")
+print("TheScore must not be importable through ThePlans")
 EOF
 
 negative_probe() {
@@ -227,11 +216,6 @@ negative_probe() {
 }
 
 negative_probe \
-    "negative ButtonHeistDSL raw symbol probe" \
-    "$NEGATIVE_DSL_PROBE_DIR" \
-    "ButtonHeistDSLRawSymbolProbe" \
-    "ButtonHeistDSL import exposed raw ThePlans symbols"
-negative_probe \
     "negative ButtonHeist -> TheInsideJob import probe" \
     "$NEGATIVE_BUTTONHEIST_PROBE_DIR" \
     "ButtonHeistNegativeTheInsideJobImportProbe" \
@@ -242,7 +226,7 @@ negative_probe \
     "ButtonHeistNegativeTestingImportProbe" \
     "ButtonHeist exposed disallowed import ButtonHeistTesting"
 negative_probe \
-    "negative ButtonHeistDSL -> TheScore import probe" \
-    "$NEGATIVE_DSL_PROBE_DIR" \
-    "ButtonHeistDSLNegativeTheScoreImportProbe" \
-    "ButtonHeistDSL exposed disallowed import TheScore"
+    "negative ThePlans -> TheScore import probe" \
+    "$NEGATIVE_THEPLANS_PROBE_DIR" \
+    "ThePlansNegativeTheScoreImportProbe" \
+    "ThePlans exposed disallowed import TheScore"

@@ -1,9 +1,9 @@
-import ButtonHeistDSL
+import ThePlans
 
 @main
-struct ButtonHeistDSLImportContract {
+struct ThePlansAuthoringImportContract {
     static func main() throws {
-        _ = try HeistPlan("dsl-import-contract") {
+        _ = try HeistPlan("theplans-authoring-import-contract") {
             Activate(.label("Pay"))
                 .expect(.changed(.screen()), timeout: .seconds(2))
 

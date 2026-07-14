@@ -53,6 +53,9 @@ public struct ElementPredicateTemplate: Codable, Sendable, Equatable, Hashable {
 
     package func resolve(in environment: HeistExecutionEnvironment) throws -> ElementPredicate {
         let resolved = ElementPredicate(core: try core.map { try $0.resolve(in: environment) })
+        if let mode = resolved.core.invalidEmptyBroadMode {
+            throw HeistExpressionError.invalidStringMatch(mode: mode.rawValue)
+        }
         if let description = resolved.invalidEmptyPayloadDescription {
             throw InvalidResolvedElementPredicateError(reason: description)
         }

@@ -254,6 +254,9 @@ jobs:
           - lane: core
             scheme: TheInsideJobTests
             device: iPhone 16 Pro
+          - lane: integration
+            scheme: TheInsideJobIntegrationTests
+            device: iPhone 16 Pro
           - lane: hosted-behavior
             scheme: HostedBehaviorTests
             device: iPhone 16 Pro
@@ -337,17 +340,12 @@ jobs:
               "$@"
           }
 
-          if [[ "${{ matrix.lane }}" == "core" ]]; then
-            run_hosted_tests \
-              -skip-testing TheInsideJobTests/SimpleSocketServerIntegrationTests \
-              -skip-testing TheInsideJobTests/SocketClientRegistryTests \
-              -skip-testing TheInsideJobTests/SocketClientLifecycleTests \
-              -skip-testing TheInsideJobTests/TLSIntegrationTests \
-              -skip-testing TheInsideJobTests/TheSafecrackerIntegrationTests
-          else
+          if [[ "${{ matrix.lane }}" == "hosted-behavior" ]]; then
             run_hosted_tests \
               -parallel-testing-enabled YES \
               -parallel-testing-worker-count 2
+          else
+            run_hosted_tests
           fi
 
       - name: Collect iOS heist receipts

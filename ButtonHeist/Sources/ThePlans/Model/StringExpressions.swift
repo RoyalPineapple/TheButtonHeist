@@ -148,6 +148,10 @@ extension StringMatchCore: Equatable where Value: Equatable {}
 extension StringMatchCore: Hashable where Value: Hashable {}
 
 package extension StringMatchCore where Value: StringMatchLeaf {
+    var invalidEmptyBroadMode: StringMatch.Mode? {
+        hasInvalidEmptyBroadLiteral ? mode : nil
+    }
+
     var hasInvalidEmptyBroadLiteral: Bool {
         switch self {
         case .contains(let value), .prefix(let value), .suffix(let value):

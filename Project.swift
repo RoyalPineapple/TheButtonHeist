@@ -75,7 +75,22 @@ let hostedTestDescriptors = [
     HostedTestDescriptor(
         name: "TheInsideJobTests",
         bundleId: "com.buttonheist.theinsidejob.tests",
-        sources: ["ButtonHeist/Tests/TheInsideJobTests/**"],
+        sources: .sourceFilesList(globs: [
+            .glob(
+                "ButtonHeist/Tests/TheInsideJobTests/**",
+                excluding: ["ButtonHeist/Tests/TheInsideJobTests/**/*IntegrationTests.swift"]
+            ),
+        ]),
+        runsInBehaviorSuite: false
+    ),
+    HostedTestDescriptor(
+        name: "TheInsideJobIntegrationTests",
+        bundleId: "com.buttonheist.theinsidejob.integration.tests",
+        sources: [
+            "ButtonHeist/Tests/TheInsideJobTests/**/*IntegrationTests.swift",
+            "ButtonHeist/Tests/TheInsideJobTests/Helpers/**",
+            "ButtonHeist/Tests/TheInsideJobTests/KeyboardWindowTestHelpers.swift",
+        ],
         runsInBehaviorSuite: false
     ),
     HostedTestDescriptor(
@@ -167,24 +182,6 @@ let project = Project(
             ])
         ),
 
-        // MARK: - Swift Heist Authoring DSL (client-side)
-        .target(
-            name: "ButtonHeistDSL",
-            destinations: [.iPhone, .iPad, .mac],
-            product: .framework,
-            bundleId: "com.buttonheist.dsl",
-            deploymentTargets: .multiplatform(iOS: "17.0", macOS: "14.0"),
-            infoPlist: .default,
-            sources: ["ButtonHeist/Sources/ButtonHeistDSL/**"],
-            dependencies: [
-                .target(name: "ThePlans"),
-            ],
-            settings: .settings(base: [
-                "SWIFT_VERSION": "6",
-                "LastSwiftMigration": "2620",
-            ])
-        ),
-
         // MARK: - iOS Server Framework (embeds in iOS apps)
         // Includes ThePlant for automatic initialization via ObjC +load
         .target(
@@ -224,8 +221,8 @@ let project = Project(
             sources: ["ButtonHeist/Sources/ButtonHeistTesting/**"],
 
             dependencies: [
-                .target(name: "ButtonHeistDSL"),
                 .target(name: "TheInsideJob"),
+                .target(name: "ThePlans"),
             ],
             settings: .settings(base: [
                 "ENABLE_TESTING_SEARCH_PATHS": "YES",
@@ -333,22 +330,6 @@ let project = Project(
             ]
         ),
 
-        // MARK: - ButtonHeistDSL Tests
-        .target(
-            name: "ButtonHeistDSLTests",
-            destinations: .macOS,
-            product: .unitTests,
-            bundleId: "com.buttonheist.dsl.tests",
-            deploymentTargets: .macOS("14.0"),
-            infoPlist: .default,
-            sources: ["ButtonHeist/Tests/ButtonHeistDSLTests/**"],
-            dependencies: [
-                .target(name: "ButtonHeistDSL"),
-                .target(name: "ThePlans"),
-                .target(name: "TheScore"),
-            ]
-        ),
-
         // MARK: - ButtonHeist Tests
         .target(
             name: "ButtonHeistTests",
@@ -372,7 +353,6 @@ let project = Project(
     schemes: [
         frameworkScheme(name: "ThePlans"),
         frameworkScheme(name: "TheScore"),
-        frameworkScheme(name: "ButtonHeistDSL"),
         frameworkScheme(name: "ButtonHeist"),
         frameworkScheme(name: "ButtonHeistSupport"),
         frameworkScheme(name: "ButtonHeistTesting"),
@@ -411,18 +391,6 @@ let project = Project(
             ]),
             testAction: .targets([
                 .testableTarget(target: .target("TheScoreTests")),
-            ])
-        ),
-        .scheme(
-            name: "ButtonHeistDSLTests",
-            buildAction: .buildAction(targets: [
-                .target("ButtonHeistDSLTests"),
-                .target("ButtonHeistDSL"),
-                .target("ThePlans"),
-                .target("TheScore"),
-            ]),
-            testAction: .targets([
-                .testableTarget(target: .target("ButtonHeistDSLTests")),
             ])
         ),
         .scheme(

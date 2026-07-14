@@ -2,21 +2,21 @@
 import PackageDescription
 
 let package = Package(
-    name: "ButtonHeistDSLImportContract",
+    name: "ThePlansAuthoringImportContract",
     platforms: [
         .macOS(.v14),
     ],
     products: [
-        .executable(name: "buttonheist-dsl-import-contract", targets: ["ButtonHeistDSLImportContract"]),
+        .executable(name: "theplans-authoring-import-contract", targets: ["ThePlansAuthoringImportContract"]),
     ],
     dependencies: [
         .package(name: "ButtonHeist", path: "../../.."),
     ],
     targets: [
         .executableTarget(
-            name: "ButtonHeistDSLImportContract",
+            name: "ThePlansAuthoringImportContract",
             dependencies: [
-                .product(name: "ButtonHeistDSL", package: "ButtonHeist"),
+                .product(name: "ThePlans", package: "ButtonHeist"),
             ],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),

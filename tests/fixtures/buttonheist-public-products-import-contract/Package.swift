@@ -18,7 +18,6 @@ let package = Package(
             dependencies: [
                 .product(name: "ThePlans", package: "ButtonHeist"),
                 .product(name: "TheScore", package: "ButtonHeist"),
-                .product(name: "ButtonHeistDSL", package: "ButtonHeist"),
                 .product(name: "ButtonHeist", package: "ButtonHeist"),
             ],
             swiftSettings: [.swiftLanguageMode(.v6)]
