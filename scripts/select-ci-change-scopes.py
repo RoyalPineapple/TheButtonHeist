@@ -11,8 +11,8 @@ from pathlib import Path
 
 PACKAGE_API = "run_package_api_contracts"
 CLI_TOOLS = "run_cli_tool_tests"
-SOURCE_SHAPE_SELF_TEST = "run_source_shape_self_test"
-SCOPES = (PACKAGE_API, CLI_TOOLS, SOURCE_SHAPE_SELF_TEST)
+BUMPER_RULE_TESTS = "run_bumper_rule_tests"
+SCOPES = (PACKAGE_API, CLI_TOOLS, BUMPER_RULE_TESTS)
 
 DOCUMENTATION_FILES = {
     "AGENTS.md",
@@ -23,14 +23,13 @@ DOCUMENTATION_FILES = {
 }
 DOCUMENTATION_PREFIXES = ("docs/",)
 
-SOURCE_SHAPE_PATHS = {
+BUMPER_RULE_PATHS = {
     "BumperBowling.swift",
     "docs/BUMPER-RULES.md",
     "scripts/check-bumper-rule-documentation.sh",
     "scripts/check-source-shape.sh",
-    "scripts/tests/check-source-shape-test.sh",
 }
-SOURCE_SHAPE_PREFIXES = (".bumper/",)
+BUMPER_RULE_PREFIXES = (".bumper/",)
 
 PACKAGE_CONTRACT_PATHS = {
     "Package.resolved",
@@ -100,8 +99,8 @@ def is_documentation(path: str) -> bool:
 
 def scopes_for_path(path: str) -> set[str]:
     """Return scopes affected by one path, failing open for unknown paths."""
-    if path in SOURCE_SHAPE_PATHS or has_prefix(path, SOURCE_SHAPE_PREFIXES):
-        return {SOURCE_SHAPE_SELF_TEST}
+    if path in BUMPER_RULE_PATHS or has_prefix(path, BUMPER_RULE_PREFIXES):
+        return {BUMPER_RULE_TESTS}
 
     if is_documentation(path):
         return set()

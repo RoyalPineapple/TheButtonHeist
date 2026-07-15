@@ -6,12 +6,26 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="${BUTTONHEIST_SOURCE_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 BUMPER_BOWLING_REPOSITORY="${BUMPER_BOWLING_REPOSITORY:-https://github.com/RoyalPineapple/BumperBowling.git}"
-BUMPER_BOWLING_REVISION="${BUMPER_BOWLING_REVISION:-4b858d28cb667338898e3cc8730ba25fcc7ccbe3}"
+BUMPER_BOWLING_REVISION="${BUMPER_BOWLING_REVISION:-971cb79942baa79606170f63c13ba811270e216b}"
 BUMPER_BOWLING_CHECKOUT="${BUMPER_BOWLING_CHECKOUT:-$REPO_ROOT/.build/bumper-bowling}"
 BUMPER_CACHE_DIR="${BUMPER_CACHE_DIR:-$REPO_ROOT/.build/bumper-cache}"
 BUMPER_EVALUATION_TIMEOUT_SECONDS="${BUMPER_EVALUATION_TIMEOUT_SECONDS:-300}"
 BUMPER_RUNNER_BUILD_CONFIGURATION="${BUMPER_RUNNER_BUILD_CONFIGURATION:-debug}"
 export BUMPER_CACHE_DIR BUMPER_EVALUATION_TIMEOUT_SECONDS BUMPER_RUNNER_BUILD_CONFIGURATION
+
+if (( $# > 1 )); then
+    echo "Usage: scripts/check-source-shape.sh [lint|test]" >&2
+    exit 2
+fi
+
+COMMAND="${1:-lint}"
+case "$COMMAND" in
+    lint|test) ;;
+    *)
+        echo "Usage: scripts/check-source-shape.sh [lint|test]" >&2
+        exit 2
+        ;;
+esac
 
 fetch_bumper_revision() {
     local checkout="$1"
@@ -39,7 +53,7 @@ ensure_bumper_checkout() {
 
 run_bumper() {
     if [[ -n "${BUMPER:-}" ]]; then
-        "$BUMPER" lint "$REPO_ROOT" --fail-on error
+        run_bumper_binary "$BUMPER"
         return
     fi
 
@@ -58,7 +72,20 @@ run_bumper_from_package() {
 
     swift build --package-path "$package_path" --product bumper >/dev/null
     binary_path="$(swift build --package-path "$package_path" --show-bin-path)/bumper"
-    "$binary_path" lint "$REPO_ROOT" --fail-on error
+    run_bumper_binary "$binary_path"
+}
+
+run_bumper_binary() {
+    local binary_path="$1"
+
+    case "$COMMAND" in
+        lint)
+            "$binary_path" lint "$REPO_ROOT" --fail-on error
+            ;;
+        test)
+            "$binary_path" test "$REPO_ROOT"
+            ;;
+    esac
 }
 
 run_bumper
