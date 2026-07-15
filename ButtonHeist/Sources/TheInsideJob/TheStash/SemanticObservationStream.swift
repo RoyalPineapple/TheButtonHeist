@@ -162,7 +162,18 @@ internal final class SemanticObservationStream {
         if timeout == 0 {
             guard isActive else { return nil }
             if scope == .discovery {
-                await cycles.waitForNextCycle(scope: scope, after: cycles.cursor())
+                let fulfillment = await cycles.waitForNextCycle(
+                    scope: scope,
+                    after: cycles.cursor()
+                )
+                guard let fulfillment else { return nil }
+                if let event = fulfilledEvent(
+                    fulfillment,
+                    scope: scope,
+                    after: requiredSequence
+                ) {
+                    return event
+                }
             }
             return observationLog.cleanEvent(scope: scope, after: requiredSequence)
         }
@@ -174,7 +185,18 @@ internal final class SemanticObservationStream {
         }
 
         if isActive {
-            await cycles.waitForNextCycle(scope: scope, after: cycles.cursor())
+            let fulfillment = await cycles.waitForNextCycle(
+                scope: scope,
+                after: cycles.cursor()
+            )
+            guard let fulfillment else { return nil }
+            if let event = fulfilledEvent(
+                fulfillment,
+                scope: scope,
+                after: requiredSequence
+            ) {
+                return event
+            }
             if let latest = observationLog.cleanEvent(scope: scope, after: requiredSequence) {
                 return latest
             }
@@ -643,6 +665,16 @@ internal final class SemanticObservationStream {
         return nil
     }
 
+    private func fulfilledEvent(
+        _ fulfillment: SemanticObservationCycles.CycleFulfillment,
+        scope: SemanticObservationScope,
+        after sequence: SettledObservationSequence?
+    ) -> SettledSemanticObservationEvent? {
+        guard let settledSequence = fulfillment.settledSequence,
+              settledSequence > (sequence ?? 0) else { return nil }
+        return observationLog.event(scope: scope, sequence: settledSequence)
+    }
+
     private func runPassiveObservationCycle() async {
         let scope = subscribedObservationScope()
         guard case .started(let cycle) = cycles.beginCycle(scope: scope) else {
@@ -650,23 +682,25 @@ internal final class SemanticObservationStream {
             return
         }
         guard !Task.isCancelled else {
-            cycles.finishCycle(token: cycle, didObserve: false)
+            cycles.finishCycle(token: cycle, result: .interrupted)
             return
         }
-        let didObserve = await performObservationCycle(scope: scope)
+        let result = await performObservationCycle(scope: scope)
         guard !Task.isCancelled else {
-            cycles.finishCycle(token: cycle, didObserve: false)
+            cycles.finishCycle(token: cycle, result: .interrupted)
             return
         }
-        cycles.finishCycle(token: cycle, didObserve: didObserve)
-        guard didObserve else { return }
+        cycles.finishCycle(token: cycle, result: result)
+        guard case .completed = result else { return }
         await Task.yield()
     }
 
-    private func performObservationCycle(scope: SemanticObservationScope) async -> Bool {
+    private func performObservationCycle(
+        scope: SemanticObservationScope
+    ) async -> SemanticObservationCycles.CycleResult {
         guard let stash else {
             stop()
-            return false
+            return .interrupted
         }
         switch scope {
         case .visible:
@@ -674,22 +708,24 @@ internal final class SemanticObservationStream {
         case .discovery:
             guard let discovery = runtimeState.discovery else {
                 invalidateLatestSettledObservation()
-                return true
+                return .completed(settledSequence: nil)
             }
             guard let exploration = await discovery() else {
                 invalidateLatestSettledObservation()
-                return true
+                return .completed(settledSequence: nil)
             }
-            guard !Task.isCancelled else { return false }
-            guard commitExploredDiscoveryObservation(exploration) != nil else {
+            guard !Task.isCancelled else { return .interrupted }
+            guard let event = commitExploredDiscoveryObservation(exploration) else {
                 invalidateLatestSettledObservation()
-                return true
+                return .completed(settledSequence: nil)
             }
-            return true
+            return .completed(settledSequence: event.sequence)
         }
     }
 
-    private func observeVisibleSemanticState(stash: TheStash) async -> Bool {
+    private func observeVisibleSemanticState(
+        stash: TheStash
+    ) async -> SemanticObservationCycles.CycleResult {
         let baselineSignal = tripwire.tripwireSignal()
         let settle: SettleSession.Outcome
         let layerGateWasClear: Bool?
@@ -707,7 +743,7 @@ internal final class SemanticObservationStream {
                !latestSettledObservationInvalidated,
                runtimeState.settledReading?.tick == reading.tick {
                 _ = await Task.cancellableSleep(for: .milliseconds(100))
-                return true
+                return .completed(settledSequence: nil)
             }
             // Layer quiet is advisory. AX-tree stability is the commit proof.
             layerGateWasClear = tripwire.latestReading?.isSettled ?? tripwire.allClear()
@@ -721,10 +757,10 @@ internal final class SemanticObservationStream {
             settle,
             stash: stash,
             layerGateWasClear: layerGateWasClear
-        ) else { return true }
-        guard !Task.isCancelled else { return false }
-        _ = commitSettledVisibleObservation(proof)
-        return true
+        ) else { return .completed(settledSequence: nil) }
+        guard !Task.isCancelled else { return .interrupted }
+        let event = commitSettledVisibleObservation(proof)
+        return .completed(settledSequence: event.sequence)
     }
 
     private func admitSettledProof(

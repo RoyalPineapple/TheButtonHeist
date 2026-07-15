@@ -412,7 +412,7 @@ final class SemanticObservationStreamTests: XCTestCase {
             await self.stash.semanticObservationStream.settledEvent(
                 scope: .discovery,
                 after: nil,
-                timeout: 60
+                timeout: 1
             )
         }
         await fulfillment(of: [discoveryStarted], timeout: 5)
