@@ -111,19 +111,19 @@ import TheScore
         let invalidOutcomes = [
             (
                 #"{"type":"passed","failure":{},"children":[]}"#,
-                "passed heist execution step outcome must not include failure"
+                ["passed heist execution step outcome must not include failure"]
             ),
             (
                 #"{"type":"failed","abortedAtChildPath":"$.body[0]","failure":{},"children":[]}"#,
-                "failed heist execution step outcome must not include abortedAtChildPath"
+                ["failed heist execution step outcome must not include abortedAtChildPath"]
             ),
             (
                 #"{"type":"skipped","evidence":{},"children":[]}"#,
-                "skipped heist execution step outcome must not include evidence"
+                ["skipped heist execution step outcome must not include evidence"]
             ),
             (
                 #"{"type":"child_aborted","status":"failed","children":[]}"#,
-                "Unknown heist execution step outcome field \"status\""
+                ["Unknown heist execution step outcome field", "status"]
             ),
         ]
 
@@ -142,7 +142,7 @@ import TheScore
             }
             """
 
-            try expectReceiptDecodeError(json, containing: expectedError)
+            try expectReceiptDecodeError(Data(json.utf8), containing: expectedError)
         }
     }
 
@@ -159,9 +159,9 @@ import TheScore
         actionWithLegacyField["legacy"] = true
 
         let invalidEvidence = [
-            (unwrappedAction, "Unknown heist step evidence field"),
-            (["action": actionWithLegacyField], "Unknown heist step evidence payload field \"legacy\""),
-            (["action": action, "wait": action], "heist step evidence must contain exactly one evidence case"),
+            (unwrappedAction, ["Unknown heist step evidence field"]),
+            (["action": actionWithLegacyField], ["Unknown heist step evidence payload field", "legacy"]),
+            (["action": action, "wait": action], ["heist step evidence must contain exactly one evidence case"]),
         ]
 
         for (replacement, expectedError) in invalidEvidence {
@@ -338,12 +338,21 @@ import TheScore
         _ data: Data,
         containing substring: String
     ) throws {
+        try expectReceiptDecodeError(data, containing: [substring])
+    }
+
+    private func expectReceiptDecodeError(
+        _ data: Data,
+        containing substrings: [String]
+    ) throws {
         do {
             _ = try HeistReceiptCodec.decode(data, format: .json)
             Issue.record("Expected receipt decode to fail")
         } catch {
             let description = String(describing: error)
-            #expect(description.contains(substring), "\(description) did not contain \(substring)")
+            for substring in substrings {
+                #expect(description.contains(substring), "\(description) did not contain \(substring)")
+            }
         }
     }
 
