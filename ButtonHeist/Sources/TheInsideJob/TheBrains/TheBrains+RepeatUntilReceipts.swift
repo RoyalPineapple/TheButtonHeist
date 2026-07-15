@@ -16,11 +16,6 @@ extension TheBrains.RepeatUntil {
             failure: HeistFailureDetail,
             children: [HeistExecutionStepResult]
         )
-        case initialUnavailable(
-            evidence: HeistRepeatUntilEvidence,
-            failure: HeistFailureDetail,
-            children: [HeistExecutionStepResult]
-        )
         case bodyFailed(
             evidence: HeistRepeatUntilEvidence,
             failure: HeistFailureDetail,
@@ -70,26 +65,6 @@ extension TheBrains.RepeatUntil {
                     ),
                     children: terminal.children
                 )
-            case .initialObservationUnavailable(let receipt):
-                let failureReason = "could not observe settled semantic hierarchy before evaluating repeat_until"
-                self = .initialUnavailable(
-                    evidence: HeistRepeatUntilEvidence.failed(
-                        predicate: step.predicateExpression,
-                        timeout: step.timeout,
-                        iterationCount: 0,
-                        expectation: Terminal.initialObservationUnavailableExpectation(
-                            step: step,
-                            receipt: receipt
-                        ),
-                        lastObservedSummary: receipt.observationSummary,
-                        failureReason: failureReason
-                    ),
-                    failure: Self.failureDetail(
-                        step: step,
-                        observed: failureReason
-                    ),
-                    children: terminal.children
-                )
             case .bodyFailed(let observation, let expectation, let iterationIndex, let childPath, _):
                 let failureReason = "iteration \(iterationIndex) failed at \(childPath)"
                 self = .bodyFailed(
@@ -98,7 +73,7 @@ extension TheBrains.RepeatUntil {
                         timeout: step.timeout,
                         iterationCount: iterationIndex + 1,
                         expectation: expectation,
-                        lastObservedSummary: observation.summary,
+                        lastObservedSummary: observation?.summary,
                         failureReason: failureReason
                     ),
                     failure: Self.failureDetail(
@@ -143,7 +118,6 @@ extension TheBrains.RepeatUntil {
             switch self {
             case .predicateMet(let evidence, _),
                  .timedOut(let evidence, _, _),
-                 .initialUnavailable(let evidence, _, _),
                  .bodyFailed(let evidence, _, _),
                  .timeoutHandledByElse(let evidence, _),
                  .timeoutElseFailed(let evidence, _, _):
@@ -155,7 +129,6 @@ extension TheBrains.RepeatUntil {
             switch self {
             case .predicateMet(_, let children),
                  .timedOut(_, _, let children),
-                 .initialUnavailable(_, _, let children),
                  .bodyFailed(_, _, let children),
                  .timeoutHandledByElse(_, let children),
                  .timeoutElseFailed(_, _, let children):
@@ -179,8 +152,7 @@ extension TheBrains.RepeatUntil {
                     evidence: .repeatUntil(evidence),
                     children: children
                 )
-            case .timedOut(_, let failure, _),
-                 .initialUnavailable(_, let failure, _):
+            case .timedOut(_, let failure, _):
                 return TheBrains.HeistReceiptRequest(
                     path: path,
                     kind: .repeatUntil,

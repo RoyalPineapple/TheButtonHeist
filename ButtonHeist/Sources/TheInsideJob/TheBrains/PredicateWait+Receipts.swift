@@ -5,111 +5,6 @@ import ThePlans
 import TheScore
 
 extension PredicateWait {
-    internal func waitReceiptWithoutInitialObservation(
-        for step: ResolvedWaitRuntimeInput,
-        initialTrace: AccessibilityTrace?,
-        start: CFAbsoluteTime,
-        shouldPoll: Bool,
-        observationScope: SemanticObservationScope,
-        changeBaseline: PredicateChangeBaselineSource
-    ) async -> HeistWaitReceipt {
-        var state = State(predicate: step.predicateExpression)
-        var stream = PredicateObservationStreamState()
-        let reducer = Reducer()
-
-        if shouldPoll {
-            var waitState = state
-            let pollResult = await PredicatePollingEngine<Decision>(
-                observeSemanticState: observeSemanticState
-            ).poll(
-                scope: observationScope,
-                timeout: step.timeout,
-                start: start,
-                after: nil,
-                pollWhenTimeoutZero: false,
-                discoveryBootstrap: .afterInitialDiscoveryAttempt,
-                evaluate: { observation in
-                    let baselineSeed: PredicateObservationBaselineSeed
-                    if stream.observationBaseline != nil {
-                        baselineSeed = .preserve
-                    } else {
-                        switch changeBaseline {
-                        case .establishFromFirstObservation:
-                            baselineSeed = .previousObservationIfAvailable
-                        case .supplied(let suppliedBaseline):
-                            baselineSeed = suppliedBaseline.map(PredicateObservationBaselineSeed.supplied)
-                                ?? .preserve
-                        }
-                    }
-                    let reduced = reduceObservation(
-                        observation,
-                        predicate: step.predicate,
-                        predicateExpression: step.predicateExpression,
-                        baselineSeed: baselineSeed,
-                        stream: stream
-                    )
-                    stream = reduced.state
-                    let decision = reducer.decision(
-                        after: .observation(Snapshot(reduced.reduction)),
-                        reducing: waitState,
-                        timedOutWhenUnmatched: false
-                    )
-                    waitState = decision.state
-                    return decision
-                },
-                isMatched: \.isSatisfied
-            )
-
-            state = pollResult.last?.evaluation.state ?? waitState
-            if let decision = pollResult.last?.evaluation {
-                if let receipt = terminalReceipt(for: decision, step: step, state: &state, start: start) {
-                    return receipt
-                }
-            }
-        }
-
-        if let receipt = terminalReceipt(
-            for: reducer.decision(state, timedOutWhenUnmatched: false),
-            step: step,
-            state: &state,
-            start: start
-        ) {
-            return receipt
-        }
-
-        if let traceEvaluation = initialTraceChangeEvaluation(
-            for: step,
-            initialTrace: initialTrace
-        ) {
-            return waitReceipt(
-                for: step,
-                trace: initialTrace,
-                observationSummary: nil,
-                expectation: traceEvaluation,
-                start: start,
-                success: traceEvaluation.met
-            )
-        }
-        return waitReceipt(for: step, state: state, start: start, success: false)
-    }
-
-    internal func terminalReceipt(
-        for decision: Decision,
-        step: ResolvedWaitRuntimeInput,
-        state: inout State,
-        start: CFAbsoluteTime
-    ) -> HeistWaitReceipt? {
-        state = decision.state
-        switch decision {
-        case .satisfied:
-            return waitReceipt(for: step, state: state, start: start, success: true)
-        case .failed:
-            return waitReceipt(for: step, state: state, start: start, success: false)
-        case .poll:
-            return nil
-        }
-    }
-
     internal func waitForAnnouncementPredicate(
         _ predicate: ResolvedAnnouncementPredicate,
         step: ResolvedWaitRuntimeInput,
@@ -261,12 +156,12 @@ extension PredicateWait {
         )
     }
 
+    internal static let changePredicateNeedsFutureObservationMessage =
+        PredicateObservationDiagnostics.changePredicateNeedsFutureObservationMessage
+
     internal nonisolated static func clampedWaitTimeout(_ timeout: Double) -> Double {
         max(immediateTimeout, min(timeout, defaultWaitTimeout))
     }
-
-    internal static let changePredicateNeedsFutureObservationMessage =
-        PredicateObservationDiagnostics.changePredicateNeedsFutureObservationMessage
 
     private static func elapsedSeconds(since start: CFAbsoluteTime) -> String {
         String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)

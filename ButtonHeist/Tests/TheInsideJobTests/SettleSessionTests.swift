@@ -221,6 +221,66 @@ final class SettleSessionTests: XCTestCase {
         XCTAssertEqual(expiredDeadline.remainingSeconds(at: 30), 0)
     }
 
+    func testViewportTransitionSettleUsesOneRunLoopTurnWhenTheRepeatIsStable() async {
+        let stable = makeParseResult([
+            makeElement(label: "Stable", traits: .staticText),
+        ])
+        let parseCount = Counter()
+        let session = SettleSession(
+            parseProvider: {
+                _ = parseCount.next()
+                return stable
+            },
+            tripwireSignalProvider: { Self.tripwireSignal(topmostVC: nil) },
+            sleeper: { _ in },
+            cyclesRequired: 1,
+            cycleIntervalMs: 0,
+            timeoutMs: SettleSession.viewportTransitionTimeoutMs
+        )
+
+        let outcome = await session.run(
+            start: CFAbsoluteTimeGetCurrent(),
+            baselineTripwireSignal: Self.tripwireSignal(topmostVC: nil)
+        )
+
+        XCTAssertTrue(outcome.outcome.didSettleCleanly)
+        XCTAssertEqual(parseCount.next(), 2)
+    }
+
+    func testViewportTransitionSettleUsesASecondRunLoopTurnAfterOneLayoutChange() async {
+        let loading = makeParseResult([
+            makeElement(label: "Loading", traits: .staticText),
+        ])
+        let ready = makeParseResult([
+            makeElement(label: "Ready", traits: .staticText),
+        ])
+        let script = ScriptBox(script: [loading, ready, ready])
+        let parseCount = Counter()
+        let session = SettleSession(
+            parseProvider: {
+                _ = parseCount.next()
+                return script.next()
+            },
+            tripwireSignalProvider: { Self.tripwireSignal(topmostVC: nil) },
+            sleeper: { _ in },
+            cyclesRequired: 1,
+            cycleIntervalMs: 0,
+            timeoutMs: SettleSession.viewportTransitionTimeoutMs
+        )
+
+        let outcome = await session.run(
+            start: CFAbsoluteTimeGetCurrent(),
+            baselineTripwireSignal: Self.tripwireSignal(topmostVC: nil)
+        )
+
+        XCTAssertTrue(outcome.outcome.didSettleCleanly)
+        XCTAssertEqual(parseCount.next(), 3)
+        XCTAssertEqual(
+            outcome.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label,
+            "Ready"
+        )
+    }
+
     // MARK: - Machine
 
     func testMachineSettlesFixedCadenceAfterRequiredConsecutiveCycles() {

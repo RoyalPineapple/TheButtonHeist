@@ -7,6 +7,26 @@ import TheScore
 
 import AccessibilitySnapshotParser
 
+internal enum ScreenContinuity: Sendable, Equatable {
+    internal enum ReplacementProof: Sendable, Equatable {
+        case screenChangedNotification
+        case inferred(AccessibilityObservationFallbackReason)
+    }
+
+    case sameGeneration
+    case replacement(ReplacementProof)
+
+    internal var isReplacement: Bool {
+        if case .replacement = self { return true }
+        return false
+    }
+
+    internal var fallbackReason: AccessibilityObservationFallbackReason? {
+        guard case .replacement(.inferred(let reason)) = self else { return nil }
+        return reason
+    }
+}
+
 /// Classifies parsed accessibility snapshots.
 ///
 /// Tripwire triggers parsing; this type is the single place that decides
@@ -17,6 +37,8 @@ import AccessibilitySnapshotParser
     struct Snapshot: Equatable {
         let signature: ScreenSignature
         let firstResponderHeistId: HeistId?
+        let semanticElementIDs: Set<HeistId>
+        let scrollContainerPaths: Set<TreePath>
     }
 
     struct ScreenSignature: Equatable {
@@ -62,38 +84,20 @@ import AccessibilitySnapshotParser
         let isScrollable: Bool
     }
 
-    enum Classification: Equatable {
-        case sameGeneration
-        case screenChangedNotification
-        case inferredScreenChange(reason: AccessibilityObservationFallbackReason)
-
-        var isScreenReplacement: Bool {
-            switch self {
-            case .sameGeneration:
-                false
-            case .screenChangedNotification, .inferredScreenChange:
-                true
-            }
-        }
-
-        var fallbackReason: AccessibilityObservationFallbackReason? {
-            switch self {
-            case .sameGeneration, .screenChangedNotification:
-                nil
-            case .inferredScreenChange(let reason):
-                reason
-            }
-        }
-    }
-
     static func snapshot(of tree: InterfaceTree) -> Snapshot {
         let hierarchy = classificationHierarchy(tree.viewportCapture.hierarchy)
+        let hierarchyScrollPaths = hierarchy.pathIndexedContainers.compactMap { item in
+            item.container.isScrollable ? item.path : nil
+        }
         return Snapshot(
             signature: signature(
                 hierarchy: hierarchy,
                 elements: hierarchy.sortedElements
             ),
-            firstResponderHeistId: tree.firstResponderHeistId
+            firstResponderHeistId: tree.firstResponderHeistId,
+            semanticElementIDs: tree.viewportElementIDs,
+            scrollContainerPaths: Set(hierarchyScrollPaths)
+                .union(tree.viewportCapture.scrollInventoriesByPath.keys)
         )
     }
 
@@ -123,12 +127,12 @@ import AccessibilitySnapshotParser
         before: Snapshot?,
         after: Snapshot,
         notifications: [AccessibilityNotificationKind]
-    ) -> Classification {
+    ) -> ScreenContinuity {
         if notifications.contains(where: {
             if case .screenChanged = $0 { return true }
             return false
         }) {
-            return .screenChangedNotification
+            return .replacement(.screenChangedNotification)
         }
         guard let before else { return .sameGeneration }
 
@@ -136,21 +140,28 @@ import AccessibilitySnapshotParser
         let afterSignature = after.signature
 
         if beforeSignature.modalMarkers != afterSignature.modalMarkers {
-            return .inferredScreenChange(reason: .modalBoundaryChanged)
+            return .replacement(.inferred(.modalBoundaryChanged))
         }
         if beforeSignature.selectedTabs != afterSignature.selectedTabs {
-            return .inferredScreenChange(reason: .selectedTabChanged)
+            return .replacement(.inferred(.selectedTabChanged))
         }
         if beforeSignature.backButton != afterSignature.backButton {
-            return .inferredScreenChange(reason: .navigationMarkerChanged)
+            return .replacement(.inferred(.navigationMarkerChanged))
         }
-        if beforeSignature.primaryHeader != afterSignature.primaryHeader {
-            return .inferredScreenChange(reason: .primaryHeaderChanged)
+        if beforeSignature.primaryHeader != afterSignature.primaryHeader,
+           !hasStableInteractionContext(before: before, after: after) {
+            return .replacement(.inferred(.primaryHeaderChanged))
+        }
+        if !before.semanticElementIDs.isEmpty,
+           !after.semanticElementIDs.isEmpty,
+           before.semanticElementIDs.isDisjoint(with: after.semanticElementIDs),
+           !hasStableInteractionContext(before: before, after: after) {
+            return .replacement(.inferred(.semanticIdentityDisjoint))
         }
         if beforeSignature.rootShape != afterSignature.rootShape,
            !hasStableInteractionContext(before: before, after: after),
            isRootShapeReplacement(before: beforeSignature.rootShape, after: afterSignature.rootShape) {
-            return .inferredScreenChange(reason: .rootShapeChanged)
+            return .replacement(.inferred(.rootShapeChanged))
         }
         return .sameGeneration
     }
@@ -161,24 +172,44 @@ import AccessibilitySnapshotParser
     ) -> ScreenSignature {
         ScreenSignature(
             modalMarkers: modalMarkers(in: hierarchy),
-            primaryHeader: summaryElement(in: elements)?.label,
+            primaryHeader: summaryElement(in: hierarchy, elements: elements)?.label,
             backButton: elements.first(where: isBackButton).map(marker(for:)),
             selectedTabs: selectedTabMarkers(in: hierarchy),
             rootShape: rootShapeTokens(in: hierarchy)
         )
     }
 
-    private static func summaryElement(in elements: [AccessibilityElement]) -> AccessibilityElement? {
+    private static func summaryElement(
+        in hierarchy: [AccessibilityHierarchy],
+        elements: [AccessibilityElement]
+    ) -> AccessibilityElement? {
         if let explicit = elements.first(where: { $0.traits.contains(.summaryElement) }) {
             return explicit
+        }
+        let navigationHeaders: [AccessibilityElement] = hierarchy.compactMap(
+            context: false,
+            container: { isInsideScrollableContainer, container in
+                isInsideScrollableContainer || container.isScrollable
+            },
+            element: { element, _, isInsideScrollableContainer -> AccessibilityElement? in
+                guard !isInsideScrollableContainer,
+                      element.traits.contains(.header) else { return nil }
+                return element
+            }
+        )
+        if let navigationHeader = navigationHeaders.first {
+            return navigationHeader
         }
         return elements.first { $0.traits.contains(.header) && $0.label != nil }
     }
 
     private static func hasStableInteractionContext(before: Snapshot, after: Snapshot) -> Bool {
-        guard let beforeResponder = before.firstResponderHeistId,
-              let afterResponder = after.firstResponderHeistId else { return false }
-        return beforeResponder == afterResponder
+        if let beforeResponder = before.firstResponderHeistId,
+           let afterResponder = after.firstResponderHeistId,
+           beforeResponder == afterResponder {
+            return true
+        }
+        return !before.scrollContainerPaths.isDisjoint(with: after.scrollContainerPaths)
     }
 
     private static func marker(for element: AccessibilityElement) -> Marker {

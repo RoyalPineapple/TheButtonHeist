@@ -530,9 +530,9 @@ final class HeistReceiptTests: XCTestCase {
         let evidence = try XCTUnwrap(step.repeatUntilEvidence)
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "repeat_until else failed")
-        XCTAssertEqual(incrementCount, 0)
+        XCTAssertEqual(incrementCount, 1)
         XCTAssertEqual(step.status, .passed)
-        XCTAssertEqual(step.children.map(\.kind), [.warn])
+        XCTAssertEqual(step.children.map(\.kind), [.repeatUntilIteration, .warn])
         XCTAssertFalse(evidence.expectation.met)
         XCTAssertEqual(evidence.outcome, .handledElse)
         XCTAssertNil(evidence.actionResult)
@@ -715,6 +715,7 @@ private final class RuntimeCapture {
 @MainActor
 private final class ReceiptWaitScript {
     private var states: [PostActionObservation.BeforeState]
+    private var previousObservation: SettledSemanticObservation?
     private var previousCapture: AccessibilityTrace.Capture?
     private var nextSequence: SettledObservationSequence = 0
 
@@ -722,8 +723,38 @@ private final class ReceiptWaitScript {
         self.states = states
     }
 
+    func observation(scope: SemanticObservationScope) -> HeistSemanticObservation? {
+        guard !states.isEmpty else { return nil }
+        let state = states.removeFirst()
+        nextSequence += 1
+        let trace = previousCapture.map { AccessibilityTrace(captures: [$0, state.capture]) }
+            ?? AccessibilityTrace(capture: state.capture)
+        let settledObservation = SettledSemanticObservation(
+            sequence: nextSequence,
+            scope: scope,
+            screen: .empty,
+            semanticSignal: .empty
+        )
+        let event = SettledSemanticObservationEvent(
+            continuity: .sameGeneration,
+            sequence: nextSequence,
+            scope: scope,
+            observation: settledObservation,
+            previous: previousObservation,
+            trace: trace
+        )
+        previousObservation = settledObservation
+        previousCapture = state.capture
+        return HeistSemanticObservation(
+            event: event,
+            state: state,
+            accessibilityTrace: trace,
+            summary: "interface: \(state.interface.projectedElements.count) elements"
+        )
+    }
+
     func receipt(for step: ResolvedWaitRuntimeInput) -> HeistWaitReceipt {
-        guard !states.isEmpty else {
+        guard let observation = observation(scope: .visible) else {
             let expectation = ExpectationResult.Unmet(
                 predicate: step.predicateExpression,
                 actual: "no settled semantic observation available"
@@ -735,11 +766,8 @@ private final class ReceiptWaitScript {
             )
         }
 
-        let state = states.removeFirst()
-        nextSequence += 1
-        let trace = previousCapture.map { AccessibilityTrace(captures: [$0, state.capture]) }
-            ?? AccessibilityTrace(capture: state.capture)
-        previousCapture = state.capture
+        let state = observation.state
+        let trace = observation.accessibilityTrace
 
         let expectation = PredicateEvaluation.evaluate(
             step.predicate,
@@ -754,7 +782,7 @@ private final class ReceiptWaitScript {
                 message: expectation.actual,
                 traceEvidence: traceEvidence,
                 expectation: expectation,
-                observedSequence: nextSequence,
+                observedSequence: observation.event.sequence,
                 observationSummary: "interface: \(state.interface.projectedElements.count) elements"
             )
         case .unmet(let expectation):
@@ -762,7 +790,7 @@ private final class ReceiptWaitScript {
                 message: expectation.actual,
                 traceEvidence: traceEvidence,
                 expectation: expectation,
-                observedSequence: nextSequence,
+                observedSequence: observation.event.sequence,
                 observationSummary: "interface: \(state.interface.projectedElements.count) elements"
             )
         }
@@ -802,8 +830,8 @@ private func repeatUntilRuntime(
         selectPredicateCase: { _, _ in
             HeistCaseSelectionResult(cases: [], outcome: .noMatch, elapsedMs: 0)
         },
-        observeSemanticState: { _, _, _ in
-            nil
+        observeSemanticState: { scope, _, _ in
+            waitScript.observation(scope: scope)
         }
     )
 }

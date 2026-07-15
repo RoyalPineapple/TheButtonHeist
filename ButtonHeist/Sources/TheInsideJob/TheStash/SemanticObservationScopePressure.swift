@@ -44,9 +44,10 @@ struct SemanticObservationScopePressure {
     }
 
     func subscribedObservationScope() -> SemanticObservationScope {
-        [subscriptions.values.max(), activeObservationDemands.values.max()]
-            .compactMap { $0 }
-            .max() ?? .visible
+        max(
+            subscriptions.values.max() ?? .visible,
+            activeObservationDemands.values.max() ?? .visible
+        )
     }
 }
 

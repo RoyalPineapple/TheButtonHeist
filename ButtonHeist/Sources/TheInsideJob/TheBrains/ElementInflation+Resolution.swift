@@ -100,15 +100,16 @@ extension ElementInflation {
         case .failure:
             break
         }
-        for _ in 0..<2 {
-            guard let exploredScreen = await exploration.discoverTarget(target) else { break }
-            if stash.semanticObservationStream.commitExploredDiscoveryObservation(exploredScreen) != nil {
-                break
-            }
-        }
+        let explorationResult = await exploration.discoverTarget(target)
         switch visibleTargetResolution(target) {
         case .success(let visible):
-            return .success(.visible(visible, ActionSubjectResolution(origin: .discovered)))
+            let resolution = ActionSubjectResolution(origin: .discovered)
+            return .success(.visible(
+                visible,
+                explorationResult?.didMoveViewport == true
+                    ? resolution.adding(.semanticReveal)
+                    : resolution
+            ))
         case .failure(let failure):
             return .failure(failure)
         case nil:

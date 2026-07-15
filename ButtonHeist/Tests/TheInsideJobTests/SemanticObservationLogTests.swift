@@ -8,6 +8,12 @@ import XCTest
 
 @MainActor
 final class SemanticObservationLogTests: XCTestCase {
+    func testObservationCursorUsesCaptureTimestamp() {
+        let settled = capture("capture", sequence: 42, generation: 3)
+
+        XCTAssertEqual(settled.cursor.observedAt, Date(timeIntervalSince1970: 42))
+    }
+
     func testCursorlessIteratorReceivesFirstEntry() async throws {
         let log = SemanticObservationLog()
         let entry = initialEntry("A", sequence: 1, generation: 0)
@@ -449,6 +455,11 @@ final class SemanticObservationLogTests: XCTestCase {
         )
         return SettledSemanticObservationEvent(
             generation: ObservationGeneration(rawValue: generation),
+            continuity: previous.map { previous in
+                previous.generation.rawValue == generation
+                    ? .sameGeneration
+                    : .replacement(.inferred(.semanticIdentityDisjoint))
+            } ?? .sameGeneration,
             sequence: SettledObservationSequence(sequence),
             scope: scope,
             observation: observation,
@@ -478,7 +489,7 @@ final class SemanticObservationLogTests: XCTestCase {
                 generation: ObservationGeneration(rawValue: generation),
                 scope: scope,
                 sequence: SettledObservationSequence(sequence),
-                captureHash: traceCapture.hash,
+                capture: traceCapture,
                 notificationSequence: sequence
             ),
             capture: traceCapture

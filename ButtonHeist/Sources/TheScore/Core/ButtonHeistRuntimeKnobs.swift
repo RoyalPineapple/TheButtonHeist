@@ -11,7 +11,6 @@ package struct RuntimeKnobEnvironmentKey: Hashable, Sendable {
         RuntimeKnobEnvironmentKey("TEST_RUNNER_\(rawValue)")
     }
 
-    package static let postScrollLayoutFrames = RuntimeKnobEnvironmentKey("BH_POST_SCROLL_LAYOUT_FRAMES")
     package static let tripwirePulseFramesPerSecond = RuntimeKnobEnvironmentKey("BH_TRIPWIRE_PULSE_HZ")
     package static let maxScrollsPerContainer = RuntimeKnobEnvironmentKey("BH_MAX_SCROLLS_PER_CONTAINER")
     package static let maxScrollsPerDiscovery = RuntimeKnobEnvironmentKey("BH_MAX_SCROLLS_PER_DISCOVERY")
@@ -44,14 +43,12 @@ package enum RuntimeKnobEnvironmentBridge {
 }
 
 package struct ButtonHeistRuntimeKnobs: Equatable, Sendable {
-    package let postScrollLayoutFrames: Int
     package let tripwirePulseFramesPerSecond: Int
     package let maxScrollsPerContainer: Int
     package let maxScrollsPerDiscovery: Int
     package let visibleElementBudget: Int
     package let totalNodeBudget: Int
 
-    package static let defaultPostScrollLayoutFrames = 3
     package static let defaultTripwirePulseFramesPerSecond = 10
     package static let defaultMaxScrollsPerContainer = 200
     package static let defaultMaxScrollsPerDiscovery = 200
@@ -70,12 +67,6 @@ package struct ButtonHeistRuntimeKnobs: Equatable, Sendable {
         environment: RuntimeKnobEnvironment = RuntimeKnobEnvironmentBridge.current()
     ) -> ButtonHeistRuntimeKnobs {
         ButtonHeistRuntimeKnobs(
-            postScrollLayoutFrames: intOverride(
-                key: .postScrollLayoutFrames,
-                environment: environment,
-                defaultValue: defaultPostScrollLayoutFrames,
-                range: 0...10
-            ),
             tripwirePulseFramesPerSecond: intOverride(
                 key: .tripwirePulseFramesPerSecond,
                 environment: environment,

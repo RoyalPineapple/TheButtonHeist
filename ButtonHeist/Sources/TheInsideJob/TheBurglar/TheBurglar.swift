@@ -150,9 +150,25 @@ final class TheBurglar {
             hierarchy: allHierarchy,
             objectsByPath: objectsByPath,
             containerObjectsByPath: containerObjectsByPath,
-            scrollViewsByPath: scrollViewsByPath,
+            scrollViewsByPath: Self.canonicalScrollViewsByPath(
+                from: scrollViewsByPath,
+                containerObjectsByPath: containerObjectsByPath
+            ),
             screenCoordinateOffsetsByPath: screenCoordinateOffsetsByPath
         )
+    }
+
+    private static func canonicalScrollViewsByPath(
+        from scrollViewsByPath: [TreePath: UIScrollView],
+        containerObjectsByPath: [TreePath: NSObject]
+    ) -> [TreePath: UIScrollView] {
+        let directlyOwnedScrollViews = Set(scrollViewsByPath.compactMap { path, scrollView in
+            containerObjectsByPath[path] === scrollView ? ObjectIdentifier(scrollView) : nil
+        })
+        return scrollViewsByPath.filter { path, scrollView in
+            !directlyOwnedScrollViews.contains(ObjectIdentifier(scrollView))
+                || containerObjectsByPath[path] === scrollView
+        }
     }
 
     /// Parse one live accessibility object by pumping it through the regular

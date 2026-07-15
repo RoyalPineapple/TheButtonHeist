@@ -1,5 +1,4 @@
 #if canImport(UIKit)
-import ButtonHeistSupport
 import Foundation
 import XCTest
 import ThePlans
@@ -16,6 +15,11 @@ import UIKit
 /// require a live window and are covered by integration/benchmark runs.
 @MainActor
 final class TheBrainsPipelineTests: XCTestCase {
+
+    private enum WaitCheck: Equatable {
+        case visible
+        case discovery
+    }
 
     private var brains: TheBrains!
 
@@ -159,30 +163,6 @@ final class TheBrainsPipelineTests: XCTestCase {
         let labels = try XCTUnwrap(result.accessibilityTrace?.captures.last?.interface.projectedElements)
             .compactMap(\.label)
         XCTAssertTrue(labels.contains("Inbox"), "Persistent visible chrome must survive screen-change final evidence")
-    }
-
-    func testSameGenerationSettledEventDoesNotSuppressActionBaselineScreenChange() {
-        let before = brains.postActionObservation.captureSemanticState(
-            from: makeScreen(elements: [("Home", .header, "home_header")]),
-            tripwireSignal: .empty,
-            settledObservationSequence: nil
-        )
-        let finalScreen = makeScreen(elements: [("Details", .header, "details_header")])
-        _ = brains.stash.semanticObservationStream.commitVisibleObservationForTesting(finalScreen)
-        let sameGenerationEvent = brains.stash.semanticObservationStream.commitVisibleObservationForTesting(finalScreen)
-        let observation = PostActionSettleObservation(
-            settle: settledOutcome(finalScreen: finalScreen),
-            result: .committed(sameGenerationEvent)
-        )
-
-        guard case .committed(_, _, let trace) = brains.postActionObservation.settledObservationResult(
-            before: before,
-            observation: observation
-        ) else {
-            return XCTFail("Expected a committed post-action observation")
-        }
-
-        XCTAssertEqual(trace.captures.last?.transition.fallbackReason, .primaryHeaderChanged)
     }
 
     func testActionErrorKindClassifiesTargetUnavailableSeparatelyFromActionIdentity() throws {
@@ -964,99 +944,35 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     // MARK: - Wait Evidence Path
 
-    func testWaitCurrentSuccessUsesSettledObservationEvidence() async throws {
-        let isolatedBrains = TheBrains(tripwire: TheTripwire())
-        defer { isolatedBrains.stopSemanticObservation() }
-        let matchedScreen = InterfaceObservation.makeForTests(elements: [
-            (makeElement(label: "Home"), HeistId(rawValue: "home")),
-        ])
+    func testWaitSuccessReceiptUsesSettledVisibleObservation() async throws {
+        let event = brains.stash.semanticObservationStream.commitVisibleObservationForTesting(
+            makeScreen(elements: [("Home", .header, "home")])
+        )
+        let wait = makeStreamBackedPredicateWait(
+            settleVisible: { _ in event }
+        )
 
-        let step = try resolvedWait(WaitStep(
-                predicate: .exists(.label("Home")),
-                timeout: 1
-        ))
-        let receiptTask = Task { @MainActor in
-            await isolatedBrains.interactionObservation.waitForPredicate(step)
-        }
-
-        await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(matchedScreen)
-
-        let receipt = await receiptTask.value
+        let receipt = await wait.wait(
+            for: try resolvedWait(WaitStep(predicate: .exists(.label("Home")), timeout: 0))
+        )
         let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
 
         XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
         XCTAssertEqual(trace.captures.last?.interface.projectedElements.map(\.label), ["Home"])
-        XCTAssertEqual(receipt.expectation.met, true)
+        XCTAssertTrue(receipt.expectation.met)
     }
 
-    func testWaitCurrentTimeoutWithoutSettledObservationFails() async throws {
-        let isolatedBrains = TheBrains(tripwire: TheTripwire())
-        defer { isolatedBrains.stopSemanticObservation() }
+    func testWaitTimeoutReceiptUsesLastSettledVisibleObservation() async throws {
+        let event = brains.stash.semanticObservationStream.commitVisibleObservationForTesting(
+            makeScreen(elements: [("Known", .staticText, "known")])
+        )
+        let wait = makeStreamBackedPredicateWait(
+            settleVisible: { _ in event }
+        )
 
-        let receipt = await isolatedBrains.interactionObservation.waitForPredicate(try resolvedWait(WaitStep(
-            predicate: .exists(.label("Home")),
-            timeout: 0.01
-        )))
-
-        XCTAssertFalse(receipt.actionResult.outcome.isSuccess)
-        XCTAssertEqual(receipt.actionResult.outcome.errorKind, .timeout)
-        XCTAssertEqual(receipt.expectation.met, false)
-        XCTAssertTrue(receipt.actionResult.message?.contains("no settled semantic observation available") == true)
-    }
-
-    func testWaitSuccessEvidenceUsesSettledObservationTrace() async throws {
-        let isolatedBrains = TheBrains(tripwire: TheTripwire())
-        defer { isolatedBrains.stopSemanticObservation() }
-        let beforeScreen = InterfaceObservation.makeForTests(elements: [
-            (makeElement(label: "Before"), HeistId(rawValue: "before")),
-        ])
-        let matchedScreen = InterfaceObservation.makeForTests(elements: [
-            (makeElement(label: "Before"), HeistId(rawValue: "before")),
-            (makeElement(label: "Loaded"), HeistId(rawValue: "loaded")),
-        ])
-
-        let step = try resolvedWait(WaitStep(
-                predicate: .exists(.label("Loaded")),
-                timeout: 1
-        ))
-        let receiptTask = Task { @MainActor in
-            await isolatedBrains.interactionObservation.waitForPredicate(step)
-        }
-
-        await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(beforeScreen)
-        await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(matchedScreen)
-
-        let receipt = await receiptTask.value
-        let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
-
-        XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
-        XCTAssertEqual(trace.captures.first?.interface.projectedElements.map(\.label), ["Before"])
-        XCTAssertEqual(trace.captures.last?.interface.projectedElements.map(\.label), ["Before", "Loaded"])
-        XCTAssertTrue(trace.changeFacts.contains { if case .elementsChanged = $0 { true } else { false } })
-    }
-
-    func testWaitTimeoutEvidenceUsesLastSettledObservationTrace() async throws {
-        let isolatedBrains = TheBrains(tripwire: TheTripwire())
-        defer { isolatedBrains.stopSemanticObservation() }
-        let observedScreen = InterfaceObservation.makeForTests(elements: [
-            (makeElement(label: "Known"), HeistId(rawValue: "known")),
-        ])
-
-        let step = try resolvedWait(WaitStep(
-                predicate: .exists(.label("Missing")),
-                timeout: 0.05
-        ))
-        let receiptTask = Task { @MainActor in
-            await isolatedBrains.interactionObservation.waitForPredicate(step)
-        }
-
-        await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(observedScreen)
-
-        let receipt = await receiptTask.value
+        let receipt = await wait.wait(
+            for: try resolvedWait(WaitStep(predicate: .exists(.label("Missing")), timeout: 0))
+        )
         let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
 
         XCTAssertFalse(receipt.actionResult.outcome.isSuccess)
@@ -1066,628 +982,268 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertTrue(receipt.actionResult.message?.contains("last result:") == true)
     }
 
-    func testDisappearedWaitRequiresObservedTransitionWhenFinalStateIsAlreadyAbsent() async throws {
-        let isolatedBrains = TheBrains(tripwire: TheTripwire())
-        defer { isolatedBrains.stopSemanticObservation() }
-        let emptyScreen = InterfaceObservation.makeForTests(elements: [])
+    func testVisibleMissRunsDiscoveryAfterVisibleSettle() async throws {
+        let visible = brains.stash.semanticObservationStream.commitVisibleObservationForTesting(
+            makeScreen(elements: [("Loading", .staticText, "loading")])
+        )
+        let discovered = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
+            makeScreen(elements: [("Ready", .staticText, "ready")])
+        )
+        var checks: [WaitCheck] = []
+        let wait = makeStreamBackedPredicateWait(
+            settleVisible: { _ in
+                checks.append(.visible)
+                return visible
+            },
+            discover: { _, _, observer in
+                checks.append(.discovery)
+                _ = observer(discovered)
+                return discovered
+            }
+        )
 
-        let step = try resolvedWait(WaitStep(
-                predicate: .changed(.elements([.disappeared(.label("Loading"))])),
-                timeout: 0.05
-        ))
-        let receiptTask = Task { @MainActor in
-            await isolatedBrains.interactionObservation.waitForPredicate(step)
-        }
+        let receipt = await wait.wait(
+            for: try resolvedWait(WaitStep(predicate: .exists(.label("Ready")), timeout: 1))
+        )
 
-        await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(emptyScreen)
-
-        let receipt = await receiptTask.value
-
-        XCTAssertFalse(receipt.actionResult.outcome.isSuccess)
-        XCTAssertEqual(receipt.actionResult.outcome.errorKind, .timeout)
-        XCTAssertFalse(receipt.expectation.met)
+        XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
+        XCTAssertEqual(checks, [.visible, .discovery])
     }
 
     func testAppearedWaitRequiresObservedTransitionWhenFinalStateIsAlreadyPresent() async throws {
-        let isolatedBrains = TheBrains(tripwire: TheTripwire())
-        defer { isolatedBrains.stopSemanticObservation() }
-        let readyScreen = InterfaceObservation.makeForTests(elements: [
-            (makeElement(label: "Ready"), HeistId(rawValue: "ready")),
-        ])
-
-        let step = try resolvedWait(WaitStep(
-                predicate: .changed(.elements([.appeared(.label("Ready"))])),
-                timeout: 0.05
-        ))
-        let receiptTask = Task { @MainActor in
-            await isolatedBrains.interactionObservation.waitForPredicate(step)
-        }
-
-        await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(readyScreen)
-
-        let receipt = await receiptTask.value
+        let ready = makeScreen(elements: [("Ready", .staticText, "ready")])
+        let receipt = try await temporalWaitReceipt(
+            predicate: .changed(.elements([.appeared(.label("Ready"))])),
+            baseline: ready,
+            final: ready
+        )
 
         XCTAssertFalse(receipt.actionResult.outcome.isSuccess)
         XCTAssertEqual(receipt.actionResult.outcome.errorKind, .timeout)
         XCTAssertFalse(receipt.expectation.met)
+        XCTAssertTrue(elementChanges(in: receipt).isEmpty)
+    }
+
+    func testAppearedWaitSucceedsFromCanonicalTransition() async throws {
+        let receipt = try await temporalWaitReceipt(
+            predicate: .changed(.elements([.appeared(.label("Ready"))])),
+            baseline: .empty,
+            final: makeScreen(elements: [("Ready", .staticText, "ready")])
+        )
+        let changes = try XCTUnwrap(elementChanges(in: receipt).first)
+
+        XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
+        XCTAssertTrue(receipt.expectation.met)
+        XCTAssertEqual(changes.appeared.count, 1)
+        XCTAssertTrue(changes.disappeared.isEmpty)
+        XCTAssertTrue(changes.updated.isEmpty)
+    }
+
+    func testDisappearedWaitRequiresObservedTransitionWhenFinalStateIsAlreadyAbsent() async throws {
+        let receipt = try await temporalWaitReceipt(
+            predicate: .changed(.elements([.disappeared(.label("Loading"))])),
+            baseline: .empty,
+            final: .empty
+        )
+
+        XCTAssertFalse(receipt.actionResult.outcome.isSuccess)
+        XCTAssertEqual(receipt.actionResult.outcome.errorKind, .timeout)
+        XCTAssertFalse(receipt.expectation.met)
+        XCTAssertTrue(elementChanges(in: receipt).isEmpty)
+    }
+
+    func testDisappearedWaitSucceedsFromCanonicalTransition() async throws {
+        let receipt = try await temporalWaitReceipt(
+            predicate: .changed(.elements([.disappeared(.label("Loading"))])),
+            baseline: makeScreen(elements: [("Loading", .staticText, "loading")]),
+            final: .empty
+        )
+        let changes = try XCTUnwrap(elementChanges(in: receipt).first)
+
+        XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
+        XCTAssertTrue(receipt.expectation.met)
+        XCTAssertTrue(changes.appeared.isEmpty)
+        XCTAssertEqual(changes.disappeared.count, 1)
+        XCTAssertTrue(changes.updated.isEmpty)
     }
 
     func testUpdatedWaitRequiresObservedTransitionWhenFinalStateAlreadyMatches() async throws {
-        let isolatedBrains = TheBrains(tripwire: TheTripwire())
-        defer { isolatedBrains.stopSemanticObservation() }
-        let quantity = AccessibilityElement.make(
-            label: "Quantity",
-            value: "3",
-            traits: .staticText,
-            respondsToUserInteraction: false
+        let quantity = volumeScreen(value: "3")
+        let receipt = try await temporalWaitReceipt(
+            predicate: .changed(.elements([.updated(
+                .label("Volume"),
+                .value(before: "2", after: "3")
+            )])),
+            baseline: quantity,
+            final: quantity
         )
-        let quantityScreen = InterfaceObservation.makeForTests(elements: [
-            (quantity, HeistId(rawValue: "quantity")),
-        ])
-
-        let step = try resolvedWait(WaitStep(
-                predicate: .changed(.elements([.updated(.label("Quantity"), .value("3"))])),
-                timeout: 0.05
-        ))
-        let receiptTask = Task { @MainActor in
-            await isolatedBrains.interactionObservation.waitForPredicate(step)
-        }
-
-        await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(quantityScreen)
-
-        let receipt = await receiptTask.value
 
         XCTAssertFalse(receipt.actionResult.outcome.isSuccess)
         XCTAssertEqual(receipt.actionResult.outcome.errorKind, .timeout)
         XCTAssertFalse(receipt.expectation.met)
+        XCTAssertTrue(elementChanges(in: receipt).isEmpty)
     }
 
-    func testFromToUpdatedWaitRequiresObservedTransitionWhenFinalStateAlreadyMatches() async throws {
-        let isolatedBrains = TheBrains(tripwire: TheTripwire())
-        defer { isolatedBrains.stopSemanticObservation() }
-        let quantity = AccessibilityElement.make(
-            label: "Quantity",
-            value: "3",
-            traits: .staticText,
-            respondsToUserInteraction: false
+    func testUpdatedWaitSucceedsFromCanonicalTransition() async throws {
+        let receipt = try await temporalWaitReceipt(
+            predicate: .changed(.elements([.updated(
+                .label("Volume"),
+                .value(before: "2", after: "3")
+            )])),
+            baseline: volumeScreen(value: "2"),
+            final: volumeScreen(value: "3")
         )
-        let quantityScreen = InterfaceObservation.makeForTests(elements: [
-            (quantity, HeistId(rawValue: "quantity")),
-        ])
-
-        let step = try resolvedWait(WaitStep(
-                predicate: .changed(.elements([.updated(
-                    .label("Quantity"),
-                    .value(before: "2", after: "3")
-                )])),
-                timeout: 0.05
-        ))
-        let receiptTask = Task { @MainActor in
-            await isolatedBrains.interactionObservation.waitForPredicate(step)
-        }
-
-        await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(quantityScreen)
-
-        let receipt = await receiptTask.value
-
-        XCTAssertFalse(receipt.actionResult.outcome.isSuccess)
-        XCTAssertEqual(receipt.actionResult.outcome.errorKind, .timeout)
-        XCTAssertEqual(receipt.expectation.met, false)
-    }
-
-    func testDisappearedWaitSucceedsWhenTransitionIsObserved() async throws {
-        let isolatedBrains = TheBrains(tripwire: TheTripwire())
-        defer { isolatedBrains.stopSemanticObservation() }
-        let loadingScreen = InterfaceObservation.makeForTests(elements: [
-            (makeElement(label: "Loading"), HeistId(rawValue: "loading")),
-        ])
-        let emptyScreen = InterfaceObservation.makeForTests(elements: [])
-
-        let step = try resolvedWait(WaitStep(
-                predicate: .changed(.elements([.disappeared(.label("Loading"))])),
-                timeout: 1
-        ))
-        let receiptTask = Task { @MainActor in
-            await isolatedBrains.interactionObservation.waitForPredicate(step)
-        }
-
-        await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(loadingScreen)
-        await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
-            emptyScreen,
-            notificationBatch: notificationBatch(kind: .screenChanged)
-        )
-
-        let receipt = await receiptTask.value
-
-        XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
-        XCTAssertEqual(receipt.expectation.met, true)
-    }
-
-    func testPredicatePollingEngineKeepsVisibleTicksBetweenDiscoveryProbes() async throws {
-        let predicate = AccessibilityPredicate.exists(.label("Never"))
-        let resolved = try resolvedPredicate(predicate)
-        var observedScopes: [SemanticObservationScope] = []
-        var sequence: SettledObservationSequence = 0
-        let engine = PredicatePollingEngine<ExpectationResult> { scope, _, _ in
-            observedScopes.append(scope)
-            sequence += 1
-            return self.pollingObservation(
-                label: scope == .visible ? "Visible" : "Discovery-\(sequence.rawValue)",
-                scope: scope,
-                sequence: sequence
-            )
-        }
-
-        let result = await engine.poll(
-            scope: .discovery,
-            timeout: 0.25,
-            evaluate: { observation in
-                PredicateEvaluation.evaluate(resolved, expression: predicate, in: observation)
-            },
-            isMatched: \.met
-        )
-
-        XCTAssertFalse(result.last?.evaluation.met ?? true)
-        XCTAssertEqual(observedScopes.prefix(2), [.visible, .discovery])
-        XCTAssertEqual(observedScopes.filter { $0 == .discovery }.count, 1)
-        XCTAssertGreaterThanOrEqual(observedScopes.filter { $0 == .visible }.count, 2)
-    }
-
-    func testPredicatePollingEngineReturnsVisibleMatchBeforeDiscoveryProbe() async throws {
-        let predicate = AccessibilityPredicate.exists(.label("Ready"))
-        let resolved = try resolvedPredicate(predicate)
-        var observedScopes: [SemanticObservationScope] = []
-        var sequence: SettledObservationSequence = 1
-        let engine = PredicatePollingEngine<ExpectationResult> { scope, _, _ in
-            observedScopes.append(scope)
-            sequence += 1
-            return self.pollingObservation(
-                label: scope == .visible ? "Ready" : "Discovery",
-                scope: scope,
-                sequence: sequence
-            )
-        }
-
-        let result = await engine.poll(
-            scope: .discovery,
-            timeout: 1,
-            after: 1,
-            initialVisibleFingerprint: .known("previous-visible-fingerprint"),
-            discoveryBootstrap: .afterInitialDiscoveryAttempt,
-            evaluate: { observation in
-                PredicateEvaluation.evaluate(resolved, expression: predicate, in: observation)
-            },
-            isMatched: \.met
-        )
-
-        XCTAssertTrue(result.last?.evaluation.met == true)
-        XCTAssertEqual(observedScopes, [.visible])
-    }
-
-    func testPredicatePollingEngineDefersDiscoveryAfterInitialDiscoveryAttempt() async throws {
-        let predicate = AccessibilityPredicate.exists(.label("Ready"))
-        let resolved = try resolvedPredicate(predicate)
-        var observedScopes: [SemanticObservationScope] = []
-        var observedTimeouts: [Double?] = []
-        var sequence: SettledObservationSequence = 1
-        let engine = PredicatePollingEngine<ExpectationResult> { scope, _, timeout in
-            observedScopes.append(scope)
-            observedTimeouts.append(timeout)
-            guard scope == .discovery else { return nil }
-            sequence += 1
-            return self.pollingObservation(
-                label: "Still Loading",
-                scope: scope,
-                sequence: sequence
-            )
-        }
-
-        let result = await engine.poll(
-            scope: .discovery,
-            timeout: 0.25,
-            after: 1,
-            initialVisibleFingerprint: .known("visible-seed"),
-            discoveryBootstrap: .afterInitialDiscoveryAttempt,
-            evaluate: { observation in
-                PredicateEvaluation.evaluate(resolved, expression: predicate, in: observation)
-            },
-            isMatched: \.met
-        )
-
-        XCTAssertNil(result.last)
-        XCTAssertFalse(observedScopes.contains(.discovery))
-        XCTAssertEqual(observedTimeouts.first.flatMap { $0 }, 0)
-    }
-
-    func testPredicateWaitStartsWithDiscoveryThenUsesVisibleTicks() async throws {
-        let predicate = AccessibilityPredicate.exists(.label("Ready"))
-        var observedScopes: [SemanticObservationScope] = []
-        var sequence: SettledObservationSequence = 0
-        var readySequence: SettledObservationSequence?
-        let wait = PredicateWait(
-            observeEvent: { scope, _, _ in
-                observedScopes.append(scope)
-                sequence += 1
-                return self.pollingObservation(
-                    label: scope == .discovery ? "Loading" : "Ready",
-                    scope: scope,
-                    sequence: sequence
-                ).event
-            },
-            latestEvent: { nil },
-            latestSettleFailure: { nil },
-            semanticObservation: { event in
-                self.brains.postActionObservation.semanticObservation(from: event)
-            },
-            buildObservationWindow: { _, _ in nil },
-            presenceTimeoutMessage: { _, _ in nil },
-            announcementCursor: { _ in .origin },
-            waitForAnnouncement: { _, _, _ in nil }
-        )
-
-        let receipt = await wait.wait(
-            for: try resolvedWait(WaitStep(predicate: predicate, timeout: 1)),
-            onReadyToPoll: { readySequence = $0 }
-        )
+        let changes = try XCTUnwrap(elementChanges(in: receipt).first)
 
         XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
         XCTAssertTrue(receipt.expectation.met)
-        XCTAssertEqual(Array(observedScopes.prefix(2)), [.discovery, .visible])
-        XCTAssertEqual(readySequence, 1)
+        XCTAssertTrue(changes.appeared.isEmpty)
+        XCTAssertTrue(changes.disappeared.isEmpty)
+        XCTAssertEqual(changes.updated.count, 1)
     }
 
-    func testPredicateWaitReturnsFromInitialDiscoveryMatch() async throws {
-        let predicate = AccessibilityPredicate.exists(.label("Ready"))
-        var observedScopes: [SemanticObservationScope] = []
-        var sequence: SettledObservationSequence = 0
-        var readySequence: SettledObservationSequence?
-        let wait = PredicateWait(
-            observeEvent: { scope, _, _ in
-                observedScopes.append(scope)
-                sequence += 1
-                return self.pollingObservation(
-                    label: "Ready",
-                    scope: scope,
-                    sequence: sequence
-                ).event
-            },
-            latestEvent: { nil },
-            latestSettleFailure: { nil },
-            semanticObservation: { event in
-                self.brains.postActionObservation.semanticObservation(from: event)
-            },
-            buildObservationWindow: { _, _ in nil },
-            presenceTimeoutMessage: { _, _ in nil },
-            announcementCursor: { _ in .origin },
-            waitForAnnouncement: { _, _, _ in nil }
+    func testCanonicalInitialTraceCanProveCompletedChangeWithoutAnotherObservation() async throws {
+        _ = brains.stash.semanticObservationStream.commitVisibleObservationForTesting(
+            volumeScreen(value: "2")
         )
-
-        let receipt = await wait.wait(
-            for: try resolvedWait(WaitStep(predicate: predicate, timeout: 1)),
-            onReadyToPoll: { readySequence = $0 }
+        let after = brains.stash.semanticObservationStream.commitVisibleObservationForTesting(
+            volumeScreen(value: "3")
         )
-
-        XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
-        XCTAssertTrue(receipt.expectation.met)
-        XCTAssertEqual(observedScopes, [.discovery])
-        XCTAssertNil(readySequence)
-    }
-
-    func testPredicateWaitAcceptsSatisfiedChangeFromInitialTraceBeforeObserving() async throws {
-        let before = brains.postActionObservation.captureSemanticState(
-            from: makeScreen(elements: [
-                ("Checkout", .staticText, "checkout"),
-            ]),
-            tripwireSignal: .empty,
-            settledObservationSequence: 41
-        )
-        let after = brains.postActionObservation.captureSemanticState(
-            from: makeScreen(elements: [
-                ("Checkout", .staticText, "checkout"),
-                ("More", .button, "more"),
-            ]),
-            tripwireSignal: .empty,
-            settledObservationSequence: 42
-        )
-        let initialTrace = AccessibilityTrace(captures: [before.capture, after.capture])
-        var didObserve = false
-        let staleObservation = makeStaleObservation(from: before, sequence: 42)
-        let wait = PredicateWait(
-            observeEvent: { _, _, _ in
-                didObserve = true
-                return staleObservation.event
-            },
-            latestEvent: { nil },
-            latestSettleFailure: { nil },
-            semanticObservation: { event in
-                event.sequence == staleObservation.event.sequence
-                    ? staleObservation
-                    : self.brains.postActionObservation.semanticObservation(from: event)
-            },
-            buildObservationWindow: { _, _ in nil },
-            presenceTimeoutMessage: { _, _ in nil },
-            announcementCursor: { _ in .origin },
-            waitForAnnouncement: { _, _, _ in nil }
+        var settleCount = 0
+        let wait = makeStreamBackedPredicateWait(
+            settleVisible: { _ in
+                settleCount += 1
+                return after
+            }
         )
 
         let receipt = await wait.wait(
             for: try resolvedWait(WaitStep(predicate: .changed(.elements()), timeout: 0)),
-            initialTrace: initialTrace
+            initialTrace: after.trace
         )
 
         XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
         XCTAssertTrue(receipt.expectation.met)
-        XCTAssertFalse(didObserve)
-        XCTAssertTrue(receipt.actionResult.accessibilityTrace?.changeFacts.contains {
-            if case .elementsChanged = $0 { true } else { false }
-        } == true)
+        XCTAssertEqual(settleCount, 0)
     }
 
-    func testPredicateWaitMatchesChangeFromSuppliedBaselineAndNextObservation() async throws {
+    func testSuppliedCanonicalBaselineOverridesStaleInitialTrace() async throws {
         let stream = brains.stash.semanticObservationStream
-        let beforeEvent = stream.commitDiscoveryObservationForTesting(volumeScreen(value: "50%"))
-        let afterEvent = stream.commitDiscoveryObservationForTesting(volumeScreen(value: "60%"))
+        let beforeEvent = stream.commitVisibleObservationForTesting(volumeScreen(value: "2"))
+        let afterEvent = stream.commitVisibleObservationForTesting(volumeScreen(value: "3"))
         let before = try XCTUnwrap(beforeEvent.settledCapture)
-        let afterObservation = brains.postActionObservation.semanticObservation(from: afterEvent)
-        let baselineTrace = AccessibilityTrace(capture: before.capture)
-        var observedAfterSequence: SettledObservationSequence?
-        let wait = PredicateWait(
-            observeEvent: { _, after, _ in
-                observedAfterSequence = after
-                return afterEvent
-            },
-            latestEvent: { nil },
-            latestSettleFailure: { nil },
-            semanticObservation: { event in
-                event.sequence == afterObservation.event.sequence
-                    ? afterObservation
-                    : self.brains.postActionObservation.semanticObservation(from: event)
-            },
-            buildObservationWindow: { baseline, event in
-                stream.observationWindow(
-                    from: baseline,
-                    through: event
-                )
-            },
-            presenceTimeoutMessage: { _, _ in nil },
-            announcementCursor: { _ in .origin },
-            waitForAnnouncement: { _, _, _ in nil }
+        let after = try XCTUnwrap(afterEvent.settledCapture)
+        let staleBrains = TheBrains(tripwire: TheTripwire())
+        defer { staleBrains.stopSemanticObservation() }
+        let staleEvent = staleBrains.stash.semanticObservationStream.commitVisibleObservationForTesting(
+            volumeScreen(value: "1")
+        )
+        let staleHash = try XCTUnwrap(staleEvent.trace.captures.last?.hash)
+        let wait = makeStreamBackedPredicateWait(
+            settleVisible: { _ in afterEvent }
         )
 
         let receipt = await wait.wait(
-            for: try resolvedWait(WaitStep(predicate: .changed(.elements()), timeout: 1)),
-            initialTrace: baselineTrace,
-            after: beforeEvent.sequence,
+            for: try resolvedWait(WaitStep(predicate: .changed(.elements()), timeout: 0)),
+            initialTrace: staleEvent.trace,
             changeBaseline: .supplied(before)
         )
 
         XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
         XCTAssertTrue(receipt.expectation.met)
-        XCTAssertEqual(observedAfterSequence, beforeEvent.sequence)
-        XCTAssertTrue(receipt.actionResult.accessibilityTrace?.changeFacts.contains {
-            if case .elementsChanged = $0 { true } else { false }
-        } == true)
+        XCTAssertEqual(
+            receipt.actionResult.accessibilityTrace?.captures.map(\.hash),
+            [before.capture.hash, after.capture.hash]
+        )
+        XCTAssertFalse(receipt.actionResult.accessibilityTrace?.captures.contains { $0.hash == staleHash } == true)
     }
 
     func testPredicateWaitBuildsScreenChangeHistoryOnlyFromCanonicalObservationLog() async throws {
         let stream = brains.stash.semanticObservationStream
-        let beforeEvent = stream.commitDiscoveryObservationForTesting(
+        let beforeEvent = stream.commitVisibleObservationForTesting(
             makeScreen(elements: [("ButtonHeist Demo", .header, "root")])
         )
-        let actionEndpointEvent = stream.commitDiscoveryObservationForTesting(
+        let actionEndpointEvent = stream.commitVisibleObservationForTesting(
             makeScreen(elements: [("Order Summary", .header, "summary")]),
             notificationBatch: notificationBatch(kind: .screenChanged)
         )
-        let destinationEvent = stream.commitDiscoveryObservationForTesting(
+        let destinationEvent = stream.commitVisibleObservationForTesting(
             makeScreen(elements: [
                 ("Order Summary", .header, "summary"),
-                ("Menu", .header, "menu"),
+                ("Menu", .button, "menu"),
             ])
         )
         let before = try XCTUnwrap(beforeEvent.settledCapture)
         let actionEndpoint = try XCTUnwrap(actionEndpointEvent.settledCapture)
         let destination = try XCTUnwrap(destinationEvent.settledCapture)
-        let actionBaselineCapture = AccessibilityTrace.Capture(
-            sequence: 98,
-            interface: before.capture.interface,
-            hash: "sha256:action-local-baseline"
-        )
-        let receiptOnlyCapture = AccessibilityTrace.Capture(
-            sequence: 99,
-            interface: before.capture.interface,
-            hash: "sha256:receipt-only-capture"
-        )
-        let actionTrace = AccessibilityTrace(captures: [
-            actionBaselineCapture,
-            receiptOnlyCapture,
-            actionEndpoint.capture,
-        ])
-        var observedAfterSequences: [SettledObservationSequence?] = []
-        let destinationObservation = brains.postActionObservation.semanticObservation(from: destinationEvent)
-        let wait = PredicateWait(
-            observeEvent: { _, after, _ in
-                observedAfterSequences.append(after)
-                if after == beforeEvent.sequence { return actionEndpointEvent }
-                if after == actionEndpointEvent.sequence { return destinationEvent }
-                return nil
-            },
-            latestEvent: { nil },
-            latestSettleFailure: { nil },
-            semanticObservation: { event in
-                event.sequence == destinationObservation.event.sequence
-                    ? destinationObservation
-                    : self.brains.postActionObservation.semanticObservation(from: event)
-            },
-            buildObservationWindow: { baseline, event in
-                stream.observationWindow(
-                    from: baseline,
-                    through: event
-                )
-            },
-            presenceTimeoutMessage: { _, _ in nil },
-            announcementCursor: { _ in .origin },
-            waitForAnnouncement: { _, _, _ in nil }
+        let wait = makeStreamBackedPredicateWait(
+            settleVisible: { _ in destinationEvent }
         )
 
         let receipt = await wait.wait(
             for: try resolvedWait(WaitStep(
                 predicate: .changed(.screen([.exists(.label("Menu"))])),
-                timeout: 1
+                timeout: 0
             )),
-            initialTrace: actionTrace,
-            after: beforeEvent.sequence,
             changeBaseline: .supplied(before)
         )
 
         XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
         XCTAssertTrue(receipt.expectation.met)
         XCTAssertEqual(receipt.traceEvidence?.completeness, .complete)
-        XCTAssertEqual(observedAfterSequences, [beforeEvent.sequence, actionEndpointEvent.sequence])
         let receiptTrace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
         XCTAssertEqual(
             receiptTrace.captures.map(\.hash),
             [before.capture.hash, actionEndpoint.capture.hash, destination.capture.hash]
         )
-        XCTAssertFalse(receiptTrace.captures.contains { $0.hash == receiptOnlyCapture.hash })
         XCTAssertEqual(receiptTrace.captures.last?.interface.projectedElements.last?.label, "Menu")
         XCTAssertTrue(receiptTrace.changeFacts.contains {
             if case .screenChanged = $0 { true } else { false }
         })
     }
 
-    func testPredicateWaitUsesCanonicalLogInsteadOfInitialTraceBaseline() async throws {
-        let beforeScreen = volumeScreen(value: "50%")
-        let afterScreen = volumeScreen(value: "60%")
-        let beforeEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(beforeScreen)
-        let afterEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(afterScreen)
-        let actionBaseline = AccessibilityTrace.Capture(
-            sequence: 1,
-            interface: brains.stash.discoveryInterfaceWithHash(
-                for: volumeScreen(value: "40%")
-            ).interface,
-            hash: "sha256:unmatched-post-transition-capture"
-        )
-        let staleActionTrace = AccessibilityTrace(captures: [actionBaseline, actionBaseline])
-        let wait = PredicateWait(
-            observeEvent: { _, _, _ in afterEvent },
-            latestEvent: { nil },
-            latestSettleFailure: { nil },
-            semanticObservation: { event in
-                self.brains.postActionObservation.semanticObservation(from: event)
-            },
-            buildObservationWindow: { baseline, event in
-                self.brains.stash.semanticObservationStream.observationWindow(
-                    from: baseline,
-                    through: event
-                )
-            },
-            presenceTimeoutMessage: { _, _ in nil },
-            announcementCursor: { _ in .origin },
-            waitForAnnouncement: { _, _, _ in nil }
-        )
+    func testCanonicalObservationWindowsKeepScreenAndElementFactsDistinct() throws {
+        let elementStream = brains.stash.semanticObservationStream
+        let elementBeforeEvent = elementStream.commitVisibleObservationForTesting(volumeScreen(value: "2"))
+        let elementAfterEvent = elementStream.commitVisibleObservationForTesting(volumeScreen(value: "3"))
+        let elementBefore = try XCTUnwrap(elementBeforeEvent.settledCapture)
+        let elementWindow = try XCTUnwrap(elementStream.observationWindow(
+            from: elementBefore,
+            through: elementAfterEvent
+        ))
 
-        let receipt = await wait.wait(
-            for: try resolvedWait(WaitStep(predicate: .changed(.elements()), timeout: 0)),
-            initialTrace: staleActionTrace
+        let screenBrains = TheBrains(tripwire: TheTripwire())
+        defer { screenBrains.stopSemanticObservation() }
+        let screenStream = screenBrains.stash.semanticObservationStream
+        let screenBeforeEvent = screenStream.commitVisibleObservationForTesting(
+            makeScreen(elements: [("Home", .header, "home")])
         )
+        let screenAfterEvent = screenStream.commitVisibleObservationForTesting(
+            makeScreen(elements: [("Details", .header, "details")]),
+            notificationBatch: notificationBatch(kind: .screenChanged)
+        )
+        let screenBefore = try XCTUnwrap(screenBeforeEvent.settledCapture)
+        let screenWindow = try XCTUnwrap(screenStream.observationWindow(
+            from: screenBefore,
+            through: screenAfterEvent
+        ))
 
-        XCTAssertFalse(receipt.actionResult.outcome.isSuccess)
-        XCTAssertFalse(receipt.expectation.met)
-        let before = try XCTUnwrap(beforeEvent.settledCapture)
-        let after = try XCTUnwrap(afterEvent.settledCapture)
+        XCTAssertEqual(elementWindow.trace.changeFacts.map(\.kind), [.elementsChanged])
         XCTAssertEqual(
-            receipt.actionResult.accessibilityTrace?.captures.map(\.hash),
-            [before.capture.hash, after.capture.hash]
+            screenWindow.trace.changeFacts.map(\.kind),
+            [.elementsChanged, .screenChanged, .elementsChanged]
         )
-        XCTAssertFalse(receipt.actionResult.accessibilityTrace?.captures.contains {
-            $0.hash == actionBaseline.hash
-        } == true)
-        XCTAssertEqual(receipt.traceEvidence?.completeness, .incomplete)
-    }
-
-    func testPredicateWaitDoesNotEstablishReplacementForUnavailableSuppliedBaseline() async throws {
-        let beforeScreen = volumeScreen(value: "50%")
-        let afterScreen = volumeScreen(value: "60%")
-        _ = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(beforeScreen)
-        let afterEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(afterScreen)
-        let wait = PredicateWait(
-            observeEvent: { _, _, _ in afterEvent },
-            latestEvent: { nil },
-            latestSettleFailure: { nil },
-            semanticObservation: { event in
-                self.brains.postActionObservation.semanticObservation(from: event)
-            },
-            buildObservationWindow: { baseline, event in
-                self.brains.stash.semanticObservationStream.observationWindow(
-                    from: baseline,
-                    through: event
-                )
-            },
-            presenceTimeoutMessage: { _, _ in nil },
-            announcementCursor: { _ in .origin },
-            waitForAnnouncement: { _, _, _ in nil }
-        )
-
-        let receipt = await wait.wait(
-            for: try resolvedWait(WaitStep(predicate: .changed(.elements()), timeout: 0)),
-            changeBaseline: .supplied(nil)
-        )
-
-        XCTAssertFalse(receipt.actionResult.outcome.isSuccess)
-        XCTAssertFalse(receipt.expectation.met)
-        XCTAssertEqual(receipt.expectation.actual, "noTrace")
-    }
-
-    func testPredicateWaitPreservesUnavailableBaselineThroughDelayedFirstObservation() async throws {
-        let beforeScreen = volumeScreen(value: "50%")
-        let afterScreen = volumeScreen(value: "60%")
-        _ = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(beforeScreen)
-        let afterEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(afterScreen)
-        var scriptedEvents: [SettledSemanticObservationEvent?] = [nil, afterEvent, nil]
-        let wait = PredicateWait(
-            observeEvent: { _, _, _ in
-                scriptedEvents.isEmpty ? nil : scriptedEvents.removeFirst()
-            },
-            latestEvent: { nil },
-            latestSettleFailure: { nil },
-            semanticObservation: { event in
-                self.brains.postActionObservation.semanticObservation(from: event)
-            },
-            buildObservationWindow: { baseline, event in
-                self.brains.stash.semanticObservationStream.observationWindow(
-                    from: baseline,
-                    through: event
-                )
-            },
-            presenceTimeoutMessage: { _, _ in nil },
-            announcementCursor: { _ in .origin },
-            waitForAnnouncement: { _, _, _ in nil }
-        )
-
-        let receipt = await wait.wait(
-            for: try resolvedWait(WaitStep(predicate: .changed(.elements()), timeout: 0.01)),
-            changeBaseline: .supplied(nil)
-        )
-
-        XCTAssertFalse(receipt.actionResult.outcome.isSuccess)
-        XCTAssertFalse(receipt.expectation.met)
-        XCTAssertEqual(receipt.expectation.actual, "noTrace")
+        XCTAssertNil(screenAfterEvent.trace.captures.last?.transition.fallbackReason)
     }
 
     func testObservationWindowRetainsFastRoundTripTransition() throws {
         let baselineEvent = brains.stash.semanticObservationStream.commitVisibleObservationForTesting(
             volumeScreen(value: "50%")
         )
-        _ = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
+        _ = brains.stash.semanticObservationStream.commitVisibleObservationForTesting(
             volumeScreen(value: "60%")
         )
-        let finalEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
+        let finalEvent = brains.stash.semanticObservationStream.commitVisibleObservationForTesting(
             volumeScreen(value: "50%")
         )
         let baseline = try XCTUnwrap(baselineEvent.settledCapture)
@@ -1734,11 +1290,11 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(window.trace.changeFacts.count, 3)
     }
 
-    func testCompleteObservationWindowProducesUnchangedProof() throws {
-        let baselineEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
+    func testCompleteObservationWindowProducesUnchangedWaitProof() async throws {
+        let baselineEvent = brains.stash.semanticObservationStream.commitVisibleObservationForTesting(
             volumeScreen(value: "50%")
         )
-        let currentEvent = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
+        let currentEvent = brains.stash.semanticObservationStream.commitVisibleObservationForTesting(
             volumeScreen(value: "50%")
         )
         let baseline = try XCTUnwrap(baselineEvent.settledCapture)
@@ -1750,34 +1306,24 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(window.completeness, .complete)
         XCTAssertTrue(window.trace.changeFacts.isEmpty)
 
-        let observation = brains.postActionObservation.semanticObservation(from: currentEvent)
         let expression = AccessibilityPredicate.noChange
         let predicate = try resolvedPredicate(expression)
-        let predicateResult = PredicateObservationEvidence(
-            observation: observation,
-            baseline: baseline,
-            window: window
-        ).evaluate(predicate, expression: expression)
-        XCTAssertTrue(predicateResult.met)
-
-        let receipt = predicateWaitForReceiptProofTests().waitReceipt(
+        let wait = makeStreamBackedPredicateWait(
+            settleVisible: { _ in currentEvent }
+        )
+        let receipt = await wait.wait(
             for: try resolvedWait(WaitStep(predicate: expression, timeout: 0)),
-            trace: window.trace,
-            observationSummary: observation.summary,
-            expectation: predicateResult,
-            start: CFAbsoluteTimeGetCurrent(),
-            success: true,
-            baseline: baseline,
-            window: window,
-            observedSequence: currentEvent.sequence
+            changeBaseline: .supplied(baseline)
         )
 
+        XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
+        XCTAssertTrue(receipt.expectation.met)
         XCTAssertEqual(receipt.traceEvidence?.completeness, .complete)
         XCTAssertEqual(receipt.actionResult.traceEvidence?.completeness, .complete)
         XCTAssertTrue(predicate.validate(against: receipt.actionResult).met)
     }
 
-    func testIncompleteObservationWindowDoesNotProduceUnchangedVerdict() throws {
+    func testIncompleteObservationWindowTimesOutUnchangedWait() async throws {
         let baselineEvent = brains.stash.semanticObservationStream.commitVisibleObservationForTesting(
             volumeScreen(value: "50%")
         )
@@ -1798,32 +1344,23 @@ final class TheBrainsPipelineTests: XCTestCase {
         }
         XCTAssertTrue(window.trace.changeFacts.isEmpty)
 
-        let observation = brains.postActionObservation.semanticObservation(from: currentEvent)
         let expression = AccessibilityPredicate.noChange
         let predicate = try resolvedPredicate(expression)
-        let predicateResult = PredicateObservationEvidence(
-            observation: observation,
-            baseline: baseline,
-            window: window
-        ).evaluate(predicate, expression: expression)
-        XCTAssertFalse(predicateResult.met)
-        XCTAssertEqual(predicateResult.actual, "observation history incomplete")
-
-        let receipt = predicateWaitForReceiptProofTests().waitReceipt(
+        let wait = makeStreamBackedPredicateWait(
+            settleVisible: { _ in currentEvent }
+        )
+        let receipt = await wait.wait(
             for: try resolvedWait(WaitStep(predicate: expression, timeout: 0)),
-            trace: window.trace,
-            observationSummary: observation.summary,
-            expectation: predicateResult,
-            start: CFAbsoluteTimeGetCurrent(),
-            success: false,
-            baseline: baseline,
-            window: window,
-            observedSequence: currentEvent.sequence
+            changeBaseline: .supplied(baseline)
         )
         let laterValidation = predicate.validate(
             against: receipt.actionResult
         )
 
+        XCTAssertFalse(receipt.actionResult.outcome.isSuccess)
+        XCTAssertEqual(receipt.actionResult.outcome.errorKind, .timeout)
+        XCTAssertFalse(receipt.expectation.met)
+        XCTAssertEqual(receipt.expectation.actual, "observation history incomplete")
         XCTAssertEqual(receipt.traceEvidence?.completeness, .incomplete)
         XCTAssertEqual(receipt.actionResult.traceEvidence?.completeness, .incomplete)
         XCTAssertFalse(laterValidation.met)
@@ -2220,19 +1757,6 @@ final class TheBrainsPipelineTests: XCTestCase {
         } == true)
     }
 
-    func testWaitObservationPlanUsesDiscoveryForElementAndContainerPredicates() throws {
-        let element = try resolvedPredicate(.exists(.label("Ready")))
-        let container = try resolvedPredicate(.exists(.container(.identifier("CheckoutList"))))
-        XCTAssertEqual(
-            WaitObservationPlan(predicate: element).scope,
-            .discovery
-        )
-        XCTAssertEqual(
-            WaitObservationPlan(predicate: container).scope,
-            .discovery
-        )
-    }
-
     // MARK: - Semantic Capture
 
     func testCaptureSemanticStateKeepsKnownElementsInCanonicalInterface() {
@@ -2323,6 +1847,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             semanticSignal: .empty
         )
         let event = SettledSemanticObservationEvent(
+            continuity: .sameGeneration,
             sequence: 7,
             scope: .discovery,
             observation: settled,
@@ -2552,33 +2077,6 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertTrue(exploration.manifest.exploredScrollPaths.isEmpty)
     }
 
-    func testSemanticExplorationAbsorbsSameIdElementChange() {
-        let before = AccessibilityElement.make(
-            label: "Total",
-            value: "$4.00",
-            traits: .staticText,
-            respondsToUserInteraction: false
-        )
-        let after = AccessibilityElement.make(
-            label: "Total",
-            value: "$8.00",
-            traits: .staticText,
-            respondsToUserInteraction: false
-        )
-        var exploration = Navigation.SemanticExploration(
-            baseline: .interfaceMemory(
-                InterfaceObservation.makeForTests(elements: [(before, HeistId(rawValue: "total_staticText"))])
-            )
-        )
-
-        exploration.absorb(InterfaceObservation.makeForTests(elements: [(after, HeistId(rawValue: "total_staticText"))]))
-
-        XCTAssertEqual(
-            exploration.screen.findElement(heistId: "total_staticText")?.element.value,
-            "$8.00"
-        )
-    }
-
     func testSemanticExplorationAddsNestedContainersAfterOuterContainerIsExplored() {
         let outer = makeScrollableContainer(
             frame: CGRect(x: 0, y: 0, width: 320, height: 400),
@@ -2623,7 +2121,10 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
         var exploration = Navigation.SemanticExploration(baseline: .interfaceMemory(.empty))
 
-        exploration.absorb(page)
+        exploration.recordCommittedObservation(
+            continuity: .sameGeneration,
+            scrollableContainers: page.tree.orderedContainers.filter { $0.container.isScrollable }
+        )
 
         XCTAssertTrue(exploration.manifest.pendingScrollPaths.contains(TreePath([0])))
         XCTAssertTrue(exploration.manifest.pendingScrollPaths.contains(TreePath([0, 0])))
@@ -2654,7 +2155,10 @@ final class TheBrainsPipelineTests: XCTestCase {
         exploration.manifest.addPendingContainers([outerEntry])
         exploration.markExplored(outerEntry)
 
-        exploration.absorbScrolledPage(page, notificationBatch: nil)
+        exploration.recordCommittedObservation(
+            continuity: .sameGeneration,
+            scrollableContainers: page.tree.orderedContainers.filter { $0.container.isScrollable }
+        )
 
         XCTAssertTrue(exploration.manifest.exploredScrollPaths.contains(outerPath))
         XCTAssertFalse(exploration.manifest.pendingScrollPaths.contains(outerPath))
@@ -2663,12 +2167,21 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     func testSemanticExplorationFinishOwnsExplorationTimestamp() {
         var exploration = Navigation.SemanticExploration(baseline: .interfaceMemory(.empty))
+        let event = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(.empty)
 
-        let result = exploration.finish(startTime: CACurrentMediaTime() - 0.01)
+        let result = exploration.finish(
+            startTime: CACurrentMediaTime() - 0.01,
+            event: event,
+            didMoveViewport: false
+        )
 
         XCTAssertGreaterThan(result.manifest.explorationTime, 0)
-        XCTAssertEqual(result.screen.tree, InterfaceObservation.empty.tree)
-        XCTAssertEqual(result.screen.liveCapture.snapshot, InterfaceObservation.empty.liveCapture.snapshot)
+        XCTAssertFalse(result.didMoveViewport)
+        XCTAssertEqual(result.event.observation.screen.tree, InterfaceObservation.empty.tree)
+        XCTAssertEqual(
+            result.event.observation.screen.liveCapture.snapshot,
+            InterfaceObservation.empty.liveCapture.snapshot
+        )
     }
 
     func testExploreScreenExploresSwipeableContainer() async throws {
@@ -2742,24 +2255,6 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
     }
 
-    private func waitForSettledSemanticWaiter(
-        on stash: TheStash,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) async {
-        let deadline = CFAbsoluteTimeGetCurrent() + 1
-        while stash.semanticObservationStream.observationReplayWaiterCount == 0,
-              CFAbsoluteTimeGetCurrent() < deadline {
-            await Task.yield()
-            guard await Task.cancellableSleep(for: .milliseconds(5)) else { break }
-        }
-        XCTAssertEqual(stash.semanticObservationStream.observationReplayWaiterCount, 1, file: file, line: line)
-    }
-
-    private func makeElement(label: String) -> AccessibilityElement {
-        AccessibilityElement.make(label: label, respondsToUserInteraction: false)
-    }
-
     private func volumeScreen(value: String) -> InterfaceObservation {
         InterfaceObservation.makeForTests(elements: [
             (
@@ -2774,19 +2269,54 @@ final class TheBrainsPipelineTests: XCTestCase {
         ])
     }
 
-    private func predicateWaitForReceiptProofTests() -> PredicateWait {
-        PredicateWait(
+    private func makeStreamBackedPredicateWait(
+        settleVisible: @escaping PredicateWait.SettleVisible,
+        discover: @escaping PredicateWait.Discover = { _, _, _ in nil }
+    ) -> PredicateWait {
+        let stream = brains.stash.semanticObservationStream
+        return PredicateWait(
             observeEvent: { _, _, _ in nil },
-            latestEvent: { nil },
-            latestSettleFailure: { nil },
+            latestEvent: { stream.latestEvent },
+            latestSettleFailure: { stream.latestSettleFailureDiagnostic },
             semanticObservation: { event in
                 self.brains.postActionObservation.semanticObservation(from: event)
             },
-            buildObservationWindow: { _, _ in nil },
+            buildObservationWindow: { baseline, event in
+                stream.observationWindow(from: baseline, through: event)
+            },
             presenceTimeoutMessage: { _, _ in nil },
             announcementCursor: { _ in .origin },
-            waitForAnnouncement: { _, _, _ in nil }
+            waitForAnnouncement: { _, _, _ in nil },
+            settleVisible: settleVisible,
+            discover: discover
         )
+    }
+
+    private func temporalWaitReceipt(
+        predicate: AccessibilityPredicate,
+        baseline: InterfaceObservation,
+        final: InterfaceObservation
+    ) async throws -> HeistWaitReceipt {
+        let stream = brains.stash.semanticObservationStream
+        let baselineEvent = stream.commitVisibleObservationForTesting(baseline)
+        let finalEvent = stream.commitVisibleObservationForTesting(final)
+        let baselineCapture = try XCTUnwrap(baselineEvent.settledCapture)
+        let wait = makeStreamBackedPredicateWait(
+            settleVisible: { _ in finalEvent }
+        )
+        return await wait.wait(
+            for: try resolvedWait(WaitStep(predicate: predicate, timeout: 0)),
+            changeBaseline: .supplied(baselineCapture)
+        )
+    }
+
+    private func elementChanges(
+        in receipt: HeistWaitReceipt
+    ) -> [AccessibilityTrace.ElementsChangeFact] {
+        receipt.actionResult.accessibilityTrace?.changeFacts.compactMap { fact in
+            guard case .elementsChanged(let changes) = fact else { return nil }
+            return changes
+        } ?? []
     }
 
     private func makeScreen(elements: [(label: String, traits: UIAccessibilityTraits, heistId: HeistId)]) -> InterfaceObservation {
@@ -2799,63 +2329,6 @@ final class TheBrainsPipelineTests: XCTestCase {
             return (element, entry.heistId)
         }
         return .makeForTests(elements: pairs)
-    }
-
-    private func pollingObservation(
-        label: String,
-        scope: SemanticObservationScope,
-        sequence: SettledObservationSequence
-    ) -> HeistSemanticObservation {
-        let screen = makeScreen(elements: [
-            (label, .staticText, HeistId(rawValue: "polling_\(label)")),
-        ])
-        let settled = SettledSemanticObservation(
-            sequence: sequence,
-            scope: scope,
-            screen: screen,
-            semanticSignal: .empty
-        )
-        let state = brains.postActionObservation.captureSemanticState(from: settled)
-        let trace = AccessibilityTrace(capture: state.capture)
-        let event = SettledSemanticObservationEvent(
-            sequence: sequence,
-            scope: scope,
-            observation: settled,
-            previous: nil,
-            trace: trace
-        )
-        return HeistSemanticObservation(
-            event: event,
-            state: state,
-            accessibilityTrace: trace,
-            summary: "interface: \(state.interface.projectedElements.count) elements"
-        )
-    }
-
-    private func makeStaleObservation(
-        from state: PostActionObservation.BeforeState,
-        sequence: SettledObservationSequence
-    ) -> HeistSemanticObservation {
-        let trace = AccessibilityTrace(capture: state.capture)
-        let settled = SettledSemanticObservation(
-            sequence: sequence,
-            scope: .discovery,
-            screen: state.screen,
-            semanticSignal: .empty
-        )
-        let event = SettledSemanticObservationEvent(
-            sequence: sequence,
-            scope: .discovery,
-            observation: settled,
-            previous: nil,
-            trace: trace
-        )
-        return HeistSemanticObservation(
-            event: event,
-            state: state,
-            accessibilityTrace: trace,
-            summary: "interface: \(state.interface.projectedElements.count) elements"
-        )
     }
 
     private func activationSubjectEvidence(

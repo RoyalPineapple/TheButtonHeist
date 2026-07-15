@@ -64,19 +64,7 @@ extension Navigation {
             command: .scrollToEdge
         ) {
         case .resolved(let scrollTarget):
-            guard case .uiScrollView(let scrollView) = scrollTarget else {
-                return .failure(
-                    .scrollToEdge,
-                    message: "scroll_to_edge failed: selected container has no live UIScrollView",
-                    failureKind: .targetUnavailable
-                )
-            }
-            let proof = await performViewportTransition(
-                primitiveResult: safecracker.scrollToEdge(scrollView, edge: edge, animated: false),
-                previousVisibleIds: stash.viewportElementIDs,
-                animated: false,
-                commitViewportMoves: true
-            )
+            let proof = await scrollToEdgeAndSettle(scrollTarget, edge: edge)
             switch proof.result {
             case .moved:
                 return .success(method: .scrollToEdge)
@@ -93,53 +81,33 @@ extension Navigation {
         }
     }
 
+    func scrollToEdgeAndSettle(
+        _ target: ScrollableTarget,
+        edge: ScrollEdge
+    ) async -> ViewportTransition {
+        guard case .uiScrollView = target else {
+            return .unavailable(previousVisibleIds: stash.viewportElementIDs)
+        }
+        return await performViewportTransition(.edge(target, edge: edge))
+    }
+
     func scrollOnePageAndSettle(
         _ target: ScrollableTarget,
         direction: UIAccessibilityScrollDirection,
-        animated: Bool = true,
-        commitViewportMoves: Bool = true
-    ) async -> ScrollSettleProof {
-        let before = stash.viewportElementIDs
-
+        animated: Bool = true
+    ) async -> ViewportTransition {
         switch target {
-        case .uiScrollView(let sv):
+        case .uiScrollView:
             return await performViewportTransition(
-                primitiveResult: safecracker.scrollByPage(sv, direction: direction, animated: animated),
-                previousVisibleIds: before,
-                animated: animated,
-                commitViewportMoves: commitViewportMoves
+                .page(target, direction: direction, animated: animated)
             )
-        case .swipeable(let frame, let contentSize):
-            let targetKey = swipeTargetKey(frame: frame, contentSize: contentSize)
-            let isDirectionChange = lastSwipeDirectionByTarget[targetKey].map { $0 != direction } ?? false
-            let proof = await performViewportTransition(
-                primitiveResult: await safecracker.scrollBySwipe(
-                    frame: frame,
-                    direction: direction,
-                    duration: Self.swipeGestureDuration
-                ),
-                previousVisibleIds: before,
-                animated: false,
-                commitViewportMoves: commitViewportMoves,
-                settleAfterMove: {
-                    await self.settleSwipeMotion(
-                        previousVisibleIds: before,
-                        requireDirectionChangeSettle: isDirectionChange,
-                        commitViewportMoves: commitViewportMoves
-                    )
-                }
+        case .swipeable:
+            return await performViewportTransition(
+                .swipe(target, direction: direction)
             )
-            if proof.result != .unavailable {
-                lastSwipeDirectionByTarget[targetKey] = direction
-            }
-            return proof
         }
     }
 
-    @discardableResult
-    func observeViewportAfterScroll(commitViewportMoves: Bool) -> InterfaceObservation? {
-        stash.semanticPageForExploration()
-    }
 }
 
 #endif // DEBUG

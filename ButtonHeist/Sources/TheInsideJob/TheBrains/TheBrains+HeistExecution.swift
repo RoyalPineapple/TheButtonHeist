@@ -135,13 +135,11 @@ extension TheBrains {
                     )
                 },
                 wait: { request in
-                    let observationPlan = WaitObservationPlan(step: request.step)
                     return await brains.interactionObservation.waitForPredicate(
                         request.step,
                         initialTrace: request.initialTrace,
                         baselineSequence: request.afterSequence,
                         changeBaseline: request.changeBaseline,
-                        observationPlan: observationPlan,
                         announcementCursorStrategy: request.announcementCursorStrategy
                     )
                 },

@@ -34,30 +34,37 @@ a drift sentinel; it is not a second schema.
 
 ### Trees and Observations Are the Currency
 
-The settled `TheStash.interfaceTree` is the sole current semantic truth.
+The committed `TheStash.interfaceTree` is the sole current semantic truth.
 TheStash resolves every element, container, and descendant-scoped
 `AccessibilityTarget` directly against that tree. Wire conversion builds one
 validated `InterfaceGraph` with the delivered `Interface`; client matching,
 subtree selection, and formatting reuse that graph. There is no semantic back
 map, alternate flat screen, or separate query projection.
 
-`InterfaceObservation` is live capture evidence, not authority to publish
-semantic truth. It pairs an `InterfaceTree` with the viewport-local
-`LiveCapture` from the latest parser read. `SemanticObservationStream` is the
-only publication owner, and its production commit entry points require an
-`InterfaceObservationProof` produced by a clean settle or a finished
-exploration.
+`InterfaceObservation` pairs an `InterfaceTree` with the viewport-local
+`LiveCapture` from one parser read. Raw parser samples remain live evidence or
+failed-settle diagnostic evidence; they never append temporal history and do
+not become targetable semantic truth by themselves. `SettleSession` reduces
+those samples and a clean result produces an `InterfaceObservationProof`.
 
-`SemanticObservationRuntimeState` atomically owns the stream lifecycle,
-generation lineage, settled sequence, and notification cursors. Publication
-construction is a pure transform over boundary-resolved evidence; the stream
-performs stash commits, fallback logging, and retained-log publication.
+`SemanticObservationStream` is the sole ordered committer. Its production
+entry points accept only `InterfaceObservationProof`, classify continuity once,
+reduce the proof into `TheStash.interfaceTree`, construct the settled
+publication from that committed graph, and only then append it to the private
+`SemanticObservationLog`. `SemanticObservationRuntimeState` advances after log
+publication and atomically owns stream lifecycle, generation lineage, settled
+sequence, and notification cursors. There is no parser-to-log path and no
+subscriber-driven graph mutation. The stream's graph reducer is the only graph
+mutation path; no compatibility reducer or publication route exists.
 
 `SemanticObservationLog` is the retained temporal owner. Each
 `ObservationEntry` pairs a settled capture with an initial, same-generation, or
 screen-boundary transition. `ObservationCursor` records generation, scope,
-settled sequence, capture hash, and notification sequence. Consumers read the
-log through replayable `ObservationEntrySequence` values; an
+settled sequence, capture hash, notification sequence, and `observedAt`.
+`observedAt` is derived automatically from the capture's interface timestamp;
+it is descriptive metadata, not an ordering input. Generation and settled
+sequence provide correctness ordering. Consumers read the log through
+replayable `ObservationEntrySequence` values; an
 `ObservationWindow` is built from one immutable baseline cursor through the
 current retained entry. No predicate, action, or adapter owns another history.
 
@@ -91,8 +98,9 @@ layout, animations, top view-controller identity, navigation state, window
 ordering, keyboard state, and first responder state. It never classifies the
 accessibility tree.
 
-When Tripwire triggers, TheBrains parses the accessibility hierarchy and waits
-for a clean settled snapshot. One pure `ScreenClassifier` combines typed
+When Tripwire triggers, TheBrains parses the accessibility hierarchy and
+`SettleSession` waits for a clean result that can produce an
+`InterfaceObservationProof`. One pure `ScreenClassifier` combines typed
 snapshots with scoped `screenChanged`, `elementChanged`, and `announcement`
 notifications. `AccessibilityNotificationBus` appends normalized events to one
 bounded ingress log. Action/heist cursors checkpoint that retained history
@@ -135,17 +143,58 @@ TheInsideJob; clients and adapters send typed observation intent.
 
 Visible observation reduces parser reads through `SettleSession`; only a clean
 settle can construct the proof consumed by the visible commit path. Discovery
-has the same publication boundary. `Navigation.SemanticExploration` absorbs
-cleanly settled pages into one last-read-wins semantic graph while retaining
-only the latest page's live capture. Intermediate pages are local reducer state.
-`Navigation.ExploredScreen` represents the finished graph, and only that
-finished value can construct the proof consumed by the discovery commit path.
+uses the same proof and commit boundary. `Navigation.performViewportTransition`
+is the sole product-driven viewport movement operation: page scroll, discovery,
+inflation placement, and restoration all provide movement intent to it. After a
+successful movement dispatch, its minimal movement-specific settle parses the
+new viewport, yields one run-loop turn, and parses again. Matching semantic
+fingerprints prove the viewport in one turn; layout churn may consume another
+turn, bounded by the 250 ms transition ceiling. Page, edge, swipe, known
+content-point reveal, and restore intents all reduce their proof into the
+canonical graph and publish one settled event. When a target is already present
+in `InterfaceTree`, inflation uses its parser-derived scroll membership and
+two-dimensional content point to jump directly to it; blank intervening pages
+are irrelevant. `ViewportExplorer` is the fallback for unknown targets or
+missing reveal evidence. It dispatches exactly one viewport movement,
+waits for settle, parse, graph reduction, publication, and callback, and only
+then may request another movement.
 
-Publication appends each settled capture to the same `SemanticObservationLog`
-used by waits and action expectations. Visible and discovery consumers select a
-scope and cursor; they do not build private capture arrays or claim notification
-events. Retained-history eviction is explicit incomplete evidence, never an
-inferred `noChange`.
+Each scrollable container is searched as two independent directional rays from
+its saved visual origin. The caller chooses `ViewportSearchOrder.forwardFirst`
+or `.backwardFirst`; after the first ray is depleted, the explorer restores and
+commits the saved origin before starting the opposite ray. Empty pages do not
+deplete a direction. A ray ends only when its next legal content offset equals
+its current legal content offset, the traversal matches, the screen changes, or
+a configured budget is exhausted. Off-edge bounce is clamped out before this
+comparison, so stretchy overdrag cannot masquerade as another page.
+
+Command discovery and wait discovery use `ViewportExitPosition.origin`: every
+touched scroll view is restored and the restored viewport is committed before
+the operation returns. Target inflation uses `ViewportExitPosition.current`, so
+the requested element remains visible for dispatch. The caller selects this
+exit policy before traversal; finalization applies it whether traversal matched,
+depleted its rays, hit a budget, or was interrupted after dispatch.
+`Navigation.ExploredScreen` is the finished event and manifest for that
+traversal; it derives from canonical stash truth and owns no second graph or
+publication path. There is no compatibility traversal or publication path.
+
+Publication appends each settled capture to the same private
+`SemanticObservationLog` used by waits and action expectations. Consumers read
+that history only through replayable `ObservationEntrySequence` values selected
+by scope and cursor; they do not subscribe to parser samples, build private
+capture arrays, or claim notification events. Retained-history eviction is
+explicit incomplete evidence, never an inferred `noChange`.
+
+Waits first evaluate settled visible truth. A wait with one eligible predicate
+target reveals and retains an element that already resolves before a standalone
+temporal wait establishes its baseline; unmatched observations re-run that
+reveal. Appearance assertions, unresolved targets, containers, and predicates
+with multiple targets use canonical discovery with `.origin`. Every temporal
+evaluation asks the log for the accumulated baseline-through-current
+`ObservationWindow`. Action expectations retain their supplied pre-action
+baseline rather than establishing or replacing it inside the wait. At the wait
+deadline, a final visible check receives the bare 250 ms settle budget and a
+final full reveal or discovery runs within the normal traversal caps.
 
 Detail level is separate: `detail: "summary"` keeps responses compact, while
 `detail: "full"` adds geometry and heavier accessibility fields.
@@ -186,9 +235,9 @@ durable artifact, or final output formatting.
 
 The approved long-lived owners are:
 
-- `TheStash`: settled `InterfaceTree`, latest disposable `LiveCapture`, and non-clean
-  settle diagnostics. Its `SemanticObservationStream` owns the retained
-  `SemanticObservationLog` and current settled publication.
+- `TheStash`: committed `InterfaceTree`, latest disposable `LiveCapture`, and
+  non-clean settle diagnostics. Its `SemanticObservationStream` is the sole
+  ordered committer and owns the private retained `SemanticObservationLog`.
 - `TheMuscle`: auth, admission, and session state inside the app.
 - `TheHandoff`: external connection phase and discovery state outside the app.
 - `PendingRequestTracker`: request ID to continuation correlation, removed on
@@ -332,21 +381,19 @@ flowchart TD
     PreAction --> Invoke["Invoke action<br/>ActionDispatchOutcome"]
     Invoke --> ExpectPath["PredicateWait.wait<br/>timeout default 1s"]
 
-    StepKind -->|Action.until / RepeatUntil| InitialStop["Initial stop check<br/>PredicateWait.wait timeout 0"]
-    InitialStop --> StopMet{"stop met?"}
+    StepKind -->|Action.until / RepeatUntil| LoopBaseline["Read baseline observation<br/>without evaluating stop predicate"]
+    LoopBaseline --> RunBody["Run body action<br/>at least once"]
+    RunBody --> ProgressGate["Use settled action trace or await<br/>the next settled element observation"]
+    ProgressGate --> EvaluateStop["Evaluate stop predicate<br/>against retained observations"]
+    EvaluateStop --> StopMet{"stop met?"}
     StopMet -->|yes| Done["success"]
-    StopMet -->|no| RunBody["Run body action"]
-    RunBody --> ProgressGate["Progress gate<br/>PredicateWait.wait(.changed(.elements()), 1s)"]
-    ProgressGate --> ProgressObserved{"progress observed?"}
-    ProgressObserved -->|no| Fail["fail / timeout"]
-    ProgressObserved -->|yes| EvaluateStop["Evaluate stop predicate<br/>against retained observations"]
-    EvaluateStop --> StopMet
+    StopMet -->|no, progress + time remains| RunBody
+    StopMet -->|no progress or deadline elapsed| Fail["fail / timeout"]
 
-    WaitForPath --> Poll["Shared polling loop"]
-    ExpectPath --> Poll
-    ProgressGate --> Poll
+    WaitForPath --> Lifecycle["PredicateWait lifecycle<br/>visible check → target reveal or canonical discovery<br/>→ observation stream → re-reveal/discovery → terminal verification"]
+    ExpectPath --> Lifecycle
 
-    Poll --> PredicateKind{"Predicate kind"}
+    Lifecycle --> PredicateKind{"Predicate kind"}
     PredicateKind -->|exists / missing| Current["Current InterfaceTree / InterfaceGraph"]
     PredicateKind -->|changed / noChange| Observe["Read next settled ObservationEntry<br/>from cursor-backed sequence"]
     Observe --> Log["SemanticObservationLog<br/>retained, non-destructive"]
@@ -362,36 +409,41 @@ flowchart TD
     Facts --> Evaluate
     Evaluate --> Matched{"matched?"}
     Matched -->|yes| Success["ActionResult success<br/>outcome-bound observation + expectation"]
-    Matched -->|no, timeout not elapsed| Observe
+    Matched -->|no, lifecycle has work remaining| Lifecycle
     Matched -->|no, timeout elapsed| Timeout["ActionResult timeout<br/>outcome-bound observation + unmet evidence"]
 ```
 
 The `WaitFor`, post-action `.expect`, and `RepeatUntil` progress paths all call
 `PredicateWait.wait(...)`. The caller chooses the baseline:
 
-- `WaitFor(...)`: temporal predicates use the first settled cursor observed by
-  the wait; presence predicates read the current tree immediately.
-- `Action(...).expect(...)`: a temporal expectation captures the exact
-  discovery-scope `SettledCapture` when action execution begins and carries it
-  into the wait. Presence and announcement expectations need no temporal
-  baseline.
+- `WaitFor(...)`: presence predicates read the current tree immediately. For a
+  temporal predicate with one eligible, already-resolvable element target, the
+  wait reveals and retains that target before using the resulting settled cursor
+  as its standalone baseline. Other standalone temporal waits establish their
+  baseline from canonical discovery.
+- `Action(...).expect(...)`: a temporal expectation supplies the exact
+  pre-action `SettledCapture` to the wait. The wait preserves that baseline;
+  presence and announcement expectations need no temporal baseline.
 - `RunHeist(...).expect(...)`: baseline is the nested heist boundary and stays
   action-like.
-- `RepeatUntil(...)` and action `.until(...)`: the stop predicate is checked
-  immediately first; after each body, The Button Heist waits up to one second for
-  `.changed(.elements())`, then evaluates the stop predicate against the same
-  retained observation lineage. Screen boundaries also emit element lifecycle
-  facts, so they satisfy this progress gate.
+- `RepeatUntil(...)` and action `.until(...)`: a direct semantic observation
+  establishes temporal evidence without evaluating the stop predicate. The body
+  always executes once. Its settled action trace, or the next settled element
+  observation, supplies the post-body state used to evaluate either a current-tree
+  existence predicate or an iteration-scoped change predicate. Only an unmet
+  result with time remaining starts another iteration. Screen boundaries emit
+  element lifecycle facts and therefore participate in the same evaluation.
 
 Each baseline is a settled `ObservationCursor` carrying generation, semantic
-scope, sequence, capture hash, and notification sequence. The semantic log
-retains bounded per-scope history and builds one `ObservationWindow` from that
-baseline through the latest settled capture. Polling asks the log for later
-entries; it does not maintain a second capture array, baseline, or notification
-claim. Action expectations carry the exact capture across the action boundary;
-they never rebind a visible sequence to an older discovery capture or
-manufacture a cursor by combining a sequence from one capture with a hash from
-another.
+scope, sequence, capture hash, notification sequence, and capture-derived
+timestamp metadata. Generation and sequence order the lineage; timestamp does
+not. The semantic log retains bounded per-scope history and builds a new
+accumulated `ObservationWindow` from the immutable baseline through every
+settled capture the wait evaluates. The wait does not maintain a second capture
+array, baseline, or notification claim. Action expectations carry the exact
+capture across the action boundary; they never replace it with a standalone
+wait baseline or manufacture a cursor by combining fields from different
+captures.
 
 A settled action endpoint may satisfy a temporal expectation immediately from
 its causal before/after trace. A timed-out diagnostic endpoint cannot take that
@@ -447,7 +499,8 @@ unconstructible.
 ### Read
 
 1. The client sends `get_interface`.
-2. TheInsideJob settles, parses, and returns an accessibility capture.
+2. TheInsideJob parses until settled, commits the proven graph and log entry,
+   and returns the resulting accessibility capture.
 3. TheFence formats the capture for CLI/MCP using the requested detail level.
 
 ### Act
@@ -469,13 +522,32 @@ unconstructible.
 
 ### Wait
 
-`wait` is a one-step heist. TheInsideJob checks current-tree predicates first,
-then reads later retained entries into one observation window until the
-requested predicate matches or the timeout expires. `.exists(target)` and
-`.missing(target)` resolve any element, container, or descendant-scoped
-`AccessibilityTarget` against current state. `.changed(.elements(...))` and
-`.changed(.screen(...))` require their declared fact evidence; a lifecycle
-assertion never passes from final state alone.
+`wait` is a one-step heist with an explicit bounded lifecycle. It checks the
+latest visible committed state first and exits immediately on a match. If
+unmatched, an eligible wait with one already-resolvable terminal element target
+uses element inflation to reveal that exact `HeistId` and exits `.current`,
+retaining the revealed viewport. A standalone temporal wait establishes its
+baseline only after that positioning commit. Each later retained entry is
+evaluated against the complete accumulated window from that immutable baseline;
+an unmatched entry triggers another reveal before the wait returns to idle.
+
+Appearance assertions, unresolved element targets, container targets, and
+predicates containing multiple targets use the canonical viewport explorer
+instead. Discovery searches both directional rays and exits `.origin`. The wait
+then sits idle on an `ObservationEntrySequence` rather than polling or reparsing;
+an unmatched retained entry permits one bounded rediscovery. Action
+expectations do not establish a standalone baseline in either route: they keep
+the supplied pre-action `SettledCapture`.
+
+At the deadline, the wait performs one final bounded visible check followed, if
+still unmatched, by one final reveal or canonical discovery check. Every
+matching stage exits early. These reveal and discovery routes are the only wait
+routes; there is no compatibility orchestration path.
+
+`.exists(target)` and `.missing(target)` resolve any element, container, or
+descendant-scoped `AccessibilityTarget` against current state.
+`.changed(.elements(...))` and `.changed(.screen(...))` require their declared
+fact evidence; a lifecycle assertion never passes from final state alone.
 
 ### Replay
 

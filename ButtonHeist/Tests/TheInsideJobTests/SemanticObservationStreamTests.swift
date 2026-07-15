@@ -22,6 +22,49 @@ final class SemanticObservationStreamTests: XCTestCase {
         stash = nil
     }
 
+    func testObservationStreamRetainsEveryFastTransitionAfterCursor() async throws {
+        let baseline = stash.semanticObservationStream.commitVisibleObservationForTesting(
+            observation(label: "Baseline", heistId: "baseline")
+        )
+        let cursor = try XCTUnwrap(baseline.cursor)
+        var publications = stash.semanticObservationStream
+            .observationEntries(after: cursor, scope: .visible)
+            .makeAsyncIterator()
+
+        let first = observation(label: "First", heistId: "first")
+        let second = observation(label: "Second", heistId: "second")
+        let firstEvent = stash.semanticObservationStream.commitVisibleObservationForTesting(first)
+        let secondEvent = stash.semanticObservationStream.commitVisibleObservationForTesting(second)
+
+        let publishedFirstValue = try await publications.next()
+        let publishedSecondValue = try await publications.next()
+        let publishedFirst = try XCTUnwrap(publishedFirstValue)
+        let publishedSecond = try XCTUnwrap(publishedSecondValue)
+        XCTAssertEqual(publishedFirst.cursor, firstEvent.cursor)
+        XCTAssertEqual(publishedSecond.cursor, secondEvent.cursor)
+    }
+
+    func testLifecycleResetClearsCommittedTruth() {
+        _ = stash.semanticObservationStream.commitVisibleObservationForTesting(
+            observation(label: "Before Reset", heistId: "before_reset")
+        )
+
+        stash.clearCache()
+
+        XCTAssertEqual(stash.interfaceTree, .empty)
+        XCTAssertEqual(stash.latestObservation.tree, InterfaceObservation.empty.tree)
+    }
+
+    func testSameCaptureInDifferentScopeGetsItsOwnPublication() {
+        let screen = observation(label: "Shared", heistId: "shared")
+
+        _ = stash.semanticObservationStream.commitVisibleObservationForTesting(screen)
+        _ = stash.semanticObservationStream.commitDiscoveryObservationForTesting(screen)
+
+        XCTAssertEqual(stash.semanticObservationStream.retainedObservationEntries(scope: .visible).count, 2)
+        XCTAssertEqual(stash.semanticObservationStream.retainedObservationEntries(scope: .discovery).count, 1)
+    }
+
     func testFirstCommittedScopeAppendsInitialEntry() throws {
         let event = stash.semanticObservationStream.commitVisibleObservationForTesting(
             observation(label: "Initial", heistId: "initial")
@@ -52,6 +95,39 @@ final class SemanticObservationStreamTests: XCTestCase {
         XCTAssertEqual(transition.previousCursor, entries[0].cursor)
     }
 
+    func testVisiblePublicationPreservesAndProjectsKnownOffViewportTruth() throws {
+        let visibleBefore = AccessibilityElement.make(
+            label: "Anchor",
+            value: "Before",
+            identifier: "anchor",
+            traits: .staticText
+        )
+        let visibleAfter = AccessibilityElement.make(
+            label: "Anchor",
+            value: "After",
+            identifier: "anchor",
+            traits: .staticText
+        )
+        let offViewport = AccessibilityElement.make(label: "Known Offscreen", traits: .button)
+        let offViewportId: HeistId = "known_offscreen_button"
+        let baseline = InterfaceObservation.makeForTests(
+            elements: [(visibleBefore, "anchor")],
+            offViewport: [.init(offViewport, heistId: offViewportId)]
+        )
+        let current = InterfaceObservation.makeForTests(elements: [(visibleAfter, "anchor")])
+
+        let baselineEvent = stash.semanticObservationStream.commitVisibleObservationForTesting(baseline)
+        let currentEvent = stash.semanticObservationStream.commitVisibleObservationForTesting(current)
+
+        XCTAssertEqual(currentEvent.generation, baselineEvent.generation)
+        XCTAssertNotNil(stash.interfaceTree.findElement(heistId: offViewportId))
+        XCTAssertTrue(
+            currentEvent.trace.captures.last?.interface.projectedElements.contains {
+                $0.label == "Known Offscreen"
+            } == true
+        )
+    }
+
     func testScreenReplacementRetainsBoundaryAndBothCaptures() throws {
         let firstEvent = stash.semanticObservationStream.commitVisibleObservationForTesting(
             observation(label: "Before", heistId: "before")
@@ -74,6 +150,22 @@ final class SemanticObservationStreamTests: XCTestCase {
         }
         XCTAssertEqual(transition.previousCursor, entries[0].cursor)
         XCTAssertEqual(entries.map(\.cursor), [firstEvent.cursor, secondEvent.cursor].compactMap { $0 })
+    }
+
+    func testInferredReplacementResetsGraphAndRetainsClassifierProof() {
+        let firstEvent = stash.semanticObservationStream.commitVisibleObservationForTesting(
+            observation(label: "Before", heistId: "before")
+        )
+        let secondEvent = stash.semanticObservationStream.commitVisibleObservationForTesting(
+            observation(label: "After", heistId: "after")
+        )
+
+        XCTAssertEqual(secondEvent.generation, firstEvent.generation.advanced())
+        XCTAssertEqual(
+            secondEvent.continuity,
+            .replacement(.inferred(.primaryHeaderChanged))
+        )
+        XCTAssertEqual(stash.interfaceTree.elementIDs, ["after"])
     }
 
     func testDiscoveryPublicationMaintainsIndependentScopeLineage() throws {
@@ -127,63 +219,6 @@ final class SemanticObservationStreamTests: XCTestCase {
         XCTAssertEqual(transition.previousCursor, discoveryEntries[0].cursor)
     }
 
-    func testGenerationClassifierUsesScopedPredecessorUntilGlobalGenerationAdvances() {
-        let root = observation(label: "Root", heistId: "root")
-        let menu = observation(label: "Menu", heistId: "menu")
-        let checkout = observation(label: "Checkout", heistId: "checkout")
-        let rootEvent = stash.semanticObservationStream.commitDiscoveryObservationForTesting(root)
-        let menuEvent = stash.semanticObservationStream.commitVisibleObservationForTesting(
-            menu,
-            notificationBatch: screenChangedBatch()
-        )
-        let sameGenerationMenuSource = menuEvent.replacingGeneration(rootEvent.generation)
-
-        XCTAssertEqual(
-            SemanticObservationGenerationClassifier.classify(
-                currentGeneration: rootEvent.generation,
-                previousInScope: rootEvent,
-                latestSource: sameGenerationMenuSource,
-                candidate: menu,
-                scope: .discovery,
-                notifications: []
-            ),
-            .inferredScreenChange(reason: .primaryHeaderChanged)
-        )
-        XCTAssertEqual(
-            SemanticObservationGenerationClassifier.classify(
-                currentGeneration: menuEvent.generation,
-                previousInScope: rootEvent,
-                latestSource: menuEvent,
-                candidate: menu,
-                scope: .discovery,
-                notifications: []
-            ),
-            .sameGeneration
-        )
-        XCTAssertEqual(
-            SemanticObservationGenerationClassifier.classify(
-                currentGeneration: menuEvent.generation,
-                previousInScope: rootEvent,
-                latestSource: menuEvent,
-                candidate: checkout,
-                scope: .discovery,
-                notifications: []
-            ),
-            .inferredScreenChange(reason: .primaryHeaderChanged)
-        )
-        XCTAssertEqual(
-            SemanticObservationGenerationClassifier.classify(
-                currentGeneration: menuEvent.generation,
-                previousInScope: rootEvent,
-                latestSource: menuEvent,
-                candidate: menu,
-                scope: .discovery,
-                notifications: [.screenChanged]
-            ),
-            .screenChangedNotification
-        )
-    }
-
     func testRuntimeStateOwnsLifecycleReplacementAndCancellation() {
         var state = SemanticObservationRuntimeState()
         let task = Task<Void, Never> { await Task.yield() }
@@ -199,7 +234,7 @@ final class SemanticObservationStreamTests: XCTestCase {
         state.requireReplacement()
 
         XCTAssertEqual(state.lineage, .replacementRequired(.initial))
-        XCTAssertEqual(state.lineage.admitting(.sameGeneration), .screenChangedNotification)
+        XCTAssertEqual(state.lineage.admitting(.sameGeneration), .replacement(.screenChangedNotification))
 
         let stoppedTask = state.stop()
         stoppedTask?.cancel()
@@ -221,7 +256,7 @@ final class SemanticObservationStreamTests: XCTestCase {
             screen: screen,
             semanticSignal: .empty,
             context: SemanticObservationPublication.Context(
-                generationClassification: .screenChangedNotification,
+                continuity: .replacement(.screenChangedNotification),
                 generation: .initial,
                 previousEvents: [:]
             ),
@@ -399,11 +434,11 @@ final class SemanticObservationStreamTests: XCTestCase {
             }
             didProduceFreshDiscovery = true
             self.stash.recordParsedObservedEvidence(freshDiscovery)
+            let event = self.stash.semanticObservationStream
+                .commitDiscoveryObservationForTesting(freshDiscovery)
             return Navigation.ExploredScreen(
-                screen: freshDiscovery,
-                manifest: .init(),
-                generationDisposition: .preservesGeneration,
-                discoveryCommitPolicy: .mergeIntoInterface
+                event: event,
+                manifest: .init()
             )
         }
         defer { discoveryContinuation?.resume() }

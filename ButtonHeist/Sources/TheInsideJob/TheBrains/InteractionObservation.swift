@@ -18,20 +18,25 @@ final class InteractionObservation {
     private static let defaultVisibleStateTimeout = Double(SettleSession.defaultTimeoutMs) / 1_000
 
     private let stash: TheStash
+    private let navigation: Navigation
     private let postActionObservation: PostActionObservation
     private var heistAnnouncementCursor: AccessibilityNotificationCursor = .origin
     private var predicateWait: PredicateWait {
         makePredicateWait()
     }
 
-    init(stash: TheStash, postActionObservation: PostActionObservation) {
+    init(
+        stash: TheStash,
+        navigation: Navigation,
+        postActionObservation: PostActionObservation
+    ) {
         self.stash = stash
+        self.navigation = navigation
         self.postActionObservation = postActionObservation
     }
 
     private func makePredicateWait() -> PredicateWait {
         let stash = self.stash
-        let postActionObservation = self.postActionObservation
         return PredicateWait(
             observeEvent: { scope, sequence, timeout in
                 await stash.observeSettledSemanticObservation(
@@ -40,15 +45,9 @@ final class InteractionObservation {
                     timeout: timeout
                 )
             },
-            latestEvent: {
-                stash.latestSettledSemanticObservationEvent
-            },
-            latestSettleFailure: {
-                stash.latestSemanticObservationFailureDiagnostic()
-            },
-            semanticObservation: { event in
-                postActionObservation.semanticObservation(from: event)
-            },
+            latestEvent: { stash.latestSettledSemanticObservationEvent },
+            latestSettleFailure: { stash.latestSemanticObservationFailureDiagnostic() },
+            semanticObservation: { self.postActionObservation.semanticObservation(from: $0) },
             buildObservationWindow: { baseline, event in
                 stash.semanticObservationStream.observationWindow(
                     from: baseline,
@@ -58,28 +57,109 @@ final class InteractionObservation {
             presenceTimeoutMessage: { predicate, elapsed in
                 stash.presenceWaitTimeoutMessage(for: predicate, elapsed: elapsed)
             },
-            announcementCursor: { [weak self] strategy in
-                switch strategy {
-                case .futureOnly:
-                    return stash.accessibilityNotifications.cursor()
-                case .heistScoped:
-                    return self?.heistAnnouncementCursor ?? .origin
-                }
+            announcementCursor: { strategy in
+                self.announcementCursor(for: strategy)
             },
-            waitForAnnouncement: { [weak self] cursor, predicate, timeout in
-                let announcement = await stash.accessibilityNotifications.waitForAnnouncement(
+            waitForAnnouncement: { cursor, predicate, timeout in
+                await self.waitForAnnouncement(
                     after: cursor,
                     matching: predicate,
                     timeout: timeout
                 )
-                if let announcement, let self {
-                    self.heistAnnouncementCursor = AccessibilityNotificationCursor(
-                        sequence: max(self.heistAnnouncementCursor.sequence, announcement.sequence)
+            },
+            settleVisible: { deadline in
+                if !stash.latestSettledSemanticObservationInvalidated,
+                   let current = stash.latestSettledSemanticObservationEvent {
+                    return current
+                }
+                guard deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) else { return nil }
+                guard let evidence = await stash.observeVisibleSemanticEvidence(
+                    timeout: min(Self.defaultVisibleStateTimeout, deadline.remainingSeconds())
+                ),
+                let event = stash.latestSettledSemanticObservationEvent,
+                event.sequence == evidence.settledObservationSequence
+                else { return nil }
+                return event
+            },
+            revealTarget: { target, deadline in
+                guard target.isElementTarget,
+                      stash.resolveTarget(target).resolved != nil
+                else { return nil }
+                if let deadline,
+                   !deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) {
+                    return nil
+                }
+                switch await self.navigation.elementInflation.inflate(
+                    for: target,
+                    method: .scrollToVisible
+                ) {
+                case .inflated:
+                    return stash.latestSettledSemanticObservationEvent
+                case .failed:
+                    return nil
+                }
+            },
+            discover: { target, deadline, observer in
+                if let deadline,
+                   !deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) {
+                    return nil
+                }
+                let baseline = Navigation.ExplorationBaseline.currentViewport(
+                    stash.visibleExplorationBaseline(from: stash.latestObservation)
+                )
+                guard let exploration = await self.navigation.exploreScreen(
+                    target: target,
+                    baseline: baseline,
+                    exitPosition: .origin,
+                    deadline: deadline,
+                    onObservation: { event in
+                        observer(event) ? .finish : .continue
+                    }
+                ) else { return nil }
+                return exploration.event
+            },
+            latestObservationCursor: {
+                stash.semanticObservationStream.latestObservationCursor(scope: .visible)
+            },
+            observationEntries: { cursor in
+                if let cursor {
+                    return stash.semanticObservationStream.observationEntries(
+                        after: cursor,
+                        scope: .visible
                     )
                 }
-                return announcement
+                return stash.semanticObservationStream.observationEntries(scope: .visible)
             }
         )
+    }
+
+    private func announcementCursor(
+        for strategy: AnnouncementWaitCursorStrategy
+    ) -> AccessibilityNotificationCursor {
+        switch strategy {
+        case .futureOnly:
+            stash.accessibilityNotifications.cursor()
+        case .heistScoped:
+            heistAnnouncementCursor
+        }
+    }
+
+    private func waitForAnnouncement(
+        after cursor: AccessibilityNotificationCursor,
+        matching predicate: ResolvedAnnouncementPredicate,
+        timeout: Double
+    ) async -> CapturedAnnouncement? {
+        let announcement = await stash.accessibilityNotifications.waitForAnnouncement(
+            after: cursor,
+            matching: predicate,
+            timeout: timeout
+        )
+        if let announcement {
+            heistAnnouncementCursor = AccessibilityNotificationCursor(
+                sequence: max(heistAnnouncementCursor.sequence, announcement.sequence)
+            )
+        }
+        return announcement
     }
 
     func resetAnnouncementWaitCursorForHeist(to cursor: AccessibilityNotificationCursor) {
@@ -176,28 +256,23 @@ final class InteractionObservation {
         initialTrace: AccessibilityTrace? = nil,
         baselineSequence: SettledObservationSequence? = nil,
         changeBaseline: PredicateChangeBaselineSource = .establishFromFirstObservation,
-        observationPlan: WaitObservationPlan? = nil,
         announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly,
         onReadyToPoll: PredicateWait.ReadyToPoll? = nil
     ) async -> HeistWaitReceipt {
-        let plan = observationPlan ?? WaitObservationPlan(step: step)
         let baselineSource: PredicateChangeBaselineSource
         switch (changeBaseline, baselineSequence) {
         case (.establishFromFirstObservation, .some(let sequence)):
             baselineSource = .supplied(stash.semanticObservationStream.settledCapture(
-                scope: plan.scope,
+                scope: .visible,
                 at: sequence
             ))
         case (.establishFromFirstObservation, .none), (.supplied, _):
             baselineSource = changeBaseline
         }
-        let baseline = baselineSource.capture
         return await predicateWait.wait(
             for: step,
             initialTrace: initialTrace,
-            after: baseline?.cursor.sequence ?? baselineSequence,
             changeBaseline: baselineSource,
-            observationPlan: plan,
             announcementCursorStrategy: announcementCursorStrategy,
             onReadyToPoll: onReadyToPoll
         )

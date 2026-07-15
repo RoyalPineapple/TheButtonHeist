@@ -355,7 +355,7 @@ final class TheStashResolutionTests: XCTestCase {
             (sharedCurrentAction, "shared_action"),
         ])
         XCTAssertEqual(currentVisible.id, "buttonheist_demo")
-        bagman.recordParsedObservedEvidence(currentVisible)
+        bagman.semanticObservationStream.commitVisibleObservationForTesting(currentVisible)
 
         let baseline = bagman.actionDiscoveryBaseline()
 
@@ -453,7 +453,7 @@ final class TheStashResolutionTests: XCTestCase {
         }, ["Toast"])
     }
 
-    func testVisibleObservationTraceExcludesDiscoveryOnlyElements() throws {
+    func testVisibleObservationTraceIncludesCommittedDiscoveryElements() throws {
         let visible = element(label: "Custom Rotors", traits: .button)
         let discovered = element(label: "ButtonHeist Demo", traits: .button)
         let discovery = InterfaceObservation.makeForTests(
@@ -479,8 +479,7 @@ final class TheStashResolutionTests: XCTestCase {
             .interface
             .projectedElements
             .compactMap(\.label)
-        XCTAssertEqual(labels, ["Custom Rotors"])
-        XCTAssertFalse(labels.contains("ButtonHeist Demo"))
+        XCTAssertEqual(labels, ["Custom Rotors", "ButtonHeist Demo"])
     }
 
     func testDiagnosticEvidenceInvalidatesLatestSettledObservationWithoutReplacingIt() {
@@ -1207,48 +1206,6 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(bagman.latestFailedSettleDiagnosticEvidence?.tree, screenA.tree)
         XCTAssertNil(bagman.latestFailedSettleDiagnosticEvidence?.liveCapture.object(for: "a"))
     }
-
-    func testExploredAdmissionRejectsStaleSourceAndAcceptsCurrentSourceMerge() {
-        let objectA = NSObject()
-        let objectB = NSObject()
-        let screenA = InterfaceObservation.makeForTests([
-            .init(label: "Catalog", heistId: "header", traits: .header),
-            .init(label: "Old", heistId: "old", object: objectA),
-        ])
-        let screenB = InterfaceObservation.makeForTests([
-            .init(label: "Catalog", heistId: "header", traits: .header),
-            .init(label: "Current", heistId: "current", object: objectB),
-        ])
-        bagman.recordParsedObservedEvidence(screenA)
-        let staleExploration = Navigation.ExploredScreen(
-            screen: screenA,
-            manifest: .init(),
-            generationDisposition: .preservesGeneration,
-            discoveryCommitPolicy: .mergeIntoInterface
-        )
-        bagman.recordParsedObservedEvidence(screenB)
-
-        XCTAssertNil(bagman.semanticObservationStream.commitExploredDiscoveryObservation(staleExploration))
-
-        var currentExploration = Navigation.SemanticExploration(baseline: .interfaceMemory(screenA))
-        currentExploration.absorb(screenB)
-        let currentScreen = currentExploration.screen
-        let currentResult = bagman.semanticObservationStream.commitExploredDiscoveryObservation(
-            Navigation.ExploredScreen(
-                screen: currentScreen,
-                manifest: currentExploration.manifest,
-                generationDisposition: currentExploration.generationDisposition,
-                discoveryCommitPolicy: currentExploration.discoveryCommitPolicy
-            )
-        )
-
-        XCTAssertEqual(currentScreen.captureToken, screenB.captureToken)
-        XCTAssertTrue(currentScreen.liveCapture.object(for: "current") === objectB)
-        XCTAssertNotNil(currentScreen.findElement(heistId: "old"))
-        XCTAssertNotNil(currentScreen.findElement(heistId: "current"))
-        XCTAssertNotNil(currentResult)
-    }
-
     func testSettledSemanticObservationWaiterCompletesOnLaterObservation() async {
         let first = InterfaceObservation.makeForTests(elements: [(element(label: "First"), "first")])
         bagman.semanticObservationStream.commitVisibleObservationForTesting(first)
@@ -1360,8 +1317,12 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(observation?.observation.screen.orderedElements.first?.element.label, "Discovery")
     }
 
-    func testVisibleWaiterCompletesWithVisibleProjectionFromDiscoveryObservation() async {
-        let first = InterfaceObservation.makeForTests(elements: [(element(label: "First"), "first")])
+    func testVisibleWaiterCarriesCommittedGraphFromDiscoveryObservation() async {
+        let sharedHeader = element(label: "Catalog", traits: .header)
+        let first = InterfaceObservation.makeForTests(elements: [
+            (sharedHeader, "catalog"),
+            (element(label: "First"), "first"),
+        ])
         bagman.semanticObservationStream.commitVisibleObservationForTesting(first)
         let firstSequence = bagman.latestSettledSemanticObservation?.sequence
 
@@ -1381,7 +1342,10 @@ final class TheStashResolutionTests: XCTestCase {
         let visibleDiscovery = element(label: "Visible Discovery")
         let knownDiscovery = element(label: "Known Discovery")
         let discovery = InterfaceObservation.makeForTests(
-            elements: [(visibleDiscovery, "visible_discovery")],
+            elements: [
+                (sharedHeader, "catalog"),
+                (visibleDiscovery, "visible_discovery"),
+            ],
             offViewport: [
                 InterfaceObservation.OffViewportEntry(
                     knownDiscovery,
@@ -1397,26 +1361,36 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(observation?.sequence, 2)
         XCTAssertEqual(
             observation?.observation.screen.orderedElements.compactMap(\.element.label),
-            ["Visible Discovery"]
+            ["Catalog", "Visible Discovery"]
         )
         XCTAssertEqual(
             observation?.trace.captures.last?.interface.projectedElements.compactMap(\.label),
-            ["Visible Discovery"]
+            ["Catalog", "Visible Discovery", "First", "Known Discovery"]
         )
         XCTAssertEqual(bagman.latestSettledSemanticObservation?.scope, .discovery)
-        XCTAssertEqual(bagman.interfaceElementIDs, ["first", "known_discovery", "visible_discovery"])
+        XCTAssertEqual(
+            bagman.interfaceElementIDs,
+            ["catalog", "first", "known_discovery", "visible_discovery"]
+        )
         XCTAssertEqual(bagman.semanticObservationStream.observationReplayWaiterCount, 0)
     }
 
-    func testCleanVisibleEventAfterDiscoveryReturnsVisibleProjection() async {
-        let first = InterfaceObservation.makeForTests(elements: [(element(label: "First"), "first")])
+    func testCleanVisibleEventAfterDiscoveryCarriesCommittedGraph() async {
+        let sharedHeader = element(label: "Catalog", traits: .header)
+        let first = InterfaceObservation.makeForTests(elements: [
+            (sharedHeader, "catalog"),
+            (element(label: "First"), "first"),
+        ])
         bagman.semanticObservationStream.commitVisibleObservationForTesting(first)
         let firstSequence = bagman.latestSettledSemanticObservation?.sequence
 
         let visibleDiscovery = element(label: "Visible Discovery")
         let knownDiscovery = element(label: "Known Discovery")
         let discovery = InterfaceObservation.makeForTests(
-            elements: [(visibleDiscovery, "visible_discovery")],
+            elements: [
+                (sharedHeader, "catalog"),
+                (visibleDiscovery, "visible_discovery"),
+            ],
             offViewport: [
                 InterfaceObservation.OffViewportEntry(
                     knownDiscovery,
@@ -1437,11 +1411,11 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(observation?.sequence, 2)
         XCTAssertEqual(
             observation?.observation.screen.orderedElements.compactMap(\.element.label),
-            ["Visible Discovery"]
+            ["Catalog", "Visible Discovery"]
         )
         XCTAssertEqual(
             observation?.trace.captures.last?.interface.projectedElements.compactMap(\.label),
-            ["Visible Discovery"]
+            ["Catalog", "Visible Discovery", "First", "Known Discovery"]
         )
     }
 
@@ -1569,10 +1543,14 @@ final class TheStashResolutionTests: XCTestCase {
     }
 
     func testDiscoveryProjectionMaintainsFullTrace() throws {
+        let sharedHeader = element(label: "Catalog", traits: .header)
         let firstVisible = element(label: "First Visible")
         let firstKnown = element(label: "First Known")
         let first = InterfaceObservation.makeForTests(
-            elements: [(firstVisible, "first_visible")],
+            elements: [
+                (sharedHeader, "catalog"),
+                (firstVisible, "first_visible"),
+            ],
             offViewport: [
                 InterfaceObservation.OffViewportEntry(
                     firstKnown,
@@ -1586,7 +1564,10 @@ final class TheStashResolutionTests: XCTestCase {
         let secondVisible = element(label: "Second Visible")
         let secondKnown = element(label: "Second Known")
         let second = InterfaceObservation.makeForTests(
-            elements: [(secondVisible, "second_visible")],
+            elements: [
+                (sharedHeader, "catalog"),
+                (secondVisible, "second_visible"),
+            ],
             offViewport: [
                 InterfaceObservation.OffViewportEntry(
                     secondKnown,
@@ -1602,15 +1583,15 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(event.trace.captures.count, 2)
         XCTAssertEqual(
             try XCTUnwrap(event.trace.captures.first).interface.projectedElements.compactMap(\.label).sorted(),
-            ["First Known", "First Visible"]
+            ["Catalog", "First Known", "First Visible"]
         )
         XCTAssertEqual(
             try XCTUnwrap(event.trace.captures.last).interface.projectedElements.compactMap(\.label).sorted(),
-            ["First Known", "First Visible", "Second Known", "Second Visible"]
+            ["Catalog", "First Known", "First Visible", "Second Known", "Second Visible"]
         )
         XCTAssertEqual(
             bagman.interfaceElementIDs,
-            ["first_known", "first_visible", "second_known", "second_visible"]
+            ["catalog", "first_known", "first_visible", "second_known", "second_visible"]
         )
     }
 
@@ -1703,11 +1684,11 @@ final class TheStashResolutionTests: XCTestCase {
         bagman.startPassiveSemanticObservation {
             discoveryCount += 1
             self.bagman.recordParsedObservedEvidence(second)
+            let event = self.bagman.semanticObservationStream
+                .commitDiscoveryObservationForTesting(second)
             return Navigation.ExploredScreen(
-                screen: second,
-                manifest: .init(),
-                generationDisposition: .preservesGeneration,
-                discoveryCommitPolicy: .mergeIntoInterface
+                event: event,
+                manifest: .init()
             )
         }
 
@@ -1728,11 +1709,11 @@ final class TheStashResolutionTests: XCTestCase {
         bagman.startPassiveSemanticObservation {
             discoveryCount += 1
             self.bagman.recordParsedObservedEvidence(discovery)
+            let event = self.bagman.semanticObservationStream
+                .commitDiscoveryObservationForTesting(discovery)
             return Navigation.ExploredScreen(
-                screen: discovery,
-                manifest: .init(),
-                generationDisposition: .preservesGeneration,
-                discoveryCommitPolicy: .mergeIntoInterface
+                event: event,
+                manifest: .init()
             )
         }
 
@@ -1804,11 +1785,11 @@ final class TheStashResolutionTests: XCTestCase {
             discoveryScreen = nil
             return screen.map {
                 self.bagman.recordParsedObservedEvidence($0)
+                let event = self.bagman.semanticObservationStream
+                    .commitDiscoveryObservationForTesting($0)
                 return Navigation.ExploredScreen(
-                    screen: $0,
-                    manifest: .init(),
-                    generationDisposition: .preservesGeneration,
-                    discoveryCommitPolicy: .mergeIntoInterface
+                    event: event,
+                    manifest: .init()
                 )
             }
         }

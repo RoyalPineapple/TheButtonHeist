@@ -308,7 +308,6 @@ unprefixed name wins when it is valid.
 
 | Variable | Default | Clamp | Purpose |
 |----------|---------|-------|---------|
-| `BH_POST_SCROLL_LAYOUT_FRAMES` | `3` | `0...10` | Main-run-loop frames to wait after programmatic scrolling. |
 | `BH_TRIPWIRE_PULSE_HZ` | `10` | `1...120` | Accessibility tripwire polling frequency. |
 | `BH_MAX_SCROLLS_PER_CONTAINER` | `200` | `1...2000` | Per-container scroll exploration safety limit. |
 | `BH_MAX_SCROLLS_PER_DISCOVERY` | `200` | `1...2000` | Whole-discovery scroll exploration safety limit. |

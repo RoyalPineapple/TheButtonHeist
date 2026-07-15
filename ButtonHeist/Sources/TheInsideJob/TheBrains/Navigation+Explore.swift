@@ -12,41 +12,38 @@ import AccessibilitySnapshotParser
 extension Navigation {
 
     fileprivate func observeSemanticDiscovery() async -> ExploredScreen? {
-        await exploreScreen()
+        await exploreScreen(exitPosition: .origin)
     }
 
     func exploreScreen(
         target: ResolvedAccessibilityTarget? = nil,
         baseline: ExplorationBaseline? = nil,
+        exitPosition: ViewportExitPosition = .origin,
+        searchOrder: ViewportSearchOrder = .forwardFirst,
+        deadline: SemanticObservationDeadline? = nil,
         maxScrollsPerContainer: Int? = nil,
-        maxScrollsPerDiscovery: Int? = nil
+        maxScrollsPerDiscovery: Int? = nil,
+        onObservation: ((SettledSemanticObservationEvent) -> ViewportExplorationDecision)? = nil
     ) async -> ExploredScreen? {
-        guard !Task.isCancelled else { return nil }
-        let startTime = CACurrentMediaTime()
-        guard let settledPage = await settledExplorationPage(),
-              !Task.isCancelled else { return nil }
-        var exploration = SemanticExploration(
-            baseline: baseline ?? .interfaceMemory(stash.explorationBaseline()),
-            maxScrollsPerContainer: maxScrollsPerContainer ?? ScreenManifest.maxScrollsPerContainer,
-            maxScrollsPerDiscovery: maxScrollsPerDiscovery ?? ScreenManifest.maxScrollsPerDiscovery
+        let explorer = ViewportExplorer(
+            navigation: self,
+            exploration: SemanticExploration(
+                baseline: baseline ?? .interfaceMemory(stash.explorationBaseline()),
+                deadline: deadline,
+                maxScrollsPerContainer: maxScrollsPerContainer ?? ScreenManifest.maxScrollsPerContainer,
+                maxScrollsPerDiscovery: maxScrollsPerDiscovery ?? ScreenManifest.maxScrollsPerDiscovery
+            ),
+            searchOrder: searchOrder
         )
-
-        exploration.absorb(settledPage)
-
-        if let target, hasVisibleTerminalExplorationResolution(target, in: exploration.screen.tree) {
-            exploration.manifest.clearPendingContainers()
-            return exploration.finish(startTime: startTime)
+        return await explorer.exploreViewports(exitPosition: exitPosition) { event in
+            if let decision = onObservation?(event), decision == .finish {
+                return .finish
+            }
+            guard let target else { return .continue }
+            return hasVisibleTerminalExplorationResolution(target, in: event.observation.screen.tree)
+                ? .finish
+                : .continue
         }
-
-        exploration.addDiscoveredContainers(exploration.screen.orderedContainers.filter { $0.container.isScrollable })
-        guard !Task.isCancelled else { return nil }
-        let terminal = await scanPendingContainers(target: target, exploration: &exploration)
-        guard !Task.isCancelled else { return nil }
-        if terminal != nil {
-            return exploration.finish(startTime: startTime)
-        }
-
-        return exploration.finish(startTime: startTime)
     }
 
     func hasTerminalExplorationResolution(_ target: ResolvedAccessibilityTarget, in tree: InterfaceTree) -> Bool {
@@ -68,16 +65,49 @@ extension Navigation {
 }
 
 extension Navigation {
-    func settledExplorationPage() async -> InterfaceObservation? {
-        let settle = await SettleSession.live(
+    func settledExplorationPage(
+        deadline: SemanticObservationDeadline?,
+        discoveryCommitPolicy: DiscoveryCommitPolicy,
+        notificationWindow: AccessibilityNotificationActionWindow? = nil,
+        requiredAfterMovement: Bool = false
+    ) async -> SettledSemanticObservationEvent? {
+        defer { notificationWindow?.cancel() }
+        guard requiredAfterMovement || (!Task.isCancelled && hasTimeRemaining(before: deadline)) else {
+            return nil
+        }
+        let timeoutMs: Int
+        switch (deadline, requiredAfterMovement) {
+        case (_, true), (nil, false):
+            timeoutMs = SettleSession.viewportTransitionTimeoutMs
+        case (.some(let deadline), false):
+            timeoutMs = min(
+                SettleSession.viewportTransitionTimeoutMs,
+                max(1, Int((deadline.remainingSeconds() * 1_000).rounded(.up)))
+            )
+        }
+        let settle = await SettleSession.viewportTransition(
             stash: stash,
             tripwire: tripwire,
-            timeoutMs: SettleSession.defaultTimeoutMs
+            timeoutMs: timeoutMs
         ).run(
             start: CFAbsoluteTimeGetCurrent(),
             baselineTripwireSignal: tripwire.tripwireSignal()
         )
-        return InterfaceObservationProof.settled(settle, stash: stash)?.screen
+        guard requiredAfterMovement || (!Task.isCancelled && hasTimeRemaining(before: deadline)),
+              let proof = InterfaceObservationProof.settled(
+                  settle,
+                  stash: stash,
+                  discoveryCommitPolicy: discoveryCommitPolicy
+              )
+        else { return nil }
+        return stash.semanticObservationStream.commitSettledDiscoveryObservation(
+            proof,
+            notificationBatch: notificationWindow?.capture()
+        )
+    }
+
+    private func hasTimeRemaining(before deadline: SemanticObservationDeadline?) -> Bool {
+        deadline?.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) ?? true
     }
 }
 

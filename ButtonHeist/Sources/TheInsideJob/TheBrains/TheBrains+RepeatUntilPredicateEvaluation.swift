@@ -29,6 +29,15 @@ extension TheBrains.RepeatUntil {
             traceEvidence = receipt.traceEvidence
             summary = receipt.observationSummary
         }
+
+        internal init(_ observation: HeistSemanticObservation) {
+            sequence = observation.event.sequence
+            traceEvidence = AccessibilityTraceEvidence(
+                trace: observation.accessibilityTrace,
+                completeness: .incomplete
+            )
+            summary = observation.summary
+        }
     }
 
     internal struct MetCheck {
@@ -101,28 +110,10 @@ extension TheBrains.RepeatUntil {
         }
     }
 
-    internal enum InitialCheck {
-        case unavailable(HeistWaitReceipt)
-        case met(MetCheck)
-        case unmet(UnmetCheck)
-
-        internal static func make(receipt: HeistWaitReceipt) -> InitialCheck {
-            guard let check = ObservedCheck(receipt: receipt) else {
-                return .unavailable(receipt)
-            }
-            switch check {
-            case .met(let check):
-                return .met(check)
-            case .unmet(let check):
-                return .unmet(check)
-            }
-        }
-    }
-
     internal enum PostBodyCheck {
         case deadlineElapsed(ExpectationResult.Unmet)
-        case changedMet(MetCheck)
-        case changedUnmet(UnmetCheck)
+        case met(MetCheck)
+        case unmet(UnmetCheck)
         case noProgress(observation: Observation?, expectation: ExpectationResult.Unmet, receipt: HeistWaitReceipt)
 
         internal var iterationOutcome: IterationOutcome {
@@ -130,9 +121,9 @@ extension TheBrains.RepeatUntil {
             case .deadlineElapsed(let expectation),
                  .noProgress(_, let expectation, _):
                 return .continued(expectation)
-            case .changedMet(let check):
+            case .met(let check):
                 return .predicateMet(check.expectation)
-            case .changedUnmet(let check):
+            case .unmet(let check):
                 return .continued(check.expectation)
             }
         }
@@ -141,9 +132,9 @@ extension TheBrains.RepeatUntil {
             switch self {
             case .deadlineElapsed:
                 return nil
-            case .changedMet(let check):
+            case .met(let check):
                 return check.observation
-            case .changedUnmet(let check):
+            case .unmet(let check):
                 return check.observation
             case .noProgress(let observation, _, _):
                 return observation
@@ -179,11 +170,12 @@ extension TheBrains {
     internal func repeatUntilPostBodyCheck(
         context: RepeatUntil.Context,
         step: ResolvedRepeatUntilStep,
-        observation: RepeatUntil.Observation,
+        observation: RepeatUntil.Observation?,
         iterationResults: [HeistExecutionStepResult],
         deadline: CFAbsoluteTime
     ) async -> RepeatUntil.PostBodyCheck {
-        if let actionTraceCheck = repeatUntilActionTracePostBodyCheck(
+        if let observation,
+           let actionTraceCheck = repeatUntilActionTracePostBodyCheck(
             step: step,
             observation: observation,
             iterationResults: iterationResults
@@ -199,11 +191,19 @@ extension TheBrains {
             ))
         }
         let progressTimeout = min(defaultActionExpectationTimeout, remaining)
-        let receipt = await context.runtime.wait(.afterObservation(
-            .changedElements(timeout: progressTimeout),
-            baselineTrace: observation.trace,
-            sequence: observation.sequence
-        ))
+        let receipt: HeistWaitReceipt
+        if let observation {
+            receipt = await context.runtime.wait(.afterObservation(
+                .changedElements(timeout: progressTimeout),
+                baselineTrace: observation.trace,
+                sequence: observation.sequence
+            ))
+        } else {
+            receipt = await context.runtime.wait(.baselineTraceOnly(
+                ResolvedWaitRuntimeInput(repeatUntil: step, timeout: progressTimeout),
+                trace: nil
+            ))
+        }
         let expectation = repeatUntilStopExpectation(
             authored: step.predicateExpression,
             resolved: step.predicate,
@@ -214,8 +214,7 @@ extension TheBrains {
         let observedCheck = RepeatUntil.Observation(receipt).map {
             RepeatUntil.ObservedCheck(observation: $0, check: stopCheck, receipt: receipt)
         }
-        guard receipt.succeeded,
-              let check = observedCheck else {
+        guard let check = observedCheck else {
             let noProgressExpectation: ExpectationResult.Unmet
             switch stopCheck {
             case .met(let metExpectation):
@@ -236,9 +235,16 @@ extension TheBrains {
         }
         switch check {
         case .met(let check):
-            return .changedMet(check)
+            return .met(check)
         case .unmet(let check):
-            return .changedUnmet(check)
+            guard receipt.succeeded else {
+                return .noProgress(
+                    observation: check.observation,
+                    expectation: check.expectation,
+                    receipt: receipt
+                )
+            }
+            return .unmet(check)
         }
     }
 
@@ -275,7 +281,7 @@ extension TheBrains {
                 observedSequence: sequence,
                 observationSummary: actionObservation.summary
             )
-            return .changedMet(RepeatUntil.MetCheck(
+            return .met(RepeatUntil.MetCheck(
                 observation: actionObservation,
                 expectation: expectation,
                 receipt: receipt
@@ -288,7 +294,7 @@ extension TheBrains {
                 observedSequence: sequence,
                 observationSummary: actionObservation.summary
             )
-            return .changedUnmet(RepeatUntil.UnmetCheck(
+            return .unmet(RepeatUntil.UnmetCheck(
                 observation: actionObservation,
                 expectation: expectation,
                 receipt: receipt

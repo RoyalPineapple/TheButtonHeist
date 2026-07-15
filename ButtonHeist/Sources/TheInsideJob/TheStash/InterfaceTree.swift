@@ -142,41 +142,22 @@ struct InterfaceTree: Sendable, Equatable {
 
     @MainActor
     func updatingViewport(with observation: InterfaceObservation) -> InterfaceTree {
-        let observed = observation.tree
-        guard !observed.viewportElementIDs.isEmpty else { return observed }
-        if let currentID = id, let observedID = observed.id, currentID != observedID {
-            return observed
-        }
-
-        let offViewportIDs = elementIDs.subtracting(viewportElementIDs)
-        guard observationPairsWithCurrentViewport(observed, offViewportIDs: offViewportIDs) else {
-            return observed
-        }
-
-        let disappearedIDs = viewportElementIDs.subtracting(observed.elementIDs)
+        guard observation.tree != .empty else { return .empty }
+        let next = observation.tree
+        let previousVisible = viewportElementIDs
+        let disappearedVisible = previousVisible.subtracting(next.viewportElementIDs)
+        let previousContainerPaths = Set(viewportCapture.hierarchy.pathIndexedContainers.map(\.path))
+        let nextContainerPaths = Set(next.viewportCapture.hierarchy.pathIndexedContainers.map(\.path))
+        let disappearedContainers = previousContainerPaths.subtracting(nextContainerPaths)
         return InterfaceTree(
             elements: elements
-                .merging(observed.elements) { _, new in new }
-                .filter { !disappearedIDs.contains($0.key) },
-            containers: containers.merging(observed.containers) { _, new in new },
-            viewportCapture: observed.viewportCapture
+                .filter { !disappearedVisible.contains($0.key) }
+                .merging(next.elements) { _, new in new },
+            containers: containers
+                .filter { !disappearedContainers.contains($0.key) }
+                .merging(next.containers) { _, new in new },
+            viewportCapture: next.viewportCapture
         )
-    }
-
-    @MainActor
-    private func observationPairsWithCurrentViewport(
-        _ observation: InterfaceTree,
-        offViewportIDs: Set<HeistId>
-    ) -> Bool {
-        if !viewportElementIDs.isDisjoint(with: observation.viewportElementIDs) {
-            return true
-        }
-        if !offViewportIDs.isEmpty && viewportElementIDs.isEmpty {
-            return true
-        }
-        let previous = viewportElementIDs.compactMap { elements[$0]?.element }
-        let current = observation.viewportElementIDs.compactMap { observation.elements[$0]?.element }
-        return previous.sharesElementPairing(with: current)
     }
 
     // MARK: - Element Entry
@@ -184,15 +165,15 @@ struct InterfaceTree: Sendable, Equatable {
     /// Durable scroll-container membership derived while walking the hierarchy.
     ///
     /// This is semantic placement evidence, not live action geometry: it records
-    /// the owning scroll container and the optional accessibility container index
+    /// the owning scroll container and optional accessibility container index
     /// reported by UIKit. It deliberately cannot express an absolute scroll-content point.
     struct ScrollMembership: Sendable, Equatable {
         let containerPath: TreePath
         let index: Int?
     }
 
-    /// Scroll-content coordinate captured for an element's activation point
-    /// while that element was visible in its scroll view.
+    /// Scroll-content coordinate captured whenever the parser delivers an
+    /// element under its scroll view, including off-viewport elements.
     ///
     /// This is reveal evidence only. It is not current screen geometry, and it
     /// must not be projected into wire `frame` / `activationPoint` fields for
@@ -339,7 +320,7 @@ struct InterfaceTree: Sendable, Equatable {
             traits: element.traits.heistTraitNames,
             respondsToUserInteraction: element.respondsToUserInteraction,
             customContent: customContent,
-            rotors: element.customRotors.map { $0.name }.filter { !$0.isEmpty }
+            rotors: element.customRotors.map(\.name).filter { !$0.isEmpty }
         )
     }
 

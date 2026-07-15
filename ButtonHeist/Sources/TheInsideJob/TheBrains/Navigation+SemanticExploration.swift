@@ -14,13 +14,6 @@ extension Navigation {
         case interfaceMemory(InterfaceObservation)
         case currentViewport(InterfaceObservation)
 
-        var screen: InterfaceObservation {
-            switch self {
-            case .interfaceMemory(let screen), .currentViewport(let screen):
-                screen
-            }
-        }
-
         var discoveryCommitPolicy: DiscoveryCommitPolicy {
             switch self {
             case .interfaceMemory:
@@ -36,35 +29,39 @@ extension Navigation {
         case replaceInterface
     }
 
-    enum ExplorationGenerationDisposition: Equatable {
-        case preservesGeneration
-        case replacesGeneration(reason: AccessibilityObservationFallbackReason)
-
-        mutating func record(_ classification: ScreenClassifier.Classification) {
-            guard case .inferredScreenChange(let reason) = classification else { return }
-            self = .replacesGeneration(reason: reason)
-        }
+    enum ViewportExplorationDecision: Equatable, Sendable {
+        case `continue`
+        case finish
     }
 
-    enum SemanticExplorationScope {
-        case manifestBoundedDiscovery
-        case knownTargetReveal(SemanticObservationDeadline)
+    enum ViewportExitPosition: Equatable, Sendable {
+        case origin
+        case current
+    }
+
+    enum ViewportSearchOrder: Equatable, Sendable {
+        case forwardFirst
+        case backwardFirst
+
+        var directions: [ScrollScanDirection] {
+            switch self {
+            case .forwardFirst:
+                [.forward, .back]
+            case .backwardFirst:
+                [.back, .forward]
+            }
+        }
     }
 
     struct ContainerExploration {
         let semanticContainer: InterfaceTree.Container
-        let scrollView: UIScrollView
+        let savedVisualOrigin: CGPoint
         let hasHOverflow: Bool
         let hasVOverflow: Bool
 
         var container: AccessibilityContainer { semanticContainer.container }
 
         var path: TreePath { semanticContainer.path }
-
-        @MainActor
-        var savedVisualOrigin: CGPoint {
-            Navigation.visualOrigin(in: scrollView)
-        }
     }
 
     enum ScrollScanDirection: Equatable, Sendable {
@@ -72,262 +69,67 @@ extension Navigation {
         case back
     }
 
-    enum ScrollScanGoal: Equatable, Sendable {
-        case exhaust
-        case findTarget(ResolvedAccessibilityTarget)
-        case findHeistId(HeistId)
-    }
-
-    enum ScrollTraversalTerminal: Equatable, Sendable {
-        case foundTarget(ResolvedAccessibilityTarget)
-        case foundHeistId(HeistId)
-        case coverageComplete
-    }
-
     enum ScrollContainerScanResult: Equatable, Sendable {
-        case terminal(ScrollTraversalTerminal)
+        case finished
         case completed
         case screenReplaced
         case omitted(ExplorationOmissionReason)
+        case interrupted
     }
 
     enum ScrollScanOutcome: Equatable, Sendable {
-        case terminal(ScrollTraversalTerminal)
+        case finished
         case exhausted
         case screenReplaced
         case limitHit(ExplorationOmissionReason)
-    }
-
-    struct ScrollScanPlan {
-        let container: ContainerExploration
-        let direction: ScrollScanDirection
-        let goal: ScrollScanGoal
-        let animated: Bool
-
-        init(
-            container: ContainerExploration,
-            direction: ScrollScanDirection,
-            goal: ScrollScanGoal,
-            animated: Bool = false
-        ) {
-            self.container = container
-            self.direction = direction
-            self.goal = goal
-            self.animated = animated
-        }
-    }
-
-    enum ScrollContainerScanState: Equatable, Sendable {
-        case idle
-        case scanning(ScrollScanDirection)
-        case restoring(ScrollContainerScanRestore)
-        case finished(ScrollContainerScanResult)
-    }
-
-    enum ScrollContainerScanEvent: Equatable, Sendable {
-        case begin
-        case scanCompleted(ScrollScanOutcome)
-        case restoreCompleted
-    }
-
-    enum ScrollContainerScanEffect: Equatable, Sendable {
-        case run(ScrollScanDirection)
-        case restore
-        case finish(ScrollContainerScanResult)
-    }
-
-    enum ScrollContainerScanRejection: Equatable, Sendable {
-        case alreadyStarted
-        case alreadyFinished
-        case scanOutcomeWithoutActiveScan
-        case restoreWithoutPendingRestore
-    }
-
-    enum ScrollContainerScanRestore: Equatable, Sendable {
-        case beforeBackwardScan
-        case beforeOmission(ExplorationOmissionReason)
-        case beforeCompletion
-    }
-
-    struct ScrollContainerScanMachine: SimpleStateMachine, Equatable {
-        func advance(
-            _ state: ScrollContainerScanState,
-            with event: ScrollContainerScanEvent
-        ) -> StateChange<ScrollContainerScanState, ScrollContainerScanEffect, ScrollContainerScanRejection> {
-            switch (state, event) {
-            case (.idle, .begin):
-                return .changed(to: .scanning(.forward), effects: [.run(.forward)])
-
-            case (.idle, .scanCompleted),
-                 (.idle, .restoreCompleted):
-                return .rejected(.scanOutcomeWithoutActiveScan, stayingIn: state)
-
-            case (.scanning(let direction), .scanCompleted(let outcome)):
-                return Self.advanceScanning(direction: direction, outcome: outcome)
-
-            case (.scanning, .begin):
-                return .rejected(.alreadyStarted, stayingIn: state)
-
-            case (.scanning, .restoreCompleted):
-                return .rejected(.restoreWithoutPendingRestore, stayingIn: state)
-
-            case (.restoring(let restore), .restoreCompleted):
-                return Self.advanceRestoring(restore)
-
-            case (.restoring, .begin):
-                return .rejected(.alreadyStarted, stayingIn: state)
-
-            case (.restoring, .scanCompleted):
-                return .rejected(.scanOutcomeWithoutActiveScan, stayingIn: state)
-
-            case (.finished, _):
-                return .rejected(.alreadyFinished, stayingIn: state)
-            }
-        }
-
-        private static func advanceScanning(
-            direction: ScrollScanDirection,
-            outcome: ScrollScanOutcome
-        ) -> StateChange<ScrollContainerScanState, ScrollContainerScanEffect, ScrollContainerScanRejection> {
-            switch (direction, outcome) {
-            case (_, .screenReplaced):
-                return .changed(to: .finished(.screenReplaced), effects: [.finish(.screenReplaced)])
-
-            case (_, .terminal(let terminal)):
-                let result = ScrollContainerScanResult.terminal(terminal)
-                return .changed(to: .finished(result), effects: [.finish(result)])
-
-            case (.forward, .exhausted):
-                return .changed(to: .restoring(.beforeBackwardScan), effects: [.restore])
-
-            case (.forward, .limitHit(let reason)):
-                return .changed(to: .restoring(.beforeOmission(reason)), effects: [.restore])
-
-            case (.back, .exhausted):
-                return .changed(to: .restoring(.beforeCompletion), effects: [.restore])
-
-            case (.back, .limitHit(let reason)):
-                return .changed(to: .restoring(.beforeOmission(reason)), effects: [.restore])
-            }
-        }
-
-        private static func advanceRestoring(
-            _ restore: ScrollContainerScanRestore
-        ) -> StateChange<ScrollContainerScanState, ScrollContainerScanEffect, ScrollContainerScanRejection> {
-            switch restore {
-            case .beforeBackwardScan:
-                return .changed(to: .scanning(.back), effects: [.run(.back)])
-
-            case .beforeOmission(let reason):
-                let result = ScrollContainerScanResult.omitted(reason)
-                return .changed(to: .finished(result), effects: [.finish(result)])
-
-            case .beforeCompletion:
-                return .changed(to: .finished(.completed), effects: [.finish(.completed)])
-            }
-        }
+        case interrupted
     }
 
     struct ExploredScreen {
-        let screen: InterfaceObservation
+        let event: SettledSemanticObservationEvent
         let manifest: ScreenManifest
-        let generationDisposition: ExplorationGenerationDisposition
-        let discoveryCommitPolicy: DiscoveryCommitPolicy
+        let didMoveViewport: Bool
 
         internal init(
-            screen: InterfaceObservation,
+            event: SettledSemanticObservationEvent,
             manifest: ScreenManifest,
-            generationDisposition: ExplorationGenerationDisposition,
-            discoveryCommitPolicy: DiscoveryCommitPolicy
+            didMoveViewport: Bool = false
         ) {
-            self.screen = screen
+            self.event = event
             self.manifest = manifest
-            self.generationDisposition = generationDisposition
-            self.discoveryCommitPolicy = discoveryCommitPolicy
+            self.didMoveViewport = didMoveViewport
         }
     }
 
     struct SemanticExploration {
-        var screen: InterfaceObservation
         var manifest: ScreenManifest
-        let scope: SemanticExplorationScope
-        let discoveryCommitPolicy: DiscoveryCommitPolicy
-        private(set) var generationDisposition = ExplorationGenerationDisposition.preservesGeneration
+        private(set) var discoveryCommitPolicy: DiscoveryCommitPolicy
+        let deadline: SemanticObservationDeadline?
 
         init(
             baseline: ExplorationBaseline,
+            deadline: SemanticObservationDeadline? = nil,
             maxScrollsPerContainer: Int = ScreenManifest.maxScrollsPerContainer,
             maxScrollsPerDiscovery: Int = ScreenManifest.maxScrollsPerDiscovery
         ) {
-            screen = baseline.screen
-            scope = .manifestBoundedDiscovery
             discoveryCommitPolicy = baseline.discoveryCommitPolicy
+            self.deadline = deadline
             manifest = ScreenManifest(
                 maxScrollsPerContainer: maxScrollsPerContainer,
                 maxScrollsPerDiscovery: maxScrollsPerDiscovery
             )
         }
 
-        init(baseline: InterfaceObservation, knownTargetDeadline: SemanticObservationDeadline) {
-            screen = baseline
-            scope = .knownTargetReveal(knownTargetDeadline)
-            discoveryCommitPolicy = .mergeIntoInterface
-            manifest = ScreenManifest()
-        }
-
         var hasTimeRemaining: Bool {
-            switch scope {
-            case .manifestBoundedDiscovery:
-                return true
-            case .knownTargetReveal(let deadline):
-                return deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent())
-            }
+            deadline?.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) ?? true
         }
 
-        func cappedAnimatedWait(_ maximum: TimeInterval) -> TimeInterval {
-            switch scope {
-            case .manifestBoundedDiscovery:
-                return maximum
-            case .knownTargetReveal(let deadline):
-                return min(maximum, deadline.remainingSeconds())
-            }
-        }
-
-        @discardableResult
-        @MainActor
-        mutating func absorb(_ parsed: InterfaceObservation?) -> ScreenClassifier.Classification? {
-            guard let parsed else { return nil }
-            let classification = ScreenClassifier.classify(
-                before: ScreenClassifier.snapshot(of: screen.tree),
-                after: ScreenClassifier.snapshot(of: parsed.tree),
-                notifications: []
-            )
-            return absorb(parsed, classification: classification)
-        }
-
-        @discardableResult
-        @MainActor
-        mutating func absorbScrolledPage(
-            _ parsed: InterfaceObservation,
-            notificationBatch: AccessibilityNotificationBatch?
-        ) -> ScreenClassifier.Classification {
-            let classification: ScreenClassifier.Classification = if notificationBatch?.events.contains(where: {
-                if case .screenChanged = $0.kind { return true }
-                return false
-            }) == true {
-                .screenChangedNotification
-            } else {
-                .sameGeneration
-            }
-            return absorb(parsed, classification: classification)
-        }
-
-        private mutating func absorb(
-            _ parsed: InterfaceObservation,
-            classification: ScreenClassifier.Classification
-        ) -> ScreenClassifier.Classification {
-            generationDisposition.record(classification)
-            if classification.isScreenReplacement {
+        mutating func recordCommittedObservation(
+            continuity: ScreenContinuity,
+            scrollableContainers: [InterfaceTree.Container]
+        ) {
+            discoveryCommitPolicy = .mergeIntoInterface
+            if continuity.isReplacement {
                 // A replacement starts a new graph, not a new execution budget.
                 let scrollCount = manifest.scrollCount
                 manifest = ScreenManifest(
@@ -335,18 +137,8 @@ extension Navigation {
                     maxScrollsPerDiscovery: manifest.maxScrollsPerDiscovery
                 )
                 manifest.scrollCount = scrollCount
-                screen = parsed
-            } else {
-                do {
-                    screen = try parsed.replacingTreeWithCurrentCapture(
-                        screen.tree.merging(parsed.tree)
-                    )
-                } catch {
-                    preconditionFailure("Exploration observation failed validation: \(error)")
-                }
             }
-            addDiscoveredContainers(parsed.orderedContainers.filter { $0.container.isScrollable })
-            return classification
+            addDiscoveredContainers(scrollableContainers)
         }
 
         mutating func markExplored(_ container: InterfaceTree.Container) {
@@ -361,13 +153,16 @@ extension Navigation {
             manifest.addPendingContainers(newContainers)
         }
 
-        mutating func finish(startTime: CFTimeInterval) -> ExploredScreen {
+        mutating func finish(
+            startTime: CFTimeInterval,
+            event: SettledSemanticObservationEvent,
+            didMoveViewport: Bool
+        ) -> ExploredScreen {
             manifest.explorationTime = CACurrentMediaTime() - startTime
             return ExploredScreen(
-                screen: screen,
+                event: event,
                 manifest: manifest,
-                generationDisposition: generationDisposition,
-                discoveryCommitPolicy: discoveryCommitPolicy
+                didMoveViewport: didMoveViewport
             )
         }
     }

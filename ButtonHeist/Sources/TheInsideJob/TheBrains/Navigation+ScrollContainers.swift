@@ -146,7 +146,11 @@ extension Navigation {
                 return .failed(liveScrollElementFailure(target, command: command))
             }
             let targetDescription = Self.ScrollTargetDescription(resolved)
-            guard let scrollView = stash.liveScrollView(for: resolved) else {
+            guard let containerPath = stash.nearestLiveScrollContainerPath(for: resolved.path),
+                  let semanticContainer = stash.latestObservation.tree.containers[containerPath],
+                  let contentSize = semanticContainer.container.scrollableContentSize,
+                  let scrollView = stash.liveScrollableContainerView(forPath: containerPath)
+            else {
                 return .failed(.missingScrollableAncestor(targetDescription, command: command))
             }
             guard !scrollView.bhIsUnsafeForProgrammaticScrolling else {
@@ -161,7 +165,14 @@ extension Navigation {
                     command: command
                 ))
             }
-            return .resolved(.uiScrollView(scrollView))
+            guard let scrollTarget = scrollableTarget(
+                for: semanticContainer,
+                contentSize: contentSize,
+                safeSwipeBounds: currentSwipeSafeBounds()
+            ) else {
+                return .failed(.missingScrollableAncestor(targetDescription, command: command))
+            }
+            return .resolved(scrollTarget)
         case .container(let containerName):
             let candidates = scrollCandidates(requiredAxis: axis).filter {
                 stash.liveContainerName(forPath: $0.path) == containerName
@@ -239,9 +250,11 @@ extension Navigation {
         for evidence: ScrollContainerEvidence,
         safeSwipeBounds: CGRect
     ) -> ScrollableTarget? {
-        scrollableTarget(
-            for: evidence.container,
-            path: evidence.path,
+        guard let semanticContainer = stash.latestObservation.tree.containers[evidence.path] else {
+            return nil
+        }
+        return scrollableTarget(
+            for: semanticContainer,
             contentSize: evidence.contentSize,
             safeSwipeBounds: safeSwipeBounds
         )
@@ -253,16 +266,43 @@ extension Navigation {
         contentSize: AccessibilitySize,
         safeSwipeBounds: CGRect
     ) -> ScrollableTarget? {
+        guard let path,
+              let semanticContainer = stash.latestObservation.tree.containers[path]
+        else { return nil }
+        return scrollableTarget(
+            for: semanticContainer,
+            contentSize: contentSize,
+            safeSwipeBounds: safeSwipeBounds
+        )
+    }
+
+    private func scrollableTarget(
+        for semanticContainer: InterfaceTree.Container,
+        contentSize: AccessibilitySize,
+        safeSwipeBounds: CGRect
+    ) -> ScrollableTarget? {
         let cgContentSize = contentSize.cgSize
-        if let path,
-           let scrollView = stash.liveScrollableContainerView(forPath: path) {
+        if let scrollView = stash.liveScrollableContainerView(forPath: semanticContainer.path),
+           let object = stash.liveContainerObject(forPath: semanticContainer.path),
+           stash.liveContainer(forPath: semanticContainer.path) != nil {
             guard !scrollView.bhIsUnsafeForProgrammaticScrolling else { return nil }
-            return .uiScrollView(scrollView)
+            return .uiScrollView(
+                containerTarget: semanticContainer,
+                object: object,
+                scrollView: scrollView
+            )
         }
-        guard let screenFrame = safeSwipeFrame(from: container.frame.cgRect, safeBounds: safeSwipeBounds) else {
+        guard case .resolved(let liveContainer) = stash.resolveLiveContainerTarget(for: semanticContainer) else {
             return nil
         }
-        return .swipeable(frame: screenFrame, contentSize: cgContentSize)
+        guard let screenFrame = safeSwipeFrame(from: liveContainer.frame, safeBounds: safeSwipeBounds) else {
+            return nil
+        }
+        return .swipeable(
+            container: liveContainer,
+            frame: screenFrame,
+            contentSize: cgContentSize
+        )
     }
 
     /// Clamp a swipe rectangle to the screen region outside accessibility-level

@@ -14,7 +14,7 @@ import ThePlans
 //
 // - `Navigation+PageScroll.swift`: one-page and edge scroll commands.
 // - `Navigation+ScrollToVisible.swift`: explicit viewport wrapper over ElementInflation.
-// - `Navigation+ScrollSettleProof.swift`: the explicit moved/unchanged proof.
+// - `Navigation+ScrollSettleProof.swift`: the sole typed viewport transition.
 // - `Navigation+ScrollContainers.swift`: live container resolution.
 
 extension Navigation {

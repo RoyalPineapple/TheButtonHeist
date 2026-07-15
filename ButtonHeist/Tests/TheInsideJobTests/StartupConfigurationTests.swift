@@ -312,7 +312,6 @@ final class StartupConfigurationTests: XCTestCase {
     func testRuntimeKnobsUseDefaults() {
         let knobs = ButtonHeistRuntimeKnobs.resolve(environment: .empty)
 
-        XCTAssertEqual(knobs.postScrollLayoutFrames, 3)
         XCTAssertEqual(knobs.tripwirePulseFramesPerSecond, 10)
         XCTAssertEqual(knobs.maxScrollsPerContainer, 200)
         XCTAssertEqual(knobs.maxScrollsPerDiscovery, 200)
@@ -323,7 +322,6 @@ final class StartupConfigurationTests: XCTestCase {
 
     func testRuntimeKnobsReadEnvironmentFromOneResolver() {
         let knobs = ButtonHeistRuntimeKnobs.resolve(environment: RuntimeKnobEnvironment(values: [
-            .postScrollLayoutFrames: "0",
             .tripwirePulseFramesPerSecond: "60",
             .maxScrollsPerContainer: "25",
             .maxScrollsPerDiscovery: "30",
@@ -331,7 +329,6 @@ final class StartupConfigurationTests: XCTestCase {
             .totalNodeBudget: "4000"
         ]))
 
-        XCTAssertEqual(knobs.postScrollLayoutFrames, 0)
         XCTAssertEqual(knobs.tripwirePulseFramesPerSecond, 60)
         XCTAssertEqual(knobs.maxScrollsPerContainer, 25)
         XCTAssertEqual(knobs.maxScrollsPerDiscovery, 30)
@@ -342,7 +339,6 @@ final class StartupConfigurationTests: XCTestCase {
 
     func testRuntimeKnobsReadTestRunnerPrefixedEnvironmentAndClamp() {
         let knobs = ButtonHeistRuntimeKnobs.resolve(environment: RuntimeKnobEnvironment(values: [
-            .postScrollLayoutFrames.testRunnerPrefixed: "99",
             .tripwirePulseFramesPerSecond.testRunnerPrefixed: "0",
             .maxScrollsPerContainer.testRunnerPrefixed: "9999",
             .maxScrollsPerDiscovery.testRunnerPrefixed: "9999",
@@ -350,7 +346,6 @@ final class StartupConfigurationTests: XCTestCase {
             .totalNodeBudget.testRunnerPrefixed: "9999"
         ]))
 
-        XCTAssertEqual(knobs.postScrollLayoutFrames, 10)
         XCTAssertEqual(knobs.tripwirePulseFramesPerSecond, 1)
         XCTAssertEqual(knobs.maxScrollsPerContainer, 2_000)
         XCTAssertEqual(knobs.maxScrollsPerDiscovery, 2_000)

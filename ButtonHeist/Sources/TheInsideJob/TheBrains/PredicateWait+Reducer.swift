@@ -74,11 +74,6 @@ extension PredicateWait {
             return snapshot.observation.summary
         }
 
-        internal var lastVisibleFingerprint: PredicateVisibleFingerprint {
-            guard case .observed(let snapshot) = self else { return .unknown }
-            return snapshot.observation.visibleFingerprint
-        }
-
         internal var observedSequence: SettledObservationSequence? {
             guard case .observed(let snapshot) = self else { return nil }
             return snapshot.observation.sequence
@@ -137,18 +132,15 @@ extension PredicateWait {
     internal struct WaitObservation: Sendable, Equatable {
         internal let trace: AccessibilityTrace?
         internal let summary: String
-        internal let visibleFingerprint: PredicateVisibleFingerprint
         internal let sequence: SettledObservationSequence
 
         internal init(
             trace: AccessibilityTrace?,
             summary: String,
-            visibleFingerprint: PredicateVisibleFingerprint,
             sequence: SettledObservationSequence
         ) {
             self.trace = trace
             self.summary = summary
-            self.visibleFingerprint = visibleFingerprint
             self.sequence = sequence
         }
     }
@@ -178,28 +170,6 @@ extension PredicateWait {
         }
     }
 
-}
-
-internal enum PredicateVisibleFingerprint: Sendable, Equatable {
-    case unknown
-    case known(String)
-
-    internal init(_ rawValue: String?) {
-        if let rawValue {
-            self = .known(rawValue)
-        } else {
-            self = .unknown
-        }
-    }
-
-    internal func replacingUnknown(with fallback: PredicateVisibleFingerprint) -> PredicateVisibleFingerprint {
-        switch self {
-        case .known:
-            return self
-        case .unknown:
-            return fallback
-        }
-    }
 }
 
 #endif // DEBUG

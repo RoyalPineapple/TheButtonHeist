@@ -30,8 +30,8 @@ extension TheSafecracker {
         guard !scrollView.bhIsUnsafeForProgrammaticScrolling else { return .unavailable }
 
         let overlap = CGFloat(ScrollContainerMetrics.pageOverlap)
-        let size = scrollView.frame.size
-        let offset = scrollView.contentOffset
+        let size = scrollView.bounds.size
+        let offset = clampedContentOffset(in: scrollView)
         let contentSize = scrollView.contentSize
         let insets = scrollView.adjustedContentInset
 
@@ -57,7 +57,7 @@ extension TheSafecracker {
             return .unavailable
         }
 
-        if newOffset.x == offset.x && newOffset.y == offset.y { return .alreadyInPosition }
+        if contentOffsetsEqual(newOffset, offset) { return .alreadyInPosition }
         scrollView.setContentOffset(newOffset, animated: animated)
         return .moved
     }
@@ -122,6 +122,33 @@ extension TheSafecracker {
         return .moved
     }
 
+    /// Centers a previously observed scroll-content point in the current viewport.
+    func revealContentPoint(
+        _ contentPoint: ScrollContentPoint,
+        in scrollView: UIScrollView
+    ) -> ScrollPrimitiveResult {
+        guard !scrollView.bhIsUnsafeForProgrammaticScrolling else { return .unavailable }
+
+        let point = contentPoint.cgPoint
+        let insets = scrollView.adjustedContentInset
+        let visibleWidth = max(1, scrollView.bounds.width - insets.left - insets.right)
+        let visibleHeight = max(1, scrollView.bounds.height - insets.top - insets.bottom)
+        let minX = -insets.left
+        let minY = -insets.top
+        let maxX = max(minX, scrollView.contentSize.width - scrollView.bounds.width + insets.right)
+        let maxY = max(minY, scrollView.contentSize.height - scrollView.bounds.height + insets.bottom)
+        let targetOffset = CGPoint(
+            x: min(max(point.x - visibleWidth / 2 - insets.left, minX), maxX),
+            y: min(max(point.y - visibleHeight / 2 - insets.top, minY), maxY)
+        )
+        guard !contentOffsetsEqual(targetOffset, clampedContentOffset(in: scrollView)) else {
+            return .alreadyInPosition
+        }
+
+        scrollView.setContentOffset(targetOffset, animated: false)
+        return .moved
+    }
+
     private func usableVisibleRect(
         screenRect: CGRect,
         fullVisibleRect: CGRect,
@@ -150,7 +177,8 @@ extension TheSafecracker {
         guard !scrollView.bhIsUnsafeForProgrammaticScrolling else { return .unavailable }
 
         let insets = scrollView.adjustedContentInset
-        var newOffset = scrollView.contentOffset
+        let currentOffset = clampedContentOffset(in: scrollView)
+        var newOffset = currentOffset
 
         switch edge {
         case .top:
@@ -163,12 +191,54 @@ extension TheSafecracker {
             newOffset.x = scrollView.contentSize.width + insets.right - scrollView.frame.width
         }
 
-        if newOffset.x == scrollView.contentOffset.x,
-           newOffset.y == scrollView.contentOffset.y {
+        if contentOffsetsEqual(newOffset, currentOffset) {
             return .alreadyInPosition
         }
         scrollView.setContentOffset(newOffset, animated: animated)
         return .moved
+    }
+
+    /// Restore a scroll view to a previously captured visual content origin.
+    func restoreVisualOrigin(
+        _ visualOrigin: CGPoint,
+        in scrollView: UIScrollView
+    ) -> ScrollPrimitiveResult {
+        let insets = scrollView.adjustedContentInset
+        let currentOrigin = CGPoint(
+            x: scrollView.contentOffset.x + insets.left,
+            y: scrollView.contentOffset.y + insets.top
+        )
+        guard currentOrigin != visualOrigin else { return .alreadyInPosition }
+
+        let restoredOffset = CGPoint(
+            x: visualOrigin.x - insets.left,
+            y: visualOrigin.y - insets.top
+        )
+        let maxX = scrollView.contentSize.width + insets.right - scrollView.frame.width
+        let maxY = scrollView.contentSize.height + insets.bottom - scrollView.frame.height
+        let clampedOffset = CGPoint(
+            x: max(-insets.left, min(restoredOffset.x, maxX)),
+            y: max(-insets.top, min(restoredOffset.y, maxY))
+        )
+        scrollView.setContentOffset(clampedOffset, animated: false)
+        return .moved
+    }
+
+    private func clampedContentOffset(in scrollView: UIScrollView) -> CGPoint {
+        let insets = scrollView.adjustedContentInset
+        let minimum = CGPoint(x: -insets.left, y: -insets.top)
+        let maximum = CGPoint(
+            x: max(minimum.x, scrollView.contentSize.width + insets.right - scrollView.bounds.width),
+            y: max(minimum.y, scrollView.contentSize.height + insets.bottom - scrollView.bounds.height)
+        )
+        return CGPoint(
+            x: min(max(scrollView.contentOffset.x, minimum.x), maximum.x),
+            y: min(max(scrollView.contentOffset.y, minimum.y), maximum.y)
+        )
+    }
+
+    private func contentOffsetsEqual(_ lhs: CGPoint, _ rhs: CGPoint) -> Bool {
+        abs(lhs.x - rhs.x) <= 0.5 && abs(lhs.y - rhs.y) <= 0.5
     }
 
     /// Scroll a region by one page using a synthetic swipe gesture.

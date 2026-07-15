@@ -22,9 +22,14 @@ internal final class ElementInflation {
         internal let deadline: SemanticObservationDeadline
     }
 
+    internal typealias MoveViewport = @MainActor (
+        Navigation.ViewportMovementIntent
+    ) async -> Navigation.ViewportTransition
+
     internal struct Exploration {
         internal var discoverTarget: @MainActor (ResolvedAccessibilityTarget) async -> Navigation.ExploredScreen?
         internal var revealKnownTarget: @MainActor (KnownTargetRevealRequest) async -> Navigation.ExploredScreen?
+        internal var moveViewport: MoveViewport
     }
 
     internal struct GeometryEnvironment {
@@ -55,8 +60,6 @@ internal final class ElementInflation {
     internal var geometryEnvironment: GeometryEnvironment
 
     internal static let comfortMarginFraction: CGFloat = 1.0 / 6.0
-    internal static var postScrollLayoutFrames: Int { Navigation.postScrollLayoutFrames }
-
     internal init(
         stash: TheStash,
         safecracker: TheSafecracker,
@@ -127,7 +130,7 @@ internal final class ElementInflation {
                     nextState = .failed(failure)
                 }
                 if let failure = transition(&state, to: nextState) {
-                    revealTransaction.rollBack()
+                    await revealTransaction.rollBack(using: exploration.moveViewport)
                     return .failed(failure)
                 }
 
@@ -140,7 +143,7 @@ internal final class ElementInflation {
                     transaction: revealTransaction
                 )
                 if let failure = transition(&state, to: nextState) {
-                    revealTransaction.rollBack()
+                    await revealTransaction.rollBack(using: exploration.moveViewport)
                     return .failed(failure)
                 }
 
@@ -154,7 +157,7 @@ internal final class ElementInflation {
                     deadline: deadline
                 )
                 if let failure = transition(&state, to: nextState) {
-                    revealTransaction.rollBack()
+                    await revealTransaction.rollBack(using: exploration.moveViewport)
                     return .failed(failure)
                 }
 
@@ -165,7 +168,7 @@ internal final class ElementInflation {
                     transaction: revealTransaction
                 )
                 if let failure = transition(&state, to: nextState) {
-                    revealTransaction.rollBack()
+                    await revealTransaction.rollBack(using: exploration.moveViewport)
                     return .failed(failure)
                 }
 
@@ -174,7 +177,7 @@ internal final class ElementInflation {
                 return .inflated(result)
 
             case .failed(let failure):
-                revealTransaction.rollBack()
+                await revealTransaction.rollBack(using: exploration.moveViewport)
                 return .failed(failure)
             }
         }

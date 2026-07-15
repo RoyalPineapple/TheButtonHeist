@@ -29,35 +29,17 @@ extension TheBrains {
             return repeatUntilResolutionFailure(step, path: path, start: start, error: error)
         }
 
-        let initialReceipt = await runtime.wait(
-            .immediate(ResolvedWaitRuntimeInput(
-                repeatUntil: resolved,
-                timeout: immediateTimeout
-            ))
+        let initialObservation = await runtime.observeSemanticState(
+            .visible,
+            nil,
+            immediateTimeout
         )
-        var state = RepeatUntil.LoopState.reduce(
-            .awaitingInitial,
-            event: .initial(RepeatUntil.InitialCheck.make(receipt: initialReceipt))
+        let state = RepeatUntil.LoopState.running(
+            RepeatUntil.RunningState(
+                currentObservation: initialObservation.map(RepeatUntil.Observation.init)
+            )
         )
         let timeout = PredicateWait.clampedWaitTimeout(resolved.timeout)
-
-        if case .running = state, timeout <= 0 {
-            state = RepeatUntil.LoopState.reduce(
-                state,
-                event: .deadlineElapsed(ExpectationResult.Unmet(
-                    predicate: resolved.predicateExpression,
-                    actual: "repeat_until deadline elapsed"
-                ))
-            )
-        }
-
-        guard case .running = state else {
-            return await repeatUntilTerminalResult(
-                context: context,
-                step: resolved,
-                state: state
-            )
-        }
 
         return await repeatUntilLoopResult(
             context: context,
@@ -76,7 +58,10 @@ extension TheBrains {
         let deadline = context.start + timeout
         var state = initialState
 
-        while case .running(let running) = state, CFAbsoluteTimeGetCurrent() < deadline {
+        while case .running(let running) = state {
+            guard running.iterationNodes.isEmpty || CFAbsoluteTimeGetCurrent() < deadline else {
+                break
+            }
             let iterationIndex = running.iterationNodes.count
             let iterationStart = CFAbsoluteTimeGetCurrent()
             let iterationPath = "\(context.path).repeat_until.iterations[\(iterationIndex)]"
@@ -111,7 +96,7 @@ extension TheBrains {
             let postBody = await repeatUntilPostBodyCheck(
                 context: context,
                 step: step,
-                observation: running.currentCheck.observation,
+                observation: running.currentObservation,
                 iterationResults: iterationResults,
                 deadline: deadline
             )
@@ -162,7 +147,7 @@ extension TheBrains {
             postBody = await repeatUntilPostBodyCheck(
                 context: context,
                 step: step,
-                observation: running.currentCheck.observation,
+                observation: running.currentObservation,
                 iterationResults: iterationResults,
                 deadline: deadline
             )
@@ -187,7 +172,7 @@ extension TheBrains {
             frame: frame,
             step: step,
             outcome: .failed(expectation: failureExpectation, childPath: failedStep.path),
-            observation: running.currentCheck.observation,
+            observation: running.currentObservation,
             children: iterationResults
         )
         return RepeatUntil.FailedIterationEvent(

@@ -6,16 +6,6 @@ import ThePlans
 import TheScore
 
 extension TheBrains.RepeatUntil.Terminal {
-    internal static func initialObservationUnavailableExpectation(
-        step: ResolvedRepeatUntilStep,
-        receipt: HeistWaitReceipt
-    ) -> ExpectationResult.Unmet {
-        ExpectationResult.Unmet(receipt.expectation) ?? ExpectationResult.Unmet(
-            predicate: step.predicateExpression,
-            actual: "initial observation unavailable"
-        )
-    }
-
     internal static func timeoutReason(
         step: ResolvedRepeatUntilStep,
         expectation: ExpectationResult.Unmet

@@ -2,11 +2,25 @@
 #if DEBUG
 import UIKit
 
+import ThePlans
 import TheScore
 
-// MARK: - Scroll Settle Proof
-
 extension Navigation {
+
+    @MainActor enum ViewportMovementIntent { // swiftlint:disable:this agent_main_actor_value_type
+        case page(ScrollableTarget, direction: UIAccessibilityScrollDirection, animated: Bool)
+        case edge(ScrollableTarget, edge: ScrollEdge)
+        case swipe(ScrollableTarget, direction: UIAccessibilityScrollDirection)
+        case revealPoint(
+            CGPoint,
+            in: UIScrollView,
+            preferredScreenRect: CGRect,
+            minimumScreenRect: CGRect
+        )
+        case revealContentPoint(ScrollContentPoint, in: UIScrollView)
+        case restoreVisualOrigin(CGPoint, in: UIScrollView)
+
+    }
 
     enum ScrollSettleResult: Equatable {
         case moved
@@ -18,74 +32,132 @@ extension Navigation {
         }
     }
 
-    struct ScrollSettleProof {
+    struct ViewportTransition {
         let result: ScrollSettleResult
         let previousVisibleIds: Set<HeistId>
+        let event: SettledSemanticObservationEvent?
+
+        static func unavailable(previousVisibleIds: Set<HeistId> = []) -> ViewportTransition {
+            ViewportTransition(
+                result: .unavailable,
+                previousVisibleIds: previousVisibleIds,
+                event: nil
+            )
+        }
     }
 
+    /// The only viewport-movement pipeline. It owns dispatch, the minimal
+    /// movement-specific settle, parser proof, graph reduction, and stream
+    /// publication in that order.
     func performViewportTransition(
-        primitiveResult: TheSafecracker.ScrollPrimitiveResult,
-        previousVisibleIds: Set<HeistId>,
-        animated: Bool,
-        commitViewportMoves: Bool,
-        settleAfterMove: (() async -> ScrollSettleResult)? = nil
-    ) async -> ScrollSettleProof {
+        _ intent: ViewportMovementIntent,
+        deadline: SemanticObservationDeadline? = nil,
+        discoveryCommitPolicy: DiscoveryCommitPolicy = .mergeIntoInterface
+    ) async -> ViewportTransition {
+        let previousVisibleIds = stash.viewportElementIDs
+        let notificationWindow = stash.accessibilityNotifications.beginActionWindow()
+        let primitiveResult = await dispatchViewportMovement(intent)
         switch primitiveResult {
         case .moved:
-            if let settleAfterMove {
-                return ScrollSettleProof(
-                    result: await settleAfterMove(),
-                    previousVisibleIds: previousVisibleIds
+            // Once UIKit accepts a movement, its resulting viewport must be
+            // committed even when the initiating task is cancelled.
+            return await Task { @MainActor in
+                let event = await self.settledExplorationPage(
+                    deadline: deadline,
+                    discoveryCommitPolicy: discoveryCommitPolicy,
+                    notificationWindow: notificationWindow,
+                    requiredAfterMovement: true
                 )
-            }
-            if animated {
-                _ = await tripwire.waitForAllClear(timeout: 0.5)
-            } else {
-                await tripwire.yieldFrames(Self.postScrollLayoutFrames)
-            }
-            observeViewportAfterScroll(commitViewportMoves: commitViewportMoves)
-            return ScrollSettleProof(result: .moved, previousVisibleIds: previousVisibleIds)
+                guard let event else {
+                    return .unavailable(previousVisibleIds: previousVisibleIds)
+                }
+                return ViewportTransition(
+                    result: self.movementResult(
+                        for: intent,
+                        previousVisibleIds: previousVisibleIds
+                    ),
+                    previousVisibleIds: previousVisibleIds,
+                    event: event
+                )
+            }.value
         case .alreadyInPosition:
-            return ScrollSettleProof(result: .unchanged, previousVisibleIds: previousVisibleIds)
-        case .unavailable:
-            return ScrollSettleProof(result: .unavailable, previousVisibleIds: previousVisibleIds)
-        }
-    }
-
-    /// Parse through post-gesture spring/inertia and consider the swipe settled
-    /// when no new elements are discovered for a short consecutive frame window.
-    func settleSwipeMotion(
-        previousVisibleIds: Set<HeistId>,
-        requireDirectionChangeSettle: Bool,
-        commitViewportMoves: Bool = true
-    ) async -> ScrollSettleResult {
-        let profile: SettleSwipeProfile = requireDirectionChangeSettle
-            ? .directionChange
-            : .sameDirection
-        var state = SettleSwipeLoopState(
-            profile: profile,
-            previousVisibleIds: previousVisibleIds
-        )
-        var seenVisibleIds = stash.viewportElementIDs
-
-        while true {
-            observeViewportAfterScroll(commitViewportMoves: commitViewportMoves)
-            let currentVisibleIds = stash.viewportElementIDs
-            let newHeistIds = currentVisibleIds.subtracting(seenVisibleIds)
-            seenVisibleIds.formUnion(newHeistIds)
-
-            let step = state.advance(
-                visibleIds: currentVisibleIds,
-                newHeistIds: newHeistIds
+            notificationWindow.cancel()
+            return ViewportTransition(
+                result: .unchanged,
+                previousVisibleIds: previousVisibleIds,
+                event: nil
             )
-            if case .done = step { break }
-            await tripwire.yieldFrames(1)
+        case .unavailable:
+            notificationWindow.cancel()
+            return .unavailable(previousVisibleIds: previousVisibleIds)
         }
-        return state.moved ? .moved : .unchanged
     }
 
-    func swipeTargetKey(frame: CGRect, contentSize: CGSize) -> SwipeTargetKey {
-        SwipeTargetKey(frame: frame, contentSize: contentSize)
+    private func dispatchViewportMovement(
+        _ intent: ViewportMovementIntent
+    ) async -> TheSafecracker.ScrollPrimitiveResult {
+        switch intent {
+        case .page(let target, let direction, let animated):
+            guard case .uiScrollView(_, _, let scrollView) = current(target) else {
+                return .unavailable
+            }
+            return safecracker.scrollByPage(scrollView, direction: direction, animated: animated)
+        case .edge(let target, let edge):
+            guard case .uiScrollView(_, _, let scrollView) = current(target) else {
+                return .unavailable
+            }
+            return safecracker.scrollToEdge(scrollView, edge: edge, animated: false)
+        case .swipe(let target, let direction):
+            guard case .swipeable(_, let frame, _) = current(target) else {
+                return .unavailable
+            }
+            return await safecracker.scrollBySwipe(
+                frame: frame,
+                direction: direction,
+                duration: Self.swipeGestureDuration
+            )
+        case .revealPoint(let point, let scrollView, let preferredScreenRect, let minimumScreenRect):
+            return safecracker.scrollToMakeScreenPointVisible(
+                point,
+                in: scrollView,
+                animated: false,
+                preferredScreenRect: preferredScreenRect,
+                minimumScreenRect: minimumScreenRect
+            )
+        case .revealContentPoint(let point, let scrollView):
+            return safecracker.revealContentPoint(point, in: scrollView)
+        case .restoreVisualOrigin(let origin, let scrollView):
+            return safecracker.restoreVisualOrigin(origin, in: scrollView)
+        }
+    }
+
+    private func current(_ target: ScrollableTarget) -> ScrollableTarget? {
+        guard let currentObject = stash.liveContainerObject(forPath: target.containerTarget.path),
+              currentObject === target.object else { return nil }
+        switch target {
+        case .uiScrollView(let containerTarget, _, let scrollView):
+            guard stash.liveScrollableContainerView(
+                forPath: containerTarget.path
+            ) === scrollView else { return nil }
+            return .uiScrollView(
+                containerTarget: containerTarget,
+                object: currentObject,
+                scrollView: scrollView
+            )
+        case .swipeable(_, let frame, let contentSize):
+            guard case .resolved(let currentContainer) = stash.resolveLiveContainerTarget(
+                for: target.containerTarget
+            ) else { return nil }
+            return .swipeable(container: currentContainer, frame: frame, contentSize: contentSize)
+        }
+    }
+
+    private func movementResult(
+        for intent: ViewportMovementIntent,
+        previousVisibleIds: Set<HeistId>
+    ) -> ScrollSettleResult {
+        guard case .swipe = intent else { return .moved }
+        return stash.viewportElementIDs == previousVisibleIds ? .unchanged : .moved
     }
 }
 

@@ -105,7 +105,6 @@ extension PredicateWait.Snapshot {
             observation: PredicateWait.WaitObservation(
                 trace: reduction.trace,
                 summary: reduction.observation.summary,
-                visibleFingerprint: .known(reduction.observation.visibleFingerprint),
                 sequence: reduction.observation.event.sequence
             ),
             expectation: reduction.expectation,
