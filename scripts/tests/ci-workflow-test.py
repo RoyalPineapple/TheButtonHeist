@@ -41,6 +41,11 @@ class CIWorkflowTests(unittest.TestCase):
         self.assertIn("runs-on: ubuntu-latest", release)
         self.assertNotRegex(release, r"\b(?:xcodebuild|tuist)\b")
 
+    def test_hosted_canaries_reuse_the_dedicated_simulator(self) -> None:
+        hosted = job_blocks()["ios-demo-gates"]
+        self.assertIn("-parallel-testing-enabled NO", hosted)
+        self.assertNotIn("-parallel-testing-worker-count", hosted)
+
 
 if __name__ == "__main__":
     unittest.main()

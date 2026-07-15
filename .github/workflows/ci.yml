@@ -344,8 +344,7 @@ jobs:
             -derivedDataPath "$DERIVED_DATA_PATH" \
             -resultBundlePath "$IOS_TEST_RESULT_BUNDLE" \
             -collect-test-diagnostics never \
-            -parallel-testing-enabled YES \
-            -parallel-testing-worker-count 2
+            -parallel-testing-enabled NO
           echo "HOSTED_RUN_END=$(date +%s)" >> "$GITHUB_ENV"
 
       - name: Collect hosted failure evidence
