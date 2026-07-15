@@ -195,6 +195,10 @@ expect_root_top() {
     expect_element_label "Controls Demo"
 }
 
+expect_root_bottom() {
+    expect_element_label "Trait Validation"
+}
+
 expect_root_rotor_row() {
     expect_element_label "Custom Rotors"
 }
@@ -562,7 +566,13 @@ ROOT_BOTTOM_JSON="$(run_cli_json scroll_to_edge --edge bottom)"
 printf '%s' "$ROOT_BOTTOM_JSON" | json_expect_ok "scroll root to bottom"
 ROOT_BOTTOM_INTERFACE_JSON="$(run_cli_json get_interface)"
 printf '%s' "$ROOT_BOTTOM_INTERFACE_JSON" | json_expect_ok "root bottom get_interface"
-printf '%s' "$ROOT_BOTTOM_INTERFACE_JSON" | expect_root_rotor_row
+printf '%s' "$ROOT_BOTTOM_INTERFACE_JSON" | expect_root_bottom
+
+ROOT_ROTORS_VISIBLE_JSON="$(run_cli_json scroll_to_visible --label "Custom Rotors" --timeout 15)"
+printf '%s' "$ROOT_ROTORS_VISIBLE_JSON" | json_expect_ok "scroll Custom Rotors into view"
+ROOT_ROTORS_INTERFACE_JSON="$(run_cli_json get_interface)"
+printf '%s' "$ROOT_ROTORS_INTERFACE_JSON" | json_expect_ok "root Custom Rotors get_interface"
+printf '%s' "$ROOT_ROTORS_INTERFACE_JSON" | expect_root_rotor_row
 
 log "Verifying custom rotor"
 ROTORS_ACTION_JSON="$(run_cli_json activate --label "Custom Rotors" --traits button --timeout 15)"
