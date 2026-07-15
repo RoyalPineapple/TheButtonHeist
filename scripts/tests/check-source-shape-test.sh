@@ -11,6 +11,8 @@ LINT_STATUS=0
 
 trap 'rm -rf "$FIXTURE_ROOT"' EXIT
 
+"$REPO_ROOT/scripts/check-bumper-rule-documentation.sh"
+
 fail() {
     echo "FAIL: $*" >&2
     exit 1
@@ -32,7 +34,20 @@ run_lint() {
     set -e
 }
 
+prepare_bumper_binary() {
+    local binary_path
+
+    if [[ -n "${BUMPER:-}" || -z "${BUMPER_BOWLING_PACKAGE_PATH:-}" ]]; then
+        return
+    fi
+
+    swift build --package-path "$BUMPER_BOWLING_PACKAGE_PATH" --product bumper >/dev/null
+    binary_path="$(swift build --package-path "$BUMPER_BOWLING_PACKAGE_PATH" --show-bin-path)/bumper"
+    export BUMPER="$binary_path"
+}
+
 mkdir -p "$FIXTURE_REPO"
+prepare_bumper_binary
 copy_fixture_file "BumperBowling.swift"
 
 while IFS= read -r source; do
@@ -42,11 +57,10 @@ done < <(find "$REPO_ROOT/.bumper" -type f -print | sort)
 while IFS= read -r owner; do
     copy_fixture_file "$owner"
 done < <(
-    sed -n '/private let architectureCurrencyOwners:/,/^]/p' \
+    sed -n '/private let architectureCurrencyDeclarationOwners:/,/^]/p' \
         "$REPO_ROOT/.bumper/Sources/ButtonHeistCustomRules.swift" \
         | sed -n \
-            -e 's/.*[.]declaration([^,]*, ownerPath: "\([^"]*\)".*/\1/p' \
-            -e 's/.*declarationOwnerPath: "\([^"]*\)".*/\1/p' \
+            -e 's/.*owner: "\([^"]*\)".*/\1/p' \
         | sort -u
 )
 
@@ -58,7 +72,8 @@ mkdir -p \
     "$FIXTURE_REPO/ButtonHeist/Sources/TheInsideJob/TheStash" \
     "$FIXTURE_REPO/ButtonHeist/Sources/TheInsideJob/SourceShapeFixtures" \
     "$FIXTURE_REPO/ButtonHeist/Sources/TheScore/Core" \
-    "$FIXTURE_REPO/ButtonHeist/Sources/TheScore/SourceShapeFixtures"
+    "$FIXTURE_REPO/ButtonHeist/Sources/TheScore/SourceShapeFixtures" \
+    "$FIXTURE_REPO/TestApp/Sources"
 
 cat > "$FIXTURE_REPO/ButtonHeistCLI/Sources/Support/SourceShapeFixtures.swift" <<'EOF'
 var onActorIsolated: (@MainActor (Int) -> Void)?
@@ -68,6 +83,12 @@ var onSendable: (@Sendable (Int) -> Void)?
 final class LockBackedFixture: @unchecked Sendable {} // swiftlint:disable:this agent_unchecked_sendable_no_comment
 
 @MainActor enum ActorNamespaceFixture {} // swiftlint:disable:this agent_main_actor_value_type
+EOF
+
+cat > "$FIXTURE_REPO/TestApp/Sources/AccessibleFixture.swift" <<'EOF'
+func configureAccessibleFixture(_ view: FixtureView) {
+    view.accessibilityLabel = "Fixture"
+}
 EOF
 
 cat > "$FIXTURE_REPO/ButtonHeist/Sources/TheInsideJob/SourceShapeFixtures/ObservationCommits.swift" <<'EOF'
@@ -196,11 +217,56 @@ struct AccessibilityTarget {}
 func constructObservationOutsideOwner() {
     _ = InterfaceObservation()
 }
+
+func constructLiveCaptureOutsideOwner() {
+    _ = LiveCapture()
+}
+
+func constructEvidenceRollupOutsideOwner() {
+    _ = HeistExecutionEvidenceRollup(steps: [])
+}
+
+func constructSemanticObservationPublicationOutsideOwner() {
+    _ = SemanticObservationPublication()
+}
+
+func constructSemanticObservationRuntimeStateOutsideOwner() {
+    _ = SemanticObservationRuntimeState()
+}
+
+struct HeistExecutionEvidenceRollup {}
+EOF
+
+cat > "$FIXTURE_REPO/ButtonHeist/Sources/TheInsideJob/TheStash/InterfaceObservation.swift" <<'EOF'
+struct InterfaceObservation {
+    static func invalidOwnerConstruction() -> InterfaceObservation {
+        InterfaceObservation()
+    }
+}
+EOF
+
+cat > "$FIXTURE_REPO/ButtonHeist/Sources/TheInsideJob/TheStash/LiveCapture.swift" <<'EOF'
+struct LiveCapture {
+    static func invalidOwnerConstruction() -> LiveCapture {
+        LiveCapture()
+    }
+}
+EOF
+
+cat > "$FIXTURE_REPO/TestApp/Sources/AccessibleFixture.swift" <<'EOF'
+func configureAccessibleFixture(_ view: FixtureView) {
+    view.accessibilityIdentifier = "fixture"
+}
 EOF
 
 cat > "$FIXTURE_REPO/ButtonHeist/Sources/ThePlans/SourceShapeFixtures/ExpressionOwnership.swift" <<'EOF'
 internal enum Expr<Value> {}
 public struct AlternateExpr {}
+EOF
+
+cat >> "$FIXTURE_REPO/ButtonHeist/Sources/ThePlans/Model/AccessibilityPredicate.swift" <<'EOF'
+
+package typealias RogueTarget = AccessibilityTarget
 EOF
 
 cat > "$FIXTURE_REPO/ButtonHeist/Sources/TheInsideJob/TheBurglar/TheBurglar+InterfaceObservationBuilding.swift" <<'EOF'
@@ -213,16 +279,6 @@ func burglarHierarchyWalk(_ hierarchy: AccessibilityHierarchy) {
             burglarHierarchyWalk(child)
         }
     }
-}
-EOF
-
-cat > "$FIXTURE_REPO/ButtonHeist/Sources/TheInsideJob/SourceShapeFixtures/TargetResolution.swift" <<'EOF'
-struct SemanticInterfaceProjection {
-    let elementByProjectedPath: [TreePath: InterfaceTree.Element]
-}
-
-func resolveThroughBackMap(_ projection: SemanticInterfaceProjection) {
-    _ = projection.elementByProjectedPath
 }
 EOF
 
@@ -265,8 +321,10 @@ EOF
 
 run_lint
 [[ "$LINT_STATUS" -ne 0 ]] || fail "source-shape lint accepted invalid fixtures"
-[[ "$LINT_OUTPUT" == *"alternate AccessibilityTarget typealias"* ]] \
+[[ "$LINT_OUTPUT" == *"buttonheist.canonical_accessibility_target_spelling"* ]] \
     || fail "source-shape lint missed the alternate target alias: $LINT_OUTPUT"
+[[ "$LINT_OUTPUT" == *"alternate AccessibilityTarget typealias"* ]] \
+    || fail "source-shape lint missed the owner-file target alias: $LINT_OUTPUT"
 [[ "$LINT_OUTPUT" == *"callback without isolation annotation"* ]] \
     || fail "source-shape lint missed the unannotated callback: $LINT_OUTPUT"
 [[ "$LINT_OUTPUT" == *"onUnannotated"* ]] \
@@ -283,23 +341,37 @@ run_lint
     || fail "source-shape lint missed recursive accessibility hierarchy descent: $LINT_OUTPUT"
 [[ "$LINT_OUTPUT" == *"buttonheist.canonical_accessibility_hierarchy_traversal"* ]] \
     || fail "hierarchy traversal violation did not identify its architectural rule: $LINT_OUTPUT"
-[[ "$LINT_OUTPUT" == *"architecture currency symbol must be declared exactly once"* ]] \
+[[ "$LINT_OUTPUT" == *"buttonheist.architecture_currency.AccessibilityTarget"* ]] \
     || fail "source-shape lint missed duplicate typed architecture ownership: $LINT_OUTPUT"
+[[ "$LINT_OUTPUT" == *"buttonheist.architecture_currency.HeistExecutionEvidenceRollup"* ]] \
+    || fail "source-shape lint missed duplicate rollup declaration ownership: $LINT_OUTPUT"
 [[ "$LINT_OUTPUT" == *"pipeline value constructed outside its canonical owner"* ]] \
-    || fail "source-shape lint missed construction outside a typed owner: $LINT_OUTPUT"
+    || fail "source-shape lint missed construction outside the canonical builder method: $LINT_OUTPUT"
+[[ "$LINT_OUTPUT" == *"buttonheist.canonical_interface_observation_construction"* ]] \
+    || fail "source-shape lint missed InterfaceObservation construction ownership: $LINT_OUTPUT"
+[[ "$LINT_OUTPUT" == *"buttonheist.canonical_live_capture_construction"* ]] \
+    || fail "source-shape lint missed LiveCapture construction ownership: $LINT_OUTPUT"
+[[ "$LINT_OUTPUT" == *"buttonheist.canonical_heist_execution_evidence_rollup_construction"* ]] \
+    || fail "source-shape lint missed standard-shaper construction ownership: $LINT_OUTPUT"
 [[ "$LINT_OUTPUT" == *"Expr must be the single package-internal expression declaration"* ]] \
     || fail "source-shape lint missed non-package Expr ownership: $LINT_OUTPUT"
 [[ "$LINT_OUTPUT" == *"nominal Expr bookkeeping type outside the canonical expression owner"* ]] \
     || fail "source-shape lint missed nominal Expr bookkeeping: $LINT_OUTPUT"
-[[ "$LINT_OUTPUT" == *"target resolution uses retired SemanticInterfaceProjection/back-map architecture"* ]] \
-    || fail "source-shape lint missed projected back-map target resolution: $LINT_OUTPUT"
 [[ "$LINT_OUTPUT" == *"semantic observation log exposes a destructive clear API"* ]] \
     || fail "source-shape lint missed destructive observation-log API: $LINT_OUTPUT"
+[[ "$LINT_OUTPUT" == *"buttonheist.canonical_semantic_observation_log_construction"* ]] \
+    || fail "source-shape lint missed standard-shaper observation-log ownership: $LINT_OUTPUT"
+[[ "$LINT_OUTPUT" == *"buttonheist.canonical_semantic_observation_publication_construction"* ]] \
+    || fail "source-shape lint missed observation-publication ownership: $LINT_OUTPUT"
+[[ "$LINT_OUTPUT" == *"buttonheist.canonical_semantic_observation_runtime_state_construction"* ]] \
+    || fail "source-shape lint missed observation runtime-state ownership: $LINT_OUTPUT"
 [[ "$LINT_OUTPUT" == *"InterfaceGraph reconstructed from Interface outside its owner"* ]] \
     || fail "source-shape lint missed external InterfaceGraph reconstruction: $LINT_OUTPUT"
 [[ "$LINT_OUTPUT" == *"test support implements HeistStep execution semantics"* ]] \
     || fail "source-shape lint missed test-owned HeistStep execution: $LINT_OUTPUT"
 [[ "$LINT_OUTPUT" == *"test support implements wait predicate semantics"* ]] \
     || fail "source-shape lint missed test-owned wait predicate evaluation: $LINT_OUTPUT"
+[[ "$LINT_OUTPUT" == *"buttonheist.demo_accessibility_identifier"* ]] \
+    || fail "source-shape lint missed demo accessibilityIdentifier use: $LINT_OUTPUT"
 
 echo "PASS: SwiftSyntax source-shape guardrails"
