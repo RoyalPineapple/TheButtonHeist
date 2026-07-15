@@ -113,7 +113,7 @@ extension TheStash {
 
     func installScreenForTesting(_ screen: InterfaceObservation) {
         nextVisibleRefreshScreenForTesting = screen
-        _ = semanticObservationStream.commitSettledVisibleObservation(.testing(screen))
+        semanticObservationStream.commitVisibleObservationForTesting(screen)
     }
 
     func clearInstalledVisibleRefreshScreenForTesting() {

@@ -220,6 +220,11 @@ package struct InterfaceContainerProjectionMetadata: Equatable, Sendable {
 }
 
 package struct InterfaceGraph: Equatable, Sendable {
+    struct Projection {
+        let annotations: InterfaceAnnotations
+        let traceIdentities: InterfaceTraceIdentities
+    }
+
     package let hierarchy: AccessibilityHierarchyGraph
     package let elementAnnotationByPath: [TreePath: InterfaceElementAnnotation]
     package let containerAnnotationByPath: [TreePath: InterfaceContainerAnnotation]
@@ -229,7 +234,7 @@ package struct InterfaceGraph: Equatable, Sendable {
 
     private let elementRecordByPath: [TreePath: InterfaceGraphElementRecord]
 
-    package init(
+    fileprivate init(
         projecting tree: [AccessibilityHierarchy],
         elementMetadata: (TreePath, AccessibilityElement, Int) -> InterfaceElementProjectionMetadata?,
         containerMetadata: (TreePath, AccessibilityContainer) -> InterfaceContainerProjectionMetadata?
@@ -266,7 +271,7 @@ package struct InterfaceGraph: Equatable, Sendable {
         )
     }
 
-    package init(
+    fileprivate init(
         tree: [AccessibilityHierarchy],
         annotations: InterfaceAnnotations = .empty,
         traceIdentities: InterfaceTraceIdentities = .empty
@@ -285,6 +290,37 @@ package struct InterfaceGraph: Equatable, Sendable {
             elementAnnotationByPath: elementAnnotationByPath,
             containerAnnotationByPath: containerAnnotationByPath,
             traceIdentityByPath: traceIdentityByPath
+        )
+    }
+
+    static func validate(
+        tree: [AccessibilityHierarchy],
+        annotations: InterfaceAnnotations = .empty,
+        traceIdentities: InterfaceTraceIdentities = .empty
+    ) throws(InterfaceGraphValidationError) {
+        _ = try InterfaceGraph(
+            tree: tree,
+            annotations: annotations,
+            traceIdentities: traceIdentities
+        )
+    }
+
+    static func projection(
+        tree: [AccessibilityHierarchy],
+        elementMetadata: (TreePath, AccessibilityElement, Int) -> InterfaceElementProjectionMetadata?,
+        containerMetadata: (TreePath, AccessibilityContainer) -> InterfaceContainerProjectionMetadata?
+    ) -> Projection {
+        let graph = InterfaceGraph(
+            projecting: tree,
+            elementMetadata: elementMetadata,
+            containerMetadata: containerMetadata
+        )
+        return Projection(
+            annotations: InterfaceAnnotations(
+                elements: graph.elementAnnotationByPath.values.sorted { $0.path < $1.path },
+                containers: graph.containerAnnotationByPath.values.sorted { $0.path < $1.path }
+            ),
+            traceIdentities: InterfaceTraceIdentities(graph.traceIdentityByPath)
         )
     }
 
@@ -464,6 +500,20 @@ package struct InterfaceGraph: Equatable, Sendable {
             case .element:
                 break
             }
+        }
+    }
+}
+
+extension Interface {
+    package var graph: InterfaceGraph {
+        do {
+            return try InterfaceGraph(
+                tree: tree,
+                annotations: annotations,
+                traceIdentities: traceIdentities
+            )
+        } catch {
+            preconditionFailure("Invalid Interface graph: \(error)")
         }
     }
 }

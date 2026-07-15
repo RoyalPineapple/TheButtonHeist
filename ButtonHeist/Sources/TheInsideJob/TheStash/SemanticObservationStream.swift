@@ -266,27 +266,6 @@ internal final class SemanticObservationStream {
     }
 
     @discardableResult
-    internal func commitVisibleObservationForTesting(
-        _ screen: InterfaceObservation,
-        notificationBatch: AccessibilityNotificationBatch? = nil,
-        notificationIdentityScreen: InterfaceObservation? = nil
-    ) -> SettledSemanticObservationEvent {
-        commitSettledVisibleObservation(
-            .testing(screen),
-            notificationBatch: notificationBatch,
-            notificationIdentityScreen: notificationIdentityScreen
-        )
-    }
-
-    @discardableResult
-    internal func commitDiscoveryObservationForTesting(
-        _ screen: InterfaceObservation,
-        notificationBatch: AccessibilityNotificationBatch? = nil
-    ) -> SettledSemanticObservationEvent {
-        commitSettledDiscoveryObservation(.testing(screen), notificationBatch: notificationBatch)
-    }
-
-    @discardableResult
     private func publishCommittedObservation(
         _ proof: InterfaceObservationProof,
         scope: SemanticObservationScope,
