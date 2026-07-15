@@ -14,7 +14,7 @@ fail() {
 
 require_documented() {
     local value="$1"
-    rg -Fq "\`$value\`" "$RULE_DOC" || fail "missing documentation for $value"
+    grep -Fq "\`$value\`" "$RULE_DOC" || fail "missing documentation for $value"
 }
 
 [[ -f "$RULE_DOC" ]] || fail "missing docs/BUMPER-RULES.md"
@@ -22,7 +22,7 @@ require_documented() {
 while IFS= read -r rule_id; do
     require_documented "$rule_id"
 done < <(
-    rg -o '"buttonheist\.[A-Za-z0-9_.]+"' "$RULE_SOURCE" \
+    grep -Eo '"buttonheist\.[A-Za-z0-9_.]+"' "$RULE_SOURCE" \
         | tr -d '"' \
         | sort -u
 )
@@ -42,8 +42,8 @@ done < <(
         | sed -n 's/.*= "\([^"]*\)"/\1/p'
 )
 
-custom_rule_count="$(rg -c 'Rules\.(repository|files)\(' "$RULE_SOURCE")"
-custom_summary_count="$(rg -c '^[[:space:]]+summary: "' "$RULE_SOURCE")"
+custom_rule_count="$(grep -Ec 'Rules\.(repository|files)\(' "$RULE_SOURCE" || true)"
+custom_summary_count="$(grep -Ec '^[[:space:]]+summary: "' "$RULE_SOURCE" || true)"
 [[ "$custom_rule_count" -eq "$custom_summary_count" ]] \
     || fail "every custom repository/file rule must declare an explicit summary"
 
