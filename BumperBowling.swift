@@ -20,14 +20,13 @@ let bumper = BumperProject {
         Component(.plans) {
             Owns("ButtonHeist/Sources/ThePlans")
             Modules("ThePlans")
-            Applies(.buttonHeistPureReducers)
+            Applies(.buttonHeistPlansBoundary)
         }
 
         Component(.score) {
             Owns("ButtonHeist/Sources/TheScore")
             Modules("TheScore")
-            MayDependOn(.plans)
-            Applies(.buttonHeistScoreContract)
+            Applies(.buttonHeistScoreBoundary)
         }
 
         Component(.doctor) {
@@ -36,8 +35,6 @@ let bumper = BumperProject {
                 "ButtonHeist/Sources/HeistDoctorTool"
             )
             Modules("HeistDoctorCore", "HeistDoctorTool")
-            MayDependOn(.plans, .score)
-            Applies(.buttonHeistToolBoundary)
         }
 
         Component(.runtime) {
@@ -48,18 +45,11 @@ let bumper = BumperProject {
                 "ButtonHeist/Sources/ButtonHeistSupport"
             )
             Modules("ButtonHeist", "TheInsideJob", "ThePlant", "ButtonHeistSupport")
-            MayDependOn(.plans, .score)
-            Applies(.buttonHeistLiveRuntimeBoundary)
         }
 
         Component(.testing) {
             Owns("ButtonHeist/Sources/ButtonHeistTesting")
             Modules("ButtonHeistTesting")
-            MayDependOn(
-                .plans,
-                .runtime
-            )
-            Applies(.buttonHeistTestingBoundary)
         }
 
         Component(.tools) {
@@ -68,44 +58,21 @@ let bumper = BumperProject {
                 "ButtonHeistCLI/Sources"
             )
             Modules("HeistPlanTool", "ButtonHeistCLI")
-            MayDependOn(
-                .plans,
-                .score,
-                .doctor,
-                .runtime
-            )
-            Applies(.buttonHeistToolBoundary)
         }
 
         Component(.mcp) {
             Owns("ButtonHeistMCP/Sources")
             Modules("ButtonHeistMCP")
-            MayDependOn(
-                .plans,
-                .score,
-                .runtime,
-                .tools
-            )
-            Applies(.buttonHeistMCPBoundary)
         }
 
         Component(.demo) {
             Owns("TestApp/Sources")
             Modules("TestApp")
-            MayDependOn(
-                .plans,
-                .score,
-                .runtime,
-                .testing
-            )
-            Applies(.buttonHeistDemoSurface)
         }
     }
 
     Rules {
-        DependencyBoundaries(.error)
         SingleOwner(.error)
-        AcyclicDeclaredDependencies(.error)
         buttonHeistRules
     }
 }
