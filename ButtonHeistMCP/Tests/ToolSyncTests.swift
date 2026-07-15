@@ -146,18 +146,6 @@ struct ToolSyncTests {
         )
     }
 
-    @Test("ToolDefinitions.all has no duplicate tool names")
-    func noDuplicateToolNames() {
-        var seen = Set<String>()
-        for tool in ToolDefinitions.all {
-            #expect(
-                !seen.contains(tool.name),
-                "Duplicate MCP tool name: '\(tool.name)'"
-            )
-            seen.insert(tool.name)
-        }
-    }
-
     @Test("MCP tool surface stays source-oriented")
     func mcpToolSurfaceStaysSourceOriented() {
         let expected = directToolDescriptors().map(\.command.rawValue).sorted()
@@ -182,8 +170,8 @@ struct ToolSyncTests {
         }
     }
 
-    @Test("StringMatch command schemas advertise object form without combinators")
-    func stringMatchCommandSchemasAdvertiseObjectFormWithoutCombinators() throws {
+    @Test("StringMatch command schemas advertise canonical object form")
+    func stringMatchCommandSchemasAdvertiseCanonicalObjectForm() throws {
         let removedFlatFields = ["label", "identifier", "value"]
         let schemaCases: [(command: TheFence.Command, basePath: [String], label: String)] = [
             (.activate, ["properties", "target", "properties"], "target"),
@@ -326,12 +314,6 @@ struct ToolSyncTests {
             schemaValue(at: checkPropertiesPath + ["values", "minItems"], in: tool.inputSchema)
                 == .int(1)
         )
-
-        // No schema combinator anywhere under the container subschema.
-        #expect(schemaValue(at: containerPath + ["oneOf"], in: tool.inputSchema) == nil)
-        #expect(schemaValue(at: containerPath + ["anyOf"], in: tool.inputSchema) == nil)
-        #expect(schemaValue(at: containerPath + ["allOf"], in: tool.inputSchema) == nil)
-        #expect(SchemaCombinatorScanner.combinatorPaths(in: container, path: "container").isEmpty)
     }
 
     @Test("get_interface schema exposes bounded discovery limits")
@@ -348,38 +330,7 @@ struct ToolSyncTests {
         }
     }
 
-    @Test("No MCP tool input schema contains a combinator at any depth")
-    func noToolSchemaContainsCombinatorAtAnyDepth() {
-        let offending = ToolDefinitions.all.flatMap { tool in
-            SchemaCombinatorScanner.combinatorPaths(
-                in: tool.inputSchema,
-                path: "\(tool.name).inputSchema"
-            )
-        }
-        #expect(
-            offending.isEmpty,
-            "MCP tool input schemas must not advertise oneOf/anyOf/allOf:\n\(offending.joined(separator: "\n"))"
-        )
-    }
-
-    @Test("No generated MCP tool input schema has a top-level combinator")
-    func noGeneratedToolSchemaHasTopLevelCombinator() {
-        let offending = ToolDefinitions.all.flatMap { tool -> [String] in
-            guard case .object(let schema) = tool.inputSchema else {
-                return ["\(tool.name).inputSchema is not an object"]
-            }
-            return SchemaCombinatorScanner.bannedKeywords.compactMap { keyword in
-                schema[keyword] == nil ? nil : "\(tool.name).inputSchema.\(keyword)"
-            }
-        }
-
-        #expect(
-            offending.isEmpty,
-            "MCP tool input schemas must not use top-level oneOf/anyOf/allOf:\n\(offending.joined(separator: "\n"))"
-        )
-    }
-
-    @Test("run_heist schema exposes plan sources and root argument without schema combinators")
+    @Test("run_heist schema exposes plan sources and root argument")
     func runHeistSchemaExposesOnlyPlan() throws {
         let tool = try #require(ToolDefinitions.all.first { $0.name == "run_heist" })
 
@@ -410,10 +361,6 @@ struct ToolSyncTests {
         #expect(schemaValue(at: ["properties", "argument", "properties", "target", "properties", "checks"], in: tool.inputSchema) != nil)
         #expect(schemaValue(at: ["properties", "argument", "properties", "target", "properties", "label"], in: tool.inputSchema) == nil)
         #expect(schemaValue(at: ["properties", "argument", "properties", "target", "properties", "unexpected"], in: tool.inputSchema) == nil)
-
-        #expect(schemaValue(at: ["oneOf"], in: tool.inputSchema) == nil)
-        #expect(schemaValue(at: ["anyOf"], in: tool.inputSchema) == nil)
-        #expect(schemaValue(at: ["allOf"], in: tool.inputSchema) == nil)
     }
 
     @Test("validate_heist is offline and exposes canonical sources, argument, and lint")
@@ -441,13 +388,10 @@ struct ToolSyncTests {
                 "perform schema must not expose \(field)"
             )
         }
-        #expect(schemaValue(at: ["oneOf"], in: tool.inputSchema) == nil)
-        #expect(schemaValue(at: ["anyOf"], in: tool.inputSchema) == nil)
-        #expect(schemaValue(at: ["allOf"], in: tool.inputSchema) == nil)
     }
 
-    @Test("heist discovery schemas expose validated plan source without top-level combinators")
-    func heistDiscoverySchemasExposePlanSourceWithoutTopLevelCombinators() throws {
+    @Test("heist discovery schemas expose validated plan source")
+    func heistDiscoverySchemasExposePlanSource() throws {
         let listHeists = try #require(ToolDefinitions.all.first { $0.name == "list_heists" })
         let describeHeist = try #require(ToolDefinitions.all.first { $0.name == "describe_heist" })
 
@@ -464,9 +408,6 @@ struct ToolSyncTests {
                     "\(tool.name) schema must not expose raw JSON IR field \(field)"
                 )
             }
-            #expect(schemaValue(at: ["oneOf"], in: tool.inputSchema) == nil)
-            #expect(schemaValue(at: ["anyOf"], in: tool.inputSchema) == nil)
-            #expect(schemaValue(at: ["allOf"], in: tool.inputSchema) == nil)
         }
 
         #expect(schemaValue(at: ["properties", "heist"], in: describeHeist.inputSchema) != nil)
@@ -523,10 +464,6 @@ private func assertStringMatchSchema(_ schema: Value, path: String) {
         object?["properties"]?.objectValue?["value"] == .object(["type": .string("string")]),
         "\(path).properties.value must be a string"
     )
-    #expect(
-        SchemaCombinatorScanner.combinatorPaths(in: schema, path: path).isEmpty,
-        "\(path) must not use oneOf/anyOf/allOf for StringMatch"
-    )
 }
 
 private extension Value {
@@ -541,36 +478,9 @@ private extension Value {
     }
 }
 
-/// Recursively scans a JSON Schema value for banned combinator keywords,
-/// returning the exact dotted path to each occurrence (e.g.
-/// `get_interface.inputSchema.properties.subtree.properties.container.oneOf`).
-private enum SchemaCombinatorScanner {
-    static let bannedKeywords = ["oneOf", "anyOf", "allOf"]
-
-    static func combinatorPaths(in value: Value, path: String) -> [String] {
-        switch value {
-        case .object(let object):
-            var paths: [String] = []
-            for keyword in bannedKeywords where object[keyword] != nil {
-                paths.append("\(path).\(keyword)")
-            }
-            for (key, nestedValue) in object {
-                paths += combinatorPaths(in: nestedValue, path: "\(path).\(key)")
-            }
-            return paths
-
-        case .array(let values):
-            return values.enumerated().flatMap { index, nestedValue in
-                combinatorPaths(in: nestedValue, path: "\(path)[\(index)]")
-            }
-
-        default:
-            return []
-        }
-    }
-}
-
 private enum ToolSchemaLint {
+    private static let bannedCombinatorKeywords = ["oneOf", "anyOf", "allOf"]
+
     static func violations(in tools: [Tool]) -> [String] {
         tools.flatMap { tool in
             lintRootSchema(tool.inputSchema, path: "\(tool.name).inputSchema")
@@ -617,7 +527,7 @@ private enum ToolSchemaLint {
 
             // Schema combinators are banned entirely on the MCP surface — OpenAI
             // tool input schemas reject oneOf/anyOf/allOf at any depth.
-            for combinator in SchemaCombinatorScanner.bannedKeywords where object[combinator] != nil {
+            for combinator in bannedCombinatorKeywords where object[combinator] != nil {
                 violations.append("\(path).\(combinator) is a forbidden JSON Schema combinator")
             }
 

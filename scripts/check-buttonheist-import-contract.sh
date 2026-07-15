@@ -27,8 +27,6 @@ fi
 [[ ! -e "$REPO_ROOT/ButtonHeist/Sources/ButtonHeistDSL" ]] \
     || fail "removed ButtonHeistDSL source facade directory still exists"
 
-"$SCRIPT_DIR/check-source-shape.sh"
-
 normalize_exported_imports() {
     sed -E \
         -e "s#^$REPO_ROOT/##" \

@@ -43,6 +43,14 @@ def error_summary(error: BaseException) -> dict[str, Any]:
     }
 
 
+def failure_kind(error: BaseException, *, scenario_started: bool) -> str:
+    if scenario_started:
+        return "product-lifecycle-failure"
+    if isinstance(error, (TimeoutError, subprocess.TimeoutExpired)):
+        return "infrastructure-timeout"
+    return "infrastructure-setup-failure"
+
+
 def run(
     cmd: list[str],
     *,
@@ -607,6 +615,7 @@ def main() -> None:
                 report["scenarios"][name] = run_scenario()
             except Exception as exc:
                 report["status"] = "failed"
+                report["failureKind"] = failure_kind(exc, scenario_started=True)
                 report["failed_scenario"] = name
                 report["scenarios"][name] = {
                     "status": "failed",
@@ -618,10 +627,15 @@ def main() -> None:
 
         report.pop("current_scenario", None)
         report["status"] = "passed"
+        report["failureKind"] = "none"
         write_report(report_path, report)
         print(json.dumps(report, indent=2, sort_keys=True))
     except Exception as exc:
         report["status"] = "failed"
+        report.setdefault(
+            "failureKind",
+            failure_kind(exc, scenario_started="current_scenario" in report),
+        )
         report["error"] = error_summary(exc)
         write_report(report_path, report)
         raise

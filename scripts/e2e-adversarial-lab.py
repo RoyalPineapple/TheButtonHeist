@@ -272,7 +272,7 @@ def observe_iteration(
 
 
 def iteration_report(observation: IterationObservation) -> dict[str, Any]:
-    return {
+    report = {
         "iteration": observation.iteration,
         "passed": observation.passed,
         "returncode": observation.returncode,
@@ -281,10 +281,14 @@ def iteration_report(observation: IterationObservation) -> dict[str, Any]:
         "cliWallDurationMs": observation.cli_wall_duration_ms,
         "receiptTimingMs": summarize_receipt_timing(observation.receipt_timing_samples),
         "unexpectedCeilingHits": observation.unexpected_ceiling_hits,
-        "response": observation.response,
-        "stdout": observation.stdout,
-        "stderr": observation.stderr,
     }
+    if not observation.passed or observation.unexpected_ceiling_hits:
+        report["diagnostics"] = {
+            "response": observation.response,
+            "stdout": observation.stdout,
+            "stderr": observation.stderr,
+        }
+    return report
 
 
 def scenario_report(scenario: Scenario, observations: list[IterationObservation]) -> dict[str, Any]:
@@ -312,12 +316,19 @@ def scenario_report(scenario: Scenario, observations: list[IterationObservation]
 
 def gate_summary(scenarios: list[dict[str, Any]], ceiling_policy: CeilingPolicy) -> dict[str, Any]:
     ceiling_hit_count = sum(len(scenario["unexpectedCeilingHits"]) for scenario in scenarios)
+    failed_count = sum(scenario["failed"] for scenario in scenarios)
+    failure_kinds: list[str] = []
+    if failed_count > 0:
+        failure_kinds.append("product-scenario-failure")
+    if ceiling_policy is CeilingPolicy.FAIL and ceiling_hit_count > 0:
+        failure_kinds.append("product-ceiling-failure")
     return {
         "attempted": sum(scenario["attempted"] for scenario in scenarios),
         "passed": sum(scenario["passed"] for scenario in scenarios),
-        "failed": sum(scenario["failed"] for scenario in scenarios),
+        "failed": failed_count,
         "unexpectedCeilingHits": ceiling_hit_count,
         "ceilingPolicyViolated": ceiling_policy is CeilingPolicy.FAIL and ceiling_hit_count > 0,
+        "failureKinds": failure_kinds,
     }
 
 
@@ -804,11 +815,17 @@ def main() -> int:
         report["summary"] = gate_summary(report["scenarios"], args.ceiling_policy)
         failed = gate_failed(report["summary"])
         report["status"] = "failed" if failed else "passed"
+        report["failureKind"] = ", ".join(report["summary"]["failureKinds"]) if failed else "none"
         write_report(report_path, report)
         print(json.dumps(report, indent=2, sort_keys=True))
         return 1 if failed else 0
     except Exception as error:
         report["status"] = "failed"
+        report["failureKind"] = (
+            "infrastructure-timeout"
+            if isinstance(error, (subprocess.TimeoutExpired, TimeoutError))
+            else "infrastructure-failure"
+        )
         report["error"] = error_summary(error)
         write_report(report_path, report)
         print(f"Adversarial lab gate failed: {error}", file=sys.stderr)

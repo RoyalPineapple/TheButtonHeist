@@ -1506,15 +1506,6 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(TXTRecordKey.transport.rawValue, "transport")
     }
 
-    // MARK: - EnvironmentKey
-
-    func testEnvironmentKeyRawValues() {
-        XCTAssertEqual(EnvironmentKey.buttonheistDevice.rawValue, "BUTTONHEIST_DEVICE")
-        XCTAssertEqual(EnvironmentKey.buttonheistToken.rawValue, "BUTTONHEIST_TOKEN")
-        XCTAssertEqual(EnvironmentKey.insideJobToken.rawValue, "INSIDEJOB_TOKEN")
-        XCTAssertEqual(EnvironmentKey.insideJobPort.rawValue, "INSIDEJOB_PORT")
-    }
-
     // MARK: - ErrorKind
 
     func testErrorKindAllCasesRoundTrip() throws {

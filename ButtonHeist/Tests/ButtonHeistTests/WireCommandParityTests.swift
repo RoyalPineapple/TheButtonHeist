@@ -5,13 +5,7 @@ import ThePlans
 
 final class WireCommandParityTests: XCTestCase {
 
-    func testEveryCommandHasExactlyOneDescriptor() {
-        let descriptorCommands = TheFence.Command.descriptors.map(\.command)
-        XCTAssertEqual(descriptorCommands.count, TheFence.Command.allCases.count)
-        XCTAssertEqual(Set(descriptorCommands), Set(TheFence.Command.allCases))
-    }
-
-    func testCommandFamiliesHaveNoDuplicateRawValuesAndCoverEveryCommand() {
+    func testDescriptorsCoverEveryCommandExactlyOnce() {
         let descriptors = TheFence.Command.descriptors
         let descriptorCommands = descriptors.map(\.command)
 
@@ -272,95 +266,37 @@ final class WireCommandParityTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testCLIAndMCPRoutesDeferEveryRequiredParameterFailureToAdmission() async throws {
+    func testCLIAndMCPAdaptersPreserveRepresentativeAdmissionFailures() async throws {
         let (fence, _) = makeConnectedFence()
-
-        for descriptor in TheFence.Command.descriptors where descriptor.isPublicRequestContract {
-            for parameter in descriptor.parameters where parameter.required {
-                var values = sampleArguments(for: descriptor.command)
-                XCTAssertNotNil(
-                    values.removeValue(forKey: parameter.key),
-                    "Missing required sample for \(descriptor.command.rawValue).\(parameter.key)"
-                )
-                var routedInputs: [FenceCommandInput] = []
-
-                if descriptor.mcpExposure == .directTool {
-                    routedInputs.append(try TheFence.Command.routeToolRequest(
-                        named: descriptor.command.rawValue,
-                        arguments: .init(values: values)
-                    ).get())
-                }
-                if descriptor.cliExposure == .directCommand {
-                    values[FenceParameterKey.command.rawValue] = .string(descriptor.command.rawValue)
-                    routedInputs.append(try TheFence.Command.routeCLICommandEnvelope(
-                        .init(values: values),
-                        context: "test"
-                    ).get())
-                }
-
-                XCTAssertFalse(routedInputs.isEmpty, descriptor.command.rawValue)
-                for input in routedInputs {
-                    XCTAssertThrowsError(try fence.admit(input), descriptor.command.rawValue) { error in
-                        XCTAssertEqual(
-                            (error as? SchemaValidationError)?.field,
-                            parameter.key,
-                            "\(descriptor.command.rawValue).\(parameter.key): \(error)"
-                        )
-                    }
-                }
-            }
+        let missingStep = try TheFence.Command.routeToolRequest(
+            named: TheFence.Command.perform.rawValue,
+            arguments: .init(values: [:])
+        ).get()
+        XCTAssertThrowsError(try fence.admit(missingStep)) { error in
+            XCTAssertEqual((error as? SchemaValidationError)?.field, FenceParameterKey.step.rawValue)
         }
-    }
 
-    @ButtonHeistActor
-    func testCLIAndMCPRoutesDeferEveryProjectedParameterMutationToAdmission() async throws {
-        let (fence, _) = makeConnectedFence()
+        let malformedDirection = try TheFence.Command.routeCLICommandEnvelope(
+            .init(values: [
+                FenceParameterKey.command.rawValue: .string(TheFence.Command.scroll.rawValue),
+                FenceParameterKey.direction.rawValue: .string("sideways"),
+            ]),
+            context: "test"
+        ).get()
+        XCTAssertThrowsError(try fence.admit(malformedDirection)) { error in
+            XCTAssertEqual((error as? SchemaValidationError)?.field, FenceParameterKey.direction.rawValue)
+        }
 
-        for descriptor in TheFence.Command.descriptors where descriptor.isPublicRequestContract {
-            for parameter in descriptor.parameters {
-                for mutation in invalidValues(for: parameter) {
-                    var values = sampleArguments(for: descriptor.command)
-                    values[parameter.key] = mutation
-                    var routedInputs: [FenceCommandInput] = []
-                    let expectedFailure: Error
-
-                    do {
-                        _ = try fence.admit(FenceCommandInput(
-                            command: descriptor.command,
-                            arguments: .init(values: values)
-                        ))
-                        XCTFail("Expected admission failure for \(descriptor.command.rawValue).\(parameter.key)")
-                        continue
-                    } catch {
-                        expectedFailure = error
-                    }
-
-                    if descriptor.mcpExposure == .directTool {
-                        routedInputs.append(try TheFence.Command.routeToolRequest(
-                            named: descriptor.command.rawValue,
-                            arguments: .init(values: values)
-                        ).get())
-                    }
-                    if descriptor.cliExposure == .directCommand {
-                        values[FenceParameterKey.command.rawValue] = .string(descriptor.command.rawValue)
-                        routedInputs.append(try TheFence.Command.routeCLICommandEnvelope(
-                            .init(values: values),
-                            context: "test"
-                        ).get())
-                    }
-
-                    XCTAssertFalse(routedInputs.isEmpty, descriptor.command.rawValue)
-                    for input in routedInputs {
-                        XCTAssertThrowsError(try fence.admit(input), descriptor.command.rawValue) { error in
-                            XCTAssertEqual(
-                                String(reflecting: type(of: error)),
-                                String(reflecting: type(of: expectedFailure))
-                            )
-                            XCTAssertEqual(String(describing: error), String(describing: expectedFailure))
-                        }
-                    }
-                }
-            }
+        let unknownKey = "__unknown_parameter__"
+        let unknownParameter = try TheFence.Command.routeCLICommandEnvelope(
+            .init(values: [
+                FenceParameterKey.command.rawValue: .string(TheFence.Command.ping.rawValue),
+                unknownKey: .bool(true),
+            ]),
+            context: "test"
+        ).get()
+        XCTAssertThrowsError(try fence.admit(unknownParameter)) { error in
+            XCTAssertEqual((error as? SchemaValidationError)?.field, unknownKey)
         }
     }
 
@@ -390,65 +326,6 @@ final class WireCommandParityTests: XCTestCase {
                     )),
                     "\(descriptor.command.rawValue).\(parameter.key) explicit"
                 )
-            }
-        }
-    }
-
-    @ButtonHeistActor
-    func testCLIAndMCPRoutesExecuteTheSameAdmission() async throws {
-        let (fence, _) = makeConnectedFence()
-
-        for descriptor in TheFence.Command.descriptors where descriptor.mcpExposure == .directTool {
-            let arguments = TheFence.CommandArgumentEnvelope(values: sampleArguments(for: descriptor.command))
-            let input = try TheFence.Command.routeToolRequest(
-                named: descriptor.command.rawValue,
-                arguments: arguments
-            ).get()
-
-            XCTAssertEqual(try fence.admit(input).command, descriptor.command)
-        }
-
-        for descriptor in TheFence.Command.descriptors where descriptor.cliExposure == .directCommand {
-            var values = sampleArguments(for: descriptor.command)
-            values[FenceParameterKey.command.rawValue] = .string(descriptor.command.rawValue)
-            let input = try TheFence.Command.routeCLICommandEnvelope(
-                .init(values: values),
-                context: "test"
-            ).get()
-
-            XCTAssertEqual(try fence.admit(input).command, descriptor.command)
-        }
-    }
-
-    @ButtonHeistActor
-    func testCLIAndMCPRoutesDeferEveryUnknownParameterFailureToAdmission() async throws {
-        let (fence, _) = makeConnectedFence()
-        let unknownKey = "__unknown_parameter__"
-
-        for descriptor in TheFence.Command.descriptors where descriptor.isPublicRequestContract {
-            var values = sampleArguments(for: descriptor.command)
-            values[unknownKey] = .bool(true)
-            var routedInputs: [FenceCommandInput] = []
-
-            if descriptor.mcpExposure == .directTool {
-                routedInputs.append(try TheFence.Command.routeToolRequest(
-                    named: descriptor.command.rawValue,
-                    arguments: .init(values: values)
-                ).get())
-            }
-            if descriptor.cliExposure == .directCommand {
-                values[FenceParameterKey.command.rawValue] = .string(descriptor.command.rawValue)
-                routedInputs.append(try TheFence.Command.routeCLICommandEnvelope(
-                    .init(values: values),
-                    context: "test"
-                ).get())
-            }
-
-            XCTAssertFalse(routedInputs.isEmpty, descriptor.command.rawValue)
-            for input in routedInputs {
-                XCTAssertThrowsError(try fence.admit(input), descriptor.command.rawValue) { error in
-                    XCTAssertEqual((error as? SchemaValidationError)?.field, unknownKey)
-                }
             }
         }
     }

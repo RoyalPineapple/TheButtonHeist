@@ -2,13 +2,19 @@ name: Adversarial Nightly
 
 on:
   schedule:
-    - cron: "17 3 * * *"
+    # Daily coverage is deliberately shallow; Sunday owns the deeper soak.
+    - cron: "17 3 * * 1-6"
+    - cron: "17 3 * * 0"
   workflow_dispatch:
     inputs:
-      repeat_count:
-        description: Scenario repeat count
+      passing_repeat_count:
+        description: Passing scenario repeat count
         required: false
-        default: "20"
+        default: "5"
+      failure_repeat_count:
+        description: Expected-failure scenario repeat count
+        required: false
+        default: "1"
 
 concurrency:
   group: adversarial-nightly-${{ github.ref }}
@@ -21,14 +27,14 @@ jobs:
   adversarial-nightly:
     if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
     runs-on: macos-15
-    timeout-minutes: 45
+    timeout-minutes: 65
     env:
       DERIVED_DATA_PATH: /tmp/ButtonHeistDerivedData-adversarial
-      BUTTONHEIST_ADVERSARIAL_REPEAT_COUNT: ${{ github.event.inputs.repeat_count || '20' }}
-      BUTTONHEIST_ADVERSARIAL_FAILURE_REPEAT_COUNT: ${{ github.event.inputs.repeat_count || '20' }}
+      BUTTONHEIST_ADVERSARIAL_REPEAT_COUNT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.passing_repeat_count || github.event.schedule == '17 3 * * 0' && '20' || '5' }}
+      BUTTONHEIST_ADVERSARIAL_FAILURE_REPEAT_COUNT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.failure_repeat_count || '1' }}
       BUTTONHEIST_ADVERSARIAL_CEILING_POLICY: fail
       BUTTONHEIST_RECEIPTS_DIR: ${{ github.workspace }}/ci-artifacts/buttonheist-receipts/adversarial-nightly
-      BUTTONHEIST_RECEIPTS_MODE: failing-and-passing
+      BUTTONHEIST_RECEIPTS_MODE: failures
 
     steps:
       - name: Checkout repository
@@ -74,7 +80,7 @@ jobs:
         run: swift build --package-path ButtonHeistCLI
 
       - name: Run adversarial lab
-        timeout-minutes: 35
+        timeout-minutes: 40
         run: |
           APP="$DERIVED_DATA_PATH/Build/Products/Debug-iphonesimulator/BHDemo.app"
           scripts/run-with-heist-receipts.sh \
@@ -89,17 +95,61 @@ jobs:
             --ceiling-policy "$BUTTONHEIST_ADVERSARIAL_CEILING_POLICY" \
             --report "$RUNNER_TEMP/buttonheist-adversarial-nightly-report.json"
 
-      - name: Collect adversarial diagnostics
+      - name: Run lifecycle gate
+        if: always()
+        timeout-minutes: 10
+        run: |
+          APP="$DERIVED_DATA_PATH/Build/Products/Debug-iphonesimulator/BHDemo.app"
+          scripts/run-with-heist-receipts.sh \
+            --dir "$BUTTONHEIST_RECEIPTS_DIR" \
+            --mode "$BUTTONHEIST_RECEIPTS_MODE" \
+            -- scripts/e2e-lifecycle-gate.py \
+            --sim-udid "$SIM_UDID" \
+            --app "$APP" \
+            --cli "$PWD/ButtonHeistCLI/.build/debug/buttonheist" \
+            --report "$RUNNER_TEMP/buttonheist-lifecycle-nightly-report.json"
+
+      - name: Summarize nightly reports
         if: always()
         run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          reports = (
+              ("Adversarial lab", Path(os.environ["RUNNER_TEMP"]) / "buttonheist-adversarial-nightly-report.json"),
+              ("Lifecycle gate", Path(os.environ["RUNNER_TEMP"]) / "buttonheist-lifecycle-nightly-report.json"),
+          )
+          lines = ["## Nightly test summary", "", "| Gate | Status | Classification |", "|---|---|---|"]
+          for label, path in reports:
+              if not path.exists():
+                  lines.append(f"| {label} | missing | infrastructure/setup failure |")
+                  continue
+              report = json.loads(path.read_text())
+              status = report.get("status", "unknown")
+              classification = report.get("failureKind", "none")
+              if status in {"starting", "running"}:
+                  classification = "infrastructure timeout/interruption"
+              lines.append(f"| {label} | {status} | {classification} |")
+          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
+              summary.write("\n".join(lines) + "\n")
+          PY
+
+      - name: Collect nightly failure diagnostics
+        if: failure()
+        run: |
           mkdir -p "$BUTTONHEIST_RECEIPTS_DIR/diagnostics"
-          if [[ -f "$RUNNER_TEMP/buttonheist-adversarial-nightly-report.json" ]]; then
-            cp "$RUNNER_TEMP/buttonheist-adversarial-nightly-report.json" \
-              "$BUTTONHEIST_RECEIPTS_DIR/diagnostics/buttonheist-adversarial-nightly-report.json"
-          fi
+          for report in \
+            "$RUNNER_TEMP/buttonheist-adversarial-nightly-report.json" \
+            "$RUNNER_TEMP/buttonheist-lifecycle-nightly-report.json"; do
+            if [[ -f "$report" ]]; then
+              cp "$report" "$BUTTONHEIST_RECEIPTS_DIR/diagnostics/$(basename "$report")"
+            fi
+          done
 
       - name: Finalize heist receipts
-        if: always()
+        if: failure()
         uses: ./.github/actions/finalize-heist-receipts
         with:
           receipt-directory: ${{ env.BUTTONHEIST_RECEIPTS_DIR }}

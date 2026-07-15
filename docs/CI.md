@@ -106,16 +106,34 @@ the coverage contract; CI does not partition these suites with test selectors:
 |--------|----------|
 | `TheInsideJobTests` | Deterministic core runtime and protocol tests |
 | `TheInsideJobIntegrationTests` | Real loopback, TLS, live-window, gesture, and settle integration tests |
-| `DogfoodFeatureFlowTests` | Forms, list/calculator, controls/presentation, repeat-until, and text/paste/foreach flows |
-| `DogfoodRuntimeContractTests` | Advanced actions, public roots/prebuilt plans, runtime control flow, viewport commands, lifecycle, and failed receipts |
-| `AdversarialMutationTests` | Async reveal, dynamic cells, stale live objects, and text-field fallback |
-| `AdversarialNavigationTests` | Offscreen checkout, duplicate labels, modal obstruction, and nested scrolling |
+| `DogfoodFeatureFlowTests` | One semantic list mutation through the public heist API |
+| `DogfoodRuntimeContractTests` | Public roots/prebuilt plans and advanced control flow |
+| `AdversarialMutationTests` | Async reveal and stale-live-object recovery |
+| `AdversarialNavigationTests` | Modal fail-closed behavior and nested scrolling |
 
-`HostedBehaviorTests` combines the four dogfood and adversarial schemes. CI runs
-three lanes: `TheInsideJobTests` and `TheInsideJobIntegrationTests` stay serial,
-while `HostedBehaviorTests` uses two Xcode-managed simulator workers. Two workers
-let the isolated behavior suites overlap without multiplying GitHub-hosted
-runners or overloading one runner with four simulators.
+`HostedBehaviorTests` combines the four dogfood and adversarial schemes. Those
+targets contain seven focused live canaries, all of which run on pull requests
+through two Xcode-managed simulator workers. The scheduled adversarial workflow
+owns the complete external-driver scenario matrix, with a short daily pass and
+a deeper Sunday soak.
+
+CI budgets macOS capacity explicitly:
+
+- Portable release, parser, workflow, timing-parser, and automation contracts
+  run on Linux.
+- Pull requests use exactly three macOS runners: consolidated macOS validation
+  (including every portable framework test target),
+  deterministic iOS core plus a trimmed demo smoke using one shared build, and
+  hosted behavior canaries.
+- Pushes to `main` do not rerun those PR lanes. They run the genuine
+  `TheInsideJobIntegrationTests` suite on one dedicated macOS runner.
+- Successful jobs publish timing summaries. Receipt bundles, result bundles,
+  and simulator diagnostics are retained only when a job fails.
+
+This keeps two active PRs schedulable across a five-runner macOS pool while a
+post-merge integration run waits for or consumes the next available runner.
+The complete schemes remain available for local validation and deliberate
+pre-release runs.
 
 Run the core, integration, and combined behavior schemes for complete hosted coverage:
 
