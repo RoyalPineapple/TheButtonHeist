@@ -78,9 +78,10 @@ class CIWorkflowTests(unittest.TestCase):
             macos,
         )
         self.assertIn(
-            "if: steps.changes.outputs.run_source_shape_self_test == 'true'",
+            "if: steps.changes.outputs.run_bumper_rule_tests == 'true'",
             macos,
         )
+        self.assertIn("run: scripts/check-source-shape.sh test", macos)
         self.assertIn(
             "if: steps.changes.outputs.run_package_api_contracts == 'true'",
             macos,

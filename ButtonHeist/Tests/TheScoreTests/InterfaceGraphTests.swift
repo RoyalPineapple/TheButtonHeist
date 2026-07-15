@@ -21,7 +21,7 @@ final class InterfaceGraphTests: XCTestCase {
             .element(makeTestAccessibilityElement(third), traversalIndex: 1),
         ]
 
-        let graph = try InterfaceGraph(tree: tree)
+        let graph = Interface(timestamp: Date(timeIntervalSince1970: 1), tree: tree).graph
 
         XCTAssertEqual(graph.elementsInTraversalOrder.map(\.path), [
             TreePath([0, 1, 0]),
@@ -78,7 +78,8 @@ final class InterfaceGraphTests: XCTestCase {
 
     func testDuplicateAnnotationPathsRejected() {
         let annotation = InterfaceElementAnnotation(path: TreePath([0]), actions: [.activate])
-        XCTAssertThrowsError(try InterfaceGraph(
+        XCTAssertThrowsError(try Interface(
+            timestamp: Date(timeIntervalSince1970: 1),
             tree: [.element(makeTestAccessibilityElement(makeElement(label: "Save")), traversalIndex: 0)],
             annotations: InterfaceAnnotations(elements: [annotation, annotation])
         )) { error in
@@ -87,7 +88,8 @@ final class InterfaceGraphTests: XCTestCase {
     }
 
     func testAnnotationPathWithoutNodeRejected() {
-        XCTAssertThrowsError(try InterfaceGraph(
+        XCTAssertThrowsError(try Interface(
+            timestamp: Date(timeIntervalSince1970: 1),
             tree: [.element(makeTestAccessibilityElement(makeElement(label: "Save")), traversalIndex: 0)],
             annotations: InterfaceAnnotations(elements: [
                 InterfaceElementAnnotation(path: TreePath([1]), actions: [.activate]),
@@ -105,7 +107,8 @@ final class InterfaceGraphTests: XCTestCase {
         let saveIdentity = TraceElementIdentity("save_button")
         let cancelIdentity = TraceElementIdentity("cancel_button")
 
-        let graph = try InterfaceGraph(
+        let graph = try Interface(
+            timestamp: Date(timeIntervalSince1970: 1),
             tree: [
                 .element(makeTestAccessibilityElement(save), traversalIndex: 0),
                 .element(makeTestAccessibilityElement(cancel), traversalIndex: 1),
@@ -118,7 +121,7 @@ final class InterfaceGraphTests: XCTestCase {
                 savePath: saveIdentity,
                 cancelPath: cancelIdentity,
             ])
-        )
+        ).graph
 
         let saveRecord = graph.elementsInTraversalOrder.first { $0.path == savePath }
         let cancelRecord = graph.elementsInTraversalOrder.first { $0.path == cancelPath }
@@ -131,7 +134,8 @@ final class InterfaceGraphTests: XCTestCase {
         let duplicate = makeTestAccessibilityElement(makeElement(label: "Duplicate"))
         let firstPath = TreePath([0, 0])
         let secondPath = TreePath([0, 1])
-        let graph = try InterfaceGraph(
+        let graph = try Interface(
+            timestamp: Date(timeIntervalSince1970: 1),
             tree: [
                 .container(makeTestAccessibilityContainer(type: .list), children: [
                     .element(duplicate, traversalIndex: 4),
@@ -146,7 +150,7 @@ final class InterfaceGraphTests: XCTestCase {
                 firstPath: TraceElementIdentity("duplicate_first"),
                 secondPath: TraceElementIdentity("duplicate_second"),
             ])
-        )
+        ).graph
 
         let first = try XCTUnwrap(graph.element(at: firstPath))
         let second = try XCTUnwrap(graph.element(at: secondPath))
@@ -165,7 +169,8 @@ final class InterfaceGraphTests: XCTestCase {
     }
 
     func testTraceIdentityPathWithoutElementRejected() {
-        XCTAssertThrowsError(try InterfaceGraph(
+        XCTAssertThrowsError(try Interface(
+            timestamp: Date(timeIntervalSince1970: 1),
             tree: [
                 .container(makeTestAccessibilityContainer(type: .list), children: []),
             ],

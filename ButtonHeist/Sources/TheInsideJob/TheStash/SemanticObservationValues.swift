@@ -366,9 +366,37 @@ internal struct InterfaceObservationProof {
             discoveryCommitPolicy: exploration.discoveryCommitPolicy
         )
     }
+}
 
-    internal static func testing(_ screen: InterfaceObservation) -> InterfaceObservationProof {
+fileprivate extension InterfaceObservationProof {
+    static func forTesting(_ screen: InterfaceObservation) -> InterfaceObservationProof {
         InterfaceObservationProof(screen: screen)
+    }
+}
+
+internal extension SemanticObservationStream {
+    @discardableResult
+    func commitVisibleObservationForTesting(
+        _ screen: InterfaceObservation,
+        notificationBatch: AccessibilityNotificationBatch? = nil,
+        notificationIdentityScreen: InterfaceObservation? = nil
+    ) -> SettledSemanticObservationEvent {
+        commitSettledVisibleObservation(
+            .forTesting(screen),
+            notificationBatch: notificationBatch,
+            notificationIdentityScreen: notificationIdentityScreen
+        )
+    }
+
+    @discardableResult
+    func commitDiscoveryObservationForTesting(
+        _ screen: InterfaceObservation,
+        notificationBatch: AccessibilityNotificationBatch? = nil
+    ) -> SettledSemanticObservationEvent {
+        commitSettledDiscoveryObservation(
+            .forTesting(screen),
+            notificationBatch: notificationBatch
+        )
     }
 }
 

@@ -23,6 +23,9 @@ let package = Package(
         // via scripts/check-parser-contract.sh and scripts/bump-parser.sh.
         .package(url: "https://github.com/RoyalPineapple/AccessibilitySnapshotBH", exact: "0.24.0"),
         .package(url: "https://github.com/apple/swift-argument-parser", .upToNextMinor(from: "1.7.0")),
+        // Source-shape validation runs the dependency's executable product
+        // directly through SwiftPM; it is not linked into a Button Heist target.
+        .package(url: "https://github.com/RoyalPineapple/BumperBowling.git", exact: "0.6.0"),
     ],
     targets: [
         .target(

@@ -597,18 +597,6 @@ public struct Interface: Codable, Equatable, Sendable {
         projectedElementRecords.map(\.element)
     }
 
-    package var graph: InterfaceGraph {
-        do {
-            return try InterfaceGraph(
-                tree: tree,
-                annotations: annotations,
-                traceIdentities: traceIdentities
-            )
-        } catch {
-            preconditionFailure("Invalid Interface graph: \(error)")
-        }
-    }
-
     /// Trace-aware element projection in VoiceOver traversal order.
     ///
     /// `projectedElements` intentionally stays a public, content-only view.
@@ -672,7 +660,7 @@ public struct Interface: Codable, Equatable, Sendable {
         screenActions: [ScreenAction] = [],
         traceIdentities: InterfaceTraceIdentities
     ) throws(InterfaceGraphValidationError) {
-        _ = try InterfaceGraph(
+        try InterfaceGraph.validate(
             tree: tree,
             annotations: annotations,
             traceIdentities: traceIdentities
@@ -696,24 +684,19 @@ public struct Interface: Codable, Equatable, Sendable {
         elementMetadata: (TreePath, AccessibilityElement, Int) -> InterfaceElementProjectionMetadata?,
         containerMetadata: (TreePath, AccessibilityContainer) -> InterfaceContainerProjectionMetadata?
     ) {
-        let graph = InterfaceGraph(
-            projecting: tree,
+        let projection = InterfaceGraph.projection(
+            tree: tree,
             elementMetadata: elementMetadata,
             containerMetadata: containerMetadata
         )
-        let annotations = InterfaceAnnotations(
-            elements: graph.elementAnnotationByPath.values.sorted { $0.path < $1.path },
-            containers: graph.containerAnnotationByPath.values.sorted { $0.path < $1.path }
-        )
-        let traceIdentities = InterfaceTraceIdentities(graph.traceIdentityByPath)
 
         self.init(
             validatedTimestamp: timestamp,
             tree: tree,
-            annotations: annotations,
+            annotations: projection.annotations,
             diagnostics: diagnostics,
             screenActions: screenActions,
-            traceIdentities: traceIdentities
+            traceIdentities: projection.traceIdentities
         )
     }
 

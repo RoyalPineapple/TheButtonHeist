@@ -19,14 +19,14 @@ class ChangeScopeSelectionTests(unittest.TestCase):
         *,
         package_api: bool,
         cli_tools: bool,
-        source_shape_self_test: bool,
+        bumper_rule_tests: bool,
     ) -> None:
         self.assertEqual(
             SELECTOR.select_scopes(paths),
             {
                 SELECTOR.PACKAGE_API: package_api,
                 SELECTOR.CLI_TOOLS: cli_tools,
-                SELECTOR.SOURCE_SHAPE_SELF_TEST: source_shape_self_test,
+                SELECTOR.BUMPER_RULE_TESTS: bumper_rule_tests,
             },
         )
 
@@ -35,7 +35,7 @@ class ChangeScopeSelectionTests(unittest.TestCase):
             ["README.md", "docs/CI.md", "ButtonHeistCLI/README.md"],
             package_api=False,
             cli_tools=False,
-            source_shape_self_test=False,
+            bumper_rule_tests=False,
         )
 
     def test_ios_test_helper_skips_optional_scopes(self) -> None:
@@ -43,7 +43,7 @@ class ChangeScopeSelectionTests(unittest.TestCase):
             ["ButtonHeist/Tests/TheInsideJobTests/Helpers/HostedTestAssertions.swift"],
             package_api=False,
             cli_tools=False,
-            source_shape_self_test=False,
+            bumper_rule_tests=False,
         )
 
     def test_hosted_fixture_and_ios_automation_skip_optional_scopes(self) -> None:
@@ -56,7 +56,7 @@ class ChangeScopeSelectionTests(unittest.TestCase):
             ],
             package_api=False,
             cli_tools=False,
-            source_shape_self_test=False,
+            bumper_rule_tests=False,
         )
 
     def test_public_source_runs_package_contracts_and_tool_tests(self) -> None:
@@ -64,7 +64,7 @@ class ChangeScopeSelectionTests(unittest.TestCase):
             ["ButtonHeist/Sources/TheScore/AccessibilityObservationChange.swift"],
             package_api=True,
             cli_tools=True,
-            source_shape_self_test=False,
+            bumper_rule_tests=False,
         )
 
     def test_cli_change_runs_only_tool_tests(self) -> None:
@@ -72,7 +72,7 @@ class ChangeScopeSelectionTests(unittest.TestCase):
             ["ButtonHeistCLI/Sources/Commands/ActivateCommand.swift"],
             package_api=False,
             cli_tools=True,
-            source_shape_self_test=False,
+            bumper_rule_tests=False,
         )
 
     def test_compiled_example_runs_tool_tests(self) -> None:
@@ -80,7 +80,7 @@ class ChangeScopeSelectionTests(unittest.TestCase):
             ["examples/heist-program.swift"],
             package_api=False,
             cli_tools=True,
-            source_shape_self_test=False,
+            bumper_rule_tests=False,
         )
 
     def test_package_manifest_runs_package_contracts_and_tool_tests(self) -> None:
@@ -88,14 +88,14 @@ class ChangeScopeSelectionTests(unittest.TestCase):
             ["./Package.swift"],
             package_api=True,
             cli_tools=True,
-            source_shape_self_test=False,
+            bumper_rule_tests=False,
         )
 
-    def test_source_shape_owners_run_only_harness_self_test(self) -> None:
+    def test_bumper_policy_changes_run_only_rule_tests(self) -> None:
         for path in (
             "BumperBowling.swift",
             ".bumper/Sources/ButtonHeistCustomRules.swift",
-            "scripts/tests/check-source-shape-test.sh",
+            ".bumper/Tests/FrameworkImportOwnershipTests.swift",
             "docs/BUMPER-RULES.md",
         ):
             with self.subTest(path=path):
@@ -103,7 +103,7 @@ class ChangeScopeSelectionTests(unittest.TestCase):
                     [path],
                     package_api=False,
                     cli_tools=False,
-                    source_shape_self_test=True,
+                    bumper_rule_tests=True,
                 )
 
     def test_workflow_and_unknown_changes_fail_open(self) -> None:
@@ -113,7 +113,7 @@ class ChangeScopeSelectionTests(unittest.TestCase):
                     [path],
                     package_api=True,
                     cli_tools=True,
-                    source_shape_self_test=True,
+                    bumper_rule_tests=True,
                 )
 
     def test_mixed_paths_union_their_scopes(self) -> None:
@@ -125,7 +125,7 @@ class ChangeScopeSelectionTests(unittest.TestCase):
             ],
             package_api=False,
             cli_tools=True,
-            source_shape_self_test=True,
+            bumper_rule_tests=True,
         )
 
     def test_empty_input_fails_open(self) -> None:
@@ -133,7 +133,7 @@ class ChangeScopeSelectionTests(unittest.TestCase):
             [],
             package_api=True,
             cli_tools=True,
-            source_shape_self_test=True,
+            bumper_rule_tests=True,
         )
 
     def test_output_is_stable_github_boolean_syntax(self) -> None:
@@ -142,7 +142,7 @@ class ChangeScopeSelectionTests(unittest.TestCase):
             SELECTOR.format_outputs(scopes),
             "run_package_api_contracts=false\n"
             "run_cli_tool_tests=false\n"
-            "run_source_shape_self_test=false",
+            "run_bumper_rule_tests=false",
         )
 
 

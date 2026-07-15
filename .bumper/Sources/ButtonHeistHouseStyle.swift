@@ -3,7 +3,6 @@ import BumperBowlingCore
 enum ButtonHeistComponent: String, ComponentKey {
     case plans
     case score
-    case dsl
     case doctor
     case runtime
     case testing
@@ -13,7 +12,7 @@ enum ButtonHeistComponent: String, ComponentKey {
 }
 
 extension ComponentShape {
-    static let buttonHeistValuePipeline = ComponentShape {
+    static let buttonHeistPlansBoundary = ComponentShape {
         DoesNotUse(.uiKit, .swiftUI, .persistence, .testing, severity: .error)
         DoesNotUse(
             "ArgumentParser",
@@ -25,31 +24,7 @@ extension ComponentShape {
         )
     }
 
-    static let buttonHeistPureReducers = ComponentShape {
-        Applies(.buttonHeistValuePipeline)
-    }
-
-    static let buttonHeistScoreContract = ComponentShape {
+    static let buttonHeistScoreBoundary = ComponentShape {
         DoesNotUse(.uiKit, .swiftUI, .persistence, .testing, severity: .error)
-    }
-
-    static let buttonHeistLiveRuntimeBoundary = ComponentShape {
-        MayUse(.foundation, .uiKit, .swiftUI)
-    }
-
-    static let buttonHeistTestingBoundary = ComponentShape {
-        MayUse(.foundation, .testing)
-    }
-
-    static let buttonHeistToolBoundary = ComponentShape {
-        MayUse(.foundation)
-    }
-
-    static let buttonHeistMCPBoundary = ComponentShape {
-        MayUse(.foundation)
-    }
-
-    static let buttonHeistDemoSurface = ComponentShape {
-        MayUse(.foundation, .uiKit, .swiftUI)
     }
 }

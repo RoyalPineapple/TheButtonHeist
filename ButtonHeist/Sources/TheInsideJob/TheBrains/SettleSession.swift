@@ -483,7 +483,7 @@ struct SettleSessionFinalObservation: Equatable, Sendable {
     }
 
     /// Result of the loop, exposed so the caller can compute transients.
-    struct Outcome {
+    struct Outcome: Sendable {
         let outcome: SettleOutcome
         /// Lightweight signals observed during the loop. These explain why
         /// the settle baseline was reset, but the final `outcome` still owns

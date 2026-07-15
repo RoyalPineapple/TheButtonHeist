@@ -28,19 +28,10 @@ done < <(
 )
 
 for rule_id in \
-    component_boundary \
-    declared_dependency_cycle \
     duplicate_ownership \
     forbidden_import; do
     require_documented "$rule_id"
 done
-
-while IFS= read -r symbol; do
-    require_documented "$symbol"
-done < <(
-    sed -n '/private enum ArchitectureCurrency:/,/^}/p' "$RULE_SOURCE" \
-        | sed -n 's/.*= "\([^"]*\)"/\1/p'
-)
 
 custom_rule_count="$(grep -Ec 'Rules\.(repository|files)\(' "$RULE_SOURCE" || true)"
 custom_summary_count="$(grep -Ec '^[[:space:]]+summary: "' "$RULE_SOURCE" || true)"

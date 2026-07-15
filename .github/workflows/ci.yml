@@ -92,11 +92,9 @@ jobs:
           swiftlint lint --strict
           scripts/check-source-shape.sh
 
-      - name: Test source-shape policy
-        if: steps.changes.outputs.run_source_shape_self_test == 'true'
-        run: |
-          BUMPER_BOWLING_PACKAGE_PATH="$PWD/.build/bumper-bowling" \
-            scripts/tests/check-source-shape-test.sh
+      - name: Test Bumper rules
+        if: steps.changes.outputs.run_bumper_rule_tests == 'true'
+        run: scripts/check-source-shape.sh test
 
       - name: Validate Swift package products and public API
         if: steps.changes.outputs.run_package_api_contracts == 'true'
