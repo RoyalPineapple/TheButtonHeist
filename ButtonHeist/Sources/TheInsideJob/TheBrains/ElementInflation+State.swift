@@ -50,14 +50,17 @@ extension ElementInflation {
             }
         }
 
-        internal func rollBack() {
+        internal func rollBack(using moveViewport: MoveViewport) async {
             guard phase == .active else { return }
             phase = .rolledBack
-            movementOrder.reversed().forEach { identifier in
-                guard let movement = movements[identifier] else { return }
+            for identifier in movementOrder.reversed() {
+                guard let movement = movements[identifier] else { continue }
                 let currentOrigin = Navigation.visualOrigin(in: movement.scrollView)
-                guard currentOrigin != movement.visualOrigin else { return }
-                Navigation.restoreVisualOrigin(movement.visualOrigin, in: movement.scrollView)
+                guard currentOrigin != movement.visualOrigin else { continue }
+                _ = await moveViewport(.restoreVisualOrigin(
+                    movement.visualOrigin,
+                    in: movement.scrollView
+                ))
             }
         }
 

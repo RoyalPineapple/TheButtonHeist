@@ -341,9 +341,7 @@ struct SettleSessionFinalObservation: Equatable, Sendable {
 /// shared. `TheTripwire.waitForAllClear`
 /// watches CALayers and is deliberately blind to the AX tree; "no layer
 /// motion" and "AX tree stable" disagree on every spinner-driven loading
-/// state. `SettleSwipeLoopState` (Navigation.swift) is also AX-tree driven
-/// but interleaves parse with frame yields and exposes a `moved` latch — its
-/// termination is per-swipe, not per-action.
+/// state. Viewport movement uses this same reducer with a one-cycle policy.
 ///
 /// The loop seeds `previousFingerprint` from a synchronous parse *before*
 /// the first sleep, so a static screen settles after exactly
@@ -388,6 +386,11 @@ struct SettleSessionFinalObservation: Equatable, Sendable {
     /// a Lottie loop, a video) and the caller is better off accepting the
     /// last-seen snapshot than blocking the action pipeline further.
     static let defaultTimeoutMs: Int = 5_000
+
+    /// Programmatic viewport movement should normally prove itself after one
+    /// run-loop turn. This ceiling allows brief layout churn without turning
+    /// page-by-page discovery into action settlement.
+    static let viewportTransitionTimeoutMs: Int = 250
 
     typealias ParseProvider = @MainActor () -> InterfaceObservation?
     typealias TripwireSignalProvider = @MainActor () -> TheTripwire.TripwireSignal
@@ -477,6 +480,24 @@ struct SettleSessionFinalObservation: Equatable, Sendable {
             tripwireSignalProvider: { tripwire.tripwireSignal() },
             observationYield: observationYield,
             policy: policy,
+            clock: { CFAbsoluteTimeGetCurrent() },
+            timeoutMs: timeoutMs
+        )
+    }
+
+    /// Minimal proof for a programmatic viewport transition. UIKit receives
+    /// one run-loop turn to lay out the new viewport, then the parser must
+    /// return the same semantic fingerprint on consecutive captures.
+    static func viewportTransition(
+        stash: TheStash,
+        tripwire: TheTripwire,
+        timeoutMs: Int
+    ) -> SettleSession {
+        SettleSession(
+            parseProvider: { stash.semanticObservationForSettle() },
+            tripwireSignalProvider: { tripwire.tripwireSignal() },
+            observationYield: { await tripwire.yieldRealFrames(1) },
+            policy: .consecutiveCycles(required: 1),
             clock: { CFAbsoluteTimeGetCurrent() },
             timeoutMs: timeoutMs
         )
@@ -616,13 +637,25 @@ private struct SettleLoopRunner {
             initial: initial,
             machine: SettleLoopMachine()
         )
+        var terminalObservationOutcome: SettleSession.Outcome?
+
+        func ingest(_ screen: InterfaceObservation) -> SettleSession.Outcome? {
+            let recorded = observations.record(screen)
+            let transition = driver.send(
+                .observation(
+                    recorded.sample,
+                    elapsedMs: deadline.elapsedMilliseconds(at: clock())
+                )
+            )
+            terminalObservationOutcome = SettleSession.outcome(
+                for: transition,
+                observations: observations
+            )
+            return terminalObservationOutcome
+        }
 
         if let initial = parseProvider() {
-            let observation = observations.record(initial)
-            let transition = driver.send(
-                .observation(observation.sample, elapsedMs: deadline.elapsedMilliseconds(at: clock())),
-            )
-            if let outcome = SettleSession.outcome(for: transition, observations: observations) {
+            if let outcome = ingest(initial) {
                 return outcome
             }
         }
@@ -653,11 +686,7 @@ private struct SettleLoopRunner {
             }
 
             guard let parse = parseProvider() else { continue }
-            let observation = observations.record(parse)
-            let observationTransition = driver.send(
-                .observation(observation.sample, elapsedMs: deadline.elapsedMilliseconds(at: clock()))
-            )
-            if let outcome = SettleSession.outcome(for: observationTransition, observations: observations) {
+            if let outcome = ingest(parse) {
                 return outcome
             }
         }

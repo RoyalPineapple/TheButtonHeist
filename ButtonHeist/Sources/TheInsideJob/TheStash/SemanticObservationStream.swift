@@ -148,6 +148,13 @@ internal final class SemanticObservationStream {
         observationLog.settledCapture(scope: scope, at: sequence)
     }
 
+    internal func observationEvent(
+        scope: SemanticObservationScope,
+        at sequence: SettledObservationSequence
+    ) -> SettledSemanticObservationEvent? {
+        observationLog.event(scope: scope, sequence: sequence)
+    }
+
     internal func settledEvent(
         scope: SemanticObservationScope,
         after sequence: SettledObservationSequence?,
@@ -254,18 +261,6 @@ internal final class SemanticObservationStream {
     }
 
     @discardableResult
-    internal func commitExploredDiscoveryObservation(
-        _ exploration: Navigation.ExploredScreen,
-        notificationBatch: AccessibilityNotificationBatch? = nil
-    ) -> SettledSemanticObservationEvent? {
-        guard let stash,
-              let proof = InterfaceObservationProof.explored(exploration, stash: stash) else {
-            return nil
-        }
-        return commitSettledDiscoveryObservation(proof, notificationBatch: notificationBatch)
-    }
-
-    @discardableResult
     private func publishCommittedObservation(
         _ proof: InterfaceObservationProof,
         scope: SemanticObservationScope,
@@ -279,28 +274,37 @@ internal final class SemanticObservationStream {
             ?? stash.accessibilityNotifications.checkpoint(
                 after: runtimeState.notificationCursor
             )
-        let candidateScreen = proof.screen.semanticObservationProjection(for: scope)
-        let classifiedSource = SemanticObservationGenerationClassifier.classify(
-            currentGeneration: runtimeState.lineage.generation,
-            previousInScope: observationLog.previousEvent(for: scope),
-            latestSource: observationLog.latestSourceEvent,
-            candidate: candidateScreen,
-            scope: scope,
+        let previousTree = stash.interfaceTree
+        let candidateTree = switch scope {
+        case .visible:
+            previousTree.updatingViewport(with: proof.screen)
+        case .discovery:
+            proof.discoveryCommitPolicy == .replaceInterface
+                ? proof.screen.tree
+                : previousTree.merging(proof.screen.tree)
+        }
+        let previous = committedInterfaceObservation(from: previousTree)
+        let candidate = committedInterfaceObservation(from: candidateTree) ?? .empty
+        let classifiedContinuity = SemanticObservationGenerationClassifier.continuity(
+            from: previous,
+            to: candidate,
             notifications: resolvedNotificationBatch.events.map(\.kind)
         )
-        let sourceClassification = proof.authoritativeReplacementClassification
-            ?? classifiedSource
-        switch scope {
-        case .visible:
-            stash.commitVisibleInterface(proof, classification: sourceClassification)
-        case .discovery:
-            stash.commitDiscoveryInterface(proof, classification: sourceClassification)
+        let continuity = runtimeState.lineage.admitting(classifiedContinuity)
+        if continuity.isReplacement {
+            observationLog.beginScreenReplacement()
         }
+        _ = stash.reduceInterfaceGraph(
+            with: proof.screen,
+            scope: scope,
+            continuity: continuity,
+            discoveryCommitPolicy: proof.discoveryCommitPolicy
+        )
         return publishCurrentSettledObservation(
             scope: scope,
             stash: stash,
             notificationBatch: resolvedNotificationBatch,
-            sourceClassification: sourceClassification,
+            continuity: continuity,
             notificationIdentityScreen: notificationIdentityScreen
         )
     }
@@ -404,7 +408,7 @@ internal final class SemanticObservationStream {
         scope: SemanticObservationScope = .visible,
         stash: TheStash,
         notificationBatch: AccessibilityNotificationBatch,
-        sourceClassification: ScreenClassifier.Classification,
+        continuity: ScreenContinuity,
         notificationIdentityScreen: InterfaceObservation? = nil
     ) -> SettledSemanticObservationEvent {
         let settledScreen: InterfaceObservation
@@ -413,7 +417,6 @@ internal final class SemanticObservationStream {
         } catch {
             preconditionFailure("Published semantic observation failed validation: \(error)")
         }
-        let admittedClassification = runtimeState.lineage.admitting(sourceClassification)
         let publication = SemanticObservationPublication.make(
             sourceScope: scope,
             sequence: runtimeState.sequence + 1,
@@ -421,7 +424,7 @@ internal final class SemanticObservationStream {
             screen: settledScreen,
             semanticSignal: tripwire.tripwireSignal().semanticValue,
             context: SemanticObservationPublication.Context(
-                generationClassification: admittedClassification,
+                continuity: continuity,
                 generation: runtimeState.lineage.generation,
                 previousEvents: observationLog.latestEventsByScope
             ),
@@ -462,13 +465,7 @@ internal final class SemanticObservationStream {
         stash: TheStash
     ) -> [SemanticObservationScope: SemanticObservationPublication.Evidence] {
         Dictionary(uniqueKeysWithValues: sourceScope.fulfilledScopes.map { fulfilledScope in
-            let projected = screen.semanticObservationProjection(for: fulfilledScope)
-            let referenceScreen = switch fulfilledScope {
-            case .visible:
-                projected.viewportOnly
-            case .discovery:
-                projected
-            }
+            let referenceScreen = screen
             return (fulfilledScope, SemanticObservationPublication.Evidence(
                 interface: stash.semanticInterfaceWithHash(for: referenceScreen).interface,
                 accessibilityNotifications: stash.resolveAccessibilityNotificationEvidence(
@@ -694,11 +691,7 @@ internal final class SemanticObservationStream {
                 return .completed(settledSequence: nil)
             }
             guard !Task.isCancelled else { return .interrupted }
-            guard let event = commitExploredDiscoveryObservation(exploration) else {
-                invalidateLatestSettledObservation()
-                return .completed(settledSequence: nil)
-            }
-            return .completed(settledSequence: event.sequence)
+            return .completed(settledSequence: exploration.event.sequence)
         }
     }
 
@@ -784,6 +777,17 @@ internal final class SemanticObservationStream {
             }
         }
         stash.recordFailedSettleDiagnosticEvidence(screen)
+    }
+
+    private func committedInterfaceObservation(
+        from tree: InterfaceTree
+    ) -> InterfaceObservation? {
+        guard tree != .empty else { return nil }
+        do {
+            return try InterfaceObservation.build(tree: tree)
+        } catch {
+            preconditionFailure("Committed interface observation failed validation: \(error)")
+        }
     }
 }
 

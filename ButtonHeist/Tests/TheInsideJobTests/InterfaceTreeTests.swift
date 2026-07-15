@@ -678,7 +678,7 @@ final class InterfaceTreeTests: XCTestCase {
         XCTAssertNil(updated.findElement(heistId: "button_scrolled_away"))
     }
 
-    func testInterfaceTreeViewportUpdateReplacesInterfaceTreeForUnrelatedVisibleRefresh() {
+    func testInterfaceTreeViewportUpdatePreservesOffViewportMemoryForUnrelatedVisibleRefresh() {
         let old = makeElement(label: "Old", traits: .button)
         let offViewport = makeElement(label: "Known", traits: .button)
         let replacement = makeElement(label: "Replacement", traits: .button)
@@ -692,8 +692,8 @@ final class InterfaceTreeTests: XCTestCase {
 
         let updated = updateViewport(of: screen.tree, with: refresh)
 
-        XCTAssertEqual(updated.elementIDs, ["button_replacement"])
-        XCTAssertNil(updated.findElement(heistId: "button_known"))
+        XCTAssertEqual(updated.elementIDs, ["button_known", "button_replacement"])
+        XCTAssertEqual(updated.findElement(heistId: "button_known")?.element.label, "Known")
     }
 
     func testInterfaceTreeViewportUpdateReplacesInterfaceTreeForEmptyRefresh() {

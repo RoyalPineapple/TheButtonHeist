@@ -1,5 +1,6 @@
 #if canImport(UIKit)
 #if DEBUG
+import Foundation
 import TheScore
 
 internal struct ObservationGeneration: RawRepresentable, Sendable, Equatable, Hashable {
@@ -18,6 +19,22 @@ internal struct ObservationCursor: Sendable, Equatable, Hashable {
     internal let sequence: SettledObservationSequence
     internal let captureHash: String
     internal let notificationSequence: UInt64
+    internal let observedAt: Date
+
+    internal init(
+        generation: ObservationGeneration,
+        scope: SemanticObservationScope,
+        sequence: SettledObservationSequence,
+        capture: AccessibilityTrace.Capture,
+        notificationSequence: UInt64
+    ) {
+        self.generation = generation
+        self.scope = scope
+        self.sequence = sequence
+        captureHash = capture.hash
+        self.notificationSequence = notificationSequence
+        observedAt = capture.interface.timestamp
+    }
 }
 
 internal struct SettledCapture: Sendable, Equatable {
@@ -232,6 +249,7 @@ internal struct SettledSemanticObservation: Sendable, Equatable {
 /// One published settled observation with its generation and evidence lineage.
 internal struct SettledSemanticObservationEvent: Sendable, Equatable {
     internal let generation: ObservationGeneration
+    internal let continuity: ScreenContinuity
     internal let sequence: SettledObservationSequence
     internal let scope: SemanticObservationScope
     internal let observation: SettledSemanticObservation
@@ -246,7 +264,7 @@ internal struct SettledSemanticObservationEvent: Sendable, Equatable {
                 generation: generation,
                 scope: scope,
                 sequence: sequence,
-                captureHash: $0.hash,
+                capture: $0,
                 notificationSequence: notificationSequence
             )
         }
@@ -263,6 +281,7 @@ internal struct SettledSemanticObservationEvent: Sendable, Equatable {
 
     internal init(
         generation: ObservationGeneration = .initial,
+        continuity: ScreenContinuity,
         sequence: SettledObservationSequence,
         scope: SemanticObservationScope,
         observation: SettledSemanticObservation,
@@ -272,6 +291,7 @@ internal struct SettledSemanticObservationEvent: Sendable, Equatable {
         trace: AccessibilityTrace
     ) {
         self.generation = generation
+        self.continuity = continuity
         self.sequence = sequence
         self.scope = scope
         self.observation = observation
@@ -284,6 +304,7 @@ internal struct SettledSemanticObservationEvent: Sendable, Equatable {
     internal func replacingGeneration(_ generation: ObservationGeneration) -> SettledSemanticObservationEvent {
         SettledSemanticObservationEvent(
             generation: generation,
+            continuity: continuity,
             sequence: sequence,
             scope: scope,
             observation: observation,
@@ -304,37 +325,21 @@ internal struct VisibleSemanticObservationEvidence {
 
 /// Validated evidence admitted for a semantic observation commit.
 internal struct InterfaceObservationProof {
-    private enum GenerationAdmission {
-        case classifyAtCommit
-        case replace(reason: AccessibilityObservationFallbackReason)
-
-        fileprivate var authoritativeReplacementClassification: ScreenClassifier.Classification? {
-            guard case .replace(let reason) = self else { return nil }
-            return .inferredScreenChange(reason: reason)
-        }
-    }
-
     internal let screen: InterfaceObservation
-    private let generationAdmission: GenerationAdmission
     internal let discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy
-
-    internal var authoritativeReplacementClassification: ScreenClassifier.Classification? {
-        generationAdmission.authoritativeReplacementClassification
-    }
 
     private init(
         screen: InterfaceObservation,
-        generationAdmission: GenerationAdmission = .classifyAtCommit,
         discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy = .mergeIntoInterface
     ) {
         self.screen = screen
-        self.generationAdmission = generationAdmission
         self.discoveryCommitPolicy = discoveryCommitPolicy
     }
 
     @MainActor internal static func settled(
         _ outcome: SettleSession.Outcome,
-        stash: TheStash
+        stash: TheStash,
+        discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy = .mergeIntoInterface
     ) -> InterfaceObservationProof? {
         guard outcome.outcome.didSettleCleanly,
               let finalObservation = outcome.finalObservation else { return nil }
@@ -343,27 +348,9 @@ internal struct InterfaceObservationProof {
               screen.tree == finalObservation.tree,
               SettleTimeline.fingerprint(of: screen.liveCapture.hierarchy.sortedElements)
                 == finalObservation.fingerprint else { return nil }
-        return InterfaceObservationProof(screen: screen)
-    }
-
-    @MainActor internal static func explored(
-        _ exploration: Navigation.ExploredScreen,
-        stash: TheStash
-    ) -> InterfaceObservationProof? {
-        guard exploration.screen.captureToken == stash.latestObservation.captureToken else {
-            return nil
-        }
-        let generationAdmission: GenerationAdmission
-        switch exploration.generationDisposition {
-        case .preservesGeneration:
-            generationAdmission = .classifyAtCommit
-        case .replacesGeneration(let reason):
-            generationAdmission = .replace(reason: reason)
-        }
         return InterfaceObservationProof(
-            screen: exploration.screen,
-            generationAdmission: generationAdmission,
-            discoveryCommitPolicy: exploration.discoveryCommitPolicy
+            screen: screen,
+            discoveryCommitPolicy: discoveryCommitPolicy
         )
     }
 }

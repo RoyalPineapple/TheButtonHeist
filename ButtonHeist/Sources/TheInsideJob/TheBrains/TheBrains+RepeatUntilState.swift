@@ -39,14 +39,14 @@ extension TheBrains.RepeatUntil {
     }
 
     internal struct RunningState {
-        internal let currentCheck: UnmetCheck
+        internal let currentObservation: Observation?
         internal let iterationNodes: [HeistExecutionStepResult]
 
         internal init(
-            currentCheck: UnmetCheck,
-            iterationNodes: [HeistExecutionStepResult]
+            currentObservation: Observation?,
+            iterationNodes: [HeistExecutionStepResult] = []
         ) {
-            self.currentCheck = currentCheck
+            self.currentObservation = currentObservation
             self.iterationNodes = iterationNodes
         }
 
@@ -54,33 +54,22 @@ extension TheBrains.RepeatUntil {
             _ node: HeistExecutionStepResult,
             nextCheck: UnmetCheck
         ) -> RunningState {
-            RunningState(currentCheck: nextCheck, iterationNodes: iterationNodes + [node])
+            RunningState(
+                currentObservation: nextCheck.observation,
+                iterationNodes: iterationNodes + [node]
+            )
         }
     }
 
     internal enum LoopState {
-        case awaitingInitial
         case running(RunningState)
         case terminal(Terminal)
 
         internal static func reduce(_ state: LoopState, event: LoopEvent) -> LoopState {
             switch (state, event) {
-            case (.awaitingInitial, .initial(let check)):
-                switch check {
-                case .unavailable(let receipt):
-                    return .terminal(.initialObservationUnavailable(receipt))
-                case .met(let check):
-                    return .terminal(.predicateMet(
-                        check: check,
-                        iterationCount: 0,
-                        iterationNodes: []
-                    ))
-                case .unmet(let check):
-                    return .running(RunningState(currentCheck: check, iterationNodes: []))
-                }
             case (.running(let running), .deadlineElapsed(let expectation)):
                 return .terminal(.timedOut(
-                    observation: running.currentCheck.observation,
+                    observation: running.currentObservation,
                     expectation: expectation,
                     iterationCount: running.iterationNodes.count,
                     iterationNodes: running.iterationNodes
@@ -91,10 +80,7 @@ extension TheBrains.RepeatUntil {
                 return reduceIterationFailed(running: running, event: event)
             case (.terminal(let terminal), .elseCompleted(let children)):
                 return reduceElseCompleted(state: state, terminal: terminal, children: children)
-            case (.awaitingInitial, _),
-                 (.running, .initial),
-                 (.running, .elseCompleted),
-                 (.terminal, .initial),
+            case (.running, .elseCompleted),
                  (.terminal, .deadlineElapsed),
                  (.terminal, .iterationPassed),
                  (.terminal, .iterationFailed):
@@ -107,17 +93,17 @@ extension TheBrains.RepeatUntil {
             event: PassedIterationEvent
         ) -> LoopState {
             switch event.postBody {
-            case .changedMet(let check):
+            case .met(let check):
                 return .terminal(.predicateMet(
                     check: check,
                     iterationCount: event.frame.count,
                     iterationNodes: running.iterationNodes + [event.iterationNode]
                 ))
-            case .changedUnmet(let check):
+            case .unmet(let check):
                 return .running(running.appendingIteration(event.iterationNode, nextCheck: check))
             case .deadlineElapsed(let expectation):
                 return .terminal(.timedOut(
-                    observation: running.currentCheck.observation,
+                    observation: running.currentObservation,
                     expectation: expectation,
                     iterationCount: event.frame.count,
                     iterationNodes: running.iterationNodes + [event.iterationNode]
@@ -137,7 +123,7 @@ extension TheBrains.RepeatUntil {
             event: FailedIterationEvent
         ) -> LoopState {
             if let postBody = event.postBody,
-               case .changedMet(let check) = postBody {
+               case .met(let check) = postBody {
                 return .terminal(.predicateMet(
                     check: check,
                     iterationCount: event.frame.count,
@@ -145,7 +131,7 @@ extension TheBrains.RepeatUntil {
                 ))
             }
             return .terminal(.bodyFailed(
-                observation: running.currentCheck.observation,
+                observation: running.currentObservation,
                 expectation: event.failureExpectation,
                 iterationIndex: event.frame.index,
                 childPath: event.failedStep.path,
@@ -182,7 +168,6 @@ extension TheBrains.RepeatUntil {
     }
 
     internal enum LoopEvent {
-        case initial(InitialCheck)
         case deadlineElapsed(ExpectationResult.Unmet)
         case iterationPassed(PassedIterationEvent)
         case iterationFailed(FailedIterationEvent)
@@ -197,9 +182,8 @@ extension TheBrains.RepeatUntil {
             iterationCount: Int,
             iterationNodes: [HeistExecutionStepResult]
         )
-        case initialObservationUnavailable(HeistWaitReceipt)
         case bodyFailed(
-            observation: Observation,
+            observation: Observation?,
             expectation: ExpectationResult.Unmet,
             iterationIndex: Int,
             childPath: String,
@@ -229,8 +213,6 @@ extension TheBrains.RepeatUntil {
                  .timeoutHandledByElse(_, _, _, let iterationNodes, _),
                  .timeoutElseFailed(_, _, _, let iterationNodes, _, _):
                 return iterationNodes
-            case .initialObservationUnavailable:
-                return []
             }
         }
 
@@ -241,7 +223,6 @@ extension TheBrains.RepeatUntil {
                 return iterationNodes + elseChildren
             case .predicateMet,
                  .timedOut,
-                 .initialObservationUnavailable,
                  .bodyFailed:
                 return iterationNodes
             }

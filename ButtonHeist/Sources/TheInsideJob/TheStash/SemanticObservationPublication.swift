@@ -5,43 +5,18 @@ import ThePlans
 
 internal enum SemanticObservationGenerationClassifier {
     @MainActor
-    internal static func classify(
-        currentGeneration: ObservationGeneration,
-        previousInScope: SettledSemanticObservationEvent?,
-        latestSource: SettledSemanticObservationEvent?,
-        candidate: InterfaceObservation,
-        scope: SemanticObservationScope,
+    internal static func continuity(
+        from previous: InterfaceObservation?,
+        to candidate: InterfaceObservation,
         notifications: [AccessibilityNotificationKind]
-    ) -> ScreenClassifier.Classification {
-        if notifications.contains(where: {
-            if case .screenChanged = $0 { return true }
-            return false
-        }) {
-            return .screenChangedNotification
-        }
-        if let previousInScope {
-            precondition(
-                previousInScope.generation.rawValue <= currentGeneration.rawValue,
-                "scoped observation generation cannot lead the stream"
-            )
-        }
-        let predecessor = if previousInScope?.generation == currentGeneration {
-            previousInScope
-        } else {
-            latestSource
-        }
-        let previousSnapshot = predecessor.map { event in
-            ScreenClassifier.snapshot(
-                of: event.observation.screen
-                    .semanticObservationProjection(for: scope).tree
-            )
-        }
-        return ScreenClassifier.classify(
-            before: previousSnapshot,
+    ) -> ScreenContinuity {
+        ScreenClassifier.classify(
+            before: previous.map { ScreenClassifier.snapshot(of: $0.tree) },
             after: ScreenClassifier.snapshot(of: candidate.tree),
             notifications: notifications
         )
     }
+
 }
 
 /// Builds one publication from the log's latest per-scope events.
@@ -55,7 +30,7 @@ internal struct SemanticObservationPublication {
     }
 
     internal struct Context {
-        internal let generationClassification: ScreenClassifier.Classification
+        internal let continuity: ScreenContinuity
         internal let generation: ObservationGeneration
         internal let previousEvents: EventsByScope
     }
@@ -97,8 +72,7 @@ internal struct SemanticObservationPublication {
         context: Context,
         evidenceByScope: [SemanticObservationScope: Evidence]
     ) -> SemanticObservationPublication {
-        let notificationKinds = notificationBatch.events.map(\.kind)
-        let eventGeneration = context.generationClassification.isScreenReplacement
+        let eventGeneration = context.continuity.isReplacement
             ? context.generation.advanced()
             : context.generation
         var events: EventsByScope = [:]
@@ -113,14 +87,6 @@ internal struct SemanticObservationPublication {
                 screen: screen.semanticObservationProjection(for: fulfilledScope),
                 semanticSignal: semanticSignal
             )
-            let classification = ScreenClassifier.classify(
-                before: previousEvent.map {
-                    ScreenClassifier.snapshot(of: $0.observation.screen.tree)
-                },
-                after: ScreenClassifier.snapshot(of: observation.screen.tree),
-                notifications: notificationKinds
-            )
-            let fallbackReason = classification.fallbackReason
             let previousCapture = previousEvent?.trace.captures.last
             let currentCapture = makeCapture(
                 observation: observation,
@@ -129,7 +95,7 @@ internal struct SemanticObservationPublication {
                 generation: eventGeneration,
                 notificationBatch: notificationBatch,
                 evidence: evidence,
-                fallbackReason: fallbackReason
+                fallbackReason: context.continuity.fallbackReason
             )
             let trace = if let previousCapture {
                 AccessibilityTrace(captures: [previousCapture, currentCapture])
@@ -138,6 +104,7 @@ internal struct SemanticObservationPublication {
             }
             events[fulfilledScope] = SettledSemanticObservationEvent(
                 generation: eventGeneration,
+                continuity: context.continuity,
                 sequence: observation.sequence,
                 scope: observation.scope,
                 observation: observation,

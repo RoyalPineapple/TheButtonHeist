@@ -30,10 +30,10 @@ internal struct SemanticObservationRuntimeState {
             }
         }
 
-        internal func admitting(_ classification: ScreenClassifier.Classification) -> ScreenClassifier.Classification {
+        internal func admitting(_ continuity: ScreenContinuity) -> ScreenContinuity {
             switch self {
-            case .continuous: classification
-            case .replacementRequired: .screenChangedNotification
+            case .continuous: continuity
+            case .replacementRequired: .replacement(.screenChangedNotification)
             }
         }
     }

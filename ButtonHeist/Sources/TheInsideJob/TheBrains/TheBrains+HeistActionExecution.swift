@@ -205,7 +205,7 @@ extension TheBrains {
 
         case .resolved(let resolvedCommand):
             let expectationBaselineScope = expectation?.predicate.requiresChangeBaseline == true
-                ? WaitObservationPlan.temporalScope
+                ? SemanticObservationScope.visible
                 : nil
             let execution = await runtime.execute(resolvedCommand, expectationBaselineScope)
             let actionResult = execution.result

@@ -4,7 +4,8 @@ Button Heist uses Bumper Bowling only for repository-wide source invariants
 that Swift, SwiftLint, and the test suite cannot express directly. SwiftPM and
 Tuist own target dependencies, Swift access control owns construction, and
 behavioral tests own runtime and wire contracts. Bumper does not prescribe
-filenames, helper names, or implementation shape.
+filenames, helper names, or implementation shape except where a named currency
+or cross-file owner is itself the durable invariant.
 
 Every retained rule records its invariant, repair, proof, and deletion
 condition below. Button Heist owns these policies; Bumper Bowling supplies the
@@ -57,17 +58,46 @@ resolve Swift types or infer runtime ownership.
 | --- | --- | --- | --- |
 | `buttonheist.checked_concurrency` | Production code does not use `@preconcurrency` or broad `nonisolated(unsafe)` escape hatches. The private IOHID loader remains the sole narrow exception. | Model actor isolation or Sendability explicitly; isolate unavoidable private SPI behind its owner. | Focused attribute/modifier mutations plus repository lint. Delete when upstream SPI is concurrency-safe and the final exception disappears. |
 
+## Observation And Graph Pipeline
+
+The stream owns observation history and publication. A narrow custom rule
+protects the cross-file proof-to-graph relationship that the standard shapers
+cannot express.
+
+| Rule ID | Invariant | Repair | Proof and deletion condition |
+| --- | --- | --- | --- |
+| `buttonheist.semantic_observation_log_ownership` | `SemanticObservationStream` constructs the only `SemanticObservationLog`. | Read or inject the stream-owned log instead of creating another history. | Bumper's standard `canonicalConstruction` fact plus repository lint. Delete when the log is nested in or privately initialized by the stream. |
+| `buttonheist.semantic_observation_publication_ownership` | Only `SemanticObservationStream` calls `observationLog.publish`. | Submit a settled proof to the stream rather than publishing from a consumer. | Bumper's standard `boundaryOnly` fact plus repository lint. Delete when publication is private to the stream. |
+| `buttonheist.settled_observation_commit_ownership` | One proof-bearing `SemanticObservationStream.publishCommittedObservation` call enters `TheStash.reduceInterfaceGraph`; only that reducer and explicit lifecycle reset mutate `interfaceTree`. | Settle or explore into `InterfaceObservationProof`, then commit through the stream. | The custom typed-query rule checks call count, enclosing proof-bearing function, and graph assignments. Delete when graph storage and reducer invocation are inaccessible outside one owner. |
+
+## Expression Ownership
+
+| Rule ID | Invariant | Repair | Proof and deletion condition |
+| --- | --- | --- | --- |
+| `buttonheist.expr_ownership` | The package enum `Expr<Value>` in `StringExpressions.swift` is the repository's one authored-expression currency. This does not reserve the `Expr` suffix or ban semantically distinct types. | Extend `Expr<Value>` or choose a domain name that represents a genuinely different concept. | Bumper 0.5.2's standard `singleDeclaration` fact plus repository lint. Delete when module boundaries make another `Expr` declaration impossible or the currency is removed. |
+
+## Canonical Traversal
+
+Both rules use Bumper 0.5.2's standard `canonicalTraversal` shaper. They protect
+recursive ownership without preserving helper names or a custom recursion
+visitor.
+
+| Rule ID | Invariant | Repair | Proof and deletion condition |
+| --- | --- | --- | --- |
+| `buttonheist.canonical_plan_traversal` | `HeistPlanTraversal.swift` owns analysis walks and TheBrains owns recursive execution of `HeistStep`. | Express analysis through the traversal algebra; keep execution recursion in TheBrains. | Bumper's recursive-call facts plus repository lint. Delete when recursive children are inaccessible outside those owners. |
+| `buttonheist.canonical_accessibility_hierarchy_traversal` | `AccessibilityHierarchy+Traversal.swift` owns recursive `.container` descent. | Use the canonical fold, preorder, compaction, or graph projection. | Bumper's recursive-call facts plus repository lint. Delete when the parser exposes only its traversal algebra. |
+
 ## Retired Policy
 
-Exact declaration filenames, constructor allowlists, compatibility-name bans,
-explicit-access file lists, expression suffixes, folder import allowlists, and
-recursive implementation policing are intentionally absent. Interface graph
-construction and settled-observation admission now use inaccessible
-constructors and proof types; remaining cross-file constructors are not
-policed through filename lists. Durable observation values rely on `Sendable`
-and strict concurrency rather than a blacklist of UIKit-looking type names.
-Traversal, receipts, serialization, retries, and observation lifecycle remain
-covered by behavioral, wire-contract, and reducer tests.
+Constructor allowlists, compatibility-name bans, explicit-access file lists,
+expression-suffix reservations, folder import allowlists, component dependency
+shadow graphs, viewport helper policing, and custom recursive visitors are
+intentionally absent. Interface graph construction uses proof types; Bumper
+retains only the narrow cross-file commit relationship until Swift access
+control can own it. Durable observation values rely on `Sendable` and strict
+concurrency rather than a blacklist of UIKit-looking type names. Receipts,
+serialization, retries, settlement behavior, and wire contracts remain covered
+by behavioral and reducer tests.
 
 ## Rule Lifecycle
 

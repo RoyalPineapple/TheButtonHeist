@@ -222,7 +222,9 @@ HeistPlan("cartFlow") {
 ```
 
 `RepeatUntil` is the bounded repetition form, serialized as a `repeat_until`
-step. The timeout is mandatory and is the step's totality bound:
+step. The body always executes once before the predicate is evaluated; only an
+unmet post-body predicate turns that action into another iteration. The timeout
+is mandatory and is the step's totality bound:
 
 ```swift
 RepeatUntil(.exists(.label("Inbox empty")), timeout: .seconds(10)) {

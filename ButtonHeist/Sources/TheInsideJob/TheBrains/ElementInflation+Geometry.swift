@@ -126,14 +126,16 @@ extension ElementInflation {
             return .failure(.geometryNotActionable(unsafeProgrammaticScrollMessage))
         }
         transaction?.record(scrollView)
-        switch safecracker.scrollToMakeScreenPointVisible(
-            activationPoint,
-            in: scrollView,
-            animated: false,
-            preferredScreenRect: Self.interactionComfortZone,
-            minimumScreenRect: ScreenMetrics.current.bounds
-        ) {
-        case .alreadyInPosition:
+        let transition = await exploration.moveViewport(
+            .revealPoint(
+                activationPoint,
+                in: scrollView,
+                preferredScreenRect: Self.interactionComfortZone,
+                minimumScreenRect: ScreenMetrics.current.bounds
+            )
+        )
+        switch transition.result {
+        case .unchanged:
             return .success(.alreadyInPosition)
         case .unavailable:
             if ScreenMetrics.current.bounds.contains(activationPoint) {
@@ -141,7 +143,6 @@ extension ElementInflation {
             }
             return .failure(.geometryNotActionable(scrollFailedMessage))
         case .moved:
-            await tripwire.yieldFrames(Self.postScrollLayoutFrames)
             return .success(.moved)
         }
     }

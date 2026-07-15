@@ -160,6 +160,7 @@ final class TheBrains {
         self.postActionObservation = postActionObservation
         self.interactionObservation = InteractionObservation(
             stash: stash,
+            navigation: navigation,
             postActionObservation: postActionObservation
         )
     }
@@ -189,7 +190,6 @@ final class TheBrains {
 
     func clearCache() {
         stash.clearCache()
-        navigation.clearCache()
     }
 
     // MARK: - Response State Tracking
@@ -211,35 +211,29 @@ final class TheBrains {
         guard semanticObservationIsActive else {
             return .failure(.inactiveRuntime)
         }
-        for _ in 0..<2 {
-            guard let visibleEvidence = await stash.observeVisibleSemanticEvidence(timeout: 2.0),
-                  let exploration = await navigation.exploreScreen(
-                    baseline: .currentViewport(
-                        stash.visibleExplorationBaseline(from: visibleEvidence.screen)
-                    ),
-                    maxScrollsPerContainer: query.maxScrollsPerContainer,
-                    maxScrollsPerDiscovery: query.maxScrollsPerDiscovery
-                  ) else {
-                return .failure(.rootViewUnavailable)
-            }
-            guard stash.semanticObservationStream.commitExploredDiscoveryObservation(exploration) != nil else {
-                continue
-            }
-
-            do {
-                let interface = try InterfaceSelector(interface: stash.discoveryInterface()).select(query)
-                let diagnostics = exploration.manifest.interfaceDiagnostics(
-                    for: exploration.screen,
-                    includedElementCount: interface.projectedElements.count
-                )
-                return .success(interface
-                    .withDiagnostics(diagnostics)
-                    .withScreenActions(actions.availableScreenActions()))
-            } catch {
-                return .failure(.selection(error))
-            }
+        guard let visibleEvidence = await stash.observeVisibleSemanticEvidence(timeout: 2.0),
+              let exploration = await navigation.exploreScreen(
+                baseline: .currentViewport(
+                    stash.visibleExplorationBaseline(from: visibleEvidence.screen)
+                ),
+                maxScrollsPerContainer: query.maxScrollsPerContainer,
+                maxScrollsPerDiscovery: query.maxScrollsPerDiscovery
+              ) else {
+            return .failure(.rootViewUnavailable)
         }
-        return .failure(.rootViewUnavailable)
+
+        do {
+            let interface = try InterfaceSelector(interface: stash.discoveryInterface()).select(query)
+            let diagnostics = exploration.manifest.interfaceDiagnostics(
+                for: exploration.event.observation.screen,
+                includedElementCount: interface.projectedElements.count
+            )
+            return .success(interface
+                .withDiagnostics(diagnostics)
+                .withScreenActions(actions.availableScreenActions()))
+        } catch {
+            return .failure(.selection(error))
+        }
     }
 
     func beginChangedWait() -> Bool {

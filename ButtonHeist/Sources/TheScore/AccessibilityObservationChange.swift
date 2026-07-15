@@ -7,6 +7,7 @@ public enum AccessibilityObservationFallbackReason: String, Codable, Sendable, E
     case selectedTabChanged
     case navigationMarkerChanged
     case primaryHeaderChanged
+    case semanticIdentityDisjoint
     case rootShapeChanged
 }
 

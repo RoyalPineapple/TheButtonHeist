@@ -55,6 +55,35 @@ final class TheSafecrackerScrollTests: XCTestCase {
         XCTAssertEqual(moved, .alreadyInPosition)
     }
 
+    func testScrollByPageDownTreatsBottomOverdragAsAlreadyAtEdge() {
+        let scrollView = makeScrollView(
+            frame: CGRect(x: 0, y: 0, width: 400, height: 800),
+            contentSize: CGSize(width: 400, height: 1_000),
+            contentOffset: CGPoint(x: 0, y: 240)
+        )
+
+        let result = safecracker.scrollByPage(scrollView, direction: .down, animated: false)
+
+        XCTAssertEqual(result, .alreadyInPosition)
+    }
+
+    func testScrollByPageUpTreatsTopOverdragAsAlreadyAtEdge() {
+        let scrollView = makeScrollView(contentOffset: CGPoint(x: 0, y: -30))
+
+        let result = safecracker.scrollByPage(scrollView, direction: .up, animated: false)
+
+        XCTAssertEqual(result, .alreadyInPosition)
+    }
+
+    func testScrollByPageMovesInwardFromClampedOverdragPosition() {
+        let scrollView = makeScrollView(contentOffset: CGPoint(x: 0, y: -30))
+
+        let result = safecracker.scrollByPage(scrollView, direction: .down, animated: false)
+
+        XCTAssertEqual(result, .moved)
+        XCTAssertEqual(scrollView.contentOffset.y, 756, accuracy: 0.01)
+    }
+
     func testScrollByPageUpFromMiddle() {
         let sv = makeScrollView(contentOffset: CGPoint(x: 0, y: 1000))
         let moved = safecracker.scrollByPage(sv, direction: .up, animated: false)
@@ -176,6 +205,37 @@ final class TheSafecrackerScrollTests: XCTestCase {
 
         XCTAssertEqual(result, .unavailable)
         XCTAssertEqual(sv.contentOffset.y, 0, accuracy: 0.01)
+    }
+
+    func testRevealContentPointCentersKnownContentCoordinates() {
+        let scrollView = makeScrollView(
+            frame: CGRect(x: 0, y: 0, width: 400, height: 800),
+            contentSize: CGSize(width: 2_000, height: 3_000)
+        )
+
+        let result = safecracker.revealContentPoint(
+            ScrollContentPoint(x: 1_200, y: 1_200),
+            in: scrollView
+        )
+
+        XCTAssertEqual(result, .moved)
+        XCTAssertEqual(scrollView.contentOffset.x, 1_000, accuracy: 0.01)
+        XCTAssertEqual(scrollView.contentOffset.y, 800, accuracy: 0.01)
+    }
+
+    func testRevealContentPointClampsAtContentEdge() {
+        let scrollView = makeScrollView(
+            frame: CGRect(x: 0, y: 0, width: 400, height: 800),
+            contentSize: CGSize(width: 400, height: 1_000)
+        )
+
+        let result = safecracker.revealContentPoint(
+            ScrollContentPoint(x: 200, y: 980),
+            in: scrollView
+        )
+
+        XCTAssertEqual(result, .moved)
+        XCTAssertEqual(scrollView.contentOffset.y, 200, accuracy: 0.01)
     }
 }
 #endif

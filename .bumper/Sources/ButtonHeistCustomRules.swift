@@ -37,6 +37,36 @@ let buttonHeistRules = RuleSet {
     anyBoundaryRule
     callbackIsolationRule
     checkedConcurrencyRule
+
+    Rules.canonicalConstruction(
+        "SemanticObservationLog",
+        owners: .files([semanticObservationStreamPath]),
+        id: "buttonheist.semantic_observation_log_ownership"
+    )
+    Rules.boundaryOnly(
+        function: "observationLog.publish",
+        allowed: .files([semanticObservationStreamPath]),
+        id: "buttonheist.semantic_observation_publication_ownership"
+    )
+    settledObservationCommitOwnershipRule
+
+    Rules.singleDeclaration(
+        "Expr",
+        owner: expressionOwnerPath,
+        id: "buttonheist.expr_ownership"
+    )
+    Rules.canonicalTraversal(
+        root: "HeistStep",
+        structuralCase: "heist",
+        owners: heistStepTraversalOwners,
+        id: "buttonheist.canonical_plan_traversal"
+    )
+    Rules.canonicalTraversal(
+        root: "AccessibilityHierarchy",
+        structuralCase: "container",
+        owners: .files([accessibilityHierarchyTraversalPath]),
+        id: "buttonheist.canonical_accessibility_hierarchy_traversal"
+    )
 }
 
 private let runtimeScope = RuleScope.component(ButtonHeistComponent.runtime)
@@ -52,6 +82,29 @@ private let demoAccessibilityIdentifierResearchFixtures: Set<RelativeFilePath> =
 private let unsafeNonisolatedSPIBoundary: Set<RelativeFilePath> = [
     "ButtonHeist/Sources/TheInsideJob/TheSafecracker/TheSafecracker+IOHIDEventBuilder.swift",
 ]
+
+private let insideJobSourcePrefix: RelativePathPrefix = "ButtonHeist/Sources/TheInsideJob/"
+private let semanticObservationStreamPath: RelativeFilePath =
+    "ButtonHeist/Sources/TheInsideJob/TheStash/SemanticObservationStream.swift"
+private let interfaceStatePath: RelativeFilePath =
+    "ButtonHeist/Sources/TheInsideJob/TheStash/TheStash+InterfaceState.swift"
+private let expressionOwnerPath: RelativePathPrefix =
+    "ButtonHeist/Sources/ThePlans/Model/StringExpressions.swift"
+private let heistPlanTraversalPath: RelativeFilePath =
+    "ButtonHeist/Sources/ThePlans/Model/HeistPlanTraversal.swift"
+private let accessibilityHierarchyTraversalPath: RelativeFilePath =
+    "ButtonHeist/Sources/TheScore/Core/AccessibilityHierarchy+Traversal.swift"
+
+private let heistStepTraversalOwners = RuleScope.files([heistPlanTraversalPath])
+    .union(.under("ButtonHeist/Sources/TheInsideJob/TheBrains/"))
+
+private let settledObservationCommitOwnershipRule = Rules.repository(
+    "buttonheist.settled_observation_commit_ownership",
+    severity: .error,
+    summary: "Settled proof publication is the sole path into the InterfaceTree reducer."
+) { context in
+    settledObservationCommitFailures(in: context)
+}
 
 private let anyBoundaryRule = Rules.files(
     "buttonheist.any_boundary",
@@ -155,6 +208,98 @@ private let checkedConcurrencyRule = Rules.files(
         }
 
     return preconcurrencyFailures + unsafeNonisolatedFailures
+}
+
+private func settledObservationCommitFailures(in context: RuleContext) -> [RuleFailure] {
+    let files = context.files(in: .under(insideJobSourcePrefix))
+    let reducerCalls = files.flatMap { file in
+        functionCalls()
+            .filter { $0.node.calleeBaseName == "reduceInterfaceGraph" }
+            .matches(in: file)
+    }
+    var failures = reducerCalls.compactMap(reducerCallFailure)
+    if reducerCalls.count != 1 {
+        failures.append(RuleFailure(
+            path: semanticObservationStreamPath,
+            message: "settled observation commit calls the InterfaceTree reducer \(reducerCalls.count) times",
+            evidence: ViolationEvidence(
+                observed: "reduceInterfaceGraph calls: \(reducerCalls.count)",
+                expectation: "one call from proof-bearing SemanticObservationStream.publishCommittedObservation"
+            )
+        ))
+    }
+
+    var reducerMutations = 0
+    for file in files {
+        for match in SyntaxQuery<SequenceExprSyntax>().matches(in: file) {
+            let elements = Array(match.node.elements)
+            for index in elements.indices where elements[index].is(AssignmentExprSyntax.self) {
+                guard index > elements.startIndex,
+                      isInterfaceTreeReference(elements[elements.index(before: index)]) else {
+                    continue
+                }
+                let lexicalContext = match.node.bumper.lexicalContext
+                let isStashOwner = file.path == interfaceStatePath
+                    && lexicalContext.enclosingNominalNames.contains("TheStash")
+                switch lexicalContext.enclosingFunctionName {
+                case "reduceInterfaceGraph" where isStashOwner:
+                    reducerMutations += 1
+                case "clearInterfaceForLifecycleReset" where isStashOwner:
+                    break
+                default:
+                    failures.append(file.failure(
+                        at: elements[index],
+                        message: "InterfaceTree bypasses settled observation commit ownership",
+                        evidence: ViolationEvidence(
+                            observed: file.path.rawValue,
+                            expectation: "settled proof reduction or explicit lifecycle reset owns InterfaceTree mutation"
+                        )
+                    ))
+                }
+            }
+        }
+    }
+    if reducerMutations == 0 {
+        failures.append(RuleFailure(
+            path: interfaceStatePath,
+            message: "settled observation reducer does not update InterfaceTree",
+            evidence: ViolationEvidence(
+                observed: "no reducer-owned interfaceTree assignment",
+                expectation: "InterfaceTree assignments live in TheStash.reduceInterfaceGraph"
+            )
+        ))
+    }
+    return failures
+}
+
+private func reducerCallFailure(
+    _ match: SyntaxMatch<FunctionCallExprSyntax>
+) -> RuleFailure? {
+    let lexicalContext = match.node.bumper.lexicalContext
+    let function = match.node.ancestors.compactMap { $0.as(FunctionDeclSyntax.self) }.first
+    let acceptsProof = function?.signature.parameterClause.parameters.contains { parameter in
+        parameter.type.tokens(viewMode: .sourceAccurate).contains { $0.text == "InterfaceObservationProof" }
+    } == true
+    guard match.file.path == semanticObservationStreamPath,
+          lexicalContext.enclosingNominalNames.contains("SemanticObservationStream"),
+          lexicalContext.enclosingFunctionName == "publishCommittedObservation",
+          acceptsProof else {
+        return match.failure(
+            message: "InterfaceTree bypasses settled observation commit ownership",
+            evidence: ViolationEvidence(
+                observed: match.file.path.rawValue,
+                expectation: "one call from proof-bearing SemanticObservationStream.publishCommittedObservation"
+            )
+        )
+    }
+    return nil
+}
+
+private func isInterfaceTreeReference(_ expression: ExprSyntax) -> Bool {
+    if let reference = expression.as(DeclReferenceExprSyntax.self) {
+        return reference.baseName.text == "interfaceTree"
+    }
+    return expression.as(MemberAccessExprSyntax.self)?.declName.baseName.text == "interfaceTree"
 }
 
 private func isAllowedAnyBoundary(_ node: IdentifierTypeSyntax) -> Bool {

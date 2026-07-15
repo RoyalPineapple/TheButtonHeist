@@ -284,6 +284,23 @@ final class ElementInflationProductTests: XCTestCase {
         XCTAssertTrue(fixture.scrollView.didReceiveRevealRequest)
     }
 
+    func testLiveCaptureUsesDirectScrollContainerAsMovementOwner() throws {
+        let fixture = try installOffscreenActivationFixture(
+            identifier: "direct_scroll_owner",
+            label: "Direct Scroll Owner"
+        )
+        defer { fixture.cleanup() }
+
+        let screen = try XCTUnwrap(brains.stash.refreshLiveCapture())
+        let paths = screen.liveCapture.scrollableContainerViewsByPath.compactMap { path, reference in
+            reference.view === fixture.scrollView ? path : nil
+        }
+
+        XCTAssertEqual(paths.count, 1)
+        let path = try XCTUnwrap(paths.first)
+        XCTAssertTrue(screen.liveCapture.containerObject(forPath: path) === fixture.scrollView)
+    }
+
     func testSemanticActivateRevealsNestedContainerTarget() async throws {
         let fixture = try installOffscreenActivationFixture(
             identifier: "nested_semantic_checkout_submit",
@@ -631,8 +648,11 @@ final class ElementInflationProductTests: XCTestCase {
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .activate)
         XCTAssertDiagnostic(result.message, contains: [
-            "element inflation failed [timedOut]",
-            "action deadline",
+            "element inflation failed [noRevealPath]",
+            "no live scrollable ancestor",
+            "expectedScrollContainerPath=[99]",
+            "available live scroll containers:",
+            "no reveal path appeared before the action deadline",
         ])
         XCTAssertFalse(result.message?.localizedCaseInsensitiveContains("scroll first") ?? false)
         XCTAssertFalse(result.message?.contains("get_interface") ?? false)

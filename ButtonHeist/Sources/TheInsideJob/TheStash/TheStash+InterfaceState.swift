@@ -35,21 +35,18 @@ extension TheStash {
         nextVisibleRefreshScreenForTesting = queuedVisibleRefresh
     }
 
-    /// Read the live accessibility tree and produce one observed capture value.
-    /// Every successful parse refreshes latest observed capture and visible
-    /// live view, but it never updates the interface tree.
+    /// Read the live accessibility tree and retain its live evidence.
+    /// Parsing never promotes an unproven sample into targetable truth.
     /// Returns nil if no accessible windows exist (loading screen,
     /// app backgrounded, etc.).
     func parse() -> InterfaceObservation? {
-        guard let result = burglar.parse() else { return nil }
-        let screen = TheBurglar.buildObservation(from: result)
+        guard let screen = parsedInterfaceObservation() else { return nil }
         recordParsedObservedEvidence(from: screen)
         return screen
     }
 
-    /// Parse and refresh the latest observation. The returned viewport may be
-    /// used by exploration or diagnostics, but
-    /// this method never updates the interface tree.
+    /// Refresh the latest live viewport evidence. The returned value remains the raw
+    /// capture-local observation for geometry and exploration consumers.
     @discardableResult
     func refreshLiveCapture() -> InterfaceObservation? {
         if let visibleTree = nextVisibleRefreshScreenForTesting {
@@ -59,47 +56,43 @@ extension TheStash {
         return parse()
     }
 
-    /// Produce one visible observation for the settle loop without committing
-    /// it yet. Successful parses refresh latest observed capture and visible
-    /// live view; the observation stream alone promotes a proven final screen
-    /// into the interface tree.
+    /// Produce one raw parser value for the settle runner without committing it.
     func semanticObservationForSettle() -> InterfaceObservation? {
-        refreshLiveCapture()
+        guard let observation = nextVisibleRefreshScreenForTesting ?? parsedInterfaceObservation() else {
+            return nil
+        }
+        recordParsedObservedEvidence(from: observation)
+        return observation
     }
 
-    /// Produce one page observation for scroll exploration. Exploration owns a
-    /// local semantic union until it finishes; the observation stream commits
-    /// only the final explored tree.
+    /// Produce one raw page observation for scroll exploration.
     func semanticPageForExploration() -> InterfaceObservation? {
         refreshLiveCapture()
     }
 
-    @discardableResult
-    func commitVisibleInterface(
-        _ proof: InterfaceObservationProof,
-        classification: ScreenClassifier.Classification
-    ) -> InterfaceObservation {
-        let committedScreen = proof.screen
+    /// The sole reducer from a parsed observation into durable graph truth.
+    func reduceInterfaceGraph(
+        with observation: InterfaceObservation,
+        scope: SemanticObservationScope,
+        continuity: ScreenContinuity,
+        discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy
+    ) -> InterfaceTree {
         if let queuedVisibleRefresh = nextVisibleRefreshScreenForTesting,
-           queuedVisibleRefresh.interfaceHash != committedScreen.interfaceHash {
+           queuedVisibleRefresh.interfaceHash != observation.interfaceHash {
             nextVisibleRefreshScreenForTesting = nil
         }
-        interfaceTree = classification.isScreenReplacement
-            ? committedScreen.tree
-            : interfaceTree.updatingViewport(with: committedScreen)
-        return finishCommit(observation: committedScreen)
-    }
-
-    @discardableResult
-    func commitDiscoveryInterface(
-        _ proof: InterfaceObservationProof,
-        classification: ScreenClassifier.Classification
-    ) -> InterfaceObservation {
-        let screen = proof.screen
-        interfaceTree = classification.isScreenReplacement || proof.discoveryCommitPolicy == .replaceInterface
-            ? screen.tree
-            : interfaceTree.merging(screen.tree)
-        return finishCommit(observation: screen)
+        switch scope {
+        case .visible:
+            interfaceTree = continuity.isReplacement
+                ? observation.tree
+                : interfaceTree.updatingViewport(with: observation)
+        case .discovery:
+            interfaceTree = continuity.isReplacement || discoveryCommitPolicy == .replaceInterface
+                ? observation.tree
+                : interfaceTree.merging(observation.tree)
+        }
+        finishCommit(observation: observation)
+        return interfaceTree
     }
 
     func recordFailedSettleDiagnosticEvidence(_ screen: InterfaceObservation?) {
@@ -143,18 +136,10 @@ extension TheStash {
 
     /// Starting value for action-owned target discovery.
     ///
-    /// Target inflation should retain current-screen discovery memory so
-    /// retained off-viewport elements can fail with the right reveal diagnostic.
-    /// After navigation, though, old discovery-only rows can look actionable on
-    /// the new screen. Use the full committed baseline only while its viewport
-    /// surface still pairs with the latest observation.
+    /// The canonical continuity decision is applied when observations commit,
+    /// so retained discovery memory already belongs to the current generation.
     func actionDiscoveryBaseline() -> InterfaceObservation {
-        let currentVisible = latestObservation.viewportOnly
-        let settledBaseline = explorationBaseline()
-        guard settledBaseline.visibleSurfacePairs(with: currentVisible) else {
-            return visibleExplorationBaseline(from: currentVisible)
-        }
-        return settledBaseline
+        explorationBaseline()
     }
 
     func firstResponderInterfaceElement() -> InterfaceTree.Element? {
@@ -223,50 +208,13 @@ extension TheStash {
         latestObservation = screen
     }
 
-    private var currentInterfaceObservation: InterfaceObservation {
-        do {
-            return try InterfaceObservation.build(tree: interfaceTree)
-        } catch {
-            preconditionFailure("Committed interface observation failed validation: \(error)")
-        }
+    private func parsedInterfaceObservation() -> InterfaceObservation? {
+        burglar.parse().map(TheBurglar.buildObservation(from:))
     }
 
-    private func finishCommit(observation: InterfaceObservation) -> InterfaceObservation {
+    private func finishCommit(observation: InterfaceObservation) {
         recordParsedObservedEvidence(from: observation)
         diagnosticObservation = nil
-        return currentInterfaceObservation
-    }
-}
-
-private extension InterfaceObservation {
-    @MainActor
-    func visibleSurfacePairs(with currentVisible: InterfaceObservation) -> Bool {
-        guard !currentVisible.viewportElementIDs.isEmpty else {
-            return !elementIDs.isEmpty
-        }
-        if let baselineId = id,
-           let currentId = currentVisible.id,
-           baselineId != currentId {
-            return false
-        }
-        if !viewportElementIDs.isDisjoint(with: currentVisible.viewportElementIDs) {
-            return true
-        }
-        if let baselineName = name,
-           let currentName = currentVisible.name,
-           baselineName == currentName {
-            return true
-        }
-        return visibleElementsPair(with: currentVisible)
-    }
-
-    @MainActor
-    func visibleElementsPair(with currentVisible: InterfaceObservation) -> Bool {
-        let previous = viewportElementIDs
-            .compactMap { tree.elements[$0]?.element }
-        let current = currentVisible.viewportElementIDs
-            .compactMap { currentVisible.tree.elements[$0]?.element }
-        return previous.sharesElementPairing(with: current)
     }
 }
 

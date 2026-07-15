@@ -297,6 +297,12 @@ private struct TargetTerminalContainerSelection {
     let ordinal: Int?
 }
 
+extension ResolvedAccessibilityTarget {
+    var isElementTarget: Bool {
+        terminalElementSelection != nil
+    }
+}
+
 private extension ResolvedAccessibilityTarget {
     var terminalElementSelection: TargetTerminalElementSelection? {
         switch self {

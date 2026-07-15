@@ -3,380 +3,594 @@
 import UIKit
 
 import AccessibilitySnapshotParser
-import ButtonHeistSupport
 
 import TheScore
 import ThePlans
 
 extension Navigation {
 
+    private enum TraversalResult: Equatable {
+        case finished
+        case completed
+        case interrupted
+    }
+
+    private struct ObservedViewport {
+        let event: SettledSemanticObservationEvent
+        let decision: ViewportExplorationDecision
+
+        var continuity: ScreenContinuity { event.continuity }
+    }
+
+    private enum OriginRestoreResult {
+        case observed(ObservedViewport)
+        case unchanged
+        case unavailable
+        case interrupted
+    }
+
+    private struct ActiveContainerExploration {
+        let semantic: ContainerExploration
+        let scrollViewID: ObjectIdentifier
+
+        var semanticContainer: InterfaceTree.Container { semantic.semanticContainer }
+        var savedVisualOrigin: CGPoint { semantic.savedVisualOrigin }
+        var hasHOverflow: Bool { semantic.hasHOverflow }
+        var hasVOverflow: Bool { semantic.hasVOverflow }
+        var path: TreePath { semantic.path }
+    }
+
+    private struct LiveScrollableTarget {
+        let path: TreePath
+        let target: ScrollableTarget
+        let scrollViewID: ObjectIdentifier
+    }
+
+    private struct PendingContainer {
+        let container: InterfaceTree.Container
+        let overflow: CGFloat
+    }
+
+    @MainActor
+    final class ViewportExplorer {
+        private let navigation: Navigation
+        private let revealRootScrollViewID: ObjectIdentifier?
+        private let searchOrder: ViewportSearchOrder
+        private var exploration: SemanticExploration
+        private var latestEvent: SettledSemanticObservationEvent?
+        private var didMoveViewport = false
+        private var exploredScrollViewIDs = Set<ObjectIdentifier>()
+        private var originByScrollViewID: [ObjectIdentifier: CGPoint] = [:]
+        private var originOrder: [ObjectIdentifier] = []
+
+        init(
+            navigation: Navigation,
+            exploration: SemanticExploration,
+            searchOrder: ViewportSearchOrder,
+            revealRootScrollViewID: ObjectIdentifier? = nil
+        ) {
+            self.navigation = navigation
+            self.exploration = exploration
+            self.searchOrder = searchOrder
+            self.revealRootScrollViewID = revealRootScrollViewID
+        }
+
+        func exploreViewports(
+            exitPosition: ViewportExitPosition,
+            onObservation: (SettledSemanticObservationEvent) -> ViewportExplorationDecision
+        ) async -> ExploredScreen? {
+            let startTime = CACurrentMediaTime()
+            let result: TraversalResult
+
+            if let initial = await observe(onObservation: onObservation) {
+                if initial.decision == .finish {
+                    exploration.manifest.clearPendingContainers()
+                    result = .finished
+                } else {
+                    result = await scanPendingContainers(
+                        onObservation: onObservation
+                    )
+                }
+            } else {
+                result = .interrupted
+            }
+
+            let didFinalize = await finalize(
+                exitPosition: exitPosition,
+                notifyObservation: result != .finished,
+                onObservation: onObservation
+            )
+            guard didFinalize, result != .interrupted, let latestEvent else { return nil }
+            return exploration.finish(
+                startTime: startTime,
+                event: latestEvent,
+                didMoveViewport: didMoveViewport
+            )
+        }
+
+        private func scanPendingContainers(
+            onObservation: (SettledSemanticObservationEvent) -> ViewportExplorationDecision
+        ) async -> TraversalResult {
+            while !exploration.manifest.pendingScrollPaths.isEmpty {
+                guard !Task.isCancelled, exploration.hasTimeRemaining else { return .interrupted }
+                guard exploration.manifest.scrollCount < exploration.manifest.maxScrollsPerDiscovery else {
+                    exploration.manifest.markDiscoveryLimitHit()
+                    return .completed
+                }
+
+                let batch = sortedPendingContainers()
+                guard !batch.isEmpty else {
+                    exploration.manifest.clearPendingContainers()
+                    return .completed
+                }
+
+                containerBatch: for container in batch {
+                    guard !Task.isCancelled, exploration.hasTimeRemaining else { return .interrupted }
+                    guard exploration.manifest.scrollCount < exploration.manifest.maxScrollsPerDiscovery else {
+                        exploration.manifest.markDiscoveryLimitHit()
+                        return .completed
+                    }
+                    guard let containerExploration = prepareContainerExploration(for: container) else {
+                        exploration.markExplored(container)
+                        continue
+                    }
+                    recordOrigin(of: containerExploration)
+
+                    let result = await scanContainer(
+                        containerExploration,
+                        onObservation: onObservation
+                    )
+                    switch result {
+                    case .finished:
+                        markExplored(containerExploration)
+                        return .finished
+                    case .completed:
+                        markExplored(containerExploration)
+                    case .screenReplaced:
+                        break containerBatch
+                    case .omitted(let reason):
+                        exploration.manifest.markOmitted(containerExploration.path, reason: reason)
+                    case .interrupted:
+                        return .interrupted
+                    }
+                }
+            }
+            return .completed
+        }
+
+        private func sortedPendingContainers() -> [InterfaceTree.Container] {
+            var admittedScrollViewIDs = exploredScrollViewIDs
+            let liveTargetsByPath = Dictionary(uniqueKeysWithValues: currentLiveScrollableTargets().map {
+                ($0.path, $0)
+            })
+            return exploration.manifest.pendingScrollPaths
+                .sorted()
+                .compactMap { navigation.stash.latestObservation.tree.containers[$0] }
+                .compactMap { container -> PendingContainer? in
+                    guard let liveTarget = liveTargetsByPath[container.path],
+                          admittedScrollViewIDs.insert(liveTarget.scrollViewID).inserted else { return nil }
+                    return PendingContainer(
+                        container: container,
+                        overflow: totalOverflow(of: container.container)
+                    )
+                }
+                .sorted {
+                    $0.overflow == $1.overflow
+                        ? $0.container.path < $1.container.path
+                        : $0.overflow > $1.overflow
+                }
+                .map(\.container)
+        }
+
+        private func prepareContainerExploration(
+            for semanticContainer: InterfaceTree.Container
+        ) -> ActiveContainerExploration? {
+            let container = semanticContainer.container
+            guard let contentSize = container.scrollableContentSize else { return nil }
+            guard let target = currentProgrammaticScrollTarget(for: semanticContainer.path),
+                  case .uiScrollView(_, _, let scrollView) = target else { return nil }
+            guard !exploredScrollViewIDs.contains(ObjectIdentifier(scrollView)),
+                  scrollView.window != nil,
+                  !scrollView.bhIsUnsafeForProgrammaticScrolling,
+                  !Navigation.isObscuredByPresentation(view: scrollView) else { return nil }
+
+            let savedVisualOrigin = Navigation.visualOrigin(in: scrollView)
+
+            let hasHOverflow = contentSize.width > container.frame.width + 1
+            let hasVOverflow = contentSize.height > container.frame.height + 1
+            guard hasHOverflow || hasVOverflow else { return nil }
+
+            return ActiveContainerExploration(
+                semantic: ContainerExploration(
+                    semanticContainer: semanticContainer,
+                    savedVisualOrigin: savedVisualOrigin,
+                    hasHOverflow: hasHOverflow,
+                    hasVOverflow: hasVOverflow
+                ),
+                scrollViewID: ObjectIdentifier(scrollView)
+            )
+        }
+
+        private func scanContainer(
+            _ container: ActiveContainerExploration,
+            onObservation: (SettledSemanticObservationEvent) -> ViewportExplorationDecision
+        ) async -> ScrollContainerScanResult {
+            for (index, direction) in searchOrder.directions.enumerated() {
+                switch await runScrollScan(
+                    container,
+                    direction: direction,
+                    onObservation: onObservation
+                ) {
+                case .finished:
+                    return .finished
+                case .screenReplaced:
+                    return .screenReplaced
+                case .limitHit(let reason):
+                    return .omitted(reason)
+                case .interrupted:
+                    return .interrupted
+                case .exhausted:
+                    break
+                }
+
+                guard index == 0 else { return .completed }
+                switch await restoreOrigin(of: container, onObservation: onObservation) {
+                case .observed(let observation):
+                    if observation.decision == .finish { return .finished }
+                    if observation.continuity.isReplacement { return .screenReplaced }
+                case .unchanged:
+                    break
+                case .unavailable, .interrupted:
+                    return .interrupted
+                }
+            }
+            return .completed
+        }
+
+        private func runScrollScan(
+            _ container: ActiveContainerExploration,
+            direction: ScrollScanDirection,
+            onObservation: (SettledSemanticObservationEvent) -> ViewportExplorationDecision
+        ) async -> ScrollScanOutcome {
+            while true {
+                guard !Task.isCancelled, exploration.hasTimeRemaining else { return .interrupted }
+                if let reason = exploration.manifest.recordScrollAttempt(in: container.path) {
+                    return .limitHit(reason)
+                }
+                guard let target = currentProgrammaticScrollTarget(for: container) else { return .exhausted }
+
+                let transition = await navigation.performViewportTransition(
+                    .page(
+                        target,
+                        direction: pageDirection(for: container, scanDirection: direction),
+                        animated: false
+                    ),
+                    deadline: exploration.deadline,
+                    discoveryCommitPolicy: exploration.discoveryCommitPolicy
+                )
+                switch transition.result {
+                case .unchanged, .unavailable:
+                    return .exhausted
+                case .moved:
+                    didMoveViewport = true
+                }
+                guard let event = transition.event else { return .interrupted }
+                let observation = record(event, notifyObservation: true, onObservation: onObservation)
+                if observation.decision == .finish { return .finished }
+                if observation.continuity.isReplacement { return .screenReplaced }
+                if let nestedOutcome = await scanNewlyVisibleNestedContainers(
+                    inside: container,
+                    onObservation: onObservation
+                ) {
+                    return nestedOutcome
+                }
+            }
+        }
+
+        private func scanNewlyVisibleNestedContainers(
+            inside parent: ActiveContainerExploration,
+            onObservation: (SettledSemanticObservationEvent) -> ViewportExplorationDecision
+        ) async -> ScrollScanOutcome? {
+            guard let parentTarget = currentLiveScrollableTarget(for: parent.scrollViewID),
+                  case .uiScrollView(_, _, let parentScrollView) = parentTarget.target else {
+                return .interrupted
+            }
+            let nestedContainers = sortedPendingContainers().filter {
+                guard let target = currentProgrammaticScrollTarget(for: $0.path),
+                      case .uiScrollView(_, _, let scrollView) = target else { return false }
+                return nearestScrollableSuperview(of: scrollView) === parentScrollView
+            }
+            for semanticContainer in nestedContainers {
+                guard !Task.isCancelled, exploration.hasTimeRemaining else { return .interrupted }
+                guard let nested = prepareContainerExploration(for: semanticContainer) else {
+                    exploration.markExplored(semanticContainer)
+                    continue
+                }
+                recordOrigin(of: nested)
+                let result = await scanContainer(
+                    nested,
+                    onObservation: onObservation
+                )
+                switch result {
+                case .finished:
+                    markExplored(nested)
+                    return .finished
+                case .completed:
+                    markExplored(nested)
+                case .screenReplaced:
+                    return .screenReplaced
+                case .omitted(let reason):
+                    exploration.manifest.markOmitted(nested.path, reason: reason)
+                    if reason == .discoveryScrollLimit { return .limitHit(reason) }
+                case .interrupted:
+                    return .interrupted
+                }
+            }
+            return nil
+        }
+
+        private func pageDirection(
+            for container: ActiveContainerExploration,
+            scanDirection: ScrollScanDirection
+        ) -> UIAccessibilityScrollDirection {
+            switch (container.hasVOverflow, scanDirection) {
+            case (true, .forward):
+                .down
+            case (true, .back):
+                .up
+            case (false, .forward):
+                .right
+            case (false, .back):
+                .left
+            }
+        }
+
+        private func observe(
+            onObservation: (SettledSemanticObservationEvent) -> ViewportExplorationDecision
+        ) async -> ObservedViewport? {
+            guard let event = await navigation.settledExplorationPage(
+                deadline: exploration.deadline,
+                discoveryCommitPolicy: exploration.discoveryCommitPolicy
+            ) else { return nil }
+            return record(event, notifyObservation: true, onObservation: onObservation)
+        }
+
+        private func record(
+            _ event: SettledSemanticObservationEvent,
+            notifyObservation: Bool,
+            onObservation: (SettledSemanticObservationEvent) -> ViewportExplorationDecision
+        ) -> ObservedViewport {
+            latestEvent = event
+            if event.continuity.isReplacement {
+                exploredScrollViewIDs.removeAll()
+                originByScrollViewID.removeAll()
+                originOrder.removeAll()
+            }
+            exploration.recordCommittedObservation(
+                continuity: event.continuity,
+                scrollableContainers: currentScrollableContainers()
+            )
+            return ObservedViewport(
+                event: event,
+                decision: notifyObservation ? onObservation(event) : .continue
+            )
+        }
+
+        private func finalize(
+            exitPosition: ViewportExitPosition,
+            notifyObservation: Bool,
+            onObservation: (SettledSemanticObservationEvent) -> ViewportExplorationDecision
+        ) async -> Bool {
+            guard exitPosition == .origin else { return true }
+            for scrollViewID in originOrder.reversed() {
+                guard let origin = originByScrollViewID[scrollViewID] else { continue }
+                switch await restoreOrigin(
+                    origin,
+                    scrollViewID: scrollViewID,
+                    notifyObservation: notifyObservation,
+                    onObservation: onObservation
+                ) {
+                case .observed, .unchanged:
+                    continue
+                case .unavailable, .interrupted:
+                    return false
+                }
+            }
+            return true
+        }
+
+        private func restoreOrigin(
+            of container: ActiveContainerExploration,
+            onObservation: (SettledSemanticObservationEvent) -> ViewportExplorationDecision
+        ) async -> OriginRestoreResult {
+            await restoreOrigin(
+                container.savedVisualOrigin,
+                scrollViewID: container.scrollViewID,
+                onObservation: onObservation
+            )
+        }
+
+        private func restoreOrigin(
+            _ origin: CGPoint,
+            scrollViewID: ObjectIdentifier,
+            notifyObservation: Bool = true,
+            onObservation: (SettledSemanticObservationEvent) -> ViewportExplorationDecision
+        ) async -> OriginRestoreResult {
+            guard let target = currentProgrammaticScrollTarget(for: scrollViewID),
+                  case .uiScrollView(_, _, let scrollView) = target else {
+                return .unavailable
+            }
+            let transition = await navigation.performViewportTransition(
+                .restoreVisualOrigin(origin, in: scrollView),
+                deadline: exploration.deadline,
+                discoveryCommitPolicy: exploration.discoveryCommitPolicy
+            )
+            switch transition.result {
+            case .unavailable:
+                return .unavailable
+            case .unchanged:
+                return .unchanged
+            case .moved:
+                didMoveViewport = true
+                guard let event = transition.event else { return .interrupted }
+                return .observed(record(
+                    event,
+                    notifyObservation: notifyObservation,
+                    onObservation: onObservation
+                ))
+            }
+        }
+
+        private func currentProgrammaticScrollTarget(
+            for container: ActiveContainerExploration
+        ) -> ScrollableTarget? {
+            if let exactTarget = currentProgrammaticScrollTarget(for: container.path),
+               case .uiScrollView(_, _, let scrollView) = exactTarget,
+               ObjectIdentifier(scrollView) == container.scrollViewID {
+                return exactTarget
+            }
+            return currentProgrammaticScrollTarget(for: container.scrollViewID)
+        }
+
+        private func currentProgrammaticScrollTarget(
+            for scrollViewID: ObjectIdentifier
+        ) -> ScrollableTarget? {
+            currentLiveScrollableTarget(for: scrollViewID)?.target
+        }
+
+        private func currentProgrammaticScrollTarget(for path: TreePath) -> ScrollableTarget? {
+            guard let semanticContainer = navigation.stash.latestObservation.tree.containers[path]
+                    ?? navigation.stash.interfaceTree.containers[path],
+                  let object = navigation.stash.liveContainerObject(forPath: path),
+                  navigation.stash.liveContainer(forPath: path) != nil,
+                  let scrollView = navigation.stash.liveScrollableContainerView(forPath: path),
+                  !scrollView.bhIsUnsafeForProgrammaticScrolling else { return nil }
+            return .uiScrollView(
+                containerTarget: semanticContainer,
+                object: object,
+                scrollView: scrollView
+            )
+        }
+
+        private func currentLiveScrollableTargets() -> [LiveScrollableTarget] {
+            let containers = navigation.stash.latestObservation.tree.orderedContainers
+            var targetByScrollViewID: [ObjectIdentifier: LiveScrollableTarget] = [:]
+            for container in containers {
+                guard let target = currentProgrammaticScrollTarget(for: container.path),
+                      case .uiScrollView(_, _, let scrollView) = target else { continue }
+                let candidate = LiveScrollableTarget(
+                    path: container.path,
+                    target: target,
+                    scrollViewID: ObjectIdentifier(scrollView)
+                )
+                if let current = targetByScrollViewID[candidate.scrollViewID],
+                   current.path <= candidate.path {
+                    continue
+                }
+                targetByScrollViewID[candidate.scrollViewID] = candidate
+            }
+            let liveTargets = targetByScrollViewID.values.sorted { $0.path < $1.path }
+            guard let revealRootScrollViewID else { return liveTargets }
+
+            var eligibleIDs: Set<ObjectIdentifier> = [revealRootScrollViewID]
+            var didAddNestedScrollView = true
+            while didAddNestedScrollView {
+                didAddNestedScrollView = false
+                for liveTarget in liveTargets where !eligibleIDs.contains(liveTarget.scrollViewID) {
+                    guard case .uiScrollView(_, _, let scrollView) = liveTarget.target,
+                          let parent = nearestScrollableSuperview(of: scrollView),
+                          eligibleIDs.contains(ObjectIdentifier(parent)) else { continue }
+                    eligibleIDs.insert(liveTarget.scrollViewID)
+                    didAddNestedScrollView = true
+                }
+            }
+            return liveTargets.filter { eligibleIDs.contains($0.scrollViewID) }
+        }
+
+        private func currentLiveScrollableTarget(
+            for scrollViewID: ObjectIdentifier
+        ) -> LiveScrollableTarget? {
+            let matches = currentLiveScrollableTargets().filter { $0.scrollViewID == scrollViewID }
+            guard matches.count == 1 else { return nil }
+            return matches[0]
+        }
+
+        private func currentScrollableContainers() -> [InterfaceTree.Container] {
+            currentLiveScrollableTargets().compactMap { target in
+                navigation.stash.latestObservation.tree.containers[target.path]
+            }
+        }
+
+        private func nearestScrollableSuperview(of view: UIView) -> UIScrollView? {
+            var ancestor = view.superview
+            while let current = ancestor {
+                if let scrollView = current as? UIScrollView { return scrollView }
+                ancestor = current.superview
+            }
+            return nil
+        }
+
+        private func markExplored(_ container: ActiveContainerExploration) {
+            exploredScrollViewIDs.insert(container.scrollViewID)
+            exploration.markExplored(container.semanticContainer)
+        }
+
+        private func recordOrigin(of container: ActiveContainerExploration) {
+            guard originByScrollViewID[container.scrollViewID] == nil else { return }
+            originByScrollViewID[container.scrollViewID] = container.savedVisualOrigin
+            originOrder.append(container.scrollViewID)
+        }
+
+        private func totalOverflow(of container: AccessibilityContainer) -> CGFloat {
+            guard let contentSize = container.scrollableContentSize else { return 0 }
+            return max(0, contentSize.width - container.frame.width)
+                + max(0, contentSize.height - container.frame.height)
+        }
+
+    }
+
     func scanForHeistId(
         _ heistId: HeistId,
         deadline: SemanticObservationDeadline
     ) async -> ExploredScreen? {
-        guard !Task.isCancelled,
-              deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) else { return nil }
-        let startTime = CACurrentMediaTime()
-        var exploration = SemanticExploration(
-            baseline: stash.actionDiscoveryBaseline(),
-            knownTargetDeadline: deadline
+        guard let rootScrollViewID = revealRootScrollViewID(for: heistId) else { return nil }
+        var didFindTarget = false
+        let explorer = ViewportExplorer(
+            navigation: self,
+            exploration: SemanticExploration(
+                baseline: .interfaceMemory(stash.actionDiscoveryBaseline()),
+                deadline: deadline
+            ),
+            searchOrder: .backwardFirst,
+            revealRootScrollViewID: rootScrollViewID
         )
-        guard let settledPage = await settledKnownTargetPage(deadline: deadline),
-              !Task.isCancelled,
-              deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) else { return nil }
-        exploration.absorb(settledPage)
-        if stash.liveContains(heistId: heistId) {
-            return exploration.finish(startTime: startTime)
+        let explored = await explorer.exploreViewports(exitPosition: .current) { event in
+            didFindTarget = event.observation.screen.liveCapture.contains(heistId: heistId)
+            return didFindTarget ? .finish : .continue
         }
+        return didFindTarget ? explored : nil
+    }
 
-        exploration.addDiscoveredContainers(exploration.screen.orderedContainers.filter { $0.container.isScrollable })
-        let terminal = await scanPendingContainers(target: nil, targetHeistId: heistId, exploration: &exploration)
-        guard !Task.isCancelled,
-              deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) else { return nil }
-        if terminal != nil {
-            return exploration.finish(startTime: startTime)
+    private func revealRootScrollViewID(for heistId: HeistId) -> ObjectIdentifier? {
+        guard let membership = stash.interfaceElement(heistId: heistId)?.scrollMembership else { return nil }
+        var visitedPaths = Set<TreePath>()
+        var path: TreePath? = membership.containerPath
+        while let currentPath = path, visitedPaths.insert(currentPath).inserted {
+            if let scrollView = liveProgrammaticScrollView(at: currentPath) {
+                return ObjectIdentifier(scrollView)
+            }
+            guard let container = stash.interfaceTree.containers[currentPath] else { return nil }
+            path = container.scrollMembership?.containerPath
         }
         return nil
     }
 
-    func scanPendingContainers(
-        target: ResolvedAccessibilityTarget?,
-        targetHeistId: HeistId? = nil,
-        exploration: inout SemanticExploration
-    ) async -> ScrollTraversalTerminal? {
-        while !exploration.manifest.pendingScrollPaths.isEmpty {
-            guard !Task.isCancelled, exploration.hasTimeRemaining else { return nil }
-            guard exploration.manifest.scrollCount < exploration.manifest.maxScrollsPerDiscovery else {
-                exploration.manifest.markDiscoveryLimitHit()
-                return nil
-            }
-
-            let batch = sortedPendingContainers(in: exploration)
-            guard !batch.isEmpty else {
-                exploration.manifest.clearPendingContainers()
-                return nil
-            }
-
-            containerBatch: for container in batch {
-                guard !Task.isCancelled, exploration.hasTimeRemaining else { return nil }
-                guard exploration.manifest.scrollCount < exploration.manifest.maxScrollsPerDiscovery else {
-                    exploration.manifest.markDiscoveryLimitHit()
-                    return nil
-                }
-                guard let containerExploration = prepareContainerExploration(for: container) else {
-                    exploration.markExplored(container)
-                    continue
-                }
-
-                let result = await scanContainer(
-                    containerExploration,
-                    target: target,
-                    targetHeistId: targetHeistId,
-                    exploration: &exploration
-                )
-                switch result {
-                case .terminal(let terminal):
-                    exploration.markExplored(containerExploration.semanticContainer)
-                    return terminal
-                case .completed:
-                    exploration.markExplored(containerExploration.semanticContainer)
-                case .screenReplaced:
-                    if let terminal = scanGoalTerminal(
-                        scanGoal(target: target, targetHeistId: targetHeistId),
-                        in: exploration.screen
-                    ) {
-                        return terminal
-                    }
-                    break containerBatch
-                case .omitted(let reason):
-                    exploration.manifest.markOmitted(containerExploration.path, reason: reason)
-                }
-                exploration.addDiscoveredContainers(exploration.screen.orderedContainers.filter { $0.container.isScrollable })
-            }
-        }
-        return nil
-    }
-
-    private func sortedPendingContainers(in exploration: SemanticExploration) -> [InterfaceTree.Container] {
-        exploration.manifest.pendingScrollPaths
-            .compactMap { exploration.screen.tree.containers[$0] }
-            .map { PendingContainer(container: $0, overflow: totalOverflow(of: $0.container)) }
-            .sorted { $0.overflow > $1.overflow }
-            .map(\.container)
-    }
-
-    private func prepareContainerExploration(
-        for semanticContainer: InterfaceTree.Container
-    ) -> ContainerExploration? {
-        let container = semanticContainer.container
-        guard let contentSize = container.scrollableContentSize else { return nil }
-
-        guard let scrollView = stash.liveScrollableContainerView(forPath: semanticContainer.path),
-              scrollView.window != nil,
-              !scrollView.bhIsUnsafeForProgrammaticScrolling,
-              !Self.isObscuredByPresentation(view: scrollView)
-        else { return nil }
-
-        let hasHOverflow = contentSize.width > container.frame.width + 1
-        let hasVOverflow = contentSize.height > container.frame.height + 1
-        guard hasHOverflow || hasVOverflow else { return nil }
-
-        return ContainerExploration(
-            semanticContainer: semanticContainer,
-            scrollView: scrollView,
-            hasHOverflow: hasHOverflow,
-            hasVOverflow: hasVOverflow
-        )
-    }
-
-    private func scanContainer(
-        _ containerExploration: ContainerExploration,
-        target: ResolvedAccessibilityTarget?,
-        targetHeistId: HeistId?,
-        exploration: inout SemanticExploration
-    ) async -> ScrollContainerScanResult {
-        let savedVisualOrigin = containerExploration.savedVisualOrigin
-        let goal = scanGoal(target: target, targetHeistId: targetHeistId)
-
-        if shouldSkipFullScanByInventory(containerExploration, goal: goal, exploration: exploration) {
-            return .omitted(.containerScrollLimit)
-        }
-
-        var driver = StateDriver(
-            initial: ScrollContainerScanState.idle,
-            machine: ScrollContainerScanMachine()
-        )
-        var effect = driver.send(.begin).scrollContainerScanEffect
-        while true {
-            guard !Task.isCancelled, exploration.hasTimeRemaining else {
-                restoreKnownTargetOriginIfNeeded(
-                    savedVisualOrigin,
-                    containerExploration: containerExploration,
-                    exploration: exploration
-                )
-                return .completed
-            }
-            switch effect {
-            case .run(let direction):
-                let outcome = await runScrollScan(
-                    ScrollScanPlan(container: containerExploration, direction: direction, goal: goal),
-                    exploration: &exploration
-                )
-                effect = driver.send(.scanCompleted(outcome)).scrollContainerScanEffect
-
-            case .restore:
-                let classification = await restoreContainerPosition(
-                    containerExploration,
-                    savedVisualOrigin: savedVisualOrigin,
-                    exploration: &exploration
-                )
-                if classification?.isScreenReplacement == true {
-                    return .screenReplaced
-                }
-                effect = driver.send(.restoreCompleted).scrollContainerScanEffect
-
-            case .finish(let result):
-                return result
-            }
-        }
-    }
-
-    private func restoreKnownTargetOriginIfNeeded(
-        _ savedVisualOrigin: CGPoint,
-        containerExploration: ContainerExploration,
-        exploration: SemanticExploration
-    ) {
-        guard case .knownTargetReveal = exploration.scope else { return }
-        Self.restoreVisualOrigin(savedVisualOrigin, in: containerExploration.scrollView)
-    }
-
-    private func scanGoal(target: ResolvedAccessibilityTarget?, targetHeistId: HeistId?) -> ScrollScanGoal {
-        if let target {
-            return .findTarget(target)
-        }
-        if let targetHeistId {
-            return .findHeistId(targetHeistId)
-        }
-        return .exhaust
-    }
-
-    private func runScrollScan(
-        _ plan: ScrollScanPlan,
-        exploration: inout SemanticExploration
-    ) async -> ScrollScanOutcome {
-        guard !Task.isCancelled, exploration.hasTimeRemaining else { return .exhausted }
-        if let terminal = scanGoalTerminal(plan.goal, in: exploration.screen) {
-            return .terminal(terminal)
-        }
-
-        // Lazy containers can revise contentSize as each viewport materializes.
-        // Derive one offset at a time from the geometry proven by the last page.
-        while let offset = Self.nextExplorationScanOffset(
-            in: plan.container.scrollView,
-            axis: plan.container.hasVOverflow ? .vertical : .horizontal,
-            direction: plan.direction
-        ) {
-            observeOffset: while true {
-                guard !Task.isCancelled, exploration.hasTimeRemaining else { return .exhausted }
-                if let reason = exploration.manifest.recordScrollAttempt(in: plan.container.path) {
-                    return .limitHit(reason)
-                }
-                let classification: ScreenClassifier.Classification?
-                do {
-                    let notificationWindow = stash.accessibilityNotifications.beginActionWindow()
-                    defer { notificationWindow.cancel() }
-                    plan.container.scrollView.setContentOffset(offset, animated: plan.animated)
-                    guard !Task.isCancelled, exploration.hasTimeRemaining else { return .exhausted }
-                    if plan.animated {
-                        _ = await tripwire.waitForAllClear(timeout: exploration.cappedAnimatedWait(0.5))
-                    } else {
-                        await tripwire.yieldFrames(Self.postScrollLayoutFrames)
-                    }
-                    guard !Task.isCancelled, exploration.hasTimeRemaining else { return .exhausted }
-                    classification = await absorbExplorationPage(
-                        in: &exploration,
-                        notificationBatch: notificationWindow.capture()
-                    )
-                }
-                guard !Task.isCancelled, exploration.hasTimeRemaining else { return .exhausted }
-                guard let classification else { continue observeOffset }
-                if classification.isScreenReplacement { return .screenReplaced }
-
-                if let terminal = scanGoalTerminal(plan.goal, in: exploration.screen) {
-                    return .terminal(terminal)
-                }
-                break observeOffset
-            }
-        }
-
-        return .exhausted
-    }
-
-    private func shouldSkipFullScanByInventory(
-        _ containerExploration: ContainerExploration,
-        goal: ScrollScanGoal,
-        exploration: SemanticExploration
-    ) -> Bool {
-        guard goal == .exhaust,
-              let totalElementCount = containerExploration.semanticContainer.scrollInventory?.totalElementCount
-        else { return false }
-        let visibleCount = max(1, containerExploration.semanticContainer.scrollInventory?.visibleIndices.count ?? 1)
-        return totalElementCount > visibleCount * exploration.manifest.maxScrollsPerContainer
-    }
-
-    static func nextExplorationScanOffset(
-        in scrollView: UIScrollView,
-        axis: ScanAxis,
-        direction: ScrollScanDirection
-    ) -> CGPoint? {
-        let current = scrollView.contentOffset
-        let bounds = scrollView.bounds
-        let insets = scrollView.adjustedContentInset
-        let minOffset = CGPoint(x: -insets.left, y: -insets.top)
-        let maxOffset = CGPoint(
-            x: max(scrollView.contentSize.width + insets.right - bounds.width, -insets.left),
-            y: max(scrollView.contentSize.height + insets.bottom - bounds.height, -insets.top)
-        )
-        let currentScalar = axis.scalar(from: current)
-        let minScalar = axis.scalar(from: minOffset)
-        let maxScalar = axis.scalar(from: maxOffset)
-        let clampedCurrent = min(max(currentScalar, minScalar), maxScalar)
-        let step = max(1, axis.scalar(from: CGPoint(x: bounds.width, y: bounds.height)) * 0.8)
-        let nextScalar: CGFloat = switch direction {
-        case .forward:
-            min(clampedCurrent + step, maxScalar)
-        case .back:
-            max(clampedCurrent - step, minScalar)
-        }
-        guard Int(nextScalar.rounded()) != Int(currentScalar.rounded()) else { return nil }
-        return axis.point(updating: current, scalar: nextScalar)
-    }
-
-    private func scanGoalTerminal(
-        _ goal: ScrollScanGoal,
-        in screen: InterfaceObservation
-    ) -> ScrollTraversalTerminal? {
-        switch goal {
-        case .exhaust:
-            return nil
-        case .findHeistId(let targetHeistId):
-            guard screen.liveCapture.contains(heistId: targetHeistId) else { return nil }
-            return .foundHeistId(targetHeistId)
-        case .findTarget(let target):
-            guard hasVisibleTerminalExplorationResolution(target, in: screen.tree) else { return nil }
-            return .foundTarget(target)
-        }
-    }
-
-    private func absorbExplorationPage(
-        in exploration: inout SemanticExploration,
-        notificationBatch: AccessibilityNotificationBatch? = nil
-    ) async -> ScreenClassifier.Classification? {
-        guard !Task.isCancelled, exploration.hasTimeRemaining else { return nil }
-        let page: InterfaceObservation?
-        switch exploration.scope {
-        case .manifestBoundedDiscovery:
-            page = await settledExplorationPage()
-        case .knownTargetReveal(let deadline):
-            page = await settledKnownTargetPage(deadline: deadline)
-        }
-        guard !Task.isCancelled, exploration.hasTimeRemaining else { return nil }
-        guard let page else { return nil }
-        return exploration.absorbScrolledPage(page, notificationBatch: notificationBatch)
-    }
-
-    private func restoreContainerPosition(
-        _ containerExploration: ContainerExploration,
-        savedVisualOrigin: CGPoint,
-        exploration: inout SemanticExploration
-    ) async -> ScreenClassifier.Classification? {
-        let notificationWindow = stash.accessibilityNotifications.beginActionWindow()
-        defer { notificationWindow.cancel() }
-        Self.restoreVisualOrigin(savedVisualOrigin, in: containerExploration.scrollView)
-        guard !Task.isCancelled, exploration.hasTimeRemaining else { return nil }
-        await tripwire.yieldFrames(Self.postScrollLayoutFrames)
-        guard !Task.isCancelled, exploration.hasTimeRemaining else { return nil }
-        return await absorbExplorationPage(
-            in: &exploration,
-            notificationBatch: notificationWindow.capture()
-        )
-    }
-
-    private func settledKnownTargetPage(
-        deadline: SemanticObservationDeadline
-    ) async -> InterfaceObservation? {
-        guard !Task.isCancelled,
-              deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) else { return nil }
-        let timeoutMs = min(
-            SettleSession.defaultTimeoutMs,
-            max(1, Int((deadline.remainingSeconds() * 1_000).rounded(.up)))
-        )
-        let settle = await SettleSession.live(
-            stash: stash,
-            tripwire: tripwire,
-            timeoutMs: timeoutMs
-        ).run(
-            start: CFAbsoluteTimeGetCurrent(),
-            baselineTripwireSignal: tripwire.tripwireSignal()
-        )
-        guard !Task.isCancelled,
-              deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) else { return nil }
-        return InterfaceObservationProof.settled(settle, stash: stash)?.screen
-    }
-
-    static func restoreVisualOrigin(_ visualOrigin: CGPoint, in scrollView: UIScrollView) {
-        let insets = scrollView.adjustedContentInset
-        let restoredOffset = CGPoint(
-            x: visualOrigin.x - insets.left,
-            y: visualOrigin.y - insets.top
-        )
-        let maxX = scrollView.contentSize.width + insets.right - scrollView.frame.width
-        let maxY = scrollView.contentSize.height + insets.bottom - scrollView.frame.height
-        let clampedOffset = CGPoint(
-            x: max(-insets.left, min(restoredOffset.x, maxX)),
-            y: max(-insets.top, min(restoredOffset.y, maxY))
-        )
-        scrollView.setContentOffset(clampedOffset, animated: false)
+    private func liveProgrammaticScrollView(at path: TreePath) -> UIScrollView? {
+        guard let scrollView = stash.liveScrollableContainerView(forPath: path),
+              stash.liveContainerObject(forPath: path) != nil,
+              stash.liveContainer(forPath: path) != nil,
+              !scrollView.bhIsUnsafeForProgrammaticScrolling else { return nil }
+        return scrollView
     }
 
     static func visualOrigin(in scrollView: UIScrollView) -> CGPoint {
@@ -384,12 +598,6 @@ extension Navigation {
             x: scrollView.contentOffset.x + scrollView.adjustedContentInset.left,
             y: scrollView.contentOffset.y + scrollView.adjustedContentInset.top
         )
-    }
-
-    private func totalOverflow(of container: AccessibilityContainer) -> CGFloat {
-        guard let contentSize = container.scrollableContentSize else { return 0 }
-        return max(0, contentSize.width - container.frame.width)
-            + max(0, contentSize.height - container.frame.height)
     }
 
     static func hasContentBeyondFrame(
@@ -429,48 +637,6 @@ extension Navigation {
             return extendsBeyond ? true : nil
         }
         return !hits.isEmpty
-    }
-
-    private struct PendingContainer {
-        let container: InterfaceTree.Container
-        let overflow: CGFloat
-    }
-
-    enum ScanAxis {
-        case horizontal
-        case vertical
-
-        func scalar(from point: CGPoint) -> CGFloat {
-            switch self {
-            case .horizontal:
-                return point.x
-            case .vertical:
-                return point.y
-            }
-        }
-
-        func point(updating point: CGPoint, scalar: CGFloat) -> CGPoint {
-            switch self {
-            case .horizontal:
-                return CGPoint(x: scalar, y: point.y)
-            case .vertical:
-                return CGPoint(x: point.x, y: scalar)
-            }
-        }
-    }
-
-}
-
-private extension StateChange
-where State == Navigation.ScrollContainerScanState,
-      Effect == Navigation.ScrollContainerScanEffect,
-      Rejection == Navigation.ScrollContainerScanRejection {
-
-    var scrollContainerScanEffect: Navigation.ScrollContainerScanEffect {
-        guard let effect = singleEffect else {
-            preconditionFailure("ScrollContainerScanMachine must emit exactly one effect per accepted event.")
-        }
-        return effect
     }
 }
 

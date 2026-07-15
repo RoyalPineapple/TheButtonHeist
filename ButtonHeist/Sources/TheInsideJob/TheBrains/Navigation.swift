@@ -9,10 +9,8 @@ import AccessibilitySnapshotParser
 
 /// Navigation — scroll orchestration and screen exploration.
 ///
-/// Internal component of TheBrains. Owns the scroll engine
-/// (`ScrollableTarget`, `SettleSwipeLoopState`, swipe settle) and
-/// the explore engine (`ScreenManifest`). Drives TheSafecracker's scroll
-/// primitives against TheStash's hierarchy view.
+/// Internal component of TheBrains. Owns the scroll and exploration engines,
+/// and drives TheSafecracker's scroll primitives against TheStash's hierarchy.
 @MainActor
 final class Navigation {
 
@@ -30,18 +28,21 @@ final class Navigation {
                 guard let self else { return nil }
                 return await self.exploreScreen(
                     target: target,
-                    baseline: .interfaceMemory(self.stash.actionDiscoveryBaseline())
+                    baseline: .interfaceMemory(self.stash.actionDiscoveryBaseline()),
+                    exitPosition: .current,
+                    searchOrder: .backwardFirst
                 )
             },
             revealKnownTarget: { [weak self] request in
                 guard let self else { return nil }
                 return await self.scanForHeistId(request.heistId, deadline: request.deadline)
+            },
+            moveViewport: { [weak self] intent in
+                guard let self else { return .unavailable() }
+                return await self.performViewportTransition(intent)
             }
         )
     )
-
-    /// Last dispatched swipe direction per swipeable target key.
-    var lastSwipeDirectionByTarget: [SwipeTargetKey: UIAccessibilityScrollDirection] = [:]
 
     // MARK: - Init
 
@@ -60,187 +61,35 @@ final class Navigation {
     /// Keep swipe gesture timing stable; scrolling cadence is frame-driven.
     static let swipeGestureDuration: GestureDuration = .scrollSwipeDefault
 
-    /// Layout frames to yield after a non-animated UIScrollView scroll before
-    /// re-reading the accessibility tree.
-    /// Empirical default: 3 frames covers a CATransaction flush plus a UIKit
-    /// layout pass without waiting for animations.
-    static var postScrollLayoutFrames: Int {
-        ButtonHeistRuntimeKnobs.current.postScrollLayoutFrames
-    }
-
-    /// Settle-loop pacing parameters. Two canned profiles: `.directionChange`
-    /// is the conservative budget for reversals (spring/inertia takes longer);
-    /// `.sameDirection` is the aggressive budget for continuing scrolls.
-    struct SettleSwipeProfile: Sendable, Equatable {
-        /// Earliest frame at which exit conditions can be evaluated.
-        var minFrames: Int
-        /// Hard cap on settle polling to avoid long stalls on spring animations.
-        var maxFrames: Int
-        /// Consecutive frames with no newly-discovered elements needed to exit.
-        var requiredIdleFrames: Int
-        /// Consecutive frames with an unchanged visible id set needed to exit.
-        var requiredStableVisibleFrames: Int
-
-        static let directionChange = SettleSwipeProfile(
-            minFrames: 6, maxFrames: 24,
-            requiredIdleFrames: 2, requiredStableVisibleFrames: 3
-        )
-        static let sameDirection = SettleSwipeProfile(
-            minFrames: 1, maxFrames: 3,
-            requiredIdleFrames: 1, requiredStableVisibleFrames: 1
-        )
-    }
-
-    /// Return value from `SettleSwipeLoopState.advance(...)` — whether the
-    /// caller should feed another frame or treat the swipe as settled.
-    enum SettleSwipeStep: Equatable { case `continue`, done }
-
-    /// Stable target identity for swipe-dispatched scrolls.
-    struct SwipeTargetKey: Hashable, Sendable {
-        private let storage: SwipeTargetKeyStorage
-
-        init(containerName: ContainerName) {
-            storage = .containerName(containerName)
-        }
-
-        init(containerPath: TreePath) {
-            storage = .containerPath(containerPath)
-        }
-
-        init(frame: CGRect, contentSize: CGSize) {
-            storage = .geometry(CoarseScrollGeometry(frame: frame, contentSize: contentSize))
-        }
-    }
-
-    private enum SwipeTargetKeyStorage: Hashable, Sendable {
-        case containerName(ContainerName)
-        case containerPath(TreePath)
-        case geometry(CoarseScrollGeometry)
-    }
-
-    private struct CoarseScrollGeometry: Hashable, Sendable {
-        let frame: CoarseRect
-        let contentSize: CoarseSize
-
-        init(frame: CGRect, contentSize: CGSize) {
-            self.frame = CoarseRect(frame)
-            self.contentSize = CoarseSize(contentSize)
-        }
-    }
-
-    private struct CoarseSize: Hashable, Sendable {
-        let width: Int
-        let height: Int
-
-        init(_ size: CGSize) {
-            width = Int(size.width.rounded())
-            height = Int(size.height.rounded())
-        }
-    }
-
-    private struct CoarseRect: Hashable, Sendable {
-        let minX: Int
-        let minY: Int
-        let width: Int
-        let height: Int
-
-        init(_ rect: CGRect) {
-            minX = Int(rect.minX.rounded())
-            minY = Int(rect.minY.rounded())
-            width = Int(rect.width.rounded())
-            height = Int(rect.height.rounded())
-        }
-    }
-
-    /// Pure stepwise driver for the swipe-settle loop. Tracks motion-detected
-    /// state, idle/stable counters, and exit conditions given a sequence of
-    /// per-frame observations. `moved` only latches from false to true.
+    /// Capture-bound dispatch evidence for one scrollable semantic container.
     ///
-    /// **Settle signal boundary.** This is one of four distinct settle
-    /// implementations; each watches a different signal because the callers
-    /// need different answers:
-    ///
-    /// 1. `SettleSwipeLoopState` (here) — visible heistId set changes,
-    ///    interleaved frame-by-frame with Stash visible observations.
-    ///    Answers "did the swipe move us, and has the visible set stopped
-    ///    accepting new heistIds?" — the only signal that distinguishes
-    ///    spring-bounce-then-settle from edge-rejected gestures.
-    /// 2. `SettleSession` (`SettleSession.swift`) — AX-tree fingerprint
-    ///    stability, plus VC-change preemption and transient-element
-    ///    accumulation. Active heists select the quiet-window policy at frame
-    ///    cadence; passive reads select consecutive cycles.
-    /// 3. `TheTripwire.waitForAllClear(timeout:)` — CADisplayLink-driven
-    ///    layer-level quiet detection (no AX tree). Used when we only care
-    ///    that animations and layout have flushed.
-    /// 4. `TheTripwire.yieldFrames(_:)` / `yieldRealFrames(_:)` — fixed-count
-    ///    waits with no termination signal. Empirically calibrated budgets
-    ///    for known animation timings (post-reveal SPI scrolls, etc.).
-    ///
-    /// This loop cannot be folded into (2) or (3): (2) doesn't expose a
-    /// `moved` latch and runs its own polling cadence; (3) never reads the
-    /// AX tree, so it can't tell whether new heistIds are still arriving.
-    struct SettleSwipeLoopState: Equatable {
-        let profile: SettleSwipeProfile
-        let previousVisibleIds: Set<HeistId>
-        private(set) var moved = false
-        private(set) var frame = 0
-        private var lastVisibleIds: Set<HeistId>
-        private var idleFramesWithoutNew = 0
-        private var stableVisibleFrames = 0
-
-        init(
-            profile: SettleSwipeProfile,
-            previousVisibleIds: Set<HeistId>
-        ) {
-            self.profile = profile
-            self.previousVisibleIds = previousVisibleIds
-            self.lastVisibleIds = previousVisibleIds
-        }
-
-        /// Advance one frame. Pass the current visible id set and the heistIds
-        /// newly discovered this frame.
-        mutating func advance(
-            visibleIds: Set<HeistId>,
-            newHeistIds: Set<HeistId>
-        ) -> SettleSwipeStep {
-            if visibleIds != previousVisibleIds {
-                moved = true
-            }
-
-            if visibleIds == lastVisibleIds {
-                stableVisibleFrames += 1
-            } else {
-                lastVisibleIds = visibleIds
-                stableVisibleFrames = 0
-            }
-
-            if newHeistIds.isEmpty {
-                idleFramesWithoutNew += 1
-            } else {
-                idleFramesWithoutNew = 0
-            }
-
-            frame += 1
-
-            if frame >= profile.minFrames,
-               idleFramesWithoutNew >= profile.requiredIdleFrames,
-               stableVisibleFrames >= profile.requiredStableVisibleFrames {
-                return .done
-            }
-            if frame >= profile.maxFrames {
-                return .done
-            }
-            return .continue
-        }
-    }
-
-    /// A scrollable container discovered from the accessibility hierarchy.
-    ///
-    /// `@MainActor` justification: holds a UIScrollView reference (non-Sendable);
-    /// MainActor matches where these targets are resolved and consumed.
+    /// `@MainActor` justification: the programmatic case holds a UIScrollView
+    /// reference. Both cases retain the capture token until final dispatch.
     @MainActor enum ScrollableTarget { // swiftlint:disable:this agent_main_actor_value_type
-        case uiScrollView(UIScrollView)
-        case swipeable(frame: CGRect, contentSize: CGSize)
+        case uiScrollView(
+            containerTarget: InterfaceTree.Container,
+            object: NSObject,
+            scrollView: UIScrollView
+        )
+        case swipeable(container: TheStash.LiveContainerTarget, frame: CGRect, contentSize: CGSize)
+
+        var containerTarget: InterfaceTree.Container {
+            switch self {
+            case .uiScrollView(let containerTarget, _, _):
+                return containerTarget
+            case .swipeable(let container, _, _):
+                return container.containerTarget
+            }
+        }
+
+        var object: NSObject {
+            switch self {
+            case .uiScrollView(_, let object, _):
+                return object
+            case .swipeable(let container, _, _):
+                return container.object
+            }
+        }
     }
 
     struct ScrollAxis: OptionSet, Sendable {
@@ -477,11 +326,6 @@ final class Navigation {
 
     }
 
-    // MARK: - Clear
-
-    func clearCache() {
-        lastSwipeDirectionByTarget.removeAll()
-    }
 }
 
 private extension Set where Element == Navigation.ExplorationOmissionReason {

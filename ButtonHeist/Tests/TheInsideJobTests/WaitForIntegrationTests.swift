@@ -536,15 +536,29 @@ final class WaitForIntegrationTests: XCTestCase {
             offViewport: [.init(offViewportElement, heistId: offViewportHeistId)]
         )
         let stream = insideJob.brains.stash.semanticObservationStream
-        let baselineEvent = stream.commitVisibleObservationForTesting(baseline)
+        let notificationCursor = insideJob.brains.stash.accessibilityNotifications.cursor()
+        let notificationBatch = AccessibilityNotificationBatch(
+            events: [],
+            through: notificationCursor,
+            scopedScreenChangedThrough: insideJob.brains.stash.accessibilityNotifications
+                .latestScopedScreenChangedSequence,
+            gap: nil
+        )
+        let baselineEvent = stream.commitVisibleObservationForTesting(
+            baseline,
+            notificationBatch: notificationBatch
+        )
         let baselineCapture = try XCTUnwrap(baselineEvent.settledCapture)
         XCTAssertNotNil(insideJob.brains.stash.interfaceTree.findElement(heistId: offViewportHeistId))
 
         let updatedVisible = InterfaceObservation.makeForTests(elements: [(visibleAfter, visibleHeistId)])
-        let updatedEvent = stream.commitVisibleObservationForTesting(updatedVisible)
+        let updatedEvent = stream.commitVisibleObservationForTesting(
+            updatedVisible,
+            notificationBatch: notificationBatch
+        )
         let wait = PredicateWait(
             observeEvent: { _, sequence, _ in
-                XCTAssertEqual(sequence, baselineEvent.sequence)
+                XCTAssertNil(sequence)
                 return updatedEvent
             },
             latestEvent: { updatedEvent },
@@ -562,7 +576,6 @@ final class WaitForIntegrationTests: XCTestCase {
         let result = await wait.wait(
             for: try resolvedWait(WaitStep(predicate: .changed(.elements()), timeout: 5.0)),
             initialTrace: AccessibilityTrace(capture: baselineCapture.capture),
-            after: baselineEvent.sequence,
             changeBaseline: .supplied(baselineCapture)
         ).actionResult
 

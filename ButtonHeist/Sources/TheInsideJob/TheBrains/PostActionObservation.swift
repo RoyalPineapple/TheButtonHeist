@@ -294,10 +294,10 @@ final class PostActionObservation {
     static func shouldRecordAccessibilityTrace(
         baseline: BeforeState,
         current: BeforeState,
-        classification: ScreenClassifier.Classification
+        classification: ScreenContinuity
     ) -> Bool {
         switch classification {
-        case .screenChangedNotification, .inferredScreenChange:
+        case .replacement:
             return true
         case .sameGeneration:
             return current.capture.context != baseline.capture.context
@@ -344,20 +344,20 @@ final class PostActionObservation {
     func makeAccessibilityTrace(
         afterInterface: Interface,
         parentCapture: AccessibilityTrace.Capture,
-        classification: ScreenClassifier.Classification,
+        classification: ScreenContinuity,
         transient: [HeistElement] = [],
         accessibilityNotifications: [AccessibilityNotificationEvidence] = [],
         accessibilityNotificationGap: AccessibilityNotificationGap? = nil
     ) -> AccessibilityTrace {
         let transition: AccessibilityTrace.Transition
         switch classification {
-        case .sameGeneration, .screenChangedNotification:
+        case .sameGeneration, .replacement(.screenChangedNotification):
             transition = AccessibilityTrace.Transition(
                 transient: transient,
                 accessibilityNotifications: accessibilityNotifications,
                 accessibilityNotificationGap: accessibilityNotificationGap
             )
-        case .inferredScreenChange(let reason):
+        case .replacement(.inferred(let reason)):
             AccessibilityObservationFallbackLog.record(
                 reason,
                 source: .postAction
@@ -421,15 +421,15 @@ final class PostActionObservation {
         final: BeforeState,
         accessibilityNotifications: [AccessibilityNotificationEvidence],
         transitionEvidence: AccessibilityTrace.Transition?
-    ) -> ScreenClassifier.Classification {
-        let baselineClassification = ScreenClassifier.classify(
-            before: before.screenSnapshot,
-            after: final.screenSnapshot,
+    ) -> ScreenContinuity {
+        let baselineClassification = SemanticObservationGenerationClassifier.continuity(
+            from: before.screen,
+            to: final.screen,
             notifications: accessibilityNotifications.map(\.kind)
         )
         if let transitionEvidence {
             switch transitionEvidence.screenClassification {
-            case .screenChangedNotification, .inferredScreenChange:
+            case .replacement:
                 return transitionEvidence.screenClassification
             case .sameGeneration:
                 break
@@ -545,7 +545,7 @@ final class PostActionObservation {
         settleResult: SettleSession.Outcome,
         before: BeforeState,
         final: BeforeState,
-        classification: ScreenClassifier.Classification
+        classification: ScreenContinuity
     ) -> [HeistElement] {
         guard case .sameGeneration = classification,
               !settleResult.events.containsTripwireSignalChange else {
@@ -571,14 +571,14 @@ private extension SemanticObservationScope {
 }
 
 private extension AccessibilityTrace.Transition {
-    @MainActor var screenClassification: ScreenClassifier.Classification {
+    @MainActor var screenClassification: ScreenContinuity {
         if accessibilityNotifications.contains(where: {
             if case .screenChanged = $0.kind { true } else { false }
         }) {
-            return .screenChangedNotification
+            return .replacement(.screenChangedNotification)
         }
         if let fallbackReason {
-            return .inferredScreenChange(reason: fallbackReason)
+            return .replacement(.inferred(fallbackReason))
         }
         return .sameGeneration
     }

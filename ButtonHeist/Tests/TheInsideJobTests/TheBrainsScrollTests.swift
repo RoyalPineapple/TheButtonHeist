@@ -258,153 +258,11 @@ final class TheBrainsScrollTests: XCTestCase {
             XCTAssertEqual(Optional(scrollView.contentOffset), unsafeOffsets[ObjectIdentifier(scrollView)])
         }
         XCTAssertTrue(
-            exploration.screen.tree.elements.values.contains {
+            exploration.event.observation.screen.tree.elements.values.contains {
                 $0.element.label == "Page One Visible Label"
             },
             "Visible page content should remain discoverable without scrolling the private queuing scroll view"
         )
-    }
-
-    // MARK: - Exploration Scan Geometry (Pure Math)
-
-    func testExplorationScanRecomputesNextOffsetFromExpandedContentExtent() throws {
-        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 500))
-        scrollView.contentSize = CGSize(width: 320, height: 1_000)
-        scrollView.contentOffset = CGPoint(x: 0, y: 500)
-
-        XCTAssertNil(
-            Navigation.nextExplorationScanOffset(
-                in: scrollView,
-                axis: .vertical,
-                direction: .forward
-            )
-        )
-
-        scrollView.contentSize = CGSize(width: 320, height: 1_800)
-
-        let next = try XCTUnwrap(
-            Navigation.nextExplorationScanOffset(
-                in: scrollView,
-                axis: .vertical,
-                direction: .forward
-            )
-        )
-        XCTAssertEqual(next.y, 900, accuracy: 0.01)
-    }
-
-    func testExplorationScanCompletesOnlyAtLatestContentEdge() throws {
-        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 500))
-        scrollView.contentSize = CGSize(width: 320, height: 1_800)
-        scrollView.contentOffset = CGPoint(x: 0, y: 1_100)
-
-        let edge = try XCTUnwrap(
-            Navigation.nextExplorationScanOffset(
-                in: scrollView,
-                axis: .vertical,
-                direction: .forward
-            )
-        )
-        XCTAssertEqual(edge.y, 1_300, accuracy: 0.01)
-
-        scrollView.contentOffset = edge
-        XCTAssertNil(
-            Navigation.nextExplorationScanOffset(
-                in: scrollView,
-                axis: .vertical,
-                direction: .forward
-            )
-        )
-    }
-
-    // MARK: - semanticRevealTargetOffset (Pure Math)
-
-    func testScrollTargetOffsetCentersOnContentPoint() {
-        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 375, height: 667))
-        scrollView.contentSize = CGSize(width: 375, height: 5000)
-        scrollView.contentInset = .zero
-
-        let contentPoint = CGPoint(x: 100, y: 2500)
-        let offset = ElementInflation.semanticRevealTargetOffset(
-            for: observedContentActivationPoint(contentPoint),
-            in: scrollView
-        )
-
-        XCTAssertEqual(offset.x, max(contentPoint.x - 375.0 / 2, 0), accuracy: 0.01)
-        XCTAssertEqual(offset.y, contentPoint.y - 667.0 / 2, accuracy: 0.01)
-    }
-
-    func testScrollTargetOffsetClampsToTop() {
-        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 375, height: 667))
-        scrollView.contentSize = CGSize(width: 375, height: 5000)
-
-        let offset = ElementInflation.semanticRevealTargetOffset(
-            for: observedContentActivationPoint(CGPoint(x: 100, y: 100)),
-            in: scrollView
-        )
-
-        XCTAssertGreaterThanOrEqual(offset.y, 0)
-    }
-
-    func testScrollTargetOffsetClampsToBottom() {
-        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 375, height: 667))
-        scrollView.contentSize = CGSize(width: 375, height: 5000)
-
-        let offset = ElementInflation.semanticRevealTargetOffset(
-            for: observedContentActivationPoint(CGPoint(x: 100, y: 4900)),
-            in: scrollView
-        )
-
-        let maxY = scrollView.contentSize.height - scrollView.bounds.height
-        XCTAssertLessThanOrEqual(offset.y, maxY + 0.01)
-    }
-
-    func testScrollTargetOffsetRespectsContentInsets() {
-        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 375, height: 667))
-        scrollView.contentSize = CGSize(width: 375, height: 5000)
-        scrollView.contentInset = UIEdgeInsets(top: 100, left: 0, bottom: 50, right: 0)
-
-        let offset = ElementInflation.semanticRevealTargetOffset(
-            for: observedContentActivationPoint(CGPoint(x: 100, y: 10)),
-            in: scrollView
-        )
-
-        XCTAssertGreaterThanOrEqual(offset.y, -scrollView.adjustedContentInset.top)
-    }
-
-    func testScrollTargetOffsetCentersWithinAdjustedVisibleRect() {
-        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 600))
-        scrollView.contentSize = CGSize(width: 3000, height: 5000)
-        scrollView.contentInset = UIEdgeInsets(top: 100, left: 20, bottom: 50, right: 60)
-
-        let contentPoint = CGPoint(x: 1000, y: 1800)
-        let offset = ElementInflation.semanticRevealTargetOffset(
-            for: observedContentActivationPoint(contentPoint),
-            in: scrollView
-        )
-
-        let insets = scrollView.adjustedContentInset
-        let visibleWidth = scrollView.bounds.width - insets.left - insets.right
-        let visibleHeight = scrollView.bounds.height - insets.top - insets.bottom
-        XCTAssertEqual(offset.x + insets.left + visibleWidth / 2, contentPoint.x, accuracy: 0.01)
-        XCTAssertEqual(offset.y + insets.top + visibleHeight / 2, contentPoint.y, accuracy: 0.01)
-    }
-
-    func testScrollTargetOffsetHorizontalClamping() {
-        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 375, height: 667))
-        scrollView.contentSize = CGSize(width: 2000, height: 667)
-
-        let offsetStart = ElementInflation.semanticRevealTargetOffset(
-            for: observedContentActivationPoint(CGPoint(x: 50, y: 300)),
-            in: scrollView
-        )
-        XCTAssertGreaterThanOrEqual(offsetStart.x, 0)
-
-        let offsetEnd = ElementInflation.semanticRevealTargetOffset(
-            for: observedContentActivationPoint(CGPoint(x: 1950, y: 300)),
-            in: scrollView
-        )
-        let maxX = scrollView.contentSize.width - scrollView.bounds.width
-        XCTAssertLessThanOrEqual(offsetEnd.x, maxX + 0.01)
     }
 
     // MARK: - requiredAxis Mapping
@@ -653,6 +511,9 @@ final class TheBrainsScrollTests: XCTestCase {
             ],
             containerNamesByPath: [scrollContainerPath: containerName],
             heistIdsByPath: [scrollContainerPath.appending(0): visible.heistId],
+            containerRefsByPath: includeLiveScrollAncestor
+                ? [scrollContainerPath: .init(object: offscreen.scrollView)]
+                : [:],
             firstResponderHeistId: nil,
             scrollableContainerViewsByPath: includeLiveScrollAncestor
                 ? [scrollContainerPath: .init(view: offscreen.scrollView)]
@@ -671,6 +532,7 @@ final class TheBrainsScrollTests: XCTestCase {
                 elementRefs: [
                     offscreen.heistId: .init(object: retainedLiveObject(), scrollView: offscreen.scrollView),
                 ],
+                containerRefsByPath: [scrollContainerPath: .init(object: offscreen.scrollView)],
                 firstResponderHeistId: nil,
                 scrollableContainerViewsByPath: [
                     scrollContainerPath: .init(view: offscreen.scrollView),
@@ -698,52 +560,6 @@ final class TheBrainsScrollTests: XCTestCase {
         }
         XCTAssertEqual(scrollView.setContentOffsetAnimations, [])
         XCTAssertEqual(scrollView.contentOffset, .zero)
-    }
-
-    func testSemanticRevealDoesNotNoopWhenVisibleIdRepresentsDifferentElement() async {
-        let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
-        scrollView.contentSize = CGSize(width: 320, height: 1_600)
-        scrollView.contentOffset = CGPoint(x: 0, y: 800)
-        let container = makeScrollableContainer(contentSize: scrollView.contentSize, frame: scrollView.frame)
-        let containerName: ContainerName = "reused_cell_scroll"
-        let target = makeElement(label: "Controls Demo", traits: .button)
-        let currentlyVisibleReuse = makeElement(label: "Custom Rotors", traits: .button)
-        let entry = InterfaceTree.Element(
-            heistId: "reused_cell",
-            scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: nil),
-            observedScrollContentActivationPoint: observedContentActivationPoint(CGPoint(x: 0, y: 100)),
-            element: target
-        )
-        brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
-            elements: [entry.heistId: entry],
-            hierarchy: [
-                .container(container, children: [
-                    .element(currentlyVisibleReuse, traversalIndex: 0)
-                ])
-            ],
-            containerNamesByPath: [TreePath([0]): containerName],
-            heistIdsByPath: [TreePath([0, 0]): entry.heistId],
-            elementRefs: [
-                entry.heistId: .init(object: nil, scrollView: scrollView)
-            ],
-            firstResponderHeistId: nil,
-            scrollableContainerViewsByPath: [
-                TreePath([0]): .init(view: scrollView)
-            ]
-        ))
-        brains.stash.nextVisibleRefreshScreenForTesting = InterfaceObservation.makeForTests([
-            .init(target, heistId: entry.heistId, object: retainedLiveObject()),
-        ])
-
-        let result = await brains.navigation.elementInflation.revealSemanticTarget(
-            entry, deadline: semanticRevealDeadline()
-        )
-
-        guard case .revealed = result else {
-            return XCTFail("Expected reused visible id to trigger semantic reveal, got \(result)")
-        }
-        XCTAssertEqual(scrollView.setContentOffsetAnimations, [false])
-        XCTAssertLessThan(scrollView.contentOffset.y, 100)
     }
 
     func testDirectSemanticRevealRejectsReusedIdReplacementAndRestoresOrigin() async throws {
@@ -780,424 +596,6 @@ final class TheBrainsScrollTests: XCTestCase {
             return XCTFail("Expected direct reused-ID evidence to fail closed, got \(result)")
         }
         XCTAssertEqual(scrollView.contentOffset, CGPoint(x: 0, y: 80))
-    }
-
-    func testSemanticRevealUsesNonAnimatedJumpForOffViewportElement() async throws {
-        let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
-        scrollView.contentSize = CGSize(width: 320, height: 1_600)
-        let visible = makeElement(label: "Visible")
-        let offscreen = makeElement(label: "Settings")
-        let contentActivationPoint = CGPoint(x: 0, y: 1_200)
-        let observedActivationPoint = try XCTUnwrap(InterfaceTree.ObservedScrollContentActivationPoint(contentActivationPoint))
-        installScreenWithOffViewport(
-            visible: InterfaceObservation.TestEntry(visible, heistId: "visible_element"),
-            offscreen: OffViewportScrollTarget(
-                offscreen,
-                heistId: "settings_button",
-                contentActivationPoint: contentActivationPoint,
-                scrollView: scrollView
-            ),
-            revealsTargetOnRefresh: true
-        )
-
-        let entry = try XCTUnwrap(
-            brains.stash.interfaceTree.findElement(heistId: "settings_button")
-        )
-        let result = await brains.navigation.elementInflation.revealSemanticTarget(
-            entry, deadline: semanticRevealDeadline()
-        )
-
-        guard case .revealed = result else {
-            return XCTFail("Expected semantic reveal to resolve, got \(result)")
-        }
-        XCTAssertEqual(scrollView.setContentOffsetAnimations, [false])
-        let expectedOffset = ElementInflation.semanticRevealTargetOffset(for: observedActivationPoint, in: scrollView)
-        XCTAssertEqual(scrollView.contentOffset.x, expectedOffset.x, accuracy: 0.01)
-        XCTAssertEqual(scrollView.contentOffset.y, expectedOffset.y, accuracy: 0.01)
-    }
-
-    func testNestedSemanticRevealTraversesOutermostFirstWithoutReusingCapturePaths() async {
-        let outerScrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
-        outerScrollView.contentSize = CGSize(width: 320, height: 1_600)
-        let innerScrollView = RecordingScrollView(frame: CGRect(x: 20, y: 820, width: 280, height: 200))
-        innerScrollView.contentSize = CGSize(width: 280, height: 900)
-        let decoyScrollView = RecordingScrollView(frame: innerScrollView.frame)
-        decoyScrollView.contentSize = innerScrollView.contentSize
-        let targetWindow = UIWindow(frame: UIScreen.main.bounds)
-        targetWindow.addSubview(outerScrollView)
-        outerScrollView.addSubview(innerScrollView)
-        let decoyWindow = UIWindow(frame: UIScreen.main.bounds)
-        decoyWindow.addSubview(decoyScrollView)
-
-        let wrapper = AccessibilityContainer(type: .none, frame: AccessibilityRect(UIScreen.main.bounds))
-        let outerContainer = makeScrollableContainer(
-            contentSize: outerScrollView.contentSize,
-            frame: outerScrollView.frame
-        )
-        let innerContainer = makeScrollableContainer(
-            contentSize: innerScrollView.contentSize,
-            frame: innerScrollView.frame
-        )
-        let decoyContainer = makeScrollableContainer(
-            contentSize: decoyScrollView.contentSize,
-            frame: decoyScrollView.frame
-        )
-        let target = installNestedSemanticReveal(
-            outerScrollView: outerScrollView,
-            refreshedHierarchy: [
-                .container(wrapper, children: [
-                    .container(decoyContainer, children: []),
-                ]),
-                .container(wrapper, children: [
-                    .container(outerContainer, children: [
-                        .container(innerContainer, children: []),
-                    ]),
-                ]),
-            ],
-            refreshedScrollViewsByPath: [
-                TreePath([0, 0]): decoyScrollView,
-                TreePath([1, 0]): outerScrollView,
-                TreePath([1, 0, 0]): innerScrollView,
-            ]
-        )
-        var scrollOrder: [ObjectIdentifier] = []
-        for scrollView in [outerScrollView, innerScrollView, decoyScrollView] {
-            scrollView.onSetContentOffset = { scrollOrder.append(ObjectIdentifier($0)) }
-        }
-
-        let result = await brains.navigation.elementInflation.revealSemanticTarget(
-            target, deadline: semanticRevealDeadline()
-        )
-
-        guard case .revealed = result else {
-            return XCTFail("Expected exact live containment to reveal the nested target, got \(result)")
-        }
-        XCTAssertEqual(
-            scrollOrder,
-            [ObjectIdentifier(outerScrollView), ObjectIdentifier(innerScrollView)]
-        )
-        XCTAssertGreaterThan(outerScrollView.contentOffset.y, 0)
-        XCTAssertTrue(outerScrollView.setContentOffsetAnimations.allSatisfy { !$0 })
-        XCTAssertEqual(innerScrollView.setContentOffsetAnimations, [false])
-        XCTAssertEqual(decoyScrollView.setContentOffsetAnimations, [])
-        XCTAssertTrue(innerScrollView.window === targetWindow)
-        XCTAssertTrue(decoyScrollView.window === decoyWindow)
-    }
-
-    func testNestedSemanticRevealRejectsSeparateWindowDecoyAtPriorCapturePath() async {
-        let outerScrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
-        outerScrollView.contentSize = CGSize(width: 320, height: 1_600)
-        let decoyScrollView = RecordingScrollView(frame: CGRect(x: 20, y: 820, width: 280, height: 200))
-        decoyScrollView.contentSize = CGSize(width: 280, height: 900)
-        let targetWindow = UIWindow(frame: UIScreen.main.bounds)
-        targetWindow.addSubview(outerScrollView)
-        let decoyWindow = UIWindow(frame: UIScreen.main.bounds)
-        decoyWindow.addSubview(decoyScrollView)
-
-        let wrapper = AccessibilityContainer(type: .none, frame: AccessibilityRect(UIScreen.main.bounds))
-        let outerContainer = makeScrollableContainer(
-            contentSize: outerScrollView.contentSize,
-            frame: outerScrollView.frame
-        )
-        let decoyContainer = makeScrollableContainer(
-            contentSize: decoyScrollView.contentSize,
-            frame: decoyScrollView.frame
-        )
-        let target = installNestedSemanticReveal(
-            outerScrollView: outerScrollView,
-            refreshedHierarchy: [
-                .container(wrapper, children: [
-                    .container(decoyContainer, children: []),
-                ]),
-                .container(wrapper, children: [
-                    .container(outerContainer, children: []),
-                ]),
-            ],
-            refreshedScrollViewsByPath: [
-                TreePath([0, 0]): decoyScrollView,
-                TreePath([1, 0]): outerScrollView,
-            ]
-        )
-        brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in nil }
-
-        let result = await brains.navigation.elementInflation.revealSemanticTarget(
-            target, deadline: semanticRevealDeadline()
-        )
-
-        guard case .failed(.noLiveScrollableAncestor) = result else {
-            return XCTFail("Expected the separate-window decoy to fail closed, got \(result)")
-        }
-        XCTAssertEqual(outerScrollView.contentOffset, .zero)
-        XCTAssertTrue(outerScrollView.setContentOffsetAnimations.allSatisfy { !$0 })
-        XCTAssertEqual(decoyScrollView.setContentOffsetAnimations, [])
-        XCTAssertTrue(outerScrollView.window === targetWindow)
-        XCTAssertTrue(decoyScrollView.window === decoyWindow)
-    }
-
-    func testNestedSemanticRevealRejectsUniqueStructurallyUnrelatedChildAndRestoresOrigins() async {
-        let outerScrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
-        outerScrollView.contentSize = CGSize(width: 320, height: 1_600)
-        outerScrollView.contentOffset = CGPoint(x: 0, y: 120)
-        let decoyScrollView = RecordingScrollView(frame: CGRect(x: 20, y: 820, width: 280, height: 200))
-        decoyScrollView.contentSize = CGSize(width: 280, height: 1_000)
-        decoyScrollView.contentOffset = CGPoint(x: 0, y: 40)
-        outerScrollView.addSubview(decoyScrollView)
-        outerScrollView.setContentOffsetAnimations.removeAll()
-        decoyScrollView.setContentOffsetAnimations.removeAll()
-
-        let outerContainer = makeScrollableContainer(
-            contentSize: outerScrollView.contentSize,
-            frame: outerScrollView.frame
-        )
-        let decoyContainer = makeScrollableContainer(
-            contentSize: decoyScrollView.contentSize,
-            frame: decoyScrollView.frame
-        )
-        let outerPath = TreePath([0])
-        let decoyPath = TreePath([0, 0])
-        let target = installNestedSemanticReveal(
-            outerScrollView: outerScrollView,
-            refreshedHierarchy: [
-                .container(outerContainer, children: [
-                    .container(decoyContainer, children: []),
-                ]),
-            ],
-            refreshedScrollViewsByPath: [
-                outerPath: outerScrollView,
-                decoyPath: decoyScrollView,
-            ],
-            refreshedContainerNamesByPath: [
-                outerPath: "semantic_outer_scroll",
-                decoyPath: "decoy_scroll",
-            ]
-        )
-        brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in nil }
-
-        let result = await brains.navigation.elementInflation.revealSemanticTarget(
-            target,
-            deadline: semanticRevealDeadline()
-        )
-
-        guard case .failed(.noLiveScrollableAncestor) = result else {
-            return XCTFail("Expected unrelated nested scroll view to fail closed, got \(result)")
-        }
-        XCTAssertEqual(outerScrollView.contentOffset, CGPoint(x: 0, y: 120))
-        XCTAssertEqual(decoyScrollView.contentOffset, CGPoint(x: 0, y: 40))
-        XCTAssertEqual(decoyScrollView.setContentOffsetAnimations, [])
-    }
-
-    func testNestedSemanticRevealCancellationAfterFirstOffsetRestoresAllOrigins() async {
-        let outerScrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
-        outerScrollView.contentSize = CGSize(width: 320, height: 1_600)
-        outerScrollView.contentOffset = CGPoint(x: 0, y: 120)
-        let innerScrollView = RecordingScrollView(frame: CGRect(x: 20, y: 820, width: 280, height: 200))
-        innerScrollView.contentSize = CGSize(width: 280, height: 900)
-        innerScrollView.contentOffset = CGPoint(x: 0, y: 40)
-        outerScrollView.addSubview(innerScrollView)
-        outerScrollView.setContentOffsetAnimations.removeAll()
-        innerScrollView.setContentOffsetAnimations.removeAll()
-        let outerContainer = makeScrollableContainer(
-            contentSize: outerScrollView.contentSize,
-            frame: outerScrollView.frame
-        )
-        let innerContainer = makeScrollableContainer(
-            contentSize: innerScrollView.contentSize,
-            frame: innerScrollView.frame
-        )
-        let target = installNestedSemanticReveal(
-            outerScrollView: outerScrollView,
-            refreshedHierarchy: [
-                .container(outerContainer, children: [
-                    .container(innerContainer, children: []),
-                ]),
-            ],
-            refreshedScrollViewsByPath: [
-                TreePath([0]): outerScrollView,
-                TreePath([0, 0]): innerScrollView,
-            ]
-        )
-        var revealTask: Task<ElementInflation.SemanticRevealResult, Never>?
-        outerScrollView.onSetContentOffset = { _ in revealTask?.cancel() }
-        revealTask = Task { @MainActor in
-            await self.brains.navigation.elementInflation.revealSemanticTarget(
-                target,
-                deadline: self.semanticRevealDeadline()
-            )
-        }
-        guard let revealTask else {
-            return XCTFail("Expected reveal task")
-        }
-
-        let result = await revealTask.value
-
-        guard case .cancelled = result else {
-            return XCTFail("Expected cancellation after the outer movement, got \(result)")
-        }
-        XCTAssertEqual(outerScrollView.contentOffset, CGPoint(x: 0, y: 120))
-        XCTAssertEqual(innerScrollView.contentOffset, CGPoint(x: 0, y: 40))
-        XCTAssertEqual(innerScrollView.setContentOffsetAnimations, [])
-    }
-
-    func testSemanticMismatchAfterScanRestoresScanOrigin() async throws {
-        let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
-        scrollView.contentSize = CGSize(width: 320, height: 1_600)
-        scrollView.contentOffset = CGPoint(x: 0, y: 80)
-        let targetId: HeistId = "scan_reused_target"
-        installScreenWithOffViewport(
-            visible: .init(makeElement(label: "Visible"), heistId: "visible_element"),
-            offscreen: .init(
-                makeElement(label: "Original Target", traits: .button),
-                heistId: targetId,
-                contentActivationPoint: CGPoint(x: 0, y: 1_200),
-                scrollView: scrollView
-            )
-        )
-        scrollView.setContentOffsetAnimations.removeAll()
-        let treeElement = try XCTUnwrap(brains.stash.interfaceElement(heistId: targetId))
-        brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in
-            scrollView.setContentOffset(CGPoint(x: 0, y: 700), animated: false)
-            let replacement = InterfaceObservation.makeForTests([
-                .init(
-                    self.makeElement(label: "Replacement Target", traits: .button),
-                    heistId: targetId,
-                    object: self.retainedLiveObject()
-                ),
-            ])
-            self.brains.stash.recordParsedObservedEvidence(replacement)
-            return Navigation.ExploredScreen(
-                screen: replacement,
-                manifest: .init(),
-                generationDisposition: .preservesGeneration,
-                discoveryCommitPolicy: .mergeIntoInterface
-            )
-        }
-
-        let result = await brains.navigation.elementInflation.revealSemanticTarget(
-            treeElement,
-            deadline: semanticRevealDeadline()
-        )
-
-        guard case .failed(.scanDidNotRevealTarget) = result else {
-            return XCTFail("Expected mismatched scanned element to fail closed, got \(result)")
-        }
-        XCTAssertEqual(scrollView.contentOffset, CGPoint(x: 0, y: 80))
-    }
-
-    func testNestedSemanticRevealRejectsAmbiguousCurrentLiveAlias() async {
-        let outerScrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
-        outerScrollView.contentSize = CGSize(width: 320, height: 1_600)
-        let outerContainer = makeScrollableContainer(
-            contentSize: outerScrollView.contentSize,
-            frame: outerScrollView.frame
-        )
-        let target = installNestedSemanticReveal(
-            outerScrollView: outerScrollView,
-            includesCurrentAlias: true,
-            refreshedHierarchy: [
-                .container(outerContainer, children: []),
-            ],
-            refreshedScrollViewsByPath: [
-                TreePath([0]): outerScrollView,
-            ]
-        )
-        brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in nil }
-
-        let result = await brains.navigation.elementInflation.revealSemanticTarget(
-            target, deadline: semanticRevealDeadline()
-        )
-
-        guard case .failed(.noLiveScrollableAncestor) = result else {
-            return XCTFail("Expected duplicate current live identity to fail closed, got \(result)")
-        }
-        XCTAssertEqual(outerScrollView.contentOffset, .zero)
-        XCTAssertEqual(outerScrollView.setContentOffsetAnimations, [])
-    }
-
-    func testNestedSemanticRevealRejectsMultipleDirectChildren() async {
-        let outerScrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
-        outerScrollView.contentSize = CGSize(width: 320, height: 1_600)
-        let firstChild = RecordingScrollView(frame: CGRect(x: 20, y: 820, width: 280, height: 200))
-        firstChild.contentSize = CGSize(width: 280, height: 900)
-        let secondChild = RecordingScrollView(frame: CGRect(x: 20, y: 1_040, width: 280, height: 200))
-        secondChild.contentSize = firstChild.contentSize
-        outerScrollView.addSubview(firstChild)
-        outerScrollView.addSubview(secondChild)
-
-        let outerContainer = makeScrollableContainer(
-            contentSize: outerScrollView.contentSize,
-            frame: outerScrollView.frame
-        )
-        let firstContainer = makeScrollableContainer(
-            contentSize: firstChild.contentSize,
-            frame: firstChild.frame
-        )
-        let secondContainer = makeScrollableContainer(
-            contentSize: secondChild.contentSize,
-            frame: secondChild.frame
-        )
-        let target = installNestedSemanticReveal(
-            outerScrollView: outerScrollView,
-            refreshedHierarchy: [
-                .container(outerContainer, children: [
-                    .container(firstContainer, children: []),
-                    .container(secondContainer, children: []),
-                ]),
-            ],
-            refreshedScrollViewsByPath: [
-                TreePath([0]): outerScrollView,
-                TreePath([0, 0]): firstChild,
-                TreePath([0, 1]): secondChild,
-            ]
-        )
-        brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in nil }
-
-        let result = await brains.navigation.elementInflation.revealSemanticTarget(
-            target, deadline: semanticRevealDeadline()
-        )
-
-        guard case .failed(.noLiveScrollableAncestor) = result else {
-            return XCTFail("Expected ambiguous direct children to fail closed, got \(result)")
-        }
-        XCTAssertEqual(outerScrollView.contentOffset, .zero)
-        XCTAssertFalse(outerScrollView.setContentOffsetAnimations.isEmpty)
-        XCTAssertTrue(outerScrollView.setContentOffsetAnimations.allSatisfy { !$0 })
-        XCTAssertEqual(firstChild.setContentOffsetAnimations, [])
-        XCTAssertEqual(secondChild.setContentOffsetAnimations, [])
-    }
-
-    func testNestedSemanticRevealRejectsChildWhenParentIsAbsentFromCurrentCapture() async {
-        let outerScrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
-        outerScrollView.contentSize = CGSize(width: 320, height: 1_600)
-        let childScrollView = RecordingScrollView(frame: CGRect(x: 20, y: 820, width: 280, height: 200))
-        childScrollView.contentSize = CGSize(width: 280, height: 900)
-        outerScrollView.addSubview(childScrollView)
-
-        let childContainer = makeScrollableContainer(
-            contentSize: childScrollView.contentSize,
-            frame: childScrollView.frame
-        )
-        let target = installNestedSemanticReveal(
-            outerScrollView: outerScrollView,
-            refreshedHierarchy: [
-                .container(childContainer, children: []),
-            ],
-            refreshedScrollViewsByPath: [
-                TreePath([0]): childScrollView,
-            ]
-        )
-        brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in nil }
-
-        let result = await brains.navigation.elementInflation.revealSemanticTarget(
-            target, deadline: semanticRevealDeadline()
-        )
-
-        guard case .failed(.noLiveScrollableAncestor) = result else {
-            return XCTFail("Expected stale parent evidence to fail closed, got \(result)")
-        }
-        XCTAssertEqual(outerScrollView.contentOffset, .zero)
-        XCTAssertFalse(outerScrollView.setContentOffsetAnimations.isEmpty)
-        XCTAssertTrue(outerScrollView.setContentOffsetAnimations.allSatisfy { !$0 })
-        XCTAssertEqual(childScrollView.setContentOffsetAnimations, [])
     }
 
     func testSemanticRevealFailsWithoutProvenLiveScrollAncestor() async throws {
@@ -1352,7 +750,6 @@ final class TheBrainsScrollTests: XCTestCase {
             failure.message
         )
         XCTAssertTrue(failure.message.contains("element inflation failed [noRevealPath]"))
-        XCTAssertTrue(failure.message.contains("has no scroll membership"))
     }
 
     func testInflationRecordsDiscoveredOriginWhenExplorationFindsTarget() async throws {
@@ -1377,11 +774,12 @@ final class TheBrainsScrollTests: XCTestCase {
         brains.stash.nextVisibleRefreshScreenForTesting = discoveredScreen
         brains.navigation.elementInflation.exploration.discoverTarget = { _ in
             self.brains.stash.recordParsedObservedEvidence(discoveredScreen)
+            let event = self.brains.stash.semanticObservationStream
+                .commitDiscoveryObservationForTesting(discoveredScreen)
             return Navigation.ExploredScreen(
-                screen: discoveredScreen,
+                event: event,
                 manifest: .init(),
-                generationDisposition: .preservesGeneration,
-                discoveryCommitPolicy: .replaceInterface
+                didMoveViewport: true
             )
         }
         defer {
@@ -1399,7 +797,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertTrue(inflatedTarget.liveTarget.object === discoveredObject)
         XCTAssertEqual(
             inflatedTarget.resolution,
-            ActionSubjectResolution(origin: .discovered)
+            ActionSubjectResolution(origin: .discovered, adjustments: [.semanticReveal])
         )
     }
 
@@ -1599,7 +997,6 @@ final class TheBrainsScrollTests: XCTestCase {
         }
         XCTAssertEqual(failure.failedStep, ElementInflation.ElementInflationFailureStep.noRevealPath)
         XCTAssertTrue(failure.message.contains("element inflation failed [noRevealPath]"))
-        XCTAssertTrue(failure.message.contains("has no scroll membership"))
         XCTAssertTrue(failure.message.contains("before the action deadline"))
         XCTAssertTrue(failure.message.contains("Coke"))
     }
@@ -1810,7 +1207,6 @@ final class TheBrainsScrollTests: XCTestCase {
             scrollView: scrollView
         )
         brains.stash.installScreenForTesting(initialScreen)
-        brains.stash.nextVisibleRefreshScreenForTesting = initialScreen
         guard let committed = brains.stash.interfaceElement(heistId: targetId) else {
             return XCTFail("Expected placement target in committed semantic state")
         }
@@ -1827,25 +1223,13 @@ final class TheBrainsScrollTests: XCTestCase {
         }
         XCTAssertTrue(brains.stash.liveScrollView(for: committed) === scrollView)
 
-        let target = try resolvedTarget(AccessibilityTarget.label("Placed Target").and(.traits([.button])))
-        let resultBox = InflationResultBox()
-        let inflation = Task { @MainActor in
-            resultBox.value = await self.brains.navigation.elementInflation.inflate(
-                for: target,
-                method: .activate
-            )
-        }
-        await waitForSettledSemanticWaiter()
-
         let placedFrame = CGRect(
             x: ElementInflation.interactionComfortZone.midX - 100,
             y: ElementInflation.interactionComfortZone.midY - 22,
             width: 200,
             height: 44
         )
-        object.accessibilityFrame = placedFrame
         let placedActivationPoint = CGPoint(x: placedFrame.midX, y: placedFrame.midY)
-        object.accessibilityActivationPoint = placedActivationPoint
         let placedElement = AccessibilityElement.make(
             label: "Placed Target",
             traits: .button,
@@ -1858,12 +1242,24 @@ final class TheBrainsScrollTests: XCTestCase {
             object: object,
             scrollView: scrollView
         )
-        brains.stash.nextVisibleRefreshScreenForTesting = placedScreen
-        brains.stash.semanticObservationStream.commitVisibleObservationForTesting(placedScreen)
-        await inflation.value
+        let originalMoveViewport = brains.navigation.elementInflation.exploration.moveViewport
+        brains.navigation.elementInflation.exploration.moveViewport = { intent in
+            object.accessibilityFrame = placedFrame
+            object.accessibilityActivationPoint = placedActivationPoint
+            self.brains.stash.nextVisibleRefreshScreenForTesting = placedScreen
+            return await originalMoveViewport(intent)
+        }
+        defer {
+            brains.navigation.elementInflation.exploration.moveViewport = originalMoveViewport
+        }
 
-        guard case .inflated(let inflatedTarget)? = resultBox.value else {
-            return XCTFail("Expected activation-point placement inflation, got \(String(describing: resultBox.value))")
+        let result = await brains.navigation.elementInflation.inflate(
+            for: try resolvedTarget(AccessibilityTarget.label("Placed Target").and(.traits([.button]))),
+            method: .activate
+        )
+
+        guard case .inflated(let inflatedTarget) = result else {
+            return XCTFail("Expected activation-point placement inflation, got \(result)")
         }
         XCTAssertEqual(
             inflatedTarget.resolution,
@@ -2159,8 +1555,8 @@ final class TheBrainsScrollTests: XCTestCase {
             try resolvedTarget(.label("Controls Demo").and(.traits([.button])))
         )
 
-        XCTAssertNotNil(discovered?.screen.findElement(heistId: "current_controls_header"))
-        XCTAssertNil(discovered?.screen.findElement(heistId: "stale_controls_button"))
+        XCTAssertNotNil(discovered?.event.observation.screen.findElement(heistId: "current_controls_header"))
+        XCTAssertNil(discovered?.event.observation.screen.findElement(heistId: "stale_controls_button"))
     }
 
     func testInterfaceDiscoveryDoesNotGraftStaleRowsFromReusedScrollContainerName() async throws {
@@ -2228,10 +1624,6 @@ final class TheBrainsScrollTests: XCTestCase {
         ) else {
             return XCTFail("Expected word-list exploration to settle")
         }
-        guard brains.stash.semanticObservationStream.commitExploredDiscoveryObservation(exploration) != nil else {
-            return XCTFail("Expected current-viewport exploration to produce committable discovery evidence")
-        }
-
         let labels = brains.stash.discoveryInterface().projectedElements.compactMap(\.label)
         XCTAssertGreaterThan(exploration.manifest.scrollCount, 0, "Expected discovery to scroll the word list")
         XCTAssertTrue(labels.contains("Words"), "Expected visible word in discovered interface: \(labels)")
@@ -2240,6 +1632,125 @@ final class TheBrainsScrollTests: XCTestCase {
             labels.contains("Auto-Settle Fixtures"),
             "Stale root rows must not be grafted into the current scroll container: \(labels)"
         )
+    }
+
+    func testDiscoveryCrossesBlankViewportBeforeUnknownTarget() async throws {
+        let rootView = UIView()
+        rootView.backgroundColor = .white
+        let scrollView = AccessibilityRevealingScrollView(
+            frame: CGRect(x: 0, y: 0, width: 320, height: 600)
+        )
+        scrollView.contentSize = CGSize(width: 320, height: 2_200)
+        scrollView.revealThreshold = 1_000
+
+        let visible = UILabel(frame: CGRect(x: 40, y: 80, width: 240, height: 44))
+        visible.text = "Blank Page Anchor"
+        visible.accessibilityLabel = "Blank Page Anchor"
+        visible.isAccessibilityElement = true
+
+        let target = UIButton(type: .system)
+        target.frame = CGRect(x: 40, y: 1_500, width: 240, height: 44)
+        target.setTitle("Beyond Blank Page", for: .normal)
+        target.accessibilityLabel = "Beyond Blank Page"
+        target.accessibilityTraits = .button
+        target.isAccessibilityElement = true
+
+        scrollView.revealedElements = [target]
+        scrollView.updateAccessibilityVisibility()
+        scrollView.addSubview(visible)
+        scrollView.addSubview(target)
+        rootView.addSubview(scrollView)
+
+        let window = try installModalWindow(rootView: rootView)
+        defer {
+            window.rootViewController?.view.accessibilityViewIsModal = false
+            window.isHidden = true
+        }
+        await brains.tripwire.yieldFrames(3)
+        let initialVisualOrigin = Navigation.visualOrigin(in: scrollView)
+        guard let visibleScreen = brains.stash.refreshLiveCapture() else {
+            throw XCTSkip("No live hierarchy available for blank-page discovery")
+        }
+
+        guard let exploration = await brains.navigation.exploreScreen(
+            target: try resolvedTarget(.label("Beyond Blank Page")),
+            baseline: .currentViewport(brains.stash.visibleExplorationBaseline(from: visibleScreen)),
+            exitPosition: .origin,
+            maxScrollsPerContainer: 4,
+            maxScrollsPerDiscovery: 4
+        ) else {
+            return XCTFail("Expected discovery to cross the blank viewport")
+        }
+
+        XCTAssertGreaterThanOrEqual(exploration.manifest.scrollCount, 2)
+        XCTAssertNotNil(brains.stash.interfaceTree.orderedElements.first {
+            $0.element.label == "Beyond Blank Page"
+        })
+        XCTAssertEqual(
+            Navigation.visualOrigin(in: scrollView).y,
+            initialVisualOrigin.y,
+            accuracy: 0.01
+        )
+    }
+
+    func testWaitDiscoveryRestoresViewportAfterOffscreenTargetMatch() async throws {
+        let rootView = UIView()
+        rootView.backgroundColor = .white
+        let scrollView = AccessibilityRevealingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 600))
+        scrollView.contentSize = CGSize(width: 320, height: 1_200)
+        scrollView.revealThreshold = 300
+
+        let visible = UILabel(frame: CGRect(x: 40, y: 80, width: 240, height: 44))
+        visible.text = "Wait Discovery Anchor"
+        visible.accessibilityLabel = "Wait Discovery Anchor"
+        visible.accessibilityTraits = .staticText
+        visible.isAccessibilityElement = true
+
+        let target = UIButton(type: .system)
+        target.frame = CGRect(x: 40, y: 760, width: 240, height: 44)
+        target.setTitle("Wait Discovery Target", for: .normal)
+        target.accessibilityLabel = "Wait Discovery Target"
+        target.accessibilityTraits = .button
+        target.isAccessibilityElement = true
+
+        scrollView.revealedElements = [target]
+        scrollView.updateAccessibilityVisibility()
+        scrollView.addSubview(visible)
+        scrollView.addSubview(target)
+        rootView.addSubview(scrollView)
+
+        let window = try installModalWindow(rootView: rootView)
+        defer {
+            window.rootViewController?.view.accessibilityViewIsModal = false
+            window.isHidden = true
+        }
+        await brains.tripwire.yieldFrames(3)
+        let initialVisualOrigin = Navigation.visualOrigin(in: scrollView)
+
+        guard let visibleScreen = brains.stash.refreshLiveCapture() else {
+            throw XCTSkip("No live hierarchy available for wait discovery restoration")
+        }
+        guard let exploration = await brains.navigation.exploreScreen(
+            target: try resolvedTarget(.label("Wait Discovery Target")),
+            baseline: .currentViewport(brains.stash.visibleExplorationBaseline(from: visibleScreen)),
+            exitPosition: .origin,
+            maxScrollsPerContainer: 3,
+            maxScrollsPerDiscovery: 3
+        ) else {
+            return XCTFail("Expected wait discovery to find the offscreen target")
+        }
+
+        XCTAssertNotNil(exploration.event.observation.screen.orderedElements.first {
+            $0.element.label == "Wait Discovery Target"
+        })
+        XCTAssertEqual(
+            Navigation.visualOrigin(in: scrollView).y,
+            initialVisualOrigin.y,
+            accuracy: 0.01
+        )
+        XCTAssertFalse(exploration.event.observation.screen.liveCapture.hierarchy.sortedElements.contains {
+            $0.label == "Wait Discovery Target"
+        })
     }
 
     func testScrollToVisibleDiscoversTargetAboveCurrentViewport() async throws {
@@ -2375,6 +1886,7 @@ final class TheBrainsScrollTests: XCTestCase {
         }
         XCTAssertEqual(discoveryAttempts, 0)
         XCTAssertEqual(staleScrollView.setContentOffsetAnimations, [false])
+        XCTAssertEqual(staleScrollView.contentOffset.y, 1_000, accuracy: 0.01)
         XCTAssertEqual(inflatedTarget.treeElement.heistId, recoveredEntry.heistId)
         XCTAssertEqual(inflatedTarget.liveTarget.activationPoint.x, recoveredFrame.midX, accuracy: 0.01)
         XCTAssertEqual(inflatedTarget.liveTarget.activationPoint.y, recoveredFrame.midY, accuracy: 0.01)
@@ -2537,9 +2049,11 @@ final class TheBrainsScrollTests: XCTestCase {
             elements: [:],
             hierarchy: [.container(container, children: [])],
             containerNamesByPath: [TreePath([0]): "main_scroll"],
+            containerRefsByPath: [TreePath([0]): .init(object: scrollView)],
             firstResponderHeistId: nil,
             scrollableContainerViewsByPath: [TreePath([0]): .init(view: scrollView)]
         ))
+        let baselineSequence = brains.stash.latestSettledSemanticObservationEvent?.sequence
 
         let result = await brains.navigation.executeScroll(
             try resolvedScrollTarget(ScrollTarget())
@@ -2547,6 +2061,9 @@ final class TheBrainsScrollTests: XCTestCase {
 
         XCTAssertTrue(result.success, "Expected default scroll to pick the only visible container: \(String(describing: result.message))")
         XCTAssertGreaterThan(scrollView.contentOffset.y, 0)
+        let committedMovement = try XCTUnwrap(brains.stash.latestSettledSemanticObservationEvent)
+        XCTAssertEqual(committedMovement.scope, .discovery)
+        XCTAssertNotEqual(committedMovement.sequence, baselineSequence)
     }
 
     func testScrollToEdgeWithoutElementDefaultsTop() async throws {
@@ -2558,6 +2075,7 @@ final class TheBrainsScrollTests: XCTestCase {
             elements: [:],
             hierarchy: [.container(container, children: [])],
             containerNamesByPath: [TreePath([0]): "main_scroll"],
+            containerRefsByPath: [TreePath([0]): .init(object: scrollView)],
             firstResponderHeistId: nil,
             scrollableContainerViewsByPath: [TreePath([0]): .init(view: scrollView)]
         ))
@@ -2578,6 +2096,7 @@ final class TheBrainsScrollTests: XCTestCase {
             elements: [:],
             hierarchy: [.container(container, children: [])],
             containerNamesByPath: [TreePath([0]): "main_scroll"],
+            containerRefsByPath: [TreePath([0]): .init(object: scrollView)],
             firstResponderHeistId: nil,
             scrollableContainerViewsByPath: [TreePath([0]): .init(view: scrollView)]
         ))
@@ -2606,6 +2125,10 @@ final class TheBrainsScrollTests: XCTestCase {
             containerNamesByPath: [
                 TreePath([0]): "first_scroll",
                 TreePath([1]): "second_scroll",
+            ],
+            containerRefsByPath: [
+                TreePath([0]): .init(object: firstScrollView),
+                TreePath([1]): .init(object: secondScrollView),
             ],
             firstResponderHeistId: nil,
             scrollableContainerViewsByPath: [
@@ -2643,6 +2166,10 @@ final class TheBrainsScrollTests: XCTestCase {
             containerNamesByPath: [
                 TreePath([0]): "first_scroll",
                 TreePath([1]): "second_scroll",
+            ],
+            containerRefsByPath: [
+                TreePath([0]): .init(object: firstScrollView),
+                TreePath([1]): .init(object: secondScrollView),
             ],
             firstResponderHeistId: nil,
             scrollableContainerViewsByPath: [
@@ -2684,6 +2211,10 @@ final class TheBrainsScrollTests: XCTestCase {
                 firstPath: "first_repeated_scroll",
                 secondPath: "second_repeated_scroll",
             ],
+            containerRefsByPath: [
+                firstPath: .init(object: firstScrollView),
+                secondPath: .init(object: secondScrollView),
+            ],
             firstResponderHeistId: nil,
             scrollableContainerViewsByPath: [
                 firstPath: .init(view: firstScrollView),
@@ -2715,6 +2246,10 @@ final class TheBrainsScrollTests: XCTestCase {
             containerNamesByPath: [
                 TreePath([0]): "first_scroll",
                 TreePath([1]): "second_scroll",
+            ],
+            containerRefsByPath: [
+                TreePath([0]): .init(object: retainedLiveObject()),
+                TreePath([1]): .init(object: retainedLiveObject()),
             ],
             firstResponderHeistId: nil,
         ))
@@ -2867,8 +2402,8 @@ final class TheBrainsScrollTests: XCTestCase {
         guard case .failed(let failure) = result else {
             return XCTFail("Expected uncommitted live identities to fail closed, got \(result)")
         }
-        XCTAssertEqual(failure.failedStep, .timedOut)
-        XCTAssertEqual(failure.failureKind, .timeout)
+        XCTAssertEqual(failure.failedStep, .noRevealPath)
+        XCTAssertEqual(failure.failureKind, .actionFailed)
         XCTAssertFalse(failure.message.contains("[ambiguous]"))
     }
 
@@ -2942,138 +2477,6 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertGreaterThan(scrollView.contentOffset.y, 0)
     }
 
-    // MARK: - SettleSwipeLoopState (Pure Decision Logic)
-
-    func testSettleLoopSameDirectionExitsAfterOneStableFrame() {
-        var state = Navigation.SettleSwipeLoopState(
-            profile: .sameDirection,
-            previousVisibleIds: ["a"]
-        )
-        let step1 = state.advance(
-            visibleIds: ["b"],
-            newHeistIds: []
-        )
-        XCTAssertEqual(step1, .continue, "Viewport change resets stable counter")
-        XCTAssertTrue(state.moved, "Visible-id set differs, motion detected")
-
-        let step2 = state.advance(
-            visibleIds: ["b"],
-            newHeistIds: []
-        )
-        XCTAssertEqual(step2, .done, "Same-direction profile exits once stable visible count hits 1")
-        XCTAssertTrue(state.moved)
-    }
-
-    func testSettleLoopDirectionChangeHonorsMinFrames() {
-        var state = Navigation.SettleSwipeLoopState(
-            profile: .directionChange,
-            previousVisibleIds: ["a"]
-        )
-        for frameIndex in 0..<5 {
-            let step = state.advance(
-                visibleIds: ["a"],
-                newHeistIds: []
-            )
-            XCTAssertEqual(step, .continue, "Frame \(frameIndex + 1) must not exit before minFrames=6")
-        }
-        let finalStep = state.advance(
-            visibleIds: ["a"],
-            newHeistIds: []
-        )
-        XCTAssertEqual(finalStep, .done, "Direction-change profile exits at frame 6")
-        XCTAssertEqual(state.frame, 6)
-    }
-
-    func testSettleLoopExitsAtMaxFramesWhenConditionsNeverSettle() {
-        var state = Navigation.SettleSwipeLoopState(
-            profile: .directionChange,
-            previousVisibleIds: ["a"]
-        )
-        for frameIndex in 0..<23 {
-            let heistId = HeistId(rawValue: "id-\(frameIndex)")
-            let step = state.advance(
-                visibleIds: [heistId],
-                newHeistIds: [heistId]
-            )
-            XCTAssertEqual(step, .continue, "Frame \(frameIndex + 1) churns, should continue")
-        }
-        let finalStep = state.advance(
-            visibleIds: [HeistId(rawValue: "id-final")],
-            newHeistIds: [HeistId(rawValue: "id-final")]
-        )
-        XCTAssertEqual(finalStep, .done, "Must exit at maxFrames=24 even if never settles")
-        XCTAssertEqual(state.frame, 24)
-    }
-
-    func testSettleLoopMovedLatchesAndNeverClears() {
-        var state = Navigation.SettleSwipeLoopState(
-            profile: .directionChange,
-            previousVisibleIds: ["a"]
-        )
-        XCTAssertFalse(state.moved)
-
-        _ = state.advance(
-            visibleIds: ["b"],
-            newHeistIds: []
-        )
-        XCTAssertTrue(state.moved, "Visible-id changes flag motion")
-
-        _ = state.advance(
-            visibleIds: ["a"],
-            newHeistIds: []
-        )
-        XCTAssertTrue(state.moved, "moved only latches true, never clears back to false")
-    }
-
-    func testSettleLoopUsesViewportDiffAsMotionSignal() {
-        var state = Navigation.SettleSwipeLoopState(
-            profile: .directionChange,
-            previousVisibleIds: ["a"]
-        )
-        _ = state.advance(
-            visibleIds: ["b"],
-            newHeistIds: []
-        )
-        XCTAssertTrue(state.moved, "Viewport set difference signals motion")
-    }
-
-    func testSwipeTargetKeyEquatesSameCoarseGeometry() {
-        let frame = CGRect(x: 10, y: 20, width: 300, height: 400)
-        let contentSize = CGSize(width: 300, height: 1_200)
-
-        let lhs = brains.navigation.swipeTargetKey(frame: frame, contentSize: contentSize)
-        let rhs = brains.navigation.swipeTargetKey(frame: frame, contentSize: contentSize)
-
-        XCTAssertEqual(lhs, rhs)
-    }
-
-    func testSwipeTargetKeyDistinguishesDifferentCoarseGeometry() {
-        let frame = CGRect(x: 10, y: 20, width: 300, height: 400)
-        let contentSize = CGSize(width: 300, height: 1_200)
-
-        let lhs = brains.navigation.swipeTargetKey(frame: frame, contentSize: contentSize)
-        let rhs = brains.navigation.swipeTargetKey(
-            frame: frame.offsetBy(dx: 0, dy: 1),
-            contentSize: contentSize
-        )
-
-        XCTAssertNotEqual(lhs, rhs)
-    }
-
-    func testSwipeDirectionCacheUsesEquivalentTypedKeyForDirectionChangeLookup() {
-        let frame = CGRect(x: 10, y: 20, width: 300, height: 400)
-        let contentSize = CGSize(width: 300, height: 1_200)
-        let originalKey = brains.navigation.swipeTargetKey(frame: frame, contentSize: contentSize)
-        let lookupKey = brains.navigation.swipeTargetKey(frame: frame, contentSize: contentSize)
-
-        brains.navigation.lastSwipeDirectionByTarget[originalKey] = .down
-
-        let changesToUp = brains.navigation.lastSwipeDirectionByTarget[lookupKey].map { $0 != .up } ?? false
-        let changesToDown = brains.navigation.lastSwipeDirectionByTarget[lookupKey].map { $0 != .down } ?? false
-        XCTAssertTrue(changesToUp)
-        XCTAssertFalse(changesToDown)
-    }
-
     // MARK: - safeSwipeFrame
 
     func testScrollableTargetUsesAccessibilityContainerFrameForSemanticOnlySwipeFallback() throws {
@@ -3087,6 +2490,7 @@ final class TheBrainsScrollTests: XCTestCase {
         brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(container, children: [])],
+            containerRefsByPath: [path: .init(object: retainedLiveObject())],
             firstResponderHeistId: nil
         ))
 
@@ -3096,7 +2500,7 @@ final class TheBrainsScrollTests: XCTestCase {
             contentSize: contentSize
         ))
 
-        guard case .swipeable(let frame, let resolvedContentSize) = target else {
+        guard case .swipeable(_, let frame, let resolvedContentSize) = target else {
             XCTFail("Expected semantic-only scroll container to use swipeable accessibility geometry")
             return
         }
@@ -3114,6 +2518,7 @@ final class TheBrainsScrollTests: XCTestCase {
             elements: [:],
             hierarchy: [.container(container, children: [])],
             containerNamesByPath: [path: "main_scroll"],
+            containerRefsByPath: [path: .init(object: scrollView)],
             firstResponderHeistId: nil,
             scrollableContainerViewsByPath: [path: .init(view: scrollView)]
         ))
@@ -3124,11 +2529,87 @@ final class TheBrainsScrollTests: XCTestCase {
             contentSize: contentSize
         ))
 
-        guard case .uiScrollView(let resolvedScrollView) = target else {
+        guard case .uiScrollView(_, _, let resolvedScrollView) = target else {
             XCTFail("Expected path-keyed UIScrollView target, got \(target)")
             return
         }
         XCTAssertTrue(resolvedScrollView === scrollView)
+    }
+
+    func testPageScrollRejectsContainerFromPreviousCapture() async throws {
+        let path = TreePath([0])
+        let oldScrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        oldScrollView.contentSize = CGSize(width: 320, height: 1_600)
+        let container = makeScrollableContainer(contentSize: oldScrollView.contentSize, frame: oldScrollView.frame)
+        let contentSize = try XCTUnwrap(container.scrollableContentSize)
+        brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
+            elements: [:],
+            hierarchy: [.container(container, children: [])],
+            containerRefsByPath: [path: .init(object: oldScrollView)],
+            firstResponderHeistId: nil,
+            scrollableContainerViewsByPath: [path: .init(view: oldScrollView)]
+        ))
+        let staleTarget = try XCTUnwrap(brains.navigation.scrollableTarget(
+            for: container,
+            path: path,
+            contentSize: contentSize
+        ))
+
+        let replacementScrollView = UIScrollView(frame: oldScrollView.frame)
+        replacementScrollView.contentSize = oldScrollView.contentSize
+        brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
+            elements: [:],
+            hierarchy: [.container(container, children: [])],
+            containerRefsByPath: [path: .init(object: replacementScrollView)],
+            firstResponderHeistId: nil,
+            scrollableContainerViewsByPath: [path: .init(view: replacementScrollView)]
+        ))
+
+        let proof = await brains.navigation.scrollOnePageAndSettle(
+            staleTarget,
+            direction: .down,
+            animated: false
+        )
+
+        XCTAssertEqual(proof.result, .unavailable)
+        XCTAssertEqual(oldScrollView.contentOffset, .zero)
+        XCTAssertEqual(replacementScrollView.contentOffset, .zero)
+    }
+
+    func testEdgeScrollRejectsContainerFromPreviousCapture() async throws {
+        let path = TreePath([0])
+        let oldScrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        oldScrollView.contentSize = CGSize(width: 320, height: 1_600)
+        let container = makeScrollableContainer(contentSize: oldScrollView.contentSize, frame: oldScrollView.frame)
+        let contentSize = try XCTUnwrap(container.scrollableContentSize)
+        brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
+            elements: [:],
+            hierarchy: [.container(container, children: [])],
+            containerRefsByPath: [path: .init(object: oldScrollView)],
+            firstResponderHeistId: nil,
+            scrollableContainerViewsByPath: [path: .init(view: oldScrollView)]
+        ))
+        let staleTarget = try XCTUnwrap(brains.navigation.scrollableTarget(
+            for: container,
+            path: path,
+            contentSize: contentSize
+        ))
+
+        let replacementScrollView = UIScrollView(frame: oldScrollView.frame)
+        replacementScrollView.contentSize = oldScrollView.contentSize
+        brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
+            elements: [:],
+            hierarchy: [.container(container, children: [])],
+            containerRefsByPath: [path: .init(object: replacementScrollView)],
+            firstResponderHeistId: nil,
+            scrollableContainerViewsByPath: [path: .init(view: replacementScrollView)]
+        ))
+
+        let proof = await brains.navigation.scrollToEdgeAndSettle(staleTarget, edge: .bottom)
+
+        XCTAssertEqual(proof.result, .unavailable)
+        XCTAssertEqual(oldScrollView.contentOffset, .zero)
+        XCTAssertEqual(replacementScrollView.contentOffset, .zero)
     }
 
     func testSafeSwipeFrameFullyInSafeBoundsIsUnchanged() throws {
@@ -3184,117 +2665,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
     }
 
-    // MARK: - Clear Cache
-
-    func testClearCacheClearsLastSwipeDirectionCache() {
-        let key = brains.navigation.swipeTargetKey(
-            frame: CGRect(x: 10, y: 20, width: 300, height: 400),
-            contentSize: CGSize(width: 300, height: 1_200)
-        )
-        brains.navigation.lastSwipeDirectionByTarget[key] = .down
-        XCTAssertFalse(brains.navigation.lastSwipeDirectionByTarget.isEmpty)
-        brains.clearCache()
-        XCTAssertTrue(
-            brains.navigation.lastSwipeDirectionByTarget.isEmpty,
-            "clearCache must drop the swipe direction cache so a new session starts fresh"
-        )
-    }
-
     // MARK: - Helpers
-
-    private func installNestedSemanticReveal(
-        outerScrollView: UIScrollView,
-        includesCurrentAlias: Bool = false,
-        refreshedHierarchy: [AccessibilityHierarchy],
-        refreshedScrollViewsByPath: [TreePath: UIScrollView],
-        refreshedContainerNamesByPath: [TreePath: ContainerName]? = nil
-    ) -> InterfaceTree.Element {
-        let outerSemanticPath = TreePath([0, 0])
-        let innerSemanticPath = TreePath([0, 0, 0])
-        let outerActivationPoint = observedContentActivationPoint(CGPoint(x: 160, y: 1_000))
-        let target = InterfaceTree.Element(
-            heistId: "nested_target",
-            scrollMembership: InterfaceTree.ScrollMembership(containerPath: innerSemanticPath, index: nil),
-            observedScrollContentActivationPoint: observedContentActivationPoint(CGPoint(x: 140, y: 700)),
-            element: makeElement(label: "Nested Target", traits: .button)
-        )
-        let outerContainer = makeScrollableContainer(
-            contentSize: outerScrollView.contentSize,
-            frame: outerScrollView.frame
-        )
-        let innerContainer = makeScrollableContainer(
-            contentSize: CGSize(width: 280, height: 900),
-            frame: CGRect(x: 20, y: 820, width: 280, height: 200)
-        )
-        let semanticTree = InterfaceTree(
-            elements: [target.heistId: target],
-            containers: [
-                outerSemanticPath: InterfaceTree.Container(
-                    container: outerContainer,
-                    path: outerSemanticPath,
-                    containerName: "semantic_outer_scroll",
-                    contentFrame: outerScrollView.frame
-                ),
-                innerSemanticPath: InterfaceTree.Container(
-                    container: innerContainer,
-                    path: innerSemanticPath,
-                    containerName: "semantic_inner_scroll",
-                    contentFrame: innerContainer.frame.cgRect,
-                    scrollMembership: InterfaceTree.ScrollMembership(
-                        containerPath: outerSemanticPath,
-                        index: nil
-                    ),
-                    observedScrollContentActivationPoint: outerActivationPoint
-                ),
-            ]
-        )
-        let initialHierarchy: [AccessibilityHierarchy] = includesCurrentAlias
-            ? [.container(outerContainer, children: []), .container(outerContainer, children: [])]
-            : [.container(outerContainer, children: [])]
-        let initialScrollPaths = includesCurrentAlias ? [TreePath([0]), TreePath([1])] : [TreePath([0])]
-        let initialContainerNames: [TreePath: ContainerName] = Dictionary(
-            uniqueKeysWithValues: initialScrollPaths.map { ($0, "semantic_outer_scroll") }
-        )
-        let refreshedContainerNamesByPath = refreshedContainerNamesByPath
-            ?? refreshedScrollViewsByPath.mapValues { scrollView in
-                if scrollView === outerScrollView {
-                    return "semantic_outer_scroll"
-                }
-                return scrollView.nearestScrollableSuperviewForTesting === outerScrollView
-                    ? "semantic_inner_scroll"
-                    : "unrelated_scroll"
-            }
-        brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
-            tree: semanticTree,
-            liveCapture: LiveCapture.makeForTests(
-                hierarchy: initialHierarchy,
-                containerNamesByPath: initialContainerNames,
-                scrollableContainerViewsByPath: Dictionary(
-                    uniqueKeysWithValues: initialScrollPaths.map {
-                        ($0, LiveCapture.ScrollableViewRef(view: outerScrollView))
-                    }
-                )
-            )
-        ))
-        let targetPath = TreePath([refreshedHierarchy.count])
-        let refreshedTarget = InterfaceTree.Element(
-            heistId: target.heistId,
-            scrollMembership: nil,
-            element: target.element
-        )
-        brains.stash.nextVisibleRefreshScreenForTesting = InterfaceObservation.makeForTests(
-            elements: [refreshedTarget.heistId: refreshedTarget],
-            hierarchy: refreshedHierarchy + [.element(target.element, traversalIndex: 0)],
-            containerNamesByPath: refreshedContainerNamesByPath,
-            heistIdsByPath: [targetPath: target.heistId],
-            elementRefs: [target.heistId: .init(object: retainedLiveObject(), scrollView: nil)],
-            firstResponderHeistId: nil,
-            scrollableContainerViewsByPath: refreshedScrollViewsByPath.mapValues {
-                LiveCapture.ScrollableViewRef(view: $0)
-            }
-        )
-        return target
-    }
 
     private func makeElement(
         label: String? = nil,
@@ -3330,6 +2701,7 @@ final class TheBrainsScrollTests: XCTestCase {
             ],
             heistIdsByPath: [containerPath.appending(0): targetId],
             elementRefs: [targetId: .init(object: object, scrollView: scrollView)],
+            containerRefsByPath: [containerPath: .init(object: scrollView)],
             firstResponderHeistId: nil,
             scrollableContainerViewsByPath: [containerPath: .init(view: scrollView)]
         )
@@ -3346,9 +2718,13 @@ final class TheBrainsScrollTests: XCTestCase {
     }
 
     private func installScrollableContainers(_ containers: [AccessibilityContainer]) {
+        let containerRefs = Dictionary(uniqueKeysWithValues: containers.indices.map { index in
+            (TreePath([index]), LiveCapture.ContainerRef(object: retainedLiveObject()))
+        })
         brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: containers.map { .container($0, children: []) },
+            containerRefsByPath: containerRefs,
             firstResponderHeistId: nil,
         ))
     }
@@ -3374,6 +2750,7 @@ final class TheBrainsScrollTests: XCTestCase {
             elementRefs: [
                 treeElement.heistId: .init(object: nil, scrollView: scrollView)
             ],
+            containerRefsByPath: [TreePath([0]): .init(object: scrollView)],
             firstResponderHeistId: nil,
             scrollableContainerViewsByPath: [
                 TreePath([0]): .init(view: scrollView)
