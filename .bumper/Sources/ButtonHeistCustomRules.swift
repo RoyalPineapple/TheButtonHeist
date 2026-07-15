@@ -3,7 +3,11 @@ import Foundation
 import SwiftSyntax
 
 let buttonHeistRules = RuleSet {
-    Rules.repository("buttonheist.thescore.import_allow_list", severity: .error) { context in
+    Rules.repository(
+        "buttonheist.thescore.import_allow_list",
+        severity: .error,
+        summary: "TheScore imports only modules admitted by its value-layer contract."
+    ) { context in
         let allowedImports = Set([
             "AccessibilitySnapshotModel",
             "CoreGraphics",
@@ -38,7 +42,11 @@ let buttonHeistRules = RuleSet {
             }
     }
 
-    Rules.repository("buttonheist.thescore.folder_import_allow_list", severity: .error) { context in
+    Rules.repository(
+        "buttonheist.thescore.folder_import_allow_list",
+        severity: .error,
+        summary: "Each TheScore folder imports only the modules required by its assigned responsibility."
+    ) { context in
         let scorePaths = Set(context.files(in: .component(ButtonHeistComponent.score)).map(\.path))
         return try context.facts(BuiltInFacts.sourceFiles)
             .filter { scorePaths.contains($0.path) }
@@ -63,7 +71,11 @@ let buttonHeistRules = RuleSet {
             }
     }
 
-    Rules.repository("buttonheist.framework_import_sandbox", severity: .error) { context in
+    Rules.repository(
+        "buttonheist.framework_import_sandbox",
+        severity: .error,
+        summary: "Frameworks with runtime authority remain inside their explicit boundary owners."
+    ) { context in
         let componentPaths = Set(ButtonHeistComponent.allCases.flatMap { component in
             context.files(in: .component(component)).map(\.path)
         })
@@ -88,17 +100,52 @@ let buttonHeistRules = RuleSet {
             }
     }
 
-    Rules.repository("buttonheist.architecture_currency_ownership", severity: .error) { context in
-        try architectureCurrencyOwnershipFailures(in: context)
+    architectureCurrencyDeclarationRules
+    architectureCurrencyConstructionRules
+    Rules.noAlternateAliases(
+        "AccessibilityTarget",
+        allowing: .files(["ButtonHeist/Sources/ThePlans/Model/AccessibilityPredicate.swift"]),
+        id: "buttonheist.canonical_accessibility_target_spelling"
+    )
+    Rules.repository(
+        "buttonheist.demo_accessibility_identifier",
+        severity: .error,
+        summary: "Demo screens expose real accessibility semantics instead of test-only identifiers."
+    ) { context in
+        try context.facts(BuiltInFacts.memberReferences)
+            .filter {
+                $0.member == "accessibilityIdentifier"
+                    && $0.path.rawValue.hasPrefix("TestApp/Sources/")
+                    && !demoAccessibilityIdentifierAllowedPaths.contains($0.path)
+            }
+            .map {
+                RuleFailure(
+                    path: $0.path,
+                    location: $0.location,
+                    message: "demo screen uses accessibilityIdentifier",
+                    evidence: ViolationEvidence(
+                        observed: $0.member,
+                        expectation: "demo screens are findable through real accessibility labels, values, traits, hints, and actions"
+                    )
+                )
+            }
     }
 
-    Rules.files("buttonheist.swift_source_shape", severity: .error) { file in
+    Rules.files(
+        "buttonheist.swift_source_shape",
+        severity: .error,
+        summary: "Production source uses typed boundaries, named shapes, and one canonical pipeline per concept."
+    ) { file in
         let visitor = ButtonHeistSourceShapeRuleVisitor(file: file, viewMode: .sourceAccurate)
         visitor.walk(file.syntax)
         return visitor.failures
     }
 
-    Rules.files("buttonheist.canonical_plan_traversal", severity: .error) { file in
+    Rules.files(
+        "buttonheist.canonical_plan_traversal",
+        severity: .error,
+        summary: "Production HeistPlan recursion is owned by the canonical traversal algebra."
+    ) { file in
         guard isPlanTraversalCheckedProductionPath(file.path.rawValue),
               containsHeistPlanTreeType(in: file.source) else {
             return []
@@ -108,7 +155,11 @@ let buttonHeistRules = RuleSet {
         return visitor.failures(in: file)
     }
 
-    Rules.files("buttonheist.canonical_accessibility_hierarchy_traversal", severity: .error) { file in
+    Rules.files(
+        "buttonheist.canonical_accessibility_hierarchy_traversal",
+        severity: .error,
+        summary: "AccessibilityHierarchy recursion is owned by its fold, preorder, compaction, and graph APIs."
+    ) { file in
         guard isAccessibilityHierarchyTraversalCheckedProductionPath(file.path.rawValue),
               file.source.contains("AccessibilityHierarchy") else {
             return []
@@ -118,7 +169,11 @@ let buttonHeistRules = RuleSet {
         return visitor.failures(in: file)
     }
 
-    Rules.files("buttonheist.insidejob_architectural_shape", severity: .error) { file in
+    Rules.files(
+        "buttonheist.insidejob_architectural_shape",
+        severity: .error,
+        summary: "TheInsideJob admits observations, reveal retries, and commits through their canonical owners."
+    ) { file in
         guard file.path.rawValue.hasPrefix(insideJobSourcePrefix),
               containsInsideJobArchitecturalShape(in: file.source) else {
             return []
@@ -376,7 +431,6 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
     }
 
     override func visit(_ node: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
-        recordActionObservationWireShape(node)
         recordExpressionNominal(node: node, modifiers: node.modifiers, name: node.name.text)
         recordExplicitAccess(node: node, modifiers: node.modifiers, name: node.name.text)
         return .visitChildren
@@ -403,7 +457,6 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
     override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
         recordObservationLogDestructiveAPI(node)
         recordTestOwnedSemantics(node)
-        recordRetiredParameterLabels(node.signature.parameterClause.parameters)
         recordContainerSemanticIdentifierAlias(node)
         recordRawExecutableParameters(node)
         recordSelectorShortcut(node)
@@ -430,7 +483,6 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
     }
 
     override func visit(_ node: InitializerDeclSyntax) -> SyntaxVisitorContinueKind {
-        recordRetiredParameterLabels(node.signature.parameterClause.parameters)
         recordLooseObservationInitializer(node)
         recordTupleParameters(
             node: node,
@@ -442,7 +494,6 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
     }
 
     override func visit(_ node: SubscriptDeclSyntax) -> SyntaxVisitorContinueKind {
-        recordRetiredParameterLabels(node.parameterClause.parameters)
         recordTupleResult(
             node: node,
             modifiers: node.modifiers,
@@ -459,7 +510,7 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
     }
 
     override func visit(_ node: TypeAliasDeclSyntax) -> SyntaxVisitorContinueKind {
-        recordAccessibilityTargetAlias(node)
+        recordAccessibilityTargetAliasInsideOwner(node)
         recordExportedTupleTypealias(node)
         recordCompatibilitySurface(
             node: node,
@@ -471,7 +522,6 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
     }
 
     override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
-        recordRetiredVariableSymbols(node)
         recordSiblingReceiptWarnings(node)
         recordVariableCompatibilitySurface(node)
         recordUnannotatedCallback(node)
@@ -503,8 +553,6 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
     }
 
     override func visit(_ node: FunctionCallExprSyntax) -> SyntaxVisitorContinueKind {
-        recordRetiredCallLabels(node)
-        recordOldTraceSettlementJSON(node)
         recordOwnedPipelineConstruction(node)
         recordExternalInterfaceGraphReconstruction(node)
         recordRawNotificationNormalization(node)
@@ -520,7 +568,6 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
 
     override func visit(_ node: MemberAccessExprSyntax) -> SyntaxVisitorContinueKind {
         let observed = node.declName.baseName.text
-        recordDemoAccessibilityIdentifierUse(node, observed: observed)
         recordJSONBoundaryUse(node, observed: observed)
         recordPurePipelineEffectUse(node, observed: observed)
         return .visitChildren
@@ -565,6 +612,27 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
                 evidence: ViolationEvidence(
                     observed: name,
                     expectation: "ThePlans uses only package enum Expr<Value>; public DSL models stay concrete"
+                )
+            )
+        )
+    }
+
+    private func recordAccessibilityTargetAliasInsideOwner(_ node: TypeAliasDeclSyntax) {
+        guard filePath == accessibilityPredicateOwnerPath,
+              isNamedType(node.initializer.value, ArchitectureCurrency.accessibilityTarget.rawValue) else {
+            return
+        }
+        let isPhaseWitness = node.name.text == "Target"
+            && accessibilityPredicatePhaseTypes.contains(enclosingNominalType(of: node) ?? "")
+        guard !isPhaseWitness else { return }
+
+        failures.append(
+            file.failure(
+                at: node,
+                message: "alternate AccessibilityTarget typealias",
+                evidence: ViolationEvidence(
+                    observed: "\(node.name.text) = \(node.initializer.value.trimmedDescription)",
+                    expectation: "only predicate phase witnesses alias AccessibilityTarget"
                 )
             )
         )
@@ -649,43 +717,6 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
         })
     }
 
-    private func recordRetiredVariableSymbols(_ node: VariableDeclSyntax) {
-        for binding in node.bindings {
-            guard let identifier = binding.pattern.as(IdentifierPatternSyntax.self) else { continue }
-            recordRetiredSourceSymbol(node: identifier, observed: identifier.identifier.text)
-        }
-    }
-
-    private func recordRetiredCallLabels(_ node: FunctionCallExprSyntax) {
-        for argument in node.arguments {
-            guard let label = argument.label?.text else { continue }
-            recordRetiredSourceSymbol(node: argument, observed: label)
-        }
-    }
-
-    private func recordRetiredParameterLabels(_ parameters: FunctionParameterListSyntax) {
-        for parameter in parameters {
-            recordRetiredSourceSymbol(node: parameter, observed: parameter.firstName.text)
-            if let secondName = parameter.secondName?.text {
-                recordRetiredSourceSymbol(node: parameter, observed: secondName)
-            }
-        }
-    }
-
-    private func recordRetiredSourceSymbol(node: some SyntaxProtocol, observed: String) {
-        guard retiredProductionSymbols.contains(observed) else { return }
-        failures.append(
-            file.failure(
-                at: node,
-                message: "retired production source symbol",
-                evidence: ViolationEvidence(
-                    observed: observed,
-                    expectation: "production source uses the canonical admitted and typed architecture"
-                )
-            )
-        )
-    }
-
     private func recordRawExecutableParameters(_ node: FunctionDeclSyntax) {
         guard filePath.hasPrefix("ButtonHeist/Sources/"),
               node.name.text.lowercased().hasPrefix("execute") else {
@@ -767,45 +798,6 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
         )
     }
 
-    private func recordActionObservationWireShape(_ node: EnumDeclSyntax) {
-        guard node.name.text == "ActionResultObservationEvidence",
-              let kind = node.memberBlock.members.compactMap({ member in
-                  member.decl.as(EnumDeclSyntax.self)
-              }).first(where: { $0.name.text == "Kind" }) else {
-            return
-        }
-        let cases = enumCaseNames(in: kind)
-        guard cases.contains("trace"), !cases.contains("settledTrace") else { return }
-        failures.append(
-            file.failure(
-                at: kind,
-                message: "trace and settlement share an old JSON discriminator",
-                evidence: ViolationEvidence(
-                    observed: "trace without settledTrace",
-                    expectation: "settled trace evidence has its own settledTrace wire kind"
-                )
-            )
-        )
-    }
-
-    private func recordOldTraceSettlementJSON(_ node: FunctionCallExprSyntax) {
-        guard node.calledExpression.as(MemberAccessExprSyntax.self)?.declName.baseName.text == "decodeIfPresent",
-              let decodedType = node.arguments.first?.expression,
-              isMetatypeReference(decodedType, named: "ActionSettlementEvidence") else {
-            return
-        }
-        failures.append(
-            file.failure(
-                at: node,
-                message: "optional settlement in trace JSON",
-                evidence: ViolationEvidence(
-                    observed: "decodeIfPresent(ActionSettlementEvidence.self)",
-                    expectation: "trace and settledTrace decode as distinct wire kinds"
-                )
-            )
-        )
-    }
-
     private func recordSelectorShortcut(_ node: FunctionDeclSyntax) {
         guard isTopLevel(node),
               isExported(node.modifiers),
@@ -874,28 +866,6 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
                 )
             )
         }
-    }
-
-    private func recordAccessibilityTargetAlias(_ node: TypeAliasDeclSyntax) {
-        let isPhaseWitness = filePath == accessibilityPredicateOwnerPath
-            && node.name.text == "Target"
-            && accessibilityPredicatePhaseTypes.contains(enclosingNominalType(of: node) ?? "")
-        guard isNamedType(node.initializer.value, "AccessibilityTarget"),
-              !isPhaseWitness,
-              !(isButtonHeistDSLFacade(file.path) && node.name.text == "AccessibilityTarget") else {
-            return
-        }
-
-        failures.append(
-            file.failure(
-                at: node,
-                message: "alternate AccessibilityTarget typealias",
-                evidence: ViolationEvidence(
-                    observed: "\(node.name.text) = \(node.initializer.value.trimmedDescription)",
-                    expectation: "AccessibilityTarget is the canonical target spelling"
-                )
-            )
-        )
     }
 
     private func recordUnannotatedCallback(_ node: VariableDeclSyntax) {
@@ -995,8 +965,7 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
 
     private func recordExportedTupleTypealias(_ node: TypeAliasDeclSyntax) {
         let type = node.initializer.value
-        guard !isButtonHeistDSLFacade(file.path),
-              node.genericParameterClause == nil,
+        guard node.genericParameterClause == nil,
               !hasExtensionAncestor(node),
               isCrossFileVisible(node, modifiers: node.modifiers),
               isTupleType(type) else {
@@ -1057,7 +1026,7 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
     private func recordLooseObservationInitializer(_ node: InitializerDeclSyntax) {
         guard let owner = enclosingNominalType(of: node),
               let currency = ArchitectureCurrency(rawValue: owner),
-              canonicalBuilderOwnedCurrencies.contains(currency),
+              canonicalBuilderConstructionOwnerships[currency] != nil,
               !hasModifier("private", in: node.modifiers) else {
             return
         }
@@ -1258,13 +1227,12 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
     }
 
     private func recordOwnedPipelineConstruction(_ node: FunctionCallExprSyntax) {
-        guard filePath.hasPrefix("ButtonHeist/Sources/"),
-              let calledSymbol = calledConstructorName(node.calledExpression),
+        guard let calledSymbol = calledConstructorName(node.calledExpression),
               let symbolName = calledSymbol == "Self" ? enclosingNominalType(of: node) : calledSymbol,
               let symbol = ArchitectureCurrency(rawValue: symbolName),
-              let descriptor = architectureCurrencyOwnersBySymbol[symbol],
-              let ownership = descriptor.construction,
-              !isAllowedPipelineConstruction(symbol: symbol, ownership: ownership, call: node) else {
+              let ownership = canonicalBuilderConstructionOwnerships[symbol],
+              ownership.allowedPaths.contains(file.path),
+              !isAllowedPipelineConstruction(symbol: symbol, call: node) else {
             return
         }
 
@@ -1282,11 +1250,8 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
 
     private func isAllowedPipelineConstruction(
         symbol: ArchitectureCurrency,
-        ownership: PipelineConstructionOwnership,
         call: FunctionCallExprSyntax
     ) -> Bool {
-        guard ownership.allowedPaths.contains(filePath) else { return false }
-        guard canonicalBuilderOwnedCurrencies.contains(symbol) else { return true }
         return enclosingFunctionName(of: call) == "build"
             && enclosingNominalType(of: call) == symbol.rawValue
     }
@@ -1306,25 +1271,6 @@ private final class ButtonHeistSourceShapeRuleVisitor: SyntaxVisitor {
                 evidence: ViolationEvidence(
                     observed: filePath,
                     expectation: "raw UIKit notification codes enter through \(accessibilityNotificationRawCodeOwnerPath)"
-                )
-            )
-        )
-    }
-
-    private func recordDemoAccessibilityIdentifierUse(_ node: some SyntaxProtocol, observed: String) {
-        guard observed == "accessibilityIdentifier",
-              filePath.hasPrefix("TestApp/Sources/"),
-              !demoAccessibilityIdentifierAllowedPaths.contains(filePath) else {
-            return
-        }
-
-        failures.append(
-            file.failure(
-                at: node,
-                message: "demo screen uses accessibilityIdentifier",
-                evidence: ViolationEvidence(
-                    observed: observed,
-                    expectation: "demo screens are findable through real accessibility labels, values, traits, hints, and actions"
                 )
             )
         )
@@ -1472,16 +1418,7 @@ private final class InsideJobArchitecturalShapeRuleVisitor: SyntaxVisitor {
     }
 
     private func recordForbiddenReference(node: some SyntaxProtocol, observed: String) {
-        guard isForbiddenInsideJobArchitectureSymbol(observed) else { return }
-        if retiredTargetProjectionSymbols.contains(observed) {
-            recordFailure(
-                at: node,
-                observed: observed,
-                expectation: "TheStash resolves targets directly against InterfaceTree and ElementMatchGraph",
-                message: "target resolution uses retired SemanticInterfaceProjection/back-map architecture"
-            )
-            return
-        }
+        guard isForbiddenRevealRetrySymbol(observed) else { return }
         recordFailure(
             at: node,
             observed: observed,
@@ -1528,8 +1465,18 @@ private final class InsideJobArchitecturalShapeRuleVisitor: SyntaxVisitor {
 }
 
 private struct PipelineConstructionOwnership {
-    let allowedPaths: Set<String>
+    let allowedPaths: Set<RelativeFilePath>
     let expectation: String
+}
+
+private struct ArchitectureCurrencyDeclarationOwner {
+    let symbol: ArchitectureCurrency
+    let owner: RelativePathPrefix
+
+    init(_ symbol: ArchitectureCurrency, owner: RelativePathPrefix) {
+        self.symbol = symbol
+        self.owner = owner
+    }
 }
 
 private enum ArchitectureCurrency: String {
@@ -1556,120 +1503,126 @@ private enum ArchitectureCurrency: String {
     case observationWindow = "ObservationWindow"
     case semanticContainerPredicate = "SemanticContainerPredicate"
     case semanticObservationLog = "SemanticObservationLog"
+    case semanticObservationPublication = "SemanticObservationPublication"
+    case semanticObservationRuntimeState = "SemanticObservationRuntimeState"
     case settleLoopMachine = "SettleLoopMachine"
     case settleLoopRunner = "SettleLoopRunner"
     case settlePolicy = "SettlePolicy"
 }
 
-private struct ArchitectureCurrencyOwnerDescriptor {
-    let symbol: ArchitectureCurrency
-    let declarationOwnerPath: String?
-    let construction: PipelineConstructionOwnership?
-
-    static func declaration(_ symbol: ArchitectureCurrency, ownerPath: String) -> Self {
-        Self(symbol: symbol, declarationOwnerPath: ownerPath, construction: nil)
-    }
-
-    static func construction(
-        _ symbol: ArchitectureCurrency,
-        declarationOwnerPath: String? = nil,
-        allowedPaths: Set<String>,
-        expectation: String
-    ) -> Self {
-        Self(
-            symbol: symbol,
-            declarationOwnerPath: declarationOwnerPath,
-            construction: PipelineConstructionOwnership(
-                allowedPaths: allowedPaths,
-                expectation: expectation
-            )
-        )
-    }
-}
-
-private let reportPipelineOwnerPath =
-    "ButtonHeist/Sources/TheScore/Reports/HeistExecutionResult+Report.swift"
-
-private let accessibilityPredicateOwnerPath =
-    "ButtonHeist/Sources/ThePlans/Model/AccessibilityPredicate.swift"
-
 private let expressionOwnerPath =
     "ButtonHeist/Sources/ThePlans/Model/StringExpressions.swift"
 
-private let interfaceGraphOwnerPath =
-    "ButtonHeist/Sources/TheScore/Core/AccessibilityHierarchyGraph.swift"
+private let accessibilityPredicateOwnerPath =
+    "ButtonHeist/Sources/ThePlans/Model/AccessibilityPredicate.swift"
 
 private let accessibilityPredicatePhaseTypes: Set<String> = [
     "AuthoredAccessibilityPredicatePhase",
     "ResolvedAccessibilityPredicatePhase",
 ]
 
-private let architectureCurrencyOwners: [ArchitectureCurrencyOwnerDescriptor] = [
-    .construction(
-        .heistExecutionEvidenceRollup,
-        allowedPaths: [reportPipelineOwnerPath],
-        expectation: "execution evidence rollup construction stays in \(reportPipelineOwnerPath)"
+private let interfaceGraphOwnerPath =
+    "ButtonHeist/Sources/TheScore/Core/AccessibilityHierarchyGraph.swift"
+
+private let canonicalBuilderConstructionOwnerships: [ArchitectureCurrency: PipelineConstructionOwnership] = [
+    .interfaceObservation: PipelineConstructionOwnership(
+        allowedPaths: ["ButtonHeist/Sources/TheInsideJob/TheStash/InterfaceObservation.swift"],
+        expectation: "production observations enter through InterfaceObservation.build"
     ),
-    .construction(
-        .heistExecutionStepReportFacts,
-        declarationOwnerPath: "ButtonHeist/Sources/TheScore/Reports/HeistExecutionResult+Report.swift",
-        allowedPaths: [reportPipelineOwnerPath],
-        expectation: "step report fact construction stays in \(reportPipelineOwnerPath)"
+    .liveCapture: PipelineConstructionOwnership(
+        allowedPaths: ["ButtonHeist/Sources/TheInsideJob/TheStash/LiveCapture.swift"],
+        expectation: "production live captures enter through LiveCapture.build"
     ),
-    .construction(
-        .actionResultEvidence,
-        declarationOwnerPath: "ButtonHeist/Sources/TheScore/Reports/ActionResultEvidence.swift",
-        allowedPaths: [
+]
+
+private let architectureCurrencyDeclarationOwners: [ArchitectureCurrencyDeclarationOwner] = [
+    .init(.heistExecutionEvidenceRollup, owner: "ButtonHeist/Sources/TheScore/Reports/HeistExecutionResult+Report.swift"),
+    .init(.heistExecutionStepReportFacts, owner: "ButtonHeist/Sources/TheScore/Reports/HeistExecutionResult+Report.swift"),
+    .init(.actionResultEvidence, owner: "ButtonHeist/Sources/TheScore/Reports/ActionResultEvidence.swift"),
+    .init(.interfaceObservation, owner: "ButtonHeist/Sources/TheInsideJob/TheStash/InterfaceObservation.swift"),
+    .init(.liveCapture, owner: "ButtonHeist/Sources/TheInsideJob/TheStash/LiveCapture.swift"),
+    .init(.semanticObservationLog, owner: "ButtonHeist/Sources/TheInsideJob/TheStash/SemanticObservationLog.swift"),
+    .init(.semanticObservationPublication, owner: "ButtonHeist/Sources/TheInsideJob/TheStash/SemanticObservationPublication.swift"),
+    .init(.semanticObservationRuntimeState, owner: "ButtonHeist/Sources/TheInsideJob/TheStash/SemanticObservationRuntimeState.swift"),
+    .init(.accessibilityContainerKind, owner: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
+    .init(.accessibilityPredicate, owner: "ButtonHeist/Sources/ThePlans/Model/AccessibilityPredicate.swift"),
+    .init(.accessibilityTarget, owner: "ButtonHeist/Sources/ThePlans/Model/AccessibilityTarget.swift"),
+    .init(.containerPredicate, owner: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
+    .init(.containerPredicateActions, owner: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
+    .init(.containerPredicateCheck, owner: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
+    .init(.containerPredicateCount, owner: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
+    .init(.containerPredicateFacts, owner: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
+    .init(.containerPredicateRoleFacts, owner: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
+    .init(.semanticContainerPredicate, owner: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
+    .init(.expr, owner: "ButtonHeist/Sources/ThePlans/Model/StringExpressions.swift"),
+    .init(.accessibilityTrace, owner: "ButtonHeist/Sources/TheScore/Evidence/AccessibilityTrace.swift"),
+    .init(.changeFact, owner: "ButtonHeist/Sources/TheScore/Evidence/AccessibilityTrace+ChangeFacts.swift"),
+    .init(.elementMatchGraph, owner: "ButtonHeist/Sources/TheScore/Core/ElementPredicate+HeistElement.swift"),
+    .init(.interfaceQuery, owner: "ButtonHeist/Sources/TheScore/Wire/InterfaceQuery.swift"),
+    .init(.observationWindow, owner: "ButtonHeist/Sources/TheInsideJob/TheBrains/ObservationWindow.swift"),
+    .init(.settleLoopMachine, owner: "ButtonHeist/Sources/TheInsideJob/TheBrains/SettleSession.swift"),
+    .init(.settleLoopRunner, owner: "ButtonHeist/Sources/TheInsideJob/TheBrains/SettleSession.swift"),
+    .init(.settlePolicy, owner: "ButtonHeist/Sources/TheInsideJob/TheBrains/SettleSession.swift"),
+    .init(.interfaceTree, owner: "ButtonHeist/Sources/TheInsideJob/TheStash/InterfaceTree.swift"),
+]
+
+private let architectureCurrencyDeclarationRules = RuleSet {
+    for ownership in architectureCurrencyDeclarationOwners {
+        Rules.singleDeclaration(
+            NominalSymbol(ownership.symbol.rawValue),
+            owner: ownership.owner,
+            id: RuleID("buttonheist.architecture_currency.\(ownership.symbol.rawValue)")
+        )
+    }
+}
+
+private let architectureCurrencyConstructionRules = RuleSet {
+    Rules.canonicalConstruction(
+        "InterfaceObservation",
+        owners: .files(["ButtonHeist/Sources/TheInsideJob/TheStash/InterfaceObservation.swift"]),
+        id: "buttonheist.canonical_interface_observation_construction"
+    )
+    Rules.canonicalConstruction(
+        "LiveCapture",
+        owners: .files(["ButtonHeist/Sources/TheInsideJob/TheStash/LiveCapture.swift"]),
+        id: "buttonheist.canonical_live_capture_construction"
+    )
+    Rules.canonicalConstruction(
+        "HeistExecutionEvidenceRollup",
+        owners: .files(["ButtonHeist/Sources/TheScore/Reports/HeistExecutionResult+Report.swift"]),
+        id: "buttonheist.canonical_heist_execution_evidence_rollup_construction"
+    )
+    Rules.canonicalConstruction(
+        "HeistExecutionStepReportFacts",
+        owners: .files(["ButtonHeist/Sources/TheScore/Reports/HeistExecutionResult+Report.swift"]),
+        id: "buttonheist.canonical_heist_execution_step_report_facts_construction"
+    )
+    Rules.canonicalConstruction(
+        "ActionResultEvidence",
+        owners: .files([
             "ButtonHeist/Sources/TheInsideJob/TheBrains/PostActionObservation.swift",
             "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+HeistWaitExecution.swift",
             "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+ScreenCapture.swift",
             "ButtonHeist/Sources/TheScore/Reports/ActionResultPayloads.swift",
-        ],
-        expectation: "action result evidence is assembled only by its value owner or runtime evidence producers"
-    ),
-    .construction(
-        .interfaceObservation,
-        declarationOwnerPath: "ButtonHeist/Sources/TheInsideJob/TheStash/InterfaceObservation.swift",
-        allowedPaths: ["ButtonHeist/Sources/TheInsideJob/TheStash/InterfaceObservation.swift"],
-        expectation: "production observations enter through InterfaceObservation.build"
-    ),
-    .construction(
-        .liveCapture,
-        declarationOwnerPath: "ButtonHeist/Sources/TheInsideJob/TheStash/LiveCapture.swift",
-        allowedPaths: ["ButtonHeist/Sources/TheInsideJob/TheStash/LiveCapture.swift"],
-        expectation: "production live captures enter through LiveCapture.build"
-    ),
-    .construction(
-        .semanticObservationLog,
-        declarationOwnerPath: "ButtonHeist/Sources/TheInsideJob/TheStash/SemanticObservationLog.swift",
-        allowedPaths: ["ButtonHeist/Sources/TheInsideJob/TheStash/SemanticObservationStream.swift"],
-        expectation: "SemanticObservationStream owns the single semantic observation log"
-    ),
-    .declaration(.accessibilityContainerKind, ownerPath: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
-    .declaration(.accessibilityPredicate, ownerPath: "ButtonHeist/Sources/ThePlans/Model/AccessibilityPredicate.swift"),
-    .declaration(.accessibilityTarget, ownerPath: "ButtonHeist/Sources/ThePlans/Model/AccessibilityTarget.swift"),
-    .declaration(.containerPredicate, ownerPath: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
-    .declaration(.containerPredicateActions, ownerPath: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
-    .declaration(.containerPredicateCheck, ownerPath: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
-    .declaration(.containerPredicateCount, ownerPath: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
-    .declaration(.containerPredicateFacts, ownerPath: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
-    .declaration(.containerPredicateRoleFacts, ownerPath: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
-    .declaration(.semanticContainerPredicate, ownerPath: "ButtonHeist/Sources/ThePlans/Model/ContainerPredicate.swift"),
-    .declaration(.expr, ownerPath: "ButtonHeist/Sources/ThePlans/Model/StringExpressions.swift"),
-    .declaration(.accessibilityTrace, ownerPath: "ButtonHeist/Sources/TheScore/Evidence/AccessibilityTrace.swift"),
-    .declaration(.changeFact, ownerPath: "ButtonHeist/Sources/TheScore/Evidence/AccessibilityTrace+ChangeFacts.swift"),
-    .declaration(.elementMatchGraph, ownerPath: "ButtonHeist/Sources/TheScore/Core/ElementPredicate+HeistElement.swift"),
-    .declaration(.interfaceQuery, ownerPath: "ButtonHeist/Sources/TheScore/Wire/InterfaceQuery.swift"),
-    .declaration(.observationWindow, ownerPath: "ButtonHeist/Sources/TheInsideJob/TheBrains/ObservationWindow.swift"),
-    .declaration(.settleLoopMachine, ownerPath: "ButtonHeist/Sources/TheInsideJob/TheBrains/SettleSession.swift"),
-    .declaration(.settleLoopRunner, ownerPath: "ButtonHeist/Sources/TheInsideJob/TheBrains/SettleSession.swift"),
-    .declaration(.settlePolicy, ownerPath: "ButtonHeist/Sources/TheInsideJob/TheBrains/SettleSession.swift"),
-    .declaration(.interfaceTree, ownerPath: "ButtonHeist/Sources/TheInsideJob/TheStash/InterfaceTree.swift"),
-]
-
-private let architectureCurrencyOwnersBySymbol = Dictionary(
-    uniqueKeysWithValues: architectureCurrencyOwners.map { ($0.symbol, $0) }
-)
+        ]),
+        id: "buttonheist.canonical_action_result_evidence_construction"
+    )
+    Rules.canonicalConstruction(
+        "SemanticObservationLog",
+        owners: .files(["ButtonHeist/Sources/TheInsideJob/TheStash/SemanticObservationStream.swift"]),
+        id: "buttonheist.canonical_semantic_observation_log_construction"
+    )
+    Rules.canonicalConstruction(
+        "SemanticObservationPublication",
+        owners: .files(["ButtonHeist/Sources/TheInsideJob/TheStash/SemanticObservationPublication.swift"]),
+        id: "buttonheist.canonical_semantic_observation_publication_construction"
+    )
+    Rules.canonicalConstruction(
+        "SemanticObservationRuntimeState",
+        owners: .files(["ButtonHeist/Sources/TheInsideJob/TheStash/SemanticObservationStream.swift"]),
+        id: "buttonheist.canonical_semantic_observation_runtime_state_construction"
+    )
+}
 
 private let accessibilityNotificationRawCodeOwnerPath =
     "ButtonHeist/Sources/TheInsideJob/TheTripwire/AccessibilityNotificationBus.swift"
@@ -1872,97 +1825,6 @@ private let explicitAccessRequiredPaths: Set<String> = [
     "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+RepeatUntilFailures.swift",
 ]
 
-private struct ArchitectureCurrencyDeclaration {
-    let path: RelativeFilePath
-    let location: SourcePosition?
-}
-
-private func architectureCurrencyOwnershipFailures(
-    in context: RuleContext
-) throws -> [RuleFailure] {
-    let declarationOwnerships = architectureCurrencyOwners.filter { $0.declarationOwnerPath != nil }
-    let nominalTypes = try context.facts(BuiltInFacts.nominalTypes)
-    let configuredPathFailures = Set(declarationOwnerships.compactMap(\.declarationOwnerPath))
-        .sorted()
-        .compactMap { rawOwnerPath -> RuleFailure? in
-            let symbols = declarationOwnerships
-                .filter { $0.declarationOwnerPath == rawOwnerPath }
-                .map(\.symbol.rawValue)
-                .sorted()
-                .joined(separator: ", ")
-            guard let ownerPath = try? RelativeFilePath(rawOwnerPath) else {
-                return context.repository.files.first.map { file in
-                    RuleFailure(
-                        path: file.path,
-                        message: "configured architecture currency owner path is invalid",
-                        evidence: ViolationEvidence(
-                            observed: rawOwnerPath,
-                            expectation: "\(symbols) have a normalized repository-relative owner path"
-                        )
-                    )
-                }
-            }
-            guard !context.repository.files.contains(where: { $0.path == ownerPath }) else { return nil }
-            return RuleFailure(
-                path: ownerPath,
-                message: "configured architecture currency owner path does not exist",
-                evidence: ViolationEvidence(
-                    observed: rawOwnerPath,
-                    expectation: "owner path for \(symbols) is present in Bumper's source input"
-                )
-            )
-        }
-
-    let missingOwnerPaths = Set(configuredPathFailures.map(\.path))
-    let declarationFailures = declarationOwnerships
-        .sorted { $0.symbol.rawValue < $1.symbol.rawValue }
-        .flatMap { ownership -> [RuleFailure] in
-            guard let rawOwnerPath = ownership.declarationOwnerPath,
-                  let ownerPath = try? RelativeFilePath(rawOwnerPath),
-                  !missingOwnerPaths.contains(ownerPath) else {
-                return []
-            }
-
-            let declarations = nominalTypes
-                .filter { $0.type.name.rawValue == ownership.symbol.rawValue }
-                .map { occurrence in
-                    ArchitectureCurrencyDeclaration(
-                        path: occurrence.path,
-                        location: occurrence.type.location
-                    )
-                }
-            guard declarations.count == 1 else {
-                return [
-                    RuleFailure(
-                        path: ownerPath,
-                        message: "architecture currency symbol must be declared exactly once",
-                        evidence: ViolationEvidence(
-                            observed: "\(ownership.symbol.rawValue) has \(declarations.count) declarations",
-                            expectation: "one declaration in \(rawOwnerPath)"
-                        )
-                    ),
-                ]
-            }
-
-            let declaration = declarations[0]
-            guard declaration.path == ownerPath else {
-                return [
-                    RuleFailure(
-                        path: declaration.path,
-                        location: declaration.location,
-                        message: "architecture currency declared outside its canonical owner",
-                        evidence: ViolationEvidence(
-                            observed: "\(ownership.symbol.rawValue) in \(declaration.path.rawValue)",
-                            expectation: "\(ownership.symbol.rawValue) is declared only in \(rawOwnerPath)"
-                        )
-                    ),
-                ]
-            }
-            return []
-        }
-    return configuredPathFailures + declarationFailures
-}
-
 private let privateStorageBoundaryPath =
     "ButtonHeist/Sources/TheButtonHeist/Storage/PrivateStorage.swift"
 
@@ -1994,11 +1856,6 @@ private let allowedUnsafeNonisolatedSPIVariables: Set<String> = [
     "ioHIDFunctionsLoaded",
 ]
 
-private let canonicalBuilderOwnedCurrencies: Set<ArchitectureCurrency> = [
-    .interfaceObservation,
-    .liveCapture,
-]
-
 private let settledValueOwnerNames: Set<String> = [
     "InterfaceTree",
     "ObservationWindow",
@@ -2020,27 +1877,12 @@ private let explicitLiveStorageTypeNames: Set<String> = [
 
 private let insideJobSourcePrefix = "ButtonHeist/Sources/TheInsideJob/"
 
-private let retiredProductionSymbols: Set<String> = [
-    "runtimeValidatedVersion",
-]
-
-private let forbiddenInsideJobArchitectureSymbols = retiredTargetProjectionSymbols.union([
-    "refreshCurrentVisibleTree",
-    "refreshTreeAfterViewportMove",
-])
-
-private let retiredTargetProjectionSymbols: Set<String> = [
-    "SemanticInterfaceProjection",
-    "containerByProjectedPath",
-    "elementByProjectedPath",
-    "semanticInterfaceProjection",
-]
-
 private let rawObservationCommitTypes: Set<String> = ["InterfaceObservation", "Screen"]
 
 private func containsInsideJobArchitecturalShape(in source: String) -> Bool {
     let lowercasedSource = source.lowercased()
-    return forbiddenInsideJobArchitectureSymbols.contains { source.contains($0) }
+    return (lowercasedSource.contains("reveal")
+        && (lowercasedSource.contains("grace") || lowercasedSource.contains("silentreparse")))
         || (lowercasedSource.contains("commit") && rawObservationCommitTypes.contains { source.contains($0) })
         || (source.contains("InterfaceObservationProof") && source.contains("testing"))
 }
@@ -2115,7 +1957,7 @@ private let purePipelineEffectSymbols: Set<String> = [
     "URLSession",
 ]
 
-private let demoAccessibilityIdentifierAllowedPaths: Set<String> = [
+private let demoAccessibilityIdentifierAllowedPaths: Set<RelativeFilePath> = [
     "TestApp/Sources/ScrollSPIHarnessView.swift",
     "TestApp/Sources/TraitProbeView.swift",
     "TestApp/Sources/TraitValidationView.swift",
@@ -2353,12 +2195,6 @@ private func enclosingExtensionType(of node: some SyntaxProtocol) -> String? {
     return nil
 }
 
-private func enumCaseNames(in declaration: EnumDeclSyntax) -> Set<String> {
-    Set(declaration.memberBlock.members.flatMap { member in
-        member.decl.as(EnumCaseDeclSyntax.self)?.elements.map(\.name.text) ?? []
-    })
-}
-
 private func isTopLevelOrFirstLevelMember(_ node: some SyntaxProtocol) -> Bool {
     var memberDepth = 0
     var ancestor = Syntax(node).parent
@@ -2401,10 +2237,6 @@ private func hasAccessQualifiedExtensionAncestor(_ node: some SyntaxProtocol) ->
         ancestor = current.parent
     }
     return false
-}
-
-private func isButtonHeistDSLFacade(_ path: RelativeFilePath) -> Bool {
-    path.rawValue == "ButtonHeist/Sources/ButtonHeistDSL/ButtonHeistDSL.swift"
 }
 
 private func isCompatibilityName(_ name: String) -> Bool {
@@ -2578,15 +2410,6 @@ private func locallyDispatchedCallName(_ expression: ExprSyntax) -> String? {
     return member.declName.baseName.text
 }
 
-private func isMetatypeReference(_ expression: ExprSyntax, named expectedName: String) -> Bool {
-    guard let member = expression.as(MemberAccessExprSyntax.self),
-          member.declName.baseName.text == "self",
-          let base = member.base else {
-        return false
-    }
-    return calledConstructorName(base) == expectedName
-}
-
 private func isMemberCall(
     _ call: FunctionCallExprSyntax,
     named memberName: String,
@@ -2600,8 +2423,7 @@ private func isMemberCall(
     return calledConstructorName(base) == ownerName
 }
 
-private func isForbiddenInsideJobArchitectureSymbol(_ observed: String) -> Bool {
-    if forbiddenInsideJobArchitectureSymbols.contains(observed) { return true }
+private func isForbiddenRevealRetrySymbol(_ observed: String) -> Bool {
     let lowercased = observed.lowercased()
     return lowercased.contains("reveal")
         && (lowercased.contains("grace") || lowercased.contains("silentreparse"))

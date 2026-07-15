@@ -1457,8 +1457,13 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(cycles.waiterCount, 1)
 
         let discoveryCycle = startedCycle(cycles.beginCycle(scope: .discovery))
-        cycles.finishCycle(token: discoveryCycle, didObserve: true)
-        await visibleWaiter.value
+        cycles.finishCycle(
+            token: discoveryCycle,
+            result: .completed(settledSequence: 1)
+        )
+        let visibleFulfillment = await visibleWaiter.value
+        XCTAssertEqual(visibleFulfillment?.cycle, discoveryCycle)
+        XCTAssertEqual(visibleFulfillment?.settledSequence, 1)
         XCTAssertEqual(cycles.waiterCount, 0)
 
         let discoveryWaiter = Task { @MainActor in
@@ -1470,12 +1475,20 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(cycles.waiterCount, 1)
 
         let visibleCycle = startedCycle(cycles.beginCycle(scope: .visible))
-        cycles.finishCycle(token: visibleCycle, didObserve: true)
+        cycles.finishCycle(
+            token: visibleCycle,
+            result: .completed(settledSequence: 2)
+        )
         XCTAssertEqual(cycles.waiterCount, 1)
 
         let fulfillingDiscoveryCycle = startedCycle(cycles.beginCycle(scope: .discovery))
-        cycles.finishCycle(token: fulfillingDiscoveryCycle, didObserve: true)
-        await discoveryWaiter.value
+        cycles.finishCycle(
+            token: fulfillingDiscoveryCycle,
+            result: .completed(settledSequence: 3)
+        )
+        let discoveryFulfillment = await discoveryWaiter.value
+        XCTAssertEqual(discoveryFulfillment?.cycle, fulfillingDiscoveryCycle)
+        XCTAssertEqual(discoveryFulfillment?.settledSequence, 3)
         XCTAssertEqual(cycles.waiterCount, 0)
     }
 
@@ -1486,32 +1499,73 @@ final class TheStashResolutionTests: XCTestCase {
         cycles.cancelRunningCycle()
 
         let replacementCycle = startedCycle(cycles.beginCycle(scope: .visible))
-        XCTAssertEqual(cycles.finishCycle(token: staleCycle, didObserve: true), .ignoredStaleToken)
-        XCTAssertEqual(cycles.finishCycle(token: replacementCycle, didObserve: true), .completed)
+        XCTAssertEqual(
+            cycles.finishCycle(token: staleCycle, result: .completed(settledSequence: 1)),
+            .ignoredStaleToken
+        )
+        XCTAssertEqual(
+            cycles.finishCycle(token: replacementCycle, result: .completed(settledSequence: 2)),
+            .completed
+        )
         XCTAssertEqual(cycles.cursor(), replacementCycle.cursor)
     }
 
-    func testObservationCycleWithoutObservationCannotReuseStaleToken() {
+    func testInterruptedObservationCycleCannotReuseStaleToken() {
         let cycles = SemanticObservationCycles()
         let staleCycle = startedCycle(cycles.beginCycle(scope: .visible))
-        XCTAssertEqual(cycles.finishCycle(token: staleCycle, didObserve: false), .completed)
+        XCTAssertEqual(cycles.finishCycle(token: staleCycle, result: .interrupted), .completed)
 
         let replacementCycle = startedCycle(cycles.beginCycle(scope: .visible))
 
         XCTAssertNotEqual(replacementCycle.cursor, staleCycle.cursor)
-        XCTAssertEqual(cycles.finishCycle(token: staleCycle, didObserve: true), .ignoredStaleToken)
-        XCTAssertEqual(cycles.finishCycle(token: replacementCycle, didObserve: true), .completed)
+        XCTAssertEqual(
+            cycles.finishCycle(token: staleCycle, result: .completed(settledSequence: 1)),
+            .ignoredStaleToken
+        )
+        XCTAssertEqual(
+            cycles.finishCycle(token: replacementCycle, result: .completed(settledSequence: 2)),
+            .completed
+        )
     }
 
     func testObservationCycleCompletedBeforeWaitRegistrationIsNotLost() async {
         let cycles = SemanticObservationCycles()
         let cursor = cycles.cursor()
         let cycle = startedCycle(cycles.beginCycle(scope: .discovery))
-        cycles.finishCycle(token: cycle, didObserve: true)
+        cycles.finishCycle(token: cycle, result: .completed(settledSequence: 1))
 
-        await cycles.waitForNextCycle(scope: .visible, after: cursor)
+        let fulfillment = await cycles.waitForNextCycle(scope: .visible, after: cursor)
 
+        XCTAssertEqual(fulfillment?.cycle, cycle)
+        XCTAssertEqual(fulfillment?.settledSequence, 1)
         XCTAssertEqual(cycles.waiterCount, 0)
+    }
+
+    func testObservationCycleWaiterRetainsExactFulfillmentAcrossLaterEmptyCycle() async {
+        let cycles = SemanticObservationCycles()
+        let cursor = cycles.cursor()
+        let waiter = Task { @MainActor in
+            await cycles.waitForNextCycle(scope: .discovery, after: cursor)
+        }
+        for _ in 0..<1_000 where cycles.waiterCount == 0 {
+            await Task.yield()
+        }
+        XCTAssertEqual(cycles.waiterCount, 1)
+
+        let publishedCycle = startedCycle(cycles.beginCycle(scope: .discovery))
+        cycles.finishCycle(
+            token: publishedCycle,
+            result: .completed(settledSequence: 3)
+        )
+        let emptyCycle = startedCycle(cycles.beginCycle(scope: .discovery))
+        cycles.finishCycle(
+            token: emptyCycle,
+            result: .completed(settledSequence: nil)
+        )
+
+        let fulfillment = await waiter.value
+        XCTAssertEqual(fulfillment?.cycle, publishedCycle)
+        XCTAssertEqual(fulfillment?.settledSequence, 3)
     }
 
     func testDiscoveryProjectionMaintainsFullTrace() throws {

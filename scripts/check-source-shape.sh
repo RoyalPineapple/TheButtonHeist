@@ -44,12 +44,21 @@ run_bumper() {
     fi
 
     if [[ -n "${BUMPER_BOWLING_PACKAGE_PATH:-}" ]]; then
-        swift run --package-path "$BUMPER_BOWLING_PACKAGE_PATH" bumper lint "$REPO_ROOT" --fail-on error
+        run_bumper_from_package "$BUMPER_BOWLING_PACKAGE_PATH"
         return
     fi
 
     ensure_bumper_checkout
-    swift run --package-path "$BUMPER_BOWLING_CHECKOUT" bumper lint "$REPO_ROOT" --fail-on error
+    run_bumper_from_package "$BUMPER_BOWLING_CHECKOUT"
+}
+
+run_bumper_from_package() {
+    local package_path="$1"
+    local binary_path
+
+    swift build --package-path "$package_path" --product bumper >/dev/null
+    binary_path="$(swift build --package-path "$package_path" --show-bin-path)/bumper"
+    "$binary_path" lint "$REPO_ROOT" --fail-on error
 }
 
 run_bumper
