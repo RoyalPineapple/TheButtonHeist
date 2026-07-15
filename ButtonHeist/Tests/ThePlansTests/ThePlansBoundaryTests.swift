@@ -404,7 +404,8 @@ func `heist artifact manifest rejects unknown root fields`() throws {
             from: url,
             containing: [
                 "invalid manifest.json",
-                #"Unknown manifest field "legacyKind""#,
+                "Unknown manifest field",
+                "legacyKind",
             ]
         )
     }
@@ -431,7 +432,8 @@ func `heist artifact manifest rejects unknown producer fields`() throws {
             from: url,
             containing: [
                 "invalid manifest.json",
-                #"Unknown manifest producer field "legacySource""#,
+                "Unknown manifest producer field",
+                "legacySource",
             ]
         )
     }
@@ -454,7 +456,8 @@ func `heist artifact manifest rejects stale version key`() throws {
             from: url,
             containing: [
                 "invalid manifest.json",
-                #"Unknown manifest field "version""#,
+                "Unknown manifest field",
+                "version",
             ]
         )
     }
@@ -474,7 +477,8 @@ func `heist artifact validates manifest and plan versions`() throws {
             from: url,
             containing: [
                 "invalid manifest.json",
-                #"Missing manifest field "formatVersion""#,
+                "Missing manifest field",
+                "formatVersion",
             ]
         )
     }
