@@ -39,7 +39,7 @@ class AdversarialNightlyWorkflowTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.workflow = WORKFLOW_PATH.read_text()
 
-    def test_daily_and_weekly_schedules_have_distinct_repeat_policies(self) -> None:
+    def test_one_daily_schedule_has_bounded_repeat_policy(self) -> None:
         schedules = set(
             re.findall(
                 r'^\s*- cron:\s*["\']([^"\']+)["\']',
@@ -47,17 +47,17 @@ class AdversarialNightlyWorkflowTests(unittest.TestCase):
                 re.MULTILINE,
             )
         )
-        self.assertEqual(schedules, {"17 3 * * 1-6", "17 3 * * 0"})
+        self.assertEqual(schedules, {"17 3 * * *"})
 
         job = indented_block(self.workflow, "adversarial-nightly", 2)
         passing_policy = mapping_value(job, "BUTTONHEIST_ADVERSARIAL_REPEAT_COUNT")
         failure_policy = mapping_value(job, "BUTTONHEIST_ADVERSARIAL_FAILURE_REPEAT_COUNT")
 
-        self.assertIn("github.event.schedule == '17 3 * * 0'", passing_policy)
-        self.assertIn("'20'", passing_policy)
         self.assertIn("'5'", passing_policy)
         self.assertIn("'1'", failure_policy)
+        self.assertNotIn("github.event.schedule", passing_policy)
         self.assertNotIn("github.event.schedule", failure_policy)
+        self.assertNotIn("'20'", passing_policy)
 
     def test_manual_dispatch_controls_passing_and_failure_repeats_separately(self) -> None:
         dispatch = indented_block(self.workflow, "workflow_dispatch", 2)

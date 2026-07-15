@@ -2,9 +2,7 @@ name: Adversarial Nightly
 
 on:
   schedule:
-    # Daily coverage is deliberately shallow; Sunday owns the deeper soak.
-    - cron: "17 3 * * 1-6"
-    - cron: "17 3 * * 0"
+    - cron: "17 3 * * *"
   workflow_dispatch:
     inputs:
       passing_repeat_count:
@@ -30,7 +28,7 @@ jobs:
     timeout-minutes: 65
     env:
       DERIVED_DATA_PATH: /tmp/ButtonHeistDerivedData-adversarial
-      BUTTONHEIST_ADVERSARIAL_REPEAT_COUNT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.passing_repeat_count || github.event.schedule == '17 3 * * 0' && '20' || '5' }}
+      BUTTONHEIST_ADVERSARIAL_REPEAT_COUNT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.passing_repeat_count || '5' }}
       BUTTONHEIST_ADVERSARIAL_FAILURE_REPEAT_COUNT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.failure_repeat_count || '1' }}
       BUTTONHEIST_ADVERSARIAL_CEILING_POLICY: fail
       BUTTONHEIST_RECEIPTS_DIR: ${{ github.workspace }}/ci-artifacts/buttonheist-receipts/adversarial-nightly
