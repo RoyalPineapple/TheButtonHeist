@@ -9,7 +9,8 @@ import Testing
         }
 
         await #expect(waitUntil { await harness.count == 1 })
-        await #expect(harness.resolve("resolve", returning: 7))
+        let didResolve = await harness.resolve("resolve", returning: 7)
+        #expect(didResolve)
         await #expect(task.value == 7)
         await #expect(harness.count == 0)
         await #expect(harness.timeoutFireCount == 0)
@@ -24,7 +25,8 @@ import Testing
         await #expect(task.value == 42)
         await #expect(harness.timeoutFireCount == 1)
         await #expect(harness.count == 0)
-        await #expect(!harness.resolve("timeout", returning: 7))
+        let didResolve = await harness.resolve("timeout", returning: 7)
+        #expect(!didResolve)
     }
 
     @Test func `cancellation resumes and unregisters waiter`() async {
@@ -38,7 +40,8 @@ import Testing
 
         await #expect(task.value == WaiterHarness.cancelledValue)
         await #expect(waitUntil { await harness.count == 0 })
-        await #expect(!harness.resolve("cancel", returning: 7))
+        let didResolve = await harness.resolve("cancel", returning: 7)
+        #expect(!didResolve)
     }
 
     @Test func `duplicate and stale resolution only resolves once`() async {
@@ -48,11 +51,14 @@ import Testing
         }
 
         await #expect(waitUntil { await harness.count == 1 })
-        await #expect(harness.resolve("once", returning: 3))
-        await #expect(!harness.resolve("once", returning: 4))
+        let didResolve = await harness.resolve("once", returning: 3)
+        let didResolveAgain = await harness.resolve("once", returning: 4)
+        #expect(didResolve)
+        #expect(!didResolveAgain)
         await #expect(task.value == 3)
         await #expect(harness.count == 0)
-        await #expect(!harness.resolve("missing", returning: 5))
+        let didResolveMissing = await harness.resolve("missing", returning: 5)
+        #expect(!didResolveMissing)
     }
 
     @Test func `synchronous resolution still runs waiter cleanup`() async {
@@ -60,7 +66,8 @@ import Testing
 
         await #expect(harness.waitResolvingDuringRegistration(key: "immediate", returning: 11) == 11)
         await #expect(harness.count == 0)
-        await #expect(!harness.resolve("immediate", returning: 12))
+        let didResolveAgain = await harness.resolve("immediate", returning: 12)
+        #expect(!didResolveAgain)
     }
 }
 
