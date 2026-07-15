@@ -160,13 +160,6 @@ package enum AdjustableControlsScreen {
     }
 }
 
-package enum CustomRotorsScreen {
-    package static let findFirstError = HeistDef<Void>("CustomRotors.findFirstError") {
-        Rotor("Errors", on: .label("Rotor Host"))
-            .expect(.exists(.label("Rotor Result: Missing amount")), timeout: .seconds(2))
-    }
-}
-
 package enum TouchCanvasScreen {
     private static let canvas = AccessibilityTarget.element(.label("Touch Canvas"), .traits([.allowsDirectInteraction]))
 
@@ -196,23 +189,4 @@ package enum LongListScreen {
     }
 }
 
-package extension HeistExecutionResult {
-    var actionMethods: [ActionMethod] {
-        steps.flatMap(\.actionMethods)
-    }
-
-    var repeatUntilSteps: [HeistExecutionStepResult] {
-        steps.flatMap(\.repeatUntilSteps)
-    }
-}
-
-private extension HeistExecutionStepResult {
-    var actionMethods: [ActionMethod] {
-        (actionEvidence?.dispatchResult.map { [$0.method] } ?? []) + children.flatMap(\.actionMethods)
-    }
-
-    var repeatUntilSteps: [HeistExecutionStepResult] {
-        (kind == .repeatUntil ? [self] : []) + children.flatMap(\.repeatUntilSteps)
-    }
-}
 #endif // canImport(UIKit)

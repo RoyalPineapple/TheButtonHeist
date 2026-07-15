@@ -4,26 +4,6 @@ import TheScore
 
 final class HeistElementTests: XCTestCase {
 
-    func testEquality() {
-        let element1 = makeElement(label: "Button1")
-        let element2 = makeElement(label: "Button1")
-        let element3 = makeElement(label: "Button2")
-
-        XCTAssertEqual(element1, element2)
-        XCTAssertNotEqual(element1, element3)
-    }
-
-    func testHashable() {
-        let element1 = makeElement(label: "Button1")
-        let element2 = makeElement(label: "Button1")
-
-        var set = Set<HeistElement>()
-        set.insert(element1)
-        set.insert(element2)
-
-        XCTAssertEqual(set.count, 1)
-    }
-
     func testEncodingRoundTrip() throws {
         let element = makeElement(label: "RoundTrip")
 

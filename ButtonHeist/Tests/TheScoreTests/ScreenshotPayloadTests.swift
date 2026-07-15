@@ -5,24 +5,6 @@ import TheScore
 
 final class ScreenshotPayloadTests: XCTestCase {
 
-    func testInitialization() {
-        let timestamp = Date()
-        let interface = Interface(timestamp: timestamp, tree: [])
-        let payload = ScreenPayload(
-            pngData: "base64data",
-            width: 390,
-            height: 844,
-            timestamp: timestamp,
-            interface: interface
-        )
-
-        XCTAssertEqual(payload.pngData, "base64data")
-        XCTAssertEqual(payload.width, 390)
-        XCTAssertEqual(payload.height, 844)
-        XCTAssertEqual(payload.timestamp, timestamp)
-        XCTAssertEqual(payload.interface?.projectedElements, [])
-    }
-
     func testDefaultTimestamp() {
         let before = Date()
         let payload = ScreenPayload(

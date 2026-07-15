@@ -182,6 +182,21 @@ let project = Project(
             ])
         ),
 
+        // MARK: - Receipt Diagnosis (macOS tooling core)
+        .target(
+            name: "HeistDoctorCore",
+            destinations: .macOS,
+            product: .framework,
+            bundleId: "com.buttonheist.heistdoctorcore",
+            deploymentTargets: .macOS("14.0"),
+            infoPlist: .default,
+            sources: ["ButtonHeist/Sources/HeistDoctorCore/**"],
+            dependencies: [
+                .target(name: "ThePlans"),
+                .target(name: "TheScore"),
+            ]
+        ),
+
         // MARK: - iOS Server Framework (embeds in iOS apps)
         // Includes ThePlant for automatic initialization via ObjC +load
         .target(
@@ -257,6 +272,7 @@ let project = Project(
             infoPlist: .default,
             sources: ["ButtonHeist/Tests/TestSupport/**"],
             dependencies: [
+                .target(name: "ButtonHeistSupport"),
                 .target(name: "ThePlans"),
                 .target(name: "TheScore"),
                 .external(name: "AccessibilitySnapshotModel"),
@@ -295,6 +311,22 @@ let project = Project(
             sources: ["ButtonHeist/Tests/ButtonHeistSupportTests/**"],
             dependencies: [
                 .target(name: "ButtonHeistSupport"),
+            ]
+        ),
+
+        // MARK: - HeistDoctorCore Tests
+        .target(
+            name: "HeistDoctorCoreTests",
+            destinations: .macOS,
+            product: .unitTests,
+            bundleId: "com.buttonheist.heistdoctorcore.tests",
+            deploymentTargets: .macOS("14.0"),
+            infoPlist: .default,
+            sources: ["ButtonHeist/Tests/HeistDoctorCoreTests/**"],
+            dependencies: [
+                .target(name: "ButtonHeistTestSupport"),
+                .target(name: "HeistDoctorCore"),
+                .target(name: "TheScore"),
             ]
         ),
 
@@ -357,6 +389,7 @@ let project = Project(
         frameworkScheme(name: "ButtonHeistSupport"),
         frameworkScheme(name: "ButtonHeistTesting"),
         frameworkScheme(name: "ButtonHeistTestSupport"),
+        frameworkScheme(name: "HeistDoctorCore"),
         frameworkScheme(name: "TheInsideJob"),
         .scheme(
             name: "ButtonHeistSupportTests",
@@ -366,6 +399,18 @@ let project = Project(
             ]),
             testAction: .targets([
                 .testableTarget(target: .target("ButtonHeistSupportTests")),
+            ])
+        ),
+        .scheme(
+            name: "HeistDoctorCoreTests",
+            buildAction: .buildAction(targets: [
+                .target("HeistDoctorCoreTests"),
+                .target("ButtonHeistTestSupport"),
+                .target("HeistDoctorCore"),
+                .target("TheScore"),
+            ]),
+            testAction: .targets([
+                .testableTarget(target: .target("HeistDoctorCoreTests")),
             ])
         ),
         .scheme(

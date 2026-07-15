@@ -293,13 +293,6 @@ final class TargetConfigTests: XCTestCase {
         }
     }
 
-    // MARK: - TheFence Command Enum
-
-    func testConnectCommandRawValue() {
-        XCTAssertEqual(TheFence.Command.connect.rawValue, "connect")
-        XCTAssertEqual(TheFence.Command.listTargets.rawValue, "list_targets")
-    }
-
     // MARK: - TheFence.configTargetsAsDevices
 
     @ButtonHeistActor

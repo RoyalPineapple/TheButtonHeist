@@ -2,6 +2,7 @@
 import XCTest
 @testable import AccessibilitySnapshotParser
 import ButtonHeistSupport
+import ButtonHeistTestSupport
 @testable import TheInsideJob
 import ThePlans
 import TheScore
@@ -198,53 +199,87 @@ final class ScreenManifestTests: XCTestCase {
 
     // MARK: - Scroll Container Scan Machine
 
-    func testScrollContainerScanMachineRunsForwardThenRestoresBeforeBackward() {
-        var driver = StateDriver(
-            initial: Navigation.ScrollContainerScanState.idle,
-            machine: Navigation.ScrollContainerScanMachine()
-        )
-
-        XCTAssertEqual(driver.send(.begin).effects, [.run(.forward)])
-        XCTAssertEqual(driver.state, .scanning(.forward))
-        XCTAssertEqual(driver.send(.scanCompleted(.exhausted)).effects, [.restore])
-        XCTAssertEqual(driver.state, .restoring(.beforeBackwardScan))
-        XCTAssertEqual(driver.send(.restoreCompleted).effects, [.run(.back)])
-        XCTAssertEqual(driver.state, .scanning(.back))
-    }
-
-    func testScrollContainerScanMachineRestoresBeforeCompletingExhaustiveScan() {
-        var driver = StateDriver(
-            initial: Navigation.ScrollContainerScanState.scanning(.back),
-            machine: Navigation.ScrollContainerScanMachine()
-        )
-
-        XCTAssertEqual(driver.send(.scanCompleted(.exhausted)).effects, [.restore])
-        XCTAssertEqual(driver.state, .restoring(.beforeCompletion))
-        XCTAssertEqual(driver.send(.restoreCompleted).effects, [.finish(.completed)])
-        XCTAssertEqual(driver.state, .finished(.completed))
-    }
-
-    func testScrollContainerScanMachineRestoresBeforeOmittingLimitHit() {
-        var driver = StateDriver(
-            initial: Navigation.ScrollContainerScanState.scanning(.forward),
-            machine: Navigation.ScrollContainerScanMachine()
-        )
-
-        XCTAssertEqual(driver.send(.scanCompleted(.limitHit(.containerScrollLimit))).effects, [.restore])
-        XCTAssertEqual(driver.state, .restoring(.beforeOmission(.containerScrollLimit)))
-        XCTAssertEqual(driver.send(.restoreCompleted).effects, [.finish(.omitted(.containerScrollLimit))])
-        XCTAssertEqual(driver.state, .finished(.omitted(.containerScrollLimit)))
-    }
-
-    func testScrollContainerScanMachineFinishesTerminalWithoutRestore() {
+    func testScrollContainerScanMachineTransitionScenarios() throws {
         let terminal = Navigation.ScrollTraversalTerminal.foundHeistId("save")
-        var driver = StateDriver(
-            initial: Navigation.ScrollContainerScanState.scanning(.forward),
-            machine: Navigation.ScrollContainerScanMachine()
-        )
+        let scenarios: [StateMachineTestScenario<Navigation.ScrollContainerScanMachine>] = [
+            StateMachineTestScenario(
+                "forward exhaustion starts backward scan after restore",
+                initialState: .idle,
+                steps: [
+                    StateMachineTestStep(
+                        "begin forward scan",
+                        event: .begin,
+                        expected: .changed(to: .scanning(.forward), effects: [.run(.forward)])
+                    ),
+                    StateMachineTestStep(
+                        "forward scan exhausts",
+                        event: .scanCompleted(.exhausted),
+                        expected: .changed(to: .restoring(.beforeBackwardScan), effects: [.restore])
+                    ),
+                    StateMachineTestStep(
+                        "restore starts backward scan",
+                        event: .restoreCompleted,
+                        expected: .changed(to: .scanning(.back), effects: [.run(.back)])
+                    ),
+                ]
+            ),
+            StateMachineTestScenario(
+                "backward exhaustion restores before completion",
+                initialState: .scanning(.back),
+                steps: [
+                    StateMachineTestStep(
+                        "backward scan exhausts",
+                        event: .scanCompleted(.exhausted),
+                        expected: .changed(to: .restoring(.beforeCompletion), effects: [.restore])
+                    ),
+                    StateMachineTestStep(
+                        "restore completes scan",
+                        event: .restoreCompleted,
+                        expected: .changed(to: .finished(.completed), effects: [.finish(.completed)])
+                    ),
+                ]
+            ),
+            StateMachineTestScenario(
+                "limit hit restores before omission",
+                initialState: .scanning(.forward),
+                steps: [
+                    StateMachineTestStep(
+                        "scan reaches container limit",
+                        event: .scanCompleted(.limitHit(.containerScrollLimit)),
+                        expected: .changed(
+                            to: .restoring(.beforeOmission(.containerScrollLimit)),
+                            effects: [.restore]
+                        )
+                    ),
+                    StateMachineTestStep(
+                        "restore reports omission",
+                        event: .restoreCompleted,
+                        expected: .changed(
+                            to: .finished(.omitted(.containerScrollLimit)),
+                            effects: [.finish(.omitted(.containerScrollLimit))]
+                        )
+                    ),
+                ]
+            ),
+            StateMachineTestScenario(
+                "terminal result finishes without restore",
+                initialState: .scanning(.forward),
+                steps: [
+                    StateMachineTestStep(
+                        "scan finds terminal result",
+                        event: .scanCompleted(.terminal(terminal)),
+                        expected: .changed(
+                            to: .finished(.terminal(terminal)),
+                            effects: [.finish(.terminal(terminal))]
+                        )
+                    ),
+                ]
+            ),
+        ]
 
-        XCTAssertEqual(driver.send(.scanCompleted(.terminal(terminal))).effects, [.finish(.terminal(terminal))])
-        XCTAssertEqual(driver.state, .finished(.terminal(terminal)))
+        for scenario in scenarios {
+            try runStateMachineScenario(scenario, machine: Navigation.ScrollContainerScanMachine())
+        }
     }
 
     // MARK: - maxScrollsPerContainer

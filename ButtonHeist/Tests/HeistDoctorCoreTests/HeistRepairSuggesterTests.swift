@@ -688,16 +688,23 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
     @Test("Ordered change facts explain value changes without requiring full after snapshot")
     func changeFactsExplainValueChangesWithoutRequiringFullAfterSnapshot() throws {
         let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Quantity"))
-        let changed = element(label: "Quantity", value: "2", traits: [.staticText])
+        let quantityBefore = element(
+            label: "Quantity",
+            value: "1",
+            traits: [.button],
+            actions: [.activate]
+        )
+        let changed = element(
+            label: "Quantity",
+            value: "2",
+            traits: [.button],
+            actions: [.activate]
+        )
         let last = passedEvidence(
             target: target,
-            before: makeTestInterface(elements: [
-                element(label: "Quantity", value: "1", traits: [.button], actions: [.activate]),
-            ]),
+            before: makeTestInterface(elements: [quantityBefore]),
             changeFacts: changeFacts(
-                before: makeTestInterface(elements: [
-                    element(label: "Quantity", value: "1", traits: [.button]),
-                ]),
+                before: makeTestInterface(elements: [quantityBefore]),
                 after: makeTestInterface(elements: [changed])
             ),
             expectation: ExpectationResult(met: true, predicate: nil)
@@ -736,8 +743,14 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
             changeFacts: changeFacts(
                 before: oldScreen,
                 after: newScreen,
-                beforeScreenId: "cart",
-                afterScreenId: "checkout"
+                beforeContext: AccessibilityTrace.Context(
+                    screenId: "cart",
+                    observationGeneration: 1
+                ),
+                afterContext: AccessibilityTrace.Context(
+                    screenId: "checkout",
+                    observationGeneration: 2
+                )
             )
         )
         let current = failedEvidence(target: target, before: newScreen)
@@ -1111,15 +1124,18 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
     private func changeFacts(
         before: Interface,
         after: Interface,
-        beforeScreenId: String? = nil,
-        afterScreenId: String? = nil
+        beforeContext: AccessibilityTrace.Context = .empty,
+        afterContext: AccessibilityTrace.Context = .empty
     ) -> [AccessibilityTrace.ChangeFact] {
         AccessibilityTrace(capture: AccessibilityTrace.Capture(
             sequence: 1,
             interface: before,
-            context: AccessibilityTrace.Context(screenId: beforeScreenId)
+            context: beforeContext
         ))
-        .appending(after, context: AccessibilityTrace.Context(screenId: afterScreenId))
+        .appending(
+            after,
+            context: afterContext
+        )
         .changeFacts
     }
 

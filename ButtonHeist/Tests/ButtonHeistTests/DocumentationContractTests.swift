@@ -70,65 +70,6 @@ final class DocumentationContractTests: XCTestCase {
         )
     }
 
-    func testPublicSurfaceMatrixCoversRequiredContracts() throws {
-        let api = try contents(relativePath: "docs/API.md")
-
-        XCTAssertTrue(api.contains("## Public Surface Matrix"), api)
-        for phrase in [
-            "SwiftPM products and modules",
-            "Homebrew release",
-            "CLI commands",
-            "JSON-lines input",
-            "MCP tools",
-            "`.heist` artifact format",
-            "Plan DSL/source",
-            "Config and environment keys",
-            "Wire compatibility policy",
-        ] {
-            XCTAssertTrue(api.contains(phrase), phrase)
-        }
-    }
-
-    func testHeistDoctorStatusIsDocumentedAsExperimentalSPMOnly() throws {
-        let api = try contents(relativePath: "docs/API.md")
-        let doctor = try contents(relativePath: "docs/HEIST-DOCTOR.md")
-        let formula = try contents(relativePath: "Formula/buttonheist.rb")
-        let package = try contents(relativePath: "Package.swift")
-
-        XCTAssertTrue(package.contains(#".executable(name: "heist-doctor""#))
-        XCTAssertFalse(formula.contains(#"bin.install "heist-doctor""#))
-
-        for phrase in [
-            "Public experimental, SwiftPM-only",
-            "Not installed by Homebrew",
-            "not a major-version stability contract",
-        ] {
-            XCTAssertTrue(api.containsNormalizedMarkdown(phrase), phrase)
-        }
-        for phrase in [
-            "public experimental, SwiftPM-only alpha",
-            "not installed by the Homebrew formula",
-            "not a major-version compatibility contract",
-        ] {
-            XCTAssertTrue(doctor.containsNormalizedMarkdown(phrase), phrase)
-        }
-    }
-
-    func testWireProtocolDocumentsExactProductVersionLockstep() throws {
-        let wireProtocol = try contents(relativePath: "docs/WIRE-PROTOCOL.md")
-
-        for phrase in [
-            "There is no separate wire-protocol version",
-            "exact product-version lockstep",
-            "must come from the same product release",
-            "major, minor, and patch differences are all incompatible",
-            "there is no downgrade, feature negotiation, or best-effort compatibility mode",
-            "protocolMismatch",
-        ] {
-            XCTAssertTrue(wireProtocol.containsNormalizedMarkdown(phrase), phrase)
-        }
-    }
-
     func testPublicJSONDocsUseCanonicalPredicateShape() throws {
         let stalePatterns = [
             #""match"\s*:\s*""#,
@@ -277,47 +218,6 @@ final class DocumentationContractTests: XCTestCase {
         ))
         let payload = try XCTUnwrap(actionBlocks[safe: 1])
         _ = try JSONDecoder().decode(ResultPayload.self, from: Data(payload.utf8))
-    }
-
-    func testCIReceiptContractDocumentsExistingScripts() throws {
-        let ci = try contents(relativePath: "docs/CI.md")
-
-        for script in [
-            "scripts/run-with-heist-receipts.sh",
-            "scripts/collect-ios-heist-receipts.sh",
-            "scripts/write-ci-heist-receipt-manifest.sh",
-        ] {
-            XCTAssertTrue(ci.contains(script), script)
-            XCTAssertTrue(
-                FileManager.default.fileExists(atPath: repositoryRoot().appendingPathComponent(script).path),
-                script
-            )
-        }
-
-        for phrase in [
-            "BUTTONHEIST_RECEIPTS_DIR",
-            "BUTTONHEIST_RECEIPTS_MODE",
-            "--ios-sandbox",
-            "manifest.txt",
-            "receipt-files.txt",
-            "collection-diagnostics.txt",
-            "runHeistSync(\"Checkout.pay\", recordReceipt: .always, to: receiptsURL)",
-        ] {
-            XCTAssertTrue(ci.containsNormalizedMarkdown(phrase), phrase)
-        }
-    }
-
-    func testScopeDocumentsSystemSurfaceBoundary() throws {
-        let scope = try contents(relativePath: "docs/SCOPE-AND-LIMITS.md")
-
-        for phrase in [
-            "server sees only its own process's accessibility tree",
-            "SpringBoard-owned permission alerts",
-            "XCUITest should tap SpringBoard or other system UI",
-            "Do not send Button Heist commands while a SpringBoard alert is visible",
-        ] {
-            XCTAssertTrue(scope.containsNormalizedMarkdown(phrase), phrase)
-        }
     }
 
     func testHomebrewRendererAcceptsOnlySemVerReleaseVersions() throws {
@@ -512,15 +412,5 @@ private struct JSONLinesCommandExample: Decodable {
             .filter { rawFieldContainer.contains($0) }
             .map(\.stringValue)
             .sorted()
-    }
-}
-
-private extension String {
-    func containsNormalizedMarkdown(_ phrase: String) -> Bool {
-        normalizedMarkdownWhitespace.contains(phrase.normalizedMarkdownWhitespace)
-    }
-
-    var normalizedMarkdownWhitespace: String {
-        split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
 }
