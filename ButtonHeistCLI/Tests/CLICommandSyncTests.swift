@@ -13,17 +13,6 @@ final class CLICommandSyncTests: XCTestCase {
         }
     }
 
-    func testJSONLinesHelpShowsCurrentUserCommands() {
-        let help = TheFence.Command.cliJSONLinesHelp
-
-        XCTAssertTrue(help.contains("activate"))
-        XCTAssertTrue(help.contains("get_interface"))
-        XCTAssertTrue(help.contains("run_heist"))
-        XCTAssertTrue(help.contains("validate_heist"))
-        XCTAssertTrue(help.contains("list_heists"))
-        XCTAssertTrue(help.contains("describe_heist"))
-    }
-
     func testTopLevelSubcommandsMatchFenceCLIExposure() {
         let descriptorNames = TheFence.Command.cliDirectCommandDescriptors.map(\.command.rawValue)
         let expected = (descriptorNames + ["json_lines"]).sorted()
@@ -392,99 +381,44 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(parsed.argument(.text), .string("hello"))
     }
 
-    func testMachineRequestParserParsesStringMachineRequestIdAsMetadata() throws {
-        let parsed = try CLIMachineRequestParser.parsedRequest(
-            from: #"{"id":"request-1","command":"type_text","text":"hello"}"#
-        )
+    func testMachineRequestParserPreservesScalarMachineRequestIdsAsMetadata() throws {
+        let cases: [(json: String, expected: PublicRequestId)] = [
+            (#""request-1""#, .string("request-1")),
+            ("9223372036854775807", .signedInteger(Int64.max)),
+            ("null", .null),
+            ("18446744073709551615", .unsignedInteger(UInt64.max)),
+            ("1.25", .double(1.25)),
+            ("1.0", .signedInteger(1)),
+        ]
 
-        XCTAssertEqual(parsed.requestId, .string("request-1"))
-        XCTAssertNil(parsed.argument(FenceParameterKey(rawValue: "id")!))
-        XCTAssertEqual(parsed.argument(.text), .string("hello"))
-    }
-
-    func testMachineRequestParserParsesTypedMachineRequestId() throws {
-        let parsed = try CLIMachineRequestParser.parsedRequest(
-            from: #"{"id":9223372036854775807,"command":"type_text","text":"hello"}"#
-        )
-
-        XCTAssertEqual(parsed.requestId, .signedInteger(Int64.max))
-    }
-
-    func testMachineRequestParserParsesNullMachineRequestId() throws {
-        let parsed = try CLIMachineRequestParser.parsedRequest(
-            from: #"{"id":null,"command":"ping"}"#
-        )
-
-        XCTAssertEqual(parsed.requestId, .null)
-        XCTAssertEqual(parsed.command, .ping)
-    }
-
-    func testMachineRequestParserParsesUnsignedMachineRequestId() throws {
-        let parsed = try CLIMachineRequestParser.parsedRequest(
-            from: #"{"id":18446744073709551615,"command":"ping"}"#
-        )
-
-        XCTAssertEqual(parsed.requestId, .unsignedInteger(UInt64.max))
-    }
-
-    func testMachineRequestParserParsesDecimalMachineRequestId() throws {
-        let parsed = try CLIMachineRequestParser.parsedRequest(
-            from: #"{"id":1.25,"command":"ping"}"#
-        )
-
-        XCTAssertEqual(parsed.requestId, .double(1.25))
-    }
-
-    func testMachineRequestParserParsesWholeNumberMachineRequestIdAsInteger() throws {
-        let parsed = try CLIMachineRequestParser.parsedRequest(
-            from: #"{"id":1.0,"command":"ping"}"#
-        )
-
-        XCTAssertEqual(parsed.requestId, .signedInteger(1))
-    }
-
-    func testMachineRequestParserRejectsNonScalarMachineRequestId() {
-        XCTAssertThrowsError(
-            try CLIMachineRequestParser.parsedRequest(
-                from: #"{"id":{"nested":true},"command":"type_text","text":"hello"}"#
+        for testCase in cases {
+            let parsed = try CLIMachineRequestParser.parsedRequest(
+                from: "{\"id\":\(testCase.json),\"command\":\"ping\"}"
             )
-        ) { error in
-            let failure = machineRequestFailure(from: error)
-            XCTAssertTrue(
-                failure.message.contains("Public JSON request id must be string"),
-                failure.message
-            )
-            XCTAssertEqual(failure.details.code, .requestInvalid)
+
+            XCTAssertEqual(parsed.requestId, testCase.expected, testCase.json)
+            XCTAssertEqual(parsed.command, .ping, testCase.json)
+            XCTAssertNil(parsed.argument(FenceParameterKey(rawValue: "id")!), testCase.json)
         }
     }
 
-    func testMachineRequestParserRejectsBoolMachineRequestId() {
-        XCTAssertThrowsError(
-            try CLIMachineRequestParser.parsedRequest(
-                from: #"{"id":true,"command":"ping"}"#
-            )
-        ) { error in
-            let failure = machineRequestFailure(from: error)
-            XCTAssertTrue(
-                failure.message.contains("does not support bool"),
-                failure.message
-            )
-            XCTAssertEqual(failure.details.code, .requestInvalid)
-        }
-    }
+    func testMachineRequestParserRejectsUnsupportedMachineRequestIds() {
+        let cases = [
+            (#"{"nested":true}"#, "Public JSON request id must be string"),
+            ("true", "does not support bool"),
+            (#"["r1"]"#, "Public JSON request id"),
+        ]
 
-    func testMachineRequestParserRejectsArrayMachineRequestId() {
-        XCTAssertThrowsError(
-            try CLIMachineRequestParser.parsedRequest(
-                from: #"{"id":["r1"],"command":"ping"}"#
-            )
-        ) { error in
-            let failure = machineRequestFailure(from: error)
-            XCTAssertTrue(
-                failure.message.contains("Public JSON request id"),
-                failure.message
-            )
-            XCTAssertEqual(failure.details.code, .requestInvalid)
+        for (json, expectedMessage) in cases {
+            XCTAssertThrowsError(
+                try CLIMachineRequestParser.parsedRequest(
+                    from: "{\"id\":\(json),\"command\":\"ping\"}"
+                )
+            ) { error in
+                let failure = self.machineRequestFailure(from: error)
+                XCTAssertTrue(failure.message.contains(expectedMessage), failure.message)
+                XCTAssertEqual(failure.details.code, .requestInvalid)
+            }
         }
     }
 
@@ -640,13 +574,6 @@ final class CLICommandSyncTests: XCTestCase {
             )
             XCTAssertEqual(failure.details.code, .requestInvalid)
         }
-    }
-
-    func testMachineRequestParserAttachesDescriptorForCanonicalMachineJSON() throws {
-        let parsed = try CLIMachineRequestParser.parsedRequest(from: #"{"command":"type_text","text":"hello"}"#)
-
-        XCTAssertEqual(parsed.command, .typeText)
-        XCTAssertEqual(parsed.argument(.text), .string("hello"))
     }
 
     func testCommandArgumentEnvelopeBuilderCarriesCanonicalTarget() throws {

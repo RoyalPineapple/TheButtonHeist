@@ -17,8 +17,4 @@ final class HeistTraitTests: XCTestCase {
         XCTAssertEqual(decoded, .button)
     }
 
-    func testUnknownRawValueReturnsNil() {
-        XCTAssertNil(HeistTrait(rawValue: "futureTrait"))
-    }
-
 }

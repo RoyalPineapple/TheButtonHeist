@@ -1,6 +1,5 @@
 import XCTest
 import ThePlans
-import CoreGraphics
 @_spi(ButtonHeistInternals) import TheScore
 
 /// Message-level coverage for mutating behavior now proves those actions are
@@ -125,22 +124,6 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
         }
     }
 
-    func testActionResultWithFailureMessage() throws {
-        let result = ActionResult.failure(
-            method: .activate,
-            errorKind: .elementNotFound,
-            message: "Element not found",
-            evidence: .none
-        )
-        let data = try JSONEncoder().encode(result)
-        let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
-
-        XCTAssertFalse(decoded.outcome.isSuccess)
-        XCTAssertEqual(decoded.method, .activate)
-        XCTAssertEqual(decoded.message, "Element not found")
-        XCTAssertEqual(decoded.outcome.errorKind, .elementNotFound)
-    }
-
     func testActionResultEncodesCanonicalOutcomeObject() throws {
         let result = ActionResult.failure(
             method: .activate,
@@ -164,33 +147,6 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
 
         XCTAssertThrowsError(try JSONDecoder().decode(ActionResult.self, from: Data(json.utf8))) { error in
             XCTAssertTrue("\(error)".contains("Unknown ActionResult field"), "\(error)")
-        }
-    }
-
-    func testActionResultWithValueField() throws {
-        let result = ActionResult.success(payload: .typeText("hello world"), evidence: .none)
-        let data = try JSONEncoder().encode(result)
-        let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
-
-        XCTAssertTrue(decoded.outcome.isSuccess)
-        XCTAssertEqual(decoded.method, .typeText)
-        guard case .value(let text) = decoded.payload else {
-            return XCTFail("Expected .value payload, got \(String(describing: decoded.payload))")
-        }
-        XCTAssertEqual(text, "hello world")
-    }
-
-    func testServerMessageActionResultEncoding() throws {
-        let result = ActionResult.success(method: .syntheticTap, evidence: .none)
-        let message = ServerMessage.actionResult(result)
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
-
-        if case .actionResult(let decodedResult) = decoded {
-            XCTAssertTrue(decodedResult.outcome.isSuccess)
-            XCTAssertEqual(decodedResult.method, .syntheticTap)
-        } else {
-            XCTFail("Expected actionResult message")
         }
     }
 

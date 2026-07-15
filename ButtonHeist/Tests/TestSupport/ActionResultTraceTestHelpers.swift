@@ -2,22 +2,6 @@ import Foundation
 import ThePlans
 @testable import TheScore
 
-package func makeTestScreenPayload(
-    pngData: String = "",
-    width: Double = 393,
-    height: Double = 852,
-    timestamp: Date = Date(timeIntervalSince1970: 0),
-    interface: Interface? = nil
-) -> ScreenPayload {
-    ScreenPayload(
-        pngData: pngData,
-        width: width,
-        height: height,
-        timestamp: timestamp,
-        interface: interface
-    )
-}
-
 package func makeTestTraceEvidence(
     _ trace: AccessibilityTrace,
     completeness: AccessibilityTraceEvidence.Completeness

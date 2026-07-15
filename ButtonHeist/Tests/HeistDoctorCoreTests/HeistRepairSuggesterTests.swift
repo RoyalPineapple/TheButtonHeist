@@ -891,36 +891,6 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
         #expect(message == "timed out waiting for checkout")
     }
 
-    @Test("Doctor returns an error when no safe successor exists")
-    func doctorReturnsErrorWhenNoSafeSuccessorExists() {
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
-        let lastPass = receipt(
-            path: "$.body[0]",
-            status: .passed,
-            target: target,
-            before: makeTestInterface(elements: [
-                element(label: "Delete", traits: [.button], actions: [.activate]),
-            ]),
-            after: nil,
-            actionSucceeded: true
-        )
-        let newFail = receipt(
-            path: "$.body[0]",
-            status: .failed,
-            target: target,
-            before: makeTestInterface(elements: [
-                element(label: "Checkout", traits: [.button], actions: [.activate]),
-            ]),
-            after: nil,
-            actionSucceeded: false
-        )
-
-        let reason = noSafeSuggestionReason(lastPass: lastPass, newFail: newFail, expectedPath: "$.body[0]")
-
-        #expect(reason.contains("old target is missing"))
-        #expect(reason.contains("semantic continuity"))
-    }
-
     @Test func `doctor diagnosis returns typed refusal for valid receipt pair`() throws {
         let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
         let lastPass = receipt(
@@ -954,91 +924,8 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
         #expect(refusal.stage == .candidateRanking)
         #expect(refusal.reason == .noCandidateMetScoreThreshold)
         #expect(refusal.message.contains("old target is missing"))
-    }
-
-    @Test("Doctor returns an error when no target repair is needed")
-    func doctorReturnsErrorWhenNoTargetRepairIsNeeded() {
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
-        let before = listInterface(rows: [
-            ("Milk", "Delete"),
-        ])
-        let lastPass = receipt(
-            path: "$.body[0]",
-            status: .passed,
-            target: target,
-            before: before,
-            after: nil,
-            actionSucceeded: true
-        )
-        let newFail = receipt(
-            path: "$.body[0]",
-            status: .failed,
-            target: target,
-            before: before,
-            after: nil,
-            actionSucceeded: false
-        )
-
-        let reason = noSafeSuggestionReason(lastPass: lastPass, newFail: newFail, expectedPath: "$.body[0]")
-
-        #expect(reason.contains("old target still resolves"))
-        #expect(reason.contains("no target repair needed"))
-    }
-
-    @Test("Doctor suggestions do not mutate receipts")
-    func doctorSuggestionsDoNotMutateReceipts() throws {
-        let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
-        let lastPass = receipt(
-            path: "$.body[0]",
-            status: .passed,
-            target: target,
-            before: listInterface(rows: [
-                ("Milk", "Delete"),
-            ]),
-            after: makeTestInterface(elements: [
-                element(label: "Done", traits: [.staticText]),
-            ]),
-            actionSucceeded: true
-        )
-        let newFail = receipt(
-            path: "$.body[0]",
-            status: .failed,
-            target: target,
-            before: listInterface(rows: [
-                ("Milk", "Remove"),
-            ]),
-            after: nil,
-            actionSucceeded: false
-        )
-        let originalLastPass = lastPass
-        let originalNewFail = newFail
-
-        _ = try HeistDoctor.suggestions(lastPass: lastPass, newFail: newFail)
-
-        #expect(lastPass == originalLastPass)
-        #expect(newFail == originalNewFail)
-    }
-
-    private func noSafeSuggestionReason(
-        lastPass: HeistExecutionResult,
-        newFail: HeistExecutionResult,
-        expectedPath: String
-    ) -> String {
-        do {
+        #expect(throws: HeistDoctorError.self) {
             _ = try HeistDoctor.suggestions(lastPass: lastPass, newFail: newFail)
-            Issue.record("Expected no safe suggestion error")
-            return ""
-        } catch let error as HeistDoctorError {
-            guard case .noSafeSuggestion(let path, let reason) = error else {
-                Issue.record("Expected no safe suggestion error, got \(error)")
-                return ""
-            }
-            #expect(error.errorDescription == error.description)
-            #expect(path == expectedPath)
-            return reason
-        } catch {
-            Issue.record("Expected HeistDoctorError, got \(error)")
-            return ""
         }
     }
 

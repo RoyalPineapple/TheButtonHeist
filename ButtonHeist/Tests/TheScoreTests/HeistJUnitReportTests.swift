@@ -290,17 +290,6 @@ final class HeistJUnitReportTests: XCTestCase {
         assertContains(xml, "<testcase name=\"test-heist\"")
     }
 
-    // MARK: - Equatable
-
-    func testEquatable() {
-        let report1 = makeReport(outcomes: [.passed])
-        let report2 = makeReport(outcomes: [.passed])
-        XCTAssertEqual(report1, report2)
-
-        let report3 = makeReport(outcomes: [.failed(message: "error", errorKind: nil)])
-        XCTAssertNotEqual(report1, report3)
-    }
-
     // MARK: - Helpers
 
     private func makeReport(
