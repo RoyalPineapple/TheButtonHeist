@@ -35,6 +35,7 @@ final class WireCommandParityTests: XCTestCase {
         XCTAssertEqual(TheFence.Command.scrollToEdge.family, .viewportDebug)
         XCTAssertEqual(TheFence.Command.perform.family, .heistRuntime)
         XCTAssertEqual(TheFence.Command.runHeist.family, .heistRuntime)
+        XCTAssertEqual(TheFence.Command.validateHeist.family, .heistRuntime)
         XCTAssertEqual(TheFence.Command.listHeists.family, .heistRuntime)
         XCTAssertEqual(TheFence.Command.describeHeist.family, .heistRuntime)
 
@@ -83,6 +84,20 @@ final class WireCommandParityTests: XCTestCase {
         XCTAssertFalse(keys.contains("body"))
     }
 
+    func testValidateHeistDescriptorIsOfflineAndUsesCanonicalPlanSources() {
+        let descriptor = TheFence.Command.validateHeist.descriptor
+        let keys = Set(descriptor.parameters.map(\.key))
+
+        XCTAssertFalse(descriptor.requiresConnectionBeforeDispatch)
+        XCTAssertEqual(descriptor.responseProjection, .heistValidation)
+        XCTAssertTrue(keys.isSuperset(of: ["path", "plan", "argument", "lint"]))
+        XCTAssertFalse(keys.contains("body"))
+        XCTAssertEqual(
+            descriptor.requiredDefaultValue(for: FenceParameters.heistValidationLint),
+            .compositionQuality
+        )
+    }
+
     func testDescriptorLookupFindsEquivalentNestedParameters() {
         let direction = TheFence.Command.swipe.descriptor.parameter(named: .direction)
 
@@ -127,6 +142,7 @@ final class WireCommandParityTests: XCTestCase {
         XCTAssertEqual(TheFence.Command.scroll.descriptor.responseProjection, .action)
         XCTAssertEqual(TheFence.Command.listHeists.descriptor.responseProjection, .heistCatalog)
         XCTAssertEqual(TheFence.Command.describeHeist.descriptor.responseProjection, .heistDescription)
+        XCTAssertEqual(TheFence.Command.validateHeist.descriptor.responseProjection, .heistValidation)
         XCTAssertTrue(TheFence.Command.descriptors.allSatisfy { $0.failureProjection == .diagnosticFailure })
     }
 
@@ -592,7 +608,7 @@ final class WireCommandParityTests: XCTestCase {
             return ["action": .string(EditAction.paste.rawValue)]
         case .setPasteboard:
             return ["text": .string("clipboard")]
-        case .runHeist, .listHeists:
+        case .runHeist, .validateHeist, .listHeists:
             return [
                 "plan": .string("""
                 HeistPlan("entry") {

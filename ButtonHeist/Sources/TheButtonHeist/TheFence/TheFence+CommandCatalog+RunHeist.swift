@@ -21,6 +21,20 @@ extension TheFence.Command {
                 responseProjection: .heistExecution,
                 projection: .cliAndMCP(Self.runHeistDescription)
             )
+        case .validateHeist:
+            return makeDescriptor(
+                family: .heistRuntime,
+                requiresConnectionBeforeDispatch: false,
+                parameters: [
+                    Self.rootArgumentParameter,
+                    FenceParameters.heistValidationLint.spec,
+                ] + Self.planSourceParameters,
+                responseProjection: .heistValidation,
+                projection: .cliAndMCP(
+                    Self.validateHeistDescription,
+                    mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
+                )
+            )
         case .listHeists:
             return makeDescriptor(
                 family: .heistRuntime,
@@ -108,6 +122,14 @@ extension TheFence.Command {
         Provide exactly one source: `path` or `plan`. Use `argument` when the root
         heist takes a string or accessibility target. Runtime source is restricted
         ButtonHeist DSL, not arbitrary Swift.
+        """
+
+    private static let validateHeistDescription = """
+        Validate a durable Button Heist plan without connecting to an app.
+        Returns runtime-admission diagnostics, optional authoring lint, and
+        canonical source. Provide exactly one of `plan` or `path`. This cannot
+        verify live targets or UI outcomes. Call `run_heist` only after
+        `admissible` is true.
         """
 
     private static var rootArgumentParameter: FenceParameterSpec {

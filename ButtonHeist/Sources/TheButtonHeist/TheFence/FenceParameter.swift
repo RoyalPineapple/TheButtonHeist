@@ -83,7 +83,7 @@ import TheScore
     static let header = Self("header")
     static let heist = Self("heist"), hint = Self("hint"), id = Self("id"), identifier = Self("identifier")
     static let inlineData = Self("inlineData"), path = Self("path"), isImportant = Self("isImportant"), isModalBoundary = Self("isModalBoundary")
-    static let kind = Self("kind"), label = Self("label"), match = Self("match"), matcher = Self("matcher")
+    static let kind = Self("kind"), label = Self("label"), lint = Self("lint"), match = Self("match"), matcher = Self("matcher")
     static let maxScrollsPerContainer = Self("maxScrollsPerContainer")
     static let maxScrollsPerDiscovery = Self("maxScrollsPerDiscovery")
     static let mode = Self("mode")

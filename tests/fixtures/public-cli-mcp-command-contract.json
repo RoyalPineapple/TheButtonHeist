@@ -443,6 +443,24 @@
     },
     {
       "cliExposure" : "directCommand",
+      "description" : "Validate a durable Button Heist plan without connecting to an app.\nReturns runtime-admission diagnostics, optional authoring lint, and\ncanonical source. Provide exactly one of `plan` or `path`. This cannot\nverify live targets or UI outcomes. Call `run_heist` only after\n`admissible` is true.",
+      "failureProjection" : "diagnosticFailure",
+      "family" : "heistRuntime",
+      "inputSchemaSHA256" : "3683497f34d697e38a8aa6539cfab69f9608370c6ed284f64f0b7774922bd53d",
+      "mcpAnnotations" : {
+        "idempotentHint" : true,
+        "readOnlyHint" : true
+      },
+      "mcpExposure" : "directTool",
+      "name" : "validate_heist",
+      "requiresConnectionBeforeDispatch" : false,
+      "responseProjection" : "heistValidation",
+      "timeout" : {
+        "kind" : "none"
+      }
+    },
+    {
+      "cliExposure" : "directCommand",
       "description" : "Assert that an accessibility predicate is satisfied within timeout by evaluating settled accessibility state.",
       "failureProjection" : "diagnosticFailure",
       "family" : "assertion",

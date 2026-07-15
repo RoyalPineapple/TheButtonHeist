@@ -141,6 +141,9 @@ extension TheFence {
             case .runHeist:
                 let request = try fence.decodeRunHeistRequest(arguments)
                 dispatch = DecodedRequestDispatch { fence in try await fence.handleRunHeist(request) }
+            case .validateHeist:
+                let request = try fence.decodeValidateHeistRequest(arguments)
+                dispatch = DecodedRequestDispatch { fence in try fence.handleValidateHeist(request) }
             case .listHeists:
                 let request = try fence.decodeListHeistsRequest(arguments)
                 dispatch = DecodedRequestDispatch { fence in fence.handleListHeists(request) }

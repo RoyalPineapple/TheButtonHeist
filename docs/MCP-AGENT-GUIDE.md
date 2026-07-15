@@ -146,6 +146,20 @@ Prefer the `plan` field with canonical ButtonHeist source when authoring compact
 heists as an agent, or pass a generated `.heist` artifact path when reusing a
 stored artifact:
 
+Before attempting a newly authored plan, call `validate_heist` with the same
+`plan` or `.heist` `path`, root `argument`, and desired lint mode. This tool is
+entirely local: it does not discover an app, connect to a device, or acquire a
+session. Its result distinguishes:
+
+- `plan`: source/package admission
+- `invocation`: root argument arity and type
+- `lint`: `none`, `composition_quality`, or `strict_test` authoring findings
+
+`admissible` means the plan and invocation may be submitted to `run_heist`.
+It does not mean live targets exist or runtime expectations will pass. MCP
+returns invalid plans as ordinary structured validation content, so inspect
+`admissible` rather than treating `isError` as the validation result.
+
 ```swift
 HeistPlan {
     Activate(.label("Pay"))

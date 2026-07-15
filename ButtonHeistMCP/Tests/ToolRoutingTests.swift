@@ -143,6 +143,21 @@ struct ToolRoutingTests {
         ]))
     }
 
+    @Test("validate_heist routes source and lint opaquely")
+    func validateHeistRoutesSourceAndLint() throws {
+        let operation = try routed(
+            TheFence.Command.validateHeist.rawValue,
+            [
+                "plan": .string("HeistPlan { Warn(\"Check\") }"),
+                "lint": .string("strict_test"),
+            ]
+        )
+
+        #expect(operation.command == .validateHeist)
+        #expect(operation.arguments.value(for: .plan) == .string("HeistPlan { Warn(\"Check\") }"))
+        #expect(operation.arguments.value(for: .lint) == .string("strict_test"))
+    }
+
     @Test("MCP rejects nested argument trees before HeistValue conversion")
     func mcpRejectsNestedArgumentTreeBeforeHeistValueConversion() {
         let nested = Self.nestedMCPValueOverLimit()

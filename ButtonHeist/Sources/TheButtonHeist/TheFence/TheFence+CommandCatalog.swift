@@ -36,6 +36,7 @@ extension TheFence {
         case dismissKeyboard = "dismiss_keyboard"
         case perform
         case runHeist = "run_heist"
+        case validateHeist = "validate_heist"
         case listHeists = "list_heists"
         case describeHeist = "describe_heist"
         case getSessionState = "get_session_state"
@@ -124,6 +125,7 @@ struct FenceCommandExecution: OptionSet, Sendable, Equatable {
     case announcements
     case action
     case heistExecution
+    case heistValidation
     case heistCatalog
     case heistDescription
     case sessionState
@@ -295,7 +297,7 @@ struct FenceCommandExecution: OptionSet, Sendable, Equatable {
             return makeViewportDebugDescriptor()
         case .activate, .rotor, .typeText, .editAction, .setPasteboard, .dismissKeyboard:
             return makeSemanticActionDescriptor()
-        case .perform, .runHeist, .listHeists, .describeHeist:
+        case .perform, .runHeist, .validateHeist, .listHeists, .describeHeist:
             return makeHeistRuntimeDescriptor()
         }
     }

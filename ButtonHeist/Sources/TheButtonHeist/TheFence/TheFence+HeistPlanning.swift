@@ -23,6 +23,13 @@ extension TheFence {
         let description: HeistDescription
     }
 
+    struct ValidateHeistRequest {
+        let source: HeistPlanSourceAdmissionRequest
+        let argument: HeistArgument
+        let argumentProvided: Bool
+        let lintMode: HeistValidationLintMode
+    }
+
     enum PerformableHeistStep: Sendable, Equatable {
         case action(ActionStep)
         case wait(WaitStep)
@@ -91,6 +98,38 @@ extension TheFence {
         let argument = try decodeRootHeistArgument(from: arguments)
         try validateRootHeistArgument(argument, for: plan)
         return RunHeistRequest(plan: plan, argument: argument)
+    }
+
+    func decodeValidateHeistRequest(_ arguments: CommandArgumentEnvelope) throws -> ValidateHeistRequest {
+        try CommandArgumentEnvelopeLimits.validateHeistPlanSource(arguments, field: Command.validateHeist.rawValue)
+        let path = try arguments.value(FenceParameters.planPath)
+        let inlineDSL = try arguments.value(FenceParameters.inlinePlan)
+        let sourceResult = HeistPlanning.rejectRawStructuredJSONIRSourceFieldsResult(
+            commandName: Command.validateHeist.rawValue,
+            fields: rawStructuredJSONIRSourceFields(in: arguments, dropping: [.argument, .lint])
+        ).flatMap {
+            HeistPlanning.admissionRequestResult(
+                commandName: Command.validateHeist.rawValue,
+                path: path,
+                inlineDSL: inlineDSL
+            )
+        }
+        let source: HeistPlanSourceAdmissionRequest
+        switch sourceResult {
+        case .success(let request, _):
+            source = request
+        case .failure(let diagnostics):
+            throw buildDiagnosticFenceError(diagnostics)
+        }
+        return ValidateHeistRequest(
+            source: source,
+            argument: try decodeRootHeistArgument(from: arguments),
+            argumentProvided: arguments.value(for: .argument) != nil,
+            lintMode: try arguments.value(
+                FenceParameters.heistValidationLint,
+                defaultFrom: Command.validateHeist.descriptor
+            )
+        )
     }
 
     func loadInlinePerformStepSource(_ source: String) throws -> HeistPlan {

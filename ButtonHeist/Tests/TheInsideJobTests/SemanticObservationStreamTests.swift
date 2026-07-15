@@ -3,6 +3,8 @@
 import Foundation
 import XCTest
 
+import ButtonHeistTestSupport
+
 @testable import AccessibilitySnapshotParser
 @testable import TheInsideJob
 @testable import TheScore
@@ -180,6 +182,68 @@ final class SemanticObservationStreamTests: XCTestCase {
             ),
             .screenChangedNotification
         )
+    }
+
+    func testRuntimeStateOwnsLifecycleReplacementAndCancellation() {
+        var state = SemanticObservationRuntimeState()
+        let task = Task<Void, Never> { await Task.yield() }
+        let initialDiscovery: SemanticObservationRuntimeState.DiscoveryObservation = { nil }
+        state.start(task: task, discovery: initialDiscovery)
+
+        XCTAssertTrue(state.isRunning)
+        XCTAssertNotNil(state.discovery)
+        XCTAssertTrue(state.replaceDiscoveryIfRunning { nil })
+        XCTAssertEqual(state.lineage, .continuous(.initial))
+
+        state.requireReplacement()
+        state.requireReplacement()
+
+        XCTAssertEqual(state.lineage, .replacementRequired(.initial))
+        XCTAssertEqual(state.lineage.admitting(.sameGeneration), .screenChangedNotification)
+
+        let stoppedTask = state.stop()
+        stoppedTask?.cancel()
+
+        XCTAssertFalse(state.isRunning)
+        XCTAssertNil(state.discovery)
+        XCTAssertFalse(state.replaceDiscoveryIfRunning { nil })
+        XCTAssertTrue(task.isCancelled)
+    }
+
+    func testPublicationBuilderUsesOnlySuppliedEvidence() {
+        let screen = observation(label: "Published", heistId: "published")
+        let interface = makeTestInterface(elements: [])
+        let notificationBatch = screenChangedBatch()
+        let publication = SemanticObservationPublication.make(
+            sourceScope: .visible,
+            sequence: 1,
+            notificationBatch: notificationBatch,
+            screen: screen,
+            semanticSignal: .empty,
+            context: SemanticObservationPublication.Context(
+                generationClassification: .screenChangedNotification,
+                generation: .initial,
+                previousEvents: [:]
+            ),
+            evidenceByScope: [
+                .visible: SemanticObservationPublication.Evidence(
+                    interface: interface,
+                    accessibilityNotifications: [],
+                    firstResponder: nil
+                ),
+            ]
+        )
+        var state = SemanticObservationRuntimeState()
+        state.requireReplacement()
+        state.commit(publication, notificationBatch: notificationBatch, settledReading: nil)
+
+        XCTAssertEqual(publication.sourceEvent.sequence, 1)
+        XCTAssertEqual(publication.sourceEvent.generation, ObservationGeneration.initial.advanced())
+        XCTAssertEqual(publication.sourceEvent.trace.captures.last?.interface, interface)
+        XCTAssertEqual(state.sequence, 1)
+        XCTAssertEqual(state.lineage, .continuous(publication.generation))
+        XCTAssertEqual(state.notificationCursor, notificationBatch.through)
+        XCTAssertEqual(state.scopedScreenChangedSequence, 1)
     }
 
     func testFirstPublicationInScopeDoesNotBorrowCrossScopePredecessor() throws {
@@ -432,6 +496,56 @@ final class SemanticObservationStreamTests: XCTestCase {
         XCTAssertEqual(stash.semanticObservationStream.observationReplayWaiterCount, 0)
     }
 
+    func testPostActionAdmissionRejectsCleanProofFromSupersededCapture() async {
+        let stale = observation(label: "Same Tree", heistId: "same")
+        let current = observation(label: "Same Tree", heistId: "same")
+        stash.recordParsedObservedEvidence(stale)
+        stash.recordParsedObservedEvidence(current)
+
+        let result = await stash.semanticObservationStream.settlePostActionObservation(
+            baselineTripwireSignal: stash.tripwire.tripwireSignal(),
+            settleOutcome: settleOutcome(.settled(timeMs: 1), screen: stale)
+        )
+
+        guard case .unavailable = result.result else {
+            return XCTFail("A clean settle from a superseded capture must not commit")
+        }
+        XCTAssertEqual(stash.latestObservation.captureToken, current.captureToken)
+        XCTAssertEqual(stash.latestFailedSettleDiagnosticEvidence?.tree, stale.tree)
+        XCTAssertNil(stash.latestFailedSettleDiagnosticEvidence?.liveCapture.object(for: "same"))
+    }
+
+    func testPostActionAdmissionReturnsOnlyTimedOutTreeAsUnsettledEvidence() async {
+        let screen = observation(label: "Unstable", heistId: "unstable")
+        stash.recordParsedObservedEvidence(screen)
+
+        let result = await stash.semanticObservationStream.settlePostActionObservation(
+            baselineTripwireSignal: stash.tripwire.tripwireSignal(),
+            settleOutcome: settleOutcome(.timedOut(timeMs: 1), screen: screen)
+        )
+
+        guard case .observedUnsettled(let tree, _) = result.result else {
+            return XCTFail("A timeout with a final tree should return diagnostic unsettled evidence")
+        }
+        XCTAssertEqual(tree, screen.tree)
+        XCTAssertEqual(stash.latestFailedSettleDiagnosticEvidence?.tree, screen.tree)
+    }
+
+    func testPostActionAdmissionNeverReturnsCancelledTreeAsUsableEvidence() async {
+        let screen = observation(label: "Cancelled", heistId: "cancelled")
+        stash.recordParsedObservedEvidence(screen)
+
+        let result = await stash.semanticObservationStream.settlePostActionObservation(
+            baselineTripwireSignal: stash.tripwire.tripwireSignal(),
+            settleOutcome: settleOutcome(.cancelled(timeMs: 1), screen: screen)
+        )
+
+        guard case .unavailable = result.result else {
+            return XCTFail("Cancellation must not expose its last tree as usable action evidence")
+        }
+        XCTAssertEqual(stash.latestFailedSettleDiagnosticEvidence?.tree, screen.tree)
+    }
+
     private func observation(label: String, heistId: HeistId) -> InterfaceObservation {
         .makeForTests(elements: [
             (AccessibilityElement.make(label: label, traits: .header), heistId),
@@ -451,6 +565,18 @@ final class SemanticObservationStreamTests: XCTestCase {
             through: AccessibilityNotificationCursor(sequence: 1),
             scopedScreenChangedThrough: 1,
             gap: nil
+        )
+    }
+
+    private func settleOutcome(
+        _ outcome: SettleOutcome,
+        screen: InterfaceObservation
+    ) -> SettleSession.Outcome {
+        SettleSession.Outcome(
+            outcome: outcome,
+            events: [],
+            finalObservation: SettleSessionFinalObservation(screen: screen),
+            elementsByKey: [:]
         )
     }
 

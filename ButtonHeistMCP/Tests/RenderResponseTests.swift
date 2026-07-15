@@ -1,5 +1,5 @@
 import AccessibilitySnapshotModel
-@_spi(ButtonHeistTooling) import ButtonHeist
+@_spi(ButtonHeistInternals) @_spi(ButtonHeistTooling) import ButtonHeist
 import Foundation
 import MCP
 import Testing
@@ -180,6 +180,28 @@ struct RenderResponseTests {
         #expect(details["phase"]?.stringValue == expected.details.phase.rawValue)
         #expect(details["retryable"] == Value.bool(expected.details.retryable))
         #expect(details["hint"]?.stringValue == expected.details.hint)
+    }
+
+    @Test("invalid heist validation renders structured content without MCP error")
+    @ButtonHeistActor
+    func invalidHeistValidationIsNotMCPError() async throws {
+        let configuration = try EnvironmentConfig.resolve(autoReconnect: false)
+        let fence = TheFence(configuration: configuration.fenceConfiguration)
+        let request = try fence.admit(FenceCommandInput(
+            command: .validateHeist,
+            arguments: .init(values: [
+                "plan": .string("HeistPlan { Activate( }"),
+            ])
+        ))
+        let response = try await fence.execute(request)
+
+        let result = ButtonHeistMCPServer.renderResponse(response)
+        let root = try #require(result.structuredContent?.objectValue)
+
+        #expect(result.isError == false)
+        #expect(root["status"]?.stringValue == "ok")
+        #expect(root["admissible"] == Value.bool(false))
+        #expect(root["canonicalPlan"] == nil)
     }
 
     @Test("structured encoding fallback uses typed failure details")
