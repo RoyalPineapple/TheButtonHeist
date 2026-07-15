@@ -321,71 +321,6 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    private func assertOperationValidationError(
-        command: TheFence.Command,
-        arguments: [String: HeistValue] = [:],
-        contains substring: String,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) async {
-        let (fence, _) = makeConnectedFence()
-        do {
-            let response = try await fence.execute(command: command, values: arguments)
-            if case .error(let failure) = response {
-                XCTAssertTrue(
-                    failure.message.contains(substring),
-                    "Expected error containing '\(substring)', got: \(failure.message)",
-                    file: file,
-                    line: line
-                )
-            } else {
-                XCTFail("Expected .error response, got: \(response)", file: file, line: line)
-            }
-        } catch {
-            XCTFail("Unexpected throw: \(error)", file: file, line: line)
-        }
-    }
-
-    @ButtonHeistActor
-    private func assertOperationValidationError(
-        command: TheFence.Command,
-        arguments: [String: HeistValue] = [:],
-        equals expected: String,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) async {
-        let (fence, _) = makeConnectedFence()
-        do {
-            let response = try await fence.execute(command: command, values: arguments)
-            if case .error(let failure) = response {
-                XCTAssertEqual(failure.message, expected, file: file, line: line)
-            } else {
-                XCTFail("Expected .error response, got: \(response)", file: file, line: line)
-            }
-        } catch {
-            XCTFail("Unexpected throw: \(error)", file: file, line: line)
-        }
-    }
-
-    @ButtonHeistActor
-    private func assertOperationPassesValidation(
-        command: TheFence.Command,
-        arguments: [String: HeistValue] = [:],
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) async {
-        let (fence, _) = makeConnectedFence()
-        do {
-            let response = try await fence.execute(command: command, values: arguments)
-            if case .error(let failure) = response {
-                XCTFail("Got validation error: \(failure.message)", file: file, line: line)
-            }
-        } catch {
-            XCTFail("Unexpected throw: \(error)", file: file, line: line)
-        }
-    }
-
-    @ButtonHeistActor
     private func decodedAccessibilityTarget(
         target: HeistValue? = nil
     ) throws -> AccessibilityTarget? {
@@ -2067,7 +2002,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testRequestTargetRejectsNegativeOrdinal() async {
-        await assertOperationValidationError(
+        await assertValidationError(
             command: .activate,
             arguments: ["target": targetValue(label: "Save", ordinal: -1)],
             equals: "schema validation failed for target.ordinal: observed integer -1; expected ordinal must be non-negative, got -1"
@@ -2135,7 +2070,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testSchemaValidationReportsBadFieldType() async {
-        await assertOperationValidationError(
+        await assertValidationError(
             command: .typeText,
             arguments: ["text": .int(3)],
             equals: "schema validation failed for text: observed integer 3; expected string"
@@ -2144,7 +2079,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testSchemaValidationReportsBadCoercedValue() async {
-        await assertOperationValidationError(
+        await assertValidationError(
             command: .wait,
             arguments: [
                 "predicate": .object([
@@ -2162,7 +2097,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testOneFingerTapMissingTarget() async {
-        await assertOperationValidationError(
+        await assertValidationError(
             command: .oneFingerTap,
             contains: "point requires element, element with unitPoint, or ScreenPoint"
         )
@@ -2170,7 +2105,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testOneFingerTapWithCoordinatesPassesValidation() async {
-        await assertOperationPassesValidation(
+        await assertPassesValidation(
             command: .oneFingerTap,
             arguments: ["point": .object(["x": .double(100.0), "y": .double(200.0)])]
         )
@@ -2178,7 +2113,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testOneFingerTapRejectsPartialCoordinates() async {
-        await assertOperationValidationError(
+        await assertValidationError(
             command: .oneFingerTap,
             arguments: ["point": .object(["x": .double(100.0)])],
             equals: "schema validation failed for point.y: observed missing; expected number"
@@ -2187,7 +2122,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testOneFingerTapRejectsOutOfRangeUnitPoint() async {
-        await assertOperationValidationError(
+        await assertValidationError(
             command: .oneFingerTap,
             arguments: [
                 "element": targetValue(identifier: "myButton"),
@@ -2199,7 +2134,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testOneFingerTapRejectsNaNCoordinate() async {
-        await assertOperationValidationError(
+        await assertValidationError(
             command: .oneFingerTap,
             arguments: ["point": .object(["x": .double(Double.nan), "y": .double(200.0)])],
             equals: "schema validation failed for point.x: observed number nan; expected number"
@@ -2208,7 +2143,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testOneFingerTapRejectsInfiniteCoordinate() async {
-        await assertOperationValidationError(
+        await assertValidationError(
             command: .oneFingerTap,
             arguments: ["point": .object(["x": .double(Double.infinity), "y": .double(200.0)])],
             equals: "schema validation failed for point.x: observed number inf; expected number"
@@ -2217,7 +2152,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testOneFingerTapWithIdentifierPassesValidation() async {
-        await assertOperationPassesValidation(
+        await assertPassesValidation(
             command: .oneFingerTap,
             arguments: ["element": targetValue(identifier: "myButton")]
         )
@@ -2242,7 +2177,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testGestureTargetRejectsHeistId() async {
-        await assertOperationValidationError(
+        await assertValidationError(
             command: .oneFingerTap,
             arguments: [
                 "element": accessibilityTargetValue([
@@ -2255,7 +2190,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testLongPressMissingTarget() async {
-        await assertOperationValidationError(
+        await assertValidationError(
             command: .longPress,
             contains: "point requires element, element with unitPoint, or ScreenPoint"
         )
@@ -2263,7 +2198,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testLongPressWithCoordinatesPassesValidation() async {
-        await assertOperationPassesValidation(
+        await assertPassesValidation(
             command: .longPress,
             arguments: ["point": .object(["x": .double(50.0), "y": .double(50.0)])]
         )
@@ -2271,7 +2206,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testLongPressRejectsNegativeDuration() async {
-        await assertOperationValidationError(
+        await assertValidationError(
             command: .longPress,
             arguments: [
                 "point": .object(["x": .double(50.0), "y": .double(50.0)]),
@@ -2283,7 +2218,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testLongPressRejectsOversizedDurationBeforeExecution() async {
-        await assertOperationValidationError(
+        await assertValidationError(
             command: .longPress,
             arguments: [
                 "point": .object(["x": .double(50.0), "y": .double(50.0)]),
@@ -2295,7 +2230,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testSwipeInvalidDirection() async {
-        await assertOperationValidationError(
+        await assertValidationError(
             command: .swipe,
             arguments: [
                 "pointDirection": .object([
@@ -2310,7 +2245,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testSwipeDirectionWithoutTargetOrCoordinatesIsRejected() async {
-        await assertOperationValidationError(
+        await assertValidationError(
             command: .swipe,
             arguments: [
                 "pointDirection": .object(["direction": .string("up")]),
@@ -2321,7 +2256,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testSwipeRejectsPartialStartCoordinates() async {
-        await assertOperationValidationError(
+        await assertValidationError(
             command: .swipe,
             arguments: [
                 "pointToPoint": .object([
@@ -2335,7 +2270,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testSwipeWithUnitPointsPassesValidation() async {
-        await assertOperationPassesValidation(
+        await assertPassesValidation(
             command: .swipe,
             arguments: [
                 "elementUnitPoints": .object([
@@ -2349,7 +2284,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testSwipeUnitPointsRejectOutOfRangeCoordinate() async {
-        await assertOperationValidationError(
+        await assertValidationError(
             command: .swipe,
             arguments: [
                 "elementUnitPoints": .object([
@@ -2364,7 +2299,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testSwipeDirectionWithElementPassesValidation() async {
-        await assertOperationPassesValidation(
+        await assertPassesValidation(
             command: .swipe,
             arguments: [
                 "elementDirection": .object([
@@ -2396,7 +2331,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testSwipeRejectsMixedIntentObjects() async {
-        await assertOperationValidationError(
+        await assertValidationError(
             command: .swipe,
             arguments: [
                 "pointDirection": .object([
@@ -2414,7 +2349,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testDragMissingEndCoordinates() async {
-        await assertOperationValidationError(
+        await assertValidationError(
             command: .drag,
             arguments: [
                 "pointToPoint": .object([
@@ -2427,7 +2362,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testDragWithoutStartTargetIsRejected() async {
-        await assertOperationValidationError(
+        await assertValidationError(
             command: .drag,
             arguments: [
                 "pointToPoint": .object([
@@ -2440,7 +2375,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testDragWithAccessibilityTargetAndEndCoordinatesPassesValidation() async {
-        await assertOperationPassesValidation(
+        await assertPassesValidation(
             command: .drag,
             arguments: [
                 "elementToPoint": .object([
@@ -2472,7 +2407,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testDragRejectsMixedIntentObjects() async {
-        await assertOperationValidationError(
+        await assertValidationError(
             command: .drag,
             arguments: [
                 "elementToPoint": .object([
@@ -2658,14 +2593,6 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testScrollToVisibleValidPassesValidation() async {
-        await assertPassesValidation(
-            command: .scrollToVisible,
-            arguments: ["target": targetValue(identifier: "targetElement")]
-        )
-    }
-
-    @ButtonHeistActor
-    func testScrollToVisibleIdentifierTargetPassesValidation() async {
         await assertPassesValidation(
             command: .scrollToVisible,
             arguments: ["target": targetValue(identifier: "targetElement")]
@@ -3476,16 +3403,6 @@ final class TheFenceHandlerTests: XCTestCase {
     // MARK: - Parse Expectation: Discriminator Wire Shape
 
     @ButtonHeistActor
-    func testParseExpectationDiscriminatorScreenChanged() async throws {
-        let result = try parseTypedExpectation(.object([
-            "type": .string("changed"),
-            "scope": .string("screen"),
-            "assertions": .array([]),
-        ]))
-        XCTAssertEqual(result, .changed(.screen()))
-    }
-
-    @ButtonHeistActor
     func testParseExpectationDiscriminatorElementUpdatedFull() async throws {
         let result = try parseTypedExpectation(.object([
             "type": .string("changed"),
@@ -3802,7 +3719,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testGetInterfaceSubtreeElementRejectsHeistIdAndOrdinal() async {
-        await assertOperationValidationError(
+        await assertValidationError(
             command: .getInterface,
             arguments: [
                 "subtree": .object([
@@ -3816,7 +3733,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testGetInterfaceSubtreeElementRejectsUnknownTargetField() async {
-        await assertOperationValidationError(
+        await assertValidationError(
             command: .getInterface,
             arguments: [
                 "subtree": .object([

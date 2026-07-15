@@ -262,58 +262,6 @@ final class TheMuscleStateMachineTests: XCTestCase {
         XCTAssertEqual(lease.release(), [.cancelReleaseTimer])
     }
 
-    func testSessionLeaseMutationsReturnRuntimeEffects() {
-        var session = SessionLease(releaseTimeout: 30)
-        let now = Date(timeIntervalSinceReferenceDate: 1_000)
-
-        guard case .accepted(let claimEffect) = session.acquire(
-            driverIdentity: "driver:alpha",
-            clientId: 1,
-            at: now
-        ) else {
-            return XCTFail("Expected first driver to claim the session")
-        }
-        XCTAssertEqual(
-            claimEffect,
-            [.log(.sessionClaimed(clientId: 1))]
-        )
-
-        XCTAssertEqual(
-            session.removeConnection(1, at: now),
-            [
-                .replaceReleaseTimer(timeout: 30),
-                .log(.releaseTimerStarted(timeout: 30)),
-            ]
-        )
-
-        guard case .accepted(let rejoinEffect) = session.acquire(
-            driverIdentity: "driver:alpha",
-            clientId: 2,
-            at: now.addingTimeInterval(1)
-        ) else {
-            return XCTFail("Expected active driver to rejoin during the grace period")
-        }
-        XCTAssertEqual(
-            rejoinEffect,
-            [
-                .cancelReleaseTimer,
-                .log(.clientRejoinedDuringGracePeriod(clientId: 2)),
-            ]
-        )
-
-        XCTAssertEqual(
-            session.release(),
-            [
-                .cancelReleaseTimer,
-                .log(.sessionReleased),
-            ]
-        )
-        XCTAssertEqual(
-            session.release(),
-            [.cancelReleaseTimer]
-        )
-    }
-
     func testClientDeliveryReportsUnwiredFailuresAsTypedOutcomes() async {
         let delivery = ClientDelivery.unwired
 

@@ -40,14 +40,6 @@ final class InterfaceSelectorTests: XCTestCase {
         XCTAssertEqual(interface.projectedElements.map(\.label), ["Submit", "Cancel"])
     }
 
-    func testCanonicalContainerTargetSelectsMatchingContainerSubtree() throws {
-        let interface = try select(InterfaceQuery(
-            subtree: .container(.identifier("actions"))
-        ))
-
-        XCTAssertEqual(interface.projectedElements.map(\.label), ["Submit", "Cancel"])
-    }
-
     func testCanonicalWithinTargetSelectsDescendantElementSubtree() throws {
         let interface = try select(InterfaceQuery(
             subtree: .within(

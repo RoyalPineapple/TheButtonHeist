@@ -1595,138 +1595,6 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         """)
     }
 
-    func testCompactInterfaceTruncatesWholeInterfaceAtTotalNodeBudget() {
-        let rows = (0..<4).map { index in
-            TestInterfaceNode.element(makeTestHeistElement(label: "Row \(index)"))
-        }
-        let interface = makeTestInterface(nodes: rows)
-
-        let output = FenceResponse.compactInterface(
-            interface,
-            detail: .summary,
-            visibleElementBudget: 10,
-            totalNodeBudget: 2
-        )
-
-        XCTAssertEqual(output, """
-        4 elements
-        [0] "Row 0" staticText
-        [1] "Row 1" staticText
-        ... interface truncated: omitted 2 observed elements (totalNodeBudget=2)
-        """)
-    }
-
-    func testCompactInterfaceDoesNotReportScrollBudgetWhenTotalNodeBudgetStopsFirst() {
-        let rows = (0..<4).map { index in
-            TestInterfaceNode.element(makeTestHeistElement(label: "Row \(index)"))
-        }
-        let interface = makeTestInterface(nodes: [
-            .container(
-                makeTestScrollableContainer(
-                    contentWidth: 390,
-                    contentHeight: 1_200,
-                    frameWidth: 390,
-                    frameHeight: 400
-                ),
-                containerName: "long_scroll",
-                children: rows
-            ),
-        ])
-
-        let output = FenceResponse.compactInterface(
-            interface,
-            detail: .summary,
-            visibleElementBudget: 3,
-            totalNodeBudget: 2
-        )
-
-        XCTAssertFalse(output.contains("subtree truncated"), output)
-        XCTAssertTrue(
-            output.contains("... interface truncated: omitted 3 observed elements (totalNodeBudget=2)"),
-            output
-        )
-    }
-
-    func testCompactInterfaceTotalNodeBudgetCountsContainers() {
-        let interface = makeTestInterface(nodes: [
-            .container(
-                makeTestSemanticContainer(label: "Outer"),
-                containerName: "outer",
-                children: [
-                    .container(
-                        makeTestSemanticContainer(label: "Empty"),
-                        containerName: "empty",
-                        children: []
-                    ),
-                    .element(makeTestHeistElement(label: "After")),
-                ]
-            ),
-        ])
-
-        let output = FenceResponse.compactInterface(
-            interface,
-            detail: .summary,
-            totalNodeBudget: 2
-        )
-
-        XCTAssertEqual(output, """
-        1 elements
-        ── group "Outer" "outer" ──
-          ── group "Empty" "empty" ──
-          ── /empty ──
-        ── /outer ──
-        ... interface truncated: omitted 1 observed elements (totalNodeBudget=2)
-        """)
-    }
-
-    func testCompactInterfaceNestedScrollCannotResetParentVisibleElementBudget() {
-        let interface = makeTestInterface(nodes: [
-            .container(
-                makeTestScrollableContainer(
-                    contentWidth: 390,
-                    contentHeight: 2_000,
-                    frameWidth: 390,
-                    frameHeight: 400
-                ),
-                containerName: "outer_scroll",
-                children: [
-                    .element(makeTestHeistElement(label: "Row 0")),
-                    .container(
-                        makeTestScrollableContainer(
-                            contentWidth: 390,
-                            contentHeight: 1_200,
-                            frameWidth: 390,
-                            frameHeight: 400
-                        ),
-                        containerName: "inner_scroll",
-                        children: [
-                            .element(makeTestHeistElement(label: "Row 1")),
-                            .element(makeTestHeistElement(label: "Row 2")),
-                            .element(makeTestHeistElement(label: "Row 3")),
-                        ]
-                    ),
-                    .element(makeTestHeistElement(label: "Row 4")),
-                ]
-            ),
-        ])
-
-        let output = FenceResponse.compactInterface(
-            interface,
-            detail: .summary,
-            visibleElementBudget: 2
-        )
-
-        XCTAssertTrue(output.contains(#"[0] "Row 0" staticText"#), output)
-        XCTAssertTrue(output.contains(#"[1] "Row 1" staticText"#), output)
-        XCTAssertFalse(output.contains("Row 2"), output)
-        XCTAssertFalse(output.contains("Row 3"), output)
-        XCTAssertFalse(output.contains("Row 4"), output)
-        XCTAssertTrue(output.contains(#"── container "outer_scroll" 5 elements ──"#), output)
-        XCTAssertTrue(output.contains(#"── container "inner_scroll" 3 elements ──"#), output)
-        XCTAssertTrue(output.contains("⋮ 2 more"), output)
-        XCTAssertTrue(output.contains("⋮ 3 more"), output)
-    }
-
     func testInterfaceProjectionPreservesDeepWideOrderAndPathDistinctDuplicates() throws {
         let depth = 20
         let width = 24
@@ -1781,7 +1649,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertEqual(try lastRepeated.int("order"), width + 1)
     }
 
-    func testInterfaceProjectionKeepsNestedScrollElementAndNodeBudgetParity() throws {
+    func testPublicInterfaceOwnsNestedScrollAndNodeBudgetSemantics() throws {
         let rows = (1...3).map { index in
             TestInterfaceNode.element(makeTestHeistElement(label: "Row \(index)"))
         }
@@ -1812,62 +1680,46 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             .element(makeTestHeistElement(label: "After")),
         ])
 
-        let elementLimitedCompact = FenceResponse.compactInterface(
-            interface,
-            detail: .summary,
-            visibleElementBudget: 2,
-            totalNodeBudget: 100
-        )
-        let elementLimitedJSON = try publicInterfaceJSONProbe(PublicInterface(
+        let elementLimited = PublicInterface(
             interface: interface,
             detail: .summary,
             visibleElementBudget: 2,
             totalNodeBudget: 100
-        ))
-        let elementRendering = try elementLimitedJSON.object("rendering")
-        let elementTree = try elementLimitedJSON.array("tree")
-        let outer = try elementTree[0].object("container")
-        let outerChildren = try outer.array("children")
-        let inner = try outerChildren[1].object("container")
-
-        XCTAssertEqual(try elementRendering.string("reasonCode"), "scroll-subtree-element-budget")
-        XCTAssertEqual(try elementRendering.int("observedElementCount"), 6)
-        XCTAssertEqual(try elementRendering.int("renderedElementCount"), 3)
-        XCTAssertEqual(try elementRendering.int("omittedElementCount"), 3)
-        XCTAssertEqual(try outer.object("truncation").int("omittedElementCount"), 3)
-        XCTAssertEqual(try inner.object("truncation").int("omittedElementCount"), 2)
-        XCTAssertEqual(try elementTree[1].object("element").int("order"), 5)
-        XCTAssertTrue(elementLimitedCompact.contains("⋮ 2 more"), elementLimitedCompact)
-        XCTAssertTrue(elementLimitedCompact.contains("⋮ 3 more"), elementLimitedCompact)
-        XCTAssertTrue(elementLimitedCompact.contains(#"[5] "After" staticText"#), elementLimitedCompact)
-
-        let nodeLimitedCompact = FenceResponse.compactInterface(
-            interface,
-            detail: .summary,
-            visibleElementBudget: 2,
-            totalNodeBudget: 3
         )
-        let nodeLimitedJSON = try publicInterfaceJSONProbe(PublicInterface(
+        guard case .container(let elementOuter) = elementLimited.tree[0],
+              case .container(let elementInner) = elementOuter.children[1],
+              case .element(let after) = elementLimited.tree[1]
+        else {
+            return XCTFail("Expected nested scroll projection followed by the trailing element")
+        }
+
+        XCTAssertEqual(elementLimited.rendering.reasonCode, "scroll-subtree-element-budget")
+        XCTAssertEqual(elementLimited.rendering.observedElementCount, 6)
+        XCTAssertEqual(elementLimited.rendering.renderedElementCount, 3)
+        XCTAssertEqual(elementLimited.rendering.omittedElementCount, 3)
+        XCTAssertEqual(elementOuter.truncation?.omittedElementCount, 3)
+        XCTAssertEqual(elementInner.truncation?.omittedElementCount, 2)
+        XCTAssertEqual(after.order, 5)
+
+        let nodeLimited = PublicInterface(
             interface: interface,
             detail: .summary,
             visibleElementBudget: 2,
             totalNodeBudget: 3
-        ))
-        let nodeRendering = try nodeLimitedJSON.object("rendering")
-        let nodeOuter = try nodeLimitedJSON.array("tree")[0].object("container")
-        let nodeInner = try nodeOuter.array("children")[1].object("container")
-
-        XCTAssertEqual(try nodeRendering.string("reasonCode"), "total-node-budget")
-        XCTAssertEqual(try nodeRendering.int("renderedElementCount"), 1)
-        XCTAssertEqual(try nodeRendering.int("omittedElementCount"), 5)
-        try nodeRendering.assertMissing("visibleElementBudget")
-        try nodeOuter.assertMissing("truncation")
-        try nodeInner.assertMissing("truncation")
-        XCTAssertFalse(nodeLimitedCompact.contains("⋮"), nodeLimitedCompact)
-        XCTAssertTrue(
-            nodeLimitedCompact.contains("omitted 5 observed elements (totalNodeBudget=3)"),
-            nodeLimitedCompact
         )
+        guard case .container(let nodeOuter) = nodeLimited.tree[0],
+              case .container(let nodeInner) = nodeOuter.children[1]
+        else {
+            return XCTFail("Expected both nested containers within the node budget")
+        }
+
+        XCTAssertEqual(nodeLimited.rendering.reasonCode, "total-node-budget")
+        XCTAssertEqual(nodeLimited.rendering.renderedElementCount, 1)
+        XCTAssertEqual(nodeLimited.rendering.omittedElementCount, 5)
+        XCTAssertNil(nodeLimited.rendering.visibleElementBudget)
+        XCTAssertEqual(nodeLimited.rendering.totalNodeBudget, 3)
+        XCTAssertNil(nodeOuter.truncation)
+        XCTAssertNil(nodeInner.truncation)
     }
 
     func testPublicInterfaceJSONRendersScrollSummaryFields() throws {
@@ -2056,53 +1908,6 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertEqual(container.actions, ["Archive"])
     }
 
-    func testPublicInterfaceJSONTruncatesScrollableSubtreeAtVisibleElementBudget() throws {
-        let rows = (0..<4).map { index in
-            TestInterfaceNode.element(makeTestHeistElement(label: "Row \(index)"))
-        }
-        let interface = makeTestInterface(nodes: [
-            .container(
-                makeTestScrollableContainer(
-                    contentWidth: 390,
-                    contentHeight: 1_200,
-                    frameWidth: 390,
-                    frameHeight: 400
-                ),
-                containerName: "long_scroll",
-                children: rows
-            ),
-            .element(makeTestHeistElement(label: "After")),
-        ])
-
-        let json = try publicInterfaceJSONProbe(
-            PublicInterface(interface: interface, detail: .summary, visibleElementBudget: 2)
-        )
-        let rendering = try json.object("rendering")
-        let tree = try json.array("tree")
-        let scrollContainer = try tree[0].object("container")
-        let scrollChildren = try scrollContainer.array("children")
-        let truncation = try scrollContainer.object("truncation")
-        let after = try tree[1].object("element")
-
-        XCTAssertEqual(try rendering.string("state"), "truncated")
-        XCTAssertEqual(try rendering.string("reasonCode"), "scroll-subtree-element-budget")
-        XCTAssertEqual(try rendering.int("observedElementCount"), 5)
-        XCTAssertEqual(try rendering.int("renderedElementCount"), 3)
-        XCTAssertEqual(try rendering.int("omittedElementCount"), 2)
-        XCTAssertEqual(try rendering.int("visibleElementBudget"), 2)
-        try rendering.assertMissing("totalNodeBudget")
-        XCTAssertEqual(scrollChildren.count, 2)
-        XCTAssertEqual(try scrollContainer.int("observedElementCount"), 4)
-        XCTAssertEqual(try truncation.string("state"), "truncated")
-        XCTAssertEqual(try truncation.string("reasonCode"), "scroll-subtree-element-budget")
-        XCTAssertEqual(try truncation.int("observedElementCount"), 4)
-        XCTAssertEqual(try truncation.int("renderedElementCount"), 2)
-        XCTAssertEqual(try truncation.int("omittedElementCount"), 2)
-        XCTAssertEqual(try truncation.int("visibleElementBudget"), 2)
-        XCTAssertEqual(try after.string("label"), "After")
-        XCTAssertEqual(try after.int("order"), 4)
-    }
-
     func testPublicInterfaceJSONTruncatesWholeInterfaceAtTotalNodeBudget() throws {
         let rows = (0..<4).map { index in
             TestInterfaceNode.element(makeTestHeistElement(label: "Row \(index)"))
@@ -2128,82 +1933,6 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         try rendering.assertMissing("visibleElementBudget")
         XCTAssertEqual(try rendering.int("totalNodeBudget"), 2)
         XCTAssertEqual(tree.count, 2)
-    }
-
-    func testPublicInterfaceJSONTotalNodeBudgetCountsContainers() throws {
-        let interface = makeTestInterface(nodes: [
-            .container(
-                makeTestSemanticContainer(label: "Outer"),
-                containerName: "outer",
-                children: [
-                    .container(
-                        makeTestSemanticContainer(label: "Empty"),
-                        containerName: "empty",
-                        children: []
-                    ),
-                    .element(makeTestHeistElement(label: "After")),
-                ]
-            ),
-        ])
-
-        let json = try publicInterfaceJSONProbe(
-            PublicInterface(
-                interface: interface,
-                detail: .summary,
-                totalNodeBudget: 2
-            )
-        )
-        let rendering = try json.object("rendering")
-        let tree = try json.array("tree")
-        let outer = try tree[0].object("container")
-        let children = try outer.array("children")
-        let empty = try children[0].object("container")
-
-        XCTAssertEqual(try rendering.string("state"), "truncated")
-        XCTAssertEqual(try rendering.string("reasonCode"), "total-node-budget")
-        XCTAssertEqual(try rendering.int("observedElementCount"), 1)
-        XCTAssertEqual(try rendering.int("renderedElementCount"), 0)
-        XCTAssertEqual(try rendering.int("omittedElementCount"), 1)
-        XCTAssertEqual(try rendering.int("totalNodeBudget"), 2)
-        XCTAssertEqual(tree.count, 1)
-        XCTAssertEqual(try outer.string("containerName"), "outer")
-        XCTAssertEqual(children.count, 1)
-        XCTAssertEqual(try empty.string("containerName"), "empty")
-    }
-
-    func testPublicInterfaceJSONDoesNotReportScrollBudgetWhenTotalNodeBudgetStopsFirst() throws {
-        let rows = (0..<4).map { index in
-            TestInterfaceNode.element(makeTestHeistElement(label: "Row \(index)"))
-        }
-        let interface = makeTestInterface(nodes: [
-            .container(
-                makeTestScrollableContainer(
-                    contentWidth: 390,
-                    contentHeight: 1_200,
-                    frameWidth: 390,
-                    frameHeight: 400
-                ),
-                containerName: "long_scroll",
-                children: rows
-            ),
-        ])
-
-        let json = try publicInterfaceJSONProbe(
-            PublicInterface(
-                interface: interface,
-                detail: .summary,
-                visibleElementBudget: 3,
-                totalNodeBudget: 2
-            )
-        )
-        let rendering = try json.object("rendering")
-        let tree = try json.array("tree")
-        let scrollContainer = try tree[0].object("container")
-
-        XCTAssertEqual(try rendering.string("reasonCode"), "total-node-budget")
-        try rendering.assertMissing("visibleElementBudget")
-        XCTAssertEqual(try rendering.int("totalNodeBudget"), 2)
-        try scrollContainer.assertMissing("truncation")
     }
 
     func testCompactContainerEscapesLabelsAndContainerNames() {

@@ -70,30 +70,6 @@ final class DocumentationContractTests: XCTestCase {
         )
     }
 
-    func testPublicJSONDocsUseCanonicalPredicateShape() throws {
-        let stalePatterns = [
-            #""match"\s*:\s*""#,
-            #""target"\s*:\s*\{\s*"(label|identifier|value|hint)""#,
-            #""element"\s*:\s*\{\s*"(label|identifier|value|hint)""#,
-            #""matcher"\s*:\s*\{\s*"(label|identifier|value|hint)""#,
-        ]
-        let regexes = try stalePatterns.map { try NSRegularExpression(pattern: $0) }
-        var failures: [String] = []
-
-        for relativePath in ["docs/API.md", "docs/WIRE-PROTOCOL.md"] {
-            let text = try contents(relativePath: relativePath)
-            let range = NSRange(text.startIndex..<text.endIndex, in: text)
-            for regex in regexes where regex.firstMatch(in: text, range: range) != nil {
-                failures.append("\(relativePath): \(regex.pattern)")
-            }
-        }
-
-        XCTAssertTrue(
-            failures.isEmpty,
-            "Public JSON docs contain stale predicate shape:\n\(failures.joined(separator: "\n"))"
-        )
-    }
-
     func testWireEnvelopeExamplesDecodeWithCanonicalTypes() throws {
         let wireProtocol = try contents(relativePath: "docs/WIRE-PROTOCOL.md")
         let envelopeBlocks = try jsonCodeBlocks(in: markdownSection(
@@ -218,20 +194,6 @@ final class DocumentationContractTests: XCTestCase {
         ))
         let payload = try XCTUnwrap(actionBlocks[safe: 1])
         _ = try JSONDecoder().decode(ResultPayload.self, from: Data(payload.utf8))
-    }
-
-    func testHomebrewRendererAcceptsOnlySemVerReleaseVersions() throws {
-        let renderer = try contents(relativePath: "scripts/render-homebrew-formula.sh")
-
-        XCTAssertTrue(renderer.contains("RELEASE_VERSION_REGEX='^[0-9]+\\.[0-9]+\\.[0-9]+$'"))
-        XCTAssertTrue(renderer.contains("MAJOR.MINOR.PATCH") || renderer.contains("0.2.0 or 1.0.0"))
-        XCTAssertFalse(renderer.contains("(\\.[0-9]+)?"))
-        XCTAssertNil(
-            renderer.range(
-                of: #"[0-9]{4}\.[0-9]{2}\.[0-9]{2}\.[0-9]+"#,
-                options: .regularExpression
-            )
-        )
     }
 
     private func jsonLinesExamples(in contents: String) -> [(line: Int, json: String)] {

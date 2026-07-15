@@ -65,19 +65,6 @@ package enum TextInputScreen {
             .withoutExpectation("Keyboard dismissal only prepares navigation")
     }
 
-    package static let pasteName = HeistDef<Void>("TextInputScreen.pasteName") {
-        ClearText(nameField)
-            .withoutExpectation("Focuses the name field through the text input pipeline before paste")
-
-        SetPasteboard("Dogfood clipboard name")
-            .withoutExpectation("Seeds pasteboard for the public Edit(.paste) action")
-
-        Edit(.paste)
-            .expect(.exists(.value("Dogfood clipboard name")), timeout: .seconds(2))
-
-        DismissKeyboard()
-            .withoutExpectation("Keyboard dismissal only prepares navigation")
-    }
 }
 
 package enum TodoScreen {
@@ -120,72 +107,6 @@ package enum CalculatorScreen {
 
         Activate(.element(.label("equals"), .traits([.button])))
             .expect(.exists(.label("12")), timeout: .seconds(1))
-    }
-}
-
-package enum TogglePickerScreen {
-    package static let subscribe = HeistDef<Void>("TogglePickerScreen.subscribe") {
-        Activate(.label("Subscribe to newsletter"))
-            .expect(.exists(.label("Last action: Toggle: ON")), timeout: .seconds(2))
-    }
-}
-
-package enum AlertsScreen {
-    package static let acceptSimpleAlert = HeistDef<Void>("AlertsScreen.acceptSimpleAlert") {
-        Activate(.element(.label("Show Alert"), .traits([.button])))
-            .expect(.exists(.label("Alert Title")), timeout: .seconds(2))
-
-        Activate(.element(.label("OK"), .traits([.button])))
-            .expect(.missing(.label("Alert Title")), timeout: .seconds(2))
-
-        WaitFor(.exists(.label("Last action: Alert: OK")), timeout: .seconds(2))
-    }
-}
-
-package enum AdjustableControlsScreen {
-    package static let adjustVolume = HeistDef<Void>("AdjustableControls.adjustVolume") {
-        Increment(.label("Volume"))
-            .expect(.exists(.value("60")), timeout: .seconds(2))
-
-        Decrement(.label("Volume"))
-            .expect(.exists(.value("50")), timeout: .seconds(2))
-    }
-
-    package static let driveVolumeToMaximum = HeistDef<Void>("AdjustableControls.driveVolumeToMaximum") {
-        RepeatUntil(.exists(.element(.label("Volume"), .value("100"))), timeout: .seconds(8)) {
-            Increment(.label("Volume"))
-        }.else {
-            Fail("volume did not reach 100")
-        }
-    }
-}
-
-package enum TouchCanvasScreen {
-    private static let canvas = AccessibilityTarget.element(.label("Touch Canvas"), .traits([.allowsDirectInteraction]))
-
-    package static let exerciseMechanicalGestures = HeistDef<Void>("TouchCanvas.exerciseMechanicalGestures") {
-        Mechanical.Tap(canvas)
-            .withoutExpectation("Canvas drawing is intentionally spatial, not semantic")
-
-        Mechanical.LongPress(canvas)
-            .withoutExpectation("Long press gesture delivery is the behavior under test")
-
-        Mechanical.Swipe(canvas, .left)
-            .withoutExpectation("Swipe gesture delivery is the behavior under test")
-
-        Mechanical.Drag(
-            from: ScreenPoint(x: 120, y: 360),
-            to: ScreenPoint(x: 260, y: 460)
-        )
-        .withoutExpectation("Drag gesture delivery is the behavior under test")
-    }
-}
-
-package enum LongListScreen {
-    private static let topRow = ElementPredicateTemplate(label: .exact("Widget 0, Hardware"))
-
-    package static let openTopAnchor = HeistDef<Void>("LongList.openTopAnchor") {
-        WaitFor(.exists(.predicate(topRow)), timeout: .seconds(8))
     }
 }
 

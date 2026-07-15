@@ -2,7 +2,6 @@
 import XCTest
 @testable import AccessibilitySnapshotParser
 import ButtonHeistSupport
-import ButtonHeistTestSupport
 @testable import TheInsideJob
 import ThePlans
 import TheScore
@@ -199,95 +198,74 @@ final class ScreenManifestTests: XCTestCase {
 
     // MARK: - Scroll Container Scan Machine
 
-    func testScrollContainerScanMachineTransitionScenarios() throws {
+    func testScrollContainerScanMachineTransitionScenarios() {
+        typealias Machine = Navigation.ScrollContainerScanMachine
+        typealias Transition = (
+            state: Machine.State,
+            event: Machine.Event,
+            expected: StateChange<Machine.State, Machine.Effect, Machine.Rejection>
+        )
+
         let terminal = Navigation.ScrollTraversalTerminal.foundHeistId("save")
-        let scenarios: [StateMachineTestScenario<Navigation.ScrollContainerScanMachine>] = [
-            StateMachineTestScenario(
-                "forward exhaustion starts backward scan after restore",
-                initialState: .idle,
-                steps: [
-                    StateMachineTestStep(
-                        "begin forward scan",
-                        event: .begin,
-                        expected: .changed(to: .scanning(.forward), effects: [.run(.forward)])
-                    ),
-                    StateMachineTestStep(
-                        "forward scan exhausts",
-                        event: .scanCompleted(.exhausted),
-                        expected: .changed(to: .restoring(.beforeBackwardScan), effects: [.restore])
-                    ),
-                    StateMachineTestStep(
-                        "restore starts backward scan",
-                        event: .restoreCompleted,
-                        expected: .changed(to: .scanning(.back), effects: [.run(.back)])
-                    ),
-                ]
+        let transitions: [Transition] = [
+            (
+                .idle,
+                .begin,
+                .changed(to: .scanning(.forward), effects: [.run(.forward)])
             ),
-            StateMachineTestScenario(
-                "backward exhaustion restores before completion",
-                initialState: .scanning(.back),
-                steps: [
-                    StateMachineTestStep(
-                        "backward scan exhausts",
-                        event: .scanCompleted(.exhausted),
-                        expected: .changed(to: .restoring(.beforeCompletion), effects: [.restore])
-                    ),
-                    StateMachineTestStep(
-                        "restore completes scan",
-                        event: .restoreCompleted,
-                        expected: .changed(to: .finished(.completed), effects: [.finish(.completed)])
-                    ),
-                ]
+            (
+                .scanning(.forward),
+                .scanCompleted(.exhausted),
+                .changed(to: .restoring(.beforeBackwardScan), effects: [.restore])
             ),
-            StateMachineTestScenario(
-                "limit hit restores before omission",
-                initialState: .scanning(.forward),
-                steps: [
-                    StateMachineTestStep(
-                        "scan reaches container limit",
-                        event: .scanCompleted(.limitHit(.containerScrollLimit)),
-                        expected: .changed(
-                            to: .restoring(.beforeOmission(.containerScrollLimit)),
-                            effects: [.restore]
-                        )
-                    ),
-                    StateMachineTestStep(
-                        "restore reports omission",
-                        event: .restoreCompleted,
-                        expected: .changed(
-                            to: .finished(.omitted(.containerScrollLimit)),
-                            effects: [.finish(.omitted(.containerScrollLimit))]
-                        )
-                    ),
-                ]
+            (
+                .restoring(.beforeBackwardScan),
+                .restoreCompleted,
+                .changed(to: .scanning(.back), effects: [.run(.back)])
             ),
-            StateMachineTestScenario(
-                "terminal result finishes without restore",
-                initialState: .scanning(.forward),
-                steps: [
-                    StateMachineTestStep(
-                        "scan finds terminal result",
-                        event: .scanCompleted(.terminal(terminal)),
-                        expected: .changed(
-                            to: .finished(.terminal(terminal)),
-                            effects: [.finish(.terminal(terminal))]
-                        )
-                    ),
-                ]
+            (
+                .scanning(.back),
+                .scanCompleted(.exhausted),
+                .changed(to: .restoring(.beforeCompletion), effects: [.restore])
+            ),
+            (
+                .restoring(.beforeCompletion),
+                .restoreCompleted,
+                .changed(to: .finished(.completed), effects: [.finish(.completed)])
+            ),
+            (
+                .scanning(.forward),
+                .scanCompleted(.limitHit(.containerScrollLimit)),
+                .changed(to: .restoring(.beforeOmission(.containerScrollLimit)), effects: [.restore])
+            ),
+            (
+                .restoring(.beforeOmission(.containerScrollLimit)),
+                .restoreCompleted,
+                .changed(
+                    to: .finished(.omitted(.containerScrollLimit)),
+                    effects: [.finish(.omitted(.containerScrollLimit))]
+                )
+            ),
+            (
+                .scanning(.forward),
+                .scanCompleted(.terminal(terminal)),
+                .changed(to: .finished(.terminal(terminal)), effects: [.finish(.terminal(terminal))])
             ),
         ]
 
-        for scenario in scenarios {
-            try runStateMachineScenario(scenario, machine: Navigation.ScrollContainerScanMachine())
+        let machine = Machine()
+        for transition in transitions {
+            XCTAssertEqual(
+                machine.advance(transition.state, with: transition.event),
+                transition.expected
+            )
         }
     }
 
     // MARK: - maxScrollsPerContainer
 
     func testMaxScrollsPerContainerIsReasonable() {
-        XCTAssertGreaterThan(Navigation.ScreenManifest.maxScrollsPerContainer, 0)
         XCTAssertEqual(Navigation.ScreenManifest.maxScrollsPerContainer, 200)
-        XCTAssertGreaterThan(Navigation.ScreenManifest.maxScrollsPerDiscovery, 0)
         XCTAssertEqual(Navigation.ScreenManifest.maxScrollsPerDiscovery, 200)
     }
 }
