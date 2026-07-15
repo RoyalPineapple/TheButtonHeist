@@ -26,6 +26,7 @@ class AdversarialNightlyWorkflowTests(unittest.TestCase):
         self.assertNotIn("--filter", WORKFLOW)
         self.assertIn("BUTTONHEIST_RECEIPTS_MODE: failures", WORKFLOW)
         self.assertEqual(WORKFLOW.count("if: failure()"), 2)
+        self.assertNotIn("git submodule update", WORKFLOW)
 
 
 if __name__ == "__main__":

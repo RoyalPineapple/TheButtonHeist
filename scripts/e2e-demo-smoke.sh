@@ -397,7 +397,6 @@ if [[ "$SKIP_HEIST_PLAYBACK" == false ]]; then
 fi
 
 log "Preparing dependencies"
-git submodule update --init --recursive submodules/AccessibilitySnapshotBH
 if [[ "$SKIP_GENERATE" == false ]]; then
     ./scripts/generate-project.sh
 fi

@@ -121,6 +121,14 @@ let hostedTestDescriptors = [
 
 let behaviorTestDescriptors = hostedTestDescriptors.filter(\.runsInBehaviorSuite)
 
+let macFrameworkTestTargetNames = [
+    "ButtonHeistSupportTests",
+    "ThePlansTests",
+    "TheScoreTests",
+    "HeistDoctorCoreTests",
+    "ButtonHeistTests",
+]
+
 let project = Project(
     name: "ButtonHeist",
     options: .options(
@@ -406,13 +414,28 @@ let project = Project(
         ),
         testScheme(name: "TheScoreTests"),
         testScheme(name: "ButtonHeistTests"),
+        .scheme(
+            name: "MacFrameworkTests",
+            buildAction: .buildAction(
+                targets: macFrameworkTestTargetNames.map { .target($0) }
+            ),
+            testAction: .targets(
+                macFrameworkTestTargetNames.map {
+                    .testableTarget(target: .target($0), parallelization: .enabled)
+                },
+                arguments: .arguments(environmentVariables: [
+                    "HEIST_THEPLANS_BUILD_DIR": "$(BUILT_PRODUCTS_DIR)",
+                ]),
+                expandVariableFromTarget: .target("ThePlansTests")
+            )
+        ),
     ] + hostedTestDescriptors.map(\.scheme) + [
         .scheme(
             name: "HostedBehaviorTests",
             buildAction: .buildAction(targets: behaviorTestDescriptors.map { .target($0.name) }),
             testAction: .targets(
                 behaviorTestDescriptors.map {
-                    .testableTarget(target: .target($0.name), parallelization: .enabled)
+                    .testableTarget(target: .target($0.name), parallelization: .disabled)
                 }
             )
         ),

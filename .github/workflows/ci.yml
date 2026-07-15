@@ -39,8 +39,10 @@ jobs:
       - name: Test portable automation
         run: |
           scripts/tests/check-swift-api-breaking-changes-test.sh
+          scripts/tests/e2e-demo-smoke-test.sh
           scripts/tests/generate-project-test.sh
           scripts/tests/release-automation-test.sh
+          python3 scripts/tests/select-ci-change-scopes-test.py
           python3 scripts/tests/select-ios-ci-simulator-test.py
 
       - name: Report portable contract timing
@@ -64,15 +66,20 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
+      - name: Classify changed paths
+        id: changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          git diff --name-only --no-renames "$BASE_SHA" "$HEAD_SHA" \
+            | python3 scripts/select-ci-change-scopes.py --github-output "$GITHUB_OUTPUT"
+
       - name: Select Xcode 26.3
         run: |
           echo "MAC_VALIDATION_START=$(date +%s)" >> "$GITHUB_ENV"
           sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
-
-      - name: Init required submodules
-        run: |
-          git config --global url."https://github.com/".insteadOf "git@github.com:"
-          git submodule update --init --recursive submodules/AccessibilitySnapshotBH
 
       - name: Install build tools
         uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151  # v4
@@ -84,13 +91,17 @@ jobs:
         run: |
           swiftlint lint --strict
           scripts/check-source-shape.sh
+
+      - name: Test source-shape policy
+        if: steps.changes.outputs.run_source_shape_self_test == 'true'
+        run: |
           BUMPER_BOWLING_PACKAGE_PATH="$PWD/.build/bumper-bowling" \
             scripts/tests/check-source-shape-test.sh
 
       - name: Validate Swift package products and public API
+        if: steps.changes.outputs.run_package_api_contracts == 'true'
         timeout-minutes: 15
         run: |
-          swift build --product heist-plan
           scripts/check-swift-api-breaking-changes.sh
           scripts/check-buttonheist-import-contract.sh
 
@@ -103,23 +114,21 @@ jobs:
       - name: Run macOS framework tests
         timeout-minutes: 15
         run: |
-          for scheme in ButtonHeistSupportTests ThePlansTests TheScoreTests HeistDoctorCoreTests ButtonHeistTests; do
-            scripts/run-with-heist-receipts.sh \
-              --dir "$BUTTONHEIST_RECEIPTS_DIR" \
-              --mode "$BUTTONHEIST_RECEIPTS_MODE" \
-              -- tuist test "$scheme" --no-selective-testing
-          done
+          scripts/run-with-heist-receipts.sh \
+            --dir "$BUTTONHEIST_RECEIPTS_DIR" \
+            --mode "$BUTTONHEIST_RECEIPTS_MODE" \
+            -- tuist test MacFrameworkTests --no-selective-testing
 
       - name: Run CLI, MCP, and heist-plan tests
+        if: steps.changes.outputs.run_cli_tool_tests == 'true'
         timeout-minutes: 15
         env:
           HEIST_PLAN_TOOL: ${{ github.workspace }}/.build/debug/heist-plan
         run: |
+          swift build --product heist-plan
           scripts/test-heist-plan-compile.sh
           scripts/swift-test-gate.sh HeistPlanTests --disable-xctest
-          swift build --package-path ButtonHeistCLI
           scripts/swift-test-gate.sh ButtonHeistCLI
-          swift build --package-path ButtonHeistMCP
           scripts/swift-test-gate.sh ButtonHeistMCP
 
       - name: Collect macOS failure evidence
@@ -169,11 +178,6 @@ jobs:
           python3 scripts/select-ios-ci-simulator.py \
             --preferred-device "iPhone 16 Pro" \
             --sim-name "$BUTTONHEIST_CI_SIM_NAME"
-
-      - name: Init required submodules
-        run: |
-          git config --global url."https://github.com/".insteadOf "git@github.com:"
-          git submodule update --init --recursive submodules/AccessibilitySnapshotBH
 
       - name: Install Tuist
         uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151  # v4
@@ -303,11 +307,6 @@ jobs:
             --preferred-device "iPhone 16 Pro" \
             --sim-name "$BUTTONHEIST_CI_SIM_NAME"
 
-      - name: Init required submodules
-        run: |
-          git config --global url."https://github.com/".insteadOf "git@github.com:"
-          git submodule update --init --recursive submodules/AccessibilitySnapshotBH
-
       - name: Install Tuist
         uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151  # v4
 
@@ -416,11 +415,6 @@ jobs:
           python3 scripts/select-ios-ci-simulator.py \
             --preferred-device "iPhone 16 Pro" \
             --sim-name "$BUTTONHEIST_CI_SIM_NAME"
-
-      - name: Init required submodules
-        run: |
-          git config --global url."https://github.com/".insteadOf "git@github.com:"
-          git submodule update --init --recursive submodules/AccessibilitySnapshotBH
 
       - name: Install Tuist
         uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151  # v4
