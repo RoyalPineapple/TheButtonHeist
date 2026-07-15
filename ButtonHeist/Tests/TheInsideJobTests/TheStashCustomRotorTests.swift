@@ -345,15 +345,6 @@ final class TheStashRotorTests: XCTestCase {
         XCTAssertEqual(available, ["Warnings"])
     }
 
-    private func requireForegroundWindowScene() throws -> UIWindowScene {
-        guard let scene = UIApplication.shared.connectedScenes
-            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene
-        else {
-            throw XCTSkip("No foreground-active UIWindowScene available in test host")
-        }
-        return scene
-    }
-
     private func hostWindow(
         in scene: UIWindowScene,
         level: UIWindow.Level,

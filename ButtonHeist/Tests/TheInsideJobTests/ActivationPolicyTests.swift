@@ -373,45 +373,6 @@ final class ActivationPolicyTests: XCTestCase {
         )
     }
 
-    private func XCTAssertDiagnostic(
-        _ message: String?,
-        contains fragments: [String],
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) {
-        guard let message else {
-            XCTFail("Expected diagnostic message", file: file, line: line)
-            return
-        }
-        for fragment in fragments {
-            XCTAssertTrue(
-                message.contains(fragment),
-                "Expected diagnostic to contain '\(fragment)'. Message: \(message)",
-                file: file,
-                line: line
-            )
-        }
-    }
-
-    private func XCTAssertDiagnostic(
-        _ message: String?,
-        doesNotContain fragments: [String],
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) {
-        guard let message else {
-            XCTFail("Expected diagnostic message", file: file, line: line)
-            return
-        }
-        for fragment in fragments {
-            XCTAssertFalse(
-                message.contains(fragment),
-                "Expected diagnostic to omit '\(fragment)'. Message: \(message)",
-                file: file,
-                line: line
-            )
-        }
-    }
 }
 
 #endif

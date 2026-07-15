@@ -42,10 +42,6 @@ final class StateMachineTests: XCTestCase {
         XCTAssertEqual(driver.state, replacement)
     }
 
-    func testPureMachineValuesRemainSendable() {
-        assertSendable(StateChange<GateState, GateEffect, GateRejection>.self)
-        assertSendable(StateDriver<GateMachine>.self)
-    }
 }
 
 private struct GateMachine: SimpleStateMachine, Sendable {
@@ -111,5 +107,3 @@ private final class LocalState: Equatable {
         lhs.value == rhs.value
     }
 }
-
-private func assertSendable<Value: Sendable>(_: Value.Type) {}

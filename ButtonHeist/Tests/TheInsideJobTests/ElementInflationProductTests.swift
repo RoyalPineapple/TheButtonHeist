@@ -1349,35 +1349,6 @@ final class ElementInflationProductTests: XCTestCase {
         )
     }
 
-    private func requireForegroundWindowScene() throws -> UIWindowScene {
-        guard let scene = UIApplication.shared.connectedScenes
-            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene
-        else {
-            throw XCTSkip("No foreground-active UIWindowScene available in test host")
-        }
-        return scene
-    }
-
-    private func XCTAssertDiagnostic(
-        _ message: String?,
-        contains fragments: [String],
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) {
-        guard let message else {
-            XCTFail("Expected diagnostic message", file: file, line: line)
-            return
-        }
-        for fragment in fragments {
-            XCTAssertTrue(
-                message.contains(fragment),
-                "Expected diagnostic to contain '\(fragment)'. Message: \(message)",
-                file: file,
-                line: line
-            )
-        }
-    }
-
 }
 
 private struct SemanticRevealFixture {

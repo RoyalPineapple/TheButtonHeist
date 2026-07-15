@@ -47,13 +47,6 @@ package func testElement(
     ))
 }
 
-package func testParsedElement(
-    _ element: AccessibilityElement,
-    actions: [ElementAction] = []
-) -> TestInterfaceNode {
-    .parsedElement(element, actions: actions)
-}
-
 package func testContainer(
     _ container: AccessibilityContainer,
     containerName: ContainerName? = nil,

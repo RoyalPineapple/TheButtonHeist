@@ -44,7 +44,7 @@ func hostedTestTarget(
     )
 }
 
-func hostedTestScheme(name: String) -> Scheme {
+func testScheme(name: String) -> Scheme {
     .scheme(
         name: name,
         buildAction: .buildAction(targets: [
@@ -67,7 +67,7 @@ struct HostedTestDescriptor {
     }
 
     var scheme: Scheme {
-        hostedTestScheme(name: name)
+        testScheme(name: name)
     }
 }
 
@@ -391,34 +391,12 @@ let project = Project(
         frameworkScheme(name: "ButtonHeistTestSupport"),
         frameworkScheme(name: "HeistDoctorCore"),
         frameworkScheme(name: "TheInsideJob"),
-        .scheme(
-            name: "ButtonHeistSupportTests",
-            buildAction: .buildAction(targets: [
-                .target("ButtonHeistSupportTests"),
-                .target("ButtonHeistSupport"),
-            ]),
-            testAction: .targets([
-                .testableTarget(target: .target("ButtonHeistSupportTests")),
-            ])
-        ),
-        .scheme(
-            name: "HeistDoctorCoreTests",
-            buildAction: .buildAction(targets: [
-                .target("HeistDoctorCoreTests"),
-                .target("ButtonHeistTestSupport"),
-                .target("HeistDoctorCore"),
-                .target("TheScore"),
-            ]),
-            testAction: .targets([
-                .testableTarget(target: .target("HeistDoctorCoreTests")),
-            ])
-        ),
+        testScheme(name: "ButtonHeistSupportTests"),
+        testScheme(name: "HeistDoctorCoreTests"),
         .scheme(
             name: "ThePlansTests",
             buildAction: .buildAction(targets: [
                 .target("ThePlansTests"),
-                .target("ThePlans"),
-                .target("ButtonHeistTestSupport"),
             ]),
             testAction: .targets([
                 .testableTarget(target: .target("ThePlansTests")),
@@ -426,31 +404,8 @@ let project = Project(
                 "HEIST_THEPLANS_BUILD_DIR": "$(BUILT_PRODUCTS_DIR)",
             ]), expandVariableFromTarget: .target("ThePlansTests"))
         ),
-        .scheme(
-            name: "TheScoreTests",
-            buildAction: .buildAction(targets: [
-                .target("TheScoreTests"),
-                .target("ButtonHeistTestSupport"),
-                .target("ThePlans"),
-                .target("TheScore"),
-            ]),
-            testAction: .targets([
-                .testableTarget(target: .target("TheScoreTests")),
-            ])
-        ),
-        .scheme(
-            name: "ButtonHeistTests",
-            buildAction: .buildAction(targets: [
-                .target("ButtonHeistTests"),
-                .target("ButtonHeistTestSupport"),
-                .target("ButtonHeist"),
-                .target("ThePlans"),
-                .target("TheScore"),
-            ]),
-            testAction: .targets([
-                .testableTarget(target: .target("ButtonHeistTests")),
-            ])
-        ),
+        testScheme(name: "TheScoreTests"),
+        testScheme(name: "ButtonHeistTests"),
     ] + hostedTestDescriptors.map(\.scheme) + [
         .scheme(
             name: "HostedBehaviorTests",

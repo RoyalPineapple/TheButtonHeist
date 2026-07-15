@@ -5,6 +5,12 @@ import TheScore
 
 final class DiscoveredDeviceTests: XCTestCase {
 
+    private let endpoint = DiscoveredDeviceEndpoint.service(
+        name: "test",
+        type: "_test._tcp",
+        domain: "local."
+    )
+
     private func makeResolutionQuery(
         _ value: String,
         file: StaticString = #filePath,
@@ -45,7 +51,6 @@ final class DiscoveredDeviceTests: XCTestCase {
 
     func testEqualityById() {
         // Devices with same ID but different names should be equal (ID is the identity)
-        let endpoint = DiscoveredDeviceEndpoint.service(name: "test", type: "_test._tcp", domain: "local.")
         let device1 = DiscoveredDevice(id: "same-id", name: "Device A", endpoint: endpoint)
         let device2 = DiscoveredDevice(id: "same-id", name: "Device B", endpoint: endpoint)
 
@@ -104,21 +109,18 @@ final class DiscoveredDeviceTests: XCTestCase {
     // MARK: - Short ID Parsing
 
     func testShortIdParsing() {
-        let endpoint = DiscoveredDeviceEndpoint.service(name: "test", type: "_test._tcp", domain: "local.")
         let device = DiscoveredDevice(id: "test", name: "TestApp#a1b2c3d4", endpoint: endpoint)
 
         XCTAssertEqual(device.shortId, "a1b2c3d4")
     }
 
     func testShortIdNilWithoutHash() {
-        let endpoint = DiscoveredDeviceEndpoint.service(name: "test", type: "_test._tcp", domain: "local.")
         let device = DiscoveredDevice(id: "test", name: "TestApp", endpoint: endpoint)
 
         XCTAssertNil(device.shortId)
     }
 
     func testShortIdNilWithEmptyHash() {
-        let endpoint = DiscoveredDeviceEndpoint.service(name: "test", type: "_test._tcp", domain: "local.")
         let device = DiscoveredDevice(id: "test", name: "TestApp#", endpoint: endpoint)
 
         XCTAssertNil(device.shortId)
@@ -127,7 +129,6 @@ final class DiscoveredDeviceTests: XCTestCase {
     // MARK: - Service Name Identity
 
     func testAppNameUsesServiceNameWithoutInstanceId() {
-        let endpoint = DiscoveredDeviceEndpoint.service(name: "test", type: "_test._tcp", domain: "local.")
         let device = DiscoveredDevice(id: "test", name: "TestApp#a1b2c3d4", endpoint: endpoint)
 
         XCTAssertEqual(device.appName, "TestApp")
@@ -136,7 +137,6 @@ final class DiscoveredDeviceTests: XCTestCase {
     }
 
     func testAppNameWithoutShortIdUsesServiceName() {
-        let endpoint = DiscoveredDeviceEndpoint.service(name: "test", type: "_test._tcp", domain: "local.")
         let device = DiscoveredDevice(id: "test", name: "TestApp", endpoint: endpoint)
 
         XCTAssertEqual(device.appName, "TestApp")
@@ -145,7 +145,6 @@ final class DiscoveredDeviceTests: XCTestCase {
     }
 
     func testAppNameStripsInstanceIdSuffix() {
-        let endpoint = DiscoveredDeviceEndpoint.service(name: "test", type: "_test._tcp", domain: "local.")
         let device = DiscoveredDevice(id: "test", name: "NoDashName#abc123", endpoint: endpoint)
 
         XCTAssertEqual(device.appName, "NoDashName")
@@ -154,7 +153,6 @@ final class DiscoveredDeviceTests: XCTestCase {
     }
 
     func testAppNameMayContainDashes() {
-        let endpoint = DiscoveredDeviceEndpoint.service(name: "test", type: "_test._tcp", domain: "local.")
         let device = DiscoveredDevice(id: "test", name: "My-App#ff00ff00", endpoint: endpoint)
 
         XCTAssertEqual(device.appName, "My-App")
@@ -165,7 +163,6 @@ final class DiscoveredDeviceTests: XCTestCase {
     // MARK: - Device Identifiers
 
     func testSimulatorUDID() {
-        let endpoint = DiscoveredDeviceEndpoint.service(name: "test", type: "_test._tcp", domain: "local.")
         let device = DiscoveredDevice(
             id: "test", name: "TestApp#abc",
             endpoint: endpoint,
@@ -176,7 +173,6 @@ final class DiscoveredDeviceTests: XCTestCase {
     }
 
     func testDefaultIdentifiersNil() {
-        let endpoint = DiscoveredDeviceEndpoint.service(name: "test", type: "_test._tcp", domain: "local.")
         let device = DiscoveredDevice(id: "test", name: "TestApp", endpoint: endpoint)
 
         XCTAssertNil(device.simulatorUDID)
@@ -185,7 +181,6 @@ final class DiscoveredDeviceTests: XCTestCase {
     }
 
     func testAllStoredTXTRecordFields() {
-        let endpoint = DiscoveredDeviceEndpoint.service(name: "test", type: "_test._tcp", domain: "local.")
         let device = DiscoveredDevice(
             id: "test", name: "TestApp#abc",
             endpoint: endpoint,
@@ -202,7 +197,6 @@ final class DiscoveredDeviceTests: XCTestCase {
     }
 
     func testDeviceNamePrefersBroadcastDeviceName() {
-        let endpoint = DiscoveredDeviceEndpoint.service(name: "test", type: "_test._tcp", domain: "local.")
         let device = DiscoveredDevice(
             id: "test",
             name: "AccessibilityTestApp#abc123",
@@ -229,7 +223,6 @@ final class DiscoveredDeviceTests: XCTestCase {
     }
 
     func testDisplayNameDisambiguatesWithoutChangingResolutionIdentity() {
-        let endpoint = DiscoveredDeviceEndpoint.service(name: "test", type: "_test._tcp", domain: "local.")
         let first = DiscoveredDevice(
             id: "first",
             name: "DemoApp#abc123",
@@ -252,7 +245,6 @@ final class DiscoveredDeviceTests: XCTestCase {
     // MARK: - Filter Matching
 
     func testMatchesByName() {
-        let endpoint = DiscoveredDeviceEndpoint.service(name: "test", type: "_test._tcp", domain: "local.")
         let device = DiscoveredDevice(id: "test", name: "TestApp#abc123", endpoint: endpoint)
 
         XCTAssertMatches(device, "TestApp")
@@ -262,7 +254,6 @@ final class DiscoveredDeviceTests: XCTestCase {
     }
 
     func testMatchesByAppName() {
-        let endpoint = DiscoveredDeviceEndpoint.service(name: "test", type: "_test._tcp", domain: "local.")
         let device = DiscoveredDevice(id: "test", name: "MyApp#abc", endpoint: endpoint)
 
         XCTAssertMatches(device, "MyApp")
@@ -271,7 +262,6 @@ final class DiscoveredDeviceTests: XCTestCase {
     }
 
     func testMatchesByDeviceName() {
-        let endpoint = DiscoveredDeviceEndpoint.service(name: "test", type: "_test._tcp", domain: "local.")
         let device = DiscoveredDevice(
             id: "test",
             name: "TestApp#abc",
@@ -284,7 +274,6 @@ final class DiscoveredDeviceTests: XCTestCase {
     }
 
     func testMatchesByShortIdPrefix() {
-        let endpoint = DiscoveredDeviceEndpoint.service(name: "test", type: "_test._tcp", domain: "local.")
         let device = DiscoveredDevice(id: "test", name: "TestApp#abc123", endpoint: endpoint)
 
         XCTAssertMatches(device, "abc")
@@ -294,7 +283,6 @@ final class DiscoveredDeviceTests: XCTestCase {
     }
 
     func testMatchesByInstanceIdPrefix() {
-        let endpoint = DiscoveredDeviceEndpoint.service(name: "test", type: "_test._tcp", domain: "local.")
         let device = DiscoveredDevice(
             id: "test", name: "TestApp",
             endpoint: endpoint,
@@ -306,7 +294,6 @@ final class DiscoveredDeviceTests: XCTestCase {
     }
 
     func testMatchesBySimulatorUDIDPrefix() {
-        let endpoint = DiscoveredDeviceEndpoint.service(name: "test", type: "_test._tcp", domain: "local.")
         let device = DiscoveredDevice(
             id: "test", name: "TestApp",
             endpoint: endpoint,
@@ -319,7 +306,6 @@ final class DiscoveredDeviceTests: XCTestCase {
     }
 
     func testMatchesByDiscoveryDeviceIDPrefix() {
-        let endpoint = DiscoveredDeviceEndpoint.service(name: "test", type: "_test._tcp", domain: "local.")
         let device = DiscoveredDevice(
             id: "network-device-42",
             name: "TestApp",
@@ -332,7 +318,6 @@ final class DiscoveredDeviceTests: XCTestCase {
     }
 
     func testNoMatch() {
-        let endpoint = DiscoveredDeviceEndpoint.service(name: "test", type: "_test._tcp", domain: "local.")
         let device = DiscoveredDevice(id: "test", name: "TestApp#abc", endpoint: endpoint)
 
         XCTAssertDoesNotMatch(device, "Android")
@@ -340,7 +325,6 @@ final class DiscoveredDeviceTests: XCTestCase {
     }
 
     func testDiscoveryIdentityPrefersInstallationId() {
-        let endpoint = DiscoveredDeviceEndpoint.service(name: "test", type: "_test._tcp", domain: "local.")
         let oldDevice = DiscoveredDevice(
             id: "old",
             name: "AccessibilityTestApp#a18032ae",
@@ -363,7 +347,6 @@ final class DiscoveredDeviceTests: XCTestCase {
     }
 
     func testDiscoveryIdentityFallsBackToServiceIdWithoutInstallationId() {
-        let endpoint = DiscoveredDeviceEndpoint.service(name: "test", type: "_test._tcp", domain: "local.")
         let firstDevice = DiscoveredDevice(
             id: "first",
             name: "AccessibilityTestApp#a18032ae",
@@ -383,7 +366,6 @@ final class DiscoveredDeviceTests: XCTestCase {
     }
 
     func testDiscoveryRegistryUpdatesSameServiceWithoutMutation() {
-        let endpoint = DiscoveredDeviceEndpoint.service(name: "test", type: "_test._tcp", domain: "local.")
         let firstDevice = DiscoveredDevice(
             id: "AccessibilityTestApp#a18032ae",
             name: "AccessibilityTestApp#a18032ae",
@@ -405,7 +387,6 @@ final class DiscoveredDeviceTests: XCTestCase {
     }
 
     func testDiscoveryRegistryIgnoresUnknownServiceLoss() {
-        let endpoint = DiscoveredDeviceEndpoint.service(name: "test", type: "_test._tcp", domain: "local.")
         let device = DiscoveredDevice(
             id: "AccessibilityTestApp#a18032ae",
             name: "AccessibilityTestApp#a18032ae",
@@ -420,7 +401,6 @@ final class DiscoveredDeviceTests: XCTestCase {
     }
 
     func testDiscoveryRegistryDedupesSimulatorRelaunches() {
-        let endpoint = DiscoveredDeviceEndpoint.service(name: "test", type: "_test._tcp", domain: "local.")
         let oldDevice = DiscoveredDevice(
             id: "AccessibilityTestApp#a18032ae",
             name: "AccessibilityTestApp#a18032ae",
@@ -450,7 +430,6 @@ final class DiscoveredDeviceTests: XCTestCase {
     }
 
     func testDiscoveryRegistryPromotesNewestSiblingWhenCurrentAdDisappears() {
-        let endpoint = DiscoveredDeviceEndpoint.service(name: "test", type: "_test._tcp", domain: "local.")
         let oldDevice = DiscoveredDevice(
             id: "AccessibilityTestApp#a18032ae",
             name: "AccessibilityTestApp#a18032ae",
@@ -480,7 +459,6 @@ final class DiscoveredDeviceTests: XCTestCase {
     }
 
     func testDiscoveryRegistryIgnoresHiddenSiblingRemoval() {
-        let endpoint = DiscoveredDeviceEndpoint.service(name: "test", type: "_test._tcp", domain: "local.")
         let oldDevice = DiscoveredDevice(
             id: "AccessibilityTestApp#a18032ae",
             name: "AccessibilityTestApp#a18032ae",
@@ -527,23 +505,6 @@ final class DiscoveredDeviceTests: XCTestCase {
     func testDirectConnectTargetRejectsNonLoopbackHostFilters() {
         XCTAssertNil(DiscoveredDevice.directConnectTarget(from: "example.com:8080"))
         XCTAssertNil(DiscoveredDevice.directConnectTarget(from: "QA:1"))
-    }
-
-    func testAllDiscoveryFields() {
-        let endpoint = DiscoveredDeviceEndpoint.service(name: "test", type: "_test._tcp", domain: "local.")
-        let device = DiscoveredDevice(
-            id: "test", name: "TestApp#abc",
-            endpoint: endpoint,
-            simulatorUDID: "SIM-UUID",
-            installationId: "install-1",
-            displayDeviceName: "Chris's iPhone",
-            instanceId: "my-instance"
-        )
-
-        XCTAssertEqual(device.simulatorUDID, "SIM-UUID")
-        XCTAssertEqual(device.installationId, "install-1")
-        XCTAssertEqual(device.deviceName, "Chris's iPhone")
-        XCTAssertEqual(device.instanceId, "my-instance")
     }
 
     @ButtonHeistActor

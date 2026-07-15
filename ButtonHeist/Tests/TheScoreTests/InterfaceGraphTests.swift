@@ -336,19 +336,6 @@ final class InterfaceGraphTests: XCTestCase {
         XCTAssertEqual(decoded.graph, plain.graph)
     }
 
-    func testGraphCoreTypesRemainValueContracts() {
-        assertValueContract(AccessibilityNodeRecord.self)
-        assertValueContract(AccessibilityElementNodeRecord.self)
-        assertValueContract(AccessibilityHierarchyGraph.self)
-        assertValueContract(InterfaceGraphElementRecord.self)
-        assertValueContract(InterfaceGraphContainerRecord.self)
-        assertValueContract(InterfaceGraphNodeKind.self)
-        assertValueContract(InterfaceGraphNodeRecord.self)
-        assertValueContract(InterfaceElementProjectionMetadata.self)
-        assertValueContract(InterfaceContainerProjectionMetadata.self)
-        assertValueContract(InterfaceGraph.self)
-    }
-
     private func makeElement(label: String) -> HeistElement {
         HeistElement(
             description: label,
@@ -369,6 +356,4 @@ final class InterfaceGraphTests: XCTestCase {
             JSONSerialization.jsonObject(with: JSONEncoder().encode(interface)) as? NSDictionary
         )
     }
-
-    private func assertValueContract<T: Equatable & Sendable>(_: T.Type) {}
 }

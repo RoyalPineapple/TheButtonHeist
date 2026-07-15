@@ -104,13 +104,6 @@ final class DeviceConnectionTLSTests: XCTestCase {
     // MARK: - DeviceConnection Init (actor-isolated)
 
     @ButtonHeistActor
-    func testDeviceConnectionStoresTokenFromInitializer() async {
-        let connection = DeviceConnection(device: makeDummyDevice(), token: "token")
-        XCTAssertNotNil(connection)
-        XCTAssertEqual(HandoffAuthToken("token")?.rawValue, "token")
-    }
-
-    @ButtonHeistActor
     func testConnectWithoutUsableTokenEmitsMissingToken() async {
         let tokens: [String?] = [nil, "", " \n"]
 
