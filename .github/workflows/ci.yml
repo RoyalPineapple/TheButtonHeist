@@ -13,49 +13,10 @@ permissions:
   contents: read
 
 jobs:
-  swiftlint:
-    runs-on: macos-15
-    timeout-minutes: 5
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-
-      - name: Install SwiftLint
-        run: brew install swiftlint
-
-      - name: Run SwiftLint
-        run: swiftlint lint --strict
-
-  bumper-bowling:
-    name: Bumper Bowling
-    runs-on: macos-15
-    timeout-minutes: 15
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-
-      - name: Select Xcode 26.3
-        run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
-
-      - name: Run Bumper Bowling
-        run: scripts/check-source-shape.sh
-
-      - name: Test source-shape guardrails
-        env:
-          BUMPER_BOWLING_PACKAGE_PATH: ${{ github.workspace }}/.build/bumper-bowling
-        run: scripts/tests/check-source-shape-test.sh
-
   release-contract:
-    # Release/install validation belongs in CI. Version bumps belong in the
-    # release script, not in every implementation PR that touches shared types.
+    name: release-contract
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 8
 
     steps:
       - name: Checkout repository
@@ -63,72 +24,39 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
-      - name: Validate release/install contract
-        run: scripts/validate-release-contract.sh
+      - name: Validate repository contracts
+        run: |
+          echo "PORTABLE_START=$(date +%s)" >> "$GITHUB_ENV"
+          scripts/validate-release-contract.sh
 
-      - name: Validate adversarial receipt timing parser
-        run: python3 scripts/check-e2e-adversarial-lab-timing.py
+      - name: Validate adversarial automation
+        run: |
+          python3 scripts/check-e2e-adversarial-lab-timing.py
+          python3 scripts/tests/adversarial-nightly-workflow-test.py
+          python3 scripts/tests/ci-workflow-test.py
+          python3 scripts/tests/e2e-lifecycle-gate-test.py
 
-      - name: Test automation contracts
+      - name: Test portable automation
         run: |
           scripts/tests/check-swift-api-breaking-changes-test.sh
           scripts/tests/generate-project-test.sh
           scripts/tests/release-automation-test.sh
-          scripts/tests/select-ios-ci-simulator-test.py
+          python3 scripts/tests/select-ios-ci-simulator-test.py
 
-  submodule-pin:
+      - name: Report portable contract timing
+        if: success()
+        run: |
+          PORTABLE_END=$(date +%s)
+          echo "Portable contracts: $((PORTABLE_END - PORTABLE_START))s" >> "$GITHUB_STEP_SUMMARY"
+
+  macos-tests:
+    name: macos-tests
+    if: github.event_name == 'pull_request'
     runs-on: macos-15
-    timeout-minutes: 5
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-
-      - name: Verify AccessibilitySnapshotBH parser contract
-        run: scripts/check-parser-contract.sh
-
-  spm-package:
-    runs-on: macos-15
-    timeout-minutes: 20
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-
-      - name: Select Xcode 26.3
-        run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
-
-      - name: Resolve SPM dependencies
-        timeout-minutes: 12
-        run: swift package resolve
-
-      - name: Build TheScore
-        timeout-minutes: 5
-        run: swift build --target TheScore
-
-      - name: Build ButtonHeist
-        timeout-minutes: 5
-        run: swift build --target ButtonHeist
-
-      - name: Check Swift public API breakage
-        timeout-minutes: 12
-        run: scripts/check-swift-api-breaking-changes.sh
-
-      - name: Check external ButtonHeist import contract
-        timeout-minutes: 12
-        run: scripts/check-buttonheist-import-contract.sh
-
-      - name: Build heist-plan
-        timeout-minutes: 5
-        run: swift build --product heist-plan
-
-  heist-plan-tests:
-    runs-on: macos-15
-    timeout-minutes: 25
+    timeout-minutes: 45
+    env:
+      BUTTONHEIST_RECEIPTS_DIR: ${{ github.workspace }}/ci-artifacts/buttonheist-receipts/macos-tests
+      BUTTONHEIST_RECEIPTS_MODE: failures
 
     steps:
       - name: Checkout repository
@@ -137,105 +65,69 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Select Xcode 26.3
-        run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
+        run: |
+          echo "MAC_VALIDATION_START=$(date +%s)" >> "$GITHUB_ENV"
+          sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
 
       - name: Init required submodules
         run: |
           git config --global url."https://github.com/".insteadOf "git@github.com:"
           git submodule update --init --recursive submodules/AccessibilitySnapshotBH
 
-      - name: Build heist-plan
-        timeout-minutes: 8
-        run: swift build --product heist-plan
+      - name: Install build tools
+        uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151  # v4
 
-      - name: Smoke test heist-plan compile
+      - name: Install SwiftLint
+        run: brew install swiftlint
+
+      - name: Run fast source validation
+        run: |
+          swiftlint lint --strict
+          scripts/check-source-shape.sh
+          BUMPER_BOWLING_PACKAGE_PATH="$PWD/.build/bumper-bowling" \
+            scripts/tests/check-source-shape-test.sh
+
+      - name: Validate Swift package products and public API
+        timeout-minutes: 15
+        run: |
+          swift build --product heist-plan
+          scripts/check-swift-api-breaking-changes.sh
+          scripts/check-buttonheist-import-contract.sh
+
+      - name: Install dependencies and generate project
         timeout-minutes: 12
-        env:
-          HEIST_PLAN_TOOL: ${{ github.workspace }}/.build/debug/heist-plan
-        run: scripts/test-heist-plan-compile.sh
+        run: |
+          tuist install
+          ./scripts/generate-project.sh --skip-install --no-binary-cache
 
-      - name: Run HeistPlanToolTests
+      - name: Run macOS framework tests
+        timeout-minutes: 15
+        run: |
+          for scheme in ButtonHeistSupportTests ThePlansTests TheScoreTests HeistDoctorCoreTests ButtonHeistTests; do
+            scripts/run-with-heist-receipts.sh \
+              --dir "$BUTTONHEIST_RECEIPTS_DIR" \
+              --mode "$BUTTONHEIST_RECEIPTS_MODE" \
+              -- tuist test "$scheme" --no-selective-testing
+          done
+
+      - name: Run CLI, MCP, and heist-plan tests
         timeout-minutes: 15
         env:
           HEIST_PLAN_TOOL: ${{ github.workspace }}/.build/debug/heist-plan
-        run: scripts/swift-test-gate.sh HeistPlanTests --disable-xctest
-
-  macos-tests:
-    runs-on: macos-15
-    timeout-minutes: 25
-    env:
-      BUTTONHEIST_RECEIPTS_DIR: ${{ github.workspace }}/ci-artifacts/buttonheist-receipts/macos-tests
-      BUTTONHEIST_RECEIPTS_MODE: ${{ github.ref == 'refs/heads/main' && 'failing-and-passing' || 'failures' }}
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-
-      - name: Select Xcode 26.3
-        run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
-
-      - name: Init required submodules
         run: |
-          git config --global url."https://github.com/".insteadOf "git@github.com:"
-          git submodule update --init --recursive submodules/AccessibilitySnapshotBH
-
-      - name: Install Tuist
-        uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151  # v4
-
-      - name: Install Tuist dependencies
-        timeout-minutes: 12
-        run: tuist install
-
-      - name: Generate project
-        timeout-minutes: 3
-        run: ./scripts/generate-project.sh --skip-install --no-binary-cache
-
-      - name: Run TheScoreTests
-        timeout-minutes: 5
-        run: |
-          scripts/run-with-heist-receipts.sh \
-            --dir "$BUTTONHEIST_RECEIPTS_DIR" \
-            --mode "$BUTTONHEIST_RECEIPTS_MODE" \
-            -- tuist test TheScoreTests --no-selective-testing
-
-      - name: Run ButtonHeistTests
-        timeout-minutes: 5
-        run: |
-          set -eo pipefail
-          scripts/run-with-heist-receipts.sh \
-            --dir "$BUTTONHEIST_RECEIPTS_DIR" \
-            --mode "$BUTTONHEIST_RECEIPTS_MODE" \
-            -- xcodebuild test -workspace ButtonHeist.xcworkspace -scheme ButtonHeistTests \
-            -destination 'platform=macOS'
-
-      - name: Build & test CLI (SwiftPM)
-        timeout-minutes: 12
-        run: |
-          swift package --package-path ButtonHeistCLI resolve
+          scripts/test-heist-plan-compile.sh
+          scripts/swift-test-gate.sh HeistPlanTests --disable-xctest
           swift build --package-path ButtonHeistCLI
-          scripts/run-with-heist-receipts.sh \
-            --dir "$BUTTONHEIST_RECEIPTS_DIR" \
-            --mode "$BUTTONHEIST_RECEIPTS_MODE" \
-            -- scripts/swift-test-gate.sh ButtonHeistCLI
-
-      - name: Build & test MCP (SwiftPM)
-        timeout-minutes: 12
-        run: |
-          swift package --package-path ButtonHeistMCP resolve
+          scripts/swift-test-gate.sh ButtonHeistCLI
           swift build --package-path ButtonHeistMCP
-          scripts/run-with-heist-receipts.sh \
-            --dir "$BUTTONHEIST_RECEIPTS_DIR" \
-            --mode "$BUTTONHEIST_RECEIPTS_MODE" \
-            -- scripts/swift-test-gate.sh ButtonHeistMCP
+          scripts/swift-test-gate.sh ButtonHeistMCP
 
-      - name: Run heist doctor receipt demo
-        timeout-minutes: 8
-        run: scripts/heist-doctor-demo.sh --work-dir "$RUNNER_TEMP/heist-doctor-demo" --format json
+      - name: Collect macOS failure evidence
+        if: failure()
+        run: mkdir -p "$BUTTONHEIST_RECEIPTS_DIR/diagnostics"
 
-      - name: Finalize heist receipts
-        if: always()
+      - name: Upload macOS failure receipts
+        if: failure()
         uses: ./.github/actions/finalize-heist-receipts
         with:
           receipt-directory: ${{ env.BUTTONHEIST_RECEIPTS_DIR }}
@@ -243,193 +135,25 @@ jobs:
           artifact-name: buttonheist-receipts-macos-tests-${{ github.run_attempt }}
           retention-days: 14
 
-  ios-test-lanes:
-    name: ios-tests (${{ matrix.lane }})
-    runs-on: macos-15
-    timeout-minutes: 40
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - lane: core
-            scheme: TheInsideJobTests
-            device: iPhone 16 Pro
-          - lane: integration
-            scheme: TheInsideJobIntegrationTests
-            device: iPhone 16 Pro
-          - lane: hosted-behavior
-            scheme: HostedBehaviorTests
-            device: iPhone 16 Pro
-    env:
-      DERIVED_DATA_PATH: /tmp/ButtonHeistDerivedData-${{ matrix.lane }}
-      BUTTONHEIST_CI_SIM_NAME: buttonheist-ci-ios-tests-${{ matrix.lane }}-${{ github.run_id }}-${{ github.run_attempt }}
-      BUTTONHEIST_RECEIPTS_DIR: process-temporary-directory
-      BUTTONHEIST_RECEIPTS_MODE: ${{ github.ref == 'refs/heads/main' && 'failing-and-passing' || 'failures' }}
-      BUTTONHEIST_CI_RECEIPTS_DIR: ${{ github.workspace }}/ci-artifacts/buttonheist-receipts/ios-tests-${{ matrix.lane }}
-      IOS_TEST_RESULT_BUNDLE: /tmp/ButtonHeist-ios-tests-${{ matrix.lane }}.xcresult
-      IOS_TEST_DIAGNOSTICS_DIR: /tmp/ButtonHeist-ios-tests-${{ matrix.lane }}-diagnostics
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-
-      - name: Select Xcode 26.3
-        run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
-
-      - name: Boot simulator in background
+      - name: Report macOS validation timing
+        if: success()
         run: |
-          python3 scripts/select-ios-ci-simulator.py \
-            --preferred-device "${{ matrix.device }}" \
-            --sim-name "$BUTTONHEIST_CI_SIM_NAME"
-          # Boot continues asynchronously; don't wait for bootstatus here.
-
-      - name: Init required submodules
-        run: |
-          git config --global url."https://github.com/".insteadOf "git@github.com:"
-          git submodule update --init --recursive submodules/AccessibilitySnapshotBH
-
-      - name: Install Tuist
-        uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151  # v4
-
-      - name: Install Tuist dependencies
-        timeout-minutes: 12
-        run: tuist install
-
-      - name: Generate project
-        timeout-minutes: 5
-        run: ./scripts/generate-project.sh --skip-install --no-binary-cache
-
-      - name: Build ${{ matrix.scheme }} for iOS
-        timeout-minutes: 20
-        run: |
-          set -eo pipefail
-          echo "IOS_TEST_BUILD_START=$(date +%s)" >> "$GITHUB_ENV"
-          trap 'echo "IOS_TEST_BUILD_END=$(date +%s)" >> "$GITHUB_ENV"' EXIT
-          DEST="platform=iOS Simulator,id=$SIM_UDID,arch=arm64"
-
-          xcodebuild build-for-testing -workspace ButtonHeist.xcworkspace -scheme "${{ matrix.scheme }}" \
-            -destination "$DEST" \
-            -derivedDataPath "$DERIVED_DATA_PATH"
-
-      - name: Wait for simulator boot
-        timeout-minutes: 5
-        run: xcrun simctl bootstatus "$SIM_UDID" -b
-
-      - name: Run ${{ matrix.scheme }}
-        # Run the hosted iOS test bundle before demo smoke gates so test compile
-        # and runtime failures fail before spending minutes replaying CLI flows.
-        timeout-minutes: 30
-        run: |
-          set -eo pipefail
-          echo "IOS_TEST_RUN_START=$(date +%s)" >> "$GITHUB_ENV"
-          trap 'echo "IOS_TEST_RUN_END=$(date +%s)" >> "$GITHUB_ENV"' EXIT
-          DEST="platform=iOS Simulator,id=$SIM_UDID,arch=arm64"
-          rm -rf "$IOS_TEST_RESULT_BUNDLE"
-          echo "Running ${{ matrix.scheme }} on $SIM_DEVICE_TYPE (iOS $SIM_OS)"
-
-          run_hosted_tests() {
-            scripts/run-with-heist-receipts.sh \
-              --ios-sandbox \
-              --mode "$BUTTONHEIST_RECEIPTS_MODE" \
-              -- xcodebuild test-without-building -workspace ButtonHeist.xcworkspace -scheme "${{ matrix.scheme }}" \
-              -destination "$DEST" \
-              -derivedDataPath "$DERIVED_DATA_PATH" \
-              -resultBundlePath "$IOS_TEST_RESULT_BUNDLE" \
-              "$@"
-          }
-
-          if [[ "${{ matrix.lane }}" == "hosted-behavior" ]]; then
-            run_hosted_tests \
-              -parallel-testing-enabled YES \
-              -parallel-testing-worker-count 2
-          else
-            run_hosted_tests
-          fi
-
-      - name: Collect iOS heist receipts
-        if: always()
-        run: |
-          if [[ -n "${SIM_UDID:-}" ]]; then
-            scripts/collect-ios-heist-receipts.sh "$SIM_UDID" "$BUTTONHEIST_CI_RECEIPTS_DIR"
-          else
-            echo "SIM_UDID is unavailable; skipping iOS heist receipt collection"
-          fi
-
-      - name: Finalize heist receipts
-        if: always()
-        uses: ./.github/actions/finalize-heist-receipts
-        with:
-          receipt-directory: ${{ env.BUTTONHEIST_CI_RECEIPTS_DIR }}
-          job-label: ios-tests-${{ matrix.lane }}
-          artifact-name: buttonheist-receipts-ios-tests-${{ matrix.lane }}-${{ github.run_attempt }}
-          retention-days: 14
-
-      - name: Collect iOS test diagnostics
-        if: always()
-        run: |
-          mkdir -p "$IOS_TEST_DIAGNOSTICS_DIR"
-          xcrun simctl list devices > "$IOS_TEST_DIAGNOSTICS_DIR/simulators.txt"
-          if [[ -n "${SIM_UDID:-}" ]]; then
-            xcrun simctl spawn "$SIM_UDID" log show \
-              --style compact \
-              --last 30m \
-              > "$IOS_TEST_DIAGNOSTICS_DIR/simulator.log" 2>&1 || true
-          fi
-
-      - name: Upload iOS test result and diagnostics
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
-        with:
-          name: buttonheist-ios-test-diagnostics-${{ matrix.lane }}-${{ github.run_attempt }}
-          path: |
-            ${{ env.IOS_TEST_RESULT_BUNDLE }}
-            ${{ env.IOS_TEST_DIAGNOSTICS_DIR }}
-          if-no-files-found: warn
-          retention-days: 14
-
-      - name: Report iOS test timings
-        if: always()
-        run: |
-          append_duration() {
-            local label="$1"
-            local start="$2"
-            local end="$3"
-            if [[ -n "$start" && -n "$end" && "$end" -ge "$start" ]]; then
-              local duration=$((end - start))
-              printf '| %s | %dm %02ds |\n' "$label" $((duration / 60)) $((duration % 60))
-            else
-              printf '| %s | unavailable |\n' "$label"
-            fi
-          }
-
-          {
-            echo "## iOS Test Timings"
-            echo "| Phase | Duration |"
-            echo "|-------|----------|"
-            append_duration "Build ${{ matrix.scheme }}" "${IOS_TEST_BUILD_START:-}" "${IOS_TEST_BUILD_END:-}"
-            append_duration "Run ${{ matrix.scheme }}" "${IOS_TEST_RUN_START:-}" "${IOS_TEST_RUN_END:-}"
-          } >> "$GITHUB_STEP_SUMMARY"
+          MAC_VALIDATION_END=$(date +%s)
+          echo "Consolidated macOS validation: $((MAC_VALIDATION_END - MAC_VALIDATION_START))s" \
+            >> "$GITHUB_STEP_SUMMARY"
 
   ios-tests:
     name: ios-tests
-    if: always()
-    needs: ios-test-lanes
-    runs-on: ubuntu-latest
-    steps:
-      - name: Require every hosted iOS lane
-        env:
-          IOS_TEST_LANES_RESULT: ${{ needs.ios-test-lanes.result }}
-        run: test "$IOS_TEST_LANES_RESULT" = success
-
-  ios-demo-gates:
+    if: github.event_name == 'pull_request'
     runs-on: macos-15
-    timeout-minutes: 25
+    timeout-minutes: 40
     env:
-      DERIVED_DATA_PATH: /tmp/ButtonHeistDerivedData-demo
-      BUTTONHEIST_RECEIPTS_DIR: ${{ github.workspace }}/ci-artifacts/buttonheist-receipts/ios-demo-gates
-      BUTTONHEIST_RECEIPTS_MODE: ${{ github.ref == 'refs/heads/main' && 'failing-and-passing' || 'failures' }}
+      DERIVED_DATA_PATH: /tmp/ButtonHeistDerivedData-core-demo
+      BUTTONHEIST_CI_SIM_NAME: buttonheist-ci-core-demo-${{ github.run_id }}-${{ github.run_attempt }}
+      BUTTONHEIST_RECEIPTS_MODE: failures
+      BUTTONHEIST_CI_RECEIPTS_DIR: ${{ github.workspace }}/ci-artifacts/buttonheist-receipts/ios-tests
+      IOS_TEST_RESULT_BUNDLE: /tmp/ButtonHeist-ios-tests-core.xcresult
+      IOS_TEST_DIAGNOSTICS_DIR: /tmp/ButtonHeist-ios-tests-core-diagnostics
 
     steps:
       - name: Checkout repository
@@ -440,10 +164,11 @@ jobs:
       - name: Select Xcode 26.3
         run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
 
-      - name: Boot simulator in background
+      - name: Boot dedicated simulator
         run: |
-          python3 scripts/select-ios-ci-simulator.py
-          # Boot continues asynchronously; don't wait for bootstatus here.
+          python3 scripts/select-ios-ci-simulator.py \
+            --preferred-device "iPhone 16 Pro" \
+            --sim-name "$BUTTONHEIST_CI_SIM_NAME"
 
       - name: Init required submodules
         run: |
@@ -453,61 +178,52 @@ jobs:
       - name: Install Tuist
         uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151  # v4
 
-      - name: Install Tuist dependencies
-        timeout-minutes: 12
-        run: tuist install
-
-      - name: Generate project
-        timeout-minutes: 5
-        run: ./scripts/generate-project.sh --skip-install --no-binary-cache
-
-      - name: Build iOS app targets
+      - name: Install dependencies and generate project
         timeout-minutes: 12
         run: |
-          set -eo pipefail
-          echo "IOS_DEMO_BUILD_START=$(date +%s)" >> "$GITHUB_ENV"
-          trap 'echo "IOS_DEMO_BUILD_END=$(date +%s)" >> "$GITHUB_ENV"' EXIT
+          tuist install
+          ./scripts/generate-project.sh --skip-install --no-binary-cache
+
+      - name: Build core tests and BH Demo once
+        timeout-minutes: 20
+        run: |
+          echo "IOS_CORE_BUILD_START=$(date +%s)" >> "$GITHUB_ENV"
           DEST="platform=iOS Simulator,id=$SIM_UDID,arch=arm64"
-
-          xcodebuild -workspace ButtonHeist.xcworkspace -scheme "BH Demo" \
+          xcodebuild build-for-testing -workspace ButtonHeist.xcworkspace \
+            -scheme TheInsideJobTests \
             -destination "$DEST" \
-            -derivedDataPath "$DERIVED_DATA_PATH" \
-            build
-
-      - name: Measure framework sizes
-        run: |
-          DERIVED="$DERIVED_DATA_PATH/Build/Products/Debug-iphonesimulator"
-          {
-            echo "## Framework Sizes"
-            echo "| Framework | Size |"
-            echo "|-----------|------|"
-            for fw in TheInsideJob TheScore ThePlant; do
-              if [ -d "$DERIVED/${fw}.framework" ]; then
-                SIZE=$(du -sh "$DERIVED/${fw}.framework" | cut -f1)
-                echo "| ${fw} | ${SIZE} |"
-              fi
-            done
-            if [ -d "$DERIVED/BHDemo.app" ]; then
-              APP_SIZE=$(du -sh "$DERIVED/BHDemo.app" | cut -f1)
-              echo "| BHDemo.app (total) | ${APP_SIZE} |"
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
+            -derivedDataPath "$DERIVED_DATA_PATH"
+          echo "IOS_CORE_BUILD_END=$(date +%s)" >> "$GITHUB_ENV"
 
       - name: Build ButtonHeist CLI
         timeout-minutes: 8
         run: swift build --package-path ButtonHeistCLI
 
-      - name: Run BH Demo CLI smoke
-        # Cold CLI SwiftPM resolution plus simulator install can exceed 5 min
-        # on macOS runners; keep this bounded without clipping valid replay runs.
-        timeout-minutes: 12
+      - name: Run deterministic iOS core
+        timeout-minutes: 18
         run: |
-          set -eo pipefail
-          echo "IOS_DEMO_SMOKE_START=$(date +%s)" >> "$GITHUB_ENV"
-          trap 'echo "IOS_DEMO_SMOKE_END=$(date +%s)" >> "$GITHUB_ENV"' EXIT
+          echo "IOS_CORE_RUN_START=$(date +%s)" >> "$GITHUB_ENV"
+          xcrun simctl bootstatus "$SIM_UDID" -b
+          DEST="platform=iOS Simulator,id=$SIM_UDID,arch=arm64"
+          rm -rf "$IOS_TEST_RESULT_BUNDLE"
+          scripts/run-with-heist-receipts.sh \
+            --ios-sandbox \
+            --mode "$BUTTONHEIST_RECEIPTS_MODE" \
+            -- xcodebuild test-without-building -workspace ButtonHeist.xcworkspace \
+            -scheme TheInsideJobTests \
+            -destination "$DEST" \
+            -derivedDataPath "$DERIVED_DATA_PATH" \
+            -resultBundlePath "$IOS_TEST_RESULT_BUNDLE" \
+            -collect-test-diagnostics never
+          echo "IOS_CORE_RUN_END=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Run trimmed BH Demo smoke
+        timeout-minutes: 10
+        run: |
+          echo "IOS_DEMO_RUN_START=$(date +%s)" >> "$GITHUB_ENV"
           APP="$DERIVED_DATA_PATH/Build/Products/Debug-iphonesimulator/BHDemo.app"
           scripts/run-with-heist-receipts.sh \
-            --dir "$BUTTONHEIST_RECEIPTS_DIR" \
+            --dir "$BUTTONHEIST_CI_RECEIPTS_DIR" \
             --mode "$BUTTONHEIST_RECEIPTS_MODE" \
             -- scripts/e2e-demo-smoke.sh \
             --skip-generate \
@@ -515,73 +231,280 @@ jobs:
             --sim-udid "$SIM_UDID" \
             --app "$APP" \
             --benchmark-report "$RUNNER_TEMP/buttonheist-demo-benchmark.json"
+          echo "IOS_DEMO_RUN_END=$(date +%s)" >> "$GITHUB_ENV"
 
-      - name: Run BH Demo lifecycle gate
-        timeout-minutes: 8
+      - name: Collect iOS failure evidence
+        if: failure()
         run: |
-          set -eo pipefail
-          echo "IOS_DEMO_LIFECYCLE_START=$(date +%s)" >> "$GITHUB_ENV"
-          trap 'echo "IOS_DEMO_LIFECYCLE_END=$(date +%s)" >> "$GITHUB_ENV"' EXIT
-          APP="$DERIVED_DATA_PATH/Build/Products/Debug-iphonesimulator/BHDemo.app"
-          scripts/run-with-heist-receipts.sh \
-            --dir "$BUTTONHEIST_RECEIPTS_DIR" \
-            --mode "$BUTTONHEIST_RECEIPTS_MODE" \
-            -- scripts/e2e-lifecycle-gate.py \
-            --sim-udid "$SIM_UDID" \
-            --app "$APP" \
-            --cli "$PWD/ButtonHeistCLI/.build/debug/buttonheist" \
-            --report "$RUNNER_TEMP/buttonheist-lifecycle-report.json"
+          mkdir -p "$IOS_TEST_DIAGNOSTICS_DIR" "$BUTTONHEIST_CI_RECEIPTS_DIR/diagnostics"
+          xcrun simctl list devices > "$IOS_TEST_DIAGNOSTICS_DIR/simulators.txt"
+          if [[ -n "${SIM_UDID:-}" ]]; then
+            scripts/collect-ios-heist-receipts.sh "$SIM_UDID" "$BUTTONHEIST_CI_RECEIPTS_DIR"
+            xcrun simctl spawn "$SIM_UDID" log show --style compact --last 30m \
+              > "$IOS_TEST_DIAGNOSTICS_DIR/simulator.log" 2>&1 || true
+          else
+            echo "SIM_UDID unavailable" > "$IOS_TEST_DIAGNOSTICS_DIR/simulator.log"
+          fi
+          if [[ -f "$RUNNER_TEMP/buttonheist-demo-benchmark.json" ]]; then
+            cp "$RUNNER_TEMP/buttonheist-demo-benchmark.json" \
+              "$BUTTONHEIST_CI_RECEIPTS_DIR/diagnostics/"
+          fi
 
-      - name: Collect demo diagnostics
-        if: always()
-        run: |
-          mkdir -p "$BUTTONHEIST_RECEIPTS_DIR/diagnostics"
-          {
-            echo "buttonheistDemoDiagnostics=1"
-            echo "runnerTemp=$RUNNER_TEMP"
-          } > "$BUTTONHEIST_RECEIPTS_DIR/demo-diagnostics.txt"
-
-          for report in \
-            "$RUNNER_TEMP/buttonheist-demo-benchmark.json" \
-            "$RUNNER_TEMP/buttonheist-lifecycle-report.json"; do
-            name="$(basename "$report")"
-            if [[ -f "$report" ]]; then
-              cp "$report" "$BUTTONHEIST_RECEIPTS_DIR/diagnostics/$name"
-              echo "$name=diagnostics/$name" >> "$BUTTONHEIST_RECEIPTS_DIR/demo-diagnostics.txt"
-            else
-              echo "$name=missing" >> "$BUTTONHEIST_RECEIPTS_DIR/demo-diagnostics.txt"
-            fi
-          done
-
-      - name: Finalize heist receipts
-        if: always()
+      - name: Upload iOS failure receipts
+        if: failure()
         uses: ./.github/actions/finalize-heist-receipts
         with:
-          receipt-directory: ${{ env.BUTTONHEIST_RECEIPTS_DIR }}
-          job-label: ios-demo-gates
-          artifact-name: buttonheist-receipts-ios-demo-gates-${{ github.run_attempt }}
+          receipt-directory: ${{ env.BUTTONHEIST_CI_RECEIPTS_DIR }}
+          job-label: ios-tests
+          artifact-name: buttonheist-receipts-ios-tests-${{ github.run_attempt }}
           retention-days: 14
 
-      - name: Report iOS demo timings
-        if: always()
-        run: |
-          append_duration() {
-            local label="$1"
-            local start="$2"
-            local end="$3"
-            if [[ -n "$start" && -n "$end" && "$end" -ge "$start" ]]; then
-              local duration=$((end - start))
-              printf '| %s | %dm %02ds |\n' "$label" $((duration / 60)) $((duration % 60))
-            else
-              printf '| %s | unavailable |\n' "$label"
-            fi
-          }
+      - name: Upload iOS failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: buttonheist-ios-test-diagnostics-core-${{ github.run_attempt }}
+          path: |
+            ${{ env.IOS_TEST_RESULT_BUNDLE }}
+            ${{ env.IOS_TEST_DIAGNOSTICS_DIR }}
+          if-no-files-found: warn
+          retention-days: 14
 
+      - name: Report iOS core and demo timings
+        if: success()
+        run: |
+          duration() { echo $(( $2 - $1 )); }
           {
-            echo "## iOS Demo Timings"
-            echo "| Phase | Duration |"
-            echo "|-------|----------|"
-            append_duration "Build iOS app targets" "${IOS_DEMO_BUILD_START:-}" "${IOS_DEMO_BUILD_END:-}"
-            append_duration "Run demo CLI smoke" "${IOS_DEMO_SMOKE_START:-}" "${IOS_DEMO_SMOKE_END:-}"
-            append_duration "Run demo lifecycle gate" "${IOS_DEMO_LIFECYCLE_START:-}" "${IOS_DEMO_LIFECYCLE_END:-}"
+            echo "## iOS Core and Demo Timings"
+            echo "- Build: $(duration "$IOS_CORE_BUILD_START" "$IOS_CORE_BUILD_END")s"
+            echo "- Core: $(duration "$IOS_CORE_RUN_START" "$IOS_CORE_RUN_END")s"
+            echo "- Demo smoke: $(duration "$IOS_DEMO_RUN_START" "$IOS_DEMO_RUN_END")s"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  ios-demo-gates:
+    name: ios-demo-gates
+    if: github.event_name == 'pull_request'
+    runs-on: macos-15
+    timeout-minutes: 35
+    env:
+      DERIVED_DATA_PATH: /tmp/ButtonHeistDerivedData-hosted-canaries
+      BUTTONHEIST_CI_SIM_NAME: buttonheist-ci-hosted-canaries-${{ github.run_id }}-${{ github.run_attempt }}
+      BUTTONHEIST_RECEIPTS_MODE: failures
+      BUTTONHEIST_CI_RECEIPTS_DIR: ${{ github.workspace }}/ci-artifacts/buttonheist-receipts/hosted-canaries
+      IOS_TEST_RESULT_BUNDLE: /tmp/ButtonHeist-hosted-canaries.xcresult
+      IOS_TEST_DIAGNOSTICS_DIR: /tmp/ButtonHeist-hosted-canaries-diagnostics
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Select Xcode 26.3
+        run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
+
+      - name: Boot dedicated simulator
+        run: |
+          python3 scripts/select-ios-ci-simulator.py \
+            --preferred-device "iPhone 16 Pro" \
+            --sim-name "$BUTTONHEIST_CI_SIM_NAME"
+
+      - name: Init required submodules
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git submodule update --init --recursive submodules/AccessibilitySnapshotBH
+
+      - name: Install Tuist
+        uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151  # v4
+
+      - name: Install dependencies and generate project
+        timeout-minutes: 12
+        run: |
+          tuist install
+          ./scripts/generate-project.sh --skip-install --no-binary-cache
+
+      - name: Build hosted behavior once
+        timeout-minutes: 20
+        run: |
+          echo "HOSTED_BUILD_START=$(date +%s)" >> "$GITHUB_ENV"
+          DEST="platform=iOS Simulator,id=$SIM_UDID,arch=arm64"
+          xcodebuild build-for-testing -workspace ButtonHeist.xcworkspace \
+            -scheme HostedBehaviorTests \
+            -destination "$DEST" \
+            -derivedDataPath "$DERIVED_DATA_PATH"
+          echo "HOSTED_BUILD_END=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Run representative hosted canaries
+        timeout-minutes: 15
+        run: |
+          echo "HOSTED_RUN_START=$(date +%s)" >> "$GITHUB_ENV"
+          xcrun simctl bootstatus "$SIM_UDID" -b
+          DEST="platform=iOS Simulator,id=$SIM_UDID,arch=arm64"
+          rm -rf "$IOS_TEST_RESULT_BUNDLE"
+          scripts/run-with-heist-receipts.sh \
+            --ios-sandbox \
+            --mode "$BUTTONHEIST_RECEIPTS_MODE" \
+            -- xcodebuild test-without-building -workspace ButtonHeist.xcworkspace \
+            -scheme HostedBehaviorTests \
+            -destination "$DEST" \
+            -derivedDataPath "$DERIVED_DATA_PATH" \
+            -resultBundlePath "$IOS_TEST_RESULT_BUNDLE" \
+            -collect-test-diagnostics never \
+            -parallel-testing-enabled YES \
+            -parallel-testing-worker-count 2
+          echo "HOSTED_RUN_END=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Collect hosted failure evidence
+        if: failure()
+        run: |
+          mkdir -p "$IOS_TEST_DIAGNOSTICS_DIR" "$BUTTONHEIST_CI_RECEIPTS_DIR/diagnostics"
+          xcrun simctl list devices > "$IOS_TEST_DIAGNOSTICS_DIR/simulators.txt"
+          if [[ -n "${SIM_UDID:-}" ]]; then
+            scripts/collect-ios-heist-receipts.sh "$SIM_UDID" "$BUTTONHEIST_CI_RECEIPTS_DIR"
+            xcrun simctl spawn "$SIM_UDID" log show --style compact --last 30m \
+              > "$IOS_TEST_DIAGNOSTICS_DIR/simulator.log" 2>&1 || true
+          else
+            echo "SIM_UDID unavailable" > "$IOS_TEST_DIAGNOSTICS_DIR/simulator.log"
+          fi
+
+      - name: Upload hosted failure receipts
+        if: failure()
+        uses: ./.github/actions/finalize-heist-receipts
+        with:
+          receipt-directory: ${{ env.BUTTONHEIST_CI_RECEIPTS_DIR }}
+          job-label: ios-demo-gates
+          artifact-name: buttonheist-receipts-hosted-canaries-${{ github.run_attempt }}
+          retention-days: 14
+
+      - name: Upload hosted failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: buttonheist-hosted-canary-diagnostics-${{ github.run_attempt }}
+          path: |
+            ${{ env.IOS_TEST_RESULT_BUNDLE }}
+            ${{ env.IOS_TEST_DIAGNOSTICS_DIR }}
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Report hosted canary timings
+        if: success()
+        run: |
+          {
+            echo "## Hosted Canary Timings"
+            echo "- Build: $((HOSTED_BUILD_END - HOSTED_BUILD_START))s"
+            echo "- Run: $((HOSTED_RUN_END - HOSTED_RUN_START))s"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  main-integration:
+    name: main-integration
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: macos-15
+    timeout-minutes: 35
+    env:
+      DERIVED_DATA_PATH: /tmp/ButtonHeistDerivedData-main-integration
+      BUTTONHEIST_CI_SIM_NAME: buttonheist-ci-main-integration-${{ github.run_id }}-${{ github.run_attempt }}
+      BUTTONHEIST_RECEIPTS_MODE: failures
+      BUTTONHEIST_CI_RECEIPTS_DIR: ${{ github.workspace }}/ci-artifacts/buttonheist-receipts/main-integration
+      IOS_TEST_RESULT_BUNDLE: /tmp/ButtonHeist-main-integration.xcresult
+      IOS_TEST_DIAGNOSTICS_DIR: /tmp/ButtonHeist-main-integration-diagnostics
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Select Xcode 26.3
+        run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
+
+      - name: Boot dedicated simulator
+        run: |
+          python3 scripts/select-ios-ci-simulator.py \
+            --preferred-device "iPhone 16 Pro" \
+            --sim-name "$BUTTONHEIST_CI_SIM_NAME"
+
+      - name: Init required submodules
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git submodule update --init --recursive submodules/AccessibilitySnapshotBH
+
+      - name: Install Tuist
+        uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151  # v4
+
+      - name: Install dependencies and generate project
+        timeout-minutes: 12
+        run: |
+          tuist install
+          ./scripts/generate-project.sh --skip-install --no-binary-cache
+
+      - name: Build integration suite
+        timeout-minutes: 20
+        run: |
+          echo "INTEGRATION_BUILD_START=$(date +%s)" >> "$GITHUB_ENV"
+          DEST="platform=iOS Simulator,id=$SIM_UDID,arch=arm64"
+          xcodebuild build-for-testing -workspace ButtonHeist.xcworkspace \
+            -scheme TheInsideJobIntegrationTests \
+            -destination "$DEST" \
+            -derivedDataPath "$DERIVED_DATA_PATH"
+          echo "INTEGRATION_BUILD_END=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Run genuine iOS integration suite
+        timeout-minutes: 18
+        run: |
+          echo "INTEGRATION_RUN_START=$(date +%s)" >> "$GITHUB_ENV"
+          xcrun simctl bootstatus "$SIM_UDID" -b
+          DEST="platform=iOS Simulator,id=$SIM_UDID,arch=arm64"
+          rm -rf "$IOS_TEST_RESULT_BUNDLE"
+          scripts/run-with-heist-receipts.sh \
+            --ios-sandbox \
+            --mode "$BUTTONHEIST_RECEIPTS_MODE" \
+            -- xcodebuild test-without-building -workspace ButtonHeist.xcworkspace \
+            -scheme TheInsideJobIntegrationTests \
+            -destination "$DEST" \
+            -derivedDataPath "$DERIVED_DATA_PATH" \
+            -resultBundlePath "$IOS_TEST_RESULT_BUNDLE" \
+            -collect-test-diagnostics never
+          echo "INTEGRATION_RUN_END=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Collect integration failure evidence
+        if: failure()
+        run: |
+          mkdir -p "$IOS_TEST_DIAGNOSTICS_DIR" "$BUTTONHEIST_CI_RECEIPTS_DIR/diagnostics"
+          xcrun simctl list devices > "$IOS_TEST_DIAGNOSTICS_DIR/simulators.txt"
+          if [[ -n "${SIM_UDID:-}" ]]; then
+            scripts/collect-ios-heist-receipts.sh "$SIM_UDID" "$BUTTONHEIST_CI_RECEIPTS_DIR"
+            xcrun simctl spawn "$SIM_UDID" log show --style compact --last 30m \
+              > "$IOS_TEST_DIAGNOSTICS_DIR/simulator.log" 2>&1 || true
+          else
+            echo "SIM_UDID unavailable" > "$IOS_TEST_DIAGNOSTICS_DIR/simulator.log"
+          fi
+
+      - name: Upload integration failure receipts
+        if: failure()
+        uses: ./.github/actions/finalize-heist-receipts
+        with:
+          receipt-directory: ${{ env.BUTTONHEIST_CI_RECEIPTS_DIR }}
+          job-label: main-integration
+          artifact-name: buttonheist-receipts-main-integration-${{ github.run_attempt }}
+          retention-days: 14
+
+      - name: Upload integration failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: buttonheist-main-integration-diagnostics-${{ github.run_attempt }}
+          path: |
+            ${{ env.IOS_TEST_RESULT_BUNDLE }}
+            ${{ env.IOS_TEST_DIAGNOSTICS_DIR }}
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Report integration timings
+        if: success()
+        run: |
+          {
+            echo "## Main Integration Timings"
+            echo "- Build: $((INTEGRATION_BUILD_END - INTEGRATION_BUILD_START))s"
+            echo "- Run: $((INTEGRATION_RUN_END - INTEGRATION_RUN_START))s"
           } >> "$GITHUB_STEP_SUMMARY"

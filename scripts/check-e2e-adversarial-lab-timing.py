@@ -145,8 +145,30 @@ assert [iteration["passed"] for iteration in negative_report["iterations"]] == [
     False,
 ]
 assert [hit["iteration"] for hit in negative_report["unexpectedCeilingHits"]] == [1, 2, 3]
-assert negative_report["iterations"][0]["response"] == RECEIPT
-assert negative_report["iterations"][1]["stderr"] == "different diagnostic"
+assert negative_report["iterations"][0]["diagnostics"]["response"] == RECEIPT
+assert negative_report["iterations"][1]["diagnostics"]["stderr"] == "different diagnostic"
+
+passing_scenario = lab.Scenario(
+    name="/passing",
+    plan="unused",
+    repeat_count=1,
+    expectation=lab.ScenarioExpectation.COMMAND_SUCCEEDS,
+)
+passing_observation = lab.observe_iteration(
+    passing_scenario,
+    1,
+    subprocess.CompletedProcess(
+        args=["buttonheist"],
+        returncode=0,
+        stdout=json.dumps({"report": {"metrics": {"samples": [], "ceilings": []}}}),
+        stderr="",
+    ),
+    5,
+)
+passing_iteration = lab.iteration_report(passing_observation)
+
+assert passing_iteration["passed"] is True
+assert "diagnostics" not in passing_iteration
 
 ceiling_only_report = lab.scenario_report(negative_scenario, negative_observations[:1])
 record_summary = lab.gate_summary([ceiling_only_report], lab.CeilingPolicy.RECORD)
