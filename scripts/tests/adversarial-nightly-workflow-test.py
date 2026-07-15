@@ -40,26 +40,27 @@ class AdversarialNightlyWorkflowTests(unittest.TestCase):
         cls.workflow = WORKFLOW_PATH.read_text()
 
     def test_one_daily_schedule_has_bounded_repeat_policy(self) -> None:
-        schedules = set(
-            re.findall(
-                r'^\s*- cron:\s*["\']([^"\']+)["\']',
-                self.workflow,
-                re.MULTILINE,
-            )
+        schedules = re.findall(
+            r'^\s*- cron:\s*["\']([^"\']+)["\']',
+            self.workflow,
+            re.MULTILINE,
         )
-        self.assertEqual(schedules, {"17 3 * * *"})
+        self.assertEqual(schedules, ["17 3 * * *"])
 
         job = indented_block(self.workflow, "adversarial-nightly", 2)
         passing_policy = mapping_value(job, "BUTTONHEIST_ADVERSARIAL_REPEAT_COUNT")
         failure_policy = mapping_value(job, "BUTTONHEIST_ADVERSARIAL_FAILURE_REPEAT_COUNT")
 
-        self.assertIn("'5'", passing_policy)
-        self.assertIn("'1'", failure_policy)
-        self.assertNotIn("github.event.schedule", passing_policy)
-        self.assertNotIn("github.event.schedule", failure_policy)
-        self.assertNotIn("'20'", passing_policy)
+        self.assertEqual(
+            passing_policy,
+            "${{ github.event.inputs.passing_repeat_count || '5' }}",
+        )
+        self.assertEqual(
+            failure_policy,
+            "${{ github.event.inputs.failure_repeat_count || '1' }}",
+        )
 
-    def test_manual_dispatch_controls_passing_and_failure_repeats_separately(self) -> None:
+    def test_manual_dispatch_defaults_passing_and_failure_repeats_separately(self) -> None:
         dispatch = indented_block(self.workflow, "workflow_dispatch", 2)
         inputs = indented_block(dispatch, "inputs", 4)
         passing = indented_block(inputs, "passing_repeat_count", 6)
@@ -67,16 +68,6 @@ class AdversarialNightlyWorkflowTests(unittest.TestCase):
 
         self.assertEqual(mapping_value(passing, "default"), "5")
         self.assertEqual(mapping_value(failing, "default"), "1")
-
-        job = indented_block(self.workflow, "adversarial-nightly", 2)
-        self.assertIn(
-            "github.event.inputs.passing_repeat_count",
-            mapping_value(job, "BUTTONHEIST_ADVERSARIAL_REPEAT_COUNT"),
-        )
-        self.assertIn(
-            "github.event.inputs.failure_repeat_count",
-            mapping_value(job, "BUTTONHEIST_ADVERSARIAL_FAILURE_REPEAT_COUNT"),
-        )
 
     def test_nightly_owns_the_complete_adversarial_matrix(self) -> None:
         lab_step = step_containing(self.workflow, "scripts/e2e-adversarial-lab.py")
