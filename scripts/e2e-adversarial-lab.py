@@ -63,8 +63,6 @@ class IterationObservation:
     passed: bool
     returncode: int
     diagnostic_matched: bool | None
-    cli_wall_duration_ms: int
-    receipt_timing_samples: dict[str, list[int]]
     unexpected_ceiling_hits: list[dict[str, Any]]
     response: Any | None
     stdout: str
@@ -73,25 +71,6 @@ class IterationObservation:
     @property
     def requires_app_recovery(self) -> bool:
         return self.returncode != 0
-
-
-def percentile(values: list[int], pct: float) -> int:
-    if not values:
-        return 0
-    ordered = sorted(values)
-    index = min(len(ordered) - 1, int(round((pct / 100) * (len(ordered) - 1))))
-    return ordered[index]
-
-
-def stats(values: list[int]) -> dict[str, int]:
-    return {
-        "min": min(values) if values else 0,
-        "p50": percentile(values, 50),
-        "p95": percentile(values, 95),
-        "p99": percentile(values, 99),
-        "max": max(values) if values else 0,
-        "total": sum(values),
-    }
 
 
 def run(cmd: list[str], *, env: dict[str, str] | None = None, timeout: float = 60, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -123,34 +102,12 @@ def parse_jsonish(text: str) -> Any | None:
     return None
 
 
-def sample_stats(values: list[int]) -> dict[str, int]:
-    return {"count": len(values), **stats(values)}
-
-
-def ms(value: Any, *, scale: int = 1) -> int | None:
+def ms(value: Any) -> int | None:
     if isinstance(value, bool):
         return None
     if isinstance(value, (int, float)) and math.isfinite(value):
-        return max(0, int(round(value * scale)))
+        return max(0, int(round(value)))
     return None
-
-
-def empty_receipt_timing_samples() -> dict[str, list[int]]:
-    return {}
-
-
-def add_sample(samples: dict[str, list[int]], bucket: str, value: int | None) -> None:
-    if value is not None:
-        samples.setdefault(bucket, []).append(value)
-
-
-def merge_receipt_timing_samples(target: dict[str, list[int]], source: dict[str, list[int]]) -> None:
-    for bucket, values in source.items():
-        target.setdefault(bucket, []).extend(values)
-
-
-def summarize_receipt_timing(samples: dict[str, list[int]]) -> dict[str, dict[str, int]]:
-    return {bucket: sample_stats(values) for bucket, values in sorted(samples.items()) if values}
 
 
 def report_metrics_object(response: Any) -> dict[str, Any] | None:
@@ -163,44 +120,10 @@ def report_metrics_object(response: Any) -> dict[str, Any] | None:
     return metrics if isinstance(metrics, dict) else None
 
 
-def add_receipt_metric_samples(samples: dict[str, list[int]], metrics: dict[str, Any]) -> None:
-    sample_rows = metrics.get("samples")
-    if not isinstance(sample_rows, list):
-        return
-    for row in sample_rows:
-        if not isinstance(row, dict):
-            continue
-        name = row.get("name")
-        if not isinstance(name, str) or not name:
-            continue
-        add_sample(samples, name, ms(row.get("valueMs")))
-
-
-def ceiling_hit(
-    *,
-    path: Any,
-    kind: Any,
-    status: Any,
-    source: str,
-    budget_ms: int | None,
-    elapsed_ms: int | None,
-) -> dict[str, Any] | None:
-    if budget_ms is None or elapsed_ms is None:
-        return None
-    threshold_ms = max(0, budget_ms - CEILING_HIT_TOLERANCE_MS)
-    if elapsed_ms < threshold_ms:
-        return None
-    return {
-        "path": path,
-        "kind": kind,
-        "status": status,
-        "source": source,
-        "budgetMs": budget_ms,
-        "elapsedMs": elapsed_ms,
-    }
-
-
-def receipt_ceiling_hits(metrics: dict[str, Any]) -> list[dict[str, Any]]:
+def receipt_ceiling_hits(response: Any) -> list[dict[str, Any]]:
+    metrics = report_metrics_object(response)
+    if metrics is None:
+        return []
     ceiling_rows = metrics.get("ceilings")
     if not isinstance(ceiling_rows, list):
         return []
@@ -208,31 +131,18 @@ def receipt_ceiling_hits(metrics: dict[str, Any]) -> list[dict[str, Any]]:
     for row in ceiling_rows:
         if not isinstance(row, dict):
             continue
-        source = row.get("source")
-        if not isinstance(source, str) or not source:
+        budget_ms = ms(row.get("budgetMs"))
+        elapsed_ms = ms(row.get("elapsedMs"))
+        if (
+            not isinstance(row.get("source"), str)
+            or not row["source"]
+            or budget_ms is None
+            or elapsed_ms is None
+        ):
             continue
-        hit = ceiling_hit(
-            path=row.get("path"),
-            kind=row.get("kind"),
-            status=row.get("status"),
-            source=source,
-            budget_ms=ms(row.get("budgetMs")),
-            elapsed_ms=ms(row.get("elapsedMs")),
-        )
-        if hit is not None:
-            hits.append(hit)
+        if elapsed_ms >= max(0, budget_ms - CEILING_HIT_TOLERANCE_MS):
+            hits.append(row)
     return hits
-
-
-def receipt_metrics(response: Any) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    samples = empty_receipt_timing_samples()
-    ceiling_hits: list[dict[str, Any]] = []
-    metrics = report_metrics_object(response)
-    if metrics is None:
-        return samples, ceiling_hits
-    add_receipt_metric_samples(samples, metrics)
-    ceiling_hits.extend(receipt_ceiling_hits(metrics))
-    return samples, ceiling_hits
 
 
 def with_iteration(items: list[dict[str, Any]], iteration: int) -> list[dict[str, Any]]:
@@ -243,11 +153,10 @@ def observe_iteration(
     scenario: Scenario,
     iteration: int,
     result: subprocess.CompletedProcess[str],
-    duration_ms: int,
 ) -> IterationObservation:
     parsed_stdout = parse_jsonish(result.stdout)
     parsed = parsed_stdout if parsed_stdout is not None else parse_jsonish(result.stderr)
-    timing_samples, ceiling_hits = receipt_metrics(parsed)
+    ceiling_hits = receipt_ceiling_hits(parsed)
     diagnostic_matched: bool | None = None
     if scenario.expectation is ScenarioExpectation.COMMAND_SUCCEEDS:
         passed = result.returncode == 0
@@ -262,8 +171,6 @@ def observe_iteration(
         passed=passed,
         returncode=result.returncode,
         diagnostic_matched=diagnostic_matched,
-        cli_wall_duration_ms=duration_ms,
-        receipt_timing_samples=timing_samples,
         unexpected_ceiling_hits=ceiling_hits,
         response=parsed,
         stdout=result.stdout,
@@ -278,8 +185,6 @@ def iteration_report(observation: IterationObservation) -> dict[str, Any]:
         "returncode": observation.returncode,
         "diagnosticMatched": observation.diagnostic_matched,
         "requiresAppRecovery": observation.requires_app_recovery,
-        "cliWallDurationMs": observation.cli_wall_duration_ms,
-        "receiptTimingMs": summarize_receipt_timing(observation.receipt_timing_samples),
         "unexpectedCeilingHits": observation.unexpected_ceiling_hits,
     }
     if not observation.passed or observation.unexpected_ceiling_hits:
@@ -292,12 +197,9 @@ def iteration_report(observation: IterationObservation) -> dict[str, Any]:
 
 
 def scenario_report(scenario: Scenario, observations: list[IterationObservation]) -> dict[str, Any]:
-    timing_samples = empty_receipt_timing_samples()
     ceiling_hits: list[dict[str, Any]] = []
     for observation in observations:
-        merge_receipt_timing_samples(timing_samples, observation.receipt_timing_samples)
         ceiling_hits.extend(with_iteration(observation.unexpected_ceiling_hits, observation.iteration))
-    durations = [observation.cli_wall_duration_ms for observation in observations]
     passed = sum(observation.passed for observation in observations)
     return {
         "name": scenario.name,
@@ -307,8 +209,6 @@ def scenario_report(scenario: Scenario, observations: list[IterationObservation]
         "attempted": len(observations),
         "passed": passed,
         "failed": len(observations) - passed,
-        "cliWallTimingMs": sample_stats(durations),
-        "receiptTimingMs": summarize_receipt_timing(timing_samples),
         "unexpectedCeilingHits": ceiling_hits,
         "iterations": [iteration_report(observation) for observation in observations],
     }
@@ -629,8 +529,13 @@ FAILING_PLANS = {
 }
 
 
-def run_heist(cli: Path, app: DemoApp, plan: str, *, timeout: float = 60) -> tuple[subprocess.CompletedProcess[str], int]:
-    start = time.monotonic_ns()
+def run_heist(
+    cli: Path,
+    app: DemoApp,
+    plan: str,
+    *,
+    timeout: float = 60,
+) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env.update(
         {
@@ -658,8 +563,7 @@ def run_heist(cli: Path, app: DemoApp, plan: str, *, timeout: float = 60) -> tup
         timeout=timeout,
         check=False,
     )
-    duration_ms = int((time.monotonic_ns() - start) / 1_000_000)
-    return result, duration_ms
+    return result
 
 
 def execute_scenario(
@@ -677,8 +581,8 @@ def execute_scenario(
     write_report(report_path, report)
 
     for iteration in range(1, scenario.repeat_count + 1):
-        result, duration_ms = run_heist(cli, app, scenario.plan)
-        observation = observe_iteration(scenario, iteration, result, duration_ms)
+        result = run_heist(cli, app, scenario.plan)
+        observation = observe_iteration(scenario, iteration, result)
         observations.append(observation)
         report["scenarios"][scenario_index] = scenario_report(scenario, observations)
         report["summary"] = gate_summary(report["scenarios"], ceiling_policy)

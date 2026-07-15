@@ -24,7 +24,6 @@ APP=""
 CLI_CONFIGURATION="debug"
 HEIST_PATH=""
 SKIP_HEIST_PLAYBACK=false
-BENCHMARK_REPORT=""
 RECEIPTS_DIR=""
 RECEIPTS_MODE=""
 
@@ -46,7 +45,6 @@ Options:
   --cli-configuration C  SwiftPM CLI configuration: debug or release. Defaults to debug.
   --heist PATH           Heist fixture to replay. Defaults to tests/fixtures/bh-demo-smoke.heist.
   --skip-heist-playback  Skip replaying the heist fixture.
-  --benchmark-report P   Write per-command timing measurements to PATH.
   --receipts-dir DIR     Enable heist execution receipt artifacts in DIR.
   --receipts-mode MODE   Receipt mode: failures, failing-and-passing, all, or off.
   -h, --help             Show this help.
@@ -258,11 +256,6 @@ while [[ $# -gt 0 ]]; do
             SKIP_HEIST_PLAYBACK=true
             shift
             ;;
-        --benchmark-report)
-            BENCHMARK_REPORT="${2:-}"
-            [[ -n "$BENCHMARK_REPORT" ]] || fail "--benchmark-report requires a value"
-            shift 2
-            ;;
         --receipts-dir)
             RECEIPTS_DIR="${2:-}"
             [[ -n "$RECEIPTS_DIR" ]] || fail "--receipts-dir requires a value"
@@ -291,7 +284,6 @@ require_tool cksum
 require_tool awk
 require_tool sed
 require_tool jq
-require_tool python3
 
 WORKTREE_ID="$(sanitize_identifier "$(basename "$REPO_ROOT")")"
 [[ -n "$WORKTREE_ID" ]] || WORKTREE_ID="workspace"
@@ -324,17 +316,12 @@ DEVICE_ENDPOINT="127.0.0.1:$PORT"
 DERIVED_DATA="${TMPDIR:-/tmp}/buttonheist-e2e-${WORKTREE_ID}-derived-data"
 BUILD_LOG="${TMPDIR:-/tmp}/buttonheist-e2e-${WORKTREE_ID}-xcodebuild.log"
 BUTTONHEIST_BIN="$REPO_ROOT/ButtonHeistCLI/.build/$CLI_CONFIGURATION/buttonheist"
-BENCHMARK_TMP="$(mktemp "${TMPDIR:-/tmp}/buttonheist-demo-benchmark.XXXXXX")"
 OWNS_SIMULATOR=false
 APP_LAUNCHED=false
-BENCHMARK_REPORT_WRITTEN=false
 
 cleanup() {
     local status=$?
     set +e
-    if [[ "$BENCHMARK_REPORT_WRITTEN" == false && -n "$BENCHMARK_REPORT" && -f "$BENCHMARK_TMP" ]]; then
-        emit_benchmark_report
-    fi
     if [[ -n "$SIM_UDID" && "$APP_LAUNCHED" == true ]]; then
         xcrun simctl terminate "$SIM_UDID" com.buttonheist.testapp >/dev/null 2>&1 || true
     fi
@@ -347,79 +334,17 @@ cleanup() {
     fi
     rm -rf "$DERIVED_DATA"
     rm -f "$BUILD_LOG"
-    rm -f "$BENCHMARK_TMP"
     exit "$status"
 }
 trap cleanup EXIT
 
-now_ms() {
-    python3 - <<'PY'
-import time
-print(time.monotonic_ns() // 1_000_000)
-PY
-}
-
-record_benchmark() {
-    local name="$1"
-    local command="$2"
-    local duration_ms="$3"
-    local status="$4"
-    jq -cn \
-        --arg name "$name" \
-        --arg command "$command" \
-        --argjson durationMs "$duration_ms" \
-        --argjson status "$status" \
-        '{name: $name, command: $command, durationMs: $durationMs, status: $status}' \
-        >> "$BENCHMARK_TMP"
-}
-
-emit_benchmark_report() {
-    local generated_at
-    local report_json
-    generated_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-    report_json="$(
-        jq -s \
-            --arg generatedAt "$generated_at" \
-            --arg cliConfiguration "$CLI_CONFIGURATION" \
-            --arg endpoint "$DEVICE_ENDPOINT" \
-            '{
-                generatedAt: $generatedAt,
-                cliConfiguration: $cliConfiguration,
-                endpoint: $endpoint,
-                commandCount: length,
-                totalDurationMs: ((map(.durationMs) | add) // 0),
-                maxDurationMs: ((map(.durationMs) | max) // 0),
-                measurements: .
-            }' "$BENCHMARK_TMP"
-    )"
-    log "Benchmark summary"
-    jq -r '
-        "    commands: \(.commandCount)",
-        "    total: \(.totalDurationMs)ms",
-        "    max: \(.maxDurationMs)ms",
-        (.measurements[] | "    \(.name): \(.durationMs)ms")
-    ' <<< "$report_json"
-    if [[ -n "$BENCHMARK_REPORT" ]]; then
-        mkdir -p "$(dirname "$BENCHMARK_REPORT")"
-        printf '%s\n' "$report_json" > "$BENCHMARK_REPORT"
-        log "Benchmark report written to $BENCHMARK_REPORT"
-    fi
-    BENCHMARK_REPORT_WRITTEN=true
-}
-
 run_cli_json() {
     local status
     local output
-    local start_ms
-    local end_ms
-    local duration_ms
-    local name
     local attempt
     local attempts
-    name="${1:-command}"
     attempt=1
     attempts="${BUTTONHEIST_ROOT_VIEW_RETRY_ATTEMPTS:-4}"
-    start_ms="$(now_ms)"
     while true; do
         set +e
         output="$(
@@ -435,9 +360,6 @@ run_cli_json() {
         set -e
 
         if (( status == 0 )); then
-            end_ms="$(now_ms)"
-            duration_ms=$((end_ms - start_ms))
-            record_benchmark "$name" "$*" "$duration_ms" "$status"
             printf '%s\n' "$output"
             return 0
         fi
@@ -449,9 +371,6 @@ run_cli_json() {
             continue
         fi
 
-        end_ms="$(now_ms)"
-        duration_ms=$((end_ms - start_ms))
-        record_benchmark "$name" "$*" "$duration_ms" "$status"
         printf '%s\n' "$output" >&2
         return "$status"
     done
@@ -563,5 +482,4 @@ if [[ "$SKIP_HEIST_PLAYBACK" == false ]]; then
     printf '%s' "$PLAYBACK_FINAL_JSON" | expect_screen_title "Display"
 fi
 
-emit_benchmark_report
 log "Demo smoke test passed"

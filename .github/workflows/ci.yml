@@ -229,8 +229,7 @@ jobs:
             --skip-generate \
             --skip-cli-build \
             --sim-udid "$SIM_UDID" \
-            --app "$APP" \
-            --benchmark-report "$RUNNER_TEMP/buttonheist-demo-benchmark.json"
+            --app "$APP"
           echo "IOS_DEMO_RUN_END=$(date +%s)" >> "$GITHUB_ENV"
 
       - name: Collect iOS failure evidence
@@ -245,11 +244,6 @@ jobs:
           else
             echo "SIM_UDID unavailable" > "$IOS_TEST_DIAGNOSTICS_DIR/simulator.log"
           fi
-          if [[ -f "$RUNNER_TEMP/buttonheist-demo-benchmark.json" ]]; then
-            cp "$RUNNER_TEMP/buttonheist-demo-benchmark.json" \
-              "$BUTTONHEIST_CI_RECEIPTS_DIR/diagnostics/"
-          fi
-
       - name: Upload iOS failure receipts
         if: failure()
         uses: ./.github/actions/finalize-heist-receipts
