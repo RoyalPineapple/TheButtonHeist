@@ -35,6 +35,7 @@ class TestRunnerTests(unittest.TestCase):
         self.assertEqual(
             set(SUITES),
             {
+                "ReleaseContractTests",
                 "TheScoreTests",
                 "ButtonHeistTests",
                 "TheInsideJobTests",
@@ -53,6 +54,7 @@ class TestRunnerTests(unittest.TestCase):
                 "contract-wire",
                 "contract-targets",
                 "mutation-receipt-kind",
+                "mutation-release-proof",
                 "mutation-child-abort-path",
                 "mutation-live-target-refresh",
                 "mutation-interaction-fifo",
@@ -63,6 +65,28 @@ class TestRunnerTests(unittest.TestCase):
                 "mutation-stale-discovery",
             }.issubset(FOCUSES)
         )
+
+    def test_portable_contract_runs_through_the_canonical_interface(self) -> None:
+        suite = SUITES["ReleaseContractTests"]
+        paths = RUNNER["suite_paths"]("ReleaseContractTests")
+
+        command = RUNNER["test_command"](
+            "run", "ReleaseContractTests", suite, paths, None, "full"
+        )
+
+        self.assertEqual(
+            command,
+            [str(RUNNER["ROOT"] / "scripts/tests/require-successful-ci-for-commit-test.sh")],
+        )
+        with self.assertRaisesRegex(ValueError, "supports run mode only"):
+            RUNNER["test_command"](
+                "build-for-testing",
+                "ReleaseContractTests",
+                suite,
+                paths,
+                None,
+                "full",
+            )
 
     def test_arguments_expand_suites_in_source_order(self) -> None:
         args = RUNNER["parse_args"](

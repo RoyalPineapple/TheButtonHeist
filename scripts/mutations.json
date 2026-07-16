@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 1,
+  "mutations": [
+    {
+      "id": "receipt.warning-kind",
+      "category": "mapping-corruption",
+      "risk": "A warning receipt is projected as a failure node.",
+      "owner": "HeistExecutionStepResult.kind",
+      "file": "ButtonHeist/Sources/TheScore/Receipts/HeistExecutionStepResult.swift",
+      "search": "        case .warning: .warn\n",
+      "replacement": "        case .warning: .fail\n",
+      "focus": "mutation-receipt-kind",
+      "expectedDiagnostic": "testAbortedHeistOutputCountsOnlyReceiptNodes",
+      "timeoutSeconds": 180
+    },
+    {
+      "id": "receipt.child-abort-path",
+      "category": "evidence-loss",
+      "risk": "A failed child no longer identifies the path that aborted its parent.",
+      "owner": "HeistExecutionCompletion.facts",
+      "file": "ButtonHeist/Sources/TheScore/Receipts/HeistExecutionStepResult.swift",
+      "search": "        case .childAborted(_, let failure, let children):\n            .init(\n                status: .failed,\n                failure: failure,\n                children: children.values,\n                abortedAtChildPath: children.abortedAtPath\n            )\n",
+      "replacement": "        case .childAborted(_, let failure, let children):\n            .init(\n                status: .failed,\n                failure: failure,\n                children: children.values,\n                abortedAtChildPath: nil\n            )\n",
+      "focus": "mutation-child-abort-path",
+      "expectedDiagnostic": "receipt fixture constructs terminal and child aborted nodes",
+      "timeoutSeconds": 180
+    },
+    {
+      "id": "release.required-suite.accept-skipped",
+      "category": "contract-relaxation",
+      "risk": "A skipped required suite can satisfy exact-SHA release admission.",
+      "owner": "exact-sha-suite.jq",
+      "file": "scripts/exact-sha-suite.jq",
+      "search": "| ([.suites[] | select(.conclusion != \"success\") | \"\\(.name)=\\(.conclusion // \"null\")\"]) as $failed\n",
+      "replacement": "| ([.suites[] | select(.conclusion != \"success\" and .conclusion != \"skipped\") | \"\\(.name)=\\(.conclusion // \"null\")\"]) as $failed\n",
+      "focus": "mutation-release-proof",
+      "expectedDiagnostic": "FAIL: expected failure for required suite conclusion skipped",
+      "timeoutSeconds": 30
+    },
+    {
+      "id": "dispatch.live-target-refresh",
+      "category": "omission",
+      "risk": "A committed target dispatches through a stale UIKit object.",
+      "owner": "ElementInflation.refreshCommittedTarget",
+      "file": "ButtonHeist/Sources/TheInsideJob/TheBrains/ElementInflation+Geometry.swift",
+      "search": "            guard stash.refreshLiveCapture() != nil else { continue }\n",
+      "replacement": "",
+      "focus": "mutation-live-target-refresh",
+      "expectedDiagnostic": "testCommittedTargetRefreshReplacesStaleLiveEvidenceAndStartsANewDeadline",
+      "timeoutSeconds": 180
+    },
+    {
+      "id": "interaction.fifo-bypass",
+      "category": "ordering-bypass",
+      "risk": "A second request starts before the active request completes.",
+      "owner": "InteractionRequestExecutor.enqueue",
+      "file": "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains.swift",
+      "search": "            pending.append(request)\n            phase = .running(active: active, pending: pending)\n            return .accepted\n",
+      "replacement": "            start(request, pending: pending)\n            return .accepted\n",
+      "focus": "mutation-interaction-fifo",
+      "expectedDiagnostic": "testRequestsFromOneClientExecuteInExactOrder",
+      "timeoutSeconds": 180
+    },
+    {
+      "id": "receipt.action-legality",
+      "category": "guard-removal",
+      "risk": "Action evidence incompatible with its declaration is admitted.",
+      "owner": "HeistExecutionStepNode.admitAction",
+      "file": "ButtonHeist/Sources/TheScore/Receipts/HeistExecutionStepNode.swift",
+      "search": "        guard evidence?.matches(command: command) ?? true else { return nil }\n",
+      "replacement": "",
+      "focus": "mutation-receipt-legality",
+      "expectedDiagnostic": "decode rejects malformed external receipt relationships",
+      "timeoutSeconds": 180
+    },
+    {
+      "id": "screen.semantic-identity",
+      "category": "boundary-inversion",
+      "risk": "Disjoint semantic identities remain in one screen generation.",
+      "owner": "ScreenClassifier.classify",
+      "file": "ButtonHeist/Sources/TheInsideJob/TheBrains/ScreenClassifier.swift",
+      "search": "            return .replacement(.inferred(.semanticIdentityDisjoint))\n",
+      "replacement": "            return .sameGeneration\n",
+      "focus": "mutation-screen-generation",
+      "expectedDiagnostic": "testSameTitleAndScrollPathWithDisjointIdentityIsReplacement",
+      "timeoutSeconds": 180
+    },
+    {
+      "id": "interaction.active-cancellation",
+      "category": "cancellation-removal",
+      "risk": "Cancelling an owner leaves its active operation task running.",
+      "owner": "InteractionRequestExecutor.resolveCancellation",
+      "file": "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains.swift",
+      "search": "        active.task.cancel()\n",
+      "replacement": "",
+      "focus": "mutation-active-cancellation",
+      "expectedDiagnostic": "testOwnerCancellationCancelsTheActiveOperationTask",
+      "timeoutSeconds": 180
+    },
+    {
+      "id": "settlement.required-cycles",
+      "category": "boundary-inversion",
+      "risk": "Settlement requires one more stable cycle than declared.",
+      "owner": "SettleSession.StateMachine.reduce",
+      "file": "ButtonHeist/Sources/TheInsideJob/TheBrains/SettleSession.swift",
+      "search": "            guard cycleState.stableCycles >= cycleState.required else {\n",
+      "replacement": "            guard cycleState.stableCycles > cycleState.required else {\n",
+      "focus": "mutation-settlement-threshold",
+      "expectedDiagnostic": "testMachineSettlesFixedCadenceAfterRequiredConsecutiveCycles",
+      "timeoutSeconds": 180
+    },
+    {
+      "id": "discovery.stale-generation",
+      "category": "guard-removal",
+      "risk": "Buffered events from an invalidated discovery generation reach current state.",
+      "owner": "DeviceDiscovery.startBrowsing",
+      "file": "ButtonHeist/Sources/TheButtonHeist/TheHandoff/DeviceDiscovery.swift",
+      "search": "                guard eventStream.isGenerationActive else { break }\n",
+      "replacement": "",
+      "focus": "mutation-stale-discovery",
+      "expectedDiagnostic": "testDeviceDiscoveryOverflowInvalidatesBufferedEventsAndFailsOnce",
+      "timeoutSeconds": 180
+    }
+  ]
+}

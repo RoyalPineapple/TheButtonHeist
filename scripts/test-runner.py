@@ -27,6 +27,10 @@ IOS_DEVICE = "iPhone 16 Pro"
 
 # The only test-driving catalog: public name, scheme, platform, and CI behavior.
 SUITES = {
+    "ReleaseContractTests": {
+        "platform": "portable",
+        "command": ("scripts/tests/require-successful-ci-for-commit-test.sh",),
+    },
     "TheScoreTests": {"platform": "macos"},
     "ButtonHeistTests": {"platform": "macos"},
     "TheInsideJobTests": {"platform": "ios"},
@@ -68,6 +72,9 @@ FOCUSES = {
         "ButtonHeistTests": (
             "ButtonHeistTests/TheFenceCompactFormattingContractTests",
         ),
+    },
+    "mutation-release-proof": {
+        "ReleaseContractTests": (),
     },
     "mutation-child-abort-path": {
         "TheScoreTests": ("TheScoreTests/ButtonHeistTestSupportTests",),
@@ -281,6 +288,10 @@ def test_command(
     selection: str,
     only_tests: Sequence[str] = (),
 ) -> list[str]:
+    if suite["platform"] == "portable":
+        if mode != "run":
+            raise ValueError(f"{name} supports run mode only")
+        return [str(ROOT / part) for part in suite["command"]]
     if suite["platform"] == "ios":
         if simulator is None:
             raise ValueError("iOS suites require a simulator")
@@ -490,21 +501,24 @@ def execute(
         return phase.exit_code
     if args.mode in ("run", "test-without-building"):
         collect(suite, paths, include_diagnostics=phase.exit_code != 0)
-        try:
-            test_count = require_executed_tests(paths["result"])
-        except (OSError, ValueError, KeyError, RuntimeError, subprocess.CalledProcessError) as error:
-            write_run_record(
-                paths["record"],
-                name=name,
-                mode=args.mode,
-                only_tests=only_tests,
-                source=source,
-                result=phase,
-                outcome="inconclusive",
-                executed_test_count=None,
-            )
-            print(f"Error: {error}", file=sys.stderr)
-            return 2
+        if suite["platform"] == "portable":
+            test_count = 1
+        else:
+            try:
+                test_count = require_executed_tests(paths["result"])
+            except (OSError, ValueError, KeyError, RuntimeError, subprocess.CalledProcessError) as error:
+                write_run_record(
+                    paths["record"],
+                    name=name,
+                    mode=args.mode,
+                    only_tests=only_tests,
+                    source=source,
+                    result=phase,
+                    outcome="inconclusive",
+                    executed_test_count=None,
+                )
+                print(f"Error: {error}", file=sys.stderr)
+                return 2
     else:
         test_count = None
     write_run_record(
