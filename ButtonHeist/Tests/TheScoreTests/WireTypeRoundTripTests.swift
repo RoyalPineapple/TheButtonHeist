@@ -1322,7 +1322,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testWaitTargetRejectsTimeoutAboveMaximum() {
-        let json = #"{"predicate":{"type":"exists","target":{"checks":[{"kind":"label","match":{"mode":"exact","value":"x"}}]}},"timeout":60}"#
+        let json = #"{"predicate":{"type":"exists","target":{"checks":[{"kind":"label","match":{"mode":"exact","value":"x"}}]}},"timeout":61}"#
 
         XCTAssertThrowsError(try decoder.decode(WaitTarget.self, from: Data(json.utf8))) { error in
             assertDecodingError(error, contains: ["wait timeout must be"])
