@@ -155,6 +155,27 @@ extension TheStash {
         resolveContainerTarget(target, in: tree, resolutionScope: .provided)
     }
 
+    func hasVisibleTerminalResolution(
+        _ target: ResolvedAccessibilityTarget,
+        in tree: InterfaceTree
+    ) -> Bool {
+        let viewport = tree.viewportOnly
+        if target.isElementTarget {
+            switch resolveTarget(target, in: viewport) {
+            case .resolved, .ambiguous:
+                return true
+            case .notFound:
+                return false
+            }
+        }
+        switch resolveContainerTarget(target, in: viewport) {
+        case .resolved, .ambiguous:
+            return true
+        case .notFound:
+            return false
+        }
+    }
+
     private func resolveContainerTarget(
         _ target: ResolvedAccessibilityTarget,
         in tree: InterfaceTree,
