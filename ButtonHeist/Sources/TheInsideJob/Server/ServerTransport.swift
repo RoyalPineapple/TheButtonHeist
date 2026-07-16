@@ -9,6 +9,7 @@ enum TransportEvent: Sendable {
     case clientConnected(clientId: Int, remoteAddress: String?)
     case clientDisconnected(clientId: Int)
     case dataReceived(clientId: Int, data: Data, respond: SocketResponseHandler)
+    case backlogOverflow(maxEvents: Int)
 }
 
 enum ServerTransportError: Error, LocalizedError, Equatable, Sendable {
@@ -104,15 +105,10 @@ final class ServerTransport {
     /// Bonjour advertisement lifecycle and TXT record state.
     @MainActor private let advertisement = BonjourAdvertisement()
 
-    /// Owner callback for fail-closed shutdown when ordered event delivery
-    /// overflows. If unset, the transport still stops itself and unpublished
-    /// Bonjour rather than leaving a stale listener advertised.
-    @MainActor private var eventBacklogOverflowHandler: (@MainActor @Sendable (_ maxEvents: Int) async -> Void)?
-
     // MARK: - Event Stream
 
     /// Ordered event stream. Only one consumer should iterate it.
-    nonisolated let events: AsyncStream<TransportEvent>
+    nonisolated let events: TransportEventStream.Events
     private nonisolated let eventStream: TransportEventStream
 
     #if DEBUG
@@ -124,22 +120,6 @@ final class ServerTransport {
     ) async throws -> UInt16)?
     @MainActor var stopOverride: (@MainActor @Sendable () async -> Void)?
     #endif
-
-    @MainActor
-    func setEventBacklogOverflowHandler(
-        _ handler: (@MainActor @Sendable (_ maxEvents: Int) async -> Void)?
-    ) {
-        eventBacklogOverflowHandler = handler
-    }
-
-    @MainActor
-    func handleEventBacklogOverflow(maxEvents: Int) async {
-        if let handler = eventBacklogOverflowHandler {
-            await handler(maxEvents)
-        } else {
-            await stop()
-        }
-    }
 
     /// The port the server is listening on (0 if not started).
     nonisolated var listeningPort: UInt16 {
@@ -236,10 +216,7 @@ final class ServerTransport {
 
     @MainActor
     internal func makeCallbacks() -> SocketServerCallbacks {
-        eventStream.makeCallbacks { [weak self] maxEvents in
-            guard let self else { return }
-            await self.handleEventBacklogOverflow(maxEvents: maxEvents)
-        }
+        eventStream.makeCallbacks()
     }
 
     /// Stop the TCP server and any Bonjour advertisement.
@@ -247,17 +224,16 @@ final class ServerTransport {
     func stop() async {
         advertisement.stop()
 
+        let stopOperation: ServerTransportStopOperation
         switch operation {
         case .start(let startOperation):
-            beginStopping(waitingFor: startOperation.completion)
-            return
-        case .stop(let stopOperation):
-            await stopOperation.task.value
-            return
+            stopOperation = beginStopping(waitingFor: startOperation.completion)
+        case .stop(let existingOperation):
+            stopOperation = existingOperation
         case .none:
-            let stopOperation = beginStopping(waitingFor: nil)
-            await stopOperation.task.value
+            stopOperation = beginStopping(waitingFor: nil)
         }
+        await stopOperation.task.value
     }
 
     /// Await completion of any in-flight stop operation.

@@ -48,8 +48,8 @@ class CIWorkflowTests(unittest.TestCase):
 
     def test_hosted_canaries_reuse_the_dedicated_simulator(self) -> None:
         hosted = job_blocks()["ios-demo-gates"]
-        self.assertIn("-parallel-testing-enabled NO", hosted)
-        self.assertNotIn("-parallel-testing-worker-count", hosted)
+        self.assertIn("BUTTONHEIST_TEST_SIMULATOR_NAME:", hosted)
+        self.assertNotIn("parallel-testing", hosted)
         hosted_scheme = PROJECT.split('name: "HostedBehaviorTests"', 1)[1]
         self.assertIn("parallelization: .disabled", hosted_scheme)
 
@@ -84,9 +84,33 @@ class CIWorkflowTests(unittest.TestCase):
 
     def test_macos_frameworks_share_one_test_invocation(self) -> None:
         macos = job_blocks()["macos-tests"]
-        self.assertIn("tuist test MacFrameworkTests --no-selective-testing", macos)
+        self.assertIn(
+            "scripts/test-runner.py run MacFrameworkTests --selection full",
+            macos,
+        )
         self.assertNotIn("for scheme in", macos)
         self.assertIn('name: "MacFrameworkTests"', PROJECT)
+
+    def test_xcode_suites_delegate_all_test_driving_to_the_runner(self) -> None:
+        for command in (
+            "build-for-testing TheInsideJobTests",
+            "test-without-building TheInsideJobTests",
+            "build-for-testing HostedBehaviorTests",
+            "test-without-building HostedBehaviorTests",
+            "build-for-testing TheInsideJobIntegrationTests",
+            "test-without-building TheInsideJobIntegrationTests",
+        ):
+            self.assertIn(f"scripts/test-runner.py {command}", WORKFLOW)
+        self.assertEqual(WORKFLOW.count("scripts/test-runner.py collect "), 4)
+
+        self.assertNotRegex(
+            WORKFLOW,
+            r"\bxcodebuild\s+(?:test|build-for-testing|test-without-building)\b",
+        )
+        self.assertNotRegex(WORKFLOW, r"\btuist\s+test\b")
+        self.assertNotIn("select-ios-ci-simulator.py", WORKFLOW)
+        self.assertNotIn("IOS_TEST_RESULT_BUNDLE", WORKFLOW)
+        self.assertNotIn("-destination", WORKFLOW)
 
     def test_swift_test_owns_cli_and_mcp_builds(self) -> None:
         macos = job_blocks()["macos-tests"]

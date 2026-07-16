@@ -45,6 +45,7 @@ jobs:
           scripts/tests/require-successful-ci-for-commit-test.sh
           python3 scripts/tests/select-ci-change-scopes-test.py
           python3 scripts/tests/select-ios-ci-simulator-test.py
+          python3 scripts/tests/test-runner-test.py
 
       - name: Report portable contract timing
         if: success()
@@ -58,8 +59,8 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 45
     env:
-      BUTTONHEIST_RECEIPTS_DIR: ${{ github.workspace }}/ci-artifacts/buttonheist-receipts/macos-tests
       BUTTONHEIST_RECEIPTS_MODE: failures
+      BUTTONHEIST_TEST_ARTIFACTS_DIR: ${{ github.workspace }}/ci-artifacts/test-runs
 
     steps:
       - name: Checkout repository
@@ -113,11 +114,7 @@ jobs:
 
       - name: Run macOS framework tests
         timeout-minutes: 15
-        run: |
-          scripts/run-with-heist-receipts.sh \
-            --dir "$BUTTONHEIST_RECEIPTS_DIR" \
-            --mode "$BUTTONHEIST_RECEIPTS_MODE" \
-            -- tuist test MacFrameworkTests --no-selective-testing
+        run: scripts/test-runner.py run MacFrameworkTests --selection full
 
       - name: Run CLI, MCP, and heist-plan tests
         if: github.event_name == 'push' || steps.changes.outputs.run_cli_tool_tests == 'true'
@@ -133,13 +130,13 @@ jobs:
 
       - name: Collect macOS failure evidence
         if: failure()
-        run: mkdir -p "$BUTTONHEIST_RECEIPTS_DIR/diagnostics"
+        run: scripts/test-runner.py collect MacFrameworkTests
 
       - name: Upload macOS failure receipts
         if: failure()
         uses: ./.github/actions/finalize-heist-receipts
         with:
-          receipt-directory: ${{ env.BUTTONHEIST_RECEIPTS_DIR }}
+          receipt-directory: ${{ env.BUTTONHEIST_TEST_RECEIPTS_DIR }}
           job-label: macos-tests
           artifact-name: buttonheist-receipts-macos-tests-${{ github.run_attempt }}
           retention-days: 14
@@ -157,12 +154,9 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 40
     env:
-      DERIVED_DATA_PATH: /tmp/ButtonHeistDerivedData-core-demo
-      BUTTONHEIST_CI_SIM_NAME: buttonheist-ci-core-demo-${{ github.run_id }}-${{ github.run_attempt }}
       BUTTONHEIST_RECEIPTS_MODE: failures
-      BUTTONHEIST_CI_RECEIPTS_DIR: ${{ github.workspace }}/ci-artifacts/buttonheist-receipts/ios-tests
-      IOS_TEST_RESULT_BUNDLE: /tmp/ButtonHeist-ios-tests-core.xcresult
-      IOS_TEST_DIAGNOSTICS_DIR: /tmp/ButtonHeist-ios-tests-core-diagnostics
+      BUTTONHEIST_TEST_ARTIFACTS_DIR: ${{ github.workspace }}/ci-artifacts/test-runs
+      BUTTONHEIST_TEST_SIMULATOR_NAME: buttonheist-ci-core-demo-${{ github.run_id }}-${{ github.run_attempt }}
 
     steps:
       - name: Checkout repository
@@ -172,12 +166,6 @@ jobs:
 
       - name: Select Xcode 26.3
         run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
-
-      - name: Boot dedicated simulator
-        run: |
-          python3 scripts/select-ios-ci-simulator.py \
-            --preferred-device "iPhone 16 Pro" \
-            --sim-name "$BUTTONHEIST_CI_SIM_NAME"
 
       - name: Install Tuist
         uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151  # v4
@@ -192,11 +180,7 @@ jobs:
         timeout-minutes: 20
         run: |
           echo "IOS_CORE_BUILD_START=$(date +%s)" >> "$GITHUB_ENV"
-          DEST="platform=iOS Simulator,id=$SIM_UDID,arch=arm64"
-          xcodebuild build-for-testing -workspace ButtonHeist.xcworkspace \
-            -scheme TheInsideJobTests \
-            -destination "$DEST" \
-            -derivedDataPath "$DERIVED_DATA_PATH"
+          scripts/test-runner.py build-for-testing TheInsideJobTests
           echo "IOS_CORE_BUILD_END=$(date +%s)" >> "$GITHUB_ENV"
 
       - name: Build ButtonHeist CLI
@@ -207,27 +191,16 @@ jobs:
         timeout-minutes: 18
         run: |
           echo "IOS_CORE_RUN_START=$(date +%s)" >> "$GITHUB_ENV"
-          xcrun simctl bootstatus "$SIM_UDID" -b
-          DEST="platform=iOS Simulator,id=$SIM_UDID,arch=arm64"
-          rm -rf "$IOS_TEST_RESULT_BUNDLE"
-          scripts/run-with-heist-receipts.sh \
-            --ios-sandbox \
-            --mode "$BUTTONHEIST_RECEIPTS_MODE" \
-            -- xcodebuild test-without-building -workspace ButtonHeist.xcworkspace \
-            -scheme TheInsideJobTests \
-            -destination "$DEST" \
-            -derivedDataPath "$DERIVED_DATA_PATH" \
-            -resultBundlePath "$IOS_TEST_RESULT_BUNDLE" \
-            -collect-test-diagnostics never
+          scripts/test-runner.py test-without-building TheInsideJobTests
           echo "IOS_CORE_RUN_END=$(date +%s)" >> "$GITHUB_ENV"
 
       - name: Run trimmed BH Demo smoke
         timeout-minutes: 10
         run: |
           echo "IOS_DEMO_RUN_START=$(date +%s)" >> "$GITHUB_ENV"
-          APP="$DERIVED_DATA_PATH/Build/Products/Debug-iphonesimulator/BHDemo.app"
+          APP="$BUTTONHEIST_TEST_DERIVED_DATA/Build/Products/Debug-iphonesimulator/BHDemo.app"
           scripts/run-with-heist-receipts.sh \
-            --dir "$BUTTONHEIST_CI_RECEIPTS_DIR" \
+            --dir "$BUTTONHEIST_TEST_RECEIPTS_DIR" \
             --mode "$BUTTONHEIST_RECEIPTS_MODE" \
             -- scripts/e2e-demo-smoke.sh \
             --skip-generate \
@@ -238,21 +211,13 @@ jobs:
 
       - name: Collect iOS failure evidence
         if: failure()
-        run: |
-          mkdir -p "$IOS_TEST_DIAGNOSTICS_DIR" "$BUTTONHEIST_CI_RECEIPTS_DIR/diagnostics"
-          xcrun simctl list devices > "$IOS_TEST_DIAGNOSTICS_DIR/simulators.txt"
-          if [[ -n "${SIM_UDID:-}" ]]; then
-            scripts/collect-ios-heist-receipts.sh "$SIM_UDID" "$BUTTONHEIST_CI_RECEIPTS_DIR"
-            xcrun simctl spawn "$SIM_UDID" log show --style compact --last 30m \
-              > "$IOS_TEST_DIAGNOSTICS_DIR/simulator.log" 2>&1 || true
-          else
-            echo "SIM_UDID unavailable" > "$IOS_TEST_DIAGNOSTICS_DIR/simulator.log"
-          fi
+        run: scripts/test-runner.py collect TheInsideJobTests
+
       - name: Upload iOS failure receipts
         if: failure()
         uses: ./.github/actions/finalize-heist-receipts
         with:
-          receipt-directory: ${{ env.BUTTONHEIST_CI_RECEIPTS_DIR }}
+          receipt-directory: ${{ env.BUTTONHEIST_TEST_RECEIPTS_DIR }}
           job-label: ios-tests
           artifact-name: buttonheist-receipts-ios-tests-${{ github.run_attempt }}
           retention-days: 14
@@ -263,8 +228,8 @@ jobs:
         with:
           name: buttonheist-ios-test-diagnostics-core-${{ github.run_attempt }}
           path: |
-            ${{ env.IOS_TEST_RESULT_BUNDLE }}
-            ${{ env.IOS_TEST_DIAGNOSTICS_DIR }}
+            ${{ env.BUTTONHEIST_TEST_RESULT_BUNDLE }}
+            ${{ env.BUTTONHEIST_TEST_DIAGNOSTICS_DIR }}
           if-no-files-found: warn
           retention-days: 14
 
@@ -285,12 +250,9 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 35
     env:
-      DERIVED_DATA_PATH: /tmp/ButtonHeistDerivedData-hosted-canaries
-      BUTTONHEIST_CI_SIM_NAME: buttonheist-ci-hosted-canaries-${{ github.run_id }}-${{ github.run_attempt }}
       BUTTONHEIST_RECEIPTS_MODE: failures
-      BUTTONHEIST_CI_RECEIPTS_DIR: ${{ github.workspace }}/ci-artifacts/buttonheist-receipts/hosted-canaries
-      IOS_TEST_RESULT_BUNDLE: /tmp/ButtonHeist-hosted-canaries.xcresult
-      IOS_TEST_DIAGNOSTICS_DIR: /tmp/ButtonHeist-hosted-canaries-diagnostics
+      BUTTONHEIST_TEST_ARTIFACTS_DIR: ${{ github.workspace }}/ci-artifacts/test-runs
+      BUTTONHEIST_TEST_SIMULATOR_NAME: buttonheist-ci-hosted-canaries-${{ github.run_id }}-${{ github.run_attempt }}
 
     steps:
       - name: Checkout repository
@@ -300,12 +262,6 @@ jobs:
 
       - name: Select Xcode 26.3
         run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
-
-      - name: Boot dedicated simulator
-        run: |
-          python3 scripts/select-ios-ci-simulator.py \
-            --preferred-device "iPhone 16 Pro" \
-            --sim-name "$BUTTONHEIST_CI_SIM_NAME"
 
       - name: Install Tuist
         uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151  # v4
@@ -320,50 +276,25 @@ jobs:
         timeout-minutes: 20
         run: |
           echo "HOSTED_BUILD_START=$(date +%s)" >> "$GITHUB_ENV"
-          DEST="platform=iOS Simulator,id=$SIM_UDID,arch=arm64"
-          xcodebuild build-for-testing -workspace ButtonHeist.xcworkspace \
-            -scheme HostedBehaviorTests \
-            -destination "$DEST" \
-            -derivedDataPath "$DERIVED_DATA_PATH"
+          scripts/test-runner.py build-for-testing HostedBehaviorTests
           echo "HOSTED_BUILD_END=$(date +%s)" >> "$GITHUB_ENV"
 
       - name: Run representative hosted canaries
         timeout-minutes: 15
         run: |
           echo "HOSTED_RUN_START=$(date +%s)" >> "$GITHUB_ENV"
-          xcrun simctl bootstatus "$SIM_UDID" -b
-          DEST="platform=iOS Simulator,id=$SIM_UDID,arch=arm64"
-          rm -rf "$IOS_TEST_RESULT_BUNDLE"
-          scripts/run-with-heist-receipts.sh \
-            --ios-sandbox \
-            --mode "$BUTTONHEIST_RECEIPTS_MODE" \
-            -- xcodebuild test-without-building -workspace ButtonHeist.xcworkspace \
-            -scheme HostedBehaviorTests \
-            -destination "$DEST" \
-            -derivedDataPath "$DERIVED_DATA_PATH" \
-            -resultBundlePath "$IOS_TEST_RESULT_BUNDLE" \
-            -collect-test-diagnostics never \
-            -parallel-testing-enabled NO
+          scripts/test-runner.py test-without-building HostedBehaviorTests
           echo "HOSTED_RUN_END=$(date +%s)" >> "$GITHUB_ENV"
 
       - name: Collect hosted failure evidence
         if: failure()
-        run: |
-          mkdir -p "$IOS_TEST_DIAGNOSTICS_DIR" "$BUTTONHEIST_CI_RECEIPTS_DIR/diagnostics"
-          xcrun simctl list devices > "$IOS_TEST_DIAGNOSTICS_DIR/simulators.txt"
-          if [[ -n "${SIM_UDID:-}" ]]; then
-            scripts/collect-ios-heist-receipts.sh "$SIM_UDID" "$BUTTONHEIST_CI_RECEIPTS_DIR"
-            xcrun simctl spawn "$SIM_UDID" log show --style compact --last 30m \
-              > "$IOS_TEST_DIAGNOSTICS_DIR/simulator.log" 2>&1 || true
-          else
-            echo "SIM_UDID unavailable" > "$IOS_TEST_DIAGNOSTICS_DIR/simulator.log"
-          fi
+        run: scripts/test-runner.py collect HostedBehaviorTests
 
       - name: Upload hosted failure receipts
         if: failure()
         uses: ./.github/actions/finalize-heist-receipts
         with:
-          receipt-directory: ${{ env.BUTTONHEIST_CI_RECEIPTS_DIR }}
+          receipt-directory: ${{ env.BUTTONHEIST_TEST_RECEIPTS_DIR }}
           job-label: ios-demo-gates
           artifact-name: buttonheist-receipts-hosted-canaries-${{ github.run_attempt }}
           retention-days: 14
@@ -374,8 +305,8 @@ jobs:
         with:
           name: buttonheist-hosted-canary-diagnostics-${{ github.run_attempt }}
           path: |
-            ${{ env.IOS_TEST_RESULT_BUNDLE }}
-            ${{ env.IOS_TEST_DIAGNOSTICS_DIR }}
+            ${{ env.BUTTONHEIST_TEST_RESULT_BUNDLE }}
+            ${{ env.BUTTONHEIST_TEST_DIAGNOSTICS_DIR }}
           if-no-files-found: warn
           retention-days: 14
 
@@ -395,12 +326,9 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 35
     env:
-      DERIVED_DATA_PATH: /tmp/ButtonHeistDerivedData-main-integration
-      BUTTONHEIST_CI_SIM_NAME: buttonheist-ci-main-integration-${{ github.run_id }}-${{ github.run_attempt }}
       BUTTONHEIST_RECEIPTS_MODE: failures
-      BUTTONHEIST_CI_RECEIPTS_DIR: ${{ github.workspace }}/ci-artifacts/buttonheist-receipts/main-integration
-      IOS_TEST_RESULT_BUNDLE: /tmp/ButtonHeist-main-integration.xcresult
-      IOS_TEST_DIAGNOSTICS_DIR: /tmp/ButtonHeist-main-integration-diagnostics
+      BUTTONHEIST_TEST_ARTIFACTS_DIR: ${{ github.workspace }}/ci-artifacts/test-runs
+      BUTTONHEIST_TEST_SIMULATOR_NAME: buttonheist-ci-main-integration-${{ github.run_id }}-${{ github.run_attempt }}
 
     steps:
       - name: Checkout repository
@@ -410,12 +338,6 @@ jobs:
 
       - name: Select Xcode 26.3
         run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
-
-      - name: Boot dedicated simulator
-        run: |
-          python3 scripts/select-ios-ci-simulator.py \
-            --preferred-device "iPhone 16 Pro" \
-            --sim-name "$BUTTONHEIST_CI_SIM_NAME"
 
       - name: Install Tuist
         uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151  # v4
@@ -430,49 +352,25 @@ jobs:
         timeout-minutes: 20
         run: |
           echo "INTEGRATION_BUILD_START=$(date +%s)" >> "$GITHUB_ENV"
-          DEST="platform=iOS Simulator,id=$SIM_UDID,arch=arm64"
-          xcodebuild build-for-testing -workspace ButtonHeist.xcworkspace \
-            -scheme TheInsideJobIntegrationTests \
-            -destination "$DEST" \
-            -derivedDataPath "$DERIVED_DATA_PATH"
+          scripts/test-runner.py build-for-testing TheInsideJobIntegrationTests
           echo "INTEGRATION_BUILD_END=$(date +%s)" >> "$GITHUB_ENV"
 
       - name: Run genuine iOS integration suite
         timeout-minutes: 18
         run: |
           echo "INTEGRATION_RUN_START=$(date +%s)" >> "$GITHUB_ENV"
-          xcrun simctl bootstatus "$SIM_UDID" -b
-          DEST="platform=iOS Simulator,id=$SIM_UDID,arch=arm64"
-          rm -rf "$IOS_TEST_RESULT_BUNDLE"
-          scripts/run-with-heist-receipts.sh \
-            --ios-sandbox \
-            --mode "$BUTTONHEIST_RECEIPTS_MODE" \
-            -- xcodebuild test-without-building -workspace ButtonHeist.xcworkspace \
-            -scheme TheInsideJobIntegrationTests \
-            -destination "$DEST" \
-            -derivedDataPath "$DERIVED_DATA_PATH" \
-            -resultBundlePath "$IOS_TEST_RESULT_BUNDLE" \
-            -collect-test-diagnostics never
+          scripts/test-runner.py test-without-building TheInsideJobIntegrationTests
           echo "INTEGRATION_RUN_END=$(date +%s)" >> "$GITHUB_ENV"
 
       - name: Collect integration failure evidence
         if: failure()
-        run: |
-          mkdir -p "$IOS_TEST_DIAGNOSTICS_DIR" "$BUTTONHEIST_CI_RECEIPTS_DIR/diagnostics"
-          xcrun simctl list devices > "$IOS_TEST_DIAGNOSTICS_DIR/simulators.txt"
-          if [[ -n "${SIM_UDID:-}" ]]; then
-            scripts/collect-ios-heist-receipts.sh "$SIM_UDID" "$BUTTONHEIST_CI_RECEIPTS_DIR"
-            xcrun simctl spawn "$SIM_UDID" log show --style compact --last 30m \
-              > "$IOS_TEST_DIAGNOSTICS_DIR/simulator.log" 2>&1 || true
-          else
-            echo "SIM_UDID unavailable" > "$IOS_TEST_DIAGNOSTICS_DIR/simulator.log"
-          fi
+        run: scripts/test-runner.py collect TheInsideJobIntegrationTests
 
       - name: Upload integration failure receipts
         if: failure()
         uses: ./.github/actions/finalize-heist-receipts
         with:
-          receipt-directory: ${{ env.BUTTONHEIST_CI_RECEIPTS_DIR }}
+          receipt-directory: ${{ env.BUTTONHEIST_TEST_RECEIPTS_DIR }}
           job-label: main-integration
           artifact-name: buttonheist-receipts-main-integration-${{ github.run_attempt }}
           retention-days: 14
@@ -483,8 +381,8 @@ jobs:
         with:
           name: buttonheist-main-integration-diagnostics-${{ github.run_attempt }}
           path: |
-            ${{ env.IOS_TEST_RESULT_BUNDLE }}
-            ${{ env.IOS_TEST_DIAGNOSTICS_DIR }}
+            ${{ env.BUTTONHEIST_TEST_RESULT_BUNDLE }}
+            ${{ env.BUTTONHEIST_TEST_DIAGNOSTICS_DIR }}
           if-no-files-found: warn
           retention-days: 14
 

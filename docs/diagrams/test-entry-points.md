@@ -3,7 +3,7 @@
 The four ways a test process hands control to Button Heist, and what the run loop is doing in each. "Held" is not "frozen": in every entry point the test thread keeps pumping the run loop, so timers, callbacks, and the in-app server all keep firing while the test waits. All four are `#if DEBUG` only.
 
 **Illustrates:** [SWIFT-HEIST-AUTHORING.md](../SWIFT-HEIST-AUTHORING.md), [HEIST-FORMAT.md](../HEIST-FORMAT.md)
-**Source of truth:** `ButtonHeist/Sources/ButtonHeistTesting/ButtonHeistTesting.swift`
+**Source of truth:** `ButtonHeist/Sources/ButtonHeistTesting/ButtonHeistTesting.swift`, `ButtonHeist/Sources/ButtonHeistTesting/ButtonHeistTesting+Synchronous.swift`, `ButtonHeist/Sources/ButtonHeistTesting/ButtonHeistTesting+JoinedSession.swift`
 
 ## `runHeist` — async test, in-process run
 

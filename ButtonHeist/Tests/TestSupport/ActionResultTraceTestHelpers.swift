@@ -82,22 +82,28 @@ package enum HeistReceiptFixture {
             guard let evidence = HeistFailedActionEvidence(evidence) else {
                 preconditionFailure("failed action receipt fixture requires failing evidence")
             }
-            return .action(
+            guard let receipt = HeistExecutionStepResult.admitAction(
                 path: executionPath(path),
                 durationMs: durationMs,
                 command: command,
                 completion: .failed(evidence: evidence, failure: resolvedFailure)
-            )
+            ).receipt else {
+                preconditionFailure("failed action receipt fixture must match its command")
+            }
+            return receipt
         }
         guard let evidence = HeistPassedActionEvidence(evidence) else {
             preconditionFailure("passed action receipt fixture requires passing evidence")
         }
-        return .action(
+        guard let receipt = HeistExecutionStepResult.admitAction(
             path: executionPath(path),
             durationMs: durationMs,
             command: command,
             completion: .passed(evidence: evidence)
-        )
+        ).receipt else {
+            preconditionFailure("passed action receipt fixture must match its command")
+        }
+        return receipt
     }
 
     package static func wait(
@@ -249,12 +255,17 @@ package enum HeistReceiptFixture {
         children: [HeistExecutionStepResult]
     ) -> HeistExecutionStepResult {
         let resolvedPath = path ?? "$.body[0].for_each_string.iterations[\(ordinal)]"
-        let evidence = HeistForEachStringEvidence(
+        guard let evidence = HeistForEachStringEvidence(
             iterationCount: iterationCount ?? count,
             iterationOrdinal: ordinal,
             value: value,
             failureReason: failureReason
-        )
+        ) else {
+            preconditionFailure("invalid string loop fixture progress")
+        }
+        guard let declaration = HeistForEachStringDeclaration(parameter: parameter, count: count) else {
+            preconditionFailure("invalid string loop fixture declaration")
+        }
         let failure = failureReason.map {
             HeistFailureDetail(
                 category: .loop,
@@ -267,11 +278,10 @@ package enum HeistReceiptFixture {
                   let admittedChildren = HeistAbortedChildren(children) else {
                 preconditionFailure("aborted loop fixture requires failed evidence and children")
             }
-            return .forEachStringIteration(
+            guard let receipt = HeistExecutionStepResult.admitForEachStringIteration(
                 path: executionPath(resolvedPath),
                 durationMs: durationMs,
-                parameter: parameter,
-                count: count,
+                declaration: declaration,
                 completion: .childAborted(
                     evidence: admittedEvidence,
                     failure: failure ?? HeistFailureDetail(
@@ -281,34 +291,41 @@ package enum HeistReceiptFixture {
                     ),
                     children: admittedChildren
                 )
-            )
+            ).receipt else {
+                preconditionFailure("aborted string iteration fixture admission failed")
+            }
+            return receipt
         }
         if status == .failed, let failure {
             guard let evidence = HeistFailedForEachStringEvidence(evidence) else {
                 preconditionFailure("failed loop fixture requires a failure reason")
             }
-            return .forEachStringIteration(
+            guard let receipt = HeistExecutionStepResult.admitForEachStringIteration(
                 path: executionPath(resolvedPath),
                 durationMs: durationMs,
-                parameter: parameter,
-                count: count,
+                declaration: declaration,
                 completion: .failed(
                     evidence: .observed(evidence),
                     failure: failure,
                     children: passingChildren(children)
                 )
-            )
+            ).receipt else {
+                preconditionFailure("failed string iteration fixture admission failed")
+            }
+            return receipt
         }
         guard let evidence = HeistPassedForEachStringEvidence(evidence) else {
             preconditionFailure("passed loop fixture cannot carry a failure reason")
         }
-        return .forEachStringIteration(
+        guard let receipt = HeistExecutionStepResult.admitForEachStringIteration(
             path: executionPath(resolvedPath),
             durationMs: durationMs,
-            parameter: parameter,
-            count: count,
+            declaration: declaration,
             completion: .passed(evidence: evidence, children: passingChildren(children))
-        )
+        ).receipt else {
+            preconditionFailure("passed string iteration fixture admission failed")
+        }
+        return receipt
     }
 
     package static func result(

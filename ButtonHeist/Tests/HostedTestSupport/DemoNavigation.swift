@@ -15,9 +15,9 @@ package enum DemoNavigation {
         try backOneLevelIfNeeded()
         try backOneLevelIfNeeded()
         try backOneLevelIfNeeded()
-        WaitFor(.missing(.predicate(anyBackTarget)), timeout: .seconds(2))
-        WaitFor(.missing(.predicate(rootBackTarget)), timeout: .seconds(2))
-        WaitFor(.exists(.predicate(rootTitle)), timeout: .seconds(4))
+        WaitFor(.missing(.predicate(anyBackTarget)), timeout: 2)
+        WaitFor(.missing(.predicate(rootBackTarget)), timeout: 2)
+        WaitFor(.exists(.predicate(rootTitle)), timeout: 4)
     }
 
     package static let backToRoot = HeistDef<Void>("DemoNavigation.backToRoot") {
@@ -28,7 +28,7 @@ package enum DemoNavigation {
         try backToRootIfNeeded()
 
         Activate(.label("Menu"))
-            .expect(.changed(.screen([.exists(.label("Menu"))])), timeout: .seconds(8))
+            .expect(.changed(.screen([.exists(.label("Menu"))])), timeout: 8)
     }
 
     package static let backTo = HeistDef<String>("DemoNavigation.backTo", parameter: "title") { title in
@@ -37,23 +37,23 @@ package enum DemoNavigation {
         Activate(.predicate(ElementPredicateTemplate(label: .exact(title), traits: [.backButton])))
             .withoutExpectation("Back navigation is proven by the destination title wait")
 
-        WaitFor(.exists(.predicate(destinationTitle)), timeout: .seconds(8))
+        WaitFor(.exists(.predicate(destinationTitle)), timeout: 8)
     }
 
     private static let backOneLevelIfNeeded = HeistDef<Void>("DemoNavigation.backOneLevelIfNeeded") {
         try reanchorLongListIfNeeded()
 
-        WaitFor(.exists(.predicate(rootBackTarget)), timeout: .seconds(backChromeSettleTimeout))
+        WaitFor(.exists(.predicate(rootBackTarget)), timeout: try .seconds(backChromeSettleTimeout))
             .else {}
 
         If {
             Case(.exists(.predicate(rootBackTarget))) {
                 Activate(.predicate(rootBackTarget))
-                    .expect(.changed(.screen()), timeout: .seconds(8))
+                    .expect(.changed(.screen()), timeout: 8)
             }
             Case(.exists(.predicate(anyBackTarget))) {
                 Activate(.predicate(anyBackTarget))
-                    .expect(.changed(.screen()), timeout: .seconds(8))
+                    .expect(.changed(.screen()), timeout: 8)
             }
             Else {}
         }
@@ -62,7 +62,7 @@ package enum DemoNavigation {
     private static let reanchorLongListIfNeeded = HeistDef<Void>("DemoNavigation.reanchorLongListIfNeeded") {
         If {
             Case(.exists(.predicate(longListFirstRow))) {
-                WaitFor(.exists(.predicate(longListFirstRow)), timeout: .seconds(1))
+                WaitFor(.exists(.predicate(longListFirstRow)), timeout: 1)
             }
             Else {}
         }

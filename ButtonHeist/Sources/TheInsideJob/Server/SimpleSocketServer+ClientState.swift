@@ -25,9 +25,12 @@ extension SimpleSocketServer {
     }
 
     private func scheduleErrorFlushDisconnect(_ clientId: Int) {
-        pendingCallbackTasks.spawn { [weak self] in
+        guard clientRegistry.client(clientId) != nil,
+              let generation = currentListener
+        else { return }
+        spawnTrackedTask(in: generation) { server in
             guard await Task.cancellableSleep(for: Self.errorFlushGracePeriod) else { return }
-            await self?.removeClient(clientId)
+            await server.removeClient(clientId)
         }
     }
 }

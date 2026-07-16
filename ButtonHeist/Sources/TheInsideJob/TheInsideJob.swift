@@ -8,6 +8,11 @@ import TheScore
 
 let insideJobLogger = ButtonHeistLog.logger(.insideJob(.server))
 
+public enum InsideJobStopOutcome: Sendable, Equatable {
+    case stopped
+    case teardownTimedOut
+}
+
 /// The job itself: resolves startup/runtime configuration, assembles the crew,
 /// and coordinates transport start/stop with the app lifecycle.
 @MainActor
@@ -302,10 +307,16 @@ public final class TheInsideJob {
         insideJobLogger.info("Server started successfully")
     }
 
-    public func stop() async {
-        await stopRuntime()
-
-        insideJobLogger.info("Server stopped")
+    @discardableResult
+    public func stop() async -> InsideJobStopOutcome {
+        let outcome = await stopRuntime()
+        switch outcome {
+        case .stopped:
+            insideJobLogger.info("Server stopped")
+        case .teardownTimedOut:
+            insideJobLogger.error("Server teardown timed out")
+        }
+        return outcome
     }
 }
 

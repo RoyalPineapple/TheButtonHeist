@@ -82,7 +82,7 @@ extension HeistPlanSourceParser {
         try expectSymbol("(")
         let predicate = try parseAccessibilityPredicateExpr()
         guard let timeout = try parseTrailingTimeout(defaultValue: nil) else {
-            throw error(currentToken, "RepeatUntil requires timeout: .seconds(...)")
+            throw error(currentToken, "RepeatUntil requires timeout in seconds")
         }
         try expectSymbol(")")
         let body = try parseHeistBlock()

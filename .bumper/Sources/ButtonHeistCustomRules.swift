@@ -38,11 +38,33 @@ let buttonHeistRules = RuleSet {
     anyBoundaryRule
     callbackIsolationRule
     checkedConcurrencyRule
+    receiptConstructionSafetyRule
+    receiptNodeCodecOwnershipRule
 
     Rules.canonicalConstruction(
         "PredicateWaitLifecycleMachine",
         owners: .files([predicateWaitPath]),
         id: "buttonheist.predicate_wait_lifecycle_ownership"
+    )
+    Rules.canonicalConstruction(
+        "TaskTracker",
+        owners: .files(taskTrackerOwnerPaths),
+        id: "buttonheist.task_tracker_ownership"
+    )
+    Rules.canonicalConstruction(
+        "InteractionRequestExecutor",
+        owners: .files([interactionRequestExecutorPath]),
+        id: "buttonheist.interaction_request_executor_ownership"
+    )
+    Rules.singleDeclaration(
+        "HeistExecutionStepNode",
+        owner: receiptNodePath,
+        id: "buttonheist.receipt_node_ownership"
+    )
+    Rules.boundaryOnly(
+        function: "reduceInterfaceGraph",
+        allowed: .files([semanticObservationPublicationPath]),
+        id: "buttonheist.semantic_observation_commit_ownership"
     )
     Rules.boundaryOnly(
         function: "matchingTreeElements",
@@ -68,6 +90,24 @@ private let demoAccessibilityIdentifierResearchFixtures: Set<RelativeFilePath> =
 
 private let predicateWaitPath: RelativeFilePath =
     "ButtonHeist/Sources/TheInsideJob/TheBrains/PredicateWait.swift"
+private let interactionRequestExecutorPath: RelativeFilePath =
+    "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains.swift"
+private let taskTrackerOwnerPaths: Set<RelativeFilePath> = [
+    "ButtonHeist/Sources/TheInsideJob/InsideJobLifecycleState.swift",
+    "ButtonHeist/Sources/TheInsideJob/Server/MuscleDelayedDisconnects.swift",
+    "ButtonHeist/Sources/TheInsideJob/Server/NetworkBoundary/SocketListenerRuntime.swift",
+]
+private let receiptNodePath: RelativePathPrefix =
+    "ButtonHeist/Sources/TheScore/Receipts/HeistExecutionStepNode.swift"
+private let receiptNodeCodecPath: RelativeFilePath =
+    "ButtonHeist/Sources/TheScore/Receipts/HeistExecutionStepNode+Codable.swift"
+private let receiptConstructionPaths: Set<RelativeFilePath> = [
+    "ButtonHeist/Sources/TheScore/Receipts/HeistExecutionStepNode.swift",
+    "ButtonHeist/Sources/TheScore/Receipts/HeistExecutionStepNode+Codable.swift",
+    "ButtonHeist/Sources/TheScore/Receipts/HeistExecutionStepResult+Admission.swift",
+]
+private let semanticObservationPublicationPath: RelativeFilePath =
+    "ButtonHeist/Sources/TheInsideJob/TheStash/SemanticObservationStream+Publication.swift"
 private let interfaceTreeMatchingPaths: Set<RelativeFilePath> = [
     "ButtonHeist/Sources/TheInsideJob/TheStash/TheStash+Matching.swift",
     "ButtonHeist/Sources/TheInsideJob/TheStash/TheStash+TargetResolution.swift",
@@ -174,6 +214,41 @@ private let checkedConcurrencyRule = Rules.files(
         }
 
     return preconcurrencyFailures + unsafeNonisolatedFailures
+}
+
+private let receiptConstructionSafetyRule = Rules.forbid(
+    functionCalls().filter { match in
+        match.node.calleeBaseName == "precondition"
+            || match.node.calleeBaseName == "preconditionFailure"
+    },
+    id: "buttonheist.receipt_construction_safety",
+    severity: .error,
+    summary: "Internal receipt construction admits typed evidence instead of trapping.",
+    scope: .files(receiptConstructionPaths)
+) { match in
+    "receipt construction trap: \(match.node.calleeBaseName); use typed receipt admission or a decoding error"
+}
+
+private let receiptNodeCodecOwnershipRule = Rules.files(
+    "buttonheist.receipt_node_codec_ownership",
+    severity: .error,
+    summary: "The receipt node codec has one extension owner."
+) { file in
+    guard file.path != receiptNodeCodecPath else { return [] }
+    return SyntaxQuery<ExtensionDeclSyntax>()
+        .filter { match in
+            match.node.extendedType.trimmedDescription == "HeistExecutionStepNode"
+        }
+        .matches(in: file)
+        .map { match in
+            match.failure(
+                message: "receipt node extension outside its codec owner",
+                evidence: ViolationEvidence(
+                    observed: file.path.rawValue,
+                    expectation: receiptNodeCodecPath.rawValue
+                )
+            )
+        }
 }
 
 private func isAllowedAnyBoundary(_ node: IdentifierTypeSyntax) -> Bool {

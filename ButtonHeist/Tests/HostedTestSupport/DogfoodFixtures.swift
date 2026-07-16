@@ -34,7 +34,7 @@ package enum DogfoodHome {
                 backToRoot
 
                 Activate(.predicate(ElementPredicateTemplate(label: .exact(screen), traits: [.button])))
-                    .expect(.changed(.screen([.exists(.predicate(destinationTitle))])), timeout: .seconds(8))
+                    .expect(.changed(.screen([.exists(.predicate(destinationTitle))])), timeout: 8)
             }
         }
     }
@@ -43,7 +43,7 @@ package enum DogfoodHome {
 package enum ControlsDemoScreen {
     package static let openScreen = HeistDef<String>("ControlsDemo.openScreen", parameter: "screen") { screen in
         Activate(.predicate(ElementPredicateTemplate(label: .exact(screen), traits: [.button])))
-            .expect(.changed(.screen([.exists(.label(screen))])), timeout: .seconds(8))
+            .expect(.changed(.screen([.exists(.label(screen))])), timeout: 8)
     }
 }
 
@@ -53,13 +53,13 @@ package enum TextInputScreen {
 
     package static let fillProfile = HeistDef<String>("TextInputScreen.fillProfile", parameter: "name") { name in
         TypeText(name, into: nameField)
-            .expect(.exists(.value(name)), timeout: .seconds(2))
+            .expect(.exists(.value(name)), timeout: 2)
 
         DismissKeyboard()
             .withoutExpectation("Ends the first field edit before focusing the email field")
 
         TypeText("dogfood@example.com", into: emailField)
-            .expect(.exists(.value("dogfood@example.com")), timeout: .seconds(4))
+            .expect(.exists(.value("dogfood@example.com")), timeout: 4)
 
         DismissKeyboard()
             .withoutExpectation("Keyboard dismissal only prepares navigation")
@@ -75,17 +75,17 @@ package enum TodoScreen {
         )
         let visibleItem = ElementPredicateTemplate(label: .exact(item))
 
-        WaitFor(.exists(.predicate(visibleItem)), timeout: .seconds(4))
+        WaitFor(.exists(.predicate(visibleItem)), timeout: 4)
 
         If {
             Case(.exists(.predicate(completedItem))) {
-                WaitFor(.exists(.predicate(completedItem)), timeout: .seconds(1))
+                WaitFor(.exists(.predicate(completedItem)), timeout: 1)
             }
             Else {
                 CustomAction("Toggle", on: .label(item))
                     .withoutExpectation("Completion is proven by the following wait")
 
-                WaitFor(.exists(.predicate(completedItem)), timeout: .seconds(4))
+                WaitFor(.exists(.predicate(completedItem)), timeout: 4)
             }
         }
     }
@@ -94,19 +94,19 @@ package enum TodoScreen {
 package enum CalculatorScreen {
     package static let addSevenAndFive = HeistDef<Void>("CalculatorScreen.addSevenAndFive") {
         Activate(.element(.label("all clear"), .traits([.button])))
-            .expect(.exists(.label("0")), timeout: .seconds(1))
+            .expect(.exists(.label("0")), timeout: 1)
 
         Activate(.element(.label("7"), .traits([.button])))
-            .expect(.exists(.label("7")), timeout: .seconds(1))
+            .expect(.exists(.label("7")), timeout: 1)
 
         Activate(.element(.label("+"), .traits([.button])))
-            .expect(.changed(.elements()), timeout: .seconds(1))
+            .expect(.changed(.elements()), timeout: 1)
 
         Activate(.element(.label("5"), .traits([.button])))
-            .expect(.exists(.label("5")), timeout: .seconds(1))
+            .expect(.exists(.label("5")), timeout: 1)
 
         Activate(.element(.label("equals"), .traits([.button])))
-            .expect(.exists(.label("12")), timeout: .seconds(1))
+            .expect(.exists(.label("12")), timeout: 1)
     }
 }
 

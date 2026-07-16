@@ -9,27 +9,8 @@ extension HeistPlanSourceParser {
     }
 
     mutating func parseDuration() throws -> WaitTimeout {
-        if consumeSymbol(".") {
-            return try parseDurationCall()
-        }
-        throw error(currentToken, "expected a timeout duration such as .seconds(1)")
-    }
-
-    mutating func parseDurationCall() throws -> WaitTimeout {
         let durationToken = currentToken
-        let method = try parseIdentifier()
-        try expectSymbol("(")
-        let value = try parseNumber()
-        try expectSymbol(")")
-        let seconds: Double
-        switch method {
-        case "seconds":
-            seconds = value
-        case "milliseconds":
-            seconds = value / 1_000
-        default:
-            throw error(previous, "unsupported duration '.\(method)'")
-        }
+        let seconds = try parseNumber()
         do {
             return try WaitTimeout(validatingSeconds: seconds)
         } catch let validationError {

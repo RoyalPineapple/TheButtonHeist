@@ -130,9 +130,14 @@ final class SocketListenerRuntimeLifecycleTests: XCTestCase {
         let pendingConnection = makeConnection()
         let admissionConnection = makeConnection()
         let callbackTask = await MainActor.run { neverEndingTask() }
-        server.pendingCallbackTasks.record(callbackTask)
-        XCTAssertEqual(server.pendingCallbackCountForTesting, 1)
         await server.setListenerRuntimeStartOverrideForTesting { generation in
+            generation.spawnCallbackTask {
+                await withTaskCancellationHandler {
+                    await callbackTask.value
+                } onCancel: {
+                    callbackTask.cancel()
+                }
+            }
             let ownsPendingConnection = generation.own(pendingConnection)
             let ownsAdmissionConnection = generation.own(admissionConnection)
             let acceptance = await server.acceptReadyConnection(
@@ -163,7 +168,6 @@ final class SocketListenerRuntimeLifecycleTests: XCTestCase {
         XCTAssertTrue(observation.ownsAdmissionConnection)
         XCTAssertEqual(observation.acceptance, .rejected)
         XCTAssertEqual(observation.generation.pendingConnectionCountForTesting, 0)
-        XCTAssertEqual(server.pendingCallbackCountForTesting, 0)
         XCTAssertTrue(callbackTask.isCancelled)
         XCTAssertEqual(clientCount, 0)
     }

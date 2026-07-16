@@ -34,7 +34,7 @@ final class DogfoodRuntimeContractTests: XCTestCase {
             If {
                 Case(.exists(.label("Rotor Host"))) {
                     Rotor("Errors", on: .label("Rotor Host"))
-                        .expect(.exists(.label("Rotor Result: Missing amount")), timeout: .seconds(2))
+                        .expect(.exists(.label("Rotor Result: Missing amount")), timeout: 2)
                 }
                 Else {
                     Fail("Custom Rotors did not expose its semantic rotor host")

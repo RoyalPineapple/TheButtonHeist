@@ -77,7 +77,7 @@ extension TheInsideJob {
     /// Spawn a Task that wraps an async lifecycle transition. The handle is
     /// retained in `lifecycleBoundaryTasks` so callers that resume the server
     /// (`start()` / `resume()`) can await prior shutdowns before they begin.
-    func spawnLifecycleTask(_ body: @escaping @MainActor () async -> Void) {
+    func spawnLifecycleTask(_ body: @escaping @MainActor @Sendable () async -> Void) {
         lifecycleBoundaryTasks.spawn(body)
     }
 

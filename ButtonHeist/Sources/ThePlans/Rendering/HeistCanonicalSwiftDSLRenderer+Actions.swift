@@ -20,7 +20,7 @@ extension HeistCanonicalSwiftDSLRenderer {
     private func renderActionExpectationTimeout(_ timeout: WaitTimeout) -> String {
         timeout == defaultActionExpectationTimeout
             ? ""
-            : ", timeout: .seconds(\(decimal(timeout.seconds)))"
+            : ", timeout: \(decimal(timeout.seconds))"
     }
 
     func render(

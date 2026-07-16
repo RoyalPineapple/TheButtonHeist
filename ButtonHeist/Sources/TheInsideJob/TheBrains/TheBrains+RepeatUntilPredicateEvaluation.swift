@@ -190,7 +190,18 @@ extension TheBrains {
                 actual: "repeat_until deadline elapsed"
             ))
         }
-        let progressTimeout = WaitTimeout(seconds: min(defaultActionExpectationTimeout.seconds, remaining))
+        let progressTimeout: WaitTimeout
+        do {
+            progressTimeout = try WaitTimeout(validatingSeconds: min(
+                defaultActionExpectationTimeout.seconds,
+                remaining
+            ))
+        } catch {
+            return .deadlineElapsed(ExpectationResult.Unmet(
+                predicate: step.predicateExpression,
+                actual: String(describing: error)
+            ))
+        }
         let receipt: HeistWaitReceipt
         if let observation {
             receipt = await context.runtime.wait(.afterObservation(

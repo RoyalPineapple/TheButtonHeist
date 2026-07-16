@@ -73,7 +73,7 @@ extension SimpleSocketServer {
         let remoteAddress = Self.extractRemoteHost(from: connection).map { "\($0)" }
         connectionLogger.info("Client \(clientId) connected")
         callbacks.onClientConnected?(clientId, remoteAddress)
-        startReceiving(clientId: clientId, connection: connection)
+        startReceiving(clientId: clientId, connection: connection, generation: generation)
         return .registered(clientId: clientId)
     }
 

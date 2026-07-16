@@ -1,4 +1,5 @@
 import Foundation
+import ThePlans
 
 package struct HeistPassingChildren: Codable, Sendable, Equatable {
     package static let empty = Self(admitted: [])
@@ -27,7 +28,7 @@ package struct HeistPassingChildren: Codable, Sendable, Equatable {
 
 package struct HeistSkippedChildren: Codable, Sendable, Equatable {
     package static let empty = Self(admitted: [])
-    package let values: [HeistExecutionStepResult]
+    package private(set) var values: [HeistExecutionStepResult]
 
     package init?(_ values: [HeistExecutionStepResult]) {
         guard values.allSatisfy({ $0.status == .skipped }) else { return nil }
@@ -35,6 +36,14 @@ package struct HeistSkippedChildren: Codable, Sendable, Equatable {
     }
 
     fileprivate init(admitted values: [HeistExecutionStepResult]) { self.values = values }
+
+    package mutating func append(
+        path: HeistExecutionPath,
+        durationMs: Int,
+        step: HeistStep
+    ) {
+        values.append(.skipped(path: path, durationMs: durationMs, step: step))
+    }
 
     package init(from decoder: Decoder) throws {
         let values = try [HeistExecutionStepResult](from: decoder)

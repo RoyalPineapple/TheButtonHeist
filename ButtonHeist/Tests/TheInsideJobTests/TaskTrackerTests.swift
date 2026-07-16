@@ -1,184 +1,213 @@
-import ButtonHeistTestSupport
 import XCTest
+import os
 @testable import TheInsideJob
 
-/// Covers the leak fix in `TaskTracker`: completed Tasks must self-remove
-/// from the tracking set via the sibling watcher Task spawned by
-/// `record(_:)`. The previous prune-on-insert filter only removed cancelled
-/// Tasks, so normal completion left handles in the set forever.
-///
-/// These tests are deterministic — synchronization is via `await task.value`
-/// and bounded polling on the watcher Task's eventual removal, never wall
-/// clock sleeps.
 final class TaskTrackerTests: XCTestCase {
 
-    // MARK: - Completion path
-
-    func testRecordedTasksAreRemovedOnCompletion() async {
+    func testImmediateCompletionCannotOutrunInsertion() async {
         let tracker = TaskTracker()
-        var tasks: [Task<Void, Never>] = []
-        for _ in 0..<32 {
-            let task = Task { /* completes immediately */ }
-            tracker.record(task)
-            tasks.append(task)
-        }
+        let completions = LockedCounter()
 
-        // Drain the recorded Tasks themselves first so the watchers' `await
-        // task.value` resolves and they can take the lock to self-remove.
-        for task in tasks { await task.value }
+        XCTAssertEqual(tracker.spawn { completions.increment() }, .accepted)
+        await tracker.waitForIdle()
 
-        let drained = await eventually(within: .seconds(5)) { tracker.taskCountForTesting == 0 }
-        XCTAssertTrue(drained,
-                      "Completed Tasks must self-remove; observed \(tracker.taskCountForTesting) lingering")
+        XCTAssertEqual(completions.value, 1)
     }
 
-    func testSpawnedTasksAreRemovedOnCompletion() async {
+    func testCompletionRacingDrainIsAccountedExactlyOnce() async {
         let tracker = TaskTracker()
-        for _ in 0..<32 {
-            tracker.spawn { /* completes immediately */ }
-        }
+        let entered = AsyncGate()
+        let cancelled = AsyncGate()
+        let terminalGate = AsyncGate()
+        let completions = LockedCounter()
 
-        let drained = await eventually(within: .seconds(5)) { tracker.taskCountForTesting == 0 }
-        XCTAssertTrue(drained,
-                      "spawn(_:) completions must drain; observed \(tracker.taskCountForTesting) lingering")
+        XCTAssertEqual(
+            tracker.spawn {
+                entered.open()
+                await withTaskCancellationHandler {
+                    await terminalGate.wait()
+                    completions.increment()
+                } onCancel: {
+                    cancelled.open()
+                }
+            },
+            .accepted
+        )
+        await entered.wait()
+
+        let drain = Task { await tracker.drain() }
+        await cancelled.wait()
+        terminalGate.open()
+        await drain.value
+
+        XCTAssertEqual(completions.value, 1)
+        XCTAssertEqual(tracker.spawn {}, .rejected(.drained))
     }
 
-    // MARK: - Teardown path
-
-    func testCancelAllCancelsAndDrains() async {
+    func testConcurrentDrainCallersAwaitOneCancellationInsensitiveOperation() async {
         let tracker = TaskTracker()
-        let gate = AsyncSemaphore()
-        var tasks: [Task<Void, Never>] = []
-        for _ in 0..<8 {
-            let task = Task { await gate.wait() }
-            tracker.record(task)
-            tasks.append(task)
+        let cancelled = AsyncGate()
+        let terminalGate = AsyncGate()
+        let firstReturned = AsyncGate()
+        let secondStarted = AsyncGate()
+
+        XCTAssertEqual(
+            tracker.spawn {
+                await withTaskCancellationHandler {
+                    await terminalGate.wait()
+                } onCancel: {
+                    cancelled.open()
+                }
+            },
+            .accepted
+        )
+
+        let firstDrain = Task {
+            await tracker.drain()
+            firstReturned.open()
         }
+        await cancelled.wait()
+        firstDrain.cancel()
 
-        // The set holds the 8 long-running tasks. Watchers are still parked
-        // on `await task.value` — that's fine, cancelAll empties the set
-        // synchronously under the lock.
-        XCTAssertGreaterThanOrEqual(tracker.taskCountForTesting, 1,
-                                     "tracker should be populated before cancelAll")
-
-        tracker.cancelAll()
-        XCTAssertEqual(tracker.taskCountForTesting, 0,
-                       "cancelAll must clear the set immediately")
-
-        // Each tracked Task must observe the cancellation.
-        gate.signalAll()
-        for task in tasks {
-            await task.value
-            XCTAssertTrue(task.isCancelled, "cancelAll must propagate to tracked Tasks")
+        let secondDrain = Task {
+            secondStarted.open()
+            await tracker.drain()
         }
+        await secondStarted.wait()
+
+        XCTAssertFalse(firstReturned.isOpen)
+        XCTAssertEqual(tracker.spawn {}, .rejected(.draining))
+
+        terminalGate.open()
+        await firstDrain.value
+        await secondDrain.value
+
+        XCTAssertTrue(firstReturned.isOpen)
+        XCTAssertEqual(tracker.spawn {}, .rejected(.drained))
     }
 
-    // MARK: - Weak self / no retain on watcher
+    func testIdleWaitIncludesNewlyAdmittedWorkWithoutCancellingIt() async {
+        let tracker = TaskTracker()
+        let admitSecond = AsyncGate()
+        let secondEntered = AsyncGate()
+        let secondTerminalGate = AsyncGate()
+        let idleStarted = AsyncGate()
+        let idleReturned = AsyncGate()
+        let cancellations = LockedCounter()
 
-    func testWatcherDoesNotLeakSelfAfterDeinit() async {
-        // Sentinel observes TaskTracker's deinit indirectly: we keep a weak
-        // reference and assert it nils after the strong reference is dropped,
-        // even while a recorded long-running Task is still in flight.
-        let gate = AsyncSemaphore()
-        let holder = WeakHolder()
-        let longTask: Task<Void, Never>
+        XCTAssertEqual(
+            tracker.spawn {
+                await admitSecond.wait()
+                tracker.spawn {
+                    secondEntered.open()
+                    await withTaskCancellationHandler {
+                        await secondTerminalGate.wait()
+                    } onCancel: {
+                        cancellations.increment()
+                    }
+                }
+            },
+            .accepted
+        )
 
-        do {
-            let tracker = TaskTracker()
-            holder.set(tracker)
-            longTask = Task { await gate.wait() }
-            tracker.record(longTask)
-            // Drop the strong reference here.
+        let idle = Task {
+            idleStarted.open()
+            await tracker.waitForIdle()
+            idleReturned.open()
         }
+        await idleStarted.wait()
+        admitSecond.open()
+        await secondEntered.wait()
 
-        // The watcher Task captures `[weak self, task]`, so the only strong
-        // refs are the tracked Task (still parked) and the watcher's own weak
-        // self — which doesn't retain. The tracker should be released.
-        let released = await eventually(within: .seconds(5)) { holder.isNil }
-        XCTAssertTrue(released, "TaskTracker leaked despite weak self in watcher")
+        XCTAssertFalse(idleReturned.isOpen)
+        secondTerminalGate.open()
+        await idle.value
 
-        // Let the long-running Task finish so the watcher's `await task.value`
-        // resolves; self?.remove is a no-op on nil self. No crash, no leak.
-        gate.signalAll()
-        await longTask.value
+        XCTAssertEqual(cancellations.value, 0)
+        XCTAssertTrue(idleReturned.isOpen)
     }
 
-    // MARK: - Race tolerance
+    func testDrainRunsCancellationCleanupAndReleasesTrackerAndCaptures() async {
+        let terminalGate = AsyncGate()
+        let operationRan = AsyncGate()
+        var tracker: TaskTracker? = TaskTracker()
+        weak let weakTracker = tracker
+        var captured: LifetimeSentinel? = LifetimeSentinel()
+        weak let weakCaptured = captured
 
-    func testRapidRecordCompletionIsRaceFree() async {
-        let tracker = TaskTracker()
-        let count = 1000
-        var tasks: [Task<Void, Never>] = []
-        tasks.reserveCapacity(count)
-        for index in 0..<count {
-            let task = Task {
-                // Minimal work; a few yields to interleave with watchers.
-                if index.isMultiple(of: 2) { await Task.yield() }
-            }
-            tracker.record(task)
-            tasks.append(task)
-        }
+        XCTAssertEqual(
+            tracker?.spawn { [captured] in
+                withExtendedLifetime(captured) {
+                    operationRan.open()
+                }
+                await withTaskCancellationHandler {
+                    await terminalGate.wait()
+                } onCancel: {
+                    terminalGate.open()
+                }
+            },
+            .accepted
+        )
+        captured = nil
 
-        for task in tasks { await task.value }
+        await tracker?.drain()
+        XCTAssertTrue(operationRan.isOpen)
+        tracker = nil
 
-        let drained = await eventually(within: .seconds(10)) {
-            tracker.taskCountForTesting == 0
-        }
-        XCTAssertTrue(drained,
-                      "1000 rapid record/complete cycles must fully drain; observed \(tracker.taskCountForTesting) lingering")
+        XCTAssertNil(weakTracker)
+        XCTAssertNil(weakCaptured)
     }
 }
 
-// MARK: - WeakHolder
-
-/// Holds a weak reference behind a lock so it can be observed from
-/// `@Sendable` polling closures under strict concurrency.
-private final class WeakHolder: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
-    private let lock = NSLock()
-    private weak var object: AnyObject?
-
-    func set(_ object: AnyObject) {
-        lock.lock(); defer { lock.unlock() }
-        self.object = object
+private final class AsyncGate: Sendable {
+    private enum State {
+        case closed([CheckedContinuation<Void, Never>])
+        case open
     }
 
-    var isNil: Bool {
-        lock.lock(); defer { lock.unlock() }
-        return object == nil
-    }
-}
-
-// MARK: - AsyncSemaphore
-
-/// Minimal one-shot async gate. `wait()` suspends until `signalAll()` is
-/// called; subsequent waits return immediately. Used to park tracked Tasks
-/// deterministically without `Task.sleep`.
-private final class AsyncSemaphore: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
-    private let lock = NSLock()
-    private var isSignalled = false
-    private var continuations: [CheckedContinuation<Void, Never>] = []
+    private let state = OSAllocatedUnfairLock<State>(initialState: .closed([]))
 
     func wait() async {
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            lock.lock()
-            if isSignalled {
-                lock.unlock()
+        await withCheckedContinuation { continuation in
+            let isOpen = state.withLock { state -> Bool in
+                guard case .closed(var waiters) = state else { return true }
+                waiters.append(continuation)
+                state = .closed(waiters)
+                return false
+            }
+            if isOpen {
                 continuation.resume()
-            } else {
-                continuations.append(continuation)
-                lock.unlock()
             }
         }
     }
 
-    func signalAll() {
-        lock.lock()
-        isSignalled = true
-        let pending = continuations
-        continuations.removeAll()
-        lock.unlock()
-        for continuation in pending {
-            continuation.resume()
+    func open() {
+        let waiters = state.withLock { state -> [CheckedContinuation<Void, Never>] in
+            guard case .closed(let waiters) = state else { return [] }
+            state = .open
+            return waiters
+        }
+        waiters.forEach { $0.resume() }
+    }
+
+    var isOpen: Bool {
+        state.withLock { state in
+            guard case .open = state else { return false }
+            return true
         }
     }
 }
+
+private final class LockedCounter: Sendable {
+    private let count = OSAllocatedUnfairLock<Int>(initialState: 0)
+
+    func increment() {
+        count.withLock { $0 += 1 }
+    }
+
+    var value: Int {
+        count.withLock { $0 }
+    }
+}
+
+private final class LifetimeSentinel: Sendable {}

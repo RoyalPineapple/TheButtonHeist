@@ -36,17 +36,26 @@ extension TheBrains {
         step: ResolvedRepeatUntilStep,
         observed: String
     ) -> HeistExecutionStepResult {
-        .repeatUntil(
-            path: context.path,
-            durationMs: elapsedMilliseconds(since: context.start),
+        let durationMs = elapsedMilliseconds(since: context.start)
+        let declaration = HeistRepeatUntilDeclaration(
             predicate: step.predicateExpression,
-            timeout: step.timeout,
+            timeout: step.timeout
+        )
+        let candidate = HeistExecutionStepResult.admitRepeatUntil(
+            path: context.path,
+            durationMs: durationMs,
+            declaration: declaration,
             completion: .failed(evidence: .unavailable, failure: HeistFailureDetail(
                 category: .loop,
                 contract: "repeat_until execution reaches a terminal state",
                 observed: observed,
                 expected: "terminal repeat_until state"
             ))
+        )
+        return admittedReceipt(
+            candidate,
+            path: context.path,
+            durationMs: durationMs
         )
     }
 
@@ -56,17 +65,23 @@ extension TheBrains {
         start: CFAbsoluteTime,
         error: Error
     ) -> HeistExecutionStepResult {
-        .repeatUntil(
+        let durationMs = elapsedMilliseconds(since: start)
+        let declaration = HeistRepeatUntilDeclaration(step)
+        let candidate = HeistExecutionStepResult.admitRepeatUntil(
             path: path,
-            durationMs: elapsedMilliseconds(since: start),
-            predicate: step.predicate,
-            timeout: step.timeout,
+            durationMs: durationMs,
+            declaration: declaration,
             completion: .failed(evidence: .unavailable, failure: HeistFailureDetail(
                 category: .validation,
                 contract: "repeat_until predicate resolves before evaluation",
                 observed: "could not resolve heist repeat_until predicate: \(error)",
                 expected: step.predicate.description
             ))
+        )
+        return admittedReceipt(
+            candidate,
+            path: path,
+            durationMs: durationMs
         )
     }
 }

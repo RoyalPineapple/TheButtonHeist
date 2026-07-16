@@ -24,7 +24,7 @@ final class TheBrains {
     let postActionObservation: PostActionObservation
     let interactionObservation: InteractionObservation
     let failureEvidencePolicy: FailureEvidencePolicy
-    private let requestExecutor = InteractionRequestExecutor()
+    private let requestExecutor: InteractionRequestExecutor
     private var observationDriver = StateDriver(
         initial: ObservationRuntimePhase.inactive,
         machine: ObservationRuntimeMachine()
@@ -137,10 +137,12 @@ final class TheBrains {
     init(
         tripwire: TheTripwire,
         fingerprintsEnabled: Bool = true,
-        failureEvidencePolicy: FailureEvidencePolicy = .screenshot
+        failureEvidencePolicy: FailureEvidencePolicy = .screenshot,
+        requestExecutor: InteractionRequestExecutor? = nil
     ) {
         self.tripwire = tripwire
         self.failureEvidencePolicy = failureEvidencePolicy
+        self.requestExecutor = requestExecutor ?? InteractionRequestExecutor()
         let stash = TheStash(tripwire: tripwire)
         let safecracker = TheSafecracker(fingerprintsEnabled: fingerprintsEnabled)
         self.stash = stash
@@ -239,28 +241,38 @@ final class TheBrains {
 
     func executeInAppRequest<Value: Sendable>(
         _ operation: @escaping @MainActor @Sendable () async -> Value
-    ) async -> Value {
-        switch await requestExecutor.execute(owner: .inApp, operation: operation) {
-        case .completed(let value):
-            return value
-        case .cancelled:
-            preconditionFailure("In-app requests cannot be cancelled by a transport owner")
+    ) async -> InteractionRequestExecutor.Outcome<Value> {
+        await withCheckedContinuation { continuation in
+            requestExecutor.submit(
+                owner: .inApp,
+                operation: operation,
+                completion: { continuation.resume(returning: $0) }
+            )
         }
     }
 
+    @discardableResult
     func submitTransportRequest(
         clientId: Int,
         operation: @escaping @MainActor @Sendable () async -> Void
-    ) async {
-        _ = await requestExecutor.execute(owner: .transportClient(clientId), operation: operation)
+    ) -> InteractionRequestExecutor.Admission {
+        requestExecutor.submit(
+            owner: .transportClient(clientId),
+            operation: operation,
+            completion: { _ in }
+        )
     }
 
     func cancelTransportRequests(clientId: Int) {
         requestExecutor.cancel(owner: .transportClient(clientId))
     }
 
-    func cancelAllTransportRequests() {
-        requestExecutor.cancelTransportRequests()
+    func stopInteractionRequests() async {
+        await requestExecutor.drain()
+    }
+
+    var interactionRequestSnapshot: InteractionRequestExecutor.Snapshot {
+        requestExecutor.snapshot
     }
 
     func beginChangedWait() -> Bool {
@@ -277,8 +289,23 @@ final class TheBrains {
     }
 }
 
+enum InteractionRequestExecutorPhase: Equatable, Sendable {
+    case idle
+    case running
+    case cancelling
+    case cleanupTimedOut
+    case stopping
+}
+
 @MainActor
-private final class InteractionRequestExecutor {
+final class InteractionRequestExecutor {
+    nonisolated static let maximumPendingRequests = 64
+    nonisolated static let cleanupTimeout: Duration = .seconds(5)
+
+    typealias CleanupDeadlineScheduler = @MainActor @Sendable (
+        _ deadlineReached: @escaping @MainActor @Sendable () -> Void
+    ) -> Task<Void, Never>
+
     enum Owner: Equatable, Sendable {
         case inApp
         case transportClient(Int)
@@ -289,16 +316,34 @@ private final class InteractionRequestExecutor {
         }
     }
 
+    enum Rejection: Equatable, Sendable {
+        case busy(capacity: Int)
+        case cleanupTimedOut
+        case stopping
+    }
+
+    enum Admission: Equatable, Sendable {
+        case accepted
+        case rejected(Rejection)
+    }
+
     enum Outcome<Value: Sendable>: Sendable {
         case completed(Value)
         case cancelled
+        case rejected(Rejection)
+    }
+
+    struct Snapshot: Equatable, Sendable {
+        let phase: InteractionRequestExecutorPhase
+        let pendingDepth: Int
+        let capacity: Int
     }
 
     private struct PendingRequest {
         let id: UInt64
         let owner: Owner
         let operation: @MainActor @Sendable () async -> Void
-        let cancelBeforeExecution: @MainActor @Sendable () -> Void
+        let cancel: @MainActor @Sendable () -> Void
     }
 
     private struct ActiveRequest {
@@ -306,76 +351,173 @@ private final class InteractionRequestExecutor {
         let task: Task<Void, Never>
     }
 
+    private struct CancellationState {
+        let active: ActiveRequest
+        var pending: [PendingRequest]
+        var deadlineTask: Task<Void, Never>?
+        var drainWaiters: [CheckedContinuation<Void, Never>]
+        var deadlineExpired: Bool
+    }
+
     private enum Phase {
         case idle
         case running(active: ActiveRequest, pending: [PendingRequest])
+        case cancelling(CancellationState)
     }
 
+    private let scheduleCleanupDeadline: CleanupDeadlineScheduler
     private var phase = Phase.idle
     private var nextRequestID: UInt64 = 1
 
-    func execute<Value: Sendable>(
-        owner: Owner,
-        operation: @escaping @MainActor @Sendable () async -> Value
-    ) async -> Outcome<Value> {
-        guard !owner.isTransport || !Task.isCancelled else { return .cancelled }
-        return await withCheckedContinuation { continuation in
-            let requestID = nextRequestID
-            precondition(requestID < UInt64.max, "Interaction request ID space exhausted")
-            nextRequestID += 1
-            enqueue(PendingRequest(
-                id: requestID,
-                owner: owner,
-                operation: {
-                    guard !Task.isCancelled else {
-                        continuation.resume(returning: .cancelled)
-                        return
-                    }
-                    continuation.resume(returning: .completed(await operation()))
-                },
-                cancelBeforeExecution: {
-                    continuation.resume(returning: .cancelled)
-                }
-            ))
+    fileprivate convenience init() {
+        self.init { deadlineReached in
+            Task { @MainActor in await InteractionRequestExecutor.waitForCleanupDeadline(deadlineReached) }
         }
+    }
+
+    init(cleanupDeadlineScheduler: @escaping CleanupDeadlineScheduler) {
+        scheduleCleanupDeadline = cleanupDeadlineScheduler
+    }
+
+    var snapshot: Snapshot {
+        switch phase {
+        case .idle:
+            return Snapshot(phase: .idle, pendingDepth: 0, capacity: Self.maximumPendingRequests)
+        case .running(_, let pending):
+            return Snapshot(
+                phase: .running,
+                pendingDepth: pending.count,
+                capacity: Self.maximumPendingRequests
+            )
+        case .cancelling(let state):
+            let phase: InteractionRequestExecutorPhase
+            if !state.drainWaiters.isEmpty {
+                phase = .stopping
+            } else if state.deadlineExpired {
+                phase = .cleanupTimedOut
+            } else {
+                phase = .cancelling
+            }
+            return Snapshot(
+                phase: phase,
+                pendingDepth: state.pending.count,
+                capacity: Self.maximumPendingRequests
+            )
+        }
+    }
+
+    private static func waitForCleanupDeadline(
+        _ deadlineReached: @escaping @MainActor @Sendable () -> Void
+    ) async {
+        try? await Task.sleep(for: cleanupTimeout)
+        guard !Task.isCancelled else { return }
+        deadlineReached()
+    }
+
+    @discardableResult
+    func submit<Value: Sendable>(
+        owner: Owner,
+        operation: @escaping @MainActor @Sendable () async -> Value,
+        completion: @escaping @MainActor @Sendable (Outcome<Value>) -> Void
+    ) -> Admission {
+        let resolver = RequestResolver(completion)
+        guard !owner.isTransport || !Task.isCancelled else {
+            resolver.resolve(.cancelled)
+            return .accepted
+        }
+
+        let requestID = nextRequestID
+        nextRequestID &+= 1
+        let request = PendingRequest(
+            id: requestID,
+            owner: owner,
+            operation: {
+                guard !Task.isCancelled else {
+                    resolver.resolve(.cancelled)
+                    return
+                }
+                resolver.resolve(.completed(await operation()))
+            },
+            cancel: { resolver.resolve(.cancelled) }
+        )
+        let admission = enqueue(request)
+        if case .rejected(let rejection) = admission {
+            resolver.resolve(.rejected(rejection))
+        }
+        return admission
     }
 
     func cancel(owner: Owner) {
-        guard case .running(let active, let pending) = phase else { return }
-        let cancelled = pending.filter { $0.owner == owner }
-        let retained = pending.filter { $0.owner != owner }
-        cancelled.forEach { $0.cancelBeforeExecution() }
-        if active.request.owner == owner {
-            active.task.cancel()
+        let pendingToCancel: [PendingRequest]
+        let activeToCancel: ActiveRequest?
+        switch phase {
+        case .idle:
+            return
+        case .running(let active, let pending):
+            let cancelled = pending.filter { $0.owner == owner }
+            let retained = pending.filter { $0.owner != owner }
+            pendingToCancel = cancelled
+            if active.request.owner == owner {
+                beginCancellation(active: active, pending: retained)
+                activeToCancel = active
+            } else {
+                phase = .running(active: active, pending: retained)
+                activeToCancel = nil
+            }
+        case .cancelling(var state):
+            let cancelled = state.pending.filter { $0.owner == owner }
+            state.pending.removeAll { $0.owner == owner }
+            phase = .cancelling(state)
+            pendingToCancel = cancelled
+            activeToCancel = nil
         }
-        phase = .running(active: active, pending: retained)
+        resolveCancellation(for: pendingToCancel)
+        if let activeToCancel {
+            resolveCancellation(for: activeToCancel)
+        }
     }
 
-    func cancelTransportRequests() {
-        guard case .running(let active, let pending) = phase else { return }
-        let cancelled = pending.filter { $0.owner.isTransport }
-        let retained = pending.filter { !$0.owner.isTransport }
-        cancelled.forEach { $0.cancelBeforeExecution() }
-        if active.request.owner.isTransport {
-            active.task.cancel()
+    func drain() async {
+        guard case .idle = phase else {
+            await withCheckedContinuation { continuation in
+                beginDrain(continuation: continuation)
+            }
+            return
         }
-        phase = .running(active: active, pending: retained)
     }
 
-    private func enqueue(_ request: PendingRequest) {
+    private func enqueue(_ request: PendingRequest) -> Admission {
         switch phase {
         case .idle:
             start(request, pending: [])
+            return .accepted
         case .running(let active, var pending):
+            guard pending.count < Self.maximumPendingRequests else {
+                return .rejected(.busy(capacity: Self.maximumPendingRequests))
+            }
             pending.append(request)
             phase = .running(active: active, pending: pending)
+            return .accepted
+        case .cancelling(var state):
+            guard state.drainWaiters.isEmpty else {
+                return .rejected(.stopping)
+            }
+            guard !state.deadlineExpired else {
+                return .rejected(.cleanupTimedOut)
+            }
+            guard state.pending.count < Self.maximumPendingRequests else {
+                return .rejected(.busy(capacity: Self.maximumPendingRequests))
+            }
+            state.pending.append(request)
+            phase = .cancelling(state)
+            return .accepted
         }
     }
 
     private func start(_ request: PendingRequest, pending: [PendingRequest]) {
         let task = Task { @MainActor [weak self] in
             await request.operation()
-            self?.complete(requestID: request.id)
+            self?.complete(expected: request.id)
         }
         phase = .running(
             active: ActiveRequest(request: request, task: task),
@@ -383,14 +525,115 @@ private final class InteractionRequestExecutor {
         )
     }
 
-    private func complete(requestID: UInt64) {
-        guard case .running(let active, var pending) = phase,
-              active.request.id == requestID else { return }
-        guard !pending.isEmpty else {
-            phase = .idle
+    private func complete(expected requestID: UInt64) {
+        switch phase {
+        case .idle:
+            return
+        case .running(let active, var pending):
+            guard active.request.id == requestID else { return }
+            guard !pending.isEmpty else {
+                phase = .idle
+                return
+            }
+            start(pending.removeFirst(), pending: pending)
+        case .cancelling(let state):
+            guard state.active.request.id == requestID else { return }
+            state.deadlineTask?.cancel()
+            if !state.drainWaiters.isEmpty {
+                finishDrain(state.drainWaiters)
+            } else if state.deadlineExpired || state.pending.isEmpty {
+                phase = .idle
+            } else {
+                var pending = state.pending
+                start(pending.removeFirst(), pending: pending)
+            }
+        }
+    }
+
+    private func beginDrain(
+        continuation: CheckedContinuation<Void, Never>
+    ) {
+        switch phase {
+        case .idle:
+            continuation.resume()
+        case .running(let active, let pending):
+            resolveCancellation(for: pending)
+            beginCancellation(active: active, pending: [], drainWaiters: [continuation])
+            resolveCancellation(for: active)
+        case .cancelling(var state):
+            resolveCancellation(for: state.pending)
+            state.pending.removeAll()
+            state.drainWaiters.append(continuation)
+            phase = .cancelling(state)
+        }
+    }
+
+    private func beginCancellation(
+        active: ActiveRequest,
+        pending: [PendingRequest],
+        drainWaiters: [CheckedContinuation<Void, Never>] = []
+    ) {
+        phase = .cancelling(CancellationState(
+            active: active,
+            pending: pending,
+            deadlineTask: nil,
+            drainWaiters: drainWaiters,
+            deadlineExpired: false
+        ))
+        let requestID = active.request.id
+        let deadlineTask = scheduleCleanupDeadline { [weak self] in
+            self?.cleanupDeadlineReached(expected: requestID)
+        }
+        guard case .cancelling(var state) = phase,
+              state.active.request.id == requestID else {
+            deadlineTask.cancel()
             return
         }
-        start(pending.removeFirst(), pending: pending)
+        state.deadlineTask = deadlineTask
+        phase = .cancelling(state)
+    }
+
+    private func cleanupDeadlineReached(expected requestID: UInt64) {
+        guard case .cancelling(var state) = phase,
+              state.active.request.id == requestID,
+              !state.deadlineExpired else { return }
+        let pending = state.pending
+        state.pending.removeAll()
+        state.deadlineTask = nil
+        state.deadlineExpired = true
+        phase = .cancelling(state)
+        resolveCancellation(for: pending)
+    }
+
+    private func finishDrain(_ waiters: [CheckedContinuation<Void, Never>]) {
+        phase = .idle
+        for waiter in waiters {
+            waiter.resume()
+        }
+    }
+
+    private func resolveCancellation(for active: ActiveRequest) {
+        active.request.cancel()
+        active.task.cancel()
+    }
+
+    private func resolveCancellation(for pending: [PendingRequest]) {
+        pending.forEach { $0.cancel() }
+    }
+
+    @MainActor
+    private final class RequestResolver<Value: Sendable> {
+        private var completion: (@MainActor @Sendable (Outcome<Value>) -> Void)?
+
+        init(_ completion: @escaping @MainActor @Sendable (Outcome<Value>) -> Void) {
+            self.completion = completion
+        }
+
+        func resolve(_ outcome: Outcome<Value>) {
+            guard let completion else { return }
+            self.completion = nil
+            completion(outcome)
+        }
     }
 }
 

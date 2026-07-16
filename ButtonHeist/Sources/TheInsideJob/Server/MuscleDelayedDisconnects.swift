@@ -3,7 +3,7 @@
 import Foundation
 import ButtonHeistSupport
 
-final class MuscleDelayedDisconnects {
+final class MuscleDelayedDisconnects: Sendable {
 
     private let gracePeriod: Duration
     private let tasks = TaskTracker()
@@ -13,7 +13,7 @@ final class MuscleDelayedDisconnects {
     }
 
     var taskCountForTesting: Int {
-        tasks.taskCountForTesting
+        tasks.snapshot.taskCount
     }
 
     func schedule(clientId: Int, disconnect: @escaping @Sendable () async -> Void) {
@@ -24,8 +24,8 @@ final class MuscleDelayedDisconnects {
         }
     }
 
-    func cancelAll() {
-        tasks.cancelAll()
+    func drain() async {
+        await tasks.drain()
     }
 }
 

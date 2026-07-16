@@ -266,6 +266,26 @@ single capture and must not become stable identity. Transport registries and
 auth registries may share a client key, but they stay separate: transport does
 not own authentication semantics.
 
+The implementation owners for the bounded coordination and projection
+pipelines are explicit:
+
+| Concept | Canonical owner | Thin projections or lifecycle callers |
+| --- | --- | --- |
+| UI request admission and cancellation | `InteractionRequestExecutor` in `TheBrains.swift` | `TheGetaway+Transport.swift`, `Heist.swift` |
+| Drainable callback work | `TaskTracker.swift` | Lifecycle, listener-generation, and delayed-disconnect owners |
+| Discovery callback delivery | `DeviceDiscoveryEventStream.swift` | `DeviceDiscovery.swift` |
+| Compiler process terminal outcome | `CompilerProcessOwner.swift` | `HeistSwiftFileCompiler.swift`; diagnostic rendering lives in `HeistSwiftFileCompilerError.swift` |
+| Receipt node algebra | `HeistExecutionStepNode.swift` | Admitted receipt construction |
+| Receipt node codec | `HeistExecutionStepNode+Codable.swift` | External receipt JSON boundaries |
+| Receipt admission | `HeistExecutionStepResult+Admission.swift` | Runtime receipt construction |
+| Receipt report facts | `HeistExecutionStepResult+ReportFacts.swift` | Report, compact, JUnit, doctor, and metric adapters |
+| Semantic observation scheduling | `SemanticObservationStream.swift` | Passive settle cycles and observation demand |
+| Semantic observation publication | `SemanticObservationStream+Publication.swift` | The sole `InterfaceTree` reducer and observation-log publisher |
+| Semantic observation waiter delivery | `SemanticObservationStream+Waiters.swift` | Cursor, window, replay, and timeout projections |
+| Testing request construction | `ButtonHeistTesting.swift` | Synchronous helpers and joined sessions live in their named extension files |
+| Fence action JSON | `FenceJSON+Action.swift` and `FenceJSON+HeistExecution.swift`, one result family each | Fence response formatting |
+| Test scheme, destination, and artifact topology | `scripts/test-runner.py` | CI and local invocations |
+
 ### Report and Action Evidence Have One Owner
 
 `HeistExecutionStepReportFacts` is the canonical typed projection of report
@@ -274,7 +294,10 @@ consume that projection; they do not rebuild report facts from plan siblings or
 parallel result fields.
 
 `HeistExecutionStepResult` owns a typed execution path, duration, and one
-`HeistExecutionStepNode`. The node combines authored step semantics with its
+`HeistExecutionStepNode`. `HeistExecutionStepNode.swift` owns the algebra,
+`HeistExecutionStepNode+Codable.swift` owns its one codec, and
+`HeistExecutionStepResult+Admission.swift` binds authored declarations to legal
+evidence before constructing a result. The node combines authored step semantics with its
 legal completion; typed completion and evidence wrappers prevent mismatched
 outcome, evidence, failure, and child shapes. Status and abort paths are derived
 from that node. The wire decoder accepts only the fields legal for the node's

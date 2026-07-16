@@ -191,7 +191,7 @@ import Testing
         (
             "WaitFor explicit",
             try HeistPlan {
-                WaitFor(.exists(.label("Home")), timeout: .seconds(5))
+                WaitFor(.exists(.label("Home")), timeout: 5)
             },
             WaitStep(predicate: .exists(.label("Home")), timeout: 5)
         ),
@@ -212,7 +212,7 @@ import Testing
         (
             "expect explicit timeout",
             try HeistPlan {
-                Activate(.label("Pay")).expect(.exists(.label("Receipt")), timeout: .seconds(3))
+                Activate(.label("Pay")).expect(.exists(.label("Receipt")), timeout: 3)
             },
             WaitStep(predicate: .exists(.label("Receipt")), timeout: 3)
         ),
@@ -239,13 +239,19 @@ import Testing
 @Test func `payload admission rejects invalid durations and prohibited empty text`() throws {
     for seconds in [0, -1, .nan, .infinity, GestureDuration.maximumSeconds.nextUp] {
         #expect(throws: GestureProjectionError.self) {
-            _ = try GestureDuration.admitting(seconds: seconds)
+            _ = try GestureDuration(validatingSeconds: seconds)
         }
     }
 
     for seconds in [0, -1, .nan, .infinity, WaitTimeout.maximumSeconds.nextUp] {
         #expect(throws: WaitTimeoutError.self) {
-            _ = try WaitTimeout.admitting(seconds: seconds)
+            _ = try WaitTimeout.seconds(seconds)
+        }
+    }
+
+    for milliseconds in [0, -1, .nan, .infinity, (WaitTimeout.maximumSeconds * 1_000).nextUp] {
+        #expect(throws: WaitTimeoutError.self) {
+            _ = try WaitTimeout.milliseconds(milliseconds)
         }
     }
 
@@ -256,6 +262,18 @@ import Testing
     #expect(throws: PasteboardTextError.self) {
         _ = try PasteboardText(validating: "")
     }
+}
+
+@Test func `dynamic duration admission preserves units at valid boundaries`() throws {
+    let gestureSeconds = GestureDuration.maximumSeconds
+    let waitSeconds = WaitTimeout.maximumSeconds
+    let waitMilliseconds = WaitTimeout.maximumSeconds * 1_000
+    let replacement = String()
+
+    #expect(try GestureDuration(validatingSeconds: gestureSeconds).seconds == gestureSeconds)
+    #expect(try WaitTimeout.seconds(waitSeconds).seconds == waitSeconds)
+    #expect(try WaitTimeout.milliseconds(waitMilliseconds).seconds == waitSeconds)
+    #expect(try TextInputText(validating: replacement, mode: .replace) == .replacing(replacement))
 }
 
 @Test func `payload decoding uses the same admission bounds without repair`() throws {

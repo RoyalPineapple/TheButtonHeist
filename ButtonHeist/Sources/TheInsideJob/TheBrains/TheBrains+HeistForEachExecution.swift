@@ -277,6 +277,7 @@ extension TheBrains {
         item: ForEachElementItem,
         children: [HeistExecutionStepResult]
     ) -> HeistExecutionStepResult {
+        let durationMs = elapsedMilliseconds(since: start)
         let evidence = HeistForEachElementEvidence(
             matchedCount: matchedCount,
             iterationCount: iterationIndex + 1,
@@ -292,20 +293,28 @@ extension TheBrains {
                 childPath: $0.path
             ))
         } ?? .completed
-        return .forEachElementIteration(
-            path: path,
-            durationMs: elapsedMilliseconds(since: start),
-            parameter: step.parameter,
-            matching: step.matching,
-            limit: step.limit,
-            completion: forEachCompletion(
+        let candidate = evidence.flatMap { evidence in
+            forEachCompletion(
                 evidence: evidence,
                 termination: termination,
                 children: children,
                 admitPassed: HeistPassedForEachElementEvidence.init,
                 admitFailed: HeistFailedForEachElementEvidence.init,
                 failure: forEachIterationFailure
-            )
+            ).flatMap { completion in
+                HeistExecutionStepResult.admitForEachElementIteration(
+                    path: path,
+                    durationMs: durationMs,
+                    declaration: HeistForEachElementDeclaration(step),
+                    completion: completion
+                )
+            }
+        }
+        return admittedReceipt(
+            candidate,
+            path: path,
+            durationMs: durationMs,
+            children: children
         )
     }
 
@@ -315,18 +324,14 @@ extension TheBrains {
         step: ForEachElementStep,
         outcome: ForEachLoopOutcome
     ) -> HeistExecutionStepResult {
+        let durationMs = elapsedMilliseconds(since: start)
         let evidence = HeistForEachElementEvidence(
             matchedCount: outcome.totalCount,
             iterationCount: outcome.iterationCount,
             failureReason: outcome.failureReason
         )
-        return .forEachElement(
-            path: path,
-            durationMs: elapsedMilliseconds(since: start),
-            parameter: step.parameter,
-            matching: step.matching,
-            limit: step.limit,
-            completion: forEachCompletion(
+        let candidate = evidence.flatMap { evidence in
+            forEachCompletion(
                 evidence: evidence,
                 termination: outcome.termination,
                 children: outcome.iterationNodes,
@@ -336,7 +341,20 @@ extension TheBrains {
                     contract: "for_each_element completes all matched iterations",
                     expected: "\(outcome.totalCount) iteration(s)"
                 )
-            )
+            ).flatMap { completion in
+                HeistExecutionStepResult.admitForEachElement(
+                    path: path,
+                    durationMs: durationMs,
+                    declaration: HeistForEachElementDeclaration(step),
+                    completion: completion
+                )
+            }
+        }
+        return admittedReceipt(
+            candidate,
+            path: path,
+            durationMs: durationMs,
+            children: outcome.iterationNodes
         )
     }
 
@@ -391,6 +409,7 @@ extension TheBrains {
         value: String,
         children: [HeistExecutionStepResult]
     ) -> HeistExecutionStepResult {
+        let durationMs = elapsedMilliseconds(since: start)
         let evidence = HeistForEachStringEvidence(
             iterationCount: iterationIndex + 1,
             iterationOrdinal: iterationIndex,
@@ -404,19 +423,28 @@ extension TheBrains {
                 childPath: $0.path
             ))
         } ?? .completed
-        return .forEachStringIteration(
-            path: path,
-            durationMs: elapsedMilliseconds(since: start),
-            parameter: step.parameter,
-            count: step.values.count,
-            completion: forEachCompletion(
+        let candidate = evidence.flatMap { evidence in
+            forEachCompletion(
                 evidence: evidence,
                 termination: termination,
                 children: children,
                 admitPassed: HeistPassedForEachStringEvidence.init,
                 admitFailed: HeistFailedForEachStringEvidence.init,
                 failure: forEachIterationFailure
-            )
+            ).flatMap { completion in
+                HeistExecutionStepResult.admitForEachStringIteration(
+                    path: path,
+                    durationMs: durationMs,
+                    declaration: HeistForEachStringDeclaration(step),
+                    completion: completion
+                )
+            }
+        }
+        return admittedReceipt(
+            candidate,
+            path: path,
+            durationMs: durationMs,
+            children: children
         )
     }
 
@@ -426,16 +454,13 @@ extension TheBrains {
         step: ForEachStringStep,
         outcome: ForEachLoopOutcome
     ) -> HeistExecutionStepResult {
+        let durationMs = elapsedMilliseconds(since: start)
         let evidence = HeistForEachStringEvidence(
             iterationCount: outcome.iterationCount,
             failureReason: outcome.failureReason
         )
-        return .forEachString(
-            path: path,
-            durationMs: elapsedMilliseconds(since: start),
-            parameter: step.parameter,
-            count: step.values.count,
-            completion: forEachCompletion(
+        let candidate = evidence.flatMap { evidence in
+            forEachCompletion(
                 evidence: evidence,
                 termination: outcome.termination,
                 children: outcome.iterationNodes,
@@ -445,7 +470,20 @@ extension TheBrains {
                     contract: "for_each_string completes all values",
                     expected: "\(outcome.totalCount) value(s)"
                 )
-            )
+            ).flatMap { completion in
+                HeistExecutionStepResult.admitForEachString(
+                    path: path,
+                    durationMs: durationMs,
+                    declaration: HeistForEachStringDeclaration(step),
+                    completion: completion
+                )
+            }
+        }
+        return admittedReceipt(
+            candidate,
+            path: path,
+            durationMs: durationMs,
+            children: outcome.iterationNodes
         )
     }
 
@@ -456,20 +494,16 @@ extension TheBrains {
         admitPassed: (Evidence) -> Passed?,
         admitFailed: (Evidence) -> Failed?,
         failure: (_ observed: String, _ childPath: HeistExecutionPath?) -> HeistFailureDetail
-    ) -> HeistExecutionCompletion<Passed, HeistEvidenceAvailability<Failed>, Failed>
+    ) -> HeistExecutionCompletion<Passed, HeistEvidenceAvailability<Failed>, Failed>?
     where Passed: Sendable & Equatable, Failed: Codable & Sendable & Equatable {
         switch termination {
         case .completed:
             guard let evidence = admitPassed(evidence),
-                  case .passed(let children) = HeistExecutedChildren(children) else {
-                preconditionFailure("completed for_each must carry passing evidence and children")
-            }
+                  case .passed(let children) = HeistExecutedChildren(children) else { return nil }
             return .passed(evidence: evidence, children: children)
         case .childFailed(let childFailure):
             guard let evidence = admitFailed(evidence),
-                  case .aborted(let children) = HeistExecutedChildren(children) else {
-                preconditionFailure("child-failed for_each must carry failed evidence and children")
-            }
+                  case .aborted(let children) = HeistExecutedChildren(children) else { return nil }
             return .childAborted(
                 evidence: evidence,
                 failure: failure(childFailure.reason, childFailure.childPath),
@@ -478,9 +512,7 @@ extension TheBrains {
         case .postObservationUnavailable(let iterationIndex):
             let observed = "iteration \(iterationIndex) post-observation unavailable"
             guard let evidence = admitFailed(evidence),
-                  case .passed(let children) = HeistExecutedChildren(children) else {
-                preconditionFailure("unavailable for_each must carry failed evidence and passing children")
-            }
+                  case .passed(let children) = HeistExecutedChildren(children) else { return nil }
             return .failed(
                 evidence: .observed(evidence),
                 failure: failure(observed, nil),
@@ -524,25 +556,35 @@ extension TheBrains {
         limit: Int
     ) -> HeistExecutionStepResult {
         let observed = "could not observe settled semantic hierarchy before evaluating for_each_element"
+        let durationMs = elapsedMilliseconds(since: start)
         let evidence = HeistForEachElementEvidence(
             matchedCount: 0,
             iterationCount: 0,
             failureReason: observed
-        )
-        guard let evidence = HeistFailedForEachElementEvidence(evidence) else {
-            preconditionFailure("unavailable element loop must carry failed evidence")
-        }
-        return .forEachElement(
-            path: path,
-            durationMs: elapsedMilliseconds(since: start),
+        ).flatMap(HeistFailedForEachElementEvidence.init)
+        let declaration = HeistForEachElementDeclaration(
             parameter: parameter,
             matching: matching,
-            limit: limit,
-            completion: .failed(evidence: .observed(evidence), failure: HeistFailureDetail(
-                category: .runtimeUnavailable,
-                contract: "settled semantic hierarchy is observable before for_each_element matching",
-                observed: observed
-            ))
+            limit: limit
+        )
+        let candidate = declaration.flatMap { declaration in
+            evidence.flatMap { evidence in
+                HeistExecutionStepResult.admitForEachElement(
+                    path: path,
+                    durationMs: durationMs,
+                    declaration: declaration,
+                    completion: .failed(evidence: .observed(evidence), failure: HeistFailureDetail(
+                        category: .runtimeUnavailable,
+                        contract: "settled semantic hierarchy is observable before for_each_element matching",
+                        observed: observed
+                    ))
+                )
+            }
+        }
+        return admittedReceipt(
+            candidate,
+            path: path,
+            durationMs: durationMs
         )
     }
 
@@ -553,26 +595,29 @@ extension TheBrains {
         error: Error
     ) -> HeistExecutionStepResult {
         let observed = "could not resolve for_each_element matcher: \(error)"
+        let durationMs = elapsedMilliseconds(since: start)
         let evidence = HeistForEachElementEvidence(
             matchedCount: 0,
             iterationCount: 0,
             failureReason: observed
-        )
-        guard let evidence = HeistFailedForEachElementEvidence(evidence) else {
-            preconditionFailure("unresolved element loop must carry failed evidence")
+        ).flatMap(HeistFailedForEachElementEvidence.init)
+        let candidate = evidence.flatMap { evidence in
+            HeistExecutionStepResult.admitForEachElement(
+                path: path,
+                durationMs: durationMs,
+                declaration: HeistForEachElementDeclaration(step),
+                completion: .failed(evidence: .observed(evidence), failure: HeistFailureDetail(
+                    category: .targetResolution,
+                    contract: "for_each_element matcher resolves before evaluation",
+                    observed: observed,
+                    expected: step.matching.description
+                ))
+            )
         }
-        return .forEachElement(
+        return admittedReceipt(
+            candidate,
             path: path,
-            durationMs: elapsedMilliseconds(since: start),
-            parameter: step.parameter,
-            matching: step.matching,
-            limit: step.limit,
-            completion: .failed(evidence: .observed(evidence), failure: HeistFailureDetail(
-                category: .targetResolution,
-                contract: "for_each_element matcher resolves before evaluation",
-                observed: observed,
-                expected: step.matching.description
-            ))
+            durationMs: durationMs
         )
     }
 
@@ -586,26 +631,36 @@ extension TheBrains {
         limit: Int
     ) -> HeistExecutionStepResult {
         let observed = "matched \(matchedCount) element(s), exceeding for_each_element limit \(limit)"
+        let durationMs = elapsedMilliseconds(since: start)
         let evidence = HeistForEachElementEvidence(
             matchedCount: matchedCount,
             iterationCount: 0,
             failureReason: observed
-        )
-        guard let evidence = HeistFailedForEachElementEvidence(evidence) else {
-            preconditionFailure("over-limit element loop must carry failed evidence")
-        }
-        return .forEachElement(
-            path: path,
-            durationMs: elapsedMilliseconds(since: start),
+        ).flatMap(HeistFailedForEachElementEvidence.init)
+        let declaration = HeistForEachElementDeclaration(
             parameter: parameter,
             matching: matching,
-            limit: limit,
-            completion: .failed(evidence: .observed(evidence), failure: HeistFailureDetail(
-                category: .loop,
-                contract: "for_each_element matched count does not exceed limit",
-                observed: observed,
-                expected: "at most \(limit) element(s)"
-            ))
+            limit: limit
+        )
+        let candidate = declaration.flatMap { declaration in
+            evidence.flatMap { evidence in
+                HeistExecutionStepResult.admitForEachElement(
+                    path: path,
+                    durationMs: durationMs,
+                    declaration: declaration,
+                    completion: .failed(evidence: .observed(evidence), failure: HeistFailureDetail(
+                        category: .loop,
+                        contract: "for_each_element matched count does not exceed limit",
+                        observed: observed,
+                        expected: "at most \(limit) element(s)"
+                    ))
+                )
+            }
+        }
+        return admittedReceipt(
+            candidate,
+            path: path,
+            durationMs: durationMs
         )
     }
 }

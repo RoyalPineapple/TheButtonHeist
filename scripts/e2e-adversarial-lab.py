@@ -292,14 +292,14 @@ class DemoApp:
 
 OPEN_LAB = """
     Activate(.element(.label("Adversarial Lab"), .traits([.button])))
-        .expect(.exists(.label("Async Reveal")), timeout: .seconds(8))
+        .expect(.exists(.label("Async Reveal")), timeout: 8)
 """
 
 BACK_TO_ROOT = """
     Activate(.element(.label("Adversarial Lab"), .traits([.backButton])))
-        .expect(.exists(.label("Adversarial Lab")), timeout: .seconds(8))
+        .expect(.exists(.label("Adversarial Lab")), timeout: 8)
     Activate(.element(.label("ButtonHeist Demo"), .traits([.backButton])))
-        .expect(.exists(.label("Controls Demo")), timeout: .seconds(8))
+        .expect(.exists(.label("Controls Demo")), timeout: 8)
 """
 
 
@@ -308,7 +308,7 @@ def scenario_plan(name: str, title: str, body: str) -> str:
 HeistPlan("{name}") {{
 {OPEN_LAB}
     Activate(.element(.label("{title}"), .traits([.button])))
-        .expect(.exists(.label("{title}")), timeout: .seconds(8))
+        .expect(.exists(.label("{title}")), timeout: 8)
 {body}
 {BACK_TO_ROOT}
 }}
@@ -321,7 +321,7 @@ PASSING_PLANS = {
         "Async Reveal",
         """
     Activate(.label("Reveal with notification"))
-        .expect(.exists(.label("Delayed code: 7429")), timeout: .seconds(3))
+        .expect(.exists(.label("Delayed code: 7429")), timeout: 3)
 """,
     ),
     "/async-reveal-silent": scenario_plan(
@@ -329,7 +329,7 @@ PASSING_PLANS = {
         "Async Reveal",
         """
     Activate(.label("Reveal silently"))
-        .expect(.exists(.label("Delayed code: 7429")), timeout: .seconds(3))
+        .expect(.exists(.label("Delayed code: 7429")), timeout: 3)
 """,
     ),
     "/offscreen-checkout": scenario_plan(
@@ -337,9 +337,9 @@ PASSING_PLANS = {
         "Offscreen Checkout",
         """
     Activate(.label("Add Espresso"))
-        .expect(.exists(.label("Remove Espresso")), timeout: .seconds(2))
+        .expect(.exists(.label("Remove Espresso")), timeout: 2)
     Activate(.element(.label("Place order"), .traits([.button])))
-        .expect(.exists(.label("Order placed")), timeout: .seconds(4))
+        .expect(.exists(.label("Order placed")), timeout: 4)
 """,
     ),
     "/duplicate-labels": scenario_plan(
@@ -358,7 +358,7 @@ PASSING_PLANS = {
             .value("Completed"),
             .customContent(.match(label: "Category", value: "Work")),
             .customContent(.match(label: "Priority", value: "High"))
-        )), timeout: .seconds(2))
+        )), timeout: 2)
 """,
     ),
     "/dynamic-cells": scenario_plan(
@@ -366,7 +366,7 @@ PASSING_PLANS = {
         "Dynamic Cells",
         """
     Activate(.label("Churn menu"))
-        .expect(.exists(.label("Menu churned")), timeout: .seconds(4))
+        .expect(.exists(.label("Menu churned")), timeout: 4)
     CustomAction("Add to Cart", on: .element(
         .label("Nebula Noodles Prime"),
         .customContent(.match(label: "SKU", value: "SKU-72")),
@@ -383,7 +383,7 @@ PASSING_PLANS = {
             .customContent(.match(label: "Quantity", value: "1")),
             .customContent(.match(label: "Line Total", value: "$18.00")),
             .actions([.custom("Remove from Cart")])
-        )), timeout: .seconds(6))
+        )), timeout: 6)
 """,
     ),
     "/text-field-fallback": scenario_plan(
@@ -391,7 +391,7 @@ PASSING_PLANS = {
         "Text Field Fallback",
         """
     TypeText(.replacing("fallback typed"), into: .element(.label("Fallback field"), .traits([.textEntry])))
-        .expect(.exists(.value("fallback typed")), timeout: .seconds(3))
+        .expect(.exists(.value("fallback typed")), timeout: 3)
     DismissKeyboard()
         .withoutExpectation("Returns the app to navigation after text entry")
 """,
@@ -400,11 +400,11 @@ PASSING_PLANS = {
         "adversarialStaleLiveObjectPass",
         "Stale Live Object",
         """
-    WaitFor(.exists(.element(.label("Submit Order"), .value("version 1"))), timeout: .seconds(2))
+    WaitFor(.exists(.element(.label("Submit Order"), .value("version 1"))), timeout: 2)
     Activate(.label("Replace Target"))
-        .expect(.exists(.element(.label("Submit Order"), .value("version 2"))), timeout: .seconds(2))
+        .expect(.exists(.element(.label("Submit Order"), .value("version 2"))), timeout: 2)
     Activate(.element(.label("Submit Order"), .value("version 2")))
-        .expect(.exists(.label("Result: submitted version 2")), timeout: .seconds(2))
+        .expect(.exists(.label("Result: submitted version 2")), timeout: 2)
 """,
     ),
     "/modal-obstruction": scenario_plan(
@@ -412,11 +412,11 @@ PASSING_PLANS = {
         "Modal Obstruction",
         """
     Activate(.label("Review order"))
-        .expect(.exists(.label("Order review")), timeout: .seconds(4))
+        .expect(.exists(.label("Order review")), timeout: 4)
     Activate(.label("Confirm review"))
-        .expect(.exists(.label("Status: Review confirmed")), timeout: .seconds(2))
+        .expect(.exists(.label("Status: Review confirmed")), timeout: 2)
     Activate(.label("Close"))
-        .expect(.missing(.label("Order review")), timeout: .seconds(4))
+        .expect(.missing(.label("Order review")), timeout: 4)
 """,
     ),
     "/nested-scroll": scenario_plan(
@@ -424,7 +424,7 @@ PASSING_PLANS = {
         "Nested Scroll",
         """
     Activate(.label("Verified by The Vibe Check"))
-        .expect(.exists(.label("Selected Verified")), timeout: .seconds(6))
+        .expect(.exists(.label("Selected Verified")), timeout: 6)
 """,
     ),
 }
@@ -438,7 +438,7 @@ FAILING_PLANS = {
             """
     Activate(.label("Reveal silently"))
         .withoutExpectation("The failing wait below proves async destination diagnostics")
-    WaitFor(.exists(.label("Delayed code: 9999")), timeout: .seconds(0.2))
+    WaitFor(.exists(.label("Delayed code: 9999")), timeout: 0.2)
 """,
         ),
         "Delayed code: 9999",
@@ -469,7 +469,7 @@ FAILING_PLANS = {
             "Dynamic Cells",
             """
     Activate(.label("Churn menu"))
-        .expect(.exists(.label("Menu churned")), timeout: .seconds(4))
+        .expect(.exists(.label("Menu churned")), timeout: 4)
     CustomAction("Add to Cart", on: .element(
         .label("Nebula Noodles"),
         .customContent(.match(label: "SKU", value: "SKU-72")),
@@ -496,9 +496,9 @@ FAILING_PLANS = {
             "Stale Live Object",
         """
     Activate(.label("Replace Target"))
-        .expect(.exists(.element(.label("Submit Order"), .value("version 2"))), timeout: .seconds(2))
+        .expect(.exists(.element(.label("Submit Order"), .value("version 2"))), timeout: 2)
     Activate(.label("Show Duplicate Target"))
-        .expect(.exists(.element(.label("Submit Order"), .value("version duplicate"))), timeout: .seconds(2))
+        .expect(.exists(.element(.label("Submit Order"), .value("version duplicate"))), timeout: 2)
     Activate(.label("Submit Order"))
 """,
         ),
@@ -510,7 +510,7 @@ FAILING_PLANS = {
             "Modal Obstruction",
             """
     Activate(.label("Review order"))
-        .expect(.exists(.label("Order review")), timeout: .seconds(4))
+        .expect(.exists(.label("Order review")), timeout: 4)
     Activate(.label("Archive order 100"))
 """,
         ),

@@ -43,13 +43,13 @@ private struct EncodedHeistPlanHeaderContract: Decodable {
 func `representative heist plan encodes decodes validates and renders`() throws {
     let plan = try HeistPlan("loginFlow") {
         TypeText("alex@example.com", into: .identifier("email"))
-            .expect(.exists(.value("alex@example.com")), timeout: .seconds(1))
+            .expect(.exists(.value("alex@example.com")), timeout: 1)
 
         Activate(.label("Submit"))
             .expect(.changed(.screen()))
-            .expect(.exists(.label("Home")), timeout: .seconds(5))
+            .expect(.exists(.label("Home")), timeout: 5)
 
-        WaitFor(.missing(.label("Loading")), timeout: .seconds(1))
+        WaitFor(.missing(.label("Loading")), timeout: 1)
 
         If {
             Case(.exists(.label("Promo"))) {

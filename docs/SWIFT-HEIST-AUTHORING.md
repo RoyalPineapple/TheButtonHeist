@@ -260,7 +260,7 @@ Increment(.label("Quantity"))
     ])))
 
 Increment(.label("Volume"))
-    .until(.exists(.element(label: "Volume", value: "100")), timeout: .seconds(5))
+    .until(.exists(.element(label: "Volume", value: "100")), timeout: 5)
 
 Rotor("Headings", on: .label("Article"), direction: .next)
     .withoutExpectation("Navigation cursor only")
@@ -282,7 +282,7 @@ WaitFor(.element(
     label: .contains("No results"),
     identifier: .contains("empty_state"),
     value: .contains("0 items")
-), timeout: .seconds(2))
+), timeout: 2)
 ```
 
 `StringMatch` cases `.contains`, `.prefix`, and `.suffix` work on all element string predicate fields
@@ -333,8 +333,8 @@ contains this matching container", not "a navigation just happened". They match
 settled accessibility structure without requiring a previous transition:
 
 ```swift
-WaitFor(.exists(.container(.identifier("Checkout"))), timeout: .seconds(2))
-WaitFor(.missing(.container(.identifier("Loading"))), timeout: .seconds(2))
+WaitFor(.exists(.container(.identifier("Checkout"))), timeout: 2)
+WaitFor(.missing(.container(.identifier("Loading"))), timeout: 2)
 Activate(.within(container: .label("Checkout"), .label("Pay")))
 Activate(.within(container: .scrollable(true), .label("Load more")))
 WaitFor(.exists(.container(.dataTable(rowCount: .init(3)))))
@@ -359,12 +359,12 @@ assertions are available only inside `.changed(.elements([...]))`.
 ```swift
 ForEach(.label("Delete"), limit: 20) { target in
     Activate(target)
-        .expect(.missing(target), timeout: .seconds(2))
+        .expect(.missing(target), timeout: 2)
 }
 
 ForEach("Milk", "Eggs") { item in
     TypeText(item, into: .label("Add item"))
-        .expect(.exists(.label(item)), timeout: .seconds(2))
+        .expect(.exists(.label(item)), timeout: 2)
 }
 ```
 
@@ -373,7 +373,7 @@ holds against settled state or the mandatory timeout elapses, with an optional
 `.else { ... }` body for the timeout path:
 
 ```swift
-RepeatUntil(.exists(.label("Inbox empty")), timeout: .seconds(10)) {
+RepeatUntil(.exists(.label("Inbox empty")), timeout: 10) {
     Activate(.label("Delete"))
 }
 ```

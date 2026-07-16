@@ -20,7 +20,10 @@ extension TheGetaway {
     /// — `sendToClient` was still nil — and the serverHello was silently
     /// dropped. Awaiting `installCallbacks` inline closes that race for both
     /// `start()` and `resume()`. See finding PR #352 (High) and #359 M1.
-    func wireTransport(_ transport: ServerTransport) async {
+    func wireTransport(
+        _ transport: ServerTransport,
+        onBacklogOverflow: @escaping @MainActor @Sendable (Int) async -> Void
+    ) async {
         self.transport = transport
 
         // Install actor-isolated callbacks on TheMuscle. Each callback is
@@ -45,10 +48,10 @@ extension TheGetaway {
         )
 
         eventConsumerTask?.cancel()
-        eventConsumerTask = Task { @MainActor [weak self, events = transport.events] in
+        eventConsumerTask = Task { @MainActor [weak self, events = transport.events, onBacklogOverflow] in
             for await event in events {
                 guard let self else { return }
-                await self.handleTransportEvent(event)
+                await self.handleTransportEvent(event, onBacklogOverflow: onBacklogOverflow)
             }
         }
     }
@@ -56,7 +59,10 @@ extension TheGetaway {
     /// Routes one transport event on the main actor. Client frames are handed
     /// to per-client admission streams so unrelated lifecycle and client
     /// traffic can continue while a request is suspended.
-    func handleTransportEvent(_ event: TransportEvent) async {
+    func handleTransportEvent(
+        _ event: TransportEvent,
+        onBacklogOverflow: @MainActor @Sendable (Int) async -> Void
+    ) async {
         switch event {
         case .clientConnected(let clientId, let remoteAddress):
             insideJobLogger.info("Client \(clientId) connected from \(remoteAddress ?? "unknown"), awaiting hello")
@@ -74,17 +80,23 @@ extension TheGetaway {
         case .dataReceived(let clientId, let data, let respond):
             await enqueueClientRequest(clientId: clientId, data: data, respond: respond)
 
+        case .backlogOverflow(let maxEvents):
+            await onBacklogOverflow(maxEvents)
+
         }
     }
 
     func tearDown() async {
-        eventConsumerTask?.cancel()
+        let eventConsumer = eventConsumerTask
+        eventConsumer?.cancel()
         eventConsumerTask = nil
-        brains.cancelAllTransportRequests()
-        for pipeline in clientRequestPipelines.values {
-            pipeline.stop()
-        }
+        let pipelineConsumers = clientRequestPipelines.values.compactMap { $0.stop() }
         clientRequestPipelines.removeAll()
+        await brains.stopInteractionRequests()
+        await eventConsumer?.value
+        for consumer in pipelineConsumers {
+            await consumer.value
+        }
         transport = nil
     }
 
@@ -152,9 +164,16 @@ extension TheGetaway {
             case .control:
                 await handleClientMessage(message, respond: request.respond)
             case .userInterface:
-                await brains.submitTransportRequest(clientId: request.clientId) { [weak self] in
+                let submission = brains.submitTransportRequest(clientId: request.clientId) { [weak self] in
                     guard !Task.isCancelled else { return }
                     await self?.handleClientMessage(message, respond: request.respond)
+                }
+                if case .rejected(let rejection) = submission {
+                    insideJobLogger.error(
+                        "Client \(request.clientId) interaction submission rejected: \(String(describing: rejection))"
+                    )
+                    stopClientRequestPipeline(clientId: request.clientId)
+                    await transport?.server.removeClient(request.clientId)
                 }
             }
         case .handled:

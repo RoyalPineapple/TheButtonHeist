@@ -237,7 +237,7 @@ import AccessibilitySnapshotParser
     ) -> [RotorName] {
         var names = treeElement.element.customRotors.compactMap { try? RotorName(validating: $0.name) }
         let liveNames = liveObject?.accessibilityCustomRotors?
-            .map { $0.bhInvocableName(locale: liveObject?.accessibilityLanguage) }
+            .compactMap { $0.bhInvocableName(locale: liveObject?.accessibilityLanguage) }
             ?? []
         names += liveNames.uniqued(on: \.self, excluding: Set(names))
         return names

@@ -129,7 +129,7 @@ final class InsideJobLifecycleStateMachineTests: XCTestCase {
             ),
             .changed(
                 to: stopping,
-                effects: [.cleanupTransport(fixture.transport), .tearDownRuntimeServices]
+                effects: [.tearDownRuntimeServices, .cleanupTransport(fixture.transport)]
             )
         )
         XCTAssertEqual(
@@ -140,9 +140,9 @@ final class InsideJobLifecycleStateMachineTests: XCTestCase {
             .changed(
                 to: stopping,
                 effects: [
-                    .releaseResources(policy: .stop, idleTimerBaseline: false),
-                    .stopTransport(fixture.transport),
                     .tearDownRuntimeServices,
+                    .stopTransport(fixture.transport),
+                    .releaseResources(policy: .stop, idleTimerBaseline: false),
                 ]
             )
         )
@@ -154,9 +154,9 @@ final class InsideJobLifecycleStateMachineTests: XCTestCase {
             .changed(
                 to: stopping,
                 effects: [
-                    .releaseResources(policy: .stop, idleTimerBaseline: false),
-                    .stopTransport(fixture.transport),
                     .tearDownRuntimeServices,
+                    .stopTransport(fixture.transport),
+                    .releaseResources(policy: .stop, idleTimerBaseline: false),
                 ]
             )
         )
@@ -168,8 +168,8 @@ final class InsideJobLifecycleStateMachineTests: XCTestCase {
             .changed(
                 to: stopping,
                 effects: [
-                    .releaseResources(policy: .stop, idleTimerBaseline: false),
                     .tearDownRuntimeServices,
+                    .releaseResources(policy: .stop, idleTimerBaseline: false),
                 ]
             )
         )
@@ -182,8 +182,8 @@ final class InsideJobLifecycleStateMachineTests: XCTestCase {
                 to: stopping,
                 effects: [
                     .cancelResume(fixture.resumeAttempt),
-                    .releaseResources(policy: .stop, idleTimerBaseline: false),
                     .tearDownRuntimeServices,
+                    .releaseResources(policy: .stop, idleTimerBaseline: false),
                 ]
             )
         )
@@ -229,9 +229,9 @@ final class InsideJobLifecycleStateMachineTests: XCTestCase {
             .changed(
                 to: .suspending(fixture.suspension),
                 effects: [
-                    .releaseResources(policy: .suspend, idleTimerBaseline: false),
-                    .stopTransport(fixture.transport),
                     .tearDownRuntimeServices,
+                    .stopTransport(fixture.transport),
+                    .releaseResources(policy: .suspend, idleTimerBaseline: false),
                 ]
             )
         )
@@ -348,6 +348,35 @@ final class InsideJobLifecycleStateMachineTests: XCTestCase {
             ),
             .rejected(.staleResumeAttempt, stayingIn: .resuming(fixture.resumeAttempt))
         )
+    }
+
+    func testStopAttemptSharesCompletionAcrossWaiters() async {
+        let attempt = TheInsideJob.InsideJobStopAttempt(id: UUID())
+        let first = Task { @MainActor in
+            await attempt.waitForCompletion(timeout: .seconds(30))
+        }
+        let second = Task { @MainActor in
+            await attempt.waitForCompletion(timeout: .seconds(30))
+        }
+
+        attempt.finish()
+
+        let firstCompleted = await first.value
+        let secondCompleted = await second.value
+        let subsequentCompleted = await attempt.waitForCompletion(timeout: .zero)
+        XCTAssertTrue(firstCompleted)
+        XCTAssertTrue(secondCompleted)
+        XCTAssertTrue(subsequentCompleted)
+    }
+
+    func testStopAttemptTimeoutDoesNotDiscardLaterCompletion() async {
+        let attempt = TheInsideJob.InsideJobStopAttempt(id: UUID())
+
+        let timedOut = await attempt.waitForCompletion(timeout: .zero)
+        attempt.finish()
+        let completed = await attempt.waitForCompletion(timeout: .zero)
+        XCTAssertFalse(timedOut)
+        XCTAssertTrue(completed)
     }
 
 }

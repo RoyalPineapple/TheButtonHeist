@@ -75,32 +75,25 @@ struct CompilerProcessCommand: Sendable, Equatable {
 struct CompilerProcessOutput: Sendable, Equatable {
     let stdout: Data
     let stderr: Data
-    let stdoutWasTruncated: Bool
-    let stderrWasTruncated: Bool
 
-    init(
-        stdout: Data,
-        stderr: Data,
-        stdoutWasTruncated: Bool = false,
-        stderrWasTruncated: Bool = false
-    ) {
+    init(stdout: Data, stderr: Data) {
         self.stdout = stdout
         self.stderr = stderr
-        self.stdoutWasTruncated = stdoutWasTruncated
-        self.stderrWasTruncated = stderrWasTruncated
     }
 
     var diagnostics: String {
         let stderrText = String(data: stderr, encoding: .utf8) ?? ""
         let stdoutText = String(data: stdout, encoding: .utf8) ?? ""
-        var sections = [stderrText, stdoutText]
+        return [stderrText, stdoutText]
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-        if stderrWasTruncated || stdoutWasTruncated {
-            sections.append("process output was truncated")
-        }
-        return sections.joined(separator: "\n")
+            .joined(separator: "\n")
     }
+}
+
+enum CompilerProcessOutputStream: String, Sendable, Equatable, CaseIterable {
+    case stdout
+    case stderr
 }
 
 enum CompilerProcessOutcome: Sendable, Equatable {
@@ -109,6 +102,7 @@ enum CompilerProcessOutcome: Sendable, Equatable {
     case signaled(signal: Int32, output: CompilerProcessOutput)
     case timedOut(CompilerProcessOutput)
     case cancelled
+    case outputLimitExceeded(stream: CompilerProcessOutputStream, output: CompilerProcessOutput)
 }
 
 enum CompilerProcessOperation: String, Sendable, Equatable {
@@ -116,6 +110,10 @@ enum CompilerProcessOperation: String, Sendable, Equatable {
     case fileActionsInitialization = "file-actions initialization"
     case spawnAttributesInitialization = "spawn-attributes initialization"
     case processGroupConfiguration = "process-group configuration"
+    case signalMaskInitialization = "signal-mask initialization"
+    case signalMaskConfiguration = "signal-mask configuration"
+    case signalDefaultsInitialization = "signal-defaults initialization"
+    case signalDefaultsConfiguration = "signal-defaults configuration"
     case spawnFlagsConfiguration = "spawn-flags configuration"
     case launch
     case stdoutRedirect = "stdout redirect"
@@ -178,12 +176,14 @@ actor CompilerProcessOwner {
         let stdoutTask = await stdoutDrain.start()
         let stderrTask = await stderrDrain.start()
 
-        let waitResult: ProcessWaitResult
+        let terminalCandidate: CompilerProcessSelectedTerminal
         do {
-            waitResult = try await wait(
+            terminalCandidate = try await wait(
                 for: process.pid,
                 timeout: limits.timeout(for: purpose),
-                pollInterval: limits.pollInterval
+                pollInterval: limits.pollInterval,
+                stdoutDrain: stdoutDrain,
+                stderrDrain: stderrDrain
             )
         } catch {
             let cleanupResult = await cleanupResult {
@@ -197,24 +197,12 @@ actor CompilerProcessOwner {
             throw error
         }
 
-        let terminationResult: Result<ChildTermination, Error>
-        do {
-            switch waitResult {
-            case .terminated(let termination):
-                terminationResult = .success(try await shutDown(
-                    process,
-                    knownTermination: termination,
-                    limits: limits
-                ))
-            case .timedOut, .cancelled:
-                terminationResult = .success(try await shutDown(
-                    process,
-                    knownTermination: nil,
-                    limits: limits
-                ))
-            }
-        } catch {
-            terminationResult = .failure(error)
+        let shutdownResult = await cleanupResult {
+            _ = try await shutDown(
+                process,
+                knownTermination: terminalCandidate.reapedTermination,
+                limits: limits
+            )
         }
 
         await stdoutDrain.stop()
@@ -223,27 +211,14 @@ actor CompilerProcessOwner {
         let stderr = await stderrTask.value
         let output = CompilerProcessOutput(
             stdout: stdout.data,
-            stderr: stderr.data,
-            stdoutWasTruncated: stdout.wasTruncated,
-            stderrWasTruncated: stderr.wasTruncated
+            stderr: stderr.data
         )
-        let childTermination = try terminationResult.get()
-
-        switch waitResult {
-        case .timedOut:
-            return .timedOut(output)
-        case .cancelled:
-            return .cancelled
-        case .terminated:
-            switch childTermination {
-            case .exited(0):
-                return .succeeded(output)
-            case .exited(let code):
-                return .nonzeroExit(code: code, output: output)
-            case .signaled(let signal):
-                return .signaled(signal: signal, output: output)
-            }
-        }
+        try shutdownResult.get()
+        let selectedTerminal = terminalCandidate.selectedAfterOutputDrain(
+            stdoutExceededLimit: stdout.exceededLimit,
+            stderrExceededLimit: stderr.exceededLimit
+        )
+        return selectedTerminal.outcome(output: output)
     }
 
     private func cleanupResult(
@@ -260,12 +235,20 @@ actor CompilerProcessOwner {
     private func wait(
         for pid: pid_t,
         timeout: Duration,
-        pollInterval: Duration
-    ) async throws -> ProcessWaitResult {
+        pollInterval: Duration,
+        stdoutDrain: OutputDrain,
+        stderrDrain: OutputDrain
+    ) async throws -> CompilerProcessSelectedTerminal {
         let deadline = ContinuousClock.now.advanced(by: timeout)
         while true {
-            if let termination = try reap(pid) {
-                return .terminated(termination)
+            if let reapedTermination = try reap(pid) {
+                return .reapedTermination(reapedTermination)
+            }
+            if await stdoutDrain.exceededLimit {
+                return .outputLimitExceeded(.stdout)
+            }
+            if await stderrDrain.exceededLimit {
+                return .outputLimitExceeded(.stderr)
             }
             if Task.isCancelled {
                 return .cancelled
@@ -420,8 +403,33 @@ actor CompilerProcessOwner {
                 posix_spawnattr_setpgroup(&attributes, 0),
                 operation: .processGroupConfiguration
             )
+            var signalMask = sigset_t()
             try requirePOSIXSuccess(
-                posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_SETPGROUP)),
+                sigemptyset(&signalMask),
+                operation: .signalMaskInitialization
+            )
+            try requirePOSIXSuccess(
+                posix_spawnattr_setsigmask(&attributes, &signalMask),
+                operation: .signalMaskConfiguration
+            )
+            var defaultSignals = sigset_t()
+            try requirePOSIXSuccess(
+                sigemptyset(&defaultSignals),
+                operation: .signalDefaultsInitialization
+            )
+            try requirePOSIXSuccess(
+                sigaddset(&defaultSignals, SIGTERM),
+                operation: .signalDefaultsInitialization
+            )
+            try requirePOSIXSuccess(
+                posix_spawnattr_setsigdefault(&attributes, &defaultSignals),
+                operation: .signalDefaultsConfiguration
+            )
+            let spawnFlags = POSIX_SPAWN_SETPGROUP
+                | POSIX_SPAWN_SETSIGMASK
+                | POSIX_SPAWN_SETSIGDEF
+            try requirePOSIXSuccess(
+                posix_spawnattr_setflags(&attributes, Int16(spawnFlags)),
                 operation: .spawnFlagsConfiguration
             )
 
@@ -539,13 +547,61 @@ private struct ProcessPipe {
     let writeFileDescriptor: Int32
 }
 
-private enum ProcessWaitResult {
-    case terminated(ChildTermination)
+private enum CompilerProcessSelectedTerminal: Sendable {
+    case reapedTermination(ChildTermination)
     case timedOut
     case cancelled
+    case outputLimitExceeded(CompilerProcessOutputStream)
+
+    var reapedTermination: ChildTermination? {
+        switch self {
+        case .reapedTermination(let termination):
+            termination
+        case .timedOut, .cancelled, .outputLimitExceeded:
+            nil
+        }
+    }
+
+    func selectedAfterOutputDrain(
+        stdoutExceededLimit: Bool,
+        stderrExceededLimit: Bool
+    ) -> Self {
+        switch self {
+        case .timedOut, .cancelled:
+            self
+        case .reapedTermination, .outputLimitExceeded:
+            if stdoutExceededLimit {
+                .outputLimitExceeded(.stdout)
+            } else if stderrExceededLimit {
+                .outputLimitExceeded(.stderr)
+            } else {
+                self
+            }
+        }
+    }
+
+    func outcome(output: CompilerProcessOutput) -> CompilerProcessOutcome {
+        switch self {
+        case .reapedTermination(let termination):
+            switch termination {
+            case .exited(0):
+                return .succeeded(output)
+            case .exited(let code):
+                return .nonzeroExit(code: code, output: output)
+            case .signaled(let signal):
+                return .signaled(signal: signal, output: output)
+            }
+        case .timedOut:
+            return .timedOut(output)
+        case .cancelled:
+            return .cancelled
+        case .outputLimitExceeded(let stream):
+            return .outputLimitExceeded(stream: stream, output: output)
+        }
+    }
 }
 
-private enum ChildTermination: Equatable {
+private enum ChildTermination: Sendable {
     case exited(Int32)
     case signaled(Int32)
 
@@ -561,7 +617,7 @@ private enum ChildTermination: Equatable {
 
 private struct CapturedProcessStream: Sendable {
     let data: Data
-    let wasTruncated: Bool
+    let exceededLimit: Bool
 }
 
 private actor OutputDrain {
@@ -569,6 +625,7 @@ private actor OutputDrain {
     private let capturedByteLimit: Int
     private let pollInterval: Duration
     private var shouldStop = false
+    private(set) var exceededLimit = false
 
     init(
         fileDescriptor: Int32,
@@ -584,7 +641,6 @@ private actor OutputDrain {
         Task(priority: .utility) { [self] in
             defer { close(fileDescriptor) }
             var captured = Data()
-            var wasTruncated = false
             var buffer = [UInt8](repeating: 0, count: 16_384)
             var readsAfterStop = 0
 
@@ -599,31 +655,31 @@ private actor OutputDrain {
                         captured.append(contentsOf: buffer.prefix(capturedCount))
                     }
                     if capturedCount < count {
-                        wasTruncated = true
+                        exceededLimit = true
                     }
                     await Task.yield()
                     if shouldStop {
                         readsAfterStop += 1
                         if readsAfterStop == 64 {
-                            return CapturedProcessStream(data: captured, wasTruncated: wasTruncated)
+                            return CapturedProcessStream(data: captured, exceededLimit: exceededLimit)
                         }
                     }
                     continue
                 }
                 if count == 0 {
-                    return CapturedProcessStream(data: captured, wasTruncated: wasTruncated)
+                    return CapturedProcessStream(data: captured, exceededLimit: exceededLimit)
                 }
                 if errno == EINTR {
                     continue
                 }
                 if errno == EAGAIN || errno == EWOULDBLOCK {
                     if shouldStop {
-                        return CapturedProcessStream(data: captured, wasTruncated: wasTruncated)
+                        return CapturedProcessStream(data: captured, exceededLimit: exceededLimit)
                     }
                     try? await Task.sleep(for: pollInterval)
                     continue
                 }
-                return CapturedProcessStream(data: captured, wasTruncated: wasTruncated)
+                return CapturedProcessStream(data: captured, exceededLimit: exceededLimit)
             }
         }
     }

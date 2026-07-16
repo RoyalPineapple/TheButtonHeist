@@ -14,6 +14,7 @@ private let driverIdentityLogger = ButtonHeistLog.logger(.handoff(.driverIdentit
 /// never become a phase value.
 enum HandoffConnectionError: Error, LocalizedError, Equatable {
     case connectionFailed(String)
+    case discoveryBacklogOverflow(capacity: Int)
     case serverFailure(ServerError)
     case disconnected(DisconnectReason)
     case timeout
@@ -50,6 +51,12 @@ enum HandoffConnectionError: Error, LocalizedError, Equatable {
             return HandoffFailureDiagnostic(
                 target: nil,
                 cause: message,
+                code: .connectionFailed
+            )
+        case .discoveryBacklogOverflow(let capacity):
+            return HandoffFailureDiagnostic(
+                target: nil,
+                cause: "Bonjour discovery event backlog exceeded \(capacity) events",
                 code: .connectionFailed
             )
         case .serverFailure(let serverError):

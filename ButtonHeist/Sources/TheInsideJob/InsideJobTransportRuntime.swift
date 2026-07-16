@@ -32,23 +32,40 @@ extension TheInsideJob {
         return try await startRuntimeResources(for: request)
     }
 
-    func stopRuntime() async {
-        let attempt = InsideJobStopAttempt(id: UUID())
-        let change = applyLifecycleEvent(.stopRequested(attempt))
-        guard !change.effects.isEmpty else {
-            return
+    func stopRuntime() async -> InsideJobStopOutcome {
+        let requestedAttempt = InsideJobStopAttempt(id: UUID())
+        let change = applyLifecycleEvent(.stopRequested(requestedAttempt))
+        let attempt: InsideJobStopAttempt
+
+        if change.effects.isEmpty {
+            guard case .stopping(let activeAttempt) = serverPhase else {
+                return .stopped
+            }
+            attempt = activeAttempt
+        } else {
+            attempt = requestedAttempt
+            let effects = change.effects
+            spawnLifecycleTask { [weak self] in
+                guard let self else {
+                    requestedAttempt.finish()
+                    return
+                }
+                await self.performLifecycleEffects(effects)
+                let finishChange = self.applyLifecycleEvent(.stopFinished(requestedAttempt.id))
+                await self.performLifecycleEffects(finishChange.effects)
+                requestedAttempt.finish()
+            }
         }
 
-        await performLifecycleEffects(change.effects)
-        let finishChange = applyLifecycleEvent(.stopFinished(attempt.id))
-        await performLifecycleEffects(finishChange.effects)
+        return await attempt.waitForCompletion() ? .stopped : .teardownTimedOut
     }
 
     private func startRuntimeResources(
         for request: InsideJobTransportStartRequest
     ) async throws -> InsideJobRuntimeResources {
-        installTransportOverflowHandler(request.transport)
-        await getaway.wireTransport(request.transport)
+        await getaway.wireTransport(request.transport) { [weak self] maxEvents in
+            await self?.handleTransportEventBacklogOverflow(maxEvents: maxEvents)
+        }
 
         let exposure = ServerExposure(
             allowedScopes: runtimeConfiguration.allowedScopes,
@@ -75,15 +92,11 @@ extension TheInsideJob {
         return resources
     }
 
-    func installTransportOverflowHandler(_ transport: ServerTransport) {
-        transport.setEventBacklogOverflowHandler { [weak self] maxEvents in
-            await self?.handleTransportEventBacklogOverflow(maxEvents: maxEvents)
-        }
-    }
-
     func handleTransportEventBacklogOverflow(maxEvents: Int) async {
         insideJobLogger.error("Transport event backlog exceeded \(maxEvents), stopping server")
-        await stop()
+        spawnLifecycleTask { [weak self] in
+            await self?.stop()
+        }
     }
 
     func cleanupFailedTransportStartup(_ transport: ServerTransport?) async {
@@ -163,8 +176,8 @@ extension TheInsideJob {
         case .activateRuntime(let resources):
             activateRuntime(resources)
         case .tearDownRuntimeServices:
-            await muscle.tearDown()
             await getaway.tearDown()
+            await muscle.tearDown()
         }
     }
 }

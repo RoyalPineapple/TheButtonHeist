@@ -22,69 +22,223 @@ private final class PipelineTestSignal {
             waiters.append(continuation)
         }
     }
+
+    var hasSignalled: Bool { isSignalled }
 }
 
-final class InteractionRequestExecutorTests: XCTestCase {
+final class TheBrainsInteractionRequestTests: XCTestCase {
     @MainActor
-    func testTransportAndInAppRequestsShareOneFIFO() async {
+    func testAdmissionStopsAtPendingCapacity() async {
         let brains = TheBrains(tripwire: TheTripwire())
-        let firstBlocked = PipelineTestGate()
-        let secondSubmitted = PipelineTestSignal()
-        var trace: [String] = []
+        let activeGate = PipelineTestGate()
 
-        let first = Task { @MainActor in
-            await brains.submitTransportRequest(clientId: 1) {
-                trace.append("first-start")
-                await firstBlocked.suspend()
-                trace.append("first-finish")
-            }
+        XCTAssertEqual(brains.submitTransportRequest(clientId: 0) {
+            await activeGate.suspend()
+        }, .accepted)
+        await activeGate.entered.wait()
+
+        for clientId in 1...64 {
+            XCTAssertEqual(brains.submitTransportRequest(clientId: clientId) {}, .accepted)
         }
-        await firstBlocked.entered.wait()
+        XCTAssertEqual(
+            brains.interactionRequestSnapshot,
+            .init(phase: .running, pendingDepth: 64, capacity: 64)
+        )
+        XCTAssertEqual(
+            brains.submitTransportRequest(clientId: 65) {},
+            .rejected(.busy(capacity: 64))
+        )
+        XCTAssertEqual(brains.interactionRequestSnapshot.pendingDepth, 64)
 
-        let second = Task { @MainActor in
-            secondSubmitted.signal()
-            await brains.executeInAppRequest {
-                trace.append("second")
-            }
-        }
-        await secondSubmitted.wait()
-
-        XCTAssertEqual(trace, ["first-start"])
-        firstBlocked.release()
-        await first.value
-        await second.value
-        XCTAssertEqual(trace, ["first-start", "first-finish", "second"])
+        activeGate.release()
+        await brains.stopInteractionRequests()
     }
 
     @MainActor
-    func testDisconnectCancelsQueuedClientUIWork() async {
+    func testOwnerCancellationRetainsOtherQueuedRequestsInFIFOOrder() async {
         let brains = TheBrains(tripwire: TheTripwire())
-        let activeBlocked = PipelineTestGate()
-        let queuedSubmitted = PipelineTestSignal()
+        let activeGate = PipelineTestGate()
+        let retainedCompleted = PipelineTestSignal()
         var trace: [String] = []
 
-        let active = Task { @MainActor in
-            await brains.submitTransportRequest(clientId: 1) {
-                trace.append("active")
-                await activeBlocked.suspend()
-            }
+        brains.submitTransportRequest(clientId: 1) {
+            trace.append("active")
+            await activeGate.suspend()
         }
-        await activeBlocked.entered.wait()
-
-        let queued = Task { @MainActor in
-            queuedSubmitted.signal()
-            await brains.submitTransportRequest(clientId: 2) {
-                trace.append("cancelled")
-            }
+        await activeGate.entered.wait()
+        brains.submitTransportRequest(clientId: 2) {
+            trace.append("cancelled")
         }
-        await queuedSubmitted.wait()
+        brains.submitTransportRequest(clientId: 3) {
+            trace.append("retained")
+            retainedCompleted.signal()
+        }
 
         brains.cancelTransportRequests(clientId: 2)
-        activeBlocked.release()
-        await active.value
-        await queued.value
+        activeGate.release()
+        await retainedCompleted.wait()
+        XCTAssertEqual(trace, ["active", "retained"])
+        await brains.stopInteractionRequests()
+    }
 
-        XCTAssertEqual(trace, ["active"])
+    @MainActor
+    func testCancelledActiveRequestFinishesCleanupBeforeQueueAdvances() async {
+        let brains = TheBrains(tripwire: TheTripwire())
+        let activeGate = PipelineTestGate()
+        let nextGate = PipelineTestGate()
+        let lastCompleted = PipelineTestSignal()
+        var trace: [String] = []
+
+        brains.submitTransportRequest(clientId: 1) {
+            trace.append("active-start")
+            await activeGate.suspend()
+            trace.append("active-cleanup")
+        }
+        await activeGate.entered.wait()
+        brains.submitTransportRequest(clientId: 2) {
+            trace.append("next-start")
+            await nextGate.suspend()
+            trace.append("next-finish")
+        }
+        brains.submitTransportRequest(clientId: 3) {
+            trace.append("last")
+            lastCompleted.signal()
+        }
+
+        brains.cancelTransportRequests(clientId: 1)
+        XCTAssertEqual(trace, ["active-start"])
+
+        activeGate.release()
+        await nextGate.entered.wait()
+        XCTAssertEqual(trace, ["active-start", "active-cleanup", "next-start"])
+        XCTAssertFalse(lastCompleted.hasSignalled)
+
+        brains.cancelTransportRequests(clientId: 1)
+        nextGate.release()
+        await lastCompleted.wait()
+        XCTAssertEqual(
+            trace,
+            ["active-start", "active-cleanup", "next-start", "next-finish", "last"]
+        )
+        await brains.stopInteractionRequests()
+    }
+
+    @MainActor
+    func testDrainWaitsForCancellationInsensitiveCleanup() async {
+        let brains = TheBrains(tripwire: TheTripwire())
+        let activeGate = PipelineTestGate()
+        let drainCompleted = PipelineTestSignal()
+        let joinedDrainCompleted = PipelineTestSignal()
+
+        let active = Task { @MainActor in
+            await brains.executeInAppRequest {
+                await activeGate.suspend()
+            }
+        }
+        await activeGate.entered.wait()
+
+        let drain = Task { @MainActor in
+            await brains.stopInteractionRequests()
+            drainCompleted.signal()
+        }
+        guard case .cancelled = await active.value else {
+            activeGate.release()
+            await drain.value
+            return XCTFail("Expected drain to cancel the active request outcome")
+        }
+        XCTAssertFalse(drainCompleted.hasSignalled)
+        guard case .rejected(.stopping) = await brains.executeInAppRequest({}) else {
+            activeGate.release()
+            await drain.value
+            return XCTFail("Expected stopping rejection to resolve its completion")
+        }
+        let joinedDrain = Task { @MainActor in
+            await brains.stopInteractionRequests()
+            joinedDrainCompleted.signal()
+        }
+
+        activeGate.release()
+        await drain.value
+        await joinedDrain.value
+        XCTAssertTrue(drainCompleted.hasSignalled)
+        XCTAssertTrue(joinedDrainCompleted.hasSignalled)
+        guard case .completed(let value) = await brains.executeInAppRequest({ "ready" }) else {
+            return XCTFail("Expected requests to resume after drain")
+        }
+        XCTAssertEqual(value, "ready")
+    }
+
+    @MainActor
+    func testCancellationDeadlinePoisonsAdmissionUntilCleanupFinishes() async {
+        let deadline = ManualInteractionCleanupDeadline()
+        let executor = InteractionRequestExecutor(
+            cleanupDeadlineScheduler: deadline.schedule
+        )
+        let activeGate = PipelineTestGate()
+        var activeCancellationCount = 0
+        var queuedCancellationCount = 0
+
+        XCTAssertEqual(executor.submit(owner: .transportClient(1), operation: {
+            await activeGate.suspend()
+        }, completion: { outcome in
+            if case .cancelled = outcome {
+                activeCancellationCount += 1
+            }
+        }), .accepted)
+        await activeGate.entered.wait()
+        XCTAssertEqual(executor.submit(owner: .transportClient(2), operation: {}, completion: { outcome in
+            if case .cancelled = outcome {
+                queuedCancellationCount += 1
+            }
+        }), .accepted)
+
+        executor.cancel(owner: .transportClient(1))
+        XCTAssertEqual(activeCancellationCount, 1)
+        XCTAssertEqual(
+            executor.snapshot,
+            .init(phase: .cancelling, pendingDepth: 1, capacity: 64)
+        )
+
+        deadline.fire()
+        XCTAssertEqual(queuedCancellationCount, 1)
+        XCTAssertEqual(
+            executor.snapshot,
+            .init(phase: .cleanupTimedOut, pendingDepth: 0, capacity: 64)
+        )
+        XCTAssertEqual(
+            executor.submit(owner: .transportClient(3), operation: {}, completion: { _ in }),
+            .rejected(.cleanupTimedOut)
+        )
+
+        let drainStarted = PipelineTestSignal()
+        let drain = Task { @MainActor in
+            drainStarted.signal()
+            await executor.drain()
+        }
+        await drainStarted.wait()
+        XCTAssertEqual(executor.snapshot.phase, .stopping)
+        activeGate.release()
+        await drain.value
+        XCTAssertEqual(executor.snapshot, .init(phase: .idle, pendingDepth: 0, capacity: 64))
+        XCTAssertEqual(activeCancellationCount, 1)
+    }
+}
+
+@MainActor
+private final class ManualInteractionCleanupDeadline {
+    private var deadlineReached: (@MainActor @Sendable () -> Void)?
+
+    func schedule(
+        _ deadlineReached: @escaping @MainActor @Sendable () -> Void
+    ) -> Task<Void, Never> {
+        self.deadlineReached = deadlineReached
+        return Task {}
+    }
+
+    func fire() {
+        let operation = deadlineReached
+        deadlineReached = nil
+        operation?()
     }
 }
 
@@ -104,6 +258,82 @@ private final class PipelineTestGate {
 }
 
 final class ClientRequestPipelineTests: XCTestCase {
+    @MainActor
+    func testSameClientControlProgressesAndDisconnectCancelsLaterUIWork() async {
+        let brains = TheBrains(tripwire: TheTripwire())
+        let uiGate = PipelineTestGate()
+        let controlCompleted = PipelineTestSignal()
+        var controlTrace: [String] = []
+        var secondUIExecuted = false
+        let pipeline = ClientRequestPipeline { request in
+            switch request.text {
+            case "first-ui":
+                brains.submitTransportRequest(clientId: request.clientId) {
+                    await uiGate.suspend()
+                }
+            case "ping":
+                controlTrace.append("ping")
+            case "status":
+                controlTrace.append("status")
+                controlCompleted.signal()
+            case "second-ui":
+                brains.submitTransportRequest(clientId: request.clientId) {
+                    secondUIExecuted = true
+                }
+            default:
+                XCTFail("Unexpected request")
+            }
+        }
+
+        XCTAssertEqual(pipeline.enqueue(request(clientId: 1, requestId: "first-ui")), .enqueued)
+        await uiGate.entered.wait()
+        XCTAssertEqual(pipeline.enqueue(request(clientId: 1, requestId: "ping")), .enqueued)
+        XCTAssertEqual(pipeline.enqueue(request(clientId: 1, requestId: "status")), .enqueued)
+        XCTAssertEqual(pipeline.enqueue(request(clientId: 1, requestId: "second-ui")), .enqueued)
+        await controlCompleted.wait()
+        XCTAssertEqual(controlTrace, ["ping", "status"])
+        XCTAssertFalse(secondUIExecuted)
+
+        let consumer = pipeline.stop()
+        brains.cancelTransportRequests(clientId: 1)
+        XCTAssertEqual(brains.interactionRequestSnapshot.phase, .cancelling)
+        uiGate.release()
+        await brains.stopInteractionRequests()
+        await consumer?.value
+        XCTAssertFalse(secondUIExecuted)
+    }
+
+    @MainActor
+    func testAdmissionOverflowStopsAtItsNamedCapacity() async throws {
+        let activeGate = PipelineTestGate()
+        var executedRequestIds: [String] = []
+        let pipeline = ClientRequestPipeline { request in
+            executedRequestIds.append(request.text)
+            await activeGate.suspend()
+        }
+
+        XCTAssertEqual(pipeline.enqueue(request(clientId: 1, requestId: "active")), .enqueued)
+        await activeGate.entered.wait()
+        for requestIndex in 0..<ClientRequestPipeline.maximumQueuedRequests {
+            let requestID = try RequestID(validating: "queued-\(requestIndex)")
+            XCTAssertEqual(
+                pipeline.enqueue(request(clientId: 1, requestId: requestID)),
+                .enqueued
+            )
+        }
+
+        XCTAssertEqual(
+            pipeline.enqueue(request(clientId: 1, requestId: "overflow")),
+            .overflowed
+        )
+        XCTAssertEqual(pipeline.enqueue(request(clientId: 1, requestId: "late")), .stopped)
+
+        let consumer = pipeline.stop()
+        activeGate.release()
+        await consumer?.value
+        XCTAssertEqual(executedRequestIds, ["active"])
+    }
+
     @MainActor
     func testBlockedClientDoesNotDelayAnotherClient() async {
         let blocked = PipelineTestGate()

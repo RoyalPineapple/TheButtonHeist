@@ -19,7 +19,7 @@ public enum TextInputSource: Sendable, Equatable {
             guard let text = environment.strings[reference] else {
                 throw HeistExpressionError.unresolvedStringReference(reference.rawValue)
             }
-            return try TextInputText.admitting(text: text, mode: mode)
+            return try TextInputText(validating: text, mode: mode)
         }
     }
 }
@@ -64,7 +64,7 @@ public struct TypeTextTarget: Codable, Sendable, Equatable {
         switch (text, reference) {
         case (.some(let text), nil):
             do {
-                source = .text(try TextInputText.admitting(text: text, mode: mode))
+                source = .text(try TextInputText(validating: text, mode: mode))
             } catch {
                 throw DecodingError.dataCorruptedError(
                     forKey: .text,
@@ -204,34 +204,35 @@ public struct WaitTimeout: Codable, Sendable, Equatable, Comparable, CustomStrin
 
     private let boundedSeconds: BoundedSeconds
 
-    public init(validatingSeconds seconds: Double) throws {
-        self = try Self.admitting(seconds: seconds)
-    }
-
-    package init(seconds: Double) {
-        self = requireValidPublicPayload {
-            try Self.admitting(seconds: seconds)
+    public init(validatingSeconds seconds: Double) throws(WaitTimeoutError) {
+        do {
+            self.init(boundedSeconds: try BoundedSeconds(
+                value: seconds,
+                maximum: Self.maximumSeconds
+            ))
+        } catch let error {
+            throw WaitTimeoutError.invalid(observed: error.observed, expected: error.expected)
         }
     }
 
     public init(floatLiteral value: Double) {
-        self = requireValidPublicPayload {
+        self = requireValidLiteralPayload {
             try Self(validatingSeconds: value)
         }
     }
 
     public init(integerLiteral value: Int) {
-        self = requireValidPublicPayload {
+        self = requireValidLiteralPayload {
             try Self(validatingSeconds: Double(value))
         }
     }
 
-    public static func seconds(_ value: Double) -> Self {
-        WaitTimeout(seconds: value)
+    public static func seconds(_ value: Double) throws(WaitTimeoutError) -> Self {
+        try Self(validatingSeconds: value)
     }
 
-    public static func milliseconds(_ value: Double) -> Self {
-        WaitTimeout(seconds: value / 1_000)
+    public static func milliseconds(_ value: Double) throws(WaitTimeoutError) -> Self {
+        try Self(validatingSeconds: value / 1_000)
     }
 
     public var seconds: Double { boundedSeconds.value }
@@ -240,7 +241,7 @@ public struct WaitTimeout: Codable, Sendable, Equatable, Comparable, CustomStrin
         let container = try decoder.singleValueContainer()
         let seconds = try container.decode(Double.self)
         do {
-            self = try Self.admitting(seconds: seconds)
+            self = try Self(validatingSeconds: seconds)
         } catch {
             throw DecodingError.dataCorruptedError(
                 in: container,
@@ -258,17 +259,6 @@ public struct WaitTimeout: Codable, Sendable, Equatable, Comparable, CustomStrin
 
     public static func < (lhs: Self, rhs: Self) -> Bool {
         lhs.seconds < rhs.seconds
-    }
-
-    package static func admitting(seconds: Double) throws -> Self {
-        do {
-            return Self(boundedSeconds: try BoundedSeconds(
-                value: seconds,
-                maximum: maximumSeconds
-            ))
-        } catch let error as BoundedSecondsError {
-            throw WaitTimeoutError.invalid(observed: error.observed, expected: error.expected)
-        }
     }
 
     private init(boundedSeconds: BoundedSeconds) {

@@ -73,30 +73,22 @@ runHeistSync("Checkout.pay", recordReceipt: .always, to: receiptsURL) {
 If no URL is supplied, receipts are written under the process temporary
 directory at `buttonheist-receipts/`.
 
-In CI, prefer the receipt wrapper so branch policy controls whether receipts
-are captured for failures only or for both failing and passing runs:
+In this repository, use the canonical test runner. It applies the receipt
+wrapper and owns the result and receipt paths:
 
 ```bash
-scripts/run-with-heist-receipts.sh \
-  --dir "$BUTTONHEIST_RECEIPTS_DIR" \
-  --mode "$BUTTONHEIST_RECEIPTS_MODE" \
-  -- xcodebuild test -workspace ButtonHeist.xcworkspace -scheme ButtonHeistTests
-
-scripts/write-ci-heist-receipt-manifest.sh "$BUTTONHEIST_RECEIPTS_DIR" macos-tests
+BUTTONHEIST_RECEIPTS_MODE=failures \
+  scripts/test-runner.py run ButtonHeistTests --selection full
 ```
 
 iOS simulator-hosted test bundles write inside the app/test process sandbox.
-Use the wrapper's `--ios-sandbox` sentinel for the test run, then collect and
-manifest receipts from the simulator:
+The runner selects an explicit simulator, applies the sandbox sentinel, and
+collects receipts after each run and during failure cleanup:
 
 ```bash
-scripts/run-with-heist-receipts.sh \
-  --ios-sandbox \
-  --mode "$BUTTONHEIST_RECEIPTS_MODE" \
-  -- xcodebuild test-without-building -workspace ButtonHeist.xcworkspace -scheme TheInsideJobTests
-
-scripts/collect-ios-heist-receipts.sh "$SIM_UDID" "$BUTTONHEIST_CI_RECEIPTS_DIR"
-scripts/write-ci-heist-receipt-manifest.sh "$BUTTONHEIST_CI_RECEIPTS_DIR" ios-tests
+BUTTONHEIST_RECEIPTS_MODE=failures \
+  scripts/test-runner.py run TheInsideJobTests --selection full \
+  --simulator-name "$TASK_SLUG"
 ```
 
 Button Heist owns six explicit `BH Demo`-hosted schemes. Target membership is
@@ -112,8 +104,8 @@ the coverage contract; CI does not partition these suites with test selectors:
 | `AdversarialNavigationTests` | Modal fail-closed behavior and nested scrolling |
 
 `HostedBehaviorTests` combines the four dogfood and adversarial schemes. Those
-targets contain seven focused live canaries, all of which run on pull requests
-through two Xcode-managed simulator workers. The scheduled adversarial workflow
+targets contain seven focused live canaries, all of which run serially on pull
+requests in one dedicated simulator. The scheduled adversarial workflow
 owns the complete external-driver scenario matrix, with a short daily pass and
 a deeper Sunday soak.
 
@@ -131,21 +123,33 @@ CI budgets macOS capacity explicitly:
 - A final `exact-sha-suite` job records the commit, workflow revision, run ID,
   and every required suite conclusion in `buttonheist-exact-sha-suite`. Release
   admission accepts only that successful aggregate and validates its manifest.
-- Successful jobs publish timing summaries. Receipt bundles, result bundles,
-  and simulator diagnostics are retained only when a job fails; the release
-  proof manifest is retained for every main run.
+- Successful jobs publish timing summaries. Receipt and result bundles are
+  retained only when a job fails; the release proof manifest is retained for
+  every main run.
 
 This keeps the main validation topology within the same three-runner ceiling
-while making the exact release SHA prove the complete required suite. The
-complete schemes remain available for local validation through the canonical
-`tuist test` commands below.
+while making the exact release SHA prove the complete required suite. CI and
+local validation both delegate test driving to `scripts/test-runner.py`.
+
+Run the complete portable framework suite with:
+
+```bash
+scripts/test-runner.py run MacFrameworkTests --selection full
+```
 
 Run the core, integration, and combined behavior schemes for complete hosted coverage:
 
 ```bash
-tuist test TheInsideJobTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
-tuist test TheInsideJobIntegrationTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
-tuist test HostedBehaviorTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
+scripts/test-runner.py run TheInsideJobTests --selection full
+scripts/test-runner.py run TheInsideJobIntegrationTests --selection full
+scripts/test-runner.py run HostedBehaviorTests --selection full
+```
+
+CI preserves build-once execution without owning Xcode arguments:
+
+```bash
+scripts/test-runner.py build-for-testing TheInsideJobTests
+scripts/test-runner.py test-without-building TheInsideJobTests
 ```
 
 ## Topology 2: external driver

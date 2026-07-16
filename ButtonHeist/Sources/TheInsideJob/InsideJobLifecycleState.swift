@@ -91,7 +91,67 @@ extension TheInsideJob {
     }
 
     struct InsideJobStopAttempt: Equatable, Sendable {
+        static let timeout: Duration = .seconds(5)
+
         let id: UUID
+        private let completion: InsideJobStopSignal
+
+        @MainActor
+        init(id: UUID) {
+            self.id = id
+            completion = InsideJobStopSignal()
+        }
+
+        @MainActor
+        func waitForCompletion(timeout: Duration = Self.timeout) async -> Bool {
+            guard !completion.isFinished else { return true }
+            guard timeout > .zero else { return false }
+            let stream = completion.stream
+            return await withTaskGroup(of: Bool.self) { group in
+                group.addTask {
+                    var iterator = stream.makeAsyncIterator()
+                    _ = await iterator.next()
+                    return true
+                }
+                group.addTask {
+                    try? await Task.sleep(for: timeout)
+                    return false
+                }
+                let completed = await group.next() ?? false
+                group.cancelAll()
+                return completed
+            }
+        }
+
+        @MainActor
+        func finish() {
+            completion.finish()
+        }
+
+        static func == (lhs: Self, rhs: Self) -> Bool {
+            lhs.id == rhs.id
+        }
+    }
+
+    @MainActor
+    private final class InsideJobStopSignal {
+        let stream: AsyncStream<Void>
+        private let continuation: AsyncStream<Void>.Continuation
+        private(set) var isFinished = false
+
+        init() {
+            let stream = AsyncStream<Void>.makeStream(
+                bufferingPolicy: .bufferingNewest(1)
+            )
+            self.stream = stream.stream
+            self.continuation = stream.continuation
+        }
+
+        func finish() {
+            guard !isFinished else { return }
+            isFinished = true
+            continuation.finish()
+        }
     }
 
     enum RuntimeReleasePolicy: Equatable, Sendable {
@@ -119,29 +179,18 @@ extension TheInsideJob {
     /// Tracks @objc lifecycle bridge Tasks that must finish before start/resume reads `serverPhase`.
     @MainActor
     final class LifecycleBoundaryTasks {
-        private var tasks: [UInt64: Task<Void, Never>] = [:]
-        private var nextTaskId: UInt64 = 0
+        private let tasks = TaskTracker()
 
-        var isEmpty: Bool { tasks.isEmpty }
+        var isEmpty: Bool { tasks.snapshot.taskCount == 0 }
 
-        func spawn(_ body: @escaping @MainActor () async -> Void) {
-            nextTaskId &+= 1
-            let id = nextTaskId
-            let task = Task { @MainActor [weak self] in
+        func spawn(_ body: @escaping @MainActor @Sendable () async -> Void) {
+            tasks.spawn {
                 await body()
-                self?.tasks.removeValue(forKey: id)
             }
-            tasks[id] = task
         }
 
         func drain() async {
-            while !tasks.isEmpty {
-                let snapshot = Array(tasks.values)
-                tasks.removeAll()
-                for task in snapshot {
-                    await task.value
-                }
-            }
+            await tasks.waitForIdle()
         }
     }
 }
@@ -367,7 +416,7 @@ struct InsideJobLifecycleMachine: @MainActor SimpleStateMachine {
         case .starting(let attempt):
             return .changed(
                 to: .stopping(stopAttempt),
-                effects: [.cleanupTransport(attempt.transport), .tearDownRuntimeServices]
+                effects: [.tearDownRuntimeServices, .cleanupTransport(attempt.transport)]
             )
         case .running(let resources):
             return stopRunning(resources, attempt: stopAttempt)
@@ -377,8 +426,8 @@ struct InsideJobLifecycleMachine: @MainActor SimpleStateMachine {
             return .changed(
                 to: .stopping(stopAttempt),
                 effects: [
-                    .releaseResources(policy: .stop, idleTimerBaseline: suspendedRuntime.idleTimerBaseline),
                     .tearDownRuntimeServices,
+                    .releaseResources(policy: .stop, idleTimerBaseline: suspendedRuntime.idleTimerBaseline),
                 ]
             )
         case .resuming(let attempt):
@@ -386,11 +435,11 @@ struct InsideJobLifecycleMachine: @MainActor SimpleStateMachine {
                 to: .stopping(stopAttempt),
                 effects: [
                     .cancelResume(attempt),
+                    .tearDownRuntimeServices,
                     .releaseResources(
                         policy: .stop,
                         idleTimerBaseline: attempt.suspendedRuntime.idleTimerBaseline
                     ),
-                    .tearDownRuntimeServices,
                 ]
             )
         }
@@ -403,9 +452,9 @@ struct InsideJobLifecycleMachine: @MainActor SimpleStateMachine {
         .changed(
             to: .stopping(stopAttempt),
             effects: [
-                .releaseResources(policy: .stop, idleTimerBaseline: resources.idleTimerBaseline),
-                .stopTransport(resources.transport),
                 .tearDownRuntimeServices,
+                .stopTransport(resources.transport),
+                .releaseResources(policy: .stop, idleTimerBaseline: resources.idleTimerBaseline),
             ]
         )
     }
@@ -423,9 +472,9 @@ struct InsideJobLifecycleMachine: @MainActor SimpleStateMachine {
             return .changed(
                 to: .suspending(suspension),
                 effects: [
-                    .releaseResources(policy: .suspend, idleTimerBaseline: resources.idleTimerBaseline),
-                    .stopTransport(resources.transport),
                     .tearDownRuntimeServices,
+                    .stopTransport(resources.transport),
+                    .releaseResources(policy: .suspend, idleTimerBaseline: resources.idleTimerBaseline),
                 ]
             )
         case (.resuming(let attempt), _):

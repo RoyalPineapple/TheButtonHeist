@@ -16,7 +16,7 @@ final class AdversarialMutationTests: XCTestCase {
         try await AdversarialLabRoute.open(.asyncReveal)
         let notification = try await runHeist("AdversarialAsyncRevealNotificationPass") {
             Activate(.label("Reveal with notification"))
-                .expect(destination, timeout: .seconds(3))
+                .expect(destination, timeout: 3)
         }
         let notificationReceipt = try actionEvidence(for: notificationCommand, in: notification.result)
         let notificationDispatch = try XCTUnwrap(notificationReceipt.dispatchResult)
@@ -32,7 +32,7 @@ final class AdversarialMutationTests: XCTestCase {
         try await AdversarialLabRoute.open(.asyncReveal)
         let silent = try await runHeist("AdversarialAsyncRevealSilentPass") {
             Activate(.label("Reveal silently"))
-                .expect(destination, timeout: .seconds(3))
+                .expect(destination, timeout: 3)
         }
         let silentReceipt = try actionEvidence(for: silentCommand, in: silent.result)
         let silentDispatch = try XCTUnwrap(silentReceipt.dispatchResult)
@@ -54,7 +54,7 @@ final class AdversarialMutationTests: XCTestCase {
                 .expect(.exists(.element(
                     .label("Submit Order"),
                     .value(finalValue)
-                )), timeout: .seconds(4))
+                )), timeout: 4)
         }
 
         XCTAssertNil(heist.result.firstFailedStep)

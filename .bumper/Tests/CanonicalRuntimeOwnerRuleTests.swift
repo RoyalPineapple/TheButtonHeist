@@ -29,6 +29,87 @@ struct CanonicalRuntimeOwnerRuleTests {
     }
 
     @Test
+    func taskTrackingOutsideCanonicalOwnersIsRejected() throws {
+        let path: RelativeFilePath =
+            "ButtonHeist/Sources/TheInsideJob/TheSafecracker/CompetingTaskOwner.swift"
+        let report = try evaluateButtonHeistRules(
+            path: path,
+            component: .runtime,
+            source: "let tasks = TaskTracker()"
+        )
+
+        #expect(report.contains(ViolationMatcher(
+            id: "buttonheist.task_tracker_ownership",
+            path: path
+        )))
+    }
+
+    @Test
+    func interactionBacklogsOutsideTheCanonicalExecutorAreRejected() throws {
+        let path: RelativeFilePath =
+            "ButtonHeist/Sources/TheInsideJob/TheBrains/CompetingInteractionQueue.swift"
+        let report = try evaluateButtonHeistRules(
+            path: path,
+            component: .runtime,
+            source: "let executor = InteractionRequestExecutor()"
+        )
+
+        expectOnlyViolation(
+            in: report,
+            id: "buttonheist.interaction_request_executor_ownership",
+            path: path
+        )
+    }
+
+    @Test
+    func receiptConstructionTrapsAreRejected() throws {
+        let path: RelativeFilePath =
+            "ButtonHeist/Sources/TheScore/Receipts/HeistExecutionStepResult+Admission.swift"
+        let report = try evaluateButtonHeistRules(
+            path: path,
+            component: .score,
+            source: "func admit() { preconditionFailure(\"mismatch\") }"
+        )
+
+        #expect(report.contains(ViolationMatcher(
+            id: "buttonheist.receipt_construction_safety",
+            path: path
+        )))
+    }
+
+    @Test
+    func receiptNodeExtensionsOutsideCodecOwnerAreRejected() throws {
+        let path: RelativeFilePath =
+            "ButtonHeist/Sources/TheScore/Receipts/CompetingReceiptCodec.swift"
+        let report = try evaluateButtonHeistRules(
+            path: path,
+            component: .score,
+            source: "extension HeistExecutionStepNode {}"
+        )
+
+        #expect(report.contains(ViolationMatcher(
+            id: "buttonheist.receipt_node_codec_ownership",
+            path: path
+        )))
+    }
+
+    @Test
+    func interfaceGraphCommitsOutsidePublicationOwnerAreRejected() throws {
+        let path: RelativeFilePath =
+            "ButtonHeist/Sources/TheInsideJob/TheStash/CompetingCommitter.swift"
+        let report = try evaluateButtonHeistRules(
+            path: path,
+            component: .runtime,
+            source: "func commit() { reduceInterfaceGraph() }"
+        )
+
+        #expect(report.contains(ViolationMatcher(
+            id: "buttonheist.semantic_observation_commit_ownership",
+            path: path
+        )))
+    }
+
+    @Test
     func directInterfaceTreeMatchingOutsideOwnersIsRejected() throws {
         let path: RelativeFilePath =
             "ButtonHeist/Sources/TheInsideJob/TheBrains/CompetingMatcher.swift"

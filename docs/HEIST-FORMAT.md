@@ -198,7 +198,7 @@ HeistPlan("purchaseFlow") {
             .identifier(.contains("cart"))
         ))])))
 
-    WaitFor(.missing(.label("Loading")), timeout: .seconds(5))
+    WaitFor(.missing(.label("Loading")), timeout: 5)
         .else {
             Fail("Loading did not finish")
         }
@@ -243,7 +243,7 @@ unmet post-body predicate turns that action into another iteration. The timeout
 is mandatory and is the step's totality bound:
 
 ```swift
-RepeatUntil(.exists(.label("Inbox empty")), timeout: .seconds(10)) {
+RepeatUntil(.exists(.label("Inbox empty")), timeout: 10) {
     Activate(.label("Delete"))
 }
 ```
@@ -253,7 +253,7 @@ Semantic ForEach binds a target expression, not a cached element handle:
 ```swift
 ForEach(.label("Delete"), limit: 20) { target in
     Activate(target)
-        .expect(.missing(target), timeout: .seconds(2))
+        .expect(.missing(target), timeout: 2)
 }
 ```
 

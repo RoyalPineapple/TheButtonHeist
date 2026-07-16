@@ -7,21 +7,30 @@ import TheScore
 private let receiveLogger = ButtonHeistLog.logger(.handoff(.server))
 
 extension SimpleSocketServer {
-    func startReceiving(clientId: Int, connection: NWConnection) {
-        receiveNextChunk(clientId: clientId, connection: connection, framer: NewlineDelimitedFramer())
+    func startReceiving(clientId: Int, connection: NWConnection, generation: SocketListenerGeneration) {
+        receiveNextChunk(
+            clientId: clientId, connection: connection,
+            framer: NewlineDelimitedFramer(), generation: generation
+        )
     }
 
-    private func receiveNextChunk(clientId: Int, connection: NWConnection, framer: NewlineDelimitedFramer) {
+    private func receiveNextChunk(
+        clientId: Int,
+        connection: NWConnection,
+        framer: NewlineDelimitedFramer,
+        generation: SocketListenerGeneration
+    ) {
         connection.receive(minimumIncompleteLength: 1, maximumLength: WireFrameLimits.receiveChunkBytes) { [weak self] content, _, isComplete, error in
             guard let self else { return }
-            self.spawnTrackedTask { server in
+            self.spawnTrackedTask(in: generation) { server in
                 await server.handleReceivedData(
                     clientId: clientId,
                     connection: connection,
                     content: content,
                     isComplete: isComplete,
                     error: error,
-                    framer: framer
+                    framer: framer,
+                    generation: generation
                 )
             }
         }
@@ -34,7 +43,8 @@ extension SimpleSocketServer {
         content: Data?,
         isComplete: Bool,
         error: NWError?,
-        framer: NewlineDelimitedFramer
+        framer: NewlineDelimitedFramer,
+        generation: SocketListenerGeneration
     ) {
         if let error {
             receiveLogger.error("Receive error from client \(clientId): \(error)")
@@ -64,7 +74,10 @@ extension SimpleSocketServer {
         if isComplete {
             removeClient(clientId)
         } else {
-            receiveNextChunk(clientId: clientId, connection: connection, framer: receiveFramer)
+            receiveNextChunk(
+                clientId: clientId, connection: connection,
+                framer: receiveFramer, generation: generation
+            )
         }
     }
 

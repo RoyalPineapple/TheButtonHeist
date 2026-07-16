@@ -323,7 +323,7 @@ extension HeistPlanSourceParser {
         let durationToken = currentToken
         let seconds = try parseNumber()
         do {
-            return try GestureDuration.admitting(seconds: seconds)
+            return try GestureDuration(validatingSeconds: seconds)
         } catch let validationError {
             throw error(durationToken, String(describing: validationError))
         }

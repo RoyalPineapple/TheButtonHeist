@@ -117,7 +117,7 @@ private func representativePlan() throws -> HeistPlan {
         TypeText("alex@example.com", into: .identifier("email"))
             .expect(.changed(.elements([
                 .updated(.identifier("email"), .value("alex@example.com")),
-            ])), timeout: .seconds(1))
+            ])), timeout: 1)
 
         Warn("done")
     }

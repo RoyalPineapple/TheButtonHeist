@@ -7,6 +7,8 @@ extension FenceError {
     init(_ connectionError: HandoffConnectionError) {
         switch connectionError {
         case .connectionFailed(let message): self = .connectionFailed(message)
+        case .discoveryBacklogOverflow:
+            self = .connectionFailed(connectionError.diagnostic.cause)
         case .serverFailure(let serverError):
             let details = serverError.failureDetails
             self = .connectionFailure(ConnectionFailure(

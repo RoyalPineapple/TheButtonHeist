@@ -267,24 +267,34 @@ extension TheBrains {
             )
             switch evaluation {
             case .matched:
-                guard let evidence = HeistPassedActionEvidence(evidence) else {
-                    preconditionFailure("matched action expectation produced non-passing evidence")
+                let durationMs = elapsedMilliseconds(since: start)
+                let candidate = HeistPassedActionEvidence(evidence).flatMap { evidence in
+                    HeistExecutionStepResult.admitAction(
+                        path: path,
+                        durationMs: durationMs,
+                        command: command,
+                        completion: .passed(evidence: evidence)
+                    )
                 }
-                return .action(
+                return admittedReceipt(
+                    candidate,
                     path: path,
-                    durationMs: elapsedMilliseconds(since: start),
-                    command: command,
-                    completion: .passed(evidence: evidence)
+                    durationMs: durationMs
                 )
             case .failed(let failed):
-                guard let evidence = HeistFailedActionEvidence(evidence) else {
-                    preconditionFailure("failed action expectation produced non-failing evidence")
+                let durationMs = elapsedMilliseconds(since: start)
+                let candidate = HeistFailedActionEvidence(evidence).flatMap { evidence in
+                    HeistExecutionStepResult.admitAction(
+                        path: path,
+                        durationMs: durationMs,
+                        command: command,
+                        completion: .failed(evidence: evidence, failure: failed.detail)
+                    )
                 }
-                return .action(
+                return admittedReceipt(
+                    candidate,
                     path: path,
-                    durationMs: elapsedMilliseconds(since: start),
-                    command: command,
-                    completion: .failed(evidence: evidence, failure: failed.detail)
+                    durationMs: durationMs
                 )
             }
         }
@@ -297,29 +307,35 @@ extension TheBrains {
         start: CFAbsoluteTime
     ) -> HeistExecutionStepResult {
         let evidence = actionEvidence(actionResult: actionResult)
+        let durationMs = elapsedMilliseconds(since: start)
+        let candidate: HeistReceiptAdmission?
         switch actionResult.outcome {
         case .success:
-            guard let evidence = HeistPassedActionEvidence(evidence) else {
-                preconditionFailure("successful action produced non-passing receipt evidence")
+            candidate = HeistPassedActionEvidence(evidence).flatMap { evidence in
+                HeistExecutionStepResult.admitAction(
+                    path: path,
+                    durationMs: durationMs,
+                    command: command,
+                    completion: .passed(evidence: evidence)
+                )
             }
-            return .action(
-                path: path,
-                durationMs: elapsedMilliseconds(since: start),
-                command: command,
-                completion: .passed(evidence: evidence)
-            )
         case .failure:
-            guard let evidence = HeistFailedActionEvidence(evidence),
-                  let failure = actionDispatchFailure(command: command, result: actionResult) else {
-                preconditionFailure("failed action produced non-failing receipt evidence")
+            candidate = HeistFailedActionEvidence(evidence).flatMap { evidence in
+                actionDispatchFailure(command: command, result: actionResult).flatMap { failure in
+                    HeistExecutionStepResult.admitAction(
+                        path: path,
+                        durationMs: durationMs,
+                        command: command,
+                        completion: .failed(evidence: evidence, failure: failure)
+                    )
+                }
             }
-            return .action(
-                path: path,
-                durationMs: elapsedMilliseconds(since: start),
-                command: command,
-                completion: .failed(evidence: evidence, failure: failure)
-            )
         }
+        return admittedReceipt(
+            candidate,
+            path: path,
+            durationMs: durationMs
+        )
     }
 
     private func waitStepResult(
@@ -514,15 +530,19 @@ extension TheBrains {
         path: HeistExecutionPath,
         start: CFAbsoluteTime
     ) -> HeistExecutionStepResult {
-        let evidence = HeistActionEvidence.commandResolutionFailure
-        guard let evidence = HeistFailedActionEvidence(evidence) else {
-            preconditionFailure("command resolution failure must be failing action evidence")
+        let durationMs = elapsedMilliseconds(since: start)
+        let candidate = HeistFailedActionEvidence(.commandResolutionFailure).flatMap { evidence in
+            HeistExecutionStepResult.admitAction(
+                path: path,
+                durationMs: durationMs,
+                command: command,
+                completion: .failed(evidence: evidence, failure: failure.detail)
+            )
         }
-        return .action(
+        return admittedReceipt(
+            candidate,
             path: path,
-            durationMs: elapsedMilliseconds(since: start),
-            command: command,
-            completion: .failed(evidence: evidence, failure: failure.detail)
+            durationMs: durationMs
         )
     }
 
@@ -575,14 +595,19 @@ extension TheBrains {
             expectationResult: expectationActionResult,
             expectation: expectation
         )
-        guard let evidence = HeistFailedActionEvidence(evidence) else {
-            preconditionFailure("expectation resolution failure must be failing action evidence")
+        let durationMs = elapsedMilliseconds(since: start)
+        let candidate = HeistFailedActionEvidence(evidence).flatMap { evidence in
+            HeistExecutionStepResult.admitAction(
+                path: path,
+                durationMs: durationMs,
+                command: command,
+                completion: .failed(evidence: evidence, failure: failure.detail)
+            )
         }
-        return .action(
+        return admittedReceipt(
+            candidate,
             path: path,
-            durationMs: elapsedMilliseconds(since: start),
-            command: command,
-            completion: .failed(evidence: evidence, failure: failure.detail)
+            durationMs: durationMs
         )
     }
 

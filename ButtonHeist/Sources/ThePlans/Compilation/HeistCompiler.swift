@@ -322,6 +322,21 @@ private extension HeistCompiler {
                 "Compiled Swift heist source\(entrySuffix) exceeded its evaluation deadline: \(bounded(output))",
                 source: source
             )]
+        case .compileOutputLimitExceeded(_, let stream, let output):
+            return [diagnostic(
+                code: .swiftCompilationCompileOutputLimitExceeded,
+                "Swift compiler\(entrySuffix) exceeded its \(stream.rawValue) output limit: \(bounded(output))",
+                source: source
+            )]
+        case .executionOutputLimitExceeded(_, let stream, let output):
+            return [diagnostic(
+                code: .swiftCompilationExecutionOutputLimitExceeded,
+                """
+                Compiled Swift heist source\(entrySuffix) exceeded its \(stream.rawValue) output limit: \
+                \(bounded(output))
+                """,
+                source: source
+            )]
         case .compilerTerminated(_, let signal, let output):
             return [diagnostic(
                 code: .swiftCompilationCompilerTerminated,

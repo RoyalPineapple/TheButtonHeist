@@ -59,6 +59,7 @@ public struct HeistFailureDetail: Codable, Sendable, Equatable {
 }
 
 public enum HeistFailureCategory: String, Codable, Sendable, Equatable {
+    case internalInvariant
     case validation
     case runtimeUnavailable
     case targetResolution

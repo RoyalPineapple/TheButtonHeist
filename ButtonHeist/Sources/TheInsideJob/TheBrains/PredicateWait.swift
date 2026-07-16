@@ -242,30 +242,22 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
         }
 
         func run() async -> Result {
-            var signalIterator: AsyncStream<PredicateWaitLifecycleSignal>.Iterator?
+            var observationIterator: ObservationEntrySequence.Iterator?
             while true {
                 applyCancellation()
                 switch effect {
                 case .settleVisible(let budget):
                     await settleVisible(budget)
                 case .discover(let budget):
-                    if let signals = await runDiscovery(budget) {
-                        signalIterator = signals.makeAsyncIterator()
+                    if let observations = await runDiscovery(budget) {
+                        observationIterator = observations.makeAsyncIterator()
                     }
                 case .awaitObservation:
-                    guard var iterator = signalIterator else {
+                    guard let iterator = observationIterator else {
                         effect = lifecycle.send(.deadlineReached).predicateWaitEffect
                         continue
                     }
-                    var signal = await iterator.next()
-                    signalIterator = iterator
-                    while case .observation(let observation) = signal,
-                          let ignored = ignoreObservationsThrough,
-                          observation.event.sequence <= ignored {
-                        signal = await iterator.next()
-                        signalIterator = iterator
-                    }
-                    consume(signal)
+                    observationIterator = await consumeNextObservation(from: iterator)
                 case .finish(let outcome):
                     return projection.result(outcome, deadline, lifecycle.state.evidence)
                 }
@@ -291,7 +283,7 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
 
         private func runDiscovery(
             _ budget: PredicateWaitDiscoveryBudget
-        ) async -> AsyncStream<PredicateWaitLifecycleSignal>? {
+        ) async -> ObservationEntrySequence? {
             let discoveryPhase = lifecycle.state.phase
             let discoveryDeadline = budget.deadline(overall: deadline)
             var latestEvaluation = PredicateWaitLifecycleEvaluation(
@@ -341,29 +333,26 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
                 }
             }
             let evaluation = matchedEvaluation ?? latestEvaluation
-            let signals = prepareObservationPolling(
+            let observations = prepareObservationPolling(
                 after: event,
                 discoveryPhase: discoveryPhase,
                 matched: evaluation.matched
             )
             effect = lifecycle.send(.evaluated(evaluation)).predicateWaitEffect
-            return signals
+            return observations
         }
 
         private func prepareObservationPolling(
             after event: SettledSemanticObservationEvent?,
             discoveryPhase: PredicateWaitLifecyclePhase,
             matched: Bool
-        ) -> AsyncStream<PredicateWaitLifecycleSignal>? {
+        ) -> ObservationEntrySequence? {
             if discoveryPhase == .initialDiscovery, !matched {
                 if let event {
                     onReadyToPoll?(event.sequence)
                 }
                 if let observations = wait.observationEntries(wait.latestObservationCursor()) {
-                    return predicateWaitLifecycleSignals(
-                        observations: observations,
-                        timeout: deadline.remainingSeconds()
-                    )
+                    return observations
                 }
             } else if discoveryPhase == .triggeredDiscovery {
                 ignoreObservationsThrough = wait.latestObservationCursor()?.sequence
@@ -371,21 +360,41 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
             return nil
         }
 
-        private func consume(_ signal: PredicateWaitLifecycleSignal?) {
-            switch signal {
-            case .observation(let observation):
-                ignoreObservationsThrough = nil
-                let evaluation = evaluate(
-                    observation.event,
-                    lifecyclePhase: lifecycle.state.phase,
-                    evidence: lifecycle.state.evidence
-                )
-                effect = lifecycle.send(.observation(evaluation)).predicateWaitEffect
-            case .deadlineReached:
-                effect = lifecycle.send(.deadlineReached).predicateWaitEffect
-            case nil:
-                effect = lifecycle.send(Task.isCancelled ? .cancelled : .deadlineReached).predicateWaitEffect
+        private func consumeNextObservation(
+            from initialIterator: ObservationEntrySequence.Iterator
+        ) async -> ObservationEntrySequence.Iterator? {
+            var iterator = initialIterator
+            while true {
+                switch await nextPredicateWaitLifecyclePoll(
+                    iterator: iterator,
+                    timeout: deadline.remainingSeconds()
+                ) {
+                case .observation(let observation, let nextIterator):
+                    iterator = nextIterator
+                    if let ignored = ignoreObservationsThrough,
+                       observation.event.sequence <= ignored {
+                        continue
+                    }
+                    consume(observation)
+                    return nextIterator
+                case .deadlineReached:
+                    effect = lifecycle.send(.deadlineReached).predicateWaitEffect
+                    return nil
+                case .cancelled:
+                    effect = lifecycle.send(.cancelled).predicateWaitEffect
+                    return nil
+                }
             }
+        }
+
+        private func consume(_ observation: ObservationEntry) {
+            ignoreObservationsThrough = nil
+            let evaluation = evaluate(
+                observation.event,
+                lifecyclePhase: lifecycle.state.phase,
+                evidence: lifecycle.state.evidence
+            )
+            effect = lifecycle.send(.observation(evaluation)).predicateWaitEffect
         }
 
         private func evaluate(

@@ -40,7 +40,7 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
             .action(try ActionStep(command: .mechanicalTap(TapTarget(selection: point)))),
             .action(try ActionStep(command: .mechanicalLongPress(LongPressTarget(
                 selection: point,
-                duration: GestureDuration(seconds: 1.0)
+                duration: 1.0
             )))),
             .action(try ActionStep(command: .mechanicalSwipe(SwipeTarget(selection: .elementDirection(target, .left))))),
             .action(try ActionStep(command: .mechanicalDrag(DragTarget(

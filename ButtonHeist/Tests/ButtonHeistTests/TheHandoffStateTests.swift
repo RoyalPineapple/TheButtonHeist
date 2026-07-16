@@ -1,5 +1,6 @@
 import ButtonHeistTestSupport
 import Network
+import os
 import XCTest
 @_spi(ButtonHeistTooling) @testable import ButtonHeist
 import TheScore
@@ -1017,6 +1018,85 @@ final class TheHandoffStateTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testDeviceDiscoveryDeliversEventsAtBufferCapacity() async {
+        let browser = FakeDiscoveryBrowser()
+        let discovery = DeviceDiscovery(
+            reachabilityValidationInterval: 60,
+            makeBrowser: { browser }
+        )
+        var deliveredStateCount = 0
+        var failures: [HandoffConnectionError] = []
+        let capacityDelivered = HandoffTestSignal()
+        discovery.onEvent = { event in
+            switch event {
+            case .stateChanged:
+                deliveredStateCount += 1
+                if deliveredStateCount == DeviceDiscoveryEventStream.bufferLimit {
+                    capacityDelivered.signal()
+                }
+            case .failed(let failure):
+                failures.append(failure)
+            case .found, .lost:
+                break
+            }
+        }
+
+        discovery.start()
+        for _ in 0..<DeviceDiscoveryEventStream.bufferLimit {
+            browser.emit(.waiting)
+        }
+        await capacityDelivered.wait()
+
+        XCTAssertEqual(deliveredStateCount, DeviceDiscoveryEventStream.bufferLimit)
+        XCTAssertEqual(failures, [])
+        XCTAssertEqual(browser.cancelCount, 0)
+        discovery.stop()
+    }
+
+    @ButtonHeistActor
+    func testDeviceDiscoveryOverflowInvalidatesBufferedEventsAndFailsOnce() async {
+        let browser = FakeDiscoveryBrowser()
+        let discovery = DeviceDiscovery(
+            reachabilityValidationInterval: 60,
+            makeBrowser: { browser }
+        )
+        var deliveredStateCount = 0
+        var failures: [HandoffConnectionError] = []
+        let terminalDelivered = HandoffTestSignal()
+        discovery.onEvent = { event in
+            switch event {
+            case .stateChanged:
+                deliveredStateCount += 1
+            case .failed(let failure):
+                failures.append(failure)
+                terminalDelivered.signal()
+            case .found, .lost:
+                break
+            }
+        }
+
+        discovery.start()
+        for _ in 0...DeviceDiscoveryEventStream.bufferLimit {
+            browser.emit(.waiting)
+        }
+        for _ in 0..<DeviceDiscoveryEventStream.bufferLimit {
+            browser.emit(.ready)
+        }
+
+        XCTAssertEqual(deliveredStateCount, 0)
+        XCTAssertEqual(browser.cancelCount, 1)
+
+        await terminalDelivered.wait()
+
+        XCTAssertEqual(deliveredStateCount, 0)
+        XCTAssertEqual(failures, [
+            .discoveryBacklogOverflow(capacity: DeviceDiscoveryEventStream.bufferLimit),
+        ])
+        XCTAssertEqual(discovery.discoveredDevices, [])
+        XCTAssertEqual(browser.cancelCount, 1)
+    }
+
+    @ButtonHeistActor
     func testDeviceDiscoveryTerminalFailureClearsAndFails() async {
         let browser = FakeDiscoveryBrowser()
         let discovery = DeviceDiscovery(
@@ -1050,7 +1130,7 @@ final class TheHandoffStateTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testDeviceDiscoveryIgnoresStaleCallbacksAfterStopAndRestart() async {
+    func testDeviceDiscoveryIgnoresStaleCallbacksAfterOverflowAndRestart() async {
         let firstBrowser = FakeDiscoveryBrowser()
         let secondBrowser = FakeDiscoveryBrowser()
         var browsers = [firstBrowser, secondBrowser]
@@ -1058,19 +1138,31 @@ final class TheHandoffStateTests: XCTestCase {
             reachabilityValidationInterval: 60,
             makeBrowser: { browsers.removeFirst() }
         )
-        var states: [Bool] = []
+        var readyStateCount = 0
+        var failures: [HandoffConnectionError] = []
+        let overflowDelivered = HandoffTestSignal()
         let currentReadyDelivered = HandoffTestSignal()
         discovery.onEvent = { event in
-            if case .stateChanged(let isReady) = event {
-                states.append(isReady)
+            switch event {
+            case .stateChanged(let isReady):
                 if isReady {
+                    readyStateCount += 1
                     currentReadyDelivered.signal()
                 }
+            case .failed(let failure):
+                failures.append(failure)
+                overflowDelivered.signal()
+            case .found, .lost:
+                break
             }
         }
 
         discovery.start()
-        discovery.stop()
+        for _ in 0...DeviceDiscoveryEventStream.bufferLimit {
+            firstBrowser.emit(.waiting)
+        }
+        await overflowDelivered.wait()
+
         discovery.start()
         firstBrowser.emit(.ready)
         secondBrowser.emit(.ready)
@@ -1078,7 +1170,12 @@ final class TheHandoffStateTests: XCTestCase {
 
         XCTAssertEqual(firstBrowser.cancelCount, 1)
         XCTAssertEqual(secondBrowser.startCount, 1)
-        XCTAssertEqual(states, [true])
+        XCTAssertEqual(secondBrowser.cancelCount, 0)
+        XCTAssertEqual(readyStateCount, 1)
+        XCTAssertEqual(failures, [
+            .discoveryBacklogOverflow(capacity: DeviceDiscoveryEventStream.bufferLimit),
+        ])
+        discovery.stop()
     }
 
     @ButtonHeistActor
@@ -1889,24 +1986,39 @@ private final class HandoffTestSignal {
 }
 
 final class FakeDiscoveryBrowser: DeviceDiscoveryBrowsing {
-    private var onStateChanged: (@Sendable (DeviceDiscoveryBrowserState) -> Void)?
-    private(set) var startCount = 0
-    private(set) var cancelCount = 0
+    private struct State {
+        var onStateChanged: (@Sendable (DeviceDiscoveryBrowserState) -> Void)?
+        var startCount = 0
+        var cancelCount = 0
+    }
+
+    private let state = OSAllocatedUnfairLock(initialState: State())
+
+    var startCount: Int {
+        state.withLock { $0.startCount }
+    }
+
+    var cancelCount: Int {
+        state.withLock { $0.cancelCount }
+    }
 
     func start(
         queue: DispatchQueue,
         onResultsChanged: @escaping @Sendable (Set<NWBrowser.Result>, Set<NWBrowser.Result.Change>) -> Void,
         onStateChanged: @escaping @Sendable (DeviceDiscoveryBrowserState) -> Void
     ) {
-        self.onStateChanged = onStateChanged
-        startCount += 1
+        state.withLock { state in
+            state.onStateChanged = onStateChanged
+            state.startCount += 1
+        }
     }
 
     func cancel() {
-        cancelCount += 1
+        state.withLock { $0.cancelCount += 1 }
     }
 
-    func emit(_ state: DeviceDiscoveryBrowserState) {
-        onStateChanged?(state)
+    func emit(_ browserState: DeviceDiscoveryBrowserState) {
+        let onStateChanged = state.withLock { $0.onStateChanged }
+        onStateChanged?(browserState)
     }
 }

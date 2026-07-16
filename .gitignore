@@ -34,7 +34,7 @@ thoughts/
 .rp1/
 .context/
 session/
-reports/
+/reports/
 research/
 demos/
 ci-artifacts/

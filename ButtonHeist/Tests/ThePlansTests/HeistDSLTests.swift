@@ -47,7 +47,7 @@ func actionTargetSupportsRepeatedStringChecksForOneProperty() throws {
 func actionExpectationAttachesWaitStep() throws {
     let heist = try HeistPlan {
         Activate(.label("Sign In"))
-            .expect(.exists(.label("Home")), timeout: .seconds(5))
+            .expect(.exists(.label("Home")), timeout: 5)
     }
 
     #expect(try heist == HeistPlan(body: [
@@ -159,7 +159,7 @@ func predicateContextsUseExplicitCanonicalAssertions() throws {
         Activate(.label("Open Details"))
             .expect(.changed(.screen([.exists(.label("Details"))])))
 
-        WaitFor(.exists(.identifier("ready")), timeout: .seconds(2))
+        WaitFor(.exists(.identifier("ready")), timeout: 2)
 
         If(.exists(.value(.contains("Promo")))) {
             Warn("promo visible")
@@ -227,11 +227,11 @@ func `chained screen and state expectations compose into one action expectation`
     let forward = try HeistPlan {
         Activate(.label("Search"))
             .expect(.changed(.screen()))
-            .expect(.exists(.label("Results")), timeout: .seconds(5))
+            .expect(.exists(.label("Results")), timeout: 5)
     }
     let reversed = try HeistPlan {
         Activate(.label("Search"))
-            .expect(.exists(.label("Results")), timeout: .seconds(5))
+            .expect(.exists(.label("Results")), timeout: 5)
             .expect(.changed(.screen()))
     }
     let expected = try HeistPlan(body: [
@@ -290,8 +290,8 @@ func `different explicit chained expectation timeouts fail validation`() throws 
     do {
         _ = try HeistPlan {
             Activate(.label("Save"))
-                .expect(.changed(.screen()), timeout: .seconds(1))
-                .expect(.exists(.label("B")), timeout: .seconds(2))
+                .expect(.changed(.screen()), timeout: 1)
+                .expect(.exists(.label("B")), timeout: 2)
         }
         Issue.record("Expected HeistPlanBuildError")
     } catch let error as HeistPlanBuildError {
@@ -340,11 +340,11 @@ func `string heist search flow preserves query ref in composed post activation e
     enum SearchScreen {
         static let search = HeistDef<String>("SearchScreen.search", parameter: "query") { query in
             TypeText(query, into: .label("Search"))
-                .expect(.exists(.value(query)), timeout: .seconds(1))
+                .expect(.exists(.value(query)), timeout: 1)
 
             Activate(.label("Search"))
                 .expect(.changed(.screen()))
-                .expect(.exists(.label(query)), timeout: .seconds(5))
+                .expect(.exists(.label(query)), timeout: 5)
         }
     }
 
@@ -455,7 +455,7 @@ func screenActionsNamespaceBuildsRegularActionContent() throws {
 func customActionAndRotorBuildSemanticActionSteps() throws {
     let heist = try HeistPlan {
         CustomAction("Archive", on: .label("Message"))
-            .expect(.changed(.elements()), timeout: .seconds(1))
+            .expect(.changed(.elements()), timeout: 1)
         Rotor("Headings", on: .label("Article"), direction: .next)
             .withoutExpectation("Navigation cursor only")
     }
@@ -473,7 +473,7 @@ func customActionAndRotorBuildSemanticActionSteps() throws {
 @Test
 func waitForBuildsWaitStep() throws {
     let heist = try HeistPlan {
-        WaitFor(.exists(.label("Home")), timeout: .seconds(5))
+        WaitFor(.exists(.label("Home")), timeout: 5)
     }
 
     #expect(try heist == HeistPlan(body: [
@@ -484,8 +484,8 @@ func waitForBuildsWaitStep() throws {
 @Test
 func `container predicates and scoped targets render canonically`() throws {
     let heist = try HeistPlan {
-        WaitFor(.exists(.container(.label("Checkout"))), timeout: .seconds(2))
-        WaitFor(.exists(.container(.actions(.init(.custom("Archive"))))), timeout: .seconds(1))
+        WaitFor(.exists(.container(.label("Checkout"))), timeout: 2)
+        WaitFor(.exists(.container(.actions(.init(.custom("Archive"))))), timeout: 1)
         Activate(.within(container: .label("Checkout"), .label("Pay")))
     }
 
@@ -495,8 +495,8 @@ func `container predicates and scoped targets render canonically`() throws {
         .action(try ActionStep(command: .activate(.within(container: .label("Checkout"), .label("Pay"))))),
     ]))
     let canonical = try heist.canonicalSwiftDSL()
-    #expect(canonical.contains(#"WaitFor(.exists(.container(.label("Checkout"))), timeout: .seconds(2))"#))
-    #expect(canonical.contains(#"WaitFor(.exists(.container(.actions(.init(.custom("Archive"))))), timeout: .seconds(1))"#))
+    #expect(canonical.contains(#"WaitFor(.exists(.container(.label("Checkout"))), timeout: 2)"#))
+    #expect(canonical.contains(#"WaitFor(.exists(.container(.actions(.init(.custom("Archive"))))), timeout: 1)"#))
     #expect(canonical.contains(#"Activate(.within(container: .label("Checkout"), .label("Pay")))"#))
 }
 
@@ -552,7 +552,7 @@ func multiCaseIfBuildsConditionalStep() throws {
 @Test
 func waitForElseBuildsWaitStepWithElseBody() throws {
     let heist = try HeistPlan {
-        WaitFor(.exists(.label("Home")), timeout: .seconds(8))
+        WaitFor(.exists(.label("Home")), timeout: 8)
             .else {
                 Fail("no known result")
             }
@@ -571,12 +571,12 @@ func waitForElseBuildsWaitStepWithElseBody() throws {
 func canonicalProductDemoCompilesAsAccessibilityContractProgram() throws {
     let heist = try HeistPlan("searchFlow") {
         TypeText("milk", into: .label("Search"))
-            .expect(.exists(.element(.label("Search"), .value("milk"))), timeout: .seconds(2))
+            .expect(.exists(.element(.label("Search"), .value("milk"))), timeout: 2)
 
         Activate(.label("Search"))
-            .expect(.changed(.screen()), timeout: .seconds(5))
+            .expect(.changed(.screen()), timeout: 5)
 
-        WaitFor(.exists(.label("Results")), timeout: .seconds(5))
+        WaitFor(.exists(.label("Results")), timeout: 5)
             .else {
                 Fail("Search did not settle")
             }
@@ -623,7 +623,7 @@ func heistDefinitionsCompileToInvocationsWithLocalDefinitions() throws {
         static let addToCart = HeistDef<String>("LibraryScreen.addToCart", parameter: "item") { item in
             Activate(.label(item))
             Activate(.label("Add to Cart"))
-                .expect(.exists(.label(item)), timeout: .seconds(2))
+                .expect(.exists(.label(item)), timeout: 2)
         }
     }
 
@@ -696,7 +696,7 @@ func `string heist definitions default parameter to input`() throws {
 func `accessibility target heist definitions default parameter to input`() throws {
     let delete = HeistDef<AccessibilityTarget>("Rows.delete") { row in
         Activate(row)
-            .expect(.missing(row), timeout: .seconds(2))
+            .expect(.missing(row), timeout: 2)
     }
 
     let heist = try HeistPlan {
@@ -925,7 +925,7 @@ func heistDefinitionsCanBeInvokedFromForEachBodies() throws {
     enum CartScreen {
         static let deleteItem = HeistDef<AccessibilityTarget>("CartScreen.deleteItem", parameter: "target") { target in
             Activate(target)
-                .expect(.missing(target), timeout: .seconds(2))
+                .expect(.missing(target), timeout: 2)
         }
     }
 
@@ -969,7 +969,7 @@ func stringForEachBuildsRuntimeStringLoop() throws {
     let heist = try HeistPlan {
         ForEach("Milk", "Eggs") { item in
             TypeText(item, into: .label("Add item"))
-                .expect(.exists(.label(item)), timeout: .seconds(2))
+                .expect(.exists(.label(item)), timeout: 2)
         }
     }
 
@@ -995,7 +995,7 @@ func stringForEachBuildsRuntimeStringLoop() throws {
 @Test
 func repeatUntilBuildsRuntimeLoopWithElseBody() throws {
     let heist = try HeistPlan {
-        RepeatUntil(.exists(.value("2")), timeout: .seconds(3)) {
+        RepeatUntil(.exists(.value("2")), timeout: 3) {
             Increment(.identifier("Quantity"))
         }.else {
             Fail("quantity did not reach 2")
@@ -1020,7 +1020,7 @@ func repeatUntilBuildsRuntimeLoopWithElseBody() throws {
 func namedHeistPlanCanDeclareSingularStringRootParameter() throws {
     let heist = try HeistPlan("Search", parameter: "query") { query in
         TypeText(query, into: .label("Search"))
-            .expect(.exists(.value(query)), timeout: .seconds(2))
+            .expect(.exists(.value(query)), timeout: 2)
     }
 
     #expect(heist.parameter == .string(name: "query"))
@@ -1038,7 +1038,7 @@ func namedHeistPlanCanDeclareSingularStringRootParameter() throws {
     #expect(try heist.canonicalSwiftDSL() == """
     HeistPlan("Search", parameter: "query") { query in
         TypeText(query, into: .label("Search"))
-            .expect(.exists(.value(query)), timeout: .seconds(2))
+            .expect(.exists(.value(query)), timeout: 2)
     }
     """)
 }
@@ -1049,7 +1049,7 @@ func semanticForEachCallsBodyWithRuntimeIterationTarget() throws {
     let heist = try HeistPlan {
         ForEach(matching, limit: 20) { element in
             Activate(element)
-                .expect(.missing(element), timeout: .seconds(2))
+                .expect(.missing(element), timeout: 2)
         }
     }
 
@@ -1078,7 +1078,7 @@ func encodedJSONDecodesBackToEqualPlanAndContainsNoSourceMetadata() throws {
 
         ForEach("Milk", "Eggs") { item in
             TypeText(item, into: .label("Add item"))
-                .expect(.exists(.label(item)), timeout: .seconds(2))
+                .expect(.exists(.label(item)), timeout: 2)
         }
     }
 
@@ -1126,7 +1126,7 @@ private func loginFlow(email: TextInputText, password: TextInputText) throws -> 
         TypeText(password, into: .identifier("password"))
 
         Activate(.label("Sign In"))
-            .expect(.exists(.label("Home")), timeout: .seconds(5))
+            .expect(.exists(.label("Home")), timeout: 5)
     }
 }
 

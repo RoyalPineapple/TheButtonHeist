@@ -5,14 +5,14 @@ import TheScore
     public let defaultValue: Value?
 
     internal let spec: FenceParameterSpec
-    private let convertValue: @Sendable (HeistValue) -> Value?
+    private let convertValue: @Sendable (HeistValue) throws -> Value?
     private let encodeValue: @Sendable (Value) -> HeistValue
 
     internal init(
         key: FenceParameterKey,
         spec: FenceParameterSpec,
         defaultValue: Value? = nil,
-        convertValue: @escaping @Sendable (HeistValue) -> Value?,
+        convertValue: @escaping @Sendable (HeistValue) throws -> Value?,
         encodeValue: @escaping @Sendable (Value) -> HeistValue
     ) {
         precondition(spec.key == key.rawValue, "FenceParameter key must match its schema")
@@ -44,7 +44,7 @@ import TheScore
 
     internal func decode(_ value: HeistValue, field: String) throws -> Value {
         try spec.validateScalar(value, field: field)
-        guard let decoded = convertValue(value) else {
+        guard let decoded = try convertValue(value) else {
             preconditionFailure("FenceParameter converter disagrees with schema for \(key.rawValue)")
         }
         return decoded
