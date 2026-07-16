@@ -310,7 +310,8 @@ public enum WaitTimeoutError: Error, Sendable, Equatable, CustomStringConvertibl
 public struct WaitTarget: Codable, Sendable, Equatable {
     /// The predicate to wait on.
     public let predicate: AccessibilityPredicate
-    /// Maximum time to wait (default: 30 seconds; configured maximum defaults to 60 seconds).
+    /// Optional wait duration. Omitted waits use the 30-second default; explicit
+    /// values are admitted up to the configured maximum, which defaults to 60 seconds.
     public let timeout: WaitTimeout?
 
     public init(predicate: AccessibilityPredicate, timeout: WaitTimeout? = nil) {

@@ -243,6 +243,14 @@ import Testing
 
     #expect(WaitTimeout.maximumSeconds(environment: [:]) == 60)
     #expect(configuredMaximum == 120)
+    for invalidValue in ["", "not-a-number", "0", "29", "-1", "nan", "infinity"] {
+        #expect(
+            WaitTimeout.maximumSeconds(environment: [
+                WaitTimeoutEnvironmentKey.maximum.rawValue: invalidValue,
+            ]) == 60,
+            "invalid override: \(invalidValue)"
+        )
+    }
     #expect(try WaitTimeout(validatingSeconds: 120, maximumSeconds: configuredMaximum).seconds == 120)
     #expect(throws: WaitTimeoutError.self) {
         _ = try WaitTimeout(

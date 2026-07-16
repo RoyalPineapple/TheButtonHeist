@@ -554,6 +554,26 @@ func runtimeSafetyRequiresForEachStringExplicitValuesUnderConfiguredMax() throws
 }
 
 @Test
+func runtimeSafetyUsesTheAdmittedWaitTimeoutWithoutASecondRepeatUntilCap() throws {
+    let configuredMaximum = WaitTimeout.maximumSeconds(environment: [
+        WaitTimeoutEnvironmentKey.maximum.rawValue: "120",
+    ])
+    let timeout = try WaitTimeout(
+        validatingSeconds: configuredMaximum,
+        maximumSeconds: configuredMaximum
+    )
+    let raw = HeistPlanAdmissionCandidate(body: [
+        .repeatUntil(try RepeatUntilStep(
+            predicate: .exists(.label("Done")),
+            timeout: timeout,
+            body: [.warn(WarnStep(message: "retry"))]
+        )),
+    ])
+
+    #expect(runtimeSafetyFailures(for: raw).isEmpty)
+}
+
+@Test
 func runtimeSafetyRejectsNestedStepDepthWithPreciseDiagnostic() throws {
     let raw = HeistPlanAdmissionCandidate(body: [
         .conditional(try ConditionalStep(cases: [
