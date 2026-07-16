@@ -403,6 +403,11 @@ jobs:
     timeout-minutes: 5
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          ref: ${{ github.sha }}
+
       - name: Record exact-SHA suite manifest
         env:
           COMMIT_SHA: ${{ github.sha }}
@@ -458,20 +463,11 @@ jobs:
         env:
           COMMIT_SHA: ${{ github.sha }}
           EXPECTED_WORKFLOW_REF: ${{ github.repository }}/.github/workflows/ci.yml@refs/heads/main
+          RUN_ID: ${{ github.run_id }}
         run: |
           jq -e \
             --arg commit "$COMMIT_SHA" \
-            --arg workflowRef "$EXPECTED_WORKFLOW_REF" '
-            .schemaVersion == 1
-            and .commit == $commit
-            and .workflow.ref == $workflowRef
-            and .workflow.sha == $commit
-            and ([.suites[].name] | sort == [
-              "ios-demo-gates",
-              "ios-tests",
-              "macos-tests",
-              "main-integration",
-              "release-contract"
-            ])
-            and ([.suites[] | select(.conclusion != "success")] | length == 0)
-          ' exact-sha-suite.json
+            --arg workflowRef "$EXPECTED_WORKFLOW_REF" \
+            --arg runId "$RUN_ID" \
+            -f scripts/exact-sha-suite.jq \
+            exact-sha-suite.json

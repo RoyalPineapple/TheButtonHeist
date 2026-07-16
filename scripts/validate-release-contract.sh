@@ -139,6 +139,10 @@ grep -Fq 'name: buttonheist-exact-sha-suite' .github/workflows/ci.yml \
     || fail "main CI must retain the exact-SHA suite manifest"
 grep -Fq '.name == "exact-sha-suite"' scripts/require-successful-ci-for-commit.sh \
     || fail "the exact-commit CI guard must require the aggregate release-suite job"
+grep -Fq 'scripts/exact-sha-suite.jq' .github/workflows/ci.yml \
+    || fail "main CI must delegate exact-SHA manifest admission to the canonical filter"
+grep -Fq 'exact-sha-suite.jq' scripts/require-successful-ci-for-commit.sh \
+    || fail "the release guard must delegate exact-SHA manifest admission to the canonical filter"
 if grep -Fq 'parents[0]' .github/workflows/release.yml; then
     fail ".github/workflows/release.yml must not accept parent-commit CI for release publishing"
 fi

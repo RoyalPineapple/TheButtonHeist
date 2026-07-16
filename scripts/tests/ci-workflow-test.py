@@ -70,8 +70,7 @@ class CIWorkflowTests(unittest.TestCase):
             aggregate,
         )
         self.assertIn("name: buttonheist-exact-sha-suite", aggregate)
-        self.assertIn(".workflow.ref == $workflowRef", aggregate)
-        self.assertIn(".workflow.sha == $commit", aggregate)
+        self.assertIn("-f scripts/exact-sha-suite.jq", aggregate)
         for suite in (
             "release-contract",
             "macos-tests",

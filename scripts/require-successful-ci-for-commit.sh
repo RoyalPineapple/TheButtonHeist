@@ -85,21 +85,9 @@ has_successful_exact_sha_suite() {
             && jq -e \
                 --arg commit "$COMMIT_SHA" \
                 --arg runId "$run_id" \
-                --arg workflowRef "$expected_workflow_ref" '
-                .schemaVersion == 1
-                and .commit == $commit
-                and .workflow.runId == $runId
-                and .workflow.ref == $workflowRef
-                and .workflow.sha == $commit
-                and ([.suites[].name] | sort == [
-                    "ios-demo-gates",
-                    "ios-tests",
-                    "macos-tests",
-                    "main-integration",
-                    "release-contract"
-                ])
-                and ([.suites[] | select(.conclusion != "success")] | length == 0)
-            ' "$manifest_directory/exact-sha-suite.json" >/dev/null 2>&1; then
+                --arg workflowRef "$expected_workflow_ref" \
+                -f "$SCRIPT_DIR/exact-sha-suite.jq" \
+                "$manifest_directory/exact-sha-suite.json" >/dev/null; then
             rm -rf "$manifest_directory"
             return 0
         fi
