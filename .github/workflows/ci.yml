@@ -65,6 +65,7 @@ jobs:
     env:
       BUTTONHEIST_RECEIPTS_MODE: failures
       BUTTONHEIST_TEST_ARTIFACTS_DIR: ${{ github.workspace }}/ci-artifacts/test-runs
+      BUTTONHEIST_MAX_WAIT_TIMEOUT: "60"
 
     steps:
       - name: Checkout repository
