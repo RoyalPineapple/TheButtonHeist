@@ -76,8 +76,7 @@ if [[ "${1:-} ${2:-}" == "run download" ]]; then
             {name: "macos-tests", conclusion: "success"},
             {name: "ios-tests", conclusion: "success"},
             {name: "ios-demo-gates", conclusion: "success"},
-            {name: "main-integration", conclusion: "success"},
-            {name: "critical-mutations", conclusion: "success"}
+            {name: "main-integration", conclusion: "success"}
         ]
     }' > "$destination/exact-sha-suite.json"
     exit 0

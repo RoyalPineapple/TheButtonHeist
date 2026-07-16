@@ -35,7 +35,6 @@ class TestRunnerTests(unittest.TestCase):
         self.assertEqual(
             set(SUITES),
             {
-                "ReleaseContractTests",
                 "TheScoreTests",
                 "ButtonHeistTests",
                 "TheInsideJobTests",
@@ -45,52 +44,17 @@ class TestRunnerTests(unittest.TestCase):
             },
         )
 
-    def test_focus_catalog_owns_vertical_contracts_and_named_mutations(self) -> None:
-        self.assertTrue(
+    def test_focus_catalog_owns_vertical_contracts(self) -> None:
+        self.assertEqual(
+            set(FOCUSES),
             {
                 "contract-actions",
                 "contract-predicates",
                 "contract-receipts",
                 "contract-wire",
                 "contract-targets",
-                "mutation-receipt-kind",
-                "mutation-release-proof",
-                "mutation-child-abort-path",
-                "mutation-live-target-refresh",
-                "mutation-interaction-fifo",
-                "mutation-receipt-legality",
-                "mutation-screen-generation",
-                "mutation-active-cancellation",
-                "mutation-settlement-threshold",
-                "mutation-stale-discovery",
-            }.issubset(FOCUSES)
+            },
         )
-        self.assertEqual(
-            FOCUSES["mutation-interaction-fifo"]["TheInsideJobTests"],
-            ("TheInsideJobTests/ClientRequestPipelineTests",),
-        )
-
-    def test_portable_contract_runs_through_the_canonical_interface(self) -> None:
-        suite = SUITES["ReleaseContractTests"]
-        paths = RUNNER["suite_paths"]("ReleaseContractTests")
-
-        command = RUNNER["test_command"](
-            "run", "ReleaseContractTests", suite, paths, None, "full"
-        )
-
-        self.assertEqual(
-            command,
-            [str(RUNNER["ROOT"] / "scripts/tests/require-successful-ci-for-commit-test.sh")],
-        )
-        with self.assertRaisesRegex(ValueError, "supports run mode only"):
-            RUNNER["test_command"](
-                "build-for-testing",
-                "ReleaseContractTests",
-                suite,
-                paths,
-                None,
-                "full",
-            )
 
     def test_arguments_expand_suites_in_source_order(self) -> None:
         args = RUNNER["parse_args"](

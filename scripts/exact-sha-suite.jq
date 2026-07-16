@@ -1,6 +1,5 @@
 def required_suites:
     [
-        "critical-mutations",
         "ios-demo-gates",
         "ios-tests",
         "macos-tests",

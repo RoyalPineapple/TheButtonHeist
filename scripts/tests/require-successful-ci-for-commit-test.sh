@@ -97,8 +97,7 @@ successful_manifest=$(jq -cn --arg sha "$COMMIT" '{
         {name: "macos-tests", conclusion: "success"},
         {name: "ios-tests", conclusion: "success"},
         {name: "ios-demo-gates", conclusion: "success"},
-        {name: "main-integration", conclusion: "success"},
-        {name: "critical-mutations", conclusion: "success"}
+        {name: "main-integration", conclusion: "success"}
     ]
 }')
 
