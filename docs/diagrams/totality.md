@@ -17,8 +17,8 @@ flowchart TD
     end
 
     subgraph watchdog["Watchdog termination"]
-        WAITT["WaitStep.timeout mandatory<br/>defaultWaitTimeout 30 s · 0 = immediate check"]
-        REPEATT["RepeatUntilStep.timeout mandatory<br/>capped by maxRepeatUntilTimeout 30 s"]
+        WAITT["WaitStep.timeout mandatory<br/>default 30 s · maximum 60 s or BUTTONHEIST_MAX_WAIT_TIMEOUT"]
+        REPEATT["RepeatUntilStep.timeout mandatory<br/>same configured WaitTimeout maximum"]
         SETTLET["settle hard timeout:<br/>SettleSession.defaultTimeoutMs 5000 —<br/>ends in SettleOutcome.timedOut, never blocks"]
     end
 

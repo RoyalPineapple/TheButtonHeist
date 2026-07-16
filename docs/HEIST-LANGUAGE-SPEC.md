@@ -266,12 +266,15 @@ fixed timeouts as bare numeric literals; generated plan JSON carries the same
 value as a bare number of seconds. Runtime Swift code constructing a dynamic
 timeout uses `try WaitTimeout.seconds(_:)` or
 `try WaitTimeout.milliseconds(_:)`. Timeouts MUST be finite and positive.
+`WaitTimeout` defaults to a 60-second maximum. Set
+`BUTTONHEIST_MAX_WAIT_TIMEOUT` to a finite number of seconds greater than or
+equal to 30 to override that maximum; there is no additional fixed policy cap.
 
 | Site | Default | Notes |
 |------|---------|-------|
 | `WaitFor(_, timeout:)` | 30 seconds | Standalone waits and `WaitFor(...).else` gates. |
 | Action `.expect(_, timeout:)` | 1 second | How long an action expectation polls accumulated settled evidence before reporting the expectation unmet. |
-| `RepeatUntil(_, timeout:)` | none — required | The mandatory bound for a predicate only the run can decide. Runtime validation caps it at 30 seconds. |
+| `RepeatUntil(_, timeout:)` | none — required | The mandatory bound for a predicate only the run can decide. The configured `WaitTimeout` maximum applies. |
 
 Settlement has its own clock, separate from these: the settle loop and its
 5-second default hard timeout are defined in

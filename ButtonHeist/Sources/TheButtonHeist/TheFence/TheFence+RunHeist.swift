@@ -108,7 +108,10 @@ extension TheFence {
             return try HeistPlan(body: [.wait(step)])
         case .actions(_, let actions, let expectationPayload):
             let expectationStep = expectationPayload.expectation.map {
-                WaitStep(predicate: $0, timeout: min(expectationPayload.timeout ?? defaultActionExpectationTimeout, defaultWaitTimeout))
+                WaitStep(
+                    predicate: $0,
+                    timeout: expectationPayload.timeout ?? defaultActionExpectationTimeout
+                )
             }
 
             var steps: [HeistStep] = []
@@ -143,10 +146,10 @@ extension TheFence {
             guard expectationPayload.expectation != nil else {
                 return max(
                     actionBudget,
-                    expectationPayload.timeout.map { min($0, defaultWaitTimeout).seconds } ?? actionBudget
+                    expectationPayload.timeout?.seconds ?? actionBudget
                 )
             }
-            let expectationTimeout = min(expectationPayload.timeout ?? defaultActionExpectationTimeout, defaultWaitTimeout)
+            let expectationTimeout = expectationPayload.timeout ?? defaultActionExpectationTimeout
             return actionBudget + expectationTimeout.seconds + config.postActionExpectationTimeoutBuffer
         }
     }
@@ -159,7 +162,7 @@ extension TheFence {
             let actionBudget = performActionTimeout(for: action.command)
             guard let expectation = action.expectationPolicy.expectedStep else { return actionBudget }
             return actionBudget
-                + min(expectation.timeout, defaultWaitTimeout).seconds
+                + expectation.timeout.seconds
                 + config.postActionExpectationTimeoutBuffer
         }
     }
