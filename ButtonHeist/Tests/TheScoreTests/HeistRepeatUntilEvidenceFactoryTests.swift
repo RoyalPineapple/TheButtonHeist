@@ -41,28 +41,28 @@ import TheScore
             actual: "not found"
         )))
 
-        let predicateMet = HeistRepeatUntilEvidence.matched(
+        let predicateMet = try #require(HeistRepeatUntilEvidence.matched(
             iterationCount: 1,
             expectation: met
-        )
+        ))
         #expect(predicateMet.outcome == .matched)
         #expect(predicateMet.expectation.met)
 
-        let failed = HeistRepeatUntilEvidence.failed(
+        let failed = try #require(HeistRepeatUntilEvidence.failed(
             iterationCount: 1,
             expectation: unmet,
             lastObservedSummary: "Cart",
             failureReason: "timed out"
-        )
+        ))
         #expect(failed.outcome == .failed)
         #expect(!failed.expectation.met)
         #expect(failed.failureReason == "timed out")
 
-        let handledElse = HeistRepeatUntilEvidence.handledElse(
+        let handledElse = try #require(HeistRepeatUntilEvidence.handledElse(
             iterationCount: 1,
             expectation: unmet,
             lastObservedSummary: "Cart"
-        )
+        ))
         #expect(handledElse.outcome == .handledElse)
     }
 
@@ -75,39 +75,39 @@ import TheScore
             actual: "not found"
         )))
 
-        let predicateMet = HeistRepeatUntilEvidence.matched(
+        let predicateMet = try #require(HeistRepeatUntilEvidence.matched(
             iterationCount: 1,
             iterationOrdinal: 0,
             expectation: met
-        )
+        ))
         #expect(predicateMet.outcome == .matched)
         #expect(predicateMet.iterationOrdinal == 0)
 
-        let continued = HeistRepeatUntilEvidence.continued(
+        let continued = try #require(HeistRepeatUntilEvidence.continued(
             iterationCount: 1,
             iterationOrdinal: 0,
             expectation: unmet
-        )
+        ))
         #expect(continued.outcome == .continued)
         #expect(continued.iterationOrdinal == 0)
 
-        let failed = HeistRepeatUntilEvidence.failed(
+        let failed = try #require(HeistRepeatUntilEvidence.failed(
             iterationCount: 1,
             iterationOrdinal: 0,
             expectation: unmet,
             lastObservedSummary: "Cart",
             failureReason: "child failed"
-        )
+        ))
         #expect(failed.outcome == .failed)
         #expect(failed.iterationOrdinal == 0)
     }
 
     @Test func `decode rejects invalid repeat until polarity at boundary`() throws {
         let predicate = AccessibilityPredicate.exists(.label("Done"))
-        let evidence = HeistRepeatUntilEvidence.matched(
+        let evidence = try #require(HeistRepeatUntilEvidence.matched(
             iterationCount: 1,
             expectation: ExpectationResult.Met(predicate: predicate)
-        )
+        ))
         let invalidExpectation = ExpectationResult(
             met: false,
             predicate: evidence.expectation.predicate,

@@ -1138,7 +1138,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let fence = TheFence(configuration: .init())
 
         let request = try fence.decodePerformRequest(TheFence.CommandArgumentEnvelope(values: [
-            "step": .string(#"WaitFor(.exists(.label("Pay")), timeout: .seconds(5))"#),
+            "step": .string(#"WaitFor(.exists(.label("Pay")), timeout: 5)"#),
         ]))
 
         XCTAssertEqual(request.plan.body, [
@@ -1153,7 +1153,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
         XCTAssertThrowsError(try fence.decodePerformRequest(TheFence.CommandArgumentEnvelope(values: [
             "step": .string("""
-            WaitFor(.exists(.label("Receipt")), timeout: .seconds(5)).else {
+            WaitFor(.exists(.label("Receipt")), timeout: 5).else {
                 Warn("fallback")
             }
             """),
@@ -1214,7 +1214,7 @@ final class TheFenceHandlerTests: XCTestCase {
             }
             """,
             """
-            WaitFor(.exists(.label("Receipt")), timeout: .seconds(5)) {
+            WaitFor(.exists(.label("Receipt")), timeout: 5) {
                 Activate(.label("Done"))
             }
             """,
@@ -1761,7 +1761,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 HeistPlan("shop") {
                     HeistDef<Void>("checkout") {
                         Activate(.label("Checkout"))
-                            .expect(.exists(.label("Done")), timeout: .seconds(1))
+                            .expect(.exists(.label("Done")), timeout: 1)
                     }
 
                     Warn("ready")

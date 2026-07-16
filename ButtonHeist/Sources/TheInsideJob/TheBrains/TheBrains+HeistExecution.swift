@@ -259,7 +259,7 @@ extension TheBrains {
             let stepPath = path.step(at: index)
 
             if accumulator.abortedPath != nil {
-                accumulator.append(skippedHeistReceipt(for: step, path: stepPath))
+                accumulator.append(.skipped(path: stepPath, durationMs: 0, step: step))
                 continue
             } else {
                 let stepResult = await executeHeistStep(

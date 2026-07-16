@@ -40,7 +40,7 @@ extension TheStash {
         let rotors = object.accessibilityCustomRotors ?? []
         guard !rotors.isEmpty else { return .noRotors }
 
-        let availableNames = rotors.map { $0.bhInvocableName(locale: object.accessibilityLanguage) }
+        let availableNames = rotors.compactMap { $0.bhInvocableName(locale: object.accessibilityLanguage) }
         let selection: UIAccessibilityCustomRotor
         switch rotorSelection {
         case .index(let rotorIndex):
@@ -50,7 +50,7 @@ extension TheStash {
             selection = rotors[rotorIndex]
         case .named(let rotorName):
             let matches = rotors.enumerated().filter {
-                $0.element.bhInvocableName(locale: object.accessibilityLanguage) == rotorName
+                $0.element.bhInvocableName(locale: object.accessibilityLanguage) == .some(rotorName)
             }
             switch matches.count {
             case 0:
@@ -68,7 +68,9 @@ extension TheStash {
             }
         }
 
-        let rotorName = selection.bhInvocableName(locale: object.accessibilityLanguage)
+        guard let rotorName = selection.bhInvocableName(locale: object.accessibilityLanguage) else {
+            return .noSuchRotor(available: availableNames)
+        }
         let hostHeistId = liveTarget.treeElement.heistId
 
         let predicate = UIAccessibilityCustomRotorSearchPredicate()
@@ -215,9 +217,9 @@ private extension RotorDirection {
 }
 
 extension UIAccessibilityCustomRotor {
-    func bhInvocableName(locale: String?) -> RotorName {
+    func bhInvocableName(locale: String?) -> RotorName? {
         let value = bhInvocableNameText(locale: locale)
-        return requireValidPublicPayload { try RotorName(validating: value) }
+        return try? RotorName(validating: value)
     }
 
     private func bhInvocableNameText(locale: String?) -> String {

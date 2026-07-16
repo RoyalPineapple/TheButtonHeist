@@ -92,7 +92,13 @@ extension TheFence {
             return .action(errorKind)
         }
         switch step.failure?.detail.category {
-        case .validation, .runtimeUnavailable, .targetResolution, .invocation, .loop, .explicitFailure:
+        case .internalInvariant,
+             .validation,
+             .runtimeUnavailable,
+             .targetResolution,
+             .invocation,
+             .loop,
+             .explicitFailure:
             return .commandError
         case .action, .expectation, .wait, .none:
             return nil

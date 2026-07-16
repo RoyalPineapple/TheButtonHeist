@@ -1774,7 +1774,7 @@ final class TheBrainsActionTests: XCTestCase {
         ]))
         XCTAssertFalse(inactiveBrains.stash.semanticObservationStream.isActive)
 
-        let step = WaitStep(predicate: .exists(.label("Home")), timeout: .milliseconds(1))
+        let step = WaitStep(predicate: .exists(.label("Home")), timeout: try .milliseconds(1))
         let result = await inactiveBrains.performWait(step: try resolvedWait(step))
 
         XCTAssertFalse(result.outcome.isSuccess)
@@ -2074,7 +2074,7 @@ final class TheBrainsActionTests: XCTestCase {
         let baseline = try XCTUnwrap(baselineEvent.settledCapture)
         let expectation = WaitStep(
             predicate: .changed(.elements()),
-            timeout: .milliseconds(1)
+            timeout: try .milliseconds(1)
         )
         var waitRequests: [TheBrains.HeistRuntimeWaitRequest] = []
         var baselineScopes: [SemanticObservationScope?] = []
@@ -2657,7 +2657,7 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testHeistActionExpectationWithExpiredDeadlineUsesActionInteractionTrace() async throws {
-        let expectation = WaitStep(predicate: .changed(.screen()), timeout: .milliseconds(1))
+        let expectation = WaitStep(predicate: .changed(.screen()), timeout: try .milliseconds(1))
         let beforeState = observedState(labels: ["Controls Demo"])
         let afterState = observedState(labels: ["Buttons & Actions"])
         let beforeCapture = AccessibilityTrace.Capture(
@@ -2719,7 +2719,7 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testHeistActionExpectationWithExpiredDeadlineRejectsUnsettledActionTrace() async throws {
-        let expectation = WaitStep(predicate: .changed(.screen()), timeout: .milliseconds(1))
+        let expectation = WaitStep(predicate: .changed(.screen()), timeout: try .milliseconds(1))
         let beforeState = observedState(labels: ["Controls Demo"])
         let afterState = observedState(labels: ["Buttons & Actions"])
         let beforeCapture = AccessibilityTrace.Capture(
@@ -4109,7 +4109,7 @@ final class TheBrainsActionTests: XCTestCase {
             try DragTarget(
                 start: .coordinate(ScreenPoint(x: 10, y: 10)),
                 end: ScreenPoint(x: .infinity, y: 20),
-                duration: GestureDuration(seconds: 0.01)
+                duration: 0.01
             ).resolve(in: .empty)
         )
 
@@ -4426,7 +4426,7 @@ final class TheBrainsActionTests: XCTestCase {
     // MARK: - Accessibility Tree Availability
 
     func testWaitTimesOutWhenAccessibilityTreeIsUnavailable() async throws {
-        let step = WaitStep(predicate: .exists(.label("never")), timeout: .milliseconds(1))
+        let step = WaitStep(predicate: .exists(.label("never")), timeout: try .milliseconds(1))
         let resolvedStep = try resolvedWait(step)
         let result = await withNoTraversableWindows {
             await brains.performWait(step: resolvedStep)

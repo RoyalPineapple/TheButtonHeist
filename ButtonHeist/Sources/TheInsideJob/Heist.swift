@@ -211,9 +211,33 @@ extension TheInsideJob {
         _ plan: HeistPlan,
         argument: HeistArgument = .none
     ) async -> ActionResult {
-        await brains.executeInAppRequest { [self] in
+        switch await brains.executeInAppRequest({ [self] in
             await executeAdmittedInAppHeist(plan, argument: argument)
+        }) {
+        case .completed(let result):
+            return result
+        case .cancelled:
+            return inAppHeistSubmissionFailure("In-app heist execution was cancelled")
+        case .rejected(.busy(let capacity)):
+            return inAppHeistSubmissionFailure(
+                "Interaction queue is full at \(capacity) pending requests"
+            )
+        case .rejected(.cleanupTimedOut):
+            return inAppHeistSubmissionFailure(
+                "The previous interaction did not finish cancellation cleanup"
+            )
+        case .rejected(.stopping):
+            return inAppHeistSubmissionFailure("ButtonHeist runtime is stopping")
         }
+    }
+
+    private func inAppHeistSubmissionFailure(_ message: String) -> ActionResult {
+        .failure(
+            method: .heistPlan,
+            errorKind: .actionFailed,
+            message: message,
+            evidence: .none
+        )
     }
 
     private func executeAdmittedInAppHeist(

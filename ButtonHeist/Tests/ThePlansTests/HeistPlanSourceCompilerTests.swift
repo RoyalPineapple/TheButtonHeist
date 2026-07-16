@@ -23,7 +23,7 @@ import Testing
             .value(.suffix("items")),
             .hint(.isEmpty)
         )),
-        timeout: .seconds(2)
+        timeout: 2
     )
     TypeText("milk", into: .value(.prefix("Search")))
     """))
@@ -47,7 +47,7 @@ import Testing
 @Test func `runtime parser accepts announcement predicates`() throws {
     let plan = try HeistPlanSourceCompiler().compile(root("""
     Activate(.label("Delete")).expect(.announcement("Item deleted"))
-    WaitFor(.announcement(.contains("processed")), timeout: .seconds(5))
+    WaitFor(.announcement(.contains("processed")), timeout: 5)
     WaitFor(.announcement)
     """))
     let expected = try HeistPlan(body: [
@@ -65,8 +65,8 @@ import Testing
 
 @Test func `runtime parser accepts container predicates and scoped targets`() throws {
     let plan = try HeistPlanSourceCompiler().compile(root("""
-    WaitFor(.exists(.container(.label("Checkout"))), timeout: .seconds(2))
-    WaitFor(.exists(.container(.actions(.init(.custom("Archive"))))), timeout: .seconds(1))
+    WaitFor(.exists(.container(.label("Checkout"))), timeout: 2)
+    WaitFor(.exists(.container(.actions(.init(.custom("Archive"))))), timeout: 1)
     WaitFor(.exists(.container(.dataTable(rowCount: .init(3), columnCount: .init(2)))))
     WaitFor(.exists(.container(.matching(.type(.list), .identifier("orders"), .scrollable(true)))))
     WaitFor(.missing(.container(.identifier("Checkout"), ordinal: 1)))
@@ -719,7 +719,7 @@ import Testing
 
         Activate(.label("Pay")).expect(.changed(.screen()))
 
-        WaitFor(.exists(.label("Receipt")), timeout: .seconds(5)).else {
+        WaitFor(.exists(.label("Receipt")), timeout: 5).else {
             Fail("Receipt did not appear")
         }
 
@@ -777,7 +777,7 @@ import Testing
         Activate(.label("Pay"))
             .expect(.changed(.screen()))
 
-        WaitFor(.exists(.label("Receipt")), timeout: .seconds(5)).else {
+        WaitFor(.exists(.label("Receipt")), timeout: 5).else {
             Fail("Receipt did not appear")
         }
 
@@ -1003,7 +1003,7 @@ import Testing
 
 @Test func `inline plan source RepeatUntil compiles`() throws {
     let plan = try HeistPlanSourceCompiler().compile(root("""
-    RepeatUntil(.exists(.value("3")), timeout: .seconds(2)) {
+    RepeatUntil(.exists(.value("3")), timeout: 2) {
         Increment(.identifier("Quantity"))
     }.else {
         Fail("quantity did not reach 3")
@@ -1046,7 +1046,7 @@ import Testing
 
 @Test func `inline plan source WaitFor and If compile`() throws {
     let plan = try HeistPlanSourceCompiler().compile(root("""
-    WaitFor(.exists(.label("Home")), timeout: .seconds(1))
+    WaitFor(.exists(.label("Home")), timeout: 1)
     If {
         Case(.exists(.label("Pay"))) {
             Warn("ready")
@@ -1238,7 +1238,7 @@ import Testing
     try assertCanonicalRoundTrip(try HeistPlan(body: [
         .action(try ActionStep(
             command: .activate(.predicate(.label("Pay"))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: .milliseconds(1))))),
+            expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 0.001)))),
         .action(try ActionStep(
             command: .typeText(text: "milk", target: .predicate(.label("Search"))),
             expectationPolicy: .expect(ActionExpectation(predicate: .exists(.value("milk")), timeout: 2)))),
@@ -1275,11 +1275,11 @@ import Testing
         )))),
         .action(try ActionStep(command: .mechanicalLongPress(LongPressTarget(
             selection: .coordinate(ScreenPoint(x: 20, y: 40)),
-            duration: GestureDuration(seconds: 1)
+            duration: 1
         )))),
         .action(try ActionStep(command: .mechanicalLongPress(LongPressTarget(
             selection: .elementUnitPoint(.label("Message"), UnitPoint(x: 0.5, y: 0.2)),
-            duration: GestureDuration(seconds: 1.4)
+            duration: 1.4
         )))),
         .action(try ActionStep(command: .mechanicalSwipe(SwipeTarget(selection: .unitElement(
             .label("Carousel"),
@@ -1328,7 +1328,7 @@ import Testing
                 .predicate(.label("Row")),
                 UnitPoint(x: 0.5, y: 0.5)
             ),
-            duration: GestureDuration(seconds: 1.4)
+            duration: 1.4
         )))),
         .action(try ActionStep(command: .mechanicalDrag(DragTarget(
             selection: .elementToPoint(
@@ -1784,7 +1784,7 @@ import Testing
         .customContent(label: "Slot", value: "Main"),
         .rotors(["Actions"]),
         .exclude(.rotors(["Headings"]))
-    )), timeout: .seconds(2))
+    )), timeout: 2)
     """#)
 
     let plan = try HeistPlanSourceCompiler().compile(source)

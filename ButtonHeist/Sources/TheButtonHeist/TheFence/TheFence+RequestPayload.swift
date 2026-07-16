@@ -325,7 +325,7 @@ extension TheFence {
             let text = try arguments.requiredValue(FenceParameters.text)
             let input: TextInputText
             do {
-                input = try TextInputText.admitting(text: text, mode: mode)
+                input = try TextInputText(validating: text, mode: mode)
             } catch TextInputTextError.emptyAppend {
                 throw SchemaValidationError(
                     field: FenceParameters.text.key.rawValue,

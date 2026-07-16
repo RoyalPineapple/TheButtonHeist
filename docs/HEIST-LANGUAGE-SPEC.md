@@ -181,7 +181,7 @@ Activate(.element(.label("Pay"), .traits([.button])))
 
 Activate(.target(.element(.label("Delete"), .traits([.button])), ordinal: 1))
 
-WaitFor(.exists(.element(.label("Total"), .value("$12.00"))), timeout: .seconds(2))
+WaitFor(.exists(.element(.label("Total"), .value("$12.00"))), timeout: 2)
 ```
 
 The following forms are not durable selector or context identity:
@@ -261,10 +261,11 @@ implied final state is true.
 
 ## Timeouts
 
-Every timeout in the language is a `Double` in **seconds**. DSL source SHOULD
-spell timeouts with `.seconds(_:)` or `.milliseconds(_:)`; generated plan JSON
-carries the same value as a bare number of seconds. Timeouts MUST be finite
-and non-negative.
+Every timeout in the language is a `Double` in **seconds**. DSL source spells
+fixed timeouts as bare numeric literals; generated plan JSON carries the same
+value as a bare number of seconds. Runtime Swift code constructing a dynamic
+timeout uses `try WaitTimeout.seconds(_:)` or
+`try WaitTimeout.milliseconds(_:)`. Timeouts MUST be finite and positive.
 
 | Site | Default | Notes |
 |------|---------|-------|
@@ -294,7 +295,7 @@ HeistPlan("checkout") {
     Activate(.label("Pay"))
         .expect(.changed(.screen([.exists(.label("Receipt"))])))
 
-    WaitFor(.exists(.label("Receipt")), timeout: .seconds(10))
+    WaitFor(.exists(.label("Receipt")), timeout: 10)
 }
 ```
 
@@ -328,7 +329,7 @@ timeout elapses; the optional lowercase `.else { ... }` body runs when the
 timeout wins:
 
 ```swift
-RepeatUntil(.exists(.label("Inbox empty")), timeout: .seconds(10)) {
+RepeatUntil(.exists(.label("Inbox empty")), timeout: 10) {
     Activate(.label("Delete"))
 }
 .else {

@@ -188,6 +188,8 @@ enum DiagnosticFailureMapper {
 
     static func failureDetails(for reportFailure: HeistFailureDetail) -> FailureDetails {
         switch reportFailure.category {
+        case .internalInvariant:
+            return FailureDetails(code: .requestActionFailed)
         case .validation:
             return FailureDetails(code: .requestValidationError)
         case .runtimeUnavailable:

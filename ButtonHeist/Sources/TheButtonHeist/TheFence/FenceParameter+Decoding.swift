@@ -105,7 +105,10 @@ extension FenceParameter where Value == GestureDuration {
         return FenceParameter(
             key: key,
             spec: spec,
-            convertValue: { value in value.numberValue.map { GestureDuration(seconds: $0) } },
+            convertValue: { value in
+                guard let seconds = value.numberValue else { return nil }
+                return try GestureDuration(validatingSeconds: seconds)
+            },
             encodeValue: { jsonSchemaNumber($0.seconds) }
         )
     }

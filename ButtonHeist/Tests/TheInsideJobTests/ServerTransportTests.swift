@@ -6,18 +6,12 @@ final class ServerTransportTests: XCTestCase {
 
     func testTransportEventStreamUsesCheckedSendableConformance() {
         assertSendable(TransportEventStream.self)
-        assertSendable(TransportEventStream.EventStream.self)
+        assertSendable(TransportEventStream.Events.self)
     }
 
     @MainActor
-    func testEventOverflowInvokesFailClosedHandler() async {
+    func testEventOverflowIsDeliveredAsOrderedTerminalEvent() async {
         let transport = ServerTransport(token: "overflow-test-token")
-        let overflow = expectation(description: "overflow handler called")
-        var observedMaxEvents: Int?
-        transport.setEventBacklogOverflowHandler { maxEvents in
-            observedMaxEvents = maxEvents
-            overflow.fulfill()
-        }
         let callbacks = transport.makeCallbacks()
 
         for index in 0..<ServerTransport.eventStreamBufferLimit {
@@ -25,8 +19,14 @@ final class ServerTransportTests: XCTestCase {
         }
         callbacks.onClientDisconnected?(ServerTransport.eventStreamBufferLimit)
 
-        await fulfillment(of: [overflow], timeout: 1.0)
-        XCTAssertEqual(observedMaxEvents, ServerTransport.eventStreamBufferLimit)
+        var iterator = transport.events.makeAsyncIterator()
+        for _ in 0..<ServerTransport.eventStreamBufferLimit {
+            _ = await iterator.next()
+        }
+        guard case .backlogOverflow(let maxEvents) = await iterator.next() else {
+            return XCTFail("Expected a terminal backlog-overflow event")
+        }
+        XCTAssertEqual(maxEvents, ServerTransport.eventStreamBufferLimit)
     }
 
     @MainActor
@@ -149,9 +149,14 @@ final class ServerTransportTests: XCTestCase {
     func testStopWhileStartingRejectsStaleStartCompletion() async throws {
         let transport = ServerTransport(token: "starting-token")
         let startGate = TransportStartGate()
+        let underlyingStopFinished = TransportSignal()
+        var stopReturned = false
         transport.startOverride = { _, _, _ in
             await startGate.enterAndWaitForRelease()
             return 49152
+        }
+        transport.stopOverride = {
+            underlyingStopFinished.signal()
         }
 
         let startTask = Task { @MainActor in
@@ -159,8 +164,15 @@ final class ServerTransportTests: XCTestCase {
         }
         await startGate.waitUntilEntered()
 
-        await transport.stop()
+        let stopTask = Task { @MainActor in
+            await transport.stop()
+            stopReturned = true
+        }
+        await underlyingStopFinished.wait()
+        XCTAssertFalse(stopReturned)
+
         startGate.release()
+        await stopTask.value
 
         do {
             _ = try await startTask.value
@@ -206,6 +218,7 @@ final class ServerTransportTests: XCTestCase {
     func testRestartAfterStopDuringStartupWaitsForStaleCompletion() async throws {
         let transport = ServerTransport(token: "starting-token")
         let startGate = TransportStartGate()
+        let underlyingStopFinished = TransportSignal()
         var startCount = 0
         var lifecycleEvents: [String] = []
         transport.startOverride = { _, _, _ in
@@ -219,17 +232,24 @@ final class ServerTransportTests: XCTestCase {
             lifecycleEvents.append("restart-started")
             return 49153
         }
+        transport.stopOverride = {
+            underlyingStopFinished.signal()
+        }
 
         let staleStart = Task { @MainActor in
             try await transport.start(port: 0, bindToLoopback: true)
         }
         await startGate.waitUntilEntered()
-        await transport.stop()
+        let stopTask = Task { @MainActor in
+            await transport.stop()
+        }
+        await underlyingStopFinished.wait()
         let restart = Task { @MainActor in
             try await transport.start(port: 0, bindToLoopback: true)
         }
 
         startGate.release()
+        await stopTask.value
 
         do {
             _ = try await staleStart.value
@@ -247,28 +267,23 @@ final class ServerTransportTests: XCTestCase {
         await transport.stop()
     }
 
-    func testTransportEventStreamDropsNewestWhenBufferLimitIsReached() {
-        let eventStream = TransportEventStream.makeEventStream(
-            bufferLimit: ServerTransport.eventStreamBufferLimit
-        )
-        defer {
-            eventStream.continuation.finish()
-            withExtendedLifetime(eventStream.events) {}
-        }
+    func testTransportEventStreamReservesTerminalOverflowCapacity() async {
+        let eventStream = TransportEventStream(bufferLimit: 2)
+        let callbacks = eventStream.makeCallbacks()
+        callbacks.onClientConnected?(1, nil)
+        callbacks.onClientConnected?(2, nil)
+        callbacks.onClientDisconnected?(3)
 
-        for index in 0..<ServerTransport.eventStreamBufferLimit {
-            let yieldResult = eventStream.continuation.yield(.clientConnected(clientId: index, remoteAddress: nil))
-            guard case .enqueued = yieldResult else {
-                return XCTFail("Expected transport event to enqueue before the buffer limit")
-            }
+        var iterator = eventStream.events.makeAsyncIterator()
+        guard case .clientConnected(let first, _) = await iterator.next(),
+              case .clientConnected(let second, _) = await iterator.next(),
+              case .backlogOverflow(let maxEvents) = await iterator.next()
+        else {
+            return XCTFail("Expected accepted events followed by terminal overflow")
         }
-
-        let overflowResult = eventStream.continuation.yield(
-            .clientDisconnected(clientId: ServerTransport.eventStreamBufferLimit)
-        )
-        guard case .dropped = overflowResult else {
-            return XCTFail("Expected newest transport event to drop when the buffer limit is reached")
-        }
+        XCTAssertEqual(first, 1)
+        XCTAssertEqual(second, 2)
+        XCTAssertEqual(maxEvents, 2)
     }
 
     @MainActor
@@ -342,6 +357,30 @@ final class ServerTransportTests: XCTestCase {
             let waiters = releaseWaiters
             releaseWaiters.removeAll()
             waiters.forEach { $0.resume() }
+        }
+    }
+
+    @MainActor
+    private final class TransportSignal {
+        private var isSignalled = false
+        private var waiters: [CheckedContinuation<Void, Never>] = []
+
+        func signal() {
+            isSignalled = true
+            let pendingWaiters = waiters
+            waiters.removeAll()
+            pendingWaiters.forEach { $0.resume() }
+        }
+
+        func wait() async {
+            guard !isSignalled else { return }
+            await withCheckedContinuation { continuation in
+                if isSignalled {
+                    continuation.resume()
+                } else {
+                    waiters.append(continuation)
+                }
+            }
         }
     }
 }

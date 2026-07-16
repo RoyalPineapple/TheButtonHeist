@@ -122,6 +122,15 @@ grep -Fq 'Verify CI passed on exact release commit' .github/workflows/release.ym
     || fail ".github/workflows/release.yml must gate releases on exact release-commit CI"
 grep -Fq 'scripts/require-successful-ci-for-commit.sh' .github/workflows/release.yml \
     || fail ".github/workflows/release.yml must delegate to the canonical exact-commit CI guard"
+[[ -x scripts/test-runner.py ]] \
+    || fail "scripts/test-runner.py must be the executable canonical test runner"
+grep -Fq 'scripts/test-runner.py' AGENTS.md \
+    || fail "AGENTS.md must name scripts/test-runner.py as the canonical test runner"
+grep -Fq 'scripts/test-runner.py' docs/CI.md \
+    || fail "docs/CI.md must name scripts/test-runner.py as the canonical test runner"
+if grep -Eq '(xcodebuild[[:space:]]+(test|build-for-testing|test-without-building)|tuist[[:space:]]+test)([[:space:]]|$)' .github/workflows/ci.yml; then
+    fail ".github/workflows/ci.yml must delegate test driving to scripts/test-runner.py"
+fi
 grep -Fq -- '--branch main' scripts/require-successful-ci-for-commit.sh \
     || fail "the exact-commit CI guard must check main-branch CI"
 grep -Fq 'name: exact-sha-suite' .github/workflows/ci.yml \

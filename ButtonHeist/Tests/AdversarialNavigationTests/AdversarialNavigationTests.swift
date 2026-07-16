@@ -14,7 +14,7 @@ final class AdversarialNavigationTests: XCTestCase {
         try await AdversarialLabRoute.open(.modalObstruction)
         let failure = try await expectHeistFailure("AdversarialModalObstructionBackgroundFails") {
             Activate(.label("Review order"))
-                .expect(.exists(.label("Order review")), timeout: .seconds(4))
+                .expect(.exists(.label("Order review")), timeout: 4)
             Activate(.label("Archive order 3"))
         }
 
@@ -26,21 +26,21 @@ final class AdversarialNavigationTests: XCTestCase {
         XCTAssertNil(actionResult.subjectEvidence)
 
         let cleanup = try await runHeist("AdversarialModalObstructionCleanup") {
-            WaitFor(.exists(.element(.label("Archived orders"), .value("0"))), timeout: .seconds(2))
+            WaitFor(.exists(.element(.label("Archived orders"), .value("0"))), timeout: 2)
             WaitFor(.exists(.element(
                 .label("Background archive actions"),
                 .value("0")
-            )), timeout: .seconds(2))
+            )), timeout: 2)
             WaitFor(.exists(.element(
                 .label("Background scroll attempts"),
                 .value("0")
-            )), timeout: .seconds(2))
+            )), timeout: 2)
             WaitFor(.exists(.element(
                 .label("Background scroll movements"),
                 .value("0")
-            )), timeout: .seconds(2))
+            )), timeout: 2)
             Activate(.label("Close"))
-                .expect(.missing(.label("Order review")), timeout: .seconds(4))
+                .expect(.missing(.label("Order review")), timeout: 4)
         }
         XCTAssertNil(cleanup.result.firstFailedStep)
     }
@@ -54,11 +54,11 @@ final class AdversarialNavigationTests: XCTestCase {
         try await AdversarialLabRoute.open(.nestedScroll)
         let heist = try await runHeist("AdversarialNestedScrollPass") {
             Activate(target)
-                .expect(.exists(.label("Selected Verified")), timeout: .seconds(6))
+                .expect(.exists(.label("Selected Verified")), timeout: 6)
             WaitFor(.exists(.element(
                 .label("Nested target activations"),
                 .value("1")
-            )), timeout: .seconds(2))
+            )), timeout: 2)
         }
 
         XCTAssertNil(heist.result.firstFailedStep)

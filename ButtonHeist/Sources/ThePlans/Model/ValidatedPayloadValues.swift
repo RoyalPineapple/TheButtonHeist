@@ -1,7 +1,7 @@
 package struct BoundedSeconds: Sendable, Equatable {
     package let value: Double
 
-    package init(value: Double, maximum: Double) throws {
+    package init(value: Double, maximum: Double) throws(BoundedSecondsError) {
         guard value.isFinite,
               value > 0,
               value <= maximum else {
@@ -66,14 +66,19 @@ public struct TextInputText: Codable, Sendable, Equatable, Hashable, CustomStrin
     public let mode: Mode
     private let text: String
 
-    public init(validating text: String) throws {
-        self = try Self.admitting(text: text, mode: .append)
+    public init(validating text: String) throws(TextInputTextError) {
+        try self.init(validating: text, mode: .append)
+    }
+
+    public init(validating text: String, mode: Mode) throws(TextInputTextError) {
+        guard mode == .replace || !text.isEmpty else {
+            throw TextInputTextError.emptyAppend
+        }
+        self.init(mode: mode, text: text)
     }
 
     public static func replacing(_ text: String) -> Self {
-        requireValidPublicPayload {
-            try Self.admitting(text: text, mode: .replace)
-        }
+        Self(mode: .replace, text: text)
     }
 
     package var rawText: String { text }
@@ -84,7 +89,7 @@ public struct TextInputText: Codable, Sendable, Equatable, Hashable, CustomStrin
         let text = try container.decode(String.self, forKey: .text)
         let mode = try container.decode(Mode.self, forKey: .mode)
         do {
-            self = try Self.admitting(text: text, mode: mode)
+            self = try Self(validating: text, mode: mode)
         } catch {
             throw DecodingError.dataCorruptedError(
                 forKey: .text,
@@ -102,13 +107,6 @@ public struct TextInputText: Codable, Sendable, Equatable, Hashable, CustomStrin
 
     public var description: String { text }
 
-    package static func admitting(text: String, mode: Mode) throws -> Self {
-        let admitted = mode == .replace
-            ? text
-            : try requireNonEmpty(text, or: TextInputTextError.emptyAppend)
-        return Self(mode: mode, text: admitted)
-    }
-
     private init(mode: Mode, text: String) {
         self.mode = mode
         self.text = text
@@ -121,7 +119,7 @@ public struct TextInputText: Codable, Sendable, Equatable, Hashable, CustomStrin
 
 extension TextInputText: ExpressibleByStringLiteral {
     public init(stringLiteral value: String) {
-        self = requireValidPublicPayload {
+        self = requireValidLiteralPayload {
             try Self(validating: value)
         }
     }
@@ -157,7 +155,7 @@ public struct PasteboardText: Codable, Sendable, Equatable, Hashable, CustomStri
 
 extension PasteboardText: ExpressibleByStringLiteral {
     public init(stringLiteral value: String) {
-        self = requireValidPublicPayload {
+        self = requireValidLiteralPayload {
             try Self(validating: value)
         }
     }
@@ -193,7 +191,7 @@ public struct CustomActionName: Codable, Sendable, Equatable, Hashable, CustomSt
 
 extension CustomActionName: ExpressibleByStringLiteral {
     public init(stringLiteral value: String) {
-        self = requireValidPublicPayload { try Self(validating: value) }
+        self = requireValidLiteralPayload { try Self(validating: value) }
     }
 }
 
@@ -225,7 +223,7 @@ public struct RotorName: Codable, Sendable, Equatable, Hashable, CustomStringCon
 
 extension RotorName: ExpressibleByStringLiteral {
     public init(stringLiteral value: String) {
-        self = requireValidPublicPayload { try Self(validating: value) }
+        self = requireValidLiteralPayload { try Self(validating: value) }
     }
 }
 
@@ -257,7 +255,7 @@ public struct HeistWarningMessage: Codable, Sendable, Equatable, Hashable, Custo
 
 extension HeistWarningMessage: ExpressibleByStringLiteral {
     public init(stringLiteral value: String) {
-        self = requireValidPublicPayload { try Self(validating: value) }
+        self = requireValidLiteralPayload { try Self(validating: value) }
     }
 }
 
@@ -289,7 +287,7 @@ public struct HeistFailureMessage: Codable, Sendable, Equatable, Hashable, Custo
 
 extension HeistFailureMessage: ExpressibleByStringLiteral {
     public init(stringLiteral value: String) {
-        self = requireValidPublicPayload { try Self(validating: value) }
+        self = requireValidLiteralPayload { try Self(validating: value) }
     }
 }
 
@@ -299,7 +297,7 @@ public enum HeistFailureMessageError: Error, Sendable, Equatable, CustomStringCo
     public var description: String { "heist failure message must not be blank" }
 }
 
-package func requireValidPublicPayload<Value>(_ construct: () throws -> Value) -> Value {
+func requireValidLiteralPayload<Value>(_ construct: () throws -> Value) -> Value {
     do {
         return try construct()
     } catch {

@@ -8,7 +8,7 @@ struct CanonicalHeistSourceRoundTripTests {
         try assertRoundTrip(try HeistPlan(body: [
             .action(try ActionStep(
                 command: .activate(.predicate(.label("Pay"))),
-                expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: .milliseconds(1))))),
+                expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 0.001)))),
             .action(try ActionStep(
                 command: .typeText(text: "milk", target: .predicate(.label("Search"))),
                 expectationPolicy: .expect(ActionExpectation(predicate: .exists(.element(.label("Search"), .value("milk"))), timeout: 2)))),
@@ -72,7 +72,7 @@ struct CanonicalHeistSourceRoundTripTests {
             TypeText("milk", into: .label("Search"))
                 .expect(.changed(.elements([.updated(.label("Search"), .value("milk"))])))
 
-            WaitFor(.exists(.label("Results")), timeout: .seconds(2))
+            WaitFor(.exists(.label("Results")), timeout: 2)
 
             If(.exists(.value(.contains("Promo")))) {
                 Warn("promo")
@@ -96,7 +96,7 @@ struct CanonicalHeistSourceRoundTripTests {
             TypeText("milk", into: .label("Search"))
                 .expect(.changed(.elements([.updated(.label("Search"), .value("milk"))])))
 
-            WaitFor(.exists(.label("Results")), timeout: .seconds(2))
+            WaitFor(.exists(.label("Results")), timeout: 2)
 
             If(.exists(.value(.contains("Promo")))) {
                 Warn("promo")
@@ -155,7 +155,7 @@ struct CanonicalHeistSourceRoundTripTests {
             )))),
             .action(try ActionStep(command: .mechanicalLongPress(LongPressTarget(
                 selection: .coordinate(ScreenPoint(x: 20, y: 40)),
-                duration: GestureDuration(seconds: 1)
+                duration: 1
             )))),
             .action(try ActionStep(command: .mechanicalSwipe(SwipeTarget(selection: .elementDirection(
                 .label("List"),

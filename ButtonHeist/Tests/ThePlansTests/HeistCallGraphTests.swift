@@ -144,7 +144,7 @@ private struct EncodedInvocationStepContract: Decodable {
         ], body: [
             .wait(WaitStep(
                 predicate: .exists(.label("Ready")),
-                timeout: .milliseconds(1),
+                timeout: 0.001,
                 elseBody: [.invoke(HeistInvocationStep(path: "fallback"))]
             )),
         ]),

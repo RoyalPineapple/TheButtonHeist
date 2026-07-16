@@ -76,7 +76,7 @@ actor TheMuscle {
     private var delivery: ClientDelivery = .unwired
     private var sessionReleaseTimer = SessionReleaseTimer()
 
-    private let delayedDisconnects = MuscleDelayedDisconnects(
+    private var delayedDisconnects = MuscleDelayedDisconnects(
         gracePeriod: TheMuscle.disconnectGracePeriod
     )
     private let authenticationDeadlines = MuscleAuthenticationDeadlines(
@@ -213,7 +213,11 @@ actor TheMuscle {
     func tearDown() async {
         admission.removeAllClients()
         cancelAllAuthenticationDeadlines()
-        delayedDisconnects.cancelAll()
+        let disconnectGeneration = delayedDisconnects
+        await disconnectGeneration.drain()
+        if delayedDisconnects === disconnectGeneration {
+            delayedDisconnects = MuscleDelayedDisconnects(gracePeriod: Self.disconnectGracePeriod)
+        }
         await releaseSession()
     }
 

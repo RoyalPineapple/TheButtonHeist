@@ -288,8 +288,8 @@ final class PredicateWaitLifecycleTests: XCTestCase {
 
         XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
         XCTAssertEqual(checks, [.visible, .discovery, .visible, .discovery])
-        XCTAssertEqual(deadlines[0]?.timeoutSeconds, WaitTimeout.milliseconds(1).seconds)
-        XCTAssertEqual(deadlines[1]?.timeoutSeconds, WaitTimeout.milliseconds(1).seconds)
+        XCTAssertEqual(deadlines[0]?.timeoutSeconds, try WaitTimeout.milliseconds(1).seconds)
+        XCTAssertEqual(deadlines[1]?.timeoutSeconds, try WaitTimeout.milliseconds(1).seconds)
         XCTAssertEqual(
             deadlines[2]?.timeoutSeconds,
             Double(SettleSession.viewportTransitionTimeoutMs) / 1_000

@@ -45,7 +45,7 @@ Activate(.label("Pay")).expect(.changed(.screen()))
 TypeText("milk", into: .label("Search"))
     .expect(.exists(.element(.label("Search"), .value("milk"))))
 Increment(.label("Quantity"))
-    .until(.element(label: "Quantity", value: "10"), timeout: .seconds(5))
+    .until(.element(label: "Quantity", value: "10"), timeout: 5)
 Decrement(.label("Quantity"))
 CustomAction("Archive", on: .label("Message"))
 Rotor("Headings", on: .label("Article"))
@@ -58,7 +58,7 @@ Mechanical.LongPress(.label("Message"))
 Mechanical.Swipe(.label("Carousel"), .left)
 Mechanical.Drag(.label("Slider"), to: ScreenPoint(x: 200, y: 40))
 
-WaitFor(.label("Checkout"), timeout: .seconds(5))
+WaitFor(.label("Checkout"), timeout: 5)
 ```
 
 `perform(step:)` accepts one durable DSL step only. It rejects program-shaped
@@ -96,10 +96,10 @@ Activate(.label("Pay"), ordinal: 0)
 **Waiting**: use `perform(step:)` with `WaitFor(...)` when the UI is updating asynchronously — network requests, timers, animations completing. The predicate should name the specific outcome:
 
 ```swift
-WaitFor(.changed(.screen()), timeout: .seconds(10))
-WaitFor(.exists(.container(.label("Checkout"))), timeout: .seconds(5))
-WaitFor(.label("Receipt"), timeout: .seconds(5))
-WaitFor(.missing(.label("Loading")), timeout: .seconds(10))
+WaitFor(.changed(.screen()), timeout: 10)
+WaitFor(.exists(.container(.label("Checkout"))), timeout: 5)
+WaitFor(.label("Receipt"), timeout: 5)
+WaitFor(.missing(.label("Loading")), timeout: 10)
 ```
 
 For `.missing(...)`, the predicate means the element is absent from the current settled hierarchy. It does not require The Button Heist to prove the element existed and then vanished.
@@ -266,7 +266,7 @@ For operations that take time, keep using the DSL:
 Activate(.label("Pay"))
     .expect(.changed(.screen([.exists(.label("Receipt"))])))
 
-WaitFor(.label("Receipt"), timeout: .seconds(10))
+WaitFor(.label("Receipt"), timeout: 10)
 ```
 
 If the action receipt shows a spinner or loading overlay instead of the final state,

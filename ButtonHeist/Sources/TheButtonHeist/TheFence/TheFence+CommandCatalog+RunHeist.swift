@@ -98,7 +98,7 @@ extension TheFence.Command {
         `Mechanical.LongPress(.label("Message"), at: UnitPoint(x: 0.5, y: 0.5))`
         `Mechanical.Swipe(.label("Carousel"), .left)`
         `Mechanical.Drag(.label("Slider"), to: ScreenPoint(x: 200, y: 40))`
-        `WaitFor(.label("Checkout"), timeout: .seconds(5))`
+        `WaitFor(.label("Checkout"), timeout: 5)`
 
         Use `perform` when one line is enough. Use `run_heist` when the job needs
         multiple instructions, reusable heists, `RunHeist`, `If`,
@@ -113,7 +113,7 @@ extension TheFence.Command {
         `HeistDef<String>("Cart.addItem", parameter: "item") { item in ... }`
         `RunHeist("Cart.addItem", "Milk").expect(.changed(.elements([.appeared(.element(.label("subtotal"), .value(.contains("1 item"))))])))`
         `If(.label("Pay")) { ... }.else { ... }`
-        `WaitFor(.changed(.screen()), timeout: .seconds(10)).else { ... }`
+        `WaitFor(.changed(.screen()), timeout: 10).else { ... }`
         `ForEach("Milk", "Bread") { item in ... }`
         `ForEach(.element(.label(.prefix("Delete")), .traits([.button])), limit: 20) { target in ... }`
         `Warn("message")`

@@ -6,9 +6,9 @@ import Testing
 func swiftDSLAndJSONProjectToEquivalentCanonicalSwift() throws {
     let swiftPlan = try HeistPlan {
         Activate(.label("Sign In"))
-            .expect(.exists(.label("Home")), timeout: .seconds(5))
+            .expect(.exists(.label("Home")), timeout: 5)
 
-        WaitFor(.missing(.label("Loading")), timeout: .seconds(1))
+        WaitFor(.missing(.label("Loading")), timeout: 1)
 
         If {
             Case(.exists(.label("Home"))) {
@@ -20,7 +20,7 @@ func swiftDSLAndJSONProjectToEquivalentCanonicalSwift() throws {
             }
         }
 
-        WaitFor(.exists(.label("Results")), timeout: .seconds(8))
+        WaitFor(.exists(.label("Results")), timeout: 8)
             .else {
                 Fail("timeout")
             }
@@ -29,12 +29,12 @@ func swiftDSLAndJSONProjectToEquivalentCanonicalSwift() throws {
 
         ForEach(.label("Delete"), limit: 20) { target in
             Activate(target)
-                .expect(.missing(target), timeout: .seconds(2))
+                .expect(.missing(target), timeout: 2)
         }
 
         ForEach("Milk", "Eggs") { item in
             TypeText(item, into: .label("Add item"))
-                .expect(.exists(.label(item)), timeout: .seconds(2))
+                .expect(.exists(.label(item)), timeout: 2)
         }
 
         Warn("done")
@@ -52,14 +52,14 @@ func swiftDSLAndJSONProjectToEquivalentCanonicalSwift() throws {
 func rootAccessibilityTargetPlanRendersCanonicalSwiftAndCompilesBack() async throws {
     let plan = try HeistPlan("RecordedTarget", targetParameter: "target") { target in
         Activate(target)
-            .expect(.missing(target), timeout: .seconds(2))
+            .expect(.missing(target), timeout: 2)
 
-        WaitFor(.exists(target), timeout: .seconds(1))
+        WaitFor(.exists(target), timeout: 1)
 
         If {
             Case(.exists(target)) {
                 CustomAction("Archive", on: target)
-                    .expect(.changed(.screen([.exists(target)])), timeout: .seconds(3))
+                    .expect(.changed(.screen([.exists(target)])), timeout: 3)
             }
 
             Else {
@@ -67,7 +67,7 @@ func rootAccessibilityTargetPlanRendersCanonicalSwiftAndCompilesBack() async thr
             }
         }
 
-        WaitFor(.missing(target), timeout: .seconds(4))
+        WaitFor(.missing(target), timeout: 4)
 
         Warn("target removed")
     }
@@ -77,19 +77,19 @@ func rootAccessibilityTargetPlanRendersCanonicalSwiftAndCompilesBack() async thr
     #expect(rendered == """
     HeistPlan("RecordedTarget", targetParameter: "target") { target in
         Activate(target)
-            .expect(.missing(target), timeout: .seconds(2))
+            .expect(.missing(target), timeout: 2)
 
-        WaitFor(.exists(target), timeout: .seconds(1))
+        WaitFor(.exists(target), timeout: 1)
 
         If(.exists(target)) {
             CustomAction("Archive", on: target)
-                .expect(.changed(.screen([.exists(target)])), timeout: .seconds(3))
+                .expect(.changed(.screen([.exists(target)])), timeout: 3)
         }
         .else {
             Fail("target missing")
         }
 
-        WaitFor(.missing(target), timeout: .seconds(4))
+        WaitFor(.missing(target), timeout: 4)
 
         Warn("target removed")
     }
@@ -151,7 +151,7 @@ func `canonical Swift renderer preserves composed expectation with string ref`()
 
             Activate(.label("Search"))
                 .expect(.changed(.screen()))
-                .expect(.exists(.label(query)), timeout: .seconds(5))
+                .expect(.exists(.label(query)), timeout: 5)
         }
     }
 
@@ -166,7 +166,7 @@ func `canonical Swift renderer preserves composed expectation with string ref`()
                 .expect(.exists(.value(query)))
 
             Activate(.label("Search"))
-                .expect(.changed(.screen([.exists(.label(query))])), timeout: .seconds(5))
+                .expect(.changed(.screen([.exists(.label(query))])), timeout: 5)
         }
 
         RunHeist("SearchScreen.search", "milk")
@@ -261,14 +261,14 @@ func canonicalSwiftRendererRendersMechanicalActionForms() throws {
         )))),
         .action(try ActionStep(command: .mechanicalLongPress(LongPressTarget(
             selection: .coordinate(ScreenPoint(x: 1.25, y: 2.5)),
-            duration: GestureDuration(seconds: 1.2)
+            duration: 1.2
         )))),
         .action(try ActionStep(command: .mechanicalLongPress(LongPressTarget(
             selection: .elementUnitPoint(
                 .predicate(.label("Message")),
                 UnitPoint(x: 0.5, y: 0.2)
             ),
-            duration: GestureDuration(seconds: 1.4)
+            duration: 1.4
         )))),
         .action(try ActionStep(command: .mechanicalSwipe(SwipeTarget(selection: .elementDirection(
             .predicate(.label("List")),

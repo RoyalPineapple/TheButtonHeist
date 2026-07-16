@@ -6,6 +6,30 @@ import ThePlans
 import TheScore
 
 extension TheBrains {
+    private struct RepeatUntilReceiptContext {
+        let path: HeistExecutionPath
+        let durationMs: Int
+        let declaration: HeistRepeatUntilDeclaration
+        let step: ResolvedRepeatUntilStep
+        let children: [HeistExecutionStepResult]
+
+        init(
+            path: HeistExecutionPath,
+            durationMs: Int,
+            step: ResolvedRepeatUntilStep,
+            children: [HeistExecutionStepResult]
+        ) {
+            self.path = path
+            self.durationMs = durationMs
+            declaration = HeistRepeatUntilDeclaration(
+                predicate: step.predicateExpression,
+                timeout: step.timeout
+            )
+            self.step = step
+            self.children = children
+        }
+    }
+
     internal func repeatUntilTerminalResult(
         context: RepeatUntil.Context,
         step: ResolvedRepeatUntilStep,
@@ -48,76 +72,45 @@ extension TheBrains {
                 observed: "repeat_until result requires terminal state"
             )
         }
+        let receiptContext = RepeatUntilReceiptContext(
+            path: context.path,
+            durationMs: elapsedMilliseconds(since: context.start),
+            step: step,
+            children: terminal.children
+        )
 
         switch terminal {
         case .predicateMet(let check, let iterationCount, _):
-            let evidence = HeistRepeatUntilEvidence.matched(
-                iterationCount: iterationCount,
-                expectation: check.expectation,
-                lastObservedSummary: check.observation.summary
+            return repeatUntilPredicateMetResult(
+                context: receiptContext,
+                check: check,
+                iterationCount: iterationCount
             )
-            guard let evidence = HeistPassedRepeatUntilEvidence(evidence),
-                  case .passed(let children) = HeistExecutedChildren(terminal.children) else {
-                preconditionFailure("matched repeat_until terminal must carry passing evidence and children")
-            }
-            return repeatUntilResult(context: context, step: step, completion: .passed(
-                evidence: evidence,
-                children: children
-            ))
         case .timedOut(let observation, let expectation, let iterationCount, _):
-            let reason = RepeatUntil.Terminal.timeoutReason(step: step, expectation: expectation)
-            let evidence = HeistRepeatUntilEvidence.failed(
-                iterationCount: iterationCount,
+            return repeatUntilTimedOutResult(
+                context: receiptContext,
+                observation: observation,
                 expectation: expectation,
-                lastObservedSummary: observation?.summary,
-                failureReason: reason
+                iterationCount: iterationCount
             )
-            guard let evidence = HeistFailedRepeatUntilEvidence(evidence),
-                  case .passed(let children) = HeistExecutedChildren(terminal.children) else {
-                preconditionFailure("timed-out repeat_until terminal must carry failed evidence and passing children")
-            }
-            return repeatUntilResult(context: context, step: step, completion: .failed(
-                evidence: .observed(evidence),
-                failure: repeatUntilFailure(step: step, observed: reason),
-                children: children
-            ))
         case .bodyFailed(let observation, let expectation, let index, let childPath, _):
-            let reason = "iteration \(index) failed at \(childPath)"
-            let evidence = HeistRepeatUntilEvidence.failed(
-                iterationCount: index + 1,
+            return repeatUntilBodyFailureResult(
+                context: receiptContext,
+                observation: observation,
                 expectation: expectation,
-                lastObservedSummary: observation?.summary,
-                failureReason: reason
+                iterationIndex: index,
+                childPath: childPath
             )
-            guard let evidence = HeistFailedRepeatUntilEvidence(evidence),
-                  case .aborted(let children) = HeistExecutedChildren(terminal.children) else {
-                preconditionFailure("body-failed repeat_until terminal must carry failed evidence and children")
-            }
-            return repeatUntilResult(context: context, step: step, completion: .childAborted(
-                evidence: evidence,
-                failure: repeatUntilFailure(step: step, observed: reason),
-                children: children
-            ))
         case .timeoutHandledByElse(let observation, let expectation, let iterationCount, _, _):
-            let evidence = HeistRepeatUntilEvidence.handledElse(
-                iterationCount: iterationCount,
+            return repeatUntilHandledTimeoutResult(
+                context: receiptContext,
+                observation: observation,
                 expectation: expectation,
-                lastObservedSummary: observation?.summary,
-                failureReason: RepeatUntil.Terminal.timeoutReason(step: step, expectation: expectation)
+                iterationCount: iterationCount
             )
-            guard let evidence = HeistPassedRepeatUntilEvidence(evidence),
-                  case .passed(let children) = HeistExecutedChildren(terminal.children) else {
-                preconditionFailure("handled repeat_until terminal must carry passing evidence and children")
-            }
-            return repeatUntilResult(context: context, step: step, completion: .passed(
-                evidence: evidence,
-                children: children
-            ))
         case .timeoutElseFailed(let observation, let expectation, let iterationCount, _, _, let childPath):
             return repeatUntilElseFailureResult(
-                context: context,
-                step: step,
-                terminal: terminal,
+                context: receiptContext,
                 observation: observation,
                 expectation: expectation,
                 iterationCount: iterationCount,
@@ -126,47 +119,166 @@ extension TheBrains {
         }
     }
 
+    private func repeatUntilPredicateMetResult(
+        context: RepeatUntilReceiptContext,
+        check: RepeatUntil.MetCheck,
+        iterationCount: Int
+    ) -> HeistExecutionStepResult {
+        let completion: HeistRepeatUntilCompletion?
+        if case .passed(let children) = HeistExecutedChildren(context.children) {
+            completion = HeistRepeatUntilEvidence.matched(
+                iterationCount: iterationCount,
+                expectation: check.expectation,
+                lastObservedSummary: check.observation.summary
+            ).flatMap(HeistPassedRepeatUntilEvidence.init).map { evidence in
+                .passed(evidence: evidence, children: children)
+            }
+        } else {
+            completion = nil
+        }
+        return repeatUntilResult(
+            context: context,
+            completion: completion
+        )
+    }
+
+    private func repeatUntilTimedOutResult(
+        context: RepeatUntilReceiptContext,
+        observation: RepeatUntil.Observation?,
+        expectation: ExpectationResult.Unmet,
+        iterationCount: Int
+    ) -> HeistExecutionStepResult {
+        let reason = RepeatUntil.Terminal.timeoutReason(step: context.step, expectation: expectation)
+        let completion: HeistRepeatUntilCompletion?
+        if case .passed(let children) = HeistExecutedChildren(context.children) {
+            completion = HeistRepeatUntilEvidence.failed(
+                iterationCount: iterationCount,
+                expectation: expectation,
+                lastObservedSummary: observation?.summary,
+                failureReason: reason
+            ).flatMap(HeistFailedRepeatUntilEvidence.init).map { evidence in
+                .failed(
+                    evidence: .observed(evidence),
+                    failure: repeatUntilFailure(step: context.step, observed: reason),
+                    children: children
+                )
+            }
+        } else {
+            completion = nil
+        }
+        return repeatUntilResult(
+            context: context,
+            completion: completion
+        )
+    }
+
+    private func repeatUntilBodyFailureResult(
+        context: RepeatUntilReceiptContext,
+        observation: RepeatUntil.Observation?,
+        expectation: ExpectationResult.Unmet,
+        iterationIndex: Int,
+        childPath: HeistExecutionPath
+    ) -> HeistExecutionStepResult {
+        let reason = "iteration \(iterationIndex) failed at \(childPath)"
+        let completion: HeistRepeatUntilCompletion?
+        if case .aborted(let children) = HeistExecutedChildren(context.children) {
+            completion = HeistRepeatUntilEvidence.failed(
+                iterationCount: iterationIndex + 1,
+                expectation: expectation,
+                lastObservedSummary: observation?.summary,
+                failureReason: reason
+            ).flatMap(HeistFailedRepeatUntilEvidence.init).map { evidence in
+                .childAborted(
+                    evidence: evidence,
+                    failure: repeatUntilFailure(step: context.step, observed: reason),
+                    children: children
+                )
+            }
+        } else {
+            completion = nil
+        }
+        return repeatUntilResult(
+            context: context,
+            completion: completion
+        )
+    }
+
+    private func repeatUntilHandledTimeoutResult(
+        context: RepeatUntilReceiptContext,
+        observation: RepeatUntil.Observation?,
+        expectation: ExpectationResult.Unmet,
+        iterationCount: Int
+    ) -> HeistExecutionStepResult {
+        let completion: HeistRepeatUntilCompletion?
+        if case .passed(let children) = HeistExecutedChildren(context.children) {
+            completion = HeistRepeatUntilEvidence.handledElse(
+                iterationCount: iterationCount,
+                expectation: expectation,
+                lastObservedSummary: observation?.summary,
+                failureReason: RepeatUntil.Terminal.timeoutReason(step: context.step, expectation: expectation)
+            ).flatMap(HeistPassedRepeatUntilEvidence.init).map { evidence in
+                .passed(evidence: evidence, children: children)
+            }
+        } else {
+            completion = nil
+        }
+        return repeatUntilResult(
+            context: context,
+            completion: completion
+        )
+    }
+
     private func repeatUntilElseFailureResult(
-        context: RepeatUntil.Context,
-        step: ResolvedRepeatUntilStep,
-        terminal: RepeatUntil.Terminal,
+        context: RepeatUntilReceiptContext,
         observation: RepeatUntil.Observation?,
         expectation: ExpectationResult.Unmet,
         iterationCount: Int,
         childPath: HeistExecutionPath
     ) -> HeistExecutionStepResult {
         let reason = [
-            RepeatUntil.Terminal.timeoutReason(step: step, expectation: expectation),
+            RepeatUntil.Terminal.timeoutReason(step: context.step, expectation: expectation),
             "else body failed at \(childPath)",
         ].joined(separator: "; ")
-        let evidence = HeistRepeatUntilEvidence.failed(
-            iterationCount: iterationCount,
-            expectation: expectation,
-            lastObservedSummary: observation?.summary,
-            failureReason: reason
-        )
-        guard let evidence = HeistFailedRepeatUntilEvidence(evidence),
-              case .aborted(let children) = HeistExecutedChildren(terminal.children) else {
-            preconditionFailure("else-failed repeat_until terminal must carry failed evidence and children")
+        let completion: HeistRepeatUntilCompletion?
+        if case .aborted(let children) = HeistExecutedChildren(context.children) {
+            completion = HeistRepeatUntilEvidence.failed(
+                iterationCount: iterationCount,
+                expectation: expectation,
+                lastObservedSummary: observation?.summary,
+                failureReason: reason
+            ).flatMap(HeistFailedRepeatUntilEvidence.init).map { evidence in
+                .childAborted(
+                    evidence: evidence,
+                    failure: childFailureDetail(category: .loop, childPath: childPath),
+                    children: children
+                )
+            }
+        } else {
+            completion = nil
         }
-        return repeatUntilResult(context: context, step: step, completion: .childAborted(
-            evidence: evidence,
-            failure: childFailureDetail(category: .loop, childPath: childPath),
-            children: children
-        ))
+        return repeatUntilResult(
+            context: context,
+            completion: completion
+        )
     }
 
     private func repeatUntilResult(
-        context: RepeatUntil.Context,
-        step: ResolvedRepeatUntilStep,
-        completion: HeistRepeatUntilCompletion
+        context: RepeatUntilReceiptContext,
+        completion: HeistRepeatUntilCompletion?
     ) -> HeistExecutionStepResult {
-        .repeatUntil(
+        let candidate = completion.flatMap { completion in
+            HeistExecutionStepResult.admitRepeatUntil(
+                path: context.path,
+                durationMs: context.durationMs,
+                declaration: context.declaration,
+                completion: completion
+            )
+        }
+        return admittedReceipt(
+            candidate,
             path: context.path,
-            durationMs: elapsedMilliseconds(since: context.start),
-            predicate: step.predicateExpression,
-            timeout: step.timeout,
-            completion: completion
+            durationMs: context.durationMs,
+            children: context.children
         )
     }
 
@@ -189,7 +301,7 @@ extension TheBrains {
         observation: RepeatUntil.Observation?,
         children: [HeistExecutionStepResult]
     ) -> HeistExecutionStepResult {
-        let evidence: HeistRepeatUntilEvidence
+        let evidence: HeistRepeatUntilEvidence?
         switch outcome {
         case .failed(expectation: let expectation, childPath: let childPath):
             evidence = HeistRepeatUntilEvidence.failed(
@@ -214,34 +326,55 @@ extension TheBrains {
                 lastObservedSummary: observation?.summary
             )
         }
+        let durationMs = elapsedMilliseconds(since: frame.start)
+        let declaration = HeistRepeatUntilDeclaration(
+            predicate: step.predicateExpression,
+            timeout: step.timeout
+        )
         switch outcome {
         case .predicateMet, .continued:
-            guard let evidence = HeistPassedRepeatUntilIterationEvidence(evidence),
-                  case .passed(let children) = HeistExecutedChildren(children) else {
-                preconditionFailure("passing repeat_until iteration must carry compatible evidence and children")
+            let candidate: HeistReceiptAdmission?
+            if case .passed(let admittedChildren) = HeistExecutedChildren(children) {
+                candidate = evidence.flatMap(HeistPassedRepeatUntilIterationEvidence.init).flatMap { evidence in
+                    HeistExecutionStepResult.admitRepeatUntilIteration(
+                        path: frame.path,
+                        durationMs: durationMs,
+                        declaration: declaration,
+                        completion: .passed(evidence: evidence, children: admittedChildren)
+                    )
+                }
+            } else {
+                candidate = nil
             }
-            return .repeatUntilIteration(
+            return admittedReceipt(
+                candidate,
                 path: frame.path,
-                durationMs: elapsedMilliseconds(since: frame.start),
-                predicate: step.predicateExpression,
-                timeout: step.timeout,
-                completion: .passed(evidence: evidence, children: children)
+                durationMs: durationMs,
+                children: children
             )
         case .failed(expectation: _, childPath: let childPath):
-            guard let evidence = HeistFailedRepeatUntilEvidence(evidence),
-                  case .aborted(let children) = HeistExecutedChildren(children) else {
-                preconditionFailure("failed repeat_until iteration must carry failed evidence and children")
+            let candidate: HeistReceiptAdmission?
+            if case .aborted(let admittedChildren) = HeistExecutedChildren(children) {
+                candidate = evidence.flatMap(HeistFailedRepeatUntilEvidence.init).flatMap { evidence in
+                    HeistExecutionStepResult.admitRepeatUntilIteration(
+                        path: frame.path,
+                        durationMs: durationMs,
+                        declaration: declaration,
+                        completion: .childAborted(
+                            evidence: evidence,
+                            failure: childFailureDetail(category: .loop, childPath: childPath),
+                            children: admittedChildren
+                        )
+                    )
+                }
+            } else {
+                candidate = nil
             }
-            return .repeatUntilIteration(
+            return admittedReceipt(
+                candidate,
                 path: frame.path,
-                durationMs: elapsedMilliseconds(since: frame.start),
-                predicate: step.predicateExpression,
-                timeout: step.timeout,
-                completion: .childAborted(
-                    evidence: evidence,
-                    failure: childFailureDetail(category: .loop, childPath: childPath),
-                    children: children
-                )
+                durationMs: durationMs,
+                children: children
             )
         }
     }

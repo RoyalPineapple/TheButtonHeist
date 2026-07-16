@@ -17,6 +17,13 @@ extension SimpleSocketServer {
         }
 
         let byteCount = dataToSend.count
+        guard clientRegistry.client(clientId) != nil else {
+            return .failed(.clientNotFound(clientId))
+        }
+        guard let generation = currentListener else {
+            return .failed(.transportUnavailable)
+        }
+
         let connection: NWConnection
         switch clientRegistry.reserveSend(clientId: clientId, byteCount: byteCount) {
         case .missingClient:
@@ -43,9 +50,16 @@ extension SimpleSocketServer {
                     continuation.resume(returning: .failed(.transportUnavailable))
                     return
                 }
-                self.spawnTrackedTask { server in
-                    let outcome = await server.completedSend(clientId: clientId, byteCount: byteCount, error: error)
+                let admission = self.spawnTrackedTask(in: generation) { server in
+                    let outcome = await server.completedSend(
+                        clientId: clientId,
+                        byteCount: byteCount,
+                        error: error
+                    )
                     continuation.resume(returning: outcome)
+                }
+                if case .rejected = admission {
+                    continuation.resume(returning: .failed(.transportUnavailable))
                 }
             })
         }

@@ -13,14 +13,8 @@ private let logger = ButtonHeistLog.logger(.handoff(.server))
 actor SimpleSocketServer {
     // MARK: - Actor-isolated mutable state
 
-    private var currentListener: SocketListenerGeneration?
+    private(set) var currentListener: SocketListenerGeneration?
     var clientRegistry = SocketClientRegistry()
-
-    /// Tasks that bridge `NWListener` / `NWConnection` callbacks into actor
-    /// isolation. Tracked so `stop()` can cancel in-flight work — without
-    /// tracking, a torn-down listener could still have callback Tasks running
-    /// against the stopped actor.
-    nonisolated let pendingCallbackTasks = TaskTracker()
 
     private let _syncListeningPort = OSAllocatedUnfairLock<UInt16>(initialState: 0)
 
@@ -80,8 +74,9 @@ actor SimpleSocketServer {
         listenerRuntimeStopOverride = stop
     }
 
-    func insertClientForTesting(connection: NWConnection) -> Int {
-        clientRegistry.insert(connection: connection)
+    func insertClientForTesting(connection: NWConnection) -> Int? {
+        guard currentListener != nil else { return nil }
+        return clientRegistry.insert(connection: connection)
     }
 
     func clientPhaseForTesting(_ clientId: Int) -> SocketClientPhase? {
@@ -92,9 +87,6 @@ actor SimpleSocketServer {
         clientRegistry.count
     }
 
-    nonisolated var pendingCallbackCountForTesting: Int {
-        pendingCallbackTasks.taskCountForTesting
-    }
     #endif
 
     // MARK: - Public API (async, actor-isolated)
@@ -184,9 +176,10 @@ actor SimpleSocketServer {
             return port
         } catch {
             if currentListener == generation {
-                clearListenerGenerationResources()
+                await clearListenerGenerationResources(generation)
+            } else {
+                await generation.runtime.stop()
             }
-            await runtime.stop()
             if currentListener == generation {
                 currentListener = nil
             }
@@ -232,7 +225,7 @@ actor SimpleSocketServer {
                 callbackGeneration.cancelIfOwned(connection)
                 return
             }
-            self.spawnTrackedTask { server in
+            self.spawnTrackedTask(in: callbackGeneration) { server in
                 await server.handleNewConnection(connection, generation: callbackGeneration)
             }
         }
@@ -241,25 +234,28 @@ actor SimpleSocketServer {
     /// Stop the server.
     func stop() async {
         guard let generation = currentListener else { return }
-        clearListenerGenerationResources()
-        await generation.runtime.stop()
+        await clearListenerGenerationResources(generation)
         if currentListener == generation {
             currentListener = nil
         }
         logger.info("Server stopped")
     }
 
-    private func clearListenerGenerationResources() {
-        pendingCallbackTasks.cancelAll()
+    private func clearListenerGenerationResources(_ generation: SocketListenerGeneration) async {
         _syncListeningPort.withLock { $0 = 0 }
         clientRegistry.cancelAll()
+        await generation.runtime.stop()
     }
 
     /// Spawn a Task that bridges an `NWListener` / `NWConnection` callback
     /// into actor isolation, recording the handle so `stop()` can cancel
     /// it. The closure body runs on `SimpleSocketServer`'s actor.
-    nonisolated func spawnTrackedTask(_ body: @escaping @Sendable (SimpleSocketServer) async -> Void) {
-        pendingCallbackTasks.spawn { [weak self] in
+    @discardableResult
+    nonisolated func spawnTrackedTask(
+        in generation: SocketListenerGeneration,
+        _ body: @escaping @Sendable (SimpleSocketServer) async -> Void
+    ) -> TaskTracker.Admission {
+        generation.spawnCallbackTask { [weak self] in
             guard let self else { return }
             await body(self)
         }
@@ -288,7 +284,7 @@ actor SimpleSocketServer {
             }
             switch state {
             case .ready:
-                self.spawnTrackedTask { server in
+                self.spawnTrackedTask(in: generation) { server in
                     guard admission.recordReady() == .accept else { return }
                     guard await server.revalidateReadyConnection(
                         connection,
@@ -309,12 +305,12 @@ actor SimpleSocketServer {
                 logger.error("Client connection failed: \(error)")
                 generation.cancelIfOwned(connection)
                 if case .removeRegisteredClient(let clientId) = admission.recordCancellation() {
-                    self.spawnTrackedTask { server in await server.removeClient(clientId) }
+                    self.spawnTrackedTask(in: generation) { server in await server.removeClient(clientId) }
                 }
             case .cancelled:
                 generation.cancelIfOwned(connection)
                 if case .removeRegisteredClient(let clientId) = admission.recordCancellation() {
-                    self.spawnTrackedTask { server in await server.removeClient(clientId) }
+                    self.spawnTrackedTask(in: generation) { server in await server.removeClient(clientId) }
                 }
             default:
                 break

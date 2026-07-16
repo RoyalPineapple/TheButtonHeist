@@ -104,8 +104,14 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
             return XCTFail("Expected starting phase, got \(harness.job.serverPhase)")
         }
 
-        await harness.job.stop()
+        let stopTask = Task { @MainActor in
+            await harness.job.stop()
+        }
+        await harness.waitForStopCall()
         startupGate.release()
+
+        let stopOutcome = await stopTask.value
+        XCTAssertEqual(stopOutcome, .stopped)
 
         do {
             try await startTask.value
@@ -238,7 +244,8 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
         job: TheInsideJob,
         latestTransport: @MainActor () -> ServerTransport,
         startCallCount: @MainActor () -> Int,
-        stopCallCount: @MainActor () -> Int
+        stopCallCount: @MainActor () -> Int,
+        waitForStopCall: @MainActor () async -> Void
     ) {
         let token: SessionAuthToken = "runtime-lifecycle-test-token"
         let scopes: Set<ConnectionScope> = [.simulator]
@@ -261,14 +268,20 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
                     return actualPort
                 }
                 transport.stopOverride = {
-                    harnessState.stopCount += 1
+                    harnessState.recordStop()
                 }
                 harnessState.transports.append(transport)
                 return transport
             }
         )
 
-        return (job, { harnessState.latestTransport }, { harnessState.startCount }, { harnessState.stopCount })
+        return (
+            job,
+            { harnessState.latestTransport },
+            { harnessState.startCount },
+            { harnessState.stopCount },
+            { await harnessState.waitForStopCall() }
+        )
     }
 
     private func assertRunning(
@@ -347,16 +360,32 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
         case resumeFailed
     }
 
+    @MainActor
     private final class RuntimeHarnessState {
         var startCount = 0
-        var stopCount = 0
+        private(set) var stopCount = 0
         var transports: [ServerTransport] = []
+        private var stopWaiters: [CheckedContinuation<Void, Never>] = []
 
         var latestTransport: ServerTransport {
             guard let transport = transports.last else {
                 fatalError("Expected runtime harness to have created a transport")
             }
             return transport
+        }
+
+        func recordStop() {
+            stopCount += 1
+            let waiters = stopWaiters
+            stopWaiters.removeAll()
+            waiters.forEach { $0.resume() }
+        }
+
+        func waitForStopCall() async {
+            guard stopCount == 0 else { return }
+            await withCheckedContinuation { continuation in
+                stopWaiters.append(continuation)
+            }
         }
     }
 

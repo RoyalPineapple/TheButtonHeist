@@ -25,6 +25,11 @@ func evaluateButtonHeistRules(
 
 private let canonicalButtonHeistRuleFixtures: [VirtualSourceFile] = [
     .swift(
+        "ButtonHeist/Sources/TheScore/Receipts/HeistExecutionStepNode.swift",
+        component: ButtonHeistComponent.score,
+        source: "enum HeistExecutionStepNode {}"
+    ),
+    .swift(
         "ButtonHeist/Sources/TheInsideJob/TheBrains/PredicateWait.swift",
         component: ButtonHeistComponent.runtime,
         source: "func runWait() { _ = PredicateWaitLifecycleMachine() }"

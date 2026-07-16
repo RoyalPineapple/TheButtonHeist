@@ -8,11 +8,11 @@ struct ClientTransportRequest: Sendable {
     let respond: SocketResponseHandler
 }
 
-/// One ordered frame stream for one connected client.
+/// One bounded, ordered frame-admission stream for one connected client.
 ///
-/// Admission and execution share this per-client order. A slow request blocks
-/// only later frames from the same client, while transport lifecycle and other
-/// clients continue independently.
+/// Admitted control work runs inline. UI work is submitted in source order to
+/// the shared interaction executor, so it cannot block later control frames.
+/// Transport lifecycle remains outside this stream and can stop it immediately.
 @MainActor
 final class ClientRequestPipeline {
     static let maximumQueuedRequests = 512
@@ -28,10 +28,10 @@ final class ClientRequestPipeline {
             continuation: AsyncStream<ClientTransportRequest>.Continuation,
             consumer: Task<Void, Never>
         )
-        case stopped
+        case stopped(consumer: Task<Void, Never>?)
     }
 
-    private var phase: Phase = .stopped
+    private var phase: Phase = .stopped(consumer: nil)
 
     init(
         execute: @escaping @MainActor @Sendable (ClientTransportRequest) async -> Void
@@ -71,13 +71,15 @@ final class ClientRequestPipeline {
     /// and lifecycle owners may await terminal completion when needed.
     @discardableResult
     func stop() -> Task<Void, Never>? {
-        guard case .accepting(let continuation, let consumer) = phase else {
-            return nil
+        switch phase {
+        case .accepting(let continuation, let consumer):
+            phase = .stopped(consumer: consumer)
+            continuation.finish()
+            consumer.cancel()
+            return consumer
+        case .stopped(let consumer):
+            return consumer
         }
-        phase = .stopped
-        continuation.finish()
-        consumer.cancel()
-        return consumer
     }
 }
 #endif // DEBUG

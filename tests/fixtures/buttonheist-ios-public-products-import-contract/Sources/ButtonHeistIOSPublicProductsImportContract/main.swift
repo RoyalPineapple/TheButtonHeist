@@ -89,7 +89,7 @@ func systemDialogPairingInAppContractShapeCompiles() {
         .appendingPathComponent("buttonheist-receipts", isDirectory: true)
 
     runHeistSync("Permissions.location.granted", recordReceipt: .always, to: receiptsURL) {
-        WaitFor(.exists(.label("Location Enabled")), timeout: .seconds(5))
+        WaitFor(.exists(.label("Location Enabled")), timeout: 5)
 
         Activate(.label("Continue"))
             .expect(.changed(.elements([.appeared(.label("Map"))])))

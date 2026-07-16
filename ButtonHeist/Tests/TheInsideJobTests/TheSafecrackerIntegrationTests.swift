@@ -72,7 +72,7 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
 
         let prepared = try XCTUnwrap(safecracker.prepareLongPress(
             at: screenPoint,
-            duration: GestureDuration(seconds: 0.1)
+            duration: 0.1
         ))
         let result = await safecracker.completePreparedTouch(prepared)
         XCTAssertTrue(result)
@@ -85,7 +85,7 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
         let prepared = try XCTUnwrap(safecracker.prepareSwipe(
             from: start,
             to: end,
-            duration: GestureDuration(seconds: 0.1)
+            duration: 0.1
         ))
         let result = await safecracker.completePreparedTouch(prepared)
         XCTAssertTrue(result)
@@ -98,7 +98,7 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
         let prepared = try XCTUnwrap(safecracker.prepareDrag(
             from: start,
             to: end,
-            duration: GestureDuration(seconds: 0.1)
+            duration: 0.1
         ))
         let result = await safecracker.completePreparedTouch(prepared)
         XCTAssertTrue(result)

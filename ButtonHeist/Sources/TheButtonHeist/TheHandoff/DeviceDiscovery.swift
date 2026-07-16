@@ -15,7 +15,7 @@ enum DeviceDiscoveryBrowserState: Equatable, Sendable {
     case cancelled
 }
 
-protocol DeviceDiscoveryBrowsing {
+protocol DeviceDiscoveryBrowsing: Sendable {
     func start(
         queue: DispatchQueue,
         onResultsChanged: @escaping @Sendable (Set<NWBrowser.Result>, Set<NWBrowser.Result.Change>) -> Void,
@@ -132,8 +132,16 @@ final class DeviceDiscovery: DeviceDiscovering {
         let eventStream = DeviceDiscoveryEventStream()
         let eventConsumerTask = Task { @ButtonHeistActor [weak self, eventStream, sessionID] in
             for await event in eventStream.events {
+                guard eventStream.isGenerationActive else { break }
                 guard let self else { return }
                 self.handleBrowserEvent(event, sessionID: sessionID)
+            }
+            guard let terminalReason = eventStream.terminalReason else { return }
+            switch terminalReason {
+            case .overflow:
+                self?.handleEventStreamOverflow(sessionID: sessionID)
+            case .finished, .continuationTerminated:
+                return
             }
         }
 
@@ -146,13 +154,17 @@ final class DeviceDiscovery: DeviceDiscovering {
             reachabilityTask: nil,
             browserState: .setup
         ))
+        let receiveBrowserEvent: @Sendable (DeviceDiscoveryBrowserEvent) -> Void = { [browser, eventStream] event in
+            guard case .overflow = eventStream.yield(event) else { return }
+            browser.cancel()
+        }
         browser.start(
             queue: browserQueue,
-            onResultsChanged: { [eventStream] results, changes in
-                eventStream.yield(.resultsChanged(results, changes: changes))
+            onResultsChanged: { results, changes in
+                receiveBrowserEvent(.resultsChanged(results, changes: changes))
             },
-            onStateChanged: { [eventStream] state in
-                eventStream.yield(.stateChanged(state))
+            onStateChanged: { state in
+                receiveBrowserEvent(.stateChanged(state))
             }
         )
         logger.info("Browser started")
@@ -205,6 +217,19 @@ final class DeviceDiscovery: DeviceDiscovering {
                 cancelBrowser: false
             )
         }
+    }
+
+    private func handleEventStreamOverflow(sessionID: UUID) {
+        guard case .active(let activeDiscovery) = discoveryPhase,
+              activeDiscovery.id == sessionID else { return }
+        logger.error(
+            "Bonjour discovery event backlog exceeded \(DeviceDiscoveryEventStream.bufferLimit), stopping discovery"
+        )
+        finishTerminalBrowserState(
+            activeDiscovery,
+            failure: .discoveryBacklogOverflow(capacity: DeviceDiscoveryEventStream.bufferLimit),
+            cancelBrowser: false
+        )
     }
 
     private func finishTerminalBrowserState(

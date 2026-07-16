@@ -121,9 +121,10 @@ internal enum PredicateWaitDiscoveryBudget: Sendable, Equatable {
     }
 }
 
-internal enum PredicateWaitLifecycleSignal: Sendable, Equatable {
-    case observation(ObservationEntry)
+internal enum PredicateWaitLifecyclePollResult: Sendable {
+    case observation(ObservationEntry, ObservationEntrySequence.Iterator)
     case deadlineReached
+    case cancelled
 }
 
 internal enum PredicateWaitLifecycleRejection: Sendable, Equatable {
@@ -215,34 +216,32 @@ extension PredicateWait {
     }
 }
 
-@MainActor
-internal func predicateWaitLifecycleSignals(
-    observations: ObservationEntrySequence,
+internal func nextPredicateWaitLifecyclePoll(
+    iterator: ObservationEntrySequence.Iterator,
     timeout: Double
-) -> AsyncStream<PredicateWaitLifecycleSignal> {
-    AsyncStream(bufferingPolicy: .unbounded) { continuation in
-        let observationTask = Task { @MainActor in
+) async -> PredicateWaitLifecyclePollResult {
+    await withTaskGroup(of: PredicateWaitLifecyclePollResult.self) { group in
+        group.addTask {
+            var iterator = iterator
             do {
-                for try await observation in observations {
-                    guard !Task.isCancelled else { return }
-                    continuation.yield(.observation(observation))
+                guard let observation = try await iterator.next() else {
+                    return Task.isCancelled ? .cancelled : .deadlineReached
                 }
+                return .observation(observation, iterator)
             } catch {
                 // A lost cursor forces the terminal visible/discovery checks.
-                continuation.yield(.deadlineReached)
-                continuation.finish()
+                return .deadlineReached
             }
         }
-        let deadlineTask = Task { @MainActor in
+        group.addTask {
             let nanoseconds = UInt64((max(0, timeout) * 1_000_000_000).rounded(.up))
-            guard await Task.cancellableSleep(for: .nanoseconds(nanoseconds)) else { return }
-            continuation.yield(.deadlineReached)
-            continuation.finish()
+            return await Task.cancellableSleep(for: .nanoseconds(nanoseconds))
+                ? .deadlineReached
+                : .cancelled
         }
-        continuation.onTermination = { _ in
-            observationTask.cancel()
-            deadlineTask.cancel()
-        }
+        let result = await group.next() ?? .cancelled
+        group.cancelAll()
+        return result
     }
 }
 

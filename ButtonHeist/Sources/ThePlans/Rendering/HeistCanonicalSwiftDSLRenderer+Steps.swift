@@ -20,7 +20,7 @@ extension HeistCanonicalSwiftDSLRenderer {
     private func renderInvocationExpectationTimeout(_ timeout: WaitTimeout) -> String {
         timeout == defaultActionExpectationTimeout
             ? ""
-            : ", timeout: .seconds(\(decimal(timeout.seconds)))"
+            : ", timeout: \(decimal(timeout.seconds))"
     }
 
     func render(argument: HeistArgument, environment: RenderEnvironment) throws -> String {
@@ -187,7 +187,7 @@ extension HeistCanonicalSwiftDSLRenderer {
         environment: RenderEnvironment
     ) throws -> String {
         let predicate = try render(predicate: repeatUntil.predicate, environment: environment)
-        let timeout = ".seconds(\(decimal(repeatUntil.timeout.seconds)))"
+        let timeout = decimal(repeatUntil.timeout.seconds)
         var source = """
         \(line("RepeatUntil(\(predicate), timeout: \(timeout)) {", indent))
         \(renderedBody)

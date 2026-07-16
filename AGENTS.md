@@ -83,28 +83,27 @@ Calling `tuist generate` directly still works for quick iteration, but prefer th
 
 ## Canonical Test Runner
 
-Use `tuist test` as the canonical way to run tests in this repository.
+Use `scripts/test-runner.py` as the canonical way to run repository test suites locally and in CI. The runner is the sole owner of suite names, schemes, destinations, selection behavior, result bundles, receipt directories, and split build/test execution.
 
 - Do not use `swift test` for normal verification. SwiftPM does not model the hosted iOS test setup correctly and can produce misleading failures in this mixed macOS/iOS repo.
-- Do not use raw `xcodebuild test` as the default workflow. Use it only when debugging Tuist or Xcode behavior.
-- Do not use bare `tuist test` in this workspace. The default `ButtonHeist-Workspace` scheme mixes macOS and iOS targets and can pick an unintended destination.
-- Always run `tuist test` with an explicit scheme. For iOS-hosted tests, also pass an explicit simulator device and OS.
-- `tuist test` is selective by default. When you need the full suite, add `--no-selective-testing`.
+- Do not call `tuist test` or test-driving `xcodebuild` commands directly. Use them only when debugging the runner, Tuist, or Xcode behavior.
+- `run` uses selective testing by default. Pass `--selection full` when every test must run.
+- The runner selects an explicit iOS simulator and emits its resolved UDID destination. Agents should pass their task slug with `--simulator-name` to preserve simulator isolation.
+- CI's build-once optimization uses the runner's `build-for-testing` and `test-without-building` commands. Those commands are full-suite phases and share one deterministic derived-data path.
 
 Recommended commands:
 
 ```bash
-tuist test TheScoreTests --no-selective-testing
-tuist test ButtonHeistTests --no-selective-testing
-tuist test TheInsideJobTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
-tuist test TheInsideJobIntegrationTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
-tuist test HostedBehaviorTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
+scripts/test-runner.py run MacFrameworkTests --selection full
+scripts/test-runner.py run TheInsideJobTests --selection full
+scripts/test-runner.py run TheInsideJobIntegrationTests --selection full
+scripts/test-runner.py run HostedBehaviorTests --selection full
 ```
 
-If Tuist reports missing external dependencies, run:
+From a clean checkout, install declared dependencies and run a portable suite with:
 
 ```bash
-tuist install
+scripts/test-runner.py run MacFrameworkTests --selection full --install-dependencies
 ```
 
 ### Adding a dependency
@@ -256,11 +255,10 @@ Before pushing any commit, verify the following:
 ### 3. Tests Pass
 - **All existing tests must pass.** Run the test suite:
   ```bash
-  tuist test TheScoreTests --no-selective-testing
-  tuist test ButtonHeistTests --no-selective-testing
-  tuist test TheInsideJobTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
-  tuist test TheInsideJobIntegrationTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
-  tuist test HostedBehaviorTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
+  scripts/test-runner.py run MacFrameworkTests --selection full
+  scripts/test-runner.py run TheInsideJobTests --selection full
+  scripts/test-runner.py run TheInsideJobIntegrationTests --selection full
+  scripts/test-runner.py run HostedBehaviorTests --selection full
   ```
 - If tests fail, fix the code or update tests to reflect intentional changes.
 
@@ -287,12 +285,12 @@ Before pushing any commit, verify the following:
 
 ### One True Way
 
-`tuist test` is the one true way to run tests in this repository.
+`scripts/test-runner.py` is the one true way to run tests in this repository.
 
-- `TheScoreTests` and `ButtonHeistTests` run as explicit Tuist schemes.
+- `TheScoreTests` and `ButtonHeistTests` are canonical portable suites. `MacFrameworkTests` is the real aggregate scheme used by the consolidated CI lane.
 - The hosted iOS suite has three canonical schemes: core `TheInsideJobTests`, isolated `TheInsideJobIntegrationTests`, and aggregate `HostedBehaviorTests`, which owns the dogfood and adversarial targets.
-- All three hosted schemes run via the `BH Demo` test host and require an explicit simulator destination. Running only `TheInsideJobTests` skips integration and hosted behavior.
-- Use `--no-selective-testing` when you need to force the full suite instead of Tuist's default selective run.
+- All three hosted schemes run via the `BH Demo` test host. The runner resolves and records their explicit simulator destination; running only `TheInsideJobTests` skips integration and hosted behavior.
+- Use `--selection full` when you need to force the full suite instead of the runner's default selective run.
 - Treat `swift test` as a package-debugging tool, not as the source of truth for CI-style verification.
 
 ### Test Framework

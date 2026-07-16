@@ -10,6 +10,13 @@ struct SocketListenerGeneration: Equatable, Sendable {
     let attemptID: UUID
     let runtime: SocketListenerRuntime
 
+    @discardableResult
+    func spawnCallbackTask(
+        _ operation: @escaping @Sendable () async -> Void
+    ) -> TaskTracker.Admission {
+        runtime.spawnCallbackTask(operation)
+    }
+
     func own(_ connection: NWConnection) -> Bool {
         runtime.own(connection)
     }
@@ -136,6 +143,7 @@ actor SocketListenerRuntime: Equatable {
     }
 
     nonisolated private let pendingConnections = PendingSocketConnections()
+    nonisolated private let callbackTasks = TaskTracker()
     private let stopSignal = SocketListenerStopSignal()
     private var phase = Phase.idle
 
@@ -166,6 +174,12 @@ actor SocketListenerRuntime: Equatable {
         pendingConnections.transfer(connection)
     }
 
+    nonisolated fileprivate func spawnCallbackTask(
+        _ operation: @escaping @Sendable () async -> Void
+    ) -> TaskTracker.Admission {
+        callbackTasks.spawn(operation)
+    }
+
     #if DEBUG
     nonisolated fileprivate var pendingConnectionCountForTesting: Int {
         pendingConnections.count
@@ -191,6 +205,7 @@ actor SocketListenerRuntime: Equatable {
             await stopOverride()
         }
         #endif
+        await callbackTasks.drain()
         await stopSignal.finish()
     }
 

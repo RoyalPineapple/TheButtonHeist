@@ -7,7 +7,7 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     func renderTimeout(_ timeout: WaitTimeout) -> String {
-        timeout == defaultWaitTimeout ? "" : ", timeout: .seconds(\(decimal(timeout.seconds)))"
+        timeout == defaultWaitTimeout ? "" : ", timeout: \(decimal(timeout.seconds))"
     }
 
     func line(_ text: String, _ indent: Int) -> String {
