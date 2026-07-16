@@ -1,13 +1,3 @@
-public extension Double {
-    static func seconds(_ value: Double) -> Double {
-        value
-    }
-
-    static func milliseconds(_ value: Double) -> Double {
-        value / 1_000
-    }
-}
-
 public struct WaitFor: HeistContent {
     public let heistSteps: [HeistStep]
     public let heistDefinitions: [HeistPlanAdmissionCandidate]
@@ -15,7 +5,7 @@ public struct WaitFor: HeistContent {
 
     public init(
         _ predicate: AccessibilityPredicate,
-        timeout: Double = defaultWaitTimeout
+        timeout: WaitTimeout = defaultWaitTimeout
     ) {
         self.init(predicate: predicate, timeout: timeout, elseBody: nil, definitions: [], diagnostics: [])
     }
@@ -42,7 +32,7 @@ public struct WaitFor: HeistContent {
 
     private init(
         predicate: AccessibilityPredicate,
-        timeout: Double,
+        timeout: WaitTimeout,
         elseBody: [HeistStep]?,
         definitions: [HeistPlanAdmissionCandidate],
         diagnostics: [HeistBuildDiagnostic]
@@ -60,7 +50,7 @@ public struct RepeatUntil: HeistContent {
 
     public init(
         _ predicate: AccessibilityPredicate,
-        timeout: Double,
+        timeout: WaitTimeout,
         @HeistBuilder _ content: () -> some HeistContent
     ) {
         let content = content()
@@ -97,7 +87,7 @@ public struct RepeatUntil: HeistContent {
 
     private init(
         predicate: AccessibilityPredicate,
-        timeout: Double,
+        timeout: WaitTimeout,
         body: [HeistStep],
         elseBody: [HeistStep]?,
         definitions: [HeistPlanAdmissionCandidate],
@@ -222,7 +212,7 @@ public struct Warn: HeistContent {
     public let heistSteps: [HeistStep]
     public let heistDefinitions: [HeistPlanAdmissionCandidate] = []
 
-    public init(_ message: String) {
+    public init(_ message: HeistWarningMessage) {
         heistSteps = [.warn(WarnStep(message: message))]
     }
 }
@@ -231,7 +221,7 @@ public struct Fail: HeistContent {
     public let heistSteps: [HeistStep]
     public let heistDefinitions: [HeistPlanAdmissionCandidate] = []
 
-    public init(_ message: String) {
+    public init(_ message: HeistFailureMessage) {
         heistSteps = [.fail(FailStep(message: message))]
     }
 }

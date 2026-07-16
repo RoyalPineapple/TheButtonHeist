@@ -24,7 +24,7 @@ flowchart TD
     subgraph replay["Replay"]
         GATE["wire: exact buttonHeistVersion<br/>handshake gates every run"]
         BRAINS["TheBrains.executeHeistPlan<br/>in the app process"]
-        RECEIPT["HeistExecutionResult<br/>outcome + per-step results + durationMs"]
+        RECEIPT["HeistExecutionResult<br/>semantic step tree + durationMs<br/>outcome derived from nodes"]
         GATE --> BRAINS
         BRAINS --> RECEIPT
     end
@@ -41,5 +41,5 @@ Notes:
 - Both authoring frontends lower to `HeistPlanAdmissionCandidate`; one semantic admission constructs the validated `HeistPlan`. The runtime never compiles Swift. Live composition (heists assembled over an interactive session) enters the same IR boundary as hand-authoring.
 - Admission is strict at the boundary: decoding rejects unknown keys with an explicit allowed list per step type, `HeistCallGraph` rejects any recursive definition cycle ("heist runs must not be recursive"), and `HeistPlanRuntimeSafetyLimits` caps plan size (see [totality.md](totality.md)).
 - `.compositionQuality` and `.strictTest` lint consume an admitted `HeistPlan`; they are quality checks, not a second admission path.
-- The `.heist` package is two JSON files: `manifest.json` (`format`, `formatVersion`, `planVersion`, `entry`, `producer`, `createdAt`) and `plan.json` (the IR, `HeistPlan.currentVersion = 1`), read and written by `HeistArtifactCodec`.
+- The `.heist` package is two JSON files: `manifest.json` (`format`, `formatVersion`, `planVersion`, `entry`, `producer`, `createdAt`) and `plan.json` (the IR, `HeistPlan.currentVersion = 2`), read and written by `HeistArtifactCodec`.
 - Replay always crosses the wire contract: the exact `buttonHeistVersion` handshake gates the session before any plan runs, so a heist can never execute against a mismatched runtime.

@@ -35,18 +35,13 @@ struct CheckedConcurrencyRuleTests {
     }
 
     @Test
-    func checkedCodeAndTheNarrowSPIBoundaryRemainValid() throws {
-        let checkedReport = try evaluate(
+    func checkedCodeRemainsValid() throws {
+        let report = try evaluate(
             path: "ButtonHeist/Sources/TheInsideJob/CheckedState.swift",
             source: "enum State { static let callback: @Sendable () -> Void = {} }"
         )
-        let spiReport = try evaluate(
-            path: "ButtonHeist/Sources/TheInsideJob/TheSafecracker/TheSafecracker+IOHIDEventBuilder.swift",
-            source: "enum Loader { nonisolated(unsafe) static var function: (() -> Void)? }"
-        )
 
-        #expect(checkedReport.violations.isEmpty)
-        #expect(spiReport.violations.isEmpty)
+        #expect(report.violations.isEmpty)
     }
 
     private func evaluate(path: RelativeFilePath, source: String) throws -> RuleReport {

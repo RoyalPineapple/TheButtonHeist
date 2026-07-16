@@ -83,9 +83,17 @@ final class DeviceDiscovery: DeviceDiscovering {
     private struct ActiveDiscovery {
         let id: UUID
         let browser: any DeviceDiscoveryBrowsing
+        let eventStream: DeviceDiscoveryEventStream
+        let eventConsumerTask: Task<Void, Never>
         var registry: DiscoveryRegistry
         var reachabilityTask: Task<Void, Never>?
         var browserState: DeviceDiscoveryBrowserState
+
+        func cancelOwnedTasks() {
+            eventStream.finish()
+            eventConsumerTask.cancel()
+            reachabilityTask?.cancel()
+        }
     }
 
     private var discoveryPhase: DiscoveryPhase = .idle
@@ -121,27 +129,30 @@ final class DeviceDiscovery: DeviceDiscovering {
 
         let sessionID = UUID()
         let browser = makeBrowser()
+        let eventStream = DeviceDiscoveryEventStream()
+        let eventConsumerTask = Task { @ButtonHeistActor [weak self, eventStream, sessionID] in
+            for await event in eventStream.events {
+                guard let self else { return }
+                self.handleBrowserEvent(event, sessionID: sessionID)
+            }
+        }
 
         discoveryPhase = .active(ActiveDiscovery(
             id: sessionID,
             browser: browser,
+            eventStream: eventStream,
+            eventConsumerTask: eventConsumerTask,
             registry: DiscoveryRegistry(),
             reachabilityTask: nil,
             browserState: .setup
         ))
         browser.start(
             queue: browserQueue,
-            onResultsChanged: { [weak self, sessionID] results, changes in
-                Task { @ButtonHeistActor [weak self, sessionID] in
-                    logger.info("Results changed: \(results.count) results, \(changes.count) changes")
-                    self?.handleResults(results, changes: changes, sessionID: sessionID)
-                }
+            onResultsChanged: { [eventStream] results, changes in
+                eventStream.yield(.resultsChanged(results, changes: changes))
             },
-            onStateChanged: { [weak self, sessionID] state in
-                Task { @ButtonHeistActor [weak self, sessionID] in
-                    logger.info("Browser state: \(String(describing: state))")
-                    self?.handleStateUpdate(state, sessionID: sessionID)
-                }
+            onStateChanged: { [eventStream] state in
+                eventStream.yield(.stateChanged(state))
             }
         )
         logger.info("Browser started")
@@ -149,9 +160,20 @@ final class DeviceDiscovery: DeviceDiscovering {
 
     func stop() {
         guard case .active(let activeDiscovery) = discoveryPhase else { return }
-        activeDiscovery.reachabilityTask?.cancel()
-        activeDiscovery.browser.cancel()
         discoveryPhase = .idle
+        activeDiscovery.cancelOwnedTasks()
+        activeDiscovery.browser.cancel()
+    }
+
+    private func handleBrowserEvent(_ event: DeviceDiscoveryBrowserEvent, sessionID: UUID) {
+        switch event {
+        case .resultsChanged(let results, let changes):
+            logger.info("Results changed: \(results.count) results, \(changes.count) changes")
+            handleResults(results, changes: changes, sessionID: sessionID)
+        case .stateChanged(let state):
+            logger.info("Browser state: \(String(describing: state))")
+            handleStateUpdate(state, sessionID: sessionID)
+        }
     }
 
     private func handleStateUpdate(_ state: DeviceDiscoveryBrowserState, sessionID: UUID) {
@@ -190,7 +212,7 @@ final class DeviceDiscovery: DeviceDiscovering {
         failure: HandoffConnectionError,
         cancelBrowser: Bool
     ) {
-        activeDiscovery.reachabilityTask?.cancel()
+        activeDiscovery.cancelOwnedTasks()
         if cancelBrowser {
             activeDiscovery.browser.cancel()
         }
@@ -217,8 +239,9 @@ final class DeviceDiscovery: DeviceDiscovering {
                 }
             case .removed(let result):
                 logger.info("Service removed: \(String(describing: result.endpoint))")
-                if case let .service(name, _, _, _) = result.endpoint {
-                    let mutations = activeDiscovery.registry.recordLost(DiscoveryServiceName(name))
+                if case let .service(name, _, _, _) = result.endpoint,
+                   let deviceID = try? DiscoveryDeviceID(validating: name) {
+                    let mutations = activeDiscovery.registry.recordLost(deviceID)
                     discoveryPhase = .active(activeDiscovery)
                     apply(mutations)
                 }
@@ -226,8 +249,9 @@ final class DeviceDiscovery: DeviceDiscovering {
                 logger.info("Service changed: \(String(describing: old.endpoint)) -> \(String(describing: new.endpoint))")
                 if case let .service(oldName, _, _, _) = old.endpoint,
                    case let .service(newName, _, _, _) = new.endpoint,
-                   oldName != newName {
-                    let mutations = activeDiscovery.registry.recordLost(DiscoveryServiceName(oldName))
+                   oldName != newName,
+                   let oldDeviceID = try? DiscoveryDeviceID(validating: oldName) {
+                    let mutations = activeDiscovery.registry.recordLost(oldDeviceID)
                     discoveryPhase = .active(activeDiscovery)
                     apply(mutations)
                 }
@@ -280,17 +304,17 @@ final class DeviceDiscovery: DeviceDiscovering {
         let visibleDevices = activeDiscovery.registry.devices
         guard !visibleDevices.isEmpty else { return }
 
-        let unreachableServiceNames = await withTaskGroup(of: String?.self) { group in
+        let unreachableDeviceIDs = await withTaskGroup(of: DiscoveryDeviceID?.self) { group in
             for device in visibleDevices {
                 group.addTask {
                     await device.isReachable(timeout: 0.75) ? nil : device.id
                 }
             }
 
-            var unreachable: [String] = []
-            for await serviceName in group {
-                if let serviceName {
-                    unreachable.append(serviceName)
+            var unreachable: [DiscoveryDeviceID] = []
+            for await deviceID in group {
+                if let deviceID {
+                    unreachable.append(deviceID)
                 }
             }
             return unreachable
@@ -300,9 +324,9 @@ final class DeviceDiscovery: DeviceDiscovering {
               activeDiscovery.id == sessionID else {
             return
         }
-        for serviceName in unreachableServiceNames {
-            logger.info("Evicting unreachable device advertisement: \(serviceName)")
-            let mutations = activeDiscovery.registry.recordLost(DiscoveryServiceName(serviceName))
+        for deviceID in unreachableDeviceIDs {
+            logger.info("Evicting unreachable device advertisement: \(deviceID)")
+            let mutations = activeDiscovery.registry.recordLost(deviceID)
             discoveryPhase = .active(activeDiscovery)
             apply(mutations)
         }

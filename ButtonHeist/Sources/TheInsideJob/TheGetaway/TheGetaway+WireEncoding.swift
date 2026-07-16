@@ -62,7 +62,7 @@ enum ResponseDeliveryFailure: Error, Sendable, Equatable, CustomStringConvertibl
 }
 
 struct ResponseEncodingFailure: Error, Sendable, Equatable, CustomStringConvertible {
-    let requestId: String?
+    let requestId: RequestID?
     let underlyingDescription: String
 
     var description: String {
@@ -76,7 +76,7 @@ struct ResponseEncodingFailure: Error, Sendable, Equatable, CustomStringConverti
 enum ResponseEnvelopeDelivery {
     static func encodeEnvelope(
         _ message: ServerMessage,
-        requestId: String? = nil
+        requestId: RequestID? = nil
     ) -> Result<Data, ResponseEncodingFailure> {
         do {
             let envelopeData = try ResponseEnvelope(
@@ -91,7 +91,7 @@ enum ResponseEnvelopeDelivery {
 
     static func sendMessage(
         _ message: ServerMessage,
-        requestId: String? = nil,
+        requestId: RequestID? = nil,
         respond: @escaping SocketResponseHandler
     ) async -> ResponseDeliveryResult {
         switch encodeEnvelope(
@@ -121,7 +121,7 @@ extension TheGetaway {
 
     func encodeEnvelope(
         _ message: ServerMessage,
-        requestId: String? = nil
+        requestId: RequestID? = nil
     ) -> Result<Data, ResponseEncodingFailure> {
         ResponseEnvelopeDelivery.encodeEnvelope(message, requestId: requestId)
     }
@@ -148,7 +148,7 @@ extension TheGetaway {
     @discardableResult
     func sendMessage(
         _ message: ServerMessage,
-        requestId: String? = nil,
+        requestId: RequestID? = nil,
         respond: @escaping SocketResponseHandler
     ) async -> DeliveryResult {
         let result = await ResponseEnvelopeDelivery.sendMessage(message, requestId: requestId, respond: respond)

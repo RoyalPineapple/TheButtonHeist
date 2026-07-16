@@ -1,7 +1,6 @@
 import Foundation
 
-public let immediateTimeout: Double = 0
-public let defaultWaitTimeout: Double = 30
+public let defaultWaitTimeout: WaitTimeout = 30
 
 public struct WaitStep: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
@@ -10,13 +9,12 @@ public struct WaitStep: Codable, Sendable, Equatable {
     }
 
     public let predicate: AccessibilityPredicate
-    /// Seconds. `0` means immediate predicate evaluation.
-    public let timeout: Double
+    public let timeout: WaitTimeout
     public let elseBody: [HeistStep]?
 
     public init(
         predicate: AccessibilityPredicate,
-        timeout: Double = defaultWaitTimeout,
+        timeout: WaitTimeout = defaultWaitTimeout,
         elseBody: [HeistStep]? = nil
     ) {
         self.predicate = predicate
@@ -27,17 +25,9 @@ public struct WaitStep: Codable, Sendable, Equatable {
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "wait step")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let decodedTimeout = try container.decode(Double.self, forKey: .timeout)
-        guard decodedTimeout >= 0 else {
-            throw DecodingError.dataCorruptedError(
-                forKey: .timeout,
-                in: container,
-                debugDescription: "wait step timeout must be non-negative"
-            )
-        }
         self.init(
             predicate: try container.decode(AccessibilityPredicate.self, forKey: .predicate),
-            timeout: decodedTimeout,
+            timeout: try container.decode(WaitTimeout.self, forKey: .timeout),
             elseBody: try container.decodeIfPresent([HeistStep].self, forKey: .elseBody)
         )
     }
@@ -52,9 +42,9 @@ public struct WaitStep: Codable, Sendable, Equatable {
 
 package struct ResolvedWaitStep: Sendable, Equatable {
     package let predicate: ResolvedAccessibilityPredicate
-    package let timeout: Double
+    package let timeout: WaitTimeout
 
-    package init(predicate: ResolvedAccessibilityPredicate, timeout: Double = defaultWaitTimeout) {
+    package init(predicate: ResolvedAccessibilityPredicate, timeout: WaitTimeout = defaultWaitTimeout) {
         self.predicate = predicate
         self.timeout = timeout
     }

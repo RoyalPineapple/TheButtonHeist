@@ -18,7 +18,7 @@ final class DeviceConnectionTLSTests: XCTestCase {
     private func makeConnectedConnection() -> (DeviceConnection, NWConnection) {
         let transportConnection = NWConnection(host: "127.0.0.1", port: 1, using: .tcp)
         let connection = DeviceConnection(device: makeDummyDevice())
-        connection.connectionState = .connected(DeviceConnection.ActiveConnection(connection: transportConnection))
+        connection.runtimePhase = .connected(DeviceConnection.RuntimeSession(connection: transportConnection))
         return (connection, transportConnection)
     }
 
@@ -32,7 +32,7 @@ final class DeviceConnectionTLSTests: XCTestCase {
             .serverClosed,
             .authFailed("bad token"),
             .sessionLocked("locked"),
-            .buttonHeistVersionMismatch(serverVersion: "old", clientVersion: "new"),
+            .buttonHeistVersionMismatch(serverVersion: "0.5.0", clientVersion: "0.6.0"),
             .localDisconnect,
             .missingToken,
         ]
@@ -52,7 +52,7 @@ final class DeviceConnectionTLSTests: XCTestCase {
             (.authFailed("bad token"), .authFailed, .authentication, false),
             (.sessionLocked("busy"), .sessionLocked, .session, true),
             (
-                .buttonHeistVersionMismatch(serverVersion: "old", clientVersion: "new"),
+                .buttonHeistVersionMismatch(serverVersion: "0.5.0", clientVersion: "0.6.0"),
                 .protocolMismatch, .protocolNegotiation, false
             ),
             (.localDisconnect, .clientLocalDisconnect, .client, false),
@@ -101,26 +101,40 @@ final class DeviceConnectionTLSTests: XCTestCase {
         XCTAssertTrue(failure.localizedDescription.contains("posix"))
     }
 
+    func testConnectionEventStreamDrainsAcceptedCallbacksBeforeOverflowTermination() async {
+        let stream = DeviceConnectionEventStream()
+        let sessionID = UUID()
+        let connection = NWConnection(host: "127.0.0.1", port: 1, using: .tcp)
+
+        for _ in 0..<DeviceConnectionEventStream.bufferLimit {
+            stream.yield(.state(.setup, sessionID: sessionID, connection: connection))
+        }
+        stream.yield(.state(.waiting(NWError.posix(.EAGAIN)), sessionID: sessionID, connection: connection))
+
+        var deliveredCount = 0
+        for await _ in stream.events {
+            deliveredCount += 1
+        }
+
+        XCTAssertEqual(deliveredCount, DeviceConnectionEventStream.bufferLimit)
+        XCTAssertTrue(stream.didOverflow)
+    }
+
     // MARK: - DeviceConnection Init (actor-isolated)
 
     @ButtonHeistActor
-    func testConnectWithoutUsableTokenEmitsMissingToken() async {
-        let tokens: [String?] = [nil, "", " \n"]
-
-        for token in tokens {
-            XCTAssertNil(HandoffAuthToken(token))
-            let connection = DeviceConnection(device: makeDummyDevice(), token: token)
-            var disconnectReason: DisconnectReason?
-            connection.onEvent = { event in
-                if case .disconnected(let reason) = event {
-                    disconnectReason = reason
-                }
+    func testConnectWithoutTokenEmitsMissingToken() async {
+        let connection = DeviceConnection(device: makeDummyDevice(), token: nil)
+        var disconnectReason: DisconnectReason?
+        connection.onEvent = { event in
+            if case .disconnected(let reason) = event {
+                disconnectReason = reason
             }
-
-            connection.connect()
-
-            XCTAssertEqual(disconnectReason, .missingToken)
         }
+
+        connection.connect()
+
+        XCTAssertEqual(disconnectReason, .missingToken)
     }
 
     // MARK: - Receive Events
@@ -199,10 +213,10 @@ final class DeviceConnectionTLSTests: XCTestCase {
         connection.handleReceive(.content(secondBatch), connection: transportConnection)
 
         XCTAssertEqual(receivedMessages, 2)
-        guard case .connected(let active) = connection.connectionState else {
+        guard case .connected(let session) = connection.runtimePhase else {
             return XCTFail("Expected connected receive session")
         }
-        XCTAssertEqual(active.receiveFramer.pendingData, Data("partial".utf8))
+        XCTAssertEqual(session.receiveFramer.pendingData, Data("partial".utf8))
     }
 
     @ButtonHeistActor
@@ -228,7 +242,7 @@ final class DeviceConnectionTLSTests: XCTestCase {
     func testStaleReadyCallbackWithWrongSessionIDDoesNotConnectCurrentAttempt() async {
         let transportConnection = NWConnection(host: "127.0.0.1", port: 1, using: .tcp)
         let connection = DeviceConnection(device: makeDummyDevice(), token: "token")
-        connection.connectionState = .connecting(connection: transportConnection)
+        connection.runtimePhase = .connecting(DeviceConnection.RuntimeSession(connection: transportConnection))
         var transportReadyCount = 0
         connection.onTransportReady = {
             transportReadyCount += 1
@@ -236,7 +250,7 @@ final class DeviceConnectionTLSTests: XCTestCase {
 
         connection.handleStateChange(.ready, sessionID: UUID(), connection: transportConnection)
 
-        guard case .connecting = connection.connectionState else {
+        guard case .connecting = connection.runtimePhase else {
             return XCTFail("Expected stale ready callback to leave the connection attempt in progress")
         }
         XCTAssertEqual(transportReadyCount, 0)

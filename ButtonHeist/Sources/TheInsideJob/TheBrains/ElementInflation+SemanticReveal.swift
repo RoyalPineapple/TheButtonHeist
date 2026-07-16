@@ -27,10 +27,10 @@ extension ElementInflation {
     @discardableResult
     func revealSemanticTarget(
         _ treeElement: InterfaceTree.Element,
-        deadline: SemanticObservationDeadline
+        deadline: SemanticObservationDeadline,
     ) async -> SemanticRevealResult {
-        let transaction = RevealTransaction()
-        transaction.captureScrollableHierarchy(in: stash)
+        let transaction = RevealTransaction(stash: stash)
+        transaction.captureScrollableHierarchy()
         let result = await revealSemanticTarget(
             treeElement,
             deadline: deadline,
@@ -75,7 +75,7 @@ extension ElementInflation {
         if let interruption = semanticRevealInterruption(deadline: deadline) {
             return interruption
         }
-        transaction.captureScrollableHierarchy(in: stash)
+        transaction.captureScrollableHierarchy()
         guard await exploration.revealKnownTarget(.init(
             heistId: treeElement.heistId,
             deadline: deadline
@@ -134,7 +134,7 @@ extension ElementInflation {
            )
         else { return nil }
 
-        transaction.captureScrollableHierarchy(in: stash)
+        transaction.captureScrollableHierarchy()
         return stash.refreshedLiveScrollView(for: container, directChildOf: parent)
     }
 
@@ -146,8 +146,11 @@ extension ElementInflation {
     ) async -> Bool {
         guard semanticRevealInterruption(deadline: deadline) == nil else { return false }
         transaction.record(scrollView)
+        guard let scrollTarget = Navigation.ScrollableTarget.programmatic(scrollView, in: stash) else {
+            return false
+        }
         let transition = await exploration.moveViewport(
-            .revealContentPoint(observedPoint.point, in: scrollView)
+            .revealContentPoint(observedPoint.point, in: scrollTarget)
         )
         guard semanticRevealInterruption(deadline: deadline) == nil else { return false }
         switch transition.result {

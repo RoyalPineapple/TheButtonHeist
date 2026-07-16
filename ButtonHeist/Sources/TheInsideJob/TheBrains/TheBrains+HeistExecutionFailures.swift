@@ -7,7 +7,10 @@ import TheScore
 
 extension TheBrains {
 
-    internal func childFailureDetail(category: HeistFailureCategory, childPath: String) -> HeistFailureDetail {
+    internal func childFailureDetail(
+        category: HeistFailureCategory,
+        childPath: HeistExecutionPath
+    ) -> HeistFailureDetail {
         HeistFailureDetail(
             category: category,
             contract: "child execution completes without failure",
@@ -18,7 +21,7 @@ extension TheBrains {
 
     internal func failureScreenshotStep(
         runtime: HeistExecutionRuntime,
-        failedPath: String,
+        failedPath: HeistExecutionPath,
         mode: ScreenCaptureMode
     ) async -> HeistExecutionStepResult? {
         let start = CFAbsoluteTimeGetCurrent()
@@ -27,16 +30,23 @@ extension TheBrains {
             : await executeTakeScreenshot(mode: mode)
         guard result.method == .takeScreenshot else { return nil }
         let command = HeistActionCommand.takeScreenshot
-        let evidence = HeistActionEvidence.dispatch(command: command, dispatchResult: result)
-        return heistReceipt(.init(
-            path: "\(failedPath).failure.actions[0]",
-            kind: .action,
+        let evidence = HeistActionEvidence.dispatch(dispatchResult: result)
+        if let failure = failureScreenshotDetail(for: result) {
+            guard let evidence = HeistFailedActionEvidence(evidence) else { return nil }
+            return .action(
+                path: failedPath.failureAction(at: 0),
+                durationMs: elapsedMilliseconds(since: start),
+                command: command,
+                completion: .failed(evidence: evidence, failure: failure)
+            )
+        }
+        guard let evidence = HeistPassedActionEvidence(evidence) else { return nil }
+        return .action(
+            path: failedPath.failureAction(at: 0),
             durationMs: elapsedMilliseconds(since: start),
-            intent: .action(command: command),
-            evidence: .action(evidence),
-            completion: failureScreenshotDetail(for: result)
-                .map(HeistReceiptRequest.Completion.failed) ?? .passed
-        ))
+            command: command,
+            completion: .passed(evidence: evidence)
+        )
     }
 
     private func failureScreenshotDetail(for result: ActionResult) -> HeistFailureDetail? {

@@ -5,6 +5,10 @@ import ThePlans
 @testable import TheInsideJob
 @testable import TheScore
 
+private struct TestPreparedDispatch: Sendable {
+    let result: Bool
+}
+
 @MainActor
 final class ActivationPolicyTests: XCTestCase {
 
@@ -93,9 +97,9 @@ final class ActivationPolicyTests: XCTestCase {
                 events.append("refresh")
                 return .resolved(inflatedTarget)
             },
-            activationPointDispatch: { point in
+            prepareActivationPointDispatch: { point in
                 dispatchedPoints.append(point)
-                return true
+                return TestPreparedDispatch(result: true)
             },
             showFingerprint: { point in
                 fingerprintPoints.append(point)
@@ -131,9 +135,9 @@ final class ActivationPolicyTests: XCTestCase {
             refreshAndResolve: {
                 .failure(.failure(.activate, message: "activation refresh failed"))
             },
-            activationPointDispatch: { point in
+            prepareActivationPointDispatch: { point in
                 dispatchedPoints.append(point)
-                return true
+                return TestPreparedDispatch(result: true)
             }
         ).apply(to: initialTarget)
 
@@ -161,9 +165,9 @@ final class ActivationPolicyTests: XCTestCase {
             refreshAndResolve: {
                 .resolved(inflatedTarget)
             },
-            activationPointDispatch: { point in
+            prepareActivationPointDispatch: { point in
                 dispatchedPoints.append(point)
-                return true
+                return TestPreparedDispatch(result: true)
             }
         ).apply(to: initialTarget)
 
@@ -193,7 +197,7 @@ final class ActivationPolicyTests: XCTestCase {
             refreshAndResolve: {
                 .resolved(inflatedTarget)
             },
-            activationPointDispatch: { _ in true },
+            prepareActivationPointDispatch: { _ in TestPreparedDispatch(result: true) },
             textEntryActivationFailure: { _, trace in
                 focusConfirmationTrace = trace
                 return .failure(.activate, message: "text entry did not focus", activationTrace: trace)
@@ -226,7 +230,7 @@ final class ActivationPolicyTests: XCTestCase {
             refreshAndResolve: {
                 .resolved(inflatedTarget)
             },
-            activationPointDispatch: { _ in true },
+            prepareActivationPointDispatch: { _ in TestPreparedDispatch(result: true) },
             textEntryActivationFailure: { _, _ in
                 focusConfirmationCount += 1
                 return .failure(.activate, message: "unexpected focus confirmation")
@@ -264,9 +268,9 @@ final class ActivationPolicyTests: XCTestCase {
             refreshAndResolve: {
                 .resolved(inflatedTarget)
             },
-            activationPointDispatch: { point in
+            prepareActivationPointDispatch: { point in
                 dispatchedPoints.append(point)
-                return false
+                return TestPreparedDispatch(result: false)
             }
         ).apply(to: initialTarget)
 
@@ -304,18 +308,26 @@ final class ActivationPolicyTests: XCTestCase {
 
     private func makePolicy(
         accessibilityActivate: @escaping @MainActor (TheStash.LiveActionTarget) -> AccessibilityActionDispatcher.ActivateOutcome,
-        refreshAndResolve: @escaping @MainActor () async -> ActivationPolicy.RefreshResult,
-        activationPointDispatch: @escaping @MainActor (CGPoint) async -> Bool,
+        refreshAndResolve: @escaping @MainActor () async -> ActivationRefreshResult,
+        prepareActivationPointDispatch: @escaping @MainActor (
+            CGPoint
+        ) -> TestPreparedDispatch?,
         showFingerprint: @escaping @MainActor (CGPoint) -> Void = { _ in },
         textEntryActivationFailure: @escaping @MainActor (
             InterfaceTree.Element,
             ActivationTrace
         ) async -> TheSafecracker.ActionDispatchOutcome? = { _, _ in nil }
-    ) -> ActivationPolicy {
+    ) -> ActivationPolicy<TestPreparedDispatch> {
         ActivationPolicy(
-            accessibilityActivate: accessibilityActivate,
+            accessibilityActivate: { target in
+                .success(ActivationDispatchEvidence(
+                    outcome: accessibilityActivate(target),
+                    activationPoint: target.activationPoint
+                ))
+            },
             refreshAndResolve: refreshAndResolve,
-            activationPointDispatch: activationPointDispatch,
+            prepareActivationPointDispatch: prepareActivationPointDispatch,
+            completeActivationPointDispatch: { $0.result },
             showFingerprint: showFingerprint,
             textEntryActivationFailure: { treeElement, trace in
                 guard treeElement.element.traits.contains(.textEntry) else { return nil }
@@ -345,12 +357,15 @@ final class ActivationPolicyTests: XCTestCase {
         )
         let object = ActivationObject()
         object.accessibilityFrame = frame
-        return TheStash.LiveActionTarget(
-            treeElement: treeElement,
-            object: object,
-            frame: frame,
-            activationPoint: activationPoint
-        )
+        let stash = TheStash(tripwire: TheTripwire())
+        stash.installScreenForTesting(.makeForTests(
+            elements: [(element, heistId)],
+            objects: [heistId: object]
+        ))
+        guard case .resolved(let target) = stash.resolveLiveActionTarget(for: treeElement) else {
+            preconditionFailure("Activation policy fixture did not produce a live target")
+        }
+        return target
     }
 
     private func makeInflatedTarget(

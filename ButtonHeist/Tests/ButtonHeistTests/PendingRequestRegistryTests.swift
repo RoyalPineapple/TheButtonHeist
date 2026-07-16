@@ -46,7 +46,7 @@ final class PendingRequestRegistryTests: XCTestCase {
     @ButtonHeistActor
     func testRequestIdCannotRegisterDifferentResponseShapes() async throws {
         let registry = TheFence.PendingRequestRegistry()
-        let requestId = "shared-request-id"
+        let requestId: RequestID = "shared-request-id"
         let registered = expectation(description: "original request registered")
 
         let actionTask = Task { @ButtonHeistActor in
@@ -137,7 +137,7 @@ final class PendingRequestRegistryTests: XCTestCase {
     @ButtonHeistActor
     func testServerErrorPreservesCanonicalPayload() async throws {
         let registry = TheFence.PendingRequestRegistry()
-        let requestId = "req-server-error"
+        let requestId: RequestID = "req-server-error"
         let registered = expectation(description: "request registered")
         let serverError = ServerError(
             kind: .general,
@@ -171,7 +171,7 @@ final class PendingRequestRegistryTests: XCTestCase {
     @ButtonHeistActor
     func testProtocolTrafficDoesNotConsumePendingResponse() async throws {
         let registry = TheFence.PendingRequestRegistry()
-        let requestId = "req-protocol-traffic"
+        let requestId: RequestID = "req-protocol-traffic"
         let registered = expectation(description: "request registered")
 
         let task = Task { @ButtonHeistActor in
@@ -243,7 +243,7 @@ final class PendingRequestRegistryTests: XCTestCase {
     @ButtonHeistActor
     func testTimeoutReleasesRequestIdForAReplacementOwner() async throws {
         let registry = TheFence.PendingRequestRegistry()
-        let requestId = "req-timeout"
+        let requestId: RequestID = "req-timeout"
 
         do {
             _ = try await registry.waitForResponse(
@@ -279,7 +279,7 @@ final class PendingRequestRegistryTests: XCTestCase {
     @ButtonHeistActor
     func testCancellationReleasesOnlyTheCancelledRequestOwner() async throws {
         let registry = TheFence.PendingRequestRegistry()
-        let requestId = "req-cancelled"
+        let requestId: RequestID = "req-cancelled"
         let registered = expectation(description: "cancelled request registered")
 
         let cancelledTask = Task { @ButtonHeistActor in

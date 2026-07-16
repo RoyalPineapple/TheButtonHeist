@@ -73,7 +73,7 @@ extension DeviceConnection {
 
     private func emitMessage(
         _ message: ServerMessage,
-        requestId: String?
+        requestId: RequestID?
     ) {
         onEvent?(.message(
             message,

@@ -110,8 +110,8 @@ final class TheHandoffStateTests: XCTestCase {
     @ButtonHeistActor
     func testAuthRequiredSendsConfiguredTokenAndDriverFromHandoff() async {
         let handoff = TheHandoff()
-        handoff.token = "test-token"
-        handoff.driverId = "test-driver"
+        handoff.authToken = "test-token"
+        handoff.driverID = "test-driver"
         let mock = connectMockHandoff(handoff)
 
         handoff.handleServerMessage(.authRequired, requestId: nil)
@@ -127,8 +127,8 @@ final class TheHandoffStateTests: XCTestCase {
     @ButtonHeistActor
     func testAuthRequiredSendsAuthenticateBeforeHandoffIsConnected() async {
         let handoff = TheHandoff()
-        handoff.token = "test-token"
-        handoff.driverId = "test-driver"
+        handoff.authToken = "test-token"
+        handoff.driverID = "test-driver"
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
         let mock = MockConnection()
         mock.connectEventsOverride = []
@@ -147,24 +147,15 @@ final class TheHandoffStateTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testAuthRequiredWithoutUsableTokenFailsWithoutSendingAuthenticate() async {
-        let tokens: [String?] = [nil, "", " \n"]
+    func testAuthRequiredWithoutTokenFailsWithoutSendingAuthenticate() async {
+        let handoff = TheHandoff()
+        let mock = connectPendingMockHandoff(handoff)
 
-        for token in tokens {
-            XCTAssertNil(HandoffAuthToken(token))
-            let handoff = TheHandoff()
-            handoff.token = token
-            let mock = connectPendingMockHandoff(handoff)
+        handoff.handleServerMessage(.authRequired, requestId: nil)
 
-            handoff.handleServerMessage(.authRequired, requestId: nil)
-
-            assertFailed(handoff.connectionPhase, failure: .disconnected(.missingToken))
-            XCTAssertTrue(
-                mock.sent.isEmpty,
-                "Handoff must not send authenticate for token \(String(describing: token))"
-            )
-            XCTAssertEqual(mock.disconnectCount, 1)
-        }
+        assertFailed(handoff.connectionPhase, failure: .disconnected(.missingToken))
+        XCTAssertTrue(mock.sent.isEmpty)
+        XCTAssertEqual(mock.disconnectCount, 1)
     }
 
     @ButtonHeistActor
@@ -217,7 +208,7 @@ final class TheHandoffStateTests: XCTestCase {
     func testPongResetsKeepaliveCounterAndForwardsRequestScopedPong() async {
         let handoff = TheHandoff()
         _ = connectMockHandoff(handoff)
-        var forwarded: [(ServerMessage, String?)] = []
+        var forwarded: [(ServerMessage, RequestID?)] = []
         handoff.onServerMessage = { message, requestId in
             forwarded.append((message, requestId))
         }
@@ -225,7 +216,7 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertEqual(handoff.tickKeepalive(), 1)
         XCTAssertEqual(handoff.tickKeepalive(), 2)
 
-        handoff.handleServerMessage(.pong(PongPayload()), requestId: "ping-1")
+        handoff.handleServerMessage(.pong(PongPayload(bundleIdentifier: "com.buttonheist.test")), requestId: "ping-1")
 
         XCTAssertEqual(handoff.missedPongCount, 0)
         XCTAssertEqual(forwarded.count, 1)
@@ -233,6 +224,22 @@ final class TheHandoffStateTests: XCTestCase {
         guard case .pong = forwarded.first?.0 else {
             return XCTFail("Expected request-scoped pong to be forwarded")
         }
+    }
+
+    @ButtonHeistActor
+    func testConnectionEventForwardsTypedSendFailureRequestID() async {
+        let handoff = TheHandoff()
+        let connection = connectMockHandoff(handoff)
+        let requestID: RequestID = "request-1"
+        var received: (DeviceSendFailure, RequestID?)?
+        handoff.onSendFailure = { failure, eventRequestID in
+            received = (failure, eventRequestID)
+        }
+
+        connection.onEvent?(.sendFailed(.notConnected, requestId: requestID))
+
+        XCTAssertEqual(received?.0, .notConnected)
+        XCTAssertEqual(received?.1, requestID)
     }
 
     @ButtonHeistActor
@@ -248,7 +255,7 @@ final class TheHandoffStateTests: XCTestCase {
             assertConnected(handoff.connectionPhase)
         }
 
-        handoff.handleServerMessage(.pong(PongPayload()), requestId: nil)
+        handoff.handleServerMessage(.pong(PongPayload(bundleIdentifier: "com.buttonheist.test")), requestId: nil)
 
         XCTAssertEqual(handoff.missedPongCount, 0)
         XCTAssertEqual(handoff.tickKeepalive(), 1)
@@ -344,7 +351,7 @@ final class TheHandoffStateTests: XCTestCase {
         handoff.makeDiscovery = { mockDiscovery }
         handoff.startDiscovery()
 
-        var connectedIDs: [String] = []
+        var connectedIDs: [DiscoveryDeviceID] = []
         handoff.makeConnection = { device in
             connectedIDs.append(device.id)
             let connection = MockConnection()
@@ -541,7 +548,10 @@ final class TheHandoffStateTests: XCTestCase {
     func testReconnectPhaseNotifiesWhenRunIdentityChanges() async {
         let lifecycle = HandoffConnectionLifecycle()
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
-        let target = HandoffReconnectTarget(filter: nil, device: device)
+        let target = HandoffReconnectTarget(
+            resolutionTarget: DeviceResolutionTarget(filter: nil),
+            device: device
+        )
         var phases: [HandoffConnectionPhase] = []
         lifecycle.onPhaseChanged = { phases.append($0) }
 
@@ -566,7 +576,10 @@ final class TheHandoffStateTests: XCTestCase {
     func testReconnectAttemptFailurePreservesRunWithoutRepeatingPhaseNotification() async {
         let lifecycle = HandoffConnectionLifecycle()
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
-        let target = HandoffReconnectTarget(filter: nil, device: device)
+        let target = HandoffReconnectTarget(
+            resolutionTarget: DeviceResolutionTarget(filter: nil),
+            device: device
+        )
         let failure = HandoffConnectionError.connectionFailed("retry failed")
         var phases: [HandoffConnectionPhase] = []
         lifecycle.onPhaseChanged = { phases.append($0) }
@@ -743,7 +756,7 @@ final class TheHandoffStateTests: XCTestCase {
         let device = DiscoveredDevice.fromHostPort("127.0.0.1:1456")!
         let reconnected = expectation(description: "direct endpoint reconnected")
 
-        var connectedIDs: [String] = []
+        var connectedIDs: [DiscoveryDeviceID] = []
         handoff.makeConnection = { device in
             connectedIDs.append(device.id)
             let connection = MockConnection()
@@ -862,7 +875,7 @@ final class TheHandoffStateTests: XCTestCase {
         handoff.makeDiscovery = { mockDiscovery }
         handoff.startDiscovery()
 
-        var connectedIDs: [String] = []
+        var connectedIDs: [DiscoveryDeviceID] = []
         handoff.makeConnection = { device in
             connectedIDs.append(device.id)
             let connection = MockConnection()
@@ -1012,12 +1025,14 @@ final class TheHandoffStateTests: XCTestCase {
         )
         var states: [Bool] = []
         var failures: [HandoffConnectionError] = []
+        let terminalDelivered = HandoffTestSignal()
         discovery.onEvent = { event in
             switch event {
             case .stateChanged(let isReady):
                 states.append(isReady)
             case .failed(let failure):
                 failures.append(failure)
+                terminalDelivered.signal()
             case .found, .lost:
                 break
             }
@@ -1025,9 +1040,8 @@ final class TheHandoffStateTests: XCTestCase {
 
         discovery.start()
         browser.emit(.ready)
-        await Task.yield()
         browser.emit(.failed("boom"))
-        await Task.yield()
+        await terminalDelivered.wait()
 
         XCTAssertEqual(states, [true])
         XCTAssertEqual(failures, [.connectionFailed("Bonjour discovery failed: boom")])
@@ -1045,9 +1059,13 @@ final class TheHandoffStateTests: XCTestCase {
             makeBrowser: { browsers.removeFirst() }
         )
         var states: [Bool] = []
+        let currentReadyDelivered = HandoffTestSignal()
         discovery.onEvent = { event in
             if case .stateChanged(let isReady) = event {
                 states.append(isReady)
+                if isReady {
+                    currentReadyDelivered.signal()
+                }
             }
         }
 
@@ -1055,9 +1073,8 @@ final class TheHandoffStateTests: XCTestCase {
         discovery.stop()
         discovery.start()
         firstBrowser.emit(.ready)
-        await Task.yield()
         secondBrowser.emit(.ready)
-        await Task.yield()
+        await currentReadyDelivered.wait()
 
         XCTAssertEqual(firstBrowser.cancelCount, 1)
         XCTAssertEqual(secondBrowser.startCount, 1)
@@ -1091,7 +1108,7 @@ final class TheHandoffStateTests: XCTestCase {
                                 appBuild: "1",
                                 deviceName: "Simulator",
                                 systemVersion: "18.5",
-                                buttonHeistVersion: "5.0"
+                                buttonHeistVersion: "5.0.0"
                             ),
                             session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
                         ))
@@ -1131,7 +1148,7 @@ final class TheHandoffStateTests: XCTestCase {
         mockDiscovery.discoveredDevices = [discoveredDevice]
         handoff.makeDiscovery = { mockDiscovery }
 
-        var connectedDeviceID: String?
+        var connectedDeviceID: DiscoveryDeviceID?
         handoff.makeConnection = { device in
             connectedDeviceID = device.id
             let connection = MockConnection()
@@ -1596,7 +1613,7 @@ final class TheHandoffStateTests: XCTestCase {
         handoff.makeConnection = { _ in mock }
 
         var receivedMessage: ServerMessage?
-        var receivedRequestID: String?
+        var receivedRequestID: RequestID?
         handoff.onServerMessage = { message, requestID in
             receivedMessage = message
             receivedRequestID = requestID
@@ -1629,7 +1646,7 @@ final class TheHandoffStateTests: XCTestCase {
         mock.connectEventsOverride = []
         handoff.makeConnection = { _ in mock }
 
-        var receivedMessages: [(message: ServerMessage, requestID: String?)] = []
+        var receivedMessages: [(message: ServerMessage, requestID: RequestID?)] = []
         handoff.onServerMessage = { message, requestID in
             receivedMessages.append((message, requestID))
         }
@@ -1847,6 +1864,27 @@ final class TheHandoffStateTests: XCTestCase {
         let connection = MockConnection()
         connection.emitTransportReadyOnConnect = true
         return connection
+    }
+}
+
+@ButtonHeistActor
+private final class HandoffTestSignal {
+    private var isSignalled = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func signal() {
+        guard !isSignalled else { return }
+        isSignalled = true
+        let pending = waiters
+        waiters.removeAll()
+        pending.forEach { $0.resume() }
+    }
+
+    func wait() async {
+        guard !isSignalled else { return }
+        await withCheckedContinuation { continuation in
+            waiters.append(continuation)
+        }
     }
 }
 

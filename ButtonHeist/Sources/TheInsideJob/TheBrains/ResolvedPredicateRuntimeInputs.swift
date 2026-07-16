@@ -5,7 +5,7 @@ import ThePlans
 struct ResolvedWaitRuntimeInput: Sendable, Equatable {
     let predicateExpression: AccessibilityPredicate
     let predicate: ResolvedAccessibilityPredicate
-    let timeout: Double
+    let timeout: WaitTimeout
 
     init(resolving authored: WaitStep, in environment: HeistExecutionEnvironment) throws {
         self.init(
@@ -17,7 +17,7 @@ struct ResolvedWaitRuntimeInput: Sendable, Equatable {
 
     init(
         repeatUntil step: ResolvedRepeatUntilStep,
-        timeout: Double
+        timeout: WaitTimeout
     ) {
         self.init(
             predicateExpression: step.predicateExpression,
@@ -26,7 +26,7 @@ struct ResolvedWaitRuntimeInput: Sendable, Equatable {
         )
     }
 
-    static func changedElements(timeout: Double) -> ResolvedWaitRuntimeInput {
+    static func changedElements(timeout: WaitTimeout) -> ResolvedWaitRuntimeInput {
         ResolvedWaitRuntimeInput(
             predicateExpression: .changed(.elements()),
             predicate: ResolvedAccessibilityPredicate(core: .changed(.elements([]))),
@@ -34,18 +34,10 @@ struct ResolvedWaitRuntimeInput: Sendable, Equatable {
         )
     }
 
-    func replacingTimeout(_ timeout: Double) -> ResolvedWaitRuntimeInput {
-        ResolvedWaitRuntimeInput(
-            predicateExpression: predicateExpression,
-            predicate: predicate,
-            timeout: timeout
-        )
-    }
-
     private init(
         predicateExpression: AccessibilityPredicate,
         predicate: ResolvedAccessibilityPredicate,
-        timeout: Double
+        timeout: WaitTimeout
     ) {
         self.predicateExpression = predicateExpression
         self.predicate = predicate

@@ -7,14 +7,8 @@ import TheScore
 
 import AccessibilitySnapshotParser
 
-/// Navigation — scroll orchestration and screen exploration.
-///
-/// Internal component of TheBrains. Owns the scroll and exploration engines,
-/// and drives TheSafecracker's scroll primitives against TheStash's hierarchy.
 @MainActor
 final class Navigation {
-
-    // MARK: - Properties
 
     let stash: TheStash
     let safecracker: TheSafecracker
@@ -30,12 +24,15 @@ final class Navigation {
                     target: target,
                     baseline: .interfaceMemory(self.stash.actionDiscoveryBaseline()),
                     exitPosition: .current,
-                    searchOrder: .backwardFirst
+                    searchOrder: .backwardFirst,
                 )
             },
             revealKnownTarget: { [weak self] request in
                 guard let self else { return nil }
-                return await self.scanForHeistId(request.heistId, deadline: request.deadline)
+                return await self.scanForHeistId(
+                    request.heistId,
+                    deadline: request.deadline,
+                )
             },
             moveViewport: { [weak self] intent in
                 guard let self else { return .unavailable() }
@@ -43,8 +40,6 @@ final class Navigation {
             }
         )
     )
-
-    // MARK: - Init
 
     init(
         stash: TheStash,
@@ -56,38 +51,64 @@ final class Navigation {
         self.tripwire = tripwire
     }
 
-    // MARK: - Nested Types
-
-    /// Keep swipe gesture timing stable; scrolling cadence is frame-driven.
     static let swipeGestureDuration: GestureDuration = .scrollSwipeDefault
 
-    /// Capture-bound dispatch evidence for one scrollable semantic container.
-    ///
-    /// `@MainActor` justification: the programmatic case holds a UIScrollView
-    /// reference. Both cases retain the capture token until final dispatch.
     @MainActor enum ScrollableTarget { // swiftlint:disable:this agent_main_actor_value_type
         case uiScrollView(
-            containerTarget: InterfaceTree.Container,
-            object: NSObject,
+            container: TheStash.LiveContainerTarget,
             scrollView: UIScrollView
         )
-        case swipeable(container: TheStash.LiveContainerTarget, frame: CGRect, contentSize: CGSize)
+        case swipeable(container: TheStash.LiveContainerTarget, contentSize: CGSize)
 
         var containerTarget: InterfaceTree.Container {
             switch self {
-            case .uiScrollView(let containerTarget, _, _):
-                return containerTarget
-            case .swipeable(let container, _, _):
+            case .uiScrollView(let container, _), .swipeable(let container, _):
                 return container.containerTarget
             }
         }
 
         var object: NSObject {
             switch self {
-            case .uiScrollView(_, let object, _):
-                return object
-            case .swipeable(let container, _, _):
+            case .uiScrollView(let container, _), .swipeable(let container, _):
                 return container.object
+            }
+        }
+
+        static func programmatic(
+            _ scrollView: UIScrollView,
+            in stash: TheStash
+        ) -> ScrollableTarget? {
+            let paths = stash.scrollableContainerViewsByPath
+                .compactMap { path, reference in reference === scrollView ? path : nil }
+                .sorted()
+            for path in paths {
+                guard let semanticContainer = stash.latestObservation.tree.containers[path],
+                      case .resolved(let liveContainer) = stash.resolveLiveContainerTarget(
+                          for: semanticContainer
+                      ) else { continue }
+                return .uiScrollView(container: liveContainer, scrollView: scrollView)
+            }
+            return nil
+        }
+
+        func dispatchOnFreshScrollView<Value: Sendable>(
+            in stash: TheStash,
+            operation: (UIScrollView) -> Value
+        ) -> Value? {
+            guard case .uiScrollView(let container, _) = self else { return nil }
+            let dispatch = stash.dispatchOnFreshLiveContainerTarget(
+                container,
+            ) { currentContainer -> Value? in
+                guard let scrollView = stash.liveScrollableContainerView(
+                    forPath: currentContainer.containerTarget.path
+                ) else { return nil }
+                return operation(scrollView)
+            }
+            switch dispatch {
+            case .success(let value):
+                return value
+            case .failure:
+                return nil
             }
         }
     }
@@ -105,43 +126,27 @@ final class Navigation {
         case notExplored = "not-explored"
     }
 
-    /// Bookkeeping for a single exploration pass.
-    ///
-    /// Only fields that are actually consumed by explore-loop control flow live
-    /// here. Anything that was "tracked for future use" was removed — add fields
-    /// back when they have a real consumer.
     struct ScreenManifest {
-        /// Containers that have been fully explored.
         private(set) var exploredScrollPaths = Set<TreePath>()
 
-        /// Containers discovered but not yet explored.
         private(set) var pendingScrollPaths = Set<TreePath>()
 
-        /// Total scroll attempts during exploration, including edge resets.
         var scrollCount = 0
 
-        /// Per-container scroll attempts during exploration, including edge resets.
         var scrollCountByContainerPath: [TreePath: Int] = [:]
 
-        /// Containers that may have omitted content because exploration stopped early.
         var omittedScrollPathReasons: [TreePath: Set<ExplorationOmissionReason>] = [:]
 
-        /// Whether the total discovery scroll-attempt cap stopped exploration.
         private(set) var discoveryLimitHit = false
 
-        /// Whether a per-container scroll-attempt cap stopped exploration.
         private(set) var containerLimitHit = false
 
-        /// Whether the swipeable leading-edge reset hard cap stopped exploration.
         private(set) var leadingEdgeResetLimitHit = false
 
-        /// Wall-clock time spent exploring, in seconds.
         var explorationTime: TimeInterval = 0
 
-        /// Safety cap on per-container scroll iterations for this exploration pass.
         let maxScrollsPerContainer: Int
 
-        /// Safety cap on total scroll iterations across this exploration pass.
         let maxScrollsPerDiscovery: Int
 
         init(
@@ -152,17 +157,13 @@ final class Navigation {
             self.maxScrollsPerDiscovery = maxScrollsPerDiscovery
         }
 
-        /// Safety cap on per-container scroll iterations.
         static var maxScrollsPerContainer: Int {
             ButtonHeistRuntimeKnobs.current.maxScrollsPerContainer
         }
 
-        /// Safety cap on total scroll iterations across one discovery pass.
         static var maxScrollsPerDiscovery: Int {
             ButtonHeistRuntimeKnobs.current.maxScrollsPerDiscovery
         }
-
-        // MARK: - Building
 
         mutating func recordScrollAttempt(
             in containerPath: TreePath

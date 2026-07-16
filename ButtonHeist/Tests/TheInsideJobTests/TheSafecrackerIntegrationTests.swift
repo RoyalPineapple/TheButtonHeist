@@ -52,8 +52,10 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
     // MARK: - Touch Injection
 
     func testTapReturnsTrue() async {
-        // Tap an arbitrary point — should succeed even with no target view
-        let result = await safecracker.tap(at: CGPoint(x: 100, y: 100))
+        guard let prepared = safecracker.prepareTap(at: CGPoint(x: 100, y: 100)) else {
+            return XCTFail("Expected touch preparation to succeed")
+        }
+        let result = await safecracker.completePreparedTouch(prepared)
         XCTAssertTrue(result)
     }
 
@@ -68,10 +70,11 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
             to: nil
         )
 
-        let result = await safecracker.longPress(
+        let prepared = try XCTUnwrap(safecracker.prepareLongPress(
             at: screenPoint,
             duration: GestureDuration(seconds: 0.1)
-        )
+        ))
+        let result = await safecracker.completePreparedTouch(prepared)
         XCTAssertTrue(result)
     }
 
@@ -79,11 +82,12 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
         let start = CGPoint(x: 200, y: 400)
         let end = CGPoint(x: 200, y: 200)
 
-        let result = await safecracker.swipe(
+        let prepared = try XCTUnwrap(safecracker.prepareSwipe(
             from: start,
             to: end,
             duration: GestureDuration(seconds: 0.1)
-        )
+        ))
+        let result = await safecracker.completePreparedTouch(prepared)
         XCTAssertTrue(result)
     }
 
@@ -91,11 +95,12 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
         let start = CGPoint(x: 100, y: 300)
         let end = CGPoint(x: 300, y: 300)
 
-        let result = await safecracker.drag(
+        let prepared = try XCTUnwrap(safecracker.prepareDrag(
             from: start,
             to: end,
             duration: GestureDuration(seconds: 0.1)
-        )
+        ))
+        let result = await safecracker.completePreparedTouch(prepared)
         XCTAssertTrue(result)
     }
 

@@ -8,94 +8,140 @@ import ThePlans
 @MainActor
 final class SafecrackerTouchInjection {
 
-    private struct ActiveTouch {
+    fileprivate struct ActiveTouch {
         var touch: TheSafecracker.SyntheticTouch
         let window: UIWindow
     }
 
+    fileprivate enum Completion {
+        case tap
+        case stationary(GestureDuration)
+        case path([CGPoint])
+    }
+
+    struct PreparedTouch {
+        fileprivate let activeTouch: ActiveTouch
+        fileprivate let completion: Completion
+    }
+
+    struct PreparedTouchID: RawRepresentable, Equatable, Hashable, Sendable {
+        let rawValue: UInt64
+    }
+
     private let fingerprints: TheFingerprints
+    private var preparedTouches: [PreparedTouchID: PreparedTouch] = [:]
+    private var nextPreparedTouchID = PreparedTouchID(rawValue: 1)
 
     init(fingerprints: TheFingerprints) {
         self.fingerprints = fingerprints
     }
 
-    /// Simulate a tap at the given screen coordinates.
-    /// Yields to the main run loop between began and ended phases so that
-    /// SwiftUI gesture recognizers (which process events asynchronously)
-    /// have a chance to transition from "possible" to "recognized".
-    func tap(at point: CGPoint) async -> Bool {
-        guard Self.geometryIsValid([point], field: "tap point") else { return false }
-        return await performTouchTap(at: point)
+    func prepareTap(at point: CGPoint) -> PreparedTouchID? {
+        retain(prepareTouch(at: point, field: "tap point", completion: .tap))
     }
 
-    /// Simulate a long press at the given screen coordinates.
-    /// Sends `.stationary` phase events every 10ms during the hold (matching KIF)
-    /// so gesture recognizers stay alive and processing.
-    func longPress(at point: CGPoint, duration: GestureDuration = .longPressDefault) async -> Bool {
-        guard Self.geometryIsValid([point], field: "long press point") else { return false }
-        guard var touchState = beginTouch(at: point) else { return false }
-
-        var elapsed: TimeInterval = 0
-        while elapsed < duration.seconds && !Task.isCancelled {
-            guard await Task.cancellableSleep(
-                nanoseconds: UInt64(TheSafecracker.touchGestureStepDelay * 1_000_000_000)
-            ) else { break }
-            elapsed += TheSafecracker.touchGestureStepDelay
-            sendStationary(&touchState.touch)
-        }
-
-        return endTouch(&touchState.touch)
+    func prepareLongPress(
+        at point: CGPoint,
+        duration: GestureDuration = .longPressDefault
+    ) -> PreparedTouchID? {
+        retain(prepareTouch(
+            at: point,
+            field: "long press point",
+            completion: .stationary(duration)
+        ))
     }
 
-    /// Simulate a swipe gesture between two screen points.
-    /// Pre-computes all waypoints before the gesture loop so the path is stable
-    /// even if the view moves during the gesture.
-    func swipe(from start: CGPoint, to end: CGPoint, duration: GestureDuration = .swipeDefault) async -> Bool {
-        guard Self.geometryIsValid([start, end], field: "swipe point") else { return false }
-        return await performLineGesture(from: start, to: end, duration: duration, minimumSteps: 3)
+    func prepareSwipe(
+        from start: CGPoint,
+        to end: CGPoint,
+        duration: GestureDuration = .swipeDefault
+    ) -> PreparedTouchID? {
+        retain(prepareLineGesture(
+            from: start,
+            to: end,
+            duration: duration,
+            minimumSteps: 3,
+            field: "swipe point"
+        ))
     }
 
-    /// Simulate a drag gesture between two screen points.
-    /// Slower than swipe — used for reordering, slider adjustment, etc.
-    func drag(from start: CGPoint, to end: CGPoint, duration: GestureDuration = .dragDefault) async -> Bool {
-        guard Self.geometryIsValid([start, end], field: "drag point") else { return false }
-        return await performLineGesture(from: start, to: end, duration: duration, minimumSteps: 5)
+    func prepareDrag(
+        from start: CGPoint,
+        to end: CGPoint,
+        duration: GestureDuration = .dragDefault
+    ) -> PreparedTouchID? {
+        retain(prepareLineGesture(
+            from: start,
+            to: end,
+            duration: duration,
+            minimumSteps: 5,
+            field: "drag point"
+        ))
     }
 
-    @discardableResult
-    private func performTouchPath(start: CGPoint, waypoints: [CGPoint]) async -> Bool {
-        guard var touchState = beginTouch(at: start) else { return false }
-
-        for point in waypoints {
-            if Task.isCancelled { break }
-            moveTouch(&touchState.touch, in: touchState.window, to: point)
-            guard await Task.cancellableSleep(
-                nanoseconds: UInt64(TheSafecracker.touchGestureStepDelay * 1_000_000_000)
-            ) else { break }
-        }
-
-        return endTouch(&touchState.touch)
-    }
-
-    private func performTouchTap(at point: CGPoint) async -> Bool {
-        guard var touchState = beginTouch(at: point) else { return false }
-        guard await Task.cancellableSleep(for: TheSafecracker.gestureYieldDelay) else {
-            fingerprints.endTracking()
+    func complete(_ preparedTouchID: PreparedTouchID) async -> Bool {
+        guard let prepared = preparedTouches.removeValue(forKey: preparedTouchID) else {
             return false
         }
+        var touchState = prepared.activeTouch
+        switch prepared.completion {
+        case .tap:
+            guard await Task.cancellableSleep(for: TheSafecracker.gestureYieldDelay) else {
+                fingerprints.endTracking()
+                return false
+            }
+        case .stationary(let duration):
+            var elapsed: TimeInterval = 0
+            while elapsed < duration.seconds && !Task.isCancelled {
+                guard await Task.cancellableSleep(
+                    nanoseconds: UInt64(TheSafecracker.touchGestureStepDelay * 1_000_000_000)
+                ) else { break }
+                elapsed += TheSafecracker.touchGestureStepDelay
+                sendStationary(&touchState.touch)
+            }
+        case .path(let waypoints):
+            for point in waypoints {
+                if Task.isCancelled { break }
+                moveTouch(&touchState.touch, in: touchState.window, to: point)
+                guard await Task.cancellableSleep(
+                    nanoseconds: UInt64(TheSafecracker.touchGestureStepDelay * 1_000_000_000)
+                ) else { break }
+            }
+        }
         return endTouch(&touchState.touch)
     }
 
-    private func performLineGesture(
+    private func retain(_ preparedTouch: PreparedTouch?) -> PreparedTouchID? {
+        guard let preparedTouch else { return nil }
+        let preparedTouchID = nextPreparedTouchID
+        nextPreparedTouchID = PreparedTouchID(rawValue: preparedTouchID.rawValue + 1)
+        preparedTouches[preparedTouchID] = preparedTouch
+        return preparedTouchID
+    }
+
+    private func prepareTouch(
+        at point: CGPoint,
+        field: String,
+        completion: Completion
+    ) -> PreparedTouch? {
+        guard Self.geometryIsValid([point], field: field),
+              let activeTouch = beginTouch(at: point) else { return nil }
+        return PreparedTouch(activeTouch: activeTouch, completion: completion)
+    }
+
+    private func prepareLineGesture(
         from start: CGPoint,
         to end: CGPoint,
         duration: GestureDuration,
-        minimumSteps: Int
-    ) async -> Bool {
+        minimumSteps: Int,
+        field: String
+    ) -> PreparedTouch? {
+        guard Self.geometryIsValid([start, end], field: field) else { return nil }
         let steps = max(Int(duration.seconds / TheSafecracker.touchGestureStepDelay), minimumSteps)
-        return await performTouchPath(
-            start: start,
-            waypoints: Self.linearPath(from: start, to: end, steps: steps)
+        return prepareTouch(
+            at: start,
+            field: field,
+            completion: .path(Self.linearPath(from: start, to: end, steps: steps))
         )
     }
 
@@ -175,10 +221,6 @@ final class SafecrackerTouchInjection {
         }
     }
 
-    /// Find the correct window for a tap at the given screen point.
-    /// Iterates all windows frontmost-first (highest windowLevel first),
-    /// following KIF's pattern from UIApplication-KIFAdditions.m.
-    /// Returns the first window whose hitTest succeeds at the point.
     private func windowForPoint(_ point: CGPoint) -> UIWindow? {
         guard GeometryValidation.validateScreenPoint(point) == nil else { return nil }
         for window in TheTripwire.orderedVisibleWindows() {

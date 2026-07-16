@@ -115,7 +115,7 @@ extension FenceResponse {
     private static func formatPongHuman(_ payload: PongPayload) -> String {
         var parts = [
             payload.appName.isEmpty ? "App" : payload.appName,
-            "bundle: \(payload.bundleIdentifier.isEmpty ? "unknown" : payload.bundleIdentifier)",
+            "bundle: \(payload.bundleIdentifier)",
             "ButtonHeist: \(payload.buttonHeistVersion)",
         ]
         if let version = payload.appVersion, !version.isEmpty {
@@ -124,7 +124,7 @@ extension FenceResponse {
         if let build = payload.appBuild, !build.isEmpty {
             parts.append("build: \(build)")
         }
-        if let identifier = payload.serverInstanceIdentifier, !identifier.isEmpty {
+        if let identifier = payload.serverInstanceIdentifier {
             parts.append("server: \(identifier)")
         }
         if let timestamp = payload.serverTimestampMs {

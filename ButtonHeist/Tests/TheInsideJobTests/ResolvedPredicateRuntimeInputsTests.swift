@@ -19,10 +19,6 @@ final class ResolvedPredicateRuntimeInputsTests: XCTestCase {
         )
         XCTAssertEqual(input.timeout, 4)
 
-        let immediate = input.replacingTimeout(immediateTimeout)
-        XCTAssertEqual(immediate.predicateExpression, input.predicateExpression)
-        XCTAssertEqual(immediate.predicate, input.predicate)
-        XCTAssertEqual(immediate.timeout, immediateTimeout)
     }
 
     func testPredicateCaseInputPreservesOneBodyAndResolvedEvaluation() throws {

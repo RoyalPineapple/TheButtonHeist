@@ -67,7 +67,7 @@ extension Navigation {
             navigation: Navigation,
             exploration: SemanticExploration,
             searchOrder: ViewportSearchOrder,
-            revealRootScrollViewID: ObjectIdentifier? = nil
+            revealRootScrollViewID: ObjectIdentifier? = nil,
         ) {
             self.navigation = navigation
             self.exploration = exploration
@@ -188,7 +188,7 @@ extension Navigation {
             let container = semanticContainer.container
             guard let contentSize = container.scrollableContentSize else { return nil }
             guard let target = currentProgrammaticScrollTarget(for: semanticContainer.path),
-                  case .uiScrollView(_, _, let scrollView) = target else { return nil }
+                  case .uiScrollView(_, let scrollView) = target else { return nil }
             guard !exploredScrollViewIDs.contains(ObjectIdentifier(scrollView)),
                   scrollView.window != nil,
                   !scrollView.bhIsUnsafeForProgrammaticScrolling,
@@ -292,12 +292,12 @@ extension Navigation {
             onObservation: (SettledSemanticObservationEvent) -> ViewportExplorationDecision
         ) async -> ScrollScanOutcome? {
             guard let parentTarget = currentLiveScrollableTarget(for: parent.scrollViewID),
-                  case .uiScrollView(_, _, let parentScrollView) = parentTarget.target else {
+                  case .uiScrollView(_, let parentScrollView) = parentTarget.target else {
                 return .interrupted
             }
             let nestedContainers = sortedPendingContainers().filter {
                 guard let target = currentProgrammaticScrollTarget(for: $0.path),
-                      case .uiScrollView(_, _, let scrollView) = target else { return false }
+                      case .uiScrollView(_, let scrollView) = target else { return false }
                 return nearestScrollableSuperview(of: scrollView) === parentScrollView
             }
             for semanticContainer in nestedContainers {
@@ -417,11 +417,11 @@ extension Navigation {
             onObservation: (SettledSemanticObservationEvent) -> ViewportExplorationDecision
         ) async -> OriginRestoreResult {
             guard let target = currentProgrammaticScrollTarget(for: scrollViewID),
-                  case .uiScrollView(_, _, let scrollView) = target else {
+                  case .uiScrollView = target else {
                 return .unavailable
             }
             let transition = await navigation.performViewportTransition(
-                .restoreVisualOrigin(origin, in: scrollView),
+                .restoreVisualOrigin(origin, in: target),
                 deadline: exploration.deadline,
                 discoveryCommitPolicy: exploration.discoveryCommitPolicy
             )
@@ -445,7 +445,7 @@ extension Navigation {
             for container: ActiveContainerExploration
         ) -> ScrollableTarget? {
             if let exactTarget = currentProgrammaticScrollTarget(for: container.path),
-               case .uiScrollView(_, _, let scrollView) = exactTarget,
+               case .uiScrollView(_, let scrollView) = exactTarget,
                ObjectIdentifier(scrollView) == container.scrollViewID {
                 return exactTarget
             }
@@ -461,13 +461,13 @@ extension Navigation {
         private func currentProgrammaticScrollTarget(for path: TreePath) -> ScrollableTarget? {
             guard let semanticContainer = navigation.stash.latestObservation.tree.containers[path]
                     ?? navigation.stash.interfaceTree.containers[path],
-                  let object = navigation.stash.liveContainerObject(forPath: path),
-                  navigation.stash.liveContainer(forPath: path) != nil,
+                  case .resolved(let liveContainer) = navigation.stash.resolveLiveContainerTarget(
+                      for: semanticContainer
+                  ),
                   let scrollView = navigation.stash.liveScrollableContainerView(forPath: path),
                   !scrollView.bhIsUnsafeForProgrammaticScrolling else { return nil }
             return .uiScrollView(
-                containerTarget: semanticContainer,
-                object: object,
+                container: liveContainer,
                 scrollView: scrollView
             )
         }
@@ -477,7 +477,7 @@ extension Navigation {
             var targetByScrollViewID: [ObjectIdentifier: LiveScrollableTarget] = [:]
             for container in containers {
                 guard let target = currentProgrammaticScrollTarget(for: container.path),
-                      case .uiScrollView(_, _, let scrollView) = target else { continue }
+                      case .uiScrollView(_, let scrollView) = target else { continue }
                 let candidate = LiveScrollableTarget(
                     path: container.path,
                     target: target,
@@ -497,7 +497,7 @@ extension Navigation {
             while didAddNestedScrollView {
                 didAddNestedScrollView = false
                 for liveTarget in liveTargets where !eligibleIDs.contains(liveTarget.scrollViewID) {
-                    guard case .uiScrollView(_, _, let scrollView) = liveTarget.target,
+                    guard case .uiScrollView(_, let scrollView) = liveTarget.target,
                           let parent = nearestScrollableSuperview(of: scrollView),
                           eligibleIDs.contains(ObjectIdentifier(parent)) else { continue }
                     eligibleIDs.insert(liveTarget.scrollViewID)
@@ -551,7 +551,7 @@ extension Navigation {
 
     func scanForHeistId(
         _ heistId: HeistId,
-        deadline: SemanticObservationDeadline
+        deadline: SemanticObservationDeadline,
     ) async -> ExploredScreen? {
         guard let rootScrollViewID = revealRootScrollViewID(for: heistId) else { return nil }
         var didFindTarget = false
@@ -562,7 +562,7 @@ extension Navigation {
                 deadline: deadline
             ),
             searchOrder: .backwardFirst,
-            revealRootScrollViewID: rootScrollViewID
+            revealRootScrollViewID: rootScrollViewID,
         )
         let explored = await explorer.exploreViewports(exitPosition: .current) { event in
             didFindTarget = event.observation.screen.liveCapture.contains(heistId: heistId)

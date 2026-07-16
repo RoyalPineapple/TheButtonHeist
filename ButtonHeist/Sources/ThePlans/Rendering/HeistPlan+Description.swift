@@ -40,7 +40,7 @@ extension WaitStep: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("wait", [
             predicate.description,
-            "timeout=\(ScoreDescription.decimal(timeout))",
+            "timeout=\(ScoreDescription.decimal(timeout.seconds))",
             elseBody.map { "else=\($0.count)" },
         ].compactMap { $0 })
     }
@@ -89,7 +89,7 @@ extension RepeatUntilStep: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("repeatUntil", [
             predicate.description,
-            "timeout=\(ScoreDescription.decimal(timeout))",
+            "timeout=\(ScoreDescription.decimal(timeout.seconds))",
             "body=\(body.count)",
             elseBody.map { "else=\($0.count)" },
         ].compactMap { $0 })
@@ -98,20 +98,20 @@ extension RepeatUntilStep: CustomStringConvertible {
 
 extension WarnStep: CustomStringConvertible {
     public var description: String {
-        ScoreDescription.call("warn", [ScoreDescription.quoted(message)])
+        ScoreDescription.call("warn", [ScoreDescription.quoted(message.rawValue)])
     }
 }
 
 extension FailStep: CustomStringConvertible {
     public var description: String {
-        ScoreDescription.call("fail", [ScoreDescription.quoted(message)])
+        ScoreDescription.call("fail", [ScoreDescription.quoted(message.rawValue)])
     }
 }
 
 extension HeistInvocationStep: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("invoke", [
-            "path=\(path.joined(separator: "."))",
+            "path=\(path.description)",
             "argument=\(argument.kind.rawValue)",
         ])
     }

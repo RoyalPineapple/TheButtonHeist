@@ -106,36 +106,15 @@ import Testing
     }
 
     private func failedResult() -> HeistExecutionResult {
-        HeistExecutionResult(
-            steps: [
-                .failed(
-                    path: "$.body[0]",
-                    kind: .fail,
-                    durationMs: 3,
-                    intent: .fail(message: "boom"),
-                    failure: HeistFailureDetail(
-                        category: .explicitFailure,
-                        contract: "Fail",
-                        observed: "boom"
-                    )
-                ),
-            ],
-            durationMs: 3,
-            abortedAtPath: "$.body[0]"
+        HeistReceiptFixture.result(
+            steps: [HeistReceiptFixture.explicitFailure(path: "$.body[0]", message: "boom", durationMs: 3)],
+            durationMs: 3
         )
     }
 
     private func passedResult() -> HeistExecutionResult {
-        HeistExecutionResult(
-            steps: [
-                .passed(
-                    path: "$.body[0]",
-                    receiptKind: .warning,
-                    durationMs: 2,
-                    intent: .warn(message: "record receipt"),
-                    evidence: HeistExecutionWarning(path: "$.body[0]", message: "record receipt")
-                ),
-            ],
+        HeistReceiptFixture.result(
+            steps: [HeistReceiptFixture.warning(path: "$.body[0]", message: "record receipt", durationMs: 2)],
             durationMs: 2
         )
     }

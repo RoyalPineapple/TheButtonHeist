@@ -1,33 +1,17 @@
-import Foundation
-
-struct HandoffAuthToken: Sendable, Equatable {
-    let rawValue: String
-
-    init?(_ token: String?) {
-        guard let token, !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return nil
-        }
-        self.rawValue = token
-    }
-}
+import TheScore
 
 /// Client-side admission protocol: respond to server handshake/auth messages
 /// and name terminal admission failures.
 struct HandoffAdmission {
-    private var authToken: HandoffAuthToken?
-    var driverId: String?
+    var authToken: SessionAuthToken?
+    var driverId: DriverID?
 
-    var token: String? {
-        get { authToken?.rawValue }
-        set { authToken = HandoffAuthToken(newValue) }
-    }
-
-    init(token: String? = nil, driverId: String? = nil) {
-        self.authToken = HandoffAuthToken(token)
+    init(token: SessionAuthToken? = nil, driverId: DriverID? = nil) {
+        self.authToken = token
         self.driverId = driverId
     }
 
-    var effectiveDriverId: String {
+    var effectiveDriverId: DriverID {
         HandoffDriverIdentity.effectiveDriverId(explicit: driverId)
     }
 
@@ -40,7 +24,7 @@ struct HandoffAdmission {
                 return .terminalFailure(.disconnected(.missingToken))
             }
             return .send(.authenticate(AuthenticatePayload(
-                token: authToken.rawValue,
+                token: authToken,
                 driverId: effectiveDriverId
             )))
         case .sessionLocked(let payload):

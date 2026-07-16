@@ -3,16 +3,16 @@ import Foundation
 extension HeistPlanRuntimeSafetyValidator {
     mutating func validateTarget(
         _ target: AccessibilityTarget,
-        path: String,
+        path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {
         switch target {
         case .predicate(let predicate, let ordinal):
-            validateOrdinal(ordinal, path: "\(path).ordinal")
+            validateOrdinal(ordinal, path: path.child(.ordinal))
             validateElementPredicate(predicate, path: path, scope: scope)
         case .container(let predicate, let ordinal):
-            validateOrdinal(ordinal, path: "\(path).ordinal")
-            validateContainerPredicate(predicate, path: "\(path).container", scope: scope)
+            validateOrdinal(ordinal, path: path.child(.ordinal))
+            validateContainerPredicate(predicate, path: path.child(.container), scope: scope)
         case .ref(let reference):
             validateReference(reference, path: path, role: "target ref")
             if !scope.targetRefs.contains(reference) {
@@ -24,35 +24,43 @@ extension HeistPlanRuntimeSafetyValidator {
                 )
             }
         case .within(let container, let target):
-            validateContainerPredicate(container, path: "\(path).container", scope: scope)
-            validateTarget(target, path: "\(path).target", scope: scope)
+            validateContainerPredicate(container, path: path.child(.container), scope: scope)
+            validateTarget(target, path: path.child(.target), scope: scope)
         }
     }
 
     mutating func validateString(
         _ string: Expr<String>,
-        path: String,
+        path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {
         switch string {
         case .literal(let literal):
             addString(literal, path: path, role: "string literal")
         case .ref(let reference):
-            validateReference(reference, path: path, role: "text_ref")
-            if !scope.stringRefs.contains(reference) {
-                fail(
-                    path: path,
-                    contract: "text_ref must resolve in the current heist scope",
-                    observed: "\"\(reference)\"",
-                    correction: "Use text_ref only inside the for_each_string body that defines it."
-                )
-            }
+            validateStringReference(reference, path: path, scope: scope)
+        }
+    }
+
+    mutating func validateStringReference(
+        _ reference: HeistReferenceName,
+        path: HeistPlanPath,
+        scope: HeistReferenceScope
+    ) {
+        validateReference(reference, path: path, role: "text_ref")
+        if !scope.stringRefs.contains(reference) {
+            fail(
+                path: path,
+                contract: "text_ref must resolve in the current heist scope",
+                observed: "\"\(reference)\"",
+                correction: "Use text_ref only inside the for_each_string body that defines it."
+            )
         }
     }
 
     mutating func validateString(
         _ match: StringMatchCore<Expr<String>>,
-        path: String,
+        path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {
         if let value = match.payload {
@@ -70,13 +78,13 @@ extension HeistPlanRuntimeSafetyValidator {
 
     mutating func validateContainerPredicate(
         _ predicate: ContainerPredicate,
-        path: String,
+        path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {
         for (index, check) in predicate.core.checks.enumerated() {
             validateContainerPredicateCheck(
                 check,
-                path: "\(path).checks[\(index)]",
+                path: path.child(.checks).index(index),
                 scope: scope
             )
         }
@@ -84,35 +92,35 @@ extension HeistPlanRuntimeSafetyValidator {
 
     private mutating func validateContainerPredicateCheck(
         _ check: ContainerPredicateCheckCore<Expr<String>>,
-        path: String,
+        path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {
         switch check {
         case .type, .rowCount, .columnCount, .modalBoundary, .scrollable:
             return
         case .identifier(let match):
-            validateString(match, path: "\(path).identifier", scope: scope)
+            validateString(match, path: path.child(.identifier), scope: scope)
         case .actions(let actions):
-            validateContainerActions(actions.values, path: "\(path).actions")
+            validateContainerActions(actions.values, path: path.child(.actions))
         case .semantic(let predicate):
-            validateSemanticContainerPredicate(predicate, path: "\(path).semantic", scope: scope)
+            validateSemanticContainerPredicate(predicate, path: path.child(.semantic), scope: scope)
         }
     }
 
     private mutating func validateSemanticContainerPredicate(
         _ predicate: SemanticContainerPredicateCore<Expr<String>>,
-        path: String,
+        path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {
         switch predicate {
         case .label(let match):
-            validateString(match, path: "\(path).label", scope: scope)
+            validateString(match, path: path.child(.label), scope: scope)
         case .value(let match):
-            validateString(match, path: "\(path).value", scope: scope)
+            validateString(match, path: path.child(.value), scope: scope)
         }
     }
 
-    private mutating func validateContainerActions(_ actions: Set<ElementAction>, path: String) {
+    private mutating func validateContainerActions(_ actions: Set<ElementAction>, path: HeistPlanPath) {
         guard !actions.isEmpty else {
             fail(
                 path: path,
@@ -122,19 +130,9 @@ extension HeistPlanRuntimeSafetyValidator {
             )
             return
         }
-        for action in actions {
-            if case .custom(let name) = action, name.isEmpty {
-                fail(
-                    path: path,
-                    contract: "container custom action name must not be empty",
-                    observed: #""""#,
-                    correction: "Use a named custom action."
-                )
-            }
-        }
     }
 
-    mutating func validateOrdinal(_ ordinal: Int?, path: String) {
+    mutating func validateOrdinal(_ ordinal: Int?, path: HeistPlanPath) {
         guard let ordinal, ordinal < 0 else { return }
         fail(
             path: path,
@@ -146,7 +144,7 @@ extension HeistPlanRuntimeSafetyValidator {
 
     mutating func validateElementPredicate(
         _ predicate: ElementPredicateTemplate,
-        path: String,
+        path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {
         if let description = predicate.invalidEmptyPayloadDescription {
@@ -160,7 +158,7 @@ extension HeistPlanRuntimeSafetyValidator {
         for (index, check) in predicate.core.checks.enumerated() {
             validateElementPredicateCheck(
                 check,
-                path: "\(path).checks[\(index)]",
+                path: path.child(.checks).index(index),
                 scope: scope
             )
         }
@@ -168,7 +166,7 @@ extension HeistPlanRuntimeSafetyValidator {
 
     private mutating func validateElementPredicateCheck(
         _ check: ElementPredicateCheckCore<Expr<String>>,
-        path: String,
+        path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {
         if let description = check.invalidEmptyPayloadDescription {
@@ -182,60 +180,34 @@ extension HeistPlanRuntimeSafetyValidator {
 
         switch check {
         case .label(let match):
-            validateString(match, path: "\(path).label", scope: scope)
+            validateString(match, path: path.child(.label), scope: scope)
         case .identifier(let match):
-            validateString(match, path: "\(path).identifier", scope: scope)
+            validateString(match, path: path.child(.identifier), scope: scope)
         case .value(let match):
-            validateString(match, path: "\(path).value", scope: scope)
+            validateString(match, path: path.child(.value), scope: scope)
         case .hint(let match):
-            validateString(match, path: "\(path).hint", scope: scope)
+            validateString(match, path: path.child(.hint), scope: scope)
         case .traits, .actions:
             break
         case .customContent(let match):
             if let label = match.label {
-                validateString(label, path: "\(path).customContent.label", scope: scope)
+                validateString(label, path: path.child(.customContent).child(.label), scope: scope)
             }
             if let value = match.value {
-                validateString(value, path: "\(path).customContent.value", scope: scope)
+                validateString(value, path: path.child(.customContent).child(.value), scope: scope)
             }
         case .rotors(let matches):
-            validateStrings(matches, path: "\(path).rotors", scope: scope)
+            validateStrings(matches, path: path.child(.rotors), scope: scope)
         case .exclude(let excluded):
-            validateElementPredicateCheck(excluded, path: "\(path).exclude", scope: scope)
+            validateElementPredicateCheck(excluded, path: path.child(.exclude), scope: scope)
         }
     }
 
-    mutating func validateParameter(_ parameter: String, path: String, role: String) {
-        addParameterString(parameter, path: path, role: role)
-        guard HeistParameterName.isValid(parameter) else {
-            fail(
-                path: path,
-                contract: "\(role) must be a Swift-style identifier",
-                observed: "\"\(escaped(parameter))\"",
-                correction: "Use letters, digits, and underscores, starting with a letter or underscore; avoid Swift keywords."
-            )
-            return
-        }
+    mutating func validateReference(_ reference: HeistReferenceName, path: HeistPlanPath, role: String) {
+        addParameterString(reference.rawValue, path: path, role: role)
     }
 
-    mutating func validateParameter(_ parameter: HeistReferenceName, path: String, role: String) {
-        validateParameter(parameter.rawValue, path: path, role: role)
-    }
-
-    mutating func validateReference(_ reference: HeistReferenceName, path: String, role: String) {
-        let value = reference.rawValue
-        addParameterString(value, path: path, role: role)
-        if !HeistParameterName.isValid(value) {
-            fail(
-                path: path,
-                contract: "\(role) must be a Swift-style identifier",
-                observed: "\"\(escaped(value))\"",
-                correction: "Use a ref matching the loop parameter exactly."
-            )
-        }
-    }
-
-    mutating func addParameterString(_ value: String, path: String, role: String) {
+    mutating func addParameterString(_ value: String, path: HeistPlanPath, role: String) {
         let bytes = value.utf8.count
         if bytes > limits.maxParameterBytes {
             fail(
@@ -248,7 +220,7 @@ extension HeistPlanRuntimeSafetyValidator {
         addString(value, path: path, role: role)
     }
 
-    mutating func addString(_ value: String?, path: String, role: String) {
+    mutating func addString(_ value: String?, path: HeistPlanPath, role: String) {
         guard let value else { return }
         let bytes = value.utf8.count
         if bytes > limits.maxStringBytes {
@@ -273,11 +245,11 @@ extension HeistPlanRuntimeSafetyValidator {
 
     private mutating func validateStrings(
         _ matches: [StringMatchCore<Expr<String>>],
-        path: String,
+        path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {
         for (index, match) in matches.enumerated() {
-            validateString(match, path: "\(path)[\(index)]", scope: scope)
+            validateString(match, path: path.index(index), scope: scope)
         }
     }
 }

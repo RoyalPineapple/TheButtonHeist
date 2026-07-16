@@ -28,7 +28,7 @@ public enum HeistLintState: String, Sendable, Equatable {
 
 public struct HeistPlanSummary: Sendable, Equatable {
     public let version: Int
-    public let name: String?
+    public let name: HeistPlanName?
     public let parameter: HeistParameter
     public let definitionCount: Int
     public let topLevelStepCount: Int

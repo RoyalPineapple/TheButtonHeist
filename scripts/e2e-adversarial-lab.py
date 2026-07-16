@@ -390,7 +390,7 @@ PASSING_PLANS = {
         "adversarialTextFieldFallbackPass",
         "Text Field Fallback",
         """
-    TypeText("fallback typed", into: .element(.label("Fallback field"), .traits([.textEntry])), replacingExisting: true)
+    TypeText(.replacing("fallback typed"), into: .element(.label("Fallback field"), .traits([.textEntry])))
         .expect(.exists(.value("fallback typed")), timeout: .seconds(3))
     DismissKeyboard()
         .withoutExpectation("Returns the app to navigation after text entry")

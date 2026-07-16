@@ -1,5 +1,6 @@
 import ButtonHeistSupport
 import Foundation
+import TheScore
 
 // MARK: - Event Enums
 
@@ -46,8 +47,8 @@ enum DeviceSendFailure: Error, LocalizedError, Equatable, Sendable {
 enum ConnectionEvent {
     case connected
     case disconnected(DisconnectReason)
-    case sendFailed(DeviceSendFailure, requestId: String?)
-    case message(ServerMessage, requestId: String?)
+    case sendFailed(DeviceSendFailure, requestId: RequestID?)
+    case message(ServerMessage, requestId: RequestID?)
 }
 
 /// Events emitted by a device discovery session as services appear and disappear.
@@ -67,7 +68,7 @@ protocol DeviceConnecting: AnyObject {
     func connect()
     func disconnect()
     @discardableResult
-    func send(_ message: ClientMessage, requestId: String?) -> DeviceSendOutcome
+    func send(_ message: ClientMessage, requestId: RequestID?) -> DeviceSendOutcome
 }
 
 /// Connection surface used by passive reachability probes. Raw socket

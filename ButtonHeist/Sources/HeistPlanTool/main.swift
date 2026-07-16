@@ -91,16 +91,16 @@ struct Compile: AsyncParsableCommand {
     @Option(name: .long, help: "Path to write a generated .heist package.")
     var output: String
 
-    func validate() throws {
-        guard !entry.isEmpty else {
-            throw ValidationError("--entry must not be empty")
-        }
-    }
-
     func run() async throws {
+        let entrySymbol: HeistEntrySymbol
+        do {
+            entrySymbol = try HeistEntrySymbol(validating: entry)
+        } catch {
+            throw ValidationError(String(describing: error))
+        }
         let result = await HeistCompiler().compileFile(
             URL(fileURLWithPath: source),
-            entry: entry
+            entry: entrySymbol
         )
         let plan: HeistPlan
         switch result {

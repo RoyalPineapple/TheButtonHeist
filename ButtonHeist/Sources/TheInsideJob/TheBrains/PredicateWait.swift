@@ -68,6 +68,23 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
     /// Called after an unmatched initial observation is reduced and before polling begins.
     internal typealias ReadyToPoll = @MainActor (SettledObservationSequence) -> Void
 
+    internal struct ExecutionProjection<Result, Evidence>
+    where Evidence: Sendable & Equatable {
+        let target: ResolvedAccessibilityTarget?
+        let continuesAfterInitialMiss: Bool
+        let initialEvidence: Evidence
+        let evaluate: @MainActor (
+            HeistSemanticObservation,
+            PredicateWaitLifecyclePhase,
+            Evidence
+        ) -> PredicateWaitLifecycleEvaluation<Evidence>
+        let result: @MainActor (
+            PredicateWaitLifecycleOutcome,
+            SemanticObservationDeadline,
+            Evidence
+        ) -> Result
+    }
+
     internal let observeEvent: ObserveEvent
     internal let latestEvent: LatestEvent
     internal let latestSettleFailure: LatestSettleFailure
@@ -126,14 +143,13 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
         onReadyToPoll: ReadyToPoll? = nil
     ) async -> HeistWaitReceipt {
         let start = CFAbsoluteTimeGetCurrent()
-        let timeout = Self.clampedWaitTimeout(step.timeout)
         if case .announcement(let announcement) = step.predicate.core {
             return await waitForAnnouncementPredicate(
                 announcement,
                 step: step,
                 initialTrace: initialTrace,
                 start: start,
-                timeout: timeout,
+                timeout: step.timeout,
                 cursorStrategy: announcementCursorStrategy
             )
         }
@@ -152,52 +168,80 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
             )
         }
 
-        return await Execution(
+        let projection = PredicateExecutionProjection(
             wait: self,
             step: step,
             start: start,
+            changeBaseline: changeBaseline
+        )
+        return await execute(
+            start: start,
+            timeout: step.timeout.seconds,
+            projection: ExecutionProjection(
+                target: step.predicate.waitTarget,
+                continuesAfterInitialMiss: true,
+                initialEvidence: projection.initialEvidence,
+                evaluate: { observation, lifecyclePhase, evidence in
+                    projection.evaluate(
+                        observation,
+                        lifecyclePhase: lifecyclePhase,
+                        evidence: evidence
+                    )
+                },
+                result: { outcome, _, evidence in
+                    projection.result(outcome, evidence: evidence)
+                }
+            ),
+            onReadyToPoll: onReadyToPoll
+        )
+    }
+
+    internal func execute<Result, Evidence>(
+        start: CFAbsoluteTime,
+        timeout: Double,
+        projection: ExecutionProjection<Result, Evidence>,
+        onReadyToPoll: ReadyToPoll? = nil
+    ) async -> Result where Evidence: Sendable & Equatable {
+        await Execution(
+            wait: self,
+            start: start,
             timeout: timeout,
-            changeBaseline: changeBaseline,
+            projection: projection,
             onReadyToPoll: onReadyToPoll
         ).run()
     }
 
     @MainActor
-    private final class Execution {
+    private final class Execution<Result, Evidence> where Evidence: Sendable & Equatable {
         private let wait: PredicateWait
-        private let step: ResolvedWaitRuntimeInput
-        private let start: CFAbsoluteTime
         private let deadline: SemanticObservationDeadline
-        private let changeBaseline: PredicateChangeBaselineSource
+        private let projection: ExecutionProjection<Result, Evidence>
         private let onReadyToPoll: ReadyToPoll?
-        private let reducer = Reducer()
-        private var state: State
-        private var stream = PredicateObservationStreamState()
-        private var lifecycle = StateDriver(
-            initial: PredicateWaitLifecycleState.initialVisible,
-            machine: PredicateWaitLifecycleMachine()
-        )
-        private var effect = PredicateWaitLifecycleEffect.settleVisible(.overall)
+        private var lifecycle: StateDriver<PredicateWaitLifecycleMachine<Evidence>>
+        private var effect: PredicateWaitLifecycleEffect
         private var ignoreObservationsThrough: SettledObservationSequence?
 
         init(
             wait: PredicateWait,
-            step: ResolvedWaitRuntimeInput,
             start: CFAbsoluteTime,
             timeout: Double,
-            changeBaseline: PredicateChangeBaselineSource,
+            projection: ExecutionProjection<Result, Evidence>,
             onReadyToPoll: ReadyToPoll?
         ) {
             self.wait = wait
-            self.step = step
-            self.start = start
             deadline = SemanticObservationDeadline(start: start, timeoutSeconds: timeout)
-            self.changeBaseline = changeBaseline
+            self.projection = projection
             self.onReadyToPoll = onReadyToPoll
-            state = State(predicate: step.predicateExpression)
+            lifecycle = StateDriver(
+                initial: .initialVisible(projection.initialEvidence),
+                machine: PredicateWaitLifecycleMachine(
+                    continuesAfterInitialMiss: projection.continuesAfterInitialMiss
+                )
+            )
+            effect = .settleVisible(.overall)
         }
 
-        func run() async -> HeistWaitReceipt {
+        func run() async -> Result {
             var signalIterator: AsyncStream<PredicateWaitLifecycleSignal>.Iterator?
             while true {
                 applyCancellation()
@@ -223,12 +267,7 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
                     }
                     consume(signal)
                 case .finish(let outcome):
-                    return wait.waitReceipt(
-                        for: step,
-                        state: state,
-                        start: start,
-                        success: outcome == .matched
-                    )
+                    return projection.result(outcome, deadline, lifecycle.state.evidence)
                 }
             }
         }
@@ -242,52 +281,81 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
         }
 
         private func settleVisible(_ budget: PredicateWaitVisibleBudget) async {
-            let matched = evaluate(
+            let evaluation = evaluate(
                 await wait.settleVisible(budget.deadline(overall: deadline)),
-                lifecycleState: lifecycle.state
+                lifecyclePhase: lifecycle.state.phase,
+                evidence: lifecycle.state.evidence
             )
-            effect = lifecycle.send(.evaluated(matched: matched)).predicateWaitEffect
+            effect = lifecycle.send(.evaluated(evaluation)).predicateWaitEffect
         }
 
         private func runDiscovery(
             _ budget: PredicateWaitDiscoveryBudget
         ) async -> AsyncStream<PredicateWaitLifecycleSignal>? {
-            let discoveryState = lifecycle.state
+            let discoveryPhase = lifecycle.state.phase
             let discoveryDeadline = budget.deadline(overall: deadline)
-            var matched = false
+            var latestEvaluation = PredicateWaitLifecycleEvaluation(
+                evidence: lifecycle.state.evidence,
+                matched: false
+            )
+            var matchedEvaluation: PredicateWaitLifecycleEvaluation<Evidence>?
             var evaluatedSequence: SettledObservationSequence?
             let event: SettledSemanticObservationEvent?
-            if let waitTarget = step.predicate.waitTarget,
+            if let waitTarget = projection.target,
                let revealed = await wait.revealTarget(waitTarget, discoveryDeadline) {
                 evaluatedSequence = revealed.sequence
-                matched = evaluate(revealed, lifecycleState: discoveryState)
+                let evaluation = evaluate(
+                    revealed,
+                    lifecyclePhase: discoveryPhase,
+                    evidence: latestEvaluation.evidence
+                )
+                latestEvaluation = evaluation
+                if evaluation.matched {
+                    matchedEvaluation = evaluation
+                }
                 event = revealed
             } else {
-                event = await wait.discover(step.predicate.waitTarget, discoveryDeadline) { event in
+                event = await wait.discover(projection.target, discoveryDeadline) { event in
                     evaluatedSequence = event.sequence
-                    let eventMatched = self.evaluate(event, lifecycleState: discoveryState)
-                    matched = matched || eventMatched
-                    return eventMatched
+                    let evaluation = self.evaluate(
+                        event,
+                        lifecyclePhase: discoveryPhase,
+                        evidence: latestEvaluation.evidence
+                    )
+                    latestEvaluation = evaluation
+                    if evaluation.matched {
+                        matchedEvaluation = evaluation
+                    }
+                    return evaluation.matched
                 }
             }
-            if !matched, event?.sequence != evaluatedSequence {
-                matched = evaluate(event, lifecycleState: discoveryState)
+            if matchedEvaluation == nil, event?.sequence != evaluatedSequence {
+                let evaluation = evaluate(
+                    event,
+                    lifecyclePhase: discoveryPhase,
+                    evidence: latestEvaluation.evidence
+                )
+                latestEvaluation = evaluation
+                if evaluation.matched {
+                    matchedEvaluation = evaluation
+                }
             }
+            let evaluation = matchedEvaluation ?? latestEvaluation
             let signals = prepareObservationPolling(
                 after: event,
-                discoveryState: discoveryState,
-                matched: matched
+                discoveryPhase: discoveryPhase,
+                matched: evaluation.matched
             )
-            effect = lifecycle.send(.evaluated(matched: matched)).predicateWaitEffect
+            effect = lifecycle.send(.evaluated(evaluation)).predicateWaitEffect
             return signals
         }
 
         private func prepareObservationPolling(
             after event: SettledSemanticObservationEvent?,
-            discoveryState: PredicateWaitLifecycleState,
+            discoveryPhase: PredicateWaitLifecyclePhase,
             matched: Bool
         ) -> AsyncStream<PredicateWaitLifecycleSignal>? {
-            if discoveryState == .initialDiscovery, !matched {
+            if discoveryPhase == .initialDiscovery, !matched {
                 if let event {
                     onReadyToPoll?(event.sequence)
                 }
@@ -297,7 +365,7 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
                         timeout: deadline.remainingSeconds()
                     )
                 }
-            } else if discoveryState == .triggeredDiscovery {
+            } else if discoveryPhase == .triggeredDiscovery {
                 ignoreObservationsThrough = wait.latestObservationCursor()?.sequence
             }
             return nil
@@ -307,8 +375,12 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
             switch signal {
             case .observation(let observation):
                 ignoreObservationsThrough = nil
-                let matched = evaluate(observation.event, lifecycleState: lifecycle.state)
-                effect = lifecycle.send(.observation(matched: matched)).predicateWaitEffect
+                let evaluation = evaluate(
+                    observation.event,
+                    lifecyclePhase: lifecycle.state.phase,
+                    evidence: lifecycle.state.evidence
+                )
+                effect = lifecycle.send(.observation(evaluation)).predicateWaitEffect
             case .deadlineReached:
                 effect = lifecycle.send(.deadlineReached).predicateWaitEffect
             case nil:
@@ -318,35 +390,87 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
 
         private func evaluate(
             _ event: SettledSemanticObservationEvent?,
-            lifecycleState: PredicateWaitLifecycleState
-        ) -> Bool {
-            guard let event else { return false }
-            let reduced = wait.reduceObservation(
+            lifecyclePhase: PredicateWaitLifecyclePhase,
+            evidence: Evidence
+        ) -> PredicateWaitLifecycleEvaluation<Evidence> {
+            guard let event else {
+                return PredicateWaitLifecycleEvaluation(evidence: evidence, matched: false)
+            }
+            return projection.evaluate(
                 wait.semanticObservation(event),
+                lifecyclePhase,
+                evidence
+            )
+        }
+    }
+
+    @MainActor
+    private final class PredicateExecutionProjection {
+        private let wait: PredicateWait
+        private let step: ResolvedWaitRuntimeInput
+        private let start: CFAbsoluteTime
+        private let changeBaseline: PredicateChangeBaselineSource
+
+        var initialEvidence: LifecycleEvidence {
+            LifecycleEvidence(predicate: step.predicateExpression)
+        }
+
+        init(
+            wait: PredicateWait,
+            step: ResolvedWaitRuntimeInput,
+            start: CFAbsoluteTime,
+            changeBaseline: PredicateChangeBaselineSource
+        ) {
+            self.wait = wait
+            self.step = step
+            self.start = start
+            self.changeBaseline = changeBaseline
+        }
+
+        func evaluate(
+            _ observation: HeistSemanticObservation,
+            lifecyclePhase: PredicateWaitLifecyclePhase,
+            evidence: LifecycleEvidence
+        ) -> PredicateWaitLifecycleEvaluation<LifecycleEvidence> {
+            let reduced = wait.reduceObservation(
+                observation,
                 predicate: step.predicate,
                 predicateExpression: step.predicateExpression,
-                baselineSeed: baselineSeed(for: lifecycleState),
-                stream: stream
+                baselineSeed: baselineSeed(
+                    for: lifecyclePhase,
+                    evidence: evidence
+                ),
+                stream: evidence.stream
             )
-            stream = reduced.state
-            let decision = reducer.decision(
-                after: .observation(Snapshot(reduced.reduction)),
-                reducing: state,
-                timedOutWhenUnmatched: false
+            let recorded = evidence.recording(reduced)
+            return PredicateWaitLifecycleEvaluation(
+                evidence: recorded,
+                matched: recorded.evaluation.met
             )
-            state = decision.state
-            return decision.isSatisfied
+        }
+
+        func result(
+            _ outcome: PredicateWaitLifecycleOutcome,
+            evidence: LifecycleEvidence
+        ) -> HeistWaitReceipt {
+            wait.waitReceipt(
+                for: step,
+                evidence: evidence,
+                start: start,
+                success: outcome == .matched
+            )
         }
 
         private func baselineSeed(
-            for lifecycleState: PredicateWaitLifecycleState
+            for lifecyclePhase: PredicateWaitLifecyclePhase,
+            evidence: LifecycleEvidence
         ) -> PredicateObservationBaselineSeed {
-            guard stream.observationBaseline == nil else { return .preserve }
+            guard evidence.stream.observationBaseline == nil else { return .preserve }
             switch changeBaseline {
             case .supplied(let supplied):
                 return supplied.map(PredicateObservationBaselineSeed.supplied) ?? .preserve
             case .establishFromFirstObservation:
-                return lifecycleState == .initialVisible ? .preserve : .currentObservation
+                return lifecyclePhase == .initialVisible ? .preserve : .currentObservation
             }
         }
     }

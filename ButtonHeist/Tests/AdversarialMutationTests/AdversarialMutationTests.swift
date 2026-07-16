@@ -83,7 +83,7 @@ final class AdversarialMutationTests: XCTestCase {
         line: UInt = #line
     ) throws -> HeistActionEvidence {
         try XCTUnwrap(
-            result.outputReceiptNodes.compactMap(\.actionEvidence).last { $0.command == command },
+            result.outputReceiptNodes.last { $0.actionCommand == command }?.actionEvidence,
             "Missing action receipt for \(command.wireType.rawValue)",
             file: file,
             line: line

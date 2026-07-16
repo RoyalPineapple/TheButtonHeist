@@ -1,4 +1,5 @@
 import XCTest
+import ButtonHeistTestSupport
 @testable import ButtonHeist
 import ThePlans
 import TheScore
@@ -78,37 +79,16 @@ final class HeistRunProjectionTests: XCTestCase {
     }
 
     private func passedRemoteResult(durationMs: Int) -> HeistExecutionResult {
-        .passed(
-            steps: [
-                .passed(
-                    path: "$.body[0]",
-                    receiptKind: .warning,
-                    durationMs: durationMs,
-                    intent: .warn(message: "ready"),
-                    evidence: HeistExecutionWarning(path: "$.body[0]", message: "ready")
-                ),
-            ],
+        HeistReceiptFixture.result(
+            steps: [HeistReceiptFixture.warning(message: "ready", durationMs: durationMs)],
             durationMs: durationMs
         )
     }
 
     private func abortedRemoteResult(durationMs: Int) -> HeistExecutionResult {
-        .failed(
-            steps: [
-                .failed(
-                    path: "$.body[0]",
-                    kind: .fail,
-                    durationMs: durationMs,
-                    intent: .fail(message: "boom"),
-                    failure: HeistFailureDetail(
-                        category: .explicitFailure,
-                        contract: "Fail",
-                        observed: "boom"
-                    )
-                ),
-            ],
-            durationMs: durationMs,
-            abortedAtPath: "$.body[0]"
+        HeistReceiptFixture.result(
+            steps: [HeistReceiptFixture.explicitFailure(message: "boom", durationMs: durationMs)],
+            durationMs: durationMs
         )
     }
 }

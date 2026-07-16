@@ -9,10 +9,6 @@ struct PostActionPayloadContext {
     let resolvedElementId: HeistId?
 }
 
-/// Owns the before/body/after observation contract for executable interactions.
-///
-/// It coordinates settled semantic evidence. It does not choose command
-/// payloads, resolve element inflation, choose durable selectors, or format reports.
 @MainActor
 final class InteractionObservation {
     private static let defaultVisibleStateTimeout = Double(SettleSession.defaultTimeoutMs) / 1_000
@@ -21,10 +17,6 @@ final class InteractionObservation {
     private let navigation: Navigation
     private let postActionObservation: PostActionObservation
     private var heistAnnouncementCursor: AccessibilityNotificationCursor = .origin
-    private var predicateWait: PredicateWait {
-        makePredicateWait()
-    }
-
     init(
         stash: TheStash,
         navigation: Navigation,
@@ -35,7 +27,8 @@ final class InteractionObservation {
         self.postActionObservation = postActionObservation
     }
 
-    private func makePredicateWait() -> PredicateWait {
+    private func makePredicateWait(
+    ) -> PredicateWait {
         let stash = self.stash
         return PredicateWait(
             observeEvent: { scope, sequence, timeout in
@@ -91,7 +84,7 @@ final class InteractionObservation {
                 }
                 switch await self.navigation.elementInflation.inflate(
                     for: target,
-                    method: .scrollToVisible
+                    method: .scrollToVisible,
                 ) {
                 case .inflated:
                     return stash.latestSettledSemanticObservationEvent
@@ -114,7 +107,7 @@ final class InteractionObservation {
                     deadline: deadline,
                     onObservation: { event in
                         observer(event) ? .finish : .continue
-                    }
+                    },
                 ) else { return nil }
                 return exploration.event
             },
@@ -257,7 +250,7 @@ final class InteractionObservation {
         baselineSequence: SettledObservationSequence? = nil,
         changeBaseline: PredicateChangeBaselineSource = .establishFromFirstObservation,
         announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly,
-        onReadyToPoll: PredicateWait.ReadyToPoll? = nil
+        onReadyToPoll: PredicateWait.ReadyToPoll? = nil,
     ) async -> HeistWaitReceipt {
         let baselineSource: PredicateChangeBaselineSource
         switch (changeBaseline, baselineSequence) {
@@ -269,7 +262,7 @@ final class InteractionObservation {
         case (.establishFromFirstObservation, .none), (.supplied, _):
             baselineSource = changeBaseline
         }
-        return await predicateWait.wait(
+        return await makePredicateWait().wait(
             for: step,
             initialTrace: initialTrace,
             changeBaseline: baselineSource,
@@ -282,17 +275,7 @@ final class InteractionObservation {
         _ cases: [ResolvedPredicateCaseRuntimeInput],
         timeout rawTimeout: Double
     ) async -> HeistCaseSelectionResult {
-        await PredicateCaseSelection.waitFor(
-            cases,
-            timeout: rawTimeout,
-            observeSemanticState: { scope, sequence, timeout in
-                await self.observeSemanticState(
-                    scope: scope,
-                    after: sequence,
-                    timeout: timeout
-                )
-            }
-        )
+        await makePredicateWait().selectPredicateCase(cases, timeout: rawTimeout)
     }
 
 }

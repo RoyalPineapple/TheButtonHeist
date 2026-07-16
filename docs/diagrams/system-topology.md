@@ -38,5 +38,5 @@ flowchart TD
 Notes:
 
 - The wire is TLS with a pre-shared key derived from the session token (`ButtonHeistTLSPreSharedKey.makeNetworkParameters(token:)`, HKDF-SHA256, cipher `TLS_PSK_WITH_AES_128_GCM_SHA256`). Token auth then happens again at the message layer (`authenticate`).
-- The version handshake compares the client's and server's `buttonHeistVersion` for exact equality and rejects on any mismatch (`MuscleHandshakePhase`).
+- The version handshake compares the client's and server's typed `ButtonHeistVersion` values for exact equality and rejects on any mismatch (`MuscleHandshakePhase`).
 - Everything inside the `#if DEBUG` border — the listener, TheMuscle, and the crew — does not exist in release builds. The accessibility tree is the surface the server reads and acts on; there is no other channel into the app.

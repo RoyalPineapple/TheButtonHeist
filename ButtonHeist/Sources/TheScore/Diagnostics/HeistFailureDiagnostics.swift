@@ -125,10 +125,10 @@ package extension HeistExecutionEvidenceRollup {
     var failureScreenshotSummary: String? {
         guard let step = failureScreenshotStep else { return nil }
         if let screenshot = step.screenshotPayload {
-            return HeistFailureDiagnostics.screenshotSummary(screenshot, receiptPath: step.path)
+            return HeistFailureDiagnostics.screenshotSummary(screenshot, receiptPath: step.path.description)
         }
         return HeistFailureDiagnostics.unavailableScreenshotSummary(
-            receiptPath: step.path,
+            receiptPath: step.path.description,
             message: step.reportActionResult?.message
         )
     }

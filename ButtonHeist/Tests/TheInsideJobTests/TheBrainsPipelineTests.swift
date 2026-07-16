@@ -165,6 +165,31 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertTrue(labels.contains("Inbox"), "Persistent visible chrome must survive screen-change final evidence")
     }
 
+    func testCommittedPostActionTraceUsesPublishedContinuity() {
+        let before = brains.postActionObservation.captureSemanticState(
+            from: makeScreen(elements: [("Home", .header, "home_header")]),
+            tripwireSignal: .empty,
+            settledObservationSequence: nil
+        )
+        let finalScreen = makeScreen(elements: [("Details", .header, "details_header")])
+        _ = brains.stash.semanticObservationStream.commitVisibleObservationForTesting(finalScreen)
+        let sameGenerationEvent = brains.stash.semanticObservationStream.commitVisibleObservationForTesting(finalScreen)
+        let observation = PostActionSettleObservation(
+            settle: settledOutcome(finalScreen: finalScreen),
+            result: .committed(sameGenerationEvent)
+        )
+
+        guard case .committed(_, _, let trace) = brains.postActionObservation.settledObservationResult(
+            before: before,
+            observation: observation
+        ) else {
+            return XCTFail("Expected a committed post-action observation")
+        }
+
+        XCTAssertEqual(sameGenerationEvent.continuity, .sameGeneration)
+        XCTAssertNil(trace.captures.last?.transition.fallbackReason)
+    }
+
     func testActionErrorKindClassifiesTargetUnavailableSeparatelyFromActionIdentity() throws {
         let result = TheSafecracker.ActionDispatchOutcome.failure(
             .activate,
@@ -853,11 +878,11 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     func testActionResultWithDeltaSettleTimeoutUsesObservedFinalEvidenceWithoutPublishingTruth() async {
-        let beforeScreen = makeScreen(elements: [("Save", .button, "save")])
+        let beforeScreen = makeScreen(elements: [("Menu", .header, "menu_header")])
         brains.stash.installScreenForTesting(beforeScreen)
         let before = brains.postActionObservation.captureSemanticState()
         let settledSequence = brains.stash.latestSettledSemanticObservationEvent?.sequence
-        let afterScreen = makeScreen(elements: [("Saved", .button, "save")])
+        let afterScreen = makeScreen(elements: [("Details", .header, "details_header")])
 
         let result = await brains.interactionObservation.finishAfterAction(
             outcome: successOutcome(),
@@ -876,13 +901,17 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
         XCTAssertEqual(
             brains.stash.latestSettledSemanticObservationEvent?.observation.screen.orderedElements.first?.element.label,
-            "Save"
+            "Menu"
         )
         XCTAssertTrue(brains.stash.latestSettledSemanticObservationInvalidated)
-        XCTAssertEqual(brains.stash.interfaceTree.orderedElements.first?.element.label, "Save")
-        XCTAssertEqual(brains.stash.latestFailedSettleDiagnosticEvidence?.orderedElements.first?.element.label, "Saved")
+        XCTAssertEqual(brains.stash.interfaceTree.orderedElements.first?.element.label, "Menu")
+        XCTAssertEqual(brains.stash.latestFailedSettleDiagnosticEvidence?.orderedElements.first?.element.label, "Details")
         XCTAssertEqual(result.accessibilityTrace?.captures.count, 2)
-        XCTAssertEqual(result.accessibilityTrace?.captures.last?.interface.projectedElements.first?.label, "Saved")
+        XCTAssertEqual(result.accessibilityTrace?.captures.last?.interface.projectedElements.first?.label, "Details")
+        XCTAssertEqual(
+            result.accessibilityTrace?.captures.last?.transition.fallbackReason,
+            .primaryHeaderChanged
+        )
     }
 
     func testActionBaselineDoesNotPromoteDiagnosticOnlyEvidence() {
@@ -953,7 +982,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
 
         let receipt = await wait.wait(
-            for: try resolvedWait(WaitStep(predicate: .exists(.label("Home")), timeout: 0))
+            for: try resolvedWait(WaitStep(predicate: .exists(.label("Home")), timeout: .milliseconds(1)))
         )
         let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
 
@@ -971,7 +1000,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
 
         let receipt = await wait.wait(
-            for: try resolvedWait(WaitStep(predicate: .exists(.label("Missing")), timeout: 0))
+            for: try resolvedWait(WaitStep(predicate: .exists(.label("Missing")), timeout: .milliseconds(1)))
         )
         let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
 
@@ -1118,7 +1147,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
 
         let receipt = await wait.wait(
-            for: try resolvedWait(WaitStep(predicate: .changed(.elements()), timeout: 0)),
+            for: try resolvedWait(WaitStep(predicate: .changed(.elements()), timeout: .milliseconds(1))),
             initialTrace: after.trace
         )
 
@@ -1144,7 +1173,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
 
         let receipt = await wait.wait(
-            for: try resolvedWait(WaitStep(predicate: .changed(.elements()), timeout: 0)),
+            for: try resolvedWait(WaitStep(predicate: .changed(.elements()), timeout: .milliseconds(1))),
             initialTrace: staleEvent.trace,
             changeBaseline: .supplied(before)
         )
@@ -1183,7 +1212,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         let receipt = await wait.wait(
             for: try resolvedWait(WaitStep(
                 predicate: .changed(.screen([.exists(.label("Menu"))])),
-                timeout: 0
+                timeout: .milliseconds(1)
             )),
             changeBaseline: .supplied(before)
         )
@@ -1312,7 +1341,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             settleVisible: { _ in currentEvent }
         )
         let receipt = await wait.wait(
-            for: try resolvedWait(WaitStep(predicate: expression, timeout: 0)),
+            for: try resolvedWait(WaitStep(predicate: expression, timeout: .milliseconds(1))),
             changeBaseline: .supplied(baseline)
         )
 
@@ -1350,7 +1379,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             settleVisible: { _ in currentEvent }
         )
         let receipt = await wait.wait(
-            for: try resolvedWait(WaitStep(predicate: expression, timeout: 0)),
+            for: try resolvedWait(WaitStep(predicate: expression, timeout: .milliseconds(1))),
             changeBaseline: .supplied(baseline)
         )
         let laterValidation = predicate.validate(
@@ -2305,7 +2334,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             settleVisible: { _ in finalEvent }
         )
         return await wait.wait(
-            for: try resolvedWait(WaitStep(predicate: predicate, timeout: 0)),
+            for: try resolvedWait(WaitStep(predicate: predicate, timeout: .milliseconds(1))),
             changeBaseline: .supplied(baselineCapture)
         )
     }

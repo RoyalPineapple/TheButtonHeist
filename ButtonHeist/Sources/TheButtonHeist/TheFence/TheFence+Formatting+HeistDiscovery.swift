@@ -15,7 +15,8 @@ extension FenceResponse {
 
     func compactHeistDescription(_ description: HeistDescription) -> String {
         var lines = [
-            "heist \(description.name) [\(description.role.rawValue)] \(parameterSummary(description)) validation=\(description.validationStatus.rawValue)",
+            "heist \(description.identity.displayName) [\(description.role.rawValue)] "
+                + "\(parameterSummary(description)) validation=\(description.validationStatus.rawValue)",
         ]
         if let summary = description.summary, !summary.isEmpty {
             lines.append("summary: \(summary)")
@@ -35,7 +36,7 @@ extension FenceResponse {
 
     func formatHeistDescriptionHuman(_ description: HeistDescription) -> String {
         var lines = [
-            "Heist: \(description.name)",
+            "Heist: \(description.identity.displayName)",
             "Role: \(description.role.rawValue)",
             "Parameter: \(parameterSummary(description))",
             "Validation: \(description.validationStatus.rawValue)",
@@ -63,7 +64,7 @@ extension FenceResponse {
         let role = paddedRole
             ? entry.role.rawValue.padding(toLength: 10, withPad: " ", startingAt: 0)
             : entry.role.rawValue
-        var firstLine = "\(indent)\(role) \(entry.name) \(parameterSummary(entry))"
+        var firstLine = "\(indent)\(role) \(entry.identity.displayName) \(parameterSummary(entry))"
         if let summary = entry.summary, !summary.isEmpty {
             firstLine += " summary=\(summary)"
         }
@@ -133,7 +134,7 @@ extension HeistCatalogTag {
 
 extension HeistInvocationPath {
     var heistDiscoveryDisplayValue: String {
-        dottedName
+        description
     }
 }
 

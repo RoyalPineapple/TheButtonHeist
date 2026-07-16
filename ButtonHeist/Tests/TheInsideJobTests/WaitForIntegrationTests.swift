@@ -90,7 +90,7 @@ final class WaitForIntegrationTests: XCTestCase {
     private func waitFor(
         target: AccessibilityTarget,
         absent: Bool = false,
-        timeout: Double? = nil
+        timeout: WaitTimeout? = nil
     ) async throws -> ActionResult? {
         let predicate: AccessibilityPredicate = absent
             ? .missing(target)
@@ -475,16 +475,16 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertTrue(result.message?.contains("expected: changed(elements(*))") == true)
     }
 
-    func testWaitForChangeTimeoutZeroPerformsOneBoundedSettledCheck() async throws {
-        let baseline = addLabel("WaitForChange-TimeoutZeroBaseline")
+    func testWaitForChangeMinimumTimeoutPerformsOneBoundedSettledCheck() async throws {
+        let baseline = addLabel("WaitForChange-MinimumTimeoutBaseline")
         defer { baseline.removeFromSuperview() }
         let didObserveBaseline = await waitForSettledVisibleObservation()
         XCTAssertTrue(didObserveBaseline)
 
         let start = CFAbsoluteTimeGetCurrent()
         let result = await changedWait(
-            expectation: .exists(.label("WaitForChange-TimeoutZeroMissing")),
-            timeout: 0
+            expectation: .exists(.label("WaitForChange-MinimumTimeoutMissing")),
+            timeout: 0.001
         )
         let elapsed = CFAbsoluteTimeGetCurrent() - start
         let message = try XCTUnwrap(result.message)
@@ -494,7 +494,7 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertEqual(result.outcome.errorKind, .timeout)
         XCTAssertLessThan(elapsed, 1.0)
         XCTAssertTrue(
-            message.contains("expected: label=\"WaitForChange-TimeoutZeroMissing\""),
+            message.contains("expected: label=\"WaitForChange-MinimumTimeoutMissing\""),
             "Unexpected message: \(message)"
         )
         XCTAssertTrue(message.contains("last result:"), "Unexpected message: \(message)")

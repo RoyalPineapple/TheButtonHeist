@@ -8,15 +8,15 @@ import TheScore
 extension TheBrains {
 
     internal struct InvocationResolution {
-        internal let requestedName: String
-        internal let resolvedPath: [String]
-        internal let resolvedName: String
+        internal let requestedName: HeistInvocationPath
+        internal let resolvedPath: HeistInvocationPath
+        internal let resolvedName: HeistInvocationPath
         internal let definition: HeistPlan?
 
         internal init(
-            requestedName: String,
-            resolvedPath: [String],
-            resolvedName: String,
+            requestedName: HeistInvocationPath,
+            resolvedPath: HeistInvocationPath,
+            resolvedName: HeistInvocationPath,
             definition: HeistPlan?
         ) {
             self.requestedName = requestedName
@@ -28,23 +28,20 @@ extension TheBrains {
 
     internal struct InvocationExecutionContext {
         internal let invoke: HeistInvocationStep
-        internal let path: String
+        internal let path: HeistExecutionPath
         internal let start: CFAbsoluteTime
-        internal let requestedName: String
-        internal let intent: HeistStepIntent
+        internal let requestedName: HeistInvocationPath
 
         internal init(
             invoke: HeistInvocationStep,
-            path: String,
+            path: HeistExecutionPath,
             start: CFAbsoluteTime,
-            requestedName: String,
-            intent: HeistStepIntent
+            requestedName: HeistInvocationPath
         ) {
             self.invoke = invoke
             self.path = path
             self.start = start
             self.requestedName = requestedName
-            self.intent = intent
         }
 
         internal var argumentSummary: String? {
@@ -91,7 +88,7 @@ extension TheBrains {
     internal func executeInvocationStep(
         _ invoke: HeistInvocationStep,
         index _: Int,
-        path: String,
+        path: HeistExecutionPath,
         start: CFAbsoluteTime,
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
@@ -102,8 +99,7 @@ extension TheBrains {
             invoke: invoke,
             path: path,
             start: start,
-            requestedName: resolution.requestedName,
-            intent: invocationIntent(invoke, invocationName: resolution.requestedName)
+            requestedName: resolution.requestedName
         )
         guard !scope.invocationStack.contains(resolution.resolvedName) else {
             return recursiveInvocationResult(context: context, resolvedInvocationName: resolution.resolvedName)
@@ -136,10 +132,10 @@ extension TheBrains {
             scope: HeistExecutionScope(
                 plan: definition,
                 rootPlan: scope.rootPlan,
-                definitionPath: resolution.resolvedPath,
+                definitionPath: resolution.resolvedPath.components,
                 invocationStack: scope.invocationStack.union([resolution.resolvedName])
             ),
-            path: "\(path).invoke.body"
+            path: path.invocationBody()
         )
         let expectationOutcome = await evaluateInvocationExpectation(
             expectationContext,
@@ -158,27 +154,30 @@ extension TheBrains {
         _ invoke: HeistInvocationStep,
         scope: HeistExecutionScope
     ) -> InvocationResolution {
-        let requestedName = invoke.path.joined(separator: ".")
-        let localDefinition = scope.plan.heistDefinition(at: invoke.path)
-        let rootDefinition = invoke.path.count > 1 ? scope.rootPlan.heistDefinition(at: invoke.path) : nil
-        let resolvedPath = localDefinition == nil && rootDefinition != nil
-            ? invoke.path
-            : scope.definitionPath + invoke.path
+        let requestedName = invoke.path
+        guard let firstComponent = invoke.path.components.first else {
+            preconditionFailure("validated heist invocation path must not be empty")
+        }
+        let definitionPath = HeistDefinitionPath(
+            first: firstComponent,
+            remaining: Array(invoke.path.components.dropFirst())
+        )
+        let localDefinition = scope.plan.heistDefinition(at: definitionPath)
+        let rootDefinition = invoke.path.components.count > 1
+            ? scope.rootPlan.heistDefinition(at: definitionPath)
+            : nil
+        let resolvedComponents = localDefinition == nil && rootDefinition != nil
+            ? invoke.path.components
+            : scope.definitionPath + invoke.path.components
+        guard let first = resolvedComponents.first else {
+            preconditionFailure("validated heist invocation path must not be empty")
+        }
+        let resolvedPath = HeistInvocationPath(first: first, remaining: Array(resolvedComponents.dropFirst()))
         return InvocationResolution(
             requestedName: requestedName,
             resolvedPath: resolvedPath,
-            resolvedName: resolvedPath.joined(separator: "."),
+            resolvedName: resolvedPath,
             definition: localDefinition ?? rootDefinition
-        )
-    }
-
-    private func invocationIntent(
-        _ invoke: HeistInvocationStep,
-        invocationName: String
-    ) -> HeistStepIntent {
-        HeistStepIntent.invoke(
-            path: invoke.invocationPath,
-            argument: invoke.argument
         )
     }
 
@@ -199,7 +198,7 @@ extension TheBrains {
             ))
         }
         let baseline = await runtime.wait(
-            .immediate(input.replacingTimeout(immediateTimeout))
+            .immediate(input)
         )
         return .prepared(InvocationExpectationContext(
             input: input,

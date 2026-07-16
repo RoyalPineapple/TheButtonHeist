@@ -10,13 +10,13 @@ public struct ResponseEnvelope: Codable, Sendable {
     /// Server's `buttonHeistVersion`. The handshake requires exact equality
     /// with the client's `buttonHeistVersion` — there is no separate wire
     /// protocol version.
-    public let buttonHeistVersion: String
-    public let requestId: String?
+    public let buttonHeistVersion: ButtonHeistVersion
+    public let requestId: RequestID?
     public let message: ServerMessage
 
     public init(
-        buttonHeistVersion: String = TheScore.buttonHeistVersion,
-        requestId: String? = nil,
+        buttonHeistVersion: ButtonHeistVersion = TheScore.buttonHeistVersion,
+        requestId: RequestID? = nil,
         message: ServerMessage
     ) {
         self.buttonHeistVersion = buttonHeistVersion
@@ -50,7 +50,7 @@ public enum ServerMessage: Codable, Sendable {
     case interface(Interface)
 
     /// Pong response with cheap static app/server health facts.
-    case pong(PongPayload = PongPayload())
+    case pong(PongPayload)
 
     /// Server-side error broadcast. `ServerError.kind` tags the category
     /// (auth failure, general) so clients can route without

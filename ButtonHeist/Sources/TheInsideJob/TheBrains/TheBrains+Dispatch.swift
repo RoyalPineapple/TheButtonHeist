@@ -10,11 +10,6 @@ internal struct RuntimeActionExecution: Sendable, Equatable {
 }
 
 extension TheBrains {
-    // MARK: - Command Dispatch
-
-    /// Execute a command through the full interaction pipeline:
-    /// refresh → snapshot → execute → settle → semantic observation → delta → result.
-    /// Returns the ActionResult for TheInsideJob to send.
     func executeRuntimeAction(_ command: ResolvedHeistActionCommand) async -> ActionResult {
         await executeRuntimeActionWithBaseline(command).result
     }
@@ -27,9 +22,6 @@ extension TheBrains {
             scope: expectationBaselineScope
         )
 
-        // Rotor mode holds a single cursor only while consecutive rotor steps
-        // run on the same host. Any other interaction exits rotor mode and drops
-        // the held cursor.
         clearRotorCursorBeforeNonRotorAction(command)
         let result: ActionResult
         switch command {
@@ -50,13 +42,25 @@ extension TheBrains {
                 await self.actions.executeCustomAction(name: name, target: target)
             }
         case .dismiss:
-            result = await performInteraction(method: .dismiss) { await self.actions.executeDismiss() }
+            result = await performInteraction(method: .dismiss) {
+                await self.actions.executeDismiss()
+            }
         case .magicTap:
-            result = await performInteraction(method: .magicTap) { await self.actions.executeMagicTap() }
+            result = await performInteraction(method: .magicTap) {
+                await self.actions.executeMagicTap()
+            }
         case .rotor(let selection, let target, let direction):
-            result = await performRotor(selection: selection, target: target, direction: direction)
+            result = await performInteraction(method: .rotor, observationScope: .discovery) {
+                await self.actions.executeRotor(
+                    selection: selection,
+                    target: target,
+                    direction: direction
+                )
+            }
         case .editAction(let target):
-            result = await performInteraction(method: .editAction) { await self.actions.executeEditAction(target) }
+            result = await performInteraction(method: .editAction) {
+                await self.actions.executeEditAction(target)
+            }
         case .setPasteboard(let target):
             result = await performInteraction(method: .setPasteboard) {
                 await self.actions.executeSetPasteboard(target)
@@ -95,18 +99,14 @@ extension TheBrains {
             ) {
                 await self.actions.executeDrag(target)
             }
-        case .typeText(let text, let target, let replacingExisting):
-            result = await performTypeText(
-                text: text,
-                target: target,
-                replacingExisting: replacingExisting
-            )
+        case .typeText(let payload):
+            result = await executeTypeText(payload)
         case .viewportScroll(let target):
-            result = await performViewportScroll(target)
+            result = await executeViewportScroll(target)
         case .viewportScrollToVisible(let target):
-            result = await performViewportScrollToVisible(target)
+            result = await executeViewportScrollToVisible(target)
         case .viewportScrollToEdge(let target):
-            result = await performViewportScrollToEdge(target)
+            result = await executeViewportScrollToEdge(target)
         }
         return RuntimeActionExecution(
             result: result,
@@ -114,40 +114,22 @@ extension TheBrains {
         )
     }
 
-    private func clearRotorCursorBeforeNonRotorAction(_ command: ResolvedHeistActionCommand) {
-        if case .rotor = command {} else {
-            stash.clearRotorCursor()
-        }
-    }
-
-    private func performTypeText(
-        text: String,
-        target: ResolvedAccessibilityTarget?,
-        replacingExisting: Bool
-    ) async -> ActionResult {
+    private func executeTypeText(_ payload: ResolvedTypeTextTarget) async -> ActionResult {
         await performInteraction(
             method: .typeText,
             observationScope: .discovery,
             afterStatePayload: { context in
-                guard let resolvedElementId = context.resolvedElementId else {
-                    return nil
+                context.resolvedElementId.flatMap {
+                    self.actions.typeTextPayload(resolvedElementId: $0, in: context.afterState)
                 }
-                return self.actions.typeTextPayload(
-                    resolvedElementId: resolvedElementId,
-                    in: context.afterState
-                )
             },
             interaction: {
-                await self.actions.executeTypeText(
-                    text: text,
-                    target: target,
-                    replacingExisting: replacingExisting
-                )
+                await self.actions.executeTypeText(text: payload.text, target: payload.target)
             }
         )
     }
 
-    private func performViewportScroll(_ target: ResolvedScrollTarget) async -> ActionResult {
+    private func executeViewportScroll(_ target: ResolvedScrollTarget) async -> ActionResult {
         await performInteraction(
             method: .scroll,
             observationScope: .discovery,
@@ -157,9 +139,7 @@ extension TheBrains {
         }
     }
 
-    private func performViewportScrollToVisible(
-        _ target: ResolvedAccessibilityTarget
-    ) async -> ActionResult {
+    private func executeViewportScrollToVisible(_ target: ResolvedAccessibilityTarget) async -> ActionResult {
         await performInteraction(
             method: .scrollToVisible,
             observationScope: .discovery,
@@ -169,15 +149,23 @@ extension TheBrains {
         }
     }
 
-    private func performViewportScrollToEdge(
-        _ target: ResolvedScrollToEdgeTarget
-    ) async -> ActionResult {
+    private func executeViewportScrollToEdge(_ target: ResolvedScrollToEdgeTarget) async -> ActionResult {
         await performInteraction(
             method: .scrollToEdge,
             observationScope: .discovery,
             postActionCommitScope: .discovery
         ) {
             await self.navigation.executeScrollToEdge(target)
+        }
+    }
+
+    func executeSemanticDiscovery() async -> Navigation.ExploredScreen? {
+        await navigation.exploreScreen(exitPosition: .origin)
+    }
+
+    private func clearRotorCursorBeforeNonRotorAction(_ command: ResolvedHeistActionCommand) {
+        if case .rotor = command {} else {
+            stash.clearRotorCursor()
         }
     }
 
@@ -198,10 +186,7 @@ extension TheBrains {
             )
         }
     }
-
-    // MARK: - Interaction Pipeline
-
-    func performInteraction(
+    private func performInteraction(
         method: ActionMethod,
         observationScope: SemanticObservationScope = .visible,
         beforeStateScope: SemanticObservationScope = .visible,
@@ -245,22 +230,30 @@ extension TheBrains {
         ))
     }
 
-    private func performRotor(
-        selection: RotorSelection,
-        target: ResolvedAccessibilityTarget,
-        direction: RotorDirection
-    ) async -> ActionResult {
-        return await performInteraction(method: .rotor, observationScope: .discovery) {
-            await self.actions.executeRotor(selection: selection, target: target, direction: direction)
-        }
-    }
-
     func performWait(step: ResolvedWaitRuntimeInput) async -> ActionResult {
         guard semanticObservationIsActive else {
             return runtimeInactiveResult(method: .wait)
         }
-        let receipt = await interactionObservation.waitForPredicate(step)
+        let receipt = await waitForPredicate(step)
         return receipt.actionResult
+    }
+
+    func waitForPredicate(
+        _ step: ResolvedWaitRuntimeInput,
+        initialTrace: AccessibilityTrace? = nil,
+        baselineSequence: SettledObservationSequence? = nil,
+        changeBaseline: PredicateChangeBaselineSource = .establishFromFirstObservation,
+        announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly,
+        onReadyToPoll: PredicateWait.ReadyToPoll? = nil
+    ) async -> HeistWaitReceipt {
+        await interactionObservation.waitForPredicate(
+            step,
+            initialTrace: initialTrace,
+            baselineSequence: baselineSequence,
+            changeBaseline: changeBaseline,
+            announcementCursorStrategy: announcementCursorStrategy,
+            onReadyToPoll: onReadyToPoll
+        )
     }
 
     nonisolated static func actionErrorKind(for failureKind: TheSafecracker.FailureKind) -> ErrorKind {

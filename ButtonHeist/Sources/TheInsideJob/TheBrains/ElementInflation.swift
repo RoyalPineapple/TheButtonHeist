@@ -5,15 +5,6 @@ import ButtonHeistSupport
 import TheScore
 import ThePlans
 
-/// Converts a semantic target into a fresh live target that can receive the
-/// requested accessibility action.
-///
-/// Invariant: the tree is the map; viewport movement updates the map; actions
-/// resolve one map entry to a fresh live object with an on-screen activation point.
-///
-/// It owns reveal, bounded viewport movement, and live geometry acquisition.
-/// It does not choose matchers, dispatch actions, or evaluate post-action
-/// expectations.
 @MainActor
 internal final class ElementInflation {
 
@@ -23,12 +14,16 @@ internal final class ElementInflation {
     }
 
     internal typealias MoveViewport = @MainActor (
-        Navigation.ViewportMovementIntent
+        Navigation.ViewportMovementIntent,
     ) async -> Navigation.ViewportTransition
 
     internal struct Exploration {
-        internal var discoverTarget: @MainActor (ResolvedAccessibilityTarget) async -> Navigation.ExploredScreen?
-        internal var revealKnownTarget: @MainActor (KnownTargetRevealRequest) async -> Navigation.ExploredScreen?
+        internal var discoverTarget: @MainActor (
+            ResolvedAccessibilityTarget,
+        ) async -> Navigation.ExploredScreen?
+        internal var revealKnownTarget: @MainActor (
+            KnownTargetRevealRequest,
+        ) async -> Navigation.ExploredScreen?
         internal var moveViewport: MoveViewport
     }
 
@@ -104,8 +99,8 @@ internal final class ElementInflation {
         initialState: State = .resolving
     ) async -> ElementInflationResult {
         var state = initialState
-        let revealTransaction = RevealTransaction()
-        revealTransaction.captureScrollableHierarchy(in: stash)
+        let revealTransaction = RevealTransaction(stash: stash)
+        revealTransaction.captureScrollableHierarchy()
 
         while true {
             switch state {
@@ -185,7 +180,7 @@ internal final class ElementInflation {
 
     internal func refreshCommittedTarget(
         _ target: CommittedElementTarget,
-        method: ActionMethod
+        method: ActionMethod,
     ) async -> ElementInflationResult {
         guard !Task.isCancelled else {
             return .failed(.cancelled("element inflation was cancelled before committed target refresh"))

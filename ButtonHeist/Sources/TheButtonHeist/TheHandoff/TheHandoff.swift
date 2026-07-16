@@ -1,5 +1,6 @@
 import Foundation
 import ButtonHeistSupport
+import TheScore
 
 /// Client-side coordinator for device discovery, connection, admission, keepalive, and auto-reconnect.
 ///
@@ -66,18 +67,18 @@ final class TheHandoff {
     var onConnectionStateChanged: (@ButtonHeistActor (HandoffConnectionPhase) -> Void)?
     /// Non-lifecycle server messages delivered to TheFence for request-tracker
     /// resolution. TheHandoff forwards these without retaining semantic state.
-    var onServerMessage: (@ButtonHeistActor (ServerMessage, String?) -> Void)?
+    var onServerMessage: (@ButtonHeistActor (ServerMessage, RequestID?) -> Void)?
     /// Transport send failures reported after Network.framework processes an enqueued write.
-    var onSendFailure: (@ButtonHeistActor (DeviceSendFailure, String?) -> Void)?
+    var onSendFailure: (@ButtonHeistActor (DeviceSendFailure, RequestID?) -> Void)?
     // MARK: - Configuration
 
-    var token: String? {
-        get { serverMessages.token }
-        set { serverMessages.token = newValue }
+    var authToken: SessionAuthToken? {
+        get { serverMessages.authToken }
+        set { serverMessages.authToken = newValue }
     }
     /// Explicit driver ID override (e.g. from BUTTONHEIST_DRIVER_ID env var).
     /// When nil, a persistent auto-generated ID is used instead.
-    var driverId: String? {
+    var driverID: DriverID? {
         get { serverMessages.driverId }
         set { serverMessages.driverId = newValue }
     }

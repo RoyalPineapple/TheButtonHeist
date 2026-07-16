@@ -125,15 +125,20 @@ CI budgets macOS capacity explicitly:
   (including every portable framework test target),
   deterministic iOS core plus a trimmed demo smoke using one shared build, and
   hosted behavior canaries.
-- Pushes to `main` do not rerun those PR lanes. They run the genuine
-  `TheInsideJobIntegrationTests` suite on one dedicated macOS runner.
+- Pushes to `main` run those same three mandatory lanes. The genuine
+  `TheInsideJobIntegrationTests` suite then runs behind the completed iOS core
+  lane, keeping macOS concurrency at three.
+- A final `exact-sha-suite` job records the commit, workflow revision, run ID,
+  and every required suite conclusion in `buttonheist-exact-sha-suite`. Release
+  admission accepts only that successful aggregate and validates its manifest.
 - Successful jobs publish timing summaries. Receipt bundles, result bundles,
-  and simulator diagnostics are retained only when a job fails.
+  and simulator diagnostics are retained only when a job fails; the release
+  proof manifest is retained for every main run.
 
-This keeps two active PRs schedulable across a five-runner macOS pool while a
-post-merge integration run waits for or consumes the next available runner.
-The complete schemes remain available for local validation and deliberate
-pre-release runs.
+This keeps the main validation topology within the same three-runner ceiling
+while making the exact release SHA prove the complete required suite. The
+complete schemes remain available for local validation through the canonical
+`tuist test` commands below.
 
 Run the core, integration, and combined behavior schemes for complete hosted coverage:
 

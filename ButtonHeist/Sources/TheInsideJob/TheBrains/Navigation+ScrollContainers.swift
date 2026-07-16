@@ -7,11 +7,8 @@ import AccessibilitySnapshotParser
 import TheScore
 import ThePlans
 
-// MARK: - Scroll Container Resolution
-
 extension Navigation {
 
-    /// One selected semantic scroll container plus the physical target used to move it.
     @MainActor struct ScrollPlan { // swiftlint:disable:this agent_main_actor_value_type
         let target: ScrollableTarget
         let container: AccessibilityContainer
@@ -230,9 +227,6 @@ extension Navigation {
         }
     }
 
-    /// Build a ScrollableTarget for a container. Geometry comes from the current
-    /// accessibility capture; UIKit refs are only dispatch objects for real scroll
-    /// actions, not semantic state authority.
     func scrollableTarget(
         for container: AccessibilityContainer,
         path: TreePath? = nil,
@@ -282,42 +276,26 @@ extension Navigation {
         safeSwipeBounds: CGRect
     ) -> ScrollableTarget? {
         let cgContentSize = contentSize.cgSize
-        if let scrollView = stash.liveScrollableContainerView(forPath: semanticContainer.path),
-           let object = stash.liveContainerObject(forPath: semanticContainer.path),
-           stash.liveContainer(forPath: semanticContainer.path) != nil {
-            guard !scrollView.bhIsUnsafeForProgrammaticScrolling else { return nil }
-            return .uiScrollView(
-                containerTarget: semanticContainer,
-                object: object,
-                scrollView: scrollView
-            )
-        }
         guard case .resolved(let liveContainer) = stash.resolveLiveContainerTarget(for: semanticContainer) else {
             return nil
         }
-        guard let screenFrame = safeSwipeFrame(from: liveContainer.frame, safeBounds: safeSwipeBounds) else {
+        if let scrollView = stash.liveScrollableContainerView(forPath: semanticContainer.path),
+           stash.liveContainer(forPath: semanticContainer.path) != nil {
+            guard !scrollView.bhIsUnsafeForProgrammaticScrolling else { return nil }
+            return .uiScrollView(
+                container: liveContainer,
+                scrollView: scrollView
+            )
+        }
+        guard safeSwipeFrame(from: liveContainer.frame, safeBounds: safeSwipeBounds) != nil else {
             return nil
         }
         return .swipeable(
             container: liveContainer,
-            frame: screenFrame,
             contentSize: cgContentSize
         )
     }
 
-    /// Clamp a swipe rectangle to the screen region outside accessibility-level
-    /// chrome: above any `.tabBar` container, inset horizontally by the key
-    /// window's layout margins. Returns nil when the frame has no targetable
-    /// on-screen geometry.
-    ///
-    /// Nav bar detection is deliberately absent: UIKit does not expose an
-    /// accessibility signal for `UINavigationBar`, and we refuse to walk the
-    /// UIView hierarchy to infer one. Apps whose scrollable frame extends
-    /// under a translucent nav bar will surface the bug (swipe misfires or
-    /// doesn't scroll) — the honest failure mode per BH's thesis. The proper
-    /// fix will come from AXRuntime attribute 2015 (`_accessibilityValueForAttribute:`),
-    /// which every element carries as a back-reference to its owning nav bar;
-    /// that path needs LLDB validation across OS versions before shipping.
     func safeSwipeFrame(from frame: CGRect) -> CGRect? {
         safeSwipeFrame(from: frame, safeBounds: currentSwipeSafeBounds())
     }
@@ -334,10 +312,6 @@ extension Navigation {
         return nil
     }
 
-    /// Region of the screen safe for synthetic swipes. Bottom edge is the top
-    /// of any `.tabBar` container in the accessibility hierarchy. Top edge is
-    /// the window's `safeAreaInsets.top` — covers the status bar / notch but
-    /// not nav bars (see `safeSwipeFrame`).
     private func currentSwipeSafeBounds() -> CGRect {
         currentSwipeSafeBounds(in: stash.latestObservedLiveHierarchy.pathIndexedContainers)
     }
@@ -372,7 +346,6 @@ extension Navigation {
             .first(where: \.isKeyWindow)
     }
 
-    /// Scroll either reveals the requested target or returns a reason it cannot.
     private func liveScrollElementFailure(
         _ target: ResolvedAccessibilityTarget,
         command: ContainerScrollCommand

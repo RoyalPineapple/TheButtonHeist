@@ -4,14 +4,14 @@ import TheScore
 
 extension TheSafecracker {
 
-    enum ActionDispatchOutcomeState {
+    enum ActionDispatchOutcomeState: Sendable {
         case success(payload: ActionResultPayload?, resolvedElementId: HeistId?)
         case failure(FailureKind)
     }
 
     /// Outcome of a high-level action dispatch before post-action observation.
     /// Post-action observation adds semantic evidence to this value to produce the wire ActionResult.
-    struct ActionDispatchOutcome {
+    struct ActionDispatchOutcome: Sendable {
         let method: ActionMethod
         let message: String?
         let subjectEvidence: ActionSubjectEvidence?
@@ -157,7 +157,7 @@ extension TheSafecracker {
 
     /// Internal failure kinds used by dispatch to choose the wire ErrorKind.
     /// Not wire format — this is an internal control-flow signal.
-    enum FailureKind {
+    enum FailureKind: Sendable {
         /// Generic interaction failure that does not carry a more specific kind.
         case actionFailed
         /// The accessibility tree could not be parsed (no traversable windows).

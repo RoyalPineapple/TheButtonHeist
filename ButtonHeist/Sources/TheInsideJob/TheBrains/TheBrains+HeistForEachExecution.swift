@@ -40,12 +40,24 @@ extension TheBrains {
 
     private struct ForEachLoopContext {
         let totalCount: Int
-        let iterationPathComponent: String
+        let kind: ForEachLoopKind
         let body: [HeistStep]
-        let path: String
+        let path: HeistExecutionPath
         let runtime: HeistExecutionRuntime
         let environment: HeistExecutionEnvironment
         let scope: HeistExecutionScope
+    }
+
+    private enum ForEachLoopKind {
+        case element
+        case string
+
+        func iterationPath(from path: HeistExecutionPath, at index: Int) -> HeistExecutionPath {
+            switch self {
+            case .element: path.forEachElementIteration(at: index)
+            case .string: path.forEachStringIteration(at: index)
+            }
+        }
     }
 
     private enum ForEachLoopNext<Item> {
@@ -66,7 +78,7 @@ extension TheBrains {
     private struct ForEachLoopChildFailure {
         let iterationIndex: Int
         let identity: ForEachLoopItemIdentity
-        let childPath: String
+        let childPath: HeistExecutionPath
 
         var reason: String {
             switch identity {
@@ -81,7 +93,7 @@ extension TheBrains {
     func executeForEachElementStep(
         _ step: ForEachElementStep,
         index: Int,
-        path: String,
+        path: HeistExecutionPath,
         start: CFAbsoluteTime,
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
@@ -132,7 +144,7 @@ extension TheBrains {
         let outcome = await runForEachLoop(
             context: ForEachLoopContext(
                 totalCount: matchedCount,
-                iterationPathComponent: "for_each_element",
+                kind: .element,
                 body: step.body,
                 path: path,
                 runtime: runtime,
@@ -198,7 +210,7 @@ extension TheBrains {
         iterationReceipt: (
             Item,
             Int,
-            String,
+            HeistExecutionPath,
             CFAbsoluteTime,
             [HeistExecutionStepResult]
         ) -> HeistExecutionStepResult
@@ -219,13 +231,13 @@ extension TheBrains {
                 )
             }
             let iterationStart = CFAbsoluteTimeGetCurrent()
-            let iterationPath = "\(context.path).\(context.iterationPathComponent).iterations[\(iterationIndex)]"
+            let iterationPath = context.kind.iterationPath(from: context.path, at: iterationIndex)
             let iterationResults = await executeHeistSteps(
                 context.body,
                 runtime: context.runtime,
                 environment: bind(context.environment, item),
                 scope: context.scope,
-                path: "\(iterationPath).body"
+                path: iterationPath.iterationBody()
             )
 
             iterationNodes.append(iterationReceipt(
@@ -257,7 +269,7 @@ extension TheBrains {
     }
 
     private func forEachElementIterationResult(
-        path: String,
+        path: HeistExecutionPath,
         start: CFAbsoluteTime,
         step: ForEachElementStep,
         matchedCount: Int,
@@ -265,60 +277,73 @@ extension TheBrains {
         item: ForEachElementItem,
         children: [HeistExecutionStepResult]
     ) -> HeistExecutionStepResult {
-        let evidence = HeistStepEvidence.forEachElement(HeistForEachElementEvidence(
-            parameter: step.parameter,
-            matching: step.matching,
-            limit: step.limit,
+        let evidence = HeistForEachElementEvidence(
             matchedCount: matchedCount,
             iterationCount: iterationIndex + 1,
             iterationOrdinal: iterationIndex,
             targetOrdinal: item.ordinal,
             targetSummary: item.target.description,
             failureReason: children.firstFailedStep.map { "child failed at \($0.path)" }
-        ))
-        return heistReceipt(.init(
+        )
+        let termination = children.firstFailedStep.map {
+            ForEachLoopTermination.childFailed(.init(
+                iterationIndex: iterationIndex,
+                identity: .element(item.target),
+                childPath: $0.path
+            ))
+        } ?? .completed
+        return .forEachElementIteration(
             path: path,
-            kind: .forEachIteration,
             durationMs: elapsedMilliseconds(since: start),
-            intent: .forEachElement(parameter: step.parameter, matching: step.matching, limit: step.limit),
-            evidence: evidence,
-            children: children,
-            childFailure: { childPath in
-                self.childFailureDetail(category: .loop, childPath: childPath)
-            }
-        ))
+            parameter: step.parameter,
+            matching: step.matching,
+            limit: step.limit,
+            completion: forEachCompletion(
+                evidence: evidence,
+                termination: termination,
+                children: children,
+                admitPassed: HeistPassedForEachElementEvidence.init,
+                admitFailed: HeistFailedForEachElementEvidence.init,
+                failure: forEachIterationFailure
+            )
+        )
     }
 
     private func forEachElementResult(
-        path: String,
+        path: HeistExecutionPath,
         start: CFAbsoluteTime,
         step: ForEachElementStep,
         outcome: ForEachLoopOutcome
     ) -> HeistExecutionStepResult {
-        let evidence = HeistStepEvidence.forEachElement(HeistForEachElementEvidence(
-            parameter: step.parameter,
-            matching: step.matching,
-            limit: step.limit,
+        let evidence = HeistForEachElementEvidence(
             matchedCount: outcome.totalCount,
             iterationCount: outcome.iterationCount,
             failureReason: outcome.failureReason
-        ))
-        return forEachReceipt(
+        )
+        return .forEachElement(
             path: path,
-            kind: .forEachElement,
             durationMs: elapsedMilliseconds(since: start),
-            intent: .forEachElement(parameter: step.parameter, matching: step.matching, limit: step.limit),
-            evidence: evidence,
-            outcome: outcome,
-            contract: "for_each_element completes all matched iterations",
-            expected: "\(outcome.totalCount) iteration(s)"
+            parameter: step.parameter,
+            matching: step.matching,
+            limit: step.limit,
+            completion: forEachCompletion(
+                evidence: evidence,
+                termination: outcome.termination,
+                children: outcome.iterationNodes,
+                admitPassed: HeistPassedForEachElementEvidence.init,
+                admitFailed: HeistFailedForEachElementEvidence.init,
+                failure: loopFailure(
+                    contract: "for_each_element completes all matched iterations",
+                    expected: "\(outcome.totalCount) iteration(s)"
+                )
+            )
         )
     }
 
     func executeForEachStringStep(
         _ step: ForEachStringStep,
         index _: Int,
-        path: String,
+        path: HeistExecutionPath,
         start: CFAbsoluteTime,
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
@@ -327,7 +352,7 @@ extension TheBrains {
         let outcome = await runForEachLoop(
             context: ForEachLoopContext(
                 totalCount: step.values.count,
-                iterationPathComponent: "for_each_string",
+                kind: .string,
                 body: step.body,
                 path: path,
                 runtime: runtime,
@@ -359,69 +384,116 @@ extension TheBrains {
     }
 
     private func forEachStringIterationResult(
-        path: String,
+        path: HeistExecutionPath,
         start: CFAbsoluteTime,
         step: ForEachStringStep,
         iterationIndex: Int,
         value: String,
         children: [HeistExecutionStepResult]
     ) -> HeistExecutionStepResult {
-        let evidence = HeistStepEvidence.forEachString(HeistForEachStringEvidence(
-            parameter: step.parameter,
-            count: step.values.count,
+        let evidence = HeistForEachStringEvidence(
             iterationCount: iterationIndex + 1,
             iterationOrdinal: iterationIndex,
             value: value,
             failureReason: children.firstFailedStep.map { "child failed at \($0.path)" }
-        ))
-        return heistReceipt(.init(
+        )
+        let termination = children.firstFailedStep.map {
+            ForEachLoopTermination.childFailed(.init(
+                iterationIndex: iterationIndex,
+                identity: .string(value),
+                childPath: $0.path
+            ))
+        } ?? .completed
+        return .forEachStringIteration(
             path: path,
-            kind: .forEachIteration,
             durationMs: elapsedMilliseconds(since: start),
-            intent: .forEachString(parameter: step.parameter, count: step.values.count),
-            evidence: evidence,
-            children: children,
-            childFailure: { childPath in
-                self.childFailureDetail(category: .loop, childPath: childPath)
-            }
-        ))
+            parameter: step.parameter,
+            count: step.values.count,
+            completion: forEachCompletion(
+                evidence: evidence,
+                termination: termination,
+                children: children,
+                admitPassed: HeistPassedForEachStringEvidence.init,
+                admitFailed: HeistFailedForEachStringEvidence.init,
+                failure: forEachIterationFailure
+            )
+        )
     }
 
     private func forEachStringResult(
-        path: String,
+        path: HeistExecutionPath,
         start: CFAbsoluteTime,
         step: ForEachStringStep,
         outcome: ForEachLoopOutcome
     ) -> HeistExecutionStepResult {
-        let evidence = HeistStepEvidence.forEachString(HeistForEachStringEvidence(
-            parameter: step.parameter,
-            count: outcome.totalCount,
+        let evidence = HeistForEachStringEvidence(
             iterationCount: outcome.iterationCount,
             failureReason: outcome.failureReason
-        ))
-        return forEachReceipt(
+        )
+        return .forEachString(
             path: path,
-            kind: .forEachString,
             durationMs: elapsedMilliseconds(since: start),
-            intent: .forEachString(parameter: step.parameter, count: outcome.totalCount),
-            evidence: evidence,
-            outcome: outcome,
-            contract: "for_each_string completes all values",
-            expected: "\(outcome.totalCount) value(s)"
+            parameter: step.parameter,
+            count: step.values.count,
+            completion: forEachCompletion(
+                evidence: evidence,
+                termination: outcome.termination,
+                children: outcome.iterationNodes,
+                admitPassed: HeistPassedForEachStringEvidence.init,
+                admitFailed: HeistFailedForEachStringEvidence.init,
+                failure: loopFailure(
+                    contract: "for_each_string completes all values",
+                    expected: "\(outcome.totalCount) value(s)"
+                )
+            )
         )
     }
 
-    private func forEachReceipt(
-        path: String,
-        kind: HeistExecutionStepKind,
-        durationMs: Int,
-        intent: HeistStepIntent,
-        evidence: HeistStepEvidence,
-        outcome: ForEachLoopOutcome,
+    private func forEachCompletion<Evidence, Passed, Failed>(
+        evidence: Evidence,
+        termination: ForEachLoopTermination,
+        children: [HeistExecutionStepResult],
+        admitPassed: (Evidence) -> Passed?,
+        admitFailed: (Evidence) -> Failed?,
+        failure: (_ observed: String, _ childPath: HeistExecutionPath?) -> HeistFailureDetail
+    ) -> HeistExecutionCompletion<Passed, HeistEvidenceAvailability<Failed>, Failed>
+    where Passed: Sendable & Equatable, Failed: Codable & Sendable & Equatable {
+        switch termination {
+        case .completed:
+            guard let evidence = admitPassed(evidence),
+                  case .passed(let children) = HeistExecutedChildren(children) else {
+                preconditionFailure("completed for_each must carry passing evidence and children")
+            }
+            return .passed(evidence: evidence, children: children)
+        case .childFailed(let childFailure):
+            guard let evidence = admitFailed(evidence),
+                  case .aborted(let children) = HeistExecutedChildren(children) else {
+                preconditionFailure("child-failed for_each must carry failed evidence and children")
+            }
+            return .childAborted(
+                evidence: evidence,
+                failure: failure(childFailure.reason, childFailure.childPath),
+                children: children
+            )
+        case .postObservationUnavailable(let iterationIndex):
+            let observed = "iteration \(iterationIndex) post-observation unavailable"
+            guard let evidence = admitFailed(evidence),
+                  case .passed(let children) = HeistExecutedChildren(children) else {
+                preconditionFailure("unavailable for_each must carry failed evidence and passing children")
+            }
+            return .failed(
+                evidence: .observed(evidence),
+                failure: failure(observed, nil),
+                children: children
+            )
+        }
+    }
+
+    private func loopFailure(
         contract: String,
         expected: String
-    ) -> HeistExecutionStepResult {
-        func failure(observed: String) -> HeistFailureDetail {
+    ) -> (String, HeistExecutionPath?) -> HeistFailureDetail {
+        { observed, _ in
             HeistFailureDetail(
                 category: .loop,
                 contract: contract,
@@ -429,100 +501,84 @@ extension TheBrains {
                 expected: expected
             )
         }
-        let receiptFailure: HeistFailureDetail?
-        let childFailure: (String) -> HeistFailureDetail
-        switch outcome.termination {
-        case .completed:
-            receiptFailure = nil
-            childFailure = { childPath in
-                failure(observed: "child failed at \(childPath)")
-            }
-        case .childFailed(let childFailureInfo):
-            receiptFailure = failure(observed: childFailureInfo.reason)
-            childFailure = { _ in
-                failure(observed: childFailureInfo.reason)
-            }
-        case .postObservationUnavailable(let iterationIndex):
-            let observed = "iteration \(iterationIndex) post-observation unavailable"
-            receiptFailure = failure(observed: observed)
-            childFailure = { _ in
-                failure(observed: observed)
-            }
-        }
-        return heistReceipt(.init(
-            path: path,
-            kind: kind,
-            durationMs: durationMs,
-            intent: intent,
-            evidence: evidence,
-            completion: receiptFailure.map(HeistReceiptRequest.Completion.failed) ?? .passed,
-            children: outcome.iterationNodes,
-            childFailure: childFailure
-        ))
+    }
+
+    private func forEachIterationFailure(
+        observed: String,
+        childPath: HeistExecutionPath?
+    ) -> HeistFailureDetail {
+        childPath.map { childFailureDetail(category: .loop, childPath: $0) }
+            ?? HeistFailureDetail(
+                category: .runtimeUnavailable,
+                contract: "for_each iteration remains observable",
+                observed: observed
+            )
     }
 
     private func forEachUnavailableResult(
         index _: Int,
-        path: String,
+        path: HeistExecutionPath,
         start: CFAbsoluteTime,
         parameter: HeistReferenceName,
         matching: ElementPredicateTemplate,
         limit: Int
     ) -> HeistExecutionStepResult {
         let observed = "could not observe settled semantic hierarchy before evaluating for_each_element"
-        return heistReceipt(.init(
+        let evidence = HeistForEachElementEvidence(
+            matchedCount: 0,
+            iterationCount: 0,
+            failureReason: observed
+        )
+        guard let evidence = HeistFailedForEachElementEvidence(evidence) else {
+            preconditionFailure("unavailable element loop must carry failed evidence")
+        }
+        return .forEachElement(
             path: path,
-            kind: .forEachElement,
             durationMs: elapsedMilliseconds(since: start),
-            intent: .forEachElement(parameter: parameter, matching: matching, limit: limit),
-            evidence: .forEachElement(HeistForEachElementEvidence(
-                parameter: parameter,
-                matching: matching,
-                limit: limit,
-                matchedCount: 0,
-                iterationCount: 0,
-                failureReason: observed
-            )),
-            completion: .failed(HeistFailureDetail(
+            parameter: parameter,
+            matching: matching,
+            limit: limit,
+            completion: .failed(evidence: .observed(evidence), failure: HeistFailureDetail(
                 category: .runtimeUnavailable,
                 contract: "settled semantic hierarchy is observable before for_each_element matching",
                 observed: observed
             ))
-        ))
+        )
     }
 
     private func forEachResolutionFailureResult(
-        path: String,
+        path: HeistExecutionPath,
         start: CFAbsoluteTime,
         step: ForEachElementStep,
         error: Error
     ) -> HeistExecutionStepResult {
         let observed = "could not resolve for_each_element matcher: \(error)"
-        return heistReceipt(.init(
+        let evidence = HeistForEachElementEvidence(
+            matchedCount: 0,
+            iterationCount: 0,
+            failureReason: observed
+        )
+        guard let evidence = HeistFailedForEachElementEvidence(evidence) else {
+            preconditionFailure("unresolved element loop must carry failed evidence")
+        }
+        return .forEachElement(
             path: path,
-            kind: .forEachElement,
             durationMs: elapsedMilliseconds(since: start),
-            intent: .forEachElement(parameter: step.parameter, matching: step.matching, limit: step.limit),
-            evidence: .forEachElement(HeistForEachElementEvidence(
-                parameter: step.parameter,
-                matching: step.matching,
-                limit: step.limit,
-                matchedCount: 0,
-                iterationCount: 0,
-                failureReason: observed
-            )),
-            completion: .failed(HeistFailureDetail(
+            parameter: step.parameter,
+            matching: step.matching,
+            limit: step.limit,
+            completion: .failed(evidence: .observed(evidence), failure: HeistFailureDetail(
                 category: .targetResolution,
                 contract: "for_each_element matcher resolves before evaluation",
                 observed: observed,
                 expected: step.matching.description
             ))
-        ))
+        )
     }
 
     private func forEachLimitResult(
         index _: Int,
-        path: String,
+        path: HeistExecutionPath,
         start: CFAbsoluteTime,
         parameter: HeistReferenceName,
         matching: ElementPredicateTemplate,
@@ -530,26 +586,27 @@ extension TheBrains {
         limit: Int
     ) -> HeistExecutionStepResult {
         let observed = "matched \(matchedCount) element(s), exceeding for_each_element limit \(limit)"
-        return heistReceipt(.init(
+        let evidence = HeistForEachElementEvidence(
+            matchedCount: matchedCount,
+            iterationCount: 0,
+            failureReason: observed
+        )
+        guard let evidence = HeistFailedForEachElementEvidence(evidence) else {
+            preconditionFailure("over-limit element loop must carry failed evidence")
+        }
+        return .forEachElement(
             path: path,
-            kind: .forEachElement,
             durationMs: elapsedMilliseconds(since: start),
-            intent: .forEachElement(parameter: parameter, matching: matching, limit: limit),
-            evidence: .forEachElement(HeistForEachElementEvidence(
-                parameter: parameter,
-                matching: matching,
-                limit: limit,
-                matchedCount: matchedCount,
-                iterationCount: 0,
-                failureReason: observed
-            )),
-            completion: .failed(HeistFailureDetail(
+            parameter: parameter,
+            matching: matching,
+            limit: limit,
+            completion: .failed(evidence: .observed(evidence), failure: HeistFailureDetail(
                 category: .loop,
                 contract: "for_each_element matched count does not exceed limit",
                 observed: observed,
                 expected: "at most \(limit) element(s)"
             ))
-        ))
+        )
     }
 }
 

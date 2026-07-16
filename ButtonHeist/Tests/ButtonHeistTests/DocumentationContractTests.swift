@@ -155,10 +155,10 @@ final class DocumentationContractTests: XCTestCase {
         ]
 
         for document in requestDocuments {
-            _ = try JSONDecoder().decode(RequestEnvelope.self, from: Data(document.utf8))
+            _ = try JSONDecoder().decode(RequestEnvelope.self, from: wireExampleData(document))
         }
         for document in responseDocuments {
-            _ = try JSONDecoder().decode(ResponseEnvelope.self, from: Data(document.utf8))
+            _ = try JSONDecoder().decode(ResponseEnvelope.self, from: wireExampleData(document))
         }
     }
 
@@ -171,7 +171,7 @@ final class DocumentationContractTests: XCTestCase {
             in: api
         )) + jsonDocuments(in: onlyJSONBlock(
             startingAt: "The strict predicate wire grammar is:",
-            endingAt: "Raw heist receipt steps use one tagged `outcome`",
+            endingAt: "Raw heist receipt steps contain only",
             in: wireProtocol
         ))
 
@@ -181,7 +181,7 @@ final class DocumentationContractTests: XCTestCase {
         }
 
         let receipt = try onlyJSONBlock(
-            startingAt: "Raw heist receipt steps use one tagged `outcome`",
+            startingAt: "Raw heist receipt steps contain only",
             endingAt: "## Action Results",
             in: wireProtocol
         )
@@ -194,6 +194,14 @@ final class DocumentationContractTests: XCTestCase {
         ))
         let payload = try XCTUnwrap(actionBlocks[safe: 1])
         _ = try JSONDecoder().decode(ResultPayload.self, from: Data(payload.utf8))
+    }
+
+    private func wireExampleData(_ document: String) -> Data {
+        let normalized = document
+            .replacingOccurrences(of: "<server-semver>", with: "1.2.3")
+            .replacingOccurrences(of: "<client-semver>", with: "1.2.3")
+            .replacingOccurrences(of: "<semver>", with: "1.2.3")
+        return Data(normalized.utf8)
     }
 
     private func jsonLinesExamples(in contents: String) -> [(line: Int, json: String)] {

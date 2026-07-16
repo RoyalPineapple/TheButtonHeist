@@ -40,7 +40,7 @@ final class TheMuscleTests: XCTestCase {
     private var sink: CallbackSink!
 
     private func makeMuscle(
-        explicitToken: String?,
+        explicitToken: SessionAuthToken?,
         sessionReleaseTimeout: TimeInterval = StartupConfiguration.defaultSessionTimeout
     ) -> TheMuscle {
         TheMuscle(
@@ -93,7 +93,7 @@ final class TheMuscleTests: XCTestCase {
 
     // MARK: - Encoding helpers
 
-    private func encodeAuth(token: String, driverId: String? = nil) throws -> Data {
+    private func encodeAuth(token: SessionAuthToken, driverId: DriverID? = nil) throws -> Data {
         let payload = AuthenticatePayload(token: token, driverId: driverId)
         let envelope = RequestEnvelope(message: .authenticate(payload))
         return try JSONEncoder().encode(envelope)
@@ -126,8 +126,8 @@ final class TheMuscleTests: XCTestCase {
 
     private func authenticate(
         clientId: Int,
-        token: String,
-        driverId: String? = nil,
+        token: SessionAuthToken,
+        driverId: DriverID? = nil,
         address: String = "127.0.0.1",
         respond: @escaping SocketResponseHandler
     ) async throws {
@@ -175,6 +175,7 @@ final class TheMuscleTests: XCTestCase {
     // MARK: - Encoding
 
     func testEnvelopeEncodingFailureDoesNotInventFallbackMessage() async {
+        let requestID: RequestID = "bad-info"
         let payload = ServerInfo(
             appName: "Test",
             bundleIdentifier: "test.bundle",
@@ -188,25 +189,26 @@ final class TheMuscleTests: XCTestCase {
             tlsActive: true
         )
 
-        let result = await muscle.encodeEnvelope(.info(payload), requestId: "bad-info")
+        let result = await muscle.encodeEnvelope(.info(payload), requestId: requestID)
 
         guard case .failure(let failure) = result else {
             return XCTFail("Encoding failure should fail closed instead of synthesizing a different response shape")
         }
-        XCTAssertEqual(failure.requestId, "bad-info")
+        XCTAssertEqual(failure.requestId, requestID)
     }
 
     func testExplicitErrorEnvelopeStillEncodes() async throws {
+        let requestID: RequestID = "explicit-error"
         let result = await muscle.encodeEnvelope(
             .error(ServerError(kind: .general, message: "Explicit failure")),
-            requestId: "explicit-error"
+            requestId: requestID
         )
         guard case .success(let data) = result else {
             return XCTFail("Expected explicit error envelope to encode, got \(result)")
         }
 
         let envelope = try JSONDecoder().decode(ResponseEnvelope.self, from: data)
-        XCTAssertEqual(envelope.requestId, "explicit-error")
+        XCTAssertEqual(envelope.requestId, requestID)
         guard case .error(let error) = envelope.message else {
             return XCTFail("Expected explicit error response, got \(envelope.message)")
         }
@@ -228,7 +230,7 @@ final class TheMuscleTests: XCTestCase {
         let object = try JSONProbe(data: sent.data)
         XCTAssertEqual(try object.string("type"), ServerWireMessageType.serverHello.rawValue)
         try object.assertMissing("payload")
-        XCTAssertEqual(try object.string("buttonHeistVersion"), buttonHeistVersion)
+        XCTAssertEqual(try object.string("buttonHeistVersion"), buttonHeistVersion.description)
     }
 
     func testAdmissionFailureResponseEnvelopeKeepsStableWireShape() async throws {
@@ -248,7 +250,7 @@ final class TheMuscleTests: XCTestCase {
         let object = try JSONProbe(data: response)
         XCTAssertEqual(try object.string("type"), ServerWireMessageType.error.rawValue)
         try object.assertPresent("payload")
-        XCTAssertEqual(try object.string("buttonHeistVersion"), buttonHeistVersion)
+        XCTAssertEqual(try object.string("buttonHeistVersion"), buttonHeistVersion.description)
     }
 
     // MARK: - Auth Flow Tests
@@ -469,37 +471,6 @@ final class TheMuscleTests: XCTestCase {
         XCTAssertEqual(authFailure?.recoveryHint, "Retry with the configured token.")
     }
 
-    func testExplicitTokenRejectsEmptyTokenWithoutUIApproval() async throws {
-        let (respond, responses) = collectResponses()
-        try await authenticate(clientId: 1, token: "", respond: respond)
-
-        let authFailure = responses().compactMap { data -> ServerError? in
-            guard case .error(let error) = decodeServerMessage(data), error.kind == .authFailure else { return nil }
-            return error
-        }.first
-        XCTAssertEqual(authFailure?.message, "Token is required. Retry with the configured token.")
-        XCTAssertEqual(authFailure?.recoveryHint, "Retry with the configured token.")
-        let connections = await muscle.activeSessionConnections
-        XCTAssertFalse(connections.contains(1))
-        XCTAssertEqual(connections.count, 0)
-    }
-
-    func testGeneratedTokenRejectsEmptyTokenWithoutUIApproval() async throws {
-        await muscle.tearDown()
-        muscle = makeMuscle(explicitToken: nil)
-        sink = CallbackSink()
-        await installCallbacks()
-        let (respond, responses) = collectResponses()
-        try await authenticate(clientId: 1, token: "", respond: respond)
-
-        let authFailure = responses().compactMap { data -> ServerError? in
-            guard case .error(let error) = decodeServerMessage(data), error.kind == .authFailure else { return nil }
-            return error
-        }.first
-        XCTAssertEqual(authFailure?.message, "Token is required. Retry with the configured token.")
-        XCTAssertEqual(authFailure?.recoveryHint, "Retry with the configured token.")
-    }
-
     func testGeneratedTokenAuthenticatesWhenProvided() async throws {
         await muscle.tearDown()
         muscle = makeMuscle(explicitToken: nil)
@@ -531,26 +502,6 @@ final class TheMuscleTests: XCTestCase {
             "Invalid token. Retry with the configured token."
         )
         XCTAssertEqual(authFailure?.recoveryHint, "Retry with the configured token.")
-    }
-
-    func testGeneratedTokenStillRejectsEmptyTokenWhileSessionActive() async throws {
-        await muscle.tearDown()
-        muscle = makeMuscle(explicitToken: nil)
-        sink = CallbackSink()
-        await installCallbacks()
-        let generatedToken = await muscle.sessionToken
-        try await authenticate(clientId: 1, token: generatedToken, respond: respondSink())
-        let (respond, responses) = collectResponses()
-
-        try await authenticate(clientId: 2, token: "", respond: respond)
-
-        let authFailure = responses().compactMap { data -> ServerError? in
-            guard case .error(let error) = decodeServerMessage(data), error.kind == .authFailure else { return nil }
-            return error
-        }.first
-        XCTAssertEqual(authFailure?.message, "Token is required. Retry with the configured token.")
-        let connections = await muscle.activeSessionConnections
-        XCTAssertFalse(connections.contains(2))
     }
 
     func testNonAuthMessageReturnsAuthFailure() async throws {
@@ -589,7 +540,7 @@ final class TheMuscleTests: XCTestCase {
     func testNoSessionValidTokenAcquires() async throws {
         try await authenticate(clientId: 1, token: "test-token", respond: respondSink())
 
-        let driverId = await muscle.activeSessionDriverId
+        let driverId = await muscle.sessionOwner
         XCTAssertNotNil(driverId, "Session should be claimed")
         let connections = await muscle.activeSessionConnections
         XCTAssertTrue(connections.contains(1))
@@ -641,13 +592,13 @@ final class TheMuscleTests: XCTestCase {
     func testSessionReleasedAfterAllDisconnect() async throws {
         // Authenticate a client
         try await authenticate(clientId: 1, token: "test-token", respond: respondSink())
-        let driverId = await muscle.activeSessionDriverId
+        let driverId = await muscle.sessionOwner
         XCTAssertNotNil(driverId)
 
         // Disconnect the client — session release timer starts (default 30s, too slow for tests)
         await muscle.handleClientDisconnected(1)
         // Session should still be active (timer hasn't fired)
-        let driverIdAfter = await muscle.activeSessionDriverId
+        let driverIdAfter = await muscle.sessionOwner
         XCTAssertNotNil(driverIdAfter, "Session should still be active during grace period")
     }
 
@@ -672,7 +623,7 @@ final class TheMuscleTests: XCTestCase {
         // Session is draining: no connections, but driver still owns it
         let connectionsDuringDrain = await muscle.activeSessionConnections
         XCTAssertTrue(connectionsDuringDrain.isEmpty, "No connections during draining")
-        let driverIdDuringDrain = await muscle.activeSessionDriverId
+        let driverIdDuringDrain = await muscle.sessionOwner
         XCTAssertNotNil(driverIdDuringDrain, "Driver should still own session while draining")
         let hasReleaseTimerDuringDrain = await muscle.hasSessionReleaseTimerForTesting
         XCTAssertTrue(hasReleaseTimerDuringDrain)
@@ -682,7 +633,7 @@ final class TheMuscleTests: XCTestCase {
         try await authenticate(clientId: 2, token: "test-token", respond: respondSink())
 
         let connectionsAfter = await muscle.activeSessionConnections
-        let driverIdAfter = await muscle.activeSessionDriverId
+        let driverIdAfter = await muscle.sessionOwner
         XCTAssertTrue(connectionsAfter.contains(2), "New client should be in session")
         XCTAssertEqual(driverIdAfter, driverIdDuringDrain)
         let hasReleaseTimerAfterRejoin = await muscle.hasSessionReleaseTimerForTesting
@@ -723,8 +674,8 @@ final class TheMuscleTests: XCTestCase {
 
         let connections = await muscle.activeSessionConnections
         XCTAssertTrue(connections.contains(1))
-        let driverId = await muscle.activeSessionDriverId
-        XCTAssertEqual(driverId, "driver:driver-a")
+        let driverId = await muscle.sessionOwner
+        XCTAssertEqual(driverId, .driver("driver-a"))
     }
 
     func testLastSessionConnectionStartsReleaseTimer() async throws {
@@ -737,7 +688,7 @@ final class TheMuscleTests: XCTestCase {
         await muscle.handleClientDisconnected(1)
         await muscle.awaitSessionReleaseTimerForTesting()
 
-        let driverId = await muscle.activeSessionDriverId
+        let driverId = await muscle.sessionOwner
         XCTAssertNil(driverId)
     }
 
@@ -786,7 +737,7 @@ final class TheMuscleTests: XCTestCase {
     func testAutoGeneratedTokenIsUUID() async {
         let muscle = makeMuscle(explicitToken: nil)
         let token = await muscle.sessionToken
-        XCTAssertNotNil(UUID(uuidString: token), "Auto-generated token should be a valid UUID")
+        XCTAssertNotNil(UUID(uuidString: token.description), "Auto-generated token should be a valid UUID")
     }
 
     func testTearDownClearsState() async throws {
@@ -798,7 +749,7 @@ final class TheMuscleTests: XCTestCase {
 
         await muscle.tearDown()
 
-        let driverId = await muscle.activeSessionDriverId
+        let driverId = await muscle.sessionOwner
         XCTAssertNil(driverId)
         let connections = await muscle.activeSessionConnections
         XCTAssertTrue(connections.isEmpty)

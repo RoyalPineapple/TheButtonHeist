@@ -217,66 +217,6 @@ final class TheBrainsActionTests: XCTestCase {
         )
     }
 
-    func testPerformInteractionFailsBeforeActionWhenSettledObservationUnavailable() async {
-        var interactionRan = false
-
-        let result = await withNoTraversableWindows {
-            await brains.performInteraction(method: .activate) {
-                interactionRan = true
-                return .success(method: .activate)
-            }
-        }
-
-        XCTAssertFalse(result.outcome.isSuccess)
-        XCTAssertEqual(result.method, .activate)
-        XCTAssertEqual(result.outcome.errorKind, .accessibilityTreeUnavailable)
-        XCTAssertDiagnostic(result.message, contains: [
-            "Could not observe accessibility tree",
-            "last parsed: no accessibility tree",
-        ])
-        XCTAssertFalse(interactionRan, "command action must not run without settled pre-state")
-    }
-
-    func testPerformInteractionUsesVisibleEvidenceWhenSettledObservationIsUnavailable() async throws {
-        let windowScene = try requireForegroundWindowScene()
-        var interactionRan = false
-
-        let result = await withNoTraversableWindows {
-            let viewController = UIViewController()
-            viewController.view.backgroundColor = .white
-
-            let button = UIButton(type: .system)
-            button.setTitle("Visible Evidence Action", for: .normal)
-            button.frame = CGRect(x: 40, y: 80, width: 180, height: 44)
-            viewController.view.addSubview(button)
-
-            let window = UIWindow(windowScene: windowScene)
-            window.windowLevel = .alert + 60
-            window.rootViewController = viewController
-            window.frame = UIScreen.main.bounds
-            window.isHidden = false
-
-            defer {
-                window.isHidden = true
-            }
-
-            brains.stash.stopPassiveSemanticObservation()
-
-            return await brains.performInteraction(method: .activate) {
-                interactionRan = true
-                return .success(method: .activate)
-            }
-        }
-
-        XCTAssertTrue(interactionRan, "readable live trees should not be blocked by settled-observation timeouts")
-        XCTAssertTrue(result.outcome.isSuccess, result.message ?? "action unexpectedly failed")
-        XCTAssertEqual(result.method, .activate)
-        XCTAssertTrue(
-            brains.stash.interfaceTree.orderedElements.contains { $0.element.label == "Visible Evidence Action" },
-            "the observed full tree should be committed so action resolution sees live evidence"
-        )
-    }
-
     func testExecuteIncrementFailsWhenElementIsNotAdjustable() async throws {
         let heistId: HeistId = "live_button"
         let liveObject = UIButton(type: .system)
@@ -835,7 +775,7 @@ final class TheBrainsActionTests: XCTestCase {
             .action(try ActionStep(command: .activate(target))),
             .wait(WaitStep(
                 predicate: .exists(.label("Ready")),
-                timeout: 0
+                timeout: .milliseconds(1)
             )),
         ])
 
@@ -992,7 +932,7 @@ final class TheBrainsActionTests: XCTestCase {
         let screenshotStep = try XCTUnwrap(heist.steps.last)
         XCTAssertEqual(screenshotStep.kind, .action)
         XCTAssertEqual(screenshotStep.status, .passed)
-        XCTAssertEqual(screenshotStep.actionEvidence?.command, .takeScreenshot)
+        XCTAssertEqual(screenshotStep.actionCommand, .takeScreenshot)
         guard case .screenshot(let payload) = screenshotStep.actionEvidence?.dispatchResult?.payload else {
             return XCTFail("Expected screenshot action payload")
         }
@@ -1098,7 +1038,7 @@ final class TheBrainsActionTests: XCTestCase {
         let plan = try HeistPlan(body: [
             .wait(WaitStep(
                 predicate: .exists(.label("Home")),
-                timeout: 0
+                timeout: .milliseconds(1)
             )),
         ])
 
@@ -1119,7 +1059,7 @@ final class TheBrainsActionTests: XCTestCase {
         let plan = try HeistPlan(body: [
             .wait(WaitStep(
                 predicate: .exists(.label("Home")),
-                timeout: 0,
+                timeout: .milliseconds(1),
                 elseBody: [.warn(WarnStep(message: "no known state appeared"))]
             )),
         ])
@@ -1211,7 +1151,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(observedTimeouts.count, 2)
         XCTAssertEqual(observedTimeouts[0], 0)
         let observedTimeout = try XCTUnwrap(observedTimeouts[1])
-        XCTAssertEqual(observedTimeout, defaultActionExpectationTimeout, accuracy: 0.1)
+        XCTAssertEqual(observedTimeout, defaultActionExpectationTimeout.seconds, accuracy: 0.1)
     }
 
     func testHeistRepeatUntilExecutesBodyWhenBaselineObservationIsUnavailable() async throws {
@@ -1433,7 +1373,7 @@ final class TheBrainsActionTests: XCTestCase {
         let step = try XCTUnwrap(heist.steps.first)
         let failedIteration = try XCTUnwrap(step.children.last)
         let failedRetry = try XCTUnwrap(failedIteration.children.first)
-        let failedRetryPath = "$.body[0].repeat_until.iterations[1].body[0]"
+        let failedRetryPath: HeistExecutionPath = "$.body[0].repeat_until.iterations[1].body[0]"
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(activationCount, 2)
@@ -1455,12 +1395,13 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(failedRetry.actionEvidence?.dispatchResult?.outcome.errorKind, .actionFailed)
     }
 
-    func testHeistRepeatUntilTimeoutWithElseRunsBodyOnceWhenTimeoutIsZero() async throws {
+    func testHeistRepeatUntilMinimumTimeoutWithElseRunsBodyOnce() async throws {
         var incrementCount = 0
+        let quantityZero = observedState(elements: [
+            (makeElement(value: "0", identifier: "quantity"), "quantity"),
+        ])
         let runtime = heistRuntime(
-            observations: [
-                observedState(elements: [(makeElement(value: "0", identifier: "quantity"), "quantity")]),
-            ],
+            observations: [quantityZero, quantityZero],
             execute: { command in
                 if case .increment = command {
                     incrementCount += 1
@@ -1471,7 +1412,7 @@ final class TheBrainsActionTests: XCTestCase {
         let plan = try HeistPlan(body: [
             .repeatUntil(try RepeatUntilStep(
                 predicate: .exists(.element(.identifier("quantity"), .value("2"))),
-                timeout: 0,
+                timeout: .milliseconds(1),
                 body: [
                     .action(try ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
                 ],
@@ -1643,13 +1584,14 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testHeistRepeatUntilTimeoutElseChildFailureReportsElsePath() async throws {
-        let runtime = heistRuntime(observations: [
-            observedState(elements: [(makeElement(value: "0", identifier: "quantity"), "quantity")]),
+        let quantityZero = observedState(elements: [
+            (makeElement(value: "0", identifier: "quantity"), "quantity"),
         ])
+        let runtime = heistRuntime(observations: [quantityZero, quantityZero])
         let plan = try HeistPlan(body: [
             .repeatUntil(try RepeatUntilStep(
                 predicate: .exists(.element(.identifier("quantity"), .value("2"))),
-                timeout: 0,
+                timeout: .milliseconds(1),
                 body: [
                     .action(try ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
                 ],
@@ -1662,7 +1604,7 @@ final class TheBrainsActionTests: XCTestCase {
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
         let heist = try XCTUnwrap(result.heistExecutionPayload)
         let step = try XCTUnwrap(heist.steps.first)
-        let elseFailurePath = "$.body[0].repeat_until.else_body[0]"
+        let elseFailurePath: HeistExecutionPath = "$.body[0].repeat_until.else_body[0]"
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(heist.abortedAtPath, elseFailurePath)
@@ -1806,7 +1748,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(observedTimeouts, [0])
     }
 
-    func testHeistWaitTimeoutZeroSucceedsFromVisibleMissingObservation() async throws {
+    func testHeistWaitWithMinimumTimeoutSucceedsFromVisibleMissingObservation() async throws {
         var observedTimeouts: [Double?] = []
         let runtime = heistRuntime(
             observations: [observedState(labels: ["Home"])],
@@ -1815,24 +1757,24 @@ final class TheBrainsActionTests: XCTestCase {
         let plan = try HeistPlan(body: [
             .wait(WaitStep(
                 predicate: .missing(.label("Loading")),
-                timeout: 0
+                timeout: .milliseconds(1)
             )),
         ])
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
 
         XCTAssertTrue(result.outcome.isSuccess)
-        XCTAssertEqual(observedTimeouts, [0])
+        XCTAssertEqual(observedTimeouts, [0.001])
     }
 
-    func testPerformWaitTimeoutZeroDoesNotStartObservationWhenRuntimeInactive() async throws {
+    func testPerformWaitWithBoundedTimeoutDoesNotStartObservationWhenRuntimeInactive() async throws {
         let inactiveBrains = TheBrains(tripwire: TheTripwire())
         inactiveBrains.stash.installScreenForTesting(.makeForTests(elements: [
             (makeElement(label: "Home"), HeistId(rawValue: "home")),
         ]))
         XCTAssertFalse(inactiveBrains.stash.semanticObservationStream.isActive)
 
-        let step = WaitStep(predicate: .exists(.label("Home")), timeout: 0)
+        let step = WaitStep(predicate: .exists(.label("Home")), timeout: .milliseconds(1))
         let result = await inactiveBrains.performWait(step: try resolvedWait(step))
 
         XCTAssertFalse(result.outcome.isSuccess)
@@ -1917,7 +1859,7 @@ final class TheBrainsActionTests: XCTestCase {
             to: currentHeist.cursor
         )
         let staleReceipt = await isolatedBrains.interactionObservation.waitForPredicate(
-            try resolvedWait(WaitStep(predicate: .announcement("Ready"), timeout: 0)),
+            try resolvedWait(WaitStep(predicate: .announcement("Ready"), timeout: .milliseconds(1))),
             announcementCursorStrategy: .heistScoped
         )
 
@@ -1929,7 +1871,7 @@ final class TheBrainsActionTests: XCTestCase {
             associatedElement: .none
         )
         let currentReceipt = await isolatedBrains.interactionObservation.waitForPredicate(
-            try resolvedWait(WaitStep(predicate: .announcement("Ready"), timeout: 0)),
+            try resolvedWait(WaitStep(predicate: .announcement("Ready"), timeout: .milliseconds(1))),
             announcementCursorStrategy: .heistScoped
         )
 
@@ -2116,7 +2058,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         let receipt = await wait.wait(for: try resolvedWait(WaitStep(
             predicate: .exists(.label("Missing")),
-            timeout: 0
+            timeout: .milliseconds(1)
         )))
         let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
 
@@ -2132,7 +2074,7 @@ final class TheBrainsActionTests: XCTestCase {
         let baseline = try XCTUnwrap(baselineEvent.settledCapture)
         let expectation = WaitStep(
             predicate: .changed(.elements()),
-            timeout: 0
+            timeout: .milliseconds(1)
         )
         var waitRequests: [TheBrains.HeistRuntimeWaitRequest] = []
         var baselineScopes: [SemanticObservationScope?] = []
@@ -2257,25 +2199,6 @@ final class TheBrainsActionTests: XCTestCase {
         }
     }
 
-    func testHeistRuntimeSafetyRejectsInvalidStringLoopBeforeDispatch() async throws {
-        let raw = HeistPlanAdmissionCandidate(body: [
-            .forEachString(try ForEachStringStep(
-                values: [""],
-                parameter: "item",
-                body: [
-                    .action(try ActionStep(command: .typeText(
-                        reference: "item",
-                        target: .predicate(.label("Search"))
-                    ))),
-                ]
-            )),
-        ])
-
-        XCTAssertThrowsError(try raw.validatedForRuntimeSafety()) { error in
-            XCTAssertTrue(String(describing: error).contains("text must be non-empty"))
-        }
-    }
-
     func testHeistRuntimeSafetyRejectsOversizedForEachBeforeObservation() async throws {
         let raw = HeistPlanAdmissionCandidate(body: [
             .forEachElement(try ForEachElementStep(
@@ -2315,12 +2238,12 @@ final class TheBrainsActionTests: XCTestCase {
                     .action(try ActionStep(command: .activate(.label(
                         HeistReferenceName(stringLiteral: "item")
                     )))),
-                    .invoke(HeistInvocationStep(path: ["tapAddButton"])),
+                    .invoke(HeistInvocationStep(path: "tapAddButton")),
                 ]
             ),
         ], body: [
             .invoke(HeistInvocationStep(
-                path: ["addToCart"],
+                path: "addToCart",
                 argument: .string("Milk")
             )),
         ]).validatedForRuntimeSafety()
@@ -2370,7 +2293,7 @@ final class TheBrainsActionTests: XCTestCase {
             ],
             body: [
                 .invoke(HeistInvocationStep(
-                    path: ["Cart", "addItem"],
+                    path: "Cart.addItem",
                     argument: .string("Milk"),
                     expectation: expectation
                 )),
@@ -2415,7 +2338,7 @@ final class TheBrainsActionTests: XCTestCase {
             ],
             body: [
                 .invoke(HeistInvocationStep(
-                    path: ["Checkout", "pay"],
+                    path: "Checkout.pay",
                     expectation: WaitStep(
                         predicate: .exists(.label("Payment Complete")),
                         timeout: defaultActionExpectationTimeout
@@ -2465,7 +2388,7 @@ final class TheBrainsActionTests: XCTestCase {
             ],
             body: [
                 .invoke(HeistInvocationStep(
-                    path: ["Cart", "addItem"],
+                    path: "Cart.addItem",
                     argument: .string("Eggs"),
                     expectation: WaitStep(
                         predicate: .changed(.elements([.updated(
@@ -2508,7 +2431,7 @@ final class TheBrainsActionTests: XCTestCase {
             ],
             body: [
                 .invoke(HeistInvocationStep(
-                    path: ["Checkout", "pay"],
+                    path: "Checkout.pay",
                     expectation: WaitStep(
                         predicate: .changed(.screen([.exists(.label("Receipt"))])),
                         timeout: defaultActionExpectationTimeout
@@ -2557,7 +2480,7 @@ final class TheBrainsActionTests: XCTestCase {
             ],
             body: [
                 .invoke(HeistInvocationStep(
-                    path: ["Cart", "addItem"],
+                    path: "Cart.addItem",
                     argument: .string("Eggs"),
                     expectation: WaitStep(
                         predicate: .changed(.elements([.updated(
@@ -2600,11 +2523,11 @@ final class TheBrainsActionTests: XCTestCase {
                     .action(try ActionStep(command: .activate(.predicate(.label("Pay"))))),
                 ]),
                 HeistPlanAdmissionCandidate(name: "checkout", body: [
-                    .invoke(HeistInvocationStep(path: ["lib", "payOpen"])),
+                    .invoke(HeistInvocationStep(path: "lib.payOpen")),
                 ]),
             ], body: []),
         ], body: [
-            .invoke(HeistInvocationStep(path: ["lib", "checkout"])),
+            .invoke(HeistInvocationStep(path: "lib.checkout")),
         ]).validatedForRuntimeSafety()
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
@@ -2717,11 +2640,11 @@ final class TheBrainsActionTests: XCTestCase {
                     ]),
                 ],
                 body: [
-                    .invoke(HeistInvocationStep(path: ["setup"])),
+                    .invoke(HeistInvocationStep(path: "setup")),
                 ]
             ),
         ], body: [
-            .invoke(HeistInvocationStep(path: ["setup"])),
+            .invoke(HeistInvocationStep(path: "setup")),
         ])
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
@@ -2733,8 +2656,8 @@ final class TheBrainsActionTests: XCTestCase {
         )
     }
 
-    func testHeistActionExpectationTimeoutZeroUsesActionInteractionTrace() async throws {
-        let expectation = WaitStep(predicate: .changed(.screen()), timeout: 0)
+    func testHeistActionExpectationWithExpiredDeadlineUsesActionInteractionTrace() async throws {
+        let expectation = WaitStep(predicate: .changed(.screen()), timeout: .milliseconds(1))
         let beforeState = observedState(labels: ["Controls Demo"])
         let afterState = observedState(labels: ["Buttons & Actions"])
         let beforeCapture = AccessibilityTrace.Capture(
@@ -2795,8 +2718,8 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertNil(step.reportExpectation?.actual)
     }
 
-    func testHeistActionExpectationTimeoutZeroRejectsUnsettledActionTrace() async throws {
-        let expectation = WaitStep(predicate: .changed(.screen()), timeout: 0)
+    func testHeistActionExpectationWithExpiredDeadlineRejectsUnsettledActionTrace() async throws {
+        let expectation = WaitStep(predicate: .changed(.screen()), timeout: .milliseconds(1))
         let beforeState = observedState(labels: ["Controls Demo"])
         let afterState = observedState(labels: ["Buttons & Actions"])
         let beforeCapture = AccessibilityTrace.Capture(
@@ -3068,7 +2991,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(step.kind, .forEachElement)
         XCTAssertEqual(step.status, .passed)
         XCTAssertEqual(forEachResult.matchedCount, 0)
-        XCTAssertEqual(forEachResult.limit, 20)
+        XCTAssertEqual(step.forEachElementDeclaration?.limit, 20)
         XCTAssertEqual(forEachResult.iterationCount, 0)
         XCTAssertNil(forEachResult.failureReason)
         XCTAssertNil(step.failure)
@@ -3091,14 +3014,14 @@ final class TheBrainsActionTests: XCTestCase {
         let heist = try XCTUnwrap(result.heistExecutionPayload)
         let forEachStep = try XCTUnwrap(heist.steps.first)
         let forEachResult = try XCTUnwrap(forEachStep.forEachStringEvidence)
-        let failedChildPath = "$.body[0].for_each_string.iterations[0].body[0]"
+        let failedChildPath: HeistExecutionPath = "$.body[0].for_each_string.iterations[0].body[0]"
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(heist.abortedAtPath, failedChildPath)
         XCTAssertEqual(heist.steps.map(\.kind), [.forEachString, .warn, .action])
         XCTAssertEqual(heist.steps.map(\.status), [.failed, .skipped, .passed])
         XCTAssertEqual(forEachStep.status, .failed)
-        XCTAssertEqual(forEachResult.count, 2)
+        XCTAssertEqual(forEachStep.forEachStringDeclaration?.count, 2)
         XCTAssertEqual(forEachResult.iterationCount, 1)
         XCTAssertEqual(
             forEachResult.failureReason,
@@ -3150,12 +3073,12 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(executedCommands, [.takeScreenshot])
         XCTAssertEqual(forEachResult.matchedCount, 2)
-        XCTAssertEqual(forEachResult.limit, 1)
+        XCTAssertEqual(step.forEachElementDeclaration?.limit, 1)
         XCTAssertEqual(forEachResult.iterationCount, 0)
         XCTAssertEqual(forEachResult.failureReason, "matched 2 element(s), exceeding for_each_element limit 1")
         XCTAssertTrue(step.children.isEmpty)
         XCTAssertEqual(heist.steps.map(\.path), ["$.body[0]", "$.body[0].failure.actions[0]"])
-        XCTAssertEqual(heist.failureScreenshotStep?.actionEvidence?.command, .takeScreenshot)
+        XCTAssertEqual(heist.failureScreenshotStep?.actionCommand, .takeScreenshot)
     }
 
     func testHeistForEachCallsBodyWithOrdinalTargetForEachInitialMatchWithoutMutatingPlan() async throws {
@@ -3387,7 +3310,7 @@ final class TheBrainsActionTests: XCTestCase {
         let heist = try XCTUnwrap(result.heistExecutionPayload)
         let forEachStep = try XCTUnwrap(heist.steps.first)
         let forEachResult = try XCTUnwrap(forEachStep.forEachElementEvidence)
-        let failedActionPath = "$.body[0].for_each_element.iterations[0].body[0]"
+        let failedActionPath: HeistExecutionPath = "$.body[0].for_each_element.iterations[0].body[0]"
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(heist.abortedAtPath, failedActionPath)
@@ -3688,6 +3611,10 @@ final class TheBrainsActionTests: XCTestCase {
         )
 
         XCTAssertFalse(textField.isFirstResponder)
+        XCTAssertFalse(
+            brains.safecracker.isKeyboardVisible(),
+            "targeted typing must work when an active input has no software keyboard"
+        )
 
         let command = try HeistActionCommand.typeText(
             text: "hello",
@@ -3754,8 +3681,7 @@ final class TheBrainsActionTests: XCTestCase {
         let actionTask = Task { @MainActor in
             await brains.actions.executeTypeText(
                 text: "hello",
-                target: resolvedTarget,
-                replacingExisting: false
+                target: resolvedTarget
             )
         }
 
@@ -3857,9 +3783,8 @@ final class TheBrainsActionTests: XCTestCase {
         await brains.tripwire.yieldFrames(3)
 
         let command = try HeistActionCommand.typeText(
-            text: "b",
-            target: .identifier("message_field"),
-            replacingExisting: true
+            text: .replacing("b"),
+            target: .identifier("message_field")
         ).resolve(in: .empty)
         let result = await brains.executeRuntimeAction(command)
 
@@ -3903,9 +3828,8 @@ final class TheBrainsActionTests: XCTestCase {
         await brains.tripwire.yieldFrames(3)
 
         let command = try HeistActionCommand.typeText(
-            text: "",
-            target: .identifier("message_field"),
-            replacingExisting: true
+            text: .replacing(""),
+            target: .identifier("message_field")
         ).resolve(in: .empty)
         let result = await brains.executeRuntimeAction(command)
 
@@ -3925,8 +3849,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         let result = await brains.actions.executeTypeText(
             text: "hello",
-            target: nil,
-            replacingExisting: false
+            target: nil
         )
 
         XCTAssertFalse(result.success)
@@ -3948,8 +3871,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         let result = await brains.actions.executeTypeText(
             text: "hello",
-            target: nil,
-            replacingExisting: false
+            target: nil
         )
 
         XCTAssertFalse(result.success)
@@ -4089,11 +4011,13 @@ final class TheBrainsActionTests: XCTestCase {
         var dispatchedPoint: CGPoint?
         let result = await brains.actions.performPointAction(
             selection: .element(try AccessibilityTarget.label("Below Fold").resolve(in: .empty)),
-            method: .syntheticTap
-        ) { point in
-            dispatchedPoint = point
-            return true
-        }
+            method: .syntheticTap,
+            prepare: { $0 },
+            complete: { point in
+                dispatchedPoint = point
+                return true
+            }
+        )
 
         XCTAssertFalse(result.success)
         XCTAssertNil(dispatchedPoint, "Off-viewport targets must not dispatch their stored activation point")
@@ -4117,11 +4041,13 @@ final class TheBrainsActionTests: XCTestCase {
         var dispatchedPoint: CGPoint?
         let result = await brains.actions.performPointAction(
             selection: .element(try AccessibilityTarget.label("Live").resolve(in: .empty)),
-            method: .syntheticTap
-        ) { point in
-            dispatchedPoint = point
-            return true
-        }
+            method: .syntheticTap,
+            prepare: { $0 },
+            complete: { point in
+                dispatchedPoint = point
+                return true
+            }
+        )
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(dispatchedPoint, capturePoint)
@@ -4147,11 +4073,13 @@ final class TheBrainsActionTests: XCTestCase {
                 try AccessibilityTarget.label("Live").resolve(in: .empty),
                 UnitPoint(x: 0.25, y: 0.75)
             ),
-            method: .syntheticTap
-        ) { point in
-            dispatchedPoint = point
-            return true
-        }
+            method: .syntheticTap,
+            prepare: { $0 },
+            complete: { point in
+                dispatchedPoint = point
+                return true
+            }
+        )
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(dispatchedPoint, CGPoint(x: 120, y: 230))
@@ -4164,11 +4092,13 @@ final class TheBrainsActionTests: XCTestCase {
         var dispatchedPoint: CGPoint?
         let result = await brains.actions.performPointAction(
             selection: .coordinate(ScreenPoint(x: Double(rawPoint.x), y: Double(rawPoint.y))),
-            method: .syntheticTap
-        ) { point in
-            dispatchedPoint = point
-            return true
-        }
+            method: .syntheticTap,
+            prepare: { $0 },
+            complete: { point in
+                dispatchedPoint = point
+                return true
+            }
+        )
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(dispatchedPoint, rawPoint)
@@ -4311,9 +4241,15 @@ final class TheBrainsActionTests: XCTestCase {
     func testExecuteRotorScrollsViewportTowardResultActivationPoint() async throws {
         let hostHeistId: HeistId = "rotor_result_host"
         let resultHeistId: HeistId = "rotor_result_target"
+        let scrollContainerPath = TreePath([0])
         let screenBounds = ScreenMetrics.current.bounds
         let scrollView = UIScrollView(frame: screenBounds)
         scrollView.contentSize = CGSize(width: screenBounds.width, height: screenBounds.height + 900)
+        let scrollContainer = AccessibilityContainer(
+            type: .none,
+            scrollableContentSize: AccessibilitySize(scrollView.contentSize),
+            frame: AccessibilityRect(screenBounds)
+        )
 
         let hostFrame = CGRect(x: 32, y: 80, width: 240, height: 44)
         let hostElement = AccessibilityElement.make(
@@ -4350,28 +4286,32 @@ final class TheBrainsActionTests: XCTestCase {
             elements: [
                 hostHeistId: InterfaceTree.Element(
                     heistId: hostHeistId,
-                    scrollMembership: nil,
+                    scrollMembership: .init(containerPath: scrollContainerPath, index: 0),
                     element: hostElement
                 ),
                 resultHeistId: InterfaceTree.Element(
                     heistId: resultHeistId,
-                    scrollMembership: nil,
+                    scrollMembership: .init(containerPath: scrollContainerPath, index: 1),
                     element: resultElement
                 ),
             ],
             hierarchy: [
-                .element(hostElement, traversalIndex: 0),
-                .element(resultElement, traversalIndex: 1),
+                .container(scrollContainer, children: [
+                    .element(hostElement, traversalIndex: 0),
+                    .element(resultElement, traversalIndex: 1),
+                ]),
             ],
             heistIdsByPath: [
-                TreePath([0]): hostHeistId,
-                TreePath([1]): resultHeistId,
+                TreePath([0, 0]): hostHeistId,
+                TreePath([0, 1]): resultHeistId,
             ],
             elementRefs: [
                 hostHeistId: .init(object: hostObject, scrollView: scrollView),
                 resultHeistId: .init(object: resultObject, scrollView: scrollView),
             ],
+            containerRefsByPath: [scrollContainerPath: .init(object: scrollView)],
             firstResponderHeistId: nil,
+            scrollableContainerViewsByPath: [scrollContainerPath: .init(view: scrollView)]
         ))
 
         XCTAssertEqual(scrollView.contentOffset, .zero)
@@ -4486,7 +4426,7 @@ final class TheBrainsActionTests: XCTestCase {
     // MARK: - Accessibility Tree Availability
 
     func testWaitTimesOutWhenAccessibilityTreeIsUnavailable() async throws {
-        let step = WaitStep(predicate: .exists(.label("never")), timeout: 0)
+        let step = WaitStep(predicate: .exists(.label("never")), timeout: .milliseconds(1))
         let resolvedStep = try resolvedWait(step)
         let result = await withNoTraversableWindows {
             await brains.performWait(step: resolvedStep)
@@ -4761,6 +4701,23 @@ final class TheBrainsActionTests: XCTestCase {
         )
     }
 
+    private func scriptedPredicateWait(
+        _ source: ScriptedHeistObservationSource
+    ) -> PredicateWait {
+        PredicateWait(
+            observeEvent: { scope, _, timeout in
+                source.nextEvent(scope: scope, timeout: timeout)
+            },
+            latestEvent: { nil },
+            latestSettleFailure: { nil },
+            semanticObservation: { source.semanticObservation(for: $0) },
+            buildObservationWindow: { _, _ in nil },
+            presenceTimeoutMessage: { _, _ in nil },
+            announcementCursor: { _ in .origin },
+            waitForAnnouncement: { _, _, _ in nil }
+        )
+    }
+
     private func heistRuntime(
         observations: [PostActionObservation.BeforeState],
         executionBaseline: SettledCapture? = nil,
@@ -4781,6 +4738,7 @@ final class TheBrainsActionTests: XCTestCase {
             file: file,
             line: line
         )
+        let caseWait = scriptedPredicateWait(observationSource)
 
         return TheBrains.HeistExecutionRuntime(
             execute: { command, baselineScope in
@@ -4808,13 +4766,7 @@ final class TheBrainsActionTests: XCTestCase {
                 )
             },
             selectPredicateCase: { cases, timeout in
-                await PredicateCaseSelection.waitFor(
-                    cases,
-                    timeout: timeout,
-                    observeSemanticState: { scope, _, timeout in
-                        observationSource.next(scope: scope, timeout: timeout)
-                    }
-                )
+                await caseWait.selectPredicateCase(cases, timeout: timeout)
             },
             observeSemanticState: { scope, _, timeout in
                 observationSource.next(scope: scope, timeout: timeout)
@@ -4891,7 +4843,7 @@ final class TheBrainsActionTests: XCTestCase {
         }
         guard let observation = observationSource.next(
             scope: observationScope,
-            timeout: waitStep.timeout
+            timeout: waitStep.timeout.seconds
         ) else {
             let expectation = ExpectationResult(
                 met: false,
@@ -5068,6 +5020,7 @@ private final class ScriptedHeistObservationSource {
     private var previousObservation: SettledSemanticObservation?
     private var previousCapture: AccessibilityTrace.Capture?
     private var nextObservationSequence: SettledObservationSequence = 0
+    private var emittedObservations: [SettledObservationSequence: HeistSemanticObservation] = [:]
     private let observedScopes: (@MainActor (SemanticObservationScope) -> Void)?
     private let observedTimeouts: (@MainActor (Double?) -> Void)?
     private let file: StaticString
@@ -5112,6 +5065,24 @@ private final class ScriptedHeistObservationSource {
         )
         previousObservation = observation.event.observation
         previousCapture = observation.accessibilityTrace.captures.last
+        return observation
+    }
+
+    func nextEvent(
+        scope: SemanticObservationScope,
+        timeout: Double?
+    ) -> SettledSemanticObservationEvent? {
+        guard let observation = next(scope: scope, timeout: timeout) else { return nil }
+        emittedObservations[observation.event.sequence] = observation
+        return observation.event
+    }
+
+    func semanticObservation(
+        for event: SettledSemanticObservationEvent
+    ) -> HeistSemanticObservation {
+        guard let observation = emittedObservations[event.sequence] else {
+            preconditionFailure("scripted observation must be emitted before evaluation")
+        }
         return observation
     }
 

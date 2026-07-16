@@ -1,31 +1,69 @@
-public struct GestureDuration: Codable, Sendable, Equatable, CustomStringConvertible {
+public struct GestureDuration: Codable, Sendable, Equatable, CustomStringConvertible,
+    ExpressibleByFloatLiteral, ExpressibleByIntegerLiteral {
     public static let maximumSeconds = 60.0
 
-    public static let longPressDefault = GestureDuration(validatedSeconds: 0.5)
-    public static let swipeDefault = GestureDuration(validatedSeconds: 0.15)
-    public static let dragDefault = GestureDuration(validatedSeconds: 0.5)
-    public static let scrollSwipeDefault = GestureDuration(validatedSeconds: 0.12)
+    public static let longPressDefault = GestureDuration(seconds: 0.5)
+    public static let swipeDefault = GestureDuration(seconds: 0.15)
+    public static let dragDefault = GestureDuration(seconds: 0.5)
+    public static let scrollSwipeDefault = GestureDuration(seconds: 0.12)
 
-    public let seconds: Double
-
-    public init(seconds: Double) {
-        self.seconds = seconds
-    }
+    private let boundedSeconds: BoundedSeconds
 
     public init(validatingSeconds seconds: Double) throws {
-        if let expected = Self.validationFailure(for: seconds) {
-            throw GestureProjectionError.invalidDuration(observed: seconds, expected: expected)
-        }
-        self.seconds = seconds
+        self = try Self.admitting(seconds: seconds)
     }
 
-    private init(validatedSeconds seconds: Double) {
-        self.seconds = seconds
+    package init(seconds: Double) {
+        self = requireValidPublicPayload {
+            try Self.admitting(seconds: seconds)
+        }
+    }
+
+    public init(floatLiteral value: Double) {
+        self = requireValidPublicPayload {
+            try Self(validatingSeconds: value)
+        }
+    }
+
+    public init(integerLiteral value: Int) {
+        self = requireValidPublicPayload {
+            try Self(validatingSeconds: Double(value))
+        }
+    }
+
+    package static func admitting(seconds: Double) throws -> Self {
+        do {
+            return Self(boundedSeconds: try BoundedSeconds(
+                value: seconds,
+                maximum: maximumSeconds
+            ))
+        } catch let error as BoundedSecondsError {
+            throw GestureProjectionError.invalidDuration(
+                observed: error.observed,
+                expected: error.expected
+            )
+        }
+    }
+
+    private init(boundedSeconds: BoundedSeconds) {
+        self.boundedSeconds = boundedSeconds
+    }
+
+    public var seconds: Double {
+        boundedSeconds.value
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
-        try self.init(validatingSeconds: try container.decode(Double.self))
+        let seconds = try container.decode(Double.self)
+        do {
+            self = try Self.admitting(seconds: seconds)
+        } catch {
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: String(describing: error)
+            )
+        }
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -35,18 +73,5 @@ public struct GestureDuration: Codable, Sendable, Equatable, CustomStringConvert
 
     public var description: String {
         ScoreDescription.decimal(seconds)
-    }
-
-    public static func validationFailure(for seconds: Double) -> String? {
-        guard seconds.isFinite else {
-            return "number"
-        }
-        guard seconds > 0 else {
-            return "number > 0"
-        }
-        guard seconds <= maximumSeconds else {
-            return "number in 0...\(maximumSeconds)"
-        }
-        return nil
     }
 }

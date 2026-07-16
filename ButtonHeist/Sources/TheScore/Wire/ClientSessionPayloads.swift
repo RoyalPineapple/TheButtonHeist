@@ -8,11 +8,11 @@ public struct AuthenticatePayload: Codable, Sendable, Equatable {
         case driverId
     }
 
-    public let token: String
+    public let token: SessionAuthToken
     /// Unique driver identity for session locking. When set, the server uses this
     /// (instead of the auth token) to distinguish drivers. Set via BUTTONHEIST_DRIVER_ID.
-    public let driverId: String?
-    public init(token: String, driverId: String? = nil) {
+    public let driverId: DriverID?
+    public init(token: SessionAuthToken, driverId: DriverID? = nil) {
         self.token = token
         self.driverId = driverId
     }
@@ -20,8 +20,8 @@ public struct AuthenticatePayload: Codable, Sendable, Equatable {
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "authenticate payload")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        token = try container.decode(String.self, forKey: .token)
-        driverId = try container.decodeIfPresent(String.self, forKey: .driverId)
+        token = try container.decode(SessionAuthToken.self, forKey: .token)
+        driverId = try container.decodeIfPresent(DriverID.self, forKey: .driverId)
     }
 
     public func encode(to encoder: Encoder) throws {

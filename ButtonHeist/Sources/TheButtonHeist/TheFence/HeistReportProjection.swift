@@ -25,7 +25,7 @@ struct HeistReportSummaryProjection: Sendable {
     var executedTopLevelStepCount: Int { summary.executedTopLevelStepCount }
     var executedNodeCount: Int { summary.executedNodeCount }
     var outputReceiptNodeCount: Int { summary.outputReceiptNodeCount }
-    var abortedAtPath: String? { summary.abortedAtPath }
+    var abortedAtPath: String? { summary.abortedAtPath?.description }
     var durationMs: Int { summary.durationMs }
     var expectations: HeistExpectationsProjection? {
         summary.expectationsChecked > 0
@@ -70,7 +70,7 @@ struct HeistReportProjection: Sendable {
         outputNodes = rollup.nodes.map { HeistReportNodeProjection(node: $0, profile: profile) }
         summary = HeistReportSummaryProjection(summary: reportSummary)
         metrics = HeistExecutionMetricProjection(rollup: rollup)
-        failedStepPath = reportSummary.abortedAtPath
+        failedStepPath = reportSummary.abortedAtPath?.description
         failureScreenshotSummary = rollup.failureScreenshotSummary
         failureInterfaceDump = rollup.failureInterfaceDump(
             elementLimit: profile.limits.failureInterfaceElements
@@ -96,17 +96,17 @@ struct HeistReportNodeProjection: Sendable {
     private var report: HeistExecutionStepReportFacts { node.reportFacts }
     private var results: HeistExecutionStepReportResults { report.results }
 
-    var path: String { report.path }
+    var path: String { report.path.description }
     var kind: HeistExecutionStepKind { report.kind }
-    var capability: String? { report.capabilityName }
+    var capability: String? { report.capabilityPath?.description }
     var invocationDisplayName: String? { report.invocationDisplayName }
     var command: HeistActionCommandType? { report.command }
     var target: AccessibilityTarget? { report.target }
     var status: HeistExecutionStepStatus { report.status }
     var message: String? { report.message }
     var durationMs: Int { step.durationMs }
-    var intent: HeistStepIntent? { step.intent }
     var evidence: HeistReportEvidenceProjection? { HeistReportEvidenceProjection(node: node, profile: profile) }
+    var warning: HeistExecutionWarning? { report.warning }
     var failureMessage: String? { report.failureMessage }
     var failure: HeistReportFailureProjection? {
         step.failure.map {
@@ -118,7 +118,7 @@ struct HeistReportNodeProjection: Sendable {
         }
     }
     var failureCategory: HeistFailureCategory? { report.failureCategory }
-    var abortedAtChildPath: String? { step.abortedAtChildPath }
+    var abortedAtChildPath: String? { step.abortedAtChildPath?.description }
     var expectation: ExpectationProjection? { results.expectation.map { ExpectationProjection(result: $0) } }
     var actionErrorKind: ErrorKind? { results.actionErrorKind }
     var activationTrace: ActivationTrace? { results.actionResult?.activationTrace }

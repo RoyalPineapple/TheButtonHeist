@@ -125,11 +125,14 @@ extension ElementInflation {
             }
             return .failure(.geometryNotActionable(unsafeProgrammaticScrollMessage))
         }
+        guard let scrollTarget = Navigation.ScrollableTarget.programmatic(scrollView, in: stash) else {
+            return .failure(.geometryNotActionable(scrollFailedMessage))
+        }
         transaction?.record(scrollView)
         let transition = await exploration.moveViewport(
             .revealPoint(
                 activationPoint,
-                in: scrollView,
+                in: scrollTarget,
                 preferredScreenRect: Self.interactionComfortZone,
                 minimumScreenRect: ScreenMetrics.current.bounds
             )
@@ -344,16 +347,10 @@ extension ElementInflation {
         case .geometryUnavailable:
             return .unavailable
         }
-        let semanticLiveTarget = TheStash.LiveActionTarget(
-            treeElement: treeElement,
-            object: liveTarget.object,
-            frame: liveTarget.frame,
-            activationPoint: liveTarget.activationPoint
-        )
         return .resolved(InflatedElementTarget(
             target: target,
             treeElement: treeElement,
-            liveTarget: semanticLiveTarget,
+            liveTarget: liveTarget,
             deadline: deadline,
             resolution: resolution
         ))

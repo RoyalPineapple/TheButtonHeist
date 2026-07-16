@@ -1,4 +1,5 @@
 import Foundation
+import TheScore
 
 @ButtonHeistActor
 extension TheFence {
@@ -49,7 +50,7 @@ extension TheFence {
             resolvedToken = request.token ?? target.token
             resolvedDirectDevice = DiscoveredDevice.fromHostPort(
                 target.device,
-                id: "config-\(targetName.rawValue)",
+                id: DiscoveryDeviceID(stringLiteral: "config-\(targetName.rawValue)"),
                 name: targetName.rawValue
             )
         } else if handoff.isConnected || config.deviceFilter != nil || config.directDevice != nil {
@@ -62,11 +63,13 @@ extension TheFence {
 
         stop()
 
-        handoff.token = resolvedToken
+        let authToken = try resolvedToken.map(SessionAuthToken.init(validating:))
+        handoff.authToken = authToken
         let newConfig = Configuration(
             deviceFilter: resolvedDevice,
             connectionTimeout: config.connectionTimeout,
-            token: resolvedToken,
+            token: authToken,
+            driverID: config.driverID,
             autoReconnect: config.autoReconnect,
             fileConfig: config.fileConfig,
             directDevice: resolvedDirectDevice,

@@ -15,13 +15,13 @@ public struct HeistPlanLintFinding: Sendable, Equatable {
     }
 
     public let severity: Severity
-    public let path: String
+    public let path: HeistPlanPath
     public let message: String
     public let suggestion: String?
 
     public init(
         severity: Severity,
-        path: String,
+        path: HeistPlanPath,
         message: String,
         suggestion: String? = nil
     ) {
@@ -91,64 +91,64 @@ private struct HeistPlanLinter: HeistPlanTraversalVisitor {
         }
     }
 
-    private func missingExpectationFinding(path: HeistTraversalPath) -> HeistPlanLintFinding {
+    private func missingExpectationFinding(path: HeistPlanPath) -> HeistPlanLintFinding {
         .init(
             severity: mode == .strictTest ? .error : .warning,
-            path: path.description,
+            path: path,
             message: "Semantic action has no expectation",
             suggestion: "Attach .expect(...) or .withoutExpectation(\"reason\")"
         )
     }
 
-    private func typeTextTargetFinding(path: HeistTraversalPath) -> HeistPlanLintFinding {
+    private func typeTextTargetFinding(path: HeistPlanPath) -> HeistPlanLintFinding {
         .init(
             severity: mode == .strictTest ? .error : .warning,
-            path: path.description,
+            path: path,
             message: "TypeText has no semantic target",
             suggestion: "Use TypeText(text, into: target) for durable semantic tests"
         )
     }
 
-    private func mechanicalFinding(path: HeistTraversalPath) -> HeistPlanLintFinding {
+    private func mechanicalFinding(path: HeistPlanPath) -> HeistPlanLintFinding {
         .init(
             severity: .error,
-            path: path.description,
+            path: path,
             message: "Mechanical command appears in strict semantic-test mode",
             suggestion: "Use semantic actions for normal UI, or keep Mechanical.* only for explicit spatial tests"
         )
     }
 
-    private func viewportFinding(path: HeistTraversalPath) -> HeistPlanLintFinding {
+    private func viewportFinding(path: HeistPlanPath) -> HeistPlanLintFinding {
         .init(
             severity: .error,
-            path: path.description,
+            path: path,
             message: "Viewport command appears in strict semantic-test mode",
             suggestion: "Semantic actions own reveal and viewport mechanics"
         )
     }
 
-    private func ambientExpectationFinding(path: HeistTraversalPath) -> HeistPlanLintFinding {
+    private func ambientExpectationFinding(path: HeistPlanPath) -> HeistPlanLintFinding {
         .init(
             severity: .warning,
-            path: path.description,
+            path: path,
             message: "Ambient action has no expectation",
             suggestion: "Attach .expect(...) or .withoutExpectation(\"reason\") when this side effect has no durable semantic outcome"
         )
     }
 
-    private func viewportBeforeSemanticActionFinding(path: HeistTraversalPath) -> HeistPlanLintFinding {
+    private func viewportBeforeSemanticActionFinding(path: HeistPlanPath) -> HeistPlanLintFinding {
         .init(
             severity: mode == .strictTest ? .error : .warning,
-            path: path.description,
+            path: path,
             message: "Pre-action viewport movement immediately precedes a semantic action",
             suggestion: "Remove the viewport movement; semantic actions own reveal and element inflation"
         )
     }
 
-    private func emptyBranchFinding(path: HeistTraversalPath) -> HeistPlanLintFinding {
+    private func emptyBranchFinding(path: HeistPlanPath) -> HeistPlanLintFinding {
         .init(
             severity: .error,
-            path: path.description,
+            path: path,
             message: "Branch has no steps",
             suggestion: "Add a step or remove the empty branch"
         )
@@ -175,8 +175,8 @@ private extension HeistActionCommand {
         switch core {
         case .activate, .increment, .decrement, .customAction, .rotor:
             return .semantic
-        case .typeText(_, let target, _):
-            return target == nil ? .typeTextWithoutTarget : .semantic
+        case .typeText(let payload):
+            return payload.target == nil ? .typeTextWithoutTarget : .semantic
         case .mechanicalTap, .mechanicalLongPress, .mechanicalSwipe, .mechanicalDrag:
             return .mechanical
         case .viewportScroll, .viewportScrollToVisible, .viewportScrollToEdge:

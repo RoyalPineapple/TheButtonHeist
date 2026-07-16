@@ -1,46 +1,44 @@
 # Bumper Bowling Rules
 
 Button Heist uses Bumper Bowling only for repository-wide source invariants
-that Swift, SwiftLint, and the test suite cannot express directly. SwiftPM and
-Tuist own target dependencies, Swift access control owns construction, and
-behavioral tests own runtime and wire contracts. Bumper does not prescribe
-filenames, helper names, or implementation shape except where a named currency
-or cross-file owner is itself the durable invariant.
+that Swift, SwiftLint, and behavioral tests cannot express directly. SwiftPM
+and Tuist own target dependencies, Swift access control owns private
+construction, and tests own runtime and wire contracts.
 
-Every retained rule records its invariant, repair, proof, and deletion
-condition below. Button Heist owns these policies; Bumper Bowling supplies the
-generic facts, scopes, shapers, diagnostics, and test harness used to express
-them.
+Every retained rule below protects a current typed boundary or canonical
+owner. Rules that preserve an implementation helper, a deleted pipeline, or a
+state that access control already makes unconstructible are intentionally
+absent.
 
 ## Architecture Scope
 
 | Rule ID | Invariant | Repair | Proof and deletion condition |
 | --- | --- | --- | --- |
-| `duplicate_ownership` | Every included path and module has one Button Heist component owner, so scoped rules have an unambiguous lane. | Remove the overlapping `Owns` or `Modules` declaration. | Bumper validates its component configuration. Delete when Bumper no longer uses path/module ownership for scoping. |
-| `forbidden_import` | ThePlans and TheScore remain value layers: ThePlans excludes UI, persistence, testing, CLI, MCP, networking, Objective-C, and accessibility-parser authority; TheScore excludes UI, persistence, and testing authority. | Normalize boundary evidence into Button Heist values before it enters the value layer. | Bumper evaluates component import facts. Delete an exclusion when the corresponding build target cannot import that dependency. |
+| `duplicate_ownership` | Every included path and module has one Button Heist component owner, so scoped rules have an unambiguous lane. | Remove the overlapping `Owns` or `Modules` declaration. | Bumper validates its component configuration. Delete when Bumper no longer uses component ownership for scoping. |
+| `forbidden_import` | ThePlans and TheScore remain value layers. ThePlans excludes UI, persistence, testing, CLI, MCP, networking, Objective-C, and live accessibility parser authority; TheScore excludes UI, persistence, and testing authority. | Normalize boundary evidence into Button Heist values before it enters a value layer. | Bumper evaluates component import facts. Delete an exclusion when the build graph makes the import impossible. |
 
 The component declarations in `BumperBowling.swift` are a scoping map, not a
-second dependency graph. `Package.swift`, the Tuist projects, and compilation
-are authoritative for allowed target dependencies and cycles.
+second dependency graph. Package manifests, Tuist projects, and compilation
+remain authoritative for target dependencies and cycles.
 
-## Framework Authority
+## Typed Capability Boundaries
 
-These rules operate on modules and components rather than exact files. Moving
-an implementation within its owning component does not change policy.
+These rules operate on modules and components rather than exact implementation
+files. Moving code inside its owning component does not change policy.
 
 | Rule ID | Invariant | Repair | Proof and deletion condition |
 | --- | --- | --- | --- |
-| `buttonheist.ui_framework_ownership` | UIKit and SwiftUI remain in runtime and demo components. | Perform UI work at the runtime/demo boundary and pass values inward. | Focused valid/invalid import fixtures. Delete when target dependencies make the imports impossible elsewhere. |
-| `buttonheist.network_framework_ownership` | Network.framework remains in runtime transport or TheScore's typed TLS boundary. | Move network authority to transport/TLS code and pass typed outcomes inward. | Focused component mutation fixture. Delete when the build graph encodes the same capability boundary. |
-| `buttonheist.security_framework_ownership` | Security.framework remains in TheScore's TLS material boundary. | Keep key material conversion in TheScore and expose typed values. | Focused component mutation fixture. Delete when Security is isolated in a dedicated target. |
-| `buttonheist.objective_c_framework_ownership` | Objective-C runtime authority remains in the runtime component. | Keep private-SPI and method-override work behind the runtime boundary. | Focused component mutation fixture. Delete when the bridge is isolated in a target inaccessible elsewhere. |
-| `buttonheist.accessibility_parser_ownership` | Live accessibility parser/Core/preview authority remains in the runtime component; shared snapshot model values remain allowed at value boundaries. | Parse live evidence in the runtime and pass semantic Button Heist values outward. | Focused component mutation fixture. Delete when parser products are inaccessible outside the runtime target. |
+| `buttonheist.ui_framework_ownership` | UIKit and SwiftUI remain in runtime and demo components. | Perform UI work at the runtime or demo boundary and pass values inward. | Focused valid and invalid import fixtures. Delete when target dependencies make the imports impossible elsewhere. |
+| `buttonheist.network_framework_ownership` | Network.framework remains in runtime transport or TheScore's typed TLS boundary. | Move network authority to transport or TLS code and pass typed outcomes inward. | Focused component mutation fixtures. Delete when the build graph encodes the same capability boundary. |
+| `buttonheist.security_framework_ownership` | Security.framework remains in TheScore's TLS material boundary. | Keep key material conversion in TheScore and expose typed values. | Focused component mutation fixtures. Delete when Security is isolated in a dedicated target. |
+| `buttonheist.objective_c_framework_ownership` | Objective-C runtime authority remains in the runtime component. | Keep private-SPI and method-override work behind the runtime boundary. | Focused component mutation fixtures. Delete when the bridge is isolated in an inaccessible target. |
+| `buttonheist.accessibility_parser_ownership` | Live accessibility parser, Core, and preview authority remains in the runtime component. | Parse live evidence in the runtime and pass semantic Button Heist values outward. | Focused component mutation fixtures. Delete when parser products are inaccessible outside the runtime target. |
 
 ## User Accessibility
 
 | Rule ID | Invariant | Repair | Proof and deletion condition |
 | --- | --- | --- | --- |
-| `buttonheist.demo_accessibility_identifier` | Demo controls are discoverable through labels, values, traits, hints, and actions rather than test-only identifiers. Named SPI research fixtures remain exempt. | Improve the control's real accessibility semantics. | Focused member-reference fixture plus repository lint. Delete when demo and research targets split and the demo target cannot call the identifier API. |
+| `buttonheist.demo_accessibility_identifier` | Demo controls are discoverable through the semantics available to accessibility users, rather than test-only identifiers. Named SPI research fixtures remain exempt. | Improve the control's label, value, traits, hint, or actions. | Standard `memberReferenceOwnership` with demo, research-fixture, and non-demo fixtures. Delete when demo and research targets split and the demo target cannot call the identifier API. |
 
 ## Typed Source Boundaries
 
@@ -49,60 +47,25 @@ resolve Swift types or infer runtime ownership.
 
 | Rule ID | Invariant | Repair | Proof and deletion condition |
 | --- | --- | --- | --- |
-| `buttonheist.any_boundary` | Production `Any` appears only in the three named Foundation/Objective-C admission declarations and is normalized immediately. | Add a typed boundary value and convert the external object there. | Invalid arbitrary API plus valid named-boundary fixtures. Delete when Foundation exposes typed equivalents or those bridges move into isolated targets. |
-| `buttonheist.callback_isolation` | Stored `onFoo` callback types declare `@Sendable` or a global actor, including file-local callback aliases. | State the callback's actor or Sendability contract in its type. | Direct and aliased valid/invalid fixtures plus strict-concurrency compilation. Delete when Swift requires equivalent isolation for every stored callback shape. |
+| `buttonheist.any_boundary` | Production `Any` appears only in the three current Foundation and Objective-C admission declarations and is normalized immediately. | Add a typed boundary value and convert the external object there. | Invalid arbitrary API plus valid named-boundary fixtures. Delete when Foundation exposes typed equivalents or the bridges move into isolated targets. |
+| `buttonheist.callback_isolation` | Stored `onFoo` callback types declare `@Sendable` or a global actor, including file-local callback aliases. | State the callback's actor or Sendability contract in its type. | Direct and aliased valid and invalid fixtures plus strict-concurrency compilation. Delete when Swift requires equivalent isolation for every stored callback shape. |
+| `buttonheist.checked_concurrency` | Production code does not use `@preconcurrency` or `nonisolated(unsafe)` escape hatches. | Model actor isolation or Sendability explicitly. | Focused attribute and modifier mutations plus repository lint. Delete when the compiler settings reject both forms directly. |
 
-## Checked Concurrency
+## Canonical Runtime Owners
 
-| Rule ID | Invariant | Repair | Proof and deletion condition |
-| --- | --- | --- | --- |
-| `buttonheist.checked_concurrency` | Production code does not use `@preconcurrency` or broad `nonisolated(unsafe)` escape hatches. The private IOHID loader remains the sole narrow exception. | Model actor isolation or Sendability explicitly; isolate unavoidable private SPI behind its owner. | Focused attribute/modifier mutations plus repository lint. Delete when upstream SPI is concurrency-safe and the final exception disappears. |
-
-## Observation And Graph Pipeline
-
-The stream owns observation history and publication. A narrow custom rule
-protects the cross-file proof-to-graph relationship that the standard shapers
-cannot express.
+These positive shapers name current owners. They do not ban old helper names or
+preserve compatibility paths.
 
 | Rule ID | Invariant | Repair | Proof and deletion condition |
 | --- | --- | --- | --- |
-| `buttonheist.semantic_observation_log_ownership` | `SemanticObservationStream` constructs the only `SemanticObservationLog`. | Read or inject the stream-owned log instead of creating another history. | Bumper's standard `canonicalConstruction` fact plus repository lint. Delete when the log is nested in or privately initialized by the stream. |
-| `buttonheist.semantic_observation_publication_ownership` | Only `SemanticObservationStream` calls `observationLog.publish`. | Submit a settled proof to the stream rather than publishing from a consumer. | Bumper's standard `boundaryOnly` fact plus repository lint. Delete when publication is private to the stream. |
-| `buttonheist.settled_observation_commit_ownership` | One proof-bearing `SemanticObservationStream.publishCommittedObservation` call enters `TheStash.reduceInterfaceGraph`; only that reducer and explicit lifecycle reset mutate `interfaceTree`. | Settle or explore into `InterfaceObservationProof`, then commit through the stream. | The custom typed-query rule checks call count, enclosing proof-bearing function, and graph assignments. Delete when graph storage and reducer invocation are inaccessible outside one owner. |
-
-## Expression Ownership
-
-| Rule ID | Invariant | Repair | Proof and deletion condition |
-| --- | --- | --- | --- |
-| `buttonheist.expr_ownership` | The package enum `Expr<Value>` in `StringExpressions.swift` is the repository's one authored-expression currency. This does not reserve the `Expr` suffix or ban semantically distinct types. | Extend `Expr<Value>` or choose a domain name that represents a genuinely different concept. | Bumper 0.5.2's standard `singleDeclaration` fact plus repository lint. Delete when module boundaries make another `Expr` declaration impossible or the currency is removed. |
-
-## Canonical Traversal
-
-Both rules use Bumper 0.5.2's standard `canonicalTraversal` shaper. They protect
-recursive ownership without preserving helper names or a custom recursion
-visitor.
-
-| Rule ID | Invariant | Repair | Proof and deletion condition |
-| --- | --- | --- | --- |
-| `buttonheist.canonical_plan_traversal` | `HeistPlanTraversal.swift` owns analysis walks and TheBrains owns recursive execution of `HeistStep`. | Express analysis through the traversal algebra; keep execution recursion in TheBrains. | Bumper's recursive-call facts plus repository lint. Delete when recursive children are inaccessible outside those owners. |
-| `buttonheist.canonical_accessibility_hierarchy_traversal` | `AccessibilityHierarchy+Traversal.swift` owns recursive `.container` descent. | Use the canonical fold, preorder, compaction, or graph projection. | Bumper's recursive-call facts plus repository lint. Delete when the parser exposes only its traversal algebra. |
-
-## Retired Policy
-
-Constructor allowlists, compatibility-name bans, explicit-access file lists,
-expression-suffix reservations, folder import allowlists, component dependency
-shadow graphs, viewport helper policing, and custom recursive visitors are
-intentionally absent. Interface graph construction uses proof types; Bumper
-retains only the narrow cross-file commit relationship until Swift access
-control can own it. Durable observation values rely on `Sendable` and strict
-concurrency rather than a blacklist of UIKit-looking type names. Receipts,
-serialization, retries, settlement behavior, and wire contracts remain covered
-by behavioral and reducer tests.
+| `buttonheist.predicate_wait_lifecycle_ownership` | `PredicateWait.swift` is the only production file that constructs `PredicateWaitLifecycleMachine`; all predicate waits use that lifecycle driver. | Add wait behavior as a lifecycle state, event, or effect and execute it through `PredicateWait`. | Standard `canonicalConstruction` with authorized and unauthorized construction fixtures. Delete when the machine initializer is inaccessible outside `PredicateWait`. |
+| `buttonheist.interface_tree_element_matching_ownership` | Direct `InterfaceTree` element matching stays in `TheStash+Matching.swift` and is consumed by `TheStash+TargetResolution.swift`. | Resolve element targets through TheStash's canonical matching and target-resolution path. | Standard `boundaryOnly` with authorized and unauthorized call fixtures. Delete when the matching entry point is inaccessible outside those owners. |
+| `buttonheist.interface_tree_container_matching_ownership` | Direct `InterfaceTree` container matching stays in `TheStash+Matching.swift` and is consumed by `TheStash+TargetResolution.swift`. | Resolve container targets through TheStash's canonical matching and target-resolution path. | Standard `boundaryOnly` with authorized and unauthorized call fixtures. Delete when the matching entry point is inaccessible outside those owners. |
 
 ## Rule Lifecycle
 
 A new blocking rule must demonstrate valid Swift that violates a durable
-repository invariant, explain why the compiler/build graph/tests cannot own
-it, and include one valid and one invalid in-memory fixture. When a native
+repository invariant, explain why the compiler, build graph, and tests cannot
+own it, and include one valid and one invalid in-memory fixture. When a native
 boundary makes the bad state unconstructible, delete the Bumper rule and its
 fixture in the same change.

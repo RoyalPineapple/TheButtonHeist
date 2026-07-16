@@ -8,17 +8,15 @@ struct HeistCanonicalSwiftDSLRenderer {
     }
 
     func renderHeistHeader(_ plan: HeistPlan, callee: String) throws -> String {
-        let nameArgument = plan.name.map(quote)
+        let nameArgument = plan.name.map { quote($0.description) }
         switch plan.parameter {
         case .none:
             guard let nameArgument else { return "\(callee) {" }
             return "\(callee)(\(nameArgument)) {"
         case .string(let parameter):
-            try validateParameter(parameter)
             let prefix = nameArgument.map { "\($0), " } ?? ""
             return "\(callee)(\(prefix)parameter: \(quote(parameter))) { \(parameter) in"
         case .accessibilityTarget(let parameter):
-            try validateParameter(parameter)
             let prefix = nameArgument.map { "\($0), " } ?? ""
             return "\(callee)(\(prefix)targetParameter: \(quote(parameter))) { \(parameter) in"
         }
@@ -27,20 +25,20 @@ struct HeistCanonicalSwiftDSLRenderer {
 
 private struct HeistCanonicalSwiftDSLRenderAlgebra: HeistPlanTraversalVisitor {
     private struct DefinitionFrame {
-        let fullPath: [String]
+        let fullPath: HeistDefinitionPath
         let indent: Int
         let isNamespace: Bool
     }
 
     let renderer: HeistCanonicalSwiftDSLRenderer
-    private var renderedSteps: [HeistTraversalPath: String] = [:]
-    private var renderedBodies: [HeistTraversalPath: String] = [:]
-    private var renderedDefinitions: [HeistTraversalPath: String] = [:]
-    private var renderedDefinitionGroups: [HeistTraversalPath: String] = [:]
-    private var bodyIndents: [HeistTraversalPath: Int] = [:]
-    private var bodyEnvironments: [HeistTraversalPath: RenderEnvironment] = [:]
-    private var stepIndents: [HeistTraversalPath: Int] = [:]
-    private var stepEnvironments: [HeistTraversalPath: RenderEnvironment] = [:]
+    private var renderedSteps: [HeistPlanPath: String] = [:]
+    private var renderedBodies: [HeistPlanPath: String] = [:]
+    private var renderedDefinitions: [HeistPlanPath: String] = [:]
+    private var renderedDefinitionGroups: [HeistPlanPath: String] = [:]
+    private var bodyIndents: [HeistPlanPath: Int] = [:]
+    private var bodyEnvironments: [HeistPlanPath: RenderEnvironment] = [:]
+    private var stepIndents: [HeistPlanPath: Int] = [:]
+    private var stepEnvironments: [HeistPlanPath: RenderEnvironment] = [:]
     private var activeBodyIndents: [Int] = []
     private var activeBodyEnvironments: [RenderEnvironment] = []
     private var definitionFrames: [DefinitionFrame] = []
@@ -56,12 +54,16 @@ private struct HeistCanonicalSwiftDSLRenderAlgebra: HeistPlanTraversalVisitor {
     }
 
     mutating func visitDefinition(_ plan: HeistPlan, context: HeistTraversalContext) {
-        let name = plan.name ?? "<anonymous>"
+        guard let name = plan.name else {
+            preconditionFailure("admitted heist definitions must have names")
+        }
         let parent = definitionFrames.last
-        let pathPrefix = parent?.isNamespace == true ? parent?.fullPath ?? [] : []
+        let pathPrefix = parent?.isNamespace == true ? parent?.fullPath.components ?? [] : []
         let indent = parent.map { $0.isNamespace ? $0.indent : $0.indent + 1 } ?? 1
         let frame = DefinitionFrame(
-            fullPath: pathPrefix + [name],
+            fullPath: HeistDefinitionPath(first: pathPrefix.first ?? name, remaining: pathPrefix.isEmpty
+                ? []
+                : Array(pathPrefix.dropFirst()) + [name]),
             indent: indent,
             isNamespace: plan.body.isEmpty && !plan.definitions.isEmpty && plan.parameter == .none
         )
@@ -140,10 +142,6 @@ private struct HeistCanonicalSwiftDSLRenderAlgebra: HeistPlanTraversalVisitor {
         let frame = definitionFrames.removeLast()
         guard failure == nil else { return }
         do {
-            guard let name = plan.name else {
-                throw HeistCanonicalSwiftDSLError.invalidParameter("<anonymous>")
-            }
-            try renderer.validateParameter(name)
             if frame.isNamespace {
                 renderedDefinitions[context.path] = renderedDefinitionGroups[
                     context.path.child(.definitions)
@@ -199,7 +197,7 @@ private struct HeistCanonicalSwiftDSLRenderAlgebra: HeistPlanTraversalVisitor {
 
     private func render(
         _ step: HeistStep,
-        path: HeistTraversalPath,
+        path: HeistPlanPath,
         indent: Int,
         environment: RenderEnvironment
     ) throws -> String {
@@ -248,9 +246,9 @@ private struct HeistCanonicalSwiftDSLRenderAlgebra: HeistPlanTraversalVisitor {
                 environment: environment
             )
         case .warn(let warn):
-            return renderer.line("Warn(\(renderer.quote(warn.message)))", indent)
+            return renderer.line("Warn(\(renderer.quote(warn.message.rawValue)))", indent)
         case .fail(let fail):
-            return renderer.line("Fail(\(renderer.quote(fail.message)))", indent)
+            return renderer.line("Fail(\(renderer.quote(fail.message.rawValue)))", indent)
         case .heist(let plan):
             let body = renderedBodies[path.child(.heist).child(.body)] ?? ""
             let header = try renderer.renderHeistHeader(plan, callee: "HeistPlan")

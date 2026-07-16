@@ -172,10 +172,7 @@ import ThePlans
         #expect(wait.waitEvidence?.outcome == .matched)
         #expect(conditional.abortedAtChildPath == failed.path)
         #expect(iteration.abortedAtChildPath == failed.path)
-        #expect(HeistReceiptFixture.result(
-            steps: [failed],
-            abortedAtPath: failed.path
-        ).abortedAtPath == failed.path)
+        #expect(HeistReceiptFixture.result(steps: [failed]).abortedAtPath == failed.path)
     }
 
     @Test func `eventually uses a bounded ContinuousClock poll`() async {

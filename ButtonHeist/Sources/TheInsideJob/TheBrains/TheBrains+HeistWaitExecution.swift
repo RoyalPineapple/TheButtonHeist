@@ -9,7 +9,7 @@ extension TheBrains {
     func executeWaitStep(
         _ step: WaitStep,
         index: Int,
-        path: String,
+        path: HeistExecutionPath,
         start: CFAbsoluteTime,
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,

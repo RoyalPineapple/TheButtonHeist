@@ -31,18 +31,7 @@ struct HeistRunProjection {
         remoteResult: HeistExecutionResult,
         totalMs: Int
     ) -> HeistExecutionResult {
-        if let abortedAtPath = remoteResult.abortedAtPath {
-            return .failed(
-                steps: remoteResult.steps,
-                durationMs: totalMs,
-                abortedAtPath: abortedAtPath
-            )
-        } else {
-            return .passed(
-                steps: remoteResult.steps,
-                durationMs: totalMs
-            )
-        }
+        HeistExecutionResult(steps: remoteResult.steps, durationMs: totalMs)
     }
 
     private static func heistAccessibilityTrace(
@@ -148,25 +137,30 @@ extension TheFence {
         let actionBudget: TimeInterval
         switch request {
         case .wait(_, let wait):
-            return wait.timeout + config.postActionExpectationTimeoutBuffer
+            return wait.timeout.seconds + config.postActionExpectationTimeoutBuffer
         case .actions(let command, _, let expectationPayload):
             actionBudget = command.descriptor.timeout.requiredSingleStepBaseSeconds
             guard expectationPayload.expectation != nil else {
-                return max(actionBudget, expectationPayload.timeout.map { min($0, defaultWaitTimeout) } ?? actionBudget)
+                return max(
+                    actionBudget,
+                    expectationPayload.timeout.map { min($0, defaultWaitTimeout).seconds } ?? actionBudget
+                )
             }
             let expectationTimeout = min(expectationPayload.timeout ?? defaultActionExpectationTimeout, defaultWaitTimeout)
-            return actionBudget + expectationTimeout + config.postActionExpectationTimeoutBuffer
+            return actionBudget + expectationTimeout.seconds + config.postActionExpectationTimeoutBuffer
         }
     }
 
     private func performTimeout(for step: PerformableHeistStep) -> TimeInterval {
         switch step {
         case .wait(let wait):
-            return wait.timeout + config.postActionExpectationTimeoutBuffer
+            return wait.timeout.seconds + config.postActionExpectationTimeoutBuffer
         case .action(let action):
             let actionBudget = performActionTimeout(for: action.command)
             guard let expectation = action.expectationPolicy.expectedStep else { return actionBudget }
-            return actionBudget + min(expectation.timeout, defaultWaitTimeout) + config.postActionExpectationTimeoutBuffer
+            return actionBudget
+                + min(expectation.timeout, defaultWaitTimeout).seconds
+                + config.postActionExpectationTimeoutBuffer
         }
     }
 

@@ -8,17 +8,17 @@ private let serverMessageLogger = ButtonHeistLog.logger(.handoff(.serverMessage)
 struct HandoffServerMessageRouter {
     var admission = HandoffAdmission()
 
-    var token: String? {
-        get { admission.token }
-        set { admission.token = newValue }
+    var authToken: SessionAuthToken? {
+        get { admission.authToken }
+        set { admission.authToken = newValue }
     }
 
-    var driverId: String? {
+    var driverId: DriverID? {
         get { admission.driverId }
         set { admission.driverId = newValue }
     }
 
-    mutating func route(_ message: ServerMessage, requestId: String?) -> HandoffServerMessageRoute {
+    mutating func route(_ message: ServerMessage, requestId: RequestID?) -> HandoffServerMessageRoute {
         if let decision = admission.decision(for: message) {
             return .admission(decision)
         }
@@ -48,8 +48,8 @@ struct HandoffServerMessageRouter {
 enum HandoffServerMessageRoute {
     case admission(HandoffAdmissionDecision)
     case serverInfo(ServerInfo)
-    case forward(ServerMessage, String?)
+    case forward(ServerMessage, RequestID?)
     case serverFailure(ServerError)
-    case pong(PongPayload, requestId: String?)
+    case pong(PongPayload, requestId: RequestID?)
     case handled
 }

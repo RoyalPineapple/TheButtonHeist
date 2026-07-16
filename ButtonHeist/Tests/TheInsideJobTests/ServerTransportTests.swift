@@ -11,7 +11,7 @@ final class ServerTransportTests: XCTestCase {
 
     @MainActor
     func testEventOverflowInvokesFailClosedHandler() async {
-        let transport = ServerTransport()
+        let transport = ServerTransport(token: "overflow-test-token")
         let overflow = expectation(description: "overflow handler called")
         var observedMaxEvents: Int?
         transport.setEventBacklogOverflowHandler { maxEvents in
@@ -27,22 +27,6 @@ final class ServerTransportTests: XCTestCase {
 
         await fulfillment(of: [overflow], timeout: 1.0)
         XCTAssertEqual(observedMaxEvents, ServerTransport.eventStreamBufferLimit)
-    }
-
-    @MainActor
-    func testStartWithoutTokenFailsClosedBeforeListenerStarts() async throws {
-        let transport = ServerTransport()
-
-        do {
-            _ = try await transport.start(port: 0, bindToLoopback: true)
-            XCTFail("Expected ServerTransport to reject listener startup without token")
-        } catch let error as ServerTransportError {
-            XCTAssertEqual(error, .tlsTokenRequired)
-        } catch {
-            XCTFail("Expected ServerTransportError, got \(error)")
-        }
-
-        XCTAssertEqual(transport.listeningPort, 0)
     }
 
     @MainActor
@@ -289,7 +273,7 @@ final class ServerTransportTests: XCTestCase {
 
     @MainActor
     func testAdvertiseWithoutActiveListenerDoesNotPublish() {
-        let transport = ServerTransport()
+        let transport = ServerTransport(token: "inactive-listener-token")
 
         transport.advertise(serviceName: "Inactive")
 

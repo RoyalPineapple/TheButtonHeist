@@ -109,14 +109,14 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
     func evidenceMustBelongToTheSameFailingStep() {
         let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
         let last = passedEvidence(
-            stepPath: "$.steps[0]",
+            stepPath: "$.body[0]",
             target: target,
             before: makeTestInterface(elements: [
                 element(label: "Delete", traits: [.button], actions: [.activate]),
             ])
         )
         let current = failedEvidence(
-            stepPath: "$.steps[1]",
+            stepPath: "$.body[1]",
             target: target,
             before: makeTestInterface(elements: [
                 element(label: "Remove", traits: [.button], actions: [.activate]),
@@ -850,29 +850,25 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
             observed: "timed out waiting for checkout",
             expected: predicate.description
         )
-        let step = HeistExecutionStepResult.failed(
+        let step = HeistReceiptFixture.action(
             path: "$.body[0]",
-            receiptKind: .action,
-            durationMs: 1,
-            intent: .action(command: .activate(target)),
-            evidence: .expectation(
-                command: .activate(target),
-                dispatchResult: ActionResult.success(
-                    method: .activate,
-                    evidence: ActionResultSuccessEvidence(observation: .trace(makeTestTraceEvidence(dispatchTrace, completeness: .incomplete)))
-                ),
-                expectationResult: ActionResult.failure(
-                    method: .wait,
-                    errorKind: .timeout,
-                    message: "wait timed out",
-                    evidence: ActionResultFailureEvidence(observation: .trace(makeTestTraceEvidence(expectationTrace, completeness: .incomplete)))
-                ),
-                expectation: ExpectationResult(
-                    met: false,
-                    predicate: predicate,
-                    actual: "timed out waiting for checkout"
-                )
+            command: .activate(target),
+            result: ActionResult.success(
+                method: .activate,
+                evidence: ActionResultSuccessEvidence(observation: .trace(makeTestTraceEvidence(dispatchTrace, completeness: .incomplete)))
             ),
+            expectationActionResult: ActionResult.failure(
+                method: .wait,
+                errorKind: .timeout,
+                message: "wait timed out",
+                evidence: ActionResultFailureEvidence(observation: .trace(makeTestTraceEvidence(expectationTrace, completeness: .incomplete)))
+            ),
+            expectation: ExpectationResult(
+                met: false,
+                predicate: predicate,
+                actual: "timed out waiting for checkout"
+            ),
+            durationMs: 1,
             failure: failure
         )
 
@@ -964,7 +960,7 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
 
     private func passedEvidence(
         heistFingerprint: String? = nil,
-        stepPath: String = "$.steps[0]",
+        stepPath: HeistExecutionPath = "$.body[0]",
         command: HeistActionCommand? = nil,
         target: AccessibilityTarget,
         before: Interface,
@@ -987,7 +983,7 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
 
     private func failedEvidence(
         heistFingerprint: String? = nil,
-        stepPath: String = "$.steps[0]",
+        stepPath: HeistExecutionPath = "$.body[0]",
         command: HeistActionCommand? = nil,
         target: AccessibilityTarget,
         before: Interface,
@@ -1124,17 +1120,12 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
                 evidence: ActionResultFailureEvidence(observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete)))
             )
         }
-        let evidence = HeistActionEvidence.dispatch(
-            command: .activate(target),
-            dispatchResult: actionResult
-        )
         let step = status == .failed
-            ? HeistExecutionStepResult.failed(
+            ? HeistReceiptFixture.action(
                 path: path,
-                receiptKind: .action,
+                command: .activate(target),
+                result: actionResult,
                 durationMs: 1,
-                intent: .action(command: .activate(target)),
-                evidence: evidence,
                 failure: HeistFailureDetail(
                     category: .targetResolution,
                     contract: "action dispatch succeeds",
@@ -1142,17 +1133,15 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
                     expected: target.description
                 )
             )
-            : HeistExecutionStepResult.passed(
+            : HeistReceiptFixture.action(
                 path: path,
-                receiptKind: .action,
-                durationMs: 1,
-                intent: .action(command: .activate(target)),
-                evidence: evidence
-        )
+                command: .activate(target),
+                result: actionResult,
+                durationMs: 1
+            )
         return HeistExecutionResult(
             steps: [step],
-            durationMs: 1,
-            abortedAtPath: status == .failed ? path : nil
+            durationMs: 1
         )
     }
 

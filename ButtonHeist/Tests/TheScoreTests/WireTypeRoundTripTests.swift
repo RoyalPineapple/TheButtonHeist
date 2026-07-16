@@ -11,6 +11,52 @@ final class WireTypeRoundTripTests: XCTestCase {
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
+    // MARK: - ButtonHeistVersion
+
+    func testButtonHeistVersionRoundTripsAsWireString() throws {
+        let version: ButtonHeistVersion = "1.2.3"
+
+        let data = try encoder.encode(version)
+
+        XCTAssertEqual(String(bytes: data, encoding: .utf8), #""1.2.3""#)
+        XCTAssertEqual(try decoder.decode(ButtonHeistVersion.self, from: data), version)
+    }
+
+    func testRequestEnvelopeRejectsInvalidButtonHeistVersion() throws {
+        let data = Data("""
+        {"buttonHeistVersion":"1.0","type":"ping"}
+        """.utf8)
+
+        XCTAssertThrowsError(try decoder.decode(RequestEnvelope.self, from: data)) { error in
+            assertDecodingError(error, contains: ["Button Heist version must be a MAJOR.MINOR.PATCH semantic version"])
+        }
+    }
+
+    // MARK: - RequestID
+
+    func testRequestIDRoundTripsAsWireString() throws {
+        let requestID: RequestID = "request-1"
+
+        let data = try encoder.encode(requestID)
+
+        XCTAssertEqual(String(bytes: data, encoding: .utf8), #""request-1""#)
+        XCTAssertEqual(try decoder.decode(RequestID.self, from: data), requestID)
+    }
+
+    func testRequestEnvelopeRejectsBlankRequestID() throws {
+        for requestID in ["", " \n\t"] {
+            let data = try JSONSerialization.data(withJSONObject: [
+                "buttonHeistVersion": buttonHeistVersion.description,
+                "requestId": requestID,
+                "type": "ping",
+            ])
+
+            XCTAssertThrowsError(try decoder.decode(RequestEnvelope.self, from: data)) { error in
+                assertDecodingError(error, contains: ["value must not be blank"])
+            }
+        }
+    }
+
     // MARK: - AccessibilityPredicate
 
     func testAccessibilityPredicateWireContractValuesStayStable() {
@@ -59,7 +105,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     // MARK: - Simple Command Payloads
 
     func testTypeTextTargetRejectsUnknownPayloadKey() throws {
-        let data = Data(#"{"text":"hello","foo":"bar"}"#.utf8)
+        let data = Data(#"{"text":"hello","mode":"append","foo":"bar"}"#.utf8)
         XCTAssertThrowsError(try decoder.decode(TypeTextTarget.self, from: data)) { error in
             assertDecodingError(error, contains: [#"Unknown type text target field "foo""#])
         }
@@ -72,7 +118,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         )
 
         XCTAssertThrowsError(try command.resolve(in: HeistExecutionEnvironment(strings: ["item": ""]))) { error in
-            XCTAssertEqual(error as? TypeTextTargetError, .emptyText)
+            XCTAssertEqual(error as? TextInputTextError, .emptyAppend)
         }
     }
 
@@ -80,16 +126,15 @@ final class WireTypeRoundTripTests: XCTestCase {
         let command = HeistActionCommand.typeText(
             reference: "item",
             target: .predicate(ElementPredicateTemplate(label: "Add item")),
-            replacingExisting: true
+            mode: .replace
         )
 
         let message = try command.resolve(in: HeistExecutionEnvironment(strings: ["item": ""]))
 
-        guard case .typeText(let text, _, let replacingExisting) = message else {
+        guard case .typeText(let payload) = message else {
             return XCTFail("Expected typeText runtime message, got \(message)")
         }
-        XCTAssertEqual(text, "")
-        XCTAssertTrue(replacingExisting)
+        XCTAssertEqual(payload.text, .replacing(""))
     }
 
     func testSetPasteboardTargetRejectsUnknownPayloadKey() throws {
@@ -356,7 +401,10 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testLongPressTargetRejectsInvalidDurationAtDecode() {
         let json = #"{"point":{"x":10,"y":20},"duration":61}"#
         XCTAssertThrowsError(try decoder.decode(LongPressTarget.self, from: Data(json.utf8))) { error in
-            XCTAssertTrue("\(error)".contains("duration must be number in 0...60.0"), "\(error)")
+            assertDecodingError(
+                error,
+                contains: ["duration must be finite number greater than 0 and no more than 60 (observed 61)"]
+            )
         }
     }
 
@@ -379,12 +427,18 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testSwipeAndDragRejectInvalidDurationAtDecode() {
         let swipeJSON = #"{"pointDirection":{"start":{"x":10,"y":20},"direction":"down"},"duration":0}"#
         XCTAssertThrowsError(try decoder.decode(SwipeTarget.self, from: Data(swipeJSON.utf8))) { error in
-            XCTAssertTrue("\(error)".contains("duration must be number > 0"), "\(error)")
+            assertDecodingError(
+                error,
+                contains: ["duration must be finite number greater than 0 and no more than 60 (observed 0)"]
+            )
         }
 
         let dragJSON = #"{"pointToPoint":{"start":{"x":10,"y":20},"end":{"x":30,"y":40}},"duration":61}"#
         XCTAssertThrowsError(try decoder.decode(DragTarget.self, from: Data(dragJSON.utf8))) { error in
-            XCTAssertTrue("\(error)".contains("duration must be number in 0...60.0"), "\(error)")
+            assertDecodingError(
+                error,
+                contains: ["duration must be finite number greater than 0 and no more than 60 (observed 61)"]
+            )
         }
     }
 
@@ -626,13 +680,13 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testProtocolMismatchPayloadRoundTrip() throws {
         let payload = ProtocolMismatchPayload(
-            serverButtonHeistVersion: "2026.05.09",
-            clientButtonHeistVersion: "2026.05.08"
+            serverButtonHeistVersion: "2026.5.9",
+            clientButtonHeistVersion: "2026.5.8"
         )
         let data = try encoder.encode(payload)
         let decoded = try decoder.decode(ProtocolMismatchPayload.self, from: data)
-        XCTAssertEqual(decoded.serverButtonHeistVersion, "2026.05.09")
-        XCTAssertEqual(decoded.clientButtonHeistVersion, "2026.05.08")
+        XCTAssertEqual(decoded.serverButtonHeistVersion, "2026.5.9")
+        XCTAssertEqual(decoded.clientButtonHeistVersion, "2026.5.8")
     }
 
     // MARK: - AccessibilityContainer
@@ -969,264 +1023,40 @@ final class WireTypeRoundTripTests: XCTestCase {
             observed: "No element matching label \"Save\"",
             expected: "predicate(label=\"Save\")"
         )
-        let result = HeistExecutionResult.failed(
-            steps: [
-                .failed(
-                    path: "$.body[0]",
-                    receiptKind: .action,
-                    durationMs: 0,
-                    intent: .action(command: command),
-                    evidence: .dispatch(
-                        command: command,
-                        dispatchResult: .failure(
-                            method: .activate,
-                            errorKind: .elementNotFound,
-                            message: "No element matching label \"Save\"",
-                            evidence: ActionResultFailureEvidence(
-                                observation: .none,
-                                activationTrace: activationTrace
-                            )
-                        )
-                    ),
-                    failure: failure
-                ),
-            ],
-            durationMs: 1,
-            abortedAtPath: "$.body[0]"
-        )
-
-        let data = try encoder.encode(result)
-        let decoded = try decoder.decode(HeistExecutionResult.self, from: data)
-
-        XCTAssertEqual(decoded.abortedAtPath, "$.body[0]")
-        XCTAssertEqual(decoded.steps.count, 1)
-        XCTAssertEqual(decoded.steps[0].status, .failed)
-        XCTAssertEqual(decoded.steps[0].actionEvidence?.command?.wireType, .activate)
-        XCTAssertEqual(
-            decoded.steps[0].actionEvidence?.command?.reportTarget,
-            .predicate(ElementPredicateTemplate(label: "Save"))
-        )
-        XCTAssertEqual(decoded.steps[0].actionEvidence?.dispatchResult?.method, .activate)
-        XCTAssertEqual(decoded.steps[0].actionEvidence?.dispatchResult?.outcome.errorKind, .elementNotFound)
-        XCTAssertEqual(
-            decoded.steps[0].actionEvidence?.dispatchResult?.message,
-            "No element matching label \"Save\""
-        )
-        XCTAssertEqual(decoded.steps[0].actionEvidence?.dispatchResult?.activationTrace, activationTrace)
-        XCTAssertEqual(decoded.steps[0].failure?.category, .targetResolution)
-
-        let payload = try JSONProbe(data: data)
-        let step = try payload.array("steps")[0]
-        let intent = try step.object("intent")
-        let encodedFailure = try step.object("outcome").object("failure")
-        XCTAssertEqual(try intent.string("type"), "action")
-        XCTAssertEqual(try intent.object("command").string("type"), "activate")
-        try intent.assertMissing("target")
-        try encodedFailure.assertMissing("activationTrace")
-    }
-
-    func testHeistFailureDetailRejectsRetiredActivationTraceField() throws {
-        let json = #"""
-        {
-            "category":"action",
-            "contract":"action dispatch succeeds",
-            "observed":"activation failed",
-            "activationTrace":{
-                "axActivateReturned":true,
-                "tapActivationDispatched":false,
-                "tapActivationSucceeded":false
-            }
-        }
-        """#
-
-        XCTAssertThrowsError(try decoder.decode(HeistFailureDetail.self, from: Data(json.utf8))) { error in
-            assertDecodingError(error, contains: [#"Unknown heist failure detail field "activationTrace""#])
-        }
-    }
-
-    func testHeistExecutionResultRoundTripPreservesForEachResult() throws {
-        let matching = ElementPredicateTemplate.label("Row")
-        let result = HeistExecutionResult.passed(
-            steps: [
-                .passed(
-                    path: "$.body[0]",
-                    receiptKind: .forEachElement,
-                    durationMs: 500,
-                    intent: .forEachElement(parameter: "row", matching: matching, limit: 10),
-                    evidence: HeistForEachElementEvidence(
-                        parameter: "row",
-                        matching: matching,
-                        limit: 10,
-                        matchedCount: 3,
-                        iterationCount: 3
-                    ),
-                    children: [
-                        forEachElementIteration(index: 0, durationMs: 50, matching: matching),
-                        forEachElementIteration(index: 1, durationMs: 45, matching: matching),
-                        forEachElementIteration(index: 2, durationMs: 40, matching: matching),
-                    ]
-                ),
-            ],
-            durationMs: 500
-        )
-
-        let data = try encoder.encode(result)
-        let decoded = try decoder.decode(HeistExecutionResult.self, from: data)
-
-        XCTAssertNil(decoded.abortedAtPath)
-        let step = try XCTUnwrap(decoded.steps.first)
-        XCTAssertEqual(step.kind, .forEachElement)
-        XCTAssertEqual(step.forEachElementEvidence?.matchedCount, 3)
-        XCTAssertEqual(step.forEachElementEvidence?.limit, 10)
-        XCTAssertEqual(step.forEachElementEvidence?.iterationCount, 3)
-        XCTAssertNil(step.forEachElementEvidence?.failureReason)
-        XCTAssertEqual(step.children.map(\.kind), [.forEachIteration, .forEachIteration, .forEachIteration])
-        XCTAssertEqual(step.children.first?.children.first?.actionEvidence?.dispatchResult?.method, .activate)
-        XCTAssertFalse(step.isFailure)
-
-        let payload = try JSONProbe(data: data)
-        let steps = try payload.array("steps")
-        let stepPayload = try XCTUnwrap(steps.first)
-        XCTAssertEqual(try stepPayload.string("kind"), "for_each_element")
-        let intent = try stepPayload.object("intent")
-        XCTAssertEqual(try intent.string("type"), "for_each_element")
-        XCTAssertEqual(try intent.object("matching").array("checks")[0].string("kind"), "label")
-        try stepPayload.assertMissing("childResults")
-        _ = try stepPayload.object("outcome").array("children")
-    }
-
-    func testHeistExecutionResultRoundTripPreservesForEachFailure() throws {
-        let result = HeistExecutionResult.failed(
-            steps: [
-                .failed(
-                    path: "$.body[0]",
-                    receiptKind: .forEachElement,
-                    durationMs: 200,
-                    intent: .forEachElement(parameter: "row", matching: .label("Row"), limit: 10),
-                    evidence: HeistForEachElementEvidence(
-                        parameter: "row",
-                        matching: .label("Row"),
-                        limit: 10,
-                        matchedCount: 5,
-                        iterationCount: 2,
-                        failureReason: "child step failed at iteration 2"
-                    ),
-                    failure: HeistFailureDetail(
-                        category: .loop,
-                        contract: "for_each_element completes all matched iterations",
-                        observed: "child step failed at iteration 2",
-                        expected: "5 iteration(s)"
-                    )
-                ),
-            ],
-            durationMs: 200,
-            abortedAtPath: "$.body[0]"
-        )
-
-        let data = try encoder.encode(result)
-        let decoded = try decoder.decode(HeistExecutionResult.self, from: data)
-
-        XCTAssertEqual(decoded.abortedAtPath, "$.body[0]")
-        let step = try XCTUnwrap(decoded.steps.first)
-        XCTAssertEqual(step.forEachElementEvidence?.failureReason, "child step failed at iteration 2")
-        XCTAssertTrue(step.isFailure)
-    }
-
-    func testHeistExecutionResultRoundTripPreservesCaseSelectionAndChildren() throws {
-        let predicate = AccessibilityPredicate.exists(.label("Home"))
-        let child = HeistExecutionStepResult.failed(
-            path: "$.body[0].conditional.cases[0].body[0]",
-            receiptKind: .action,
-            durationMs: 4,
-            evidence: .commandlessDispatch(
-                dispatchResult: .failure(
-                    method: .activate,
-                    errorKind: .actionFailed,
-                    message: "button disabled",
-                    evidence: .none
+        let step = HeistReceiptFixture.action(
+            command: command,
+            result: .failure(
+                method: .activate,
+                errorKind: .elementNotFound,
+                message: "No element matching label \"Save\"",
+                evidence: ActionResultFailureEvidence(
+                    observation: .none,
+                    activationTrace: activationTrace
                 )
             ),
-            failure: HeistFailureDetail(
-                category: .action,
-                contract: "action dispatch succeeds",
-                observed: "button disabled"
-            )
+            durationMs: 0,
+            failure: failure
         )
-        let result = HeistExecutionResult.failed(
-            steps: [
-                .childAborted(
-                    path: "$.body[0]",
-                    receiptKind: .conditional,
-                    durationMs: 6,
-                    intent: .conditional,
-                    evidence: HeistCaseSelectionEvidence(selection: HeistCaseSelectionResult(
-                        cases: [
-                            HeistCaseMatchResult(
-                                predicate: predicate,
-                                met: true
-                            ),
-                        ],
-                        outcome: .matchedCase(index: 0),
-                        elapsedMs: 2,
-                        lastObservedSummary: "screen: login; interface: 3 elements"
-                    )),
-                    failure: HeistFailureDetail(
-                        category: .invocation,
-                        contract: "child execution completes without failure",
-                        observed: "child failed at \(child.path)"
-                    ),
-                    abortedAtChildPath: child.path,
-                    children: [child]
-                ),
-            ],
-            durationMs: 7,
-            abortedAtPath: child.path
-        )
+        let result = HeistReceiptFixture.result(steps: [step])
 
         let data = try encoder.encode(result)
         let decoded = try decoder.decode(HeistExecutionResult.self, from: data)
 
-        let decodedStep = try XCTUnwrap(decoded.steps.first)
-        XCTAssertEqual(decodedStep.caseSelectionEvidence?.selection.cases.first?.predicate, predicate)
-        XCTAssertEqual(decodedStep.caseSelectionEvidence?.selection.cases.first?.result.met, true)
-        XCTAssertEqual(
-            decodedStep.caseSelectionEvidence?.selection.outcome,
-            HeistCaseSelectionOutcome.matchedCase(index: 0)
-        )
-        XCTAssertEqual(decodedStep.children.first?.actionEvidence?.dispatchResult?.outcome.errorKind, .actionFailed)
-        XCTAssertTrue(decodedStep.children.first?.isFailure == true)
-    }
+        XCTAssertEqual(decoded, result)
+        XCTAssertEqual(decoded.abortedAtPath?.description, "$.body[0]")
+        XCTAssertEqual(decoded.steps[0].actionEvidence?.dispatchResult?.activationTrace, activationTrace)
 
-    func testHeistCaseMatchResultRejectsOldNestedResultShape() throws {
-        let predicate = AccessibilityPredicate.exists(.label("Home"))
-        let mismatchedPredicate = AccessibilityPredicate.exists(.label("Settings"))
-        let payload = HeistCaseMatchResultPayload(
-            predicate: predicate,
-            result: ExpectationResult(met: true, predicate: mismatchedPredicate)
-        )
-        let data = try encoder.encode(payload)
-
-        XCTAssertThrowsError(try decoder.decode(HeistCaseMatchResult.self, from: data)) { error in
-            assertDecodingError(error, contains: ["result"])
-        }
-    }
-
-    func testHeistExecutionStepRejectsIntentContradictingContentKind() {
-        let json = """
-        {
-          "path": "$.body[0]",
-          "kind": "action",
-          "durationMs": 0,
-          "intent": {"type": "warn", "message": "unexpected"},
-          "outcome": {"type": "passed", "children": []}
-        }
-        """
-
-        XCTAssertThrowsError(
-            try decoder.decode(HeistExecutionStepResult.self, from: Data(json.utf8))
-        ) { error in
-            assertDecodingError(error, contains: ["action heist execution step cannot include mismatched intent"])
-        }
+        let payload = try JSONProbe(data: data)
+        let encodedStep = try payload.array("steps")[0]
+        let node = try encodedStep.object("node")
+        let encodedFailure = try node.object("failure")
+        XCTAssertEqual(try node.string("type"), "action")
+        XCTAssertEqual(try node.string("outcome"), "failed")
+        XCTAssertEqual(try node.object("command").string("type"), "activate")
+        try encodedStep.assertMissing("kind")
+        try encodedStep.assertMissing("intent")
+        try encodedStep.assertMissing("outcome")
+        try encodedFailure.assertMissing("activationTrace")
     }
 
     func testInvocationExpectationDerivesSummaryFromWaitEvidence() throws {
@@ -1316,8 +1146,6 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testForEachStringEvidenceRejectsPartialIterationShape() throws {
         let missingValue = """
         {
-          "parameter": "item",
-          "count": 2,
           "iterationCount": 1,
           "iterationOrdinal": 0
         }
@@ -1333,9 +1161,6 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testForEachElementEvidenceRejectsPartialIterationShape() throws {
         let missingTargetSummary = """
         {
-          "parameter": "item",
-          "matching": { "checks": [{ "kind": "label", "match": { "mode": "exact", "value": "Cell" } }] },
-          "limit": 10,
           "matchedCount": 2,
           "iterationCount": 1,
           "iterationOrdinal": 0,
@@ -1365,44 +1190,6 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertThrowsError(try decoder.decode(RotorTextRange.self, from: Data(missingEndOffset.utf8))) { error in
             assertDecodingError(error, contains: ["requires startOffset and endOffset together"])
         }
-    }
-
-    private func forEachElementIteration(
-        index: Int,
-        durationMs: Int,
-        matching: ElementPredicateTemplate
-    ) -> HeistExecutionStepResult {
-        let path = "$.body[0].for_each_element.iterations[\(index)]"
-        return .passed(
-            path: path,
-            receiptKind: .forEachElementIteration,
-            durationMs: durationMs,
-            intent: .forEachElement(parameter: "row", matching: matching, limit: 10),
-            evidence: HeistForEachElementEvidence(
-                parameter: "row",
-                matching: matching,
-                limit: 10,
-                matchedCount: 3,
-                iterationCount: index + 1,
-                iterationOrdinal: index,
-                targetOrdinal: index,
-                targetSummary: "predicate(label=\"Row\", ordinal: \(index))"
-            ),
-            children: [
-                .passed(
-                    path: "\(path).body[0]",
-                    receiptKind: .action,
-                    durationMs: durationMs,
-                    evidence: .commandlessDispatch(
-                        dispatchResult: .success(
-                            method: .activate,
-                            message: "activated",
-                            evidence: .none
-                        )
-                    )
-                ),
-            ]
-        )
     }
 
     // MARK: - HeistCustomContent
@@ -1534,9 +1321,12 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(target.resolvedTimeout, defaultWaitTimeout)
     }
 
-    func testWaitTargetTimeoutCapsAt30() {
-        let target = WaitTarget(predicate: .exists(.label("x")), timeout: 60)
-        XCTAssertEqual(target.resolvedTimeout, defaultWaitTimeout)
+    func testWaitTargetRejectsTimeoutAboveMaximum() {
+        let json = #"{"predicate":{"type":"exists","target":{"checks":[{"kind":"label","match":{"mode":"exact","value":"x"}}]}},"timeout":60}"#
+
+        XCTAssertThrowsError(try decoder.decode(WaitTarget.self, from: Data(json.utf8))) { error in
+            assertDecodingError(error, contains: ["wait timeout must be"])
+        }
     }
 
     func testWaitTargetChangedResolvedDefaults() {

@@ -12,136 +12,6 @@ import XCTest
 @MainActor
 final class HeistReceiptTests: XCTestCase {
 
-    func testReceiptRequestBuildsPassedAction() {
-        let brains = TheBrains(tripwire: TheTripwire())
-        let intent = receiptActionIntent()
-        let evidence = receiptActionEvidence()
-
-        let receipt = brains.heistReceipt(.init(
-            path: "$.body[0]",
-            kind: .action,
-            durationMs: 12,
-            intent: intent,
-            evidence: .action(evidence)
-        ))
-
-        XCTAssertEqual(
-            receipt,
-            .passed(
-                path: "$.body[0]",
-                receiptKind: .action,
-                durationMs: 12,
-                intent: intent,
-                evidence: evidence
-            )
-        )
-    }
-
-    func testReceiptRequestBuildsFailedAction() {
-        let brains = TheBrains(tripwire: TheTripwire())
-        let evidence = receiptActionEvidence(success: false)
-        let failure = receiptFailure(observed: "expected failure")
-        let intent = receiptActionIntent()
-
-        let receipt = brains.heistReceipt(.init(
-            path: "$.body[0]",
-            kind: .action,
-            durationMs: 7,
-            intent: intent,
-            evidence: .action(evidence),
-            completion: .failed(failure)
-        ))
-
-        XCTAssertEqual(
-            receipt,
-            .failed(
-                path: "$.body[0]",
-                receiptKind: .action,
-                durationMs: 7,
-                intent: intent,
-                evidence: evidence,
-                failure: failure
-            )
-        )
-    }
-
-    func testReceiptRequestDerivesChildAbortedLoopFromChildren() {
-        let brains = TheBrains(tripwire: TheTripwire())
-        let failure = receiptFailure(observed: "child failed")
-        let child = HeistExecutionStepResult.failed(
-            path: "$.body[0].children[0]",
-            kind: .fail,
-            durationMs: 3,
-            intent: .fail(message: "stop"),
-            failure: receiptFailure(observed: "stop")
-        )
-        let evidence = HeistStepEvidence.forEachString(HeistForEachStringEvidence(
-            parameter: "item",
-            count: 1,
-            iterationCount: 1,
-            iterationOrdinal: 0,
-            value: "Milk",
-            failureReason: "child failed at \(child.path)"
-        ))
-
-        let receipt = brains.heistReceipt(.init(
-            path: "$.body[0]",
-            kind: .forEachIteration,
-            durationMs: 9,
-            intent: .forEachString(parameter: "item", count: 1),
-            evidence: evidence,
-            children: [child],
-            childFailure: { _ in failure }
-        ))
-
-        XCTAssertEqual(
-            receipt,
-            .childAborted(
-                path: "$.body[0]",
-                receiptKind: .forEachStringIteration,
-                durationMs: 9,
-                intent: .forEachString(parameter: "item", count: 1),
-                evidence: HeistForEachStringEvidence(
-                    parameter: "item",
-                    count: 1,
-                    iterationCount: 1,
-                    iterationOrdinal: 0,
-                    value: "Milk",
-                    failureReason: "child failed at \(child.path)"
-                ),
-                failure: failure,
-                abortedAtChildPath: child.path,
-                children: [child]
-            )
-        )
-    }
-
-    func testReceiptRequestBuildsSkippedOutcome() {
-        let brains = TheBrains(tripwire: TheTripwire())
-        let child = HeistExecutionStepResult.skipped(
-            path: "$.body[0].children[0]",
-            kind: .warn,
-            durationMs: 1
-        )
-
-        let receipt = brains.heistReceipt(.init(
-            path: "$.body[0]",
-            kind: .conditional,
-            durationMs: 0,
-            completion: .skipped,
-            children: [child]
-        ))
-
-        XCTAssertEqual(
-            receipt,
-            .skipped(
-                path: "$.body[0]",
-                kind: .conditional,
-                children: [child]
-            )
-        )
-    }
-
     func testWaitReceiptFactoriesBindCanonicalActionAndExpectationOutcomes() {
         let predicate = AccessibilityPredicate.exists(.label("Done"))
         let met = ExpectationResult.Met(predicate: predicate, actual: "found")
@@ -178,42 +48,18 @@ final class HeistReceiptTests: XCTestCase {
         XCTAssertFalse(failed.expectation.met)
     }
 
-    private func receiptActionIntent() -> HeistStepIntent {
-        .action(command: .activate(.label("Receipt Target")))
-    }
-
-    private func receiptActionEvidence(success: Bool = true) -> HeistActionEvidence {
-        let result: ActionResult
-        if success {
-            result = ActionResult.success(method: .activate, evidence: .none)
-        } else {
-            result = ActionResult.failure(
-                method: .activate,
-                errorKind: .actionFailed,
-                message: "failed",
-                evidence: .none
-            )
-        }
-        return .commandlessDispatch(dispatchResult: result)
-    }
-
-    private func receiptFailure(observed: String) -> HeistFailureDetail {
-        HeistFailureDetail(
-            category: .explicitFailure,
-            contract: "test receipt construction",
-            observed: observed
-        )
-    }
-
-    func testRunHeistFacadeWarnRunsInAppProcess() async throws {
-        let heist = try await runHeist("publicFacadeWarn") {
+    func testRunHeistFacadeProducesCanonicalInvocationReceipt() async throws {
+        let heist = try await runHeist("PublicFacade.warn") {
             Warn("ok")
         }
 
-        XCTAssertEqual(heist.result.steps.map(\.kind), [.warn])
-        XCTAssertEqual(heist.result.steps.first?.reportMessage, "ok")
+        let invocation = try XCTUnwrap(heist.result.steps.first)
+        XCTAssertEqual(heist.result.steps.map(\.kind), [.invoke])
+        XCTAssertEqual(invocation.reportDisplayName, #"RunHeist("PublicFacade.warn")"#)
+        XCTAssertEqual(invocation.children.map(\.kind), [.warn])
+        XCTAssertEqual(invocation.children.first?.reportMessage, "ok")
         XCTAssertEqual(heist.result.warnings, [
-            HeistExecutionWarning(path: "$.body[0]", message: "ok"),
+            HeistExecutionWarning(path: "$.body[0].invoke.body[0]", message: "ok"),
         ])
     }
 
@@ -239,7 +85,9 @@ final class HeistReceiptTests: XCTestCase {
         let options = XCTExpectedFailure.Options()
         options.issueMatcher = { issue in
             issue.type == .assertionFailure
-                && issue.compactDescription.contains("Heist failed path=$.body[0] kind=fail message=stop")
+                && issue.compactDescription.contains(
+                    "Heist failed path=$.body[0].invoke.body[0] kind=fail message=stop"
+                )
                 && issue.sourceCodeContext.location?.fileURL.path == expectedFile
                 && issue.sourceCodeContext.location?.lineNumber == Int(expectedLine)
         }
@@ -281,18 +129,6 @@ final class HeistReceiptTests: XCTestCase {
         }
     }
 
-    func testPublicRunHeistFacadeDottedNameRunsAsNamedCapability() async throws {
-        let heist = try await runHeist("PublicFacade.warn") {
-            Warn("ok")
-        }
-
-        let step = try XCTUnwrap(heist.result.steps.first)
-        XCTAssertEqual(heist.result.steps.map(\.kind), [.invoke])
-        XCTAssertEqual(step.reportDisplayName, #"RunHeist("PublicFacade.warn")"#)
-        XCTAssertEqual(step.children.map(\.kind), [.warn])
-        XCTAssertEqual(step.children.first?.reportMessage, "ok")
-    }
-
     func testRunHeistTestingFacadeDottedStringArgumentBuildsValidatedInvocation() throws {
         let input: HeistReferenceName = "input"
         let request = try makeRunHeistRequest("Cart.addItem", argument: "Milk") { _ in
@@ -303,7 +139,7 @@ final class HeistReceiptTests: XCTestCase {
         XCTAssertNil(request.plan.name)
         XCTAssertEqual(request.plan.parameter, .string(name: input))
         XCTAssertEqual(request.argument, .string("Milk"))
-        XCTAssertEqual(invocation.path, ["Cart", "addItem"])
+        XCTAssertEqual(invocation.path, "Cart.addItem")
         XCTAssertEqual(invocation.argument, .string(reference: input))
     }
 
@@ -317,7 +153,7 @@ final class HeistReceiptTests: XCTestCase {
         XCTAssertNil(request.plan.name)
         XCTAssertEqual(request.plan.parameter, .accessibilityTarget(name: input))
         XCTAssertEqual(request.argument, .accessibilityTarget(.label("Milk")))
-        XCTAssertEqual(invocation.path, ["Rows", "activate"])
+        XCTAssertEqual(invocation.path, "Rows.activate")
         XCTAssertEqual(invocation.argument, .accessibilityTarget(AccessibilityTarget(ref: input)))
     }
 
@@ -398,43 +234,40 @@ final class HeistReceiptTests: XCTestCase {
             Warn("adding")
         }
 
-        XCTAssertEqual(heist.result.steps.map(\.kind), [.warn])
+        let invocation = try XCTUnwrap(heist.result.steps.first)
+        XCTAssertEqual(heist.result.steps.map(\.kind), [.invoke])
+        XCTAssertEqual(invocation.reportDisplayName, #"RunHeist("addToCart", input)"#)
+        XCTAssertEqual(invocation.children.map(\.kind), [.warn])
+        XCTAssertEqual(invocation.children.first?.reportMessage, "adding")
         XCTAssertEqual(request.argument, .string("Milk"))
-        XCTAssertEqual(request.plan.name, "addToCart")
-        XCTAssertEqual(request.plan.parameter, .string(name: "input"))
     }
 
-    func testRunHeistTestingFacadeNoArgumentLowersLikeNamedHeistPlan() throws {
-        let expectedPlan = try HeistPlan("CheckoutPay") {
-            Warn("paying")
-        }
+    func testRunHeistTestingFacadeNoArgumentUsesCanonicalInvocationTopology() throws {
         let request = try makeRunHeistRequest("CheckoutPay") {
             Warn("paying")
         }
 
-        XCTAssertEqual(request.plan, expectedPlan)
-        XCTAssertEqual(request.plan.name, "CheckoutPay")
+        let invocation = try invocationStep(in: request.plan)
+        XCTAssertNil(request.plan.name)
+        XCTAssertEqual(invocation.path, "CheckoutPay")
+        XCTAssertEqual(invocation.argument, .none)
         XCTAssertEqual(request.argument, .none)
     }
 
-    func testRunHeistTestingFacadeStringArgumentLowersLikeNamedHeistPlan() throws {
-        let expectedPlan = try HeistPlan("CartAddItem", parameter: "input") { _ in
-            Warn("adding")
-        }
+    func testRunHeistTestingFacadeStringArgumentUsesCanonicalInvocationTopology() throws {
         let request = try makeRunHeistRequest("CartAddItem", argument: "Milk") { _ in
             Warn("adding")
         }
 
-        XCTAssertEqual(request.plan, expectedPlan)
-        XCTAssertEqual(request.plan.name, "CartAddItem")
+        let invocation = try invocationStep(in: request.plan)
+        XCTAssertNil(request.plan.name)
         XCTAssertEqual(request.plan.parameter, .string(name: "input"))
         XCTAssertEqual(request.argument, .string("Milk"))
+        XCTAssertEqual(invocation.path, "CartAddItem")
+        XCTAssertEqual(invocation.argument, .string(reference: "input"))
     }
 
-    func testRunHeistTestingFacadeAccessibilityTargetArgumentLowersLikeNamedHeistPlan() throws {
-        let expectedPlan = try HeistPlan("RowsActivate", targetParameter: "input") { _ in
-            Warn("activating")
-        }
+    func testRunHeistTestingFacadeAccessibilityTargetArgumentUsesCanonicalInvocationTopology() throws {
         let request = try makeRunHeistRequest(
             "RowsActivate",
             argument: AccessibilityTarget.label("Milk")
@@ -442,10 +275,12 @@ final class HeistReceiptTests: XCTestCase {
             Warn("activating")
         }
 
-        XCTAssertEqual(request.plan, expectedPlan)
-        XCTAssertEqual(request.plan.name, "RowsActivate")
+        let invocation = try invocationStep(in: request.plan)
+        XCTAssertNil(request.plan.name)
         XCTAssertEqual(request.plan.parameter, .accessibilityTarget(name: "input"))
         XCTAssertEqual(request.argument, .accessibilityTarget(.label("Milk")))
+        XCTAssertEqual(invocation.path, "RowsActivate")
+        XCTAssertEqual(invocation.argument, .accessibilityTarget(AccessibilityTarget(ref: "input")))
     }
 
     func testSingleAccessibilityTargetRootHeistBindsOneRootArgument() async throws {
@@ -514,7 +349,7 @@ final class HeistReceiptTests: XCTestCase {
         let plan = try HeistPlan(body: [
             .repeatUntil(try RepeatUntilStep(
                 predicate: .exists(.element(.identifier("quantity"), .value("2"))),
-                timeout: 0,
+                timeout: .milliseconds(1),
                 body: [
                     .action(try ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
                 ],
@@ -553,8 +388,8 @@ final class HeistReceiptTests: XCTestCase {
         }
 
         XCTAssertEqual(heist.result.warnings, [
-            HeistExecutionWarning(path: "$.body[0]", message: "root"),
-            HeistExecutionWarning(path: "$.body[1].invoke.body[0]", message: "nested"),
+            HeistExecutionWarning(path: "$.body[0].invoke.body[0]", message: "root"),
+            HeistExecutionWarning(path: "$.body[0].invoke.body[1].invoke.body[0]", message: "nested"),
         ])
     }
 
@@ -565,10 +400,14 @@ final class HeistReceiptTests: XCTestCase {
             }
             XCTFail("Expected failed heist to throw")
         } catch let failure as Heist.Failure {
-            XCTAssertEqual(failure.failedStepPath, "$.body[0]")
+            let invocation = try XCTUnwrap(failure.result.steps.first)
+            XCTAssertEqual(failure.failedStepPath, "$.body[0].invoke.body[0]")
             XCTAssertEqual(failure.failedStepKind, .fail)
             XCTAssertEqual(failure.message, "stop")
-            XCTAssertEqual(failure.result.steps.first?.kind, .fail)
+            XCTAssertEqual(invocation.kind, .invoke)
+            XCTAssertEqual(invocation.status, .failed)
+            XCTAssertEqual(invocation.children.map(\.kind), [.fail])
+            XCTAssertEqual(invocation.children.first?.path, failure.failedStepPath)
             XCTAssertEqual(failure.result.failureScreenshotStep?.kind, .action)
         }
     }
@@ -601,33 +440,20 @@ final class HeistReceiptTests: XCTestCase {
         )
         let result = HeistExecutionResult(
             steps: [
-                .failed(
+                HeistReceiptFixture.explicitFailure(
                     path: "$.body[0]",
-                    kind: .fail,
-                    durationMs: 1,
-                    intent: .fail(message: "stop"),
-                    failure: HeistFailureDetail(
-                        category: .explicitFailure,
-                        contract: "Fail(...) aborts the heist",
-                        observed: "stop"
-                    )
+                    message: "stop"
                 ),
-                .passed(
+                HeistReceiptFixture.action(
                     path: "$.body[0].failure.actions[0]",
-                    receiptKind: .action,
-                    durationMs: 1,
-                    intent: .action(command: .takeScreenshot),
-                    evidence: .dispatch(
-                        command: .takeScreenshot,
-                        dispatchResult: ActionResult.success(
-                            payload: .screenshot(screenshot),
-                            evidence: .none
-                        )
+                    command: .takeScreenshot,
+                    result: ActionResult.success(
+                        payload: .screenshot(screenshot),
+                        evidence: .none
                     )
                 ),
             ],
-            durationMs: 2,
-            abortedAtPath: "$.body[0]"
+            durationMs: 2
         )
 
         let description = Heist.Failure(result).description
@@ -665,8 +491,6 @@ final class HeistReceiptTests: XCTestCase {
             let skipped = try XCTUnwrap(failure.result.steps.dropFirst(2).first)
             XCTAssertEqual(skipped.path, "$.body[2]")
             XCTAssertEqual(skipped.kind, .warn)
-            XCTAssertNil(skipped.intent)
-            XCTAssertNil(skipped.evidence)
             XCTAssertNil(skipped.failure)
             XCTAssertFalse(job.isRunning)
             XCTAssertFalse(job.brains.semanticObservationIsActive)
@@ -845,7 +669,7 @@ private extension ActionResult {
 
 private func invocationStep(in plan: HeistPlan) throws -> HeistInvocationStep {
     guard case .invoke(let invocation)? = plan.body.first else {
-        throw HeistReceiptTestFailure("Expected wrapper plan to invoke a dotted heist definition")
+        throw HeistReceiptTestFailure("Expected wrapper plan to invoke its typed heist definition")
     }
     return invocation
 }

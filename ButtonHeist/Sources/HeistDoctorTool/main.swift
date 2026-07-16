@@ -46,10 +46,11 @@ struct HeistDoctorCommand: ParsableCommand {
     mutating func run() throws {
         let lastPassReceipt = try Self.decodeReceipt(at: lastPass)
         let newFailReceipt = try Self.decodeReceipt(at: newFail)
+        let requestedStepPath = try stepPath.map(HeistExecutionPath.init(validating:))
         let suggestions = try HeistDoctor.suggestions(
             lastPass: lastPassReceipt,
             newFail: newFailReceipt,
-            stepPath: stepPath
+            stepPath: requestedStepPath
         )
         let report = HeistDoctorReport(suggestions: suggestions)
 

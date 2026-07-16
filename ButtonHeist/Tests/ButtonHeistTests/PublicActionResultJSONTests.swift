@@ -60,12 +60,7 @@ final class PublicActionResultJSONTests: XCTestCase {
     func testStandaloneActionResponseEncodesHeistExecutionPayloadSummary() throws {
         let heistResult = HeistExecutionResult(
             steps: [
-                .passed(
-                    path: "$.body[0]",
-                    receiptKind: .warning,
-                    durationMs: 1,
-                    evidence: HeistExecutionWarning(path: "$.body[0]", message: "heads up")
-                ),
+                HeistReceiptFixture.warning(message: "heads up"),
             ],
             durationMs: 1
         )
@@ -160,7 +155,15 @@ final class PublicActionResultJSONTests: XCTestCase {
     }
 
     func testNestedHeistActionResultEncodesSuccessRotorPayload() throws {
-        let result = try nestedHeistActionResultJSON(result: rotorActionResult(), status: .passed)
+        let result = try nestedHeistActionResultJSON(
+            command: .rotor(
+                selection: .named("Headings"),
+                target: .predicate(ElementPredicateTemplate(label: "Chapter 1")),
+                direction: .next
+            ),
+            result: rotorActionResult(),
+            status: .passed
+        )
 
         try assertRotorSuccess(result, method: "rotor")
         try result.assertMissing("expectation")
@@ -195,13 +198,12 @@ final class PublicActionResultJSONTests: XCTestCase {
             message: "Delete not found", evidence: .none)
         let response = FenceResponse.heistExecution(
             plan: try minimalPlan(),
-            result: HeistExecutionResult.failed(
+            result: HeistExecutionResult(
                 steps: [
-                    .failed(
+                    HeistReceiptFixture.action(
                         path: "$.body[0]",
-                        receiptKind: .action,
+                        result: actionResult,
                         durationMs: 7,
-                        evidence: .commandlessDispatch(dispatchResult: actionResult),
                         failure: HeistFailureDetail(
                             category: .targetResolution,
                             contract: "action dispatch succeeds",
@@ -209,8 +211,7 @@ final class PublicActionResultJSONTests: XCTestCase {
                         )
                     ),
                 ],
-                durationMs: 7,
-                abortedAtPath: "$.body[0]"
+                durationMs: 7
             )
         )
 
@@ -253,13 +254,12 @@ final class PublicActionResultJSONTests: XCTestCase {
         )
         let response = FenceResponse.heistExecution(
             plan: try minimalPlan(),
-            result: HeistExecutionResult.failed(
+            result: HeistExecutionResult(
                 steps: [
-                    .failed(
+                    HeistReceiptFixture.action(
                         path: "$.body[0]",
-                        receiptKind: .action,
+                        result: actionResult,
                         durationMs: 7,
-                        evidence: .commandlessDispatch(dispatchResult: actionResult),
                         failure: HeistFailureDetail(
                             category: .targetResolution,
                             contract: "action dispatch succeeds",
@@ -267,8 +267,7 @@ final class PublicActionResultJSONTests: XCTestCase {
                         )
                     ),
                 ],
-                durationMs: 7,
-                abortedAtPath: "$.body[0]"
+                durationMs: 7
             )
         )
         let narrowProfile = summaryProfile(screenPreviewElements: 1)
@@ -509,36 +508,30 @@ final class PublicActionResultJSONTests: XCTestCase {
     }
 
     private func nestedHeistActionResultJSON(
+        command: HeistActionCommand = .activate(.predicate(ElementPredicateTemplate(label: "Button"))),
         result: ActionResult,
         status: HeistExecutionStepStatus,
         failure: HeistFailureDetail? = nil
     ) throws -> JSONProbe {
-        let evidence = HeistActionEvidence.commandlessDispatch(dispatchResult: result)
         let step = status == .failed
-            ? HeistExecutionStepResult.failed(
+            ? HeistReceiptFixture.action(
                 path: "$.body[0]",
-                receiptKind: .action,
+                command: command,
+                result: result,
                 durationMs: 7,
-                evidence: evidence,
                 failure: failure ?? HeistFailureDetail(
                     category: result.outcome.errorKind == .elementNotFound ? .targetResolution : .action,
                     contract: "action dispatch succeeds",
                     observed: result.message ?? "action failed"
                 )
             )
-            : HeistExecutionStepResult.passed(
+            : HeistReceiptFixture.action(
                 path: "$.body[0]",
-                receiptKind: .action,
-                durationMs: 7,
-                evidence: evidence
+                command: command,
+                result: result,
+                durationMs: 7
             )
-        let execution = status == .failed
-            ? HeistExecutionResult.failed(
-                steps: [step],
-                durationMs: 7,
-                abortedAtPath: step.path
-            )
-            : HeistExecutionResult.passed(steps: [step], durationMs: 7)
+        let execution = HeistExecutionResult(steps: [step], durationMs: 7)
         let response = FenceResponse.heistExecution(
             plan: try minimalPlan(),
             result: execution

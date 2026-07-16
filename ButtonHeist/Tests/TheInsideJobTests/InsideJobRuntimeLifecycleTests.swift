@@ -240,12 +240,12 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
         startCallCount: @MainActor () -> Int,
         stopCallCount: @MainActor () -> Int
     ) {
-        let token = "runtime-lifecycle-test-token"
+        let token: SessionAuthToken = "runtime-lifecycle-test-token"
         let scopes: Set<ConnectionScope> = [.simulator]
         let harnessState = RuntimeHarnessState()
 
         let job = TheInsideJob(
-            token: token,
+            token: token.description,
             allowedScopes: scopes,
             transportFactory: { runtimeToken, runtimeScopes in
                 XCTAssertEqual(runtimeToken, token, file: file, line: line)

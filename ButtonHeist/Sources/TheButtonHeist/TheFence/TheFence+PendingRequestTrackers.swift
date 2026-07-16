@@ -8,7 +8,7 @@ extension TheFence {
     // MARK: - Pending Request Tracking
 
     enum PendingRequestError: Error, Equatable, LocalizedError {
-        case duplicateRequestId(String)
+        case duplicateRequestId(RequestID)
 
         var errorDescription: String? {
             switch self {
@@ -24,7 +24,7 @@ extension TheFence {
 
         fileprivate func decode(
             _ result: Result<ServerMessage, Error>,
-            requestId: String
+            requestId: RequestID
         ) -> Result<Response, Error> {
             switch result {
             case .success(let message):
@@ -44,7 +44,7 @@ extension TheFence {
         private static func responseTypeMismatchError(
             expected: String,
             actual: String,
-            requestId: String
+            requestId: RequestID
         ) -> FenceError {
             let message = "Protocol mismatch for request \(requestId): expected \(expected) response, " +
                 "received \(actual) response."
@@ -57,12 +57,8 @@ extension TheFence {
         }
     }
 
-    private struct PendingRequestID: Hashable, Sendable {
-        let rawValue: String
-    }
-
     private struct PendingRequestOwner: Equatable, Sendable {
-        let requestID: PendingRequestID
+        let requestID: RequestID
         let nonce: UUID
     }
 
@@ -77,16 +73,15 @@ extension TheFence {
 
     @ButtonHeistActor
     final class PendingRequestRegistry {
-        private var pending: [PendingRequestID: PendingRequest] = [:]
+        private var pending: [RequestID: PendingRequest] = [:]
 
         func waitForResponse<Response: Sendable>(
             _ expectation: PendingResponseExpectation<Response>,
-            requestId: String,
+            requestId: RequestID,
             timeout: TimeInterval,
             afterRegister: (() -> Void)? = nil
         ) async throws -> Response {
-            let requestID = PendingRequestID(rawValue: requestId)
-            let owner = PendingRequestOwner(requestID: requestID, nonce: UUID())
+            let owner = PendingRequestOwner(requestID: requestId, nonce: UUID())
             let response = TimedOneShot<Result<ServerMessage, Error>>()
 
             let result = await response.wait(
@@ -104,7 +99,7 @@ extension TheFence {
 
                     response.armTimeout(after: .seconds(timeout)) { [weak self] in
                         await self?.finish(
-                            requestID: requestID,
+                            requestID: requestId,
                             expectedOwner: owner,
                             with: .failure(FenceError.actionTimeout)
                         )
@@ -119,27 +114,27 @@ extension TheFence {
         }
 
         @discardableResult
-        func resolveTransientResponse(_ message: ServerMessage, requestId: String) -> Bool {
+        func resolveTransientResponse(_ message: ServerMessage, requestId: RequestID) -> Bool {
             switch message {
             case .error(let serverError):
                 finish(
-                    requestID: PendingRequestID(rawValue: requestId),
+                    requestID: requestId,
                     with: .failure(FenceError.serverError(serverError))
                 )
                 return true
             default:
                 guard message.pendingResponseName != nil else { return false }
                 finish(
-                    requestID: PendingRequestID(rawValue: requestId),
+                    requestID: requestId,
                     with: .success(message)
                 )
                 return true
             }
         }
 
-        func resolveTransientFailure(_ error: Error, requestId: String) {
+        func resolveTransientFailure(_ error: Error, requestId: RequestID) {
             finish(
-                requestID: PendingRequestID(rawValue: requestId),
+                requestID: requestId,
                 with: .failure(error)
             )
         }
@@ -158,7 +153,7 @@ extension TheFence {
         }
 
         private func finish(
-            requestID: PendingRequestID,
+            requestID: RequestID,
             expectedOwner: PendingRequestOwner? = nil,
             with result: Result<ServerMessage, Error>
         ) {

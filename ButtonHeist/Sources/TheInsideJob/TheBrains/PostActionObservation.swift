@@ -155,6 +155,7 @@ final class PostActionObservation {
                 before: before,
                 finalState: finalState,
                 settle: observation.settle,
+                continuity: event.continuity,
                 transitionEvidence: event.trace.captures.last?.transition
             )
             return .committed(
@@ -178,7 +179,7 @@ final class PostActionObservation {
                 tripwireSignal: before.tripwireSignal,
                 settledObservationSequence: nil
             )
-            let trace = observedTrace(
+            let trace = diagnosticObservedTrace(
                 before: before,
                 finalState: finalState,
                 settle: observation.settle,
@@ -192,7 +193,7 @@ final class PostActionObservation {
         case .unavailable(let notificationBatch):
             let trace: AccessibilityTrace
             if let notificationBatch {
-                trace = observedTrace(
+                trace = diagnosticObservedTrace(
                     before: before,
                     finalState: before,
                     settle: observation.settle,
@@ -227,6 +228,7 @@ final class PostActionObservation {
         before: BeforeState,
         finalState: BeforeState,
         settle: SettleSession.Outcome,
+        continuity: ScreenContinuity,
         transitionEvidence: AccessibilityTrace.Transition?
     ) -> AccessibilityTrace {
         let accessibilityNotifications = Self.remapAccessibilityNotifications(
@@ -234,11 +236,37 @@ final class PostActionObservation {
             from: finalState,
             to: finalState
         )
-        return buildPostActionTrace(
-            before: before,
-            final: finalState,
-            settleOutcome: settle,
+        return makeAccessibilityTrace(
+            afterInterface: finalState.interface,
+            parentCapture: before.capture,
+            classification: continuity,
+            transient: Self.transientElements(
+                settleResult: settle,
+                before: before,
+                final: finalState,
+                classification: continuity
+            ),
             accessibilityNotifications: accessibilityNotifications,
+            accessibilityNotificationGap: transitionEvidence?.accessibilityNotificationGap
+        )
+    }
+
+    private func diagnosticObservedTrace(
+        before: BeforeState,
+        finalState: BeforeState,
+        settle: SettleSession.Outcome,
+        transitionEvidence: AccessibilityTrace.Transition?
+    ) -> AccessibilityTrace {
+        let continuity = SemanticObservationGenerationClassifier.continuity(
+            from: before.screen,
+            to: finalState.screen,
+            notifications: transitionEvidence?.accessibilityNotifications.map(\.kind) ?? []
+        )
+        return observedTrace(
+            before: before,
+            finalState: finalState,
+            settle: settle,
+            continuity: continuity,
             transitionEvidence: transitionEvidence
         )
     }
@@ -388,56 +416,6 @@ final class PostActionObservation {
         )
     }
 
-    private func buildPostActionTrace(
-        before: BeforeState,
-        final: BeforeState,
-        settleOutcome: SettleSession.Outcome,
-        accessibilityNotifications: [AccessibilityNotificationEvidence],
-        transitionEvidence: AccessibilityTrace.Transition?
-    ) -> AccessibilityTrace {
-        let classification = postActionScreenClassification(
-            before: before,
-            final: final,
-            accessibilityNotifications: accessibilityNotifications,
-            transitionEvidence: transitionEvidence
-        )
-        return makeAccessibilityTrace(
-            afterInterface: final.interface,
-            parentCapture: before.capture,
-            classification: classification,
-            transient: Self.transientElements(
-                settleResult: settleOutcome,
-                before: before,
-                final: final,
-                classification: classification
-            ),
-            accessibilityNotifications: accessibilityNotifications,
-            accessibilityNotificationGap: transitionEvidence?.accessibilityNotificationGap
-        )
-    }
-
-    private func postActionScreenClassification(
-        before: BeforeState,
-        final: BeforeState,
-        accessibilityNotifications: [AccessibilityNotificationEvidence],
-        transitionEvidence: AccessibilityTrace.Transition?
-    ) -> ScreenContinuity {
-        let baselineClassification = SemanticObservationGenerationClassifier.continuity(
-            from: before.screen,
-            to: final.screen,
-            notifications: accessibilityNotifications.map(\.kind)
-        )
-        if let transitionEvidence {
-            switch transitionEvidence.screenClassification {
-            case .replacement:
-                return transitionEvidence.screenClassification
-            case .sameGeneration:
-                break
-            }
-        }
-        return baselineClassification
-    }
-
     static func remapAccessibilityNotifications(
         _ notifications: [AccessibilityNotificationEvidence],
         from source: BeforeState,
@@ -567,20 +545,6 @@ private extension SemanticObservationScope {
         case .discovery:
             return .discovery
         }
-    }
-}
-
-private extension AccessibilityTrace.Transition {
-    @MainActor var screenClassification: ScreenContinuity {
-        if accessibilityNotifications.contains(where: {
-            if case .screenChanged = $0.kind { true } else { false }
-        }) {
-            return .replacement(.screenChangedNotification)
-        }
-        if let fallbackReason {
-            return .replacement(.inferred(fallbackReason))
-        }
-        return .sameGeneration
     }
 }
 

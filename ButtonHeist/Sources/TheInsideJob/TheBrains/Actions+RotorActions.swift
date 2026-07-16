@@ -7,14 +7,12 @@ import ThePlans
 
 extension Actions {
 
-    // MARK: - Rotor Actions
-
     private static let rotorStringProfile = ElementDiagnosticSummary.RenderProfile.actionCapability
 
     func executeRotor(
         selection: RotorSelection,
         target: ResolvedAccessibilityTarget,
-        direction: RotorDirection
+        direction: RotorDirection,
     ) async -> TheSafecracker.ActionDispatchOutcome {
         let rotor = selection.rotorName
         let rotorIndex = selection.rotorIndex
@@ -25,31 +23,48 @@ extension Actions {
             requireInteractive: false,
             activationPointPolicy: .liveObjectOnly
         ) { context in
-            let outcome = self.stash.performRotor(
-                selection: selection,
-                direction: direction,
-                on: context.liveTarget
-            )
+            let outcome: TheStash.RotorOutcome
+            let result: TheSafecracker.ActionDispatchOutcome
+            switch self.stash.dispatchOnFreshLiveActionTarget(
+                context.liveTarget,
+                operation: { liveTarget in
+                let outcome = self.stash.performRotor(
+                    selection: selection,
+                    direction: direction,
+                    on: liveTarget
+                )
+                let result = Self.rotorDispatchOutcome(
+                    outcome: outcome,
+                    rotor: rotor,
+                    rotorIndex: rotorIndex,
+                    direction: direction,
+                    liveTarget: liveTarget
+                )
+                return (outcome, result)
+                }
+            ) {
+            case .success(let dispatch):
+                outcome = dispatch.0
+                result = dispatch.1
+            case .failure(let staleness):
+                return self.staleLiveTargetFailure(staleness, method: .rotor)
+            }
             if case .succeeded(let hit) = outcome {
                 await self.exposeRotorResultIfPossible(hit)
             }
-            return Self.rotorDispatchOutcome(
-                outcome: outcome,
-                rotor: rotor,
-                rotorIndex: rotorIndex,
-                direction: direction,
-                liveTarget: context.liveTarget
-            )
+            return result
         }
     }
 
-    private func exposeRotorResultIfPossible(_ hit: TheStash.RotorHit) async {
+    private func exposeRotorResultIfPossible(
+        _ hit: TheStash.RotorHit,
+    ) async {
         guard let treeElement = hit.treeElement else { return }
 
         if case .objectUnavailable = stash.resolveLiveActionTarget(for: treeElement) {
             _ = await navigation.elementInflation.revealSemanticTarget(
                 treeElement,
-                deadline: navigation.elementInflation.handoffDeadline(for: treeElement)
+                deadline: navigation.elementInflation.handoffDeadline(for: treeElement),
             )
         }
 
@@ -70,11 +85,9 @@ extension Actions {
         )
     }
 
-    // MARK: - Diagnostic Helpers
-
     private static func rotorDispatchOutcome(
         outcome: TheStash.RotorOutcome,
-        rotor: String?,
+        rotor: RotorName?,
         rotorIndex: Int?,
         direction: RotorDirection,
         liveTarget: TheStash.LiveActionTarget
@@ -101,14 +114,16 @@ extension Actions {
                                 element: element, liveObject: liveObject,
                                 suggestion: "target an element exposing custom rotors")
         case .noSuchRotor(let available):
-            return rotorFailure(observed: "requestedRotor=\(rotorStringProfile.renderString(rotor ?? "")) "
-                                + "availableRotors=\(rotorStringProfile.renderList(available, itemStyle: .quoted))",
+            let renderedAvailable = available.map(\.description)
+            return rotorFailure(observed: "requestedRotor=\(rotorStringProfile.renderString(rotor?.description ?? "")) "
+                                + "availableRotors=\(rotorStringProfile.renderList(renderedAvailable, itemStyle: .quoted))",
                                 rotor: rotor, rotorIndex: rotorIndex, direction: direction,
                                 element: element, liveObject: liveObject,
-                                suggestion: "use one of available rotors \(rotorStringProfile.renderList(available, itemStyle: .quoted))")
+                                suggestion: "use one of available rotors \(rotorStringProfile.renderList(renderedAvailable, itemStyle: .quoted))")
         case .ambiguousRotor(let available):
-            return rotorFailure(observed: "ambiguousRotor=\(rotorStringProfile.renderString(rotor ?? "")) "
-                                + "availableRotors=\(rotorStringProfile.renderList(available, itemStyle: .quoted))",
+            let renderedAvailable = available.map(\.description)
+            return rotorFailure(observed: "ambiguousRotor=\(rotorStringProfile.renderString(rotor?.description ?? "")) "
+                                + "availableRotors=\(rotorStringProfile.renderList(renderedAvailable, itemStyle: .quoted))",
                                 rotor: rotor, rotorIndex: rotorIndex, direction: direction,
                                 element: element, liveObject: liveObject,
                                 suggestion: "specify rotorIndex or an exact rotor name")
@@ -141,7 +156,7 @@ extension Actions {
                                 suggestion: "use the text range returned by the previous rotor result")
         case .noResult(let rotorName):
             return rotorFailure(
-                observed: "rotor=\(rotorStringProfile.renderString(rotorName)) returned no \(direction.rawValue) result",
+                observed: "rotor=\(rotorStringProfile.renderString(rotorName.description)) returned no \(direction.rawValue) result",
                 rotor: rotor,
                 rotorIndex: rotorIndex,
                 direction: direction,
@@ -151,7 +166,7 @@ extension Actions {
             )
         case .resultTargetUnavailable(let rotorName):
             return rotorFailure(
-                observed: "rotor=\(rotorStringProfile.renderString(rotorName)) returned a result without an accessibility target",
+                observed: "rotor=\(rotorStringProfile.renderString(rotorName.description)) returned a result without an accessibility target",
                 rotor: rotor,
                 rotorIndex: rotorIndex,
                 direction: direction,
@@ -161,7 +176,7 @@ extension Actions {
             )
         case .resultTargetNotParsed(let rotorName):
             return rotorFailure(
-                observed: "rotor=\(rotorStringProfile.renderString(rotorName)) returned a target outside the parsed hierarchy",
+                observed: "rotor=\(rotorStringProfile.renderString(rotorName.description)) returned a target outside the parsed hierarchy",
                 rotor: rotor,
                 rotorIndex: rotorIndex,
                 direction: direction,
@@ -197,7 +212,7 @@ extension Actions {
 
     private static func rotorFailure(
         observed: String,
-        rotor: String?,
+        rotor: RotorName?,
         rotorIndex: Int?,
         direction: RotorDirection,
         element: InterfaceTree.Element,
@@ -222,7 +237,7 @@ extension Actions {
 
     private static func rotorDiagnostic(
         observed: String,
-        rotor: String?,
+        rotor: RotorName?,
         rotorIndex: Int?,
         direction: RotorDirection,
         element: InterfaceTree.Element,
@@ -231,7 +246,7 @@ extension Actions {
     ) -> String {
         var attempted: [String] = []
         if let rotor {
-            attempted.append("rotor=\(rotorStringProfile.renderString(rotor))")
+            attempted.append("rotor=\(rotorStringProfile.renderString(rotor.description))")
         } else {
             attempted.append("rotor")
         }
@@ -243,7 +258,7 @@ extension Actions {
         let availableRotors = ActionCapabilityDiagnostic.availableRotors(for: element, liveObject: liveObject)
         return "rotor failed: attempted \(attempted.joined(separator: " ")) "
             + "on \(ActionCapabilityDiagnostic.elementObservation(element, liveObject: liveObject)) "
-            + "availableRotors=\(rotorStringProfile.renderList(availableRotors, itemStyle: .quoted)); "
+            + "availableRotors=\(rotorStringProfile.renderList(availableRotors.map(\.description), itemStyle: .quoted)); "
             + "observed \(observed); try \(suggestion)."
     }
 }

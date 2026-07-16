@@ -3,7 +3,7 @@ import Foundation
 
 package func testResponseEnvelopeData(
     _ message: ServerMessage,
-    buttonHeistVersion version: String = buttonHeistVersion
+    buttonHeistVersion version: ButtonHeistVersion = buttonHeistVersion
 ) throws -> Data {
     try JSONEncoder().encode(ResponseEnvelope(
         buttonHeistVersion: version,

@@ -3,37 +3,40 @@ import Foundation
 /// Directed graph of named local heist capability calls.
 public struct HeistCallGraph: Sendable, Equatable {
     struct Node: Sendable, Equatable, Hashable, Comparable, CustomStringConvertible {
-        let name: String
+        let path: HeistInvocationPath
 
-        init(_ name: String) {
-            self.name = name
+        init(_ path: HeistInvocationPath) {
+            self.path = path
         }
 
-        init(namePath: [String]) {
-            self.init(HeistInvocationPath.render(namePath))
+        init(namePath: [HeistPlanName]) {
+            guard let first = namePath.first else {
+                preconditionFailure("call graph nodes require a non-empty heist path")
+            }
+            self.init(HeistInvocationPath(first: first, remaining: Array(namePath.dropFirst())))
         }
 
         var description: String {
-            name
+            path.description
         }
 
         static func < (lhs: Node, rhs: Node) -> Bool {
-            lhs.name < rhs.name
+            lhs.description < rhs.description
         }
     }
 
     /// A resolved `RunHeist` edge from one definition body to another definition.
     public struct Edge: Sendable, Equatable, Hashable {
-        public let caller: String
-        public let callee: String
+        public let caller: HeistInvocationPath
+        public let callee: HeistInvocationPath
 
-        public init(caller: String, callee: String) {
+        public init(caller: HeistInvocationPath, callee: HeistInvocationPath) {
             self.caller = caller
             self.callee = callee
         }
 
         init(_ edge: NodeEdge) {
-            self.init(caller: edge.caller.name, callee: edge.callee.name)
+            self.init(caller: edge.caller.path, callee: edge.callee.path)
         }
     }
 
@@ -53,19 +56,19 @@ public struct HeistCallGraph: Sendable, Equatable {
 
     /// A witnessed cycle in resolved definition-name order.
     public struct Cycle: Error, Sendable, Equatable {
-        public let path: [String]
+        public let path: [HeistInvocationPath]
 
-        public init(path: [String]) {
+        public init(path: [HeistInvocationPath]) {
             self.path = path
         }
 
         init(_ cycle: NodeCycle) {
-            self.init(path: cycle.path.map(\.name))
+            self.init(path: cycle.path.map(\.path))
         }
 
         /// Human-readable cycle path, e.g. `A -> B -> A`.
         public var displayPath: String {
-            path.joined(separator: " -> ")
+            path.map(\.description).joined(separator: " -> ")
         }
     }
 
@@ -73,7 +76,7 @@ public struct HeistCallGraph: Sendable, Equatable {
         let path: [Node]
 
         var displayPath: String {
-            path.map(\.name).joined(separator: " -> ")
+            path.map(\.description).joined(separator: " -> ")
         }
     }
 
@@ -82,8 +85,8 @@ public struct HeistCallGraph: Sendable, Equatable {
     let typedNodes: Set<Node>
     let typedEdges: Set<NodeEdge>
 
-    public var nodes: Set<String> {
-        Set(typedNodes.map(\.name))
+    public var nodes: Set<HeistInvocationPath> {
+        Set(typedNodes.map(\.path))
     }
 
     public var edges: Set<Edge> {
@@ -108,7 +111,7 @@ public struct HeistCallGraph: Sendable, Equatable {
         self.init(typedNodes: builder.nodes, typedEdges: builder.edges)
     }
 
-    public init(nodes: Set<String>, edges: Set<Edge>) {
+    public init(nodes: Set<HeistInvocationPath>, edges: Set<Edge>) {
         self.init(
             typedNodes: Set(nodes.map(Node.init)),
             typedEdges: Set(edges.map(NodeEdge.init))
@@ -127,10 +130,10 @@ public struct HeistCallGraph: Sendable, Equatable {
 
     // MARK: - Ordering
 
-    public func topologicalOrder() -> Result<[String], Cycle> {
+    public func topologicalOrder() -> Result<[HeistInvocationPath], Cycle> {
         switch topologicalNodeOrder() {
         case .success(let order):
-            return .success(order.map(\.name))
+            return .success(order.map(\.path))
         case .failure(let cycle):
             return .failure(Cycle(cycle))
         }
@@ -236,12 +239,15 @@ private struct HeistCallGraphBuilder: HeistPlanTraversalVisitor {
     }
 
     mutating func visitDefinition(_ plan: HeistPlan, context: HeistTraversalContext) {
-        nodes.insert(HeistCallGraph.Node(namePath: context.definitionScope.pathPrefix + [plan.name ?? ""]))
+        guard let name = plan.name else {
+            preconditionFailure("admitted heist definitions must have names")
+        }
+        nodes.insert(HeistCallGraph.Node(namePath: context.definitionScope.pathPrefix + [name]))
     }
 
     mutating func visitInvoke(_ step: HeistInvocationStep, context: HeistTraversalContext) {
         guard let caller = context.invocationStack.last,
-              let resolved = context.resolveInvocation(path: step.invocationPath)
+              let resolved = context.resolveInvocation(path: step.path)
         else { return }
         let callee = resolved.callGraphNode
         nodes.insert(callee)

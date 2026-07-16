@@ -104,15 +104,6 @@ extension TheStash {
         recordParsedObservedEvidence(from: screen)
     }
 
-    func installScreenForTesting(_ screen: InterfaceObservation) {
-        nextVisibleRefreshScreenForTesting = screen
-        semanticObservationStream.commitVisibleObservationForTesting(screen)
-    }
-
-    func clearInstalledVisibleRefreshScreenForTesting() {
-        nextVisibleRefreshScreenForTesting = nil
-    }
-
     /// Starting value for page-by-page exploration. The tree's value-only
     /// viewport capture is the evidence that belongs to this committed state;
     /// a fresh parser read replaces it before exploration performs live work.

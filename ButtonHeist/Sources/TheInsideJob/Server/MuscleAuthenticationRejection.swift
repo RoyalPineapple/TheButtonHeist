@@ -50,7 +50,7 @@ struct MuscleAuthenticationRejection {
     static func unauthenticatedMessage(
         _ clientId: Int,
         message: String,
-        requestId: String?,
+        requestId: RequestID?,
         respond: @escaping TheMuscleAdmission.ResponseHandler
     ) -> [MuscleAdmissionEffect] {
         let error = ServerError(kind: .authFailure, message: message)

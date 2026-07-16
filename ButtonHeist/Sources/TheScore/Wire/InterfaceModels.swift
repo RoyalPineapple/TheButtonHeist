@@ -754,4 +754,19 @@ public struct Interface: Codable, Equatable, Sendable {
         graph.annotationsForSubtree(originalPath: originalPath, rootPath: rootPath)
     }
 
+    package func selectingSubtree(at originalPath: TreePath) -> Interface {
+        guard let node = graph.node(at: originalPath) else {
+            preconditionFailure("Cannot project missing interface subtree")
+        }
+        let rootPath = TreePath([0])
+        return Interface(
+            validatedTimestamp: timestamp,
+            tree: [node],
+            annotations: graph.annotationsForSubtree(originalPath: originalPath, rootPath: rootPath),
+            diagnostics: diagnostics,
+            screenActions: [],
+            traceIdentities: graph.traceIdentitiesForSubtree(originalPath: originalPath, rootPath: rootPath)
+        )
+    }
+
 }

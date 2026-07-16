@@ -27,29 +27,21 @@ enum DeviceReceiveEvent: Sendable {
 
 extension DeviceConnection {
     func startReceiving() {
-        guard case .connected(let active) = connectionState,
-              let sessionID = currentSessionID else { return }
-        receiveNext(connection: active.connection, sessionID: sessionID)
+        guard case .connected(let session) = runtimePhase else { return }
+        receiveNext(connection: session.connection, sessionID: session.id)
     }
 
     func receiveNext(connection: NWConnection, sessionID: UUID) {
-        guard let continuation = connectedSession(matching: sessionID, connection: connection)?.eventContinuation else {
-            return
-        }
+        guard let session = connectedSession(matching: sessionID, connection: connection) else { return }
+        let eventStream = session.eventStream
         connection.receive(minimumIncompleteLength: 1, maximumLength: WireFrameLimits.receiveChunkBytes) { content, _, isComplete, error in
-            DeviceConnectionEventStream.yield(
+            eventStream.yield(
                 .received(
                     DeviceReceiveEvent(content: content, isComplete: isComplete, error: error),
                     sessionID: sessionID,
                     connection: connection
-                ),
-                to: continuation
-            ) { [weak self, weak connection] in
-                guard let connection else { return }
-                Task { @ButtonHeistActor [weak self] in
-                    self?.handleEventStreamOverflow(connection: connection, sessionID: sessionID)
-                }
-            }
+                )
+            )
         }
     }
 

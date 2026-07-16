@@ -6,21 +6,21 @@ import Foundation
 /// This intentionally excludes dynamic UI/accessibility state, latency, and
 /// discovery scans so ping can be answered cheaply.
 public struct PongPayload: Codable, Sendable, Equatable {
-    public let buttonHeistVersion: String
+    public let buttonHeistVersion: ButtonHeistVersion
     public let appName: String
-    public let bundleIdentifier: String
+    public let bundleIdentifier: BundleIdentifier
     public let appVersion: String?
     public let appBuild: String?
-    public let serverInstanceIdentifier: String?
+    public let serverInstanceIdentifier: InsideJobInstanceID?
     public let serverTimestampMs: Int64?
 
     public init(
-        buttonHeistVersion: String = TheScore.buttonHeistVersion,
+        buttonHeistVersion: ButtonHeistVersion = TheScore.buttonHeistVersion,
         appName: String = "",
-        bundleIdentifier: String = "",
+        bundleIdentifier: BundleIdentifier,
         appVersion: String? = nil,
         appBuild: String? = nil,
-        serverInstanceIdentifier: String? = nil,
+        serverInstanceIdentifier: InsideJobInstanceID? = nil,
         serverTimestampMs: Int64? = nil
     ) {
         self.buttonHeistVersion = buttonHeistVersion
@@ -47,10 +47,13 @@ public struct PongPayload: Codable, Sendable, Equatable {
 
 /// Sent when the client's `buttonHeistVersion` does not exactly match the server's.
 public struct ProtocolMismatchPayload: Codable, Sendable {
-    public let serverButtonHeistVersion: String
-    public let clientButtonHeistVersion: String
+    public let serverButtonHeistVersion: ButtonHeistVersion
+    public let clientButtonHeistVersion: ButtonHeistVersion
 
-    public init(serverButtonHeistVersion: String, clientButtonHeistVersion: String) {
+    public init(
+        serverButtonHeistVersion: ButtonHeistVersion,
+        clientButtonHeistVersion: ButtonHeistVersion
+    ) {
         self.serverButtonHeistVersion = serverButtonHeistVersion
         self.clientButtonHeistVersion = clientButtonHeistVersion
     }
@@ -70,19 +73,19 @@ public struct StatusPayload: Codable, Sendable {
 /// App/device identity for a running Inside Job instance.
 public struct StatusIdentity: Codable, Sendable {
     public let appName: String
-    public let bundleIdentifier: String
+    public let bundleIdentifier: BundleIdentifier
     public let appBuild: String
     public let deviceName: String
     public let systemVersion: String
-    public let buttonHeistVersion: String
+    public let buttonHeistVersion: ButtonHeistVersion
 
     public init(
         appName: String,
-        bundleIdentifier: String,
+        bundleIdentifier: BundleIdentifier,
         appBuild: String,
         deviceName: String,
         systemVersion: String,
-        buttonHeistVersion: String
+        buttonHeistVersion: ButtonHeistVersion
     ) {
         self.appName = appName
         self.bundleIdentifier = bundleIdentifier
@@ -103,13 +106,13 @@ public struct StatusSession: Codable, Sendable {
     /// Number of active connections in the session.
     public let activeConnections: Int
     /// Driver ID that owns the active session, when the client supplied one.
-    public let activeDriverId: String?
+    public let activeDriverId: DriverID?
 
     public init(
         active: Bool,
         watchersAllowed: Bool,
         activeConnections: Int,
-        activeDriverId: String? = nil
+        activeDriverId: DriverID? = nil
     ) {
         self.active = active
         self.watchersAllowed = watchersAllowed

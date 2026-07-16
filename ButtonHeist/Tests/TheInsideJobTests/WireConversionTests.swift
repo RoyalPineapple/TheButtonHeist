@@ -584,9 +584,9 @@ final class WireConverterTests: XCTestCase {
             ],
             firstResponderHeistId: nil
         )
-        let interface = WireConversion.toSemanticInterface(from: screen.tree)
-
-        let selected = try InterfaceSelector(interface: interface).select(InterfaceQuery(
+        let stash = TheStash(tripwire: TheTripwire())
+        stash.installScreenForTesting(screen)
+        let selected = try stash.selectInterface(InterfaceQuery(
             subtree: .predicate(ElementPredicateTemplate(label: "Second"))
         ))
         let record = try XCTUnwrap(selected.projectedElementRecords.single)
@@ -620,9 +620,9 @@ final class WireConverterTests: XCTestCase {
             ],
             firstResponderHeistId: nil
         )
-        let interface = WireConversion.toInterface(from: screen.tree)
-
-        let selected = try InterfaceSelector(interface: interface).select(InterfaceQuery(
+        let stash = TheStash(tripwire: TheTripwire())
+        stash.installScreenForTesting(screen)
+        let selected = try stash.selectInterface(InterfaceQuery(
             subtree: .container(.label("Actions"))
         ))
         let records = selected.projectedElementRecords
@@ -694,7 +694,9 @@ final class WireConverterTests: XCTestCase {
         let projected = interface.projectedElements
         XCTAssertEqual(projected.compactMap(\.label), ["aardvark", "zymurgy"])
 
-        let selectedInterface = try InterfaceSelector(interface: interface).select(InterfaceQuery(
+        let stash = TheStash(tripwire: TheTripwire())
+        stash.installScreenForTesting(screen)
+        let selectedInterface = try stash.selectInterface(InterfaceQuery(
             subtree: .predicate(ElementPredicateTemplate(label: "zymurgy"))
         ))
         let selectedProjection = try XCTUnwrap(selectedInterface.projectedElements.first)

@@ -57,7 +57,7 @@ for file in "${FILES[@]}"; do
 done
 
 CURRENT_PATTERN=${CURRENT_VERSION//./\\.}
-sed "s/buttonHeistVersion = \"$CURRENT_PATTERN\"/buttonHeistVersion = \"$NEW_VERSION\"/" \
+sed "s/buttonHeistVersion: ButtonHeistVersion = \"$CURRENT_PATTERN\"/buttonHeistVersion: ButtonHeistVersion = \"$NEW_VERSION\"/" \
     "$BUTTONHEIST_CODE_VERSION_FILE" > "$TMP_DIR/updated/$BUTTONHEIST_CODE_VERSION_FILE"
 printf '%s\n' "$NEW_VERSION" > "$TMP_DIR/updated/$BUTTONHEIST_RELEASE_VERSION_FILE"
 sed "s/version \"$CURRENT_PATTERN\"/version \"$NEW_VERSION\"/" \

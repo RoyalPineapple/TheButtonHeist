@@ -3,7 +3,7 @@ import Foundation
 extension HeistPlanRuntimeSafetyValidator {
     mutating func validatePredicate(
         _ predicate: AccessibilityPredicate,
-        path: String,
+        path: HeistPlanPath,
         depth: Int,
         scope: HeistReferenceScope
     ) {
@@ -12,7 +12,7 @@ extension HeistPlanRuntimeSafetyValidator {
 
     mutating func validatePredicate(
         _ predicate: ChangeDeclaration.ScreenAssertion,
-        path: String,
+        path: HeistPlanPath,
         depth: Int,
         scope: HeistReferenceScope
     ) {
@@ -21,7 +21,7 @@ extension HeistPlanRuntimeSafetyValidator {
 
     private mutating func validatePredicateCore(
         _ core: AccessibilityPredicateCore<AuthoredAccessibilityPredicatePhase>,
-        path: String,
+        path: HeistPlanPath,
         depth: Int,
         scope: HeistReferenceScope
     ) {
@@ -31,10 +31,10 @@ extension HeistPlanRuntimeSafetyValidator {
             validatePresenceCore(presence, path: path, scope: scope)
         case .announcement(let announcement):
             if let match = announcement.match {
-                validateString(match.core, path: "\(path).match", scope: scope)
+                validateString(match.core, path: path.child(.match), scope: scope)
             }
         case .changed(let declaration):
-            validateChangeCore(declaration, path: "\(path).changed", depth: depth + 1, scope: scope)
+            validateChangeCore(declaration, path: path.child(.changed), depth: depth + 1, scope: scope)
         case .noChange:
             break
         }
@@ -42,34 +42,34 @@ extension HeistPlanRuntimeSafetyValidator {
 
     private mutating func validatePresenceCore(
         _ core: PresencePredicateCore<AuthoredAccessibilityPredicatePhase>,
-        path: String,
+        path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {
         switch core {
         case .exists(let target), .missing(let target):
-            validateTarget(target, path: "\(path).target", scope: scope)
+            validateTarget(target, path: path.child(.target), scope: scope)
         }
     }
 
     private mutating func validateChangeCore(
         _ core: ChangeDeclarationCore<AuthoredAccessibilityPredicatePhase>,
-        path: String,
+        path: HeistPlanPath,
         depth: Int,
         scope: HeistReferenceScope
     ) {
         checkPredicateDepth(depth, path: path)
         switch core {
         case .screen(let assertions):
-            validateAllChildCount(assertions.count, path: "\(path).assertions")
+            validateAllChildCount(assertions.count, path: path.child(.assertions))
         case .elements(let assertions):
-            validateAllChildCount(assertions.count, path: "\(path).assertions")
+            validateAllChildCount(assertions.count, path: path.child(.assertions))
         }
         switch core {
         case .screen(let assertions):
             for (index, assertion) in assertions.enumerated() {
                 validateScreenAssertionCore(
                     assertion,
-                    path: "\(path).assertions[\(index)]",
+                    path: path.child(.assertions).index(index),
                     depth: depth + 1,
                     scope: scope
                 )
@@ -78,7 +78,7 @@ extension HeistPlanRuntimeSafetyValidator {
             for (index, assertion) in assertions.enumerated() {
                 validateElementAssertionCore(
                     assertion,
-                    path: "\(path).assertions[\(index)]",
+                    path: path.child(.assertions).index(index),
                     depth: depth + 1,
                     scope: scope
                 )
@@ -88,7 +88,7 @@ extension HeistPlanRuntimeSafetyValidator {
 
     private mutating func validateScreenAssertionCore(
         _ core: ScreenAssertionCore<AuthoredAccessibilityPredicatePhase>,
-        path: String,
+        path: HeistPlanPath,
         depth: Int,
         scope: HeistReferenceScope
     ) {
@@ -101,7 +101,7 @@ extension HeistPlanRuntimeSafetyValidator {
 
     private mutating func validateElementAssertionCore(
         _ core: ElementAssertionCore<AuthoredAccessibilityPredicatePhase>,
-        path: String,
+        path: HeistPlanPath,
         depth: Int,
         scope: HeistReferenceScope
     ) {
@@ -110,16 +110,16 @@ extension HeistPlanRuntimeSafetyValidator {
         case .presence(let presence):
             validatePresenceCore(presence, path: path, scope: scope)
         case .appeared(let target), .disappeared(let target):
-            validateTarget(target, path: "\(path).target", scope: scope)
+            validateTarget(target, path: path.child(.target), scope: scope)
         case .updated(let target, let change):
-            validateTarget(target, path: "\(path).target", scope: scope)
-            validatePropertyChange(change, path: "\(path).change", scope: scope)
+            validateTarget(target, path: path.child(.target), scope: scope)
+            validatePropertyChange(change, path: path.child(.change), scope: scope)
         }
     }
 
     private mutating func validatePropertyChange(
         _ change: ElementPropertyChange,
-        path: String,
+        path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {
         switch change.core {
@@ -136,70 +136,70 @@ extension HeistPlanRuntimeSafetyValidator {
 
     private mutating func validateStringPropertyChange(
         _ change: PropertyChangeCore<StringMatchCore<Expr<String>>>,
-        path: String,
+        path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {
         if let before = change.before {
-            validateString(before, path: "\(path).before", scope: scope)
+            validateString(before, path: path.child(.before), scope: scope)
         }
         if let after = change.after {
-            validateString(after, path: "\(path).after", scope: scope)
+            validateString(after, path: path.child(.after), scope: scope)
         }
     }
 
     private mutating func validateCustomContentPropertyChange(
         _ change: PropertyChangeCore<CustomContentMatchCore<Expr<String>>>,
-        path: String,
+        path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {
         if let before = change.before {
-            validateCustomContent(before, path: "\(path).before", scope: scope)
+            validateCustomContent(before, path: path.child(.before), scope: scope)
         }
         if let after = change.after {
-            validateCustomContent(after, path: "\(path).after", scope: scope)
+            validateCustomContent(after, path: path.child(.after), scope: scope)
         }
     }
 
     private mutating func validateCustomContent(
         _ match: CustomContentMatchCore<Expr<String>>,
-        path: String,
+        path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {
         if let label = match.label {
-            validateString(label, path: "\(path).label", scope: scope)
+            validateString(label, path: path.child(.label), scope: scope)
         }
         if let value = match.value {
-            validateString(value, path: "\(path).value", scope: scope)
+            validateString(value, path: path.child(.value), scope: scope)
         }
     }
 
     private mutating func validateRotorPropertyChange(
         _ change: PropertyChangeCore<RotorSetMatchCore<Expr<String>>>,
-        path: String,
+        path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {
         if let before = change.before {
-            validateRotorSet(before, path: "\(path).before", scope: scope)
+            validateRotorSet(before, path: path.child(.before), scope: scope)
         }
         if let after = change.after {
-            validateRotorSet(after, path: "\(path).after", scope: scope)
+            validateRotorSet(after, path: path.child(.after), scope: scope)
         }
     }
 
     private mutating func validateRotorSet(
         _ match: RotorSetMatchCore<Expr<String>>,
-        path: String,
+        path: HeistPlanPath,
         scope: HeistReferenceScope
     ) {
         for (index, include) in match.include.enumerated() {
-            validateString(include, path: "\(path).include[\(index)]", scope: scope)
+            validateString(include, path: path.child(.include).index(index), scope: scope)
         }
         for (index, exclude) in match.exclude.enumerated() {
-            validateString(exclude, path: "\(path).exclude[\(index)]", scope: scope)
+            validateString(exclude, path: path.child(.exclude).index(index), scope: scope)
         }
     }
 
-    mutating func checkPredicateDepth(_ depth: Int, path: String) {
+    mutating func checkPredicateDepth(_ depth: Int, path: HeistPlanPath) {
         if depth > limits.maxPredicateDepth {
             fail(
                 path: path,
@@ -210,7 +210,7 @@ extension HeistPlanRuntimeSafetyValidator {
         }
     }
 
-    mutating func validateAllChildCount(_ count: Int, path: String) {
+    mutating func validateAllChildCount(_ count: Int, path: HeistPlanPath) {
         if count > limits.maxAllPredicateChildren {
             fail(
                 path: path,

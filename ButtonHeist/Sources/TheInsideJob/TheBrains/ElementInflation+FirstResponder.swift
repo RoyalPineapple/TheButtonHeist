@@ -12,7 +12,9 @@ extension ElementInflation {
         case failed(ElementInflationFailure)
     }
 
-    internal func inflateFirstResponder(method: ActionMethod) async -> FirstResponderInflation {
+    internal func inflateFirstResponder(
+        method: ActionMethod,
+    ) async -> FirstResponderInflation {
         await inflateFirstResponder(method: method) { target, method in
             await self.inflate(for: target, method: method)
         }

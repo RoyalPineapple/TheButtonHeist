@@ -155,13 +155,13 @@ extension TheFence.Command {
                 family: .semanticAction,
                 parameters: FenceParameterBlocks.target + [
                     FenceParameters.text.spec,
-                    FenceParameters.replacingExisting.spec,
+                    FenceParameters.textInputMode.spec,
                 ] + FenceParameterBlocks.expectation,
                 timeout: .singleStepAction(base: .longAction),
                 responseProjection: .heistExecution,
                 execution: [.appInteraction, .heistPrimitive],
                 projection: .cliOnly(
-                    "Type text. With replacingExisting=true, The Button Heist clears the focused field before typing."
+                    "Type text. Replace mode clears the focused field before typing."
                 )
             )
         case .editAction:

@@ -18,6 +18,7 @@ Compatibility is exact product-version lockstep:
 - the embedded iOS server, macOS framework, CLI, and MCP server must come from
   the same product release
 - `buttonHeistVersion` must match exactly during the hello handshake
+- malformed semantic versions are rejected while decoding the envelope
 - major, minor, and patch differences are all incompatible on the wire
 - there is no downgrade, feature negotiation, or best-effort compatibility mode
 
@@ -148,8 +149,8 @@ Server response:
 
 | Field | Description |
 |-------|-------------|
-| `buttonHeistVersion` | Product SemVer. Must match exactly across client and server. |
-| `requestId` | Optional correlation id. Echoed by the matching response. |
+| `buttonHeistVersion` | `ButtonHeistVersion` encoded as a `MAJOR.MINOR.PATCH` string. Must match exactly across client and server. |
+| `requestId` | Optional `RequestID` encoded as a nonblank string. Echoed by the matching response. |
 | `type` | Explicit TheScore message discriminator. |
 | `payload` | Optional payload object. |
 
@@ -172,8 +173,9 @@ parameter inventories belong in the generated references.
 {"buttonHeistVersion":"<semver>","type":"authenticate","payload":{"token":"your-secret-token","driverId":"agent-1"}}
 ```
 
-`driverId` is optional. When present, it is the session-locking identity. When
-absent, the token is used as the driver identity.
+`token` is a `SessionAuthToken` and `driverId` is an optional `DriverID`. Both
+encode as exact, nonblank strings; whitespace is not trimmed. `SessionOwner`
+retains whether ownership came from the driver ID or, when absent, the token.
 
 ### Rejected Auth Tags
 
@@ -290,7 +292,7 @@ predicate chain. Inclusion uses the positive check (`.traits([...])`,
   "type": "heistPlan",
   "payload": {
     "plan": {
-      "version": 1,
+      "version": 2,
       "parameter": { "type": "none" },
       "body": [
         {
@@ -342,7 +344,7 @@ media only through explicit, size-bounded opt-ins.
 ### Wait
 
 ```json
-{"buttonHeistVersion":"<semver>","type":"heistPlan","payload":{"plan":{"version":1,"parameter":{"type":"none"},"body":[{"type":"wait","wait":{"predicate":{"type":"changed","scope":"screen","assertions":[]},"timeout":30}}]},"argument":{"type":"none"}}}
+{"buttonHeistVersion":"<semver>","type":"heistPlan","payload":{"plan":{"version":2,"parameter":{"type":"none"},"body":[{"type":"wait","wait":{"predicate":{"type":"changed","scope":"screen","assertions":[]},"timeout":30}}]},"argument":{"type":"none"}}}
 ```
 
 The host evaluates current-tree predicates against the current delivered
@@ -368,17 +370,18 @@ The strict predicate wire grammar is:
 accept `appeared`, `disappeared`, and `updated`. `change`, `scopes`,
 `screenChanged`, and flat target wrappers are invalid.
 
-Raw heist receipt steps use one tagged `outcome`; status-specific evidence,
-failure, abort path, and children live inside that case:
+Raw heist receipt steps contain only `path`, `durationMs`, and one semantic
+`node`. The node's `type` selects its authored fields and legal completion:
 
 ```json
-{"path":"$.body[0]","kind":"action","durationMs":12,"outcome":{"type":"passed","evidence":{"action":{"_0":{"type":"dispatch","command":{"type":"dismiss"},"dispatchResult":{"outcome":{"kind":"success"},"method":"dismiss","evidence":{"observation":{"kind":"none"}}}}}},"children":[]}}
+{"path":"$.body[0]","durationMs":1,"node":{"type":"warning","outcome":"passed","message":"notice","children":[]}}
 ```
 
-`status`, `evidence`, `failure`, and `children` are outcome-owned and are invalid
-as top-level step fields. Swift constructors pair each
-`HeistStepReceiptKind<Evidence>` with its matching evidence type before creating
-the tagged outcome.
+Inside `node`, `outcome` determines whether that node may carry evidence,
+failure, and which child shape is legal. Typed completion and evidence wrappers
+enforce those combinations before encoding; `kind`, `intent`, `status`, and a
+top-level receipt outcome are not part of the contract. Run status and the abort
+path are derived from the semantic node tree.
 
 ## Action Results
 
@@ -516,8 +519,8 @@ omitted from the projection.
 
 ## Authentication and Sessions
 
-Driver connections require authentication. A session is held by one driver
-identity at a time:
+Driver connections require authentication. `SessionLease` holds one typed
+`SessionOwner` (`DriverID` or `SessionAuthToken`) at a time:
 
 1. First authenticated driver claims the session.
 2. Same driver identity can reconnect or issue separate direct CLI commands.

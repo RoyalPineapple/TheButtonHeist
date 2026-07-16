@@ -130,7 +130,6 @@ extension Navigation {
         ) {
             discoveryCommitPolicy = .mergeIntoInterface
             if continuity.isReplacement {
-                // A replacement starts a new graph, not a new execution budget.
                 let scrollCount = manifest.scrollCount
                 manifest = ScreenManifest(
                     maxScrollsPerContainer: manifest.maxScrollsPerContainer,

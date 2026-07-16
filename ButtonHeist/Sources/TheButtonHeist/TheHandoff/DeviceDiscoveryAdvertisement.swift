@@ -5,7 +5,7 @@ extension DeviceDiscovery {
         guard case let .service(name, type, domain, _) = result.endpoint else {
             return nil
         }
-        let serviceName = DiscoveryServiceName(name)
+        guard let deviceID = try? DiscoveryDeviceID(validating: name) else { return nil }
 
         let txtRecord = result.endpoint.txtRecord ?? {
             if case .bonjour(let metadataTXTRecord) = result.metadata {
@@ -14,20 +14,23 @@ extension DeviceDiscovery {
             return nil
         }()
 
-        var simUDID: String?
-        var installationId: String?
+        var simUDID: SimulatorUDID?
+        var installationId: InstallationID?
         var displayDeviceName: String?
-        var instanceId: String?
+        var instanceId: InsideJobInstanceID?
         if let txtRecord {
             simUDID = txtRecord[TXTRecordKey.simUDID.rawValue]
+                .flatMap { try? SimulatorUDID(validating: $0) }
             installationId = txtRecord[TXTRecordKey.installationId.rawValue]
+                .flatMap { try? InstallationID(validating: $0) }
             displayDeviceName = txtRecord[TXTRecordKey.deviceName.rawValue]
             instanceId = txtRecord[TXTRecordKey.instanceId.rawValue]
+                .flatMap { try? InsideJobInstanceID(validating: $0) }
         }
 
         return DiscoveredDevice(
-            deviceID: .serviceName(serviceName),
-            name: serviceName.rawValue,
+            id: deviceID,
+            name: name,
             endpoint: .service(name: name, type: type, domain: domain),
             simulatorUDID: simUDID,
             installationId: installationId,

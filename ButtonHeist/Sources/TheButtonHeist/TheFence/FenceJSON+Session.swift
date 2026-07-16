@@ -22,7 +22,7 @@ struct PublicSessionStateResponse: FencePublicJSONResponse {
         self.deviceName = payload.device?.deviceName
         self.appName = payload.device?.appName
         self.connectionType = payload.device?.connectionType.rawValue
-        self.shortId = payload.device?.shortId
+        self.shortId = payload.device?.shortId?.description
         self.lastFailure = payload.lastFailure.map { PublicSessionFailure(payload: $0) }
     }
 }
@@ -65,12 +65,12 @@ struct PublicPongResponse: FencePublicJSONResponse {
     let serverTimestampMs: Int64?
 
     init(payload: PongPayload) {
-        self.buttonHeistVersion = payload.buttonHeistVersion
+        self.buttonHeistVersion = payload.buttonHeistVersion.description
         self.appName = payload.appName
-        self.bundleIdentifier = payload.bundleIdentifier
+        self.bundleIdentifier = payload.bundleIdentifier.description
         self.appVersion = payload.appVersion
         self.appBuild = payload.appBuild
-        self.serverInstanceIdentifier = payload.serverInstanceIdentifier
+        self.serverInstanceIdentifier = payload.serverInstanceIdentifier?.description
         self.serverTimestampMs = payload.serverTimestampMs
     }
 }
@@ -97,8 +97,8 @@ struct PublicDiscoveredDevice: Encodable {
         self.appName = device.appName
         self.deviceName = device.deviceName
         self.connectionType = device.connectionType.rawValue
-        self.shortId = device.shortId
-        self.simulatorUDID = device.simulatorUDID
+        self.shortId = device.shortId?.description
+        self.simulatorUDID = device.simulatorUDID?.description
     }
 }
 

@@ -84,6 +84,23 @@ without forcing compatibility aliases back into the package.
 `BUTTONHEIST_SWIFT_API_BREAKAGE_MODE=report` is available for local
 investigation only.
 
+### Payload Value Admission
+
+Public ThePlans payload values are admitted when they are constructed, not
+repaired when they reach execution. `GestureDuration` accepts only finite
+values greater than zero and no more than 60 seconds. `WaitTarget` accepts an
+omitted timeout or a finite value greater than zero and no more than 30
+seconds. Immediate predicate evaluation is a separate operation, not a zero
+timeout. A timeout above the maximum is rejected rather than clamped.
+
+Appending text and pasteboard writes require non-empty text. Replacement text
+may be empty because that is the typed clear operation. Swift construction,
+canonical source parsing, and `Decodable` entry points share the same admission
+rules, so a successfully constructed payload needs no later validity check.
+`HeistPlanName` and `HeistReferenceName` likewise share one exact Swift-style
+identifier grammar; whitespace and invalid spellings are rejected, never trimmed
+or repaired by loops, validation, or rendering.
+
 ## TheInsideJob
 
 **Import**: `import TheInsideJob`
@@ -185,9 +202,11 @@ Container identifiers are orthogonal data on every delivered parser container,
 not only semantic-group containers. A container identifier target therefore
 matches any parser container type that carries that identifier. The current
 delivered tree is the authority for both element and container matches.
-TheStash resolves directly against its `InterfaceTree`; a delivered `Interface`
-constructs one validated `InterfaceGraph` for client matching and formatting.
-A flattened element list, screen model, or back map is not a second query model.
+TheStash resolves actions, predicates, and `get_interface` subtree requests
+directly against its `InterfaceTree`; subtree projection happens only after that
+resolution. A delivered `Interface` constructs one validated `InterfaceGraph`
+for client matching and formatting. A flattened element list, screen model, or
+back map is not a second query model.
 A capture-local `HeistId` is not a replay selector or geometry authority.
 The string fields may be a single StringMatch or an array of StringMatch values
 when one property needs multiple checks; every entry for that property must
@@ -344,6 +363,13 @@ surfaces are projected from the Fence command descriptors.
 - `run_heist` accepts a durable source plan string or generated `.heist`
   package at public boundaries; execution uses the typed `HeistPlan` contract
   after source/package loading.
+- Root names, definition paths, and invocation paths enter core logic as
+  `HeistPlanName`, `HeistDefinitionPath`, and `HeistInvocationPath`. Literals
+  are typed authoring sugar; dynamic JSON, source, and CLI strings are
+  validated once at admission.
+- Swift compiler entries follow the same rule through `HeistEntrySymbol`;
+  validation and lint locations remain `HeistPlanPath` values until rendered
+  into diagnostics or public response JSON.
 - `validate_heist` applies the same plan and root-argument admission entirely
   offline. It returns plan, invocation, and lint results plus canonical source
   for admitted plans. Invalid candidates are typed validation responses, not

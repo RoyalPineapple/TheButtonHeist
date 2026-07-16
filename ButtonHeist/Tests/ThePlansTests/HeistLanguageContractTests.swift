@@ -1,9 +1,25 @@
+import Foundation
 import Testing
 @testable import ThePlans
 
+@Test func `name and path currencies use one single value wire shape`() throws {
+    let planName: HeistPlanName = "Cart"
+    let definitionPath: HeistDefinitionPath = "Cart.addItem"
+    let invocationPath: HeistInvocationPath = "Cart.addItem"
+    let encoder = JSONEncoder()
+    let decoder = JSONDecoder()
+
+    #expect(String(bytes: try encoder.encode(planName), encoding: .utf8) == #""Cart""#)
+    #expect(String(bytes: try encoder.encode(definitionPath), encoding: .utf8) == #""Cart.addItem""#)
+    #expect(String(bytes: try encoder.encode(invocationPath), encoding: .utf8) == #""Cart.addItem""#)
+    #expect(try decoder.decode(HeistPlanName.self, from: encoder.encode(planName)) == planName)
+    #expect(try decoder.decode(HeistDefinitionPath.self, from: encoder.encode(definitionPath)) == definitionPath)
+    #expect(try decoder.decode(HeistInvocationPath.self, from: encoder.encode(invocationPath)) == invocationPath)
+}
+
 @Test func `typed paths build definitions and invocations without raw strings`() throws {
-    let definitionPath = try HeistDefinitionPath(dottedName: "Cart.addItem")
-    let invocationPath = try HeistInvocationPath(dottedName: "Cart.addItem")
+    let definitionPath: HeistDefinitionPath = "Cart.addItem"
+    let invocationPath: HeistInvocationPath = "Cart.addItem"
     let addItem = HeistDef<String>(definitionPath, parameter: "item") { item in
         Activate(.label(item))
     }
@@ -16,79 +32,11 @@ import Testing
     #expect(plan.definitions.map(\.name) == ["Cart"])
     #expect(plan.body == [
         .invoke(HeistInvocationStep(
-            invocationPath: invocationPath,
+            path: invocationPath,
             argument: .string("Milk")
         )),
     ])
-    #expect(plan.heistDefinition(at: definitionPath.components)?.name == "addItem")
-}
-
-@Test func `typed path constructors reject malformed name corpus`() throws {
-    let cases = [
-        ("", "must not be empty"),
-        (".checkout", "component at index 0 must not be empty"),
-        ("Cart.", "component at index 1 must not be empty"),
-        ("Cart..checkout", "component at index 1 must not be empty"),
-        ("Cart Screen.checkout", "component at index 0 must be a Swift-style identifier"),
-        ("1Cart.checkout", "component at index 0 must be a Swift-style identifier"),
-        ("Cart.class", "component at index 1 must be a Swift-style identifier"),
-        ("Cart.checkout-now", "component at index 1 must be a Swift-style identifier"),
-    ]
-
-    for (path, expectedMessage) in cases {
-        expectDefinitionPathFailure(path, contains: expectedMessage)
-        expectInvocationPathFailure(path, contains: expectedMessage)
-    }
-}
-
-@Test func `source and Swift builder share invalid definition path diagnostics`() throws {
-    let definition = HeistDef<Void>("Cart..checkout") {
-        Warn("checkout")
-    }
-    let builderDiagnostic = try #require(definition.heistBuildDiagnostics.first)
-    let sourceDiagnostic = compileDiagnostic("""
-    HeistPlan("cart") {
-        HeistDef<Void>("Cart..checkout") {
-            Warn("checkout")
-        }
-    }
-    """)
-
-    #expect(builderDiagnostic.code == .dslInvalidDefinition)
-    #expect(sourceDiagnostic.code == builderDiagnostic.code)
-    #expect(builderDiagnostic.title == "Invalid heist definition")
-    #expect(sourceDiagnostic.title == builderDiagnostic.title)
-    #expect(builderDiagnostic.path == "Cart..checkout")
-    #expect(sourceDiagnostic.path == builderDiagnostic.path)
-    #expect(builderDiagnostic.message == sourceDiagnostic.message)
-    #expect(builderDiagnostic.hint == sourceDiagnostic.hint)
-    #expect(builderDiagnostic.phase == .dslBuild)
-    #expect(sourceDiagnostic.phase == .sourceCompilation)
-    #expect(sourceDiagnostic.sourceSpan?.line == 2)
-    #expect(sourceDiagnostic.sourceSpan?.column == 20)
-}
-
-@Test func `source and Swift builder share invalid invocation path diagnostics`() throws {
-    let builderContent = RunHeist("Cart..checkout")
-    let builderDiagnostic = try #require(builderContent.heistBuildDiagnostics.first)
-    let sourceDiagnostic = compileDiagnostic("""
-    HeistPlan("cart") {
-        RunHeist("Cart..checkout")
-    }
-    """)
-
-    #expect(builderDiagnostic.code == .dslInvalidInvocationPath)
-    #expect(sourceDiagnostic.code == builderDiagnostic.code)
-    #expect(builderDiagnostic.title == "Invalid RunHeist path")
-    #expect(sourceDiagnostic.title == builderDiagnostic.title)
-    #expect(builderDiagnostic.path == "Cart..checkout")
-    #expect(sourceDiagnostic.path == builderDiagnostic.path)
-    #expect(builderDiagnostic.message == sourceDiagnostic.message)
-    #expect(builderDiagnostic.hint == sourceDiagnostic.hint)
-    #expect(builderDiagnostic.phase == .dslBuild)
-    #expect(sourceDiagnostic.phase == .sourceCompilation)
-    #expect(sourceDiagnostic.sourceSpan?.line == 2)
-    #expect(sourceDiagnostic.sourceSpan?.column == 14)
+    #expect(plan.heistDefinition(at: definitionPath)?.name == "addItem")
 }
 
 @Test func `semantic validation rejects duplicate unresolved and recursive plans`() throws {
@@ -103,7 +51,7 @@ import Testing
     )
 
     let unresolved = HeistPlanAdmissionCandidate(body: [
-        .invoke(HeistInvocationStep(path: ["Missing"])),
+        .invoke(HeistInvocationStep(path: "Missing")),
     ])
     try expectSemanticDiagnostic(
         unresolved,
@@ -114,13 +62,13 @@ import Testing
     let recursive = HeistPlanAdmissionCandidate(definitions: [
         HeistPlanAdmissionCandidate(name: "lib", definitions: [
             HeistPlanAdmissionCandidate(name: "a", body: [
-                .invoke(HeistInvocationStep(path: ["lib", "b"])),
+                .invoke(HeistInvocationStep(path: "lib.b")),
             ]),
             HeistPlanAdmissionCandidate(name: "b", body: [
-                .invoke(HeistInvocationStep(path: ["lib", "a"])),
+                .invoke(HeistInvocationStep(path: "lib.a")),
             ]),
         ], body: []),
-    ], body: [.invoke(HeistInvocationStep(path: ["lib", "a"]))])
+    ], body: [.invoke(HeistInvocationStep(path: "lib.a"))])
     try expectSemanticDiagnostic(
         recursive,
         path: "$.definitions[0].definitions[0].body[0].invoke.body[0].invoke.path",
@@ -176,7 +124,7 @@ private func nestedCollectionLoopCases() throws -> [(candidate: HeistPlanAdmissi
                     HeistPlanAdmissionCandidate(name: "Inner", body: [admissionStep(try stringLoop(parameter: "size"))]),
                 ],
                 body: [admissionStep(try stringLoop(parameter: "item", body: [
-                    .invoke(HeistInvocationStep(path: ["Inner"])),
+                    .invoke(HeistInvocationStep(path: "Inner")),
                 ]))]
             ),
             "$.body[0].for_each_string.body[0].invoke.body[0].for_each_string",
@@ -201,32 +149,6 @@ private func elementLoop(
     body: [HeistStep] = [.warn(WarnStep(message: "nested"))]
 ) throws -> HeistStep {
     .forEachElement(try ForEachElementStep(matching: .label("Row"), limit: 1, parameter: parameter, body: body))
-}
-
-private func expectDefinitionPathFailure(
-    _ path: String,
-    contains expectedMessage: String
-) {
-    do {
-        _ = try HeistDefinitionPath(dottedName: path)
-        Issue.record("Expected definition path to fail: \(path)")
-    } catch {
-        let message = String(describing: error)
-        #expect(message.contains(expectedMessage), "\(message) did not contain \(expectedMessage)")
-    }
-}
-
-private func expectInvocationPathFailure(
-    _ path: String,
-    contains expectedMessage: String
-) {
-    do {
-        _ = try HeistInvocationPath(dottedName: path)
-        Issue.record("Expected invocation path to fail: \(path)")
-    } catch {
-        let message = String(describing: error)
-        #expect(message.contains(expectedMessage), "\(message) did not contain \(expectedMessage)")
-    }
 }
 
 private func expectSemanticDiagnostic(

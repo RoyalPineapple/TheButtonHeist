@@ -1,36 +1,42 @@
 import Foundation
 import Network
+import os
 
-enum DeviceConnectionEventStream {
-    nonisolated static let bufferLimit = 512
+final class DeviceConnectionEventStream: Sendable {
+    static let bufferLimit = 512
 
-    struct EventStream {
-        let events: AsyncStream<DeviceConnectionEvent>
-        let continuation: AsyncStream<DeviceConnectionEvent>.Continuation
-    }
+    let events: AsyncStream<DeviceConnectionEvent>
 
-    nonisolated static func makeStream() -> EventStream {
+    private let continuation: AsyncStream<DeviceConnectionEvent>.Continuation
+    private let didOverflowState = OSAllocatedUnfairLock(initialState: false)
+
+    init() {
         let stream = AsyncStream<DeviceConnectionEvent>.makeStream(
-            bufferingPolicy: .bufferingOldest(bufferLimit)
+            bufferingPolicy: .bufferingOldest(Self.bufferLimit)
         )
-        return EventStream(events: stream.stream, continuation: stream.continuation)
+        self.events = stream.stream
+        self.continuation = stream.continuation
     }
 
-    nonisolated static func yield(
-        _ event: DeviceConnectionEvent,
-        to continuation: AsyncStream<DeviceConnectionEvent>.Continuation,
-        onOverflow: @escaping @Sendable () -> Void
-    ) {
+    func yield(_ event: DeviceConnectionEvent) {
         switch continuation.yield(event) {
         case .enqueued, .terminated:
             return
         case .dropped:
+            didOverflowState.withLock { $0 = true }
             continuation.finish()
-            onOverflow()
         @unknown default:
+            didOverflowState.withLock { $0 = true }
             continuation.finish()
-            onOverflow()
         }
+    }
+
+    func finish() {
+        continuation.finish()
+    }
+
+    var didOverflow: Bool {
+        didOverflowState.withLock { $0 }
     }
 }
 

@@ -52,6 +52,7 @@ extension TheStash {
         let resolutionScope: ResolutionScope
         let treeElements: [InterfaceTree.Element]
         let visibleHeistIds: Set<HeistId>
+        let exactMatches: [InterfaceTree.Element]
     }
 
     struct TargetAmbiguityFacts {
@@ -59,6 +60,7 @@ extension TheStash {
         let candidates: [TargetCandidateFacts]
         let matchedCount: Int
         let resolutionScope: ResolutionScope
+        let exactMatches: [InterfaceTree.Element]
     }
 
     enum ContainerNotFoundReason: Equatable {
@@ -71,6 +73,7 @@ extension TheStash {
         let ordinal: Int?
         let reason: ContainerNotFoundReason
         let resolutionScope: ResolutionScope
+        let exactMatches: [InterfaceTree.Container]
     }
 
     struct ContainerAmbiguityFacts {
@@ -145,6 +148,13 @@ extension TheStash {
         resolveContainerTarget(target, in: interfaceTree, resolutionScope: .interface)
     }
 
+    func resolveContainerTarget(
+        _ target: ResolvedAccessibilityTarget,
+        in tree: InterfaceTree
+    ) -> ContainerTargetResolution {
+        resolveContainerTarget(target, in: tree, resolutionScope: .provided)
+    }
+
     private func resolveContainerTarget(
         _ target: ResolvedAccessibilityTarget,
         in tree: InterfaceTree,
@@ -153,16 +163,15 @@ extension TheStash {
         guard let selection = target.terminalContainerSelection else {
             preconditionFailure("container resolution requires a resolved container target")
         }
-        let interface = WireConversion.toSemanticInterface(from: tree)
-        let matchSet = ElementMatchGraph(interface: interface).resolve(target.withoutTerminalOrdinal)
-        let matches = treeContainers(matching: matchSet, in: tree, interface: interface)
+        let matches = matchingTreeContainers(for: target, in: tree)
         if let ordinal = selection.ordinal {
             guard matches.indices.contains(ordinal) else {
                 return .notFound(ContainerNotFoundFacts(
                     predicate: selection.predicate,
                     ordinal: ordinal,
                     reason: .ordinalOutOfRange(requested: ordinal, matchCount: matches.count),
-                    resolutionScope: resolutionScope
+                    resolutionScope: resolutionScope,
+                    exactMatches: matches
                 ))
             }
             return .resolved(matches[ordinal])
@@ -175,7 +184,8 @@ extension TheStash {
                 predicate: selection.predicate,
                 ordinal: nil,
                 reason: .noMatches,
-                resolutionScope: resolutionScope
+                resolutionScope: resolutionScope,
+                exactMatches: []
             ))
         default:
             return .ambiguous(ContainerAmbiguityFacts(
@@ -240,15 +250,8 @@ private extension TheStash {
         guard let selection = target.terminalElementSelection else {
             preconditionFailure("element resolution requires a resolved element target")
         }
-        let interface = WireConversion.toSemanticInterface(from: tree)
-        let graph = ElementMatchGraph(interface: interface)
-        let candidates = treeElements(
-            matching: graph.elementCandidates(in: target),
-            in: tree,
-            interface: interface
-        )
-        let matchSet = graph.resolve(target.withoutTerminalOrdinal)
-        let matches = treeElements(matching: matchSet.elements, in: tree, interface: interface)
+        let candidates = elementCandidates(for: target, in: tree)
+        let matches = matchingTreeElements(for: target, in: tree)
         if let ordinal = selection.ordinal {
             guard matches.indices.contains(ordinal) else {
                 return .notFound(TargetNotFoundFacts(
@@ -257,7 +260,8 @@ private extension TheStash {
                     reason: .ordinalOutOfRange(requested: ordinal, matchCount: matches.count),
                     resolutionScope: resolutionScope,
                     treeElements: candidates,
-                    visibleHeistIds: tree.viewportElementIDs
+                    visibleHeistIds: tree.viewportElementIDs,
+                    exactMatches: matches
                 ))
             }
             return .resolved(matches[ordinal])
@@ -270,7 +274,8 @@ private extension TheStash {
                 reason: .noMatches,
                 resolutionScope: resolutionScope,
                 treeElements: candidates,
-                visibleHeistIds: tree.viewportElementIDs
+                visibleHeistIds: tree.viewportElementIDs,
+                exactMatches: []
             ))
         case 1:
             return .resolved(matches[0])
@@ -281,7 +286,8 @@ private extension TheStash {
                     TargetCandidateFacts(treeElement: $0, visibleHeistIds: tree.viewportElementIDs)
                 },
                 matchedCount: matches.count,
-                resolutionScope: resolutionScope
+                resolutionScope: resolutionScope,
+                exactMatches: matches
             ))
         }
     }
@@ -340,16 +346,6 @@ private extension ResolvedAccessibilityTarget {
         }
     }
 
-    var withoutTerminalOrdinal: ResolvedAccessibilityTarget {
-        switch self {
-        case .predicate(let predicate, _):
-            return .predicate(predicate)
-        case .container(let predicate, _):
-            return .container(predicate)
-        case .within(let container, let target):
-            return .within(container: container, target: target.withoutTerminalOrdinal)
-        }
-    }
 }
 
 #endif // DEBUG

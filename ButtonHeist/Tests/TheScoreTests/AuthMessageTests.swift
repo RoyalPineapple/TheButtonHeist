@@ -67,16 +67,8 @@ final class AuthMessageTests: XCTestCase {
     }
 
     func testAuthenticateEmptyToken() throws {
-        let payload = AuthenticatePayload(token: "")
-        let message = ClientMessage.authenticate(payload)
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
-
-        if case .authenticate(let decodedPayload) = decoded {
-            XCTAssertEqual(decodedPayload.token, "")
-        } else {
-            XCTFail("Expected authenticate, got \(decoded)")
-        }
+        let data = Data(#"{"type":"authenticate","payload":{"token":""}}"#.utf8)
+        XCTAssertThrowsError(try JSONDecoder().decode(ClientMessage.self, from: data))
     }
 
     func testAuthenticateJSON() throws {

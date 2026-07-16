@@ -6,7 +6,7 @@ import TheScore
 /// Owns token policy and per-address auth admission state for `TheMuscle`.
 struct TokenAdmission {
     enum TokenDecision: Equatable, Sendable {
-        case accepted(driverIdentity: String)
+        case accepted(owner: SessionOwner)
         case rejected(TokenRejection)
         case lockedOut(ServerError)
     }
@@ -27,15 +27,12 @@ struct TokenAdmission {
         self.lockoutDuration = lockoutDuration
     }
 
-    func emptyTokenError() -> ServerError {
-        ServerError(
-            kind: .authFailure,
-            message: tokenSource.emptyTokenMessage,
-            recoveryHint: tokenSource.configuredTokenRecoveryHint
-        )
-    }
-
-    mutating func decideToken(_ token: String, driverId: String?, address: String, now: Date = Date()) -> TokenDecision {
+    mutating func decideToken(
+        _ token: SessionAuthToken,
+        driverId: DriverID?,
+        address: String,
+        now: Date = Date()
+    ) -> TokenDecision {
         switch transitionAddress(address, with: .checkLockout(now: now)).singleAddressEffect {
         case .proceed:
             break
@@ -69,7 +66,7 @@ struct TokenAdmission {
         case .proceed, .invalidToken, .lockoutStarted, .lockedOut:
             preconditionFailure("Token acceptance emitted an invalid address auth effect.")
         }
-        return .accepted(driverIdentity: tokenSource.effectiveDriverId(driverId: driverId))
+        return .accepted(owner: tokenSource.owner(driverId: driverId))
     }
 
     private mutating func transitionAddress(
@@ -108,9 +105,9 @@ struct TokenAdmission {
         ServerError(kind: .authFailure, message: "Too many failed attempts. Try again later.")
     }
 
-    private func constantTimeEqual(_ a: String, _ b: String) -> Bool {
-        let aBytes = Array(a.utf8)
-        let bBytes = Array(b.utf8)
+    private func constantTimeEqual(_ a: SessionAuthToken, _ b: SessionAuthToken) -> Bool {
+        let aBytes = Array(a.description.utf8)
+        let bBytes = Array(b.description.utf8)
         guard aBytes.count == bBytes.count else { return false }
         var result: UInt8 = 0
         for (lhs, rhs) in zip(aBytes, bBytes) {

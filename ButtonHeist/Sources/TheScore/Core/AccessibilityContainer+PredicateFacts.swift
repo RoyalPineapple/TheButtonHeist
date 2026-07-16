@@ -3,7 +3,9 @@ import ThePlans
 
 public extension AccessibilityContainer {
     var containerPredicateFacts: ContainerPredicateFacts {
-        let actions = Set(customActions.lazy.map(\.name).filter { !$0.isEmpty }.map(ElementAction.custom))
+        let actions = Set(customActions.lazy.compactMap { action in
+            try? CustomActionName(validating: action.name)
+        }.map(ElementAction.custom))
         let role: ContainerPredicateRoleFacts
         switch type {
         case .none:

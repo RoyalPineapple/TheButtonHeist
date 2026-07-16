@@ -9,17 +9,14 @@ import AccessibilitySnapshotParser
 
 extension Actions {
 
-    // MARK: - Element Action Pipeline
-
-    /// Unified pipeline for actions that target an element:
-    /// find target in tree → resolve that tree entry to something touchable.
     func performElementAction(
         target: ResolvedAccessibilityTarget,
         method: ActionMethod,
         requireInteractive: Bool = true,
         activationPointPolicy: ElementInflation.ActivationPointPolicy = .requireOnscreen,
         preflight: (@MainActor (InterfaceTree.Element) -> TheSafecracker.ActionDispatchOutcome?)? = nil,
-        action: @MainActor (ElementInflation.InflatedElementTarget) async -> TheSafecracker.ActionDispatchOutcome
+        action: @MainActor (ElementInflation.InflatedElementTarget) async
+            -> TheSafecracker.ActionDispatchOutcome
     ) async -> TheSafecracker.ActionDispatchOutcome {
         func elapsedMilliseconds(since start: CFAbsoluteTime) -> Int {
             Int((CFAbsoluteTimeGetCurrent() - start) * 1_000)
@@ -91,22 +88,28 @@ extension Actions {
         return nil
     }
 
-    // MARK: - Accessibility Actions
-
-    /// Deliver `activate` through the accessibility contract:
-    /// semantic target -> reveal -> activation refresh ->
-    /// one `accessibilityActivate()` -> activation-point dispatch if UIKit declines.
-    func executeActivate(_ target: ResolvedAccessibilityTarget) async -> TheSafecracker.ActionDispatchOutcome {
+    func executeActivate(
+        _ target: ResolvedAccessibilityTarget,
+    ) async -> TheSafecracker.ActionDispatchOutcome {
         return await performElementAction(
             target: target,
-            method: .activate
+            method: .activate,
         ) { context in
             await ActivationPolicy(
-                accessibilityActivate: accessibilityActions.activate,
+                accessibilityActivate: { liveTarget in
+                    self.stash.dispatchOnFreshLiveActionTarget(
+                        liveTarget,
+                    ) { currentTarget in
+                        ActivationDispatchEvidence(
+                            outcome: self.accessibilityActions.activate(currentTarget),
+                            activationPoint: currentTarget.activationPoint
+                        )
+                    }
+                },
                 refreshAndResolve: {
                     switch await self.navigation.elementInflation.refreshCommittedTarget(
                         context.committedTarget,
-                        method: .activate
+                        method: .activate,
                     ) {
                     case .inflated(let inflatedTarget):
                         return .resolved(inflatedTarget)
@@ -114,7 +117,8 @@ extension Actions {
                         return .failure(failure.actionDispatchOutcome(commandMethod: .activate))
                     }
                 },
-                activationPointDispatch: safecracker.tap,
+                prepareActivationPointDispatch: safecracker.prepareTap,
+                completeActivationPointDispatch: safecracker.completePreparedTouch,
                 showFingerprint: safecracker.showFingerprint,
                 textEntryActivationFailure: textEntryActivationFailure
             ).apply(to: context.liveTarget)
@@ -141,40 +145,32 @@ extension Actions {
         return nil
     }
 
-    func executeIncrement(_ target: ResolvedAccessibilityTarget) async -> TheSafecracker.ActionDispatchOutcome {
-        return await performElementAction(
-            target: target,
-            method: .increment,
-            preflight: { treeElement in
-                guard treeElement.element.traits.contains(.adjustable) else {
-                    return .failure(
-                        .increment,
-                        message: ActionCapabilityDiagnostic.nonAdjustableAction(
-                            .increment,
-                            element: treeElement
-                        )
-                    )
-                }
-                return nil
-            },
-            action: { context in
-                let liveTarget = context.liveTarget
-                _ = self.accessibilityActions.increment(liveTarget)
-                return .success(method: .increment)
-            }
-        )
+    func executeIncrement(
+        _ target: ResolvedAccessibilityTarget,
+    ) async -> TheSafecracker.ActionDispatchOutcome {
+        await executeAdjustment(target, method: .increment, action: accessibilityActions.increment)
     }
 
-    func executeDecrement(_ target: ResolvedAccessibilityTarget) async -> TheSafecracker.ActionDispatchOutcome {
-        return await performElementAction(
+    func executeDecrement(
+        _ target: ResolvedAccessibilityTarget,
+    ) async -> TheSafecracker.ActionDispatchOutcome {
+        await executeAdjustment(target, method: .decrement, action: accessibilityActions.decrement)
+    }
+
+    private func executeAdjustment(
+        _ target: ResolvedAccessibilityTarget,
+        method: ActionMethod,
+        action: @MainActor (TheStash.LiveActionTarget) -> Bool
+    ) async -> TheSafecracker.ActionDispatchOutcome {
+        await performElementAction(
             target: target,
-            method: .decrement,
+            method: method,
             preflight: { treeElement in
                 guard treeElement.element.traits.contains(.adjustable) else {
                     return .failure(
-                        .decrement,
+                        method,
                         message: ActionCapabilityDiagnostic.nonAdjustableAction(
-                            .decrement,
+                            method,
                             element: treeElement
                         )
                     )
@@ -182,25 +178,28 @@ extension Actions {
                 return nil
             },
             action: { context in
-                let liveTarget = context.liveTarget
-                _ = self.accessibilityActions.decrement(liveTarget)
-                return .success(method: .decrement)
+                switch self.stash.dispatchOnFreshLiveActionTarget(context.liveTarget, operation: action) {
+                case .success:
+                    return .success(method: method)
+                case .failure(let staleness):
+                    return self.staleLiveTargetFailure(staleness, method: method)
+                }
             }
         )
     }
 
     func executeCustomAction(
-        name: String,
-        target: ResolvedAccessibilityTarget
+        name: CustomActionName,
+        target: ResolvedAccessibilityTarget,
     ) async -> TheSafecracker.ActionDispatchOutcome {
         await performElementAction(
             target: target,
-            method: .customAction
+            method: .customAction,
         ) { context in
             let dispatchContext: ElementInflation.InflatedElementTarget
             switch await self.customActionDispatchContext(
                 context,
-                actionName: name
+                actionName: name,
             ) {
             case .resolved(let context):
                 dispatchContext = context
@@ -210,7 +209,19 @@ extension Actions {
             let treeElement = dispatchContext.treeElement
             let liveTarget = dispatchContext.liveTarget
             let result: TheSafecracker.ActionDispatchOutcome
-            switch self.accessibilityActions.performCustomAction(named: name, on: liveTarget) {
+            let dispatch = self.stash.dispatchOnFreshLiveActionTarget(
+                liveTarget,
+            ) { target in
+                self.accessibilityActions.performCustomAction(named: name, on: target)
+            }
+            let customActionOutcome: AccessibilityActionDispatcher.CustomActionOutcome
+            switch dispatch {
+            case .success(let outcome):
+                customActionOutcome = outcome
+            case .failure(let staleness):
+                return self.staleLiveTargetFailure(staleness, method: .customAction)
+            }
+            switch customActionOutcome {
             case .deallocated:
                 result = .failure(.customAction, message: "custom action failed")
             case .noSuchAction:
@@ -245,17 +256,16 @@ extension Actions {
 
     private func customActionDispatchContext(
         _ context: ElementInflation.InflatedElementTarget,
-        actionName: String
+        actionName: CustomActionName,
     ) async -> CustomActionDispatchContextResolution {
         guard accessibilityActions.needsPreDispatchRefresh(named: actionName, on: context.liveTarget) else {
             return .resolved(context)
         }
 
-        // SwiftUI can update an AccessibilityNode's label/value before its block-backed custom actions.
         await tripwire.yieldFrames(1)
         switch await navigation.elementInflation.refreshCommittedTarget(
             context.committedTarget,
-            method: .customAction
+            method: .customAction,
         ) {
         case .inflated(let refreshedContext):
             return .resolved(refreshedContext)

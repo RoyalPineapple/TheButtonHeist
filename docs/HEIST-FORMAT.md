@@ -61,7 +61,7 @@ package from Swift/DSL source when crossing public artifact boundaries.
   "entry": "purchaseFlow",
   "format": "com.royalpineapple.buttonheist.heist",
   "formatVersion": 1,
-  "planVersion": 1,
+  "planVersion": 2,
   "producer": {
     "name": "buttonheist"
   }
@@ -70,12 +70,19 @@ package from Swift/DSL source when crossing public artifact boundaries.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `entry` | `String` | Required non-empty root plan identity. Must equal `plan.json.name`. |
-| `format` | `String` | Must be `com.royalpineapple.buttonheist.heist`. |
+| `entry` | `HeistPlanName` as one JSON string | Required root plan identity. Must equal `plan.json.name`. |
+| `format` | `HeistArtifactFormat` as one JSON string | Closed vocabulary with the sole canonical value `com.royalpineapple.buttonheist.heist`. |
 | `formatVersion` | `Int` | Package/container schema version. Current value is `1`. |
-| `planVersion` | `Int` | Must match `plan.json.version`. Current value is `1`. |
+| `planVersion` | `Int` | Must match `plan.json.version`. Current value is `2`. |
 | `producer` | `HeistArtifactProducer` | Tool that generated the artifact. |
 | `createdAt` | `Date` | Artifact creation timestamp. |
+
+`producer.name` is an open-vocabulary `HeistArtifactProducerName`, encoded as
+one nonblank JSON string. `producer.version` is an optional open-vocabulary
+`HeistArtifactProducerVersion`, also encoded as one nonblank JSON string.
+Neither wrapper trims or normalizes an admitted producer spelling. The closed
+`format` vocabulary is represented by `HeistArtifactFormat`, not a producer-name
+string.
 
 `entry` is not a path, registry key, alias, import, or selector for arbitrary
 definitions. It names the root `HeistPlan.name` stored in `plan.json`.
@@ -112,7 +119,7 @@ The root shape is:
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "name": "purchaseFlow",
   "parameter": { "type": "none" },
   "definitions": [],
@@ -128,7 +135,7 @@ The root shape is:
 | Field | Type | Description |
 |-------|------|-------------|
 | `version` | `Int` | Must match the supported `HeistPlan` version. |
-| `name` | `String?` | Heist or definition name. Required for `.heist` root entries and stored definitions; optional for inline one-step plans. |
+| `name` | `HeistPlanName?` as one JSON string | One identifier naming the root or local definition. Required for `.heist` root entries and stored definitions; optional for inline one-step plans. |
 | `parameter` | `HeistParameter` | Optional reusable-heist parameter declaration. Omitted means no parameter. |
 | `definitions` | `[HeistPlan]` | Local named reusable heist definitions. |
 | `body` | `[HeistStep]` | Ordered list of typed heist steps. The body must be non-empty unless the plan only provides definitions. |
@@ -141,13 +148,13 @@ plan contract.
 
 Three version numbers exist, and they answer different questions:
 
-- **`formatVersion`** and **`planVersion`** (both currently `1`) govern
-  artifacts. The runtime accepts only plan versions it supports and rejects
+- **`formatVersion`** (currently `1`) and **`planVersion`** (currently `2`)
+  govern artifacts. The runtime accepts only plan versions it supports and rejects
   others at load with a diagnostic; it never guesses at an unsupported shape.
-- **`buttonHeistVersion`** governs the live client–server wire. The handshake
-  requires exact equality between CLI/MCP and the embedded app build. It does
-  not participate in artifact validity: a stored `.heist` is not invalidated
-  by product releases that keep `planVersion` stable.
+- **`buttonHeistVersion`** encodes the typed `ButtonHeistVersion` used by the
+  live client–server wire. The handshake requires exact equality between CLI/MCP
+  and the embedded app build. It does not participate in artifact validity: a
+  stored `.heist` is not invalidated by releases that keep `planVersion` stable.
 
 The durable investment is the DSL source. `.heist` packages are generated
 artifacts: when `planVersion` bumps, regenerate them from source rather than
@@ -155,6 +162,15 @@ migrating JSON by hand. Within a `planVersion`, grammar additions add new step
 or predicate shapes without invalidating existing artifacts; the strict
 unknown-key rule constrains what a reader accepts, not what an older artifact
 may contain.
+
+Invocation steps encode `HeistInvocationPath` as one dotted string:
+
+```json
+{ "type": "invoke", "invoke": { "path": "Cart.addItem" } }
+```
+
+Definition paths are authoring structure and lower into nested named
+`HeistPlan` definitions; invocation paths remain a distinct type in memory.
 
 ## Authored shape
 

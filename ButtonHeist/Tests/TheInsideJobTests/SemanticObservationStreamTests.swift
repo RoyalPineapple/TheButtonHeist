@@ -168,6 +168,41 @@ final class SemanticObservationStreamTests: XCTestCase {
         XCTAssertEqual(stash.interfaceTree.elementIDs, ["after"])
     }
 
+    func testPathOnlyScrollReplacementDiscardsPriorDiscoveryAndLiveEvidence() {
+        let oldHeader = NSObject()
+        let oldRow = NSObject()
+        let newHeader = NSObject()
+        let newRow = NSObject()
+        let firstEvent = stash.semanticObservationStream.commitDiscoveryObservationForTesting(
+            scrollObservation(
+                headerId: "old_header",
+                rowLabel: "Orders",
+                rowId: "old_row",
+                headerObject: oldHeader,
+                rowObject: oldRow
+            )
+        )
+        let secondEvent = stash.semanticObservationStream.commitDiscoveryObservationForTesting(
+            scrollObservation(
+                headerId: "new_header",
+                rowLabel: "Products",
+                rowId: "new_row",
+                headerObject: newHeader,
+                rowObject: newRow
+            )
+        )
+
+        XCTAssertEqual(secondEvent.generation, firstEvent.generation.advanced())
+        XCTAssertEqual(
+            secondEvent.continuity,
+            .replacement(.inferred(.semanticIdentityDisjoint))
+        )
+        XCTAssertNil(stash.interfaceTree.findElement(heistId: "old_row"))
+        XCTAssertNotNil(stash.interfaceTree.findElement(heistId: "new_row"))
+        XCTAssertNil(stash.latestObservation.liveCapture.object(for: "old_row"))
+        XCTAssertTrue(stash.latestObservation.liveCapture.object(for: "new_row") === newRow)
+    }
+
     func testDiscoveryPublicationMaintainsIndependentScopeLineage() throws {
         let first = observation(label: "First", heistId: "first")
         let second = observation(label: "Second", heistId: "second")
@@ -585,6 +620,55 @@ final class SemanticObservationStreamTests: XCTestCase {
         .makeForTests(elements: [
             (AccessibilityElement.make(label: label, traits: .header), heistId),
         ])
+    }
+
+    private func scrollObservation(
+        headerId: HeistId,
+        rowLabel: String,
+        rowId: HeistId,
+        headerObject: NSObject,
+        rowObject: NSObject
+    ) -> InterfaceObservation {
+        let containerPath = TreePath([0])
+        let headerPath = containerPath.appending(0)
+        let rowPath = containerPath.appending(1)
+        let header = AccessibilityElement.make(label: "Menu", traits: .header)
+        let row = AccessibilityElement.make(label: rowLabel, traits: .button)
+        let scroll = AccessibilityContainer(
+            type: .list,
+            scrollableContentSize: AccessibilitySize(width: 320, height: 1_200),
+            frame: AccessibilityRect(x: 0, y: 80, width: 320, height: 560)
+        )
+        let membership = InterfaceTree.ScrollMembership(containerPath: containerPath, index: nil)
+        return InterfaceObservation.makeForTests(
+            elements: [
+                headerId: InterfaceTree.Element(
+                    heistId: headerId,
+                    scrollMembership: membership,
+                    element: header
+                ),
+                rowId: InterfaceTree.Element(
+                    heistId: rowId,
+                    scrollMembership: membership,
+                    element: row
+                ),
+            ],
+            hierarchy: [
+                .container(scroll, children: [
+                    .element(header, traversalIndex: 0),
+                    .element(row, traversalIndex: 1),
+                ]),
+            ],
+            heistIdsByPath: [
+                headerPath: headerId,
+                rowPath: rowId,
+            ],
+            elementRefs: [
+                headerId: .init(object: headerObject, scrollView: nil),
+                rowId: .init(object: rowObject, scrollView: nil),
+            ],
+            firstResponderHeistId: nil
+        )
     }
 
     private func screenChangedBatch() -> AccessibilityNotificationBatch {

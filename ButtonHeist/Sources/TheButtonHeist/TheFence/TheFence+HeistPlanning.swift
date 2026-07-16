@@ -200,12 +200,15 @@ extension TheFence {
     func decodeDescribeHeistRequest(_ arguments: CommandArgumentEnvelope) throws -> DescribeHeistRequest {
         let requestedName = try arguments.requiredValue(FenceParameters.heistName)
         do {
+            let requestedPath = try HeistDefinitionPath(validating: requestedName)
             let plan = try admitRuntimeSafeHeistPlanSource(
                 from: arguments,
                 commandName: Command.describeHeist.rawValue,
                 droppingPlanKeys: [.heist]
             )
-            return DescribeHeistRequest(description: try plan.describeHeist(named: requestedName))
+            return DescribeHeistRequest(description: try plan.describeHeist(at: requestedPath))
+        } catch let error as HeistPathValidationError {
+            throw FenceError.invalidRequest(error.description)
         } catch let error as HeistCatalogError {
             throw FenceError.invalidRequest(error.description)
         } catch let error as HeistDescriptionLookupError {

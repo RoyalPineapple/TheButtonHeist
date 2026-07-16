@@ -12,7 +12,7 @@ private enum RevealTransactionPhase {
 }
 
 private struct RevealMovement {
-    let scrollView: UIScrollView
+    let target: Navigation.ScrollableTarget
     let visualOrigin: CGPoint
 }
 
@@ -20,11 +20,16 @@ extension ElementInflation {
 
     @MainActor
     internal final class RevealTransaction {
+        private unowned let stash: TheStash
         private var movements: [ObjectIdentifier: RevealMovement] = [:]
         private var movementOrder: [ObjectIdentifier] = []
         private var phase = RevealTransactionPhase.active
 
-        internal func captureScrollableHierarchy(in stash: TheStash) {
+        internal init(stash: TheStash) {
+            self.stash = stash
+        }
+
+        internal func captureScrollableHierarchy() {
             stash.scrollableContainerViewsByPath.values.forEach(recordHierarchy(from:))
         }
 
@@ -32,8 +37,9 @@ extension ElementInflation {
             guard phase == .active else { return }
             let identifier = ObjectIdentifier(scrollView)
             guard movements[identifier] == nil else { return }
+            guard let target = Navigation.ScrollableTarget.programmatic(scrollView, in: stash) else { return }
             movements[identifier] = RevealMovement(
-                scrollView: scrollView,
+                target: target,
                 visualOrigin: Navigation.visualOrigin(in: scrollView)
             )
             movementOrder.append(identifier)
@@ -46,7 +52,9 @@ extension ElementInflation {
 
         internal var didMove: Bool {
             movements.values.contains { movement in
-                Navigation.visualOrigin(in: movement.scrollView) != movement.visualOrigin
+                movement.target.dispatchOnFreshScrollView(in: stash) { scrollView in
+                    Navigation.visualOrigin(in: scrollView) != movement.visualOrigin
+                } ?? false
             }
         }
 
@@ -55,11 +63,14 @@ extension ElementInflation {
             phase = .rolledBack
             for identifier in movementOrder.reversed() {
                 guard let movement = movements[identifier] else { continue }
-                let currentOrigin = Navigation.visualOrigin(in: movement.scrollView)
+                guard let currentOrigin = movement.target.dispatchOnFreshScrollView(
+                    in: stash,
+                    operation: Navigation.visualOrigin
+                ) else { continue }
                 guard currentOrigin != movement.visualOrigin else { continue }
                 _ = await moveViewport(.restoreVisualOrigin(
                     movement.visualOrigin,
-                    in: movement.scrollView
+                    in: movement.target
                 ))
             }
         }
@@ -91,6 +102,16 @@ extension ElementInflation {
             self.liveTarget = liveTarget
             self.deadline = deadline
             self.resolution = resolution
+        }
+
+        internal func replacingLiveTarget(_ liveTarget: TheStash.LiveActionTarget) -> Self {
+            Self(
+                target: target,
+                treeElement: liveTarget.treeElement,
+                liveTarget: liveTarget,
+                deadline: deadline,
+                resolution: resolution
+            )
         }
     }
 

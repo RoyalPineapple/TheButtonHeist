@@ -186,8 +186,8 @@ package extension ContainerPredicateCheckCore where Text: StringMatchLeaf {
                 : nil
         case .semantic(let predicate):
             return predicate.invalidPayloadDescription
-        case .actions(let actions):
-            return actions.values.invalidElementActionPayloadDescription
+        case .actions:
+            return nil
         case .type, .rowCount, .columnCount, .modalBoundary, .scrollable:
             return nil
         }

@@ -15,19 +15,19 @@ enum DiscoveryMutation: Equatable {
 /// See `docs/ARCHITECTURE.md#state-has-one-owner`.
 struct DiscoveryRegistry {
     struct Advertisement {
-        let serviceName: DiscoveryServiceName
+        let deviceID: DiscoveryDeviceID
         let device: DiscoveredDevice
         let identity: DiscoveryIdentity
         let sequence: UInt64
     }
 
-    private var advertisementsByServiceName: [DiscoveryServiceName: Advertisement] = [:]
-    private var visibleServiceNameByIdentity: [DiscoveryIdentity: DiscoveryServiceName] = [:]
+    private var advertisementsByDeviceID: [DiscoveryDeviceID: Advertisement] = [:]
+    private var visibleDeviceIDByIdentity: [DiscoveryIdentity: DiscoveryDeviceID] = [:]
     private var nextSequence: UInt64 = 0
 
     var devices: [DiscoveredDevice] {
-        visibleServiceNameByIdentity.values
-            .compactMap { advertisementsByServiceName[$0] }
+        visibleDeviceIDByIdentity.values
+            .compactMap { advertisementsByDeviceID[$0] }
             .sorted { lhs, rhs in lhs.sequence > rhs.sequence }
             .map(\.device)
     }
@@ -35,55 +35,54 @@ struct DiscoveryRegistry {
     mutating func recordFound(_ device: DiscoveredDevice) -> [DiscoveryMutation] {
         nextSequence &+= 1
 
-        let serviceName = device.discoveryServiceName
         let advertisement = Advertisement(
-            serviceName: serviceName,
+            deviceID: device.id,
             device: device,
             identity: device.discoveryIdentity,
             sequence: nextSequence
         )
-        advertisementsByServiceName[serviceName] = advertisement
+        advertisementsByDeviceID[device.id] = advertisement
 
         let identity = advertisement.identity
-        guard let visibleServiceName = visibleServiceNameByIdentity[identity] else {
-            visibleServiceNameByIdentity[identity] = serviceName
+        guard let visibleDeviceID = visibleDeviceIDByIdentity[identity] else {
+            visibleDeviceIDByIdentity[identity] = device.id
             return [.found(device)]
         }
 
-        guard visibleServiceName != serviceName else {
+        guard visibleDeviceID != device.id else {
             return []
         }
 
-        if let previous = advertisementsByServiceName[visibleServiceName] {
-            visibleServiceNameByIdentity[identity] = serviceName
+        if let previous = advertisementsByDeviceID[visibleDeviceID] {
+            visibleDeviceIDByIdentity[identity] = device.id
             return [.lost(previous.device), .found(device)]
         }
 
-        visibleServiceNameByIdentity[identity] = serviceName
+        visibleDeviceIDByIdentity[identity] = device.id
         return [.found(device)]
     }
 
-    mutating func recordLost(_ serviceName: DiscoveryServiceName) -> [DiscoveryMutation] {
-        guard let removed = advertisementsByServiceName.removeValue(forKey: serviceName) else {
+    mutating func recordLost(_ deviceID: DiscoveryDeviceID) -> [DiscoveryMutation] {
+        guard let removed = advertisementsByDeviceID.removeValue(forKey: deviceID) else {
             return []
         }
 
         let identity = removed.identity
-        guard visibleServiceNameByIdentity[identity] == serviceName else {
+        guard visibleDeviceIDByIdentity[identity] == deviceID else {
             return []
         }
 
         if let replacement = newestAdvertisement(for: identity) {
-            visibleServiceNameByIdentity[identity] = replacement.serviceName
+            visibleDeviceIDByIdentity[identity] = replacement.deviceID
             return [.lost(removed.device), .found(replacement.device)]
         }
 
-        visibleServiceNameByIdentity.removeValue(forKey: identity)
+        visibleDeviceIDByIdentity.removeValue(forKey: identity)
         return [.lost(removed.device)]
     }
 
     private func newestAdvertisement(for identity: DiscoveryIdentity) -> Advertisement? {
-        advertisementsByServiceName.values
+        advertisementsByDeviceID.values
             .filter { $0.identity == identity }
             .max { lhs, rhs in lhs.sequence < rhs.sequence }
     }

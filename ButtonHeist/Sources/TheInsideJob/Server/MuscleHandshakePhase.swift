@@ -109,17 +109,6 @@ struct MuscleHandshakePhase {
             ])
         }
 
-        if payload.token.isEmpty {
-            return .handled([
-                .sendResponse(
-                    .error(tokenAdmission.emptyTokenError()),
-                    requestId: nil,
-                    respond: respond
-                ),
-                .delayedDisconnect(clientId: clientId),
-            ])
-        }
-
         return MuscleTokenAuthenticationPhase.authenticate(
             clientId,
             address: phase.address,

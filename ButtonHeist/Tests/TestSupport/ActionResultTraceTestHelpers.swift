@@ -58,7 +58,7 @@ package enum HeistReceiptFixture {
 
     package static func action(
         path: String = "$.body[0]",
-        command: HeistActionCommand? = .activate(.predicate(ElementPredicateTemplate(label: "Button"))),
+        command: HeistActionCommand = .activate(.predicate(ElementPredicateTemplate(label: "Button"))),
         result: ActionResult = actionResult(),
         expectationActionResult: ActionResult? = nil,
         expectation: ExpectationResult? = nil,
@@ -67,40 +67,36 @@ package enum HeistReceiptFixture {
     ) -> HeistExecutionStepResult {
         let evidence: HeistActionEvidence
         if let expectationActionResult, let expectation {
-            guard let command else {
-                preconditionFailure("Expectation action evidence requires a command")
-            }
             evidence = .expectation(
-                command: command,
                 dispatchResult: result,
                 expectationResult: expectationActionResult,
                 expectation: expectation
             )
         } else {
             precondition(expectationActionResult == nil && expectation == nil)
-            evidence = command.map {
-                .dispatch(command: $0, dispatchResult: result)
-            } ?? .commandlessDispatch(dispatchResult: result)
+            evidence = .dispatch(dispatchResult: result)
         }
 
-        let intent = command.map { HeistStepIntent.action(command: $0) }
         let resolvedFailure = failure ?? inferredActionFailure(result)
         if let resolvedFailure {
-            return .failed(
-                path: path,
-                receiptKind: .action,
+            guard let evidence = HeistFailedActionEvidence(evidence) else {
+                preconditionFailure("failed action receipt fixture requires failing evidence")
+            }
+            return .action(
+                path: executionPath(path),
                 durationMs: durationMs,
-                intent: intent,
-                evidence: evidence,
-                failure: resolvedFailure
+                command: command,
+                completion: .failed(evidence: evidence, failure: resolvedFailure)
             )
         }
-        return .passed(
-            path: path,
-            receiptKind: .action,
+        guard let evidence = HeistPassedActionEvidence(evidence) else {
+            preconditionFailure("passed action receipt fixture requires passing evidence")
+        }
+        return .action(
+            path: executionPath(path),
             durationMs: durationMs,
-            intent: intent,
-            evidence: evidence
+            command: command,
+            completion: .passed(evidence: evidence)
         )
     }
 
@@ -136,23 +132,27 @@ package enum HeistReceiptFixture {
 
         let predicate = expectation.predicate
             ?? AccessibilityPredicate.exists(.label("predicate"))
-        let intent = HeistStepIntent.wait(predicate: predicate, timeout: 0)
         if let failure {
-            return .failed(
-                path: path,
-                receiptKind: .wait,
+            guard let evidence = HeistFailedWaitEvidence(evidence) else {
+                preconditionFailure("failed wait receipt fixture requires failing evidence")
+            }
+            return .wait(
+                path: executionPath(path),
                 durationMs: durationMs,
-                intent: intent,
-                evidence: evidence,
-                failure: failure
+                predicate: predicate,
+                timeout: 1,
+                completion: .failed(evidence: .observed(evidence), failure: failure)
             )
         }
-        return .passed(
-            path: path,
-            receiptKind: .wait,
+        guard let evidence = HeistPassedWaitEvidence(evidence) else {
+            preconditionFailure("passed wait receipt fixture requires matched evidence")
+        }
+        return .wait(
+            path: executionPath(path),
             durationMs: durationMs,
-            intent: intent,
-            evidence: evidence
+            predicate: predicate,
+            timeout: 1,
+            completion: .passed(evidence: evidence)
         )
     }
 
@@ -161,12 +161,11 @@ package enum HeistReceiptFixture {
         message: String,
         durationMs: Int = 1
     ) -> HeistExecutionStepResult {
-        .passed(
-            path: path,
-            receiptKind: .warning,
+        .warning(
+            path: executionPath(path),
             durationMs: durationMs,
-            intent: .warn(message: message),
-            evidence: HeistExecutionWarning(path: path, message: message)
+            message: HeistWarningMessage(stringLiteral: message),
+            completion: .passed()
         )
     }
 
@@ -175,16 +174,15 @@ package enum HeistReceiptFixture {
         message: String,
         durationMs: Int = 1
     ) -> HeistExecutionStepResult {
-        .failed(
-            path: path,
-            kind: .fail,
+        .failure(
+            path: executionPath(path),
             durationMs: durationMs,
-            intent: .fail(message: message),
-            failure: HeistFailureDetail(
+            message: HeistFailureMessage(stringLiteral: message),
+            completion: .failed(failure: HeistFailureDetail(
                 category: .explicitFailure,
                 contract: "explicit heist failure",
                 observed: message
-            )
+            ))
         )
     }
 
@@ -199,43 +197,42 @@ package enum HeistReceiptFixture {
         let evidence = HeistCaseSelectionEvidence(selection: selection)
         let resolvedDuration = durationMs ?? selection.elapsedMs
         if let abortedAtChildPath = children.firstFailedStep?.path {
-            return .childAborted(
-                path: path,
-                receiptKind: .conditional,
+            guard let children = HeistAbortedChildren(children) else {
+                preconditionFailure("conditional aborted children require the first failed path")
+            }
+            return .conditional(
+                path: executionPath(path),
                 durationMs: resolvedDuration,
-                intent: .conditional,
-                evidence: evidence,
-                failure: failure ?? HeistFailureDetail(
-                    category: .invocation,
-                    contract: "selected case body completes without failure",
-                    observed: "child failed at \(abortedAtChildPath)"
-                ),
-                abortedAtChildPath: abortedAtChildPath,
-                children: children
+                completion: .childAborted(
+                    evidence: evidence,
+                    failure: failure ?? HeistFailureDetail(
+                        category: .invocation,
+                        contract: "selected case body completes without failure",
+                        observed: "child failed at \(abortedAtChildPath)"
+                    ),
+                    children: children
+                )
             )
         }
         if status == .failed {
-            return .failed(
-                path: path,
-                receiptKind: .conditional,
+            return .conditional(
+                path: executionPath(path),
                 durationMs: resolvedDuration,
-                intent: .conditional,
-                evidence: evidence,
-                failure: failure ?? HeistFailureDetail(
-                    category: .validation,
-                    contract: "conditional branch completes",
-                    observed: "conditional failed"
-                ),
-                children: children
+                completion: .failed(
+                    evidence: .observed(evidence),
+                    failure: failure ?? HeistFailureDetail(
+                        category: .validation,
+                        contract: "conditional branch completes",
+                        observed: "conditional failed"
+                    ),
+                    children: passingChildren(children)
+                )
             )
         }
-        return .passed(
-            path: path,
-            receiptKind: .conditional,
+        return .conditional(
+            path: executionPath(path),
             durationMs: resolvedDuration,
-            intent: .conditional,
-            evidence: evidence,
-            children: children
+            completion: .passed(evidence: evidence, children: passingChildren(children))
         )
     }
 
@@ -253,8 +250,6 @@ package enum HeistReceiptFixture {
     ) -> HeistExecutionStepResult {
         let resolvedPath = path ?? "$.body[0].for_each_string.iterations[\(ordinal)]"
         let evidence = HeistForEachStringEvidence(
-            parameter: parameter,
-            count: count,
             iterationCount: iterationCount ?? count,
             iterationOrdinal: ordinal,
             value: value,
@@ -268,49 +263,77 @@ package enum HeistReceiptFixture {
             )
         }
         if let abortedAtChildPath = children.firstFailedStep?.path {
-            return .childAborted(
-                path: resolvedPath,
-                receiptKind: .forEachStringIteration,
+            guard let admittedEvidence = HeistFailedForEachStringEvidence(evidence),
+                  let admittedChildren = HeistAbortedChildren(children) else {
+                preconditionFailure("aborted loop fixture requires failed evidence and children")
+            }
+            return .forEachStringIteration(
+                path: executionPath(resolvedPath),
                 durationMs: durationMs,
-                evidence: evidence,
-                failure: failure ?? HeistFailureDetail(
-                    category: .loop,
-                    contract: "iteration \(ordinal) completes",
-                    observed: "child failed at \(abortedAtChildPath)"
-                ),
-                abortedAtChildPath: abortedAtChildPath,
-                children: children
+                parameter: parameter,
+                count: count,
+                completion: .childAborted(
+                    evidence: admittedEvidence,
+                    failure: failure ?? HeistFailureDetail(
+                        category: .loop,
+                        contract: "iteration \(ordinal) completes",
+                        observed: "child failed at \(abortedAtChildPath)"
+                    ),
+                    children: admittedChildren
+                )
             )
         }
         if status == .failed, let failure {
-            return .failed(
-                path: resolvedPath,
-                receiptKind: .forEachStringIteration,
+            guard let evidence = HeistFailedForEachStringEvidence(evidence) else {
+                preconditionFailure("failed loop fixture requires a failure reason")
+            }
+            return .forEachStringIteration(
+                path: executionPath(resolvedPath),
                 durationMs: durationMs,
-                evidence: evidence,
-                failure: failure,
-                children: children
+                parameter: parameter,
+                count: count,
+                completion: .failed(
+                    evidence: .observed(evidence),
+                    failure: failure,
+                    children: passingChildren(children)
+                )
             )
         }
-        return .passed(
-            path: resolvedPath,
-            receiptKind: .forEachStringIteration,
+        guard let evidence = HeistPassedForEachStringEvidence(evidence) else {
+            preconditionFailure("passed loop fixture cannot carry a failure reason")
+        }
+        return .forEachStringIteration(
+            path: executionPath(resolvedPath),
             durationMs: durationMs,
-            evidence: evidence,
-            children: children
+            parameter: parameter,
+            count: count,
+            completion: .passed(evidence: evidence, children: passingChildren(children))
         )
     }
 
     package static func result(
         steps: [HeistExecutionStepResult],
-        durationMs: Int = 1,
-        abortedAtPath: String? = nil
+        durationMs: Int = 1
     ) -> HeistExecutionResult {
         HeistExecutionResult(
             steps: steps,
-            durationMs: durationMs,
-            abortedAtPath: abortedAtPath
+            durationMs: durationMs
         )
+    }
+
+    private static func executionPath(_ description: String) -> HeistExecutionPath {
+        do {
+            return try HeistExecutionPath(validating: description)
+        } catch {
+            preconditionFailure("invalid receipt fixture path \(description): \(error)")
+        }
+    }
+
+    private static func passingChildren(_ children: [HeistExecutionStepResult]) -> HeistPassingChildren {
+        guard let children = HeistPassingChildren(children) else {
+            preconditionFailure("passing receipt fixture cannot contain failed children")
+        }
+        return children
     }
 
     private static func inferredActionFailure(_ result: ActionResult) -> HeistFailureDetail? {

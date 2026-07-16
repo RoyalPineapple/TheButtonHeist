@@ -17,10 +17,10 @@ extension HeistCanonicalSwiftDSLRenderer {
         return text
     }
 
-    private func renderActionExpectationTimeout(_ timeout: Double) -> String {
-        abs(timeout - defaultActionExpectationTimeout) < 0.000_001
+    private func renderActionExpectationTimeout(_ timeout: WaitTimeout) -> String {
+        timeout == defaultActionExpectationTimeout
             ? ""
-            : ", timeout: .seconds(\(decimal(timeout)))"
+            : ", timeout: .seconds(\(decimal(timeout.seconds)))"
     }
 
     func render(
@@ -38,23 +38,14 @@ extension HeistCanonicalSwiftDSLRenderer {
         case .decrement(let target):
             return "Decrement(\(try render(target: target, environment: environment)))"
         case .customAction(let name, let target):
-            return "CustomAction(\(quote(name)), on: \(try render(target: target, environment: environment)))"
+            return "CustomAction(\(quote(name.rawValue)), on: \(try render(target: target, environment: environment)))"
         case .rotor(let selection, let target, let direction):
             guard case .named(let name) = selection else {
                 throw HeistCanonicalSwiftDSLError.unsupportedAction(command.durableHeistActionFailure ?? "rotor selection \(selection)")
             }
-            return "Rotor(\(quote(name)), on: \(try render(target: target, environment: environment)), direction: .\(direction.rawValue))"
-        case .typeText(let text, let target, let replacingExisting):
-            if replacingExisting,
-               case .literal("") = text,
-               let target {
-                return "ClearText(\(try render(target: target, environment: environment)))"
-            }
-            let suffix = replacingExisting ? ", replacingExisting: true" : ""
-            if let target {
-                return "TypeText(\(try render(string: text, environment: environment)), into: \(try render(target: target, environment: environment))\(suffix))"
-            }
-            return "TypeText(\(try render(string: text, environment: environment))\(suffix))"
+            return "Rotor(\(quote(name.rawValue)), on: \(try render(target: target, environment: environment)), direction: .\(direction.rawValue))"
+        case .typeText(let payload):
+            return try render(typeText: payload, environment: environment)
         case .mechanicalTap(let target):
             return try render(mechanicalTap: target, environment: environment)
         case .mechanicalLongPress(let target):
@@ -70,7 +61,7 @@ extension HeistCanonicalSwiftDSLRenderer {
         case .editAction(let target):
             return "Edit(.\(target.action.rawValue))"
         case .setPasteboard(let target):
-            return "SetPasteboard(\(quote(target.text)))"
+            return "SetPasteboard(\(quote(target.text.rawText)))"
         case .takeScreenshot:
             return "TakeScreenshot()"
         case .dismiss:
@@ -80,6 +71,31 @@ extension HeistCanonicalSwiftDSLRenderer {
         case .dismissKeyboard:
             return "DismissKeyboard()"
         }
+    }
+
+    private func render(
+        typeText payload: TypeTextTarget,
+        environment: RenderEnvironment
+    ) throws -> String {
+        let source: String
+        let modeSuffix: String
+        switch payload.source {
+        case .text(let text):
+            if text.mode == .replace, text.rawText.isEmpty, let target = payload.target {
+                return "ClearText(\(try render(target: target, environment: environment)))"
+            }
+            source = text.mode == .replace
+                ? ".replacing(\(quote(text.rawText)))"
+                : quote(text.rawText)
+            modeSuffix = ""
+        case .reference(let reference, let mode):
+            source = try render(string: .ref(reference), environment: environment)
+            modeSuffix = mode == .replace ? ", mode: .replace" : ""
+        }
+        let target = try payload.target.map {
+            ", into: \(try render(target: $0, environment: environment))"
+        } ?? ""
+        return "TypeText(\(source)\(target)\(modeSuffix))"
     }
 
     func render(mechanicalTap target: TapTarget, environment: RenderEnvironment) throws -> String {

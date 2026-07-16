@@ -11,24 +11,24 @@ import ThePlans
 
 extension TheStash {
 
-    struct RotorHit {
-        let rotor: String
+    struct RotorHit: Sendable {
+        let rotor: RotorName
         let treeElement: InterfaceTree.Element?
         let textRange: RotorTextRange?
     }
 
-    enum RotorOutcome {
+    enum RotorOutcome: Sendable {
         case succeeded(RotorHit)
         case deallocated
         case noRotors
-        case noSuchRotor(available: [String])
-        case ambiguousRotor(available: [String])
+        case noSuchRotor(available: [RotorName])
+        case ambiguousRotor(available: [RotorName])
         case continuationInvalidated
         case currentItemUnavailable(String)
         case continuationTextRangeUnavailable
-        case noResult(String)
-        case resultTargetUnavailable(String)
-        case resultTargetNotParsed(String)
+        case noResult(RotorName)
+        case resultTargetUnavailable(RotorName)
+        case resultTargetNotParsed(RotorName)
     }
 
     func performRotor(
@@ -215,7 +215,12 @@ private extension RotorDirection {
 }
 
 extension UIAccessibilityCustomRotor {
-    func bhInvocableName(locale: String?) -> String {
+    func bhInvocableName(locale: String?) -> RotorName {
+        let value = bhInvocableNameText(locale: locale)
+        return requireValidPublicPayload { try RotorName(validating: value) }
+    }
+
+    private func bhInvocableNameText(locale: String?) -> String {
         guard name.isEmpty else { return name }
 
         switch systemRotorType {

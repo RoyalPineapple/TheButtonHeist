@@ -15,30 +15,12 @@ let deviceConnectionLogger = ButtonHeistLog.logger(.handoff(.connection))
 enum DeviceConnectionEvent: Sendable {
     case state(NWConnection.State, sessionID: UUID, connection: NWConnection)
     case received(DeviceReceiveEvent, sessionID: UUID, connection: NWConnection)
+    case sendFailed(NWError, requestId: RequestID?, sessionID: UUID, connection: NWConnection)
 }
 
 /// Connection client using Network framework.
 @ButtonHeistActor
 final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting {
-
-    struct ActiveConnection {
-        let connection: NWConnection
-        var receiveFramer = NewlineDelimitedFramer()
-    }
-
-    enum ConnectionState {
-        case disconnected
-        case connecting(connection: NWConnection)
-        case connected(ActiveConnection)
-    }
-
-    // Internal for testing (tests use @testable import to set state directly)
-    var connectionState: ConnectionState {
-        get { runtimePhase.connectionState }
-        set {
-            setRuntimePhase(RuntimePhase(connectionState: newValue))
-        }
-    }
     private let device: DiscoveredDevice
 
     var onEvent: (@ButtonHeistActor (ConnectionEvent) -> Void)?
@@ -53,7 +35,7 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
         connection.send(content: content, completion: completion)
     }
 
-    private let token: HandoffAuthToken?
+    private let token: SessionAuthToken?
 
     struct RuntimeSession {
         let id: UUID
@@ -64,63 +46,33 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
         /// Replaced on each `connect()`; cancelled when the owning session exits.
         var eventConsumerTask: Task<Void, Never>?
 
-        /// Continuation tied to this connection attempt. Yielded to from
-        /// NWConnection's `.global()` callbacks; finished when the session exits.
-        var eventContinuation: AsyncStream<DeviceConnectionEvent>.Continuation?
+        /// Ordered callback bridge tied to this connection attempt.
+        let eventStream: DeviceConnectionEventStream
 
         init(
             id: UUID = UUID(),
             connection: NWConnection,
             receiveFramer: NewlineDelimitedFramer = NewlineDelimitedFramer(),
             eventConsumerTask: Task<Void, Never>? = nil,
-            eventContinuation: AsyncStream<DeviceConnectionEvent>.Continuation? = nil
+            eventStream: DeviceConnectionEventStream = DeviceConnectionEventStream()
         ) {
             self.id = id
             self.connection = connection
             self.receiveFramer = receiveFramer
             self.eventConsumerTask = eventConsumerTask
-            self.eventContinuation = eventContinuation
-        }
-
-        var activeConnection: ActiveConnection {
-            ActiveConnection(connection: connection, receiveFramer: receiveFramer)
+            self.eventStream = eventStream
         }
 
         func cancelOwnedSidecars() {
-            eventContinuation?.finish()
+            eventStream.finish()
             eventConsumerTask?.cancel()
         }
     }
 
-    private enum RuntimePhase {
+    enum RuntimePhase {
         case disconnected
         case connecting(RuntimeSession)
         case connected(RuntimeSession)
-
-        init(connectionState: ConnectionState) {
-            switch connectionState {
-            case .disconnected:
-                self = .disconnected
-            case .connecting(let connection):
-                self = .connecting(RuntimeSession(connection: connection))
-            case .connected(let active):
-                self = .connected(RuntimeSession(
-                    connection: active.connection,
-                    receiveFramer: active.receiveFramer
-                ))
-            }
-        }
-
-        var connectionState: ConnectionState {
-            switch self {
-            case .disconnected:
-                return .disconnected
-            case .connecting(let session):
-                return .connecting(connection: session.connection)
-            case .connected(let session):
-                return .connected(session.activeConnection)
-            }
-        }
 
         var sessionID: UUID? {
             switch self {
@@ -150,11 +102,11 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
         }
     }
 
-    private var runtimePhase: RuntimePhase = .disconnected
+    var runtimePhase: RuntimePhase = .disconnected
 
-    init(device: DiscoveredDevice, token: String? = nil) {
+    init(device: DiscoveredDevice, token: SessionAuthToken? = nil) {
         self.device = device
-        self.token = HandoffAuthToken(token)
+        self.token = token
     }
 
     func connect() {
@@ -167,7 +119,7 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
             return
         }
 
-        let parameters = ButtonHeistTLSPreSharedKey.networkParameters(from: token.rawValue)
+        let parameters = ButtonHeistTLSPreSharedKey.networkParameters(from: token.description)
         deviceConnectionLogger.info("TLS enabled with token-derived PSK")
 
         let conn = NWConnection(to: device.endpoint.nwEndpoint, using: parameters)
@@ -176,15 +128,10 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
         // `connect` is idempotent: any prior consumer Task and event stream
         // are torn down so the new connection's events flow without crosstalk
         // from a previous attempt.
-        let eventStream = DeviceConnectionEventStream.makeStream()
+        let eventStream = DeviceConnectionEventStream()
 
         conn.stateUpdateHandler = { state in
-            DeviceConnectionEventStream.yield(.state(state, sessionID: sessionID, connection: conn), to: eventStream.continuation) { [weak self, weak conn] in
-                guard let conn else { return }
-                Task { @ButtonHeistActor [weak self] in
-                    self?.handleEventStreamOverflow(connection: conn, sessionID: sessionID)
-                }
-            }
+            eventStream.yield(.state(state, sessionID: sessionID, connection: conn))
         }
 
         let eventConsumerTask = Task { @ButtonHeistActor [weak self] in
@@ -195,7 +142,17 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
                     self.handleStateChange(state, sessionID: sessionID, connection: connection)
                 case .received(let receiveEvent, let sessionID, let connection):
                     self.handleReceive(receiveEvent, connection: connection, sessionID: sessionID)
+                case .sendFailed(let error, let requestId, let sessionID, let connection):
+                    self.handleSendFailure(
+                        error,
+                        requestId: requestId,
+                        connection: connection,
+                        sessionID: sessionID
+                    )
                 }
+            }
+            if eventStream.didOverflow {
+                self?.handleEventStreamOverflow(connection: conn, sessionID: sessionID)
             }
         }
 
@@ -203,7 +160,7 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
             id: sessionID,
             connection: conn,
             eventConsumerTask: eventConsumerTask,
-            eventContinuation: eventStream.continuation
+            eventStream: eventStream
         )))
         conn.start(queue: .global())
     }

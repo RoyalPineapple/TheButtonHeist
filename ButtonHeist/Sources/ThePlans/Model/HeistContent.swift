@@ -17,7 +17,7 @@ public extension HeistPlan {
     }
 
     init(
-        _ name: String,
+        _ name: HeistPlanName,
         @HeistBuilder _ content: () throws -> some HeistContent
     ) throws {
         try self.init(dslName: name, content)
@@ -34,7 +34,7 @@ public extension HeistPlan {
     }
 
     init(
-        _ name: String,
+        _ name: HeistPlanName,
         parameter: HeistReferenceName,
         @HeistBuilder _ content: (HeistReferenceName) throws -> some HeistContent
     ) throws {
@@ -55,7 +55,7 @@ public extension HeistPlan {
     }
 
     init(
-        _ name: String,
+        _ name: HeistPlanName,
         targetParameter: HeistReferenceName,
         @HeistBuilder _ content: (AccessibilityTarget) throws -> some HeistContent
     ) throws {
@@ -68,7 +68,7 @@ public extension HeistPlan {
 
 private extension HeistPlan {
     init(
-        dslName name: String?,
+        dslName name: HeistPlanName?,
         _ content: () throws -> some HeistContent
     ) throws {
         let content = try content()
@@ -81,7 +81,7 @@ private extension HeistPlan {
     }
 
     init(
-        dslName name: String?,
+        dslName name: HeistPlanName?,
         rootParameter parameter: HeistParameter,
         _ content: () throws -> some HeistContent
     ) throws {
@@ -102,7 +102,7 @@ private extension HeistPlan {
     }
 
     static func validatedDSLPlan(
-        name: String? = nil,
+        name: HeistPlanName? = nil,
         definitions: [HeistPlanAdmissionCandidate] = [],
         body: [HeistStep]
     ) throws -> HeistPlan {
@@ -216,115 +216,60 @@ private struct HeistStepList: HeistContent {
 }
 
 public struct HeistDef<Input>: Sendable {
-    public let path: [String]
+    public let path: HeistDefinitionPath
     public let parameter: HeistParameter
     private let definitionResult: ValidationResult<HeistPlanAdmissionCandidate, HeistBuildDiagnostic>
-
-    public init<Content: HeistContent>(
-        _ path: String,
-        @HeistBuilder _ content: @escaping () throws -> Content
-    ) where Input == Void {
-        self.parameter = .none
-        switch Self.pathComponents(path) {
-        case .success(let components, _):
-            self.path = components
-            self.definitionResult = Self.buildDefinition(path: components, parameter: self.parameter) {
-                try content()
-            }
-        case .failure(let diagnostics):
-            self.path = []
-            self.definitionResult = .failure(diagnostics)
-        }
-    }
 
     public init<Content: HeistContent>(
         _ path: HeistDefinitionPath,
         @HeistBuilder _ content: @escaping () throws -> Content
     ) where Input == Void {
         self.parameter = .none
-        self.path = path.components
-        self.definitionResult = Self.buildDefinition(path: path.components, parameter: self.parameter) {
+        self.path = path
+        self.definitionResult = Self.buildDefinition(path: path, parameter: self.parameter) {
             try content()
         }
     }
 
     public init<Content: HeistContent>(
-        _ path: String,
-        parameter: HeistReferenceName = "input",
-        @HeistBuilder _ content: @escaping (HeistReferenceName) throws -> Content
-    ) where Input == String {
-        let reference = parameter
-        self.parameter = .string(name: reference)
-        switch Self.pathComponents(path) {
-        case .success(let components, _):
-            self.path = components
-            self.definitionResult = Self.buildDefinition(path: components, parameter: self.parameter) {
-                try content(reference)
-            }
-        case .failure(let diagnostics):
-            self.path = []
-            self.definitionResult = .failure(diagnostics)
-        }
-    }
-
-    public init<Content: HeistContent>(
         _ path: HeistDefinitionPath,
         parameter: HeistReferenceName = "input",
         @HeistBuilder _ content: @escaping (HeistReferenceName) throws -> Content
     ) where Input == String {
         let reference = parameter
         self.parameter = .string(name: reference)
-        self.path = path.components
-        self.definitionResult = Self.buildDefinition(path: path.components, parameter: self.parameter) {
+        self.path = path
+        self.definitionResult = Self.buildDefinition(path: path, parameter: self.parameter) {
             try content(reference)
         }
     }
 
     public init<Content: HeistContent>(
-        _ path: String,
-        parameter: HeistReferenceName = "input",
-        @HeistBuilder _ content: @escaping (AccessibilityTarget) throws -> Content
-    ) where Input == AccessibilityTarget {
-        let reference = parameter
-        self.parameter = .accessibilityTarget(name: reference)
-        switch Self.pathComponents(path) {
-        case .success(let components, _):
-            self.path = components
-            self.definitionResult = Self.buildDefinition(path: components, parameter: self.parameter) {
-                try content(AccessibilityTarget(ref: reference))
-            }
-        case .failure(let diagnostics):
-            self.path = []
-            self.definitionResult = .failure(diagnostics)
-        }
-    }
-
-    public init<Content: HeistContent>(
         _ path: HeistDefinitionPath,
         parameter: HeistReferenceName = "input",
         @HeistBuilder _ content: @escaping (AccessibilityTarget) throws -> Content
     ) where Input == AccessibilityTarget {
         let reference = parameter
         self.parameter = .accessibilityTarget(name: reference)
-        self.path = path.components
-        self.definitionResult = Self.buildDefinition(path: path.components, parameter: self.parameter) {
+        self.path = path
+        self.definitionResult = Self.buildDefinition(path: path, parameter: self.parameter) {
             try content(AccessibilityTarget(ref: reference))
         }
     }
 
     private static func buildDefinition(
-        path: [String],
+        path: HeistDefinitionPath,
         parameter: HeistParameter,
         _ content: () throws -> any HeistContent
     ) -> ValidationResult<HeistPlanAdmissionCandidate, HeistBuildDiagnostic> {
-        let renderedPath = HeistDefinitionPath.render(path)
+        let renderedPath = path.description
         do {
             let content = try content()
             guard content.heistBuildDiagnostics.isEmpty else {
                 return .failure(content.heistBuildDiagnostics.map { $0.withPath(renderedPath) })
             }
             return .success(makeDefinition(
-                path: path,
+                components: path.components[...],
                 parameter: parameter,
                 definitions: content.heistDefinitions,
                 body: content.heistSteps.map(HeistStepAdmissionCandidate.init)
@@ -339,20 +284,15 @@ public struct HeistDef<Input>: Sendable {
     }
 
     private static func makeDefinition(
-        path: [String],
+        components: ArraySlice<HeistPlanName>,
         parameter: HeistParameter,
         definitions: [HeistPlanAdmissionCandidate],
         body: [HeistStepAdmissionCandidate]
     ) -> HeistPlanAdmissionCandidate {
-        guard let first = path.first else {
-            return HeistPlanAdmissionCandidate(
-                name: nil,
-                parameter: parameter,
-                definitions: definitions,
-                body: body
-            )
+        guard let first = components.first else {
+            preconditionFailure("validated heist definition path must not be empty")
         }
-        guard path.count > 1 else {
+        guard components.count > 1 else {
             return HeistPlanAdmissionCandidate(
                 name: first,
                 parameter: parameter,
@@ -361,7 +301,7 @@ public struct HeistDef<Input>: Sendable {
             )
         }
         let child = Self.makeDefinition(
-            path: Array(path.dropFirst()),
+            components: components.dropFirst(),
             parameter: parameter,
             definitions: definitions,
             body: body
@@ -373,19 +313,11 @@ public struct HeistDef<Input>: Sendable {
         )
     }
 
-    private static func pathComponents(_ path: String) -> ValidationResult<[String], HeistBuildDiagnostic> {
-        do {
-            return .success(try HeistDefinitionPath.components(fromDottedName: path), diagnostics: [])
-        } catch {
-            return .failure([.invalidDefinitionPath(path, error: error, phase: .dslBuild)])
-        }
-    }
-
     fileprivate func invocation(argument: HeistArgument) throws -> HeistInvocationContent {
         let definition = try definitionResult.get(orThrow: HeistDefinitionBuildError.init(diagnostics:))
         return HeistInvocationContent(
             invocation: HeistInvocationStep(
-                invocationPath: HeistInvocationPath.preconditionValidated(components: path),
+                path: HeistInvocationPath(definitionPath: path),
                 argument: argument
             ),
             heistDefinitions: [definition]
@@ -394,29 +326,20 @@ public struct HeistDef<Input>: Sendable {
 }
 
 public struct HeistInvocationContent: HeistContent {
-    private static let invalidInvocationPlaceholder: HeistInvocationStep = {
-        guard let path = try? HeistInvocationPath(components: ["invalid"]) else {
-            preconditionFailure("known-valid placeholder invocation path failed validation")
-        }
-        return HeistInvocationStep(invocationPath: path, argument: .none)
-    }()
-
     public let invocation: HeistInvocationStep
     public let heistDefinitions: [HeistPlanAdmissionCandidate]
-    let explicitExpectationTimeout: Double?
+    let explicitExpectationTimeout: WaitTimeout?
     let expectationValidationDiagnostics: [HeistBuildDiagnostic]
-    private let emitsInvocationStep: Bool
-    private let invocationValidationDiagnostics: [HeistBuildDiagnostic]
 
     public var heistSteps: [HeistStep] {
-        emitsInvocationStep ? [.invoke(invocation)] : []
+        [.invoke(invocation)]
     }
 
     public var heistBuildDiagnostics: [HeistBuildDiagnostic] {
-        invocationValidationDiagnostics + expectationValidationDiagnostics.map {
+        expectationValidationDiagnostics.map {
             HeistBuildDiagnostic.dslBuild(
                 code: .dslInvalidInvocationExpectation,
-                path: emitsInvocationStep ? invocation.capabilityName : invocationValidationDiagnostics.first?.path,
+                path: invocation.path.description,
                 message: $0.message,
                 hint: $0.hint
             )
@@ -426,34 +349,21 @@ public struct HeistInvocationContent: HeistContent {
     init(
         invocation: HeistInvocationStep,
         heistDefinitions: [HeistPlanAdmissionCandidate],
-        explicitExpectationTimeout: Double? = nil,
+        explicitExpectationTimeout: WaitTimeout? = nil,
         expectationValidationDiagnostics: [HeistBuildDiagnostic] = []
     ) {
         self.invocation = invocation
         self.heistDefinitions = heistDefinitions
         self.explicitExpectationTimeout = explicitExpectationTimeout
         self.expectationValidationDiagnostics = expectationValidationDiagnostics
-        self.emitsInvocationStep = true
-        self.invocationValidationDiagnostics = []
-    }
-
-    init(invalidDiagnostics: [HeistBuildDiagnostic]) {
-        self.invocation = Self.invalidInvocationPlaceholder
-        self.heistDefinitions = []
-        self.explicitExpectationTimeout = nil
-        self.expectationValidationDiagnostics = []
-        self.emitsInvocationStep = false
-        self.invocationValidationDiagnostics = invalidDiagnostics
     }
 }
 
 public extension HeistInvocationContent {
     func expect(
         _ predicate: AccessibilityPredicate,
-        timeout: Double? = nil
+        timeout: WaitTimeout? = nil
     ) -> HeistInvocationContent {
-        guard emitsInvocationStep else { return self }
-
         let timeoutResult = composeExpectationTimeout(
             existing: invocation.expectation,
             existingExplicit: explicitExpectationTimeout,
@@ -468,7 +378,7 @@ public extension HeistInvocationContent {
 
         return HeistInvocationContent(
             invocation: HeistInvocationStep(
-                invocationPath: invocation.invocationPath,
+                path: invocation.path,
                 argument: invocation.argument,
                 expectation: WaitStep(predicate: predicateResult.predicate, timeout: timeoutResult.timeout)
             ),
@@ -532,16 +442,8 @@ public extension HeistDef where Input == AccessibilityTarget {
 /// references a capability by name and lowers to the invocation IR; the named
 /// capability must resolve within the closed plan — runtime safety enforces
 /// resolution, arity, type, and non-recursion.
-public func RunHeist(_ name: String) -> HeistInvocationContent {
-    runHeistInvocation(name, argument: .none)
-}
-
 public func RunHeist(_ path: HeistInvocationPath) -> HeistInvocationContent {
     runHeistInvocation(path, argument: .none)
-}
-
-public func RunHeist(_ name: String, _ input: String) -> HeistInvocationContent {
-    runHeistInvocation(name, argument: .string(input))
 }
 
 public func RunHeist(_ path: HeistInvocationPath, _ input: String) -> HeistInvocationContent {
@@ -549,35 +451,18 @@ public func RunHeist(_ path: HeistInvocationPath, _ input: String) -> HeistInvoc
 }
 
 @_disfavoredOverload
-public func RunHeist(_ name: String, _ reference: HeistReferenceName) -> HeistInvocationContent {
-    runHeistInvocation(name, argument: .string(reference: reference))
-}
-
-@_disfavoredOverload
 public func RunHeist(_ path: HeistInvocationPath, _ reference: HeistReferenceName) -> HeistInvocationContent {
     runHeistInvocation(path, argument: .string(reference: reference))
-}
-
-public func RunHeist(_ name: String, _ input: AccessibilityTarget) -> HeistInvocationContent {
-    runHeistInvocation(name, argument: .accessibilityTarget(input))
 }
 
 public func RunHeist(_ path: HeistInvocationPath, _ input: AccessibilityTarget) -> HeistInvocationContent {
     runHeistInvocation(path, argument: .accessibilityTarget(input))
 }
 
-private func runHeistInvocation(_ name: String, argument: HeistArgument) -> HeistInvocationContent {
-    do {
-        return runHeistInvocation(try HeistInvocationPath(dottedName: name), argument: argument)
-    } catch {
-        return HeistInvocationContent(invalidDiagnostics: [.invalidInvocationPath(name, error: error, phase: .dslBuild)])
-    }
-}
-
 private func runHeistInvocation(_ path: HeistInvocationPath, argument: HeistArgument) -> HeistInvocationContent {
     HeistInvocationContent(
         invocation: HeistInvocationStep(
-            invocationPath: path,
+            path: path,
             argument: argument
         ),
         heistDefinitions: []
@@ -596,12 +481,10 @@ public struct ForEach<Content: HeistContent>: HeistContent {
         @HeistBuilder content: (HeistReferenceName) throws -> Content
     ) {
         do {
-            let parameter = try HeistParameterName.normalized(parameter.rawValue)
-            let reference = try HeistReferenceName(validating: parameter, type: "for_each string parameter")
-            let content = try content(reference)
+            let content = try content(parameter)
             let step = try ForEachStringStep(
                 values: values,
-                parameter: reference,
+                parameter: parameter,
                 body: content.heistSteps
             )
             self.heistSteps = [.forEachString(step)]
@@ -633,14 +516,12 @@ public struct ForEach<Content: HeistContent>: HeistContent {
         @HeistBuilder _ content: (AccessibilityTarget) throws -> Content
     ) {
         do {
-            let parameter = try HeistParameterName.normalized(parameter.rawValue)
-            let reference = try HeistReferenceName(validating: parameter, type: "for_each target parameter")
-            let target = AccessibilityTarget(ref: reference)
+            let target = AccessibilityTarget(ref: parameter)
             let content = try content(target)
             let step = try ForEachElementStep(
                 matching: predicate,
                 limit: limit,
-                parameter: reference,
+                parameter: parameter,
                 body: content.heistSteps
             )
             self.heistSteps = [.forEachElement(step)]

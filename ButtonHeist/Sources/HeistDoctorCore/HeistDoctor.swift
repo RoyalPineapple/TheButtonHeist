@@ -5,7 +5,7 @@ public enum HeistDoctor {
     public static func diagnosis(
         lastPass: HeistExecutionResult,
         newFail: HeistExecutionResult,
-        stepPath requestedStepPath: String? = nil
+        stepPath requestedStepPath: HeistExecutionPath? = nil
     ) throws -> HeistRepairDiagnosis {
         let currentStep = try selectedCurrentFailure(in: newFail, stepPath: requestedStepPath)
         let lastStep = try selectedLastSuccess(in: lastPass, matching: currentStep.path)
@@ -19,7 +19,7 @@ public enum HeistDoctor {
     public static func suggestions(
         lastPass: HeistExecutionResult,
         newFail: HeistExecutionResult,
-        stepPath requestedStepPath: String? = nil
+        stepPath requestedStepPath: HeistExecutionPath? = nil
     ) throws -> [HeistRepairSuggestion] {
         let diagnosis = try diagnosis(lastPass: lastPass, newFail: newFail, stepPath: requestedStepPath)
         switch diagnosis {
@@ -35,7 +35,7 @@ public enum HeistDoctor {
 
     private static func selectedCurrentFailure(
         in receipt: HeistExecutionResult,
-        stepPath: String?
+        stepPath: HeistExecutionPath?
     ) throws -> HeistExecutionStepResult {
         if let stepPath {
             let step = try receipt.actionStep(at: stepPath)
@@ -56,7 +56,7 @@ public enum HeistDoctor {
 
     private static func selectedLastSuccess(
         in receipt: HeistExecutionResult,
-        matching stepPath: String
+        matching stepPath: HeistExecutionPath
     ) throws -> HeistExecutionStepResult {
         let step = try receipt.actionStep(at: stepPath)
         guard step.status == .passed else {
@@ -69,14 +69,18 @@ public enum HeistDoctor {
 
 public enum HeistDoctorError: Error, Sendable, Equatable, CustomStringConvertible, LocalizedError {
     case noFailedStep
-    case stepNotFound(path: String)
-    case nonActionStep(path: String, kind: HeistExecutionStepKind)
-    case stepStatus(path: String, expected: HeistExecutionStepStatus, actual: HeistExecutionStepStatus)
-    case missingActionEvidence(path: String)
-    case missingTarget(path: String)
-    case missingActionResult(path: String)
-    case missingTrace(path: String)
-    case noSafeSuggestion(path: String, reason: String)
+    case stepNotFound(path: HeistExecutionPath)
+    case nonActionStep(path: HeistExecutionPath, kind: HeistExecutionStepKind)
+    case stepStatus(
+        path: HeistExecutionPath,
+        expected: HeistExecutionStepStatus,
+        actual: HeistExecutionStepStatus
+    )
+    case missingActionEvidence(path: HeistExecutionPath)
+    case missingTarget(path: HeistExecutionPath)
+    case missingActionResult(path: HeistExecutionPath)
+    case missingTrace(path: HeistExecutionPath)
+    case noSafeSuggestion(path: HeistExecutionPath, reason: String)
 
     public var description: String {
         switch self {
@@ -107,7 +111,7 @@ public enum HeistDoctorError: Error, Sendable, Equatable, CustomStringConvertibl
 }
 
 private extension HeistExecutionResult {
-    func actionStep(at path: String) throws -> HeistExecutionStepResult {
+    func actionStep(at path: HeistExecutionPath) throws -> HeistExecutionStepResult {
         guard let step = evidenceRollup.outputReceiptNodes.first(where: { $0.path == path && $0.kind == .action }) else {
             throw HeistDoctorError.stepNotFound(path: path)
         }

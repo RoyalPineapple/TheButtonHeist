@@ -57,11 +57,11 @@ struct DeviceResolver {
     let getDiscoveredDevices: () -> [DiscoveredDevice]
 
     init(
-        filter: String?,
+        target: DeviceResolutionTarget,
         discoveryTimeout: UInt64,
         getDiscoveredDevices: @escaping () -> [DiscoveredDevice]
     ) {
-        self.target = DeviceResolutionTarget(filter: filter)
+        self.target = target
         self.discoveryTimeout = discoveryTimeout
         self.getDiscoveredDevices = getDiscoveredDevices
     }

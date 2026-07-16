@@ -6,18 +6,8 @@ extension HeistCanonicalSwiftDSLRenderer {
         return "\(label): [\(traits.map { ".\($0.rawValue)" }.joined(separator: ", "))]"
     }
 
-    func renderTimeout(_ timeout: Double) -> String {
-        abs(timeout - defaultWaitTimeout) < 0.000_001 ? "" : ", timeout: .seconds(\(decimal(timeout)))"
-    }
-
-    func validateParameter(_ parameter: String) throws {
-        guard HeistParameterName.isValid(parameter) else {
-            throw HeistCanonicalSwiftDSLError.invalidParameter(parameter)
-        }
-    }
-
-    func validateParameter(_ parameter: HeistReferenceName) throws {
-        try validateParameter(parameter.rawValue)
+    func renderTimeout(_ timeout: WaitTimeout) -> String {
+        timeout == defaultWaitTimeout ? "" : ", timeout: .seconds(\(decimal(timeout.seconds)))"
     }
 
     func line(_ text: String, _ indent: Int) -> String {

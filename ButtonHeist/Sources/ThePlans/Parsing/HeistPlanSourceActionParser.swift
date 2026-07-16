@@ -39,54 +39,70 @@ extension HeistPlanSourceParser {
 
     mutating func parseTypeTextAction() throws -> HeistActionCommand {
         try expectSymbol("(")
-        let text = try parseStringExpr()
+        let textToken = currentToken
+        var source: TextInputSource
+        if consumeSymbol(".") {
+            try expectIdentifier("replacing")
+            try expectSymbol("(")
+            source = .text(.replacing(try parseStringLiteral()))
+            try expectSymbol(")")
+        } else {
+            switch try parseStringExpr() {
+            case .literal(let text):
+                do {
+                    source = .text(try TextInputText(validating: text))
+                } catch let validationError {
+                    throw error(textToken, String(describing: validationError))
+                }
+            case .ref(let reference):
+                source = .reference(reference, mode: .append)
+            }
+        }
         var target: AccessibilityTarget?
-        var replacingExisting = false
-        var sawTarget = false
-        var sawReplacingExisting = false
-        while consumeSymbol(",") {
+        if consumeSymbol(",") {
             let token = currentToken
             if lookaheadLabel("into") {
                 try expectIdentifier("into")
                 try expectSymbol(":")
-                guard !sawTarget else {
-                    throw error(token, "TypeText(...) accepts into only once")
-                }
                 target = try parseTargetExpr()
-                sawTarget = true
-            } else if lookaheadLabel("replacingExisting") {
-                try expectIdentifier("replacingExisting")
-                try expectSymbol(":")
-                guard !sawReplacingExisting else {
-                    throw error(token, "TypeText(...) accepts replacingExisting only once")
+                if consumeSymbol(",") {
+                    source = try parseTextInputMode(for: source)
                 }
-                replacingExisting = try parseBoolLiteral()
-                sawReplacingExisting = true
+            } else if lookaheadLabel("mode") {
+                source = try parseTextInputMode(for: source)
             } else {
-                throw error(token, "TypeText(...) accepts labeled arguments into: and replacingExisting:")
+                throw error(token, "TypeText(...) accepts only the labeled arguments into: and mode:")
             }
         }
         try expectSymbol(")")
-        return HeistActionCommand(core: .typeText(
-            text: text,
-            target: target,
-            replacingExisting: replacingExisting
-        ))
+        return HeistActionCommand(core: .typeText(TypeTextTarget(source: source, target: target)))
+    }
+
+    mutating func parseTextInputMode(for source: TextInputSource) throws -> TextInputSource {
+        let token = currentToken
+        try expectIdentifier("mode")
+        try expectSymbol(":")
+        let mode = try parseEnumCase(TextInputText.Mode.self, role: "text input mode")
+        guard case .reference(let reference, _) = source else {
+            throw error(token, "mode: is only valid for referenced text; use .replacing(...) for authored text")
+        }
+        return .reference(reference, mode: mode)
     }
 
     mutating func parseClearTextAction() throws -> HeistActionCommand {
         try expectSymbol("(")
         let target = try parseTargetExpr()
         try expectSymbol(")")
-        return .typeText(text: "", target: target, replacingExisting: true)
+        return .typeText(text: .replacing(""), target: target)
     }
 
     mutating func parseCustomAction() throws -> HeistActionCommand {
         try expectSymbol("(")
         let actionNameToken = currentToken
         let actionName = try parseStringLiteral()
+        let admittedName: CustomActionName
         do {
-            try CustomActionTarget.validate(actionName: actionName)
+            admittedName = try CustomActionName(validating: actionName)
         } catch let validationError {
             throw error(actionNameToken, String(describing: validationError))
         }
@@ -95,12 +111,19 @@ extension HeistPlanSourceParser {
         try expectSymbol(":")
         let target = try parseTargetExpr()
         try expectSymbol(")")
-        return .customAction(name: actionName, target: target)
+        return .customAction(name: admittedName, target: target)
     }
 
     mutating func parseRotorAction() throws -> HeistActionCommand {
         try expectSymbol("(")
+        let rotorNameToken = currentToken
         let rotorName = try parseStringLiteral()
+        let admittedName: RotorName
+        do {
+            admittedName = try RotorName(validating: rotorName)
+        } catch let validationError {
+            throw error(rotorNameToken, String(describing: validationError))
+        }
         try expectSymbol(",")
         try expectIdentifier("on")
         try expectSymbol(":")
@@ -112,14 +135,19 @@ extension HeistPlanSourceParser {
             direction = try parseEnumCase(RotorDirection.self, role: "rotor direction")
         }
         try expectSymbol(")")
-        return .rotor(selection: .named(rotorName), target: target, direction: direction)
+        return .rotor(selection: .named(admittedName), target: target, direction: direction)
     }
 
     mutating func parseSetPasteboardAction() throws -> HeistActionCommand {
         try expectSymbol("(")
+        let textToken = currentToken
         let text = try parseStringLiteral()
         try expectSymbol(")")
-        return .setPasteboard(SetPasteboardTarget(text: text))
+        do {
+            return .setPasteboard(SetPasteboardTarget(text: try PasteboardText(validating: text)))
+        } catch let validationError {
+            throw error(textToken, String(describing: validationError))
+        }
     }
 
     mutating func parseTakeScreenshotAction() throws -> HeistActionCommand {
@@ -292,13 +320,13 @@ extension HeistPlanSourceParser {
     }
 
     mutating func parseGestureDuration() throws -> GestureDuration {
-        try expectIdentifier("GestureDuration")
-        try expectSymbol("(")
-        try expectIdentifier("seconds")
-        try expectSymbol(":")
+        let durationToken = currentToken
         let seconds = try parseNumber()
-        try expectSymbol(")")
-        return GestureDuration(seconds: seconds)
+        do {
+            return try GestureDuration.admitting(seconds: seconds)
+        } catch let validationError {
+            throw error(durationToken, String(describing: validationError))
+        }
     }
 
     mutating func parseActionStep(
@@ -316,7 +344,7 @@ extension HeistPlanSourceParser {
             case "expect":
                 try expectSymbol("(")
                 let predicate: AccessibilityPredicate
-                let timeout: Double?
+                let timeout: WaitTimeout?
                 if currentToken.isSymbol(")") {
                     throw error(currentToken, ".expect(...) requires a canonical predicate")
                 } else {

@@ -3,32 +3,33 @@ import Foundation
 // MARK: - Heist Execution Environment
 
 public struct HeistReferenceName: Codable, Hashable, Sendable, Equatable, ExpressibleByStringLiteral {
+    public typealias ValidationError = HeistIdentifierValidationError
+
     public let rawValue: String
 
     public init(stringLiteral value: String) {
-        guard let normalized = Self.normalizedValue(value) else {
-            preconditionFailure("heist reference must not be empty")
+        do {
+            try self.init(validating: value)
+        } catch {
+            preconditionFailure(String(describing: error))
         }
-        rawValue = normalized
     }
 
-    public init(validating value: String, type: String = "heist") throws {
-        guard let normalized = Self.normalizedValue(value) else {
-            throw HeistExpressionError.emptyReference(type)
-        }
-        rawValue = normalized
+    public init(validating value: String) throws {
+        rawValue = try HeistIdentifierGrammar.admit(value)
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         let value = try container.decode(String.self)
-        guard let normalized = Self.normalizedValue(value) else {
+        do {
+            try self.init(validating: value)
+        } catch {
             throw DecodingError.dataCorruptedError(
                 in: container,
-                debugDescription: "reference must not be empty"
+                debugDescription: String(describing: error)
             )
         }
-        rawValue = normalized
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -36,19 +37,6 @@ public struct HeistReferenceName: Codable, Hashable, Sendable, Equatable, Expres
         try container.encode(rawValue)
     }
 
-    package static func normalized(_ value: String) -> HeistReferenceName? {
-        normalizedValue(value).map { HeistReferenceName(validated: $0) }
-    }
-
-    private static func normalizedValue(_ value: String) -> String? {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        return trimmed
-    }
-
-    private init(validated value: String) {
-        rawValue = value
-    }
 }
 
 extension HeistReferenceName: CustomStringConvertible {
@@ -81,15 +69,16 @@ extension HeistReferenceName {
         forKey key: K,
         type: String?
     ) throws -> HeistReferenceName {
-        guard let normalized = normalized(value) else {
+        do {
+            return try HeistReferenceName(validating: value)
+        } catch {
             let subject = type.map { "\($0) reference" } ?? key.stringValue
             throw DecodingError.dataCorruptedError(
                 forKey: key,
                 in: container,
-                debugDescription: "\(subject) must not be empty"
+                debugDescription: "\(subject) \(error)"
             )
         }
-        return normalized
     }
 }
 
@@ -268,7 +257,6 @@ private extension Set where Element == HeistReferenceName {
 public enum HeistExpressionError: Error, Sendable, Equatable, CustomStringConvertible {
     case unresolvedTargetReference(String)
     case unresolvedStringReference(String)
-    case emptyReference(String)
     case invalidStringMatch(mode: String)
     case unsupportedHeistActionCommand(String)
     case parameterArgumentMismatch(parameter: HeistParameterKind, argument: HeistParameterKind)
@@ -279,8 +267,6 @@ public enum HeistExpressionError: Error, Sendable, Equatable, CustomStringConver
             return "unresolved target reference \"\(reference)\""
         case .unresolvedStringReference(let reference):
             return "unresolved string reference \"\(reference)\""
-        case .emptyReference(let type):
-            return "\(type) reference must not be empty"
         case .invalidStringMatch(let mode):
             return "\(mode) string match value must not be empty"
         case .unsupportedHeistActionCommand(let command):

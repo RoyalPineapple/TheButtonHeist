@@ -10,14 +10,14 @@ extension TheBrains {
     internal struct HeistExecutionScope {
         internal let rootPlan: HeistPlan
         internal let plan: HeistPlan
-        internal var definitionPath: [String] = []
-        internal var invocationStack: Set<String> = []
+        internal var definitionPath: [HeistPlanName] = []
+        internal var invocationStack: Set<HeistInvocationPath> = []
 
         internal init(
             plan: HeistPlan,
             rootPlan: HeistPlan? = nil,
-            definitionPath: [String] = [],
-            invocationStack: Set<String> = []
+            definitionPath: [HeistPlanName] = [],
+            invocationStack: Set<HeistInvocationPath> = []
         ) {
             self.rootPlan = rootPlan ?? plan
             self.plan = plan
@@ -135,7 +135,7 @@ extension TheBrains {
                     )
                 },
                 wait: { request in
-                    return await brains.interactionObservation.waitForPredicate(
+                    return await brains.waitForPredicate(
                         request.step,
                         initialTrace: request.initialTrace,
                         baselineSequence: request.afterSequence,
@@ -197,7 +197,7 @@ extension TheBrains {
             runtime: runtime,
             environment: environment,
             scope: HeistExecutionScope(plan: plan),
-            path: "$.body"
+            path: .body
         )
         var stepResults = execution.steps
         let abortedAtPath = execution.abortedPath
@@ -211,19 +211,7 @@ extension TheBrains {
             stepResults.append(failureScreenshotStep)
         }
         let durationMs = Int((CFAbsoluteTimeGetCurrent() - heistStart) * 1000)
-        let heistResult: HeistExecutionResult
-        if let abortedAtPath {
-            heistResult = .failed(
-                steps: stepResults,
-                durationMs: durationMs,
-                abortedAtPath: abortedAtPath
-            )
-        } else {
-            heistResult = .passed(
-                steps: stepResults,
-                durationMs: durationMs
-            )
-        }
+        let heistResult = HeistExecutionResult(steps: stepResults, durationMs: durationMs)
 
         let message = heistExecutionMessage(
             completedCount: stepResults.count,
@@ -246,7 +234,7 @@ extension TheBrains {
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope,
-        path: String = "$.body"
+        path: HeistExecutionPath = .body
     ) async -> [HeistExecutionStepResult] {
         let accumulator = await executeHeistStepAccumulator(
             steps,
@@ -263,25 +251,17 @@ extension TheBrains {
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope,
-        path: String
+        path: HeistExecutionPath
     ) async -> HeistExecutionAccumulator {
         var accumulator = HeistExecutionAccumulator()
 
         for (index, step) in steps.enumerated() {
-            let stepPath = "\(path)[\(index)]"
+            let stepPath = path.step(at: index)
 
-            switch accumulator.decision(for: stepPath) {
-            case .skip(let abortedPath):
-                let transition = accumulator.apply(.skipped(
-                    skippedHeistReceipt(for: step, path: stepPath),
-                    abortedPath: abortedPath
-                ))
-                if case .rejected(let rejection) = transition {
-                    return rejectedAccumulator(rejecting: rejection, accumulated: accumulator)
-                }
+            if accumulator.abortedPath != nil {
+                accumulator.append(skippedHeistReceipt(for: step, path: stepPath))
                 continue
-
-            case .execute:
+            } else {
                 let stepResult = await executeHeistStep(
                     step,
                     index: index,
@@ -290,19 +270,8 @@ extension TheBrains {
                     environment: environment,
                     scope: scope
                 )
-                let transition = accumulator.apply(.executed(stepResult))
-                if case .rejected(let rejection) = transition {
-                    return rejectedAccumulator(rejecting: rejection, accumulated: accumulator)
-                }
-
-            case .reject(let rejection):
-                return rejectedAccumulator(rejecting: rejection, accumulated: accumulator)
+                accumulator.append(stepResult)
             }
-        }
-
-        let completion = accumulator.complete()
-        if case .rejected(let rejection) = completion {
-            return rejectedAccumulator(rejecting: rejection, accumulated: accumulator)
         }
         return accumulator
     }
@@ -310,7 +279,7 @@ extension TheBrains {
     private func executeHeistStep(
         _ step: HeistStep,
         index: Int,
-        path: String,
+        path: HeistExecutionPath,
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
@@ -406,7 +375,7 @@ extension TheBrains {
     private func executeInlineHeistStep(
         _ plan: HeistPlan,
         index _: Int,
-        path: String,
+        path: HeistExecutionPath,
         start: CFAbsoluteTime,
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
@@ -422,22 +391,30 @@ extension TheBrains {
                 definitionPath: scope.definitionPath,
                 invocationStack: scope.invocationStack
             ),
-            path: "\(path).heist.body"
+            path: path.heistBody()
         )
-        return heistReceipt(.init(
-            path: path,
-            kind: .heist,
-            durationMs: elapsedMilliseconds(since: start),
-            intent: .heist(name: plan.name),
-            evidence: .invocation(.heist(
-                name: plan.name.map { "heist \($0)" } ?? "inline heist",
-                childFailedPath: children.firstFailedStep?.path
-            )),
-            children: children,
-            childFailure: { childPath in
-                self.childFailureDetail(category: .invocation, childPath: childPath)
-            }
-        ))
+        switch HeistExecutedChildren(children) {
+        case .passed(let children):
+            return .heist(
+                path: path,
+                durationMs: elapsedMilliseconds(since: start),
+                name: plan.name,
+                completion: .passed(children: children)
+            )
+        case .aborted(let children):
+            return .heist(
+                path: path,
+                durationMs: elapsedMilliseconds(since: start),
+                name: plan.name,
+                completion: .childAborted(
+                    failure: childFailureDetail(
+                        category: .invocation,
+                        childPath: children.abortedAtPath
+                    ),
+                    children: children
+                )
+            )
+        }
     }
 
 }

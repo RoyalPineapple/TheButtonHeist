@@ -191,7 +191,7 @@ The shared command accepts these top-level fields:
 | `path` | string | Conditional | — | Path to a generated `.heist` package |
 | `argument` | object | No | `{"type":"none"}` | Root invocation argument, using the `run_heist` argument schema |
 | `lint` | string enum | No | `composition_quality` | Authoring lint mode: `none`, `composition_quality`, or `strict_test` |
-| `requestId` | string | No | Generated | Existing request correlation field |
+| `requestId` | `RequestID` string | No | Generated | Existing request correlation field |
 
 Exactly one of `plan` or `path` MUST be present. The generated JSON Schema MUST
 continue the repository convention of ordinary properties with
@@ -380,7 +380,7 @@ Each public lint finding contains:
 | Field | Type | Meaning |
 |---|---|---|
 | `severity` | `warning` or `error` | Existing `HeistPlanLintFinding.Severity` |
-| `path` | string | Canonical traversal path |
+| `path` | string | Public rendering of the canonical typed `HeistPlanPath` |
 | `message` | string | What the authoring issue is |
 | `suggestion` | string, optional | A concrete repair |
 
@@ -446,7 +446,7 @@ dispatch.
   "admissible": true,
   "plan": {
     "valid": true,
-    "version": 1,
+    "version": 2,
     "name": "checkout",
     "parameter": {
       "type": "none"
@@ -571,7 +571,7 @@ plan but is not admissible as the corresponding `run_heist` request:
   "admissible": false,
   "plan": {
     "valid": true,
-    "version": 1,
+    "version": 2,
     "name": "search",
     "parameter": {
       "type": "string",
@@ -616,7 +616,7 @@ have plan-build errors.
   "admissible": true,
   "plan": {
     "valid": true,
-    "version": 1,
+    "version": 2,
     "parameter": {
       "type": "none"
     },

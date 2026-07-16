@@ -5,12 +5,12 @@ import ThePlans
 import TheScore
 
 package enum ExpectedHeistFailureError: Error, Equatable {
-    case heistPassed(String)
+    case heistPassed(HeistDefinitionPath)
 }
 
 @MainActor
 package func expectHeistFailure<Content: HeistContent>(
-    _ name: String,
+    _ name: HeistDefinitionPath,
     @HeistBuilder content: @escaping () throws -> Content
 ) async throws -> Heist.Failure {
     do {

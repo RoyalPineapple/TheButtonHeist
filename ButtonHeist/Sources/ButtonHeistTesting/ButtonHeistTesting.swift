@@ -22,10 +22,10 @@ struct HeistRunRequest: Equatable, Sendable {
 @MainActor
 @discardableResult
 public func runHeist(
-    _ name: String,
+    _ path: HeistDefinitionPath,
     @HeistBuilder _ content: @escaping () throws -> some HeistContent
 ) async throws -> Heist {
-    let request = try makeRunHeistRequest(name, content)
+    let request = try makeRunHeistRequest(path, content)
     return try await Heist(request.plan, argument: request.argument)
 }
 
@@ -40,20 +40,12 @@ public func runHeist(
 }
 
 func makeRunHeistRequest(
-    _ name: String,
+    _ path: HeistDefinitionPath,
     @HeistBuilder _ content: @escaping () throws -> some HeistContent
 ) throws -> HeistRunRequest {
-    guard shouldWrapDottedCapability(name) else {
-        return HeistRunRequest(
-            plan: try HeistPlan(name, content),
-            argument: .none
-        )
-    }
-    let definition = HeistDef<Void>(name, content)
+    let definition = HeistDef<Void>(path, content)
     return HeistRunRequest(
-        plan: try HeistPlan {
-            try definition()
-        },
+        plan: try HeistPlan { try definition() },
         argument: .none
     )
 }
@@ -61,13 +53,13 @@ func makeRunHeistRequest(
 @MainActor
 @discardableResult
 public func runHeist(
-    _ name: String,
+    _ path: HeistDefinitionPath,
     argument input: String,
     parameter: HeistReferenceName = "input",
     @HeistBuilder _ content: @escaping (HeistReferenceName) throws -> some HeistContent
 ) async throws -> Heist {
     let request = try makeRunHeistRequest(
-        name,
+        path,
         argument: input,
         parameter: parameter,
         content
@@ -76,13 +68,13 @@ public func runHeist(
 }
 
 func makeRunHeistRequest(
-    _ name: String,
+    _ path: HeistDefinitionPath,
     argument input: String,
     parameter: HeistReferenceName = "input",
     @HeistBuilder _ content: @escaping (HeistReferenceName) throws -> some HeistContent
 ) throws -> HeistRunRequest {
     HeistRunRequest(
-        plan: try makeRunHeistPlan(name, parameter: parameter, content: content),
+        plan: try makeRunHeistPlan(path, parameter: parameter, content: content),
         argument: .string(input)
     )
 }
@@ -91,13 +83,13 @@ func makeRunHeistRequest(
 @MainActor
 @discardableResult
 public func runHeist(
-    _ name: String,
+    _ path: HeistDefinitionPath,
     argument input: AccessibilityTarget,
     parameter: HeistReferenceName = "input",
     @HeistBuilder _ content: @escaping (AccessibilityTarget) throws -> some HeistContent
 ) async throws -> Heist {
     let request = try makeRunHeistRequest(
-        name,
+        path,
         argument: input,
         parameter: parameter,
         content
@@ -107,12 +99,12 @@ public func runHeist(
 
 @_disfavoredOverload
 func makeRunHeistRequest(
-    _ name: String,
+    _ path: HeistDefinitionPath,
     argument input: AccessibilityTarget,
     parameter: HeistReferenceName = "input",
     @HeistBuilder _ content: @escaping (AccessibilityTarget) throws -> some HeistContent
 ) throws -> HeistRunRequest {
-    let plan = try makeRunHeistPlan(name, targetParameter: parameter, content: content)
+    let plan = try makeRunHeistPlan(path, targetParameter: parameter, content: content)
     return HeistRunRequest(
         plan: plan,
         argument: .accessibilityTarget(input)
@@ -120,35 +112,25 @@ func makeRunHeistRequest(
 }
 
 private func makeRunHeistPlan(
-    _ name: String,
+    _ path: HeistDefinitionPath,
     parameter: HeistReferenceName,
     content: @escaping (HeistReferenceName) throws -> some HeistContent
 ) throws -> HeistPlan {
-    guard shouldWrapDottedCapability(name) else {
-        return try HeistPlan(name, parameter: parameter, content)
-    }
-    let definition = HeistDef<String>(name, parameter: parameter, content)
+    let definition = HeistDef<String>(path, parameter: parameter, content)
     return try HeistPlan(parameter: parameter) { input in
         try definition(input)
     }
 }
 
 private func makeRunHeistPlan(
-    _ name: String,
+    _ path: HeistDefinitionPath,
     targetParameter parameter: HeistReferenceName,
     content: @escaping (AccessibilityTarget) throws -> some HeistContent
 ) throws -> HeistPlan {
-    guard shouldWrapDottedCapability(name) else {
-        return try HeistPlan(name, targetParameter: parameter, content)
-    }
-    let definition = HeistDef<AccessibilityTarget>(name, parameter: parameter, content)
+    let definition = HeistDef<AccessibilityTarget>(path, parameter: parameter, content)
     return try HeistPlan(targetParameter: parameter) { target in
         try definition(target)
     }
-}
-
-private func shouldWrapDottedCapability(_ name: String) -> Bool {
-    name.split(separator: ".").count > 1
 }
 
 /// XCTest-facing receipt recording policy for synchronous heist helpers.
@@ -196,7 +178,7 @@ public enum HeistTestReceiptRecording: Sendable, Equatable {
 /// returns `nil`. Invalid bounds fail closed as an immediate timeout.
 @discardableResult
 public func runHeistSync(
-    _ name: String,
+    _ path: HeistDefinitionPath,
     timeout: TimeInterval = 60,
     recordReceipt: HeistTestReceiptRecording = .environment,
     to receiptDirectory: URL? = nil,
@@ -205,7 +187,7 @@ public func runHeistSync(
     @HeistBuilder _ content: @escaping () throws -> some HeistContent
 ) -> Heist? {
     runHeistSyncRequest(
-        makeRequest: { try makeRunHeistRequest(name, content) },
+        makeRequest: { try makeRunHeistRequest(path, content) },
         timeout: timeout,
         recordReceipt: recordReceipt,
         receiptDirectory: receiptDirectory,
@@ -217,7 +199,7 @@ public func runHeistSync(
 /// Synchronously runs a string-argument heist from a plain XCTest method.
 @discardableResult
 public func runHeistSync(
-    _ name: String,
+    _ path: HeistDefinitionPath,
     argument input: String,
     parameter: HeistReferenceName = "input",
     timeout: TimeInterval = 60,
@@ -229,7 +211,7 @@ public func runHeistSync(
 ) -> Heist? {
     runHeistSyncRequest(
         makeRequest: {
-            try makeRunHeistRequest(name, argument: input, parameter: parameter, content)
+            try makeRunHeistRequest(path, argument: input, parameter: parameter, content)
         },
         timeout: timeout,
         recordReceipt: recordReceipt,
@@ -243,7 +225,7 @@ public func runHeistSync(
 @_disfavoredOverload
 @discardableResult
 public func runHeistSync(
-    _ name: String,
+    _ path: HeistDefinitionPath,
     argument input: AccessibilityTarget,
     parameter: HeistReferenceName = "input",
     timeout: TimeInterval = 60,
@@ -255,7 +237,7 @@ public func runHeistSync(
 ) -> Heist? {
     runHeistSyncRequest(
         makeRequest: {
-            try makeRunHeistRequest(name, argument: input, parameter: parameter, content)
+            try makeRunHeistRequest(path, argument: input, parameter: parameter, content)
         },
         timeout: timeout,
         recordReceipt: recordReceipt,

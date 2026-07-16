@@ -6,8 +6,6 @@ import TheScore
 
 extension Actions {
 
-    // MARK: - InterfaceObservation Actions
-
     func availableScreenActions() -> [ScreenAction] {
         accessibilityActions.availableScreenActions(
             startingAt: screenActionStartingObject(),
@@ -15,7 +13,8 @@ extension Actions {
         )
     }
 
-    func executeDismiss() async -> TheSafecracker.ActionDispatchOutcome {
+    func executeDismiss(
+    ) async -> TheSafecracker.ActionDispatchOutcome {
         screenActionResult(
             accessibilityActions.dismiss(
                 startingAt: screenActionStartingObject(),
@@ -26,7 +25,8 @@ extension Actions {
         )
     }
 
-    func executeMagicTap() async -> TheSafecracker.ActionDispatchOutcome {
+    func executeMagicTap(
+    ) async -> TheSafecracker.ActionDispatchOutcome {
         screenActionResult(
             accessibilityActions.magicTap(
                 startingAt: screenActionStartingObject(),

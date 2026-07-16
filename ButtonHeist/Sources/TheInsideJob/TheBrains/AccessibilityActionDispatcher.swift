@@ -2,6 +2,7 @@
 #if DEBUG
 import UIKit
 
+import ThePlans
 import TheScore
 
 /// Runtime dispatcher for UIKit accessibility actions.
@@ -11,20 +12,20 @@ import TheScore
 @MainActor
 final class AccessibilityActionDispatcher {
 
-    enum ActivateOutcome {
+    enum ActivateOutcome: Sendable {
         case success
         case objectDeallocated
         case refused
     }
 
-    enum CustomActionOutcome {
+    enum CustomActionOutcome: Sendable {
         case succeeded
         case declined
         case deallocated
         case noSuchAction
     }
 
-    enum ScreenActionOutcome: Equatable {
+    enum ScreenActionOutcome: Equatable, Sendable {
         case succeeded(handler: String)
         case noHandler
     }
@@ -45,20 +46,20 @@ final class AccessibilityActionDispatcher {
         return true
     }
 
-    func performCustomAction(named name: String, on liveTarget: TheStash.LiveActionTarget) -> CustomActionOutcome {
+    func performCustomAction(named name: CustomActionName, on liveTarget: TheStash.LiveActionTarget) -> CustomActionOutcome {
         performCustomAction(named: name, on: liveTarget.object)
     }
 
-    func needsPreDispatchRefresh(named name: String, on liveTarget: TheStash.LiveActionTarget) -> Bool {
+    func needsPreDispatchRefresh(named name: CustomActionName, on liveTarget: TheStash.LiveActionTarget) -> Bool {
         guard !(liveTarget.object is UIView),
-              let action = liveTarget.object.accessibilityCustomActions?.first(where: { $0.name == name })
+              let action = liveTarget.object.accessibilityCustomActions?.first(where: { $0.name == name.rawValue })
         else { return false }
         return action.actionHandler != nil
     }
 
-    private func performCustomAction(named name: String, on object: NSObject) -> CustomActionOutcome {
+    private func performCustomAction(named name: CustomActionName, on object: NSObject) -> CustomActionOutcome {
         guard let action = object.accessibilityCustomActions?
-            .first(where: { $0.name == name }) else {
+            .first(where: { $0.name == name.rawValue }) else {
             return .noSuchAction
         }
         if let handler = action.actionHandler {

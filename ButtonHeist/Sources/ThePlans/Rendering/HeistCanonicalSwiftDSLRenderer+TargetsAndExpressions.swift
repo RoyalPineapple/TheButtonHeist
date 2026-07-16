@@ -278,7 +278,7 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     func render(duration: GestureDuration) -> String {
-        "GestureDuration(seconds: \(decimal(duration.seconds)))"
+        decimal(duration.seconds)
     }
 }
 

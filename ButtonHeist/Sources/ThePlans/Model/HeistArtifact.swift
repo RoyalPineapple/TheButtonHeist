@@ -1,10 +1,119 @@
 import Foundation
 
-public let heistArtifactFormat = "com.royalpineapple.buttonheist.heist"
 public let currentHeistArtifactFormatVersion = 1
 public let currentHeistPlanVersion = HeistPlan.currentVersion
 
+public enum HeistArtifactFormat: String, Codable, Sendable, Equatable, CaseIterable {
+    case buttonHeist = "com.royalpineapple.buttonheist.heist"
+}
+
+private func admitArtifactProducerValue<Failure: Error>(
+    _ value: String,
+    or failure: @autoclosure () -> Failure
+) throws -> String {
+    guard value.contains(where: { !$0.isWhitespace }) else { throw failure() }
+    return value
+}
+
+private func decodeArtifactProducerValue<Value>(
+    from decoder: Decoder,
+    admitting: (String) throws -> Value
+) throws -> Value {
+    let container = try decoder.singleValueContainer()
+    do {
+        return try admitting(container.decode(String.self))
+    } catch {
+        throw DecodingError.dataCorruptedError(
+            in: container,
+            debugDescription: String(describing: error)
+        )
+    }
+}
+
+private func encodeArtifactProducerValue(_ value: String, to encoder: Encoder) throws {
+    var container = encoder.singleValueContainer()
+    try container.encode(value)
+}
+
+public struct HeistArtifactProducerName: Sendable, Equatable, Hashable, ExpressibleByStringLiteral,
+    CustomStringConvertible, Codable {
+    public enum ValidationError: Error, Sendable, Equatable, CustomStringConvertible {
+        case blank
+
+        public var description: String {
+            "heist artifact producer name must contain a non-whitespace character"
+        }
+    }
+
+    private let value: String
+
+    public init(validating value: String) throws {
+        self.value = try admitArtifactProducerValue(value, or: ValidationError.blank)
+    }
+
+    public init(stringLiteral value: String) {
+        do {
+            try self.init(validating: value)
+        } catch {
+            preconditionFailure(String(describing: error))
+        }
+    }
+
+    public var description: String { value }
+
+    public init(from decoder: Decoder) throws {
+        self = try decodeArtifactProducerValue(from: decoder, admitting: Self.init(validating:))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        try encodeArtifactProducerValue(value, to: encoder)
+    }
+}
+
+public struct HeistArtifactProducerVersion: Sendable, Equatable, Hashable, ExpressibleByStringLiteral,
+    CustomStringConvertible, Codable {
+    public enum ValidationError: Error, Sendable, Equatable, CustomStringConvertible {
+        case blank
+
+        public var description: String {
+            "heist artifact producer version must contain a non-whitespace character"
+        }
+    }
+
+    private let value: String
+
+    public init(validating value: String) throws {
+        self.value = try admitArtifactProducerValue(value, or: ValidationError.blank)
+    }
+
+    public init(stringLiteral value: String) {
+        do {
+            try self.init(validating: value)
+        } catch {
+            preconditionFailure(String(describing: error))
+        }
+    }
+
+    public var description: String { value }
+
+    public init(from decoder: Decoder) throws {
+        self = try decodeArtifactProducerValue(from: decoder, admitting: Self.init(validating:))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        try encodeArtifactProducerValue(value, to: encoder)
+    }
+}
+
 public struct HeistArtifact: Sendable, Equatable {
+    public enum InitializationError: Error, Sendable, Equatable, CustomStringConvertible {
+        case anonymousPlan
+
+        public var description: String {
+            "a .heist artifact requires a named root plan"
+        }
+    }
+
     public let manifest: HeistArtifactManifest
     public let plan: HeistPlan
 
@@ -17,11 +126,12 @@ public struct HeistArtifact: Sendable, Equatable {
         plan: HeistPlan,
         producer: HeistArtifactProducer = .buttonHeist,
         createdAt: Date = Date()
-    ) {
+    ) throws {
+        guard let entry = plan.name else { throw InitializationError.anonymousPlan }
         self.init(
             manifest: HeistArtifactManifest(
-                format: heistArtifactFormat,
-                entry: plan.name ?? "",
+                format: .buttonHeist,
+                entry: entry,
                 formatVersion: currentHeistArtifactFormatVersion,
                 planVersion: plan.version,
                 producer: producer,
@@ -33,8 +143,8 @@ public struct HeistArtifact: Sendable, Equatable {
 }
 
 public struct HeistArtifactManifest: Codable, Sendable, Equatable {
-    public let format: String
-    public let entry: String
+    public let format: HeistArtifactFormat
+    public let entry: HeistPlanName
     public let formatVersion: Int
     public let planVersion: Int
     public let producer: HeistArtifactProducer
@@ -45,8 +155,8 @@ public struct HeistArtifactManifest: Codable, Sendable, Equatable {
     }
 
     public init(
-        format: String,
-        entry: String,
+        format: HeistArtifactFormat,
+        entry: HeistPlanName,
         formatVersion: Int,
         planVersion: Int,
         producer: HeistArtifactProducer,
@@ -63,8 +173,8 @@ public struct HeistArtifactManifest: Codable, Sendable, Equatable {
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "manifest")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        format = try container.decodeRequired(String.self, forKey: .format, typeName: "manifest")
-        entry = try container.decodeRequired(String.self, forKey: .entry, typeName: "manifest")
+        format = try container.decodeRequired(HeistArtifactFormat.self, forKey: .format, typeName: "manifest")
+        entry = try container.decodeRequired(HeistPlanName.self, forKey: .entry, typeName: "manifest")
         formatVersion = try container.decodeRequired(Int.self, forKey: .formatVersion, typeName: "manifest")
         planVersion = try container.decodeRequired(Int.self, forKey: .planVersion, typeName: "manifest")
         producer = try container.decodeRequired(HeistArtifactProducer.self, forKey: .producer, typeName: "manifest")
@@ -85,14 +195,14 @@ public struct HeistArtifactManifest: Codable, Sendable, Equatable {
 public struct HeistArtifactProducer: Codable, Sendable, Equatable {
     public static let buttonHeist = HeistArtifactProducer(name: "buttonheist")
 
-    public let name: String
-    public let version: String?
+    public let name: HeistArtifactProducerName
+    public let version: HeistArtifactProducerVersion?
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case name, version
     }
 
-    public init(name: String, version: String? = nil) {
+    public init(name: HeistArtifactProducerName, version: HeistArtifactProducerVersion? = nil) {
         self.name = name
         self.version = version
     }
@@ -100,8 +210,8 @@ public struct HeistArtifactProducer: Codable, Sendable, Equatable {
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "manifest producer")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        name = try container.decodeRequired(String.self, forKey: .name, typeName: "manifest producer")
-        version = try container.decodeIfPresent(String.self, forKey: .version)
+        name = try container.decodeRequired(HeistArtifactProducerName.self, forKey: .name, typeName: "manifest producer")
+        version = try container.decodeIfPresent(HeistArtifactProducerVersion.self, forKey: .version)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -396,12 +506,6 @@ public enum HeistArtifactCodec {
         manifest: HeistArtifactManifestPayload,
         packageURL: URL
     ) throws {
-        guard manifest.format == heistArtifactFormat else {
-            throw HeistArtifactCodecError.invalidManifestFormat(
-                path: packageURL.path,
-                observed: manifest.format
-            )
-        }
         guard manifest.formatVersion == currentHeistArtifactFormatVersion else {
             throw HeistArtifactCodecError.unsupportedArtifactVersion(
                 path: packageURL.path,
@@ -411,12 +515,6 @@ public enum HeistArtifactCodec {
     }
 
     private static func validateArtifactEnvelope(manifest: HeistArtifactManifest, packageURL: URL) throws {
-        guard manifest.format == heistArtifactFormat else {
-            throw HeistArtifactCodecError.invalidManifestFormat(
-                path: packageURL.path,
-                observed: manifest.format
-            )
-        }
         guard manifest.formatVersion == currentHeistArtifactFormatVersion else {
             throw HeistArtifactCodecError.unsupportedArtifactVersion(
                 path: packageURL.path,
@@ -426,10 +524,10 @@ public enum HeistArtifactCodec {
     }
 
     private static func validateArtifactEntry(
-        manifestEntry: String?,
+        manifestEntry: HeistPlanName?,
         plan: HeistPlan,
         packageURL: URL
-    ) throws -> String {
+    ) throws -> HeistPlanName {
         let correction = artifactEntryCorrection(for: plan)
         guard let manifestEntry else {
             throw HeistArtifactCodecError.invalidManifestEntry(
@@ -439,17 +537,7 @@ public enum HeistArtifactCodec {
                 correction: correction
             )
         }
-        guard !manifestEntry.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw HeistArtifactCodecError.invalidManifestEntry(
-                path: packageURL.path,
-                contract: "entry must be non-empty and must name the root HeistPlan.name",
-                observed: "empty string",
-                correction: correction
-            )
-        }
-        guard let planName = plan.name,
-              !planName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        else {
+        guard let planName = plan.name else {
             throw HeistArtifactCodecError.invalidManifestEntry(
                 path: packageURL.path,
                 contract: "artifact root plan must have a non-empty HeistPlan.name",
@@ -461,7 +549,7 @@ public enum HeistArtifactCodec {
             throw HeistArtifactCodecError.invalidManifestEntry(
                 path: packageURL.path,
                 contract: "entry must equal the root HeistPlan.name",
-                observed: "entry \(quoted(manifestEntry)) with root plan name \(quoted(planName))",
+                observed: "entry \(quoted(manifestEntry.description)) with root plan name \(quoted(planName.description))",
                 correction: artifactEntryCorrection(for: plan)
             )
         }
@@ -469,13 +557,11 @@ public enum HeistArtifactCodec {
     }
 
     private static func artifactEntryCorrection(for plan: HeistPlan) -> String {
-        guard let planName = plan.name,
-              !planName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        else {
+        guard let planName = plan.name else {
             return "Add a non-empty root plan name in plan.json and set manifest.json entry to the same value."
         }
         return """
-        Set manifest.json entry to \(quoted(planName)), the root plan name. \
+        Set manifest.json entry to \(quoted(planName.description)), the root plan name. \
         Do not use the .heist directory name, a definition name, or a registry key.
         """
     }
@@ -522,8 +608,8 @@ private struct ArtifactMemberData {
 }
 
 private struct HeistArtifactManifestPayload: Decodable {
-    let format: String
-    let entry: String?
+    let format: HeistArtifactFormat
+    let entry: HeistPlanName?
     let formatVersion: Int
     let planVersion: Int
     let producer: HeistArtifactProducer
@@ -536,8 +622,8 @@ private struct HeistArtifactManifestPayload: Decodable {
     init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "manifest")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        format = try container.decodeRequired(String.self, forKey: .format, typeName: "manifest")
-        entry = try container.decodeIfPresent(String.self, forKey: .entry)
+        format = try container.decodeRequired(HeistArtifactFormat.self, forKey: .format, typeName: "manifest")
+        entry = try container.decodeIfPresent(HeistPlanName.self, forKey: .entry)
         formatVersion = try container.decodeRequired(Int.self, forKey: .formatVersion, typeName: "manifest")
         planVersion = try container.decodeRequired(Int.self, forKey: .planVersion, typeName: "manifest")
         producer = try container.decodeRequired(HeistArtifactProducer.self, forKey: .producer, typeName: "manifest")
@@ -555,7 +641,6 @@ public enum HeistArtifactCodecError: Error, Sendable, CustomStringConvertible, L
     case memberTooLarge(path: String, member: String, limit: Int, observed: Int)
     case invalidManifest(path: String, member: String, reason: String)
     case invalidManifestEntry(path: String, contract: String, observed: String, correction: String)
-    case invalidManifestFormat(path: String, observed: String)
     case unsupportedArtifactVersion(path: String, observed: Int)
     case missingPlanVersion(path: String)
     case invalidPlanVersion(path: String, observed: String)
@@ -603,11 +688,6 @@ public enum HeistArtifactCodecError: Error, Sendable, CustomStringConvertible, L
             return """
             Invalid .heist artifact at \(path): manifest entry contract failed: \(contract); \
             observed \(observed); \(correction)
-            """
-        case .invalidManifestFormat(let path, let observed):
-            return """
-            Invalid .heist artifact at \(path): manifest format \(observed) is unsupported. \
-            Re-export the heist as .heist.
             """
         case .unsupportedArtifactVersion(let path, let observed):
             return """

@@ -167,10 +167,29 @@ import Testing
         (#"Activate(.label(""))"#, "label match value must not be empty"),
         ("Activate(.traits([]))", "traits predicate payload must not be empty"),
         ("Activate(.actions([]))", "actions predicate payload must not be empty"),
-        (#"Activate(.actions([.custom("")]))"#, "custom action name must not be empty"),
+        (#"Activate(.actions([.custom("")]))"#, "custom action name must not be blank"),
         ("Activate(.rotors([]))", "rotors predicate payload must not be empty"),
         ("Activate(.customContent(.init()))", "customContent match must include label, value, or isImportant"),
         (#"WaitFor(.exists(.container(.identifier("Screen"), ordinal: -1)))"#, "ordinal must be non-negative"),
+    ]
+
+    for (source, expected) in cases {
+        expect(compileError(root(source)), contains: expected)
+    }
+}
+
+@Test func `runtime parser admits payload values before constructing commands`() {
+    let cases = [
+        (#"TypeText("")"#, "text to append must be non-empty"),
+        (#"SetPasteboard("")"#, "pasteboard text must be non-empty"),
+        (
+            "Mechanical.LongPress(ScreenPoint(x: 1, y: 1), duration: 0)",
+            "duration must be"
+        ),
+        (
+            "Mechanical.LongPress(ScreenPoint(x: 1, y: 1), duration: 61)",
+            "duration must be"
+        ),
     ]
 
     for (source, expected) in cases {
@@ -276,35 +295,29 @@ import Testing
 
 @Test func `inline plan source type text replacement and clear compile`() throws {
     let replacement = try HeistPlanSourceCompiler().compile(root(#"""
-    TypeText("b", into: .identifier("Field"), replacingExisting: true)
-    """#))
-    let replacementWithArgumentsReordered = try HeistPlanSourceCompiler().compile(root(#"""
-    TypeText("b", replacingExisting: true, into: .identifier("Field"))
+    TypeText(.replacing("b"), into: .identifier("Field"))
     """#))
     let clear = try HeistPlanSourceCompiler().compile(root(#"""
     ClearText(.identifier("Field"))
     """#))
     let emptyReplacement = try HeistPlanSourceCompiler().compile(root(#"""
-    TypeText("", into: .identifier("Field"), replacingExisting: true)
+    TypeText(.replacing(""), into: .identifier("Field"))
     """#))
 
     let expectedReplacement = try HeistPlan(body: [
         .action(try ActionStep(command: .typeText(
-            text: "b",
-            target: .predicate(.identifier("Field")),
-            replacingExisting: true
+            text: .replacing("b"),
+            target: .predicate(.identifier("Field"))
         ))),
     ])
     let expectedClear = try HeistPlan(body: [
         .action(try ActionStep(command: .typeText(
-            text: "",
-            target: .predicate(.identifier("Field")),
-            replacingExisting: true
+            text: .replacing(""),
+            target: .predicate(.identifier("Field"))
         ))),
     ])
 
     #expect(replacement == expectedReplacement)
-    #expect(replacementWithArgumentsReordered == expectedReplacement)
     #expect(clear == expectedClear)
     #expect(emptyReplacement == expectedClear)
     try assertCanonicalRoundTrip(replacement)
@@ -387,7 +400,7 @@ import Testing
         ],
         body: [
             .invoke(HeistInvocationStep(
-                path: ["Cart", "addItem"],
+                path: "Cart.addItem",
                 argument: .string("Milk"),
                 expectation: WaitStep(
                     predicate: .changed(.elements([.appeared(.label("subtotal"))])),
@@ -395,7 +408,7 @@ import Testing
                 )
             )),
             .invoke(HeistInvocationStep(
-                path: ["Cart", "addItem"],
+                path: "Cart.addItem",
                 argument: .string("Eggs"),
                 expectation: WaitStep(
                     predicate: .changed(.elements([
@@ -405,14 +418,14 @@ import Testing
                 )
             )),
             .invoke(HeistInvocationStep(
-                path: ["Checkout", "pay"],
+                path: "Checkout.pay",
                 expectation: WaitStep(
                     predicate: .exists(.label("Payment Complete")),
                     timeout: defaultActionExpectationTimeout
                 )
             )),
             .invoke(HeistInvocationStep(
-                path: ["Checkout", "pay"],
+                path: "Checkout.pay",
                 expectation: WaitStep(
                     predicate: .changed(.screen([.exists(.label("Receipt"))])),
                     timeout: defaultActionExpectationTimeout
@@ -444,7 +457,7 @@ import Testing
         #expect(diagnostic.phase == .sourceCompilation)
         #expect(diagnostic.path == "Cart..checkout")
         #expect(diagnostic.sourceSpan?.line == 2)
-        expect(error.description, contains: "heist definition path component at index 1 must not be empty")
+        expect(error.description, contains: "heist path component at index 1 must not be empty")
     } catch {
         Issue.record("Expected HeistPlanSourceCompilerError, got \(error)")
     }
@@ -738,7 +751,7 @@ import Testing
             parameter: "item",
             body: [
                 .invoke(HeistInvocationStep(
-                    path: ["Cart", "addItem"],
+                    path: "Cart.addItem",
                     argument: .string(reference: "item")
                 )),
             ]
@@ -850,11 +863,11 @@ import Testing
     let checkout = try #require(lib.definitions.first { $0.name == "checkout" })
 
     #expect(checkout.body == [
-        .invoke(HeistInvocationStep(path: ["lib", "payOpen"])),
-        .invoke(HeistInvocationStep(path: ["lib", "clearCheck"])),
+        .invoke(HeistInvocationStep(path: "lib.payOpen")),
+        .invoke(HeistInvocationStep(path: "lib.clearCheck")),
     ])
     #expect(plan.body == [
-        .invoke(HeistInvocationStep(path: ["lib", "checkout"])),
+        .invoke(HeistInvocationStep(path: "lib.checkout")),
     ])
 
     try assertCanonicalRoundTrip(plan)
@@ -1225,7 +1238,7 @@ import Testing
     try assertCanonicalRoundTrip(try HeistPlan(body: [
         .action(try ActionStep(
             command: .activate(.predicate(.label("Pay"))),
-            expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 0)))),
+            expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: .milliseconds(1))))),
         .action(try ActionStep(
             command: .typeText(text: "milk", target: .predicate(.label("Search"))),
             expectationPolicy: .expect(ActionExpectation(predicate: .exists(.value("milk")), timeout: 2)))),
@@ -1302,7 +1315,7 @@ import Testing
 @Test func `mechanical element unit-point source compiles to element-relative gesture`() throws {
     let plan = try HeistPlanSourceCompiler().compile(root("""
     Mechanical.Tap(.label("Row"), at: UnitPoint(x: 0.25, y: 0.75))
-    Mechanical.LongPress(.label("Row"), at: UnitPoint(x: 0.5, y: 0.5), duration: GestureDuration(seconds: 1.4))
+    Mechanical.LongPress(.label("Row"), at: UnitPoint(x: 0.5, y: 0.5), duration: 1.4)
     Mechanical.Drag(.label("Slider"), from: UnitPoint(x: 0.8, y: 0.5), to: ScreenPoint(x: 200, y: 40))
     """))
     let expected = try HeistPlan(body: [
@@ -1382,7 +1395,7 @@ import Testing
             .action(try ActionStep(command: .activate(.predicate(
                 .label(HeistReferenceName(stringLiteral: "item"))
             )))),
-            .invoke(HeistInvocationStep(path: ["AddButton", "tap"])),
+            .invoke(HeistInvocationStep(path: "AddButton.tap")),
         ]
     )
     let library = try HeistPlan(name: "LibraryScreen", definitions: [addToCart], body: [])
@@ -1391,7 +1404,7 @@ import Testing
         definitions: [library],
         body: [
             .invoke(HeistInvocationStep(
-                path: ["LibraryScreen", "addToCart"],
+                path: "LibraryScreen.addToCart",
                 argument: .string("Milk")
             )),
         ]
@@ -1504,13 +1517,13 @@ import Testing
     expect(wrongRunHeistArgument, contains: "heist run argument type must match the target parameter")
 
     let emptyCustomActionName = compileError(root(#"CustomAction("", on: .label("Message"))"#))
-    expect(emptyCustomActionName, contains: "custom action name must not be empty")
+    expect(emptyCustomActionName, contains: "custom action name must not be blank")
 
     let emptyRunHeistPath = compileError(root(#"RunHeist("")"#))
-    expect(emptyRunHeistPath, contains: "heist invocation path must not be empty")
+    expect(emptyRunHeistPath, contains: "heist path must not be empty")
 
     let emptyRunHeistPathComponent = compileError(root(#"RunHeist("lib..checkout")"#))
-    expect(emptyRunHeistPathComponent, contains: "heist invocation path component at index 1 must not be empty")
+    expect(emptyRunHeistPathComponent, contains: "heist path component at index 1 must not be empty")
 
     let bodyTry = compileError(root("""
     try ForEach("Milk") { item in

@@ -9,82 +9,68 @@ extension TheBrains {
 
     internal func executeWarnStep(
         _ warn: WarnStep,
-        path: String,
+        path: HeistExecutionPath,
         start: CFAbsoluteTime
     ) -> HeistExecutionStepResult {
-        heistReceipt(.init(
+        .warning(
             path: path,
-            kind: .warn,
             durationMs: elapsedMilliseconds(since: start),
-            intent: .warn(message: warn.message),
-            evidence: .warning(HeistExecutionWarning(path: path, message: warn.message))
-        ))
+            message: warn.message,
+            completion: .passed()
+        )
     }
 
     internal func executeFailStep(
         _ fail: FailStep,
-        path: String,
+        path: HeistExecutionPath,
         start: CFAbsoluteTime
     ) -> HeistExecutionStepResult {
-        heistReceipt(.init(
+        .failure(
             path: path,
-            kind: .fail,
             durationMs: elapsedMilliseconds(since: start),
-            intent: .fail(message: fail.message),
-            completion: .failed(HeistFailureDetail(
+            message: fail.message,
+            completion: .failed(failure: HeistFailureDetail(
                 category: .explicitFailure,
                 contract: "explicit heist failure",
-                observed: fail.message
+                observed: fail.message.rawValue
             ))
-        ))
+        )
     }
 
     internal func recursiveInvocationResult(
         context: InvocationExecutionContext,
-        resolvedInvocationName: String
+        resolvedInvocationName: HeistInvocationPath
     ) -> HeistExecutionStepResult {
         let observed = "recursive heist run \(resolvedInvocationName)"
-        return heistReceipt(.init(
+        return .invocation(
             path: context.path,
-            kind: .invoke,
             durationMs: elapsedMilliseconds(since: context.start),
-            intent: context.intent,
-            evidence: .invocation(HeistInvocationEvidence.invocation(
-                invocation: context.invoke,
-                name: context.requestedName,
-                argument: nil,
-                outcome: .completed(expectation: nil)
-            )),
-            completion: .failed(HeistFailureDetail(
+            invocationPath: context.invoke.path,
+            argument: context.invoke.argument,
+            completion: .failed(evidence: .unavailable, failure: HeistFailureDetail(
                 category: .invocation,
                 contract: "heist invocation must not recurse",
                 observed: observed
             ))
-        ))
+        )
     }
 
     internal func unknownInvocationResult(
         context: InvocationExecutionContext
     ) -> HeistExecutionStepResult {
         let observed = "unknown heist run \(context.requestedName)"
-        return heistReceipt(.init(
+        return .invocation(
             path: context.path,
-            kind: .invoke,
             durationMs: elapsedMilliseconds(since: context.start),
-            intent: context.intent,
-            evidence: .invocation(HeistInvocationEvidence.invocation(
-                invocation: context.invoke,
-                name: context.requestedName,
-                argument: nil,
-                outcome: .completed(expectation: nil)
-            )),
-            completion: .failed(HeistFailureDetail(
+            invocationPath: context.invoke.path,
+            argument: context.invoke.argument,
+            completion: .failed(evidence: .unavailable, failure: HeistFailureDetail(
                 category: .invocation,
                 contract: "heist invocation path resolves to a definition",
                 observed: observed,
-                expected: context.requestedName
+                expected: context.requestedName.description
             ))
-        ))
+        )
     }
 
     internal func invocationBindingFailureResult(
@@ -92,23 +78,17 @@ extension TheBrains {
         error: Error
     ) -> HeistExecutionStepResult {
         let observed = "could not bind heist run argument: \(error)"
-        return heistReceipt(.init(
+        return .invocation(
             path: context.path,
-            kind: .invoke,
             durationMs: elapsedMilliseconds(since: context.start),
-            intent: context.intent,
-            evidence: .invocation(HeistInvocationEvidence.invocation(
-                invocation: context.invoke,
-                name: context.requestedName,
-                argument: nil,
-                outcome: .completed(expectation: nil)
-            )),
-            completion: .failed(HeistFailureDetail(
+            invocationPath: context.invoke.path,
+            argument: context.invoke.argument,
+            completion: .failed(evidence: .unavailable, failure: HeistFailureDetail(
                 category: .validation,
                 contract: "heist invocation argument binds to the target parameter",
                 observed: observed
             ))
-        ))
+        )
     }
 
     internal func invocationExpectationResolutionFailureResult(
@@ -128,27 +108,27 @@ extension TheBrains {
             predicate: nil,
             actual: observed
         )
-        return heistReceipt(.init(
+        let evidence = HeistInvocationEvidence.completed(
+            expectation: .result(
+                actionResult: expectationActionResult,
+                expectation: expectationResult
+            )
+        )
+        guard let evidence = HeistFailedInvocationEvidence(evidence) else {
+            preconditionFailure("failed invocation expectation resolution must prove failure")
+        }
+        return .invocation(
             path: context.path,
-            kind: .invoke,
             durationMs: elapsedMilliseconds(since: context.start),
-            intent: context.intent,
-            evidence: .invocation(HeistInvocationEvidence.invocation(
-                invocation: context.invoke,
-                name: context.requestedName,
-                argument: context.argumentSummary,
-                outcome: .completed(expectation: .result(
-                    actionResult: expectationActionResult,
-                    expectation: expectationResult
-                ))
-            )),
-            completion: .failed(HeistFailureDetail(
+            invocationPath: context.invoke.path,
+            argument: context.invoke.argument,
+            completion: .failed(evidence: .observed(evidence), failure: HeistFailureDetail(
                 category: .expectation,
                 contract: "heist invocation expectation predicate resolves before evaluation",
                 observed: observed,
                 expected: expectation.predicate.description
             ))
-        ))
+        )
     }
 
     internal func completedInvocationResult(
@@ -163,33 +143,53 @@ extension TheBrains {
         let invocationExpectation = expectationEvidence.map {
             HeistInvocationEvidence.InvocationExpectationEvidence.wait($0)
         }
-        let outcome: HeistInvocationEvidence.InvocationOutcome = childExecution.firstFailedStep.map {
-            .childFailed(path: $0.path)
-        } ?? .completed(expectation: invocationExpectation)
-        let evidence = HeistInvocationEvidence.invocation(
-            invocation: context.invoke,
-            name: context.requestedName,
-            argument: context.argumentSummary,
-            outcome: outcome
-        )
-        let failure: HeistFailureDetail? = switch expectationOutcome {
-        case .notEvaluated, .matched:
-            nil
-        case .failed(receipt: _, detail: let detail):
-            detail
-        }
-        return heistReceipt(.init(
-            path: context.path,
-            kind: .invoke,
-            durationMs: elapsedMilliseconds(since: context.start),
-            intent: context.intent,
-            evidence: .invocation(evidence),
-            completion: failure.map(HeistReceiptRequest.Completion.failed) ?? .passed,
-            children: childExecution,
-            childFailure: { childPath in
-                self.childFailureDetail(category: .invocation, childPath: childPath)
+        switch HeistExecutedChildren(childExecution) {
+        case .aborted(let children):
+            let evidence = HeistInvocationEvidence.childFailed(path: children.abortedAtPath)
+            guard let evidence = HeistFailedInvocationEvidence(evidence) else {
+                preconditionFailure("child-aborted invocation must prove failure")
             }
-        ))
+            return .invocation(
+                path: context.path,
+                durationMs: elapsedMilliseconds(since: context.start),
+                invocationPath: context.invoke.path,
+                argument: context.invoke.argument,
+                completion: .childAborted(
+                    evidence: .observed(evidence),
+                    failure: childFailureDetail(
+                        category: .invocation,
+                        childPath: children.abortedAtPath
+                    ),
+                    children: children
+                )
+            )
+        case .passed(let children):
+            let evidence = HeistInvocationEvidence.completed(expectation: invocationExpectation)
+            switch expectationOutcome {
+            case .failed(_, let detail):
+                guard let evidence = HeistFailedInvocationEvidence(evidence) else {
+                    preconditionFailure("failed invocation expectation must prove failure")
+                }
+                return .invocation(
+                    path: context.path,
+                    durationMs: elapsedMilliseconds(since: context.start),
+                    invocationPath: context.invoke.path,
+                    argument: context.invoke.argument,
+                    completion: .failed(evidence: .observed(evidence), failure: detail, children: children)
+                )
+            case .notEvaluated, .matched:
+                guard let evidence = HeistPassedInvocationEvidence(evidence) else {
+                    preconditionFailure("completed invocation must carry passing evidence")
+                }
+                return .invocation(
+                    path: context.path,
+                    durationMs: elapsedMilliseconds(since: context.start),
+                    invocationPath: context.invoke.path,
+                    argument: context.invoke.argument,
+                    completion: .passed(evidence: evidence, children: children)
+                )
+            }
+        }
     }
 
     private func invocationExpectationEvidence(
@@ -223,7 +223,7 @@ extension TheBrains {
 
     internal func heistExecutionMessage(
         completedCount: Int,
-        abortedAtPath: String?
+        abortedAtPath: HeistExecutionPath?
     ) -> String {
         if let abortedAtPath {
             return "Heist execution stopped at \(abortedAtPath) after \(completedCount) executed step(s)"

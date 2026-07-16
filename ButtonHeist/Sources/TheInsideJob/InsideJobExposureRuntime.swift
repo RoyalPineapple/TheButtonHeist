@@ -20,9 +20,9 @@ extension TheInsideJob {
 
         transport.advertise(
             serviceName: serviceName,
-            simulatorUDID: ProcessInfo.processInfo.environment[.udid],
-            installationId: runtimeConfiguration.sessionIdentity.installationId,
-            instanceId: effectiveInstanceId,
+            simulatorUDID: ProcessInfo.processInfo.simulatorUDID?.description,
+            installationId: runtimeConfiguration.sessionIdentity.installationId.description,
+            instanceId: effectiveInstanceId.description,
             additionalTXT: [
                 "devicename": UIDevice.current.name
             ]
@@ -45,7 +45,7 @@ extension TheInsideJob {
             "actualPort=\(actualPort)",
             "preferredPort=\(runtimeConfiguration.preferredPort)(\(runtimeConfiguration.preferredPortSource.label))",
             "tokenSource=\(runtimeConfiguration.tokenSource.label)",
-            "sessionId=\(runtimeConfiguration.sessionIdentity.sessionId.uuidString)",
+            "sessionId=\(runtimeConfiguration.sessionIdentity.launchId)",
             "instanceIdentifier=\(effectiveInstanceId)(\(runtimeConfiguration.instanceIdSource.label))",
             "allowedScopes=\(scopeNames)(\(runtimeConfiguration.allowedScopesSource.label))",
             "addressFamily=\(runtimeConfiguration.addressFamily.rawValue)",
@@ -56,8 +56,9 @@ extension TheInsideJob {
             bonjourDescription
         ].joined(separator: " ")
         insideJobLogger.info("Startup summary: \(fields, privacy: .public) token=<redacted>")
-        if runtimeConfiguration.tokenSource == .generated, let token = runtimeConfiguration.token {
-            insideJobLogger.warning("Generated ButtonHeist token: BUTTONHEIST_TOKEN=\(token, privacy: .public)")
+        if runtimeConfiguration.tokenSource == .generated {
+            let token = runtimeConfiguration.token
+            insideJobLogger.warning("Generated ButtonHeist token: BUTTONHEIST_TOKEN=\(token.description, privacy: .public)")
         }
     }
 }

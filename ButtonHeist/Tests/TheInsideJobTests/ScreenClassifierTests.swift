@@ -68,6 +68,33 @@ final class ScreenClassifierTests: XCTestCase {
         )
     }
 
+    func testOffscreenIdentityTurnoverDoesNotReplaceStableOnscreenContent() {
+        func viewport(offscreenLabel: String, offscreenId: HeistId) -> InterfaceObservation {
+            let hierarchy: [AccessibilityHierarchy] = [
+                .element(element(label: "Total", traits: .staticText), traversalIndex: 0),
+                .element(
+                    element(label: offscreenLabel, traits: .button, visibility: .offscreen),
+                    traversalIndex: 1
+                ),
+            ]
+            return screen(
+                hierarchy: hierarchy,
+                heistIdsByPath: [
+                    TreePath([0]): "total",
+                    TreePath([1]): offscreenId,
+                ]
+            )
+        }
+
+        XCTAssertEqual(
+            classify(
+                before: viewport(offscreenLabel: "Old", offscreenId: "old"),
+                after: viewport(offscreenLabel: "New", offscreenId: "new")
+            ),
+            .sameGeneration
+        )
+    }
+
     func testExplicitSummaryElementKeepsSameGeneration() {
         let before = screen(elements: [
             element(label: "Home Header", traits: .header),
@@ -114,7 +141,7 @@ final class ScreenClassifierTests: XCTestCase {
         )
     }
 
-    func testHeaderChangeInsideStableScrollContextKeepsGeneration() {
+    func testSharedAnonymousScrollPathDoesNotProveContinuity() {
         let scroll = AccessibilityContainer(
             type: .list,
             scrollableContentSize: AccessibilitySize(width: 320, height: 1_200),
@@ -134,7 +161,88 @@ final class ScreenClassifierTests: XCTestCase {
                 before: viewport(header: "Starters", row: "Greek Salad"),
                 after: viewport(header: "Desserts", row: "Crème Brûlée")
             ),
+            .replacement(.inferred(.primaryHeaderChanged))
+        )
+    }
+
+    func testViewportMovementProvesAnonymousListContinuity() {
+        let scroll = AccessibilityContainer(
+            type: .list,
+            scrollableContentSize: AccessibilitySize(width: 320, height: 1_200),
+            frame: AccessibilityRect(x: 0, y: 80, width: 320, height: 560)
+        )
+        func viewport(header: String, row: String) -> InterfaceObservation {
+            screen(hierarchy: [
+                .container(scroll, children: [
+                    .element(element(label: header, traits: .header), traversalIndex: 0),
+                    .element(element(label: row, traits: .button), traversalIndex: 1),
+                ]),
+            ])
+        }
+
+        XCTAssertEqual(
+            classify(
+                before: viewport(header: "Starters", row: "Greek Salad"),
+                after: viewport(header: "Desserts", row: "Crème Brûlée"),
+                lineageEvidence: .viewportMovement
+            ),
             .sameGeneration
+        )
+    }
+
+    func testStableSemanticScrollContainerIdentityProvesContinuity() {
+        let scroll = AccessibilityContainer(
+            type: .list,
+            identifier: "menu_list",
+            scrollableContentSize: AccessibilitySize(width: 320, height: 1_200),
+            frame: AccessibilityRect(x: 0, y: 80, width: 320, height: 560)
+        )
+        func viewport(header: String, row: String) -> InterfaceObservation {
+            screen(hierarchy: [
+                .container(scroll, children: [
+                    .element(element(label: header, traits: .header), traversalIndex: 0),
+                    .element(element(label: row, traits: .button), traversalIndex: 1),
+                ]),
+            ])
+        }
+
+        XCTAssertEqual(
+            classify(
+                before: viewport(header: "Starters", row: "Greek Salad"),
+                after: viewport(header: "Desserts", row: "Crème Brûlée")
+            ),
+            .sameGeneration
+        )
+    }
+
+    func testSameTitleAndScrollPathWithDisjointIdentityIsReplacement() {
+        let scroll = AccessibilityContainer(
+            type: .list,
+            scrollableContentSize: AccessibilitySize(width: 320, height: 1_200),
+            frame: AccessibilityRect(x: 0, y: 80, width: 320, height: 560)
+        )
+        func viewport(headerId: HeistId, row: String, rowId: HeistId) -> InterfaceObservation {
+            let hierarchy: [AccessibilityHierarchy] = [
+                .container(scroll, children: [
+                    .element(element(label: "Menu", traits: .header), traversalIndex: 0),
+                    .element(element(label: row, traits: .button), traversalIndex: 1),
+                ]),
+            ]
+            return screen(
+                hierarchy: hierarchy,
+                heistIdsByPath: [
+                    TreePath([0, 0]): headerId,
+                    TreePath([0, 1]): rowId,
+                ]
+            )
+        }
+
+        XCTAssertEqual(
+            classify(
+                before: viewport(headerId: "old_header", row: "Orders", rowId: "old_row"),
+                after: viewport(headerId: "new_header", row: "Products", rowId: "new_row")
+            ),
+            .replacement(.inferred(.semanticIdentityDisjoint))
         )
     }
 
@@ -446,12 +554,14 @@ final class ScreenClassifierTests: XCTestCase {
     private func classify(
         before: InterfaceObservation,
         after: InterfaceObservation,
-        notifications: [AccessibilityNotificationKind] = []
+        notifications: [AccessibilityNotificationKind] = [],
+        lineageEvidence: ScreenLineageEvidence? = nil
     ) -> ScreenContinuity {
         ScreenClassifier.classify(
             before: ScreenClassifier.snapshot(of: before.tree),
             after: ScreenClassifier.snapshot(of: after.tree),
-            notifications: notifications
+            notifications: notifications,
+            lineageEvidence: lineageEvidence
         )
     }
 
@@ -479,24 +589,31 @@ final class ScreenClassifierTests: XCTestCase {
         )
     }
 
-    private func screen(hierarchy: [AccessibilityHierarchy]) -> InterfaceObservation {
-        let elements = hierarchy.sortedElements
+    private func screen(
+        hierarchy: [AccessibilityHierarchy],
+        heistIdsByPath explicitHeistIdsByPath: [TreePath: HeistId]? = nil
+    ) -> InterfaceObservation {
+        let heistIdsByPath = explicitHeistIdsByPath ?? Dictionary(
+            uniqueKeysWithValues: hierarchy.pathIndexedElements.enumerated().map { index, item in
+                (item.path, HeistId(rawValue: "element_\(index)"))
+            }
+        )
         return InterfaceObservation.makeForTests(
-            elements: Dictionary(uniqueKeysWithValues: elements.enumerated().map { index, element in
-                let heistId = HeistId(rawValue: "element_\(index)")
+            elements: Dictionary(uniqueKeysWithValues: hierarchy.pathIndexedElements.map { item in
+                guard let heistId = heistIdsByPath[item.path] else {
+                    preconditionFailure("Missing heistId for test hierarchy path \(item.path.indices)")
+                }
                 return (
                     heistId,
                     InterfaceTree.Element(
                         heistId: heistId,
                         scrollMembership: nil,
-                        element: element
+                        element: item.element
                     )
                 )
             }),
             hierarchy: hierarchy,
-            heistIdsByPath: Dictionary(uniqueKeysWithValues: hierarchy.pathIndexedElements.enumerated().map { index, item in
-                (item.path, HeistId(rawValue: "element_\(index)"))
-            }),
+            heistIdsByPath: heistIdsByPath,
             firstResponderHeistId: nil,
         )
     }

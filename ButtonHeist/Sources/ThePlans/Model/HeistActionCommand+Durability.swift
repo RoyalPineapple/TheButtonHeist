@@ -12,14 +12,14 @@ package struct HeistActionCommandTargetOccurrence: Sendable, Equatable {
         case payloadElement
         case payloadStartElement
 
-        package func render(commandPath: String) -> String {
+        package func appending(to commandPath: HeistPlanPath) -> HeistPlanPath {
             switch self {
             case .payloadTarget:
-                return "\(commandPath).payload.target"
+                return commandPath.child(.payload).child(.target)
             case .payloadElement:
-                return "\(commandPath).payload.element"
+                return commandPath.child(.payload).child(.element)
             case .payloadStartElement:
-                return "\(commandPath).payload.start.element"
+                return commandPath.child(.payload).child(.start).child(.element)
             }
         }
     }
@@ -47,8 +47,8 @@ extension HeistActionCommand {
             return [.semantic(target)]
         case .customAction(_, let target), .rotor(_, let target, _):
             return [.semantic(target)]
-        case .typeText(_, let target, _):
-            return target.map { [.semantic($0)] } ?? []
+        case .typeText(let payload):
+            return payload.target.map { [.semantic($0)] } ?? []
         case .mechanicalTap(let target):
             return target.selection.targetOccurrences(role: .gesture, path: .payloadElement)
         case .mechanicalLongPress(let target):

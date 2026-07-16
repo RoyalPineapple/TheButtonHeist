@@ -102,9 +102,35 @@ public enum HeistSemanticStringValue: Sendable, Equatable, Hashable {
     }
 }
 
+public enum HeistCatalogIdentity: Sendable, Equatable, Hashable {
+    case entry(HeistPlanName?)
+    case capability(HeistDefinitionPath)
+
+    public var role: HeistCatalogRole {
+        switch self {
+        case .entry: .entry
+        case .capability: .capability
+        }
+    }
+
+    public var displayName: String {
+        switch self {
+        case .entry(let name): name?.description ?? "entry"
+        case .capability(let path): path.description
+        }
+    }
+
+    package var lookupPath: HeistDefinitionPath? {
+        switch self {
+        case .entry(let name): name.map { HeistDefinitionPath(first: $0) }
+        case .capability(let path): path
+        }
+    }
+}
+
 public struct HeistCatalogEntry: Sendable, Equatable {
-    public let name: String
-    public let role: HeistCatalogRole
+    public let identity: HeistCatalogIdentity
+    public var role: HeistCatalogRole { identity.role }
     public let parameterKind: HeistParameterKind
     public let requiresArgument: Bool
     public let summary: String?
@@ -118,8 +144,7 @@ public struct HeistCatalogEntry: Sendable, Equatable {
     public let validationStatus: HeistValidationStatus?
 
     public init(
-        name: String,
-        role: HeistCatalogRole,
+        identity: HeistCatalogIdentity,
         parameterKind: HeistParameterKind,
         requiresArgument: Bool,
         summary: String? = nil,
@@ -132,8 +157,7 @@ public struct HeistCatalogEntry: Sendable, Equatable {
         semanticSurfaces: [HeistSemanticSurfaceFact]? = nil,
         validationStatus: HeistValidationStatus? = nil
     ) {
-        self.name = name
-        self.role = role
+        self.identity = identity
         self.parameterKind = parameterKind
         self.requiresArgument = requiresArgument
         self.summary = summary
@@ -203,8 +227,8 @@ public struct HeistSemanticSurface: Sendable, Equatable {
 }
 
 public struct HeistDescription: Sendable, Equatable {
-    public let name: String
-    public let role: HeistCatalogRole
+    public let identity: HeistCatalogIdentity
+    public var role: HeistCatalogRole { identity.role }
     public let parameterKind: HeistParameterKind
     public let parameterName: HeistReferenceName?
     public let requiresArgument: Bool
@@ -213,8 +237,7 @@ public struct HeistDescription: Sendable, Equatable {
     public let semanticSurface: HeistSemanticSurface
 
     public init(
-        name: String,
-        role: HeistCatalogRole,
+        identity: HeistCatalogIdentity,
         parameterKind: HeistParameterKind,
         parameterName: HeistReferenceName?,
         requiresArgument: Bool,
@@ -222,8 +245,7 @@ public struct HeistDescription: Sendable, Equatable {
         validationStatus: HeistValidationStatus,
         semanticSurface: HeistSemanticSurface
     ) {
-        self.name = name
-        self.role = role
+        self.identity = identity
         self.parameterKind = parameterKind
         self.parameterName = parameterName
         self.requiresArgument = requiresArgument
@@ -234,29 +256,31 @@ public struct HeistDescription: Sendable, Equatable {
 }
 
 public struct HeistDescriptionLookupError: Error, Sendable, Equatable, CustomStringConvertible {
-    public let requestedName: String
-    public let availableNames: [String]
+    public let requestedPath: HeistDefinitionPath
+    public let availableIdentities: [HeistCatalogIdentity]
 
-    public init(requestedName: String, availableNames: [String]) {
-        self.requestedName = requestedName
-        self.availableNames = availableNames
+    public init(requestedPath: HeistDefinitionPath, availableIdentities: [HeistCatalogIdentity]) {
+        self.requestedPath = requestedPath
+        self.availableIdentities = availableIdentities
     }
 
     public var description: String {
-        let available = availableNames.isEmpty ? "none" : availableNames.joined(separator: ", ")
-        return "heist \"\(requestedName)\" was not found. Available heists: \(available)"
+        let available = availableIdentities.isEmpty
+            ? "none"
+            : availableIdentities.map(\.displayName).joined(separator: ", ")
+        return "heist \"\(requestedPath)\" was not found. Available heists: \(available)"
     }
 }
 
 public struct HeistCatalogError: Error, Sendable, Equatable, CustomStringConvertible {
-    public let duplicateNames: [String]
+    public let duplicateIdentities: [HeistCatalogIdentity]
 
-    public init(duplicateNames: [String]) {
-        self.duplicateNames = duplicateNames
+    public init(duplicateIdentities: [HeistCatalogIdentity]) {
+        self.duplicateIdentities = duplicateIdentities
     }
 
     public var description: String {
-        "heist catalog has duplicate names: \(duplicateNames.joined(separator: ", "))"
+        "heist catalog has duplicate names: \(duplicateIdentities.map(\.displayName).joined(separator: ", "))"
     }
 }
 
@@ -265,8 +289,8 @@ public extension HeistPlan {
         return try uncheckedHeistCatalog(detail: detail)
     }
 
-    func describeHeist(named requestedName: String) throws -> HeistDescription {
-        return try uncheckedDescribeHeist(named: requestedName)
+    func describeHeist(at requestedPath: HeistDefinitionPath) throws -> HeistDescription {
+        return try uncheckedDescribeHeist(at: requestedPath)
     }
 }
 
@@ -276,18 +300,16 @@ private extension HeistPlan {
         return HeistDiscoveryCatalog(heists: resolved.map { catalogEntry(for: $0, detail: detail) })
     }
 
-    func uncheckedDescribeHeist(named requestedName: String) throws -> HeistDescription {
-        let trimmedName = requestedName.trimmingCharacters(in: .whitespacesAndNewlines)
+    func uncheckedDescribeHeist(at requestedPath: HeistDefinitionPath) throws -> HeistDescription {
         let resolved = try catalogResolvedHeists()
-        guard let heist = resolved.first(where: { $0.entry.name == trimmedName }) else {
+        guard let heist = resolved.first(where: { $0.entry.identity.lookupPath == requestedPath }) else {
             throw HeistDescriptionLookupError(
-                requestedName: requestedName,
-                availableNames: resolved.map(\.entry.name)
+                requestedPath: requestedPath,
+                availableIdentities: resolved.map(\.entry.identity)
             )
         }
         return HeistDescription(
-            name: heist.entry.name,
-            role: heist.entry.role,
+            identity: heist.entry.identity,
             parameterKind: heist.entry.parameterKind,
             parameterName: heist.entry.parameterName,
             requiresArgument: heist.entry.requiresArgument,
@@ -300,18 +322,21 @@ private extension HeistPlan {
     func catalogResolvedHeists() throws -> [ResolvedCatalogHeist] {
         var collector = HeistCatalogCollector()
         HeistPlanTraversal(expandsInvocations: false).walk(self, visitor: &collector)
-        try validateUniqueCatalogNames(collector.heists.map(\.entry.name))
+        try validateUniqueCatalogPaths(collector.heists.map(\.entry.identity))
         return collector.heists
     }
 
-    func validateUniqueCatalogNames(_ names: [String]) throws {
-        var seen = Set<String>()
-        var duplicates: [String] = []
-        for name in names where !seen.insert(name).inserted {
-            appendUnique(name, to: &duplicates)
+    func validateUniqueCatalogPaths(_ identities: [HeistCatalogIdentity]) throws {
+        var seen = Set<HeistDefinitionPath>()
+        var duplicates: [HeistCatalogIdentity] = []
+        for identity in identities {
+            guard let path = identity.lookupPath else { continue }
+            if !seen.insert(path).inserted {
+                appendUnique(identity, to: &duplicates)
+            }
         }
         guard duplicates.isEmpty else {
-            throw HeistCatalogError(duplicateNames: duplicates)
+            throw HeistCatalogError(duplicateIdentities: duplicates)
         }
     }
 
@@ -324,8 +349,7 @@ private extension HeistPlan {
         let tags = catalogTags(for: base, surface: surface)
         guard detail == .detailed else {
             return HeistCatalogEntry(
-                name: base.name,
-                role: base.role,
+                identity: base.identity,
                 parameterKind: base.parameterKind,
                 requiresArgument: base.requiresArgument,
                 summary: catalogSummary(for: base),
@@ -333,8 +357,7 @@ private extension HeistPlan {
             )
         }
         return HeistCatalogEntry(
-            name: base.name,
-            role: base.role,
+            identity: base.identity,
             parameterKind: base.parameterKind,
             requiresArgument: base.requiresArgument,
             summary: catalogSummary(for: base),
@@ -403,39 +426,41 @@ private struct HeistCatalogCollector: HeistPlanTraversalVisitor {
     mutating func visitPlan(_ plan: HeistPlan, context: HeistTraversalContext) {
         append(
             plan,
-            name: plan.name?.isEmpty == false ? plan.name ?? "entry" : "entry",
-            role: .entry,
-            definitionPath: [],
+            identity: .entry(plan.name),
+            definitionComponents: [],
             context: context
         )
     }
 
     mutating func visitDefinition(_ plan: HeistPlan, context: HeistTraversalContext) {
-        guard let localName = plan.name, !localName.isEmpty else { return }
-        let namePath = context.definitionScope.pathPrefix + [localName]
+        guard let localName = plan.name else {
+            preconditionFailure("admitted heist definitions must have names")
+        }
+        let nameComponents = context.definitionScope.pathPrefix + [localName]
+        guard let first = nameComponents.first else {
+            preconditionFailure("definition catalog paths must not be empty")
+        }
+        let definitionPath = HeistDefinitionPath(first: first, remaining: Array(nameComponents.dropFirst()))
         append(
             plan,
-            name: namePath.joined(separator: "."),
-            role: .capability,
-            definitionPath: namePath,
+            identity: .capability(definitionPath),
+            definitionComponents: nameComponents,
             context: context
         )
     }
 
     private mutating func append(
         _ plan: HeistPlan,
-        name: String,
-        role: HeistCatalogRole,
-        definitionPath: [String],
+        identity: HeistCatalogIdentity,
+        definitionComponents: [HeistPlanName],
         context: HeistTraversalContext
     ) {
-        let invocationStack = definitionPath.isEmpty
+        let invocationStack = definitionComponents.isEmpty
             ? []
-            : [HeistCallGraph.Node(namePath: definitionPath)]
+            : [HeistCallGraph.Node(namePath: definitionComponents)]
         heists.append(ResolvedCatalogHeist(
             entry: HeistCatalogEntry(
-                name: name,
-                role: role,
+                identity: identity,
                 parameterKind: plan.parameter.kind,
                 requiresArgument: plan.parameter.kind != .none,
                 parameterName: plan.parameter.name
@@ -443,7 +468,7 @@ private struct HeistCatalogCollector: HeistPlanTraversalVisitor {
             plan: plan,
             definitionScope: HeistDefinitionScope(
                 definitions: plan.definitions,
-                pathPrefix: definitionPath
+                pathPrefix: definitionComponents
             ),
             rootDefinitionScope: context.rootDefinitionScope,
             referenceBindings: context.referenceBindings,
@@ -493,7 +518,7 @@ private struct HeistSemanticSurfaceBuilder: HeistPlanTraversalVisitor {
     }
 
     mutating func visitWait(_ wait: WaitStep, context: HeistTraversalContext) {
-        guard !context.path.description.hasSuffix(".expectation") else { return }
+        guard !context.path.ends(in: .expectation) else { return }
         collectWait(wait.predicate)
     }
 
@@ -505,7 +530,7 @@ private struct HeistSemanticSurfaceBuilder: HeistPlanTraversalVisitor {
         if let expectation = invocation.expectation {
             collectExpectation(expectation.predicate)
         }
-        guard let resolved = context.resolveInvocation(path: invocation.invocationPath) else { return }
+        guard let resolved = context.resolveInvocation(path: invocation.path) else { return }
         appendUnique(resolved.invocationPath, to: &nestedRunHeists)
     }
 

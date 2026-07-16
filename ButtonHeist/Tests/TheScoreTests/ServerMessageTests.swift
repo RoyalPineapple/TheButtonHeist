@@ -38,7 +38,7 @@ final class ServerMessageTests: XCTestCase {
                 appBuild: "42",
                 deviceName: "iPhone",
                 systemVersion: "18.0",
-                buttonHeistVersion: "5.0"
+                buttonHeistVersion: "5.0.0"
             ),
             session: StatusSession(
                 active: true,
@@ -90,7 +90,7 @@ final class ServerMessageTests: XCTestCase {
 
     func testPongEncodeDecode() throws {
         let payload = PongPayload(
-            buttonHeistVersion: "2026.05.22",
+            buttonHeistVersion: "2026.5.22",
             appName: "TestApp",
             bundleIdentifier: "com.test.app",
             appVersion: "1.2.3",
@@ -269,7 +269,7 @@ final class ServerMessageTests: XCTestCase {
     }
 
     func testActionResultPayloadHeistExecutionWireShape() throws {
-        let heist = HeistExecutionResult.passed(steps: [], durationMs: 42)
+        let heist = HeistExecutionResult(steps: [], durationMs: 42)
         let result = ActionResult.success(payload: .heistExecution(heist), evidence: .none)
 
         let data = try JSONEncoder().encode(result)

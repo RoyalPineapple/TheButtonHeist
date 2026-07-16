@@ -6,7 +6,7 @@ extension TheFence {
     static func accessibilityActionCommand(
         target: AccessibilityTarget,
         actionName: String?
-    ) -> HeistActionCommand {
+    ) throws -> HeistActionCommand {
         guard let actionName else {
             return .activate(target)
         }
@@ -16,7 +16,7 @@ extension TheFence {
         case ElementAction.decrement.description:
             return .decrement(target)
         default:
-            return .customAction(name: actionName, target: target)
+            return .customAction(name: try CustomActionName(validating: actionName), target: target)
         }
     }
 }

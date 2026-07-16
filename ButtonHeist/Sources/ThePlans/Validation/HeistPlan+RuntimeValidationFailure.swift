@@ -1,13 +1,13 @@
 import Foundation
 
 package struct HeistPlanRuntimeSafetyFailure: Sendable, Equatable, CustomStringConvertible {
-    package let path: String
+    package let path: HeistPlanPath
     package let contract: String
     package let observed: String
     package let correction: String
 
     package init(
-        path: String,
+        path: HeistPlanPath,
         contract: String,
         observed: String,
         correction: String
@@ -43,7 +43,7 @@ extension HeistPlanRuntimeSafetyValidator {
         "this with a canonical durable DSL action."
 
     mutating func fail(
-        path: String,
+        path: HeistPlanPath,
         contract: String,
         observed: String,
         correction: String
@@ -57,11 +57,11 @@ extension HeistPlanRuntimeSafetyValidator {
     }
 
     mutating func failNonDurableAction(
-        at path: HeistTraversalPath,
+        at path: HeistPlanPath,
         observed: String
     ) {
         fail(
-            path: path.description,
+            path: path,
             contract: "durable heist action",
             observed: observed,
             correction: Self.durableHeistActionCorrection

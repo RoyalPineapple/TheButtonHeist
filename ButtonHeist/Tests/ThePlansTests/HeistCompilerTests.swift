@@ -5,6 +5,14 @@ import Testing
 @Suite(.serialized)
 struct HeistCompilerTests {
     @Test
+    func `entry symbol validates one canonical dotted identifier currency`() throws {
+        #expect(try HeistEntrySymbol(validating: "Checkout.compile").description == "Checkout.compile")
+        #expect(throws: HeistEntrySymbol.ValidationError.self) {
+            _ = try HeistEntrySymbol(validating: "Checkout-compile")
+        }
+    }
+
+    @Test
     func `known build diagnostic codes preserve raw output`() {
         let representativeCodes: [(HeistKnownBuildDiagnosticCode, String)] = [
             (.dslInvalidActionExpectation, "heist.dsl.invalid_action_expectation"),

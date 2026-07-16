@@ -60,37 +60,28 @@ final class DiscoveredDeviceTests: XCTestCase {
     // MARK: - Typed Discovery Identifiers
 
     func testDiscoveryIdentityPreservesRawAndPrintedValue() {
-        let serviceName = DiscoveryServiceName("DemoApp#abc123")
-        let serviceIdentity = DiscoveryIdentity.serviceName(serviceName)
-        let installIdentity = DiscoveryIdentity.installation(
-            appName: " DemoApp ",
-            installationId: "install-1"
+        XCTAssertEqual(
+            DiscoveryIdentity.device("DemoApp#abc123"),
+            .device("DemoApp#abc123")
         )
-
-        XCTAssertEqual(serviceIdentity.rawValue, "service|DemoApp#abc123")
-        XCTAssertEqual(String(describing: serviceIdentity), "service|DemoApp#abc123")
-        XCTAssertEqual(installIdentity.rawValue, "install|demoapp|install-1")
-        XCTAssertEqual(String(describing: installIdentity), "install|demoapp|install-1")
+        XCTAssertEqual(
+            DiscoveryIdentity.installation(appName: "demoapp", id: "install-1"),
+            .installation(appName: "demoapp", id: "install-1")
+        )
     }
 
     func testDiscoveryWrappersEncodeAsSingleJSONStringValues() throws {
         let encoder = JSONEncoder()
-        let serviceName = DiscoveryServiceName("DemoApp#abc123")
-        let identity = DiscoveryIdentity.serviceName(serviceName)
-
-        XCTAssertEqual(String(data: try encoder.encode(serviceName), encoding: .utf8), #""DemoApp#abc123""#)
-        XCTAssertEqual(String(data: try encoder.encode(identity), encoding: .utf8), #""service|DemoApp#abc123""#)
+        let deviceID: DiscoveryDeviceID = "DemoApp#abc123"
+        XCTAssertEqual(String(data: try encoder.encode(deviceID), encoding: .utf8), #""DemoApp#abc123""#)
     }
 
     func testDiscoveryDeviceIDFactoriesPreserveRawValues() throws {
-        let serviceName = DiscoveryServiceName("DemoApp#abc123")
         let hostPort = DiscoveryDeviceID.hostPort(host: "127.0.0.1", port: 5555)
-        let service = DiscoveryDeviceID.serviceName(serviceName)
         let usb = DiscoveryDeviceID.usbIdentifier("00008120")
 
-        XCTAssertEqual(hostPort.rawValue, "127.0.0.1:5555")
-        XCTAssertEqual(service.rawValue, "DemoApp#abc123")
-        XCTAssertEqual(usb.rawValue, "usb-00008120")
+        XCTAssertEqual(hostPort, "127.0.0.1:5555")
+        XCTAssertEqual(usb, "usb-00008120")
         XCTAssertEqual(String(data: try JSONEncoder().encode(usb), encoding: .utf8), #""usb-00008120""#)
     }
 
@@ -343,7 +334,10 @@ final class DiscoveredDeviceTests: XCTestCase {
         )
 
         XCTAssertEqual(oldDevice.discoveryIdentity, newDevice.discoveryIdentity)
-        XCTAssertEqual(oldDevice.discoveryIdentity.rawValue, "install|accessibilitytestapp|install-1")
+        XCTAssertEqual(
+            oldDevice.discoveryIdentity,
+            .installation(appName: "accessibilitytestapp", id: "install-1")
+        )
     }
 
     func testDiscoveryIdentityFallsBackToServiceIdWithoutInstallationId() {
@@ -362,7 +356,7 @@ final class DiscoveredDeviceTests: XCTestCase {
 
         // Without installationId, each device gets a unique service-based identity
         XCTAssertNotEqual(firstDevice.discoveryIdentity, secondDevice.discoveryIdentity)
-        XCTAssertEqual(firstDevice.discoveryIdentity.rawValue, "service|first")
+        XCTAssertEqual(firstDevice.discoveryIdentity, .device("first"))
     }
 
     func testDiscoveryRegistryUpdatesSameServiceWithoutMutation() {
@@ -396,7 +390,7 @@ final class DiscoveredDeviceTests: XCTestCase {
         var registry = DiscoveryRegistry()
 
         XCTAssertEqual(registry.recordFound(device), [.found(device)])
-        XCTAssertTrue(registry.recordLost(DiscoveryServiceName("missing-service")).isEmpty)
+        XCTAssertTrue(registry.recordLost("missing-service").isEmpty)
         XCTAssertEqual(registry.devices, [device])
     }
 
@@ -452,7 +446,7 @@ final class DiscoveredDeviceTests: XCTestCase {
         _ = registry.recordFound(newDevice)
 
         XCTAssertEqual(
-            registry.recordLost(newDevice.discoveryServiceName),
+            registry.recordLost(newDevice.id),
             [.lost(newDevice), .found(oldDevice)]
         )
         XCTAssertEqual(registry.devices, [oldDevice])
@@ -480,7 +474,7 @@ final class DiscoveredDeviceTests: XCTestCase {
         _ = registry.recordFound(oldDevice)
         _ = registry.recordFound(newDevice)
 
-        XCTAssertTrue(registry.recordLost(oldDevice.discoveryServiceName).isEmpty)
+        XCTAssertTrue(registry.recordLost(oldDevice.id).isEmpty)
         XCTAssertEqual(registry.devices, [newDevice])
     }
 

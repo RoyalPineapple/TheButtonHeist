@@ -109,7 +109,7 @@ extension HeistPlanSourceParser {
         let name = try parseStringLiteral()
         let invocationPath: HeistInvocationPath
         do {
-            invocationPath = try HeistInvocationPath(dottedName: name)
+            invocationPath = try HeistInvocationPath(validating: name)
         } catch let validationError {
             throw HeistPlanSourceCompilerError(diagnostic: .invalidInvocationPath(
                 name,
@@ -124,10 +124,10 @@ extension HeistPlanSourceParser {
         }
         try expectSymbol(")")
         var invocation = HeistInvocationStep(
-            invocationPath: invocationPath,
+            path: invocationPath,
             argument: argument
         )
-        var explicitExpectationTimeout: Double?
+        var explicitExpectationTimeout: WaitTimeout?
         while consumeSymbol(".") {
             let chainToken = currentToken
             let chain = try parseIdentifier()
@@ -135,7 +135,7 @@ extension HeistPlanSourceParser {
             case "expect":
                 try expectSymbol("(")
                 let predicate: AccessibilityPredicate
-                let timeout: Double?
+                let timeout: WaitTimeout?
                 if currentToken.isSymbol(")") {
                     throw error(currentToken, ".expect(...) requires a canonical predicate")
                 } else {
@@ -155,7 +155,7 @@ extension HeistPlanSourceParser {
                     throw error(chainToken, diagnostic.message)
                 }
                 invocation = HeistInvocationStep(
-                    invocationPath: invocation.invocationPath,
+                    path: invocation.path,
                     argument: invocation.argument,
                     expectation: WaitStep(predicate: predicateResult.predicate, timeout: timeoutResult.timeout)
                 )
@@ -176,16 +176,26 @@ extension HeistPlanSourceParser {
 
     mutating func parseWarn() throws -> HeistStep {
         try expectSymbol("(")
+        let messageToken = currentToken
         let message = try parseStringLiteral()
         try expectSymbol(")")
-        return .warn(WarnStep(message: message))
+        do {
+            return .warn(WarnStep(message: try HeistWarningMessage(validating: message)))
+        } catch let validationError {
+            throw error(messageToken, String(describing: validationError))
+        }
     }
 
     mutating func parseFail() throws -> HeistStep {
         try expectSymbol("(")
+        let messageToken = currentToken
         let message = try parseStringLiteral()
         try expectSymbol(")")
-        return .fail(FailStep(message: message))
+        do {
+            return .fail(FailStep(message: try HeistFailureMessage(validating: message)))
+        } catch let validationError {
+            throw error(messageToken, String(describing: validationError))
+        }
     }
 
     mutating func parsePredicateBranches() throws -> ParsedPredicateBranches {

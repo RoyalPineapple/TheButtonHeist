@@ -13,7 +13,7 @@ flowchart TD
     CHECK -- "otherwise" --> PROCEED["interactive"]
     WARN --> REFRESH
     PROCEED --> REFRESH["refreshAndResolve<br/>semantic refresh + fresh live geometry"]
-    REFRESH -- "failure" --> FAIL1["InteractionResult failure<br/>ActivationTrace: axActivateReturned nil,<br/>tapActivationDispatched false"]
+    REFRESH -- "failure" --> FAIL1["ActionDispatchOutcome failure<br/>ActivationTrace: axActivateReturned nil,<br/>tapActivationDispatched false"]
     REFRESH -- "resolved" --> AXACT["accessibilityActivate()<br/>on the live element"]
     AXACT -- ".success" --> OK1["success, method .activate<br/>ActivationTrace: axActivateReturned true,<br/>tapActivationDispatched false"]
     AXACT -- ".refused or .objectDeallocated" --> TAP["activationPointDispatch at the element's<br/>declared activationPoint — not a computed frame point"]

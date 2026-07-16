@@ -291,7 +291,7 @@ extension HeistCanonicalSwiftDSLRenderer {
         case .decrement:
             return ".decrement"
         case .custom(let name):
-            return ".custom(\(quote(name)))"
+            return ".custom(\(quote(name.rawValue)))"
         }
     }
 

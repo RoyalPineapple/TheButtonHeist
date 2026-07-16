@@ -7,12 +7,12 @@ import TheScore
 struct SessionLease {
     enum Phase: Equatable, Sendable {
         case idle
-        case active(driverId: String, clientId: Int)
-        case draining(driverId: String, releaseDeadline: Date)
+        case active(owner: SessionOwner, clientId: Int)
+        case draining(owner: SessionOwner, releaseDeadline: Date)
     }
 
     private enum Event: Equatable, Sendable {
-        case acquire(driverIdentity: String, clientId: Int, at: Date)
+        case acquire(owner: SessionOwner, clientId: Int, at: Date)
         case release
         case removeConnection(clientId: Int, at: Date)
     }
@@ -40,7 +40,7 @@ struct SessionLease {
     }
 
     enum OwnerDriverIdentity: Equatable, Sendable {
-        case exposed(String)
+        case exposed(DriverID)
         case hidden
     }
 
@@ -104,15 +104,17 @@ struct SessionLease {
         driver.state
     }
 
-    var activeSessionDriverId: String? {
+    var activeSessionOwner: SessionOwner? {
         switch phase {
         case .idle: return nil
-        case .active(let driverId, _), .draining(let driverId, _): return driverId
+        case .active(let owner, _), .draining(let owner, _): return owner
         }
     }
 
-    var exposedDriverId: String? {
-        activeSessionDriverId.flatMap { Self.exposedDriverId(from: $0) }
+    var exposedDriverId: DriverID? {
+        guard let activeSessionOwner,
+              case .driver(let driverId) = activeSessionOwner else { return nil }
+        return driverId
     }
 
     var activeSessionConnections: Set<Int> {
@@ -121,15 +123,15 @@ struct SessionLease {
     }
 
     var isSessionActive: Bool {
-        activeSessionDriverId != nil
+        activeSessionOwner != nil
     }
 
     var activeSessionConnectionCount: Int {
         activeSessionConnections.count
     }
 
-    mutating func acquire(driverIdentity: String, clientId: Int, at now: Date) -> Acquisition {
-        let change = driver.send(.acquire(driverIdentity: driverIdentity, clientId: clientId, at: now))
+    mutating func acquire(owner: SessionOwner, clientId: Int, at now: Date) -> Acquisition {
+        let change = driver.send(.acquire(owner: owner, clientId: clientId, at: now))
         switch change {
         case .changed:
             return .accepted(change.effects)
@@ -158,17 +160,9 @@ struct SessionLease {
         }
     }
 
-    private static func exposedDriverId(from driverIdentity: String) -> String? {
-        guard case .exposed(let driverId) = ownerIdentity(from: driverIdentity) else { return nil }
-        return driverId
-    }
-
-    private static func ownerIdentity(from driverIdentity: String) -> OwnerDriverIdentity {
-        let prefix = "driver:"
-        guard driverIdentity.hasPrefix(prefix) else { return .hidden }
-        let exposedDriverId = String(driverIdentity.dropFirst(prefix.count))
-        guard !exposedDriverId.isEmpty else { return .hidden }
-        return .exposed(exposedDriverId)
+    private static func driverIdentity(from owner: SessionOwner) -> OwnerDriverIdentity {
+        guard case .driver(let driverId) = owner else { return .hidden }
+        return .exposed(driverId)
     }
 
     private struct Machine: SimpleStateMachine {
@@ -176,38 +170,38 @@ struct SessionLease {
 
         func advance(_ state: Phase, with event: Event) -> StateChange<Phase, Effect, Rejection> {
             switch (state, event) {
-            case (.idle, .acquire(let driverIdentity, let clientId, _)):
+            case (.idle, .acquire(let owner, let clientId, _)):
                 return .changed(
-                    to: .active(driverId: driverIdentity, clientId: clientId),
+                    to: .active(owner: owner, clientId: clientId),
                     effects: [.log(.sessionClaimed(clientId: clientId))]
                 )
 
-            case (.active(let activeId, _), .acquire(let driverIdentity, _, _)) where driverIdentity == activeId:
+            case (.active(let activeOwner, _), .acquire(let owner, _, _)) where owner == activeOwner:
                 return .rejected(
-                    .acquisition(.sameDriverActive(owner: ownerIdentity(from: activeId))),
+                    .acquisition(.sameDriverActive(owner: driverIdentity(from: activeOwner))),
                     stayingIn: state
                 )
 
-            case (.draining(let activeId, _), .acquire(let driverIdentity, let clientId, _))
-                where driverIdentity == activeId:
+            case (.draining(let activeOwner, _), .acquire(let owner, let clientId, _))
+                where owner == activeOwner:
                 return .changed(
-                    to: .active(driverId: activeId, clientId: clientId),
+                    to: .active(owner: activeOwner, clientId: clientId),
                     effects: [
                         .cancelReleaseTimer,
                         .log(.clientRejoinedDuringGracePeriod(clientId: clientId)),
                     ]
                 )
 
-            case (.active(let driverId, _), .acquire):
+            case (.active(let owner, _), .acquire):
                 return .rejected(
-                    .acquisition(.activeOwner(owner: ownerIdentity(from: driverId))),
+                    .acquisition(.activeOwner(owner: driverIdentity(from: owner))),
                     stayingIn: state
                 )
 
-            case (.draining(let driverId, let releaseDeadline), .acquire(_, _, let now)):
+            case (.draining(let owner, let releaseDeadline), .acquire(_, _, let now)):
                 return .rejected(
                     .acquisition(.drainingOwner(
-                        owner: ownerIdentity(from: driverId),
+                        owner: driverIdentity(from: owner),
                         remainingTimeoutSeconds: max(0, releaseDeadline.timeIntervalSince(now))
                     )),
                     stayingIn: state
@@ -225,11 +219,11 @@ struct SessionLease {
             case (.idle, .removeConnection), (.draining, .removeConnection):
                 return .changed(to: state)
 
-            case (.active(let driverId, let activeClientId), .removeConnection(let clientId, let now))
+            case (.active(let owner, let activeClientId), .removeConnection(let clientId, let now))
                 where activeClientId == clientId:
                 let releaseDeadline = now.addingTimeInterval(releaseTimeout)
                 return .changed(
-                    to: .draining(driverId: driverId, releaseDeadline: releaseDeadline),
+                    to: .draining(owner: owner, releaseDeadline: releaseDeadline),
                     effects: [
                         .replaceReleaseTimer(timeout: releaseTimeout),
                         .log(.releaseTimerStarted(timeout: releaseTimeout)),

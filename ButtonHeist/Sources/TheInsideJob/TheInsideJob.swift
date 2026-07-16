@@ -103,7 +103,7 @@ public final class TheInsideJob {
     let getaway: TheGetaway
 
     let runtimeConfiguration: InsideJobRuntimeConfiguration
-    let transportFactory: @MainActor (String, Set<ConnectionScope>) -> ServerTransport
+    let transportFactory: @MainActor (SessionAuthToken, Set<ConnectionScope>) -> ServerTransport
     let lifecycleBoundaryTasks = LifecycleBoundaryTasks()
 
     // MARK: - Computed State
@@ -200,7 +200,7 @@ public final class TheInsideJob {
         port: UInt16 = 0,
         addressFamily: ListenerAddressFamily = .dualStack,
         fingerprintsEnabled: Bool? = nil,
-        transportFactory: @escaping @MainActor (String, Set<ConnectionScope>) -> ServerTransport = {
+        transportFactory: @escaping @MainActor (SessionAuthToken, Set<ConnectionScope>) -> ServerTransport = {
             ServerTransport(token: $0, allowedScopes: $1)
         }
     ) {
@@ -226,7 +226,7 @@ public final class TheInsideJob {
 
     init(
         runtimeConfiguration: InsideJobRuntimeConfiguration,
-        transportFactory: @escaping @MainActor (String, Set<ConnectionScope>) -> ServerTransport = {
+        transportFactory: @escaping @MainActor (SessionAuthToken, Set<ConnectionScope>) -> ServerTransport = {
             ServerTransport(token: $0, allowedScopes: $1)
         }
     ) {
@@ -245,7 +245,7 @@ public final class TheInsideJob {
             muscle: self.muscle,
             brains: self.brains,
             identity: TheGetaway.ServerIdentity(
-                sessionId: runtimeConfiguration.sessionIdentity.sessionId,
+                launchId: runtimeConfiguration.sessionIdentity.launchId,
                 effectiveInstanceId: runtimeConfiguration.sessionIdentity.effectiveInstanceId,
                 tlsActive: false
             )
@@ -265,7 +265,7 @@ public final class TheInsideJob {
         insideJobLogger.info("Starting TheInsideJob with ServerTransport...")
 
         let attemptID = UUID()
-        let attempt = try makeRuntimeStartAttempt(id: attemptID, phase: .startup)
+        let attempt = makeRuntimeStartAttempt(id: attemptID)
         let startChange = applyLifecycleEvent(
             .startRequested(
                 attempt,

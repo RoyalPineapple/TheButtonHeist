@@ -1,5 +1,12 @@
 import Foundation
 
+public enum HeistPredicateEvidenceOutcome: String, Codable, Sendable, Equatable {
+    case matched
+    case continued
+    case handledElse = "handled_else"
+    case failed
+}
+
 public struct HeistWaitEvidence: Codable, Sendable, Equatable {
     private let storage: Storage
     public let baselineSummary: String?

@@ -293,8 +293,8 @@ struct StartupConfiguration: Equatable, Sendable {
 
     let disableAutoStart: ResolvedStartupValue<Bool>
     let fingerprintsEnabled: ResolvedStartupValue<Bool>
-    let token: ResolvedStartupValue<String?>
-    let instanceId: ResolvedStartupValue<String?>
+    let token: ResolvedStartupValue<SessionAuthToken?>
+    let instanceId: ResolvedStartupValue<InsideJobInstanceID?>
     let preferredPort: ResolvedStartupValue<UInt16>
     let allowedScopes: ResolvedStartupValue<Set<ConnectionScope>>
     let sessionTimeout: ResolvedStartupValue<TimeInterval>
@@ -303,8 +303,8 @@ struct StartupConfiguration: Equatable, Sendable {
 
     init(
         disableAutoStart: ResolvedStartupValue<Bool>,
-        token: ResolvedStartupValue<String?>,
-        instanceId: ResolvedStartupValue<String?>,
+        token: ResolvedStartupValue<SessionAuthToken?>,
+        instanceId: ResolvedStartupValue<InsideJobInstanceID?>,
         preferredPort: ResolvedStartupValue<UInt16>,
         allowedScopes: ResolvedStartupValue<Set<ConnectionScope>>,
         sessionTimeout: ResolvedStartupValue<TimeInterval>,
@@ -345,6 +345,7 @@ struct StartupConfiguration: Equatable, Sendable {
         let token = resolveString(
             envKey: .token,
             plistKey: .token,
+            as: SessionAuthToken.self,
             env: env,
             plist: plist,
             absentSource: .generated,
@@ -353,6 +354,7 @@ struct StartupConfiguration: Equatable, Sendable {
         let instanceId = resolveString(
             envKey: .instanceId,
             plistKey: .instanceId,
+            as: InsideJobInstanceID.self,
             env: env,
             plist: plist,
             absentSource: .generated,
@@ -388,24 +390,25 @@ struct StartupConfiguration: Equatable, Sendable {
         )
     }
 
-    private static func resolveString(
+    private static func resolveString<Value: NonBlankStringValue>(
         envKey: StartupEnvironmentKey,
         plistKey: StartupInfoPlistKey,
+        as _: Value.Type,
         env: StartupEnvironment,
         plist: StartupInfoPlist,
         absentSource: StartupConfigurationSource,
         warnings: inout [StartupConfigurationWarning]
-    ) -> ResolvedStartupValue<String?> {
+    ) -> ResolvedStartupValue<Value?> {
         if let envValue = env[envKey] {
-            if !envValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return ResolvedStartupValue(value: envValue, source: .environment)
+            if let value = try? Value(validating: envValue) {
+                return ResolvedStartupValue(value: value, source: .environment)
             }
             warnings.append(.emptyValueIgnored(key: envKey.rawValue, source: .environment))
         }
 
         if let plistValue = plist[plistKey]?.string {
-            if !plistValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return ResolvedStartupValue(value: plistValue, source: .infoPlist)
+            if let value = try? Value(validating: plistValue) {
+                return ResolvedStartupValue(value: value, source: .infoPlist)
             }
             warnings.append(.emptyValueIgnored(key: plistKey.rawValue, source: .infoPlist))
         }
