@@ -1,3 +1,4 @@
+import os
 import XCTest
 
 @testable import TheInsideJob
@@ -121,6 +122,30 @@ final class TheBrainsInteractionRequestTests: XCTestCase {
             ["active-start", "active-cleanup", "next-start", "next-finish", "last"]
         )
         await brains.stopInteractionRequests()
+    }
+
+    @MainActor
+    func testOwnerCancellationCancelsTheActiveOperationTask() async {
+        let executor = InteractionRequestExecutor(
+            cleanupDeadlineScheduler: ManualInteractionCleanupDeadline().schedule
+        )
+        let activeGate = PipelineTestGate()
+        let cancellationObserved = OSAllocatedUnfairLock(initialState: false)
+
+        XCTAssertEqual(executor.submit(owner: .transportClient(1), operation: {
+            await withTaskCancellationHandler {
+                await activeGate.suspend()
+            } onCancel: {
+                cancellationObserved.withLock { $0 = true }
+            }
+        }, completion: { _ in }), .accepted)
+        await activeGate.entered.wait()
+
+        executor.cancel(owner: .transportClient(1))
+
+        XCTAssertTrue(cancellationObserved.withLock { $0 })
+        activeGate.release()
+        await executor.drain()
     }
 
     @MainActor
