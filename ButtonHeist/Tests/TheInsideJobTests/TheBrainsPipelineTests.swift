@@ -2106,6 +2106,17 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertTrue(exploration.manifest.exploredScrollPaths.isEmpty)
     }
 
+    func testExplorationTerminalResolutionSupportsContainerTargets() throws {
+        let screen = makeDiscoveryObservationProjectionFixture().screen
+        let visibleRoot = try AccessibilityTarget.container(.identifier("RootViewController")).resolve(in: .empty)
+        let offscreenGroup = try AccessibilityTarget.container(.identifier("OffscreenGroup")).resolve(in: .empty)
+        let missing = try AccessibilityTarget.container(.identifier("Missing")).resolve(in: .empty)
+
+        XCTAssertTrue(brains.stash.hasVisibleTerminalResolution(visibleRoot, in: screen.tree))
+        XCTAssertFalse(brains.stash.hasVisibleTerminalResolution(offscreenGroup, in: screen.tree))
+        XCTAssertFalse(brains.stash.hasVisibleTerminalResolution(missing, in: screen.tree))
+    }
+
     func testSemanticExplorationAddsNestedContainersAfterOuterContainerIsExplored() {
         let outer = makeScrollableContainer(
             frame: CGRect(x: 0, y: 0, width: 320, height: 400),

@@ -33,27 +33,10 @@ extension Navigation {
                 return .finish
             }
             guard let target else { return .continue }
-            return hasVisibleTerminalExplorationResolution(target, in: event.observation.screen.tree)
+            return stash.hasVisibleTerminalResolution(target, in: event.observation.screen.tree)
                 ? .finish
                 : .continue
         }
-    }
-
-    func hasTerminalExplorationResolution(_ target: ResolvedAccessibilityTarget, in tree: InterfaceTree) -> Bool {
-        switch stash.resolveTarget(target, in: tree) {
-        case .resolved, .ambiguous:
-            return true
-        case .notFound:
-            return false
-        }
-    }
-
-    func hasVisibleTerminalExplorationResolution(_ target: ResolvedAccessibilityTarget) -> Bool {
-        hasTerminalExplorationResolution(target, in: stash.latestObservation.tree.viewportOnly)
-    }
-
-    func hasVisibleTerminalExplorationResolution(_ target: ResolvedAccessibilityTarget, in tree: InterfaceTree) -> Bool {
-        hasTerminalExplorationResolution(target, in: tree.viewportOnly)
     }
 }
 
