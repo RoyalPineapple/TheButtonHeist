@@ -90,6 +90,17 @@ class MutationGateTests(unittest.TestCase):
             ("unexpected-failure", 0),
         )
 
+        timed_out_match = GATE["CommandResult"](
+            exit_code=124,
+            duration_seconds=1,
+            output="testRequiredInvariant failed",
+            timed_out=True,
+        )
+        self.assertEqual(
+            GATE["classification"](timed_out_match, "testRequiredInvariant"),
+            ("detected", 1),
+        )
+
     def test_nonbehavioral_outcomes_remain_distinct_and_inconclusive(self) -> None:
         cases = [
             (GATE["CommandResult"](0, 1, ""), "survived"),

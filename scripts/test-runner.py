@@ -84,7 +84,7 @@ FOCUSES = {
     },
     "mutation-interaction-fifo": {
         "TheInsideJobTests": (
-            "TheInsideJobTests/TheBrainsInteractionRequestTests",
+            "TheInsideJobTests/ClientRequestPipelineTests",
         ),
     },
     "mutation-receipt-legality": {

@@ -102,12 +102,12 @@ def apply_mutation(worktree: Path, mutation: dict[str, object]) -> str:
 
 def classification(result: CommandResult, expected_diagnostic: str) -> tuple[str, int]:
     matches = result.output.count(expected_diagnostic)
-    if result.timed_out or result.exit_code == 124:
-        return "timeout", matches
     if result.exit_code == 0:
         return "survived", matches
     if matches:
         return "detected", matches
+    if result.timed_out or result.exit_code == 124:
+        return "timeout", matches
     if any(marker in result.output for marker in (
         "SwiftCompile normal", "CompileSwift", "emit-module command failed", "** BUILD FAILED **",
     )):

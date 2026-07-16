@@ -65,6 +65,10 @@ class TestRunnerTests(unittest.TestCase):
                 "mutation-stale-discovery",
             }.issubset(FOCUSES)
         )
+        self.assertEqual(
+            FOCUSES["mutation-interaction-fifo"]["TheInsideJobTests"],
+            ("TheInsideJobTests/ClientRequestPipelineTests",),
+        )
 
     def test_portable_contract_runs_through_the_canonical_interface(self) -> None:
         suite = SUITES["ReleaseContractTests"]
