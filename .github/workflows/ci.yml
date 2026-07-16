@@ -43,6 +43,10 @@ jobs:
           scripts/tests/generate-project-test.sh
           scripts/tests/release-automation-test.sh
           scripts/tests/require-successful-ci-for-commit-test.sh
+          python3 scripts/tests/critical-mutation-results-test.py
+          python3 scripts/tests/critical-mutations-workflow-test.py
+          python3 scripts/tests/mutation-gate-test.py
+          python3 scripts/tests/select-critical-mutations-test.py
           python3 scripts/tests/select-ci-change-scopes-test.py
           python3 scripts/tests/select-ios-ci-simulator-test.py
           python3 scripts/tests/test-runner-test.py
@@ -395,9 +399,82 @@ jobs:
             echo "- Run: $((INTEGRATION_RUN_END - INTEGRATION_RUN_START))s"
           } >> "$GITHUB_STEP_SUMMARY"
 
+  critical-mutations:
+    name: critical-mutations
+    needs: [release-contract, macos-tests, ios-tests, ios-demo-gates, main-integration]
+    if: >-
+      always()
+      && needs.release-contract.result == 'success'
+      && needs.macos-tests.result == 'success'
+      && needs.ios-tests.result == 'success'
+      && needs.ios-demo-gates.result == 'success'
+      && (github.event_name == 'pull_request' || needs.main-integration.result == 'success')
+    runs-on: macos-15
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Select Xcode 26.3
+        run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
+
+      - name: Install build tools
+        uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151  # v4
+
+      - name: Select critical mutations
+        id: mutations
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            git diff --name-only --no-renames "$BASE_SHA" "$HEAD_SHA" \
+              | python3 scripts/select-critical-mutations.py --github-output "$GITHUB_OUTPUT"
+          else
+            echo "mutation_args=--all" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Boot dedicated mutation simulator
+        env:
+          MUTATION_SIMULATOR: buttonheist-mutations-${{ github.run_id }}-${{ github.run_attempt }}
+        run: python3 scripts/select-ios-ci-simulator.py --sim-name "$MUTATION_SIMULATOR" --wait
+
+      - name: Run critical mutation gate
+        env:
+          COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          MUTATION_ARGS: ${{ steps.mutations.outputs.mutation_args }}
+        run: |
+          read -r -a mutation_args <<< "$MUTATION_ARGS"
+          scripts/mutation-gate.py \
+            --commit "$COMMIT_SHA" \
+            "${mutation_args[@]}" \
+            --simulator-name "$SIM_NAME" \
+            --output ci-artifacts/critical-mutations
+
+      - name: Upload mutation evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: buttonheist-critical-mutations-${{ github.run_attempt }}
+          path: ci-artifacts/critical-mutations
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Remove dedicated mutation simulator
+        if: always()
+        run: |
+          if [[ -n "${SIM_UDID:-}" ]]; then
+            xcrun simctl shutdown "$SIM_UDID" || true
+            xcrun simctl delete "$SIM_UDID" || true
+          fi
+
   exact-sha-suite:
     name: exact-sha-suite
-    needs: [release-contract, macos-tests, ios-tests, ios-demo-gates, main-integration]
+    needs: [release-contract, macos-tests, ios-tests, ios-demo-gates, main-integration, critical-mutations]
     if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -407,6 +484,22 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
         with:
           ref: ${{ github.sha }}
+
+      - name: Download critical mutation evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
+        with:
+          name: buttonheist-critical-mutations-${{ github.run_attempt }}
+          path: critical-mutations
+
+      - name: Require complete exact-SHA mutation evidence
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          jq -e \
+            --arg commit "$COMMIT_SHA" \
+            --slurpfile manifest scripts/mutations.json \
+            -f scripts/critical-mutation-results.jq \
+            critical-mutations/mutation-results.json
 
       - name: Record exact-SHA suite manifest
         env:
@@ -420,6 +513,7 @@ jobs:
           IOS_TESTS: ${{ needs.ios-tests.result }}
           IOS_DEMO_GATES: ${{ needs.ios-demo-gates.result }}
           MAIN_INTEGRATION: ${{ needs.main-integration.result }}
+          CRITICAL_MUTATIONS: ${{ needs.critical-mutations.result }}
         run: |
           jq -n \
             --arg commit "$COMMIT_SHA" \
@@ -432,6 +526,7 @@ jobs:
             --arg iosTests "$IOS_TESTS" \
             --arg iosDemoGates "$IOS_DEMO_GATES" \
             --arg mainIntegration "$MAIN_INTEGRATION" \
+            --arg criticalMutations "$CRITICAL_MUTATIONS" \
             '{
               schemaVersion: 1,
               commit: $commit,
@@ -446,7 +541,8 @@ jobs:
                 {name: "macos-tests", conclusion: $macosTests},
                 {name: "ios-tests", conclusion: $iosTests},
                 {name: "ios-demo-gates", conclusion: $iosDemoGates},
-                {name: "main-integration", conclusion: $mainIntegration}
+                {name: "main-integration", conclusion: $mainIntegration},
+                {name: "critical-mutations", conclusion: $criticalMutations}
               ]
             }' > exact-sha-suite.json
 

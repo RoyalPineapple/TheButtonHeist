@@ -1,0 +1,61 @@
+name: Critical Mutations
+
+on:
+  schedule:
+    - cron: "13 4 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: critical-mutations-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  critical-mutations:
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    runs-on: macos-15
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          fetch-depth: 0
+
+      - name: Select Xcode 26.3
+        run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
+
+      - name: Install build tools
+        uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151  # v4
+
+      - name: Boot dedicated mutation simulator
+        env:
+          MUTATION_SIMULATOR: buttonheist-scheduled-mutations-${{ github.run_id }}-${{ github.run_attempt }}
+        run: python3 scripts/select-ios-ci-simulator.py --sim-name "$MUTATION_SIMULATOR" --wait
+
+      - name: Run complete mutation inventory
+        run: |
+          scripts/mutation-gate.py \
+            --commit "${{ github.sha }}" \
+            --all \
+            --simulator-name "$SIM_NAME" \
+            --output ci-artifacts/critical-mutations
+
+      - name: Upload mutation evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: buttonheist-scheduled-critical-mutations-${{ github.run_attempt }}
+          path: ci-artifacts/critical-mutations
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Remove dedicated mutation simulator
+        if: always()
+        run: |
+          if [[ -n "${SIM_UDID:-}" ]]; then
+            xcrun simctl shutdown "$SIM_UDID" || true
+            xcrun simctl delete "$SIM_UDID" || true
+          fi

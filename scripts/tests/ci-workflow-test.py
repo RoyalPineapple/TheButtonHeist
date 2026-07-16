@@ -34,12 +34,24 @@ class CIWorkflowTests(unittest.TestCase):
             if "runs-on: macos-15" in block and "github.ref == 'refs/heads/main'" in block
         }
 
-        self.assertEqual(pr_jobs, {"macos-tests", "ios-tests", "ios-demo-gates"})
+        self.assertEqual(
+            pr_jobs,
+            {"macos-tests", "ios-tests", "ios-demo-gates", "critical-mutations"},
+        )
         self.assertEqual(
             main_jobs,
-            {"macos-tests", "ios-tests", "ios-demo-gates", "main-integration"},
+            {
+                "macos-tests",
+                "ios-tests",
+                "ios-demo-gates",
+                "main-integration",
+            },
         )
         self.assertIn("needs: ios-tests", blocks["main-integration"])
+        self.assertIn(
+            "needs: [release-contract, macos-tests, ios-tests, ios-demo-gates, main-integration]",
+            blocks["critical-mutations"],
+        )
 
     def test_portable_contracts_stay_on_linux(self) -> None:
         release = job_blocks()["release-contract"]
@@ -62,7 +74,7 @@ class CIWorkflowTests(unittest.TestCase):
     def test_exact_sha_suite_requires_every_main_validation_job(self) -> None:
         aggregate = job_blocks()["exact-sha-suite"]
         self.assertIn(
-            "needs: [release-contract, macos-tests, ios-tests, ios-demo-gates, main-integration]",
+            "needs: [release-contract, macos-tests, ios-tests, ios-demo-gates, main-integration, critical-mutations]",
             aggregate,
         )
         self.assertIn(
@@ -71,15 +83,27 @@ class CIWorkflowTests(unittest.TestCase):
         )
         self.assertIn("name: buttonheist-exact-sha-suite", aggregate)
         self.assertIn("-f scripts/exact-sha-suite.jq", aggregate)
+        self.assertIn("-f scripts/critical-mutation-results.jq", aggregate)
+        self.assertIn("critical-mutations/mutation-results.json", aggregate)
         for suite in (
             "release-contract",
             "macos-tests",
             "ios-tests",
             "ios-demo-gates",
             "main-integration",
+            "critical-mutations",
         ):
             with self.subTest(suite=suite):
                 self.assertIn(f'{{name: "{suite}", conclusion:', aggregate)
+
+    def test_critical_mutations_use_the_reviewed_gate_after_normal_ci(self) -> None:
+        mutations = job_blocks()["critical-mutations"]
+        self.assertIn("scripts/select-critical-mutations.py", mutations)
+        self.assertIn("scripts/mutation-gate.py", mutations)
+        self.assertIn('--commit "$COMMIT_SHA"', mutations)
+        self.assertIn('--simulator-name "$SIM_NAME"', mutations)
+        self.assertIn("if: always()", mutations)
+        self.assertIn('xcrun simctl delete "$SIM_UDID"', mutations)
 
     def test_macos_frameworks_share_one_test_invocation(self) -> None:
         macos = job_blocks()["macos-tests"]
@@ -107,7 +131,8 @@ class CIWorkflowTests(unittest.TestCase):
             r"\bxcodebuild\s+(?:test|build-for-testing|test-without-building)\b",
         )
         self.assertNotRegex(WORKFLOW, r"\btuist\s+test\b")
-        self.assertNotIn("select-ios-ci-simulator.py", WORKFLOW)
+        for name in ("macos-tests", "ios-tests", "ios-demo-gates", "main-integration"):
+            self.assertNotIn("select-ios-ci-simulator.py", job_blocks()[name])
         self.assertNotIn("IOS_TEST_RESULT_BUNDLE", WORKFLOW)
         self.assertNotIn("-destination", WORKFLOW)
 

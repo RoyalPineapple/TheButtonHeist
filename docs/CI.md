@@ -120,9 +120,14 @@ CI budgets macOS capacity explicitly:
 - Pushes to `main` run those same three mandatory lanes. The genuine
   `TheInsideJobIntegrationTests` suite then runs behind the completed iOS core
   lane, keeping macOS concurrency at three.
+- Critical mutations run only after the normal validation lanes. Pull requests
+  select reviewed owner scopes plus the always-on release sentinel; `main` runs
+  all ten. A separate weekly workflow reruns the complete inventory.
 - A final `exact-sha-suite` job records the commit, workflow revision, run ID,
-  and every required suite conclusion in `buttonheist-exact-sha-suite`. Release
-  admission accepts only that successful aggregate and validates its manifest.
+  and every required suite conclusion in `buttonheist-exact-sha-suite`. It also
+  validates that the downloaded mutation report names the same commit and
+  records 10/10 behavioral detections. Release admission accepts only that
+  successful aggregate and validates its manifest.
 - Successful jobs publish timing summaries. Receipt and result bundles are
   retained only when a job fails; the release proof manifest is retained for
   every main run.
@@ -136,6 +141,52 @@ Run the complete portable framework suite with:
 ```bash
 scripts/test-runner.py run MacFrameworkTests --selection full
 ```
+
+For a vertical contract or critical invariant, use a named focus from the same
+catalog instead of reconstructing scheme and test selectors:
+
+```bash
+scripts/test-runner.py catalog
+scripts/test-runner.py run --focus contract-receipts --selection full
+scripts/test-runner.py run --focus mutation-active-cancellation --selection full \
+  --simulator-name "$TASK_SLUG"
+```
+
+Every invocation writes `run.json` beside its result artifacts. The record
+includes the exact commit, whether the tracked source tree was clean, the
+selected tests, phase, outcome, exit code, timeout state, duration, and executed
+test count. Tuist-backed runs reject a missing result bundle or zero executed
+tests. Portable release admission is also a named suite, so its mutation uses
+the same runner and evidence record.
+
+## Critical mutation gate
+
+`scripts/mutations.json` is the reviewed inventory of ten critical production
+decisions. Run one mutation or the complete inventory against an explicit
+commit; the active checkout is never edited:
+
+```bash
+scripts/mutation-gate.py \
+  --commit "$(git rev-parse HEAD)" \
+  --mutation interaction.active-cancellation \
+  --simulator-name "$TASK_SLUG" \
+  --output .build/mutation-results
+
+scripts/mutation-gate.py \
+  --commit "$(git rev-parse HEAD)" \
+  --all \
+  --simulator-name "$TASK_SLUG" \
+  --output .build/mutation-results
+```
+
+The gate creates a detached disposable worktree, applies exactly one exact-match
+mutation at a time, invokes the mutation's canonical runner focus, restores the
+production source, and removes the worktree on every terminal path. A mutation
+is detected only when the named behavioral diagnostic appears. Survived,
+compile-error, timeout, test-crash, infrastructure-error, and unexpected-failure
+remain distinct non-passing outcomes. `mutation-results.json` records the exact
+commit, manifest and runner fingerprints, patch fingerprint, environment,
+timings, test evidence, and command log for every mutation.
 
 Run the core, integration, and combined behavior schemes for complete hosted coverage:
 
