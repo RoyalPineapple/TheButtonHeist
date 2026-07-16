@@ -30,7 +30,7 @@ extension FenceResponse {
                 }
             } else if step.status == .skipped {
                 line += " -> skipped"
-            } else if let warning = step.evidence?.warning {
+            } else if let warning = step.warning {
                 line += " -> warning: \(warning.message)"
             } else if let delta {
                 if let summary = Self.compactHeistDeltaSummary(delta, step: step) {

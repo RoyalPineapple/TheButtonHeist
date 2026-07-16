@@ -8,87 +8,33 @@ import Foundation
 /// The XML steps are an adapter traversal of the structured heist execution tree,
 /// not the product model for heist results.
 public struct HeistJUnitReport: Sendable, Equatable {
-    private enum Conclusion: Sendable, Equatable {
-        case passed
-        case failed(stepIndex: Int)
-    }
-
     /// Name derived from the input file (e.g. "navigation-flow" from "navigation-flow.heist").
     public let heistName: String
     /// Bundle identifier of the app the heist targets.
     public let app: String
     /// Total number of receipt nodes surfaced in the JUnit adapter.
-    public let receiptNodeCount: Int
+    public var receiptNodeCount: Int { steps.count }
     /// Total wall-clock time for the entire heist, in seconds.
     public let totalTimeSeconds: Double
     /// Step outcomes in execution order for the JUnit adapter.
     public let steps: [StepResult]
-    private let conclusion: Conclusion
-
-    private init(
+    package init(
         heistName: String,
         app: String,
-        receiptNodeCount: Int,
         totalTimeSeconds: Double,
-        steps: [StepResult],
-        conclusion: Conclusion
+        steps: [StepResult]
     ) {
         self.heistName = heistName
         self.app = app
-        self.receiptNodeCount = receiptNodeCount
         self.totalTimeSeconds = totalTimeSeconds
         self.steps = steps
-        self.conclusion = conclusion
-    }
-
-    package static func passed(
-        heistName: String,
-        app: String,
-        receiptNodeCount: Int,
-        totalTimeSeconds: Double,
-        steps: [StepResult]
-    ) -> Self {
-        precondition(!steps.contains(where: \.failed), "passed JUnit report cannot contain failed steps")
-        return Self(
-            heistName: heistName,
-            app: app,
-            receiptNodeCount: receiptNodeCount,
-            totalTimeSeconds: totalTimeSeconds,
-            steps: steps,
-            conclusion: .passed
-        )
-    }
-
-    package static func failed(
-        heistName: String,
-        app: String,
-        receiptNodeCount: Int,
-        totalTimeSeconds: Double,
-        steps: [StepResult],
-        failedStepIndex: Int
-    ) -> Self {
-        precondition(
-            steps.indices.contains(failedStepIndex) && steps[failedStepIndex].failed,
-            "failed JUnit report requires the canonical failed step index"
-        )
-        return Self(
-            heistName: heistName,
-            app: app,
-            receiptNodeCount: receiptNodeCount,
-            totalTimeSeconds: totalTimeSeconds,
-            steps: steps,
-            conclusion: .failed(stepIndex: failedStepIndex)
-        )
     }
 
     // MARK: - Derived Properties
 
     public var passedReceiptNodeCount: Int { steps.count(where: { $0.passed }) }
     public var failedReceiptNodeCount: Int { steps.count(where: { $0.failed }) }
-    public var allPassed: Bool {
-        if case .passed = conclusion { return true }
-        return false
-    }
+    public var allPassed: Bool { !steps.contains(where: \.failed) }
 }
 
 // MARK: - Step Result
@@ -217,11 +163,7 @@ extension HeistJUnitReport {
         xml += " classname=\"\(xmlEscape(app))\""
         xml += " time=\"\(totalTime)\""
 
-        switch conclusion {
-        case .passed:
-            xml += "/>\n"
-        case .failed(let failedStepIndex):
-            let failedStep = steps[failedStepIndex]
+        if let failedStep = steps.first(where: \.failed) {
             xml += ">\n"
             let message = failedStep.outcome.failureMessage ?? "heist failed"
             let failureType = failedStep.outcome.failureType?.typeName ?? "heistFailure"
@@ -230,6 +172,8 @@ extension HeistJUnitReport {
             xml += xmlEscape(failureBody(failedStep: failedStep))
             xml += "</failure>\n"
             xml += "    </testcase>\n"
+        } else {
+            xml += "/>\n"
         }
 
         xml += "  </testsuite>\n"

@@ -103,22 +103,9 @@ import Testing
     }
 
     private func sampleReceipt(message: String) -> HeistExecutionResult {
-        HeistExecutionResult(
-            steps: [
-                .failed(
-                    path: "$.body[0]",
-                    kind: .fail,
-                    durationMs: 1,
-                    intent: .fail(message: message),
-                    failure: HeistFailureDetail(
-                        category: .explicitFailure,
-                        contract: "Fail",
-                        observed: message
-                    )
-                ),
-            ],
-            durationMs: 1,
-            abortedAtPath: "$.body[0]"
+        HeistReceiptFixture.result(
+            steps: [HeistReceiptFixture.explicitFailure(message: message)],
+            durationMs: 1
         )
     }
 

@@ -31,7 +31,10 @@ extension TheBrains {
         let step: ResolvedWaitRuntimeInput
         do {
             step = try ResolvedWaitRuntimeInput(
-                resolving: WaitStep(predicate: predicate, timeout: timeout),
+                resolving: WaitStep(
+                    predicate: predicate,
+                    timeout: WaitTimeout(validatingSeconds: timeout)
+                ),
                 in: .empty
             )
         } catch {
@@ -42,7 +45,7 @@ extension TheBrains {
                 evidence: .none
             )
         }
-        let receipt = await interactionObservation.waitForPredicate(
+        let receipt = await waitForPredicate(
             step,
             onReadyToPoll: onReadyToPoll
         )

@@ -288,7 +288,8 @@ internal final class SemanticObservationStream {
         let classifiedContinuity = SemanticObservationGenerationClassifier.continuity(
             from: previous,
             to: candidate,
-            notifications: resolvedNotificationBatch.events.map(\.kind)
+            notifications: resolvedNotificationBatch.events.map(\.kind),
+            lineageEvidence: proof.lineageEvidence
         )
         let continuity = runtimeState.lineage.admitting(classifiedContinuity)
         if continuity.isReplacement {

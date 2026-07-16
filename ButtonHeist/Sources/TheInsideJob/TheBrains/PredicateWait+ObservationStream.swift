@@ -14,7 +14,7 @@ internal enum PredicateObservationBaselineSeed {
 /// Reduces settled observations against one immutable baseline. The semantic
 /// observation log supplies the complete window for each reduction; this
 /// value does not own or merge history.
-internal struct PredicateObservationStreamState {
+internal struct PredicateObservationStreamState: Sendable, Equatable {
     private let baseline: SettledCapture?
 
     internal init() {
@@ -96,21 +96,6 @@ internal struct PredicateObservationReduction {
 
     internal var observationWindow: ObservationWindow? {
         evidence.window
-    }
-}
-
-extension PredicateWait.Snapshot {
-    internal init(_ reduction: PredicateObservationReduction) {
-        self.init(
-            observation: PredicateWait.WaitObservation(
-                trace: reduction.trace,
-                summary: reduction.observation.summary,
-                sequence: reduction.observation.event.sequence
-            ),
-            expectation: reduction.expectation,
-            baseline: reduction.changeBaseline,
-            window: reduction.observationWindow
-        )
     }
 }
 

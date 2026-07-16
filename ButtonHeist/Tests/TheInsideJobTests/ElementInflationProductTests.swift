@@ -672,8 +672,8 @@ final class ElementInflationProductTests: XCTestCase {
         )
         let heistPayload = try XCTUnwrap(heist.result.heistExecutionPayload)
         let step = try XCTUnwrap(heistPayload.steps.first)
-        guard case .action(let actionEvidence)? = step.evidence else {
-            return XCTFail("Expected heist action evidence, got \(String(describing: step.evidence))")
+        guard let actionEvidence = step.actionEvidence else {
+            return XCTFail("Expected heist action evidence")
         }
         let stepResult = try XCTUnwrap(actionEvidence.dispatchResult)
 

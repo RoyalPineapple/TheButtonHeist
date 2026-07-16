@@ -128,7 +128,7 @@ public struct Heist: Sendable {
 
 public extension Heist {
     struct Failure: Error, Sendable, LocalizedError, CustomStringConvertible {
-        public let failedStepPath: String
+        public let failedStepPath: HeistExecutionPath
         public let failedStepKind: HeistExecutionStepKind
         public let message: String
         public let diagnostic: String?
@@ -210,6 +210,15 @@ extension TheInsideJob {
     func executeInAppHeist(
         _ plan: HeistPlan,
         argument: HeistArgument = .none
+    ) async -> ActionResult {
+        await brains.executeInAppRequest { [self] in
+            await executeAdmittedInAppHeist(plan, argument: argument)
+        }
+    }
+
+    private func executeAdmittedInAppHeist(
+        _ plan: HeistPlan,
+        argument: HeistArgument
     ) async -> ActionResult {
         let shouldRestoreRuntime = !brains.semanticObservationIsActive
         if shouldRestoreRuntime {

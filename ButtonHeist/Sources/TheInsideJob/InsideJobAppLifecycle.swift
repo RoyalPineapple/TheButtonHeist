@@ -126,7 +126,7 @@ extension TheInsideJob {
             do {
                 try Task.checkCancellation()
 
-                let transport = try self.makeRuntimeTransport(phase: .resume)
+                let transport = self.makeRuntimeTransport()
                 startedTransport = transport
 
                 let startChange = self.applyLifecycleEvent(

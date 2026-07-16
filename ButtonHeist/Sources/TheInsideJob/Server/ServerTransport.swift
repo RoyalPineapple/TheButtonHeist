@@ -12,14 +12,11 @@ enum TransportEvent: Sendable {
 }
 
 enum ServerTransportError: Error, LocalizedError, Equatable, Sendable {
-    case tlsTokenRequired
     case alreadyRunning
     case stopped
 
     var errorDescription: String? {
         switch self {
-        case .tlsTokenRequired:
-            return "TLS token is required before listener startup; listener was not started and Bonjour was not published."
         case .alreadyRunning:
             return "Server transport is already running."
         case .stopped:
@@ -97,8 +94,8 @@ final class ServerTransport {
     /// The underlying TCP server (actor-isolated).
     nonisolated let server: SimpleSocketServer
 
-    /// Token used to derive TLS pre-shared key material. Nil is accepted only for inert tests.
-    private nonisolated let token: String?
+    /// Token used to derive TLS pre-shared key material.
+    private nonisolated let token: SessionAuthToken
 
     /// Tracks only in-flight transport operations. Listener state and resources
     /// belong to `SocketListenerRuntime`.
@@ -151,7 +148,7 @@ final class ServerTransport {
 
     // MARK: - Init
 
-    nonisolated init(token: String? = nil, allowedScopes: Set<ConnectionScope> = ConnectionScope.all) {
+    nonisolated init(token: SessionAuthToken, allowedScopes: Set<ConnectionScope> = ConnectionScope.all) {
         self.server = SimpleSocketServer(allowedScopes: allowedScopes)
         self.token = token
         let eventStream = TransportEventStream(bufferLimit: Self.eventStreamBufferLimit)
@@ -185,10 +182,7 @@ final class ServerTransport {
             throw ServerTransportError.stopped
         }
 
-        guard let token = token, !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw ServerTransportError.tlsTokenRequired
-        }
-        let params = ButtonHeistTLSPreSharedKey.networkParameters(from: token)
+        let params = ButtonHeistTLSPreSharedKey.networkParameters(from: token.description)
         let attempt = ServerTransportStartOperation(
             id: UUID(),
             completion: ServerTransportStartCompletion()

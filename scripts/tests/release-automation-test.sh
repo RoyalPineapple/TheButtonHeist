@@ -30,34 +30,69 @@ cat > "$FAKE_BIN/gh" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$FAKE_GH_LOG"
 
-jq_filter=""
-while [[ $# -gt 0 ]]; do
-    if [[ "$1" == "--jq" ]]; then
-        jq_filter="${2:-}"
-        break
-    fi
-    shift
-done
-
-if [[ -z "$jq_filter" ]]; then
+if [[ "${1:-} ${2:-}" == "run list" && "$*" == *"--json"* ]]; then
+    jq -cn \
+        --arg sha "$FAKE_GH_SHA" \
+        --arg conclusion "${FAKE_GH_RESULT:-success}" \
+        '[{
+            databaseId: 17,
+            event: "push",
+            headSha: $sha,
+            status: "completed",
+            conclusion: $conclusion
+        }]'
+    exit 0
+fi
+if [[ "${1:-} ${2:-}" == "run view" ]]; then
+    jq -cn --arg conclusion "${FAKE_GH_RESULT:-success}" '{jobs: [{
+        name: "exact-sha-suite",
+        status: "completed",
+        conclusion: $conclusion
+    }]}'
+    exit 0
+fi
+if [[ "${1:-} ${2:-}" == "run download" ]]; then
+    destination=""
+    while [[ $# -gt 0 ]]; do
+        if [[ "$1" == "--dir" ]]; then
+            destination="${2:-}"
+            break
+        fi
+        shift
+    done
+    [[ -n "$destination" ]]
+    mkdir -p "$destination"
+    jq -cn --arg sha "$FAKE_GH_SHA" '{
+        schemaVersion: 1,
+        commit: $sha,
+        workflow: {
+            ref: "RoyalPineapple/TheButtonHeist/.github/workflows/ci.yml@refs/heads/main",
+            sha: $sha,
+            runId: "17",
+            runAttempt: "1"
+        },
+        suites: [
+            {name: "release-contract", conclusion: "success"},
+            {name: "macos-tests", conclusion: "success"},
+            {name: "ios-tests", conclusion: "success"},
+            {name: "ios-demo-gates", conclusion: "success"},
+            {name: "main-integration", conclusion: "success"}
+        ]
+    }' > "$destination/exact-sha-suite.json"
+    exit 0
+fi
+if [[ "${1:-} ${2:-}" == "run list" ]]; then
     echo "fixture CI run"
     exit 0
 fi
-
-case "${FAKE_GH_RESULT:-success}:$jq_filter" in
-    success:*'conclusion == "success"'*) echo 1 ;;
-    success:*) echo 0 ;;
-    failure:*'conclusion == "success"'*) echo 0 ;;
-    failure:*'status != "completed"'*) echo 0 ;;
-    failure:*'conclusion != "success"'*) echo 1 ;;
-    failure:*) echo 1 ;;
-    *) echo 0 ;;
-esac
+echo "unexpected gh invocation: $*" >&2
+exit 2
 EOF
 chmod +x "$FAKE_BIN/gh"
 
 PATH="$FAKE_BIN:$PATH" \
 FAKE_GH_LOG="$GH_LOG" \
+FAKE_GH_SHA=0123456789abcdef \
 FAKE_GH_RESULT=success \
     "$REPO_ROOT/scripts/require-successful-ci-for-commit.sh" \
     --repo RoyalPineapple/TheButtonHeist \
@@ -71,6 +106,7 @@ set +e
 output=$(
     PATH="$FAKE_BIN:$PATH" \
     FAKE_GH_LOG="$GH_LOG" \
+    FAKE_GH_SHA=fedcba9876543210 \
     FAKE_GH_RESULT=failure \
         "$REPO_ROOT/scripts/require-successful-ci-for-commit.sh" \
         --repo RoyalPineapple/TheButtonHeist \
@@ -80,6 +116,7 @@ output=$(
 status=$?
 set -e
 [[ "$status" -eq 1 ]] || fail "exact-commit CI guard accepted a failed push run: $output"
-[[ "$output" == *"Main-branch CI failed"* ]] || fail "failed CI result lacked a useful diagnostic: $output"
+[[ "$output" == *"No successful exact-SHA release suite"* ]] \
+    || fail "failed CI result lacked a useful diagnostic: $output"
 
 echo "PASS: release automation shares canonical version and exact-commit CI ownership"

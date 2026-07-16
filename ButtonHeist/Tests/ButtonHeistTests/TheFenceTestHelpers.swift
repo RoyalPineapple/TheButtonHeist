@@ -98,7 +98,7 @@ private extension Array where Element == HeistExecutionStepResult {
     }
 }
 
-extension Array where Element == (ClientMessage, String?) {
+extension Array where Element == (ClientMessage, RequestID?) {
     /// The single `HeistPlan` sent for a command, when execution routed through
     /// the one-step heist pipeline.
     var sentHeistPlan: HeistPlan? {
@@ -297,7 +297,7 @@ struct HeistInspection {
     let steps: [HeistStep]
     let executionResult: HeistExecutionResult
     let executedTopLevelStepCount: Int
-    let abortedAtPath: String?
+    let abortedAtPath: HeistExecutionPath?
     let durationMs: Int
     let expectationsChecked: Int
     let expectationsMet: Int

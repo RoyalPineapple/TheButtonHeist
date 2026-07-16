@@ -53,7 +53,7 @@ struct PublicHeistPlanValidation: Encodable {
         case .valid(let summary):
             valid = true
             version = summary.version
-            name = summary.name
+            name = summary.name?.description
             parameter = summary.parameter
             definitionCount = summary.definitionCount
             topLevelStepCount = summary.topLevelStepCount
@@ -100,7 +100,7 @@ struct PublicHeistLintFinding: Encodable {
 
     init(_ finding: HeistPlanLintFinding) {
         severity = finding.severity.rawValue
-        path = finding.path
+        path = finding.path.description
         message = finding.message
         suggestion = finding.suggestion
     }
@@ -122,7 +122,7 @@ private struct PublicHeistCatalogEntry: Encodable {
     let validationStatus: HeistValidationStatus?
 
     init(_ entry: HeistCatalogEntry) {
-        name = entry.name
+        name = entry.identity.displayName
         role = entry.role
         parameterKind = entry.parameterKind
         requiresArgument = entry.requiresArgument
@@ -149,7 +149,7 @@ private struct PublicHeistDescription: Encodable {
     let semanticSurface: PublicHeistSemanticSurface
 
     init(_ description: HeistDescription) {
-        name = description.name
+        name = description.identity.displayName
         role = description.role
         parameterKind = description.parameterKind
         parameterName = description.parameterName

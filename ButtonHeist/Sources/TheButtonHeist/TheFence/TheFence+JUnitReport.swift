@@ -18,26 +18,11 @@ extension TheFence {
     ) -> HeistJUnitReport {
         let projection = HeistReportProjection(result: result, accessibilityTrace: nil, profile: .junit)
         let steps = junitSteps(projection: projection)
-        let app = handoff.serverInfo?.bundleIdentifier ?? "unknown"
-        guard let failedStepPath = projection.failedStepPath else {
-            return .passed(
-                heistName: heistName,
-                app: app,
-                receiptNodeCount: steps.count,
-                totalTimeSeconds: totalTimeSeconds,
-                steps: steps
-            )
-        }
-        guard let failedStepIndex = projection.outputNodes.firstIndex(where: { $0.path == failedStepPath }) else {
-            preconditionFailure("Canonical failed JUnit step path was absent from report projection")
-        }
-        return .failed(
+        return HeistJUnitReport(
             heistName: heistName,
-            app: app,
-            receiptNodeCount: steps.count,
+            app: handoff.serverInfo?.bundleIdentifier.description ?? "unknown",
             totalTimeSeconds: totalTimeSeconds,
-            steps: steps,
-            failedStepIndex: failedStepIndex
+            steps: steps
         )
     }
 
@@ -70,7 +55,7 @@ extension TheFence {
         if step.status == .failed {
             let message = step.failureMessage ?? step.failure?.detail.observed ?? step.message ?? "heist failed"
             let failure = step.failure?.diagnosticFailure
-            let enriched = step.path == projection.failedStepPath
+            let enriched = step.path == projection.summary.abortedAtPath
                 ? junitFailureMessage(message, projection: projection, failure: failure)
                 : junitFailureMessage(message, failure: failure)
             return .failed(message: enriched, errorKind: junitErrorKind(for: step))
@@ -106,7 +91,7 @@ extension TheFence {
         if let errorKind = step.actionErrorKind {
             return .action(errorKind)
         }
-        switch step.failureCategory {
+        switch step.failure?.detail.category {
         case .validation, .runtimeUnavailable, .targetResolution, .invocation, .loop, .explicitFailure:
             return .commandError
         case .action, .expectation, .wait, .none:

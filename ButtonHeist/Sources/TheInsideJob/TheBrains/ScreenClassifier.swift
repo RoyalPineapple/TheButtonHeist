@@ -27,6 +27,14 @@ internal enum ScreenContinuity: Sendable, Equatable {
     }
 }
 
+/// Positive evidence that two captures belong to one screen generation.
+///
+/// This is produced only by the canonical viewport-movement pipeline after
+/// UIKit accepts a movement and the resulting viewport settles.
+internal enum ScreenLineageEvidence: Sendable, Equatable {
+    case viewportMovement
+}
+
 /// Classifies parsed accessibility snapshots.
 ///
 /// Tripwire triggers parsing; this type is the single place that decides
@@ -38,7 +46,16 @@ internal enum ScreenContinuity: Sendable, Equatable {
         let signature: ScreenSignature
         let firstResponderHeistId: HeistId?
         let semanticElementIDs: Set<HeistId>
-        let scrollContainerPaths: Set<TreePath>
+        let semanticScrollContainerIdentities: Set<SemanticScrollContainerIdentity>
+    }
+
+    struct SemanticScrollContainerIdentity: Equatable, Hashable {
+        let basis: SemanticScrollContainerIdentityBasis
+    }
+
+    enum SemanticScrollContainerIdentityBasis: Equatable, Hashable {
+        case identifier(String)
+        case semanticGroup(label: String?, value: String?)
     }
 
     struct ScreenSignature: Equatable {
@@ -86,9 +103,6 @@ internal enum ScreenContinuity: Sendable, Equatable {
 
     static func snapshot(of tree: InterfaceTree) -> Snapshot {
         let hierarchy = classificationHierarchy(tree.viewportCapture.hierarchy)
-        let hierarchyScrollPaths = hierarchy.pathIndexedContainers.compactMap { item in
-            item.container.isScrollable ? item.path : nil
-        }
         return Snapshot(
             signature: signature(
                 hierarchy: hierarchy,
@@ -96,8 +110,11 @@ internal enum ScreenContinuity: Sendable, Equatable {
             ),
             firstResponderHeistId: tree.firstResponderHeistId,
             semanticElementIDs: tree.viewportElementIDs,
-            scrollContainerPaths: Set(hierarchyScrollPaths)
-                .union(tree.viewportCapture.scrollInventoriesByPath.keys)
+            semanticScrollContainerIdentities: Set(
+                hierarchy.pathIndexedContainers.compactMap {
+                    semanticScrollContainerIdentity(for: $0.container)
+                }
+            )
         )
     }
 
@@ -126,7 +143,8 @@ internal enum ScreenContinuity: Sendable, Equatable {
     static func classify(
         before: Snapshot?,
         after: Snapshot,
-        notifications: [AccessibilityNotificationKind]
+        notifications: [AccessibilityNotificationKind],
+        lineageEvidence: ScreenLineageEvidence? = nil
     ) -> ScreenContinuity {
         if notifications.contains(where: {
             if case .screenChanged = $0 { return true }
@@ -138,6 +156,11 @@ internal enum ScreenContinuity: Sendable, Equatable {
 
         let beforeSignature = before.signature
         let afterSignature = after.signature
+        let sameGenerationIsProven = hasSameGenerationEvidence(
+            before: before,
+            after: after,
+            lineageEvidence: lineageEvidence
+        )
 
         if beforeSignature.modalMarkers != afterSignature.modalMarkers {
             return .replacement(.inferred(.modalBoundaryChanged))
@@ -149,17 +172,17 @@ internal enum ScreenContinuity: Sendable, Equatable {
             return .replacement(.inferred(.navigationMarkerChanged))
         }
         if beforeSignature.primaryHeader != afterSignature.primaryHeader,
-           !hasStableInteractionContext(before: before, after: after) {
+           !sameGenerationIsProven {
             return .replacement(.inferred(.primaryHeaderChanged))
         }
         if !before.semanticElementIDs.isEmpty,
            !after.semanticElementIDs.isEmpty,
            before.semanticElementIDs.isDisjoint(with: after.semanticElementIDs),
-           !hasStableInteractionContext(before: before, after: after) {
+           !sameGenerationIsProven {
             return .replacement(.inferred(.semanticIdentityDisjoint))
         }
         if beforeSignature.rootShape != afterSignature.rootShape,
-           !hasStableInteractionContext(before: before, after: after),
+           !sameGenerationIsProven,
            isRootShapeReplacement(before: beforeSignature.rootShape, after: afterSignature.rootShape) {
             return .replacement(.inferred(.rootShapeChanged))
         }
@@ -203,13 +226,43 @@ internal enum ScreenContinuity: Sendable, Equatable {
         return elements.first { $0.traits.contains(.header) && $0.label != nil }
     }
 
-    private static func hasStableInteractionContext(before: Snapshot, after: Snapshot) -> Bool {
+    private static func hasSameGenerationEvidence(
+        before: Snapshot,
+        after: Snapshot,
+        lineageEvidence: ScreenLineageEvidence?
+    ) -> Bool {
+        if lineageEvidence == .viewportMovement {
+            return true
+        }
         if let beforeResponder = before.firstResponderHeistId,
            let afterResponder = after.firstResponderHeistId,
            beforeResponder == afterResponder {
             return true
         }
-        return !before.scrollContainerPaths.isDisjoint(with: after.scrollContainerPaths)
+        return !before.semanticScrollContainerIdentities.isDisjoint(
+            with: after.semanticScrollContainerIdentities
+        )
+    }
+
+    private static func semanticScrollContainerIdentity(
+        for container: AccessibilityContainer
+    ) -> SemanticScrollContainerIdentity? {
+        guard container.isScrollable else { return nil }
+        let facts = container.containerPredicateFacts
+        if let identifier = stableIdentifier(facts.identifier).flatMap(nonEmpty) {
+            return SemanticScrollContainerIdentity(basis: .identifier(identifier))
+        }
+        guard case .semanticGroup(let label, let value) = facts.role else { return nil }
+        let semanticLabel = label.flatMap(nonEmpty)
+        let semanticValue = value.flatMap(nonEmpty)
+        guard semanticLabel != nil || semanticValue != nil else { return nil }
+        return SemanticScrollContainerIdentity(
+            basis: .semanticGroup(label: semanticLabel, value: semanticValue)
+        )
+    }
+
+    private static func nonEmpty(_ value: String) -> String? {
+        value.isEmpty ? nil : value
     }
 
     private static func marker(for element: AccessibilityElement) -> Marker {

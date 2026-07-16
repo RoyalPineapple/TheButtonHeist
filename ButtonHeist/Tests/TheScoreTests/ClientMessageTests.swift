@@ -231,12 +231,12 @@ final class ClientMessageTests: XCTestCase {
               action.expectationPolicy.expectedStep == nil else {
             return XCTFail("Expected heistPlan envelope, got \(decoded.message)")
         }
-        guard case .typeText(let text, let target, let replacingExisting) = try action.command.resolve(in: .empty) else {
+        guard case .typeText(let payload) = try action.command.resolve(in: .empty) else {
             return XCTFail("Expected resolved typeText command")
         }
-        XCTAssertEqual(text, "hello")
-        XCTAssertEqual(target, .predicate(.identifier("nameField")))
-        XCTAssertFalse(replacingExisting)
+        XCTAssertEqual(payload.text, "hello")
+        XCTAssertEqual(payload.target, .predicate(.identifier("nameField")))
+        XCTAssertEqual(payload.text.mode, .append)
     }
 
     func testHeistActionDescriptionUsesNormalCommandIdentity() throws {
@@ -279,7 +279,7 @@ final class ClientMessageTests: XCTestCase {
     func testPrimitiveMutatingClientMessageJSONIsRejected() throws {
         let primitiveMessages = [
             #"{"type":"activate","payload":{"target":{"checks":[{"kind":"label","match":{"mode":"exact","value":"Save"}}]}}}"#,
-            #"{"type":"typeText","payload":{"text":"hello"}}"#,
+            #"{"type":"typeText","payload":{"text":"hello","mode":"append"}}"#,
             #"{"type":"setPasteboard","payload":{"text":"clipboard"}}"#,
             #"{"type":"wait","payload":{"predicate":{"type":"change","scopes":[{"type":"elements"}]},"timeout":1}}"#,
         ]
@@ -355,9 +355,8 @@ final class ClientMessageTests: XCTestCase {
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(TypeTextTarget.self, from: data)
 
-        XCTAssertEqual(decoded.text, "Hello")
+        XCTAssertEqual(decoded.source, .text("Hello"))
         XCTAssertNil(decoded.target)
-        XCTAssertFalse(decoded.replacingExisting)
     }
 
     func testTypeTextRejectsMissingTextOnDecode() throws {
@@ -368,15 +367,13 @@ final class ClientMessageTests: XCTestCase {
 
     func testTypeTextReplacingExistingAllowsEmptyText() throws {
         let target = TypeTextTarget(
-            text: "",
-            target: .predicate(ElementPredicateTemplate(identifier: "nameField")),
-            replacingExisting: true
+            text: .replacing(""),
+            target: .predicate(ElementPredicateTemplate(identifier: "nameField"))
         )
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(TypeTextTarget.self, from: data)
 
-        XCTAssertEqual(decoded.text, "")
-        XCTAssertTrue(decoded.replacingExisting)
+        XCTAssertEqual(decoded.source, .text(.replacing("")))
         if case .predicate(let matcher, _) = decoded.target {
             XCTAssertEqual(matcher.checks, [.identifier(.exact("nameField"))])
         } else {
@@ -385,7 +382,7 @@ final class ClientMessageTests: XCTestCase {
     }
 
     func testTypeTextRejectsEmptyTextWithoutReplacingExistingOnDecode() throws {
-        let json = #"{"text":""}"#
+        let json = #"{"text":"","mode":"append"}"#
 
         XCTAssertThrowsError(try JSONDecoder().decode(TypeTextTarget.self, from: Data(json.utf8)))
     }
@@ -398,7 +395,7 @@ final class ClientMessageTests: XCTestCase {
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(TypeTextTarget.self, from: data)
 
-        XCTAssertEqual(decoded.text, "Hello")
+        XCTAssertEqual(decoded.source, .text("Hello"))
         if case .predicate(let matcher, _) = decoded.target {
             XCTAssertEqual(matcher.checks, [.identifier(.exact("nameField"))])
         } else {
@@ -517,9 +514,12 @@ final class ClientMessageTests: XCTestCase {
         XCTAssertEqual(decoded.resolvedTimeout, defaultWaitTimeout)
     }
 
-    func testWaitTimeoutClamping() {
-        let target = WaitTarget(predicate: .exists(.label("x")), timeout: 999)
-        XCTAssertEqual(target.resolvedTimeout, 30.0)
+    func testWaitRejectsTimeoutAboveMaximum() {
+        let json = #"{"predicate":{"type":"exists","target":{"checks":[{"kind":"label","match":{"mode":"exact","value":"x"}}]}},"timeout":999}"#
+
+        XCTAssertThrowsError(try JSONDecoder().decode(WaitTarget.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("wait timeout must be"), "\(error)")
+        }
     }
 
     func testWaitChangedScreenRoundTrip() throws {

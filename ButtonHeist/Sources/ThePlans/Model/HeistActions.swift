@@ -4,7 +4,7 @@ public protocol HeistActionContent: HeistContent {
     var expectationValidationDiagnostics: [HeistBuildDiagnostic] { get }
 }
 
-public let defaultActionExpectationTimeout: Double = 1
+public let defaultActionExpectationTimeout: WaitTimeout = 1
 
 public extension HeistActionContent {
     var expectationValidationDiagnostics: [HeistBuildDiagnostic] { [] }
@@ -23,7 +23,7 @@ public extension HeistActionContent {
 
     func expect(
         _ predicate: AccessibilityPredicate,
-        timeout: Double? = nil
+        timeout: WaitTimeout? = nil
     ) -> ActionContent {
         let priorExplicitTimeout = (self as? ActionContent)?.explicitExpectationTimeout
         let existingExpectation = expectationPolicy.expectedStep
@@ -66,7 +66,7 @@ public extension HeistActionContent {
 
     func until(
         _ predicate: AccessibilityPredicate,
-        timeout: Double = defaultWaitTimeout
+        timeout: WaitTimeout = defaultWaitTimeout
     ) -> RepeatActionUntilContent {
         RepeatActionUntilContent(
             command: command,
@@ -83,12 +83,12 @@ public struct ActionContent: HeistActionContent {
     public let command: HeistActionCommand
     public let expectationPolicy: ActionExpectationPolicy
     public let expectationValidationDiagnostics: [HeistBuildDiagnostic]
-    let explicitExpectationTimeout: Double?
+    let explicitExpectationTimeout: WaitTimeout?
 
     init(
         command: HeistActionCommand,
         expectationPolicy: ActionExpectationPolicy = .default,
-        explicitExpectationTimeout: Double? = nil,
+        explicitExpectationTimeout: WaitTimeout? = nil,
         expectationValidationDiagnostics: [HeistBuildDiagnostic] = []
     ) {
         self.command = command
@@ -103,7 +103,7 @@ public struct RepeatActionUntilContent: HeistContent {
     public let expectationPolicy: ActionExpectationPolicy
     public let expectationValidationDiagnostics: [HeistBuildDiagnostic]
     public let predicate: AccessibilityPredicate
-    public let timeout: Double
+    public let timeout: WaitTimeout
 
     public var heistSteps: [HeistStep] {
         guard heistBuildDiagnostics.isEmpty else { return [] }
@@ -132,16 +132,7 @@ public struct RepeatActionUntilContent: HeistContent {
         }
     }
 
-    public var heistBuildDiagnostics: [HeistBuildDiagnostic] {
-        var diagnostics = expectationValidationDiagnostics
-        if timeout < 0 {
-            diagnostics.append(.dslBuild(
-                code: .dslInvalidActionUntil,
-                message: "action until timeout must be non-negative"
-            ))
-        }
-        return diagnostics
-    }
+    public var heistBuildDiagnostics: [HeistBuildDiagnostic] { expectationValidationDiagnostics }
 }
 
 public struct Activate: HeistActionContent {
@@ -190,37 +181,23 @@ public struct TypeText: HeistActionContent {
     public let command: HeistActionCommand
     public let expectationPolicy: ActionExpectationPolicy
 
-    public init(_ text: String, into target: AccessibilityTarget? = nil) {
-        self.init(text, into: target, replacingExisting: false)
-    }
-
-    public init(
-        _ text: String,
-        into target: AccessibilityTarget? = nil,
-        replacingExisting: Bool
-    ) {
+    public init(_ text: TextInputText, into target: AccessibilityTarget? = nil) {
         self.init(command: .typeText(
             text: text,
-            target: target,
-            replacingExisting: replacingExisting
+            target: target
         ))
-    }
-
-    @_disfavoredOverload
-    public init(_ reference: HeistReferenceName, into target: AccessibilityTarget? = nil) {
-        self.init(reference, into: target, replacingExisting: false)
     }
 
     @_disfavoredOverload
     public init(
         _ reference: HeistReferenceName,
         into target: AccessibilityTarget? = nil,
-        replacingExisting: Bool
+        mode: TextInputText.Mode = .append
     ) {
         self.init(command: .typeText(
             reference: reference,
             target: target,
-            replacingExisting: replacingExisting
+            mode: mode
         ))
     }
 
@@ -236,9 +213,8 @@ public struct ClearText: HeistActionContent {
 
     public init(_ target: AccessibilityTarget) {
         self.init(command: .typeText(
-            text: "",
-            target: target,
-            replacingExisting: true
+            text: .replacing(""),
+            target: target
         ))
     }
 
@@ -252,7 +228,7 @@ public struct CustomAction: HeistActionContent {
     public let command: HeistActionCommand
     public let expectationPolicy: ActionExpectationPolicy
 
-    public init(_ name: String, on target: AccessibilityTarget) {
+    public init(_ name: CustomActionName, on target: AccessibilityTarget) {
         self.init(command: .customAction(name: name, target: target))
     }
 
@@ -266,7 +242,7 @@ public struct Rotor: HeistActionContent {
     public let command: HeistActionCommand
     public let expectationPolicy: ActionExpectationPolicy
 
-    public init(_ name: String, on target: AccessibilityTarget, direction: RotorDirection = .next) {
+    public init(_ name: RotorName, on target: AccessibilityTarget, direction: RotorDirection = .next) {
         self.init(command: .rotor(selection: .named(name), target: target, direction: direction))
     }
 
@@ -280,7 +256,7 @@ public struct SetPasteboard: HeistActionContent {
     public let command: HeistActionCommand
     public let expectationPolicy: ActionExpectationPolicy
 
-    public init(_ text: String) {
+    public init(_ text: PasteboardText) {
         self.init(command: .setPasteboard(SetPasteboardTarget(text: text)))
     }
 
@@ -486,15 +462,15 @@ private func makeActionStep(
 }
 
 struct ExpectationTimeoutComposition {
-    let timeout: Double
-    let explicitTimeout: Double?
+    let timeout: WaitTimeout
+    let explicitTimeout: WaitTimeout?
     let diagnostics: [HeistBuildDiagnostic]
 }
 
 func composeExpectationTimeout(
     existing: WaitStep?,
-    existingExplicit: Double?,
-    nextExplicit: Double?
+    existingExplicit: WaitTimeout?,
+    nextExplicit: WaitTimeout?
 ) -> ExpectationTimeoutComposition {
     guard let existing else {
         return ExpectationTimeoutComposition(

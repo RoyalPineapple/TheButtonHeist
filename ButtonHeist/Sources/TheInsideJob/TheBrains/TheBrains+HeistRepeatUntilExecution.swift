@@ -9,7 +9,7 @@ extension TheBrains {
     internal func executeRepeatUntilStep(
         _ step: RepeatUntilStep,
         index _: Int,
-        path: String,
+        path: HeistExecutionPath,
         start: CFAbsoluteTime,
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
@@ -32,20 +32,18 @@ extension TheBrains {
         let initialObservation = await runtime.observeSemanticState(
             .visible,
             nil,
-            immediateTimeout
+            0
         )
         let state = RepeatUntil.LoopState.running(
             RepeatUntil.RunningState(
                 currentObservation: initialObservation.map(RepeatUntil.Observation.init)
             )
         )
-        let timeout = PredicateWait.clampedWaitTimeout(resolved.timeout)
-
         return await repeatUntilLoopResult(
             context: context,
             step: resolved,
             state: state,
-            timeout: timeout
+            timeout: resolved.timeout
         )
     }
 
@@ -53,9 +51,9 @@ extension TheBrains {
         context: RepeatUntil.Context,
         step: ResolvedRepeatUntilStep,
         state initialState: RepeatUntil.LoopState,
-        timeout: Double
+        timeout: WaitTimeout
     ) async -> HeistExecutionStepResult {
-        let deadline = context.start + timeout
+        let deadline = context.start + timeout.seconds
         var state = initialState
 
         while case .running(let running) = state {
@@ -64,13 +62,13 @@ extension TheBrains {
             }
             let iterationIndex = running.iterationNodes.count
             let iterationStart = CFAbsoluteTimeGetCurrent()
-            let iterationPath = "\(context.path).repeat_until.iterations[\(iterationIndex)]"
+            let iterationPath = context.path.repeatUntilIteration(at: iterationIndex)
             let iterationResults = await executeHeistSteps(
                 step.body,
                 runtime: context.runtime,
                 environment: context.environment,
                 scope: context.scope,
-                path: "\(iterationPath).body"
+                path: iterationPath.iterationBody()
             )
             let frame = RepeatUntil.IterationFrame(
                 path: iterationPath,

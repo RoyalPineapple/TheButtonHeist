@@ -24,7 +24,7 @@ buttonheist_code_version() {
     local count
 
     versions="$(
-        grep -E '^[[:space:]]*public let buttonHeistVersion = "[^"]+"' \
+        grep -E '^[[:space:]]*public let buttonHeistVersion: ButtonHeistVersion = "[^"]+"' \
             "$BUTTONHEIST_CODE_VERSION_FILE" \
             | sed -E 's/.*"([^"]+)".*/\1/' \
             || true

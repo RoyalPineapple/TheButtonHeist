@@ -8,7 +8,7 @@ struct CanonicalHeistSourceRoundTripTests {
         try assertRoundTrip(try HeistPlan(body: [
             .action(try ActionStep(
                 command: .activate(.predicate(.label("Pay"))),
-                expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 0)))),
+                expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: .milliseconds(1))))),
             .action(try ActionStep(
                 command: .typeText(text: "milk", target: .predicate(.label("Search"))),
                 expectationPolicy: .expect(ActionExpectation(predicate: .exists(.element(.label("Search"), .value("milk"))), timeout: 2)))),
@@ -238,7 +238,7 @@ struct CanonicalHeistSourceRoundTripTests {
                 .action(try ActionStep(
                     command: .activate(.predicate(.label(HeistReferenceName(stringLiteral: "item")))),
                     expectationPolicy: .expect(ActionExpectation(predicate: .exists(.label("Added")), timeout: 2)))),
-                .invoke(HeistInvocationStep(path: ["AddButton", "tap"])),
+                .invoke(HeistInvocationStep(path: "AddButton.tap")),
             ]
         )
         let targetDefinition = try HeistPlan(
@@ -254,11 +254,11 @@ struct CanonicalHeistSourceRoundTripTests {
             definitions: [library],
             body: [
                 .invoke(HeistInvocationStep(
-                    path: ["LibraryScreen", "addToCart"],
+                    path: "LibraryScreen.addToCart",
                     argument: .string("Milk")
                 )),
                 .invoke(HeistInvocationStep(
-                    path: ["LibraryScreen", "archive"],
+                    path: "LibraryScreen.archive",
                     argument: .accessibilityTarget(.predicate(.label("Milk")))
                 )),
             ]

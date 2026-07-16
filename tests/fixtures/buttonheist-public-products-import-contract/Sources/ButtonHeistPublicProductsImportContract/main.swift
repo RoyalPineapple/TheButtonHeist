@@ -8,7 +8,8 @@ struct ButtonHeistPublicProductsImportContract {
         let plan = try HeistPlan("public-products-import-contract") {
             Warn("public products imported")
         }
-        let value: HeistValue = .string(plan.name ?? "")
+        let planName = plan.name ?? "public-products-import-contract"
+        let value: HeistValue = .string(planName.description)
         let commandName = TheFence.Command.runHeist.rawValue
         _ = (plan, value, commandName)
     }

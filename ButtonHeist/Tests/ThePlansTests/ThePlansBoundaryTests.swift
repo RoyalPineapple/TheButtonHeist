@@ -7,6 +7,38 @@ private struct EncodedHeistPlanHeaderContract: Decodable {
     let name: String
 }
 
+@Test func `artifact format has one canonical wire spelling`() throws {
+    let encoded = try JSONEncoder().encode(HeistArtifactFormat.buttonHeist)
+
+    #expect(HeistArtifactFormat.allCases == [.buttonHeist])
+    #expect(String(bytes: encoded, encoding: .utf8) == #""com.royalpineapple.buttonheist.heist""#)
+}
+
+@Test func `artifact producer name is typed open vocabulary metadata`() throws {
+    let producer = HeistArtifactProducer(name: "third-party-compiler", version: "4.2")
+    let encoded = try JSONEncoder().encode(producer)
+    let decoded = try JSONDecoder().decode(HeistArtifactProducer.self, from: encoded)
+
+    #expect(decoded == producer)
+    #expect(decoded.name.description == "third-party-compiler")
+    #expect(decoded.version?.description == "4.2")
+}
+
+@Test func `artifact producer values reject blank construction and decoding`() throws {
+    #expect(throws: HeistArtifactProducerName.ValidationError.self) {
+        try HeistArtifactProducerName(validating: " \n\t")
+    }
+    #expect(throws: DecodingError.self) {
+        try JSONDecoder().decode(HeistArtifactProducerName.self, from: Data(#"" \n\t""#.utf8))
+    }
+    #expect(throws: HeistArtifactProducerVersion.ValidationError.self) {
+        try HeistArtifactProducerVersion(validating: " \n\t")
+    }
+    #expect(throws: DecodingError.self) {
+        try JSONDecoder().decode(HeistArtifactProducerVersion.self, from: Data(#"" \n\t""#.utf8))
+    }
+}
+
 @Test
 func `representative heist plan encodes decodes validates and renders`() throws {
     let plan = try HeistPlan("loginFlow") {
@@ -62,7 +94,7 @@ func `heist artifact package writes manifest and canonical plan`() throws {
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .iso8601
     let manifest = try decoder.decode(HeistArtifactManifest.self, from: Data(contentsOf: manifestURL))
-    #expect(manifest.format == heistArtifactFormat)
+    #expect(manifest.format == .buttonHeist)
     #expect(manifest.entry == "searchFlow")
     #expect(manifest.entry == plan.name)
     #expect(manifest.formatVersion == currentHeistArtifactFormatVersion)
@@ -484,28 +516,10 @@ func `heist artifact validates manifest and plan versions`() throws {
     }
 
     try writePackage(
-        named: "InvalidFormat.heist",
-        in: temp.url,
-        manifest: HeistArtifactManifest(
-            format: "not.buttonheist",
-            entry: "searchFlow",
-            formatVersion: currentHeistArtifactFormatVersion,
-            planVersion: currentHeistPlanVersion,
-            producer: .buttonHeist,
-            createdAt: Date(timeIntervalSince1970: 0)
-        ),
-        planJSON: representativeArtifactPlan().canonicalHeistJSONData()
-    ) { url in
-        #expect(throws: HeistArtifactCodecError.self) {
-            try HeistArtifactCodec.read(from: url)
-        }
-    }
-
-    try writePackage(
         named: "UnsupportedArtifact.heist",
         in: temp.url,
         manifest: HeistArtifactManifest(
-            format: heistArtifactFormat,
+            format: .buttonHeist,
             entry: "searchFlow",
             formatVersion: 2,
             planVersion: currentHeistPlanVersion,
@@ -534,14 +548,14 @@ func `heist artifact validates manifest and plan versions`() throws {
         named: "UnsupportedPlanVersion.heist",
         in: temp.url,
         manifest: HeistArtifactManifest(
-            format: heistArtifactFormat,
+            format: .buttonHeist,
             entry: "searchFlow",
             formatVersion: currentHeistArtifactFormatVersion,
-            planVersion: 2,
+            planVersion: 3,
             producer: .buttonHeist,
             createdAt: Date(timeIntervalSince1970: 0)
         ),
-        planJSON: Data(#"{"version":2,"body":[{"type":"warn","warn":{"message":"new version"}}]}"#.utf8)
+        planJSON: Data(#"{"version":3,"body":[{"type":"warn","warn":{"message":"new version"}}]}"#.utf8)
     ) { url in
         #expect(throws: HeistArtifactCodecError.self) {
             try HeistArtifactCodec.read(from: url)
@@ -552,13 +566,13 @@ func `heist artifact validates manifest and plan versions`() throws {
         named: "Mismatch.heist",
         in: temp.url,
         manifest: validArtifactManifest(),
-        planJSON: Data(#"{"version":2,"body":[{"type":"warn","warn":{"message":"mismatch"}}]}"#.utf8)
+        planJSON: Data(#"{"version":3,"body":[{"type":"warn","warn":{"message":"mismatch"}}]}"#.utf8)
     ) { url in
         do {
             _ = try HeistArtifactCodec.read(from: url)
             Issue.record("Expected version mismatch")
         } catch {
-            #expect(String(describing: error).contains("manifest planVersion 1 does not match plan version 2"))
+            #expect(String(describing: error).contains("manifest planVersion 2 does not match plan version 3"))
         }
     }
 }
@@ -580,22 +594,6 @@ func `heist artifact validates required entry against root plan name`() throws {
             containing: [
                 "manifest entry contract failed",
                 "observed missing entry",
-                #"Set manifest.json entry to "searchFlow""#,
-            ]
-        )
-    }
-
-    try writePackage(
-        named: "EmptyEntry.heist",
-        in: temp.url,
-        manifest: validArtifactManifest(entry: ""),
-        planJSON: planJSON
-    ) { url in
-        try expectArtifactReadError(
-            from: url,
-            containing: [
-                "entry must be non-empty",
-                "observed empty string",
                 #"Set manifest.json entry to "searchFlow""#,
             ]
         )
@@ -645,9 +643,9 @@ func `heist artifact accepts parameterized root entry through validation contrac
 @Test
 func `heist artifact loading rejects standard definition cap`() throws {
     let temp = try PlansTemporaryDirectory()
-    let definitions = (0...250).map { index in
-        HeistPlanAdmissionCandidate(name: "definition\(index)", body: [
-            .warn(WarnStep(message: "definition \(index)")),
+    let definitions = try (0...250).map { index in
+        HeistPlanAdmissionCandidate(name: try HeistPlanName(validating: "definition\(index)"), body: [
+            .warn(WarnStep(message: try HeistWarningMessage(validating: "definition \(index)"))),
         ])
     }
     let raw = HeistPlanAdmissionCandidate(
@@ -683,9 +681,9 @@ private func validArtifactManifest() -> HeistArtifactManifest {
     validArtifactManifest(entry: "searchFlow")
 }
 
-private func validArtifactManifest(entry: String) -> HeistArtifactManifest {
+private func validArtifactManifest(entry: HeistPlanName) -> HeistArtifactManifest {
     HeistArtifactManifest(
-        format: heistArtifactFormat,
+        format: .buttonHeist,
         entry: entry,
         formatVersion: currentHeistArtifactFormatVersion,
         planVersion: currentHeistPlanVersion,
@@ -733,7 +731,7 @@ private func rawArtifactManifestJSON(
     var fields = [
         #"  "createdAt" : "2026-06-05T00:00:00Z""#,
         #"  "format" : "com.royalpineapple.buttonheist.heist""#,
-        #"  "planVersion" : 1"#,
+        #"  "planVersion" : 2"#,
         #"  "producer" : { \#(producerFields.joined(separator: ", ")) }"#,
     ]
     if let entry {

@@ -6,9 +6,9 @@ import Foundation
 /// commands whose product subject is a container, such as scroll commands.
 public struct CustomActionTarget: Codable, Sendable, Equatable, CustomStringConvertible {
     public let target: AccessibilityTarget
-    public let actionName: String
+    public let actionName: CustomActionName
 
-    public init(target: AccessibilityTarget, actionName: String) {
+    public init(target: AccessibilityTarget, actionName: CustomActionName) {
         self.target = target
         self.actionName = actionName
     }
@@ -16,19 +16,8 @@ public struct CustomActionTarget: Codable, Sendable, Equatable, CustomStringConv
     public var description: String {
         ScoreDescription.call("customAction", [
             target.description,
-            ScoreDescription.stringField("action", actionName),
+            ScoreDescription.stringField("action", actionName.rawValue),
         ].compactMap { $0 })
-    }
-}
-
-enum CustomActionTargetValidationError: Error, Sendable, Equatable, CustomStringConvertible {
-    case emptyActionName
-
-    var description: String {
-        switch self {
-        case .emptyActionName:
-            return "custom action name must not be empty"
-        }
     }
 }
 
@@ -38,28 +27,12 @@ extension CustomActionTarget {
         case actionName
     }
 
-    static func validate(actionName: String) throws {
-        guard !actionName.isEmpty else {
-            throw CustomActionTargetValidationError.emptyActionName
-        }
-    }
-
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "custom action target")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let actionName = try container.decode(String.self, forKey: .actionName)
-        do {
-            try Self.validate(actionName: actionName)
-        } catch {
-            throw DecodingError.dataCorruptedError(
-                forKey: .actionName,
-                in: container,
-                debugDescription: String(describing: error)
-            )
-        }
         self.init(
             target: try container.decode(AccessibilityTarget.self, forKey: .target),
-            actionName: actionName
+            actionName: try container.decode(CustomActionName.self, forKey: .actionName)
         )
     }
 
@@ -95,10 +68,10 @@ extension TextRangeReference: CustomStringConvertible {
 
 public enum RotorSelection: Equatable, Hashable, Sendable {
     case automatic
-    case named(String)
+    case named(RotorName)
     case index(Int)
 
-    public var rotorName: String? {
+    public var rotorName: RotorName? {
         guard case .named(let name) = self else { return nil }
         return name
     }
@@ -111,7 +84,7 @@ public enum RotorSelection: Equatable, Hashable, Sendable {
 
 extension RotorSelection {
     static func decode(
-        name: String?,
+        name: RotorName?,
         index: Int?,
         codingPath: [any CodingKey]
     ) throws -> Self {
@@ -151,7 +124,7 @@ extension RotorSelection: CustomStringConvertible {
         case .automatic:
             return "automatic"
         case .named(let name):
-            return ScoreDescription.stringField("name", name) ?? "name=\"\""
+            return ScoreDescription.stringField("name", name.rawValue) ?? "name=\"\""
         case .index(let index):
             return ScoreDescription.valueField("index", index) ?? "index=\(index)"
         }
@@ -199,7 +172,7 @@ extension RotorTarget: Codable {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "rotor target")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         target = try container.decode(AccessibilityTarget.self, forKey: .target)
-        let rotor = try container.decodeIfPresent(String.self, forKey: .rotor)
+        let rotor = try container.decodeIfPresent(RotorName.self, forKey: .rotor)
         let rotorIndex = try container.decodeIfPresent(Int.self, forKey: .rotorIndex)
         selection = try RotorSelection.decode(name: rotor, index: rotorIndex, codingPath: container.codingPath)
         direction = try container.decodeIfPresent(RotorDirection.self, forKey: .direction) ?? .next

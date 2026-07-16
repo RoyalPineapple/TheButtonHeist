@@ -6,7 +6,7 @@ extension HeistDoctor {
         guard let actionEvidence = step.actionEvidence else {
             throw HeistDoctorError.missingActionEvidence(path: step.path)
         }
-        guard let command = actionEvidence.command else {
+        guard let command = step.actionCommand else {
             throw HeistDoctorError.missingActionEvidence(path: step.path)
         }
         guard let target = step.reportTarget else {

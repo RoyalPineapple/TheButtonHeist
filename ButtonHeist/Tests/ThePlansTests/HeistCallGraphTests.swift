@@ -4,7 +4,7 @@ import Testing
 @_spi(ButtonHeistInternals) @testable import ThePlans
 
 private struct EncodedInvocationStepContract: Decodable {
-    let path: [String]
+    let path: String
 }
 
 @Test func `empty call graph is acyclic`() throws {
@@ -25,12 +25,12 @@ private struct EncodedInvocationStepContract: Decodable {
     let graph = callGraph(edges: [("A", "C"), ("B", "C")])
 
     #expect(graph.nodes == ["A", "B", "C"])
-    #expect(graph.typedNodes == Set(["A", "B", "C"].map(HeistCallGraph.Node.init)))
+    #expect(graph.typedNodes == Set(["A", "B", "C"].map { HeistCallGraph.Node(typedPath($0)) }))
     #expect(graph.typedEdges == Set([
         HeistCallGraph.NodeEdge(caller: HeistCallGraph.Node("A"), callee: HeistCallGraph.Node("C")),
         HeistCallGraph.NodeEdge(caller: HeistCallGraph.Node("B"), callee: HeistCallGraph.Node("C")),
     ]))
-    let typedOrder = try graph.requireTopologicalNodeOrder().map(\.name)
+    let typedOrder = try graph.requireTopologicalNodeOrder().map(\.path)
     let publicOrder = try graph.requireTopologicalOrder()
     #expect(typedOrder == publicOrder)
     #expect(publicOrder == ["A", "B", "C"])
@@ -65,7 +65,7 @@ private struct EncodedInvocationStepContract: Decodable {
 
     #expect(!graph.isAcyclic)
     #expect(graph.requireCycle().path == ["A", "B", "A"])
-    #expect(typedCycle.path.map(\.name) == ["A", "B", "A"])
+    #expect(typedCycle.path.map(\.path) == ["A", "B", "A"])
     #expect(typedCycle.displayPath == "A -> B -> A")
     #expect(graph.requireCycle().displayPath == typedCycle.displayPath)
 }
@@ -104,7 +104,7 @@ private struct EncodedInvocationStepContract: Decodable {
                     .warn(WarnStep(message: "tap")),
                 ]),
             ], body: [
-                .invoke(HeistInvocationStep(path: ["tapAddButton"])),
+                .invoke(HeistInvocationStep(path: "tapAddButton")),
             ]),
         ], body: []),
     ], body: [.warn(WarnStep(message: "root"))])
@@ -118,17 +118,17 @@ private struct EncodedInvocationStepContract: Decodable {
 }
 
 @Test func `plan call graph resolves qualified exported namespace invocations from definition bodies`() throws {
-    let typedPath = try HeistInvocationPath(dottedName: "lib.b")
+    let typedPath: HeistInvocationPath = "lib.b"
     let raw = HeistPlanAdmissionCandidate(definitions: [
         HeistPlanAdmissionCandidate(name: "lib", definitions: [
             HeistPlanAdmissionCandidate(name: "a", body: [
-                .invoke(HeistInvocationStep(invocationPath: typedPath)),
+                .invoke(HeistInvocationStep(path: typedPath)),
             ]),
             HeistPlanAdmissionCandidate(name: "b", body: [
                 .warn(WarnStep(message: "b")),
             ]),
         ], body: []),
-    ], body: [.invoke(HeistInvocationStep(path: ["lib", "a"]))])
+    ], body: [.invoke(HeistInvocationStep(path: "lib.a"))])
 
     let graph = HeistCallGraph(plan: try raw.validatedForRuntimeSafety())
 
@@ -144,8 +144,8 @@ private struct EncodedInvocationStepContract: Decodable {
         ], body: [
             .wait(WaitStep(
                 predicate: .exists(.label("Ready")),
-                timeout: 0,
-                elseBody: [.invoke(HeistInvocationStep(path: ["fallback"]))]
+                timeout: .milliseconds(1),
+                elseBody: [.invoke(HeistInvocationStep(path: "fallback"))]
             )),
         ]),
     ], body: [.warn(WarnStep(message: "root"))])
@@ -170,39 +170,25 @@ private struct EncodedInvocationStepContract: Decodable {
     })
 }
 
-@Test func `typed invocation path renders dotted names without changing invoke JSON`() throws {
-    let invocationPath = try HeistInvocationPath(dottedName: "LibraryScreen.addToCart")
-    let invocation = HeistInvocationStep(invocationPath: invocationPath)
+@Test func `typed invocation path owns single value invoke JSON`() throws {
+    let invocationPath: HeistInvocationPath = "LibraryScreen.addToCart"
+    let invocation = HeistInvocationStep(path: invocationPath)
 
-    #expect(invocation.path == ["LibraryScreen", "addToCart"])
-    #expect(invocation.capabilityName == "LibraryScreen.addToCart")
+    #expect(invocation.path == invocationPath)
+    #expect(invocation.path.components == ["LibraryScreen", "addToCart"])
+    #expect(invocation.path == invocationPath)
 
     let encoded = try JSONEncoder().encode(invocation)
     let json = try JSONDecoder().decode(EncodedInvocationStepContract.self, from: encoded)
-    #expect(json.path == ["LibraryScreen", "addToCart"])
+    #expect(json.path == "LibraryScreen.addToCart")
 
     let decoded = try JSONDecoder().decode(HeistInvocationStep.self, from: encoded)
     #expect(decoded == invocation)
-    #expect(decoded.capabilityName == "LibraryScreen.addToCart")
-}
-
-@Test func `typed invocation path rejects empty path and components`() throws {
-    expectInvocationPathFailure(.emptyPath) {
-        _ = try HeistInvocationPath(components: [])
-    }
-    expectInvocationPathFailure(.emptyPath) {
-        _ = try HeistInvocationPath(dottedName: "")
-    }
-    expectInvocationPathFailure(.emptyComponent(index: 1)) {
-        _ = try HeistInvocationPath(components: ["LibraryScreen", ""])
-    }
-    expectInvocationPathFailure(.emptyComponent(index: 1)) {
-        _ = try HeistInvocationPath(dottedName: "LibraryScreen..addToCart")
-    }
+    #expect(decoded.path == invocationPath)
 }
 
 @Test func `traversal path builder renders stable diagnostic paths`() {
-    let path = HeistTraversalPath.root
+    let path = HeistPlanPath.root
         .child(.body)
         .index(0)
         .child(.conditional)
@@ -264,7 +250,7 @@ private struct EncodedInvocationStepContract: Decodable {
         body: []
     )
     let scope = HeistDefinitionScope(definitions: [cart])
-    let invocationPath = try HeistInvocationPath(components: ["Cart", "Checkout"])
+    let invocationPath: HeistInvocationPath = "Cart.Checkout"
 
     let resolved = try #require(scope.resolveInvocation(path: invocationPath, rootScope: scope))
 
@@ -273,25 +259,11 @@ private struct EncodedInvocationStepContract: Decodable {
     #expect(resolved.namePath == ["Cart", "Checkout"])
 }
 
-@Test func `invocation step decode rejects empty path and components`() throws {
-    expectDataCorrupted("empty invocation path", contains: "heist invocation path must not be empty") {
-        _ = try JSONDecoder().decode(HeistInvocationStep.self, from: Data("""
-        { "path": [] }
-        """.utf8))
-    }
-
-    expectDataCorrupted("empty invocation path component", contains: "component at index 1 must not be empty") {
-        _ = try JSONDecoder().decode(HeistInvocationStep.self, from: Data("""
-        { "path": [ "LibraryScreen", "" ] }
-        """.utf8))
-    }
-}
-
 @Test func `random generated definition graphs agree with reference cycle checker`() throws {
     var rng = SeededGenerator(seed: 0xAC1DCA11)
 
     for caseIndex in 0..<200 {
-        let model = RandomDefinitionGraph(caseIndex: caseIndex, rng: &rng)
+        let model = try RandomDefinitionGraph(caseIndex: caseIndex, rng: &rng)
         let graph = HeistCallGraph(nodes: Set(model.nodes), edges: model.edges)
         let expectedAcyclic = referenceIsAcyclic(nodes: model.nodes, edges: model.edges)
 
@@ -346,57 +318,64 @@ private struct RuntimeAdmissionCallGraphCase {
 }
 
 private func callGraph(edges: [(String, String)]) -> HeistCallGraph {
-    HeistCallGraph(
-        nodes: Set(edges.flatMap { [$0.0, $0.1] }),
-        edges: Set(edges.map { HeistCallGraph.Edge(caller: $0.0, callee: $0.1) })
+    let typedEdges = edges.map { caller, callee in
+        HeistCallGraph.Edge(caller: typedPath(caller), callee: typedPath(callee))
+    }
+    return HeistCallGraph(
+        nodes: Set(typedEdges.flatMap { [$0.caller, $0.callee] }),
+        edges: Set(typedEdges)
     )
 }
 
-private func inlineChainCase(_ names: [String]) -> HeistPlanAdmissionCandidate {
+private func inlineChainCase(_ names: [HeistPlanName]) -> HeistPlanAdmissionCandidate {
     let definition = inlineChainDefinition(names)
     return HeistPlanAdmissionCandidate(
         definitions: [definition],
-        body: [.invoke(HeistInvocationStep(path: [definition.name ?? ""]))]
+        body: [.invoke(HeistInvocationStep(path: invocationPath(definition.name)))]
     )
 }
 
-private func inlineCycleCase(_ names: [String]) -> HeistPlanAdmissionCandidate {
+private func inlineCycleCase(_ names: [HeistPlanName]) -> HeistPlanAdmissionCandidate {
     guard let first = names.first else {
         return HeistPlanAdmissionCandidate(body: [.warn(WarnStep(message: "empty"))])
     }
     let definition = inlineCycleDefinition(name: first, remaining: Array(names.dropFirst()), first: first)
     return HeistPlanAdmissionCandidate(
         definitions: [definition],
-        body: [.invoke(HeistInvocationStep(path: [first]))]
+        body: [.invoke(HeistInvocationStep(path: invocationPath(first)))]
     )
 }
 
-private func inlineChainDefinition(_ names: [String]) -> HeistPlanAdmissionCandidate {
+private func inlineChainDefinition(_ names: [HeistPlanName]) -> HeistPlanAdmissionCandidate {
     guard let name = names.first else {
         return HeistPlanAdmissionCandidate(name: "empty", body: [.warn(WarnStep(message: "empty"))])
     }
     guard names.count > 1 else {
-        return HeistPlanAdmissionCandidate(name: name, body: [.warn(WarnStep(message: "\(name) done"))])
+        return HeistPlanAdmissionCandidate(name: name, body: [
+            .warn(WarnStep(message: warningMessage("\(name) done"))),
+        ])
     }
     let next = inlineChainDefinition(Array(names.dropFirst()))
     return HeistPlanAdmissionCandidate(name: name, body: [
         inlineHeist(definitions: [next], body: [
-            .invoke(HeistInvocationStep(path: [next.name ?? ""])),
+            .invoke(HeistInvocationStep(path: invocationPath(next.name))),
         ]),
     ])
 }
 
 private func inlineCycleDefinition(
-    name: String,
-    remaining: [String],
-    first: String
+    name: HeistPlanName,
+    remaining: [HeistPlanName],
+    first: HeistPlanName
 ) -> HeistPlanAdmissionCandidate {
     let next = remaining.first.map { nextName in
         inlineCycleDefinition(name: nextName, remaining: Array(remaining.dropFirst()), first: first)
-    } ?? HeistPlanAdmissionCandidate(name: first, body: [.warn(WarnStep(message: "\(first) done"))])
+    } ?? HeistPlanAdmissionCandidate(name: first, body: [
+        .warn(WarnStep(message: warningMessage("\(first) done"))),
+    ])
     return HeistPlanAdmissionCandidate(name: name, body: [
         inlineHeist(definitions: [next], body: [
-            .invoke(HeistInvocationStep(path: [next.name ?? first])),
+            .invoke(HeistInvocationStep(path: invocationPath(next.name ?? first))),
         ]),
     ])
 }
@@ -420,53 +399,46 @@ private func runtimeSafetyFailures(for raw: HeistPlanAdmissionCandidate) -> [Hei
     }
 }
 
-private func expectInvocationPathFailure(
-    _ expected: HeistInvocationPath.ValidationError,
-    _ body: () throws -> Void
-) {
+private func invocationPath(_ name: HeistPlanName?) -> HeistInvocationPath {
+    guard let name else {
+        preconditionFailure("admitted test definitions must have names")
+    }
+    return HeistInvocationPath(first: name)
+}
+
+private func typedPath(_ value: String) -> HeistInvocationPath {
     do {
-        try body()
-        Issue.record("Expected invocation path construction to fail")
-    } catch let error as HeistInvocationPath.ValidationError {
-        #expect(error == expected)
+        return try HeistInvocationPath(validating: value)
     } catch {
-        Issue.record("Expected invocation path validation error, got \(error)")
+        preconditionFailure("invalid generated test path \(value): \(error)")
     }
 }
 
-private func expectDataCorrupted(
-    _ name: String,
-    contains expectedMessage: String,
-    decode: () throws -> Void
-) {
+private func warningMessage(_ value: String) -> HeistWarningMessage {
     do {
-        try decode()
-        Issue.record("Expected \(name) to reject invalid JSON")
-    } catch DecodingError.dataCorrupted(let context) {
-        #expect(
-            context.debugDescription.contains(expectedMessage),
-            "\(name) error \(context.debugDescription) did not contain \(expectedMessage)"
-        )
+        return try HeistWarningMessage(validating: value)
     } catch {
-        Issue.record("Expected \(name) to throw DecodingError.dataCorrupted, got \(error)")
+        preconditionFailure("invalid generated warning message \(value): \(error)")
     }
 }
 
-private func referenceIsAcyclic(nodes: [String], edges: Set<HeistCallGraph.Edge>) -> Bool {
+private func referenceIsAcyclic(nodes: [HeistInvocationPath], edges: Set<HeistCallGraph.Edge>) -> Bool {
     var incomingCounts = Dictionary(uniqueKeysWithValues: nodes.map { ($0, 0) })
     edges.forEach { incomingCounts[$0.callee, default: 0] += 1 }
     let outgoing = Dictionary(grouping: edges, by: \.caller)
-    var ready = incomingCounts.filter { $0.value == 0 }.map(\.key).sorted()
-    var visited: [String] = []
+    var ready = incomingCounts.filter { $0.value == 0 }.map(\.key).sorted { $0.description < $1.description }
+    var visited: [HeistInvocationPath] = []
 
     while let next = ready.first {
         ready.removeFirst()
         visited.append(next)
-        for callee in (outgoing[next] ?? []).map(\.callee).sorted() {
+        for callee in (outgoing[next] ?? []).map(\.callee).sorted(by: {
+            $0.description < $1.description
+        }) {
             incomingCounts[callee, default: 0] -= 1
             if incomingCounts[callee] == 0 {
                 ready.append(callee)
-                ready.sort()
+                ready.sort { $0.description < $1.description }
             }
         }
     }
@@ -475,12 +447,14 @@ private func referenceIsAcyclic(nodes: [String], edges: Set<HeistCallGraph.Edge>
 }
 
 private struct RandomDefinitionGraph {
-    let nodes: [String]
+    let nodes: [HeistInvocationPath]
     let edges: Set<HeistCallGraph.Edge>
 
-    init(caseIndex: Int, rng: inout some RandomNumberGenerator) {
+    init(caseIndex: Int, rng: inout some RandomNumberGenerator) throws {
         let count = Int.random(in: 1...8, using: &rng)
-        let generatedNodes = (0..<count).map { "N\($0)" }
+        let generatedNodes = try (0..<count).map { index in
+            try HeistInvocationPath(validating: "N\(index)")
+        }
         let plantsCycle = count > 1 && caseIndex.isMultiple(of: 3)
         let generatedEdges = generatedNodes.enumerated().flatMap { callerIndex, caller in
             generatedNodes.enumerated().compactMap { calleeIndex, callee -> HeistCallGraph.Edge? in
@@ -514,7 +488,7 @@ private struct SeededGenerator: RandomNumberGenerator {
 }
 
 private extension HeistCallGraph {
-    func requireTopologicalOrder() throws -> [String] {
+    func requireTopologicalOrder() throws -> [HeistInvocationPath] {
         switch topologicalOrder() {
         case .success(let order):
             return order
@@ -547,7 +521,7 @@ private extension HeistCallGraph {
     func requireNodeCycle() -> HeistCallGraph.NodeCycle {
         switch topologicalNodeOrder() {
         case .success(let order):
-            Issue.record("Expected cycle, got order \(order.map(\.name))")
+            Issue.record("Expected cycle, got order \(order.map(\.path))")
             return HeistCallGraph.NodeCycle(path: [])
         case .failure(let cycle):
             return cycle
@@ -555,7 +529,7 @@ private extension HeistCallGraph {
     }
 }
 
-private extension Array where Element == String {
+private extension Array where Element == HeistInvocationPath {
     func respects(_ edges: Set<HeistCallGraph.Edge>) -> Bool {
         let indexByNode = Dictionary(uniqueKeysWithValues: enumerated().map { ($0.element, $0.offset) })
         return edges.allSatisfy { edge in
@@ -566,7 +540,7 @@ private extension Array where Element == String {
         }
     }
 
-    func adjacentPairs() -> [(String, String)] {
+    func adjacentPairs() -> [(HeistInvocationPath, HeistInvocationPath)] {
         guard count >= 2 else { return [] }
         return zip(self, dropFirst()).map { ($0.0, $0.1) }
     }

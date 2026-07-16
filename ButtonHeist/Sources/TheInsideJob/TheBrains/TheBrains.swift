@@ -24,6 +24,7 @@ final class TheBrains {
     let postActionObservation: PostActionObservation
     let interactionObservation: InteractionObservation
     let failureEvidencePolicy: FailureEvidencePolicy
+    private let requestExecutor = InteractionRequestExecutor()
     private var observationDriver = StateDriver(
         initial: ObservationRuntimePhase.inactive,
         machine: ObservationRuntimeMachine()
@@ -217,13 +218,13 @@ final class TheBrains {
                     stash.visibleExplorationBaseline(from: visibleEvidence.screen)
                 ),
                 maxScrollsPerContainer: query.maxScrollsPerContainer,
-                maxScrollsPerDiscovery: query.maxScrollsPerDiscovery
+                maxScrollsPerDiscovery: query.maxScrollsPerDiscovery,
               ) else {
             return .failure(.rootViewUnavailable)
         }
 
         do {
-            let interface = try InterfaceSelector(interface: stash.discoveryInterface()).select(query)
+            let interface = try stash.selectInterface(query)
             let diagnostics = exploration.manifest.interfaceDiagnostics(
                 for: exploration.event.observation.screen,
                 includedElementCount: interface.projectedElements.count
@@ -234,6 +235,32 @@ final class TheBrains {
         } catch {
             return .failure(.selection(error))
         }
+    }
+
+    func executeInAppRequest<Value: Sendable>(
+        _ operation: @escaping @MainActor @Sendable () async -> Value
+    ) async -> Value {
+        switch await requestExecutor.execute(owner: .inApp, operation: operation) {
+        case .completed(let value):
+            return value
+        case .cancelled:
+            preconditionFailure("In-app requests cannot be cancelled by a transport owner")
+        }
+    }
+
+    func submitTransportRequest(
+        clientId: Int,
+        operation: @escaping @MainActor @Sendable () async -> Void
+    ) async {
+        _ = await requestExecutor.execute(owner: .transportClient(clientId), operation: operation)
+    }
+
+    func cancelTransportRequests(clientId: Int) {
+        requestExecutor.cancel(owner: .transportClient(clientId))
+    }
+
+    func cancelAllTransportRequests() {
+        requestExecutor.cancelTransportRequests()
     }
 
     func beginChangedWait() -> Bool {
@@ -247,6 +274,123 @@ final class TheBrains {
 
     func finishChangedWait() {
         observationDriver.send(.finishChangedWait)
+    }
+}
+
+@MainActor
+private final class InteractionRequestExecutor {
+    enum Owner: Equatable, Sendable {
+        case inApp
+        case transportClient(Int)
+
+        var isTransport: Bool {
+            if case .transportClient = self { return true }
+            return false
+        }
+    }
+
+    enum Outcome<Value: Sendable>: Sendable {
+        case completed(Value)
+        case cancelled
+    }
+
+    private struct PendingRequest {
+        let id: UInt64
+        let owner: Owner
+        let operation: @MainActor @Sendable () async -> Void
+        let cancelBeforeExecution: @MainActor @Sendable () -> Void
+    }
+
+    private struct ActiveRequest {
+        let request: PendingRequest
+        let task: Task<Void, Never>
+    }
+
+    private enum Phase {
+        case idle
+        case running(active: ActiveRequest, pending: [PendingRequest])
+    }
+
+    private var phase = Phase.idle
+    private var nextRequestID: UInt64 = 1
+
+    func execute<Value: Sendable>(
+        owner: Owner,
+        operation: @escaping @MainActor @Sendable () async -> Value
+    ) async -> Outcome<Value> {
+        guard !owner.isTransport || !Task.isCancelled else { return .cancelled }
+        return await withCheckedContinuation { continuation in
+            let requestID = nextRequestID
+            precondition(requestID < UInt64.max, "Interaction request ID space exhausted")
+            nextRequestID += 1
+            enqueue(PendingRequest(
+                id: requestID,
+                owner: owner,
+                operation: {
+                    guard !Task.isCancelled else {
+                        continuation.resume(returning: .cancelled)
+                        return
+                    }
+                    continuation.resume(returning: .completed(await operation()))
+                },
+                cancelBeforeExecution: {
+                    continuation.resume(returning: .cancelled)
+                }
+            ))
+        }
+    }
+
+    func cancel(owner: Owner) {
+        guard case .running(let active, let pending) = phase else { return }
+        let cancelled = pending.filter { $0.owner == owner }
+        let retained = pending.filter { $0.owner != owner }
+        cancelled.forEach { $0.cancelBeforeExecution() }
+        if active.request.owner == owner {
+            active.task.cancel()
+        }
+        phase = .running(active: active, pending: retained)
+    }
+
+    func cancelTransportRequests() {
+        guard case .running(let active, let pending) = phase else { return }
+        let cancelled = pending.filter { $0.owner.isTransport }
+        let retained = pending.filter { !$0.owner.isTransport }
+        cancelled.forEach { $0.cancelBeforeExecution() }
+        if active.request.owner.isTransport {
+            active.task.cancel()
+        }
+        phase = .running(active: active, pending: retained)
+    }
+
+    private func enqueue(_ request: PendingRequest) {
+        switch phase {
+        case .idle:
+            start(request, pending: [])
+        case .running(let active, var pending):
+            pending.append(request)
+            phase = .running(active: active, pending: pending)
+        }
+    }
+
+    private func start(_ request: PendingRequest, pending: [PendingRequest]) {
+        let task = Task { @MainActor [weak self] in
+            await request.operation()
+            self?.complete(requestID: request.id)
+        }
+        phase = .running(
+            active: ActiveRequest(request: request, task: task),
+            pending: pending
+        )
+    }
+
+    private func complete(requestID: UInt64) {
+        guard case .running(let active, var pending) = phase,
+              active.request.id == requestID else { return }
+        guard !pending.isEmpty else {
+            phase = .idle
+            return
+        }
+        start(pending.removeFirst(), pending: pending)
     }
 }
 

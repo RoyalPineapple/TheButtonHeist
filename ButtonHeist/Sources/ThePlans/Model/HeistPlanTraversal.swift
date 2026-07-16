@@ -1,57 +1,58 @@
 import Foundation
 
-enum HeistTraversalPathField: String, Sendable {
-    case action
-    case argument
-    case body
-    case cases
-    case command
-    case conditional
-    case definitions
-    case elseBody = "else_body"
-    case expectation
-    case fail
-    case forEachElement = "for_each_element"
-    case forEachString = "for_each_string"
-    case heist
-    case invoke
-    case limit
-    case matching
-    case message
-    case name
-    case parameter
-    case path
-    case predicate
-    case repeatUntil = "repeat_until"
-    case target
-    case timeout
-    case value
-    case values
-    case wait
-    case warn
-    case withoutExpectation = "without_expectation"
-}
-
-struct HeistTraversalPath: Sendable, Equatable, Hashable, CustomStringConvertible {
-    static let root = HeistTraversalPath(description: "$")
-
-    let description: String
-
-    private init(description: String) {
-        self.description = description
+public struct HeistPlanPath: Sendable, Equatable, Hashable, CustomStringConvertible {
+    enum Field: String, Sendable {
+        case action, actions, actionName, after, argument, assertions, before, body, cases, change, changed, checks
+        case command, conditional, container, customContent, definitions, element, expectation, fail, heist, hint
+        case identifier, include, invoke, label, limit, match, matching, message, name, ordinal, parameter, path
+        case payload, predicate, rotor, rotors, semantic, start, target, text, timeout, value, values, wait, warn
+        case elseBody = "else_body"
+        case exclude
+        case forEachElement = "for_each_element"
+        case forEachString = "for_each_string"
+        case repeatUntil = "repeat_until"
+        case textRef = "text_ref"
+        case withoutExpectation = "without_expectation"
     }
 
-    func child(_ field: HeistTraversalPathField) -> HeistTraversalPath {
-        HeistTraversalPath(description: "\(description).\(field.rawValue)")
+    private enum Component: Sendable, Equatable, Hashable {
+        case field(Field)
+        case index(Int)
     }
 
-    func index(_ index: Int) -> HeistTraversalPath {
-        HeistTraversalPath(description: "\(description)[\(index)]")
+    public static let root = Self(components: [])
+    private let components: [Component]
+
+    public var description: String {
+        components.reduce(into: "$") { result, component in
+            switch component {
+            case .field(let field): result += ".\(field.rawValue)"
+            case .index(let index): result += "[\(index)]"
+            }
+        }
+    }
+
+    func child(_ field: Field) -> Self {
+        Self(components: components + [.field(field)])
+    }
+
+    func index(_ index: Int) -> Self {
+        Self(components: components + [.index(index)])
+    }
+
+    func ends(in field: Field) -> Bool {
+        components.last == .field(field)
+    }
+
+    func contains(_ field: Field, followedBy nextField: Field) -> Bool {
+        zip(components, components.dropFirst()).contains {
+            $0 == .field(field) && $1 == .field(nextField)
+        }
     }
 }
 
 package struct HeistTraversalContext {
-    let path: HeistTraversalPath
+    let path: HeistPlanPath
     let depth: Int
     let stepIndex: Int?
     let nextStep: HeistStep?
@@ -73,7 +74,7 @@ package struct HeistTraversalContext {
 
 struct HeistTraversalBindingSample {
     let referenceBindings: HeistReferenceBindingContext
-    let sourcePath: HeistTraversalPath
+    let sourcePath: HeistPlanPath
 
     var environment: HeistExecutionEnvironment {
         referenceBindings.environment
@@ -223,7 +224,7 @@ package struct HeistPlanTraversal {
 
     func walk<V: HeistPlanTraversalVisitor>(
         steps: [HeistStep],
-        path: HeistTraversalPath,
+        path: HeistPlanPath,
         depth: Int,
         referenceBindings: HeistReferenceBindingContext,
         bindingSamples: [HeistTraversalBindingSample] = [],
@@ -488,7 +489,7 @@ package struct HeistPlanTraversal {
             )
         }
         guard expandsInvocations else { return }
-        guard let resolved = context.resolveInvocation(path: invoke.invocationPath) else { return }
+        guard let resolved = context.resolveInvocation(path: invoke.path) else { return }
         let resolvedNode = resolved.callGraphNode
         guard context.callGraphCycle(closing: resolvedNode) == nil,
               let referenceBindings = try? context.referenceBindings.binding(
@@ -563,7 +564,7 @@ package struct HeistPlanTraversal {
 
     private func walkDefinitions<V: HeistPlanTraversalVisitor>(
         _ definitions: [HeistPlan],
-        path: HeistTraversalPath,
+        path: HeistPlanPath,
         depth: Int,
         definitionScope: HeistDefinitionScope,
         rootDefinitionScope: HeistDefinitionScope,
@@ -573,7 +574,10 @@ package struct HeistPlanTraversal {
         let definitionsContext = parentContext.child(path: path, depth: depth)
         visitor.visitDefinitions(definitions, context: definitionsContext)
         for (index, definition) in definitions.enumerated() {
-            let currentDefinitionPath = definitionScope.pathPrefix + [definition.name ?? ""]
+            guard let definitionName = definition.name else {
+                preconditionFailure("admitted heist definitions must have names")
+            }
+            let currentDefinitionPath = definitionScope.pathPrefix + [definitionName]
             let currentDefinitionNode = HeistCallGraph.Node(namePath: currentDefinitionPath)
             let referenceBindings = definition.parameterReferenceBindings
             let definitionContext = HeistTraversalContext(
@@ -618,7 +622,7 @@ package struct HeistPlanTraversal {
 
 extension HeistTraversalContext {
     func child(
-        path: HeistTraversalPath,
+        path: HeistPlanPath,
         depth: Int? = nil,
         definitionScope: HeistDefinitionScope? = nil,
         rootDefinitionScope: HeistDefinitionScope? = nil
@@ -637,7 +641,7 @@ extension HeistTraversalContext {
         )
     }
 
-    func nestedBranch(path: HeistTraversalPath, stepIndex: Int?) -> HeistTraversalContext {
+    func nestedBranch(path: HeistPlanPath, stepIndex: Int?) -> HeistTraversalContext {
         HeistTraversalContext(
             path: path,
             depth: depth + 1,
@@ -665,10 +669,10 @@ extension HeistTraversalContext {
 
 struct HeistDefinitionScope {
     let definitions: [HeistPlan]
-    let pathPrefix: [String]
+    let pathPrefix: [HeistPlanName]
     private let definitionIndex: HeistDefinitionIndex
 
-    init(definitions: [HeistPlan], pathPrefix: [String] = []) {
+    init(definitions: [HeistPlan], pathPrefix: [HeistPlanName] = []) {
         self.definitions = definitions
         self.pathPrefix = pathPrefix
         self.definitionIndex = HeistDefinitionIndex(definitions: definitions)
@@ -693,10 +697,10 @@ private struct HeistDefinitionIndex {
         let children: HeistDefinitionIndex
     }
 
-    private let entriesByName: [String: Entry]
+    private let entriesByName: [HeistPlanName: Entry]
 
     init(definitions: [HeistPlan]) {
-        var entriesByName: [String: Entry] = [:]
+        var entriesByName: [HeistPlanName: Entry] = [:]
         for definition in definitions {
             guard let name = definition.name,
                   entriesByName[name] == nil
@@ -710,9 +714,9 @@ private struct HeistDefinitionIndex {
     }
 
     func resolve(
-        components: [String],
+        components: [HeistPlanName],
         componentIndex: Int,
-        namePath: [String]
+        namePath: [HeistPlanName]
     ) -> ResolvedHeistDefinition? {
         guard components.indices.contains(componentIndex) else { return nil }
         let component = components[componentIndex]
@@ -720,9 +724,10 @@ private struct HeistDefinitionIndex {
 
         let resolvedNamePath = namePath + [component]
         guard componentIndex + 1 < components.count else {
+            guard let first = resolvedNamePath.first else { return nil }
             return ResolvedHeistDefinition(
                 definition: entry.definition,
-                invocationPath: HeistInvocationPath.preconditionValidated(components: resolvedNamePath)
+                invocationPath: HeistInvocationPath(first: first, remaining: Array(resolvedNamePath.dropFirst()))
             )
         }
 
@@ -739,10 +744,10 @@ struct ResolvedHeistDefinition {
     let invocationPath: HeistInvocationPath
 
     var qualifiedName: String {
-        invocationPath.dottedName
+        invocationPath.description
     }
 
-    var namePath: [String] {
+    var namePath: [HeistPlanName] {
         invocationPath.components
     }
 

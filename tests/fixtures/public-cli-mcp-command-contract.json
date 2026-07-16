@@ -427,10 +427,10 @@
     },
     {
       "cliExposure" : "directCommand",
-      "description" : "Type text. With replacingExisting=true, The Button Heist clears the focused field before typing.",
+      "description" : "Type text. Replace mode clears the focused field before typing.",
       "failureProjection" : "diagnosticFailure",
       "family" : "semanticAction",
-      "inputSchemaSHA256" : "f2c4acd2df394c35362727b9159d6eef5a9f1b2a81a44b6b1c62fa445e3a2df8",
+      "inputSchemaSHA256" : "1cdb7e86113a2e65f89b3ae3ef02ab94b652ae8d14e1ffa1868b072202d6157a",
       "mcpExposure" : "notExposed",
       "name" : "type_text",
       "requiresConnectionBeforeDispatch" : true,

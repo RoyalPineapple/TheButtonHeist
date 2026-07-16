@@ -1,11 +1,12 @@
 import Foundation
 import ButtonHeistSupport
+import TheScore
 
 /// Probes discovered devices until it can return the currently reachable subset.
 @ButtonHeistActor
 struct ReachableDeviceScanner {
     let getDiscoveredDevices: () -> [DiscoveredDevice]
-    var token: String?
+    var token: SessionAuthToken?
 
     func scan(
         timeout: TimeInterval = 3.0,
@@ -13,8 +14,8 @@ struct ReachableDeviceScanner {
         retryInterval: TimeInterval = 0.2
     ) async -> [DiscoveredDevice] {
         let deadline = Date().addingTimeInterval(timeout)
-        var reachableIDs: Set<String> = []
-        var nextProbeAt: [String: Date] = [:]
+        var reachableIDs: Set<DiscoveryDeviceID> = []
+        var nextProbeAt: [DiscoveryDeviceID: Date] = [:]
 
         while Date() < deadline {
             let snapshot = getDiscoveredDevices()
@@ -50,8 +51,8 @@ struct ReachableDeviceScanner {
 
     private func devicesReadyForProbe(
         in devices: [DiscoveredDevice],
-        reachableIDs: Set<String>,
-        nextProbeAt: [String: Date]
+        reachableIDs: Set<DiscoveryDeviceID>,
+        nextProbeAt: [DiscoveryDeviceID: Date]
     ) -> [DiscoveredDevice] {
         let now = Date()
         return devices.filter { device in

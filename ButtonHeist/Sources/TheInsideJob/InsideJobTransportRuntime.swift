@@ -8,19 +8,17 @@ import TheScore
 @MainActor
 extension TheInsideJob {
     func makeRuntimeStartAttempt(
-        id: UUID,
-        phase: InsideJobRuntimeStartPhase
-    ) throws -> InsideJobStartAttempt {
+        id: UUID
+    ) -> InsideJobStartAttempt {
         InsideJobStartAttempt(
             id: id,
-            transport: try makeRuntimeTransport(phase: phase)
+            transport: makeRuntimeTransport()
         )
     }
 
-    func makeRuntimeTransport(phase: InsideJobRuntimeStartPhase) throws -> ServerTransport {
-        let token = try requireRuntimeToken(phase: phase)
+    func makeRuntimeTransport() -> ServerTransport {
         insideJobLogger.info("TLS PSK material ready")
-        return transportFactory(token, runtimeConfiguration.allowedScopes)
+        return transportFactory(runtimeConfiguration.token, runtimeConfiguration.allowedScopes)
     }
 
     func startRuntimeResources(
@@ -75,15 +73,6 @@ extension TheInsideJob {
             )
         }
         return resources
-    }
-
-    func requireRuntimeToken(phase: InsideJobRuntimeStartPhase) throws -> String {
-        guard let token = runtimeConfiguration.token,
-              !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            getaway.identity.tlsActive = false
-            throw InsideJobStartupError.tokenRequired(phase: phase)
-        }
-        return token
     }
 
     func installTransportOverflowHandler(_ transport: ServerTransport) {

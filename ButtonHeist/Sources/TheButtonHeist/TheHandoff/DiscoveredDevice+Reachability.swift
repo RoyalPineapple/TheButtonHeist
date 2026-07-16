@@ -11,7 +11,7 @@ extension Array where Element == DiscoveredDevice {
     /// Uses a passive transport/TLS-ready probe as a lightweight liveness check.
     /// Reachability never enters the post-handshake session lifecycle or asks
     /// the server for pre-auth identity.
-    func reachable(token: String? = nil, timeout: TimeInterval = 1.5) async -> [DiscoveredDevice] {
+    func reachable(token: SessionAuthToken? = nil, timeout: TimeInterval = 1.5) async -> [DiscoveredDevice] {
         await withTaskGroup(of: (Int, DiscoveredDevice?).self) { group in
             for (index, device) in self.enumerated() {
                 group.addTask {
@@ -46,12 +46,12 @@ enum DeviceReachability: Equatable {
 
 extension DiscoveredDevice {
     @ButtonHeistActor
-    func isReachable(token: String? = nil, timeout: TimeInterval = 1.5) async -> Bool {
+    func isReachable(token: SessionAuthToken? = nil, timeout: TimeInterval = 1.5) async -> Bool {
         await reachability(token: token, timeout: timeout).isReachable
     }
 
     @ButtonHeistActor
-    func reachability(token: String? = nil, timeout: TimeInterval = 1.5) async -> DeviceReachability {
+    func reachability(token: SessionAuthToken? = nil, timeout: TimeInterval = 1.5) async -> DeviceReachability {
         let connection = makeReachabilityConnection?(self) ?? DeviceConnection(device: self, token: token)
         let deviceName = name
         let resolver = ReachabilityResolver()

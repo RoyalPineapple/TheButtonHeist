@@ -54,7 +54,9 @@ Notes:
   one latest live observation, and optional failed-settle diagnostic evidence.
   There is no parallel screen/query store or semantic back map.
 - Each delivered `Interface` validates and stores one package `InterfaceGraph`.
-  Client matching, subtree selection, and formatting derive from that graph.
+  Client matching and formatting derive from that graph. Host subtree requests
+  resolve against `TheStash.interfaceTree` before wire projection re-roots the
+  selected path.
 - Element inflation resolves an `AccessibilityTarget` once, then carries a
   `CommittedElementTarget` with the exact capture-local `HeistId` and one
   graph-derived deadline. Refresh and dispatch use that id; they do not choose a

@@ -126,18 +126,16 @@ struct DoctorDemoFixture {
         )
 
         let lastPass = try receipt(
-            status: .passed,
+            outcome: .passed,
             target: target,
             before: menuInterface(primaryAction: "Checkout"),
-            after: confirmationInterface(),
-            actionSucceeded: true
+            after: confirmationInterface()
         )
         let newFail = try receipt(
-            status: .failed,
+            outcome: .failed,
             target: target,
             before: menuInterface(primaryAction: "Go to Checkout"),
-            after: nil,
-            actionSucceeded: false
+            after: nil
         )
 
         guard let passRecording = try HeistReceiptRecorder.write(
@@ -160,11 +158,10 @@ struct DoctorDemoFixture {
     }
 
     private static func receipt(
-        status: HeistExecutionStepStatus,
+        outcome: ActionNodeFixture.Outcome,
         target: AccessibilityTarget,
         before: Interface,
-        after: Interface?,
-        actionSucceeded: Bool
+        after: Interface?
     ) throws -> HeistExecutionResult {
         let trace = after
             .map { AccessibilityTrace(first: before).appending($0) }
@@ -172,56 +169,47 @@ struct DoctorDemoFixture {
         guard let traceEvidence = AccessibilityTraceEvidence(trace: trace, completeness: .complete) else {
             throw FixtureError.message("failed to build trace evidence")
         }
-        let actionResult = actionSucceeded
-            ? ActionResult.success(
+        let actionResult: ActionResult
+        switch outcome {
+        case .passed:
+            actionResult = .success(
                 method: .activate,
                 evidence: ActionResultSuccessEvidence(observation: .trace(traceEvidence))
             )
-            : ActionResult.failure(
+        case .failed:
+            actionResult = .failure(
                 method: .activate,
                 errorKind: .elementNotFound,
                 message: "No element matching \(target)",
                 evidence: ActionResultFailureEvidence(observation: .trace(traceEvidence))
             )
+        }
         let command = HeistActionCommand.activate(target)
         let evidence = HeistActionEvidence.dispatch(
             command: command,
             dispatchResult: actionResult
         )
-        let intent = HeistStepIntent.action(command: command)
-        let outcome: StepOutcomeFixture
-        switch status {
-        case .passed:
-            outcome = StepOutcomeFixture(
-                type: .passed,
-                evidence: .action(evidence),
-                failure: nil
-            )
-        case .failed:
-            outcome = StepOutcomeFixture(
-                type: .failed,
-                evidence: .action(evidence),
-                failure: HeistFailureDetail(
+        let node = ActionNodeFixture(
+            command: command,
+            outcome: outcome,
+            evidence: evidence,
+            failure: outcome == .failed
+                ? HeistFailureDetail(
                     category: .targetResolution,
                     contract: "action dispatch succeeds",
                     observed: "No element matching \(target)",
                     expected: target.description
                 )
-            )
-        case .skipped:
-            outcome = StepOutcomeFixture(type: .skipped, evidence: nil, failure: nil)
-        }
+                : nil
+        )
 
         let fixture = ReceiptFixture(
             steps: [StepFixture(
                 path: "$.body[0]",
-                kind: .action,
                 durationMs: 1,
-                intent: intent,
-                outcome: outcome
+                node: node
             )],
-            durationMs: 1,
-            abortedAtPath: status == .failed ? "$.body[0]" : nil
+            durationMs: 1
         )
         return try HeistReceiptCodec.decode(JSONEncoder().encode(fixture))
     }
@@ -348,26 +336,28 @@ struct DoctorDemoFixture {
 private struct ReceiptFixture: Encodable {
     let steps: [StepFixture]
     let durationMs: Int
-    let abortedAtPath: String?
 }
 
 private struct StepFixture: Encodable {
     let path: String
-    let kind: HeistExecutionStepKind
     let durationMs: Int
-    let intent: HeistStepIntent
-    let outcome: StepOutcomeFixture
+    let node: ActionNodeFixture
 }
 
-private struct StepOutcomeFixture: Encodable {
-    enum OutcomeType: String, Encodable {
-        case passed
-        case failed
-        case skipped
+private struct ActionNodeFixture: Encodable {
+    enum NodeType: String, Encodable {
+        case action
     }
 
-    let type: OutcomeType
-    let evidence: HeistStepEvidence?
+    enum Outcome: String, Encodable {
+        case passed
+        case failed
+    }
+
+    let type: NodeType = .action
+    let command: HeistActionCommand
+    let outcome: Outcome
+    let evidence: HeistActionEvidence?
     let failure: HeistFailureDetail?
     let children: [StepFixture] = []
 }

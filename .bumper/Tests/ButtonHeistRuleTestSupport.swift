@@ -25,47 +25,17 @@ func evaluateButtonHeistRules(
 
 private let canonicalButtonHeistRuleFixtures: [VirtualSourceFile] = [
     .swift(
-        "ButtonHeist/Sources/ThePlans/Model/StringExpressions.swift",
-        component: ButtonHeistComponent.plans,
-        source: "package enum Expr<Value> { case literal(Value) }"
+        "ButtonHeist/Sources/TheInsideJob/TheBrains/PredicateWait.swift",
+        component: ButtonHeistComponent.runtime,
+        source: "func runWait() { _ = PredicateWaitLifecycleMachine() }"
     ),
     .swift(
-        "ButtonHeist/Sources/TheInsideJob/TheStash/SemanticObservationStream.swift",
+        "ButtonHeist/Sources/TheInsideJob/TheStash/TheStash+Matching.swift",
         component: ButtonHeistComponent.runtime,
         source: """
-        final class SemanticObservationLog {
-            func publish(_ value: Int) {}
-        }
-        struct InterfaceObservationProof {}
-        final class SemanticObservationStream {
-            let observationLog = SemanticObservationLog()
-            let stash: TheStash
-
-            init(stash: TheStash) {
-                self.stash = stash
-            }
-
-            func publishCommittedObservation(_ proof: InterfaceObservationProof) {
-                stash.reduceInterfaceGraph()
-                observationLog.publish(0)
-            }
-        }
-        """
-    ),
-    .swift(
-        "ButtonHeist/Sources/TheInsideJob/TheStash/TheStash+InterfaceState.swift",
-        component: ButtonHeistComponent.runtime,
-        source: """
-        final class TheStash {
-            var interfaceTree = 0
-
-            func reduceInterfaceGraph() {
-                interfaceTree = 1
-            }
-
-            func clearInterfaceForLifecycleReset() {
-                interfaceTree = 0
-            }
+        func recurse() {
+            matchingTreeElements()
+            matchingTreeContainers()
         }
         """
     ),

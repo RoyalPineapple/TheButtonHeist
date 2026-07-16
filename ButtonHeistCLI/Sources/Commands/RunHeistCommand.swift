@@ -4,7 +4,10 @@ import Foundation
 import ThePlans
 
 struct RunHeistCommand: ConnectedOneShotCLICommand {
-    typealias SwiftHeistCompiler = @Sendable (_ source: URL, _ entry: String) async -> ValidationResult<HeistPlan, HeistBuildDiagnostic>
+    typealias SwiftHeistCompiler = @Sendable (
+        _ source: URL,
+        _ entry: HeistEntrySymbol
+    ) async -> ValidationResult<HeistPlan, HeistBuildDiagnostic>
 
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
@@ -137,11 +140,17 @@ struct RunHeistCommand: ConnectedOneShotCLICommand {
         guard let entry, !entry.isEmpty else {
             throw ValidationError("--entry is required for Swift source input")
         }
+        let entrySymbol: HeistEntrySymbol
+        do {
+            entrySymbol = try HeistEntrySymbol(validating: entry)
+        } catch {
+            throw ValidationError(String(describing: error))
+        }
 
         let source = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
         let name = source.deletingPathExtension().lastPathComponent
         let plan: HeistPlan
-        switch await compileSwiftFile(source, entry) {
+        switch await compileSwiftFile(source, entrySymbol) {
         case .success(let compiledPlan, _):
             plan = compiledPlan
         case .failure(let diagnostics):

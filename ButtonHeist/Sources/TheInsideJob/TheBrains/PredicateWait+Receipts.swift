@@ -10,7 +10,7 @@ extension PredicateWait {
         step: ResolvedWaitRuntimeInput,
         initialTrace: AccessibilityTrace?,
         start: CFAbsoluteTime,
-        timeout: Double,
+        timeout: WaitTimeout,
         cursorStrategy: AnnouncementWaitCursorStrategy
     ) async -> HeistWaitReceipt {
         if let initialTrace {
@@ -23,7 +23,7 @@ extension PredicateWait {
         }
 
         let cursor = announcementCursor(cursorStrategy)
-        guard let announcement = await waitForAnnouncement(cursor, predicate, timeout) else {
+        guard let announcement = await waitForAnnouncement(cursor, predicate, timeout.seconds) else {
             let message = Self.announcementTimeoutMessage(predicate, timeout: timeout)
             let expectation = ExpectationResult.Unmet(
                 predicate: step.predicateExpression,
@@ -139,29 +139,25 @@ extension PredicateWait {
 
     internal func waitReceipt(
         for step: ResolvedWaitRuntimeInput,
-        state: State,
+        evidence: LifecycleEvidence,
         start: CFAbsoluteTime,
         success: Bool
     ) -> HeistWaitReceipt {
         return waitReceipt(
             for: step,
-            trace: state.lastTrace,
-            observationSummary: state.lastObservationSummary,
-            expectation: state.evaluation,
+            trace: evidence.lastTrace,
+            observationSummary: evidence.lastObservationSummary,
+            expectation: evidence.evaluation,
             start: start,
             success: success,
-            baseline: state.changeBaseline,
-            window: state.observationWindow,
-            observedSequence: state.observedSequence
+            baseline: evidence.changeBaseline,
+            window: evidence.observationWindow,
+            observedSequence: evidence.observedSequence
         )
     }
 
     internal static let changePredicateNeedsFutureObservationMessage =
         PredicateObservationDiagnostics.changePredicateNeedsFutureObservationMessage
-
-    internal nonisolated static func clampedWaitTimeout(_ timeout: Double) -> Double {
-        max(immediateTimeout, min(timeout, defaultWaitTimeout))
-    }
 
     private static func elapsedSeconds(since start: CFAbsoluteTime) -> String {
         String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
@@ -257,9 +253,9 @@ extension PredicateWait {
 
     private static func announcementTimeoutMessage(
         _ predicate: ResolvedAnnouncementPredicate,
-        timeout: Double
+        timeout: WaitTimeout
     ) -> String {
-        "no \(matchingAnnouncement(predicate)) within \(String(format: "%.1f", timeout))s"
+        "no \(matchingAnnouncement(predicate)) within \(String(format: "%.1f", timeout.seconds))s"
     }
 
     private static func expectedActionAnnouncement(_ predicate: ResolvedAnnouncementPredicate) -> String {

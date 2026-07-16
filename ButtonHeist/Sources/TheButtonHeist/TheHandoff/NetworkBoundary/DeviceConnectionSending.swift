@@ -5,9 +5,9 @@ import Network
 
 extension DeviceConnection {
     @discardableResult
-    func send(_ message: ClientMessage, requestId: String? = nil) -> DeviceSendOutcome {
-        guard case .connected(let active) = connectionState,
-              let sessionID = currentSessionID else {
+    func send(_ message: ClientMessage, requestId: RequestID? = nil) -> DeviceSendOutcome {
+        guard let sessionID = currentSessionID,
+              let session = connectedSession(matching: sessionID) else {
             return .failed(.notConnected)
         }
         let envelope = RequestEnvelope(
@@ -24,23 +24,27 @@ extension DeviceConnection {
             return .failed(.encodingFailed(DeviceEncodingFailure(error)))
         }
 
-        let connection = active.connection
-        sendContent(connection, data, .contentProcessed { [weak self] error in
+        let connection = session.connection
+        let eventStream = session.eventStream
+        sendContent(connection, data, .contentProcessed { error in
             if let error {
                 deviceConnectionLogger.error("Send error: \(error)")
-                Task { @ButtonHeistActor [weak self] in
-                    self?.handleSendFailure(error, requestId: requestId, connection: connection, sessionID: sessionID)
-                }
+                eventStream.yield(.sendFailed(
+                    error,
+                    requestId: requestId,
+                    sessionID: sessionID,
+                    connection: connection
+                ))
             }
         })
         return .enqueued
     }
 
-    func handleSendFailure(_ error: NWError, requestId: String?, connection: NWConnection) {
+    func handleSendFailure(_ error: NWError, requestId: RequestID?, connection: NWConnection) {
         handleSendFailure(error, requestId: requestId, connection: connection, sessionID: nil)
     }
 
-    func handleSendFailure(_ error: NWError, requestId: String?, connection: NWConnection, sessionID: UUID?) {
+    func handleSendFailure(_ error: NWError, requestId: RequestID?, connection: NWConnection, sessionID: UUID?) {
         guard isCurrentSession(sessionID, connection: connection) else { return }
         onEvent?(.sendFailed(.transportFailed(NetworkTransportFailure(error)), requestId: requestId))
     }

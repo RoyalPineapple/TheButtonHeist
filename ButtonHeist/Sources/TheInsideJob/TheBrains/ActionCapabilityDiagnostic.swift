@@ -41,26 +41,26 @@ import AccessibilitySnapshotParser
     }
 
     static func missingCustomAction(
-        _ requestedAction: String,
+        _ requestedAction: CustomActionName,
         element: InterfaceTree.Element
     ) -> String {
         let customActions = availableCustomActions(for: element)
         let suggestion = customActions.isEmpty
             ? "target an element exposing custom actions"
-            : "use one of custom actions \(stringProfile.renderList(customActions, itemStyle: .quoted))"
-        return "custom action failed: observed requestedAction=\(stringProfile.renderString(requestedAction)) on \(elementObservation(element)); "
+            : "use one of custom actions \(stringProfile.renderList(customActions.map(\.description), itemStyle: .quoted))"
+        return "custom action failed: observed requestedAction=\(stringProfile.renderString(requestedAction.description)) on \(elementObservation(element)); "
             + "try \(suggestion)."
     }
 
     static func declinedCustomAction(
-        _ requestedAction: String,
+        _ requestedAction: CustomActionName,
         element: InterfaceTree.Element
     ) -> String {
         let alternatives = availableCustomActions(for: element).filter { $0 != requestedAction }
         let suggestion = alternatives.isEmpty
             ? "wait for the handler state to permit the requested action"
-            : "use another custom action \(stringProfile.renderList(alternatives, itemStyle: .quoted))"
-        return "custom action failed: observed requestedAction=\(stringProfile.renderString(requestedAction)) declined by handler on "
+            : "use another custom action \(stringProfile.renderList(alternatives.map(\.description), itemStyle: .quoted))"
+        return "custom action failed: observed requestedAction=\(stringProfile.renderString(requestedAction.description)) declined by handler on "
             + "\(elementObservation(element)); try \(suggestion)."
     }
 
@@ -210,11 +210,11 @@ import AccessibilitySnapshotParser
         if AccessibilityPolicy.supportsTextEntry(element.traits.heistTraits) {
             actions.append(.typeText)
         }
-        let semanticActions = element.customActions.map { $0.name }.filter { !$0.isEmpty }.map(ElementAction.custom)
+        let semanticActions = element.customActions.compactMap { try? CustomActionName(validating: $0.name) }
+            .map(ElementAction.custom)
         actions += semanticActions.uniqued(on: \.description, excluding: Set(actions.map(\.description)))
         let liveNames = liveObject?.accessibilityCustomActions?
-            .map { $0.name }
-            .filter { !$0.isEmpty } ?? []
+            .compactMap { try? CustomActionName(validating: $0.name) } ?? []
         actions += liveNames.map(ElementAction.custom)
             .uniqued(on: \.description, excluding: Set(actions.map(\.description)))
         return actions
@@ -223,11 +223,10 @@ import AccessibilitySnapshotParser
     private static func availableCustomActions(
         for treeElement: InterfaceTree.Element,
         liveObject: NSObject? = nil
-    ) -> [String] {
-        var names = treeElement.element.customActions.map { $0.name }.filter { !$0.isEmpty }
+    ) -> [CustomActionName] {
+        var names = treeElement.element.customActions.compactMap { try? CustomActionName(validating: $0.name) }
         let liveNames = liveObject?.accessibilityCustomActions?
-            .map { $0.name }
-            .filter { !$0.isEmpty } ?? []
+            .compactMap { try? CustomActionName(validating: $0.name) } ?? []
         names += liveNames.uniqued(on: \.self, excluding: Set(names))
         return names
     }
@@ -235,11 +234,11 @@ import AccessibilitySnapshotParser
     static func availableRotors(
         for treeElement: InterfaceTree.Element,
         liveObject: NSObject? = nil
-    ) -> [String] {
-        var names = treeElement.element.customRotors.map { $0.name }.filter { !$0.isEmpty }
+    ) -> [RotorName] {
+        var names = treeElement.element.customRotors.compactMap { try? RotorName(validating: $0.name) }
         let liveNames = liveObject?.accessibilityCustomRotors?
             .map { $0.bhInvocableName(locale: liveObject?.accessibilityLanguage) }
-            .filter { !$0.isEmpty } ?? []
+            ?? []
         names += liveNames.uniqued(on: \.self, excluding: Set(names))
         return names
     }

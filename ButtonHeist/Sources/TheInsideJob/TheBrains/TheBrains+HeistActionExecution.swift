@@ -135,7 +135,7 @@ extension TheBrains {
     func executeActionStep(
         _ step: ActionStep,
         index: Int,
-        path: String,
+        path: HeistExecutionPath,
         start: CFAbsoluteTime,
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment
@@ -158,7 +158,7 @@ extension TheBrains {
     func executeStep(
         _ unit: HeistStepExecutionUnit,
         index _: Int,
-        path: String,
+        path: HeistExecutionPath,
         start: CFAbsoluteTime,
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment
@@ -189,7 +189,7 @@ extension TheBrains {
     private func actionStepResult(
         command: HeistActionCommand,
         expectation: WaitStep?,
-        path: String,
+        path: HeistExecutionPath,
         start: CFAbsoluteTime,
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment
@@ -234,7 +234,7 @@ extension TheBrains {
         command: HeistActionCommand,
         actionResult: ActionResult,
         wait: WaitStep,
-        path: String,
+        path: HeistExecutionPath,
         start: CFAbsoluteTime,
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
@@ -261,43 +261,70 @@ extension TheBrains {
             ))
             let evaluation = waitEvaluation(wait: wait, receipt: receipt, purpose: .actionExpectation)
             let evidence = HeistActionEvidence.expectation(
-                command: command,
                 dispatchResult: actionResult,
                 expectationResult: evaluation.receipt.actionResult,
                 expectation: evaluation.receipt.expectation
             )
-            return heistReceipt(.init(
-                path: path,
-                kind: .action,
-                durationMs: elapsedMilliseconds(since: start),
-                intent: actionIntent(command),
-                evidence: .action(evidence),
-                completion: evaluation.failure.map(HeistReceiptRequest.Completion.failed) ?? .passed
-            ))
+            switch evaluation {
+            case .matched:
+                guard let evidence = HeistPassedActionEvidence(evidence) else {
+                    preconditionFailure("matched action expectation produced non-passing evidence")
+                }
+                return .action(
+                    path: path,
+                    durationMs: elapsedMilliseconds(since: start),
+                    command: command,
+                    completion: .passed(evidence: evidence)
+                )
+            case .failed(let failed):
+                guard let evidence = HeistFailedActionEvidence(evidence) else {
+                    preconditionFailure("failed action expectation produced non-failing evidence")
+                }
+                return .action(
+                    path: path,
+                    durationMs: elapsedMilliseconds(since: start),
+                    command: command,
+                    completion: .failed(evidence: evidence, failure: failed.detail)
+                )
+            }
         }
     }
 
     private func actionResultNode(
         command: HeistActionCommand,
         actionResult: ActionResult,
-        path: String,
+        path: HeistExecutionPath,
         start: CFAbsoluteTime
     ) -> HeistExecutionStepResult {
-        let failure = actionDispatchFailure(command: command, result: actionResult)
-        let evidence = actionEvidence(command: command, actionResult: actionResult)
-        return heistReceipt(.init(
-            path: path,
-            kind: .action,
-            durationMs: elapsedMilliseconds(since: start),
-            intent: actionIntent(command),
-            evidence: .action(evidence),
-            completion: failure.map(HeistReceiptRequest.Completion.failed) ?? .passed
-        ))
+        let evidence = actionEvidence(actionResult: actionResult)
+        switch actionResult.outcome {
+        case .success:
+            guard let evidence = HeistPassedActionEvidence(evidence) else {
+                preconditionFailure("successful action produced non-passing receipt evidence")
+            }
+            return .action(
+                path: path,
+                durationMs: elapsedMilliseconds(since: start),
+                command: command,
+                completion: .passed(evidence: evidence)
+            )
+        case .failure:
+            guard let evidence = HeistFailedActionEvidence(evidence),
+                  let failure = actionDispatchFailure(command: command, result: actionResult) else {
+                preconditionFailure("failed action produced non-failing receipt evidence")
+            }
+            return .action(
+                path: path,
+                durationMs: elapsedMilliseconds(since: start),
+                command: command,
+                completion: .failed(evidence: evidence, failure: failure)
+            )
+        }
     }
 
     private func waitStepResult(
         wait: WaitStep,
-        path: String,
+        path: HeistExecutionPath,
         start: CFAbsoluteTime,
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
@@ -342,26 +369,41 @@ extension TheBrains {
     private func waitResult(
         wait: WaitStep,
         evaluation: HeistWaitEvaluation,
-        path: String,
+        path: HeistExecutionPath,
         start: CFAbsoluteTime
     ) -> HeistExecutionStepResult {
         let evidence = waitEvidencePayload(evaluation.receipt, outcome: evaluation.evidenceOutcome)
-        let failure = evaluation.failure
-        return heistReceipt(.init(
-            path: path,
-            kind: .wait,
-            durationMs: elapsedMilliseconds(since: start),
-            intent: waitIntent(wait),
-            evidence: .wait(evidence),
-            completion: failure.map(HeistReceiptRequest.Completion.failed) ?? .passed
-        ))
+        switch evaluation {
+        case .matched:
+            guard let evidence = HeistPassedWaitEvidence(evidence) else {
+                preconditionFailure("matched wait produced non-passing evidence")
+            }
+            return .wait(
+                path: path,
+                durationMs: elapsedMilliseconds(since: start),
+                predicate: wait.predicate,
+                timeout: wait.timeout,
+                completion: .passed(evidence: evidence)
+            )
+        case .failed(let failed):
+            guard let evidence = HeistFailedWaitEvidence(evidence) else {
+                preconditionFailure("failed wait produced non-failing evidence")
+            }
+            return .wait(
+                path: path,
+                durationMs: elapsedMilliseconds(since: start),
+                predicate: wait.predicate,
+                timeout: wait.timeout,
+                completion: .failed(evidence: .observed(evidence), failure: failed.detail)
+            )
+        }
     }
 
     private func waitElseResult(
         elseBody: [HeistStep],
         wait: WaitStep,
         receipt: HeistWaitReceipt,
-        path: String,
+        path: HeistExecutionPath,
         start: CFAbsoluteTime,
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
@@ -372,27 +414,34 @@ extension TheBrains {
             runtime: runtime,
             environment: environment,
             scope: scope,
-            path: "\(path).wait.else_body"
+            path: path.waitElseBody()
         )
         let evidence = waitEvidencePayload(receipt, outcome: .handledElse)
-        return heistReceipt(.init(
-            path: path,
-            kind: .wait,
-            durationMs: elapsedMilliseconds(since: start),
-            intent: waitIntent(wait),
-            evidence: .wait(evidence),
-            children: children,
-            childFailure: { childPath in
-                self.childFailureDetail(category: .wait, childPath: childPath)
-            }
-        ))
-    }
-
-    private func waitEvidence(_ receipt: HeistWaitReceipt) -> HeistStepEvidence {
-        .wait(waitEvidencePayload(
-            receipt,
-            outcome: receipt.actionResult.outcome.isSuccess && receipt.expectation.met ? .matched : .failed
-        ))
+        guard let evidence = HeistPassedWaitEvidence(evidence) else {
+            preconditionFailure("handled-else wait produced non-passing evidence")
+        }
+        switch HeistExecutedChildren(children) {
+        case .passed(let children):
+            return .wait(
+                path: path,
+                durationMs: elapsedMilliseconds(since: start),
+                predicate: wait.predicate,
+                timeout: wait.timeout,
+                completion: .passed(evidence: evidence, children: children)
+            )
+        case .aborted(let children):
+            return .wait(
+                path: path,
+                durationMs: elapsedMilliseconds(since: start),
+                predicate: wait.predicate,
+                timeout: wait.timeout,
+                completion: .childAborted(
+                    evidence: evidence,
+                    failure: childFailureDetail(category: .wait, childPath: children.abortedAtPath),
+                    children: children
+                )
+            )
+        }
     }
 
     private func waitEvidencePayload(
@@ -462,17 +511,19 @@ extension TheBrains {
     private func actionCommandResolutionFailureReceipt(
         command: HeistActionCommand,
         failure: ActionCommandResolutionFailure,
-        path: String,
+        path: HeistExecutionPath,
         start: CFAbsoluteTime
     ) -> HeistExecutionStepResult {
-        heistReceipt(.init(
+        let evidence = HeistActionEvidence.commandResolutionFailure
+        guard let evidence = HeistFailedActionEvidence(evidence) else {
+            preconditionFailure("command resolution failure must be failing action evidence")
+        }
+        return .action(
             path: path,
-            kind: .action,
             durationMs: elapsedMilliseconds(since: start),
-            intent: actionIntent(command),
-            evidence: .action(.commandResolutionFailure(command: command)),
-            completion: .failed(failure.detail)
-        ))
+            command: command,
+            completion: .failed(evidence: evidence, failure: failure.detail)
+        )
     }
 
     private func waitResolution(
@@ -489,23 +540,23 @@ extension TheBrains {
 
     private func waitResolutionFailure(
         wait: WaitStep,
-        path: String,
+        path: HeistExecutionPath,
         start: CFAbsoluteTime,
         failure: HeistWaitResolutionFailure
     ) -> HeistExecutionStepResult {
-        return heistReceipt(.init(
+        return .wait(
             path: path,
-            kind: .wait,
             durationMs: elapsedMilliseconds(since: start),
-            intent: waitIntent(wait),
-            completion: .failed(failure.detail)
-        ))
+            predicate: wait.predicate,
+            timeout: wait.timeout,
+            completion: .failed(evidence: .unavailable, failure: failure.detail)
+        )
     }
 
     private func expectationResolutionFailure(
         command: HeistActionCommand,
         actionResult: ActionResult,
-        path: String,
+        path: HeistExecutionPath,
         start: CFAbsoluteTime,
         failure: HeistWaitResolutionFailure
     ) -> HeistExecutionStepResult {
@@ -519,37 +570,24 @@ extension TheBrains {
             predicate: nil,
             actual: failure.observed
         )
-        return heistReceipt(.init(
+        let evidence = HeistActionEvidence.expectation(
+            dispatchResult: actionResult,
+            expectationResult: expectationActionResult,
+            expectation: expectation
+        )
+        guard let evidence = HeistFailedActionEvidence(evidence) else {
+            preconditionFailure("expectation resolution failure must be failing action evidence")
+        }
+        return .action(
             path: path,
-            kind: .action,
             durationMs: elapsedMilliseconds(since: start),
-            intent: actionIntent(command),
-            evidence: .action(.expectation(
-                command: command,
-                dispatchResult: actionResult,
-                expectationResult: expectationActionResult,
-                expectation: expectation
-            )),
-            completion: .failed(failure.detail)
-        ))
-    }
-
-    private func actionEvidence(
-        command: HeistActionCommand,
-        actionResult: ActionResult
-    ) -> HeistActionEvidence {
-        .dispatch(
             command: command,
-            dispatchResult: actionResult
+            completion: .failed(evidence: evidence, failure: failure.detail)
         )
     }
 
-    private func actionIntent(_ command: HeistActionCommand) -> HeistStepIntent {
-        .action(command: command)
-    }
-
-    private func waitIntent(_ wait: WaitStep) -> HeistStepIntent {
-        .wait(predicate: wait.predicate, timeout: wait.timeout)
+    private func actionEvidence(actionResult: ActionResult) -> HeistActionEvidence {
+        .dispatch(dispatchResult: actionResult)
     }
 
     private func actionDispatchFailure(

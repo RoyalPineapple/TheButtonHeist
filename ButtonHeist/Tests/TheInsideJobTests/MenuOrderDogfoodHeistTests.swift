@@ -71,10 +71,17 @@ final class MenuOrderDogfoodHeistTests: XCTestCase {
             try MenuScreen.checkout()
         }
 
-        XCTAssertEqual(heist.result.steps.map(\.kind), [.invoke, .forEachString, .invoke])
-        XCTAssertEqual(heist.result.steps.first?.reportDisplayName, #"RunHeist("DemoNavigation.openMenu")"#)
-        XCTAssertEqual(heist.result.steps.last?.reportDisplayName, #"RunHeist("MenuScreen.checkout")"#)
-        XCTAssertEqual(heist.result.steps[1].forEachStringEvidence?.iterationCount, DemoOrder.itemLabels.count)
+        let root = try XCTUnwrap(heist.result.steps.first)
+        XCTAssertEqual(heist.result.steps.map(\.kind), [.invoke])
+        XCTAssertEqual(root.reportDisplayName, #"RunHeist("MenuOrderDogfood_orderTwoItems")"#)
+        XCTAssertEqual(root.children.map(\.kind), [.invoke, .forEachString, .invoke])
+
+        let openMenu = try XCTUnwrap(root.children.first)
+        let items = try XCTUnwrap(root.children.dropFirst().first)
+        let checkout = try XCTUnwrap(root.children.last)
+        XCTAssertEqual(openMenu.reportDisplayName, #"RunHeist("DemoNavigation.openMenu")"#)
+        XCTAssertEqual(checkout.reportDisplayName, #"RunHeist("MenuScreen.checkout")"#)
+        XCTAssertEqual(items.forEachStringEvidence?.iterationCount, DemoOrder.itemLabels.count)
     }
 }
 

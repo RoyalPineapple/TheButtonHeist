@@ -1,29 +1,12 @@
 import Foundation
 
 struct HeistDefinitionHeader {
-    let path: String
-    let pathToken: HeistPlanSourceToken
+    let path: HeistDefinitionPath
     let parameter: HeistParameter
-
-    init(path: String, parameter: HeistParameter) {
-        self.path = path
-        self.pathToken = HeistPlanSourceToken(
-            kind: .string(path),
-            sourceName: "synthetic-heist-definition",
-            marker: HeistPlanSourceMarker(offset: 0, line: 1, column: 1, length: path.count)
-        )
-        self.parameter = parameter
-    }
-
-    init(path: String, pathToken: HeistPlanSourceToken, parameter: HeistParameter) {
-        self.path = path
-        self.pathToken = pathToken
-        self.parameter = parameter
-    }
 }
 
 struct HeistPlanHeader {
-    let name: String?
+    let name: HeistPlanName?
     let parameter: HeistParameter
 }
 
@@ -77,7 +60,7 @@ extension HeistPlanSourceParser {
             let header = try parseHeistDefHeader(parameterKind: parameterKind)
             let body = try parseHeistClosureBody(parameter: header.parameter, allowDefinitions: true)
             return makeDefinition(
-                path: try parseDefinitionPath(header),
+                components: header.path.components[...],
                 parameter: header.parameter,
                 definitions: mergeDefinitions(body.definitions),
                 body: body.steps
@@ -91,6 +74,7 @@ extension HeistPlanSourceParser {
 
     mutating func parseNamespaceDefinition() throws -> HeistPlanAdmissionCandidate {
         try expectSymbol("(")
+        let nameToken = currentToken
         let name = try parseStringLiteral()
         try expectSymbol(")")
         let body = try parseHeistClosureBody(parameter: .none, allowDefinitions: true)
@@ -98,7 +82,7 @@ extension HeistPlanSourceParser {
             throw error(previous, "Namespace blocks may contain HeistDef or Namespace declarations only")
         }
         return HeistPlanAdmissionCandidate(
-            name: name,
+            name: try parsePlanName(name, token: nameToken),
             parameter: .none,
             definitions: mergeDefinitions(body.definitions),
             body: []
@@ -153,39 +137,37 @@ extension HeistPlanSourceParser {
         default:
             throw error(previous, "HeistDef parameter type does not match its parameter declaration")
         }
-        return HeistDefinitionHeader(path: path, pathToken: pathToken, parameter: parameter)
-    }
-
-    mutating func parseDefinitionPath(_ header: HeistDefinitionHeader) throws -> [String] {
+        let definitionPath: HeistDefinitionPath
         do {
-            return try HeistDefinitionPath.components(fromDottedName: header.path)
+            definitionPath = try HeistDefinitionPath(validating: path)
         } catch {
             throw HeistPlanSourceCompilerError(diagnostic: .invalidDefinitionPath(
-                header.path,
+                path,
                 error: error,
                 phase: .sourceCompilation,
-                sourceSpan: sourceSpan(for: header.pathToken)
+                sourceSpan: sourceSpan(for: pathToken)
             ))
         }
+        return HeistDefinitionHeader(path: definitionPath, parameter: parameter)
     }
 
     func makeDefinition(
-        path: [String],
+        components: ArraySlice<HeistPlanName>,
         parameter: HeistParameter,
         definitions: [HeistPlanAdmissionCandidate],
         body: [HeistStepAdmissionCandidate]
     ) -> HeistPlanAdmissionCandidate {
-        guard let first = path.first else {
-            return HeistPlanAdmissionCandidate(parameter: parameter, definitions: definitions, body: body)
+        guard let first = components.first else {
+            preconditionFailure("validated heist definition path must not be empty")
         }
-        guard path.count > 1 else {
+        guard components.count > 1 else {
             return HeistPlanAdmissionCandidate(name: first, parameter: parameter, definitions: definitions, body: body)
         }
         return HeistPlanAdmissionCandidate(
             name: first,
             definitions: [
                 makeDefinition(
-                    path: Array(path.dropFirst()),
+                    components: components.dropFirst(),
                     parameter: parameter,
                     definitions: definitions,
                     body: body
@@ -283,7 +265,7 @@ extension HeistPlanSourceParser {
     }
 
     mutating func parseHeistPlanHeader() throws -> HeistPlanHeader {
-        var name: String?
+        var name: HeistPlanName?
         var parameter = HeistParameter.none
         guard consumeSymbol("(") else {
             return HeistPlanHeader(name: nil, parameter: .none)
@@ -295,13 +277,22 @@ extension HeistPlanSourceParser {
         if lookaheadLabel("parameter") || lookaheadLabel("targetParameter") {
             parameter = try parseRootHeistParameter()
         } else {
-            name = try parseStringLiteral()
+            let nameToken = currentToken
+            name = try parsePlanName(parseStringLiteral(), token: nameToken)
             if consumeSymbol(",") {
                 parameter = try parseRootHeistParameter()
             }
         }
         try expectSymbol(")")
         return HeistPlanHeader(name: name, parameter: parameter)
+    }
+
+    func parsePlanName(_ value: String, token: HeistPlanSourceToken) throws -> HeistPlanName {
+        do {
+            return try HeistPlanName(validating: value)
+        } catch {
+            throw self.error(token, String(describing: error))
+        }
     }
 
     mutating func parseRootHeistParameter() throws -> HeistParameter {

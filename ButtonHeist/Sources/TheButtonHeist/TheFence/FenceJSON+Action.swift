@@ -199,7 +199,7 @@ struct PublicRotorResult: Encodable {
     let textRange: PublicRotorTextRange?
 
     init(result: RotorResult) {
-        self.name = result.rotor
+        self.name = result.rotor.description
         self.direction = result.direction.rawValue
         self.found = result.foundElement
         self.textRange = result.textRange.map { PublicRotorTextRange(range: $0) }
@@ -416,7 +416,6 @@ struct PublicHeistReportNode: Encodable {
     let status: String
     let message: String?
     let durationMs: Int
-    let intent: HeistStepIntent?
     let evidence: PublicHeistReportEvidence?
     let failure: PublicHeistFailureDetail?
     let abortedAtChildPath: String?
@@ -430,7 +429,6 @@ struct PublicHeistReportNode: Encodable {
         self.status = projection.status.rawValue
         self.message = projection.message
         self.durationMs = projection.durationMs
-        self.intent = projection.intent
         self.evidence = projection.evidence.map { PublicHeistReportEvidence(projection: $0) }
         self.failure = projection.failure.map(PublicHeistFailureDetail.init)
         self.abortedAtChildPath = projection.abortedAtChildPath
@@ -490,10 +488,10 @@ struct PublicHeistReportEvidence: Encodable {
             try container.encode(PublicHeistWaitEvidence(projection: projection), forKey: .wait)
         case .caseSelection(let projection):
             try container.encode(PublicHeistCaseSelectionEvidence(projection: projection), forKey: .caseSelection)
-        case .forEachString(let evidence):
-            try container.encode(evidence, forKey: .forEachString)
-        case .forEachElement(let evidence):
-            try container.encode(evidence, forKey: .forEachElement)
+        case .forEachString(let projection):
+            try container.encode(PublicHeistForEachStringEvidence(projection: projection), forKey: .forEachString)
+        case .forEachElement(let projection):
+            try container.encode(PublicHeistForEachElementEvidence(projection: projection), forKey: .forEachElement)
         case .repeatUntil(let projection):
             try container.encode(PublicHeistRepeatUntilEvidence(projection: projection), forKey: .repeatUntil)
         case .invocation(let projection):
@@ -526,7 +524,7 @@ struct PublicHeistActionEvidence: Encodable {
         switch projection {
         case .commandResolutionFailure:
             break
-        case .dispatch(_, let result), .commandlessDispatch(let result):
+        case .dispatch(_, let result):
             try container.encode(
                 PublicActionResultOutput(projection: result, context: .heistReportEvidence),
                 forKey: .result
@@ -600,8 +598,8 @@ struct PublicHeistRepeatUntilEvidence: Encodable {
 
     init(projection: HeistRepeatUntilEvidenceProjection) {
         self.outcome = projection.evidence.outcome
-        self.predicate = projection.evidence.predicate
-        self.timeout = projection.evidence.timeout
+        self.predicate = projection.declaration.predicate
+        self.timeout = projection.declaration.timeout.seconds
         self.iterationCount = projection.evidence.iterationCount
         self.iterationOrdinal = projection.evidence.iterationOrdinal
         self.expectation = PublicExpectationResult(projection: projection.expectation)
@@ -610,6 +608,48 @@ struct PublicHeistRepeatUntilEvidence: Encodable {
         }
         self.lastObservedSummary = projection.evidence.lastObservedSummary
         self.failureReason = projection.evidence.failureReason
+    }
+}
+
+struct PublicHeistForEachStringEvidence: Encodable {
+    let parameter: HeistReferenceName
+    let count: Int
+    let iterationCount: Int
+    let iterationOrdinal: Int?
+    let value: String?
+    let failureReason: String?
+
+    init(projection: HeistForEachStringEvidenceProjection) {
+        parameter = projection.declaration.parameter
+        count = projection.declaration.count
+        iterationCount = projection.evidence.iterationCount
+        iterationOrdinal = projection.evidence.iterationOrdinal
+        value = projection.evidence.value
+        failureReason = projection.evidence.failureReason
+    }
+}
+
+struct PublicHeistForEachElementEvidence: Encodable {
+    let parameter: HeistReferenceName
+    let matching: ElementPredicateTemplate
+    let limit: Int
+    let matchedCount: Int
+    let iterationCount: Int
+    let iterationOrdinal: Int?
+    let targetOrdinal: Int?
+    let targetSummary: String?
+    let failureReason: String?
+
+    init(projection: HeistForEachElementEvidenceProjection) {
+        parameter = projection.declaration.parameter
+        matching = projection.declaration.matching
+        limit = projection.declaration.limit
+        matchedCount = projection.evidence.matchedCount
+        iterationCount = projection.evidence.iterationCount
+        iterationOrdinal = projection.evidence.iterationOrdinal
+        targetOrdinal = projection.evidence.targetOrdinal
+        targetSummary = projection.evidence.targetSummary
+        failureReason = projection.evidence.failureReason
     }
 }
 
@@ -623,10 +663,10 @@ struct PublicHeistInvocationEvidence: Encodable {
     let expectationEvidence: PublicHeistWaitEvidence?
 
     init(projection: HeistInvocationEvidenceProjection) {
-        self.capability = projection.evidence.invocation?.capabilityName
-        self.name = projection.evidence.name
-        self.argument = projection.evidence.argument
-        self.childFailedPath = projection.evidence.childFailedPath
+        self.capability = projection.invocation.path.description
+        self.name = projection.invocation.path.description
+        self.argument = projection.argumentSummary
+        self.childFailedPath = projection.evidence.childFailedPath?.description
         self.expectationResult = projection.expectation.map {
             PublicActionResultOutput(projection: $0.result, context: .heistReportEvidence)
         }

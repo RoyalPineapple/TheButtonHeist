@@ -14,11 +14,11 @@ package enum HeistActionCommandCore: Sendable, Equatable {
     case activate(AccessibilityTarget)
     case increment(AccessibilityTarget)
     case decrement(AccessibilityTarget)
-    case customAction(name: String, target: AccessibilityTarget)
+    case customAction(name: CustomActionName, target: AccessibilityTarget)
     case rotor(selection: RotorSelection, target: AccessibilityTarget, direction: RotorDirection)
     case dismiss
     case magicTap
-    case typeText(text: Expr<String>, target: AccessibilityTarget?, replacingExisting: Bool)
+    case typeText(TypeTextTarget)
     case mechanicalTap(TapTarget)
     case mechanicalLongPress(LongPressTarget)
     case mechanicalSwipe(SwipeTarget)
@@ -42,7 +42,7 @@ public struct HeistActionCommand: Codable, Sendable, Equatable {
     public static func activate(_ target: AccessibilityTarget) -> Self { Self(core: .activate(target)) }
     public static func increment(_ target: AccessibilityTarget) -> Self { Self(core: .increment(target)) }
     public static func decrement(_ target: AccessibilityTarget) -> Self { Self(core: .decrement(target)) }
-    public static func customAction(name: String, target: AccessibilityTarget) -> Self {
+    public static func customAction(name: CustomActionName, target: AccessibilityTarget) -> Self {
         Self(core: .customAction(name: name, target: target))
     }
     public static func rotor(
@@ -55,18 +55,17 @@ public struct HeistActionCommand: Codable, Sendable, Equatable {
     public static var dismiss: Self { Self(core: .dismiss) }
     public static var magicTap: Self { Self(core: .magicTap) }
     public static func typeText(
-        text: String,
-        target: AccessibilityTarget?,
-        replacingExisting: Bool = false
+        text: TextInputText,
+        target: AccessibilityTarget?
     ) -> Self {
-        Self(core: .typeText(text: .literal(text), target: target, replacingExisting: replacingExisting))
+        Self(core: .typeText(TypeTextTarget(text: text, target: target)))
     }
     public static func typeText(
         reference: HeistReferenceName,
         target: AccessibilityTarget?,
-        replacingExisting: Bool = false
+        mode: TextInputText.Mode = .append
     ) -> Self {
-        Self(core: .typeText(text: .ref(reference), target: target, replacingExisting: replacingExisting))
+        Self(core: .typeText(TypeTextTarget(reference: reference, mode: mode, target: target)))
     }
     public static func mechanicalTap(_ target: TapTarget) -> Self { Self(core: .mechanicalTap(target)) }
     public static func mechanicalLongPress(_ target: LongPressTarget) -> Self {
@@ -98,8 +97,7 @@ public struct HeistActionCommand: Codable, Sendable, Equatable {
         case .activate(let target), .increment(let target), .decrement(let target),
              .viewportScrollToVisible(let target):
             try HeistRuntimePayloadContractValidator.validate(target)
-        case .customAction(let name, let target):
-            try CustomActionTarget.validate(actionName: name)
+        case .customAction(_, let target):
             try HeistRuntimePayloadContractValidator.validate(target)
         case .rotor(let selection, let target, _):
             _ = try RotorSelection.decode(
@@ -108,13 +106,12 @@ public struct HeistActionCommand: Codable, Sendable, Equatable {
                 codingPath: []
             )
             try HeistRuntimePayloadContractValidator.validate(target)
-        case .typeText(let text, let target, let replacingExisting):
-            try TypeTextTarget.validate(text, replacingExisting: replacingExisting)
-            if let target { try HeistRuntimePayloadContractValidator.validate(target) }
+        case .typeText(let payload):
+            if let target = payload.target { try HeistRuntimePayloadContractValidator.validate(target) }
         case .editAction(let target):
             try HeistRuntimePayloadContractValidator.validate(target)
-        case .setPasteboard(let target):
-            try HeistRuntimePayloadContractValidator.validate(target)
+        case .setPasteboard:
+            break
         case .mechanicalTap, .mechanicalLongPress, .mechanicalSwipe, .mechanicalDrag,
              .viewportScroll, .viewportScrollToEdge:
             break
@@ -179,12 +176,7 @@ public struct HeistActionCommand: Codable, Sendable, Equatable {
             try Self.rejectPayload(payloadDecoder, for: type)
             core = .magicTap
         case .typeText:
-            let payload = try TypeTextPayload(from: payload())
-            core = .typeText(
-                text: payload.text,
-                target: payload.target,
-                replacingExisting: payload.replacingExisting
-            )
+            core = .typeText(try TypeTextTarget(from: payload()))
         case .oneFingerTap: core = .mechanicalTap(try TapTarget(from: payload()))
         case .longPress: core = .mechanicalLongPress(try LongPressTarget(from: payload()))
         case .swipe: core = .mechanicalSwipe(try SwipeTarget(from: payload()))
@@ -216,9 +208,8 @@ public struct HeistActionCommand: Codable, Sendable, Equatable {
         case .rotor(let selection, let target, let direction):
             try RotorPayload(selection: selection, target: target, direction: direction)
                 .encode(to: container.superEncoder(forKey: .payload))
-        case .typeText(let text, let target, let replacingExisting):
-            try TypeTextPayload(text: text, target: target, replacingExisting: replacingExisting)
-                .encode(to: container.superEncoder(forKey: .payload))
+        case .typeText(let target):
+            try target.encode(to: container.superEncoder(forKey: .payload))
         case .mechanicalTap(let target): try target.encode(to: container.superEncoder(forKey: .payload))
         case .mechanicalLongPress(let target): try target.encode(to: container.superEncoder(forKey: .payload))
         case .mechanicalSwipe(let target): try target.encode(to: container.superEncoder(forKey: .payload))
@@ -281,14 +272,11 @@ package extension HeistActionCommandCore {
             )
         case .dismiss: return .dismiss
         case .magicTap: return .magicTap
-        case .typeText(let text, let target, let replacingExisting):
-            let resolvedText = try text.resolve(in: environment)
-            try TypeTextTarget.validate(resolvedText, replacingExisting: replacingExisting)
-            return .typeText(
-                text: resolvedText,
-                target: try target?.resolve(in: environment),
-                replacingExisting: replacingExisting
-            )
+        case .typeText(let payload):
+            return .typeText(ResolvedTypeTextTarget(
+                text: try payload.source.resolve(in: environment),
+                target: try payload.target?.resolve(in: environment)
+            ))
         case .mechanicalTap(let target):
             return .mechanicalTap(try target.resolve(in: environment))
         case .mechanicalLongPress(let target):
@@ -315,11 +303,11 @@ package enum ResolvedHeistActionCommand: Sendable, Equatable {
     case activate(ResolvedAccessibilityTarget)
     case increment(ResolvedAccessibilityTarget)
     case decrement(ResolvedAccessibilityTarget)
-    case customAction(name: String, target: ResolvedAccessibilityTarget)
+    case customAction(name: CustomActionName, target: ResolvedAccessibilityTarget)
     case rotor(selection: RotorSelection, target: ResolvedAccessibilityTarget, direction: RotorDirection)
     case dismiss
     case magicTap
-    case typeText(text: String, target: ResolvedAccessibilityTarget?, replacingExisting: Bool)
+    case typeText(ResolvedTypeTextTarget)
     case mechanicalTap(ResolvedTapTarget)
     case mechanicalLongPress(ResolvedLongPressTarget)
     case mechanicalSwipe(ResolvedSwipeTarget)
@@ -331,6 +319,11 @@ package enum ResolvedHeistActionCommand: Sendable, Equatable {
     case setPasteboard(SetPasteboardTarget)
     case takeScreenshot
     case dismissKeyboard
+}
+
+package struct ResolvedTypeTextTarget: Sendable, Equatable {
+    package let text: TextInputText
+    package let target: ResolvedAccessibilityTarget?
 }
 
 package enum ResolvedGesturePointSelection: Sendable, Equatable {
@@ -504,11 +497,11 @@ private struct TargetPayload: Codable, Sendable, Equatable {
 }
 
 private struct CustomActionPayload: Codable, Sendable, Equatable {
-    let actionName: String
+    let actionName: CustomActionName
     let target: AccessibilityTarget
     private enum CodingKeys: String, CodingKey, CaseIterable { case actionName, target }
 
-    init(actionName: String, target: AccessibilityTarget) {
+    init(actionName: CustomActionName, target: AccessibilityTarget) {
         self.actionName = actionName
         self.target = target
     }
@@ -516,17 +509,7 @@ private struct CustomActionPayload: Codable, Sendable, Equatable {
     init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist action command payload")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let actionName = try container.decode(String.self, forKey: .actionName)
-        do {
-            try CustomActionTarget.validate(actionName: actionName)
-        } catch {
-            throw DecodingError.dataCorruptedError(
-                forKey: .actionName,
-                in: container,
-                debugDescription: String(describing: error)
-            )
-        }
-        self.actionName = actionName
+        actionName = try container.decode(CustomActionName.self, forKey: .actionName)
         target = try container.decode(AccessibilityTarget.self, forKey: .target)
     }
 
@@ -553,7 +536,7 @@ private struct RotorPayload: Codable, Sendable, Equatable {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist action command payload")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         selection = try RotorSelection.decode(
-            name: container.decodeIfPresent(String.self, forKey: .rotor),
+            name: container.decodeIfPresent(RotorName.self, forKey: .rotor),
             index: container.decodeIfPresent(Int.self, forKey: .rotorIndex),
             codingPath: container.codingPath
         )
@@ -566,75 +549,5 @@ private struct RotorPayload: Codable, Sendable, Equatable {
         try selection.encode(to: &container, nameKey: .rotor, indexKey: .rotorIndex)
         try container.encode(direction, forKey: .direction)
         try container.encode(target, forKey: .target)
-    }
-}
-
-private struct TypeTextPayload: Codable, Sendable, Equatable {
-    let text: Expr<String>
-    let target: AccessibilityTarget?
-    let replacingExisting: Bool
-    private enum CodingKeys: String, CodingKey, CaseIterable {
-        case text
-        case textRef = "text_ref"
-        case target
-        case replacingExisting
-    }
-
-    init(text: Expr<String>, target: AccessibilityTarget?, replacingExisting: Bool = false) {
-        self.text = text
-        self.target = target
-        self.replacingExisting = replacingExisting
-    }
-
-    init(from decoder: Decoder) throws {
-        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist action command payload")
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        replacingExisting = try container.decodeIfPresent(Bool.self, forKey: .replacingExisting) ?? false
-        let literal = try container.decodeIfPresent(String.self, forKey: .text)
-        let reference = try HeistReferenceName.decodeIfPresent(
-            from: container,
-            forKey: .textRef,
-            type: "string"
-        )
-        switch (literal, reference) {
-        case (.some(let literal), nil):
-            do {
-                try TypeTextTarget.validate(literal, replacingExisting: replacingExisting)
-            } catch {
-                throw DecodingError.dataCorruptedError(
-                    forKey: .text,
-                    in: container,
-                    debugDescription: String(describing: error)
-                )
-            }
-            text = .literal(literal)
-        case (nil, .some(let reference)):
-            text = .ref(reference)
-        case (.some, .some):
-            throw DecodingError.dataCorruptedError(
-                forKey: .textRef,
-                in: container,
-                debugDescription: "type_text accepts either text or text_ref, not both"
-            )
-        case (nil, nil):
-            throw DecodingError.dataCorruptedError(
-                forKey: .text,
-                in: container,
-                debugDescription: "type_text requires text or text_ref"
-            )
-        }
-        target = try container.decodeIfPresent(AccessibilityTarget.self, forKey: .target)
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        switch text {
-        case .literal(let literal): try container.encode(literal, forKey: .text)
-        case .ref(let reference): try container.encode(reference, forKey: .textRef)
-        }
-        try container.encodeIfPresent(target, forKey: .target)
-        if replacingExisting {
-            try container.encode(replacingExisting, forKey: .replacingExisting)
-        }
     }
 }

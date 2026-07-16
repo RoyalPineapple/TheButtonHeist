@@ -15,7 +15,10 @@ extension TheHandoff {
 
     @discardableResult
     func openConnection(to device: DiscoveredDevice) -> UUID {
-        let connection = makeConnection?(device) ?? DeviceConnection(device: device, token: token)
+        let connection = makeConnection?(device) ?? DeviceConnection(
+            device: device,
+            token: serverMessages.authToken
+        )
         let attemptID = connectionLifecycle.beginConnecting(device: device, connection: connection)
         connection.onEvent = { [weak self, attemptID] event in
             self?.handleConnectionEvent(event, attemptID: attemptID, device: device)
@@ -25,7 +28,7 @@ extension TheHandoff {
         return attemptID
     }
 
-    func handleServerMessage(_ message: ServerMessage, requestId: String?) {
+    func handleServerMessage(_ message: ServerMessage, requestId: RequestID?) {
         applyServerMessageRoute(serverMessages.route(message, requestId: requestId))
     }
 
@@ -77,7 +80,7 @@ extension TheHandoff {
     }
 
     @discardableResult
-    func send(_ message: ClientMessage, requestId: String? = nil) -> DeviceSendOutcome {
+    func send(_ message: ClientMessage, requestId: RequestID? = nil) -> DeviceSendOutcome {
         guard case .connected = connectionPhase,
               let connection = connectionLifecycle.activeConnection else {
             return .failed(.notConnected)

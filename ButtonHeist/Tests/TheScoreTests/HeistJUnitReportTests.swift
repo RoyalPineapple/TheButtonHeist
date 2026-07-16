@@ -33,10 +33,9 @@ final class HeistJUnitReportTests: XCTestCase {
     }
 
     func testEmptyReport() {
-        let report = HeistJUnitReport.passed(
+        let report = HeistJUnitReport(
             heistName: "empty",
             app: "com.test.app",
-            receiptNodeCount: 0,
             totalTimeSeconds: 0,
             steps: []
         )
@@ -139,8 +138,7 @@ final class HeistJUnitReportTests: XCTestCase {
             outcomes: [
                 .passed,
                 .failed(message: "element not found", errorKind: .action(.elementNotFound)),
-            ],
-            receiptNodeCount: 10
+            ]
         )
         let xml = report.junitXML()
 
@@ -148,7 +146,7 @@ final class HeistJUnitReportTests: XCTestCase {
         assertContains(xml, "failures=\"1\"")
         assertContains(xml, "<failure message=\"element not found\"")
         assertContains(xml, "type=\"elementNotFound\"")
-        assertContains(xml, "Completed 1/10 receipt node(s) before failure.")
+        assertContains(xml, "Completed 1/2 receipt node(s) before failure.")
         assertContains(xml, "step: [1] activate")
     }
 
@@ -176,13 +174,11 @@ final class HeistJUnitReportTests: XCTestCase {
             timeSeconds: 0.2,
             outcome: .failed(message: "leaf failed", errorKind: .action(.actionFailed))
         )
-        let report = HeistJUnitReport.failed(
+        let report = HeistJUnitReport(
             heistName: "nested-failure",
             app: "com.test.app",
-            receiptNodeCount: 2,
             totalTimeSeconds: 0.3,
-            steps: [wrapper, leaf],
-            failedStepIndex: 1
+            steps: [leaf, wrapper]
         )
 
         let xml = report.junitXML()
@@ -193,10 +189,9 @@ final class HeistJUnitReportTests: XCTestCase {
     }
 
     func testJunitXMLEmptySteps() {
-        let report = HeistJUnitReport.passed(
+        let report = HeistJUnitReport(
             heistName: "empty",
             app: "com.test.app",
-            receiptNodeCount: 0,
             totalTimeSeconds: 0,
             steps: []
         )
@@ -220,13 +215,11 @@ final class HeistJUnitReportTests: XCTestCase {
                 errorKind: nil
             )
         )
-        let report = HeistJUnitReport.failed(
+        let report = HeistJUnitReport(
             heistName: "escape-test",
             app: "com.test.app",
-            receiptNodeCount: 5,
             totalTimeSeconds: 0.1,
-            steps: [step],
-            failedStepIndex: 0
+            steps: [step]
         )
         let xml = report.junitXML()
 
@@ -239,10 +232,9 @@ final class HeistJUnitReportTests: XCTestCase {
     // MARK: - JUnit XML: Timing
 
     func testJunitXMLIncludesTotalTiming() {
-        let report = HeistJUnitReport.passed(
+        let report = HeistJUnitReport(
             heistName: "timing",
             app: "com.test.app",
-            receiptNodeCount: 1,
             totalTimeSeconds: 1.234,
             steps: [
                 HeistJUnitReport.StepResult(
@@ -266,17 +258,15 @@ final class HeistJUnitReportTests: XCTestCase {
             timeSeconds: 0.5,
             outcome: .failed(message: "swipe failed", errorKind: .action(.actionFailed))
         )
-        let report = HeistJUnitReport.failed(
+        let report = HeistJUnitReport(
             heistName: "target-test",
             app: "com.test.app",
-            receiptNodeCount: 10,
             totalTimeSeconds: 0.5,
-            steps: [step],
-            failedStepIndex: 0
+            steps: [step]
         )
         let xml = report.junitXML()
 
-        assertContains(xml, "Completed 0/10 receipt node(s) before failure.")
+        assertContains(xml, "Completed 0/1 receipt node(s) before failure.")
         assertContains(xml, "step: [0] swipe")
         assertContains(xml, "label=&quot;List&quot;")
         assertContains(xml, "identifier=&quot;main-list&quot;")
@@ -292,9 +282,7 @@ final class HeistJUnitReportTests: XCTestCase {
 
     // MARK: - Helpers
 
-    private func makeReport(
-        outcomes: [HeistJUnitReport.Outcome], receiptNodeCount: Int? = nil
-    ) -> HeistJUnitReport {
+    private func makeReport(outcomes: [HeistJUnitReport.Outcome]) -> HeistJUnitReport {
         let steps = outcomes.enumerated().map { index, outcome in
             HeistJUnitReport.StepResult(
                 index: index,
@@ -304,20 +292,9 @@ final class HeistJUnitReportTests: XCTestCase {
                 outcome: outcome
             )
         }
-        if let failedStepIndex = steps.firstIndex(where: \.failed) {
-            return HeistJUnitReport.failed(
-                heistName: "test-heist",
-                app: "com.test.app",
-                receiptNodeCount: receiptNodeCount ?? outcomes.count,
-                totalTimeSeconds: steps.reduce(0) { $0 + $1.timeSeconds },
-                steps: steps,
-                failedStepIndex: failedStepIndex
-            )
-        }
-        return HeistJUnitReport.passed(
+        return HeistJUnitReport(
             heistName: "test-heist",
             app: "com.test.app",
-            receiptNodeCount: receiptNodeCount ?? outcomes.count,
             totalTimeSeconds: steps.reduce(0) { $0 + $1.timeSeconds },
             steps: steps
         )

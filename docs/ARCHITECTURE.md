@@ -32,14 +32,29 @@ Typed `FenceCommandDescriptor` values are the sole owners of public command
 shape. The committed public CLI/MCP command-contract JSON is generated only as
 a drift sentinel; it is not a second schema.
 
+ThePlans admits public payload values before they enter a command. Gesture and
+wait durations are backed by one bounded-seconds primitive with domain-specific
+bounds. Authored strings use distinct currencies for text input, pasteboard
+content, custom action names, rotor names, warnings, and failures. These types
+share private admission and single-value JSON mechanics, never a generic public
+string wrapper. Public Swift construction and decoding call the same admission
+owner. Execution therefore consumes admitted values directly and never clamps
+or repairs them.
+
+Wire identities follow the same rule. Envelopes decode version and correlation
+strings into `ButtonHeistVersion` and `RequestID`; authentication and session
+ownership use `SessionAuthToken`, `DriverID`, and `SessionOwner`. These values
+encode as single JSON strings but are not interchangeable strings in core logic.
+
 ### Trees and Observations Are the Currency
 
 The committed `TheStash.interfaceTree` is the sole current semantic truth.
 TheStash resolves every element, container, and descendant-scoped
-`AccessibilityTarget` directly against that tree. Wire conversion builds one
-validated `InterfaceGraph` with the delivered `Interface`; client matching,
-subtree selection, and formatting reuse that graph. There is no semantic back
-map, alternate flat screen, or separate query projection.
+`AccessibilityTarget` directly against that tree, including `get_interface`
+subtree requests. Only after resolution does wire conversion project and re-root
+the selected path. A delivered `Interface` builds one validated `InterfaceGraph`
+for client matching and formatting, not host target resolution. There is no
+semantic back map, alternate flat screen, or separate query projection.
 
 `InterfaceObservation` pairs an `InterfaceTree` with the viewport-local
 `LiveCapture` from one parser read. Raw parser samples remain live evidence or
@@ -240,8 +255,8 @@ The approved long-lived owners are:
   ordered committer and owns the private retained `SemanticObservationLog`.
 - `TheMuscle`: auth, admission, and session state inside the app.
 - `TheHandoff`: external connection phase and discovery state outside the app.
-- `PendingRequestTracker`: request ID to continuation correlation, removed on
-  resolve, timeout, or cancellation.
+- `PendingRequestRegistry`: typed `RequestID` to continuation correlation,
+  removed on resolve, timeout, or cancellation.
 - `HeistExecutionResult`: immutable heist execution evidence. Report facts are
   derived from it, not stored beside it.
 - Artifact stores: `.heist` package files and screenshot bytes on disk.
@@ -258,11 +273,12 @@ facts from `HeistExecutionResult`. Formatters, diagnostics, and repair tooling
 consume that projection; they do not rebuild report facts from plan siblings or
 parallel result fields.
 
-`HeistExecutionStepOutcome` owns each step's status-specific evidence, failure,
-abort path, and children. Constructors pair a `HeistStepReceiptKind<Evidence>`
-with its matching typed evidence before it can enter that outcome. The wire
-decoder accepts exactly one tagged outcome case and one tagged evidence case;
-flat receipt bags and mismatched step-kind/evidence combinations are invalid.
+`HeistExecutionStepResult` owns a typed execution path, duration, and one
+`HeistExecutionStepNode`. The node combines authored step semantics with its
+legal completion; typed completion and evidence wrappers prevent mismatched
+outcome, evidence, failure, and child shapes. Status and abort paths are derived
+from that node. The wire decoder accepts only the fields legal for the node's
+`type` and `outcome`; there are no parallel intent, evidence, or outcome owners.
 
 `ActionDispatchOutcome` is the one result of app-side action dispatch. Its state
 is success, with an optional payload and resolved element id, or failure, with a
@@ -320,10 +336,10 @@ justification, and must not cross into the typed core or wire/report layers.
 
 ### One Driver Owns the Session
 
-The server accepts one active driver identity at a time. The identity is
-`driverId` when provided, otherwise the auth token. Same-driver reconnects can
-join the session; different drivers receive `sessionLocked` until the inactivity
-timer releases the session.
+The server accepts one active session owner at a time. Ownership is either a
+driver ID or an auth token, retaining its provenance instead of encoding it in a
+prefixed string. Same-owner reconnects can join the session; different owners
+receive `sessionLocked` until the inactivity timer releases the session.
 
 Transport supports multiple TCP connections because one-shot CLI/MCP calls may
 connect, run, and disconnect repeatedly, but session ownership remains singular.
@@ -363,6 +379,25 @@ types; expression, core, and resolved representations remain package
 implementation details. For a single action's end-to-end sequence, see the
 [action pipeline diagram](diagrams/action-pipeline.md).
 
+`InteractionRequestExecutor`, owned by `TheBrains`, provides the single FIFO for
+UI-facing requests. Transport submits admitted UI work with its client identity,
+while direct in-app heists enter the same queue before bootstrap and retain
+ownership through the complete plan. Disconnect cancels that client's active and
+queued work. Per-client `ClientRequestPipeline` instances preserve frame and
+admission order only; control traffic remains outside the interaction executor.
+
+Plan identity follows the same boundary rule. `HeistPlanName` and
+`HeistReferenceName` are distinct roles backed by one exact identifier grammar.
+Source, JSON, and CLI text is admitted once into those roles,
+`HeistDefinitionPath`, or
+`HeistInvocationPath`; parser, traversal, catalog, runtime, and receipt layers
+do not split dotted strings or rebuild paths. Definition and invocation paths
+remain semantically distinct wrappers over one canonical path-value parser and
+single-value wire representation.
+Compiler entry symbols reuse that parser as `HeistEntrySymbol`. Structural
+plan locations are component-backed `HeistPlanPath` values; only source,
+diagnostic, and response rendering turns them into strings.
+
 ```mermaid
 flowchart TD
     Author["Authoring surface<br/>Swift DSL or runtime heist source"] --> Compile["Parse / build<br/>HeistPlanAdmissionCandidate"]
@@ -371,7 +406,7 @@ flowchart TD
     Validate --> OfflineReport["validate_heist<br/>plan + invocation + lint report"]
     Plan --> FenceCommand["Fence command<br/>run_heist / perform / wait"]
     FenceCommand --> HandoffSocket["Handoff socket<br/>client version == app version"]
-    HandoffSocket --> Executor["TheBrains executor"]
+    HandoffSocket --> Executor["TheBrains-owned InteractionRequestExecutor<br/>one UI FIFO"]
 
     Executor --> StepKind{"Step kind"}
 
@@ -390,11 +425,11 @@ flowchart TD
     StopMet -->|no, progress + time remains| RunBody
     StopMet -->|no progress or deadline elapsed| Fail["fail / timeout"]
 
-    WaitForPath --> Lifecycle["PredicateWait lifecycle<br/>visible check → target reveal or canonical discovery<br/>→ observation stream → re-reveal/discovery → terminal verification"]
+    WaitForPath --> Lifecycle["PredicateWaitLifecycleMachine<br/>visible check → target reveal or canonical discovery<br/>→ observation stream → re-reveal/discovery → terminal verification"]
     ExpectPath --> Lifecycle
 
     Lifecycle --> PredicateKind{"Predicate kind"}
-    PredicateKind -->|exists / missing| Current["Current InterfaceTree / InterfaceGraph"]
+    PredicateKind -->|exists / missing| Current["Current InterfaceTree"]
     PredicateKind -->|changed / noChange| Observe["Read next settled ObservationEntry<br/>from cursor-backed sequence"]
     Observe --> Log["SemanticObservationLog<br/>retained, non-destructive"]
     Log --> Window["ObservationWindow<br/>baseline through current"]

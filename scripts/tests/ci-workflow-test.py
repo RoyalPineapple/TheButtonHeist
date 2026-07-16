@@ -35,7 +35,11 @@ class CIWorkflowTests(unittest.TestCase):
         }
 
         self.assertEqual(pr_jobs, {"macos-tests", "ios-tests", "ios-demo-gates"})
-        self.assertEqual(main_jobs, {"main-integration"})
+        self.assertEqual(
+            main_jobs,
+            {"macos-tests", "ios-tests", "ios-demo-gates", "main-integration"},
+        )
+        self.assertIn("needs: ios-tests", blocks["main-integration"])
 
     def test_portable_contracts_stay_on_linux(self) -> None:
         release = job_blocks()["release-contract"]
@@ -54,6 +58,29 @@ class CIWorkflowTests(unittest.TestCase):
         for name in ("macos-tests", "ios-tests", "ios-demo-gates", "main-integration"):
             with self.subTest(job=name):
                 self.assertNotIn("git submodule update", blocks[name])
+
+    def test_exact_sha_suite_requires_every_main_validation_job(self) -> None:
+        aggregate = job_blocks()["exact-sha-suite"]
+        self.assertIn(
+            "needs: [release-contract, macos-tests, ios-tests, ios-demo-gates, main-integration]",
+            aggregate,
+        )
+        self.assertIn(
+            "if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'",
+            aggregate,
+        )
+        self.assertIn("name: buttonheist-exact-sha-suite", aggregate)
+        self.assertIn(".workflow.ref == $workflowRef", aggregate)
+        self.assertIn(".workflow.sha == $commit", aggregate)
+        for suite in (
+            "release-contract",
+            "macos-tests",
+            "ios-tests",
+            "ios-demo-gates",
+            "main-integration",
+        ):
+            with self.subTest(suite=suite):
+                self.assertIn(f'{{name: "{suite}", conclusion:', aggregate)
 
     def test_macos_frameworks_share_one_test_invocation(self) -> None:
         macos = job_blocks()["macos-tests"]
@@ -78,16 +105,16 @@ class CIWorkflowTests(unittest.TestCase):
             macos,
         )
         self.assertIn(
-            "if: steps.changes.outputs.run_bumper_rule_tests == 'true'",
+            "if: github.event_name == 'push' || steps.changes.outputs.run_bumper_rule_tests == 'true'",
             macos,
         )
         self.assertIn("run: scripts/check-source-shape.sh test", macos)
         self.assertIn(
-            "if: steps.changes.outputs.run_package_api_contracts == 'true'",
+            "if: github.event_name == 'push' || steps.changes.outputs.run_package_api_contracts == 'true'",
             macos,
         )
         self.assertIn(
-            "if: steps.changes.outputs.run_cli_tool_tests == 'true'",
+            "if: github.event_name == 'push' || steps.changes.outputs.run_cli_tool_tests == 'true'",
             macos,
         )
         self.assertIn("python3 scripts/tests/select-ci-change-scopes-test.py", release)

@@ -52,3 +52,21 @@ func `value reference sugar projects to an exact string match`() throws {
 
     #expect(sugar == explicit)
 }
+
+@Test
+func `public payload construction exposes only admitted values`() throws {
+    let gesture = try GestureDuration(validatingSeconds: GestureDuration.maximumSeconds)
+    let text: TextInputText = "milk"
+    let pasteboardText: PasteboardText = "milk"
+    let timeout: WaitTimeout = 1
+    let append = TypeTextTarget(text: text)
+    let replacement = TypeTextTarget(text: .replacing(""))
+    let pasteboard = SetPasteboardTarget(text: pasteboardText)
+    let wait = WaitTarget(predicate: .exists(.label("Ready")), timeout: timeout)
+
+    #expect(gesture.seconds == GestureDuration.maximumSeconds)
+    #expect(append.source == .text("milk"))
+    #expect(replacement.source == .text(.replacing("")))
+    #expect(pasteboard.text.description == "milk")
+    #expect(wait.resolvedTimeout == timeout)
+}

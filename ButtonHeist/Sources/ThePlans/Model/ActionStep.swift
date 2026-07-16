@@ -28,7 +28,7 @@ public struct ActionExpectationWaiver: Codable, Sendable, Equatable, CustomStrin
 public struct ActionExpectation: Codable, Sendable, Equatable {
     public let step: WaitStep
 
-    public init(predicate: AccessibilityPredicate, timeout: Double = defaultWaitTimeout) {
+    public init(predicate: AccessibilityPredicate, timeout: WaitTimeout = defaultWaitTimeout) {
         self.step = WaitStep(predicate: predicate, timeout: timeout)
     }
 

@@ -6,7 +6,7 @@ extension HeistCanonicalSwiftDSLRenderer {
         indent: Int,
         environment: RenderEnvironment
     ) throws -> String {
-        let callee = invoke.path.joined(separator: ".")
+        let callee = invoke.path.description
         let argument = try render(argument: invoke.argument, environment: environment)
         let base = argument.isEmpty ? "RunHeist(\(quote(callee)))" : "RunHeist(\(quote(callee)), \(argument))"
         var text = line(base, indent)
@@ -17,10 +17,10 @@ extension HeistCanonicalSwiftDSLRenderer {
         return text
     }
 
-    private func renderInvocationExpectationTimeout(_ timeout: Double) -> String {
-        abs(timeout - defaultActionExpectationTimeout) < 0.000_001
+    private func renderInvocationExpectationTimeout(_ timeout: WaitTimeout) -> String {
+        timeout == defaultActionExpectationTimeout
             ? ""
-            : ", timeout: .seconds(\(decimal(timeout)))"
+            : ", timeout: .seconds(\(decimal(timeout.seconds)))"
     }
 
     func render(argument: HeistArgument, environment: RenderEnvironment) throws -> String {
@@ -90,7 +90,7 @@ extension HeistCanonicalSwiftDSLRenderer {
     func renderSingleCaseBranches(
         callee: String,
         predicate: ChangeDeclaration.ScreenAssertion,
-        timeout: Double?,
+        timeout: WaitTimeout?,
         renderedBody: String,
         renderedElseBody: String?,
         indent: Int,
@@ -157,7 +157,6 @@ extension HeistCanonicalSwiftDSLRenderer {
         indent: Int,
         environment: RenderEnvironment
     ) throws -> String {
-        try validateParameter(forEach.parameter)
         let predicate = try render(predicate: forEach.matching, environment: environment)
         let header = "ForEach(\(predicate), limit: \(forEach.limit)) { \(forEach.parameter) in"
         return """
@@ -172,7 +171,6 @@ extension HeistCanonicalSwiftDSLRenderer {
         renderedBody: String,
         indent: Int
     ) throws -> String {
-        try validateParameter(forEach.parameter)
         let values = forEach.values.map(quote).joined(separator: ", ")
         return """
         \(line("ForEach(\(values)) { \(forEach.parameter) in", indent))
@@ -189,7 +187,7 @@ extension HeistCanonicalSwiftDSLRenderer {
         environment: RenderEnvironment
     ) throws -> String {
         let predicate = try render(predicate: repeatUntil.predicate, environment: environment)
-        let timeout = ".seconds(\(decimal(repeatUntil.timeout)))"
+        let timeout = ".seconds(\(decimal(repeatUntil.timeout.seconds)))"
         var source = """
         \(line("RepeatUntil(\(predicate), timeout: \(timeout)) {", indent))
         \(renderedBody)

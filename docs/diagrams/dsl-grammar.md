@@ -63,7 +63,7 @@ flowchart LR
     ELEMENT["element predicate"]
     CONTAINER["container predicate"]
     WITHIN["within container"]
-    TREE["current InterfaceTree / InterfaceGraph"]
+    TREE["current InterfaceTree"]
     FACTS["observation-window transitions"]
     RESOLVE["one target resolver"]
     ROOT --> CHANGED

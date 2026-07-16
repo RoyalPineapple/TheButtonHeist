@@ -12,21 +12,31 @@ extension Actions {
         case failure(TheSafecracker.ActionDispatchOutcome)
     }
 
+    enum GesturePointSource {
+        case liveTarget(TheStash.LiveActionTarget, unitPoint: UnitPoint?)
+        case coordinate(CGPoint)
+    }
+
     struct ResolvedGesturePoint {
-        let point: CGPoint
+        let source: GesturePointSource
         let subjectEvidence: ActionSubjectEvidence?
+    }
+
+    struct PreparedGestureDispatch<PreparedDispatch: Sendable>: Sendable {
+        let point: CGPoint
+        let dispatch: PreparedDispatch?
     }
 
     func resolveGesturePoint(
         selection: ResolvedGesturePointSelection,
-        method: ActionMethod
+        method: ActionMethod,
     ) async -> GestureResolution<ResolvedGesturePoint> {
         let inflatedTarget: ElementInflation.InflatedElementTarget?
         switch selection {
         case .element(let target), .elementUnitPoint(let target, _):
             switch await navigation.elementInflation.inflate(
                 for: target,
-                method: method
+                method: method,
             ) {
             case .inflated(let target):
                 inflatedTarget = target
@@ -49,59 +59,81 @@ extension Actions {
             guard let inflatedTarget else {
                 return .failure(.failure(method, message: "No target specified", failureKind: .targetUnavailable))
             }
-            let point = inflatedTarget.liveTarget.activationPoint
-            if let failure = geometryFailure(method: method, field: "point", point: point) {
-                return .failure(failure)
-            }
             return .success(ResolvedGesturePoint(
-                point: point,
+                source: .liveTarget(inflatedTarget.liveTarget, unitPoint: nil),
                 subjectEvidence: inflatedTarget.subjectEvidence(source: .elementGestureTarget)
             ))
         case .elementUnitPoint(_, let unitPoint):
             guard let inflatedTarget else {
                 return .failure(.failure(method, message: "No target specified", failureKind: .targetUnavailable))
             }
-            let frame = inflatedTarget.liveTarget.frame
-            if let message = GeometryValidation.validateRect(frame, field: "frame") {
-                return .failure(.failure(
-                    method,
-                    message: "\(method.rawValue) failed: \(message)",
-                    failureKind: .inputValidation
-                ))
-            }
-            let point = CGPoint(
-                x: frame.origin.x + unitPoint.x * frame.width,
-                y: frame.origin.y + unitPoint.y * frame.height
-            )
-            if let failure = geometryFailure(method: method, field: "point", point: point) {
-                return .failure(failure)
-            }
             return .success(ResolvedGesturePoint(
-                point: point,
+                source: .liveTarget(inflatedTarget.liveTarget, unitPoint: unitPoint),
                 subjectEvidence: inflatedTarget.subjectEvidence(source: .elementGestureTarget)
             ))
         case .coordinate(let screenPoint):
-            let point = screenPoint.cgPoint
-            if let failure = geometryFailure(method: method, field: "point", point: point) {
-                return .failure(failure)
-            }
-            return .success(ResolvedGesturePoint(point: point, subjectEvidence: nil))
+            return .success(ResolvedGesturePoint(
+                source: .coordinate(screenPoint.cgPoint),
+                subjectEvidence: nil
+            ))
         }
     }
 
-    func resolveGestureFrame(
-        for inflatedTarget: ElementInflation.InflatedElementTarget,
-        method: ActionMethod
-    ) -> GestureResolution<CGRect> {
-        let frame = inflatedTarget.liveTarget.frame
-        if let message = GeometryValidation.validateRect(frame, field: "frame") {
-            return .failure(.failure(
-                method,
-                message: "\(method.rawValue) failed: \(message)",
-                failureKind: .inputValidation
-            ))
+    func prepareGestureDispatch<PreparedDispatch: Sendable>(
+        for resolvedPoint: ResolvedGesturePoint,
+        method: ActionMethod,
+        prepare: (CGPoint) -> GestureResolution<PreparedDispatch?>
+    ) -> GestureResolution<PreparedGestureDispatch<PreparedDispatch>> {
+        switch resolvedPoint.source {
+        case .coordinate(let point):
+            return prepareGestureDispatch(at: point, method: method, prepare: prepare)
+        case .liveTarget(let liveTarget, let unitPoint):
+            switch stash.dispatchOnFreshLiveActionTarget(
+                liveTarget,
+                operation: { currentTarget
+                -> GestureResolution<PreparedGestureDispatch<PreparedDispatch>> in
+                let point: CGPoint
+                if let unitPoint {
+                    let frame = currentTarget.frame
+                    if let message = GeometryValidation.validateRect(frame, field: "frame") {
+                        return .failure(.failure(
+                            method,
+                            message: "\(method.rawValue) failed: \(message)",
+                            failureKind: .inputValidation
+                        ))
+                    }
+                    point = CGPoint(
+                        x: frame.origin.x + unitPoint.x * frame.width,
+                        y: frame.origin.y + unitPoint.y * frame.height
+                    )
+                } else {
+                    point = currentTarget.activationPoint
+                }
+                return prepareGestureDispatch(at: point, method: method, prepare: prepare)
+                }
+            ) {
+            case .success(let resolution):
+                return resolution
+            case .failure(let staleness):
+                return .failure(staleLiveTargetFailure(staleness, method: method))
+            }
         }
-        return .success(frame)
+    }
+
+    private func prepareGestureDispatch<PreparedDispatch: Sendable>(
+        at point: CGPoint,
+        method: ActionMethod,
+        prepare: (CGPoint) -> GestureResolution<PreparedDispatch?>
+    ) -> GestureResolution<PreparedGestureDispatch<PreparedDispatch>> {
+        if let failure = geometryFailure(method: method, field: "point", point: point) {
+            return .failure(failure)
+        }
+        switch prepare(point) {
+        case .success(let dispatch):
+            return .success(PreparedGestureDispatch(point: point, dispatch: dispatch))
+        case .failure(let failure):
+            return .failure(failure)
+        }
     }
 
     func geometryFailure(
@@ -130,15 +162,6 @@ extension Actions {
         )
     }
 
-    /// Default swipe travel distance in points when the caller specifies a
-    /// direction without explicit end coordinates.
-    ///
-    /// 200pt is a deliberate, screen-relative-ish choice: ~25% of the short
-    /// dimension on iPhone and ~25% of the long dimension on the smallest
-    /// iPad, which is large enough to cross a typical paginated cell or
-    /// trigger a UIKit scroll-view paging snap, but small enough to stay on
-    /// screen from any activation point. Treating it as a named constant
-    /// keeps direction-only swipes behaviourally stable across releases.
     static let defaultSwipeDistance: CGFloat = 200
 
 }

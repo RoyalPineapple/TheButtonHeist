@@ -4,13 +4,9 @@ import UIKit
 import TheScore
 import ThePlans
 
-/// TheSafecracker scroll primitives — UIScrollView and screen-coordinate mechanics.
-/// Takes a scroll view and movement parameters, produces offset changes.
-/// Callers resolve any semantic target, container, or reveal policy before
-/// entering this file.
 extension TheSafecracker {
 
-    enum ScrollPrimitiveResult: Equatable {
+    enum ScrollPrimitiveResult: Equatable, Sendable {
         case moved
         case alreadyInPosition
         case unavailable
@@ -21,7 +17,6 @@ extension TheSafecracker {
         let end: CGPoint
     }
 
-    /// Scroll by one page in the given direction with a 44pt overlap.
     func scrollByPage(
         _ scrollView: UIScrollView,
         direction: UIAccessibilityScrollDirection,
@@ -62,8 +57,6 @@ extension TheSafecracker {
         return .moved
     }
 
-    /// Scrolls so a live screen point lands in the preferred screen rect when
-    /// possible, otherwise at least inside the minimum screen rect.
     func scrollToMakeScreenPointVisible(
         _ screenPoint: CGPoint,
         in scrollView: UIScrollView,
@@ -122,7 +115,6 @@ extension TheSafecracker {
         return .moved
     }
 
-    /// Centers a previously observed scroll-content point in the current viewport.
     func revealContentPoint(
         _ contentPoint: ScrollContentPoint,
         in scrollView: UIScrollView
@@ -168,7 +160,6 @@ extension TheSafecracker {
         )
     }
 
-    /// Scroll to an absolute edge.
     func scrollToEdge(
         _ scrollView: UIScrollView,
         edge: ScrollEdge,
@@ -198,7 +189,6 @@ extension TheSafecracker {
         return .moved
     }
 
-    /// Restore a scroll view to a previously captured visual content origin.
     func restoreVisualOrigin(
         _ visualOrigin: CGPoint,
         in scrollView: UIScrollView
@@ -241,19 +231,15 @@ extension TheSafecracker {
         abs(lhs.x - rhs.x) <= 0.5 && abs(lhs.y - rhs.y) <= 0.5
     }
 
-    /// Scroll a region by one page using a synthetic swipe gesture.
-    /// Used for scrollable containers that aren't UIScrollViews (e.g. SwiftUI's
-    /// HostingScrollView.PlatformContainer). The swipe covers 75% of the frame
-    /// in the given direction, slow enough for iOS to recognize as a scroll.
-    func scrollBySwipe(
+    func prepareScrollBySwipe(
         frame: CGRect,
         direction: UIAccessibilityScrollDirection,
         duration: GestureDuration = .scrollSwipeDefault
-    ) async -> ScrollPrimitiveResult {
+    ) -> PreparedTouchDispatch? {
         guard let path = Self.scrollFingerPath(frame: frame, direction: direction, travel: 0.75) else {
-            return .unavailable
+            return nil
         }
-        return await swipe(from: path.start, to: path.end, duration: duration) ? .moved : .unavailable
+        return prepareSwipe(from: path.start, to: path.end, duration: duration)
     }
 
     private static func scrollFingerPath(

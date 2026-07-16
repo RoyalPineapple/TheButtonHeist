@@ -131,7 +131,7 @@ private func writeRuntimeInvalidHeistArtifact(to url: URL) throws {
     let fileManager = FileManager.default
     try fileManager.createDirectory(at: url, withIntermediateDirectories: true)
     let manifest = HeistArtifactManifest(
-        format: heistArtifactFormat,
+        format: .buttonHeist,
         entry: "tooManySteps",
         formatVersion: currentHeistArtifactFormatVersion,
         planVersion: currentHeistPlanVersion,

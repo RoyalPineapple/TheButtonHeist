@@ -22,7 +22,7 @@ final class HeistPlanTests: XCTestCase {
     func testDecodeRejectsUnsupportedVersionAtBoundary() {
         let json = """
         {
-          "version": 2,
+          "version": 3,
           "body": [{"type":"warn","warn":{"message":"check state"}}]
         }
         """
@@ -222,14 +222,14 @@ final class HeistPlanTests: XCTestCase {
         {
           "type": "invoke",
           "invoke": {
-            "path": ["setup"]
+            "path": "setup"
           }
         }
         """
 
         let decoded = try JSONDecoder().decode(HeistStep.self, from: Data(json.utf8))
 
-        XCTAssertEqual(decoded, .invoke(HeistInvocationStep(path: ["setup"])))
+        XCTAssertEqual(decoded, .invoke(HeistInvocationStep(path: "setup")))
     }
 
     func testConditionalRejectsEmptyCases() {
@@ -254,7 +254,7 @@ final class HeistPlanTests: XCTestCase {
           "wait": {
             "predicate": {
               "type": "exists",
-              "element": {"checks": [{"kind": "label", "match": {"mode": "exact", "value": "Home"}}]}
+              "target": {"checks": [{"kind": "label", "match": {"mode": "exact", "value": "Home"}}]}
             },
             "timeout": -1
           }
@@ -262,7 +262,10 @@ final class HeistPlanTests: XCTestCase {
         """
 
         XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(json.utf8))) { error in
-            XCTAssertTrue("\(error)".contains("timeout must be non-negative"), "\(error)")
+            XCTAssertTrue(
+                "\(error)".contains("wait timeout must be"),
+                "\(error)"
+            )
         }
     }
 
@@ -286,21 +289,6 @@ final class HeistPlanTests: XCTestCase {
             }
             XCTAssertEqual(context.debugDescription, "Unknown wait heist step field \"waitForCases\"")
         }
-    }
-
-    func testHeistExecutionStepThatStopsHeistIsFailure() {
-        let result = HeistExecutionStepResult.failed(
-            path: "$.body[0]",
-            kind: .conditional,
-            durationMs: 0,
-            failure: HeistFailureDetail(
-                category: .runtimeUnavailable,
-                contract: "settled accessibility state is observable before evaluating heist cases",
-                observed: "Could not observe settled accessibility state before evaluating heist cases"
-            )
-        )
-
-        XCTAssertTrue(result.isFailure)
     }
 
     func testHeistValueRoundTrips() throws {
@@ -531,48 +519,8 @@ final class HeistPlanTests: XCTestCase {
         }
     }
 
-    func testForEachExecutionResultWithFailureIsFailure() {
-        let result = HeistExecutionStepResult.failed(
-            path: "$.body[0]",
-            receiptKind: .forEachElement,
-            durationMs: 100,
-            evidence: HeistForEachElementEvidence(
-                parameter: "target",
-                matching: ElementPredicateTemplate(label: "Cell"),
-                limit: 10,
-                matchedCount: 3,
-                iterationCount: 2,
-                failureReason: "child step failed at iteration 2"
-            ),
-            failure: HeistFailureDetail(
-                category: .loop,
-                contract: "for_each_element completes all matched iterations",
-                observed: "child step failed at iteration 2"
-            )
-        )
-
-        XCTAssertTrue(result.isFailure)
-    }
-
-    func testForEachExecutionResultWithoutFailureIsNotFailure() {
-        let result = HeistExecutionStepResult.passed(
-            path: "$.body[0]",
-            receiptKind: .forEachElement,
-            durationMs: 100,
-            evidence: HeistForEachElementEvidence(
-                parameter: "target",
-                matching: ElementPredicateTemplate(label: "Cell"),
-                limit: 10,
-                matchedCount: 3,
-                iterationCount: 3
-            )
-        )
-
-        XCTAssertFalse(result.isFailure)
-    }
-
     func testCurrentVersionIsOne() {
-        XCTAssertEqual(HeistPlan.currentVersion, 1)
+        XCTAssertEqual(HeistPlan.currentVersion, 2)
     }
 
     func testFullHeistJsonShape() throws {

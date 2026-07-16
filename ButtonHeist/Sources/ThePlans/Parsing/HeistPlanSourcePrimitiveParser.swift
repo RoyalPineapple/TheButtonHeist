@@ -1,32 +1,39 @@
 import Foundation
 
 extension HeistPlanSourceParser {
-    mutating func parseTrailingTimeout(defaultValue: Double?) throws -> Double? {
+    mutating func parseTrailingTimeout(defaultValue: WaitTimeout?) throws -> WaitTimeout? {
         guard consumeSymbol(",") else { return defaultValue }
         try expectIdentifier("timeout")
         try expectSymbol(":")
         return try parseDuration()
     }
 
-    mutating func parseDuration() throws -> Double {
+    mutating func parseDuration() throws -> WaitTimeout {
         if consumeSymbol(".") {
             return try parseDurationCall()
         }
         throw error(currentToken, "expected a timeout duration such as .seconds(1)")
     }
 
-    mutating func parseDurationCall() throws -> Double {
+    mutating func parseDurationCall() throws -> WaitTimeout {
+        let durationToken = currentToken
         let method = try parseIdentifier()
         try expectSymbol("(")
         let value = try parseNumber()
         try expectSymbol(")")
+        let seconds: Double
         switch method {
         case "seconds":
-            return value
+            seconds = value
         case "milliseconds":
-            return value / 1_000
+            seconds = value / 1_000
         default:
             throw error(previous, "unsupported duration '.\(method)'")
+        }
+        do {
+            return try WaitTimeout(validatingSeconds: seconds)
+        } catch let validationError {
+            throw error(durationToken, String(describing: validationError))
         }
     }
 
@@ -77,10 +84,11 @@ extension HeistPlanSourceParser {
     mutating func parseReferenceNameLiteral(role: String) throws -> HeistReferenceName {
         let token = currentToken
         let value = try parseStringLiteral()
-        guard let reference = HeistReferenceName.normalized(value) else {
-            throw error(token, "\(role) must not be empty")
+        do {
+            return try HeistReferenceName(validating: value)
+        } catch let validationError {
+            throw error(token, "\(role) \(validationError)")
         }
-        return reference
     }
 
     mutating func parseEnumCase<T: RawRepresentable & CaseIterable>(

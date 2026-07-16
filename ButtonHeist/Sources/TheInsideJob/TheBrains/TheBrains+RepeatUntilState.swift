@@ -11,14 +11,14 @@ extension TheBrains {
 
 extension TheBrains.RepeatUntil {
     internal struct Context {
-        internal let path: String
+        internal let path: HeistExecutionPath
         internal let start: CFAbsoluteTime
         internal let runtime: TheBrains.HeistExecutionRuntime
         internal let environment: HeistExecutionEnvironment
         internal let scope: TheBrains.HeistExecutionScope
 
         internal init(
-            path: String,
+            path: HeistExecutionPath,
             start: CFAbsoluteTime,
             runtime: TheBrains.HeistExecutionRuntime,
             environment: HeistExecutionEnvironment,
@@ -35,7 +35,7 @@ extension TheBrains.RepeatUntil {
     internal enum IterationOutcome {
         case predicateMet(ExpectationResult.Met)
         case continued(ExpectationResult.Unmet)
-        case failed(expectation: ExpectationResult.Unmet, childPath: String)
+        case failed(expectation: ExpectationResult.Unmet, childPath: HeistExecutionPath)
     }
 
     internal struct RunningState {
@@ -186,7 +186,7 @@ extension TheBrains.RepeatUntil {
             observation: Observation?,
             expectation: ExpectationResult.Unmet,
             iterationIndex: Int,
-            childPath: String,
+            childPath: HeistExecutionPath,
             iterationNodes: [HeistExecutionStepResult]
         )
         case timeoutHandledByElse(
@@ -202,7 +202,7 @@ extension TheBrains.RepeatUntil {
             iterationCount: Int,
             iterationNodes: [HeistExecutionStepResult],
             elseChildren: [HeistExecutionStepResult],
-            childPath: String
+            childPath: HeistExecutionPath
         )
 
         internal var iterationNodes: [HeistExecutionStepResult] {
@@ -230,12 +230,12 @@ extension TheBrains.RepeatUntil {
     }
 
     internal struct IterationFrame {
-        internal let path: String
+        internal let path: HeistExecutionPath
         internal let start: CFAbsoluteTime
         internal let index: Int
         internal let count: Int
 
-        internal init(path: String, start: CFAbsoluteTime, index: Int, count: Int) {
+        internal init(path: HeistExecutionPath, start: CFAbsoluteTime, index: Int, count: Int) {
             self.path = path
             self.start = start
             self.index = index

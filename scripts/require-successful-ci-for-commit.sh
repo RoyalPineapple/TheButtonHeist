@@ -48,16 +48,73 @@ if ! [[ "$TIMEOUT_SECONDS" =~ ^[0-9]+$ && "$POLL_SECONDS" =~ ^[1-9][0-9]*$ ]]; t
     exit 2
 fi
 
-ci_run_count() {
-    local jq_filter="$1"
+list_ci_runs() {
     gh run list \
         --repo "$REPOSITORY" \
         --workflow CI \
         --branch main \
         --commit "$COMMIT_SHA" \
         --limit 20 \
-        --json conclusion,event,status \
-        --jq "$jq_filter" 2>/dev/null || echo 0
+        --json conclusion,databaseId,event,headSha,status 2>/dev/null || echo '[]'
+}
+
+has_successful_exact_sha_suite() {
+    local runs_json="$1"
+    local expected_workflow_ref="$REPOSITORY/.github/workflows/ci.yml@refs/heads/main"
+    local run_id
+    while IFS= read -r run_id; do
+        [[ -n "$run_id" ]] || continue
+        local jobs_json
+        jobs_json=$(gh run view "$run_id" --repo "$REPOSITORY" --json jobs 2>/dev/null || echo '{"jobs":[]}')
+        if ! jq -e '
+            [.jobs[] | select(
+                .name == "exact-sha-suite"
+                and .status == "completed"
+                and .conclusion == "success"
+            )] | length == 1
+        ' <<< "$jobs_json" >/dev/null; then
+            continue
+        fi
+
+        local manifest_directory
+        manifest_directory=$(mktemp -d)
+        if gh run download "$run_id" \
+            --repo "$REPOSITORY" \
+            --name buttonheist-exact-sha-suite \
+            --dir "$manifest_directory" >/dev/null 2>&1 \
+            && jq -e \
+                --arg commit "$COMMIT_SHA" \
+                --arg runId "$run_id" \
+                --arg workflowRef "$expected_workflow_ref" '
+                .schemaVersion == 1
+                and .commit == $commit
+                and .workflow.runId == $runId
+                and .workflow.ref == $workflowRef
+                and .workflow.sha == $commit
+                and ([.suites[].name] | sort == [
+                    "ios-demo-gates",
+                    "ios-tests",
+                    "macos-tests",
+                    "main-integration",
+                    "release-contract"
+                ])
+                and ([.suites[] | select(.conclusion != "success")] | length == 0)
+            ' "$manifest_directory/exact-sha-suite.json" >/dev/null 2>&1; then
+            rm -rf "$manifest_directory"
+            return 0
+        fi
+        rm -rf "$manifest_directory"
+    done < <(jq -r --arg commit "$COMMIT_SHA" '
+        .[]
+        | select(
+            .headSha == $commit
+            and .event == "push"
+            and .status == "completed"
+            and .conclusion == "success"
+        )
+        | .databaseId
+    ' <<< "$runs_json")
+    return 1
 }
 
 print_ci_runs() {
@@ -82,17 +139,20 @@ report_failure() {
 deadline=$((SECONDS + TIMEOUT_SECONDS))
 echo "Waiting for main CI on $LABEL (${COMMIT_SHA:0:8})..."
 while true; do
-    success_count=$(ci_run_count '[.[] | select(.event == "push" and .status == "completed" and .conclusion == "success")] | length')
-    if [[ "$success_count" -gt 0 ]]; then
-        echo "CI verified green on exact commit ${COMMIT_SHA:0:8}"
+    runs_json=$(list_ci_runs)
+    if has_successful_exact_sha_suite "$runs_json"; then
+        echo "Exact-SHA release suite verified green on commit ${COMMIT_SHA:0:8}"
         exit 0
     fi
 
-    running_count=$(ci_run_count '[.[] | select(.event == "push" and .status != "completed")] | length')
-    failed_count=$(ci_run_count '[.[] | select(.event == "push" and .status == "completed" and .conclusion != "success")] | length')
-    total_count=$(ci_run_count '[.[] | select(.event == "push")] | length')
-    if [[ "$failed_count" -gt 0 && "$running_count" -eq 0 && "$total_count" -gt 0 ]]; then
-        report_failure "Main-branch CI failed on exact $LABEL $COMMIT_SHA."
+    running_count=$(jq --arg commit "$COMMIT_SHA" \
+        '[.[] | select(.headSha == $commit and .event == "push" and .status != "completed")] | length' \
+        <<< "$runs_json")
+    total_count=$(jq --arg commit "$COMMIT_SHA" \
+        '[.[] | select(.headSha == $commit and .event == "push")] | length' \
+        <<< "$runs_json")
+    if [[ "$running_count" -eq 0 && "$total_count" -gt 0 ]]; then
+        report_failure "No successful exact-SHA release suite found for $LABEL $COMMIT_SHA."
         exit 1
     fi
 

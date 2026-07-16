@@ -140,8 +140,6 @@ extension ElementInflation {
         )
     }
 
-    /// Resolve only after committed semantic truth advances. A known target
-    /// that gains scroll membership earns at most one reveal attempt.
     private func awaitTargetRefresh(
         mode: TargetRefreshMode,
         after settledSequence: SettledObservationSequence?,

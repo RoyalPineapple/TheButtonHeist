@@ -7,16 +7,6 @@ import AccessibilitySnapshotParser
 import TheScore
 import ThePlans
 
-// MARK: - Scroll Vocabulary
-//
-// This extension holds only behavior-neutral scroll vocabulary shared by the
-// concrete flows:
-//
-// - `Navigation+PageScroll.swift`: one-page and edge scroll commands.
-// - `Navigation+ScrollToVisible.swift`: explicit viewport wrapper over ElementInflation.
-// - `Navigation+ScrollSettleProof.swift`: the sole typed viewport transition.
-// - `Navigation+ScrollContainers.swift`: live container resolution.
-
 extension Navigation {
 
     enum ScrollTargetDescription: Equatable, CustomStringConvertible {
@@ -46,8 +36,6 @@ extension Navigation {
         }
     }
 
-    // MARK: - Scroll Axis Detection
-
     static func scrollableAxis(of container: AccessibilityContainer) -> ScrollAxis {
         guard let contentSize = container.scrollableContentSize else { return [] }
         return scrollableAxis(contentSize: contentSize.cgSize, frame: container.frame.cgRect)
@@ -73,8 +61,6 @@ extension Navigation {
         case .left, .right: return .horizontal
         }
     }
-
-    // MARK: - Direction Mapping
 
     static func edgeDirection(for edge: ScrollEdge) -> UIAccessibilityScrollDirection {
         switch edge {

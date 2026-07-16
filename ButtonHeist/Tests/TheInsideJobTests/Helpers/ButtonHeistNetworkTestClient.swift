@@ -173,7 +173,7 @@ final class ButtonHeistWireTestClient: @unchecked Sendable { // swiftlint:disabl
         networkClient.cancel()
     }
 
-    func send(_ message: ClientMessage, requestId: String? = nil, timeout: TimeInterval = 5.0) async throws {
+    func send(_ message: ClientMessage, requestId: RequestID? = nil, timeout: TimeInterval = 5.0) async throws {
         var encoded = try JSONEncoder().encode(RequestEnvelope(
             requestId: requestId,
             message: message
@@ -192,7 +192,10 @@ final class ButtonHeistWireTestClient: @unchecked Sendable { // swiftlint:disabl
             throw ButtonHeistNetworkTestFailure("Expected authRequired")
         }
 
-        try await send(.authenticate(AuthenticatePayload(token: token, driverId: driverId)))
+        try await send(.authenticate(AuthenticatePayload(
+            token: try SessionAuthToken(validating: token),
+            driverId: try DriverID(validating: driverId)
+        )))
         let envelope = try await receiveEnvelope()
         guard case .info(let info) = envelope.message else {
             throw ButtonHeistNetworkTestFailure("Expected info after authentication")
@@ -200,7 +203,7 @@ final class ButtonHeistWireTestClient: @unchecked Sendable { // swiftlint:disabl
         return info
     }
 
-    func requestInterface(requestId: String = "interface") async throws -> Interface {
+    func requestInterface(requestId: RequestID = "interface") async throws -> Interface {
         try await send(.requestInterface(InterfaceQuery()), requestId: requestId)
         let envelope = try await receiveEnvelope(requestId: requestId)
         guard case .interface(let interface) = envelope.message else {
@@ -210,7 +213,7 @@ final class ButtonHeistWireTestClient: @unchecked Sendable { // swiftlint:disabl
     }
 
     func receiveEnvelope(
-        requestId: String? = nil,
+        requestId: RequestID? = nil,
         timeout: TimeInterval = 5.0
     ) async throws -> ResponseEnvelope {
         for _ in 0..<10 {

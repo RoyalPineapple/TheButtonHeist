@@ -77,7 +77,7 @@ git ls-files --error-unmatch "$BUTTONHEIST_PUBLIC_COMMAND_CONTRACT_FILE" >/dev/n
     || fail "$BUTTONHEIST_PUBLIC_COMMAND_CONTRACT_FILE must be committed"
 
 if grep -Eq 'LabeledContent\([[:space:]]*"Version"' "$BUTTONHEIST_DEMO_VERSION_FILE"; then
-    grep -Eq 'LabeledContent\([[:space:]]*"Version"[[:space:]]*,[[:space:]]*value:[[:space:]]*(TheScore\.)?buttonHeistVersion[[:space:]]*\)' "$BUTTONHEIST_DEMO_VERSION_FILE" \
+    grep -Eq 'LabeledContent\([[:space:]]*"Version"[[:space:]]*,[[:space:]]*value:[[:space:]]*(TheScore\.)?buttonHeistVersion\.description[[:space:]]*\)' "$BUTTONHEIST_DEMO_VERSION_FILE" \
         || fail "$BUTTONHEIST_DEMO_VERSION_FILE must source Version from TheScore.buttonHeistVersion or remove the Version row"
 fi
 
@@ -124,6 +124,12 @@ grep -Fq 'scripts/require-successful-ci-for-commit.sh' .github/workflows/release
     || fail ".github/workflows/release.yml must delegate to the canonical exact-commit CI guard"
 grep -Fq -- '--branch main' scripts/require-successful-ci-for-commit.sh \
     || fail "the exact-commit CI guard must check main-branch CI"
+grep -Fq 'name: exact-sha-suite' .github/workflows/ci.yml \
+    || fail "main CI must publish one exact-SHA release-suite result"
+grep -Fq 'name: buttonheist-exact-sha-suite' .github/workflows/ci.yml \
+    || fail "main CI must retain the exact-SHA suite manifest"
+grep -Fq '.name == "exact-sha-suite"' scripts/require-successful-ci-for-commit.sh \
+    || fail "the exact-commit CI guard must require the aggregate release-suite job"
 if grep -Fq 'parents[0]' .github/workflows/release.yml; then
     fail ".github/workflows/release.yml must not accept parent-commit CI for release publishing"
 fi

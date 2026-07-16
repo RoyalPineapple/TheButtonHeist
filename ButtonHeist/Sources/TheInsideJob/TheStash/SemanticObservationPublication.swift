@@ -8,12 +8,14 @@ internal enum SemanticObservationGenerationClassifier {
     internal static func continuity(
         from previous: InterfaceObservation?,
         to candidate: InterfaceObservation,
-        notifications: [AccessibilityNotificationKind]
+        notifications: [AccessibilityNotificationKind],
+        lineageEvidence: ScreenLineageEvidence? = nil
     ) -> ScreenContinuity {
         ScreenClassifier.classify(
             before: previous.map { ScreenClassifier.snapshot(of: $0.tree) },
             after: ScreenClassifier.snapshot(of: candidate.tree),
-            notifications: notifications
+            notifications: notifications,
+            lineageEvidence: lineageEvidence
         )
     }
 

@@ -189,10 +189,24 @@ final class DeviceResolverTests: XCTestCase {
 
     // MARK: - Helpers
 
-    private func makeDevice(id: String, name: String) -> DiscoveredDevice {
+    private func makeDevice(id: DiscoveryDeviceID, name: String) -> DiscoveredDevice {
         DiscoveredDevice(
             id: id, name: name,
             endpoint: .hostPort(host: "127.0.0.1", port: 9999)
+        )
+    }
+}
+
+private extension DeviceResolver {
+    init(
+        filter: String?,
+        discoveryTimeout: UInt64,
+        getDiscoveredDevices: @escaping () -> [DiscoveredDevice]
+    ) {
+        self.init(
+            target: DeviceResolutionTarget(filter: filter),
+            discoveryTimeout: discoveryTimeout,
+            getDiscoveredDevices: getDiscoveredDevices
         )
     }
 }

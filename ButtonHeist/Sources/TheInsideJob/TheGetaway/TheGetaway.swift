@@ -20,8 +20,8 @@ final class TheGetaway {
 
     /// Identity info provided by TheInsideJob for ServerInfo responses.
     struct ServerIdentity {
-        let sessionId: UUID
-        let effectiveInstanceId: String
+        let launchId: ServerLaunchID
+        let effectiveInstanceId: InsideJobInstanceID
         var tlsActive: Bool
     }
 
@@ -35,6 +35,10 @@ final class TheGetaway {
     /// `tearDown()`; the for-await loop also exits when the transport finishes
     /// its event continuation in `stop()`.
     var eventConsumerTask: Task<Void, Never>?
+
+    /// Frames are admitted and executed in per-client order. Transport
+    /// lifecycle events never wait for these consumers.
+    var clientRequestPipelines: [Int: ClientRequestPipeline] = [:]
 
     // MARK: - Init
 
@@ -177,7 +181,7 @@ final class TheGetaway {
     private func recordAndRespond(
         command: ClientMessage,
         actionResult: ActionResult,
-        requestId: String?,
+        requestId: RequestID?,
         respond: @escaping SocketResponseHandler
     ) async {
         await sendMessage(
@@ -190,7 +194,7 @@ final class TheGetaway {
 
     func sendInterface(
         query: InterfaceQuery = InterfaceQuery(),
-        requestId: String? = nil,
+        requestId: RequestID? = nil,
         respond: @escaping SocketResponseHandler
     ) async {
         switch await brains.observeInterface(query) {
@@ -215,7 +219,7 @@ final class TheGetaway {
 
     func handleScreen(
         mode: ScreenCaptureMode = .raw,
-        requestId: String? = nil,
+        requestId: RequestID? = nil,
         respond: @escaping SocketResponseHandler
     ) async {
         insideJobLogger.debug("InterfaceObservation requested")

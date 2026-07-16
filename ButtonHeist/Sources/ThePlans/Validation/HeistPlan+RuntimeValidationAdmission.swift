@@ -5,7 +5,7 @@ import Foundation
 // separate executable-plan boundary.
 public struct HeistPlanAdmissionCandidate: Codable, Sendable, Equatable {
     package let version: Int
-    package let name: String?
+    package let name: HeistPlanName?
     package let parameter: HeistParameter
     package let definitions: [HeistPlanAdmissionCandidate]
     package let body: [HeistStepAdmissionCandidate]
@@ -16,7 +16,7 @@ public struct HeistPlanAdmissionCandidate: Codable, Sendable, Equatable {
 
     package init(
         version: Int = HeistPlan.currentVersion,
-        name: String? = nil,
+        name: HeistPlanName? = nil,
         parameter: HeistParameter = .none,
         definitions: [HeistPlanAdmissionCandidate] = [],
         body: [HeistStepAdmissionCandidate] = []
@@ -49,7 +49,7 @@ public struct HeistPlanAdmissionCandidate: Codable, Sendable, Equatable {
         }
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist plan")
         version = decodedVersion
-        name = try container.decodeIfPresent(String.self, forKey: .name)
+        name = try container.decodeIfPresent(HeistPlanName.self, forKey: .name)
         parameter = try container.decodeIfPresent(HeistParameter.self, forKey: .parameter) ?? .none
         definitions = try container.decodeIfPresent([HeistPlanAdmissionCandidate].self, forKey: .definitions) ?? []
         body = try container.decode([HeistStepAdmissionCandidate].self, forKey: .body)
@@ -178,7 +178,7 @@ indirect enum HeistStepAdmissionPayload: Sendable, Equatable {
 
 struct HeistWaitAdmissionCandidate: Codable, Sendable, Equatable {
     let predicate: AccessibilityPredicate
-    let timeout: Double
+    let timeout: WaitTimeout
     let elseBody: [HeistStepAdmissionCandidate]?
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
@@ -186,7 +186,7 @@ struct HeistWaitAdmissionCandidate: Codable, Sendable, Equatable {
         case elseBody = "else_body"
     }
 
-    init(predicate: AccessibilityPredicate, timeout: Double, elseBody: [HeistStepAdmissionCandidate]? = nil) {
+    init(predicate: AccessibilityPredicate, timeout: WaitTimeout, elseBody: [HeistStepAdmissionCandidate]? = nil) {
         self.predicate = predicate
         self.timeout = timeout
         self.elseBody = elseBody
@@ -199,17 +199,9 @@ struct HeistWaitAdmissionCandidate: Codable, Sendable, Equatable {
     init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "wait step")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let timeout = try container.decode(Double.self, forKey: .timeout)
-        guard timeout >= 0 else {
-            throw DecodingError.dataCorruptedError(
-                forKey: .timeout,
-                in: container,
-                debugDescription: "wait step timeout must be non-negative"
-            )
-        }
         self.init(
             predicate: try container.decode(AccessibilityPredicate.self, forKey: .predicate),
-            timeout: timeout,
+            timeout: try container.decode(WaitTimeout.self, forKey: .timeout),
             elseBody: try container.decodeIfPresent([HeistStepAdmissionCandidate].self, forKey: .elseBody)
         )
     }
@@ -287,10 +279,9 @@ struct HeistForEachElementAdmissionCandidate: Codable, Sendable, Equatable {
         guard matching.hasPredicates else { throw HeistPlanError.emptyForEachPredicate }
         guard limit > 0 else { throw HeistPlanError.invalidForEachLimit(limit) }
         guard !body.isEmpty else { throw HeistPlanError.emptyForEachSteps }
-        let parameter = try HeistParameterName.normalized(parameter.rawValue)
         self.matching = matching
         self.limit = limit
-        self.parameter = try HeistReferenceName(validating: parameter)
+        self.parameter = parameter
         self.body = body
     }
 
@@ -323,9 +314,8 @@ struct HeistForEachStringAdmissionCandidate: Codable, Sendable, Equatable {
     init(values: [String], parameter: HeistReferenceName, body: [HeistStepAdmissionCandidate]) throws {
         guard !values.isEmpty else { throw HeistPlanError.emptyForEachValues }
         guard !body.isEmpty else { throw HeistPlanError.emptyForEachSteps }
-        let parameter = try HeistParameterName.normalized(parameter.rawValue)
         self.values = values
-        self.parameter = try HeistReferenceName(validating: parameter)
+        self.parameter = parameter
         self.body = body
     }
 
@@ -348,7 +338,7 @@ struct HeistForEachStringAdmissionCandidate: Codable, Sendable, Equatable {
 
 struct HeistRepeatUntilAdmissionCandidate: Codable, Sendable, Equatable {
     let predicate: AccessibilityPredicate
-    let timeout: Double
+    let timeout: WaitTimeout
     let body: [HeistStepAdmissionCandidate]
     let elseBody: [HeistStepAdmissionCandidate]?
 
@@ -359,11 +349,10 @@ struct HeistRepeatUntilAdmissionCandidate: Codable, Sendable, Equatable {
 
     init(
         predicate: AccessibilityPredicate,
-        timeout: Double,
+        timeout: WaitTimeout,
         body: [HeistStepAdmissionCandidate],
         elseBody: [HeistStepAdmissionCandidate]? = nil
     ) throws {
-        guard timeout >= 0 else { throw HeistPlanError.negativeTimeout(timeout) }
         guard !body.isEmpty else { throw HeistPlanError.emptyRepeatUntilSteps }
         self.predicate = predicate
         self.timeout = timeout
@@ -383,7 +372,7 @@ struct HeistRepeatUntilAdmissionCandidate: Codable, Sendable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         try self.init(
             predicate: container.decode(AccessibilityPredicate.self, forKey: .predicate),
-            timeout: container.decode(Double.self, forKey: .timeout),
+            timeout: container.decode(WaitTimeout.self, forKey: .timeout),
             body: container.decode([HeistStepAdmissionCandidate].self, forKey: .body),
             elseBody: container.decodeIfPresent([HeistStepAdmissionCandidate].self, forKey: .elseBody)
         )

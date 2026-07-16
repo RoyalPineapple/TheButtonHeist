@@ -15,8 +15,8 @@ enum ClientAdmission: Sendable {
 }
 
 enum MuscleAdmissionEffect {
-    case sendResponse(ServerMessage, requestId: String?, respond: TheMuscleAdmission.ResponseHandler)
-    case sendClient(ServerMessage, requestId: String?, clientId: Int)
+    case sendResponse(ServerMessage, requestId: RequestID?, respond: TheMuscleAdmission.ResponseHandler)
+    case sendClient(ServerMessage, requestId: RequestID?, clientId: Int)
     case delayedDisconnect(clientId: Int)
     case log(MuscleAdmissionLogEvent)
 }
@@ -30,7 +30,11 @@ enum MuscleAdmissionLogEvent {
     case authenticatedProtocolMessage(clientId: Int, wireType: ClientWireMessageType)
     case unauthenticatedMessage(clientId: Int, message: String)
     case authenticationDeadline(clientId: Int, deadlineSeconds: UInt64)
-    case versionMismatch(clientId: Int, serverVersion: String, clientVersion: String)
+    case versionMismatch(
+        clientId: Int,
+        serverVersion: ButtonHeistVersion,
+        clientVersion: ButtonHeistVersion
+    )
     case missingRegisteredAddress(clientId: Int)
     case lockedOut(clientId: Int, address: String)
     case invalidToken(clientId: Int, attempts: Int)
@@ -40,7 +44,7 @@ enum MuscleAdmissionLogEvent {
 struct MuscleAuthentication {
     let clientId: Int
     let address: String
-    let driverIdentity: String
+    let owner: SessionOwner
     let respond: TheMuscleAdmission.ResponseHandler
     let source: MuscleAuthenticationSource
 }

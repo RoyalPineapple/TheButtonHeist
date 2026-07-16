@@ -63,7 +63,7 @@ final class AdversarialNavigationTests: XCTestCase {
 
         XCTAssertNil(heist.result.firstFailedStep)
         let actionResult = try XCTUnwrap(
-            heist.result.steps.lazy
+            heist.result.evidenceRollup.outputReceiptNodes.lazy
                 .compactMap { $0.actionEvidence?.dispatchResult }
                 .first { $0.subjectEvidence?.element.label == "Verified by The Vibe Check" }
         )
@@ -111,6 +111,5 @@ final class AdversarialNavigationTests: XCTestCase {
             line: line
         )
     }
-
 }
 #endif // canImport(UIKit)

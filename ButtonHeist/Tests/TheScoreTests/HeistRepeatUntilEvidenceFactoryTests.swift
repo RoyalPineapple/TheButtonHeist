@@ -42,8 +42,6 @@ import TheScore
         )))
 
         let predicateMet = HeistRepeatUntilEvidence.matched(
-            predicate: predicate,
-            timeout: 1,
             iterationCount: 1,
             expectation: met
         )
@@ -51,8 +49,6 @@ import TheScore
         #expect(predicateMet.expectation.met)
 
         let failed = HeistRepeatUntilEvidence.failed(
-            predicate: predicate,
-            timeout: 1,
             iterationCount: 1,
             expectation: unmet,
             lastObservedSummary: "Cart",
@@ -63,8 +59,6 @@ import TheScore
         #expect(failed.failureReason == "timed out")
 
         let handledElse = HeistRepeatUntilEvidence.handledElse(
-            predicate: predicate,
-            timeout: 1,
             iterationCount: 1,
             expectation: unmet,
             lastObservedSummary: "Cart"
@@ -82,8 +76,6 @@ import TheScore
         )))
 
         let predicateMet = HeistRepeatUntilEvidence.matched(
-            predicate: predicate,
-            timeout: 1,
             iterationCount: 1,
             iterationOrdinal: 0,
             expectation: met
@@ -92,8 +84,6 @@ import TheScore
         #expect(predicateMet.iterationOrdinal == 0)
 
         let continued = HeistRepeatUntilEvidence.continued(
-            predicate: predicate,
-            timeout: 1,
             iterationCount: 1,
             iterationOrdinal: 0,
             expectation: unmet
@@ -102,8 +92,6 @@ import TheScore
         #expect(continued.iterationOrdinal == 0)
 
         let failed = HeistRepeatUntilEvidence.failed(
-            predicate: predicate,
-            timeout: 1,
             iterationCount: 1,
             iterationOrdinal: 0,
             expectation: unmet,
@@ -117,8 +105,6 @@ import TheScore
     @Test func `decode rejects invalid repeat until polarity at boundary`() throws {
         let predicate = AccessibilityPredicate.exists(.label("Done"))
         let evidence = HeistRepeatUntilEvidence.matched(
-            predicate: predicate,
-            timeout: 1,
             iterationCount: 1,
             expectation: ExpectationResult.Met(predicate: predicate)
         )

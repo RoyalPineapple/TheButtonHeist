@@ -5,7 +5,6 @@ public enum HeistCanonicalSwiftDSLError: Error, Sendable, Equatable, CustomStrin
     case unsupportedPredicate(String)
     case unresolvedTargetReference(String)
     case unresolvedStringReference(String)
-    case invalidParameter(String)
 
     public var description: String {
         switch self {
@@ -17,8 +16,6 @@ public enum HeistCanonicalSwiftDSLError: Error, Sendable, Equatable, CustomStrin
             return "unresolved canonical Swift target reference: \(reference)"
         case .unresolvedStringReference(let reference):
             return "unresolved canonical Swift string reference: \(reference)"
-        case .invalidParameter(let parameter):
-            return "invalid canonical Swift DSL parameter: \(parameter)"
         }
     }
 }

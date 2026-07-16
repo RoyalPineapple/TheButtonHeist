@@ -100,7 +100,7 @@ final class MessageIntegrationTests: XCTestCase {
                 instanceId: "test-session", instanceIdentifier: "test", listeningPort: 49152, tlsActive: true
             )),
             .interface(Interface(timestamp: Date(), tree: [])),
-            .pong(),
+            .pong(PongPayload(bundleIdentifier: "com.test")),
             .status(StatusPayload(
                 identity: StatusIdentity(
                     appName: "Test",
@@ -136,7 +136,7 @@ final class MessageIntegrationTests: XCTestCase {
 
         if case .ping = decodedPing {
             // Server responds with pong
-            let pongMsg = ServerMessage.pong()
+            let pongMsg = ServerMessage.pong(PongPayload(bundleIdentifier: "com.test"))
             let pongData = try JSONEncoder().encode(pongMsg)
             let decodedPong = try JSONDecoder().decode(ServerMessage.self, from: pongData)
 

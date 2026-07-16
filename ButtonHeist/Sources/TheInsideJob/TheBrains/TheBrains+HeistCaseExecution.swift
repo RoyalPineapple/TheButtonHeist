@@ -9,7 +9,7 @@ extension TheBrains {
     func executeConditionalStep(
         _ step: ConditionalStep,
         index: Int,
-        path: String,
+        path: HeistExecutionPath,
         start: CFAbsoluteTime,
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
@@ -21,7 +21,7 @@ extension TheBrains {
                 try ResolvedPredicateCaseRuntimeInput(resolving: $0, in: environment)
             }
         } catch {
-            return caseResolutionFailure(index: index, path: path, kind: .conditional, start: start, error: error)
+            return caseResolutionFailure(index: index, path: path, start: start, error: error)
         }
 
         let selection = await runtime.selectPredicateCase(resolvedCases, 0)
@@ -31,9 +31,6 @@ extension TheBrains {
                 cases: resolvedCases,
                 elseBody: step.elseBody ?? [],
                 path: path,
-                kind: .conditional,
-                intent: .conditional,
-                pathSegment: "conditional",
                 start: start
             ),
             runtime: runtime,
@@ -57,22 +54,19 @@ extension TheBrains {
                 runtime: runtime,
                 environment: environment,
                 scope: scope,
-                path: "\(dispatch.path).\(dispatch.pathSegment).cases[\(selectedCaseIndex)].body"
+                path: dispatch.path.conditionalCaseBody(at: selectedCaseIndex)
             )
             return caseNode(dispatch, selection: dispatch.selection, children: children)
 
         case .elseBranch, .timedOut, .noMatch:
             guard let elseBody = dispatch.elseBody else {
-                return heistReceipt(.init(
+                return .conditional(
                     path: dispatch.path,
-                    kind: dispatch.kind,
                     durationMs: elapsedMilliseconds(since: dispatch.start),
-                    intent: dispatch.intent,
-                    evidence: .caseSelection(HeistCaseSelectionEvidence(selection: dispatch.selection)),
-                    childFailure: { childPath in
-                        self.childFailureDetail(category: .invocation, childPath: childPath)
-                    }
-                ))
+                    completion: .passed(
+                        evidence: HeistCaseSelectionEvidence(selection: dispatch.selection)
+                    )
+                )
             }
 
             let selection = dispatch.selection.selectingElseBranch()
@@ -81,7 +75,7 @@ extension TheBrains {
                 runtime: runtime,
                 environment: environment,
                 scope: scope,
-                path: "\(dispatch.path).\(dispatch.pathSegment).else_body"
+                path: dispatch.path.conditionalElseBody()
             )
             return caseNode(dispatch, selection: selection, children: children)
         }
@@ -92,37 +86,45 @@ extension TheBrains {
         selection: HeistCaseSelectionResult,
         children: [HeistExecutionStepResult]
     ) -> HeistExecutionStepResult {
-        heistReceipt(.init(
-            path: dispatch.path,
-            kind: dispatch.kind,
-            durationMs: elapsedMilliseconds(since: dispatch.start),
-            intent: dispatch.intent,
-            evidence: .caseSelection(HeistCaseSelectionEvidence(selection: selection)),
-            children: children,
-            childFailure: { childPath in
-                self.childFailureDetail(category: .invocation, childPath: childPath)
-            }
-        ))
+        let evidence = HeistCaseSelectionEvidence(selection: selection)
+        switch HeistExecutedChildren(children) {
+        case .passed(let children):
+            return .conditional(
+                path: dispatch.path,
+                durationMs: elapsedMilliseconds(since: dispatch.start),
+                completion: .passed(evidence: evidence, children: children)
+            )
+        case .aborted(let children):
+            return .conditional(
+                path: dispatch.path,
+                durationMs: elapsedMilliseconds(since: dispatch.start),
+                completion: .childAborted(
+                    evidence: evidence,
+                    failure: childFailureDetail(
+                        category: .invocation,
+                        childPath: children.abortedAtPath
+                    ),
+                    children: children
+                )
+            )
+        }
     }
 
     private func caseResolutionFailure(
         index _: Int,
-        path: String,
-        kind: HeistExecutionStepKind,
+        path: HeistExecutionPath,
         start: CFAbsoluteTime,
         error: Error
     ) -> HeistExecutionStepResult {
-        heistReceipt(.init(
+        .conditional(
             path: path,
-            kind: kind,
             durationMs: elapsedMilliseconds(since: start),
-            intent: .conditional,
-            completion: .failed(HeistFailureDetail(
+            completion: .failed(evidence: .unavailable, failure: HeistFailureDetail(
                 category: .validation,
                 contract: "case predicates resolve before evaluation",
                 observed: "could not resolve heist case predicate: \(error)"
             ))
-        ))
+        )
     }
 
 }
@@ -137,10 +139,7 @@ private struct PredicateCaseDispatch {
     let selection: HeistCaseSelectionResult
     let cases: [ResolvedPredicateCaseRuntimeInput]
     let elseBody: [HeistStep]?
-    let path: String
-    let kind: HeistExecutionStepKind
-    let intent: HeistStepIntent
-    let pathSegment: String
+    let path: HeistExecutionPath
     let start: CFAbsoluteTime
 }
 

@@ -200,7 +200,7 @@ internal struct ObservationEntry: Sendable, Equatable {
         )
     }
 
-    private init(
+    internal init(
         event: SettledSemanticObservationEvent,
         transition: ObservationTransition
     ) {
@@ -327,19 +327,56 @@ internal struct VisibleSemanticObservationEvidence {
 internal struct InterfaceObservationProof {
     internal let screen: InterfaceObservation
     internal let discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy
+    internal let lineageEvidence: ScreenLineageEvidence?
 
     private init(
         screen: InterfaceObservation,
-        discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy = .mergeIntoInterface
+        discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy = .mergeIntoInterface,
+        lineageEvidence: ScreenLineageEvidence? = nil
     ) {
         self.screen = screen
         self.discoveryCommitPolicy = discoveryCommitPolicy
+        self.lineageEvidence = lineageEvidence
+    }
+
+    internal static func uncheckedForTesting(
+        _ screen: InterfaceObservation,
+        lineageEvidence: ScreenLineageEvidence? = nil
+    ) -> Self {
+        Self(screen: screen, lineageEvidence: lineageEvidence)
     }
 
     @MainActor internal static func settled(
         _ outcome: SettleSession.Outcome,
         stash: TheStash,
         discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy = .mergeIntoInterface
+    ) -> InterfaceObservationProof? {
+        validated(
+            outcome,
+            stash: stash,
+            discoveryCommitPolicy: discoveryCommitPolicy,
+            lineageEvidence: nil
+        )
+    }
+
+    @MainActor internal static func settledAfterViewportMovement(
+        _ outcome: SettleSession.Outcome,
+        stash: TheStash,
+        discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy = .mergeIntoInterface
+    ) -> InterfaceObservationProof? {
+        validated(
+            outcome,
+            stash: stash,
+            discoveryCommitPolicy: discoveryCommitPolicy,
+            lineageEvidence: .viewportMovement
+        )
+    }
+
+    @MainActor private static func validated(
+        _ outcome: SettleSession.Outcome,
+        stash: TheStash,
+        discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy,
+        lineageEvidence: ScreenLineageEvidence?
     ) -> InterfaceObservationProof? {
         guard outcome.outcome.didSettleCleanly,
               let finalObservation = outcome.finalObservation else { return nil }
@@ -350,39 +387,8 @@ internal struct InterfaceObservationProof {
                 == finalObservation.fingerprint else { return nil }
         return InterfaceObservationProof(
             screen: screen,
-            discoveryCommitPolicy: discoveryCommitPolicy
-        )
-    }
-}
-
-fileprivate extension InterfaceObservationProof {
-    static func forTesting(_ screen: InterfaceObservation) -> InterfaceObservationProof {
-        InterfaceObservationProof(screen: screen)
-    }
-}
-
-internal extension SemanticObservationStream {
-    @discardableResult
-    func commitVisibleObservationForTesting(
-        _ screen: InterfaceObservation,
-        notificationBatch: AccessibilityNotificationBatch? = nil,
-        notificationIdentityScreen: InterfaceObservation? = nil
-    ) -> SettledSemanticObservationEvent {
-        commitSettledVisibleObservation(
-            .forTesting(screen),
-            notificationBatch: notificationBatch,
-            notificationIdentityScreen: notificationIdentityScreen
-        )
-    }
-
-    @discardableResult
-    func commitDiscoveryObservationForTesting(
-        _ screen: InterfaceObservation,
-        notificationBatch: AccessibilityNotificationBatch? = nil
-    ) -> SettledSemanticObservationEvent {
-        commitSettledDiscoveryObservation(
-            .forTesting(screen),
-            notificationBatch: notificationBatch
+            discoveryCommitPolicy: discoveryCommitPolicy,
+            lineageEvidence: lineageEvidence
         )
     }
 }

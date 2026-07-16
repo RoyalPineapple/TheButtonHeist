@@ -55,8 +55,7 @@ extension AccessibilityElement: PredicateSelectionSubject {
             ? [.increment, .decrement]
             : []
         let custom = customActions
-            .map(\.name)
-            .filter { !$0.isEmpty }
+            .compactMap { try? CustomActionName(validating: $0.name) }
             .map(ElementAction.custom)
         return Set(activate + textEntry + adjustable + custom)
     }
@@ -102,55 +101,208 @@ extension TheStash {
         in tree: InterfaceTree
     ) -> [InterfaceTree.Element] {
         guard limit > 0, predicate.hasPredicates else { return [] }
-        let interface = WireConversion.toSemanticInterface(from: tree)
-        let matches = ElementMatchGraph(interface: interface).resolve(predicate)
-        return Array(treeElements(matching: matches, in: tree, interface: interface).prefix(limit))
+        return Array(tree.orderedElements.lazy.filter { predicate.matches($0) }.prefix(limit))
     }
 
     /// All matching screen elements in traversal order. Use when diagnostics
     /// need the exact match-set size rather than an early-exit prefix.
     func matchScreenElements(_ predicate: ElementPredicate, in tree: InterfaceTree) -> [InterfaceTree.Element] {
         guard predicate.hasPredicates else { return [] }
-        let interface = WireConversion.toSemanticInterface(from: tree)
-        let matches = ElementMatchGraph(interface: interface).resolve(predicate)
-        return treeElements(matching: matches, in: tree, interface: interface)
+        return tree.orderedElements.filter { predicate.matches($0) }
     }
 
-    func treeElements(
-        matching matchSet: ElementMatchSet,
-        in tree: InterfaceTree,
-        interface: Interface
+    /// Match a resolved target without applying its terminal ordinal. Resolution
+    /// owns ordinal selection so an out-of-range diagnostic retains the full
+    /// ordered match set.
+    func matchingTreeElements(
+        for target: ResolvedAccessibilityTarget,
+        in tree: InterfaceTree
     ) -> [InterfaceTree.Element] {
-        let elementsByIdentity = Dictionary(uniqueKeysWithValues: tree.elements.values.map {
-            ($0.heistId.traceElementIdentity, $0)
-        })
-        return matchSet.matches.map { match in
-            guard let identity = interface.graph.traceIdentityByPath[match.path],
-                  let treeElement = elementsByIdentity[identity] else {
-                preconditionFailure("Semantic interface match path is not backed by an interface element")
-            }
-            return treeElement
+        matchingTreeElements(
+            for: target,
+            among: tree.orderedElements,
+            containers: tree.orderedContainers,
+            containersByPath: tree.containers
+        )
+    }
+
+    func elementCandidates(
+        for target: ResolvedAccessibilityTarget,
+        in tree: InterfaceTree
+    ) -> [InterfaceTree.Element] {
+        elementCandidates(
+            for: target,
+            among: tree.orderedElements,
+            containers: tree.orderedContainers,
+            containersByPath: tree.containers
+        )
+    }
+
+    /// Match containers in the tree's canonical path order without applying
+    /// the terminal ordinal.
+    func matchingTreeContainers(
+        for target: ResolvedAccessibilityTarget,
+        in tree: InterfaceTree
+    ) -> [InterfaceTree.Container] {
+        matchingTreeContainers(
+            for: target,
+            among: tree.orderedContainers,
+            containersByPath: tree.containers
+        )
+    }
+
+    private func matchingTreeElements(
+        for target: ResolvedAccessibilityTarget,
+        among elements: [InterfaceTree.Element],
+        containers: [InterfaceTree.Container],
+        containersByPath: [TreePath: InterfaceTree.Container]
+    ) -> [InterfaceTree.Element] {
+        switch target {
+        case .predicate(let predicate, _):
+            return elements.filter { predicate.matches($0) }
+        case .container:
+            return []
+        case .within(let containerPredicate, let nestedTarget):
+            let matchingPaths = matchingContainerPaths(containerPredicate, among: containers)
+            return matchingTreeElements(
+                for: nestedTarget,
+                among: elements.filter {
+                    isContained($0, inAnyOf: matchingPaths, containersByPath: containersByPath)
+                },
+                containers: containers.filter {
+                    isContained($0, inAnyOf: matchingPaths, containersByPath: containersByPath)
+                },
+                containersByPath: containersByPath
+            )
         }
     }
 
-    func treeContainers(
-        matching matchSet: AccessibilityTargetMatchSet,
-        in tree: InterfaceTree,
-        interface: Interface
+    private func elementCandidates(
+        for target: ResolvedAccessibilityTarget,
+        among elements: [InterfaceTree.Element],
+        containers: [InterfaceTree.Container],
+        containersByPath: [TreePath: InterfaceTree.Container]
+    ) -> [InterfaceTree.Element] {
+        switch target {
+        case .predicate:
+            return elements
+        case .container:
+            return []
+        case .within(let containerPredicate, let nestedTarget):
+            let matchingPaths = matchingContainerPaths(containerPredicate, among: containers)
+            return elementCandidates(
+                for: nestedTarget,
+                among: elements.filter {
+                    isContained($0, inAnyOf: matchingPaths, containersByPath: containersByPath)
+                },
+                containers: containers.filter {
+                    isContained($0, inAnyOf: matchingPaths, containersByPath: containersByPath)
+                },
+                containersByPath: containersByPath
+            )
+        }
+    }
+
+    private func matchingTreeContainers(
+        for target: ResolvedAccessibilityTarget,
+        among containers: [InterfaceTree.Container],
+        containersByPath: [TreePath: InterfaceTree.Container]
     ) -> [InterfaceTree.Container] {
-        let projectedPaths = interface.graph.nodesInPathOrder.compactMap { record -> TreePath? in
-            guard case .container(let container) = record.kind else { return nil }
-            return container.path
+        switch target {
+        case .predicate:
+            return []
+        case .container(let predicate, _):
+            return containers.filter { predicate.matches($0.container.containerPredicateFacts) }
+        case .within(let containerPredicate, let nestedTarget):
+            let matchingPaths = matchingContainerPaths(containerPredicate, among: containers)
+            return matchingTreeContainers(
+                for: nestedTarget,
+                among: containers.filter {
+                    isContained($0, inAnyOf: matchingPaths, containersByPath: containersByPath)
+                },
+                containersByPath: containersByPath
+            )
         }
-        let sourceContainers = tree.orderedContainers
-        precondition(projectedPaths.count == sourceContainers.count)
-        let containersByPath = Dictionary(uniqueKeysWithValues: zip(projectedPaths, sourceContainers))
-        return matchSet.containerPaths.map { path in
-            guard let container = containersByPath[path] else {
-                preconditionFailure("Semantic interface match path is not backed by an interface container")
-            }
-            return container
+    }
+
+    private func matchingContainerPaths(
+        _ predicate: ResolvedContainerPredicate,
+        among containers: [InterfaceTree.Container]
+    ) -> Set<TreePath> {
+        Set(containers.lazy.filter {
+            predicate.matches($0.container.containerPredicateFacts)
+        }.map(\.path))
+    }
+
+    private func isContained(
+        _ element: InterfaceTree.Element,
+        inAnyOf containerPaths: Set<TreePath>,
+        containersByPath: [TreePath: InterfaceTree.Container]
+    ) -> Bool {
+        isContained(
+            parentPath: semanticParentPath(
+                path: element.path,
+                scrollMembership: element.scrollMembership,
+                containersByPath: containersByPath
+            ),
+            inAnyOf: containerPaths,
+            containersByPath: containersByPath
+        )
+    }
+
+    private func isContained(
+        _ container: InterfaceTree.Container,
+        inAnyOf containerPaths: Set<TreePath>,
+        containersByPath: [TreePath: InterfaceTree.Container]
+    ) -> Bool {
+        if containerPaths.contains(container.path) { return true }
+        return isContained(
+            parentPath: semanticParentPath(
+                path: container.path,
+                scrollMembership: container.scrollMembership,
+                containersByPath: containersByPath
+            ),
+            inAnyOf: containerPaths,
+            containersByPath: containersByPath
+        )
+    }
+
+    private func isContained(
+        parentPath: TreePath?,
+        inAnyOf containerPaths: Set<TreePath>,
+        containersByPath: [TreePath: InterfaceTree.Container]
+    ) -> Bool {
+        var path = parentPath
+        var visited = Set<TreePath>()
+        while let candidate = path, visited.insert(candidate).inserted {
+            if containerPaths.contains(candidate) { return true }
+            guard let container = containersByPath[candidate] else { return false }
+            path = semanticParentPath(
+                path: container.path,
+                scrollMembership: container.scrollMembership,
+                containersByPath: containersByPath
+            )
         }
+        return false
+    }
+
+    private func semanticParentPath(
+        path: TreePath,
+        scrollMembership: InterfaceTree.ScrollMembership?,
+        containersByPath: [TreePath: InterfaceTree.Container]
+    ) -> TreePath? {
+        if let containerPath = scrollMembership?.containerPath,
+           containersByPath[containerPath] != nil {
+            return containerPath
+        }
+
+        var parent = path.parent
+        while let candidate = parent {
+            if candidate == .root { return nil }
+            if containersByPath[candidate] != nil { return candidate }
+            parent = candidate.parent
+        }
+        return nil
     }
 }
 

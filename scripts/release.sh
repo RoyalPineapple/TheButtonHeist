@@ -8,21 +8,19 @@
 #   4. Rebase onto latest origin, commit, push source to main, and wait for CI
 #   5. Tag the exact green main commit and wait for release packaging
 #
-# Local tests are skipped by default — main-branch CI gates the exact release
-# commit before the tag is pushed and release artifacts are published.
-# Use --full for an optional local preflight before committing.
+# Main-branch CI gates the exact release commit before the tag is pushed and
+# release artifacts are published. `release-readiness.sh` owns local preflight.
 #
 # Versioning: SemVer (MAJOR.MINOR.PATCH). Default bump is patch.
 #
-# Usage: ./scripts/release.sh [--dry-run] [--full] [--major | --minor | <version>]
-#        ./scripts/release.sh --tag-current [--dry-run] [--full]
+# Usage: ./scripts/release.sh [--dry-run] [--major | --minor | <version>]
+#        ./scripts/release.sh --tag-current [--dry-run]
 # Example: ./scripts/release.sh              # Bump patch: 0.2.0 -> 0.2.1
 #          ./scripts/release.sh --minor      # Bump minor: 0.2.1 -> 0.3.0
 #          ./scripts/release.sh --major      # Bump major: 0.3.0 -> 1.0.0
 #          ./scripts/release.sh 0.5.0        # Explicit version
 #          ./scripts/release.sh --tag-current # Publish the already-bumped source version
 #          ./scripts/release.sh --dry-run    # Preview only
-#          ./scripts/release.sh --full       # Run optional local tests before committing
 
 set -euo pipefail
 
@@ -36,26 +34,8 @@ SEMVER_REGEX='^[0-9]+\.[0-9]+\.[0-9]+$'
 source "$SCRIPT_DIR/release-contract.sh"
 
 DRY_RUN=false
-RUN_TESTS=false
 TAG_CURRENT=false
 BUMP_TYPE=""
-
-run_tuist_test() {
-    local receipts_dir="${BUTTONHEIST_RECEIPTS_DIR:-$REPO_ROOT/.rp1/work/heist-receipts/release}"
-    local receipts_mode="${BUTTONHEIST_RECEIPTS_MODE:-failing-and-passing}"
-    set +e
-    BUTTONHEIST_TUIST_SKIP_AUTO_CLEAN=1 \
-        scripts/run-with-heist-receipts.sh \
-        --dir "$receipts_dir" \
-        --mode "$receipts_mode" \
-        -- tuist test "$@"
-    local test_status=$?
-    set -e
-
-    scripts/clean-generated-projects.sh
-
-    return "$test_status"
-}
 
 local_release_tag_exists() {
     local version="$1"
@@ -75,7 +55,6 @@ release_tag_exists() {
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --dry-run)    DRY_RUN=true; shift ;;
-        --full)       RUN_TESTS=true; shift ;;
         --skip-tests) echo "Error: --skip-tests is not a supported release flag; local tests already skip by default."; exit 1 ;;
         --tag-current) TAG_CURRENT=true; shift ;;
         --major)      BUMP_TYPE="major"; shift ;;
@@ -188,12 +167,10 @@ EOF
 fi
 
 # CI must have passed on this commit — wait up to 20 minutes.
-if [[ "$RUN_TESTS" == false ]]; then
-    "$SCRIPT_DIR/require-successful-ci-for-commit.sh" \
-        --timeout 1200 \
-        "$LOCAL_SHA" \
-        "current source"
-fi
+"$SCRIPT_DIR/require-successful-ci-for-commit.sh" \
+    --timeout 1200 \
+    "$LOCAL_SHA" \
+    "current source"
 
 if [[ "$TAG_CURRENT" == true ]]; then
     if [[ "$NEW_VERSION_TAG_EXISTS" == true ]]; then
@@ -256,11 +233,7 @@ if [[ "$DRY_RUN" == true ]]; then
         echo "  1. Bump the canonical source version and derive RELEASE_VERSION and formula mirrors"
     fi
     echo "  2. Build CLI + MCP (parallel)"
-    if [[ "$RUN_TESTS" == true ]]; then
-        echo "  3. Run TheScoreTests, ButtonHeistTests, and all five hosted iOS test targets"
-    else
-        echo "  3. (local tests skipped — main CI gates the exact release commit. Use --full for local preflight)"
-    fi
+    echo "  3. Require the exact-SHA main CI suite"
     if [[ "$TAG_CURRENT" == true ]]; then
         echo "  4. Verify main CI is green on current HEAD"
         echo "  5. Tag current HEAD as v$NEW_VERSION and push the tag"
@@ -352,52 +325,11 @@ echo "  ✓ CLI --version reports $NEW_VERSION"
 echo ""
 
 # --------------------------------------------------------------------------
-# Phase 4: Test
-# --------------------------------------------------------------------------
-
-if [[ "$RUN_TESTS" == true ]]; then
-    echo "==> Phase 4: Running tests (--full)"
-
-    rm -rf ~/Library/Developer/Xcode/DerivedData/ButtonHeist-*
-
-    echo "  Running TheScoreTests..."
-    run_tuist_test TheScoreTests --no-selective-testing
-    echo "  ✓ TheScoreTests"
-
-    echo "  Running ButtonHeistTests..."
-    run_tuist_test ButtonHeistTests --no-selective-testing
-    echo "  ✓ ButtonHeistTests"
-
-    SIMULATOR_ENV=$(mktemp)
-    if ! python3 "$SCRIPT_DIR/select-ios-ci-simulator.py" \
-        --sim-name release-test \
-        --github-env "$SIMULATOR_ENV" \
-        --wait; then
-        rm -f "$SIMULATOR_ENV"
-        exit 1
-    fi
-    source "$SIMULATOR_ENV"
-    rm -f "$SIMULATOR_ENV"
-
-    run_hosted_release_suite() {
-        local suite="$1"
-        echo "  Running $suite on $SIM_NAME..."
-        run_tuist_test "$suite" --platform ios --device "$SIM_NAME" --no-selective-testing
-        echo "  ✓ $suite"
-    }
-
-    run_hosted_release_suite TheInsideJobTests
-    run_hosted_release_suite TheInsideJobIntegrationTests
-    run_hosted_release_suite HostedBehaviorTests
-    echo ""
-fi
-
-# --------------------------------------------------------------------------
-# Phase 5: Commit, push source, wait for CI, tag
+# Phase 4: Commit, push source, wait for CI, tag
 # --------------------------------------------------------------------------
 
 if [[ "$TAG_CURRENT" == true ]]; then
-    echo "==> Phase 5: Verifying and tagging current release"
+    echo "==> Phase 4: Verifying and tagging current release"
     "$SCRIPT_DIR/validate-release-contract.sh"
     RELEASE_SHA=$(git rev-parse HEAD)
     "$SCRIPT_DIR/require-successful-ci-for-commit.sh" \
@@ -408,7 +340,7 @@ if [[ "$TAG_CURRENT" == true ]]; then
     git push origin "v$NEW_VERSION"
     echo "  ✓ Tagged green HEAD as v$NEW_VERSION and pushed"
 else
-    echo "==> Phase 5: Committing release source"
+    echo "==> Phase 4: Committing release source"
 
     git add \
         ButtonHeist/Sources/TheScore/Wire/Messages.swift \
@@ -451,10 +383,10 @@ fi
 echo ""
 
 # --------------------------------------------------------------------------
-# Phase 6: Wait for tag workflow and upgrade Homebrew
+# Phase 5: Wait for tag workflow and upgrade Homebrew
 # --------------------------------------------------------------------------
 
-echo "==> Phase 6: Waiting for release workflow"
+echo "==> Phase 5: Waiting for release workflow"
 
 # Find the workflow run triggered by this exact tag push. Branch/tag names can
 # repeat after rollback; the commit SHA is the release identity.

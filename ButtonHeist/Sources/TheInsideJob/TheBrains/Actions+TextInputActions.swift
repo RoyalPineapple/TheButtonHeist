@@ -10,9 +10,13 @@ extension Actions {
 
     // MARK: - Edit / Pasteboard / Responder
 
-    func executeEditAction(_ target: EditActionTarget) async -> TheSafecracker.ActionDispatchOutcome {
+    func executeEditAction(
+        _ target: EditActionTarget,
+    ) async -> TheSafecracker.ActionDispatchOutcome {
         let inflatedTarget: ElementInflation.InflatedElementTarget
-        switch await navigation.elementInflation.inflateFirstResponder(method: .editAction) {
+        switch await navigation.elementInflation.inflateFirstResponder(
+            method: .editAction,
+        ) {
         case .unavailable:
             return .failure(
                 .editAction,
@@ -27,7 +31,18 @@ extension Actions {
         case .inflated(let target):
             inflatedTarget = target
         }
-        let success = safecracker.performEditAction(target.action, on: inflatedTarget.liveTarget.object)
+        let dispatch = stash.dispatchOnFreshLiveActionTarget(
+            inflatedTarget.liveTarget,
+        ) { liveTarget in
+            safecracker.performEditAction(target.action, on: liveTarget.object)
+        }
+        let success: Bool
+        switch dispatch {
+        case .success(let dispatched):
+            success = dispatched
+        case .failure(let staleness):
+            return staleLiveTargetFailure(staleness, method: .editAction)
+        }
         let message = success ? nil : ActionCapabilityDiagnostic.editActionFailed(
             target.action,
             stash: stash,
@@ -42,9 +57,11 @@ extension Actions {
             : .failure(.editAction, message: message ?? "edit action failed")
     }
 
-    func executeSetPasteboard(_ target: SetPasteboardTarget) async -> TheSafecracker.ActionDispatchOutcome {
-        UIPasteboard.general.string = target.text
-        return .success(payload: .setPasteboard(target.text))
+    func executeSetPasteboard(
+        _ target: SetPasteboardTarget,
+    ) async -> TheSafecracker.ActionDispatchOutcome {
+        UIPasteboard.general.string = target.text.rawText
+        return .success(payload: .setPasteboard(target.text.rawText))
     }
 
     func executeGetPasteboard() -> TheSafecracker.ActionDispatchOutcome {
@@ -58,9 +75,12 @@ extension Actions {
         return .success(payload: .getPasteboard(text))
     }
 
-    func executeResignFirstResponder() async -> TheSafecracker.ActionDispatchOutcome {
+    func executeResignFirstResponder(
+    ) async -> TheSafecracker.ActionDispatchOutcome {
         let inflatedTarget: ElementInflation.InflatedElementTarget
-        switch await navigation.elementInflation.inflateFirstResponder(method: .resignFirstResponder) {
+        switch await navigation.elementInflation.inflateFirstResponder(
+            method: .resignFirstResponder,
+        ) {
         case .unavailable:
             return .failure(
                 .resignFirstResponder,
@@ -74,7 +94,18 @@ extension Actions {
         case .inflated(let target):
             inflatedTarget = target
         }
-        let success = safecracker.resignFirstResponder(inflatedTarget.liveTarget.object)
+        let dispatch = stash.dispatchOnFreshLiveActionTarget(
+            inflatedTarget.liveTarget,
+        ) { liveTarget in
+            safecracker.resignFirstResponder(liveTarget.object)
+        }
+        let success: Bool
+        switch dispatch {
+        case .success(let dispatched):
+            success = dispatched
+        case .failure(let staleness):
+            return staleLiveTargetFailure(staleness, method: .resignFirstResponder)
+        }
         if success {
             return .success(
                 method: .resignFirstResponder,
@@ -94,50 +125,38 @@ extension Actions {
     // MARK: - Text Entry
 
     func executeTypeText(
-        text: String,
+        text: TextInputText,
         target: ResolvedAccessibilityTarget?,
-        replacingExisting: Bool
     ) async -> TheSafecracker.ActionDispatchOutcome {
-        guard replacingExisting || !text.isEmpty else {
-            return .failure(.typeText, message: "type_text requires non-empty text")
-        }
         let focusResult = await focusTextInput(target)
         switch focusResult {
         case .alreadyFocused:
-            return await executeTypeText(text: text, replacingExisting: replacingExisting, using: nil)
+            return await executeTypeText(text: text, using: nil)
         case .focused(let input):
-            return await executeTypeText(text: text, replacingExisting: replacingExisting, using: input)
+            return await executeTypeText(text: text, using: input)
         case .failed(let failure):
             return failure
         }
     }
 
     private func executeTypeText(
-        text: String,
-        replacingExisting: Bool,
+        text: TextInputText,
         using focusedInput: FocusedTextInput?
     ) async -> TheSafecracker.ActionDispatchOutcome {
-        if replacingExisting {
+        if text.mode == .replace {
             let clearResult = await safecracker.clearText(existingValue: focusedInput?.currentValue)
             if let diagnostic = clearResult.diagnostic {
                 return .failure(.typeText, message: typeTextInjectionFailureMessage(for: diagnostic, operation: "clearing"))
             }
         }
 
-        if !text.isEmpty {
-            let typingResult = await safecracker.typeText(text)
+        if !text.rawText.isEmpty {
+            let typingResult = await safecracker.typeText(text.rawText)
             if let diagnostic = typingResult.diagnostic {
                 return .failure(.typeText, message: typeTextInjectionFailureMessage(for: diagnostic, operation: "typing"))
             }
         }
 
-        if let value = Self.liveTextInputValue(for: focusedInput?.resolvedObject) {
-            return .success(
-                payload: .typeText(value),
-                subjectEvidence: focusedInput?.subjectEvidence,
-                resolvedElementId: focusedInput?.resolvedElementId
-            )
-        }
         return .success(
             method: .typeText,
             subjectEvidence: focusedInput?.subjectEvidence,
@@ -176,12 +195,11 @@ extension Actions {
     private struct FocusedTextInput {
         let subjectEvidence: ActionSubjectEvidence
         let resolvedElementId: HeistId
-        let resolvedObject: NSObject
         let currentValue: String?
     }
 
     private func focusTextInput(
-        _ target: ResolvedAccessibilityTarget?
+        _ target: ResolvedAccessibilityTarget?,
     ) async -> TextInputFocusResult {
         guard let target else {
             guard safecracker.hasActiveTextInput() else {
@@ -201,7 +219,7 @@ extension Actions {
         let inflatedTarget: ElementInflation.InflatedElementTarget
         switch await navigation.elementInflation.inflate(
             for: target,
-            method: .typeText
+            method: .typeText,
         ) {
         case .inflated(let target):
             inflatedTarget = target
@@ -209,34 +227,74 @@ extension Actions {
             return .failed(failure.actionDispatchOutcome(commandMethod: .typeText))
         }
 
-        if isResolvedTextInputFocused(inflatedTarget) {
-            return .focused(focusedTextInput(from: inflatedTarget))
+        if let focused = await focusedFirstResponder(
+            candidate: inflatedTarget,
+            waitForInput: false
+        ) {
+            return .focused(focused)
         }
 
         return await activateTextInputTarget(inflatedTarget.committedTarget)
     }
 
     private func activateTextInputTarget(
-        _ target: ElementInflation.CommittedElementTarget
+        _ target: ElementInflation.CommittedElementTarget,
     ) async -> TextInputFocusResult {
         let refreshedTarget: ElementInflation.InflatedElementTarget
-        switch await navigation.elementInflation.refreshCommittedTarget(target, method: .activate) {
+        switch await navigation.elementInflation.refreshCommittedTarget(
+            target,
+            method: .activate,
+        ) {
         case .inflated(let target):
             refreshedTarget = target
         case .failed(let failure):
             return .failed(failure.actionDispatchOutcome(commandMethod: .typeText))
         }
 
-        let activateOutcome = accessibilityActions.activate(refreshedTarget.liveTarget)
-        if activateOutcome == .success {
-            safecracker.showFingerprint(at: refreshedTarget.liveTarget.activationPoint)
+        let activateOutcome: AccessibilityActionDispatcher.ActivateOutcome
+        let activationPoint: CGPoint
+        switch stash.dispatchOnFreshLiveActionTarget(
+            refreshedTarget.liveTarget,
+            operation: { liveTarget in
+                ActivationDispatchEvidence(
+                    outcome: accessibilityActions.activate(liveTarget),
+                    activationPoint: liveTarget.activationPoint
+                )
+            }
+        ) {
+        case .success(let dispatch):
+            activateOutcome = dispatch.outcome
+            activationPoint = dispatch.activationPoint
+        case .failure(let staleness):
+            return .failed(staleLiveTargetFailure(staleness, method: .typeText))
         }
-        if await textInputIsFocused(refreshedTarget) {
-            return .focused(focusedTextInput(from: refreshedTarget))
+        if activateOutcome == .success {
+            safecracker.showFingerprint(at: activationPoint)
+        }
+        if let focused = await focusedFirstResponder(
+            candidate: refreshedTarget,
+            waitForInput: true
+        ) {
+            return .focused(focused)
         }
 
-        let point = refreshedTarget.liveTarget.activationPoint
-        guard await safecracker.tap(at: point) else {
+        let preparedDispatch: TheSafecracker.PreparedTouchDispatch?
+        let point: CGPoint
+        switch stash.dispatchOnFreshLiveActionTarget(
+            refreshedTarget.liveTarget,
+            operation: { liveTarget in
+                let point = liveTarget.activationPoint
+                return (point, safecracker.prepareTap(at: point))
+            }
+        ) {
+        case .success(let preparation):
+            point = preparation.0
+            preparedDispatch = preparation.1
+        case .failure(let staleness):
+            return .failed(staleLiveTargetFailure(staleness, method: .typeText))
+        }
+        guard let preparedDispatch,
+              await safecracker.completePreparedTouch(preparedDispatch) else {
             return .failed(.failure(
                 .typeText,
                 message: ActionCapabilityDiagnostic.gestureDispatchFailed(
@@ -247,7 +305,10 @@ extension Actions {
             ))
         }
 
-        guard await textInputIsFocused(refreshedTarget) else {
+        guard let focused = await focusedFirstResponder(
+            candidate: refreshedTarget,
+            waitForInput: true
+        ) else {
             return .failed(.failure(
                 .typeText,
                 message: ActionCapabilityDiagnostic.textEntryFailed(
@@ -258,56 +319,52 @@ extension Actions {
                 )
             ))
         }
-        return .focused(focusedTextInput(from: refreshedTarget))
+        return .focused(focused)
     }
 
-    private func isResolvedTextInputFocused(
-        _ inflatedTarget: ElementInflation.InflatedElementTarget
-    ) -> Bool {
-        guard safecracker.hasActiveTextInput() else { return false }
-        if stash.firstResponderHeistId == inflatedTarget.treeElement.heistId {
-            return true
+    private func focusedFirstResponder(
+        candidate: ElementInflation.InflatedElementTarget,
+        waitForInput: Bool
+    ) async -> FocusedTextInput? {
+        if !safecracker.hasActiveTextInput() {
+            guard waitForInput,
+                  await safecracker.waitForActiveTextInput() else { return nil }
         }
-        if let searchBar = inflatedTarget.liveTarget.object as? UISearchBar {
+        let liveFocus = stash.dispatchOnFreshLiveActionTarget(
+            candidate.liveTarget,
+            operation: { liveTarget -> FocusedTextInput? in
+                guard isFirstResponder(liveTarget.object) else { return nil }
+                return focusedTextInput(from: candidate, liveTarget: liveTarget)
+            }
+        )
+        if case .success(let focused?) = liveFocus {
+            return focused
+        }
+        let heistId = candidate.treeElement.heistId
+        switch await navigation.elementInflation.inflateFirstResponder(method: .typeText) {
+        case .inflated(let target) where target.treeElement.heistId == heistId:
+            return focusedTextInput(from: target, liveTarget: target.liveTarget)
+        case .unavailable, .failed, .inflated:
+            return nil
+        }
+    }
+
+    private func isFirstResponder(_ object: NSObject) -> Bool {
+        if let searchBar = object as? UISearchBar {
             return searchBar.searchTextField.isFirstResponder
         }
-        return (inflatedTarget.liveTarget.object as? UIResponder)?.isFirstResponder == true
-    }
-
-    private func textInputIsFocused(
-        _ inflatedTarget: ElementInflation.InflatedElementTarget
-    ) async -> Bool {
-        if isResolvedTextInputFocused(inflatedTarget) { return true }
-        if !safecracker.hasActiveTextInput() {
-            guard await safecracker.waitForActiveTextInput() else { return false }
-        }
-        return !(inflatedTarget.liveTarget.object is UIResponder)
+        return (object as? UIResponder)?.isFirstResponder == true
     }
 
     private func focusedTextInput(
-        from inflatedTarget: ElementInflation.InflatedElementTarget
+        from inflatedTarget: ElementInflation.InflatedElementTarget,
+        liveTarget: TheStash.LiveActionTarget
     ) -> FocusedTextInput {
         FocusedTextInput(
             subjectEvidence: inflatedTarget.subjectEvidence(source: .textInputTarget),
             resolvedElementId: inflatedTarget.treeElement.heistId,
-            resolvedObject: inflatedTarget.liveTarget.object,
-            currentValue: inflatedTarget.liveTarget.element.value
+            currentValue: liveTarget.element.value
         )
-    }
-
-    private static func liveTextInputValue(for object: NSObject?) -> String? {
-        switch object {
-        case let textField as UITextField:
-            return textField.text
-        case let textView as UITextView:
-            return textView.text
-        case let searchBar as UISearchBar:
-            return searchBar.text
-        case let object?:
-            return object.accessibilityValue
-        case nil:
-            return nil
-        }
     }
 
 }

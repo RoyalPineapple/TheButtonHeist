@@ -19,10 +19,11 @@ extension TheHandoff {
 
         let resolutionTimeout = Self.connectionResolutionTimeout(for: timeout)
         let discoveryTimeout = UInt64(resolutionTimeout * 1_000_000_000)
+        let target = DeviceResolutionTarget(filter: filter)
         let device: DiscoveredDevice
         do {
             device = try await resolveTargetDevice(
-                filter: filter,
+                target: target,
                 discoveryTimeout: discoveryTimeout
             )
         } catch {
@@ -70,11 +71,11 @@ extension TheHandoff {
     }
 
     private func resolveTargetDevice(
-        filter: String?,
+        target: DeviceResolutionTarget,
         discoveryTimeout: UInt64
     ) async throws -> DiscoveredDevice {
         let resolver = DeviceResolver(
-            filter: filter,
+            target: target,
             discoveryTimeout: discoveryTimeout,
             getDiscoveredDevices: { [weak self] in self?.discoveredDevices ?? [] }
         )

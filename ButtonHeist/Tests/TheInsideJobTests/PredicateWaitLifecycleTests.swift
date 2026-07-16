@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 #if DEBUG
 import XCTest
+import ButtonHeistSupport
 import ThePlans
 import UIKit
 
@@ -14,6 +15,59 @@ final class PredicateWaitLifecycleTests: XCTestCase {
         case visible
         case reveal
         case discovery
+    }
+
+    func testLifecycleMachineCarriesEvidenceThroughDeadlineSequence() {
+        var lifecycle = StateDriver(
+            initial: PredicateWaitLifecycleState<String>.initialVisible("initial"),
+            machine: PredicateWaitLifecycleMachine<String>(continuesAfterInitialMiss: true)
+        )
+
+        let effects = [
+            lifecycle.send(.evaluated(PredicateWaitLifecycleEvaluation(
+                evidence: "visible",
+                matched: false
+            ))).predicateWaitEffect,
+            lifecycle.send(.evaluated(PredicateWaitLifecycleEvaluation(
+                evidence: "discovery",
+                matched: false
+            ))).predicateWaitEffect,
+            lifecycle.send(.deadlineReached).predicateWaitEffect,
+            lifecycle.send(.evaluated(PredicateWaitLifecycleEvaluation(
+                evidence: "terminal visible",
+                matched: false
+            ))).predicateWaitEffect,
+            lifecycle.send(.evaluated(PredicateWaitLifecycleEvaluation(
+                evidence: "terminal discovery",
+                matched: false
+            ))).predicateWaitEffect,
+        ]
+
+        XCTAssertEqual(effects, [
+            .discover(.overall),
+            .awaitObservation,
+            .settleVisible(.viewportTransition),
+            .discover(.unbounded),
+            .finish(.timedOut),
+        ])
+        XCTAssertEqual(lifecycle.state.phase, .finished(.timedOut))
+        XCTAssertEqual(lifecycle.state.evidence, "terminal discovery")
+    }
+
+    func testImmediateCaseSelectionMissFinishesInLifecycleMachine() {
+        var lifecycle = StateDriver(
+            initial: PredicateWaitLifecycleState<String>.initialVisible("unevaluated"),
+            machine: PredicateWaitLifecycleMachine<String>(continuesAfterInitialMiss: false)
+        )
+
+        let effect = lifecycle.send(.evaluated(PredicateWaitLifecycleEvaluation(
+            evidence: "evaluated",
+            matched: false
+        ))).predicateWaitEffect
+
+        XCTAssertEqual(effect, .finish(.timedOut))
+        XCTAssertEqual(lifecycle.state.phase, .finished(.timedOut))
+        XCTAssertEqual(lifecycle.state.evidence, "evaluated")
     }
 
     func testSettledVisibleExistsMatchSkipsDiscovery() async throws {
@@ -229,13 +283,13 @@ final class PredicateWaitLifecycleTests: XCTestCase {
         )
 
         let receipt = await wait.wait(
-            for: try waitInput(predicate: .exists(.label("Ready")), timeout: 0)
+            for: try waitInput(predicate: .exists(.label("Ready")), timeout: .milliseconds(1))
         )
 
         XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
         XCTAssertEqual(checks, [.visible, .discovery, .visible, .discovery])
-        XCTAssertEqual(deadlines[0]?.timeoutSeconds, 0)
-        XCTAssertEqual(deadlines[1]?.timeoutSeconds, 0)
+        XCTAssertEqual(deadlines[0]?.timeoutSeconds, WaitTimeout.milliseconds(1).seconds)
+        XCTAssertEqual(deadlines[1]?.timeoutSeconds, WaitTimeout.milliseconds(1).seconds)
         XCTAssertEqual(
             deadlines[2]?.timeoutSeconds,
             Double(SettleSession.viewportTransitionTimeoutMs) / 1_000
@@ -447,7 +501,7 @@ final class PredicateWaitLifecycleTests: XCTestCase {
 
     private func waitInput(
         predicate: AccessibilityPredicate,
-        timeout: Double = 1
+        timeout: WaitTimeout = 1
     ) throws -> ResolvedWaitRuntimeInput {
         try resolvedWait(WaitStep(
             predicate: predicate,

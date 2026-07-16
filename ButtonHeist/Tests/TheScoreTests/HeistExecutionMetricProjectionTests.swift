@@ -42,7 +42,7 @@ import TheScore
         #expect(values(in: projection, named: .waitPipelineTargetResolutionMs) == [6, 11, 21])
         #expect(values(in: projection, named: .waitPipelineTotalMs) == [40, 95, 60])
         #expect(values(in: projection, named: .expectationWaitMs) == [40])
-        #expect(projection.samples.filter { $0.path == "$.body[0]" }.allSatisfy {
+        #expect(projection.samples.filter { $0.path?.description == "$.body[0]" }.allSatisfy {
             $0.kind == .action && $0.status == .passed
         })
         #expect(projection.ceilings == [
@@ -78,68 +78,14 @@ import TheScore
         #expect(try JSONDecoder().decode(HeistExecutionMetricProjection.self, from: encoded) == projection)
     }
 
-    @Test func `summary treats paths as opaque when excluding trailing failure evidence`() {
-        let ordinaryResult = HeistExecutionResult.passed(
-            steps: [
-                .passed(
-                    path: "$.body[0].failure.actions[0]",
-                    receiptKind: .action,
-                    durationMs: 1,
-                    intent: .action(command: .takeScreenshot),
-                    evidence: .dispatch(
-                        command: .takeScreenshot,
-                        dispatchResult: .success(method: .takeScreenshot, evidence: .none)
-                    )
-                ),
-            ],
-            durationMs: 1
-        )
-        let failedResult = HeistExecutionResult.failed(
-            steps: [
-                .failed(
-                    path: "opaque-failure",
-                    kind: .fail,
-                    durationMs: 1,
-                    failure: HeistFailureDetail(
-                        category: .explicitFailure,
-                        contract: "Fail aborts execution",
-                        observed: "stop"
-                    )
-                ),
-                .passed(
-                    path: "opaque-supplemental-evidence",
-                    receiptKind: .action,
-                    durationMs: 1,
-                    intent: .action(command: .takeScreenshot),
-                    evidence: .dispatch(
-                        command: .takeScreenshot,
-                        dispatchResult: .success(method: .takeScreenshot, evidence: .none)
-                    )
-                ),
-            ],
-            durationMs: 2,
-            abortedAtPath: "opaque-failure"
-        )
-
-        #expect(ordinaryResult.evidenceRollup.summary.executedTopLevelStepCount == 1)
-        #expect(ordinaryResult.evidenceRollup.failureScreenshotStep == nil)
-        #expect(failedResult.evidenceRollup.summary.executedTopLevelStepCount == 1)
-        #expect(failedResult.evidenceRollup.summary.outputReceiptNodeCount == 2)
-        #expect(failedResult.evidenceRollup.failureScreenshotStep?.path == "opaque-supplemental-evidence")
-        #expect(
-            failedResult.failureScreenshotSummary
-                == "failure screenshot: unavailable receipt=opaque-supplemental-evidence"
-        )
-    }
-
     private func metricProjectionFixture() throws -> HeistExecutionResult {
         let predicate = AccessibilityPredicate.exists(.label("Done"))
-        return HeistExecutionResult.passed(
+        return HeistExecutionResult(
             steps: [
                 actionStep(predicate: predicate),
                 try waitStep(predicate: predicate),
                 try repeatStep(predicate: predicate),
-                caseSelectionStep(),
+                try caseSelectionStep(),
             ],
             durationMs: 1234
         )
@@ -147,41 +93,37 @@ import TheScore
 
     private func actionStep(predicate: AccessibilityPredicate) -> HeistExecutionStepResult {
         let command = HeistActionCommand.activate(.predicate(ElementPredicateTemplate(label: "Pay")))
-        return HeistExecutionStepResult.passed(
+        return HeistReceiptFixture.action(
             path: "$.body[0]",
-            receiptKind: .action,
-            durationMs: 15,
-            intent: .action(command: command),
-            evidence: HeistActionEvidence.expectation(
-                command: command,
-                dispatchResult: .success(
-                    method: .activate,
-                    evidence: ActionResultSuccessEvidence(
-                        observation: .settledTrace(
-                            makeTestTraceEvidence(
-                                .noChangeForTests(elementCount: 0),
-                                completeness: .incomplete
-                            ),
-                            .settled(durationMs: 3)
+            command: command,
+            result: .success(
+                method: .activate,
+                evidence: ActionResultSuccessEvidence(
+                    observation: .settledTrace(
+                        makeTestTraceEvidence(
+                            .noChangeForTests(elementCount: 0),
+                            completeness: .incomplete
                         ),
-                        timing: actionTiming
-                    )
-                ),
-                expectationResult: .success(
-                    method: .wait,
-                    evidence: ActionResultSuccessEvidence(
-                        observation: .settledTrace(
-                            makeTestTraceEvidence(
-                                .noChangeForTests(elementCount: 0),
-                                completeness: .complete
-                            ),
-                            .settled(durationMs: 8)
+                        .settled(durationMs: 3)
+                    ),
+                    timing: actionTiming
+                )
+            ),
+            expectationActionResult: .success(
+                method: .wait,
+                evidence: ActionResultSuccessEvidence(
+                    observation: .settledTrace(
+                        makeTestTraceEvidence(
+                            .noChangeForTests(elementCount: 0),
+                            completeness: .complete
                         ),
-                        timing: expectationTiming
-                    )
-                ),
-                expectation: ExpectationResult(met: true, predicate: predicate)
-            )
+                        .settled(durationMs: 8)
+                    ),
+                    timing: expectationTiming
+                )
+            ),
+            expectation: ExpectationResult(met: true, predicate: predicate),
+            durationMs: 15
         )
     }
 
@@ -202,55 +144,52 @@ import TheScore
             ),
             expectation: ExpectationResult.Met(predicate: predicate)
         ))
-        return HeistExecutionStepResult.passed(
-            path: "$.body[1]",
-            receiptKind: .wait,
+        return .wait(
+            path: try HeistExecutionPath(validating: "$.body[1]"),
             durationMs: 100,
-            intent: .wait(predicate: predicate, timeout: 0.1),
-            evidence: HeistWaitEvidence.matched(check)
+            predicate: predicate,
+            timeout: 0.1,
+            completion: .passed(evidence: try #require(HeistPassedWaitEvidence(.matched(check))))
         )
     }
 
     private func repeatStep(predicate: AccessibilityPredicate) throws -> HeistExecutionStepResult {
-        HeistExecutionStepResult.passed(
-            path: "$.body[2]",
-            receiptKind: .repeatUntil,
-            durationMs: 60,
-            intent: .repeatUntil(predicate: predicate, timeout: 0.05),
-            evidence: HeistRepeatUntilEvidence.matched(
-                predicate: predicate,
-                timeout: 0.05,
-                iterationCount: 1,
-                expectation: ExpectationResult.Met(predicate: predicate),
-                actionResult: .success(
-                    method: .wait,
-                    evidence: ActionResultSuccessEvidence(
-                        observation: .settledTrace(
-                            makeTestTraceEvidence(
-                                .noChangeForTests(elementCount: 0),
-                                completeness: .complete
-                            ),
-                            .settled(durationMs: 23)
+        let evidence = HeistRepeatUntilEvidence.matched(
+            iterationCount: 1,
+            expectation: ExpectationResult.Met(predicate: predicate),
+            actionResult: .success(
+                method: .wait,
+                evidence: ActionResultSuccessEvidence(
+                    observation: .settledTrace(
+                        makeTestTraceEvidence(
+                            .noChangeForTests(elementCount: 0),
+                            completeness: .complete
                         ),
-                        timing: repeatTiming
-                    )
+                        .settled(durationMs: 23)
+                    ),
+                    timing: repeatTiming
                 )
             )
         )
+        return .repeatUntil(
+            path: try HeistExecutionPath(validating: "$.body[2]"),
+            durationMs: 60,
+            predicate: predicate,
+            timeout: 0.05,
+            completion: .passed(evidence: try #require(HeistPassedRepeatUntilEvidence(evidence)))
+        )
     }
 
-    private func caseSelectionStep() -> HeistExecutionStepResult {
-        HeistExecutionStepResult.passed(
-            path: "$.body[3]",
-            receiptKind: .conditional,
+    private func caseSelectionStep() throws -> HeistExecutionStepResult {
+        .conditional(
+            path: try HeistExecutionPath(validating: "$.body[3]"),
             durationMs: 490,
-            intent: .conditional,
-            evidence: HeistCaseSelectionEvidence(selection: HeistCaseSelectionResult(
-                cases: [],
-                outcome: .timedOut,
-                elapsedMs: 490,
-                timeout: 0.5
-            ))
+            completion: .passed(evidence: HeistCaseSelectionEvidence(selection: HeistCaseSelectionResult(
+                    cases: [],
+                    outcome: .timedOut,
+                    elapsedMs: 490,
+                    timeout: 0.5
+                )))
         )
     }
 

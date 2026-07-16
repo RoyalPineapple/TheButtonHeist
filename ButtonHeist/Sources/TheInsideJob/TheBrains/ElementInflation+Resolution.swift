@@ -82,7 +82,7 @@ extension ElementInflation {
     }
 
     internal func findTargetInTree(
-        _ target: ResolvedAccessibilityTarget
+        _ target: ResolvedAccessibilityTarget,
     ) async -> Result<TreeTargetMatch, ElementInflationFailure> {
         switch visibleTargetResolution(target) {
         case .success(let visible):

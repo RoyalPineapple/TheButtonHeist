@@ -346,7 +346,7 @@ private struct StableCaptureContainer: Codable {
         isModalBoundary = facts.isModalBoundary
         customActions = facts.actions.compactMap { action in
             guard case .custom(let name) = action else { return nil }
-            return name
+            return name.rawValue
         }.sorted()
     }
 }

@@ -16,8 +16,9 @@ public final class TheFence {
         /// Seconds to wait for initial connection before failing `start()`.
         var connectionTimeout: TimeInterval
         /// Auth token sent in the `authenticate` message after the server requests
-        /// auth. Agents use the task slug; omit to fall back to `BUTTONHEIST_TOKEN`.
-        var token: String?
+        /// auth. Agents use the task slug.
+        var token: SessionAuthToken?
+        var driverID: DriverID?
         /// When true, TheHandoff re-establishes the connection on drop.
         var autoReconnect: Bool
         /// Resolved `.buttonheist.json` config (device filter, token, output paths).
@@ -33,7 +34,8 @@ public final class TheFence {
         init(
             deviceFilter: String? = nil,
             connectionTimeout: TimeInterval = 30,
-            token: String? = nil,
+            token: SessionAuthToken? = nil,
+            driverID: DriverID? = nil,
             autoReconnect: Bool = true,
             fileConfig: ButtonHeistFileConfig? = nil,
             directDevice: DiscoveredDevice? = nil,
@@ -43,6 +45,7 @@ public final class TheFence {
             self.deviceFilter = deviceFilter
             self.connectionTimeout = connectionTimeout
             self.token = token
+            self.driverID = driverID
             self.autoReconnect = autoReconnect
             self.fileConfig = fileConfig
             self.directDevice = directDevice
@@ -69,9 +72,8 @@ public final class TheFence {
     public init(configuration: Configuration) {
         self.config = configuration
         self.screenshotArtifacts = ScreenshotArtifactWriter(baseDirectory: configuration.artifactBaseDirectory)
-        let configuredToken = configuration.token ?? EnvironmentKey.buttonheistToken.value
-        self.handoff.token = configuredToken
-        self.handoff.driverId = EnvironmentKey.buttonheistDriverId.value
+        self.handoff.authToken = configuration.token
+        self.handoff.driverID = configuration.driverID
         wireUpResponseCallbacks()
     }
 
@@ -93,7 +95,7 @@ public final class TheFence {
             deviceName: handoff.displayName(for: device),
             appName: device.appName,
             connectionType: device.connectionType,
-            shortId: device.shortId
+            shortId: device.shortId?.description
         )
     }
 
@@ -121,12 +123,12 @@ public final class TheFence {
         }
     }
 
-    private func handleServerMessage(_ message: ServerMessage, requestId: String?) {
+    private func handleServerMessage(_ message: ServerMessage, requestId: RequestID?) {
         guard let requestId else { return }
         _ = pendingRequests.resolveTransientResponse(message, requestId: requestId)
     }
 
-    private func handleSendFailure(_ failure: DeviceSendFailure, requestId: String?) {
+    private func handleSendFailure(_ failure: DeviceSendFailure, requestId: RequestID?) {
         guard let requestId else { return }
         pendingRequests.resolveTransientFailure(FenceError(failure), requestId: requestId)
     }
@@ -159,9 +161,10 @@ public final class TheFence {
 
     static func configTargetsAsDevices(_ config: ButtonHeistFileConfig) -> [DiscoveredDevice] {
         config.targets.compactMap { name, target in
+            let deviceID = DiscoveryDeviceID(stringLiteral: "config-\(name.rawValue)")
             guard let device = DiscoveredDevice.fromHostPort(
                 target.device,
-                id: "config-\(name.rawValue)",
+                id: deviceID,
                 name: name.rawValue
             ) else { return nil }
             return device

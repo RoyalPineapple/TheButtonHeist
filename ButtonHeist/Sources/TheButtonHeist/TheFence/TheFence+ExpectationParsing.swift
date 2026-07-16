@@ -6,22 +6,19 @@ extension TheFence {
 
     struct ExpectationPayload: Sendable {
         let expectation: AccessibilityPredicate?
-        let timeout: Double?
+        let timeout: WaitTimeout?
 
-        init(expectation: AccessibilityPredicate?, timeout: Double?) {
+        init(expectation: AccessibilityPredicate?, timeout: WaitTimeout?) {
             self.expectation = expectation
             self.timeout = timeout
         }
 
         init(arguments: CommandArgumentEnvelope) throws {
+            let timeout = try arguments.value(FenceParameters.timeout)
             self.init(
                 expectation: try Self.parseExpectation(arguments.value(for: .expect)),
-                timeout: try arguments.value(FenceParameters.timeout)
+                timeout: try timeout.map(WaitTimeout.init(validatingSeconds:))
             )
-        }
-
-        var postActionValidationTimeout: Double? {
-            expectation == nil ? nil : timeout ?? defaultActionExpectationTimeout
         }
 
         static func parseExpectation(_ value: HeistValue?) throws -> AccessibilityPredicate? {

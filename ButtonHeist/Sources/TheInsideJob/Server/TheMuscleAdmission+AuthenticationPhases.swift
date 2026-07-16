@@ -38,11 +38,11 @@ struct MuscleTokenAuthenticationPhase {
                 ])
             }
 
-        case .accepted(let driverIdentity):
+        case .accepted(let owner):
             return .authenticate(MuscleAuthentication(
                 clientId: clientId,
                 address: address,
-                driverIdentity: driverIdentity,
+                owner: owner,
                 respond: respond,
                 source: .token
             ))

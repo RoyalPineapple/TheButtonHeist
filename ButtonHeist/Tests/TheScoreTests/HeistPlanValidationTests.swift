@@ -32,7 +32,7 @@ private func expectNonDurableHeistActionFailure(
     path: String = "$.body[0].action.command"
 ) {
     #expect(failures.contains {
-        $0.path == path
+        $0.path.description == path
             && $0.contract == "durable heist action"
             && $0.observed == observed
             && $0.correction == nonDurableHeistActionRepairHint
@@ -150,14 +150,12 @@ func strictValidationRequiresSemanticActionExpectation() throws {
 
     let findings = plan.lint(.strictTest)
 
-    #expect(findings == [
-        HeistPlanLintFinding(
-            severity: .error,
-            path: "$.body[0].action",
-            message: "Semantic action has no expectation",
-            suggestion: "Attach .expect(...) or .withoutExpectation(\"reason\")"
-        ),
-    ])
+    let finding = try #require(findings.first)
+    #expect(findings.count == 1)
+    #expect(finding.severity == .error)
+    #expect(finding.path.description == "$.body[0].action")
+    #expect(finding.message == "Semantic action has no expectation")
+    #expect(finding.suggestion == "Attach .expect(...) or .withoutExpectation(\"reason\")")
 }
 
 @Test
@@ -194,14 +192,12 @@ func lintReportsTypeTextWithoutTarget() throws {
 
     let findings = plan.lint(.compositionQuality)
 
-    #expect(findings == [
-        HeistPlanLintFinding(
-            severity: .warning,
-            path: "$.body[0].action",
-            message: "TypeText has no semantic target",
-            suggestion: "Use TypeText(text, into: target) for durable semantic tests"
-        ),
-    ])
+    let finding = try #require(findings.first)
+    #expect(findings.count == 1)
+    #expect(finding.severity == .warning)
+    #expect(finding.path.description == "$.body[0].action")
+    #expect(finding.message == "TypeText has no semantic target")
+    #expect(finding.suggestion == "Use TypeText(text, into: target) for durable semantic tests")
 }
 
 @Test
@@ -215,7 +211,7 @@ func lintReportsEmptyBranches() throws {
     let messages = plan.lint(.strictTest).map(\.message)
 
     #expect(messages == ["Branch has no steps"])
-    #expect(plan.lint(.strictTest).map(\.path) == ["$.body[0].conditional.cases[0]"])
+    #expect(plan.lint(.strictTest).map(\.path.description) == ["$.body[0].conditional.cases[0]"])
 }
 
 @Test
@@ -352,11 +348,11 @@ func runtimeSafetyRejectsRefsOutsideTheirLoopScope() throws {
     let failures = runtimeSafetyFailures(for: raw)
 
     #expect(failures.contains {
-        $0.path == "$.body[1].action.command.payload.text"
+        $0.path.description == "$.body[1].action.command.payload.text_ref"
             && $0.contract == "text_ref must resolve in the current heist scope"
     })
     #expect(failures.contains {
-        $0.path == "$.body[3].action.command.payload.target"
+        $0.path.description == "$.body[3].action.command.payload.target"
             && $0.contract == "target ref must resolve in the current heist scope"
     })
 }
@@ -379,7 +375,7 @@ func runtimeSafetyRejectsStringRefThatLowersToInvalidCommandPayload() throws {
     let failures = runtimeSafetyFailures(for: raw)
 
     #expect(failures.contains { $0.contract.contains("heist action payload contract") })
-    #expect(failures.contains { $0.observed.contains("text must be non-empty") })
+    #expect(failures.contains { $0.observed.contains("text to append must be non-empty") })
 }
 
 @Test
@@ -452,20 +448,6 @@ func runtimeSafetyRejectsEmptyElementPredicatesBeforeRuntimeUse() throws {
 }
 
 @Test
-func runtimeSafetyRejectsEmptySetPasteboardPayload() throws {
-    let raw = HeistPlanAdmissionCandidate(body: [
-        .action(try ActionStep(command: .setPasteboard(SetPasteboardTarget(text: "")))),
-    ])
-
-    let failures = runtimeSafetyFailures(for: raw)
-
-    #expect(failures.contains {
-        $0.path == "$.body[0].action.command.payload.text"
-            && $0.contract == "set_pasteboard text must be non-empty"
-    })
-}
-
-@Test
 func runtimeSafetyEnforcesBounds() throws {
     let limits = HeistPlanRuntimeSafetyLimits(
         maxTotalSteps: 2,
@@ -483,7 +465,7 @@ func runtimeSafetyEnforcesBounds() throws {
         .exists(.label("Sibling")),
     ]))
     let raw = HeistPlanAdmissionCandidate(body: [
-        .wait(WaitStep(predicate: deepPredicate, timeout: 0)),
+        .wait(WaitStep(predicate: deepPredicate, timeout: 0.5)),
         .forEachElement(try ForEachElementStep(
             matching: .label("Delete"),
             limit: 2,
@@ -535,7 +517,7 @@ func runtimeSafetyRequiresForEachElementPositiveLimitUnderConfiguredMax() throws
     )
 
     #expect(failures.contains {
-        $0.path == "$.body[0].for_each_element.limit"
+        $0.path.description == "$.body[0].for_each_element.limit"
             && $0.contract == "max for_each_element limit"
             && $0.observed == "2"
     }, "\(failures)")
@@ -565,15 +547,15 @@ func runtimeSafetyRequiresForEachStringExplicitValuesUnderConfiguredMax() throws
     )
 
     #expect(failures.contains {
-        $0.path == "$.body[0].for_each_string.values"
+        $0.path.description == "$.body[0].for_each_string.values"
             && $0.contract == "max for_each_string values"
             && $0.observed == "2 values"
     }, "\(failures)")
 }
 
 @Test
-func runtimeSafetyRequiresRepeatUntilFiniteTimeoutUnderConfiguredMax() throws {
-    let validTimeouts = [0.0, 1.0]
+func runtimeSafetyEnforcesConfiguredRepeatUntilTimeoutCap() throws {
+    let validTimeouts: [WaitTimeout] = [0.5, 1]
     for timeout in validTimeouts {
         let raw = HeistPlanAdmissionCandidate(body: [
             .repeatUntil(try RepeatUntilStep(
@@ -591,13 +573,6 @@ func runtimeSafetyRequiresRepeatUntilFiniteTimeoutUnderConfiguredMax() throws {
         #expect(failures.isEmpty, "\(timeout): \(failures)")
     }
 
-    let infinite = HeistPlanAdmissionCandidate(body: [
-        .repeatUntil(try RepeatUntilStep(
-            predicate: .exists(.label("Done")),
-            timeout: .infinity,
-            body: [.warn(WarnStep(message: "retry"))]
-        )),
-    ])
     let excessive = HeistPlanAdmissionCandidate(body: [
         .repeatUntil(try RepeatUntilStep(
             predicate: .exists(.label("Done")),
@@ -606,29 +581,13 @@ func runtimeSafetyRequiresRepeatUntilFiniteTimeoutUnderConfiguredMax() throws {
         )),
     ])
 
-    #expect(throws: HeistPlanError.self) {
-        _ = try RepeatUntilStep(
-            predicate: .exists(.label("Done")),
-            timeout: -1,
-            body: [.warn(WarnStep(message: "retry"))]
-        )
-    }
-
-    let infiniteFailures = runtimeSafetyFailures(
-        for: infinite,
-        limits: HeistPlanRuntimeSafetyLimits(maxRepeatUntilTimeout: 1)
-    )
     let excessiveFailures = runtimeSafetyFailures(
         for: excessive,
         limits: HeistPlanRuntimeSafetyLimits(maxRepeatUntilTimeout: 1)
     )
 
-    #expect(infiniteFailures.contains {
-        $0.path == "$.body[0].repeat_until.timeout"
-            && $0.contract == "repeat_until timeout must be finite"
-    }, "\(infiniteFailures)")
     #expect(excessiveFailures.contains {
-        $0.path == "$.body[0].repeat_until.timeout"
+        $0.path.description == "$.body[0].repeat_until.timeout"
             && $0.contract == "max repeat_until timeout"
             && $0.observed == "2 seconds"
     }, "\(excessiveFailures)")
@@ -648,7 +607,7 @@ func runtimeSafetyRejectsNestedStepDepthWithPreciseDiagnostic() throws {
     )
 
     #expect(failures.contains {
-        $0.path == "$.body[0].conditional.cases[0].body[0]"
+        $0.path.description == "$.body[0].conditional.cases[0].body[0]"
             && $0.contract == "max nested step depth"
             && $0.observed == "depth 2"
     }, "\(failures)")
@@ -669,7 +628,7 @@ func runtimeSafetyRejectsMaxDefinitionsWithPreciseDiagnostic() throws {
     )
 
     #expect(failures.contains {
-        $0.path == "$.definitions"
+        $0.path.description == "$.definitions"
             && $0.contract == "max total heist definitions"
             && $0.observed == "2 definitions"
     }, "\(failures)")
@@ -677,9 +636,9 @@ func runtimeSafetyRejectsMaxDefinitionsWithPreciseDiagnostic() throws {
 
 @Test
 func runtimeSafetyRejectsStandardDefinitionCapByDefault() throws {
-    let definitions = (0...HeistPlanRuntimeSafetyLimits.standardMaxDefinitions).map { index in
-        HeistPlanAdmissionCandidate(name: "definition\(index)", body: [
-            .warn(WarnStep(message: "definition \(index)")),
+    let definitions = try (0...HeistPlanRuntimeSafetyLimits.standardMaxDefinitions).map { index in
+        HeistPlanAdmissionCandidate(name: try HeistPlanName(validating: "definition\(index)"), body: [
+            .warn(WarnStep(message: try HeistWarningMessage(validating: "definition \(index)"))),
         ])
     }
     let raw = HeistPlanAdmissionCandidate(definitions: definitions, body: [
@@ -688,22 +647,12 @@ func runtimeSafetyRejectsStandardDefinitionCapByDefault() throws {
 
     let failures = runtimeSafetyFailures(for: raw)
 
+    let expectedObserved = "\(HeistPlanRuntimeSafetyLimits.standardMaxDefinitions + 1) definitions"
     #expect(failures.contains {
-        $0.path == "$.definitions"
+        $0.path.description == "$.definitions"
             && $0.contract == "max total heist definitions"
-            && $0.observed == "\(HeistPlanRuntimeSafetyLimits.standardMaxDefinitions + 1) definitions"
+            && $0.observed == expectedObserved
     }, "\(failures)")
-}
-
-@Test
-func typedLoopStepInitializersRejectNonCanonicalSwiftParameters() throws {
-    #expect(throws: HeistPlanError.self) {
-        _ = try ForEachStringStep(
-            values: ["Milk"],
-            parameter: "bad name",
-            body: [.warn(WarnStep(message: "body"))]
-        )
-    }
 }
 
 @Test
@@ -768,7 +717,7 @@ func runtimeSafetyAllowsCollectionLoopsInsideControlFlowButRejectsNestedCollecti
         let failures = runtimeSafetyFailures(for: raw)
 
         #expect(failures.contains {
-            $0.path == path
+            $0.path.description == path
                 && $0.contract == "collection loops must not be nested"
                 && $0.observed == observed
         }, "\(failures)")
@@ -817,14 +766,6 @@ func runtimeSafetyRejectsInvalidHeistDefinitionsAndInvocations() throws {
     let cases: [(HeistPlanAdmissionCandidate, String)] = [
         (
             HeistPlanAdmissionCandidate(definitions: [
-                HeistPlanAdmissionCandidate(name: nil, body: [.warn(WarnStep(message: "x"))]),
-            ], body: [
-                .warn(WarnStep(message: "body")),
-            ]),
-            "heist definitions must have a non-empty name"
-        ),
-        (
-            HeistPlanAdmissionCandidate(definitions: [
                 HeistPlanAdmissionCandidate(name: "duplicate", body: [.warn(WarnStep(message: "a"))]),
                 HeistPlanAdmissionCandidate(name: "duplicate", body: [.warn(WarnStep(message: "b"))]),
             ], body: [.warn(WarnStep(message: "body"))]),
@@ -833,7 +774,7 @@ func runtimeSafetyRejectsInvalidHeistDefinitionsAndInvocations() throws {
         (
             HeistPlanAdmissionCandidate(definitions: [definition], body: [
                 .invoke(HeistInvocationStep(
-                    path: ["missing"],
+                    path: "missing",
                     argument: .string("Milk")
                 )),
             ]),
@@ -841,7 +782,7 @@ func runtimeSafetyRejectsInvalidHeistDefinitionsAndInvocations() throws {
         ),
         (
             HeistPlanAdmissionCandidate(definitions: [definition], body: [
-                .invoke(HeistInvocationStep(path: ["addToCart"], argument: .none)),
+                .invoke(HeistInvocationStep(path: "addToCart", argument: .none)),
             ]),
             "heist run argument type must match"
         ),
@@ -947,13 +888,14 @@ func admissionDecodingRejectsUnsupportedAndInvalidCommands() throws {
 
 @Test
 func runtimeSafetyRejectsDefinitionSelfInvocationOutsideLocalScope() throws {
-    let recursiveName = "repeatHeist"
+    let recursiveName: HeistPlanName = "repeatHeist"
+    let recursivePath: HeistInvocationPath = "repeatHeist"
     let raw = HeistPlanAdmissionCandidate(definitions: [
         HeistPlanAdmissionCandidate(name: recursiveName, body: [
-            .invoke(HeistInvocationStep(path: [recursiveName])),
+            .invoke(HeistInvocationStep(path: recursivePath)),
         ]),
     ], body: [
-        .invoke(HeistInvocationStep(path: [recursiveName])),
+        .invoke(HeistInvocationStep(path: recursivePath)),
     ])
 
     let failures = runtimeSafetyFailures(for: raw)
@@ -975,7 +917,7 @@ func runtimeSafetyAcceptsSingularAccessibilityTargetCapability() throws {
     )
     let raw = HeistPlanAdmissionCandidate(definitions: [definition], body: [
         .invoke(HeistInvocationStep(
-            path: ["deleteItem"],
+            path: "deleteItem",
             argument: .accessibilityTarget(.predicate(.label("Row 1")))
         )),
     ])
@@ -1003,7 +945,7 @@ func runtimeSafetyAcceptsParameterizedRootAndScratchRootCaller() throws {
                 ))),
             ]),
         ],
-        body: [.invoke(HeistInvocationStep(path: ["search"], argument: .string("Milk")))]
+        body: [.invoke(HeistInvocationStep(path: "search", argument: .string("Milk")))]
     )
     _ = try validatedPlan(scratchRoot)
 }
@@ -1024,12 +966,12 @@ func runtimeSafetyUsesInvokedDefinitionScopeForHelperDependencies() throws {
                 .action(try ActionStep(command: .activate(.predicate(
                     ElementPredicateTemplate(label: .exact(itemReference))
                 )))),
-                .invoke(HeistInvocationStep(path: ["tapAddButton"])),
+                .invoke(HeistInvocationStep(path: "tapAddButton")),
             ]
         ),
     ], body: [
         .invoke(HeistInvocationStep(
-            path: ["addToCart"],
+            path: "addToCart",
             argument: .string("Milk")
         )),
     ])
@@ -1048,11 +990,11 @@ func runtimeSafetyAllowsSameLeafDefinitionNamesInDifferentScopes() throws {
                 ]),
             ],
             body: [
-                .invoke(HeistInvocationStep(path: ["setup"])),
+                .invoke(HeistInvocationStep(path: "setup")),
             ]
         ),
     ], body: [
-        .invoke(HeistInvocationStep(path: ["setup"])),
+        .invoke(HeistInvocationStep(path: "setup")),
     ])
 
     _ = try validatedPlan(raw)
@@ -1073,7 +1015,7 @@ func runtimeSafetyValidatesInvokedBodiesWithBoundArguments() throws {
         ),
     ], body: [
         .invoke(HeistInvocationStep(
-            path: ["typeSearch"],
+            path: "typeSearch",
             argument: .string("")
         )),
     ])
@@ -1081,7 +1023,7 @@ func runtimeSafetyValidatesInvokedBodiesWithBoundArguments() throws {
     let failures = runtimeSafetyFailures(for: raw)
 
     #expect(failures.contains { $0.contract.contains("heist action payload contract") })
-    #expect(failures.contains { $0.observed.contains("text must be non-empty") })
+    #expect(failures.contains { $0.observed.contains("text to append must be non-empty") })
 }
 
 @Test

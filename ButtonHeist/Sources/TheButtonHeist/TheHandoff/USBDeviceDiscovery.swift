@@ -138,7 +138,7 @@ final class USBDeviceDiscovery: DeviceDiscovering {
 
             if session.knownDevices[deviceID] == nil {
                 let device = DiscoveredDevice(
-                    deviceID: deviceID,
+                    id: deviceID,
                     name: "\(connectedDevice.name) (USB)",
                     endpoint: .hostPort(host: ipv6Address, port: port),
                     displayDeviceName: connectedDevice.name,

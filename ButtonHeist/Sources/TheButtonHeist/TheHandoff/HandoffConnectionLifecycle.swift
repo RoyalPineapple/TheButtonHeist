@@ -27,7 +27,7 @@ final class HandoffConnectionLifecycle {
 
     private enum ReconnectState {
         case disabled
-        case armed(filter: String?)
+        case armed(DeviceResolutionTarget)
         case running(ReconnectRun)
         case exhausted
 
@@ -219,11 +219,12 @@ final class HandoffConnectionLifecycle {
     // MARK: - Reconnect lifecycle
 
     func setup(filter: String?) -> Bool {
-        if case .armed(let currentFilter) = runtimePhase.reconnectState,
-           currentFilter == filter {
+        let target = DeviceResolutionTarget(filter: filter)
+        if case .armed(let currentTarget) = runtimePhase.reconnectState,
+           currentTarget == target {
             return false
         }
-        transition(to: runtimePhase.replacingReconnectState(.armed(filter: filter)))
+        transition(to: runtimePhase.replacingReconnectState(.armed(target)))
         return true
     }
 
@@ -235,13 +236,13 @@ final class HandoffConnectionLifecycle {
 
     func cancel(clearTarget _: Bool) -> Bool {
         guard let run = runtimePhase.activeReconnectRun else { return false }
-        transition(to: runtimePhase.replacingReconnectState(.armed(filter: run.context.target.filter)))
+        transition(to: runtimePhase.replacingReconnectState(.armed(run.context.target.resolutionTarget)))
         return true
     }
 
     func targetForDisconnectedDevice(_ disconnectedDevice: DiscoveredDevice) -> HandoffReconnectTarget? {
-        guard case .armed(let filter) = runtimePhase.reconnectState else { return nil }
-        return HandoffReconnectTarget(filter: filter, device: disconnectedDevice)
+        guard case .armed(let target) = runtimePhase.reconnectState else { return nil }
+        return HandoffReconnectTarget(resolutionTarget: target, device: disconnectedDevice)
     }
 
     @discardableResult
@@ -249,8 +250,8 @@ final class HandoffConnectionLifecycle {
         target: HandoffReconnectTarget,
         operation: @escaping @ButtonHeistActor (HandoffReconnectRunContext) async -> Void
     ) -> HandoffReconnectRunContext? {
-        guard case .armed(let filter) = runtimePhase.reconnectState,
-              filter == target.filter,
+        guard case .armed(let resolutionTarget) = runtimePhase.reconnectState,
+              resolutionTarget == target.resolutionTarget,
               !runtimePhase.isActiveConnection
         else { return nil }
 
@@ -274,7 +275,7 @@ final class HandoffConnectionLifecycle {
 
     func finishSuccess(_ context: HandoffReconnectRunContext) -> Bool {
         guard isCurrentRun(context) else { return false }
-        let next = runtimePhase.replacingReconnectState(.armed(filter: context.target.filter))
+        let next = runtimePhase.replacingReconnectState(.armed(context.target.resolutionTarget))
         transition(to: next, cancelDepartedReconnectRun: false)
         return true
     }

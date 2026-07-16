@@ -94,8 +94,7 @@ struct RenderResponseTests {
     func summaryHeistCatalogRenderStaysCompactMenu() {
         let response = FenceResponse.heistCatalog(HeistDiscoveryCatalog(heists: [
             HeistCatalogEntry(
-                name: "checkout",
-                role: .capability,
+                identity: .capability("checkout"),
                 parameterKind: .string,
                 requiresArgument: true,
                 summary: "Reusable heist capability requiring string argument",
@@ -122,13 +121,12 @@ struct RenderResponseTests {
     func detailedHeistCatalogRenderIncludesSafeDerivedFields() throws {
         let response = FenceResponse.heistCatalog(HeistDiscoveryCatalog(heists: [
             HeistCatalogEntry(
-                name: "checkout",
-                role: .capability,
+                identity: .capability("checkout"),
                 parameterKind: .none,
                 requiresArgument: false,
                 summary: "Reusable heist capability",
                 tags: [.capability, .composed, .assertion, .semanticAction],
-                nestedRunHeists: [try HeistInvocationPath(dottedName: "checkout.confirm")],
+                nestedRunHeists: ["checkout.confirm"],
                 actionCommands: [.activate],
                 waitCount: 1,
                 expectationCount: 1,
@@ -274,20 +272,19 @@ struct RenderResponseTests {
             trace: trace,
             completeness: .complete
         ))
-        let evidence = HeistStepEvidence.action(.dispatch(
-            command: command,
+        let evidence = HeistActionEvidence.dispatch(
             dispatchResult: .success(
                 method: .activate,
                 evidence: ActionResultSuccessEvidence(observation: .trace(traceEvidence))
             )
-        ))
+        )
         let step: [String: Any] = [
             "path": "$.body[0]",
-            "kind": HeistExecutionStepKind.action.rawValue,
             "durationMs": 1,
-            "intent": try jsonObject(HeistStepIntent.action(command: command), encoder: encoder),
-            "outcome": [
-                "type": "passed",
+            "node": [
+                "type": HeistExecutionStepKind.action.rawValue,
+                "command": try jsonObject(command, encoder: encoder),
+                "outcome": "passed",
                 "evidence": try jsonObject(evidence, encoder: encoder),
                 "children": [],
             ],

@@ -7,7 +7,11 @@ import ButtonHeistSupport
 @_spi(ButtonHeistInternals) import TheScore
 
 private func invocationPath(_ dottedName: String) -> HeistInvocationPath {
-    .preconditionValidated(dottedName: dottedName)
+    do {
+        return try HeistInvocationPath(validating: dottedName)
+    } catch {
+        preconditionFailure("invalid fence fixture path \(dottedName): \(error)")
+    }
 }
 
 private func exactSemanticString(_ value: String) -> HeistSemanticStringMatch {
@@ -1336,7 +1340,7 @@ final class TheFenceHandlerTests: XCTestCase {
             body: [.action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .exact(item))))))]
         )
         let plan = try HeistPlan(definitions: [definition], body: [
-            .invoke(HeistInvocationStep(path: ["addToCart"], argument: .string("Milk"))),
+            .invoke(HeistInvocationStep(path: "addToCart", argument: .string("Milk"))),
         ])
 
         let request = try fence.decodeRunHeistRequest(try Self.planSourceArguments(for: plan))
@@ -1478,7 +1482,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let plan = try HeistPlan(
             name: "flow",
             definitions: [definition],
-            body: [.invoke(HeistInvocationStep(path: ["addToCart"], argument: .string("Milk")))]
+            body: [.invoke(HeistInvocationStep(path: "addToCart", argument: .string("Milk")))]
         )
         XCTAssertThrowsError(try fence.parseRequest(command: .runHeist, arguments: try Self.inlineArguments(for: plan)))
         XCTAssertNoThrow(try fence.parseRequest(
@@ -1507,7 +1511,7 @@ final class TheFenceHandlerTests: XCTestCase {
         guard case .heistCatalog(let catalog) = response else {
             return XCTFail("Expected heistCatalog response, got \(response)")
         }
-        XCTAssertEqual(catalog.heists.map(\.name), ["shop", "addToCart"])
+        XCTAssertEqual(catalog.heists.map(\.identity.displayName), ["shop", "addToCart"])
         XCTAssertEqual(catalog.heists[1].parameterKind, .string)
         XCTAssertTrue(catalog.heists[1].requiresArgument)
         XCTAssertEqual(catalog.heists[1].summary, "Reusable heist capability requiring string argument")
@@ -1542,7 +1546,7 @@ final class TheFenceHandlerTests: XCTestCase {
         guard case .heistCatalog(let catalog) = response else {
             return XCTFail("Expected heistCatalog response, got \(response)")
         }
-        XCTAssertEqual(catalog.heists.map(\.name), ["shop", "addToCart"])
+        XCTAssertEqual(catalog.heists.map(\.identity.displayName), ["shop", "addToCart"])
         XCTAssertEqual(catalog.heists[1].parameterKind, .string)
         XCTAssertTrue(catalog.heists[1].requiresArgument)
     }
@@ -1560,8 +1564,8 @@ final class TheFenceHandlerTests: XCTestCase {
         guard case .heistCatalog(let catalog) = listResponse else {
             return XCTFail("Expected heistCatalog response, got \(listResponse)")
         }
-        XCTAssertEqual(catalog.heists.map(\.name), ["agentFlow", "Cart", "Cart.addItem"])
-        let addItem = try XCTUnwrap(catalog.heists.first { $0.name == "Cart.addItem" })
+        XCTAssertEqual(catalog.heists.map(\.identity.displayName), ["agentFlow", "Cart", "Cart.addItem"])
+        let addItem = try XCTUnwrap(catalog.heists.first { $0.identity.displayName == "Cart.addItem" })
         XCTAssertEqual(addItem.parameterKind, .string)
         XCTAssertEqual(addItem.actionCommands, [.activate])
         XCTAssertEqual(addItem.validationStatus, .validated)
@@ -1576,7 +1580,7 @@ final class TheFenceHandlerTests: XCTestCase {
         guard case .heistDescription(let description) = describeResponse else {
             return XCTFail("Expected heistDescription response, got \(describeResponse)")
         }
-        XCTAssertEqual(description.name, "Cart.addItem")
+        XCTAssertEqual(description.identity.displayName, "Cart.addItem")
         XCTAssertEqual(description.parameterKind, .string)
         XCTAssertEqual(description.semanticSurface.actionCommands, [.activate])
         XCTAssertEqual(description.semanticSurface.targetPredicates, [.predicate(.label(item))])
@@ -1622,7 +1626,7 @@ final class TheFenceHandlerTests: XCTestCase {
                     command: .activate(.predicate(.label("Checkout"))),
                     expectationPolicy: .expect(ActionExpectation(predicate: .exists(.label("Done")), timeout: 1)))),
                 .wait(WaitStep(predicate: .exists(.label("Receipt")), timeout: 1)),
-                .invoke(HeistInvocationStep(path: ["confirm"])),
+                .invoke(HeistInvocationStep(path: "confirm")),
             ]
         )
         let plan = try HeistPlan(
@@ -1641,7 +1645,7 @@ final class TheFenceHandlerTests: XCTestCase {
         guard case .heistCatalog(let catalog) = response else {
             return XCTFail("Expected heistCatalog response, got \(response)")
         }
-        let checkout = try XCTUnwrap(catalog.heists.first { $0.name == "checkout" })
+        let checkout = try XCTUnwrap(catalog.heists.first { $0.identity.displayName == "checkout" })
         XCTAssertEqual(checkout.nestedRunHeists, [invocationPath("checkout.confirm")])
         XCTAssertEqual(checkout.actionCommands, [.activate])
         XCTAssertEqual(checkout.waitCount, 1)
@@ -1736,7 +1740,7 @@ final class TheFenceHandlerTests: XCTestCase {
         guard case .heistDescription(let description) = response else {
             return XCTFail("Expected heistDescription response, got \(response)")
         }
-        XCTAssertEqual(description.name, "checkout")
+        XCTAssertEqual(description.identity.displayName, "checkout")
         XCTAssertEqual(description.role, .capability)
         XCTAssertEqual(description.semanticSurface.actionCommands, [.activate])
         XCTAssertEqual(description.semanticSurface.expectations, [existsLabel("Done")])
@@ -1769,7 +1773,7 @@ final class TheFenceHandlerTests: XCTestCase {
         guard case .heistDescription(let description) = response else {
             return XCTFail("Expected heistDescription response, got \(response)")
         }
-        XCTAssertEqual(description.name, "checkout")
+        XCTAssertEqual(description.identity.displayName, "checkout")
         XCTAssertEqual(description.semanticSurface.actionCommands, [.activate])
         XCTAssertEqual(description.semanticSurface.targetPredicates, [
             .predicate(.label("Checkout")),
@@ -1803,53 +1807,10 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertTrue(message.contains("shop, openCart"), message)
     }
 
-    func testHeistExecutionResponseFailureDrivenByFailedStepNotFailedIndex() throws {
-        // A failed child must mark the response as failure even when the top-level
-        // abort location is carried by the receipt instead of an index.
-        let childPath = "$.body[0].invoke.body[0]"
-        let invocation = HeistInvocationStep(path: ["heist"])
-        let child = HeistExecutionStepResult.failed(
-            path: childPath,
-            receiptKind: .action,
-            durationMs: 5,
-            evidence: .dispatch(
-                command: .activate(.predicate(.label("Button"))),
-                dispatchResult: ActionResult.failure(
-                    method: .activate,
-                    errorKind: .actionFailed,
-                    message: "boom",
-                    evidence: .none
-                )
-            ),
-            failure: HeistFailureDetail(
-                category: .action,
-                contract: "activate command succeeds",
-                observed: "boom"
-            )
-        )
-        let result = HeistExecutionResult(
-            steps: [
-                .childAborted(
-                    path: "$.body[0]",
-                    receiptKind: .invocation,
-                    durationMs: 5,
-                    evidence: .invocation(
-                        invocation: invocation,
-                        name: "heist",
-                        argument: nil,
-                        outcome: .childFailed(path: childPath)
-                    ),
-                    failure: HeistFailureDetail(
-                        category: .invocation,
-                        contract: "heist body completes without failure",
-                        observed: "child failed at \(childPath)"
-                    ),
-                    abortedAtChildPath: childPath,
-                    children: [child]
-                ),
-            ],
-            durationMs: 5,
-            abortedAtPath: childPath
+    func testHeistExecutionResponseFailureDerivesFromTypedReceipt() throws {
+        let result = HeistReceiptFixture.result(
+            steps: [HeistReceiptFixture.explicitFailure(message: "boom", durationMs: 5)],
+            durationMs: 5
         )
         let response = FenceResponse.heistExecution(
             plan: try HeistPlan(body: [.warn(WarnStep(message: "x"))]),
@@ -1857,6 +1818,7 @@ final class TheFenceHandlerTests: XCTestCase {
             accessibilityTrace: nil
         )
         XCTAssertTrue(response.isFailure)
+        XCTAssertEqual(result.abortedAtPath, "$.body[0]")
     }
 
     /// Build a lower-level run_heist argument envelope from the canonical JSON
@@ -2815,7 +2777,7 @@ final class TheFenceHandlerTests: XCTestCase {
             command: .typeText,
             arguments: [
                 "text": .string(""),
-                "replacingExisting": .bool(true),
+                "mode": .string("replace"),
             ]
         )
     }
@@ -2831,12 +2793,12 @@ final class TheFenceHandlerTests: XCTestCase {
 
         XCTAssertNotNil(response.leafAction, "Expected single-step action response, got \(response)")
         guard let message = mockConn.sent.sentPlanMessages.last,
-              case .typeText(let text, let target, let replacingExisting) = message else {
+              case .typeText(let payload) = message else {
             return XCTFail("Expected typeText message, got \(String(describing: mockConn.sent.sentPlanMessages.last))")
         }
-        XCTAssertEqual(text, "hello")
-        XCTAssertEqual(target, .predicate(.identifier("search_field")))
-        XCTAssertFalse(replacingExisting)
+        XCTAssertEqual(payload.text, "hello")
+        XCTAssertEqual(payload.target, .predicate(.identifier("search_field")))
+        XCTAssertEqual(payload.text.mode, .append)
     }
 
     @ButtonHeistActor
@@ -2846,17 +2808,16 @@ final class TheFenceHandlerTests: XCTestCase {
         let response = try await fence.execute(command: .typeText, values: [
             "text": .string(""),
             "target": targetValue(identifier: "search_field"),
-            "replacingExisting": .bool(true),
+            "mode": .string("replace"),
         ])
 
         XCTAssertNotNil(response.leafAction, "Expected single-step action response, got \(response)")
         guard let message = mockConn.sent.sentPlanMessages.last,
-              case .typeText(let text, let target, let replacingExisting) = message else {
+              case .typeText(let payload) = message else {
             return XCTFail("Expected typeText message, got \(String(describing: mockConn.sent.sentPlanMessages.last))")
         }
-        XCTAssertEqual(text, "")
-        XCTAssertEqual(target, .predicate(.identifier("search_field")))
-        XCTAssertTrue(replacingExisting)
+        XCTAssertEqual(payload.text, .replacing(""))
+        XCTAssertEqual(payload.target, .predicate(.identifier("search_field")))
     }
 
     @ButtonHeistActor

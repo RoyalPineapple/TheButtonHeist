@@ -5,31 +5,68 @@ enum HeistReportEvidenceProjection: Sendable {
     case action(HeistActionEvidenceProjection)
     case wait(HeistWaitEvidenceProjection)
     case caseSelection(HeistCaseSelectionEvidenceProjection)
-    case forEachString(HeistForEachStringEvidence)
-    case forEachElement(HeistForEachElementEvidence)
+    case forEachString(HeistForEachStringEvidenceProjection)
+    case forEachElement(HeistForEachElementEvidenceProjection)
     case repeatUntil(HeistRepeatUntilEvidenceProjection)
     case invocation(HeistInvocationEvidenceProjection)
     case warning(HeistExecutionWarning)
 
     init?(node: HeistExecutionEvidenceNode, profile: ProjectionProfile) {
-        guard let evidence = node.step.evidence else { return nil }
-        switch evidence {
-        case .action(let evidence):
-            self = .action(HeistActionEvidenceProjection(evidence: evidence, profile: profile))
-        case .wait(let evidence):
+        let step = node.step
+        switch step.kind {
+        case .action:
+            guard let command = step.actionCommand,
+                  let evidence = step.actionEvidence else { return nil }
+            self = .action(HeistActionEvidenceProjection(
+                command: command,
+                evidence: evidence,
+                profile: profile
+            ))
+        case .wait:
+            guard let evidence = step.waitEvidence else { return nil }
             self = .wait(HeistWaitEvidenceProjection(evidence: evidence, profile: profile))
-        case .caseSelection(let evidence):
+        case .conditional:
+            guard let evidence = step.caseSelectionEvidence else { return nil }
             self = .caseSelection(HeistCaseSelectionEvidenceProjection(evidence: evidence, profile: profile))
-        case .forEachString(let evidence):
-            self = .forEachString(evidence)
-        case .forEachElement(let evidence):
-            self = .forEachElement(evidence)
-        case .repeatUntil(let evidence):
-            self = .repeatUntil(HeistRepeatUntilEvidenceProjection(evidence: evidence, profile: profile))
-        case .invocation(let evidence):
-            self = .invocation(HeistInvocationEvidenceProjection(evidence: evidence, profile: profile))
-        case .warning(let warning):
+        case .forEachString:
+            guard let declaration = step.forEachStringDeclaration,
+                  let evidence = step.forEachStringEvidence else { return nil }
+            self = .forEachString(.init(declaration: declaration, evidence: evidence))
+        case .forEachElement:
+            guard let declaration = step.forEachElementDeclaration,
+                  let evidence = step.forEachElementEvidence else { return nil }
+            self = .forEachElement(.init(declaration: declaration, evidence: evidence))
+        case .forEachIteration:
+            if let declaration = step.forEachStringDeclaration,
+               let evidence = step.forEachStringEvidence {
+                self = .forEachString(.init(declaration: declaration, evidence: evidence))
+            } else if let declaration = step.forEachElementDeclaration,
+                      let evidence = step.forEachElementEvidence {
+                self = .forEachElement(.init(declaration: declaration, evidence: evidence))
+            } else {
+                return nil
+            }
+        case .repeatUntil, .repeatUntilIteration:
+            guard let declaration = step.repeatUntilDeclaration,
+                  let evidence = step.repeatUntilEvidence else { return nil }
+            self = .repeatUntil(HeistRepeatUntilEvidenceProjection(
+                declaration: declaration,
+                evidence: evidence,
+                profile: profile
+            ))
+        case .invoke:
+            guard let invocation = step.invocation,
+                  let evidence = step.invocationEvidence else { return nil }
+            self = .invocation(HeistInvocationEvidenceProjection(
+                invocation: invocation,
+                evidence: evidence,
+                profile: profile
+            ))
+        case .warn:
+            guard let warning = step.warningEvidence else { return nil }
             self = .warning(warning)
+        case .fail, .heist:
+            return nil
         }
     }
 
@@ -60,7 +97,6 @@ enum HeistReportEvidenceProjection: Sendable {
 enum HeistActionEvidenceProjection: Sendable {
     case commandResolutionFailure(command: HeistActionCommand)
     case dispatch(command: HeistActionCommand, result: ActionProjection)
-    case commandlessDispatch(result: ActionProjection)
     case expectation(
         command: HeistActionCommand,
         dispatchResult: ActionProjection,
@@ -68,11 +104,15 @@ enum HeistActionEvidenceProjection: Sendable {
         expectation: ExpectationProjection
     )
 
-    init(evidence: HeistActionEvidence, profile: ProjectionProfile) {
+    init(
+        command: HeistActionCommand,
+        evidence: HeistActionEvidence,
+        profile: ProjectionProfile
+    ) {
         switch evidence {
-        case .commandResolutionFailure(let command):
+        case .commandResolutionFailure:
             self = .commandResolutionFailure(command: command)
-        case .dispatch(let command, let dispatchResult):
+        case .dispatch(let dispatchResult):
             self = .dispatch(
                 command: command,
                 result: ActionProjection(
@@ -82,16 +122,7 @@ enum HeistActionEvidenceProjection: Sendable {
                     includeOmissions: true
                 )
             )
-        case .commandlessDispatch(let dispatchResult):
-            self = .commandlessDispatch(
-                result: ActionProjection(
-                    actionMethod: .result(dispatchResult.method),
-                    result: dispatchResult,
-                    profile: profile,
-                    includeOmissions: true
-                )
-            )
-        case .expectation(let command, let dispatchResult, let expectationResult, let expectation):
+        case .expectation(let dispatchResult, let expectationResult, let expectation):
             self = .expectation(
                 command: command,
                 dispatchResult: ActionProjection(
@@ -117,8 +148,6 @@ enum HeistActionEvidenceProjection: Sendable {
              .dispatch(let command, _),
              .expectation(let command, _, _, _):
             return command.wireType
-        case .commandlessDispatch:
-            return nil
         }
     }
 
@@ -128,8 +157,6 @@ enum HeistActionEvidenceProjection: Sendable {
              .dispatch(let command, _),
              .expectation(let command, _, _, _):
             return command.reportTarget
-        case .commandlessDispatch:
-            return nil
         }
     }
 
@@ -137,7 +164,7 @@ enum HeistActionEvidenceProjection: Sendable {
         switch self {
         case .commandResolutionFailure:
             return nil
-        case .dispatch(_, let result), .commandlessDispatch(let result):
+        case .dispatch(_, let result):
             return result.delta
         case .expectation(_, _, let expectationResult, _):
             return expectationResult.delta
@@ -177,11 +204,17 @@ struct HeistCaseSelectionEvidenceProjection: Sendable {
 }
 
 struct HeistRepeatUntilEvidenceProjection: Sendable {
+    let declaration: HeistRepeatUntilDeclaration
     let evidence: HeistRepeatUntilEvidence
     let expectation: ExpectationProjection
     let result: ActionProjection?
 
-    init(evidence: HeistRepeatUntilEvidence, profile: ProjectionProfile) {
+    init(
+        declaration: HeistRepeatUntilDeclaration,
+        evidence: HeistRepeatUntilEvidence,
+        profile: ProjectionProfile
+    ) {
+        self.declaration = declaration
         self.evidence = evidence
         expectation = ExpectationProjection(result: evidence.expectation)
         result = evidence.actionResult.map {
@@ -190,20 +223,40 @@ struct HeistRepeatUntilEvidenceProjection: Sendable {
     }
 }
 
+struct HeistForEachStringEvidenceProjection: Sendable {
+    let declaration: HeistForEachStringDeclaration
+    let evidence: HeistForEachStringEvidence
+}
+
+struct HeistForEachElementEvidenceProjection: Sendable {
+    let declaration: HeistForEachElementDeclaration
+    let evidence: HeistForEachElementEvidence
+}
+
 struct HeistInvocationEvidenceProjection: Sendable {
+    let invocation: HeistInvocationStep
     let evidence: HeistInvocationEvidence
     let expectation: HeistInvocationExpectationProjection?
 
-    init(evidence: HeistInvocationEvidence, profile: ProjectionProfile) {
+    init(
+        invocation: HeistInvocationStep,
+        evidence: HeistInvocationEvidence,
+        profile: ProjectionProfile
+    ) {
+        self.invocation = invocation
         self.evidence = evidence
         switch evidence {
-        case .heist, .invocation(_, _, _, .childFailed):
+        case .childFailed:
             expectation = nil
-        case .invocation(_, _, _, .completed(let evidence)):
+        case .completed(let evidence):
             expectation = evidence.map {
                 HeistInvocationExpectationProjection(evidence: $0, profile: profile)
             }
         }
+    }
+
+    var argumentSummary: String? {
+        invocation.argument == .none ? nil : invocation.runHeistSummary
     }
 }
 

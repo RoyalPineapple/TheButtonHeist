@@ -5,7 +5,7 @@ import Foundation
 import TheScore
 
 struct InsideJobRuntimeConfiguration: Equatable, Sendable {
-    let token: String?
+    let token: SessionAuthToken
     let tokenSource: StartupConfigurationSource
     let instanceIdSource: StartupConfigurationSource
     let preferredPort: UInt16
@@ -29,15 +29,17 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
         addressFamily: ListenerAddressFamily = .dualStack,
         fingerprintsEnabled: Bool? = nil
     ) -> InsideJobRuntimeConfiguration {
+        let explicitToken = token.flatMap { try? SessionAuthToken(validating: $0) }
+        let explicitInstanceId = instanceId.flatMap { try? InsideJobInstanceID(validating: $0) }
         let resolvedToken = resolvedRuntimeToken(
-            explicitToken: token,
+            explicitToken: explicitToken,
             startupToken: startupConfiguration.token
         )
         return InsideJobRuntimeConfiguration(
             token: resolvedToken.value,
             tokenSource: resolvedToken.source,
-            instanceId: instanceId,
-            instanceIdSource: instanceId == nil ? .generated : .api,
+            instanceId: explicitInstanceId,
+            instanceIdSource: explicitInstanceId == nil ? .generated : .api,
             preferredPort: port,
             preferredPortSource: port == 0 ? .defaultValue : .api,
             allowedScopes: allowedScopes ?? startupConfiguration.allowedScopes.value,
@@ -75,29 +77,22 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
     }
 
     private static func resolvedRuntimeToken(
-        explicitToken: String?,
-        startupToken: ResolvedStartupValue<String?>
-    ) -> ResolvedStartupValue<String> {
-        if let explicitToken = nonEmptyToken(explicitToken) {
+        explicitToken: SessionAuthToken?,
+        startupToken: ResolvedStartupValue<SessionAuthToken?>
+    ) -> ResolvedStartupValue<SessionAuthToken> {
+        if let explicitToken {
             return ResolvedStartupValue(value: explicitToken, source: .api)
         }
-        if let startupTokenValue = nonEmptyToken(startupToken.value) {
+        if let startupTokenValue = startupToken.value {
             return ResolvedStartupValue(value: startupTokenValue, source: startupToken.source)
         }
         return ResolvedStartupValue(value: GeneratedSessionToken.make(), source: .generated)
     }
 
-    private static func nonEmptyToken(_ token: String?) -> String? {
-        guard let token, !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return nil
-        }
-        return token
-    }
-
     init(
-        token: String?,
+        token: SessionAuthToken,
         tokenSource: StartupConfigurationSource,
-        instanceId: String?,
+        instanceId: InsideJobInstanceID?,
         instanceIdSource: StartupConfigurationSource,
         preferredPort: UInt16,
         preferredPortSource: StartupConfigurationSource,
@@ -129,37 +124,60 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
 }
 
 struct InsideJobSessionIdentity: Equatable, Sendable {
-    let sessionId: UUID
-    let installationId: String
-    let effectiveInstanceId: String
+    let launchId: ServerLaunchID
+    let installationId: InstallationID
+    let effectiveInstanceId: InsideJobInstanceID
 
-    static func make(instanceId: String?) -> InsideJobSessionIdentity {
-        let sessionId = UUID()
+    static func make(instanceId: InsideJobInstanceID?) -> InsideJobSessionIdentity {
+        guard let launchId = try? ServerLaunchID(validating: UUID().uuidString),
+              let generatedInstanceId = try? InsideJobInstanceID(
+                validating: String(launchId.description.prefix(8)).lowercased()
+              ) else {
+            preconditionFailure("UUID generation produced a blank server identity")
+        }
         return InsideJobSessionIdentity(
-            sessionId: sessionId,
+            launchId: launchId,
             installationId: loadInstallationId(),
-            effectiveInstanceId: instanceId ?? String(sessionId.uuidString.prefix(8)).lowercased()
+            effectiveInstanceId: instanceId ?? generatedInstanceId
         )
     }
 
-    private static func loadInstallationId() -> String {
-        let bundleId = Bundle.main.bundleIdentifier ?? "com.buttonheist.theinsidejob"
-        let defaultsKey = "\(bundleId).installation-id"
+    private static func loadInstallationId() -> InstallationID {
+        let defaultsKey = "\(Bundle.main.insideJobIdentifier).installation-id"
 
-        if let existing = UserDefaults.standard.string(forKey: defaultsKey), !existing.isEmpty {
-            return existing
+        if let existing = UserDefaults.standard.string(forKey: defaultsKey),
+           let installationId = try? InstallationID(validating: existing) {
+            return installationId
         }
 
-        let generated = UUID().uuidString.lowercased()
-        UserDefaults.standard.set(generated, forKey: defaultsKey)
+        guard let generated = try? InstallationID(validating: UUID().uuidString.lowercased()) else {
+            preconditionFailure("UUID generation produced a blank installation ID")
+        }
+        UserDefaults.standard.set(generated.description, forKey: defaultsKey)
         return generated
     }
 }
 
 @MainActor
 extension TheInsideJob {
-    var effectiveInstanceId: String {
+    var effectiveInstanceId: InsideJobInstanceID {
         runtimeConfiguration.sessionIdentity.effectiveInstanceId
+    }
+}
+
+extension Bundle {
+    var insideJobIdentifier: BundleIdentifier {
+        guard let bundleIdentifier,
+              let identifier = try? BundleIdentifier(validating: bundleIdentifier) else {
+            return "com.buttonheist.theinsidejob"
+        }
+        return identifier
+    }
+}
+
+extension ProcessInfo {
+    var simulatorUDID: SimulatorUDID? {
+        environment[.udid].flatMap { try? SimulatorUDID(validating: $0) }
     }
 }
 

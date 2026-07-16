@@ -4,17 +4,15 @@ extension HeistCanonicalSwiftDSLRenderer {
     func renderDefinitionHeader(
         _ definition: HeistPlan,
         type: String,
-        path: [String]
+        path: HeistDefinitionPath
     ) throws -> String {
-        let pathArgument = quote(path.joined(separator: "."))
+        let pathArgument = quote(path.description)
         switch definition.parameter {
         case .none:
             return "\(type)(\(pathArgument)) {"
         case .string(let parameter):
-            try validateParameter(parameter)
             return "\(type)(\(pathArgument), parameter: \(quote(parameter))) { \(parameter) in"
         case .accessibilityTarget(let parameter):
-            try validateParameter(parameter)
             return "\(type)(\(pathArgument), parameter: \(quote(parameter))) { \(parameter) in"
         }
     }

@@ -307,7 +307,7 @@ final class RotorCursorTests: XCTestCase {
         return liveTarget
     }
 
-    private func expectSuccessfulStep(hostHeistId: HeistId, rotorName: String) throws {
+    private func expectSuccessfulStep(hostHeistId: HeistId, rotorName: RotorName) throws {
         let outcome = stash.performRotor(
             selection: .named(rotorName),
             direction: .next,

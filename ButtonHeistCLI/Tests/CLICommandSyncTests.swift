@@ -191,7 +191,7 @@ final class CLICommandSyncTests: XCTestCase {
     }
 
     func testRunHeistDoesNotExpandRawJSONIRInlinePlan() throws {
-        let rawJSON = #"{"version":1,"body":[{"type":"warn","warn":{"message":"x"}}]}"#
+        let rawJSON = #"{"version":2,"body":[{"type":"warn","warn":{"message":"x"}}]}"#
         let arguments = try RunHeistCommand.planArguments(inline: rawJSON)
 
         XCTAssertEqual(arguments.value(for: .plan), .string(rawJSON))

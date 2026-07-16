@@ -3,7 +3,7 @@
   "entry" : "demoSmokeFlow",
   "format" : "com.royalpineapple.buttonheist.heist",
   "formatVersion" : 1,
-  "planVersion" : 1,
+  "planVersion" : 2,
   "producer" : {
     "name" : "buttonheist"
   }

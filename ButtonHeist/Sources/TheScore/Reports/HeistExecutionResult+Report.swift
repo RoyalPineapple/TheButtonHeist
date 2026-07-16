@@ -3,14 +3,12 @@ import ThePlans
 
 // MARK: - Heist Report Facts
 //
-// Reporting consumes a typed evidence event stream derived from the execution
-// tree. These facts live on the execution result types so encoders, formatters,
-// and report adapters share one report model.
+// These facts live on the execution result types so encoders, formatters, and
+// report adapters share one report model.
 
 package struct HeistExecutionEvidenceRollup: Sendable, Equatable {
     package let rootNodes: [HeistExecutionEvidenceNode]
     package let nodes: [HeistExecutionEvidenceNode]
-    package let events: [HeistExecutionEvidenceEvent]
     package let summary: HeistExecutionEvidenceSummary
     package let actions: HeistExecutionActionEvidenceRollup
     package let metrics: HeistExecutionMetricProjection
@@ -48,7 +46,6 @@ package struct HeistExecutionEvidenceRollup: Sendable, Equatable {
 
         self.rootNodes = rootNodes
         nodes = accumulator.nodes
-        events = accumulator.events
         summary = HeistExecutionEvidenceSummary(
             executedTopLevelStepCount: reportRootNodes.count(where: \.isExecuted),
             executedNodeCount: accumulator.executedNodeCount,
@@ -78,8 +75,9 @@ private extension HeistExecutionResult {
         guard case .failed(let outcome) = outcome,
               let candidate = outcome.steps.last,
               candidate.path != outcome.abortedAtPath,
-              case .action(let evidence)? = candidate.evidence,
-              case .dispatch(let command, let result) = evidence
+              case .action(let command, _) = candidate.node,
+              let evidence = candidate.actionEvidence,
+              case .dispatch(let result) = evidence
         else { return nil }
         return command == .takeScreenshot && result.method == .takeScreenshot ? candidate : nil
     }
@@ -103,20 +101,8 @@ package struct HeistExecutionEvidenceNode: Sendable, Equatable {
     }
 }
 
-package enum HeistExecutionEvidenceEvent: Sendable, Equatable {
-    case nodeVisited(HeistExecutionEvidenceNode)
-    case dispatchedActionResult(path: String, result: ActionResult)
-    case reportedActionResult(path: String, result: ActionResult)
-    case traceResult(path: String, result: ActionResult)
-    case expectationChecked(path: String, result: ExpectationResult)
-    case expectationMet(path: String, result: ExpectationResult)
-    case firstFailure(HeistExecutionStepResult)
-    case finalScreen(path: String, screenId: String)
-}
-
 private struct HeistExecutionEvidenceAccumulator {
     var nodes: [HeistExecutionEvidenceNode] = []
-    var events: [HeistExecutionEvidenceEvent] = []
     var firstFailedStep: HeistExecutionStepResult?
     var executedNodeCount = 0
     var expectationsChecked = 0
@@ -126,7 +112,6 @@ private struct HeistExecutionEvidenceAccumulator {
     var reportedResults: [ActionResult] = []
     var traceResultsInExecutionOrder: [ActionResult] = []
     var metricBuilder: HeistExecutionMetricProjectionBuilder
-    private var failureEventInsertionIndices: [Int] = []
 
     init(durationMs: Int) {
         var metricBuilder = HeistExecutionMetricProjectionBuilder()
@@ -136,65 +121,31 @@ private struct HeistExecutionEvidenceAccumulator {
 
     mutating func enter(_ step: HeistExecutionStepResult) {
         let node = HeistExecutionEvidenceNode(step: step)
-        record(.nodeVisited(node))
+        nodes.append(node)
+        executedNodeCount += node.isExecuted ? 1 : 0
+        metricBuilder.appendMetrics(for: node)
         let results = node.reportFacts.results
         if let dispatchResult = results.dispatchedActionResult {
-            record(.dispatchedActionResult(path: node.step.path, result: dispatchResult))
+            dispatchedResults.append(dispatchResult)
         }
         if let reportedResult = results.reportedActionResult {
-            record(.reportedActionResult(path: node.step.path, result: reportedResult))
+            reportedResults.append(reportedResult)
         }
         if let traceResult = results.traceEvidenceResult {
-            record(.traceResult(path: node.step.path, result: traceResult))
+            traceResultsInExecutionOrder.append(traceResult)
             if let screenId = traceResult.accessibilityTrace?.endpointScreenId {
-                record(.finalScreen(path: node.step.path, screenId: screenId))
+                finalScreenId = screenId
             }
         }
         if let expectation = results.expectation {
-            record(.expectationChecked(path: node.step.path, result: expectation))
-            if expectation.met {
-                record(.expectationMet(path: node.step.path, result: expectation))
-            }
+            expectationsChecked += 1
+            expectationsMet += expectation.met ? 1 : 0
         }
-
-        failureEventInsertionIndices.append(events.count)
     }
 
     mutating func leave(_ step: HeistExecutionStepResult) {
-        let firstFailureEventIndex = failureEventInsertionIndices.removeLast()
         if firstFailedStep == nil, step.status == .failed {
-            record(.firstFailure(step), at: firstFailureEventIndex)
-        }
-    }
-
-    private mutating func record(
-        _ event: HeistExecutionEvidenceEvent,
-        at insertionIndex: Int? = nil
-    ) {
-        if let insertionIndex {
-            events.insert(event, at: insertionIndex)
-        } else {
-            events.append(event)
-        }
-        switch event {
-        case .nodeVisited(let node):
-            nodes.append(node)
-            executedNodeCount += node.isExecuted ? 1 : 0
-            metricBuilder.appendMetrics(for: node)
-        case .dispatchedActionResult(_, let result):
-            dispatchedResults.append(result)
-        case .reportedActionResult(_, let result):
-            reportedResults.append(result)
-        case .traceResult(_, let traceResult):
-            traceResultsInExecutionOrder.append(traceResult)
-        case .expectationChecked:
-            expectationsChecked += 1
-        case .expectationMet:
-            expectationsMet += 1
-        case .firstFailure(let step):
             firstFailedStep = step
-        case .finalScreen(_, let screenId):
-            finalScreenId = screenId
         }
     }
 }
@@ -203,7 +154,7 @@ package struct HeistExecutionEvidenceSummary: Sendable, Equatable {
     package let executedTopLevelStepCount: Int
     package let executedNodeCount: Int
     package let outputReceiptNodeCount: Int
-    package let abortedAtPath: String?
+    package let abortedAtPath: HeistExecutionPath?
     package let durationMs: Int
     package let expectationsChecked: Int
     package let expectationsMet: Int
@@ -213,7 +164,7 @@ package struct HeistExecutionEvidenceSummary: Sendable, Equatable {
         executedTopLevelStepCount: Int,
         executedNodeCount: Int,
         outputReceiptNodeCount: Int,
-        abortedAtPath: String?,
+        abortedAtPath: HeistExecutionPath?,
         durationMs: Int,
         expectationsChecked: Int,
         expectationsMet: Int,
@@ -287,14 +238,14 @@ package enum HeistExecutionMetricName: String, Codable, Sendable, Equatable, Cas
 package struct HeistExecutionMetricSample: Codable, Sendable, Equatable {
     package let name: HeistExecutionMetricName
     package let valueMs: Int
-    package let path: String?
+    package let path: HeistExecutionPath?
     package let kind: HeistExecutionStepKind?
     package let status: HeistExecutionStepStatus?
 
     package init(
         name: HeistExecutionMetricName,
         valueMs: Int,
-        path: String? = nil,
+        path: HeistExecutionPath? = nil,
         kind: HeistExecutionStepKind? = nil,
         status: HeistExecutionStepStatus? = nil
     ) {
@@ -317,7 +268,7 @@ package struct HeistExecutionCeilingMetric: Codable, Sendable, Equatable {
     package let source: HeistExecutionCeilingMetricSource
     package let budgetMs: Int
     package let elapsedMs: Int
-    package let path: String
+    package let path: HeistExecutionPath
     package let kind: HeistExecutionStepKind
     package let status: HeistExecutionStepStatus
 
@@ -325,7 +276,7 @@ package struct HeistExecutionCeilingMetric: Codable, Sendable, Equatable {
         source: HeistExecutionCeilingMetricSource,
         budgetMs: Int,
         elapsedMs: Int,
-        path: String,
+        path: HeistExecutionPath,
         kind: HeistExecutionStepKind,
         status: HeistExecutionStepStatus
     ) {
@@ -344,42 +295,53 @@ private struct HeistExecutionMetricProjectionBuilder {
     var ceilings: [HeistExecutionCeilingMetric] = []
 
     mutating func appendMetrics(for node: HeistExecutionEvidenceNode) {
-        switch node.step.evidence {
-        case .action(let evidence):
+        switch node.step.node {
+        case .action:
+            guard let evidence = node.step.actionEvidence else { return }
             appendActionTiming(evidence.dispatchResult?.timing, node: node)
             if let expectationResult = evidence.expectationResult {
                 appendWaitTiming(expectationResult.timing, node: node)
                 append(.expectationWaitMs, valueMs: expectationResult.timing?.totalMs, node: node)
             }
-        case .wait(let evidence):
+        case .wait(_, let timeout, _):
+            guard let evidence = node.step.waitEvidence else { return }
             appendWaitTiming(evidence.actionResult.timing, node: node)
-            guard case .wait(_, let timeout) = node.step.intent else { return }
             appendCeiling(
                 .intentWaitTimeout,
-                budgetMs: Self.milliseconds(seconds: timeout),
+                budgetMs: Self.milliseconds(seconds: timeout.seconds),
                 elapsedMs: evidence.actionResult.timing?.totalMs ?? node.step.durationMs,
                 node: node
             )
-        case .repeatUntil(let evidence):
+        case .repeatUntil(_, let timeout, _), .repeatUntilIteration(_, let timeout, _):
+            guard let evidence = node.step.repeatUntilEvidence else { return }
             appendWaitTiming(evidence.actionResult?.timing, node: node)
             appendCeiling(
                 .repeatUntilTimeout,
-                budgetMs: Self.milliseconds(seconds: evidence.timeout),
+                budgetMs: Self.milliseconds(seconds: timeout.seconds),
                 elapsedMs: node.step.durationMs,
                 node: node
             )
-        case .invocation(let evidence):
+        case .heist:
+            break
+        case .invocation:
+            guard let evidence = node.step.invocationEvidence else { return }
             let expectationResult = evidence.waitEvidence?.actionResult ?? evidence.expectationActionResult
             appendWaitTiming(expectationResult?.timing, node: node)
             append(.expectationWaitMs, valueMs: expectationResult?.timing?.totalMs, node: node)
-        case .caseSelection(let evidence):
+        case .conditional:
+            guard let evidence = node.step.caseSelectionEvidence else { return }
             appendCeiling(
                 .caseSelectionTimeout,
                 budgetMs: Self.milliseconds(seconds: evidence.selection.timeout),
                 elapsedMs: evidence.selection.elapsedMs,
                 node: node
             )
-        case .forEachString, .forEachElement, .warning, .none:
+        case .forEachElement,
+             .forEachString,
+             .forEachElementIteration,
+             .forEachStringIteration,
+             .warning,
+             .failure:
             break
         }
     }
@@ -442,194 +404,66 @@ private struct HeistExecutionMetricProjectionBuilder {
     }
 }
 
-package enum HeistExecutionStepReportResults: Sendable, Equatable {
-    case action(HeistActionEvidence)
-    case wait(HeistWaitEvidence)
-    case repeatUntil(HeistRepeatUntilEvidence)
-    case invocation(HeistInvocationEvidence)
-    case none
+package struct HeistExecutionStepReportResults: Sendable, Equatable {
+    package let dispatchedActionResult: ActionResult?
+    package let actionResult: ActionResult?
+    package let reportedActionResult: ActionResult?
+    package let expectation: ExpectationResult?
 
-    package var dispatchedActionResult: ActionResult? {
-        guard case .action(let evidence) = self else { return nil }
-        return evidence.dispatchResult
-    }
-
-    package var actionResult: ActionResult? {
-        switch self {
-        case .action(let evidence):
-            return evidence.reportedResult
-        case .wait(let evidence):
-            return evidence.actionResult
-        case .repeatUntil(let evidence):
-            return evidence.actionResult
-        case .invocation(let evidence):
-            return evidence.expectationActionResult
-        case .none:
-            return nil
-        }
-    }
-
-    package var reportedActionResult: ActionResult? {
-        guard case .action(let evidence) = self else { return nil }
-        return evidence.reportedResult
-    }
-
-    package var expectation: ExpectationResult? {
-        switch self {
-        case .action(let evidence):
-            return evidence.dispatchResult?.outcome.isSuccess == false ? nil : evidence.checkedExpectation
-        case .wait(let evidence):
-            return evidence.expectation
-        case .repeatUntil(let evidence):
-            return evidence.expectation
-        case .invocation(let evidence):
-            return evidence.expectation
-        case .none:
-            return nil
-        }
-    }
-
-    package var traceEvidenceResult: ActionResult? {
-        actionResult
-    }
+    package var traceEvidenceResult: ActionResult? { actionResult }
 
     package var actionErrorKind: ErrorKind? {
         actionResult?.outcome.isSuccess == false ? actionResult?.outcome.errorKind : nil
     }
-}
 
-package enum HeistExecutionStepReportDetail: Sendable, Equatable {
-    case action(HeistActionEvidence)
-    case wait(HeistWaitEvidence)
-    case caseSelection(HeistCaseSelectionEvidence)
-    case forEachString(HeistForEachStringEvidence)
-    case forEachElement(HeistForEachElementEvidence)
-    case repeatUntil(HeistRepeatUntilEvidence)
-    case invocation(HeistInvocationEvidence)
-    case warning(HeistExecutionWarning)
-    case none
-
-    package init(kind: HeistExecutionStepKind, evidence: HeistStepEvidence?) {
-        switch evidence {
-        case .action(let evidence):
-            self = .action(evidence)
-        case .wait(let evidence):
-            self = .wait(evidence)
-        case .caseSelection(let evidence):
-            self = .caseSelection(evidence)
-        case .forEachString(let evidence):
-            self = .forEachString(evidence)
-        case .forEachElement(let evidence):
-            self = .forEachElement(evidence)
-        case .repeatUntil(let evidence):
-            self = .repeatUntil(evidence)
-        case .invocation(let evidence):
-            self = kind == .invoke ? .invocation(evidence) : .none
-        case .warning(let warning):
-            self = .warning(warning)
-        case .none:
-            self = .none
-        }
+    fileprivate static func action(_ evidence: HeistActionEvidence?) -> Self {
+        Self(
+            dispatchedActionResult: evidence?.dispatchResult,
+            actionResult: evidence?.reportedResult,
+            reportedActionResult: evidence?.reportedResult,
+            expectation: evidence?.dispatchResult?.outcome.isSuccess == false ? nil : evidence?.checkedExpectation
+        )
     }
 
-    package var command: HeistActionCommandType? {
-        guard case .action(let evidence) = self else { return nil }
-        return evidence.command?.wireType
+    fileprivate static func wait(_ evidence: HeistWaitEvidence?) -> Self {
+        Self(
+            dispatchedActionResult: nil,
+            actionResult: evidence?.actionResult,
+            reportedActionResult: nil,
+            expectation: evidence?.expectation
+        )
     }
 
-    package var target: AccessibilityTarget? {
-        guard case .action(let evidence) = self else { return nil }
-        return evidence.command?.reportTarget
+    fileprivate static func repeatUntil(_ evidence: HeistRepeatUntilEvidence?) -> Self {
+        Self(
+            dispatchedActionResult: nil,
+            actionResult: evidence?.actionResult,
+            reportedActionResult: nil,
+            expectation: evidence?.expectation
+        )
     }
 
-    package var capabilityName: String? {
-        guard case .invocation(let evidence) = self else { return nil }
-        return evidence.invocation?.capabilityName
+    fileprivate static func invocation(_ evidence: HeistInvocationEvidence?) -> Self {
+        Self(
+            dispatchedActionResult: nil,
+            actionResult: evidence?.expectationActionResult,
+            reportedActionResult: nil,
+            expectation: evidence?.expectation
+        )
     }
 
-    package var invocationDisplayName: String? {
-        guard case .invocation(let evidence) = self else { return nil }
-        return evidence.invocation?.runHeistSummary
-    }
-
-    package var warning: HeistExecutionWarning? {
-        guard case .warning(let warning) = self else { return nil }
-        return warning
-    }
-
-    package var results: HeistExecutionStepReportResults {
-        switch self {
-        case .action(let evidence):
-            return .action(evidence)
-        case .wait(let evidence):
-            return .wait(evidence)
-        case .repeatUntil(let evidence):
-            return .repeatUntil(evidence)
-        case .invocation(let evidence):
-            return .invocation(evidence)
-        case .caseSelection, .forEachString, .forEachElement, .warning, .none:
-            return .none
-        }
-    }
-    package var message: String? {
-        switch self {
-        case .caseSelection(let evidence):
-            switch evidence.selection.outcome {
-            case .matchedCase(let selected):
-                return "matched case \(selected)"
-            case .elseBranch(reason: .timedOut):
-                return "timed out; else ran"
-            case .elseBranch(reason: .noMatch):
-                return "no case matched; else ran"
-            case .timedOut:
-                return "timed out"
-            case .noMatch:
-                return "no case matched"
-            }
-        case .forEachString(let evidence):
-            if let failureReason = evidence.failureReason {
-                return failureReason
-            }
-            if let ordinal = evidence.iterationOrdinal, let value = evidence.value {
-                return "iteration \(ordinal) value \"\(value)\""
-            }
-            return "completed \(evidence.iterationCount) of \(evidence.count) value(s)"
-        case .forEachElement(let evidence):
-            if let failureReason = evidence.failureReason {
-                return failureReason
-            }
-            if let ordinal = evidence.iterationOrdinal, let targetOrdinal = evidence.targetOrdinal {
-                return "iteration \(ordinal) target ordinal \(targetOrdinal)"
-            }
-            return "completed \(evidence.iterationCount) of \(evidence.matchedCount) matched element(s)"
-        case .repeatUntil(let evidence):
-            if let failureReason = evidence.failureReason {
-                return failureReason
-            }
-            if let ordinal = evidence.iterationOrdinal {
-                return "iteration \(ordinal) predicate \(evidence.expectation.met ? "met" : "not met")"
-            }
-            if evidence.expectation.met {
-                return "predicate met after \(evidence.iterationCount) iteration(s)"
-            }
-            return "timed out after \(evidence.iterationCount) iteration(s)"
-        case .invocation(let evidence):
-            if let childFailedPath = evidence.childFailedPath {
-                return "child failed at \(childFailedPath)"
-            }
-            return evidence.name
-        case .warning(let warning):
-            return warning.message
-        case .action, .wait, .none:
-            return nil
-        }
-    }
+    fileprivate static let none = Self(
+        dispatchedActionResult: nil,
+        actionResult: nil,
+        reportedActionResult: nil,
+        expectation: nil
+    )
 }
 
 package struct HeistExecutionStepReportFacts: Sendable, Equatable {
-    package let path: String
+    package let path: HeistExecutionPath
     package let kind: HeistExecutionStepKind
-    package let capabilityName: String?
+    package let capabilityPath: HeistInvocationPath?
     package let invocationDisplayName: String?
     package let command: HeistActionCommandType?
     package let target: AccessibilityTarget?
@@ -641,34 +475,113 @@ package struct HeistExecutionStepReportFacts: Sendable, Equatable {
     package let warning: HeistExecutionWarning?
 
     package init(step: HeistExecutionStepResult) {
-        let detail = HeistExecutionStepReportDetail(kind: step.kind, evidence: step.evidence)
-        let results = detail.results
-
         path = step.path
         kind = step.kind
-        capabilityName = detail.capabilityName
-        invocationDisplayName = detail.invocationDisplayName
-        command = detail.command
-        target = detail.target
         status = step.status
-        message = Self.message(for: step, detail: detail)
         failureMessage = Self.failureMessage(for: step)
         failureCategory = step.failure?.category
-        self.results = results
-        warning = detail.warning
+        if let failure = step.failure {
+            message = failure.observed
+        } else {
+            message = Self.successMessage(for: step)
+        }
+
+        switch step.node {
+        case .action(let actionCommand, _):
+            let evidence = step.actionEvidence
+            capabilityPath = nil
+            invocationDisplayName = nil
+            command = actionCommand.wireType
+            target = actionCommand.reportTarget
+            results = .action(evidence)
+            warning = nil
+        case .wait:
+            capabilityPath = nil
+            invocationDisplayName = nil
+            command = nil
+            target = nil
+            results = .wait(step.waitEvidence)
+            warning = nil
+        case .repeatUntil, .repeatUntilIteration:
+            capabilityPath = nil
+            invocationDisplayName = nil
+            command = nil
+            target = nil
+            results = .repeatUntil(step.repeatUntilEvidence)
+            warning = nil
+        case .invocation(let path, let argument, _):
+            let evidence = step.invocationEvidence
+            let invocation = HeistInvocationStep(path: path, argument: argument)
+            capabilityPath = path
+            invocationDisplayName = invocation.runHeistSummary
+            command = nil
+            target = nil
+            results = .invocation(evidence)
+            warning = nil
+        case .warning:
+            capabilityPath = nil
+            invocationDisplayName = nil
+            command = nil
+            target = nil
+            results = .none
+            warning = step.warningEvidence
+        case .conditional,
+             .forEachElement,
+             .forEachString,
+             .forEachElementIteration,
+             .forEachStringIteration,
+             .failure,
+             .heist:
+            capabilityPath = nil
+            invocationDisplayName = nil
+            command = nil
+            target = nil
+            results = .none
+            warning = nil
+        }
     }
 
-    private static func message(for step: HeistExecutionStepResult, detail: HeistExecutionStepReportDetail) -> String? {
-        if let failure = step.failure {
-            return failure.observed
-        }
-        if let message = detail.message {
-            return message
-        }
-        switch step.intent {
-        case .warn(let message), .fail(let message):
-            return message
-        default:
+    private static func successMessage(for step: HeistExecutionStepResult) -> String? {
+        switch step.node {
+        case .conditional:
+            guard let evidence = step.caseSelectionEvidence else { return nil }
+            switch evidence.selection.outcome {
+            case .matchedCase(let selected): return "matched case \(selected)"
+            case .elseBranch(reason: .timedOut): return "timed out; else ran"
+            case .elseBranch(reason: .noMatch): return "no case matched; else ran"
+            case .timedOut: return "timed out"
+            case .noMatch: return "no case matched"
+            }
+        case .forEachString(_, let count, _), .forEachStringIteration(_, let count, _):
+            guard let evidence = step.forEachStringEvidence else { return nil }
+            if let failureReason = evidence.failureReason { return failureReason }
+            if let ordinal = evidence.iterationOrdinal, let value = evidence.value {
+                return "iteration \(ordinal) value \"\(value)\""
+            }
+            return "completed \(evidence.iterationCount) of \(count) value(s)"
+        case .forEachElement, .forEachElementIteration:
+            guard let evidence = step.forEachElementEvidence else { return nil }
+            if let failureReason = evidence.failureReason { return failureReason }
+            if let ordinal = evidence.iterationOrdinal, let targetOrdinal = evidence.targetOrdinal {
+                return "iteration \(ordinal) target ordinal \(targetOrdinal)"
+            }
+            return "completed \(evidence.iterationCount) of \(evidence.matchedCount) matched element(s)"
+        case .repeatUntil, .repeatUntilIteration:
+            guard let evidence = step.repeatUntilEvidence else { return nil }
+            if let failureReason = evidence.failureReason { return failureReason }
+            if let ordinal = evidence.iterationOrdinal {
+                return "iteration \(ordinal) predicate \(evidence.expectation.met ? "met" : "not met")"
+            }
+            return evidence.expectation.met
+                ? "predicate met after \(evidence.iterationCount) iteration(s)"
+                : "timed out after \(evidence.iterationCount) iteration(s)"
+        case .invocation(let invocationPath, _, _):
+            guard let evidence = step.invocationEvidence else { return nil }
+            if let childFailedPath = evidence.childFailedPath { return "child failed at \(childFailedPath)" }
+            return invocationPath.description
+        case .warning(let message, .passed):
+            return message.description
+        case .action, .wait, .failure, .heist, .warning:
             return nil
         }
     }
@@ -688,9 +601,69 @@ package struct HeistExecutionStepReportFacts: Sendable, Equatable {
 }
 
 package extension HeistExecutionStepResult {
+    var actionCommand: HeistActionCommand? {
+        guard case .action(let command, _) = node else { return nil }
+        return command
+    }
+
+    var invocation: HeistInvocationStep? {
+        guard case .invocation(let path, let argument, _) = node else { return nil }
+        return HeistInvocationStep(path: path, argument: argument)
+    }
+
+    var forEachStringDeclaration: HeistForEachStringDeclaration? {
+        switch node {
+        case .forEachString(let parameter, let count, _),
+             .forEachStringIteration(let parameter, let count, _):
+            return HeistForEachStringDeclaration(parameter: parameter, count: count)
+        default:
+            return nil
+        }
+    }
+
+    var forEachElementDeclaration: HeistForEachElementDeclaration? {
+        switch node {
+        case .forEachElement(let parameter, let matching, let limit, _),
+             .forEachElementIteration(let parameter, let matching, let limit, _):
+            return HeistForEachElementDeclaration(
+                parameter: parameter,
+                matching: matching,
+                limit: limit
+            )
+        default:
+            return nil
+        }
+    }
+
+    var repeatUntilDeclaration: HeistRepeatUntilDeclaration? {
+        switch node {
+        case .repeatUntil(let predicate, let timeout, _),
+             .repeatUntilIteration(let predicate, let timeout, _):
+            return HeistRepeatUntilDeclaration(predicate: predicate, timeout: timeout)
+        default:
+            return nil
+        }
+    }
+
     var reportFacts: HeistExecutionStepReportFacts {
         HeistExecutionStepReportFacts(step: self)
     }
+}
+
+package struct HeistForEachStringDeclaration: Sendable, Equatable {
+    package let parameter: HeistReferenceName
+    package let count: Int
+}
+
+package struct HeistForEachElementDeclaration: Sendable, Equatable {
+    package let parameter: HeistReferenceName
+    package let matching: ElementPredicateTemplate
+    package let limit: Int
+}
+
+package struct HeistRepeatUntilDeclaration: Sendable, Equatable {
+    package let predicate: AccessibilityPredicate
+    package let timeout: WaitTimeout
 }
 
 public extension HeistExecutionStepResult {
@@ -705,46 +678,6 @@ public extension HeistExecutionStepResult {
 
     var firstFailedStep: HeistExecutionStepResult? {
         firstFailedStepInReceiptOrder
-    }
-
-    var actionEvidence: HeistActionEvidence? {
-        guard case .action(let evidence) = evidence else { return nil }
-        return evidence
-    }
-
-    var waitEvidence: HeistWaitEvidence? {
-        guard case .wait(let evidence) = evidence else { return nil }
-        return evidence
-    }
-
-    var caseSelectionEvidence: HeistCaseSelectionEvidence? {
-        guard case .caseSelection(let evidence) = evidence else { return nil }
-        return evidence
-    }
-
-    var forEachStringEvidence: HeistForEachStringEvidence? {
-        guard case .forEachString(let evidence) = evidence else { return nil }
-        return evidence
-    }
-
-    var forEachElementEvidence: HeistForEachElementEvidence? {
-        guard case .forEachElement(let evidence) = evidence else { return nil }
-        return evidence
-    }
-
-    var repeatUntilEvidence: HeistRepeatUntilEvidence? {
-        guard case .repeatUntil(let evidence) = evidence else { return nil }
-        return evidence
-    }
-
-    var invocationEvidence: HeistInvocationEvidence? {
-        guard case .invocation(let evidence) = evidence else { return nil }
-        return evidence
-    }
-
-    var warningEvidence: HeistExecutionWarning? {
-        guard case .warning(let warning) = evidence else { return nil }
-        return warning
     }
 
     /// Human-facing display label for a step. Invoke steps surface the product
@@ -841,7 +774,7 @@ public extension HeistExecutionResult {
         evidenceRollup.firstFailedStep
     }
 
-    var failedStepPath: String? {
+    var failedStepPath: HeistExecutionPath? {
         firstFailedStep?.path
     }
 

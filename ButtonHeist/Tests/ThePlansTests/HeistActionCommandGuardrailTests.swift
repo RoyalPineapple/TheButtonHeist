@@ -10,7 +10,7 @@ import Testing
 }
 
 @Test func `action command target traversal reports roles paths and report targets`() throws {
-    let commandPath = "$.body[0].action.command"
+    let commandPath = HeistPlanPath.root.child(.body).index(0).child(.action).child(.command)
     let cases: [(String, HeistActionCommand, [TargetOccurrenceExpectation])] = [
         (
             "semantic expression target",
@@ -19,7 +19,7 @@ import Testing
                 TargetOccurrenceExpectation(
                     role: .semantic,
                     path: .payloadTarget,
-                    renderedPath: "\(commandPath).payload.target",
+                    renderedPath: "$.body[0].action.command.payload.target",
                     reportTarget: .label("Pay")
                 ),
             ]
@@ -31,7 +31,7 @@ import Testing
                 TargetOccurrenceExpectation(
                     role: .scroll,
                     path: .payloadTarget,
-                    renderedPath: "\(commandPath).payload.target",
+                    renderedPath: "$.body[0].action.command.payload.target",
                     reportTarget: .label("Checkout")
                 ),
             ]
@@ -48,7 +48,7 @@ import Testing
                 TargetOccurrenceExpectation(
                     role: .gesture,
                     path: .payloadStartElement,
-                    renderedPath: "\(commandPath).payload.start.element",
+                    renderedPath: "$.body[0].action.command.payload.start.element",
                     reportTarget: .label("Row")
                 ),
             ]
@@ -60,7 +60,7 @@ import Testing
                 TargetOccurrenceExpectation(
                     role: .scroll,
                     path: .payloadTarget,
-                    renderedPath: "\(commandPath).payload.target",
+                    renderedPath: "$.body[0].action.command.payload.target",
                     reportTarget: .label("List")
                 ),
             ]
@@ -72,7 +72,7 @@ import Testing
             TargetOccurrenceExpectation(
                 role: $0.role,
                 path: $0.path,
-                renderedPath: $0.path.render(commandPath: commandPath),
+                renderedPath: $0.path.appending(to: commandPath).description,
                 reportTarget: $0.reportTarget
             )
         }
@@ -121,7 +121,7 @@ import Testing
             values: ["Milk", ""],
             parameter: "item",
             body: [.invoke(HeistInvocationStep(
-                path: ["typeQuery"],
+                path: "typeQuery",
                 argument: .string(reference: "item")
             ))]
         ))]
@@ -132,7 +132,7 @@ import Testing
     #expect(failures.contains {
         $0.contract == "string loop value must lower through the heist action payload contract"
             && $0.observed.contains("$.body[0].for_each_string.values[1] resolved to")
-            && $0.observed.contains("text must be non-empty")
+            && $0.observed.contains("text to append must be non-empty")
     }, "\(failures)")
 }
 
@@ -196,13 +196,6 @@ import Testing
             WaitStep(predicate: .exists(.label("Home")), timeout: 5)
         ),
         (
-            "WaitFor over cap",
-            try HeistPlan {
-                WaitFor(.exists(.label("Home")), timeout: .seconds(45))
-            },
-            WaitStep(predicate: .exists(.label("Home")), timeout: 45)
-        ),
-        (
             "expect any element delta",
             try HeistPlan {
                 Activate(.label("Pay")).expect(.changed(.elements()))
@@ -223,13 +216,6 @@ import Testing
             },
             WaitStep(predicate: .exists(.label("Receipt")), timeout: 3)
         ),
-        (
-            "expect over cap",
-            try HeistPlan {
-                Activate(.label("Pay")).expect(.exists(.label("Receipt")), timeout: .seconds(45))
-            },
-            WaitStep(predicate: .exists(.label("Receipt")), timeout: 45)
-        ),
     ]
 
     for (name, plan, expectedWait) in waitCases {
@@ -238,12 +224,10 @@ import Testing
     }
 
     let predicate = AccessibilityPredicate.exists(.label("Home"))
-    let waitTargetCases: [(String, WaitTarget, Double?, Double)] = [
+    let waitTargetCases: [(String, WaitTarget, WaitTimeout?, WaitTimeout)] = [
         ("default runtime timeout", WaitTarget(predicate: predicate), nil, defaultWaitTimeout),
         ("explicit runtime timeout", WaitTarget(predicate: predicate, timeout: 12), 12, 12),
-        ("over cap runtime timeout", WaitTarget(predicate: predicate, timeout: 45), 45, defaultWaitTimeout),
-        // Low-level WaitTarget currently does not validate negatives; executable WaitStep plans do.
-        ("negative runtime payload gap", WaitTarget(predicate: predicate, timeout: -1), -1, -1),
+        ("maximum runtime timeout", WaitTarget(predicate: predicate, timeout: 30), 30, 30),
     ]
 
     for (name, target, timeout, resolvedTimeout) in waitTargetCases {
@@ -252,19 +236,51 @@ import Testing
     }
 }
 
-@Test func `negative wait timeouts are rejected at executable plan boundaries`() {
-    #expect(throws: HeistPlanRuntimeSafetyError.self) {
-        _ = try HeistPlan {
-            WaitFor(.exists(.label("Home")), timeout: .seconds(-1))
+@Test func `payload admission rejects invalid durations and prohibited empty text`() throws {
+    for seconds in [0, -1, .nan, .infinity, GestureDuration.maximumSeconds.nextUp] {
+        #expect(throws: GestureProjectionError.self) {
+            _ = try GestureDuration.admitting(seconds: seconds)
         }
     }
 
-    #expect(throws: HeistPlanRuntimeSafetyError.self) {
-        _ = try HeistPlan {
-            Activate(.label("Pay")).expect(.exists(.label("Receipt")), timeout: .seconds(-1))
+    for seconds in [0, -1, .nan, .infinity, WaitTimeout.maximumSeconds.nextUp] {
+        #expect(throws: WaitTimeoutError.self) {
+            _ = try WaitTimeout.admitting(seconds: seconds)
         }
     }
 
+    #expect(throws: TextInputTextError.self) {
+        _ = try TextInputText(validating: "")
+    }
+    #expect(TextInputText.replacing("").description.isEmpty)
+    #expect(throws: PasteboardTextError.self) {
+        _ = try PasteboardText(validating: "")
+    }
+}
+
+@Test func `payload decoding uses the same admission bounds without repair`() throws {
+    for json in ["0", "-1", "60.0000000001"] {
+        expectDataCorrupted("gesture duration \(json)", contains: "duration must be") {
+            _ = try JSONDecoder().decode(GestureDuration.self, from: Data(json.utf8))
+        }
+    }
+
+    let waitPrefix = #"{"predicate":{"type":"exists","target":{"checks":[{"kind":"label","match":{"mode":"exact","value":"Home"}}]}},"timeout":"#
+    for timeout in ["0", "-1", "30.0000000001"] {
+        expectDataCorrupted("wait timeout \(timeout)", contains: "wait timeout must be") {
+            _ = try JSONDecoder().decode(WaitTarget.self, from: Data("\(waitPrefix)\(timeout)}".utf8))
+        }
+    }
+
+    expectDataCorrupted("type text", contains: "text to append must be non-empty") {
+        _ = try JSONDecoder().decode(TypeTextTarget.self, from: Data(#"{"text":"","mode":"append"}"#.utf8))
+    }
+    expectDataCorrupted("pasteboard", contains: "pasteboard text must be non-empty") {
+        _ = try JSONDecoder().decode(SetPasteboardTarget.self, from: Data(#"{"text":""}"#.utf8))
+    }
+}
+
+@Test func `nonpositive wait timeout wire payloads are rejected at admission`() {
     #expect(throws: DecodingError.self) {
         _ = try JSONDecoder().decode(WaitStep.self, from: Data("""
         {
@@ -276,14 +292,14 @@ import Testing
               ]
             }
           },
-          "timeout": -1
+          "timeout": 0
         }
         """.utf8))
     }
 }
 
-@Test func `empty custom action names are rejected before dispatch`() throws {
-    expectDataCorrupted("plan command payload", contains: "custom action name must not be empty") {
+@Test func `blank custom action names are rejected at admission`() throws {
+    expectDataCorrupted("plan command payload", contains: "custom action name must not be blank") {
         _ = try JSONDecoder().decode(HeistActionCommand.self, from: Data("""
         {
           "type": "performCustomAction",
@@ -299,7 +315,7 @@ import Testing
         """.utf8))
     }
 
-    expectDataCorrupted("runtime action payload", contains: "custom action name must not be empty") {
+    expectDataCorrupted("runtime action payload", contains: "custom action name must not be blank") {
         _ = try JSONDecoder().decode(CustomActionTarget.self, from: Data("""
         {
           "target": {
@@ -312,57 +328,34 @@ import Testing
         """.utf8))
     }
 
-    let raw = HeistPlanAdmissionCandidate(body: [
-        .action(try ActionStep(command: .customAction(name: "", target: .label("Message")))),
-    ])
-    let failures = runtimeSafetyFailures(for: raw)
-    #expect(failures.contains {
-        $0.path == "$.body[0].action.command.payload.actionName"
-            && $0.contract == "custom action name must not be empty"
-    }, "\(failures)")
-
-    #expect(throws: HeistPlanRuntimeSafetyError.self) {
-        _ = try HeistPlan {
-            CustomAction("", on: .label("Message"))
-        }
+    #expect(throws: CustomActionNameError.self) {
+        _ = try CustomActionName(validating: " \n\t")
     }
+    #expect(throws: RotorNameError.self) {
+        _ = try RotorName(validating: " \n\t")
+    }
+    #expect(throws: HeistWarningMessageError.self) {
+        _ = try HeistWarningMessage(validating: " \n\t")
+    }
+    #expect(throws: HeistFailureMessageError.self) {
+        _ = try HeistFailureMessage(validating: " \n\t")
+    }
+    #expect(try CustomActionName(validating: " Archive ").description == " Archive ")
+    #expect(try RotorName(validating: " Headings ").description == " Headings ")
 }
 
-@Test func `action command payloads reject old inline target aliases`() throws {
-    expectDataCorrupted("activate inline target alias", contains: #"Unknown heist action command payload field "label""#) {
-        _ = try JSONDecoder().decode(HeistActionCommand.self, from: Data("""
-        {
-          "type": "activate",
-          "payload": {
-            "label": "Pay"
-          }
-        }
-        """.utf8))
-    }
-
-    expectDataCorrupted("typeText inline target alias", contains: #"Unknown heist action command payload field "label""#) {
-        _ = try JSONDecoder().decode(HeistActionCommand.self, from: Data("""
-        {
-          "type": "typeText",
-          "payload": {
-            "text": "milk",
-            "label": "Search"
-          }
-        }
-        """.utf8))
-    }
-
+@Test func `type text reference payload uses canonical target`() throws {
     let referenced = try JSONDecoder().decode(HeistActionCommand.self, from: Data("""
     {
       "type": "typeText",
       "payload": {
         "text_ref": "item",
+        "mode": "append",
         "target": { "ref": "field" }
       }
     }
     """.utf8))
-    #expect(referenced == .typeText(reference: "item", target: .ref("field")))
-
+    #expect(referenced == .typeText(reference: "item", target: .ref("field"), mode: .append))
 }
 
 private struct EncodedCommandType: Decodable {
@@ -550,7 +543,7 @@ private func expectNonDurableHeistActionFailure(
     path: String = "$.body[0].action.command"
 ) {
     #expect(failures.contains {
-        $0.path == path
+        $0.path.description == path
             && $0.contract == "durable heist action"
             && $0.observed == observed
             && $0.correction == nonDurableHeistActionRepairHint

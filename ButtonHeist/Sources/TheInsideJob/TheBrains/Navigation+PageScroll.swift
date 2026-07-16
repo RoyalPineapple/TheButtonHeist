@@ -5,20 +5,20 @@ import UIKit
 import TheScore
 import ThePlans
 
-// MARK: - Page Scroll Commands
-
 extension Navigation {
 
-    func executeScroll(_ target: ResolvedScrollTarget) async -> TheSafecracker.ActionDispatchOutcome {
+    func executeScroll(
+        _ target: ResolvedScrollTarget,
+    ) async -> TheSafecracker.ActionDispatchOutcome {
         await executeScroll(
             selection: target.selection,
-            direction: target.direction
+            direction: target.direction,
         )
     }
 
     func executeScroll(
         selection: ResolvedScrollContainerSelection,
-        direction: ScrollDirection
+        direction: ScrollDirection,
     ) async -> TheSafecracker.ActionDispatchOutcome {
         stash.refreshLiveCapture()
         let axis = Self.requiredAxis(for: direction)
@@ -30,7 +30,9 @@ extension Navigation {
         case .resolved(let scrollTarget):
             let uiDirection = Self.uiScrollDirection(for: direction)
             let proof = await scrollOnePageAndSettle(
-                scrollTarget, direction: uiDirection, animated: false
+                scrollTarget,
+                direction: uiDirection,
+                animated: false,
             )
             switch proof.result {
             case .moved:
@@ -45,16 +47,18 @@ extension Navigation {
         }
     }
 
-    func executeScrollToEdge(_ target: ResolvedScrollToEdgeTarget) async -> TheSafecracker.ActionDispatchOutcome {
+    func executeScrollToEdge(
+        _ target: ResolvedScrollToEdgeTarget,
+    ) async -> TheSafecracker.ActionDispatchOutcome {
         await executeScrollToEdge(
             selection: target.selection,
-            edge: target.edge
+            edge: target.edge,
         )
     }
 
     func executeScrollToEdge(
         selection: ResolvedScrollContainerSelection,
-        edge: ScrollEdge
+        edge: ScrollEdge,
     ) async -> TheSafecracker.ActionDispatchOutcome {
         stash.refreshLiveCapture()
         let axis = Self.requiredAxis(for: edge)
@@ -64,7 +68,10 @@ extension Navigation {
             command: .scrollToEdge
         ) {
         case .resolved(let scrollTarget):
-            let proof = await scrollToEdgeAndSettle(scrollTarget, edge: edge)
+            let proof = await scrollToEdgeAndSettle(
+                scrollTarget,
+                edge: edge,
+            )
             switch proof.result {
             case .moved:
                 return .success(method: .scrollToEdge)
@@ -83,7 +90,7 @@ extension Navigation {
 
     func scrollToEdgeAndSettle(
         _ target: ScrollableTarget,
-        edge: ScrollEdge
+        edge: ScrollEdge,
     ) async -> ViewportTransition {
         guard case .uiScrollView = target else {
             return .unavailable(previousVisibleIds: stash.viewportElementIDs)
@@ -94,16 +101,16 @@ extension Navigation {
     func scrollOnePageAndSettle(
         _ target: ScrollableTarget,
         direction: UIAccessibilityScrollDirection,
-        animated: Bool = true
+        animated: Bool = true,
     ) async -> ViewportTransition {
         switch target {
         case .uiScrollView:
             return await performViewportTransition(
-                .page(target, direction: direction, animated: animated)
+                .page(target, direction: direction, animated: animated),
             )
         case .swipeable:
             return await performViewportTransition(
-                .swipe(target, direction: direction)
+                .swipe(target, direction: direction),
             )
         }
     }

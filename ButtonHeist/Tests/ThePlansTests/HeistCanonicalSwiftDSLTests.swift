@@ -189,15 +189,6 @@ func canonicalSwiftRendererRejectsRefsOutsideLoopScope() throws {
 }
 
 @Test
-func decodedRuntimeLoopsRejectNonCanonicalSwiftParameters() throws {
-    for json in [invalidElementLoopParameterJSON, invalidStringLoopParameterJSON] {
-        #expect(throws: (any Error).self) {
-            _ = try JSONDecoder().decode(HeistPlanAdmissionCandidate.self, from: Data(json.utf8))
-        }
-    }
-}
-
-@Test
 func canonicalSwiftRendererRendersAmbientActions() throws {
     let plan = try HeistPlan(body: [
         .action(try ActionStep(command: .setPasteboard(SetPasteboardTarget(text: "milk")))),
@@ -307,9 +298,9 @@ func canonicalSwiftRendererRendersMechanicalActionForms() throws {
 
         Mechanical.Tap(.label("Cell"), at: UnitPoint(x: 0.25, y: 0.75))
 
-        Mechanical.LongPress(ScreenPoint(x: 1.25, y: 2.5), duration: GestureDuration(seconds: 1.2))
+        Mechanical.LongPress(ScreenPoint(x: 1.25, y: 2.5), duration: 1.2)
 
-        Mechanical.LongPress(.label("Message"), at: UnitPoint(x: 0.5, y: 0.2), duration: GestureDuration(seconds: 1.4))
+        Mechanical.LongPress(.label("Message"), at: UnitPoint(x: 0.5, y: 0.2), duration: 1.4)
 
         Mechanical.Swipe(.label("List"), .up)
 
@@ -373,7 +364,7 @@ func viewportDebugActionsAreNotDurableHeistDSL() throws {
     do {
         _ = try JSONDecoder().decode(HeistPlan.self, from: Data("""
     {
-      "version": 1,
+      "version": 2,
       "body": [
         {
           "type": "action",
@@ -411,7 +402,7 @@ private func expectNonDurableHeistActionFailure(
     path: String = "$.body[0].action.command"
 ) {
     #expect(failures.contains {
-        $0.path == path
+        $0.path.description == path
             && $0.contract == "durable heist action"
             && $0.observed == observed
             && $0.correction == nonDurableHeistActionRepairHint
@@ -452,59 +443,3 @@ private struct CompileBackFailure: Error, CustomStringConvertible {
     }
 }
 #endif
-
-private let invalidElementLoopParameterJSON = """
-{
-  "version": 1,
-  "body": [
-    {
-      "type": "for_each_element",
-      "for_each_element": {
-        "matching": { "checks": [{ "kind": "label", "match": { "mode": "exact", "value": "Delete" } }] },
-        "limit": 20,
-        "parameter": "target-name",
-        "body": [
-          {
-            "type": "action",
-            "action": {
-              "command": {
-                "type": "activate",
-                "payload": { "target": { "ref": "target-name" } }
-              }
-            }
-          }
-        ]
-      }
-    }
-  ]
-}
-"""
-
-private let invalidStringLoopParameterJSON = """
-{
-  "version": 1,
-  "body": [
-    {
-      "type": "for_each_string",
-      "for_each_string": {
-        "values": ["Milk"],
-        "parameter": "target-name",
-        "body": [
-          {
-            "type": "action",
-            "action": {
-              "command": {
-                "type": "typeText",
-                "payload": {
-                  "text_ref": "target-name",
-                  "target": { "checks": [{ "kind": "label", "match": { "mode": "exact", "value": "Add item" } }] }
-                }
-              }
-            }
-          }
-        ]
-      }
-    }
-  ]
-}
-"""

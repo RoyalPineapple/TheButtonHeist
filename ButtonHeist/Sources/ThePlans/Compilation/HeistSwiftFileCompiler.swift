@@ -39,9 +39,17 @@ private extension Dictionary where Key == String, Value == String {
 
 struct HeistSwiftFileCompiler: Sendable {
     let packageRoot: URL?
+    let processLimits: CompilerProcessLimits
+    let temporaryDirectory: URL
 
-    init(packageRoot: URL? = nil) {
+    init(
+        packageRoot: URL? = nil,
+        processLimits: CompilerProcessLimits = .default,
+        temporaryDirectory: URL = FileManager.default.temporaryDirectory
+    ) {
         self.packageRoot = packageRoot
+        self.processLimits = processLimits
+        self.temporaryDirectory = temporaryDirectory
     }
 
     /// Persistent, shared swiftc module cache for plan compilation. Reused
@@ -52,9 +60,9 @@ struct HeistSwiftFileCompiler: Sendable {
 
     func compileSwiftFile(
         _ source: URL,
-        entry: String
-    ) throws -> HeistPlan {
-        let entry = try HeistSwiftFileEntrySymbol(validating: entry)
+        entry: HeistEntrySymbol
+    ) async throws -> HeistPlan {
+        try Task.checkCancellation()
         let source = source.standardizedFileURL
         guard FileManager.default.fileExists(atPath: source.path) else {
             throw HeistSwiftFileCompilerError.sourceFileNotFound(source.path)
@@ -63,7 +71,7 @@ struct HeistSwiftFileCompiler: Sendable {
         let artifacts = try ThePlansBuildArtifacts.resolve(explicitPackageRoot: packageRoot)
         HeistSwiftFileCompilerTrace.write("using built ThePlans artifacts at \(artifacts.buildDirectory.path)")
 
-        let tempURL = FileManager.default.temporaryDirectory
+        let tempURL = temporaryDirectory
             .appendingPathComponent("heist-source-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: tempURL, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: tempURL) }
@@ -85,7 +93,7 @@ struct HeistSwiftFileCompiler: Sendable {
             entry: entry
         )
 
-        return try compile(
+        return try await compile(
             source: source,
             compileDirectory: compileDirectory,
             buildDirectory: buildDirectory,
@@ -100,40 +108,40 @@ struct HeistSwiftFileCompiler: Sendable {
         buildDirectory: URL,
         moduleCache: URL,
         artifacts: ThePlansBuildArtifacts
-    ) throws -> HeistPlan {
+    ) async throws -> HeistPlan {
         let executableURL = buildDirectory.appendingPathComponent("plan-compiler")
         HeistSwiftFileCompilerTrace.write("compiling Swift heist wrapper against built ThePlans artifacts")
-        let compilerResult = try ProcessRunner.run(
-            executable: URL(fileURLWithPath: "/usr/bin/env"),
-            arguments: swiftcPlanCompilerArguments(
-                compileDirectory: compileDirectory,
-                moduleCache: moduleCache,
-                executableURL: executableURL,
-                artifacts: artifacts
-            )
+        let compilerResult = try await CompilerProcessOwner.shared.run(
+            CompilerProcessCommand(
+                executable: URL(fileURLWithPath: "/usr/bin/env"),
+                arguments: swiftcPlanCompilerArguments(
+                    compileDirectory: compileDirectory,
+                    moduleCache: moduleCache,
+                    executableURL: executableURL,
+                    artifacts: artifacts
+                )
+            ),
+            purpose: .compilation,
+            limits: processLimits
         )
-        guard compilerResult.exitCode == 0 else {
-            throw HeistSwiftFileCompilerError.compileFailed(
-                source.path,
-                compilerResult.diagnostics
-            )
-        }
+        _ = try successfulOutput(
+            from: compilerResult,
+            phase: .compilation(source.path)
+        )
 
         HeistSwiftFileCompilerTrace.write("running Swift heist wrapper")
-        let result = try ProcessRunner.run(
-            executable: executableURL,
-            arguments: []
+        let executionResult = try await CompilerProcessOwner.shared.run(
+            CompilerProcessCommand(executable: executableURL, arguments: []),
+            purpose: .execution,
+            limits: processLimits
+        )
+        let output = try successfulOutput(
+            from: executionResult,
+            phase: .execution(source.path)
         )
 
-        guard result.exitCode == 0 else {
-            throw HeistSwiftFileCompilerError.executionFailed(
-                source.path,
-                result.diagnostics
-            )
-        }
-
         do {
-            return try HeistPlanJSONCodec.decodeValidatedPlan(result.stdout, sourceURL: source)
+            return try HeistPlanJSONCodec.decodeValidatedPlan(output.stdout, sourceURL: source)
         } catch let error as HeistPlanJSONCodecError {
             throw HeistSwiftFileCompilerError.invalidCompilerOutput(error.description)
         } catch let error as HeistPlanRuntimeSafetyError {
@@ -143,10 +151,28 @@ struct HeistSwiftFileCompiler: Sendable {
         }
     }
 
+    private func successfulOutput(
+        from outcome: CompilerProcessOutcome,
+        phase: HeistSwiftFileCompilerProcessPhase
+    ) throws -> CompilerProcessOutput {
+        switch outcome {
+        case .succeeded(let output):
+            return output
+        case .nonzeroExit(let code, let output):
+            throw phase.nonzeroExit(code: code, diagnostics: output.diagnostics)
+        case .signaled(let signal, let output):
+            throw phase.signaled(signal: signal, diagnostics: output.diagnostics)
+        case .timedOut(let output):
+            throw phase.timedOut(diagnostics: output.diagnostics)
+        case .cancelled:
+            throw CancellationError()
+        }
+    }
+
     private func writeCompileDirectory(
         at tempURL: URL,
         source: URL,
-        entry: HeistSwiftFileEntrySymbol
+        entry: HeistEntrySymbol
     ) throws -> URL {
         let sourcesURL = tempURL
             .appendingPathComponent("Sources", isDirectory: true)
@@ -161,7 +187,7 @@ struct HeistSwiftFileCompiler: Sendable {
         import Foundation
         import ThePlans
 
-        let plan: HeistPlan = try \(entry.name)()
+        let plan: HeistPlan = try \(entry)()
         FileHandle.standardOutput.write(try plan.canonicalHeistJSONData())
         """
         try wrapper.write(
@@ -209,19 +235,20 @@ struct HeistSwiftFileCompiler: Sendable {
 }
 
 enum HeistSwiftFileCompilerError: Error, Sendable, Equatable, CustomStringConvertible {
-    case invalidEntry(String)
     case sourceFileNotFound(String)
     case packageRootNotFound
     case buildArtifactsNotFound(searched: [String], hint: String)
     case compileFailed(String, String)
     case executionFailed(String, String)
+    case compileTimedOut(String, String)
+    case executionTimedOut(String, String)
+    case compilerTerminated(String, signal: Int32, diagnostics: String)
+    case executionTerminated(String, signal: Int32, diagnostics: String)
     case invalidCompilerOutput(String)
     case runtimeSafetyFailed(String)
 
     var description: String {
         switch self {
-        case .invalidEntry(let entry):
-            return "invalid Swift heist entry symbol: \(entry)"
         case .sourceFileNotFound(let path):
             return "Swift heist source file not found: \(path)"
         case .packageRootNotFound:
@@ -243,6 +270,14 @@ enum HeistSwiftFileCompilerError: Error, Sendable, Equatable, CustomStringConver
             return "failed to compile Swift heist source \(path): \(diagnostics)"
         case .executionFailed(let path, let diagnostics):
             return "compiled Swift heist source \(path) failed while evaluating entry: \(diagnostics)"
+        case .compileTimedOut(let path, let diagnostics):
+            return "timed out compiling Swift heist source \(path): \(diagnostics)"
+        case .executionTimedOut(let path, let diagnostics):
+            return "compiled Swift heist source \(path) timed out while evaluating entry: \(diagnostics)"
+        case .compilerTerminated(let path, let signal, let diagnostics):
+            return "compiler for Swift heist source \(path) terminated by signal \(signal): \(diagnostics)"
+        case .executionTerminated(let path, let signal, let diagnostics):
+            return "compiled Swift heist source \(path) terminated by signal \(signal) while evaluating entry: \(diagnostics)"
         case .invalidCompilerOutput(let diagnostics):
             return "compiled Swift heist did not emit valid HeistPlan JSON: \(diagnostics)"
         case .runtimeSafetyFailed(let diagnostics):
@@ -251,16 +286,41 @@ enum HeistSwiftFileCompilerError: Error, Sendable, Equatable, CustomStringConver
     }
 }
 
-private struct HeistSwiftFileEntrySymbol {
-    let name: String
+private enum HeistSwiftFileCompilerProcessPhase {
+    case compilation(String)
+    case execution(String)
 
-    init(validating name: String) throws {
-        let identifier = #"[A-Za-z_][A-Za-z0-9_]*"#
-        let pattern = #"^\#(identifier)(\.\#(identifier))*$"#
-        guard name.range(of: pattern, options: .regularExpression) != nil else {
-            throw HeistSwiftFileCompilerError.invalidEntry(name)
+    func nonzeroExit(code: Int32, diagnostics: String) -> HeistSwiftFileCompilerError {
+        let details = processDetails(prefix: "exit code \(code)", diagnostics: diagnostics)
+        switch self {
+        case .compilation(let path):
+            return .compileFailed(path, details)
+        case .execution(let path):
+            return .executionFailed(path, details)
         }
-        self.name = name
+    }
+
+    func signaled(signal: Int32, diagnostics: String) -> HeistSwiftFileCompilerError {
+        switch self {
+        case .compilation(let path):
+            return .compilerTerminated(path, signal: signal, diagnostics: diagnostics)
+        case .execution(let path):
+            return .executionTerminated(path, signal: signal, diagnostics: diagnostics)
+        }
+    }
+
+    func timedOut(diagnostics: String) -> HeistSwiftFileCompilerError {
+        switch self {
+        case .compilation(let path):
+            return .compileTimedOut(path, diagnostics)
+        case .execution(let path):
+            return .executionTimedOut(path, diagnostics)
+        }
+    }
+
+    private func processDetails(prefix: String, diagnostics: String) -> String {
+        guard !diagnostics.isEmpty else { return prefix }
+        return "\(prefix): \(diagnostics)"
     }
 }
 
@@ -703,42 +763,6 @@ struct SwiftPMBuildCommand: Decodable {
     }
 }
 
-private struct ProcessResult {
-    let exitCode: Int32
-    let stdout: Data
-    let stderr: String
-
-    var diagnostics: String {
-        let stdoutText = String(data: stdout, encoding: .utf8) ?? ""
-        return [stderr, stdoutText]
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-            .joined(separator: "\n")
-    }
-}
-
-private enum ProcessRunner {
-    static func run(executable: URL, arguments: [String]) throws -> ProcessResult {
-        let process = Process()
-        process.executableURL = executable
-        process.arguments = arguments
-
-        let capture = try ProcessOutputCapture()
-        process.standardOutput = capture.stdoutHandle
-        process.standardError = capture.stderrHandle
-
-        try process.run()
-        process.waitUntilExit()
-
-        try capture.close()
-        return ProcessResult(
-            exitCode: process.terminationStatus,
-            stdout: try capture.stdoutData(),
-            stderr: try capture.stderrString()
-        )
-    }
-}
-
 private enum HeistSwiftFileCompilerTrace {
     static func write(_ message: String) {
         guard ProcessInfo.processInfo.environment[.sourceCompilerTrace] == "1" else {
@@ -749,50 +773,6 @@ private enum HeistSwiftFileCompilerTrace {
         if let data = line.data(using: .utf8) {
             FileHandle.standardError.write(data)
         }
-    }
-}
-
-private final class ProcessOutputCapture {
-    let stdoutURL: URL
-    let stderrURL: URL
-    let stdoutHandle: FileHandle
-    let stderrHandle: FileHandle
-
-    init() throws {
-        let temp = FileManager.default.temporaryDirectory
-        stdoutURL = temp.appendingPathComponent("heist-source-stdout-\(UUID().uuidString)")
-        stderrURL = temp.appendingPathComponent("heist-source-stderr-\(UUID().uuidString)")
-        _ = FileManager.default.createFile(atPath: stdoutURL.path, contents: nil)
-        _ = FileManager.default.createFile(atPath: stderrURL.path, contents: nil)
-        let openedStdoutHandle = try FileHandle(forWritingTo: stdoutURL)
-        do {
-            stderrHandle = try FileHandle(forWritingTo: stderrURL)
-            stdoutHandle = openedStdoutHandle
-        } catch {
-            try? openedStdoutHandle.close()
-            try? FileManager.default.removeItem(at: stdoutURL)
-            try? FileManager.default.removeItem(at: stderrURL)
-            throw error
-        }
-    }
-
-    deinit {
-        try? FileManager.default.removeItem(at: stdoutURL)
-        try? FileManager.default.removeItem(at: stderrURL)
-    }
-
-    func close() throws {
-        try stdoutHandle.close()
-        try stderrHandle.close()
-    }
-
-    func stdoutData() throws -> Data {
-        try Data(contentsOf: stdoutURL)
-    }
-
-    func stderrString() throws -> String {
-        let data = try Data(contentsOf: stderrURL)
-        return String(data: data, encoding: .utf8) ?? ""
     }
 }
 

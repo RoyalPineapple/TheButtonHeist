@@ -345,13 +345,14 @@ extension HeistPlanSourceParser {
             try expectSymbol("(")
             let customNameToken = currentToken
             let customName = try parseStringLiteral()
+            let admittedName: CustomActionName
             do {
-                try CustomActionTarget.validate(actionName: customName)
+                admittedName = try CustomActionName(validating: customName)
             } catch let validationError {
                 throw error(customNameToken, String(describing: validationError))
             }
             try expectSymbol(")")
-            return .custom(customName)
+            return .custom(admittedName)
         default:
             throw error(token, "unsupported action '.\(name)'. Valid: activate, typeText, increment, decrement, custom")
         }

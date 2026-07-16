@@ -6,24 +6,23 @@ import AccessibilitySnapshotParser
 import ThePlans
 import TheScore
 
-/// Ordered activation delivery pipeline for `activate`.
-///
-/// ButtonHeist treats accessibility as the interaction contract. `activate`
-/// refreshes semantic resolution and live geometry before asking UIKit to
-/// perform the element's primary accessibility activation with
-/// `accessibilityActivate()`. When UIKit declines/defaults, ButtonHeist still
-/// delivers the same `activate` command by dispatching at the fresh accessibility
-/// activation point.
-struct ActivationPolicy {
+struct ActivationDispatchEvidence: Sendable {
+    let outcome: AccessibilityActionDispatcher.ActivateOutcome
+    let activationPoint: CGPoint
+}
 
-    enum RefreshResult {
-        case resolved(ElementInflation.InflatedElementTarget)
-        case failure(TheSafecracker.ActionDispatchOutcome)
-    }
+enum ActivationRefreshResult {
+    case resolved(ElementInflation.InflatedElementTarget)
+    case failure(TheSafecracker.ActionDispatchOutcome)
+}
 
-    var accessibilityActivate: @MainActor (TheStash.LiveActionTarget) -> AccessibilityActionDispatcher.ActivateOutcome
-    var refreshAndResolve: @MainActor () async -> RefreshResult
-    var activationPointDispatch: @MainActor (CGPoint) async -> Bool
+struct ActivationPolicy<PreparedDispatch: Sendable> {
+    var accessibilityActivate: @MainActor (
+        TheStash.LiveActionTarget
+    ) -> Result<ActivationDispatchEvidence, TheStash.LiveTargetStaleness<HeistId>>
+    var refreshAndResolve: @MainActor () async -> ActivationRefreshResult
+    var prepareActivationPointDispatch: @MainActor (CGPoint) -> PreparedDispatch?
+    var completeActivationPointDispatch: @MainActor (PreparedDispatch) async -> Bool
     var showFingerprint: @MainActor (CGPoint) -> Void
     var textEntryActivationFailure: @MainActor (InterfaceTree.Element, ActivationTrace) async -> TheSafecracker.ActionDispatchOutcome?
 
@@ -40,9 +39,22 @@ struct ActivationPolicy {
         let refreshedLiveTarget = refreshedTarget.liveTarget
         let subjectEvidence = refreshedTarget.subjectEvidence(source: .resolvedSemanticTarget)
 
-        let activateOutcome = accessibilityActivate(refreshedLiveTarget)
+        let activateOutcome: AccessibilityActionDispatcher.ActivateOutcome
+        let activationPoint: CGPoint
+        switch accessibilityActivate(refreshedLiveTarget) {
+        case .success(let dispatch):
+            activateOutcome = dispatch.outcome
+            activationPoint = dispatch.activationPoint
+        case .failure(let staleness):
+            return .failure(
+                .activate,
+                message: staleness.message,
+                activationTrace: ActivationTrace(.refreshFailed),
+                failureKind: .targetUnavailable
+            )
+        }
         if activateOutcome == .success {
-            showFingerprint(refreshedLiveTarget.activationPoint)
+            showFingerprint(activationPoint)
             let trace = ActivationTrace(.accessibilityActivate)
             if let failure = await textEntryActivationFailure(treeElement, trace) {
                 return failure.withSubjectEvidence(subjectEvidence)
@@ -54,8 +66,12 @@ struct ActivationPolicy {
             )
         }
 
-        let activationPoint = refreshedLiveTarget.activationPoint
-        let tapActivationSucceeded = await activationPointDispatch(activationPoint)
+        let preparedDispatch = prepareActivationPointDispatch(activationPoint)
+        let tapActivationSucceeded = if let preparedDispatch {
+            await completeActivationPointDispatch(preparedDispatch)
+        } else {
+            false
+        }
         let trace = ActivationTrace(.activationPointFallback(
             axActivateReturned: activateOutcome.axActivateReturned,
             tapActivationPoint: ScreenPoint(x: Double(activationPoint.x), y: Double(activationPoint.y)),

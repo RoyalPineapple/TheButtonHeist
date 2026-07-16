@@ -3,7 +3,7 @@ import Testing
 import ThePlans
 
 @Test func `typed expression leaves resolve through the environment`() throws {
-    let title = try HeistReferenceName(validating: "  title  ", type: "string")
+    let title = try HeistReferenceName(validating: "title")
     #expect(title.rawValue == "title")
 
     let expression = Expr<String>.ref(title)
@@ -13,31 +13,36 @@ import ThePlans
         try expression.resolve(in: .empty)
     }
 
-    let targetReference = try HeistReferenceName(validating: "cta", type: "target")
+    let targetReference = try HeistReferenceName(validating: "cta")
     expectExpressionError(.unresolvedTargetReference("cta")) {
         try AccessibilityTarget(ref: targetReference).resolve(in: .empty)
     }
 }
 
-@Test func `invalid reference state is rejected at construction and decoding`() throws {
-    expectExpressionError(.emptyReference("string")) {
-        try HeistReferenceName(validating: "  \n ", type: "string")
+@Test func `identifier roles share exact admission at construction and decoding`() throws {
+    for value in ["", "  title  ", "target-name", "1target", "class", "Any"] {
+        #expect(throws: HeistIdentifierValidationError.self) {
+            try HeistPlanName(validating: value)
+        }
+        #expect(throws: HeistIdentifierValidationError.self) {
+            try HeistReferenceName(validating: value)
+        }
     }
 
     expectDecodingError(
         HeistReferenceName.self,
         #""   ""#,
-        contains: "reference must not be empty"
+        contains: "Swift-style identifier"
     )
     expectDecodingError(
         AccessibilityTarget.self,
         #"{"ref":"   "}"#,
-        contains: "target reference must not be empty"
+        contains: "Swift-style identifier"
     )
     expectDecodingError(
         ElementPredicateTemplate.self,
         #"{"checks":[{"kind":"label","match":{"mode":"exact","value":{"ref":"   "}}}]}"#,
-        contains: "reference must not be empty"
+        contains: "Swift-style identifier"
     )
 }
 
@@ -115,7 +120,12 @@ import ThePlans
         target: .ref("sourceTarget")
     )
     let resolvedCommand: ResolvedHeistActionCommand = try command.resolve(in: environment)
-    #expect(resolvedCommand == .typeText(text: "Pay", target: source, replacingExisting: false))
+    guard case .typeText(let resolvedTypeText) = resolvedCommand else {
+        Issue.record("Expected resolved type text command")
+        return
+    }
+    #expect(resolvedTypeText.text == "Pay")
+    #expect(resolvedTypeText.target == source)
 
     let swipe = HeistActionCommand.mechanicalSwipe(SwipeTarget(
         selection: .elementDirection(.ref("sourceTarget"), .up)

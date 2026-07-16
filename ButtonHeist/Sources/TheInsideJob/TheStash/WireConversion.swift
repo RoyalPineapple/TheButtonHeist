@@ -86,8 +86,7 @@ extension TheStash {
             ? [.increment, .decrement]
             : []
         let custom = element.customActions
-            .map { $0.name }
-            .filter { !$0.isEmpty }
+            .compactMap { try? CustomActionName(validating: $0.name) }
             .map(ElementAction.custom)
         return activate + textEntry + adjustable + custom
     }
@@ -129,8 +128,18 @@ extension TheStash {
         from tree: InterfaceTree,
         timestamp: Date = Date()
     ) -> Interface {
+        discoveryProjection(from: tree, timestamp: timestamp).interface
+    }
+
+    static func discoveryProjection(
+        from tree: InterfaceTree,
+        timestamp: Date = Date()
+    ) -> DiscoveryProjection {
         var elementAnnotations = elementAnnotations(from: tree)
         var containerAnnotations = containerAnnotations(from: tree)
+        var containerPathBySourcePath = Dictionary(
+            uniqueKeysWithValues: containerAnnotations.map { ($0.path, $0.path) }
+        )
         var traceIdentitiesByPath = traceIdentities(from: tree).byPath
         let containerAnnotationsByPath = Dictionary(
             containerAnnotations.map { ($0.path, $0) },
@@ -170,6 +179,7 @@ extension TheStash {
                         continue
                     }
                     let childPath = path.appending(children.count)
+                    containerPathBySourcePath[entry.path] = childPath
                     var nestedChildren: [AccessibilityHierarchy] = []
                     appendDiscoveryChildren(
                         for: entry.path,
@@ -206,7 +216,7 @@ extension TheStash {
         }
         let elementAnnotationByPath = InterfaceAnnotations(elements: elementAnnotations).elementByPath
         let containerAnnotationByPath = InterfaceAnnotations(containers: containerAnnotations).containerByPath
-        return Interface(
+        let interface = Interface(
             timestamp: timestamp,
             projecting: hierarchy,
             elementMetadata: { path, _, _ in
@@ -223,6 +233,10 @@ extension TheStash {
                     scrollInventory: annotation.scrollInventory
                 )
             }
+        )
+        return DiscoveryProjection(
+            interface: interface,
+            containerPathBySourcePath: containerPathBySourcePath
         )
     }
 
@@ -424,6 +438,13 @@ extension TheStash {
             )
         }
     }
+    }
+}
+
+extension TheStash.WireConversion {
+    struct DiscoveryProjection {
+        let interface: Interface
+        let containerPathBySourcePath: [TreePath: TreePath]
     }
 }
 

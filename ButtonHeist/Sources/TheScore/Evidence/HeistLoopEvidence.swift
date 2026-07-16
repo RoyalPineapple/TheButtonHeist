@@ -2,8 +2,6 @@ import Foundation
 import ThePlans
 
 public struct HeistForEachStringEvidence: Codable, Sendable, Equatable {
-    public let parameter: HeistReferenceName
-    public let count: Int
     public let iterationCount: Int
     private let shape: Shape
 
@@ -29,27 +27,22 @@ public struct HeistForEachStringEvidence: Codable, Sendable, Equatable {
     }
 
     public init(
-        parameter: HeistReferenceName,
-        count: Int,
         iterationCount: Int,
         failureReason: String? = nil
     ) {
-        self.parameter = parameter
-        self.count = count
+        precondition(iterationCount >= 0)
         self.iterationCount = iterationCount
         self.shape = .summary(failureReason: failureReason)
     }
 
     public init(
-        parameter: HeistReferenceName,
-        count: Int,
         iterationCount: Int,
         iterationOrdinal: Int,
         value: String,
         failureReason: String? = nil
     ) {
-        self.parameter = parameter
-        self.count = count
+        precondition(iterationCount >= 0)
+        precondition(iterationOrdinal >= 0)
         self.iterationCount = iterationCount
         self.shape = .iteration(
             iterationOrdinal: iterationOrdinal,
@@ -64,8 +57,6 @@ public struct HeistForEachStringEvidence: Codable, Sendable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case parameter
-        case count
         case iterationCount
         case iterationOrdinal
         case value
@@ -78,22 +69,25 @@ public struct HeistForEachStringEvidence: Codable, Sendable, Equatable {
         let iterationOrdinal = try container.decodeIfPresent(Int.self, forKey: .iterationOrdinal)
         let value = try container.decodeIfPresent(String.self, forKey: .value)
         let failureReason = try container.decodeIfPresent(String.self, forKey: .failureReason)
+        let iterationCount = try container.decode(Int.self, forKey: .iterationCount)
+        guard iterationCount >= 0, iterationOrdinal.map({ $0 >= 0 }) ?? true else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: container.codingPath,
+                debugDescription: "for_each_string counts and ordinals must be nonnegative"
+            ))
+        }
 
         switch (iterationOrdinal, value) {
         case (.some(let iterationOrdinal), .some(let value)):
             self.init(
-                parameter: try container.decode(HeistReferenceName.self, forKey: .parameter),
-                count: try container.decode(Int.self, forKey: .count),
-                iterationCount: try container.decode(Int.self, forKey: .iterationCount),
+                iterationCount: iterationCount,
                 iterationOrdinal: iterationOrdinal,
                 value: value,
                 failureReason: failureReason
             )
         case (nil, nil):
             self.init(
-                parameter: try container.decode(HeistReferenceName.self, forKey: .parameter),
-                count: try container.decode(Int.self, forKey: .count),
-                iterationCount: try container.decode(Int.self, forKey: .iterationCount),
+                iterationCount: iterationCount,
                 failureReason: failureReason
             )
         case (.some, nil), (nil, .some):
@@ -106,8 +100,6 @@ public struct HeistForEachStringEvidence: Codable, Sendable, Equatable {
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(parameter, forKey: .parameter)
-        try container.encode(count, forKey: .count)
         try container.encode(iterationCount, forKey: .iterationCount)
         try container.encodeIfPresent(iterationOrdinal, forKey: .iterationOrdinal)
         try container.encodeIfPresent(value, forKey: .value)
@@ -116,9 +108,6 @@ public struct HeistForEachStringEvidence: Codable, Sendable, Equatable {
 }
 
 public struct HeistForEachElementEvidence: Codable, Sendable, Equatable {
-    public let parameter: HeistReferenceName
-    public let matching: ElementPredicateTemplate
-    public let limit: Int
     public let matchedCount: Int
     public let iterationCount: Int
     private let shape: Shape
@@ -152,25 +141,18 @@ public struct HeistForEachElementEvidence: Codable, Sendable, Equatable {
     }
 
     public init(
-        parameter: HeistReferenceName,
-        matching: ElementPredicateTemplate,
-        limit: Int,
         matchedCount: Int,
         iterationCount: Int,
         failureReason: String? = nil
     ) {
-        self.parameter = parameter
-        self.matching = matching
-        self.limit = limit
+        precondition(matchedCount >= 0)
+        precondition(iterationCount >= 0)
         self.matchedCount = matchedCount
         self.iterationCount = iterationCount
         self.shape = .summary(failureReason: failureReason)
     }
 
     public init(
-        parameter: HeistReferenceName,
-        matching: ElementPredicateTemplate,
-        limit: Int,
         matchedCount: Int,
         iterationCount: Int,
         iterationOrdinal: Int,
@@ -178,9 +160,10 @@ public struct HeistForEachElementEvidence: Codable, Sendable, Equatable {
         targetSummary: String,
         failureReason: String? = nil
     ) {
-        self.parameter = parameter
-        self.matching = matching
-        self.limit = limit
+        precondition(matchedCount >= 0)
+        precondition(iterationCount >= 0)
+        precondition(iterationOrdinal >= 0)
+        precondition(targetOrdinal >= 0)
         self.matchedCount = matchedCount
         self.iterationCount = iterationCount
         self.shape = .iteration(
@@ -202,9 +185,6 @@ public struct HeistForEachElementEvidence: Codable, Sendable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case parameter
-        case matching
-        case limit
         case matchedCount
         case iterationCount
         case iterationOrdinal
@@ -220,15 +200,23 @@ public struct HeistForEachElementEvidence: Codable, Sendable, Equatable {
         let targetOrdinal = try container.decodeIfPresent(Int.self, forKey: .targetOrdinal)
         let targetSummary = try container.decodeIfPresent(String.self, forKey: .targetSummary)
         let failureReason = try container.decodeIfPresent(String.self, forKey: .failureReason)
+        let matchedCount = try container.decode(Int.self, forKey: .matchedCount)
+        let iterationCount = try container.decode(Int.self, forKey: .iterationCount)
+        guard matchedCount >= 0,
+              iterationCount >= 0,
+              iterationOrdinal.map({ $0 >= 0 }) ?? true,
+              targetOrdinal.map({ $0 >= 0 }) ?? true else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: container.codingPath,
+                debugDescription: "for_each_element counts and ordinals must be nonnegative"
+            ))
+        }
 
         switch (iterationOrdinal, targetOrdinal, targetSummary) {
         case (.some(let iterationOrdinal), .some(let targetOrdinal), .some(let targetSummary)):
             self.init(
-                parameter: try container.decode(HeistReferenceName.self, forKey: .parameter),
-                matching: try container.decode(ElementPredicateTemplate.self, forKey: .matching),
-                limit: try container.decode(Int.self, forKey: .limit),
-                matchedCount: try container.decode(Int.self, forKey: .matchedCount),
-                iterationCount: try container.decode(Int.self, forKey: .iterationCount),
+                matchedCount: matchedCount,
+                iterationCount: iterationCount,
                 iterationOrdinal: iterationOrdinal,
                 targetOrdinal: targetOrdinal,
                 targetSummary: targetSummary,
@@ -236,11 +224,8 @@ public struct HeistForEachElementEvidence: Codable, Sendable, Equatable {
             )
         case (nil, nil, nil):
             self.init(
-                parameter: try container.decode(HeistReferenceName.self, forKey: .parameter),
-                matching: try container.decode(ElementPredicateTemplate.self, forKey: .matching),
-                limit: try container.decode(Int.self, forKey: .limit),
-                matchedCount: try container.decode(Int.self, forKey: .matchedCount),
-                iterationCount: try container.decode(Int.self, forKey: .iterationCount),
+                matchedCount: matchedCount,
+                iterationCount: iterationCount,
                 failureReason: failureReason
             )
         default:
@@ -253,9 +238,6 @@ public struct HeistForEachElementEvidence: Codable, Sendable, Equatable {
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(parameter, forKey: .parameter)
-        try container.encode(matching, forKey: .matching)
-        try container.encode(limit, forKey: .limit)
         try container.encode(matchedCount, forKey: .matchedCount)
         try container.encode(iterationCount, forKey: .iterationCount)
         try container.encodeIfPresent(iterationOrdinal, forKey: .iterationOrdinal)
@@ -266,8 +248,6 @@ public struct HeistForEachElementEvidence: Codable, Sendable, Equatable {
 }
 
 public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
-    public let predicate: AccessibilityPredicate
-    public let timeout: Double
     public let iterationCount: Int
     public let lastObservedSummary: String?
     private let storage: Storage
@@ -352,22 +332,17 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
     }
 
     private init(
-        predicate: AccessibilityPredicate,
-        timeout: Double,
         iterationCount: Int = 0,
         lastObservedSummary: String?,
         storage: Storage
     ) {
-        self.predicate = predicate
-        self.timeout = timeout
+        precondition(iterationCount >= 0)
         self.iterationCount = iterationCount
         self.lastObservedSummary = lastObservedSummary
         self.storage = storage
     }
 
     public static func matched(
-        predicate: AccessibilityPredicate,
-        timeout: Double,
         iterationCount: Int,
         iterationOrdinal: Int? = nil,
         expectation: ExpectationResult.Met,
@@ -375,8 +350,6 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         lastObservedSummary: String? = nil
     ) -> HeistRepeatUntilEvidence {
         HeistRepeatUntilEvidence(
-            predicate: predicate,
-            timeout: timeout,
             iterationCount: iterationCount,
             lastObservedSummary: lastObservedSummary,
             storage: .matched(
@@ -388,8 +361,6 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
     }
 
     public static func continued(
-        predicate: AccessibilityPredicate,
-        timeout: Double,
         iterationCount: Int,
         iterationOrdinal: Int,
         expectation: ExpectationResult.Unmet,
@@ -397,8 +368,6 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         lastObservedSummary: String? = nil
     ) -> HeistRepeatUntilEvidence {
         HeistRepeatUntilEvidence(
-            predicate: predicate,
-            timeout: timeout,
             iterationCount: iterationCount,
             lastObservedSummary: lastObservedSummary,
             storage: .continued(
@@ -410,16 +379,12 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
     }
 
     public static func handledElse(
-        predicate: AccessibilityPredicate,
-        timeout: Double,
         iterationCount: Int,
         expectation: ExpectationResult.Unmet,
         lastObservedSummary: String?,
         failureReason: String? = nil
     ) -> HeistRepeatUntilEvidence {
         HeistRepeatUntilEvidence(
-            predicate: predicate,
-            timeout: timeout,
             iterationCount: iterationCount,
             lastObservedSummary: lastObservedSummary,
             storage: .handledElse(
@@ -430,8 +395,6 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
     }
 
     public static func failed(
-        predicate: AccessibilityPredicate,
-        timeout: Double,
         iterationCount: Int,
         iterationOrdinal: Int? = nil,
         expectation: ExpectationResult.Unmet,
@@ -439,8 +402,6 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         failureReason: String
     ) -> HeistRepeatUntilEvidence {
         HeistRepeatUntilEvidence(
-            predicate: predicate,
-            timeout: timeout,
             iterationCount: iterationCount,
             lastObservedSummary: lastObservedSummary,
             storage: .failed(
@@ -453,8 +414,6 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case outcome
-        case predicate
-        case timeout
         case iterationCount
         case iterationOrdinal
         case expectation
@@ -467,10 +426,15 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "repeat_until evidence")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let outcome = try container.decode(HeistPredicateEvidenceOutcome.self, forKey: .outcome)
-        let predicate = try container.decode(AccessibilityPredicate.self, forKey: .predicate)
-        let timeout = try container.decode(Double.self, forKey: .timeout)
         let iterationCount = try container.decode(Int.self, forKey: .iterationCount)
         let iterationOrdinal = try container.decodeIfPresent(Int.self, forKey: .iterationOrdinal)
+        guard iterationCount >= 0,
+              iterationOrdinal.map({ $0 >= 0 }) ?? true else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: container.codingPath,
+                debugDescription: "repeat_until counts and ordinals must be nonnegative"
+            ))
+        }
         let expectation = try container.decode(ExpectationResult.self, forKey: .expectation)
         let actionResult = try container.decodeIfPresent(ActionResult.self, forKey: .actionResult)
         let lastObservedSummary = try container.decodeIfPresent(String.self, forKey: .lastObservedSummary)
@@ -484,8 +448,6 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
             codingPath: container.codingPath
         )
         self.init(
-            predicate: predicate,
-            timeout: timeout,
             iterationCount: iterationCount,
             lastObservedSummary: lastObservedSummary,
             storage: storage
@@ -495,8 +457,6 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(outcome, forKey: .outcome)
-        try container.encode(predicate, forKey: .predicate)
-        try container.encode(timeout, forKey: .timeout)
         try container.encode(iterationCount, forKey: .iterationCount)
         try container.encodeIfPresent(iterationOrdinal, forKey: .iterationOrdinal)
         try container.encode(expectation, forKey: .expectation)

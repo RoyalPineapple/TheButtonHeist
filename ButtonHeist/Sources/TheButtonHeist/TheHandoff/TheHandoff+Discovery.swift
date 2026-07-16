@@ -44,7 +44,7 @@ extension TheHandoff {
 
         return await ReachableDeviceScanner(getDiscoveredDevices: { [weak self] in
             self?.discoveredDevices ?? []
-        }, token: token).scan(
+        }, token: serverMessages.authToken).scan(
             timeout: timeout,
             probeTimeout: probeTimeout,
             retryInterval: retryInterval

@@ -46,12 +46,15 @@ public enum HeistKnownBuildDiagnosticCode: String, Sendable, Hashable, CaseItera
     case swiftCompilationFailed = "heist.swift_compilation.failed"
     case swiftCompilationUnsupportedPlatform = "heist.swift_compilation.unsupported_platform"
     case swiftCompilationCancelled = "heist.swift_compilation.cancelled"
-    case swiftCompilationInvalidEntry = "heist.swift_compilation.invalid_entry"
     case swiftCompilationSourceNotFound = "heist.swift_compilation.source_not_found"
     case swiftCompilationPackageRootNotFound = "heist.swift_compilation.package_root_not_found"
     case swiftCompilationBuildArtifactsNotFound = "heist.swift_compilation.build_artifacts_not_found"
     case swiftCompilationCompileFailed = "heist.swift_compilation.compile_failed"
     case swiftCompilationExecutionFailed = "heist.swift_compilation.execution_failed"
+    case swiftCompilationCompileTimedOut = "heist.swift_compilation.compile_timed_out"
+    case swiftCompilationExecutionTimedOut = "heist.swift_compilation.execution_timed_out"
+    case swiftCompilationCompilerTerminated = "heist.swift_compilation.compiler_terminated"
+    case swiftCompilationExecutionTerminated = "heist.swift_compilation.execution_terminated"
     case swiftCompilationInvalidOutput = "heist.swift_compilation.invalid_output"
 
     case directoryNoSources = "heist.directory.no_sources"
@@ -293,12 +296,15 @@ public extension HeistBuildDiagnosticCode {
              .swiftCompilationFailed,
              .swiftCompilationUnsupportedPlatform,
              .swiftCompilationCancelled,
-             .swiftCompilationInvalidEntry,
              .swiftCompilationSourceNotFound,
              .swiftCompilationPackageRootNotFound,
              .swiftCompilationBuildArtifactsNotFound,
              .swiftCompilationCompileFailed,
              .swiftCompilationExecutionFailed,
+             .swiftCompilationCompileTimedOut,
+             .swiftCompilationExecutionTimedOut,
+             .swiftCompilationCompilerTerminated,
+             .swiftCompilationExecutionTerminated,
              .swiftCompilationInvalidOutput,
              .directoryNoSources,
              .directoryCancelled,
@@ -726,7 +732,7 @@ private extension HeistPlanRuntimeSafetyFailure {
         HeistBuildDiagnostic(
             code: diagnosticCode,
             phase: .planValidation,
-            path: path,
+            path: path.description,
             message: "\(contract); observed \(observed)",
             hint: correction
         )

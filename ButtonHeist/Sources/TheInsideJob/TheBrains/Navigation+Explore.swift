@@ -7,14 +7,7 @@ import ThePlans
 
 import AccessibilitySnapshotParser
 
-// MARK: - InterfaceObservation Exploration
-
 extension Navigation {
-
-    fileprivate func observeSemanticDiscovery() async -> ExploredScreen? {
-        await exploreScreen(exitPosition: .origin)
-    }
-
     func exploreScreen(
         target: ResolvedAccessibilityTarget? = nil,
         baseline: ExplorationBaseline? = nil,
@@ -23,7 +16,7 @@ extension Navigation {
         deadline: SemanticObservationDeadline? = nil,
         maxScrollsPerContainer: Int? = nil,
         maxScrollsPerDiscovery: Int? = nil,
-        onObservation: ((SettledSemanticObservationEvent) -> ViewportExplorationDecision)? = nil
+        onObservation: ((SettledSemanticObservationEvent) -> ViewportExplorationDecision)? = nil,
     ) async -> ExploredScreen? {
         let explorer = ViewportExplorer(
             navigation: self,
@@ -33,7 +26,7 @@ extension Navigation {
                 maxScrollsPerContainer: maxScrollsPerContainer ?? ScreenManifest.maxScrollsPerContainer,
                 maxScrollsPerDiscovery: maxScrollsPerDiscovery ?? ScreenManifest.maxScrollsPerDiscovery
             ),
-            searchOrder: searchOrder
+            searchOrder: searchOrder,
         )
         return await explorer.exploreViewports(exitPosition: exitPosition) { event in
             if let decision = onObservation?(event), decision == .finish {
@@ -93,13 +86,21 @@ extension Navigation {
             start: CFAbsoluteTimeGetCurrent(),
             baselineTripwireSignal: tripwire.tripwireSignal()
         )
-        guard requiredAfterMovement || (!Task.isCancelled && hasTimeRemaining(before: deadline)),
-              let proof = InterfaceObservationProof.settled(
-                  settle,
-                  stash: stash,
-                  discoveryCommitPolicy: discoveryCommitPolicy
-              )
-        else { return nil }
+        guard requiredAfterMovement || (!Task.isCancelled && hasTimeRemaining(before: deadline)) else {
+            return nil
+        }
+        let proof = requiredAfterMovement
+            ? InterfaceObservationProof.settledAfterViewportMovement(
+                settle,
+                stash: stash,
+                discoveryCommitPolicy: discoveryCommitPolicy
+            )
+            : InterfaceObservationProof.settled(
+                settle,
+                stash: stash,
+                discoveryCommitPolicy: discoveryCommitPolicy
+            )
+        guard let proof else { return nil }
         return stash.semanticObservationStream.commitSettledDiscoveryObservation(
             proof,
             notificationBatch: notificationWindow?.capture()
@@ -115,9 +116,9 @@ extension TheBrains {
 
     func startSemanticObservation() {
         semanticObservationIsActive = true
-        stash.startPassiveSemanticObservation { [weak navigation] in
-            guard let navigation else { return nil }
-            return await navigation.observeSemanticDiscovery()
+        stash.startPassiveSemanticObservation { [weak self] in
+            guard let self else { return nil }
+            return await self.executeSemanticDiscovery()
         }
     }
 }

@@ -10,12 +10,14 @@ public struct ButtonHeistEnvironment: Equatable, Sendable {
     public init(
         device: String? = nil,
         token: String? = nil,
+        driverID: String? = nil,
         sessionTimeout: String? = nil,
         connectionTimeout: String? = nil
     ) {
         var values: [EnvironmentKey: String] = [:]
         values[.buttonheistDevice] = device
         values[.buttonheistToken] = token
+        values[.buttonheistDriverId] = driverID
         values[.buttonheistSessionTimeout] = sessionTimeout
         values[.buttonheistConnectionTimeout] = connectionTimeout
         self.values = values
@@ -25,6 +27,7 @@ public struct ButtonHeistEnvironment: Equatable, Sendable {
         self.values = Dictionary(uniqueKeysWithValues: [
             EnvironmentKey.buttonheistDevice,
             .buttonheistToken,
+            .buttonheistDriverId,
             .buttonheistSessionTimeout,
             .buttonheistConnectionTimeout,
         ].compactMap { key in
@@ -38,6 +41,10 @@ public struct ButtonHeistEnvironment: Equatable, Sendable {
 
     var token: String? {
         values[.buttonheistToken]
+    }
+
+    var driverID: String? {
+        values[.buttonheistDriverId]
     }
 
     var sessionTimeout: String? {
@@ -61,7 +68,8 @@ public enum ButtonHeistEnvironmentBridge {
 /// to create a `TheFence`.
 public struct EnvironmentConfig: Sendable {
     public let deviceFilter: String?
-    let token: String?
+    let token: SessionAuthToken?
+    let driverID: DriverID?
     public let sessionTimeout: TimeInterval
     let connectionTimeout: TimeInterval
     let fileConfig: ButtonHeistFileConfig?
@@ -74,6 +82,7 @@ public struct EnvironmentConfig: Sendable {
             deviceFilter: deviceFilter,
             connectionTimeout: connectionTimeout,
             token: token,
+            driverID: driverID,
             autoReconnect: autoReconnect,
             fileConfig: fileConfig,
             directDevice: directDevice
@@ -93,7 +102,7 @@ public struct EnvironmentConfig: Sendable {
         autoReconnect: Bool = true,
         environment: ButtonHeistEnvironment = ButtonHeistEnvironmentBridge.current()
     ) throws -> EnvironmentConfig {
-        resolve(
+        try resolve(
             deviceFilter: deviceFilter,
             token: token,
             sessionTimeout: sessionTimeout,
@@ -149,7 +158,7 @@ public struct EnvironmentConfig: Sendable {
         environment: ButtonHeistEnvironment = ButtonHeistEnvironmentBridge.current()
     ) throws -> EnvironmentConfig {
         let fileConfig = try TargetConfigResolver.loadConfig(from: configPath)
-        return resolve(
+        return try resolve(
             deviceFilter: deviceFilter,
             token: token,
             sessionTimeout: sessionTimeout,
@@ -168,7 +177,7 @@ public struct EnvironmentConfig: Sendable {
         autoReconnect: Bool,
         fileConfig: ButtonHeistFileConfig?,
         environment: ButtonHeistEnvironment
-    ) -> EnvironmentConfig {
+    ) throws -> EnvironmentConfig {
 
         let envDevice = environment.device
         let envToken = environment.token
@@ -186,7 +195,9 @@ public struct EnvironmentConfig: Sendable {
             resolvedToken = token ?? configTarget.token
             directDevice = DiscoveredDevice.fromHostPort(
                 configTarget.device,
-                id: "config-\(fileConfig?.defaultTarget?.rawValue ?? configTarget.device)",
+                id: DiscoveryDeviceID(
+                    stringLiteral: "config-\(fileConfig?.defaultTarget?.rawValue ?? configTarget.device)"
+                ),
                 name: fileConfig?.defaultTarget?.rawValue
             )
         } else {
@@ -217,7 +228,8 @@ public struct EnvironmentConfig: Sendable {
 
         return EnvironmentConfig(
             deviceFilter: resolvedDevice,
-            token: resolvedToken,
+            token: try resolvedToken.map(SessionAuthToken.init(validating:)),
+            driverID: try environment.driverID.map(DriverID.init(validating:)),
             sessionTimeout: resolvedSessionTimeout,
             connectionTimeout: resolvedConnectionTimeout,
             fileConfig: fileConfig,

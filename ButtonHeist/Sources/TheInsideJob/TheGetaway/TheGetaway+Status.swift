@@ -17,16 +17,18 @@ extension TheGetaway {
         }
         let info = ServerInfo(
             appName: Bundle.main.infoDictionary?["CFBundleName"] as? String ?? "App",
-            bundleIdentifier: Bundle.main.bundleIdentifier ?? "",
+            bundleIdentifier: Bundle.main.insideJobIdentifier,
             deviceName: UIDevice.current.name,
             systemVersion: UIDevice.current.systemVersion,
             screenWidth: screenBounds.width,
             screenHeight: screenBounds.height,
-            instanceId: identity.sessionId.uuidString,
+            instanceId: identity.launchId,
             instanceIdentifier: identity.effectiveInstanceId,
             listeningPort: listeningPort,
-            simulatorUDID: ProcessInfo.processInfo.environment[.udid],
-            vendorIdentifier: UIDevice.current.identifierForVendor?.uuidString,
+            simulatorUDID: ProcessInfo.processInfo.simulatorUDID,
+            vendorIdentifier: UIDevice.current.identifierForVendor.flatMap {
+                try? VendorIdentifier(validating: $0.uuidString)
+            },
             tlsActive: identity.tlsActive
         )
         await sendMessage(.info(info), respond: respond)
@@ -34,12 +36,11 @@ extension TheGetaway {
 
     func makeStatusPayload() async -> StatusPayload {
         let appName = Bundle.main.infoDictionary?["CFBundleName"] as? String ?? "App"
-        let bundleId = Bundle.main.bundleIdentifier ?? ""
         let appBuild = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? ""
 
         let identity = StatusIdentity(
             appName: appName,
-            bundleIdentifier: bundleId,
+            bundleIdentifier: Bundle.main.insideJobIdentifier,
             appBuild: appBuild,
             deviceName: UIDevice.current.name,
             systemVersion: UIDevice.current.systemVersion,
@@ -67,7 +68,7 @@ extension TheGetaway {
         return PongPayload(
             buttonHeistVersion: buttonHeistVersion,
             appName: appName,
-            bundleIdentifier: Bundle.main.bundleIdentifier ?? "",
+            bundleIdentifier: Bundle.main.insideJobIdentifier,
             appVersion: info["CFBundleShortVersionString"] as? String,
             appBuild: info["CFBundleVersion"] as? String,
             serverInstanceIdentifier: identity.effectiveInstanceId

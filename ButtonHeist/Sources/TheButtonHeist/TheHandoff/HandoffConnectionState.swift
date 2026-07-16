@@ -217,15 +217,12 @@ enum HandoffConnectionPhase {
 
 /// Concrete device identity auto-reconnect is allowed to recover.
 struct HandoffReconnectTarget: Equatable, Sendable {
-    let filter: String?
+    let resolutionTarget: DeviceResolutionTarget
     let device: DiscoveredDevice
 }
 
 enum HandoffDriverIdentity {
-    static func effectiveDriverId(explicit driverId: String?) -> String {
-        if let driverId, !driverId.isEmpty { return driverId }
-        return persistentDriverId
-    }
+    static func effectiveDriverId(explicit driverId: DriverID?) -> DriverID { driverId ?? persistentDriverId }
 
     private static let driverIdFile: URL = {
         let configDir = FileManager.default.homeDirectoryForCurrentUser
@@ -233,7 +230,7 @@ enum HandoffDriverIdentity {
         return configDir.appendingPathComponent("driver-id")
     }()
 
-    private static let persistentDriverId: String = {
+    private static let persistentDriverId: DriverID = {
         let fileURL = driverIdFile
         let existingValue: String?
         do {
@@ -241,12 +238,15 @@ enum HandoffDriverIdentity {
         } catch {
             existingValue = nil
         }
-        if let existing = existingValue, !existing.isEmpty {
+        if let existing = existingValue,
+           let driverId = try? DriverID(validating: existing) {
             repairDriverIdPermissions(fileURL)
-            return existing
+            return driverId
         }
 
-        let generated = UUID().uuidString.lowercased()
+        guard let generated = try? DriverID(validating: UUID().uuidString.lowercased()) else {
+            preconditionFailure("UUID generation produced a blank driver ID")
+        }
         let dir = fileURL.deletingLastPathComponent()
         do {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
@@ -255,7 +255,7 @@ enum HandoffDriverIdentity {
         }
         if !FileManager.default.createFile(
             atPath: fileURL.path,
-            contents: Data(generated.utf8),
+            contents: Data(generated.description.utf8),
             attributes: [.posixPermissions: 0o600]
         ) {
             driverIdentityLogger.warning("Failed to persist driver-id to \(fileURL.path)")

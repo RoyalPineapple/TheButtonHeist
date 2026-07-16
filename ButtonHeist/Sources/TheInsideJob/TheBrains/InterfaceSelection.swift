@@ -17,214 +17,129 @@ enum InterfaceSelectionError: Error, Equatable {
         case .invalidSubtree(let reason):
             return "get_interface subtree could not be resolved: \(reason)"
         case .subtreeNotFound:
-            return """
-                get_interface subtree matched no nodes; refine subtree using a container \
-                or element target from get_interface.
-                """
-        case .subtreeOrdinalOutOfRange(let ordinal, let candidateCount, let candidates):
-            let range = candidateCount == 1 ? "0" : "0...\(candidateCount - 1)"
-            return """
-                get_interface subtree ordinal \(ordinal) is out of range for \(candidateCount) matches; \
-                use \(range) or refine subtree. Candidates: \(Self.diagnosticList(candidates))
-                """
-        case .ambiguousSubtree(let candidateCount, let candidates):
-            return """
-                get_interface subtree matched \(candidateCount) nodes; add subtree.ordinal \
-                0...\(candidateCount - 1) or refine subtree. Candidates: \(Self.diagnosticList(candidates))
-                """
+            return "get_interface subtree matched no nodes; refine subtree using a container or element target from get_interface."
+        case .subtreeOrdinalOutOfRange(let ordinal, let count, let candidates):
+            let range = count == 1 ? "0" : "0...\(count - 1)"
+            return "get_interface subtree ordinal \(ordinal) is out of range for \(count) matches; "
+                + "use \(range) or refine subtree. Candidates: \(Self.diagnosticList(candidates))"
+        case .ambiguousSubtree(let count, let candidates):
+            return "get_interface subtree matched \(count) nodes; add subtree.ordinal 0...\(count - 1) "
+                + "or refine subtree. Candidates: \(Self.diagnosticList(candidates))"
         }
     }
 
     private static func diagnosticList(_ candidates: [String]) -> String {
-        candidates.enumerated().map { index, candidate in
-            "[\(index)] \(candidate)"
-        }.joined(separator: "; ")
+        candidates.enumerated().map { "[\($0.offset)] \($0.element)" }.joined(separator: "; ")
     }
 }
 
-struct InterfaceSelector {
-    let interface: Interface
-
-    func select(_ query: InterfaceQuery) throws(InterfaceSelectionError) -> Interface {
-        guard let subtree = query.subtree else { return interface }
+extension TheStash {
+    func selectInterface(_ query: InterfaceQuery) throws(InterfaceSelectionError) -> Interface {
+        let tree = interfaceTree
+        let projection = WireConversion.discoveryProjection(from: tree)
+        guard let subtree = query.subtree else { return projection.interface }
+        let target: ResolvedAccessibilityTarget
         do {
-            return try select(subtree.resolve(in: .empty))
-        } catch let error as InterfaceSelectionError {
-            throw error
+            target = try subtree.resolve(in: .empty)
         } catch {
             throw .invalidSubtree(String(describing: error))
         }
+
+        let path = target.isElementTarget
+            ? try selectedPath(for: resolveTarget(target, in: tree), projection: projection)
+            : try selectedPath(for: resolveContainerTarget(target, in: tree), projection: projection)
+        return projection.interface.selectingSubtree(at: path)
     }
 
-    private func select(_ subtree: ResolvedAccessibilityTarget) throws(InterfaceSelectionError) -> Interface {
-        let graph = interface.graph
-        let resolution = InterfaceSubtreeResolution(subtree)
-        let selectedTargetPaths = ElementMatchGraph(interface: interface).resolve(resolution.target).paths
-        let candidates = graph.nodesInPathOrder.compactMap { record -> InterfaceSubtreeCandidate? in
-            guard selectedTargetPaths.contains(record.path) else { return nil }
-            switch record.kind {
-            case .element(let elementRecord):
-                let projected = elementRecord.projectedElement
-                return InterfaceSubtreeCandidate(
-                    node: record.node,
-                    originalPath: record.path,
-                    traversalIndex: elementRecord.traversalIndex,
-                    summary: projected.subtreeCandidateSummary
-                )
-
-            case .container(let containerRecord):
-                return InterfaceSubtreeCandidate(
-                    node: record.node,
-                    originalPath: record.path,
-                    traversalIndex: nil,
-                    summary: containerRecord.container.subtreeCandidateSummary(annotation: containerRecord.annotation)
-                )
+    private func selectedPath(
+        for resolution: TargetResolution,
+        projection: WireConversion.DiscoveryProjection
+    ) throws(InterfaceSelectionError) -> TreePath {
+        switch resolution {
+        case .resolved(let element):
+            let identity = element.heistId.traceElementIdentity
+            guard let path = projection.interface.graph.traceIdentityByPath.first(where: { $0.value == identity })?.key else {
+                throw .subtreeNotFound
             }
-        }.sorted()
-        guard !candidates.isEmpty else {
-            throw .subtreeNotFound
-        }
-
-        if let ordinal = resolution.ordinal {
-            guard candidates.indices.contains(ordinal) else {
-                throw .subtreeOrdinalOutOfRange(
-                    ordinal: ordinal,
-                    candidateCount: candidates.count,
-                    candidates: candidates.map(\.summary)
-                )
+            return path
+        case .notFound(let facts):
+            guard case .ordinalOutOfRange(let ordinal, let count) = facts.reason else {
+                throw .subtreeNotFound
             }
-            return selectedInterface(for: candidates[ordinal])
-        }
-
-        guard candidates.count == 1 else {
+            throw .subtreeOrdinalOutOfRange(
+                ordinal: ordinal,
+                candidateCount: count,
+                candidates: facts.exactMatches.map(\.subtreeCandidateSummary)
+            )
+        case .ambiguous(let facts):
             throw .ambiguousSubtree(
-                candidateCount: candidates.count,
-                candidates: candidates.map(\.summary)
+                candidateCount: facts.matchedCount,
+                candidates: facts.exactMatches.map(\.subtreeCandidateSummary)
             )
         }
-
-        return selectedInterface(for: candidates[0])
     }
 
-    private func selectedInterface(for candidate: InterfaceSubtreeCandidate) -> Interface {
-        let annotations = annotations(for: candidate)
-        let traceIdentities = traceIdentities(for: candidate)
-        return Interface(
-            timestamp: interface.timestamp,
-            projecting: [candidate.node],
-            diagnostics: interface.diagnostics,
-            elementMetadata: { path, _, _ in
-                guard let annotation = annotations.elementByPath[path] else { return nil }
-                return InterfaceElementProjectionMetadata(
-                    actions: annotation.actions,
-                    traceIdentity: traceIdentities[path]
-                )
-            },
-            containerMetadata: { path, _ in
-                guard let annotation = annotations.containerByPath[path] else { return nil }
-                return InterfaceContainerProjectionMetadata(
-                    containerName: annotation.containerName,
-                    scrollInventory: annotation.scrollInventory
-                )
+    private func selectedPath(
+        for resolution: ContainerTargetResolution,
+        projection: WireConversion.DiscoveryProjection
+    ) throws(InterfaceSelectionError) -> TreePath {
+        switch resolution {
+        case .resolved(let container):
+            guard let path = projection.containerPathBySourcePath[container.path] else {
+                throw .subtreeNotFound
             }
-        )
-    }
-
-    private func annotations(for candidate: InterfaceSubtreeCandidate) -> InterfaceAnnotations {
-        interface.graph.annotationsForSubtree(originalPath: candidate.originalPath, rootPath: TreePath([0]))
-    }
-
-    private func traceIdentities(for candidate: InterfaceSubtreeCandidate) -> InterfaceTraceIdentities {
-        interface.graph.traceIdentitiesForSubtree(originalPath: candidate.originalPath, rootPath: TreePath([0]))
-    }
-}
-
-private struct InterfaceSubtreeResolution {
-    let target: ResolvedAccessibilityTarget
-    let ordinal: Int?
-
-    init(_ target: ResolvedAccessibilityTarget) {
-        switch target {
-        case .predicate(let predicate, let ordinal):
-            self.target = .predicate(predicate)
-            self.ordinal = ordinal
-        case .container(let predicate, let ordinal):
-            self.target = .container(predicate)
-            self.ordinal = ordinal
-        case .within:
-            self.target = target
-            self.ordinal = nil
+            return path
+        case .notFound(let facts):
+            guard case .ordinalOutOfRange(let ordinal, let count) = facts.reason else {
+                throw .subtreeNotFound
+            }
+            throw .subtreeOrdinalOutOfRange(
+                ordinal: ordinal,
+                candidateCount: count,
+                candidates: facts.exactMatches.map(\.subtreeCandidateSummary)
+            )
+        case .ambiguous(let facts):
+            throw .ambiguousSubtree(
+                candidateCount: facts.matchedCount,
+                candidates: facts.candidates.map(\.subtreeCandidateSummary)
+            )
         }
     }
 }
 
-private struct InterfaceSubtreeCandidate: Comparable {
-    let node: AccessibilityHierarchy
-    let originalPath: TreePath
-    let traversalIndex: Int?
-    let summary: String
-
-    static func == (lhs: InterfaceSubtreeCandidate, rhs: InterfaceSubtreeCandidate) -> Bool {
-        lhs.traversalIndex == rhs.traversalIndex && lhs.originalPath == rhs.originalPath
-    }
-
-    static func < (lhs: InterfaceSubtreeCandidate, rhs: InterfaceSubtreeCandidate) -> Bool {
-        switch (lhs.traversalIndex, rhs.traversalIndex) {
-        case let (left?, right?) where left != right:
-            return left < right
-        default:
-            return lhs.originalPath < rhs.originalPath
-        }
+private extension InterfaceTree.Element {
+    @MainActor
+    var subtreeCandidateSummary: String {
+        let projected = TheStash.WireConversion.convert(element)
+        return subtreeSummary("element", fields: [
+            ("element", projected.description), ("identifier", projected.identifier),
+            ("label", projected.label), ("value", projected.value),
+            ("traits", projected.traits.isEmpty ? nil : projected.traits.map(\.rawValue).joined(separator: ",")),
+        ])
     }
 }
 
-private extension AccessibilityContainer {
-    func subtreeCandidateSummary(annotation: InterfaceContainerAnnotation?) -> String {
-        let facts = containerPredicateFacts
-        let semanticFields: [String?]
-        switch facts.role {
-        case .semanticGroup(let label, let value):
-            semanticFields = [
-                subtreeSummaryField("label", label),
-                subtreeSummaryField("value", value),
-            ]
-        case .none, .list, .landmark, .dataTable, .tabBar, .series:
-            semanticFields = []
+private extension InterfaceTree.Container {
+    var subtreeCandidateSummary: String {
+        let facts = container.containerPredicateFacts
+        let semantic: (String?, String?) = if case .semanticGroup(let label, let value) = facts.role {
+            (label, value)
+        } else {
+            (nil, nil)
         }
-        return ([
-            "container",
-            subtreeSummaryRequiredField("type", facts.role.kind.rawValue),
-            subtreeSummaryField("containerName", annotation?.containerName?.rawValue),
-            subtreeSummaryField("identifier", facts.identifier),
-        ] + semanticFields + [
+        return subtreeSummary("container", fields: [
+            ("type", facts.role.kind.rawValue), ("containerName", containerName?.rawValue),
+            ("identifier", facts.identifier), ("label", semantic.0), ("value", semantic.1),
+        ], flags: [
             facts.isModalBoundary ? "isModalBoundary=true" : nil,
             facts.isScrollable ? "isScrollable=true" : nil,
-        ])
-            .compactMap { $0 }
-            .joined(separator: " ")
+        ].compactMap { $0 })
     }
 }
 
-private extension HeistElement {
-    var subtreeCandidateSummary: String {
-        [
-            "element",
-            subtreeSummaryRequiredField("element", description),
-            subtreeSummaryField("identifier", identifier),
-            subtreeSummaryField("label", label),
-            subtreeSummaryField("value", value),
-            traits.isEmpty ? nil : subtreeSummaryRequiredField("traits", traits.map(\.rawValue).joined(separator: ",")),
-        ].compactMap { $0 }.joined(separator: " ")
-    }
-}
-
-private func subtreeSummaryField(_ name: String, _ value: String?) -> String? {
-    guard let value, !value.isEmpty else { return nil }
-    return subtreeSummaryRequiredField(name, value)
-}
-
-private func subtreeSummaryRequiredField(_ name: String, _ value: String) -> String {
-    "\(name)=\"\(value)\""
+private func subtreeSummary(_ kind: String, fields: [(String, String?)], flags: [String] = []) -> String {
+    ([kind] + fields.compactMap { name, value in value.flatMap { $0.isEmpty ? nil : "\(name)=\"\($0)\"" } } + flags)
+        .joined(separator: " ")
 }
 
 #endif

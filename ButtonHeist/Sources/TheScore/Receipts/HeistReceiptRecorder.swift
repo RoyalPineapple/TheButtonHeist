@@ -78,7 +78,7 @@ public enum HeistReceiptRecordingStatus: String, Sendable, Equatable {
 public struct HeistReceiptRecording: Sendable, Equatable {
     public let url: URL
     public let status: HeistReceiptRecordingStatus
-    public let heistName: String?
+    public let heistName: HeistPlanName?
     public let fingerprint: String
 }
 
@@ -130,8 +130,8 @@ public enum HeistReceiptRecorder {
         return SHA256.hash(data: data).prefix(12).map { String(format: "%02x", $0) }.joined()
     }
 
-    private static func directoryName(name: String?, fingerprint: String) -> String {
-        "\(slug(name ?? "unnamed-heist"))-\(fingerprint)"
+    private static func directoryName(name: HeistPlanName?, fingerprint: String) -> String {
+        "\(slug(name?.description ?? "unnamed-heist"))-\(fingerprint)"
     }
 
     private static func fileName(status: HeistReceiptRecordingStatus) -> String {

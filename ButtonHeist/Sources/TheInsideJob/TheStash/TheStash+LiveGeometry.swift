@@ -6,21 +6,17 @@ import UIKit
 
 import TheScore
 
-// MARK: - Live Geometry Resolution
-
 extension TheStash {
 
-    /// Dispatch-only action target.
-    ///
-    /// The `treeElement` is committed semantic truth; only `object`, `frame`,
-    /// and `activationPoint` come from the latest live capture.
     struct LiveActionTarget {
         let treeElement: InterfaceTree.Element
         let object: NSObject
         let frame: CGRect
         let activationPoint: CGPoint
+        let captureToken: InterfaceCaptureToken
 
         var element: AccessibilityElement { treeElement.element }
+
     }
 
     enum LiveActionTargetResolution {
@@ -29,17 +25,21 @@ extension TheStash {
         case geometryUnavailable
     }
 
-    /// Dispatch-only container target.
-    ///
-    /// `containerTarget` is semantic container identity. The backing object is
-    /// acquired from the latest live interface immediately before dispatch.
+    enum LiveTargetStaleness<Identity: Equatable & Sendable>: Error, Equatable, Sendable {
+        case semanticTargetUnavailable(Identity)
+        case objectUnavailable(Identity)
+        case geometryUnavailable(Identity)
+    }
+
     struct LiveContainerTarget {
         let containerTarget: InterfaceTree.Container
         let object: NSObject
         let frame: CGRect
         let activationPoint: CGPoint
+        let captureToken: InterfaceCaptureToken
 
         var container: AccessibilityContainer { containerTarget.container }
+
     }
 
     enum LiveContainerTargetResolution {
@@ -54,6 +54,7 @@ extension TheStash {
     }
 
     func resolveLiveActionTarget(for treeElement: InterfaceTree.Element) -> LiveActionTargetResolution {
+        let captureToken = latestObservation.captureToken
         guard let liveElement = visibleLiveElementAliasing(treeElement),
               let object = dispatchObject(for: liveElement) else {
             return .objectUnavailable
@@ -65,8 +66,27 @@ extension TheStash {
             treeElement: treeElement,
             object: object,
             frame: geometry.frame,
-            activationPoint: geometry.activationPoint
+            activationPoint: geometry.activationPoint,
+            captureToken: captureToken
         ))
+    }
+
+    func dispatchOnFreshLiveActionTarget<Value>(
+        _ target: LiveActionTarget,
+        operation: (LiveActionTarget) -> Value
+    ) -> Result<Value, LiveTargetStaleness<HeistId>> {
+        let heistId = target.treeElement.heistId
+        guard let currentTreeElement = latestObservation.tree.findElement(heistId: heistId) else {
+            return .failure(.semanticTargetUnavailable(heistId))
+        }
+        switch resolveLiveActionTarget(for: currentTreeElement) {
+        case .resolved(let currentTarget):
+            return .success(operation(currentTarget))
+        case .objectUnavailable:
+            return .failure(.objectUnavailable(heistId))
+        case .geometryUnavailable:
+            return .failure(.geometryUnavailable(heistId))
+        }
     }
 
     func visibleLiveElementAliasing(_ treeElement: InterfaceTree.Element) -> InterfaceTree.Element? {
@@ -83,6 +103,11 @@ extension TheStash {
     }
 
     func resolveLiveContainerTarget(for containerTarget: InterfaceTree.Container) -> LiveContainerTargetResolution {
+        let captureToken = latestObservation.captureToken
+        guard let currentContainer = latestObservation.tree.containers[containerTarget.path],
+              Self.container(currentContainer, matches: containerTarget) else {
+            return .objectUnavailable
+        }
         guard let object = liveContainerObject(forPath: containerTarget.path) else {
             return .objectUnavailable
         }
@@ -94,8 +119,28 @@ extension TheStash {
             containerTarget: containerTarget,
             object: object,
             frame: geometry.frame,
-            activationPoint: geometry.activationPoint
+            activationPoint: geometry.activationPoint,
+            captureToken: captureToken
         ))
+    }
+
+    func dispatchOnFreshLiveContainerTarget<Value>(
+        _ target: LiveContainerTarget,
+        operation: (LiveContainerTarget) -> Value
+    ) -> Result<Value, LiveTargetStaleness<TreePath>> {
+        let path = target.containerTarget.path
+        guard let currentContainer = latestObservation.tree.containers[path],
+              Self.container(currentContainer, matches: target.containerTarget) else {
+            return .failure(.semanticTargetUnavailable(path))
+        }
+        switch resolveLiveContainerTarget(for: currentContainer) {
+        case .resolved(let currentTarget):
+            return .success(operation(currentTarget))
+        case .objectUnavailable:
+            return .failure(.objectUnavailable(path))
+        case .geometryUnavailable:
+            return .failure(.geometryUnavailable(path))
+        }
     }
 
     func liveObject(for treeElement: InterfaceTree.Element) -> NSObject? {
@@ -200,6 +245,19 @@ extension TheStash {
 
     private static func isUsablePoint(_ point: CGPoint) -> Bool {
         point.x.isFinite && point.y.isFinite
+    }
+}
+
+extension TheStash.LiveTargetStaleness where Identity == HeistId {
+    var message: String {
+        switch self {
+        case .semanticTargetUnavailable(let heistId):
+            "Live target \(heistId.rawValue) left the current capture before dispatch"
+        case .objectUnavailable(let heistId):
+            "Live target \(heistId.rawValue) has no current UIKit object at dispatch"
+        case .geometryUnavailable(let heistId):
+            "Live target \(heistId.rawValue) has no current actionable geometry at dispatch"
+        }
     }
 }
 

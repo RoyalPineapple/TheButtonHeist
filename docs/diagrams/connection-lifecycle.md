@@ -58,6 +58,6 @@ sequenceDiagram
 
 Notes:
 
-- The version gate compares `envelope.buttonHeistVersion == buttonHeistVersion` — exact string equality, checked in `MuscleHandshakePhase` before token auth. There is no separate wire-protocol version.
-- TLS security and message-level auth both derive from the same token: the TLS layer uses a pre-shared key derived from it, then the `authenticate` message proves it again in JSON.
+- The version gate compares typed `ButtonHeistVersion` values with exact equality in `MuscleHandshakePhase` before token auth. There is no separate wire-protocol version.
+- TLS security and message-level auth both derive from the same `SessionAuthToken`: the TLS layer uses a pre-shared key derived from it, then the `authenticate` message proves it again in JSON. Session ownership is a typed `SessionOwner` carrying either that token or a `DriverID`.
 - The auth-failure message does not disclose the server's token or identity; the server's `instanceIdentifier` travels in the Bonjour TXT record and in `ServerInfo` after successful auth (see [multi-agent-isolation.md](multi-agent-isolation.md)).

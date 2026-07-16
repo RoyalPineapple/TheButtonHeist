@@ -3,12 +3,12 @@ import ThePlans
 
 /// One warning emitted by a `Warn(...)` heist step.
 public struct HeistExecutionWarning: Codable, Sendable, Equatable {
-    public let path: String
-    public let message: String
+    public let path: HeistExecutionPath
+    public let message: HeistWarningMessage
 
     public init(
-        path: String,
-        message: String
+        path: HeistExecutionPath,
+        message: HeistWarningMessage
     ) {
         self.path = path
         self.message = message

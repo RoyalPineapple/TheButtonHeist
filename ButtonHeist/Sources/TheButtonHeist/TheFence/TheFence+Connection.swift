@@ -69,7 +69,10 @@ extension TheFence {
     private func connectDirect(to device: DiscoveredDevice) async throws {
         handoff.onStatus?("Connecting to \(device.name)...")
         let resolutionTimeout = TheHandoff.connectionResolutionTimeout(for: config.connectionTimeout)
-        switch await device.reachability(token: config.token ?? EnvironmentKey.buttonheistToken.value, timeout: resolutionTimeout) {
+        switch await device.reachability(
+            token: handoff.serverMessages.authToken,
+            timeout: resolutionTimeout
+        ) {
         case .reachable:
             break
         case .failed(let reason):

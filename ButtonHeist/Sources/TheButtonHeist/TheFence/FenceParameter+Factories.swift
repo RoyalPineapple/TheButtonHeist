@@ -36,7 +36,6 @@ import TheScore
     public static let pasteboardText = FenceParameter<String>.string(.text, required: true, minLength: 1)
     public static let performStep = FenceParameter<String>.string(.step, required: true, minLength: 1)
     public static let planPath = FenceParameter<String>.string(.path)
-    public static let replacingExisting = FenceParameter<Bool>.boolean(.replacingExisting, defaultValue: false)
     public static let requestId = FenceParameter<String>.string(.requestId)
     public static let screenPointX = FenceParameter<Double>.number(.x, required: true)
     public static let screenPointY = FenceParameter<Double>.number(.y, required: true)
@@ -48,9 +47,10 @@ import TheScore
     public static let scrollEdge = FenceParameter<ScrollEdge>.enumValue(.edge, defaultValue: .top)
     public static let swipeDirection = FenceParameter<SwipeDirection>.enumValue(.direction, required: true)
     public static let text = FenceParameter<String>.string(.text, required: true)
+    public static let textInputMode = FenceParameter<TextInputText.Mode>.enumValue(.mode, defaultValue: .append)
     public static let timeout = FenceParameter<Double>.number(
         .timeout,
-        maximum: defaultWaitTimeout,
+        maximum: defaultWaitTimeout.seconds,
         exclusiveMinimum: 0
     )
     public static let token = FenceParameter<String>.string(.token)

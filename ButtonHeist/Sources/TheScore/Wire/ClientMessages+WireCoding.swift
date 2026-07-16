@@ -21,8 +21,8 @@ extension RequestEnvelope {
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: RequestEnvelopeCodingKeys.self, typeName: "request envelope")
         let container = try decoder.container(keyedBy: RequestEnvelopeCodingKeys.self)
-        buttonHeistVersion = try container.decode(String.self, forKey: .buttonHeistVersion)
-        requestId = try container.decodeIfPresent(String.self, forKey: .requestId)
+        buttonHeistVersion = try container.decode(ButtonHeistVersion.self, forKey: .buttonHeistVersion)
+        requestId = try container.decodeIfPresent(RequestID.self, forKey: .requestId)
         let type = try container.decode(ClientWireMessageType.self, forKey: .type)
         let payloadDecoder: Decoder? = container.contains(.payload)
             ? try container.superDecoder(forKey: .payload)

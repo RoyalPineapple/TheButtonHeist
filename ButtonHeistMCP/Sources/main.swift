@@ -9,7 +9,7 @@ struct ButtonHeistMCPServer {
 
         let server = Server(
             name: "buttonheist",
-            version: buttonHeistVersion,
+            version: buttonHeistVersion.description,
             instructions: TheFence.Command.mcpServerInstructions,
             capabilities: .init(tools: .init())
         )

@@ -8,7 +8,11 @@ private func validatedPlan(_ raw: HeistPlanAdmissionCandidate) throws -> HeistPl
 }
 
 private func invocation(_ dottedName: String) -> HeistInvocationPath {
-    .preconditionValidated(dottedName: dottedName)
+    do {
+        return try HeistInvocationPath(validating: dottedName)
+    } catch {
+        preconditionFailure("invalid discovery fixture path \(dottedName): \(error)")
+    }
 }
 
 private func exactSemanticString(_ value: String) -> HeistSemanticStringMatch {
@@ -27,7 +31,7 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
         body: [.warn(WarnStep(message: "ready"))]
     ).heistCatalog()
 
-    #expect(catalog.heists.map(\.name) == ["checkout"])
+    #expect(catalog.heists.map { $0.identity.displayName } == ["checkout"])
     #expect(catalog.heists[0].role == .entry)
     #expect(catalog.heists[0].parameterKind == .none)
     #expect(catalog.heists[0].requiresArgument == false)
@@ -51,7 +55,7 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
         body: [.warn(WarnStep(message: "ready"))]
     ).heistCatalog()
 
-    #expect(catalog.heists.map(\.name) == ["root", "openCart"])
+    #expect(catalog.heists.map { $0.identity.displayName } == ["root", "openCart"])
     #expect(catalog.heists[0].role == .entry)
     #expect(catalog.heists[1].role == .capability)
     #expect(catalog.heists[1].parameterKind == .none)
@@ -78,7 +82,7 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
         body: [.warn(WarnStep(message: "ready"))]
     )).heistCatalog()
 
-    #expect(catalog.heists[1].name == "addToCart")
+    #expect(catalog.heists[1].identity.displayName == "addToCart")
     #expect(catalog.heists[1].role == .capability)
     #expect(catalog.heists[1].parameterKind == .string)
     #expect(catalog.heists[1].requiresArgument == true)
@@ -102,7 +106,7 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
         body: [.warn(WarnStep(message: "ready"))]
     )).heistCatalog()
 
-    #expect(catalog.heists[1].name == "tapRow")
+    #expect(catalog.heists[1].identity.displayName == "tapRow")
     #expect(catalog.heists[1].role == .capability)
     #expect(catalog.heists[1].parameterKind == .accessibilityTarget)
     #expect(catalog.heists[1].requiresArgument == true)
@@ -113,7 +117,7 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
 
 @Test func `list heists summary mode omits detailed structure`() throws {
     let catalog = try detailedSurfacePlan().heistCatalog()
-    let checkout = try #require(catalog.heists.first { $0.name == "checkout" })
+    let checkout = try #require(catalog.heists.first { $0.identity.displayName == "checkout" })
 
     #expect(checkout.summary == "Reusable heist capability")
     #expect(checkout.tags == [.capability, .composed, .assertion, .semanticAction])
@@ -128,7 +132,7 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
 
 @Test func `list heists detailed mode includes derived non raw fields`() throws {
     let catalog = try detailedSurfacePlan().heistCatalog(detail: .detailed)
-    let checkout = try #require(catalog.heists.first { $0.name == "checkout" })
+    let checkout = try #require(catalog.heists.first { $0.identity.displayName == "checkout" })
 
     #expect(checkout.parameterName == nil)
     #expect(checkout.nestedRunHeists == [invocation("checkout.confirm")])
@@ -160,7 +164,7 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
         body: [.warn(WarnStep(message: "ready"))]
     )).heistCatalog(detail: .detailed)
 
-    let tapRow = try #require(catalog.heists.first { $0.name == "tapRow" })
+    let tapRow = try #require(catalog.heists.first { $0.identity.displayName == "tapRow" })
     #expect(tapRow.parameterName == "row")
     #expect(tapRow.parameterKind == .accessibilityTarget)
     #expect(tapRow.requiresArgument)
@@ -198,7 +202,7 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
             .action(try ActionStep(command: .activate(.label("Pay")))),
             .action(try ActionStep(command: .activate(.predicate(.label("Pay"))))),
         ]
-    ).describeHeist(named: "pay")
+    ).describeHeist(at: "pay")
 
     #expect(description.semanticSurface.targetPredicates == [.predicate(.label("Pay"))])
     #expect(description.semanticSurface.semanticSurfaces == [.label(exactSemanticString("Pay"))])
@@ -211,7 +215,7 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
             .action(try ActionStep(command: .activate(.target(.label("Pay"), ordinal: 0)))),
             .action(try ActionStep(command: .activate(.target(.label("Pay"), ordinal: 1)))),
         ]
-    ).describeHeist(named: "pay")
+    ).describeHeist(at: "pay")
 
     #expect(description.semanticSurface.targetPredicates == [.predicate(.label("Pay"))])
 }
@@ -231,6 +235,20 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
     }
 }
 
+@Test func `catalog rejects entry and capability sharing one lookup path`() throws {
+    let plan = try HeistPlan(
+        name: "checkout",
+        definitions: [
+            try HeistPlan(name: "checkout", body: [.warn(WarnStep(message: "nested"))]),
+        ],
+        body: [.warn(WarnStep(message: "root"))]
+    )
+
+    #expect(throws: HeistCatalogError.self) {
+        _ = try plan.heistCatalog()
+    }
+}
+
 @Test func `list heists includes parameterized root entry`() throws {
     let catalog = try validatedPlan(HeistPlanAdmissionCandidate(
         name: "root",
@@ -244,7 +262,7 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
     )).heistCatalog()
 
     let root = try #require(catalog.heists.first)
-    #expect(root.name == "root")
+    #expect(root.identity.displayName == "root")
     #expect(root.role == .entry)
     #expect(root.parameterKind == .string)
     #expect(root.requiresArgument)
@@ -257,9 +275,9 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
     let description = try HeistPlan(
         name: "checkout",
         body: [.warn(WarnStep(message: "ready"))]
-    ).describeHeist(named: "checkout")
+    ).describeHeist(at: "checkout")
 
-    #expect(description.name == "checkout")
+    #expect(description.identity.displayName == "checkout")
     #expect(description.role == .entry)
     #expect(description.parameterKind == .none)
     #expect(description.requiresArgument == false)
@@ -281,7 +299,7 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
             ),
         ],
         body: [.warn(WarnStep(message: "ready"))]
-    )).describeHeist(named: "addToCart")
+    )).describeHeist(at: "addToCart")
 
     #expect(description.role == .capability)
     #expect(description.parameterKind == .string)
@@ -304,12 +322,12 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
                     ),
                 ],
                 body: [
-                    .invoke(HeistInvocationStep(path: ["confirm"])),
+                    .invoke(HeistInvocationStep(path: "confirm")),
                 ]
             ),
         ],
         body: [.warn(WarnStep(message: "ready"))]
-    ).describeHeist(named: "checkout")
+    ).describeHeist(at: "checkout")
 
     #expect(description.semanticSurface.nestedRunHeists == [invocation("checkout.confirm")])
     #expect(description.semanticSurface.actionCommands == [.activate])
@@ -322,7 +340,7 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
         body: [
             .action(try ActionStep(command: .activate(.predicate(.identifier("save_button"))))),
         ]
-    ).describeHeist(named: "activateSave")
+    ).describeHeist(at: "activateSave")
 
     #expect(description.semanticSurface.actionCommands == [.activate])
     #expect(description.semanticSurface.targetPredicates == [.predicate(.identifier("save_button"))])
@@ -339,7 +357,7 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
             .wait(WaitStep(predicate: .changed(.screen()), timeout: 2)),
             .wait(WaitStep(predicate: announcement, timeout: 2)),
         ]
-    ).describeHeist(named: "submit")
+    ).describeHeist(at: "submit")
 
     #expect(description.semanticSurface.expectations == [existsLabel("Done")])
     #expect(description.semanticSurface.waits == [screenChangePredicate, announcement])
@@ -359,7 +377,7 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
                 expectationPolicy: .expect(ActionExpectation(predicate: .exists(.label("Done")), timeout: 1)))),
             .wait(WaitStep(predicate: .exists(.label("Done")), timeout: 2)),
         ]
-    ).describeHeist(named: "submit")
+    ).describeHeist(at: "submit")
 
     #expect(description.semanticSurface.expectations == [existsLabel("Done")])
     #expect(description.semanticSurface.waits == [existsLabel("Done")])
@@ -376,13 +394,13 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
     )
 
     #expect(throws: HeistDescriptionLookupError.self) {
-        try plan.describeHeist(named: "checkout")
+        try plan.describeHeist(at: "checkout")
     }
     do {
-        _ = try plan.describeHeist(named: "checkout")
+        _ = try plan.describeHeist(at: "checkout")
         Issue.record("Expected missing heist diagnostic")
     } catch let error as HeistDescriptionLookupError {
-        #expect(error.availableNames == ["root", "openCart"])
+        #expect(error.availableIdentities.map(\.displayName) == ["root", "openCart"])
         #expect(error.description.contains("checkout"))
     }
 }
@@ -409,7 +427,7 @@ private func detailedSurfacePlan() throws -> HeistPlan {
                         command: .activate(.predicate(.label("Checkout"))),
                         expectationPolicy: .expect(ActionExpectation(predicate: .exists(.label("Done")), timeout: 1)))),
                     .wait(WaitStep(predicate: .exists(.label("Confirm")), timeout: 1)),
-                    .invoke(HeistInvocationStep(path: ["confirm"])),
+                    .invoke(HeistInvocationStep(path: "confirm")),
                 ]
             ),
         ],

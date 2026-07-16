@@ -53,15 +53,14 @@ extension TheGetaway {
         }
     }
 
-    /// Dispatch a single transport event on the main actor.
-    ///
-    /// The consumer awaits this method per event, so `clientConnected` always
-    /// completes before the first `dataReceived` for that client and message
-    /// N+1 cannot start before message N finishes.
+    /// Routes one transport event on the main actor. Client frames are handed
+    /// to per-client admission streams so unrelated lifecycle and client
+    /// traffic can continue while a request is suspended.
     func handleTransportEvent(_ event: TransportEvent) async {
         switch event {
         case .clientConnected(let clientId, let remoteAddress):
             insideJobLogger.info("Client \(clientId) connected from \(remoteAddress ?? "unknown"), awaiting hello")
+            replaceClientRequestPipeline(clientId: clientId)
             if let remoteAddress {
                 await muscle.registerClientAddress(clientId, address: remoteAddress)
             }
@@ -69,15 +68,11 @@ extension TheGetaway {
 
         case .clientDisconnected(let clientId):
             insideJobLogger.info("Client \(clientId) disconnected")
+            stopClientRequestPipeline(clientId: clientId)
             await handleClientDeliveryTerminated(clientId: clientId)
 
         case .dataReceived(let clientId, let data, let respond):
-            switch await muscle.admitClientMessage(clientId, data: data, respond: respond) {
-            case .admitted(let message):
-                await handleClientMessage(message, respond: respond)
-            case .handled:
-                break
-            }
+            await enqueueClientRequest(clientId: clientId, data: data, respond: respond)
 
         }
     }
@@ -85,6 +80,11 @@ extension TheGetaway {
     func tearDown() async {
         eventConsumerTask?.cancel()
         eventConsumerTask = nil
+        brains.cancelAllTransportRequests()
+        for pipeline in clientRequestPipelines.values {
+            pipeline.stop()
+        }
+        clientRequestPipelines.removeAll()
         transport = nil
     }
 
@@ -99,6 +99,88 @@ extension TheGetaway {
 
     private func handleClientDeliveryTerminated(clientId: Int) async {
         await muscle.handleClientDisconnected(clientId)
+    }
+
+    private func replaceClientRequestPipeline(clientId: Int) {
+        brains.cancelTransportRequests(clientId: clientId)
+        clientRequestPipelines.removeValue(forKey: clientId)?.stop()
+        clientRequestPipelines[clientId] = ClientRequestPipeline { [weak self] request in
+            await self?.processClientRequest(request)
+        }
+    }
+
+    private func stopClientRequestPipeline(clientId: Int) {
+        brains.cancelTransportRequests(clientId: clientId)
+        clientRequestPipelines.removeValue(forKey: clientId)?.stop()
+    }
+
+    private func enqueueClientRequest(
+        clientId: Int,
+        data: Data,
+        respond: @escaping SocketResponseHandler
+    ) async {
+        guard let pipeline = clientRequestPipelines[clientId] else {
+            insideJobLogger.error("Dropping request for disconnected client \(clientId)")
+            return
+        }
+
+        switch pipeline.enqueue(ClientTransportRequest(clientId: clientId, data: data, respond: respond)) {
+        case .enqueued:
+            break
+        case .stopped:
+            insideJobLogger.error("Dropping request for stopped client \(clientId)")
+        case .overflowed:
+            insideJobLogger.error(
+                "Client \(clientId) request backlog exceeded \(ClientRequestPipeline.maximumQueuedRequests), disconnecting"
+            )
+            stopClientRequestPipeline(clientId: clientId)
+            await transport?.server.removeClient(clientId)
+        }
+    }
+
+    private func processClientRequest(_ request: ClientTransportRequest) async {
+        let admission = await muscle.admitClientMessage(
+            request.clientId,
+            data: request.data,
+            respond: request.respond
+        )
+        guard !Task.isCancelled else { return }
+
+        switch admission {
+        case .admitted(let message):
+            switch message.envelope.message.executionLane {
+            case .control:
+                await handleClientMessage(message, respond: request.respond)
+            case .userInterface:
+                await brains.submitTransportRequest(clientId: request.clientId) { [weak self] in
+                    guard !Task.isCancelled else { return }
+                    await self?.handleClientMessage(message, respond: request.respond)
+                }
+            }
+        case .handled:
+            break
+        }
+    }
+}
+
+private enum ClientRequestExecutionLane: Equatable {
+    case control
+    case userInterface
+}
+
+private extension ClientMessage {
+    var executionLane: ClientRequestExecutionLane {
+        switch self {
+        case .clientHello, .authenticate, .ping, .status:
+            return .control
+        case .requestInterface,
+             .getPasteboard,
+             .getAnnouncements,
+             .requestScreen,
+             .runtimeAction,
+             .heistPlan:
+            return .userInterface
+        }
     }
 }
 

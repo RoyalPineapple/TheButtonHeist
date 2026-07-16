@@ -19,7 +19,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         }
 
         init(sample: HeistExecutionMetricSample) {
-            self.init(name: sample.name.rawValue, valueMs: sample.valueMs, path: sample.path)
+            self.init(name: sample.name.rawValue, valueMs: sample.valueMs, path: sample.path?.description)
         }
     }
 
@@ -834,8 +834,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                     )
                 ),
             ],
-            durationMs: 8,
-            abortedAtPath: "$.body[0]"
+            durationMs: 8
         )
 
         let compact = FenceResponse.heistExecution(plan: plan, result: result).compactFormatted()
@@ -875,8 +874,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                         )
                     ),
                 ],
-                durationMs: 8,
-                abortedAtPath: "$.body[0]"
+                durationMs: 8
             )
         )
 
@@ -1119,8 +1117,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             steps: [
                 HeistReceiptFixture.explicitFailure(message: "Unknown screen"),
             ],
-            durationMs: 1,
-            abortedAtPath: "$.body[0]"
+            durationMs: 1
         )
 
         let output = FenceResponse.heistExecution(plan: plan, result: result).compactFormatted()
@@ -1134,8 +1131,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             steps: [
                 HeistReceiptFixture.explicitFailure(message: "Unknown screen"),
             ],
-            durationMs: 1,
-            abortedAtPath: "$.body[0]"
+            durationMs: 1
         )
         let response = FenceResponse.heistExecution(plan: plan, result: result)
 
@@ -1159,25 +1155,15 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let result = HeistExecutionResult(
             steps: [
                 HeistReceiptFixture.warning(path: "$.body[0]", message: "before"),
-                .failed(
-                    path: "$.body[1]",
-                    kind: .fail,
-                    durationMs: 1,
-                    intent: .fail(message: "stop"),
-                    failure: HeistFailureDetail(
-                        category: .explicitFailure,
-                        contract: "explicit heist failure",
-                        observed: "stop"
-                    )
-                ),
-                .skipped(
-                    path: "$.body[2]",
-                    kind: .warn,
-                    durationMs: 0
+                HeistReceiptFixture.explicitFailure(path: "$.body[1]", message: "stop"),
+                .warning(
+                    path: try HeistExecutionPath(validating: "$.body[2]"),
+                    durationMs: 0,
+                    message: "after",
+                    completion: .skipped()
                 ),
             ],
-            durationMs: 2,
-            abortedAtPath: "$.body[1]"
+            durationMs: 2
         )
         let response = FenceResponse.heistExecution(plan: plan, result: result)
 
@@ -1255,8 +1241,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                     children: [childResult]
                 ),
             ],
-            durationMs: 9,
-            abortedAtPath: childPath
+            durationMs: 9
         )
 
         let json = try publicJSONProbe(.heistExecution(plan: plan, result: result))
@@ -1385,30 +1370,32 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             failureReason: "iteration 1 failed for value \"Eggs\"",
             children: [failedAction]
         )
+        let failedLoopEvidence = try XCTUnwrap(HeistFailedForEachStringEvidence(
+            HeistForEachStringEvidence(
+                iterationCount: 2,
+                failureReason: "iteration 1 failed for value \"Eggs\""
+            )
+        ))
+        let abortedChildren = try XCTUnwrap(HeistAbortedChildren([firstIteration, secondIteration]))
         let result = HeistExecutionResult(
             steps: [
-                .childAborted(
-                    path: "$.body[0]",
-                    receiptKind: .forEachString,
+                .forEachString(
+                    path: try HeistExecutionPath(validating: "$.body[0]"),
                     durationMs: 30,
-                    intent: .forEachString(parameter: "item", count: 2),
-                    evidence: HeistForEachStringEvidence(
-                        parameter: "item",
-                        count: 2,
-                        iterationCount: 2,
-                        failureReason: "iteration 1 failed for value \"Eggs\""
+                    parameter: "item",
+                    count: 2,
+                    completion: .childAborted(
+                        evidence: failedLoopEvidence,
+                        failure: HeistFailureDetail(
+                            category: .loop,
+                            contract: "for_each_string completes all 2 value(s)",
+                            observed: "for_each_string stopped after 2 of 2 iteration(s): iteration 1 failed for value \"Eggs\""
+                        ),
+                        children: abortedChildren
                     ),
-                    failure: HeistFailureDetail(
-                        category: .loop,
-                        contract: "for_each_string completes all 2 value(s)",
-                        observed: "for_each_string stopped after 2 of 2 iteration(s): iteration 1 failed for value \"Eggs\""
-                    ),
-                    abortedAtChildPath: failedActionPath,
-                    children: [firstIteration, secondIteration]
                 ),
             ],
-            durationMs: 30,
-            abortedAtPath: failedActionPath
+            durationMs: 30
         )
         let response = FenceResponse.heistExecution(plan: plan, result: result)
 

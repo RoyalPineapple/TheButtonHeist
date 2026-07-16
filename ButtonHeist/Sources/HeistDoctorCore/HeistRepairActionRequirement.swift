@@ -5,7 +5,7 @@ enum RepairActionRequirement: Sendable, Equatable {
     case activate
     case increment
     case decrement
-    case customAction(String)
+    case customAction(CustomActionName)
     case rotor
     case textInput
     case unknown
@@ -48,7 +48,7 @@ enum RepairActionRequirement: Sendable, Equatable {
         case .customAction(let name):
             return element.actions.contains { action in
                 guard case .custom(let candidateName) = action else { return false }
-                return ElementPredicate.stringEquals(candidateName, name)
+                return ElementPredicate.stringEquals(candidateName.description, name.description)
             }
         case .rotor:
             return element.rotors?.isEmpty == false

@@ -51,12 +51,12 @@ func `checked in heist fixtures use canonical JSON contracts`() throws {
 func `JSONDecoder decode of heist plan still runs runtime safety validation`() {
     let unresolvedInvocation = Data("""
     {
-      "version": 1,
+      "version": 2,
       "body": [
         {
           "type": "invoke",
           "invoke": {
-            "path": [ "MissingCapability" ]
+            "path": "MissingCapability"
           }
         }
       ]
@@ -70,7 +70,7 @@ func `JSONDecoder decode of heist plan still runs runtime safety validation`() {
 
 @Test
 func `invalid external plan remains a candidate until runtime safety admission`() throws {
-    let data = Data(#"{"version":1,"body":[{"type":"invoke","invoke":{"path":["MissingCapability"]}}]}"#.utf8)
+    let data = Data(#"{"version":2,"body":[{"type":"invoke","invoke":{"path":"MissingCapability"}}]}"#.utf8)
     let candidate = try JSONDecoder().decode(HeistPlanAdmissionCandidate.self, from: data)
 
     #expect(throws: HeistPlanRuntimeSafetyError.self) {
@@ -82,7 +82,7 @@ func `invalid external plan remains a candidate until runtime safety admission`(
 func `JSONDecoder decode of nested collection loops is rejected by runtime safety validation`() throws {
     let nestedCollectionLoop = Data("""
     {
-      "version": 1,
+      "version": 2,
       "body": [
         {
           "type": "for_each_string",
@@ -117,7 +117,7 @@ func `JSONDecoder decode of nested collection loops is rejected by runtime safet
         Issue.record("Expected nested collection loop JSON to fail runtime safety validation")
     } catch let error as HeistPlanRuntimeSafetyError {
         let failure = try #require(error.failures.first)
-        #expect(failure.path == "$.body[0].for_each_string.body[0].for_each_element")
+        #expect(failure.path.description == "$.body[0].for_each_string.body[0].for_each_element")
         #expect(failure.contract == "collection loops must not be nested")
         #expect(failure.observed == "for_each_element inside collection loop")
         #expect(failure.correction == "Flatten this heist so ForEach bodies contain only non-collection steps.")
@@ -190,13 +190,6 @@ func `durable element predicate JSON requires canonical checks`() throws {
     #expect(predicate == .label("Receipt"))
 }
 
-@Test
-func `for each parameter names reject Swift reserved identifiers including Any`() {
-    #expect(HeistParameterName.isValid("item"))
-    #expect(!HeistParameterName.isValid("Any"))
-    #expect(!HeistParameterName.isValid("class"))
-}
-
 private func heistArtifactFixtureURLs() throws -> [URL] {
     let fixturesURL = repositoryRootURL()
         .appendingPathComponent("tests", isDirectory: true)
@@ -243,7 +236,7 @@ func `model Codable boundaries reject unknown fields`() {
     expectUnknownField("plan", contains: #"Unknown heist plan field "unexpected""#) {
         _ = try JSONDecoder().decode(HeistPlan.self, from: Data("""
         {
-          "version": 1,
+          "version": 2,
           "body": [
             { "type": "warn", "warn": { "message": "hello" } }
           ],
@@ -473,7 +466,7 @@ private func unknownTerminalStepPayloadCases() -> [UnknownFieldCase] {
         }),
         UnknownFieldCase(name: "invoke step", expectedMessage: #"Unknown heist invocation step field "unexpected""#, decode: {
             _ = try JSONDecoder().decode(HeistInvocationStep.self, from: Data("""
-            { "path": [ "Search" ], "unexpected": true }
+            { "path": "Search", "unexpected": true }
             """.utf8))
         }),
     ]
@@ -497,7 +490,7 @@ private func representativeAllStepKindsPlan() throws -> HeistPlan {
         body: [
             .action(try ActionStep(
                 command: .activate(.predicate(.label("Pay"))),
-                expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 0)))),
+                expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: .milliseconds(1))))),
             .wait(WaitStep(predicate: .exists(.label("Home")), timeout: 1)),
             .conditional(try ConditionalStep(
                 cases: [
@@ -545,7 +538,7 @@ private func representativeAllStepKindsPlan() throws -> HeistPlan {
                 .warn(WarnStep(message: "inline group")),
             ])),
             .invoke(HeistInvocationStep(
-                path: ["Search"],
+                path: "Search",
                 argument: .string("Milk")
             )),
         ]
@@ -624,7 +617,7 @@ private let expectedAllStepKindsPlanJSON = """
             "scope" : "screen",
             "type" : "changed"
           },
-          "timeout" : 0
+          "timeout" : 0.001
         }
       },
       "type" : "action"
@@ -743,6 +736,7 @@ private let expectedAllStepKindsPlanJSON = """
             "action" : {
               "command" : {
                 "payload" : {
+                  "mode" : "append",
                   "target" : {
                     "checks" : [
                       {
@@ -828,7 +822,7 @@ private let expectedAllStepKindsPlanJSON = """
             }
           }
         ],
-        "version" : 1
+        "version" : 2
       },
       "type" : "heist"
     },
@@ -838,9 +832,7 @@ private let expectedAllStepKindsPlanJSON = """
           "type" : "string",
           "value" : "Milk"
         },
-        "path" : [
-          "Search"
-        ]
+        "path" : "Search"
       },
       "type" : "invoke"
     }
@@ -852,6 +844,7 @@ private let expectedAllStepKindsPlanJSON = """
           "action" : {
             "command" : {
               "payload" : {
+                "mode" : "append",
                 "target" : {
                   "checks" : [
                     {
@@ -876,10 +869,10 @@ private let expectedAllStepKindsPlanJSON = """
         "name" : "query",
         "type" : "string"
       },
-      "version" : 1
+      "version" : 2
     }
   ],
   "name" : "wireAllSteps",
-  "version" : 1
+  "version" : 2
 }
 """

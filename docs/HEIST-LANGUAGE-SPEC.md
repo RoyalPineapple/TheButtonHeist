@@ -22,23 +22,33 @@ language.
 
 ## Path grammar
 
-Reusable capabilities are named by typed heist paths. A heist path is a
-non-empty dot-separated list of Swift-style identifier components:
+Heist plan names and reference names are distinct typed currencies over one
+exact identifier grammar. `HeistPlanName` names a root plan or one local
+definition; `HeistReferenceName` names a parameter or expression reference.
+`HeistDefinitionPath` names where a reusable definition is declared;
+`HeistInvocationPath` names the capability a `RunHeist` step invokes. The two
+path types remain distinct even though both delegate to one canonical path
+grammar. A heist path is a non-empty dot-separated list of plan-name
+components:
 
 ```text
 heist-path = identifier ("." identifier)*
 identifier = letter-or-underscore (letter-or-digit-or-underscore)*
 ```
 
-Path components MUST NOT be empty, contain whitespace, contain punctuation other
+Identifiers are admitted without trimming or repair. They and path components
+MUST NOT be empty, contain whitespace, contain punctuation other
 than the dot separator, start with a digit, or use Swift reserved words.
 `Cart.checkout` is valid. `Cart..checkout`, `.checkout`, `Cart.`,
 `Cart Screen.checkout`, `1Cart.checkout`, and `Cart.class` are invalid.
 
-Swift DSL authors SHOULD use `HeistDefinitionPath` and `HeistInvocationPath`
-when constructing reusable paths programmatically. String convenience APIs MAY
-be used for literals, but they MUST validate through the same typed path rules
-and surface diagnostics instead of silently canonicalizing invalid names.
+Swift string literals are contextual authoring sugar because all three types
+conform to `ExpressibleByStringLiteral`; the resulting value is still typed.
+Dynamic source, JSON, and CLI text MUST enter through the role type's throwing
+validating initializer at that boundary. Public plan APIs do not accept raw-string paths,
+component arrays, aliases, or alternate spellings. All three types use
+single-value string encoding, so generated JSON stores a name or dotted path as
+one string rather than exposing component bookkeeping.
 
 ## Execution entry points
 

@@ -30,17 +30,17 @@ import Foundation
 /// semantic structure; it does not observe UI state, settle, report, compose
 /// live interactions, or dispatch actions.
 public struct HeistPlan: Codable, Sendable, Equatable {
-    public static let currentVersion = 1
+    public static let currentVersion = 2
 
     public let version: Int
-    public let name: String?
+    public let name: HeistPlanName?
     public let parameter: HeistParameter
     public let definitions: [HeistPlan]
     public let body: [HeistStep]
 
     public init(
         version: Int = HeistPlan.currentVersion,
-        name: String? = nil,
+        name: HeistPlanName? = nil,
         parameter: HeistParameter = .none,
         definitions: [HeistPlan] = [],
         body: [HeistStep]

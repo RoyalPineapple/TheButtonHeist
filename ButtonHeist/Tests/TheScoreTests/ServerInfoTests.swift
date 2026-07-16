@@ -5,16 +5,16 @@ final class ServerInfoTests: XCTestCase {
 
     private func makeServerInfo(
         appName: String = "TestApp",
-        bundleIdentifier: String = "com.test.app",
+        bundleIdentifier: BundleIdentifier = "com.test.app",
         deviceName: String = "iPhone 15",
         systemVersion: String = "17.2",
         screenWidth: Double = 393,
         screenHeight: Double = 852,
-        instanceId: String = "A1B2C3D4-E5F6-7890-ABCD-EF1234567890",
-        instanceIdentifier: String = "test-instance",
+        instanceId: ServerLaunchID = "A1B2C3D4-E5F6-7890-ABCD-EF1234567890",
+        instanceIdentifier: InsideJobInstanceID = "test-instance",
         listeningPort: UInt16 = 49152,
-        simulatorUDID: String? = nil,
-        vendorIdentifier: String? = nil,
+        simulatorUDID: SimulatorUDID? = nil,
+        vendorIdentifier: VendorIdentifier? = nil,
         tlsActive: Bool = true
     ) -> ServerInfo {
         ServerInfo(

@@ -42,6 +42,7 @@ jobs:
           scripts/tests/e2e-demo-smoke-test.sh
           scripts/tests/generate-project-test.sh
           scripts/tests/release-automation-test.sh
+          scripts/tests/require-successful-ci-for-commit-test.sh
           python3 scripts/tests/select-ci-change-scopes-test.py
           python3 scripts/tests/select-ios-ci-simulator-test.py
 
@@ -53,7 +54,7 @@ jobs:
 
   macos-tests:
     name: macos-tests
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: macos-15
     timeout-minutes: 45
     env:
@@ -64,9 +65,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Classify changed paths
+        if: github.event_name == 'pull_request'
         id: changes
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -93,11 +95,11 @@ jobs:
           scripts/check-source-shape.sh
 
       - name: Test Bumper rules
-        if: steps.changes.outputs.run_bumper_rule_tests == 'true'
+        if: github.event_name == 'push' || steps.changes.outputs.run_bumper_rule_tests == 'true'
         run: scripts/check-source-shape.sh test
 
       - name: Validate Swift package products and public API
-        if: steps.changes.outputs.run_package_api_contracts == 'true'
+        if: github.event_name == 'push' || steps.changes.outputs.run_package_api_contracts == 'true'
         timeout-minutes: 15
         run: |
           scripts/check-swift-api-breaking-changes.sh
@@ -118,7 +120,7 @@ jobs:
             -- tuist test MacFrameworkTests --no-selective-testing
 
       - name: Run CLI, MCP, and heist-plan tests
-        if: steps.changes.outputs.run_cli_tool_tests == 'true'
+        if: github.event_name == 'push' || steps.changes.outputs.run_cli_tool_tests == 'true'
         timeout-minutes: 15
         env:
           HEIST_PLAN_TOOL: ${{ github.workspace }}/.build/debug/heist-plan
@@ -151,7 +153,7 @@ jobs:
 
   ios-tests:
     name: ios-tests
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: macos-15
     timeout-minutes: 40
     env:
@@ -166,7 +168,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Select Xcode 26.3
         run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
@@ -279,7 +281,7 @@ jobs:
 
   ios-demo-gates:
     name: ios-demo-gates
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: macos-15
     timeout-minutes: 35
     env:
@@ -294,7 +296,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Select Xcode 26.3
         run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
@@ -388,6 +390,7 @@ jobs:
 
   main-integration:
     name: main-integration
+    needs: ios-tests
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: macos-15
     timeout-minutes: 35
@@ -493,3 +496,84 @@ jobs:
             echo "- Build: $((INTEGRATION_BUILD_END - INTEGRATION_BUILD_START))s"
             echo "- Run: $((INTEGRATION_RUN_END - INTEGRATION_RUN_START))s"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  exact-sha-suite:
+    name: exact-sha-suite
+    needs: [release-contract, macos-tests, ios-tests, ios-demo-gates, main-integration]
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Record exact-SHA suite manifest
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+          WORKFLOW_REF: ${{ github.workflow_ref }}
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          RELEASE_CONTRACT: ${{ needs.release-contract.result }}
+          MACOS_TESTS: ${{ needs.macos-tests.result }}
+          IOS_TESTS: ${{ needs.ios-tests.result }}
+          IOS_DEMO_GATES: ${{ needs.ios-demo-gates.result }}
+          MAIN_INTEGRATION: ${{ needs.main-integration.result }}
+        run: |
+          jq -n \
+            --arg commit "$COMMIT_SHA" \
+            --arg workflowRef "$WORKFLOW_REF" \
+            --arg workflowSha "$WORKFLOW_SHA" \
+            --arg runId "$RUN_ID" \
+            --arg runAttempt "$RUN_ATTEMPT" \
+            --arg releaseContract "$RELEASE_CONTRACT" \
+            --arg macosTests "$MACOS_TESTS" \
+            --arg iosTests "$IOS_TESTS" \
+            --arg iosDemoGates "$IOS_DEMO_GATES" \
+            --arg mainIntegration "$MAIN_INTEGRATION" \
+            '{
+              schemaVersion: 1,
+              commit: $commit,
+              workflow: {
+                ref: $workflowRef,
+                sha: $workflowSha,
+                runId: $runId,
+                runAttempt: $runAttempt
+              },
+              suites: [
+                {name: "release-contract", conclusion: $releaseContract},
+                {name: "macos-tests", conclusion: $macosTests},
+                {name: "ios-tests", conclusion: $iosTests},
+                {name: "ios-demo-gates", conclusion: $iosDemoGates},
+                {name: "main-integration", conclusion: $mainIntegration}
+              ]
+            }' > exact-sha-suite.json
+
+      - name: Upload exact-SHA suite manifest
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: buttonheist-exact-sha-suite
+          path: exact-sha-suite.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Require every release suite
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+          EXPECTED_WORKFLOW_REF: ${{ github.repository }}/.github/workflows/ci.yml@refs/heads/main
+        run: |
+          jq -e \
+            --arg commit "$COMMIT_SHA" \
+            --arg workflowRef "$EXPECTED_WORKFLOW_REF" '
+            .schemaVersion == 1
+            and .commit == $commit
+            and .workflow.ref == $workflowRef
+            and .workflow.sha == $commit
+            and ([.suites[].name] | sort == [
+              "ios-demo-gates",
+              "ios-tests",
+              "macos-tests",
+              "main-integration",
+              "release-contract"
+            ])
+            and ([.suites[] | select(.conclusion != "success")] | length == 0)
+          ' exact-sha-suite.json

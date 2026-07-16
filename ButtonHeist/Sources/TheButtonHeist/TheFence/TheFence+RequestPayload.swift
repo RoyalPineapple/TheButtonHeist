@@ -60,7 +60,7 @@ extension TheFence {
 
     fileprivate struct CommandAdmission: Sendable {
         let command: Command
-        let requestId: String
+        let requestId: RequestID
         let dispatch: DecodedRequestDispatch
 
         @ButtonHeistActor
@@ -199,8 +199,19 @@ extension TheFence {
             }
         }
 
-        private static func requestId(arguments: CommandArgumentEnvelope) throws -> String {
-            try arguments.value(FenceParameters.requestId) ?? UUID().uuidString
+        private static func requestId(arguments: CommandArgumentEnvelope) throws -> RequestID {
+            guard let value = try arguments.value(FenceParameters.requestId) else {
+                return try RequestID(validating: UUID().uuidString)
+            }
+            do {
+                return try RequestID(validating: value)
+            } catch {
+                throw SchemaValidationError(
+                    field: arguments.field(.requestId),
+                    observed: "string \"\"",
+                    expected: "non-empty string"
+                )
+            }
         }
 
         @ButtonHeistActor
@@ -262,7 +273,7 @@ extension TheFence {
             let actionName = try arguments.value(FenceParameters.actionName)
             return try TheFence.appInteractionDispatch(
                 .activate,
-                TheFence.accessibilityActionCommand(target: target, actionName: actionName),
+                try TheFence.accessibilityActionCommand(target: target, actionName: actionName),
                 expectationPayload: expectation
             )
         }
@@ -282,7 +293,7 @@ extension TheFence {
                 )
             }
             let selection: RotorSelection = if let rotor {
-                .named(rotor)
+                .named(try RotorName(validating: rotor))
             } else if let rotorIndex {
                 .index(rotorIndex)
             } else {
@@ -307,26 +318,28 @@ extension TheFence {
             _ arguments: CommandArgumentEnvelope,
             expectation: ExpectationPayload
         ) throws -> DecodedRequestDispatch {
-            let replacingExisting = try arguments.value(
-                FenceParameters.replacingExisting,
+            let mode = try arguments.value(
+                FenceParameters.textInputMode,
                 defaultFrom: Command.typeText.descriptor
             )
             let text = try arguments.requiredValue(FenceParameters.text)
-            if text.isEmpty, !replacingExisting {
+            let input: TextInputText
+            do {
+                input = try TextInputText.admitting(text: text, mode: mode)
+            } catch TextInputTextError.emptyAppend {
                 throw SchemaValidationError(
-                    field: arguments.field(.text),
-                    observed: "string \"\"",
+                    field: FenceParameters.text.key.rawValue,
+                    observed: "string \"\(text)\"",
                     expected: "non-empty string"
                 )
             }
             return try TheFence.appInteractionDispatch(
                 .typeText,
                 .typeText(
-                    text: text,
+                    text: input,
                     target: try arguments.decodedAccessibilityTarget().map {
                         try $0.validatedElementTarget(command: .typeText)
-                    },
-                    replacingExisting: replacingExisting
+                    }
                 ),
                 expectationPayload: expectation
             )
@@ -354,7 +367,7 @@ extension TheFence {
             try TheFence.appInteractionDispatch(
                 .setPasteboard,
                 .setPasteboard(SetPasteboardTarget(
-                    text: try arguments.requiredValue(FenceParameters.pasteboardText)
+                    text: try PasteboardText(validating: arguments.requiredValue(FenceParameters.pasteboardText))
                 )),
                 expectationPayload: expectation
             )
@@ -370,7 +383,7 @@ extension TheFence {
 
         var command: Command { admission.command }
 
-        var requestId: String { admission.requestId }
+        var requestId: RequestID { admission.requestId }
 
         var dispatch: DecodedRequestDispatch { admission.dispatch }
 

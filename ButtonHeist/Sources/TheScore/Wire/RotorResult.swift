@@ -3,7 +3,7 @@ import Foundation
 
 /// Result from a live rotor step operation.
 public struct RotorResult: Codable, Sendable, Equatable {
-    public let rotor: String
+    public let rotor: RotorName
     public let direction: RotorDirection
     /// Description of the element the rotor cursor currently holds, if it
     /// resolved to one. This is a read-only snapshot (no id, not a durable
@@ -13,7 +13,7 @@ public struct RotorResult: Codable, Sendable, Equatable {
     public let textRange: RotorTextRange?
 
     public init(
-        rotor: String,
+        rotor: RotorName,
         direction: RotorDirection,
         foundElement: HeistElement? = nil,
         textRange: RotorTextRange? = nil
@@ -35,7 +35,7 @@ public struct RotorResult: Codable, Sendable, Equatable {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "RotorResult")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
-            rotor: try container.decode(String.self, forKey: .rotor),
+            rotor: try container.decode(RotorName.self, forKey: .rotor),
             direction: try container.decode(RotorDirection.self, forKey: .direction),
             foundElement: try container.decodeIfPresent(HeistElement.self, forKey: .foundElement),
             textRange: try container.decodeIfPresent(RotorTextRange.self, forKey: .textRange)

@@ -88,7 +88,7 @@ actor TheMuscle {
     /// Caller must be on `@MainActor` because runtime assembly is MainActor-isolated.
     @MainActor
     init(
-        explicitToken: String?,
+        explicitToken: SessionAuthToken?,
         sessionReleaseTimeout: TimeInterval
     ) {
         let tokenSource = SessionTokenSource(explicitToken: explicitToken)
@@ -126,14 +126,14 @@ actor TheMuscle {
 
     // MARK: - Session Accessors
 
-    var sessionToken: String { sessionTokenSource.token }
+    var sessionToken: SessionAuthToken { sessionTokenSource.token }
 
-    /// Driver identity that currently holds the session (nil = no active session).
-    var activeSessionDriverId: String? {
-        session.activeSessionDriverId
+    /// Owner that currently holds the session (nil = no active session).
+    var sessionOwner: SessionOwner? {
+        session.activeSessionOwner
     }
 
-    var exposedDriverId: String? {
+    var exposedDriverId: DriverID? {
         session.exposedDriverId
     }
 
@@ -234,7 +234,7 @@ actor TheMuscle {
 
     private func completeAuthentication(_ authentication: MuscleAuthentication) async {
         switch session.acquire(
-            driverIdentity: authentication.driverIdentity,
+            owner: authentication.owner,
             clientId: authentication.clientId,
             at: Date()
         ) {
@@ -393,7 +393,7 @@ actor TheMuscle {
 
     func encodeEnvelope(
         _ message: ServerMessage,
-        requestId: String? = nil
+        requestId: RequestID? = nil
     ) -> Result<Data, ResponseEncodingFailure> {
         ResponseEnvelopeDelivery.encodeEnvelope(message, requestId: requestId)
     }
@@ -406,7 +406,7 @@ actor TheMuscle {
     @discardableResult
     private func sendResponse(
         _ message: ServerMessage,
-        requestId: String? = nil,
+        requestId: RequestID? = nil,
         to destination: ResponseDestination
     ) async -> ResponseDeliveryResult {
         let result: ResponseDeliveryResult
@@ -423,7 +423,7 @@ actor TheMuscle {
 
     private func sendResponseToClient(
         _ message: ServerMessage,
-        requestId: String?,
+        requestId: RequestID?,
         clientId: Int
     ) async -> ResponseDeliveryResult {
         switch encodeEnvelope(message, requestId: requestId) {

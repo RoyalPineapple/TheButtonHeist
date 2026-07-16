@@ -562,7 +562,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(scrollView.contentOffset, .zero)
     }
 
-    func testDirectSemanticRevealRejectsReusedIdReplacementAndRestoresOrigin() async throws {
+    func testDirectSemanticRevealRejectsReusedIdReplacementWithoutStaleRestore() async throws {
         let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
         scrollView.contentOffset = CGPoint(x: 0, y: 80)
@@ -595,7 +595,8 @@ final class TheBrainsScrollTests: XCTestCase {
         guard case .failed(.noLiveScrollableAncestor) = result else {
             return XCTFail("Expected direct reused-ID evidence to fail closed, got \(result)")
         }
-        XCTAssertEqual(scrollView.contentOffset, CGPoint(x: 0, y: 80))
+        XCTAssertEqual(scrollView.setContentOffsetAnimations, [false])
+        XCTAssertNotEqual(scrollView.contentOffset, CGPoint(x: 0, y: 80))
     }
 
     func testSemanticRevealFailsWithoutProvenLiveScrollAncestor() async throws {
@@ -657,7 +658,7 @@ final class TheBrainsScrollTests: XCTestCase {
             target: try resolvedTarget(.label("Settings")),
             deadline: deadline,
             resolution: ActionSubjectResolution(origin: .known),
-            transaction: .init()
+            transaction: .init(stash: brains.stash)
         )
 
         guard case .failed(let failure) = state else {
@@ -694,7 +695,7 @@ final class TheBrainsScrollTests: XCTestCase {
                 target: target,
                 deadline: self.semanticRevealDeadline(),
                 resolution: ActionSubjectResolution(origin: .known),
-                transaction: .init()
+                transaction: .init(stash: self.brains.stash)
             )
             guard case .failed(let failure) = state else { return false }
             return failure.failedStep == .cancelled
@@ -1600,7 +1601,7 @@ final class TheBrainsScrollTests: XCTestCase {
         }).first else {
             throw XCTSkip("Parser did not expose the test scroll view as a scroll container")
         }
-        brains.stash.semanticObservationStream.commitVisibleObservationForTesting(visibleScreen)
+        let visibleEvent = brains.stash.semanticObservationStream.commitVisibleObservationForTesting(visibleScreen)
 
         let staleRootRow = makeElement(label: "Auto-Settle Fixtures", traits: .button)
         let staleEntry = InterfaceTree.Element(
@@ -1625,6 +1626,11 @@ final class TheBrainsScrollTests: XCTestCase {
             return XCTFail("Expected word-list exploration to settle")
         }
         let labels = brains.stash.discoveryInterface().projectedElements.compactMap(\.label)
+        XCTAssertEqual(
+            exploration.event.generation,
+            visibleEvent.generation,
+            "Canonical viewport movement must preserve one list generation"
+        )
         XCTAssertGreaterThan(exploration.manifest.scrollCount, 0, "Expected discovery to scroll the word list")
         XCTAssertTrue(labels.contains("Words"), "Expected visible word in discovered interface: \(labels)")
         XCTAssertTrue(labels.contains("zymurgy"), "Expected scrolled word in discovered interface: \(labels)")
@@ -2500,11 +2506,11 @@ final class TheBrainsScrollTests: XCTestCase {
             contentSize: contentSize
         ))
 
-        guard case .swipeable(_, let frame, let resolvedContentSize) = target else {
+        guard case .swipeable(let liveContainer, let resolvedContentSize) = target else {
             XCTFail("Expected semantic-only scroll container to use swipeable accessibility geometry")
             return
         }
-        XCTAssertEqual(frame, captureFrame)
+        XCTAssertEqual(liveContainer.frame, captureFrame)
         XCTAssertEqual(resolvedContentSize, contentSize.cgSize)
     }
 
@@ -2529,14 +2535,14 @@ final class TheBrainsScrollTests: XCTestCase {
             contentSize: contentSize
         ))
 
-        guard case .uiScrollView(_, _, let resolvedScrollView) = target else {
+        guard case .uiScrollView(_, let resolvedScrollView) = target else {
             XCTFail("Expected path-keyed UIScrollView target, got \(target)")
             return
         }
         XCTAssertTrue(resolvedScrollView === scrollView)
     }
 
-    func testPageScrollRejectsContainerFromPreviousCapture() async throws {
+    func testPageScrollReacquiresContainerFromCurrentCapture() async throws {
         let path = TreePath([0])
         let oldScrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         oldScrollView.contentSize = CGSize(width: 320, height: 1_600)
@@ -2571,12 +2577,12 @@ final class TheBrainsScrollTests: XCTestCase {
             animated: false
         )
 
-        XCTAssertEqual(proof.result, .unavailable)
+        XCTAssertEqual(proof.result, .moved)
         XCTAssertEqual(oldScrollView.contentOffset, .zero)
-        XCTAssertEqual(replacementScrollView.contentOffset, .zero)
+        XCTAssertGreaterThan(replacementScrollView.contentOffset.y, 0)
     }
 
-    func testEdgeScrollRejectsContainerFromPreviousCapture() async throws {
+    func testEdgeScrollReacquiresContainerFromCurrentCapture() async throws {
         let path = TreePath([0])
         let oldScrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         oldScrollView.contentSize = CGSize(width: 320, height: 1_600)
@@ -2607,9 +2613,9 @@ final class TheBrainsScrollTests: XCTestCase {
 
         let proof = await brains.navigation.scrollToEdgeAndSettle(staleTarget, edge: .bottom)
 
-        XCTAssertEqual(proof.result, .unavailable)
+        XCTAssertEqual(proof.result, .moved)
         XCTAssertEqual(oldScrollView.contentOffset, .zero)
-        XCTAssertEqual(replacementScrollView.contentOffset, .zero)
+        XCTAssertEqual(replacementScrollView.contentOffset.y, 1_200)
     }
 
     func testSafeSwipeFrameFullyInSafeBoundsIsUnchanged() throws {

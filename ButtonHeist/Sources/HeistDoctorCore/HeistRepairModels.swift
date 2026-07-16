@@ -11,7 +11,7 @@ public enum HeistRepairEvidenceOutcome: Codable, Sendable, Equatable {
 
 public struct HeistRepairEvidence: Codable, Sendable, Equatable {
     public let heistFingerprint: String?
-    public let stepPath: String
+    public let stepPath: HeistExecutionPath
     public let command: HeistActionCommand
     public let target: AccessibilityTarget
     public let beforeSnapshot: Interface
@@ -22,7 +22,7 @@ public struct HeistRepairEvidence: Codable, Sendable, Equatable {
 
     public init(
         heistFingerprint: String? = nil,
-        stepPath: String,
+        stepPath: HeistExecutionPath,
         command: HeistActionCommand,
         target: AccessibilityTarget,
         beforeSnapshot: Interface,
@@ -214,7 +214,7 @@ public enum HeistRepairDiagnosis: Codable, Sendable, Equatable {
 }
 
 public struct HeistRepairSuggestedDiagnosis: Codable, Sendable, Equatable {
-    public let stepPath: String
+    public let stepPath: HeistExecutionPath
     public let failureKind: HeistRepairFailureKind
     public let oldTarget: AccessibilityTarget
     public let oldResolvedElement: HeistRepairElementContext
@@ -223,7 +223,7 @@ public struct HeistRepairSuggestedDiagnosis: Codable, Sendable, Equatable {
     public let suggestions: [HeistRepairSuggestion]
 
     public init(
-        stepPath: String,
+        stepPath: HeistExecutionPath,
         failureKind: HeistRepairFailureKind,
         oldTarget: AccessibilityTarget,
         oldResolvedElement: HeistRepairElementContext,
@@ -266,13 +266,13 @@ public struct HeistRepairEligibleRefusalContext: Codable, Sendable, Equatable {
 }
 
 public struct HeistRepairRefusedDiagnosis: Codable, Sendable, Equatable {
-    public let stepPath: String
+    public let stepPath: HeistExecutionPath
     public let oldTarget: AccessibilityTarget
     public let context: HeistRepairRefusalContext
     public let refusal: HeistRepairRefusal
 
     public init(
-        stepPath: String,
+        stepPath: HeistExecutionPath,
         oldTarget: AccessibilityTarget,
         context: HeistRepairRefusalContext,
         refusal: HeistRepairRefusal
@@ -285,7 +285,7 @@ public struct HeistRepairRefusedDiagnosis: Codable, Sendable, Equatable {
 }
 
 public struct HeistRepairSuggestion: Codable, Sendable, Equatable {
-    public let stepPath: String
+    public let stepPath: HeistExecutionPath
     public let failureKind: HeistRepairFailureKind
     public let oldTarget: AccessibilityTarget
     public let oldResolvedElement: HeistRepairElementContext
@@ -296,7 +296,7 @@ public struct HeistRepairSuggestion: Codable, Sendable, Equatable {
     public let caveats: [RepairCaveat]
 
     public init(
-        stepPath: String,
+        stepPath: HeistExecutionPath,
         failureKind: HeistRepairFailureKind,
         oldTarget: AccessibilityTarget,
         oldResolvedElement: HeistRepairElementContext,

@@ -1,5 +1,6 @@
 import Foundation
 import ButtonHeistSupport
+import TheScore
 
 /// Structured reason for why a connection was closed.
 ///
@@ -21,11 +22,17 @@ enum DisconnectReason: Error, LocalizedError {
     case localDisconnect
     case missingToken
 
-    static func buttonHeistVersionMismatch(serverVersion: String, clientVersion: String) -> DisconnectReason {
+    static func buttonHeistVersionMismatch(
+        serverVersion: ButtonHeistVersion,
+        clientVersion: ButtonHeistVersion
+    ) -> DisconnectReason {
         .protocolMismatch(buttonHeistVersionMismatchMessage(serverVersion: serverVersion, clientVersion: clientVersion))
     }
 
-    static func buttonHeistVersionMismatchMessage(serverVersion: String, clientVersion: String) -> String {
+    static func buttonHeistVersionMismatchMessage(
+        serverVersion: ButtonHeistVersion,
+        clientVersion: ButtonHeistVersion
+    ) -> String {
         """
         Button Heist version mismatch: app/Inside Job is \(serverVersion), client/CLI/MCP is \(clientVersion). \
         Rebuild or reinstall the stale side so both use the same Button Heist version.

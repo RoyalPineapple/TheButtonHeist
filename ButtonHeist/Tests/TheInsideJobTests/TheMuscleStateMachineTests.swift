@@ -105,7 +105,7 @@ final class TheMuscleStateMachineTests: XCTestCase {
         let now = Date(timeIntervalSinceReferenceDate: 1_000)
 
         guard case .accepted(let claimEffects) = lease.acquire(
-            driverIdentity: "driver:alpha",
+            owner: .driver("alpha"),
             clientId: 1,
             at: now
         ) else {
@@ -126,7 +126,7 @@ final class TheMuscleStateMachineTests: XCTestCase {
         XCTAssertEqual(releaseDeadline, now.addingTimeInterval(30))
 
         guard case .rejected(let diagnostic) = lease.acquire(
-            driverIdentity: "driver:beta",
+            owner: .driver("beta"),
             clientId: 2,
             at: now.addingTimeInterval(12)
         ) else {
@@ -153,7 +153,7 @@ final class TheMuscleStateMachineTests: XCTestCase {
         let now = Date(timeIntervalSinceReferenceDate: 1_000)
 
         guard case .accepted(let claimEffects) = lease.acquire(
-            driverIdentity: "driver:alpha",
+            owner: .driver("alpha"),
             clientId: 1,
             at: now
         ) else {
@@ -162,7 +162,7 @@ final class TheMuscleStateMachineTests: XCTestCase {
         XCTAssertEqual(claimEffects, [.log(.sessionClaimed(clientId: 1))])
 
         guard case .rejected(let sameDriverDiagnostic) = lease.acquire(
-            driverIdentity: "driver:alpha",
+            owner: .driver("alpha"),
             clientId: 2,
             at: now
         ) else {
@@ -175,7 +175,7 @@ final class TheMuscleStateMachineTests: XCTestCase {
         XCTAssertFalse(sameDriverDiagnostic.payload().message.contains("remaining timeout:"))
 
         guard case .rejected(let activeOwnerDiagnostic) = lease.acquire(
-            driverIdentity: "driver:beta",
+            owner: .driver("beta"),
             clientId: 3,
             at: now
         ) else {
@@ -192,7 +192,7 @@ final class TheMuscleStateMachineTests: XCTestCase {
         var lease = SessionLease(releaseTimeout: 30)
         let now = Date(timeIntervalSinceReferenceDate: 1_000)
 
-        guard case .accepted = lease.acquire(driverIdentity: "driver:alpha", clientId: 1, at: now) else {
+        guard case .accepted = lease.acquire(owner: .driver("alpha"), clientId: 1, at: now) else {
             return XCTFail("Expected first driver to claim the session")
         }
 
@@ -210,7 +210,7 @@ final class TheMuscleStateMachineTests: XCTestCase {
         let now = Date(timeIntervalSinceReferenceDate: 1_000)
 
         guard case .accepted(let claimEffects) = lease.acquire(
-            driverIdentity: "driver:alpha",
+            owner: .driver("alpha"),
             clientId: 1,
             at: now
         ) else {
@@ -223,7 +223,7 @@ final class TheMuscleStateMachineTests: XCTestCase {
         }
 
         guard case .accepted(let effects) = lease.acquire(
-            driverIdentity: "driver:alpha",
+            owner: .driver("alpha"),
             clientId: 2,
             at: now.addingTimeInterval(5)
         ) else {
@@ -236,7 +236,7 @@ final class TheMuscleStateMachineTests: XCTestCase {
                 .log(.clientRejoinedDuringGracePeriod(clientId: 2)),
             ]
         )
-        XCTAssertEqual(lease.activeSessionDriverId, "driver:alpha")
+        XCTAssertEqual(lease.activeSessionOwner, .driver("alpha"))
         XCTAssertEqual(lease.exposedDriverId, "alpha")
         XCTAssertEqual(lease.activeSessionConnections, [2])
     }
@@ -248,7 +248,7 @@ final class TheMuscleStateMachineTests: XCTestCase {
         XCTAssertEqual(lease.release(), [.cancelReleaseTimer])
 
         guard case .accepted(let claimEffects) = lease.acquire(
-            driverIdentity: "driver:alpha",
+            owner: .driver("alpha"),
             clientId: 1,
             at: now
         ) else {
@@ -257,7 +257,7 @@ final class TheMuscleStateMachineTests: XCTestCase {
         XCTAssertEqual(claimEffects, [.log(.sessionClaimed(clientId: 1))])
 
         XCTAssertEqual(lease.release(), [.cancelReleaseTimer, .log(.sessionReleased)])
-        XCTAssertNil(lease.activeSessionDriverId)
+        XCTAssertNil(lease.activeSessionOwner)
         XCTAssertEqual(lease.activeSessionConnections, [])
         XCTAssertEqual(lease.release(), [.cancelReleaseTimer])
     }

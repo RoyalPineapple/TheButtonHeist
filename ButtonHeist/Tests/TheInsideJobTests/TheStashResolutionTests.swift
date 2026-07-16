@@ -91,7 +91,7 @@ final class TheStashResolutionTests: XCTestCase {
         ))
     }
 
-    private func installMatcherParityScreen() -> InterfaceObservation {
+    private func installMatchingScreen() {
         nextElementYOffset = 0
         let screen = InterfaceObservation.makeForTests(elements: [
             (
@@ -124,21 +124,6 @@ final class TheStashResolutionTests: XCTestCase {
             ),
         ])
         bagman.installScreenForTesting(screen)
-        return screen
-    }
-
-    private func matchSignature(_ element: AccessibilityElement) -> String {
-        matchSignature(TheStash.WireConversion.convert(element))
-    }
-
-    private func matchSignature(_ element: HeistElement) -> String {
-        let traits = element.traits.map(\.rawValue).sorted().joined(separator: ",")
-        return [
-            element.label ?? "",
-            element.identifier ?? "",
-            element.value ?? "",
-            traits,
-        ].joined(separator: "|")
     }
 
     private func resolvedTarget(_ authored: AccessibilityTarget) throws -> ResolvedAccessibilityTarget {
@@ -936,6 +921,25 @@ final class TheStashResolutionTests: XCTestCase {
             elementsByKey: [:]
         )
         XCTAssertNil(InterfaceObservationProof.settled(mismatchedOutcome, stash: bagman))
+    }
+
+    func testViewportMovementLineageRequiresDedicatedProofConstructor() throws {
+        let screen = InterfaceObservation.makeForTests(elements: [(element(label: "Stable"), "stable")])
+        bagman.recordParsedObservedEvidence(screen)
+        let outcome = SettleSession.Outcome(
+            outcome: .settled(timeMs: 1),
+            events: [],
+            finalObservation: SettleSessionFinalObservation(screen: screen),
+            elementsByKey: [:]
+        )
+
+        let ordinary = try XCTUnwrap(InterfaceObservationProof.settled(outcome, stash: bagman))
+        let afterMovement = try XCTUnwrap(
+            InterfaceObservationProof.settledAfterViewportMovement(outcome, stash: bagman)
+        )
+
+        XCTAssertNil(ordinary.lineageEvidence)
+        XCTAssertEqual(afterMovement.lineageEvidence, .viewportMovement)
     }
 
     func testRecaptureOnlyValueChangedNotificationProducesNotificationFact() async throws {
@@ -1911,6 +1915,7 @@ final class TheStashResolutionTests: XCTestCase {
         }
         XCTAssertEqual(notFoundFacts.reason, .ordinalOutOfRange(requested: 3, matchCount: 2))
         XCTAssertEqual(notFoundFacts.resolutionScope, .interface)
+        XCTAssertEqual(notFoundFacts.exactMatches.map(\.path), [primaryPath, secondaryPath])
         XCTAssertTrue(outOfRange.diagnostics.contains("container target ordinal 3"))
         XCTAssertTrue(outOfRange.diagnostics.contains("target an element inside the intended region"))
     }
@@ -2358,7 +2363,7 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(result.resolved?.heistId, "checkout_pay")
     }
 
-    func testScopedTargetResolutionUsesRepairedSemanticInterface() throws {
+    func testScopedTargetResolutionUsesInterfaceTreeScrollMembership() throws {
         let containerPath = TreePath([30])
         let staleElementPath = TreePath([2])
         let container = AccessibilityContainer(
@@ -2394,11 +2399,6 @@ final class TheStashResolutionTests: XCTestCase {
         )
         let resolvedTarget = try resolvedTarget(target)
 
-        let interfaceMatches = ElementMatchGraph(interface: TheStash.WireConversion.toSemanticInterface(from: screen.tree))
-            .resolve(resolvedTarget)
-            .elements
-
-        XCTAssertEqual(interfaceMatches.elements.map(\.identifier), ["review_sale"])
         XCTAssertEqual(bagman.resolveTarget(resolvedTarget).resolved?.heistId, "review_sale")
     }
 
@@ -2895,12 +2895,10 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertNotNil(result.resolved)
     }
 
-    // MARK: - ElementMatchSet Parity
+    // MARK: - Direct InterfaceTree Matching
 
-    func testElementMatchSetMatchesStashCountAndOrder() throws {
-        let screen = installMatcherParityScreen()
-        let projectedElements = screen.orderedElements.map { TheStash.WireConversion.convert($0.element) }
-        let matchGraph = ElementMatchGraph(elements: projectedElements)
+    func testDirectInterfaceTreeMatchingPreservesPredicateSemanticsAndOrder() throws {
+        installMatchingScreen()
 
         struct MatchCase {
             let name: String
@@ -2976,27 +2974,19 @@ final class TheStashResolutionTests: XCTestCase {
 
         for testCase in cases {
             let stashMatches = bagman.matchScreenElements(testCase.predicate, limit: 100)
-            let setMatches = matchGraph.resolve(testCase.predicate).elements
 
             XCTAssertEqual(stashMatches.map(\.heistId), testCase.expectedIds, testCase.name)
-            XCTAssertEqual(
-                setMatches.map(matchSignature),
-                stashMatches.map { matchSignature($0.element) },
-                testCase.name
-            )
         }
     }
 
-    func testElementMatchSetMatchesResolveTargetBehavior() throws {
-        let screen = installMatcherParityScreen()
-        let projectedElements = screen.orderedElements.map { TheStash.WireConversion.convert($0.element) }
-        let matchGraph = ElementMatchGraph(elements: projectedElements)
+    func testDirectInterfaceTreeResolutionPreservesOrdinalsAndDiagnostics() throws {
+        installMatchingScreen()
 
         enum ExpectedResolution {
             case resolved(HeistId)
-            case ambiguous(Int)
+            case ambiguous([HeistId])
             case notFound
-            case ordinalOutOfRange(requested: Int, matchCount: Int)
+            case ordinalOutOfRange(requested: Int, matches: [HeistId])
         }
 
         struct ResolutionCase {
@@ -3014,7 +3004,7 @@ final class TheStashResolutionTests: XCTestCase {
             ResolutionCase(
                 name: "ambiguous",
                 target: literalTarget(ElementPredicate.label("Delete")),
-                expected: .ambiguous(2)
+                expected: .ambiguous(["delete_first", "delete_second"])
             ),
             ResolutionCase(
                 name: "not found",
@@ -3029,43 +3019,42 @@ final class TheStashResolutionTests: XCTestCase {
             ResolutionCase(
                 name: "ordinal out of range",
                 target: literalTarget(ElementPredicate.label("Delete"), ordinal: 2),
-                expected: .ordinalOutOfRange(requested: 2, matchCount: 2)
+                expected: .ordinalOutOfRange(
+                    requested: 2,
+                    matches: ["delete_first", "delete_second"]
+                )
             ),
         ]
 
         for testCase in cases {
-            let setMatches = matchGraph.resolve(testCase.target)
             let resolution = bagman.resolveTarget(testCase.target)
 
             switch testCase.expected {
             case .resolved(let expectedId):
-                let expectedElement = try XCTUnwrap(screen.findElement(heistId: expectedId)?.element, testCase.name)
                 let resolved = try XCTUnwrap(resolution.resolved, testCase.name)
                 XCTAssertEqual(resolved.heistId, expectedId, testCase.name)
-                XCTAssertEqual(setMatches.elements.count, 1, testCase.name)
-                XCTAssertEqual(
-                    setMatches.elements.elements.map(matchSignature),
-                    [matchSignature(expectedElement)],
-                    testCase.name
-                )
-            case .ambiguous(let expectedCount):
+            case .ambiguous(let expectedIds):
                 guard case .ambiguous(let facts) = resolution else {
                     return XCTFail("Expected ambiguous for \(testCase.name), got \(resolution)")
                 }
-                XCTAssertEqual(facts.matchedCount, expectedCount, testCase.name)
-                XCTAssertEqual(setMatches.elements.count, expectedCount, testCase.name)
+                XCTAssertEqual(facts.matchedCount, expectedIds.count, testCase.name)
+                XCTAssertEqual(facts.exactMatches.map(\.heistId), expectedIds, testCase.name)
             case .notFound:
                 guard case .notFound(let facts) = resolution else {
                     return XCTFail("Expected notFound for \(testCase.name), got \(resolution)")
                 }
                 XCTAssertEqual(facts.reason, .noMatches, testCase.name)
-                XCTAssertTrue(setMatches.isEmpty, testCase.name)
-            case .ordinalOutOfRange(let requested, let matchCount):
+                XCTAssertTrue(facts.exactMatches.isEmpty, testCase.name)
+            case .ordinalOutOfRange(let requested, let expectedMatches):
                 guard case .notFound(let facts) = resolution else {
                     return XCTFail("Expected notFound for \(testCase.name), got \(resolution)")
                 }
-                XCTAssertEqual(facts.reason, .ordinalOutOfRange(requested: requested, matchCount: matchCount), testCase.name)
-                XCTAssertTrue(setMatches.isEmpty, testCase.name)
+                XCTAssertEqual(
+                    facts.reason,
+                    .ordinalOutOfRange(requested: requested, matchCount: expectedMatches.count),
+                    testCase.name
+                )
+                XCTAssertEqual(facts.exactMatches.map(\.heistId), expectedMatches, testCase.name)
             }
         }
     }

@@ -13,7 +13,7 @@ extension TheBrains.RepeatUntil.Terminal {
         let timeout = String(
             format: "%.1f",
             locale: Locale(identifier: "en_US_POSIX"),
-            PredicateWait.clampedWaitTimeout(step.timeout)
+            step.timeout.seconds
         )
         return [
             "timed out after \(timeout)s waiting for repeat_until predicate",
@@ -26,7 +26,7 @@ extension TheBrains.RepeatUntil.Terminal {
 extension TheBrains {
     internal func repeatUntilIterationResultsDroppingRedundantFailure(
         _ iterationResults: [HeistExecutionStepResult],
-        failedPath: String
+        failedPath: HeistExecutionPath
     ) -> [HeistExecutionStepResult] {
         iterationResults.filter { $0.path != failedPath }
     }
@@ -36,38 +36,38 @@ extension TheBrains {
         step: ResolvedRepeatUntilStep,
         observed: String
     ) -> HeistExecutionStepResult {
-        heistReceipt(.init(
+        .repeatUntil(
             path: context.path,
-            kind: .repeatUntil,
             durationMs: elapsedMilliseconds(since: context.start),
-            intent: .repeatUntil(predicate: step.predicateExpression, timeout: step.timeout),
-            completion: .failed(HeistFailureDetail(
+            predicate: step.predicateExpression,
+            timeout: step.timeout,
+            completion: .failed(evidence: .unavailable, failure: HeistFailureDetail(
                 category: .loop,
                 contract: "repeat_until execution reaches a terminal state",
                 observed: observed,
                 expected: "terminal repeat_until state"
             ))
-        ))
+        )
     }
 
     internal func repeatUntilResolutionFailure(
         _ step: RepeatUntilStep,
-        path: String,
+        path: HeistExecutionPath,
         start: CFAbsoluteTime,
         error: Error
     ) -> HeistExecutionStepResult {
-        heistReceipt(.init(
+        .repeatUntil(
             path: path,
-            kind: .repeatUntil,
             durationMs: elapsedMilliseconds(since: start),
-            intent: .repeatUntil(predicate: step.predicate, timeout: step.timeout),
-            completion: .failed(HeistFailureDetail(
+            predicate: step.predicate,
+            timeout: step.timeout,
+            completion: .failed(evidence: .unavailable, failure: HeistFailureDetail(
                 category: .validation,
                 contract: "repeat_until predicate resolves before evaluation",
                 observed: "could not resolve heist repeat_until predicate: \(error)",
                 expected: step.predicate.description
             ))
-        ))
+        )
     }
 }
 

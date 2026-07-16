@@ -367,7 +367,7 @@ private struct Fixture {
     @MainActor
     init() {
         let id = UUID()
-        let transport = ServerTransport()
+        let transport = ServerTransport(token: "lifecycle-fixture-token")
         let resources = TheInsideJob.InsideJobRuntimeResources(
             transport: transport,
             actualPort: 2468,

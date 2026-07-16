@@ -10,13 +10,13 @@ public struct RequestEnvelope: Codable, Sendable {
     /// Client's `buttonHeistVersion`. The handshake requires exact equality
     /// with the server's `buttonHeistVersion` — there is no separate wire
     /// protocol version.
-    public let buttonHeistVersion: String
-    public let requestId: String?
+    public let buttonHeistVersion: ButtonHeistVersion
+    public let requestId: RequestID?
     public let message: ClientMessage
 
     public init(
-        buttonHeistVersion: String = TheScore.buttonHeistVersion,
-        requestId: String? = nil,
+        buttonHeistVersion: ButtonHeistVersion = TheScore.buttonHeistVersion,
+        requestId: RequestID? = nil,
         message: ClientMessage
     ) {
         self.buttonHeistVersion = buttonHeistVersion

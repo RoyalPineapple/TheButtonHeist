@@ -33,14 +33,30 @@ public actor HeistCompiler {
         public static let `default` = Configuration()
 
         public let packageRoot: URL?
-        public let directoryEntry: String
+        public let directoryEntry: HeistEntrySymbol
+        let processLimits: CompilerProcessLimits
+        let temporaryDirectory: URL
 
         public init(
             packageRoot: URL? = nil,
-            directoryEntry: String = "heist"
+            directoryEntry: HeistEntrySymbol = "heist"
         ) {
             self.packageRoot = packageRoot
             self.directoryEntry = directoryEntry
+            self.processLimits = .default
+            self.temporaryDirectory = FileManager.default.temporaryDirectory
+        }
+
+        init(
+            packageRoot: URL? = nil,
+            directoryEntry: HeistEntrySymbol = "heist",
+            processLimits: CompilerProcessLimits,
+            temporaryDirectory: URL = FileManager.default.temporaryDirectory
+        ) {
+            self.packageRoot = packageRoot
+            self.directoryEntry = directoryEntry
+            self.processLimits = processLimits
+            self.temporaryDirectory = temporaryDirectory
         }
     }
 
@@ -52,14 +68,17 @@ public actor HeistCompiler {
 
     public func compileFile(
         _ url: URL,
-        entry: String = "heist"
+        entry: HeistEntrySymbol = "heist"
     ) async -> ValidationResult<HeistPlan, HeistBuildDiagnostic> {
         let source = url.standardizedFileURL
         do {
             try Task.checkCancellation()
 #if os(macOS) || os(Linux)
-            let plan = try HeistSwiftFileCompiler(packageRoot: configuration.packageRoot)
-                .compileSwiftFile(source, entry: entry)
+            let plan = try await HeistSwiftFileCompiler(
+                packageRoot: configuration.packageRoot,
+                processLimits: configuration.processLimits,
+                temporaryDirectory: configuration.temporaryDirectory
+            ).compileSwiftFile(source, entry: entry)
             try Task.checkCancellation()
             return .success(plan, diagnostics: [])
 #else
@@ -189,11 +208,11 @@ private extension HeistCompiler {
         sources: [URL]
     ) -> [HeistBuildDiagnostic] {
         var diagnostics: [HeistBuildDiagnostic] = []
-        var seen: [String: URL] = [:]
+        var seen: [HeistDefinitionPath: URL] = [:]
 
         for (index, plan) in plans.enumerated() {
             let source = sources[index]
-            if plans.count > 1, plan.name?.isEmpty != false {
+            if plans.count > 1, plan.name == nil {
                 diagnostics.append(diagnostic(
                     code: .catalogAnonymousCapability,
                     "Directory heist source compiled an anonymous capability. Name directory capabilities in the authored HeistPlan.",
@@ -205,15 +224,16 @@ private extension HeistCompiler {
             do {
                 let catalog = try plan.heistCatalog()
                 for entry in catalog.heists {
-                    if let previous = seen[entry.name] {
+                    guard let lookupPath = entry.identity.lookupPath else { continue }
+                    if let previous = seen[lookupPath] {
                         diagnostics.append(diagnostic(
                             code: .catalogDuplicateCapability,
-                            "Duplicate capability name \"\(entry.name)\" also compiled from \(previous.lastPathComponent).",
+                            "Duplicate capability name \"\(entry.identity.displayName)\" also compiled from \(previous.lastPathComponent).",
                             phase: .planValidation,
                             source: source
                         ))
                     } else {
-                        seen[entry.name] = source
+                        seen[lookupPath] = source
                     }
                 }
             } catch let error as HeistCatalogError {
@@ -239,7 +259,7 @@ private extension HeistCompiler {
     static func diagnostics(
         for error: Error,
         source: URL?,
-        entry: String?
+        entry: HeistEntrySymbol?
     ) -> [HeistBuildDiagnostic] {
 #if os(macOS) || os(Linux)
         if let compilerError = error as? HeistSwiftFileCompilerError {
@@ -256,16 +276,10 @@ private extension HeistCompiler {
     static func diagnostics(
         for error: HeistSwiftFileCompilerError,
         source: URL?,
-        entry: String?
+        entry: HeistEntrySymbol?
     ) -> [HeistBuildDiagnostic] {
         let entrySuffix = entry.map { " entry \"\($0)\"" } ?? ""
         switch error {
-        case .invalidEntry(let invalidEntry):
-            return [diagnostic(
-                code: .swiftCompilationInvalidEntry,
-                "Invalid Swift heist entry symbol \"\(invalidEntry)\".",
-                source: source
-            )]
         case .sourceFileNotFound(let path):
             return [diagnostic(
                 code: .swiftCompilationSourceNotFound,
@@ -294,6 +308,30 @@ private extension HeistCompiler {
             return [diagnostic(
                 code: .swiftCompilationExecutionFailed,
                 "Compiled Swift heist source\(entrySuffix) failed while evaluating the entry: \(bounded(output))",
+                source: source
+            )]
+        case .compileTimedOut(_, let output):
+            return [diagnostic(
+                code: .swiftCompilationCompileTimedOut,
+                "Swift heist source compilation\(entrySuffix) exceeded its deadline: \(bounded(output))",
+                source: source
+            )]
+        case .executionTimedOut(_, let output):
+            return [diagnostic(
+                code: .swiftCompilationExecutionTimedOut,
+                "Compiled Swift heist source\(entrySuffix) exceeded its evaluation deadline: \(bounded(output))",
+                source: source
+            )]
+        case .compilerTerminated(_, let signal, let output):
+            return [diagnostic(
+                code: .swiftCompilationCompilerTerminated,
+                "Swift compiler\(entrySuffix) terminated by signal \(signal): \(bounded(output))",
+                source: source
+            )]
+        case .executionTerminated(_, let signal, let output):
+            return [diagnostic(
+                code: .swiftCompilationExecutionTerminated,
+                "Compiled Swift heist source\(entrySuffix) terminated by signal \(signal): \(bounded(output))",
                 source: source
             )]
         case .invalidCompilerOutput(let output):

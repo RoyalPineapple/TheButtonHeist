@@ -70,7 +70,7 @@ final class TheStash {
 
     struct RotorCursor {
         let hostHeistId: HeistId
-        let rotorName: String
+        let rotorName: RotorName
         let generation: ObservationGeneration
         let selectionHeistId: HeistId
         let textRange: TextRangeReference?

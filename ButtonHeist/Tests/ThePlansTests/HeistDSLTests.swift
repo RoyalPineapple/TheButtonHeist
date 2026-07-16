@@ -521,110 +521,6 @@ func singleIfBuildsConditionalStep() throws {
 }
 
 @Test
-func invalidForEachInsideHeistDefFailsPlanBuild() {
-    expectBuildFailure(contains: "ForEach string loop is invalid") {
-        _ = try HeistPlan {
-            HeistDef<Void>("Broken") {
-                ForEach("Milk", parameter: "bad name") { _ in
-                    Warn("never")
-                }
-
-                Warn("valid sibling")
-            }
-
-            Warn("root")
-        }
-    }
-}
-
-@Test
-func invalidForEachInsideIfCaseFailsPlanBuild() {
-    expectBuildFailure(contains: "ForEach string loop is invalid") {
-        _ = try HeistPlan {
-            If {
-                Case(.exists(.label("Ready"))) {
-                    ForEach("Milk", parameter: "bad name") { _ in
-                        Warn("never")
-                    }
-
-                    Warn("valid sibling")
-                }
-
-                Else {
-                    Warn("fallback")
-                }
-            }
-        }
-    }
-}
-
-@Test
-func invalidForEachInsideWaitForElseFailsPlanBuild() {
-    expectBuildFailure(contains: "ForEach element loop is invalid") {
-        _ = try HeistPlan {
-            WaitFor(.exists(.label("Ready")), timeout: .seconds(1))
-                .else {
-                    ForEach(.label("Row"), parameter: "bad name") { target in
-                        Activate(target)
-                    }
-
-                    Warn("valid sibling")
-                }
-        }
-    }
-}
-
-@Test
-func invalidForEachInsideElseFailsPlanBuild() {
-    expectBuildFailure(contains: "ForEach string loop is invalid") {
-        _ = try HeistPlan {
-            If {
-                Case(.exists(.label("Ready"))) {
-                    Warn("ready")
-                }
-
-                Else {
-                    ForEach("Milk", parameter: "bad name") { _ in
-                        Warn("never")
-                    }
-
-                    Warn("valid sibling")
-                }
-            }
-        }
-    }
-}
-
-@Test
-func invalidForEachInsideNestedBranchBodyFailsPlanBuild() {
-    expectBuildFailure(contains: "ForEach string loop is invalid") {
-        _ = try HeistPlan {
-            If {
-                Case(.exists(.label("Outer"))) {
-                    If {
-                        Case(.exists(.label("Inner"))) {
-                            ForEach("Milk", parameter: "bad name") { _ in
-                                Warn("never")
-                            }
-
-                            Warn("valid sibling")
-                        }
-
-                        Else {
-                            Warn("nested fallback")
-                        }
-                    }
-                }
-
-                Else {
-                    Warn("outer fallback")
-                }
-            }
-        }
-    }
-}
-
-@Test
 func multiCaseIfBuildsConditionalStep() throws {
     let heist = try HeistPlan {
         If {
@@ -739,11 +635,11 @@ func heistDefinitionsCompileToInvocationsWithLocalDefinitions() throws {
     #expect(heist.name == "purchaseFlow")
     #expect(heist.body == [
         .invoke(HeistInvocationStep(
-            path: ["LibraryScreen", "addToCart"],
+            path: "LibraryScreen.addToCart",
             argument: .string("Milk")
         )),
         .invoke(HeistInvocationStep(
-            path: ["LibraryScreen", "addToCart"],
+            path: "LibraryScreen.addToCart",
             argument: .string("Bread")
         )),
     ])
@@ -840,7 +736,7 @@ func heistDefinitionsRejectConflictingDuplicatesDuringValidation() throws {
     } catch let error as HeistPlanRuntimeSafetyError {
         let failure = try #require(error.failures.first)
         #expect(error.failures.count == 1)
-        #expect(failure.path == "$.definitions[0].definitions[1].name")
+        #expect(failure.path.description == "$.definitions[0].definitions[1].name")
         #expect(failure.contract == "duplicate heist definition names are not allowed in the same scope")
         #expect(failure.observed == #""addToCart""#)
     } catch {
@@ -883,7 +779,7 @@ func heistDefinitionsCarryLocalDependenciesInDefinitionScope() throws {
                     .action(try ActionStep(command: .activate(
                         .label(HeistReferenceName(stringLiteral: "item"))
                     ))),
-                    .invoke(HeistInvocationStep(path: ["AddButton", "tap"])),
+                    .invoke(HeistInvocationStep(path: "AddButton.tap")),
                 ]
             ),
         ], body: []),
@@ -897,7 +793,7 @@ func rawHeistPlanContentCarriesDefinitions() throws {
             .action(try ActionStep(command: .activate(.label("Setup")))),
         ]),
     ], body: [
-        .invoke(HeistInvocationStep(path: ["setup"])),
+        .invoke(HeistInvocationStep(path: "setup")),
     ])
 
     let heist = try HeistPlan {
@@ -912,17 +808,17 @@ func rawHeistPlanContentCarriesDefinitions() throws {
 func runHeistBuildsHeistRunSteps() throws {
     let stringRun = ThePlans.RunHeist("LibraryScreen.addToCart", "Milk")
     #expect(stringRun.heistSteps == [
-        .invoke(HeistInvocationStep(path: ["LibraryScreen", "addToCart"], argument: .string("Milk"))),
+        .invoke(HeistInvocationStep(path: "LibraryScreen.addToCart", argument: .string("Milk"))),
     ])
 
     let noArgRun = ThePlans.RunHeist("CartScreen.checkout")
     #expect(noArgRun.heistSteps == [
-        .invoke(HeistInvocationStep(path: ["CartScreen", "checkout"], argument: .none)),
+        .invoke(HeistInvocationStep(path: "CartScreen.checkout", argument: .none)),
     ])
 
     let targetRun = ThePlans.RunHeist("Rows.activate", AccessibilityTarget.label("Row 1"))
     #expect(targetRun.heistSteps == [
-        .invoke(HeistInvocationStep(path: ["Rows", "activate"], argument: .accessibilityTarget(.label("Row 1")))),
+        .invoke(HeistInvocationStep(path: "Rows.activate", argument: .accessibilityTarget(.label("Row 1")))),
     ])
 
     let expectedSubtotal = WaitStep(
@@ -933,7 +829,7 @@ func runHeistBuildsHeistRunSteps() throws {
         .expect(.changed(.elements([.appeared(.label("subtotal"))])))
     #expect(expectedRun.heistSteps == [
         .invoke(HeistInvocationStep(
-            path: ["Cart", "addItem"],
+            path: "Cart.addItem",
             argument: .string("Milk"),
             expectation: expectedSubtotal
         )),
@@ -951,7 +847,7 @@ func runHeistBuildsHeistRunSteps() throws {
         ])))
     #expect(updatedRun.heistSteps == [
         .invoke(HeistInvocationStep(
-            path: ["Cart", "addItem"],
+            path: "Cart.addItem",
             argument: .string("Eggs"),
             expectation: expectedStatus
         )),
@@ -965,7 +861,7 @@ func runHeistBuildsHeistRunSteps() throws {
         .expect(.exists(.label("Payment Complete")))
     #expect(snapshotRun.heistSteps == [
         .invoke(HeistInvocationStep(
-            path: ["Checkout", "pay"],
+            path: "Checkout.pay",
             expectation: expectedCompletion
         )),
     ])
@@ -978,54 +874,10 @@ func runHeistBuildsHeistRunSteps() throws {
         .expect(.changed(.screen([.exists(.label("Receipt"))])))
     #expect(screenRun.heistSteps == [
         .invoke(HeistInvocationStep(
-            path: ["Checkout", "pay"],
+            path: "Checkout.pay",
             expectation: expectedReceipt
         )),
     ])
-}
-
-@Test
-func invalidRunHeistNamesSurfaceBuildDiagnostics() throws {
-    try expectInvalidRunHeistName(
-        "",
-        expectedPath: nil,
-        expectedMessage: "heist invocation path must not be empty"
-    )
-    try expectInvalidRunHeistName(
-        "LibraryScreen..addToCart",
-        expectedPath: "LibraryScreen..addToCart",
-        expectedMessage: "heist invocation path component at index 1 must not be empty"
-    )
-}
-
-@Test
-func invalidHeistDefinitionNamesSurfaceBuildDiagnostics() throws {
-    let definition = HeistDef<Void>("LibraryScreen..checkout") {
-        Warn("checkout")
-    }
-    let diagnostic = try #require(definition.heistBuildDiagnostics.first)
-
-    #expect(definition.path == [])
-    #expect(definition.heistBuildDiagnostics.count == 1)
-    #expect(diagnostic.code == .dslInvalidDefinition)
-    #expect(diagnostic.phase == .dslBuild)
-    #expect(diagnostic.path == "LibraryScreen..checkout")
-    #expect(diagnostic.message.contains("HeistDef path is invalid"))
-    #expect(diagnostic.message.contains("heist definition path component at index 1 must not be empty"))
-    #expect(diagnostic.hint == "Use a non-empty dot-separated heist capability name with Swift-style identifier components.")
-
-    do {
-        _ = try HeistPlan {
-            definition
-        }
-        Issue.record("Expected invalid HeistDef name to fail")
-    } catch let error as HeistPlanBuildError {
-        let buildDiagnostic = try #require(error.diagnostics.first)
-        #expect(error.diagnostics.count == 1)
-        #expect(buildDiagnostic == diagnostic)
-    } catch {
-        Issue.record("Expected HeistPlanBuildError, got \(error)")
-    }
 }
 
 @Test
@@ -1038,7 +890,7 @@ func runHeistResolvesNamedCapabilityThroughValidation() throws {
                 ]),
             ], body: []),
         ],
-        body: [.invoke(HeistInvocationStep(path: ["CartScreen", "checkout"]))]
+        body: [.invoke(HeistInvocationStep(path: "CartScreen.checkout"))]
     )
 }
 
@@ -1053,7 +905,7 @@ func runHeistRendersAsRunHeistInCanonicalSwift() throws {
             ], body: []),
         ],
         body: [.invoke(HeistInvocationStep(
-            path: ["CartScreen", "checkout"],
+            path: "CartScreen.checkout",
             expectation: WaitStep(predicate: .changed(.screen()), timeout: ThePlans.defaultActionExpectationTimeout)
         ))]
     )
@@ -1093,7 +945,7 @@ func heistDefinitionsCanBeInvokedFromForEachBodies() throws {
             parameter: "item",
             body: [
                 .invoke(HeistInvocationStep(
-                    path: ["LibraryScreen", "addToCart"],
+                    path: "LibraryScreen.addToCart",
                     argument: .string(reference: HeistReferenceName(stringLiteral: "item"))
                 )),
             ]
@@ -1104,7 +956,7 @@ func heistDefinitionsCanBeInvokedFromForEachBodies() throws {
             parameter: "target",
             body: [
                 .invoke(HeistInvocationStep(
-                    path: ["CartScreen", "deleteItem"],
+                    path: "CartScreen.deleteItem",
                     argument: .accessibilityTarget(.ref("target"))
                 )),
             ]
@@ -1268,50 +1120,7 @@ func emptyHeistRejectsPlanUsingDecodedHeistPlanContract() {
     }
 }
 
-private func expectBuildFailure(
-    contains expectedDiagnostic: String,
-    _ operation: () throws -> Void
-) {
-    do {
-        try operation()
-        Issue.record("Expected HeistPlanBuildError")
-    } catch let error as HeistPlanBuildError {
-        #expect(error.description.contains(expectedDiagnostic))
-    } catch {
-        Issue.record("Expected HeistPlanBuildError, got \(error)")
-    }
-}
-
-private func expectInvalidRunHeistName(
-    _ name: String,
-    expectedPath: String?,
-    expectedMessage: String
-) throws {
-    let content = ThePlans.RunHeist(name)
-    let contentDiagnostic = try #require(content.heistBuildDiagnostics.first)
-    #expect(content.heistBuildDiagnostics.count == 1)
-    #expect(contentDiagnostic.code == .dslInvalidInvocationPath)
-    #expect(contentDiagnostic.phase == .dslBuild)
-    #expect(contentDiagnostic.path == expectedPath)
-    #expect(contentDiagnostic.message.contains("RunHeist name is invalid"))
-    #expect(contentDiagnostic.message.contains(expectedMessage))
-    #expect(contentDiagnostic.hint == "Use a non-empty dot-separated heist capability name with Swift-style identifier components.")
-
-    do {
-        _ = try HeistPlan {
-            content
-        }
-        Issue.record("Expected invalid RunHeist name to fail")
-    } catch let error as HeistPlanBuildError {
-        let buildDiagnostic = try #require(error.diagnostics.first)
-        #expect(error.diagnostics.count == 1)
-        #expect(buildDiagnostic == contentDiagnostic)
-    } catch {
-        Issue.record("Expected HeistPlanBuildError, got \(error)")
-    }
-}
-
-private func loginFlow(email: String, password: String) throws -> some HeistContent {
+private func loginFlow(email: TextInputText, password: TextInputText) throws -> some HeistContent {
     try HeistPlan {
         TypeText(email, into: .identifier("email"))
         TypeText(password, into: .identifier("password"))
