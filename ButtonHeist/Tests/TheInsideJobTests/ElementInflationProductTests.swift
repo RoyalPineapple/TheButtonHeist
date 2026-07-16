@@ -138,15 +138,15 @@ final class ElementInflationProductTests: XCTestCase {
         )
     }
 
-    func testCommittedTargetRefreshStartsANewHandoffDeadline() async throws {
+    func testCommittedTargetRefreshReplacesStaleLiveEvidenceAndStartsANewDeadline() async throws {
         let heistId: HeistId = "committed_refresh_target"
         let element = makeElement(
             label: "Committed Refresh Target",
             identifier: heistId.rawValue
         )
-        let object = UIButton(frame: CGRect(x: 20, y: 20, width: 160, height: 44))
+        let staleObject = UIButton(frame: CGRect(x: 20, y: 20, width: 160, height: 44))
         brains.stash.installScreenForTesting(.makeForTests([
-            .init(element, heistId: heistId, object: object),
+            .init(element, heistId: heistId, object: staleObject),
         ]))
         let treeElement = try XCTUnwrap(brains.stash.interfaceElement(heistId: heistId))
         guard case .resolved(let liveTarget) = brains.stash.resolveLiveActionTarget(for: treeElement) else {
@@ -159,6 +159,11 @@ final class ElementInflationProductTests: XCTestCase {
             deadline: SemanticObservationDeadline(start: 0, timeoutSeconds: 0),
             resolution: ActionSubjectResolution(origin: .visible)
         )
+        brains.stopSemanticObservation()
+        let replacementObject = UIButton(frame: CGRect(x: 20, y: 20, width: 160, height: 44))
+        brains.stash.nextVisibleRefreshScreenForTesting = .makeForTests([
+            .init(element, heistId: heistId, object: replacementObject),
+        ])
         var now: CFAbsoluteTime = 100
         brains.navigation.elementInflation.geometryEnvironment = .init(
             now: { now },
@@ -174,7 +179,8 @@ final class ElementInflationProductTests: XCTestCase {
             return XCTFail("Expected a new refresh handoff, got \(result)")
         }
         XCTAssertEqual(refreshedTarget.treeElement.heistId, heistId)
-        XCTAssertTrue(refreshedTarget.liveTarget.object === object)
+        XCTAssertTrue(refreshedTarget.liveTarget.object === replacementObject)
+        XCTAssertFalse(refreshedTarget.liveTarget.object === staleObject)
         XCTAssertEqual(refreshedTarget.deadline.start, 100)
         XCTAssertEqual(refreshedTarget.deadline.timeoutSeconds, 2)
     }
