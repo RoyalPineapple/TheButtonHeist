@@ -8,7 +8,7 @@ struct HeistStepFacts {
     let abortedAtChildPath: HeistExecutionPath?
 }
 
-package enum HeistExecutionStepNode: Codable, Sendable, Equatable {
+enum HeistExecutionStepNode: Codable, Sendable, Equatable {
     case action(command: HeistActionCommand, completion: HeistActionCompletion)
     case wait(predicate: AccessibilityPredicate, timeout: WaitTimeout, completion: HeistWaitCompletion)
     case conditional(completion: HeistCaseSelectionCompletion)
@@ -31,126 +31,6 @@ package enum HeistExecutionStepNode: Codable, Sendable, Equatable {
     case failure(message: HeistFailureMessage, completion: HeistFailureCompletion)
     case heist(name: HeistPlanName?, completion: HeistGroupCompletion)
     case invocation(path: HeistInvocationPath, argument: HeistArgument, completion: HeistInvocationCompletion)
-
-    package func admitted() throws -> Self {
-        try validateConstruction()
-        return self
-    }
-
-    private func validateConstruction() throws {
-        switch self {
-        case .action(let command, let completion):
-            let evidence: HeistActionEvidence?
-            switch completion {
-            case .passed(let value, _), .childAborted(let value, _, _): evidence = value.value
-            case .failed(let value, _, _): evidence = value.value
-            case .skipped: evidence = nil
-            }
-            guard evidence?.matches(command: command) != false else {
-                throw HeistReceiptAdmissionError(
-                    description: "action evidence result method must match the receipt command"
-                )
-            }
-
-        case .forEachElement(let declaration, let completion),
-             .forEachElementIteration(let declaration, let completion):
-            let evidence: HeistForEachElementEvidence?
-            let requiresAdmittedCount: Bool
-            switch completion {
-            case .passed(let value, _):
-                evidence = value.value
-                requiresAdmittedCount = true
-            case .failed(let value, _, _):
-                evidence = value.value?.value
-                requiresAdmittedCount = false
-            case .childAborted(let value, _, _):
-                evidence = value.value
-                requiresAdmittedCount = true
-            case .skipped:
-                evidence = nil
-                requiresAdmittedCount = false
-            }
-            let iteration = isForEachIteration
-            let legal = evidence.map {
-                (!requiresAdmittedCount || $0.matchedCount <= declaration.limit)
-                    && ($0.iterationOrdinal != nil) == iteration
-            } ?? true
-            guard legal else {
-                throw HeistReceiptAdmissionError(
-                    description: "for_each_element evidence shape must match the receipt node"
-                )
-            }
-
-        case .forEachString(let declaration, let completion),
-             .forEachStringIteration(let declaration, let completion):
-            let evidence: HeistForEachStringEvidence?
-            switch completion {
-            case .passed(let value, _): evidence = value.value
-            case .failed(let value, _, _): evidence = value.value?.value
-            case .childAborted(let value, _, _): evidence = value.value
-            case .skipped: evidence = nil
-            }
-            let iteration = isForEachIteration
-            let legal = evidence.map {
-                $0.iterationCount <= declaration.count && ($0.iterationOrdinal != nil) == iteration
-            } ?? true
-            guard legal else {
-                throw HeistReceiptAdmissionError(
-                    description: "for_each_string evidence progress and shape must match the receipt declaration"
-                )
-            }
-
-        case .repeatUntil(let declaration, let completion):
-            let evidence: HeistRepeatUntilEvidence?
-            switch completion {
-            case .passed(let value, _): evidence = value.value
-            case .failed(let value, _, _): evidence = value.value?.value
-            case .childAborted(let value, _, _): evidence = value.value
-            case .skipped: evidence = nil
-            }
-            guard Self.repeatEvidence(evidence, matches: declaration, iteration: false) else {
-                throw HeistReceiptAdmissionError(
-                    description: "repeat_until evidence predicate and shape must match the receipt declaration"
-                )
-            }
-
-        case .repeatUntilIteration(let declaration, let completion):
-            let evidence: HeistRepeatUntilEvidence?
-            switch completion {
-            case .passed(let value, _): evidence = value.value
-            case .failed(let value, _, _): evidence = value.value?.value
-            case .childAborted(let value, _, _): evidence = value.value
-            case .skipped: evidence = nil
-            }
-            guard Self.repeatEvidence(evidence, matches: declaration, iteration: true) else {
-                throw HeistReceiptAdmissionError(
-                    description: "repeat_until iteration evidence predicate and shape must match the receipt declaration"
-                )
-            }
-
-        case .wait, .conditional, .warning, .failure, .heist, .invocation:
-            return
-        }
-    }
-
-    private var isForEachIteration: Bool {
-        switch self {
-        case .forEachElementIteration, .forEachStringIteration:
-            return true
-        default:
-            return false
-        }
-    }
-
-    private static func repeatEvidence(
-        _ evidence: HeistRepeatUntilEvidence?,
-        matches declaration: HeistRepeatUntilDeclaration,
-        iteration: Bool
-    ) -> Bool {
-        guard let evidence else { return true }
-        return (evidence.expectation.predicate.map { $0 == declaration.predicate } ?? true)
-            && (evidence.iterationOrdinal != nil) == iteration
-    }
 
     var facts: HeistStepFacts {
         switch self {

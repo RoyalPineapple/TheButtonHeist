@@ -305,13 +305,14 @@ extension TheBrains {
             admitFailed: HeistFailedForEachElementEvidence.init,
             failure: forEachIterationFailure
         )
-        return admittedReceipt(
-            path: path,
-            durationMs: durationMs,
-            node: .forEachElementIteration(
+        return requireAdmitted(
+            HeistExecutionStepResult.forEachElementIteration(
+                path: path,
+                durationMs: durationMs,
                 declaration: HeistForEachElementDeclaration(step),
                 completion: completion
-            )
+            ),
+            "for_each_element iteration receipt must match its declaration"
         )
     }
 
@@ -342,13 +343,14 @@ extension TheBrains {
                 expected: "\(outcome.totalCount) iteration(s)"
             )
         )
-        return admittedReceipt(
-            path: path,
-            durationMs: durationMs,
-            node: .forEachElement(
+        return requireAdmitted(
+            HeistExecutionStepResult.forEachElement(
+                path: path,
+                durationMs: durationMs,
                 declaration: HeistForEachElementDeclaration(step),
                 completion: completion
-            )
+            ),
+            "for_each_element receipt must match its declaration"
         )
     }
 
@@ -429,13 +431,14 @@ extension TheBrains {
             admitFailed: HeistFailedForEachStringEvidence.init,
             failure: forEachIterationFailure
         )
-        return admittedReceipt(
-            path: path,
-            durationMs: durationMs,
-            node: .forEachStringIteration(
+        return requireAdmitted(
+            HeistExecutionStepResult.forEachStringIteration(
+                path: path,
+                durationMs: durationMs,
                 declaration: HeistForEachStringDeclaration(step),
                 completion: completion
-            )
+            ),
+            "for_each_string iteration receipt must match its declaration"
         )
     }
 
@@ -465,13 +468,14 @@ extension TheBrains {
                 expected: "\(outcome.totalCount) value(s)"
             )
         )
-        return admittedReceipt(
-            path: path,
-            durationMs: durationMs,
-            node: .forEachString(
+        return requireAdmitted(
+            HeistExecutionStepResult.forEachString(
+                path: path,
+                durationMs: durationMs,
                 declaration: HeistForEachStringDeclaration(step),
                 completion: completion
-            )
+            ),
+            "for_each_string receipt must match its declaration"
         )
     }
 
@@ -579,17 +583,18 @@ extension TheBrains {
             ),
             "for_each_element unavailable receipt requires a positive declaration limit"
         )
-        return admittedReceipt(
-            path: path,
-            durationMs: durationMs,
-            node: .forEachElement(
+        return requireAdmitted(
+            HeistExecutionStepResult.forEachElement(
+                path: path,
+                durationMs: durationMs,
                 declaration: declaration,
                 completion: .failed(evidence: .observed(admittedEvidence), failure: HeistFailureDetail(
                     category: .runtimeUnavailable,
                     contract: "settled semantic hierarchy is observable before for_each_element matching",
                     observed: observed
                 ))
-            )
+            ),
+            "for_each_element unavailable receipt must match its declaration"
         )
     }
 
@@ -609,10 +614,10 @@ extension TheBrains {
             ).flatMap(HeistFailedForEachElementEvidence.init),
             "for_each_element resolution failure receipt must admit failed evidence"
         )
-        return admittedReceipt(
-            path: path,
-            durationMs: durationMs,
-            node: .forEachElement(
+        return requireAdmitted(
+            HeistExecutionStepResult.forEachElement(
+                path: path,
+                durationMs: durationMs,
                 declaration: HeistForEachElementDeclaration(step),
                 completion: .failed(evidence: .observed(admittedEvidence), failure: HeistFailureDetail(
                     category: .targetResolution,
@@ -620,7 +625,8 @@ extension TheBrains {
                     observed: observed,
                     expected: step.matching.description
                 ))
-            )
+            ),
+            "for_each_element resolution failure receipt must match its declaration"
         )
     }
 
@@ -651,10 +657,10 @@ extension TheBrains {
             ),
             "for_each_element limit failure receipt requires a positive declaration limit"
         )
-        return admittedReceipt(
-            path: path,
-            durationMs: durationMs,
-            node: .forEachElement(
+        return requireAdmitted(
+            HeistExecutionStepResult.forEachElement(
+                path: path,
+                durationMs: durationMs,
                 declaration: declaration,
                 completion: .failed(evidence: .observed(admittedEvidence), failure: HeistFailureDetail(
                     category: .loop,
@@ -662,7 +668,8 @@ extension TheBrains {
                     observed: observed,
                     expected: "at most \(limit) element(s)"
                 ))
-            )
+            ),
+            "for_each_element limit failure receipt must match its declaration"
         )
     }
 }

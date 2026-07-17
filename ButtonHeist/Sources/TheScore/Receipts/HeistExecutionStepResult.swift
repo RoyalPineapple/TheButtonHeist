@@ -161,12 +161,6 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
     public let durationMs: Int
     let node: HeistExecutionStepNode
 
-    init(path: HeistExecutionPath, durationMs: Int, node: HeistExecutionStepNode) {
-        self.path = path
-        self.durationMs = durationMs
-        self.node = node
-    }
-
     public var kind: HeistExecutionStepKind {
         switch node {
         case .action: .action
@@ -198,9 +192,42 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist execution step result")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        path = try container.decode(HeistExecutionPath.self, forKey: .path)
-        durationMs = try container.decode(Int.self, forKey: .durationMs)
-        node = try container.decode(HeistExecutionStepNode.self, forKey: .node)
+        let path = try container.decode(HeistExecutionPath.self, forKey: .path)
+        let durationMs = try container.decode(Int.self, forKey: .durationMs)
+        switch try container.decode(HeistExecutionStepNode.self, forKey: .node) {
+        case .action(let command, let completion):
+            self = try Self.decoded(Self.action(path: path, durationMs: durationMs, command: command, completion: completion), from: decoder)
+        case .wait(let predicate, let timeout, let completion):
+            self = .wait(path: path, durationMs: durationMs, predicate: predicate, timeout: timeout, completion: completion)
+        case .conditional(let completion):
+            self = .conditional(path: path, durationMs: durationMs, completion: completion)
+        case .forEachElement(let declaration, let completion):
+            self = try Self.decoded(Self.forEachElement(path: path, durationMs: durationMs, declaration: declaration, completion: completion), from: decoder)
+        case .forEachElementIteration(let declaration, let completion):
+            self = try Self.decoded(Self.forEachElementIteration(
+                path: path, durationMs: durationMs, declaration: declaration, completion: completion
+            ), from: decoder)
+        case .forEachString(let declaration, let completion):
+            self = try Self.decoded(Self.forEachString(path: path, durationMs: durationMs, declaration: declaration, completion: completion), from: decoder)
+        case .forEachStringIteration(let declaration, let completion):
+            self = try Self.decoded(Self.forEachStringIteration(
+                path: path, durationMs: durationMs, declaration: declaration, completion: completion
+            ), from: decoder)
+        case .repeatUntil(let declaration, let completion):
+            self = try Self.decoded(Self.repeatUntil(path: path, durationMs: durationMs, declaration: declaration, completion: completion), from: decoder)
+        case .repeatUntilIteration(let declaration, let completion):
+            self = try Self.decoded(Self.repeatUntilIteration(
+                path: path, durationMs: durationMs, declaration: declaration, completion: completion
+            ), from: decoder)
+        case .warning(let message, let completion):
+            self = .warning(path: path, durationMs: durationMs, message: message, completion: completion)
+        case .failure(let message, let completion):
+            self = .failure(path: path, durationMs: durationMs, message: message, completion: completion)
+        case .heist(let name, let completion):
+            self = .heist(path: path, durationMs: durationMs, name: name, completion: completion)
+        case .invocation(let invocationPath, let argument, let completion):
+            self = .invocation(path: path, durationMs: durationMs, invocationPath: invocationPath, argument: argument, completion: completion)
+        }
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -208,6 +235,15 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         try container.encode(path, forKey: .path)
         try container.encode(durationMs, forKey: .durationMs)
         try container.encode(node, forKey: .node)
+    }
+
+    private static func decoded(_ result: Self?, from decoder: Decoder) throws -> Self {
+        guard let result else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath, debugDescription: "heist receipt node fields have an incompatible relationship"
+            ))
+        }
+        return result
     }
 
     package func walk(

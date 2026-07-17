@@ -166,10 +166,14 @@ extension TheBrains {
             completion,
             "action receipt evidence must match the receipt command"
         )
-        return admittedReceipt(
-            path: path,
-            durationMs: durationMs,
-            node: .action(command: command, completion: admittedCompletion)
+        return requireAdmitted(
+            HeistExecutionStepResult.action(
+                path: path,
+                durationMs: durationMs,
+                command: command,
+                completion: admittedCompletion
+            ),
+            "action receipt evidence must match the receipt command"
         )
     }
 
@@ -203,10 +207,14 @@ extension TheBrains {
             completion,
             "failure screenshot receipt evidence must match the screenshot command"
         )
-        return admittedReceipt(
-            path: path,
-            durationMs: durationMs,
-            node: .action(command: command, completion: admittedCompletion)
+        return requireAdmitted(
+            HeistExecutionStepResult.action(
+                path: path,
+                durationMs: durationMs,
+                command: command,
+                completion: admittedCompletion
+            ),
+            "failure screenshot receipt evidence must match the screenshot command"
         )
     }
 }

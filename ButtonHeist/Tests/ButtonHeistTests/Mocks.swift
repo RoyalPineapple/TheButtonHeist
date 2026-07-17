@@ -331,11 +331,11 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
             guard let evidence = HeistFailedActionEvidence(rawEvidence) else {
                 preconditionFailure("command-resolution failure must carry failed action evidence")
             }
-            return admittedReceipt(
+            return requireReceipt(
                 "mock action receipt construction failed",
-                path: receiptPath(path),
-                durationMs: heistStepDurationMs,
-                node: .action(
+                HeistExecutionStepResult.action(
+                    path: receiptPath(path),
+                    durationMs: heistStepDurationMs,
                     command: action.command,
                     completion: .failed(evidence: evidence, failure: HeistFailureDetail(
                         category: .targetResolution,
@@ -361,11 +361,11 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
             guard let evidence = HeistFailedActionEvidence(actionEvidence) else {
                 preconditionFailure("failed mock action must carry failed evidence")
             }
-            return admittedReceipt(
+            return requireReceipt(
                 "failed mock action receipt construction failed",
-                path: receiptPath(path),
-                durationMs: heistStepDurationMs,
-                node: .action(
+                HeistExecutionStepResult.action(
+                    path: receiptPath(path),
+                    durationMs: heistStepDurationMs,
                     command: action.command,
                     completion: .failed(evidence: evidence, failure: failure)
                 )
@@ -374,11 +374,14 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
         guard let evidence = HeistPassedActionEvidence(actionEvidence) else {
             preconditionFailure("passed mock action must carry passing evidence")
         }
-        return admittedReceipt(
+        return requireReceipt(
             "passed mock action receipt construction failed",
-            path: receiptPath(path),
-            durationMs: heistStepDurationMs,
-            node: .action(command: action.command, completion: .passed(evidence: evidence))
+            HeistExecutionStepResult.action(
+                path: receiptPath(path),
+                durationMs: heistStepDurationMs,
+                command: action.command,
+                completion: .passed(evidence: evidence)
+            )
         )
     }
 
@@ -389,20 +392,17 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
         handler: ((ResolvedHeistActionCommand) -> ServerMessage)?
     ) -> HeistExecutionStepResult {
         guard let resolved = try? wait.resolve(in: .empty) else {
-            return admittedReceipt(
-                "mock wait resolution failure receipt construction failed",
+            return .wait(
                 path: receiptPath(path),
                 durationMs: heistStepDurationMs,
-                node: .wait(
-                    predicate: wait.predicate,
-                    timeout: wait.timeout,
-                    completion: .failed(evidence: .unavailable, failure: HeistFailureDetail(
-                        category: .wait,
-                        contract: "wait predicate resolves before evaluation",
-                        observed: "mock could not resolve heist wait predicate",
-                        expected: wait.predicate.description
-                    ))
-                )
+                predicate: wait.predicate,
+                timeout: wait.timeout,
+                completion: .failed(evidence: .unavailable, failure: HeistFailureDetail(
+                    category: .wait,
+                    contract: "wait predicate resolves before evaluation",
+                    observed: "mock could not resolve heist wait predicate",
+                    expected: wait.predicate.description
+                ))
             )
         }
         let result = waitResult(for: resolved)
@@ -440,29 +440,23 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
             guard let evidence = HeistFailedWaitEvidence(waitEvidence) else {
                 preconditionFailure("failed mock wait must carry failed evidence")
             }
-            return admittedReceipt(
-                "failed mock wait receipt construction failed",
+            return .wait(
                 path: receiptPath(path),
                 durationMs: heistStepDurationMs,
-                node: .wait(
-                    predicate: wait.predicate,
-                    timeout: wait.timeout,
-                    completion: .failed(evidence: .observed(evidence), failure: failure)
-                )
+                predicate: wait.predicate,
+                timeout: wait.timeout,
+                completion: .failed(evidence: .observed(evidence), failure: failure)
             )
         }
         guard let evidence = HeistPassedWaitEvidence(waitEvidence) else {
             preconditionFailure("passed mock wait must carry passing evidence")
         }
-        return admittedReceipt(
-            "passed mock wait receipt construction failed",
+        return .wait(
             path: receiptPath(path),
             durationMs: heistStepDurationMs,
-            node: .wait(
-                predicate: wait.predicate,
-                timeout: wait.timeout,
-                completion: .passed(evidence: evidence)
-            )
+            predicate: wait.predicate,
+            timeout: wait.timeout,
+            completion: .passed(evidence: evidence)
         )
     }
 
@@ -496,11 +490,11 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
         guard let evidence = HeistPassedForEachElementEvidence(rawEvidence) else {
             preconditionFailure("empty mock element loop must carry passing evidence")
         }
-        return admittedReceipt(
+        return requireReceipt(
             "empty mock element loop admission failed",
-            path: receiptPath(path),
-            durationMs: heistStepDurationMs,
-            node: .forEachElement(
+            HeistExecutionStepResult.forEachElement(
+                path: receiptPath(path),
+                durationMs: heistStepDurationMs,
                 declaration: HeistForEachElementDeclaration(forEach),
                 completion: .passed(evidence: evidence)
             )
@@ -520,11 +514,11 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
         guard let evidence = HeistPassedForEachStringEvidence(rawEvidence) else {
             preconditionFailure("completed mock string loop must carry passing evidence")
         }
-        return admittedReceipt(
+        return requireReceipt(
             "completed mock string loop admission failed",
-            path: receiptPath(path),
-            durationMs: heistStepDurationMs,
-            node: .forEachString(
+            HeistExecutionStepResult.forEachString(
+                path: receiptPath(path),
+                durationMs: heistStepDurationMs,
                 declaration: HeistForEachStringDeclaration(forEach),
                 completion: .passed(evidence: evidence)
             )
@@ -546,32 +540,23 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
         guard let evidence = HeistPassedRepeatUntilEvidence(rawEvidence) else {
             preconditionFailure("matched mock repeat must carry passing evidence")
         }
-        return admittedReceipt(
+        return requireReceipt(
             "matched mock repeat admission failed",
-            path: receiptPath(path),
-            durationMs: heistStepDurationMs,
-            node: .repeatUntil(
+            HeistExecutionStepResult.repeatUntil(
+                path: receiptPath(path),
+                durationMs: heistStepDurationMs,
                 declaration: HeistRepeatUntilDeclaration(repeatUntil),
                 completion: .passed(evidence: evidence)
             )
         )
     }
 
-    private func admittedReceipt(
+    private func requireReceipt(
         _ failureMessage: String,
-        path: HeistExecutionPath,
-        durationMs: Int,
-        node: HeistExecutionStepNode
+        _ result: HeistExecutionStepResult?
     ) -> HeistExecutionStepResult {
-        do {
-            return try HeistExecutionStepResult.construct(
-                path: path,
-                durationMs: durationMs,
-                node: node
-            )
-        } catch {
-            preconditionFailure("\(failureMessage): \(error)")
-        }
+        guard let result else { preconditionFailure(failureMessage) }
+        return result
     }
 
     private func mockCaseResults(for cases: [PredicateCase]) -> [HeistCaseMatchResult] {
