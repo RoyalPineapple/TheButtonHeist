@@ -25,6 +25,10 @@ package struct WaiterStore<Key: Hashable, Waiter> {
         storage.isEmpty
     }
 
+    package subscript(key: Key) -> Waiter? {
+        storage[key]
+    }
+
     package mutating func insert(_ waiter: Waiter, for key: Key) {
         precondition(storage[key] == nil, "WaiterStore registered duplicate waiter key")
         storage[key] = waiter

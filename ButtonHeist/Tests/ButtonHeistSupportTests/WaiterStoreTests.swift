@@ -2,16 +2,22 @@ import ButtonHeistSupport
 import Testing
 
 @Suite struct WaiterStoreTests {
-    @Test func `reserved waiter can be removed once`() {
+    @Test func `store owns reserved IDs across waiter removal`() {
         var store = WaiterStore<UInt64, Int>()
         let id = store.reserveID()
 
         store.insert(7, id: id)
 
         #expect(store.count == 1)
+        #expect(store[id] == 7)
         #expect(store.remove(id: id) == 7)
         #expect(store.remove(id: id) == nil)
         #expect(store.isEmpty)
+
+        let nextID = store.insert(8)
+
+        #expect(nextID == id + 1)
+        #expect(store.remove(id: nextID) == 8)
     }
 
     @Test func `remove all where leaves non matching waiters`() {

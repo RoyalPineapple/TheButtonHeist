@@ -1967,7 +1967,7 @@ final class TheBrainsActionTests: XCTestCase {
             notifications: [screenChanged.kind]
         )
         let initialTrace = isolatedBrains.postActionObservation.makeAccessibilityTrace(
-            afterInterface: after.interface,
+            afterCapture: after.capture,
             parentCapture: detachedBeforeCapture,
             classification: classification,
             accessibilityNotifications: [screenChanged]
@@ -1984,6 +1984,7 @@ observation: .settledTrace(
         XCTAssertNotEqual(initialTrace.captures.first?.hash, afterEvent.trace.captures.first?.hash)
         XCTAssertEqual(initialTrace.captures.first?.hash, detachedBeforeCapture.hash)
         XCTAssertEqual(initialTrace.captures.last?.interface, after.interface)
+        XCTAssertEqual(initialTrace.captures.last?.context, after.capture.context)
         XCTAssertEqual(initialTrace.captures.last?.transition.accessibilityNotifications, [screenChanged])
         XCTAssertNil(initialTrace.captures.last?.transition.fallbackReason)
         XCTAssertEqual(actionResult.settled, true)

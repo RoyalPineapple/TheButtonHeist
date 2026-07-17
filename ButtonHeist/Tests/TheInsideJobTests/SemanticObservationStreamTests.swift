@@ -287,6 +287,20 @@ final class SemanticObservationStreamTests: XCTestCase {
         XCTAssertTrue(task.isCancelled)
     }
 
+    func testStreamRunningTruthIsRuntimeState() {
+        let stream = stash.semanticObservationStream
+        XCTAssertFalse(stream.isActive)
+        XCTAssertFalse(stream.runtimeState.isRunning)
+
+        stream.start { nil }
+        XCTAssertTrue(stream.isActive)
+        XCTAssertTrue(stream.runtimeState.isRunning)
+
+        stream.stop()
+        XCTAssertFalse(stream.isActive)
+        XCTAssertFalse(stream.runtimeState.isRunning)
+    }
+
     func testPublicationBuilderUsesOnlySuppliedEvidence() {
         let screen = observation(label: "Published", heistId: "published")
         let interface = makeTestInterface(elements: [])
@@ -474,6 +488,30 @@ final class SemanticObservationStreamTests: XCTestCase {
 
         let received = await task.value
         XCTAssertEqual(received?.cursor, committed.cursor)
+        XCTAssertEqual(stash.semanticObservationStream.observationWaiterCount, 0)
+    }
+
+    func testCommitCompletesEveryRegisteredObservationWaiter() async {
+        let tasks = (0..<2).map { _ in
+            Task { @MainActor in
+                await self.stash.semanticObservationStream.waitForObservation(
+                    after: nil,
+                    scope: .visible,
+                    deadline: nil
+                )
+            }
+        }
+        await waitForObservationWaiterCount(2)
+
+        let committed = stash.semanticObservationStream.commitVisibleObservationForTesting(
+            observation(label: "Initial", heistId: "initial")
+        )
+        for task in tasks {
+            guard case .observation(let entry) = await task.value else {
+                return XCTFail("Expected every registered waiter to receive the observation")
+            }
+            XCTAssertEqual(entry.cursor, committed.cursor)
+        }
         XCTAssertEqual(stash.semanticObservationStream.observationWaiterCount, 0)
     }
 

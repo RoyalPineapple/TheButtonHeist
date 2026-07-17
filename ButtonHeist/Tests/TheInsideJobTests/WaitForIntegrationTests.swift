@@ -319,8 +319,6 @@ final class WaitForIntegrationTests: XCTestCase {
     }
 
     func testWaitForAbsentTreatsKnownOffViewportElementAsPresent() async throws {
-        insideJob.brains.stash.stopPassiveSemanticObservation()
-
         let visibleElement = AccessibilityElement.make(
             label: "WaitFor-Offscreen-Anchor",
             traits: .staticText,
@@ -337,6 +335,7 @@ final class WaitForIntegrationTests: XCTestCase {
             offViewport: [.init(offViewportElement, heistId: offViewportHeistId)]
         )
         insideJob.brains.stash.installScreenForTesting(screen)
+        XCTAssertTrue(insideJob.brains.semanticObservationIsActive)
         XCTAssertNotNil(insideJob.brains.stash.interfaceTree.findElement(heistId: offViewportHeistId))
 
         let response = try await waitFor(

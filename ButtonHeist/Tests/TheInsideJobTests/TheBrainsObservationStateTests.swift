@@ -12,7 +12,11 @@ final class TheBrainsObservationStateTests: XCTestCase {
         XCTAssertFalse(brains.semanticObservationIsActive)
         XCTAssertFalse(brains.beginChangedWait())
 
-        brains.semanticObservationIsActive = true
+        brains.startSemanticObservation()
+        defer {
+            brains.finishChangedWait()
+            brains.stopSemanticObservation()
+        }
 
         XCTAssertTrue(brains.semanticObservationIsActive)
         XCTAssertTrue(brains.beginChangedWait())
@@ -26,7 +30,7 @@ final class TheBrainsObservationStateTests: XCTestCase {
 
     func testStoppingObservationDuringChangedWaitIsNotReactivatedByWaitFinish() {
         let brains = TheBrains(tripwire: TheTripwire())
-        brains.semanticObservationIsActive = true
+        brains.startSemanticObservation()
 
         XCTAssertTrue(brains.beginChangedWait())
 

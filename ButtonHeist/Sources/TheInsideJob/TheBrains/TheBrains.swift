@@ -1,6 +1,5 @@
 #if canImport(UIKit)
 #if DEBUG
-import ButtonHeistSupport
 import TheScore
 
 /// The brains of the operation — plans the play, sequences the crew.
@@ -25,82 +24,14 @@ final class TheBrains {
     let interactionObservation: InteractionObservation
     let failureEvidencePolicy: FailureEvidencePolicy
     private let requestExecutor: InteractionRequestExecutor
-    private var observationDriver = StateDriver(
-        initial: ObservationRuntimePhase.inactive,
-        machine: ObservationRuntimeMachine()
-    )
+    private var changedWaitInProgress = false
 
     var semanticObservationIsActive: Bool {
-        get { observationDriver.state.isObservationActive }
-        set {
-            _ = observationDriver.send(newValue ? .startObservation : .stopObservation)
-        }
+        stash.semanticObservationStream.isActive
     }
 
     func capturedAnnouncements() -> AnnouncementListPayload {
         AnnouncementListPayload(announcements: stash.accessibilityNotifications.announcements())
-    }
-
-    private enum ObservationRuntimePhase: Equatable, Sendable {
-        case inactive
-        case observing
-        case waitingForChange
-
-        var isObservationActive: Bool {
-            switch self {
-            case .inactive:
-                return false
-            case .observing, .waitingForChange:
-                return true
-            }
-        }
-    }
-
-    private enum ObservationRuntimeEvent: Equatable, Sendable {
-        case startObservation
-        case stopObservation
-        case beginChangedWait
-        case finishChangedWait
-    }
-
-    private enum ObservationRuntimeEffect: Equatable, Sendable {}
-    private enum ObservationRuntimeRejection: Equatable, Sendable {
-        case inactive
-        case changedWaitAlreadyRunning
-    }
-
-    private struct ObservationRuntimeMachine: SimpleStateMachine {
-        func advance(
-            _ state: ObservationRuntimePhase,
-            with event: ObservationRuntimeEvent
-        ) -> StateChange<ObservationRuntimePhase, ObservationRuntimeEffect, ObservationRuntimeRejection> {
-            switch (state, event) {
-            case (.inactive, .startObservation):
-                return .changed(to: .observing)
-            case (.observing, .startObservation),
-                 (.waitingForChange, .startObservation):
-                return .changed(to: state)
-
-            case (.inactive, .stopObservation):
-                return .changed(to: .inactive)
-            case (.observing, .stopObservation),
-                 (.waitingForChange, .stopObservation):
-                return .changed(to: .inactive)
-
-            case (.observing, .beginChangedWait):
-                return .changed(to: .waitingForChange)
-            case (.waitingForChange, .beginChangedWait):
-                return .rejected(.changedWaitAlreadyRunning, stayingIn: state)
-            case (.inactive, .beginChangedWait):
-                return .rejected(.inactive, stayingIn: state)
-
-            case (.waitingForChange, .finishChangedWait):
-                return .changed(to: .observing)
-            case (.inactive, .finishChangedWait),
-                 (.observing, .finishChangedWait):
-                return .changed(to: state)
-            }
-        }
     }
 
     enum InterfaceQueryResult {
@@ -194,7 +125,6 @@ final class TheBrains {
     }
 
     func stopSemanticObservation() {
-        semanticObservationIsActive = false
         stash.stopPassiveSemanticObservation()
     }
 
@@ -264,16 +194,13 @@ final class TheBrains {
     }
 
     func beginChangedWait() -> Bool {
-        switch observationDriver.send(.beginChangedWait) {
-        case .changed:
-            return true
-        case .rejected:
-            return false
-        }
+        guard semanticObservationIsActive, !changedWaitInProgress else { return false }
+        changedWaitInProgress = true
+        return true
     }
 
     func finishChangedWait() {
-        observationDriver.send(.finishChangedWait)
+        changedWaitInProgress = false
     }
 }
 

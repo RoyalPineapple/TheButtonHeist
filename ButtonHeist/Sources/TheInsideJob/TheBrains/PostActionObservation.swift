@@ -231,13 +231,8 @@ final class PostActionObservation {
         continuity: ScreenContinuity,
         transitionEvidence: AccessibilityTrace.Transition?
     ) -> AccessibilityTrace {
-        let accessibilityNotifications = Self.remapAccessibilityNotifications(
-            transitionEvidence?.accessibilityNotifications ?? [],
-            from: finalState,
-            to: finalState
-        )
         return makeAccessibilityTrace(
-            afterInterface: finalState.interface,
+            afterCapture: finalState.capture,
             parentCapture: before.capture,
             classification: continuity,
             transient: Self.transientElements(
@@ -246,7 +241,7 @@ final class PostActionObservation {
                 final: finalState,
                 classification: continuity
             ),
-            accessibilityNotifications: accessibilityNotifications,
+            accessibilityNotifications: transitionEvidence?.accessibilityNotifications ?? [],
             accessibilityNotificationGap: transitionEvidence?.accessibilityNotificationGap
         )
     }
@@ -352,15 +347,15 @@ final class PostActionObservation {
     }
 
     func makeAccessibilityTrace(
-        afterInterface: Interface,
+        afterCapture: AccessibilityTrace.Capture,
         parentCapture: AccessibilityTrace.Capture? = nil,
         transition: AccessibilityTrace.Transition = .empty
     ) -> AccessibilityTrace {
         let capture = AccessibilityTrace.Capture(
             sequence: parentCapture == nil ? 1 : 2,
-            interface: afterInterface,
+            interface: afterCapture.interface,
             parentHash: parentCapture?.hash,
-            context: parentCapture?.context ?? .empty,
+            context: afterCapture.context,
             transition: transition
         )
         if let parentCapture {
@@ -370,7 +365,7 @@ final class PostActionObservation {
     }
 
     func makeAccessibilityTrace(
-        afterInterface: Interface,
+        afterCapture: AccessibilityTrace.Capture,
         parentCapture: AccessibilityTrace.Capture,
         classification: ScreenContinuity,
         transient: [HeistElement] = [],
@@ -398,7 +393,7 @@ final class PostActionObservation {
             )
         }
         return makeAccessibilityTrace(
-            afterInterface: afterInterface,
+            afterCapture: afterCapture,
             parentCapture: parentCapture,
             transition: transition
         )
@@ -413,79 +408,6 @@ final class PostActionObservation {
             from: screen,
             tripwireSignal: stash.tripwire.tripwireSignal(),
             settledObservationSequence: observation.sequence
-        )
-    }
-
-    static func remapAccessibilityNotifications(
-        _ notifications: [AccessibilityNotificationEvidence],
-        from source: BeforeState,
-        to destination: BeforeState
-    ) -> [AccessibilityNotificationEvidence] {
-        notifications.map { notification in
-            AccessibilityNotificationEvidence(
-                sequence: notification.sequence,
-                kind: notification.kind,
-                timestamp: notification.timestamp,
-                notificationData: remapAccessibilityNotificationPayload(
-                    notification.notificationData,
-                    from: source,
-                    to: destination
-                ),
-                associatedElement: remapAccessibilityNotificationPayload(
-                    notification.associatedElement,
-                    from: source,
-                    to: destination
-                )
-            )
-        }
-    }
-
-    private static func remapAccessibilityNotificationPayload(
-        _ payload: AccessibilityNotificationPayload,
-        from source: BeforeState,
-        to destination: BeforeState
-    ) -> AccessibilityNotificationPayload {
-        guard case .element(let reference) = payload else {
-            return payload
-        }
-        guard let heistId = heistId(for: reference, in: source),
-              let remappedReference = accessibilityNotificationElementReference(
-                for: heistId,
-                in: destination,
-                resolution: reference.resolution
-              )
-        else {
-            return .unresolvedElement
-        }
-        return .element(remappedReference)
-    }
-
-    private static func heistId(
-        for reference: AccessibilityNotificationElementReference,
-        in state: BeforeState
-    ) -> HeistId? {
-        let interface = TheStash.WireConversion.toSemanticInterface(from: state.screen.tree)
-        guard let record = interface.graph.elementsInTraversalOrder.first(where: {
-            $0.path == reference.path && $0.traversalIndex == reference.traversalIndex
-        }), let identity = record.traceIdentity else { return nil }
-        return state.screen.tree.elements.values.first {
-            $0.heistId.traceElementIdentity == identity
-        }?.heistId
-    }
-
-    private static func accessibilityNotificationElementReference(
-        for heistId: HeistId,
-        in state: BeforeState,
-        resolution: AccessibilityNotificationElementResolution
-    ) -> AccessibilityNotificationElementReference? {
-        let interface = TheStash.WireConversion.toSemanticInterface(from: state.screen.tree)
-        guard let record = interface.graph.elementsInTraversalOrder.first(where: {
-            $0.traceIdentity == heistId.traceElementIdentity
-        }) else { return nil }
-        return AccessibilityNotificationElementReference(
-            path: record.path,
-            traversalIndex: record.traversalIndex,
-            resolution: resolution
         )
     }
 

@@ -184,6 +184,40 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertNil(trace.captures.last?.transition.fallbackReason)
     }
 
+    func testPostActionTraceKeepsFinalCaptureContextWithFinalInterface() throws {
+        let before = brains.postActionObservation.captureSemanticState(
+            from: makeScreen(elements: [("Home", .header, "home_header")]),
+            tripwireSignal: .empty,
+            settledObservationSequence: nil
+        )
+        let windowOwner = NSObject()
+        let final = brains.postActionObservation.captureSemanticState(
+            from: makeScreen(elements: [("Details", .header, "details_header")]),
+            tripwireSignal: TheTripwire.TripwireSignal(
+                topmostVC: nil,
+                navigation: .empty,
+                windowStack: TheTripwire.WindowStackSignal(windows: [
+                    TheTripwire.WindowSignal(
+                        id: ObjectIdentifier(windowOwner),
+                        level: 9,
+                        isKeyWindow: true
+                    ),
+                ])
+            ),
+            settledObservationSequence: nil
+        )
+
+        let trace = brains.postActionObservation.makeAccessibilityTrace(
+            afterCapture: final.capture,
+            parentCapture: before.capture,
+            classification: .sameGeneration
+        )
+
+        XCTAssertEqual(try XCTUnwrap(trace.captures.first).context, before.capture.context)
+        XCTAssertEqual(try XCTUnwrap(trace.captures.last).context, final.capture.context)
+        XCTAssertNotEqual(trace.captures.last?.context, before.capture.context)
+    }
+
     func testActionErrorKindClassifiesTargetUnavailableSeparatelyFromActionIdentity() throws {
         let result = TheSafecracker.ActionDispatchOutcome.failure(
             .activate,
@@ -1769,28 +1803,6 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(state.interfaceHash, screen.tree.interfaceHash)
         XCTAssertEqual(state.screenSnapshot, ScreenClassifier.snapshot(of: screen.tree))
         XCTAssertEqual(state.screenId, screen.tree.id)
-    }
-
-    func testNotificationRemapPreservesUnknownNotificationKind() throws {
-        let screen = makeScreen(elements: [("Save", .button, "save")])
-        brains.stash.installScreenForTesting(screen)
-        let state = brains.postActionObservation.captureSemanticState()
-        let notification = AccessibilityNotificationEvidence(
-            sequence: 1,
-            kind: .unknown(4_242),
-            timestamp: Date(timeIntervalSince1970: 0),
-            notificationData: .none,
-            associatedElement: .none
-        )
-
-        let remapped = PostActionObservation.remapAccessibilityNotifications(
-            [notification],
-            from: state,
-            to: state
-        )
-
-        let result = try XCTUnwrap(remapped.first)
-        XCTAssertEqual(result.kind, .unknown(4_242))
     }
 
     func testDiscoveryObservationStateUsesDiscoveryInterfaceWhileTraceStaysSemantic() throws {
