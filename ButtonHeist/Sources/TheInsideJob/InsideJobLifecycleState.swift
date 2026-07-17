@@ -13,7 +13,7 @@ enum InsideJobRuntimeStartPhase: Equatable, Sendable {
 extension TheInsideJob {
     enum ServerPhase: Equatable {
         case stopped
-        case starting(InsideJobStartAttempt)
+        case starting(InsideJobTransportStartRequest)
         case running(InsideJobRuntimeResources)
         case suspending(InsideJobSuspension)
         case suspended(InsideJobSuspendedRuntime)
@@ -59,15 +59,6 @@ extension TheInsideJob {
                 && lhs.actualPort == rhs.actualPort
                 && lhs.bonjourServiceName == rhs.bonjourServiceName
                 && lhs.idleTimerBaseline == rhs.idleTimerBaseline
-        }
-    }
-
-    struct InsideJobStartAttempt: Equatable {
-        let id: UUID
-        let transport: ServerTransport
-
-        static func == (lhs: InsideJobStartAttempt, rhs: InsideJobStartAttempt) -> Bool {
-            lhs.id == rhs.id && lhs.transport === rhs.transport
         }
     }
 
@@ -166,7 +157,7 @@ struct InsideJobLifecycleMachine: @MainActor SimpleStateMachine {
         case lifecycleSuspensionNotification
         case foregroundNotification(replacingExisting: Bool)
         case terminationNotification
-        case startRequested(TheInsideJob.InsideJobStartAttempt, idleTimerBaseline: Bool)
+        case startRequested(TheInsideJob.InsideJobTransportStartRequest)
         case startSucceeded(UUID, TheInsideJob.InsideJobRuntimeResources)
         case startFailed(UUID)
         case stopRequested(TheInsideJob.InsideJobStopAttempt)
@@ -178,21 +169,6 @@ struct InsideJobLifecycleMachine: @MainActor SimpleStateMachine {
         case resumeSucceeded(UUID, TheInsideJob.InsideJobRuntimeResources)
         case resumeFailed(UUID)
 
-        static func resumeTransportRequested(
-            _ id: UUID,
-            transport: ServerTransport,
-            idleTimerBaseline: Bool
-        ) -> Event {
-            .resumeTransportRequested(
-                TheInsideJob.InsideJobTransportStartRequest(
-                    id: id,
-                    phase: .resume,
-                    transport: transport,
-                    idleTimerBaseline: idleTimerBaseline
-                )
-            )
-        }
-
         static func == (lhs: Event, rhs: Event) -> Bool {
             switch (lhs, rhs) {
             case (.lifecycleSuspensionNotification, .lifecycleSuspensionNotification),
@@ -203,11 +179,8 @@ struct InsideJobLifecycleMachine: @MainActor SimpleStateMachine {
                 .foregroundNotification(let rhsReplacingExisting)
             ):
                 return lhsReplacingExisting == rhsReplacingExisting
-            case (
-                .startRequested(let lhsAttempt, let lhsIdleTimerBaseline),
-                .startRequested(let rhsAttempt, let rhsIdleTimerBaseline)
-            ):
-                return lhsAttempt == rhsAttempt && lhsIdleTimerBaseline == rhsIdleTimerBaseline
+            case (.startRequested(let lhsRequest), .startRequested(let rhsRequest)):
+                return lhsRequest == rhsRequest
             case (.startSucceeded(let lhsID, let lhsResources), .startSucceeded(let rhsID, let rhsResources)):
                 return lhsID == rhsID && lhsResources == rhsResources
             case (.startFailed(let lhsID), .startFailed(let rhsID)):
@@ -238,7 +211,6 @@ struct InsideJobLifecycleMachine: @MainActor SimpleStateMachine {
         case scheduleSuspend
         case scheduleResume(afterCancelling: TheInsideJob.InsideJobResumeAttempt?)
         case scheduleStop
-        case startTransport(TheInsideJob.InsideJobTransportStartRequest)
         case stopTransport(ServerTransport)
         case cleanupTransport(ServerTransport)
         case releaseResources(policy: TheInsideJob.RuntimeReleasePolicy, idleTimerBaseline: Bool)
@@ -257,8 +229,6 @@ struct InsideJobLifecycleMachine: @MainActor SimpleStateMachine {
                 .scheduleResume(let rhsAttempt)
             ):
                 return lhsAttempt == rhsAttempt
-            case (.startTransport(let lhsRequest), .startTransport(let rhsRequest)):
-                return lhsRequest == rhsRequest
             case (.stopTransport(let lhsTransport), .stopTransport(let rhsTransport)):
                 return lhsTransport === rhsTransport
             case (.cleanupTransport(let lhsTransport), .cleanupTransport(let rhsTransport)):
@@ -299,8 +269,8 @@ struct InsideJobLifecycleMachine: @MainActor SimpleStateMachine {
             return foreground(state, replacingExisting: replacingExisting)
         case .terminationNotification:
             return .changed(to: state, effects: [.scheduleStop])
-        case .startRequested(let attempt, let idleTimerBaseline):
-            return startRequested(state, attempt: attempt, idleTimerBaseline: idleTimerBaseline)
+        case .startRequested(let request):
+            return startRequested(state, request: request)
         case .startSucceeded(let id, let resources):
             return startSucceeded(state, id: id, resources: resources)
         case .startFailed(let id):
@@ -337,19 +307,12 @@ struct InsideJobLifecycleMachine: @MainActor SimpleStateMachine {
 
     private func startRequested(
         _ state: State,
-        attempt: TheInsideJob.InsideJobStartAttempt,
-        idleTimerBaseline: Bool
+        request: TheInsideJob.InsideJobTransportStartRequest
     ) -> Change {
         guard case .stopped = state else {
             return .rejected(.alreadyActive, stayingIn: state)
         }
-        let request = TheInsideJob.InsideJobTransportStartRequest(
-            id: attempt.id,
-            phase: .startup,
-            transport: attempt.transport,
-            idleTimerBaseline: idleTimerBaseline
-        )
-        return .changed(to: .starting(attempt), effects: [.startTransport(request)])
+        return .changed(to: .starting(request))
     }
 
     private func startSucceeded(
@@ -357,17 +320,17 @@ struct InsideJobLifecycleMachine: @MainActor SimpleStateMachine {
         id: UUID,
         resources: TheInsideJob.InsideJobRuntimeResources
     ) -> Change {
-        guard case .starting(let attempt) = state, attempt.id == id else {
+        guard case .starting(let request) = state, request.id == id else {
             return .rejected(.staleStartAttempt, stayingIn: state)
         }
         return .changed(to: .running(resources), effects: [.activateRuntime(resources)])
     }
 
     private func startFailed(_ state: State, id: UUID) -> Change {
-        guard case .starting(let attempt) = state, attempt.id == id else {
+        guard case .starting(let request) = state, request.id == id else {
             return .rejected(.staleStartAttempt, stayingIn: state)
         }
-        return .changed(to: .stopped, effects: [.cleanupTransport(attempt.transport)])
+        return .changed(to: .stopped, effects: [.cleanupTransport(request.transport)])
     }
 
     private func stopRequested(_ state: State, attempt stopAttempt: TheInsideJob.InsideJobStopAttempt) -> Change {
@@ -376,10 +339,10 @@ struct InsideJobLifecycleMachine: @MainActor SimpleStateMachine {
             return .rejected(.alreadyStopped, stayingIn: state)
         case .stopping:
             return .rejected(.alreadyStopping, stayingIn: state)
-        case .starting(let attempt):
+        case .starting(let request):
             return .changed(
                 to: .stopping(stopAttempt),
-                effects: [.tearDownRuntimeServices, .cleanupTransport(attempt.transport)]
+                effects: [.tearDownRuntimeServices, .cleanupTransport(request.transport)]
             )
         case .running(let resources):
             return stopRunning(resources, attempt: stopAttempt)
@@ -483,7 +446,7 @@ struct InsideJobLifecycleMachine: @MainActor SimpleStateMachine {
         guard case .resuming(let attempt) = state, attempt.id == request.id else {
             return .rejected(.staleResumeAttempt, stayingIn: state)
         }
-        return .changed(to: state, effects: [.startTransport(request)])
+        return .changed(to: state)
     }
 
     private func resumeSucceeded(

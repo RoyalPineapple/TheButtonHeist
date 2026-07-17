@@ -7,29 +7,9 @@ import TheScore
 
 @MainActor
 extension TheInsideJob {
-    func makeRuntimeStartAttempt(
-        id: UUID
-    ) -> InsideJobStartAttempt {
-        InsideJobStartAttempt(
-            id: id,
-            transport: makeRuntimeTransport()
-        )
-    }
-
     func makeRuntimeTransport() -> ServerTransport {
         insideJobLogger.info("TLS PSK material ready")
         return transportFactory(runtimeConfiguration.token.value, runtimeConfiguration.allowedScopes.value)
-    }
-
-    func startRuntimeResources(
-        from effects: [InsideJobLifecycleMachine.Effect]
-    ) async throws -> InsideJobRuntimeResources {
-        guard effects.count == 1,
-              case .startTransport(let request) = effects[0]
-        else {
-            throw CancellationError()
-        }
-        return try await startRuntimeResources(for: request)
     }
 
     func stopRuntime() async -> InsideJobStopOutcome {
@@ -60,7 +40,7 @@ extension TheInsideJob {
         return await attempt.waitForCompletion() ? .stopped : .teardownTimedOut
     }
 
-    private func startRuntimeResources(
+    func startRuntimeResources(
         for request: InsideJobTransportStartRequest
     ) async throws -> InsideJobRuntimeResources {
         await getaway.wireTransport(request.transport) { [weak self] maxEvents in
@@ -131,8 +111,7 @@ extension TheInsideJob {
                 spawnLifecycleTask { [weak self] in
                     await self?.stop()
                 }
-            case .startTransport,
-                 .stopTransport,
+            case .stopTransport,
                  .cleanupTransport,
                  .releaseResources,
                  .cancelResume,
@@ -162,8 +141,6 @@ extension TheInsideJob {
             spawnLifecycleTask { [weak self] in
                 await self?.stop()
             }
-        case .startTransport:
-            assertionFailure("startTransport effects must be awaited by the lifecycle operation that requested them")
         case .stopTransport(let transport):
             await transport.stop()
         case .cleanupTransport(let transport):

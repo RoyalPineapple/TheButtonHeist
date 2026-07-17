@@ -270,20 +270,20 @@ public final class TheInsideJob {
         insideJobLogger.info("Starting TheInsideJob with ServerTransport...")
 
         let attemptID = UUID()
-        let attempt = makeRuntimeStartAttempt(id: attemptID)
-        let startChange = applyLifecycleEvent(
-            .startRequested(
-                attempt,
-                idleTimerBaseline: UIApplication.shared.isIdleTimerDisabled
-            )
+        let request = InsideJobTransportStartRequest(
+            id: attemptID,
+            phase: .startup,
+            transport: makeRuntimeTransport(),
+            idleTimerBaseline: UIApplication.shared.isIdleTimerDisabled
         )
+        let startChange = applyLifecycleEvent(.startRequested(request))
         guard case .changed = startChange else {
             insideJobLogger.info("start() called while already running — ignoring")
             return
         }
 
         do {
-            let resources = try await startRuntimeResources(from: startChange.effects)
+            let resources = try await startRuntimeResources(for: request)
             let finishChange = applyLifecycleEvent(.startSucceeded(attemptID, resources))
             guard case .running = finishChange.state else {
                 await performLifecycleEffect(.cleanupTransport(resources.transport))
@@ -296,7 +296,7 @@ public final class TheInsideJob {
             case .changed:
                 await performLifecycleEffects(failureChange.effects)
             case .rejected:
-                await performLifecycleEffect(.cleanupTransport(attempt.transport))
+                await performLifecycleEffect(.cleanupTransport(request.transport))
             }
             throw error
         }

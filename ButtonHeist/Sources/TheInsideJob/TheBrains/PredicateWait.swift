@@ -1,7 +1,6 @@
 #if canImport(UIKit)
 #if DEBUG
 import Foundation
-import ButtonHeistSupport
 import ThePlans
 
 import TheScore
@@ -143,7 +142,8 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
         private let deadline: SemanticObservationDeadline
         private let projection: ExecutionProjection<Result, Evidence>
         private let onReadyToPoll: ReadyToPoll?
-        private var lifecycle: StateDriver<PredicateWaitLifecycleMachine<Evidence>>
+        private let lifecycleMachine: PredicateWaitLifecycleMachine<Evidence>
+        private var lifecycleState: PredicateWaitLifecycleState<Evidence>
         private var effect: PredicateWaitLifecycleEffect
         private var ignoreObservationsThrough: SettledObservationSequence?
 
@@ -158,12 +158,10 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
             deadline = SemanticObservationDeadline(start: start, timeoutSeconds: timeout)
             self.projection = projection
             self.onReadyToPoll = onReadyToPoll
-            lifecycle = StateDriver(
-                initial: .initialVisible(projection.initialEvidence),
-                machine: PredicateWaitLifecycleMachine(
-                    continuesAfterInitialMiss: projection.continuesAfterInitialMiss
-                )
+            lifecycleMachine = PredicateWaitLifecycleMachine(
+                continuesAfterInitialMiss: projection.continuesAfterInitialMiss
             )
+            lifecycleState = .initialVisible(projection.initialEvidence)
             effect = .settleVisible(.overall)
         }
 
@@ -180,12 +178,12 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
                     }
                 case .awaitObservation:
                     guard let iterator = observationIterator else {
-                        effect = lifecycle.send(.deadlineReached).predicateWaitEffect
+                        advanceLifecycle(.deadlineReached)
                         continue
                     }
                     observationIterator = await consumeNextObservation(from: iterator)
                 case .finish(let outcome):
-                    return projection.result(outcome, deadline, lifecycle.state.evidence)
+                    return projection.result(outcome, deadline, lifecycleState.evidence)
                 }
             }
         }
@@ -193,7 +191,7 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
         private func applyCancellation() {
             guard Task.isCancelled else { return }
             guard case .finish = effect else {
-                effect = lifecycle.send(.cancelled).predicateWaitEffect
+                advanceLifecycle(.cancelled)
                 return
             }
         }
@@ -201,19 +199,19 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
         private func settleVisible(_ budget: PredicateWaitVisibleBudget) async {
             let evaluation = evaluate(
                 await wait.settleVisible(budget.deadline(overall: deadline)),
-                lifecyclePhase: lifecycle.state.phase,
-                evidence: lifecycle.state.evidence
+                lifecyclePhase: lifecycleState.phase,
+                evidence: lifecycleState.evidence
             )
-            effect = lifecycle.send(.evaluated(evaluation)).predicateWaitEffect
+            advanceLifecycle(.evaluated(evaluation))
         }
 
         private func runDiscovery(
             _ budget: PredicateWaitDiscoveryBudget
         ) async -> ObservationEntrySequence? {
-            let discoveryPhase = lifecycle.state.phase
+            let discoveryPhase = lifecycleState.phase
             let discoveryDeadline = budget.deadline(overall: deadline)
             var latestEvaluation = PredicateWaitLifecycleEvaluation(
-                evidence: lifecycle.state.evidence,
+                evidence: lifecycleState.evidence,
                 matched: false
             )
             var matchedEvaluation: PredicateWaitLifecycleEvaluation<Evidence>?
@@ -264,7 +262,7 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
                 discoveryPhase: discoveryPhase,
                 matched: evaluation.matched
             )
-            effect = lifecycle.send(.evaluated(evaluation)).predicateWaitEffect
+            advanceLifecycle(.evaluated(evaluation))
             return observations
         }
 
@@ -308,10 +306,10 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
                     consume(observation)
                     return nextIterator
                 case .deadlineReached:
-                    effect = lifecycle.send(.deadlineReached).predicateWaitEffect
+                    advanceLifecycle(.deadlineReached)
                     return nil
                 case .cancelled:
-                    effect = lifecycle.send(.cancelled).predicateWaitEffect
+                    advanceLifecycle(.cancelled)
                     return nil
                 }
             }
@@ -321,10 +319,24 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
             ignoreObservationsThrough = nil
             let evaluation = evaluate(
                 observation.event,
-                lifecyclePhase: lifecycle.state.phase,
-                evidence: lifecycle.state.evidence
+                lifecyclePhase: lifecycleState.phase,
+                evidence: lifecycleState.evidence
             )
-            effect = lifecycle.send(.observation(evaluation)).predicateWaitEffect
+            advanceLifecycle(.observation(evaluation))
+        }
+
+        private func advanceLifecycle(_ event: PredicateWaitLifecycleEvent<Evidence>) {
+            let transition = lifecycleMachine.advance(lifecycleState, with: event)
+            lifecycleState = transition.state
+            switch transition {
+            case .advanced(_, let nextEffect):
+                effect = nextEffect
+            case .rejected(let rejection, _):
+                insideJobLogger.error(
+                    "Predicate wait lifecycle rejected event: \(String(describing: rejection))"
+                )
+                effect = .finish(.cancelled)
+            }
         }
 
         private func evaluate(

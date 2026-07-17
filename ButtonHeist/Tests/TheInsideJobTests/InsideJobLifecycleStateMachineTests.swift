@@ -42,7 +42,7 @@ final class InsideJobLifecycleStateMachineTests: XCTestCase {
 
         let noOpStates: [TheInsideJob.ServerPhase] = [
             .stopped,
-            .starting(fixture.startAttempt),
+            .starting(fixture.startRequest),
             .running(fixture.resources),
             .suspending(fixture.suspension),
             .resuming(fixture.resumeAttempt),
@@ -61,26 +61,17 @@ final class InsideJobLifecycleStateMachineTests: XCTestCase {
 
     func testStartTransitionsAndRejections() {
         let fixture = Fixture()
-        let startRequest = TheInsideJob.InsideJobTransportStartRequest(
-            id: fixture.id,
-            phase: .startup,
-            transport: fixture.transport,
-            idleTimerBaseline: false
-        )
 
         XCTAssertEqual(
             machine.advance(
                 .stopped,
-                with: .startRequested(fixture.startAttempt, idleTimerBaseline: false)
+                with: .startRequested(fixture.startRequest)
             ),
-            .changed(
-                to: .starting(fixture.startAttempt),
-                effects: [.startTransport(startRequest)]
-            )
+            .changed(to: .starting(fixture.startRequest))
         )
         XCTAssertEqual(
             machine.advance(
-                .starting(fixture.startAttempt),
+                .starting(fixture.startRequest),
                 with: .startSucceeded(fixture.id, fixture.resources)
             ),
             .changed(
@@ -90,7 +81,7 @@ final class InsideJobLifecycleStateMachineTests: XCTestCase {
         )
         XCTAssertEqual(
             machine.advance(
-                .starting(fixture.startAttempt),
+                .starting(fixture.startRequest),
                 with: .startFailed(fixture.id)
             ),
             .changed(to: .stopped, effects: [.cleanupTransport(fixture.transport)])
@@ -98,23 +89,23 @@ final class InsideJobLifecycleStateMachineTests: XCTestCase {
         XCTAssertEqual(
             machine.advance(
                 .running(fixture.resources),
-                with: .startRequested(fixture.startAttempt, idleTimerBaseline: false)
+                with: .startRequested(fixture.startRequest)
             ),
             .rejected(.alreadyActive, stayingIn: .running(fixture.resources))
         )
         XCTAssertEqual(
             machine.advance(
-                .starting(fixture.startAttempt),
+                .starting(fixture.startRequest),
                 with: .startSucceeded(fixture.otherID, fixture.resources)
             ),
-            .rejected(.staleStartAttempt, stayingIn: .starting(fixture.startAttempt))
+            .rejected(.staleStartAttempt, stayingIn: .starting(fixture.startRequest))
         )
         XCTAssertEqual(
             machine.advance(
-                .starting(fixture.startAttempt),
+                .starting(fixture.startRequest),
                 with: .startFailed(fixture.otherID)
             ),
-            .rejected(.staleStartAttempt, stayingIn: .starting(fixture.startAttempt))
+            .rejected(.staleStartAttempt, stayingIn: .starting(fixture.startRequest))
         )
     }
 
@@ -124,7 +115,7 @@ final class InsideJobLifecycleStateMachineTests: XCTestCase {
 
         XCTAssertEqual(
             machine.advance(
-                .starting(fixture.startAttempt),
+                .starting(fixture.startRequest),
                 with: .stopRequested(fixture.stopAttempt)
             ),
             .changed(
@@ -287,10 +278,7 @@ final class InsideJobLifecycleStateMachineTests: XCTestCase {
                 .resuming(fixture.resumeAttempt),
                 with: .resumeTransportRequested(fixture.resumeRequest)
             ),
-            .changed(
-                to: .resuming(fixture.resumeAttempt),
-                effects: [.startTransport(fixture.resumeRequest)]
-            )
+            .changed(to: .resuming(fixture.resumeAttempt))
         )
         XCTAssertEqual(
             machine.advance(
@@ -357,7 +345,7 @@ private struct Fixture {
     let otherID: UUID
     let transport: ServerTransport
     let resources: TheInsideJob.InsideJobRuntimeResources
-    let startAttempt: TheInsideJob.InsideJobStartAttempt
+    let startRequest: TheInsideJob.InsideJobTransportStartRequest
     let suspension: TheInsideJob.InsideJobSuspension
     let suspendedRuntime: TheInsideJob.InsideJobSuspendedRuntime
     let resumeAttempt: TheInsideJob.InsideJobResumeAttempt
@@ -380,7 +368,12 @@ private struct Fixture {
         self.otherID = UUID()
         self.transport = transport
         self.resources = resources
-        self.startAttempt = TheInsideJob.InsideJobStartAttempt(id: id, transport: transport)
+        self.startRequest = TheInsideJob.InsideJobTransportStartRequest(
+            id: id,
+            phase: .startup,
+            transport: transport,
+            idleTimerBaseline: false
+        )
         self.suspension = TheInsideJob.InsideJobSuspension(id: id, resources: resources)
         self.suspendedRuntime = suspendedRuntime
         self.resumeAttempt = TheInsideJob.InsideJobResumeAttempt(
