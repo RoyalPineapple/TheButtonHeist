@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 import XCTest
 import UIKit
+import ButtonHeistSupport
 import TheScore
 
 @testable import TheInsideJob
@@ -365,7 +366,7 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
         var startCount = 0
         private(set) var stopCount = 0
         var transports: [ServerTransport] = []
-        private var stopWaiters: [CheckedContinuation<Void, Never>] = []
+        private let stopCalled = CompletionSignal()
 
         var latestTransport: ServerTransport {
             guard let transport = transports.last else {
@@ -376,50 +377,30 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
 
         func recordStop() {
             stopCount += 1
-            let waiters = stopWaiters
-            stopWaiters.removeAll()
-            waiters.forEach { $0.resume() }
+            stopCalled.finish()
         }
 
         func waitForStopCall() async {
-            guard stopCount == 0 else { return }
-            await withCheckedContinuation { continuation in
-                stopWaiters.append(continuation)
-            }
+            await stopCalled.wait()
         }
     }
 
     @MainActor
     private final class RuntimeStartGate {
-        private var entered = false
-        private var released = false
-        private var enteredWaiters: [CheckedContinuation<Void, Never>] = []
-        private var releaseWaiters: [CheckedContinuation<Void, Never>] = []
+        private let entered = CompletionSignal()
+        private let released = CompletionSignal()
 
         func enterAndWaitForRelease() async {
-            entered = true
-            let waiters = enteredWaiters
-            enteredWaiters.removeAll()
-            waiters.forEach { $0.resume() }
-
-            guard !released else { return }
-            await withCheckedContinuation { continuation in
-                releaseWaiters.append(continuation)
-            }
+            entered.finish()
+            await released.wait()
         }
 
         func waitUntilEntered() async {
-            guard !entered else { return }
-            await withCheckedContinuation { continuation in
-                enteredWaiters.append(continuation)
-            }
+            await entered.wait()
         }
 
         func release() {
-            released = true
-            let waiters = releaseWaiters
-            releaseWaiters.removeAll()
-            waiters.forEach { $0.resume() }
+            released.finish()
         }
     }
 }

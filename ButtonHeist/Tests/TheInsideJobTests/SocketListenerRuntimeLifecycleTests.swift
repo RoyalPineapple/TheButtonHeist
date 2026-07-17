@@ -3,6 +3,7 @@
 import Network
 import XCTest
 
+import ButtonHeistSupport
 @testable import TheInsideJob
 
 final class SocketListenerRuntimeLifecycleTests: XCTestCase {
@@ -21,7 +22,7 @@ final class SocketListenerRuntimeLifecycleTests: XCTestCase {
         let startingPhase = await runtime.phaseForTesting
         let acceptsWhileStarting = await runtime.isAcceptingConnections()
 
-        await gate.release()
+        gate.release()
         let port = try await startTask.value
         let listeningPhase = await runtime.phaseForTesting
         let acceptsWhileListening = await runtime.isAcceptingConnections()
@@ -60,7 +61,7 @@ final class SocketListenerRuntimeLifecycleTests: XCTestCase {
             XCTFail("Expected CancellationError, got \(error)")
         }
 
-        await gate.release()
+        gate.release()
         _ = try await startTask.value
         await runtime.stop()
     }
@@ -77,7 +78,7 @@ final class SocketListenerRuntimeLifecycleTests: XCTestCase {
         await gate.waitUntilEntered()
 
         await runtime.stop()
-        await gate.release()
+        gate.release()
 
         do {
             _ = try await startTask.value
@@ -185,36 +186,21 @@ private enum ListenerStartFailure: Error, Equatable {
     case partialDualListener
 }
 
-private actor ListenerRuntimeStartGate {
-    private var entered = false
-    private var released = false
-    private var enteredWaiters: [CheckedContinuation<Void, Never>] = []
-    private var releaseWaiters: [CheckedContinuation<Void, Never>] = []
+private final class ListenerRuntimeStartGate: Sendable {
+    private let entered = CompletionSignal()
+    private let released = CompletionSignal()
 
     func enterAndWaitForRelease() async {
-        entered = true
-        let waiters = enteredWaiters
-        enteredWaiters.removeAll()
-        waiters.forEach { $0.resume() }
-
-        guard !released else { return }
-        await withCheckedContinuation { continuation in
-            releaseWaiters.append(continuation)
-        }
+        entered.finish()
+        await released.wait()
     }
 
     func waitUntilEntered() async {
-        guard !entered else { return }
-        await withCheckedContinuation { continuation in
-            enteredWaiters.append(continuation)
-        }
+        await entered.wait()
     }
 
     func release() {
-        released = true
-        let waiters = releaseWaiters
-        releaseWaiters.removeAll()
-        waiters.forEach { $0.resume() }
+        released.finish()
     }
 }
 

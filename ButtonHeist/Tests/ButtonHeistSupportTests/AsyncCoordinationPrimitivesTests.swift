@@ -2,6 +2,48 @@ import ButtonHeistSupport
 import Testing
 
 @Suite struct AsyncCoordinationPrimitivesTests {
+    @Test func `completion signal supports finish before wait`() async {
+        let signal = CompletionSignal()
+
+        signal.finish()
+
+        await signal.wait()
+        #expect(signal.isFinished)
+    }
+
+    @Test func `completion signal resumes every waiter`() async {
+        let signal = CompletionSignal()
+        let first = Task { await signal.wait(timeout: .seconds(30)) }
+        let second = Task { await signal.wait(timeout: .seconds(30)) }
+        await Task.yield()
+
+        signal.finish()
+
+        await #expect(first.value)
+        await #expect(second.value)
+    }
+
+    @Test func `completion signal finish is idempotent`() async {
+        let signal = CompletionSignal()
+        let waiter = Task { await signal.wait(timeout: .seconds(30)) }
+        await Task.yield()
+
+        signal.finish()
+        signal.finish()
+
+        await #expect(waiter.value)
+        #expect(signal.isFinished)
+    }
+
+    @Test func `completion signal timeout preserves later completion`() async {
+        let signal = CompletionSignal()
+
+        await #expect(!signal.wait(timeout: .milliseconds(1)))
+        #expect(!signal.isFinished)
+        signal.finish()
+        await #expect(signal.wait(timeout: .zero))
+    }
+
     @Test func `resolve before timeout drains waiter and cancels timer`() async {
         let harness = WaiterHarness()
         let task = Task {

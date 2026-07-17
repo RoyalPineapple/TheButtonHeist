@@ -1,4 +1,5 @@
 import XCTest
+import ButtonHeistSupport
 import TheScore
 @testable import TheInsideJob
 
@@ -149,14 +150,14 @@ final class ServerTransportTests: XCTestCase {
     func testStopWhileStartingRejectsStaleStartCompletion() async throws {
         let transport = ServerTransport(token: "starting-token")
         let startGate = TransportStartGate()
-        let underlyingStopFinished = TransportSignal()
+        let underlyingStopFinished = CompletionSignal()
         var stopReturned = false
         transport.startOverride = { _, _, _ in
             await startGate.enterAndWaitForRelease()
             return 49152
         }
         transport.stopOverride = {
-            underlyingStopFinished.signal()
+            underlyingStopFinished.finish()
         }
 
         let startTask = Task { @MainActor in
@@ -188,9 +189,9 @@ final class ServerTransportTests: XCTestCase {
     @MainActor
     func testStopDuringUnderlyingListenerStartTranslatesCancellationToStopped() async {
         let transport = ServerTransport(token: "underlying-start-token")
-        let startSignal = UnderlyingListenerStartSignal()
+        let startSignal = CompletionSignal()
         transport.startOverride = { generation, _, _ in
-            await startSignal.enter()
+            startSignal.finish()
             await generation.waitUntilStoppedForTesting()
             throw CancellationError()
         }
@@ -198,7 +199,7 @@ final class ServerTransportTests: XCTestCase {
         let startTask = Task { @MainActor in
             try await transport.start(port: 0, bindToLoopback: true)
         }
-        await startSignal.waitUntilEntered()
+        await startSignal.wait()
         await transport.stop()
 
         do {
@@ -218,7 +219,7 @@ final class ServerTransportTests: XCTestCase {
     func testRestartAfterStopDuringStartupWaitsForStaleCompletion() async throws {
         let transport = ServerTransport(token: "starting-token")
         let startGate = TransportStartGate()
-        let underlyingStopFinished = TransportSignal()
+        let underlyingStopFinished = CompletionSignal()
         var startCount = 0
         var lifecycleEvents: [String] = []
         transport.startOverride = { _, _, _ in
@@ -233,7 +234,7 @@ final class ServerTransportTests: XCTestCase {
             return 49153
         }
         transport.stopOverride = {
-            underlyingStopFinished.signal()
+            underlyingStopFinished.finish()
         }
 
         let staleStart = Task { @MainActor in
@@ -328,87 +329,20 @@ final class ServerTransportTests: XCTestCase {
 
     @MainActor
     private final class TransportStartGate {
-        private var entered = false
-        private var released = false
-        private var enteredWaiters: [CheckedContinuation<Void, Never>] = []
-        private var releaseWaiters: [CheckedContinuation<Void, Never>] = []
+        private let entered = CompletionSignal()
+        private let released = CompletionSignal()
 
         func enterAndWaitForRelease() async {
-            entered = true
-            let waiters = enteredWaiters
-            enteredWaiters.removeAll()
-            waiters.forEach { $0.resume() }
-
-            guard !released else { return }
-            await withCheckedContinuation { continuation in
-                releaseWaiters.append(continuation)
-            }
+            entered.finish()
+            await released.wait()
         }
 
         func waitUntilEntered() async {
-            guard !entered else { return }
-            await withCheckedContinuation { continuation in
-                enteredWaiters.append(continuation)
-            }
+            await entered.wait()
         }
 
         func release() {
-            released = true
-            let waiters = releaseWaiters
-            releaseWaiters.removeAll()
-            waiters.forEach { $0.resume() }
-        }
-    }
-
-    @MainActor
-    private final class TransportSignal {
-        private var isSignalled = false
-        private var waiters: [CheckedContinuation<Void, Never>] = []
-
-        func signal() {
-            isSignalled = true
-            let pendingWaiters = waiters
-            waiters.removeAll()
-            pendingWaiters.forEach { $0.resume() }
-        }
-
-        func wait() async {
-            guard !isSignalled else { return }
-            await withCheckedContinuation { continuation in
-                if isSignalled {
-                    continuation.resume()
-                } else {
-                    waiters.append(continuation)
-                }
-            }
-        }
-    }
-}
-
-private actor UnderlyingListenerStartSignal {
-    private enum State {
-        case pending([CheckedContinuation<Void, Never>])
-        case entered
-    }
-
-    private var state = State.pending([])
-
-    func enter() {
-        guard case .pending(let waiters) = state else { return }
-        state = .entered
-        waiters.forEach { $0.resume() }
-    }
-
-    func waitUntilEntered() async {
-        guard case .pending = state else { return }
-        await withCheckedContinuation { continuation in
-            switch state {
-            case .pending(var waiters):
-                waiters.append(continuation)
-                state = .pending(waiters)
-            case .entered:
-                continuation.resume()
-            }
+            released.finish()
         }
     }
 }

@@ -94,33 +94,17 @@ extension TheInsideJob {
         static let timeout: Duration = .seconds(5)
 
         let id: UUID
-        private let completion: InsideJobStopSignal
+        private let completion: CompletionSignal
 
         @MainActor
         init(id: UUID) {
             self.id = id
-            completion = InsideJobStopSignal()
+            completion = CompletionSignal()
         }
 
         @MainActor
         func waitForCompletion(timeout: Duration = Self.timeout) async -> Bool {
-            guard !completion.isFinished else { return true }
-            guard timeout > .zero else { return false }
-            let stream = completion.stream
-            return await withTaskGroup(of: Bool.self) { group in
-                group.addTask {
-                    var iterator = stream.makeAsyncIterator()
-                    _ = await iterator.next()
-                    return true
-                }
-                group.addTask {
-                    try? await Task.sleep(for: timeout)
-                    return false
-                }
-                let completed = await group.next() ?? false
-                group.cancelAll()
-                return completed
-            }
+            await completion.wait(timeout: timeout)
         }
 
         @MainActor
@@ -130,27 +114,6 @@ extension TheInsideJob {
 
         static func == (lhs: Self, rhs: Self) -> Bool {
             lhs.id == rhs.id
-        }
-    }
-
-    @MainActor
-    private final class InsideJobStopSignal {
-        let stream: AsyncStream<Void>
-        private let continuation: AsyncStream<Void>.Continuation
-        private(set) var isFinished = false
-
-        init() {
-            let stream = AsyncStream<Void>.makeStream(
-                bufferingPolicy: .bufferingNewest(1)
-            )
-            self.stream = stream.stream
-            self.continuation = stream.continuation
-        }
-
-        func finish() {
-            guard !isFinished else { return }
-            isFinished = true
-            continuation.finish()
         }
     }
 
