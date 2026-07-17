@@ -1195,7 +1195,7 @@ final class TheHandoffStateTests: XCTestCase {
             let connection = MockConnection()
             connection.emitTransportReadyOnConnect = true
             if device.id == reachableDevice.id {
-                connection.autoResponse = { message in
+                connection.responseScript = { message in
                     switch message {
                     case .status:
                         return .status(StatusPayload(

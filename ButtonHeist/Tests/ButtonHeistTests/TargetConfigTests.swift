@@ -398,7 +398,7 @@ final class TargetConfigTests: XCTestCase {
     private func makeMockFence(fileConfig: ButtonHeistFileConfig? = nil) -> TheFence {
         let mockConn = MockConnection()
         mockConn.serverInfo = Self.testServerInfo
-        mockConn.autoResponse = { message in
+        mockConn.responseScript = { message in
             switch message {
             case .requestInterface:
                 return .interface(Interface(timestamp: Date(), tree: []))
@@ -417,7 +417,7 @@ final class TargetConfigTests: XCTestCase {
         makeReachabilityConnection = { _ in
             let probe = MockConnection()
             probe.emitTransportReadyOnConnect = true
-            probe.autoResponse = { message in
+            probe.responseScript = { message in
                 if case .status = message {
                     return .status(StatusPayload(
                         identity: StatusIdentity(
@@ -506,7 +506,7 @@ final class TargetConfigTests: XCTestCase {
         makeReachabilityConnection = { _ in
             let probe = MockConnection()
             probe.emitTransportReadyOnConnect = true
-            probe.autoResponse = { message in
+            probe.responseScript = { message in
                 if case .status = message {
                     return .status(StatusPayload(
                         identity: StatusIdentity(
