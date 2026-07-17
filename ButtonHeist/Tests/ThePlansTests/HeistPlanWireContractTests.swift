@@ -477,7 +477,7 @@ private func representativeAllStepKindsPlan() throws -> HeistPlan {
         name: "Search",
         parameter: .string(name: "query"),
         body: [
-            .action(try ActionStep(command: .typeText(
+            .action(ActionStep(command: .typeText(
                 reference: "query",
                 target: .predicate(.label("Search"))
             ))),
@@ -488,7 +488,7 @@ private func representativeAllStepKindsPlan() throws -> HeistPlan {
         name: "wireAllSteps",
         definitions: [searchDefinition],
         body: [
-            .action(try ActionStep(
+            .action(ActionStep(
                 command: .activate(.predicate(.label("Pay"))),
                 expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 0.001)))),
             .wait(WaitStep(predicate: .exists(.label("Home")), timeout: 1)),
@@ -507,7 +507,7 @@ private func representativeAllStepKindsPlan() throws -> HeistPlan {
                 limit: 2,
                 parameter: "row",
                 body: [
-                    .action(try ActionStep(
+                    .action(ActionStep(
                         command: .activate(.ref("row")),
                         expectationPolicy: .expect(ActionExpectation(predicate: .missing(.ref("row")), timeout: 2)))),
                 ]
@@ -516,7 +516,7 @@ private func representativeAllStepKindsPlan() throws -> HeistPlan {
                 values: ["Milk", "Eggs"],
                 parameter: "item",
                 body: [
-                    .action(try ActionStep(command: .typeText(
+                    .action(ActionStep(command: .typeText(
                         reference: "item",
                         target: .predicate(.label("Search"))
                     ))),

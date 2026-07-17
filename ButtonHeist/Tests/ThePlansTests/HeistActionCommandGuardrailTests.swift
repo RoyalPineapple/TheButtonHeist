@@ -37,18 +37,15 @@ import Testing
             ]
         ),
         (
-            "gesture start element target",
+            "gesture element target",
             .mechanicalSwipe(SwipeTarget(
-                selection: .point(
-                    start: .elementUnitPoint(.label("Row"), UnitPoint(x: 0.5, y: 0.5)),
-                    destination: .direction(.up)
-                )
+                selection: .elementDirection(.label("Row"), .up)
             )),
             [
                 TargetOccurrenceExpectation(
                     role: .gesture,
-                    path: .payloadStartElement,
-                    renderedPath: "$.body[0].action.command.payload.start.element",
+                    path: .payloadElement,
+                    renderedPath: "$.body[0].action.command.payload.element",
                     reportTarget: .label("Row")
                 ),
             ]
@@ -80,6 +77,22 @@ import Testing
     }
 }
 
+@Test func `gesture point decoding rejects nonfinite coordinates`() {
+    let decoder = JSONDecoder()
+    decoder.nonConformingFloatDecodingStrategy = .convertFromString(
+        positiveInfinity: "Infinity",
+        negativeInfinity: "-Infinity",
+        nan: "NaN"
+    )
+
+    #expect(throws: DecodingError.self) {
+        _ = try decoder.decode(ScreenPoint.self, from: Data(#"{"x":"NaN","y":0}"#.utf8))
+    }
+    #expect(throws: DecodingError.self) {
+        _ = try decoder.decode(UnitPoint.self, from: Data(#"{"x":0,"y":"Infinity"}"#.utf8))
+    }
+}
+
 @Test func `action command wire durability report target and canonical source contracts stay aligned`() throws {
     for testCase in actionCommandContractCases {
         let data = try JSONEncoder().encode(testCase.command)
@@ -91,7 +104,7 @@ import Testing
         #expect(testCase.command.durableHeistActionFailure == testCase.durabilityFailure)
         #expect(testCase.command.reportTarget == testCase.reportTarget)
 
-        let raw = HeistPlanAdmissionCandidate(body: [.action(try ActionStep(command: testCase.command))])
+        let raw = HeistPlanAdmissionCandidate(body: [.action(ActionStep(command: testCase.command))])
         if let canonicalLine = testCase.canonicalLine {
             let plan = try raw.validatedForRuntimeSafety()
             let expectedSource = canonicalPlanSource(canonicalLine)
@@ -112,7 +125,7 @@ import Testing
             HeistPlanAdmissionCandidate(
                 name: "typeQuery",
                 parameter: .string(name: "query"),
-                body: [.action(try ActionStep(command: .typeText(
+                body: [.action(ActionStep(command: .typeText(
                     reference: "query",
                     target: .label("Search")
                 )))])
@@ -370,16 +383,16 @@ import Testing
         """.utf8))
     }
 
-    #expect(throws: CustomActionNameError.self) {
+    #expect(throws: (any Error).self) {
         _ = try CustomActionName(validating: " \n\t")
     }
-    #expect(throws: RotorNameError.self) {
+    #expect(throws: (any Error).self) {
         _ = try RotorName(validating: " \n\t")
     }
-    #expect(throws: HeistWarningMessageError.self) {
+    #expect(throws: (any Error).self) {
         _ = try HeistWarningMessage(validating: " \n\t")
     }
-    #expect(throws: HeistFailureMessageError.self) {
+    #expect(throws: (any Error).self) {
         _ = try HeistFailureMessage(validating: " \n\t")
     }
     #expect(try CustomActionName(validating: " Archive ").description == " Archive ")

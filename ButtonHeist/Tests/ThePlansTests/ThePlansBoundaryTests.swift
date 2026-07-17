@@ -622,7 +622,7 @@ func `heist artifact accepts parameterized root entry through validation contrac
     let raw = HeistPlanAdmissionCandidate(
         name: "search",
         parameter: .string(name: "query"),
-        body: [.action(try ActionStep(command: .typeText(
+        body: [.action(ActionStep(command: .typeText(
             reference: "query",
             target: .label("Search")
         )))]

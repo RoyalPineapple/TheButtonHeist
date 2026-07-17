@@ -518,7 +518,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testGestureResolvedDefaultsAreContractOwned() {
         XCTAssertEqual(
             SwipeTarget(selection: .point(
-                start: .element(.predicate(ElementPredicateTemplate(label: "list"))),
+                start: ScreenPoint(x: 10, y: 20),
                 destination: .direction(.down)
             )).resolvedDuration,
             .swipeDefault
@@ -951,13 +951,13 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testHeistPlanRoundTripPreservesCommandStepWireShape() throws {
         let plan = try HeistPlan(body: [
-                .action(try ActionStep(
+                .action(ActionStep(
                     command: .activate(.predicate(
                         ElementPredicateTemplate(label: "Settings", traits: [.button]),
                         ordinal: 1
                     )),
                     expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 2.5)))),
-                .action(try ActionStep(
+                .action(ActionStep(
                     command: .setPasteboard(SetPasteboardTarget(text: "ready"))
                 )),
                 .warn(WarnStep(message: "optional step skipped")),

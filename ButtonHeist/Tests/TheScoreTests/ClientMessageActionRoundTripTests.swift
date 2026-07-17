@@ -10,16 +10,16 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
     func testHeistPlanCarriesSemanticActionCommands() throws {
         let target = AccessibilityTarget.predicate(ElementPredicateTemplate(identifier: "btn"))
         let plan = try HeistPlan(body: [
-            .action(try ActionStep(command: .activate(target))),
-            .action(try ActionStep(command: .rotor(
+            .action(ActionStep(command: .activate(target))),
+            .action(ActionStep(command: .rotor(
                 selection: .named("Errors"),
                 target: target,
                 direction: .previous
             ))),
-            .action(try ActionStep(command: .dismiss)),
-            .action(try ActionStep(command: .magicTap)),
-            .action(try ActionStep(command: .editAction(EditActionTarget(action: .paste)))),
-            .action(try ActionStep(command: .dismissKeyboard)),
+            .action(ActionStep(command: .dismiss)),
+            .action(ActionStep(command: .magicTap)),
+            .action(ActionStep(command: .editAction(EditActionTarget(action: .paste)))),
+            .action(ActionStep(command: .dismissKeyboard)),
         ])
 
         let decodedPlan = try roundTripHeistPlan(plan)
@@ -37,13 +37,13 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
         let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Canvas"))
         let point = GesturePointSelection.coordinate(ScreenPoint(x: 10, y: 20))
         let plan = try HeistPlan(body: [
-            .action(try ActionStep(command: .mechanicalTap(TapTarget(selection: point)))),
-            .action(try ActionStep(command: .mechanicalLongPress(LongPressTarget(
+            .action(ActionStep(command: .mechanicalTap(TapTarget(selection: point)))),
+            .action(ActionStep(command: .mechanicalLongPress(LongPressTarget(
                 selection: point,
                 duration: 1.0
             )))),
-            .action(try ActionStep(command: .mechanicalSwipe(SwipeTarget(selection: .elementDirection(target, .left))))),
-            .action(try ActionStep(command: .mechanicalDrag(DragTarget(
+            .action(ActionStep(command: .mechanicalSwipe(SwipeTarget(selection: .elementDirection(target, .left))))),
+            .action(ActionStep(command: .mechanicalDrag(DragTarget(
                 start: .element(target),
                 end: ScreenPoint(x: 30, y: 40)
             )))),

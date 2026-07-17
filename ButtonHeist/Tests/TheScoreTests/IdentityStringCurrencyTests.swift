@@ -1,9 +1,11 @@
 import Foundation
 import Testing
+import ThePlans
 
 @testable import TheScore
 
 @Test func identityStringCurrenciesPreserveExactValuesAndRoundTrip() throws {
+    try assertIdentityValue(ContainerName.self)
     try assertIdentityValue(SessionAuthToken.self)
     try assertIdentityValue(DriverID.self)
     try assertIdentityValue(BundleIdentifier.self)
@@ -15,6 +17,7 @@ import Testing
 }
 
 @Test func identityStringCurrenciesRejectBlankDynamicValues() {
+    #expect(throws: (any Error).self) { try ContainerName(validating: " \n") }
     #expect(throws: (any Error).self) { try SessionAuthToken(validating: " \n") }
     #expect(throws: (any Error).self) { try DriverID(validating: "") }
     #expect(throws: (any Error).self) { try BundleIdentifier(validating: "\t") }

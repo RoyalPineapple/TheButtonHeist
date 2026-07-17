@@ -177,7 +177,7 @@ func `canonical Swift renderer preserves composed expectation with string ref`()
 @Test
 func canonicalSwiftRendererRejectsRefsOutsideLoopScope() throws {
     let raw = HeistPlanAdmissionCandidate(body: [
-        .action(try ActionStep(command: .activate(.ref("target")))),
+        .action(ActionStep(command: .activate(.ref("target")))),
     ])
 
     do {
@@ -191,9 +191,9 @@ func canonicalSwiftRendererRejectsRefsOutsideLoopScope() throws {
 @Test
 func canonicalSwiftRendererRendersAmbientActions() throws {
     let plan = try HeistPlan(body: [
-        .action(try ActionStep(command: .setPasteboard(SetPasteboardTarget(text: "milk")))),
-        .action(try ActionStep(command: .editAction(EditActionTarget(action: .paste)))),
-        .action(try ActionStep(command: .dismissKeyboard)),
+        .action(ActionStep(command: .setPasteboard(SetPasteboardTarget(text: "milk")))),
+        .action(ActionStep(command: .editAction(EditActionTarget(action: .paste)))),
+        .action(ActionStep(command: .dismissKeyboard)),
     ])
     #expect(try plan.canonicalSwiftDSL() == """
     HeistPlan {
@@ -209,13 +209,13 @@ func canonicalSwiftRendererRendersAmbientActions() throws {
 @Test
 func canonicalSwiftRendererSeparatesSemanticAndMechanicalActions() throws {
     let plan = try HeistPlan(body: [
-        .action(try ActionStep(command: .customAction(name: "Archive", target: .predicate(.label("Message"))))),
-        .action(try ActionStep(command: .rotor(
+        .action(ActionStep(command: .customAction(name: "Archive", target: .predicate(.label("Message"))))),
+        .action(ActionStep(command: .rotor(
             selection: .named("Headings"),
             target: .predicate(.label("Article")),
             direction: .next
         ))),
-        .action(try ActionStep(command: .mechanicalTap(TapTarget(
+        .action(ActionStep(command: .mechanicalTap(TapTarget(
             selection: .coordinate(ScreenPoint(x: 12, y: 34))
         )))),
     ])
@@ -237,7 +237,7 @@ func elementUnitPointSwipeIsDurableAndCanonical() throws {
         start: UnitPoint(x: 0.8, y: 0.5),
         end: UnitPoint(x: 0.2, y: 0.5)
     )))
-    let plan = try HeistPlan(body: [.action(try ActionStep(command: command))])
+    let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
 
     #expect(command.durableHeistActionFailure == nil)
     #expect(try plan.canonicalSwiftDSL() == """
@@ -250,43 +250,43 @@ func elementUnitPointSwipeIsDurableAndCanonical() throws {
 @Test
 func canonicalSwiftRendererRendersMechanicalActionForms() throws {
     let plan = try HeistPlan(body: [
-        .action(try ActionStep(command: .mechanicalTap(TapTarget(
+        .action(ActionStep(command: .mechanicalTap(TapTarget(
             selection: .element(.predicate(.label("Button")))
         )))),
-        .action(try ActionStep(command: .mechanicalTap(TapTarget(
+        .action(ActionStep(command: .mechanicalTap(TapTarget(
             selection: .elementUnitPoint(
                 .predicate(.label("Cell")),
                 UnitPoint(x: 0.25, y: 0.75)
             )
         )))),
-        .action(try ActionStep(command: .mechanicalLongPress(LongPressTarget(
+        .action(ActionStep(command: .mechanicalLongPress(LongPressTarget(
             selection: .coordinate(ScreenPoint(x: 1.25, y: 2.5)),
             duration: 1.2
         )))),
-        .action(try ActionStep(command: .mechanicalLongPress(LongPressTarget(
+        .action(ActionStep(command: .mechanicalLongPress(LongPressTarget(
             selection: .elementUnitPoint(
                 .predicate(.label("Message")),
                 UnitPoint(x: 0.5, y: 0.2)
             ),
             duration: 1.4
         )))),
-        .action(try ActionStep(command: .mechanicalSwipe(SwipeTarget(selection: .elementDirection(
+        .action(ActionStep(command: .mechanicalSwipe(SwipeTarget(selection: .elementDirection(
             .predicate(.label("List")),
             .up
         ))))),
-        .action(try ActionStep(command: .mechanicalSwipe(SwipeTarget(selection: .point(
-            start: .coordinate(ScreenPoint(x: 10, y: 20)),
+        .action(ActionStep(command: .mechanicalSwipe(SwipeTarget(selection: .point(
+            start: ScreenPoint(x: 10, y: 20),
             destination: .direction(.left)
         ))))),
-        .action(try ActionStep(command: .mechanicalDrag(DragTarget(
+        .action(ActionStep(command: .mechanicalDrag(DragTarget(
             start: .element(.predicate(.label("Slider"))),
             end: ScreenPoint(x: 200, y: 40)
         )))),
-        .action(try ActionStep(command: .mechanicalDrag(DragTarget(
+        .action(ActionStep(command: .mechanicalDrag(DragTarget(
             start: .elementUnitPoint(.predicate(.label("Slider")), UnitPoint(x: 0.8, y: 0.5)),
             end: ScreenPoint(x: 220, y: 40)
         )))),
-        .action(try ActionStep(command: .mechanicalDrag(DragTarget(
+        .action(ActionStep(command: .mechanicalDrag(DragTarget(
             start: .coordinate(ScreenPoint(x: 3.3333333, y: 4)),
             end: ScreenPoint(x: 5, y: 6.5)
         )))),
@@ -325,7 +325,7 @@ func nonDurableActionShapeFailsPlanAdmission() throws {
     let reason = try #require(command.durableHeistActionFailure)
 
     do {
-        _ = try HeistPlan(body: [.action(try ActionStep(command: command))])
+        _ = try HeistPlan(body: [.action(ActionStep(command: command))])
         Issue.record("Expected non-durable action to fail plan admission")
     } catch let error as HeistPlanRuntimeSafetyError {
         expectNonDurableHeistActionFailure(error.failures, observed: reason)
@@ -352,7 +352,7 @@ func viewportDebugActionsAreNotDurableHeistDSL() throws {
         #expect(reason.contains("viewport debug command"))
 
         do {
-            _ = try HeistPlan(body: [.action(try ActionStep(command: command))])
+            _ = try HeistPlan(body: [.action(ActionStep(command: command))])
             Issue.record("Expected viewport action to fail plan admission")
         } catch let error as HeistPlanRuntimeSafetyError {
             expectNonDurableHeistActionFailure(error.failures, observed: reason)

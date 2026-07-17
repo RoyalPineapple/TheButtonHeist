@@ -6,33 +6,33 @@ struct CanonicalHeistSourceRoundTripTests {
     @Test("actions, targets, expectations, and waivers round trip")
     func actionsTargetsExpectationsAndWaiversRoundTrip() throws {
         try assertRoundTrip(try HeistPlan(body: [
-            .action(try ActionStep(
+            .action(ActionStep(
                 command: .activate(.predicate(.label("Pay"))),
                 expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 0.001)))),
-            .action(try ActionStep(
+            .action(ActionStep(
                 command: .typeText(text: "milk", target: .predicate(.label("Search"))),
                 expectationPolicy: .expect(ActionExpectation(predicate: .exists(.element(.label("Search"), .value("milk"))), timeout: 2)))),
-            .action(try ActionStep(
+            .action(ActionStep(
                 command: .typeText(text: "Bruschetta", target: .predicate(.identifier("Search"))),
                 expectationPolicy: .expect(ActionExpectation(predicate: .changed(.elements([
                     .updated(.identifier("Search"), .value(after: "Bruschetta")),
                 ])))))),
-            .action(try ActionStep(
+            .action(ActionStep(
                 command: .activate(.predicate(.label("Add item"))),
                 expectationPolicy: .expect(ActionExpectation(predicate: .changed(.elements([
                     .appeared(.label("Milk")),
                 ])))))),
-            .action(try ActionStep(
+            .action(ActionStep(
                 command: .activate(.predicate(.label("Remove"))),
                 expectationPolicy: .expect(ActionExpectation(predicate: .changed(.elements([
                     .disappeared(.identifier("row-1")),
                 ])))))),
-            .action(try ActionStep(
+            .action(ActionStep(
                 command: .typeText(text: "milk", target: .predicate(.identifier("Search"))),
                 expectationPolicy: .expect(ActionExpectation(predicate: .changed(.elements([
                     .updated(.identifier("Search"), .value(before: "", after: "milk")),
                 ])))))),
-            .action(try ActionStep(
+            .action(ActionStep(
                 command: .activate(.predicate(.identifier("Favorite"))),
                 expectationPolicy: .expect(ActionExpectation(predicate: .changed(.elements([
                     .updated(
@@ -40,26 +40,26 @@ struct CanonicalHeistSourceRoundTripTests {
                         .traits(before: .init(exclude: [.selected]), after: .init(include: [.selected]))
                     ),
                 ])))))),
-            .action(try ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
-            .action(try ActionStep(command: .decrement(.predicate(.identifier("quantity"), ordinal: 0)))),
-            .action(try ActionStep(command: .customAction(
+            .action(ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
+            .action(ActionStep(command: .decrement(.predicate(.identifier("quantity"), ordinal: 0)))),
+            .action(ActionStep(command: .customAction(
                 name: "Archive",
                 target: .predicate(.element(.label("Message"), .traits([.button])))
             ))),
-            .action(try ActionStep(command: .rotor(
+            .action(ActionStep(command: .rotor(
                 selection: .named("Headings"),
                 target: .predicate(.label("Article")),
                 direction: .next
             ))),
-            .action(try ActionStep(command: .setPasteboard(SetPasteboardTarget(text: "milk")))),
-            .action(try ActionStep(command: .takeScreenshot)),
-            .action(try ActionStep(command: .dismiss)),
-            .action(try ActionStep(command: .magicTap)),
-            .action(try ActionStep(command: .editAction(EditActionTarget(action: .paste)))),
-            .action(try ActionStep(command: .dismissKeyboard)),
-            .action(try ActionStep(
+            .action(ActionStep(command: .setPasteboard(SetPasteboardTarget(text: "milk")))),
+            .action(ActionStep(command: .takeScreenshot)),
+            .action(ActionStep(command: .dismiss)),
+            .action(ActionStep(command: .magicTap)),
+            .action(ActionStep(command: .editAction(EditActionTarget(action: .paste)))),
+            .action(ActionStep(command: .dismissKeyboard)),
+            .action(ActionStep(
                 command: .activate(.predicate(.label("Optional"))),
-                expectationPolicy: .waived(try ActionExpectationWaiver("No durable semantic outcome")))),
+                expectationPolicy: .waived("No durable semantic outcome"))),
         ]))
     }
 
@@ -121,7 +121,7 @@ struct CanonicalHeistSourceRoundTripTests {
             name: "search",
             parameter: .string(name: item),
             body: [
-                .action(try ActionStep(
+                .action(ActionStep(
                     command: .typeText(
                         reference: item,
                         target: .label(.contains(item))
@@ -150,23 +150,23 @@ struct CanonicalHeistSourceRoundTripTests {
     @Test("durable mechanical actions round trip")
     func durableMechanicalActionsRoundTrip() throws {
         try assertRoundTrip(try HeistPlan(body: [
-            .action(try ActionStep(command: .mechanicalTap(TapTarget(
+            .action(ActionStep(command: .mechanicalTap(TapTarget(
                 selection: .coordinate(ScreenPoint(x: 12, y: 34))
             )))),
-            .action(try ActionStep(command: .mechanicalLongPress(LongPressTarget(
+            .action(ActionStep(command: .mechanicalLongPress(LongPressTarget(
                 selection: .coordinate(ScreenPoint(x: 20, y: 40)),
                 duration: 1
             )))),
-            .action(try ActionStep(command: .mechanicalSwipe(SwipeTarget(selection: .elementDirection(
+            .action(ActionStep(command: .mechanicalSwipe(SwipeTarget(selection: .elementDirection(
                 .label("List"),
                 .down
             ))))),
-            .action(try ActionStep(command: .mechanicalSwipe(SwipeTarget(selection: .unitElement(
+            .action(ActionStep(command: .mechanicalSwipe(SwipeTarget(selection: .unitElement(
                 .label("Carousel"),
                 start: UnitPoint(x: 0.8, y: 0.5),
                 end: UnitPoint(x: 0.2, y: 0.5)
             ))))),
-            .action(try ActionStep(command: .mechanicalDrag(DragTarget(
+            .action(ActionStep(command: .mechanicalDrag(DragTarget(
                 selection: .pointToPoint(start: ScreenPoint(x: 10, y: 10), end: ScreenPoint(x: 100, y: 100))
             )))),
         ]))
@@ -179,7 +179,7 @@ struct CanonicalHeistSourceRoundTripTests {
             .conditional(try ConditionalStep(
                 cases: [
                     PredicateCase(predicate: .exists(.label("Pay")), body: [
-                        .action(try ActionStep(command: .activate(.predicate(.label("Pay"))))),
+                        .action(ActionStep(command: .activate(.predicate(.label("Pay"))))),
                     ]),
                 ],
                 elseBody: [.fail(FailStep(message: "Pay button missing"))]
@@ -193,7 +193,7 @@ struct CanonicalHeistSourceRoundTripTests {
                 predicate: .exists(.value("2")),
                 timeout: 4,
                 body: [
-                    .action(try ActionStep(command: .increment(.predicate(.identifier("Quantity"))))),
+                    .action(ActionStep(command: .increment(.predicate(.identifier("Quantity"))))),
                 ],
                 elseBody: [.fail(FailStep(message: "quantity did not reach 2"))]
             )),
@@ -202,7 +202,7 @@ struct CanonicalHeistSourceRoundTripTests {
                 values: ["Milk", "Eggs"],
                 parameter: "item",
                 body: [
-                    .action(try ActionStep(command: .typeText(
+                    .action(ActionStep(command: .typeText(
                         reference: "item",
                         target: .predicate(.label("Add item"))
                     ))),
@@ -213,7 +213,7 @@ struct CanonicalHeistSourceRoundTripTests {
                 limit: 2,
                 parameter: "target",
                 body: [
-                    .action(try ActionStep(
+                    .action(ActionStep(
                         command: .activate(.ref("target")),
                         expectationPolicy: .expect(ActionExpectation(predicate: .missing(.ref("target")), timeout: 2)))),
                 ]
@@ -227,7 +227,7 @@ struct CanonicalHeistSourceRoundTripTests {
     func definitionsParametersAndCompositionRoundTrip() throws {
         let tapDefinition = try HeistPlan(
             name: "tap",
-            body: [.action(try ActionStep(command: .activate(.predicate(.label("Add to Cart")))))]
+            body: [.action(ActionStep(command: .activate(.predicate(.label("Add to Cart")))))]
         )
         let addButtonNamespace = try HeistPlan(name: "AddButton", definitions: [tapDefinition], body: [])
         let addToCart = try HeistPlan(
@@ -235,7 +235,7 @@ struct CanonicalHeistSourceRoundTripTests {
             parameter: .string(name: "item"),
             definitions: [addButtonNamespace],
             body: [
-                .action(try ActionStep(
+                .action(ActionStep(
                     command: .activate(.predicate(.label(HeistReferenceName(stringLiteral: "item")))),
                     expectationPolicy: .expect(ActionExpectation(predicate: .exists(.label("Added")), timeout: 2)))),
                 .invoke(HeistInvocationStep(path: "AddButton.tap")),
@@ -245,7 +245,7 @@ struct CanonicalHeistSourceRoundTripTests {
             name: "archive",
             parameter: .accessibilityTarget(name: "row"),
             body: [
-                .action(try ActionStep(command: .customAction(name: "Archive", target: .ref("row")))),
+                .action(ActionStep(command: .customAction(name: "Archive", target: .ref("row")))),
             ]
         )
         let library = try HeistPlan(name: "LibraryScreen", definitions: [addToCart, targetDefinition], body: [])

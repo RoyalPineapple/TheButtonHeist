@@ -220,7 +220,7 @@ final class InterfaceGraphTests: XCTestCase {
                 )
             },
             containerMetadata: { _, _ in
-                InterfaceContainerProjectionMetadata(containerName: ContainerName("checkout"))
+                InterfaceContainerProjectionMetadata(containerName: "checkout")
             }
         )
 

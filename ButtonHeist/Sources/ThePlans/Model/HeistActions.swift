@@ -15,10 +15,7 @@ public extension HeistActionContent {
 
     var heistSteps: [HeistStep] {
         guard expectationValidationDiagnostics.isEmpty else { return [] }
-        return [makeActionStep(
-            command,
-            expectationPolicy: expectationPolicy
-        )]
+        return [.action(ActionStep(command: command, expectationPolicy: expectationPolicy))]
     }
 
     func expect(
@@ -49,13 +46,7 @@ public extension HeistActionContent {
         )
     }
 
-    func withoutExpectation(_ reason: String) -> ActionContent {
-        let waiver: ActionExpectationWaiver
-        do {
-            waiver = try ActionExpectationWaiver(reason)
-        } catch {
-            preconditionFailure("ThePlans constructed unsupported expectation waiver: \(error)")
-        }
+    func withoutExpectation(_ waiver: ActionExpectationWaiver) -> ActionContent {
         return ActionContent(
             command: command,
             expectationPolicy: .waived(waiver),
@@ -120,10 +111,7 @@ public struct RepeatActionUntilContent: HeistContent {
                     predicate: predicate,
                     timeout: timeout,
                     body: [
-                        makeActionStep(
-                            command,
-                            expectationPolicy: progressPolicy
-                        ),
+                        .action(ActionStep(command: command, expectationPolicy: progressPolicy)),
                     ]
                 )),
             ]
@@ -411,11 +399,11 @@ public enum Mechanical {
         }
 
         public init(from start: ScreenPoint, to end: ScreenPoint) {
-            self.init(command: .mechanicalSwipe(SwipeTarget(selection: .point(start: .coordinate(start), destination: .coordinate(end)))))
+            self.init(command: .mechanicalSwipe(SwipeTarget(selection: .point(start: start, destination: .coordinate(end)))))
         }
 
         public init(from start: ScreenPoint, _ direction: SwipeDirection) {
-            self.init(command: .mechanicalSwipe(SwipeTarget(selection: .point(start: .coordinate(start), destination: .direction(direction)))))
+            self.init(command: .mechanicalSwipe(SwipeTarget(selection: .point(start: start, destination: .direction(direction)))))
         }
 
         init(command: HeistActionCommand, expectationPolicy: ActionExpectationPolicy = .default) {
@@ -444,20 +432,6 @@ public enum Mechanical {
             self.command = command
             self.expectationPolicy = expectationPolicy
         }
-    }
-}
-
-private func makeActionStep(
-    _ command: HeistActionCommand,
-    expectationPolicy: ActionExpectationPolicy = .default
-) -> HeistStep {
-    do {
-        return .action(try ActionStep(
-            command: command,
-            expectationPolicy: expectationPolicy
-        ))
-    } catch {
-        preconditionFailure("ThePlans constructed unsupported action command: \(command.wireType.rawValue)")
     }
 }
 

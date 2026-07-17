@@ -15,7 +15,7 @@ public enum SwipeDestinationSelection: Sendable, Equatable, CustomStringConverti
 public enum SwipeGestureSelection: Sendable, Equatable, CustomStringConvertible {
     case unitElement(AccessibilityTarget, start: UnitPoint, end: UnitPoint)
     case elementDirection(AccessibilityTarget, SwipeDirection)
-    case point(start: GesturePointSelection, destination: SwipeDestinationSelection)
+    case point(start: ScreenPoint, destination: SwipeDestinationSelection)
 
     public var description: String {
         switch self {
@@ -56,6 +56,7 @@ public struct UnitPoint: Codable, Sendable, Equatable {
     public let y: Double
 
     public init(x: Double, y: Double) {
+        requireFinitePointCoordinates(x: x, y: y, kind: "unit point")
         self.x = x
         self.y = y
     }
@@ -63,9 +64,12 @@ public struct UnitPoint: Codable, Sendable, Equatable {
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "unit point")
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        let x = try container.decode(Double.self, forKey: .x)
+        let y = try container.decode(Double.self, forKey: .y)
+        try rejectNonFinitePointCoordinates(x: x, y: y, kind: "unit point", codingPath: container.codingPath)
         self.init(
-            x: try container.decode(Double.self, forKey: .x),
-            y: try container.decode(Double.self, forKey: .y)
+            x: x,
+            y: y
         )
     }
 
@@ -216,10 +220,10 @@ public struct SwipeTarget: Codable, Sendable, Equatable {
                 .unitElement($0.element, start: $0.start, end: $0.end)
             },
             GesturePayloadCandidate(.pointToPoint, as: SwipePointToPointPayload.self) {
-                .point(start: .coordinate($0.start), destination: .coordinate($0.end))
+                .point(start: $0.start, destination: .coordinate($0.end))
             },
             GesturePayloadCandidate(.pointDirection, as: SwipePointDirectionPayload.self) {
-                .point(start: .coordinate($0.start), destination: .direction($0.direction))
+                .point(start: $0.start, destination: .direction($0.direction))
             },
         ]
         self.selection = try container.decodeExactlyOneGesturePayload(
@@ -243,21 +247,12 @@ public struct SwipeTarget: Codable, Sendable, Equatable {
                 forKey: .elementDirection
             )
         case .point(let start, let destination):
-            guard case .coordinate(let startPoint) = start else {
-                throw EncodingError.invalidValue(
-                    selection,
-                    .init(
-                        codingPath: encoder.codingPath,
-                        debugDescription: "swipe point intents require a coordinate start"
-                    )
-                )
-            }
             switch destination {
             case .coordinate(let point):
-                try container.encode(SwipePointToPointPayload(start: startPoint, end: point), forKey: .pointToPoint)
+                try container.encode(SwipePointToPointPayload(start: start, end: point), forKey: .pointToPoint)
             case .direction(let direction):
                 try container.encode(
-                    SwipePointDirectionPayload(start: startPoint, direction: direction),
+                    SwipePointDirectionPayload(start: start, direction: direction),
                     forKey: .pointDirection
                 )
             }

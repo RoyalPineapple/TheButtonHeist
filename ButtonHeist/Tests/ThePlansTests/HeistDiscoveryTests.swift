@@ -73,7 +73,7 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
                 name: "addToCart",
                 parameter: .string(name: "item"),
                 body: [
-                    .action(try ActionStep(command: .activate(.predicate(
+                    .action(ActionStep(command: .activate(.predicate(
                         .label(HeistReferenceName(stringLiteral: "item"))
                     )))),
                 ]
@@ -99,7 +99,7 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
                 name: "tapRow",
                 parameter: .accessibilityTarget(name: "row"),
                 body: [
-                    .action(try ActionStep(command: .activate(.ref("row")))),
+                    .action(ActionStep(command: .activate(.ref("row")))),
                 ]
             ),
         ],
@@ -157,7 +157,7 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
                 name: "tapRow",
                 parameter: .accessibilityTarget(name: "row"),
                 body: [
-                    .action(try ActionStep(command: .activate(.ref("row")))),
+                    .action(ActionStep(command: .activate(.ref("row")))),
                 ]
             ),
         ],
@@ -181,8 +181,8 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
     let catalog = try HeistPlan(
         name: "pay",
         body: [
-            .action(try ActionStep(command: .activate(.predicate(.label("Pay"))))),
-            .action(try ActionStep(command: .activate(.predicate(duplicateTemplate)))),
+            .action(ActionStep(command: .activate(.predicate(.label("Pay"))))),
+            .action(ActionStep(command: .activate(.predicate(duplicateTemplate)))),
         ]
     ).heistCatalog(detail: .detailed)
 
@@ -199,8 +199,8 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
     let description = try HeistPlan(
         name: "pay",
         body: [
-            .action(try ActionStep(command: .activate(.label("Pay")))),
-            .action(try ActionStep(command: .activate(.predicate(.label("Pay"))))),
+            .action(ActionStep(command: .activate(.label("Pay")))),
+            .action(ActionStep(command: .activate(.predicate(.label("Pay"))))),
         ]
     ).describeHeist(at: "pay")
 
@@ -212,8 +212,8 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
     let description = try HeistPlan(
         name: "pay",
         body: [
-            .action(try ActionStep(command: .activate(.target(.label("Pay"), ordinal: 0)))),
-            .action(try ActionStep(command: .activate(.target(.label("Pay"), ordinal: 1)))),
+            .action(ActionStep(command: .activate(.target(.label("Pay"), ordinal: 0)))),
+            .action(ActionStep(command: .activate(.target(.label("Pay"), ordinal: 1)))),
         ]
     ).describeHeist(at: "pay")
 
@@ -254,7 +254,7 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
         name: "root",
         parameter: .string(name: "item"),
         body: [
-            .action(try ActionStep(command: .typeText(
+            .action(ActionStep(command: .typeText(
                 reference: "item",
                 target: .label("Search")
             ))),
@@ -292,7 +292,7 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
                 name: "addToCart",
                 parameter: .string(name: "item"),
                 body: [
-                    .action(try ActionStep(command: .activate(.predicate(
+                    .action(ActionStep(command: .activate(.predicate(
                         .label(HeistReferenceName(stringLiteral: "item"))
                     )))),
                 ]
@@ -317,7 +317,7 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
                     try HeistPlan(
                         name: "confirm",
                         body: [
-                            .action(try ActionStep(command: .activate(.predicate(.label("Confirm"))))),
+                            .action(ActionStep(command: .activate(.predicate(.label("Confirm"))))),
                         ]
                     ),
                 ],
@@ -338,7 +338,7 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
     let description = try HeistPlan(
         name: "activateSave",
         body: [
-            .action(try ActionStep(command: .activate(.predicate(.identifier("save_button"))))),
+            .action(ActionStep(command: .activate(.predicate(.identifier("save_button"))))),
         ]
     ).describeHeist(at: "activateSave")
 
@@ -351,7 +351,7 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
     let description = try HeistPlan(
         name: "submit",
         body: [
-            .action(try ActionStep(
+            .action(ActionStep(
                 command: .activate(.predicate(.label("Submit"))),
                 expectationPolicy: .expect(ActionExpectation(predicate: .exists(.label("Done")), timeout: 1)))),
             .wait(WaitStep(predicate: .changed(.screen()), timeout: 2)),
@@ -372,7 +372,7 @@ private let screenChangePredicate = AccessibilityPredicate.changed(.screen())
     let description = try HeistPlan(
         name: "submit",
         body: [
-            .action(try ActionStep(
+            .action(ActionStep(
                 command: .activate(.predicate(.label("Submit"))),
                 expectationPolicy: .expect(ActionExpectation(predicate: .exists(.label("Done")), timeout: 1)))),
             .wait(WaitStep(predicate: .exists(.label("Done")), timeout: 2)),
@@ -415,7 +415,7 @@ private func detailedSurfacePlan() throws -> HeistPlan {
                     try HeistPlan(
                         name: "confirm",
                         body: [
-                            .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(
+                            .action(ActionStep(command: .activate(.predicate(ElementPredicateTemplate(
                                 identifier: .exact("confirmation_button"),
                                 traits: [.button]
                             ))))),
@@ -423,7 +423,7 @@ private func detailedSurfacePlan() throws -> HeistPlan {
                     ),
                 ],
                 body: [
-                    .action(try ActionStep(
+                    .action(ActionStep(
                         command: .activate(.predicate(.label("Checkout"))),
                         expectationPolicy: .expect(ActionExpectation(predicate: .exists(.label("Done")), timeout: 1)))),
                     .wait(WaitStep(predicate: .exists(.label("Confirm")), timeout: 1)),

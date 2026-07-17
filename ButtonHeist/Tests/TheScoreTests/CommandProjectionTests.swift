@@ -24,7 +24,7 @@ final class CommandProjectionTests: XCTestCase {
     func testSwipeProjectionSeparatesStartAndDestination() throws {
         let target = SwipeTarget(
             selection: .point(
-                start: .coordinate(ScreenPoint(x: 10, y: 20)),
+                start: ScreenPoint(x: 10, y: 20),
                 destination: .direction(.down)
             )
         )
@@ -32,7 +32,7 @@ final class CommandProjectionTests: XCTestCase {
         XCTAssertEqual(
             target.selection,
             .point(
-                start: .coordinate(ScreenPoint(x: 10, y: 20)),
+                start: ScreenPoint(x: 10, y: 20),
                 destination: .direction(.down)
             )
         )
