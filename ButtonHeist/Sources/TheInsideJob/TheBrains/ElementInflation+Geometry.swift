@@ -46,7 +46,7 @@ extension ElementInflation {
 
         let treeElement = liveTarget.treeElement
         let description = Navigation.ScrollTargetDescription(treeElement).description
-        let settledSequence = stash.latestSettledSemanticObservationEvent?.sequence
+        let settledSequence = stash.semanticObservationStream.latestEvent?.sequence
         let placement = await scrollActivationPointIntoBounds(
             liveTarget.activationPoint,
             in: stash.liveScrollView(for: treeElement),

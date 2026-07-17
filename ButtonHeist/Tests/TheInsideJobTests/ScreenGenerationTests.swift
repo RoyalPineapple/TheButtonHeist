@@ -8,7 +8,7 @@ import UIKit
 @testable import TheScore
 
 @MainActor
-final class SemanticExplorationGenerationTests: XCTestCase {
+final class ScreenGenerationTests: XCTestCase {
 
     func testCommittedDiscoveryPagesMergeWithinGeneration() {
         let brains = TheBrains(tripwire: TheTripwire())
@@ -71,23 +71,23 @@ final class SemanticExplorationGenerationTests: XCTestCase {
             maxScrollsPerContainer: 2,
             maxScrollsPerDiscovery: 2
         )
-        exploration.manifest.addPendingScrollPaths([oldPath])
-        exploration.manifest.markExplored(oldPath)
-        XCTAssertNil(exploration.manifest.recordScrollAttempt(in: oldPath))
+        exploration.progress.addPendingScrollPaths([oldPath])
+        exploration.progress.markExplored(oldPath)
+        XCTAssertNil(exploration.progress.recordScrollAttempt(in: oldPath))
 
         exploration.recordCommittedObservation(
             continuity: .replacement(.screenChangedNotification),
             scrollableContainers: []
         )
 
-        XCTAssertTrue(exploration.manifest.exploredScrollPaths.isEmpty)
-        XCTAssertTrue(exploration.manifest.pendingScrollPaths.isEmpty)
-        XCTAssertTrue(exploration.manifest.scrollCountByContainerPath.isEmpty)
-        XCTAssertEqual(exploration.manifest.scrollCount, 1)
-        XCTAssertEqual(exploration.manifest.maxScrollsPerContainer, 2)
-        XCTAssertEqual(exploration.manifest.maxScrollsPerDiscovery, 2)
-        XCTAssertNil(exploration.manifest.recordScrollAttempt(in: newPath))
-        XCTAssertEqual(exploration.manifest.recordScrollAttempt(in: newPath), .discoveryScrollLimit)
+        XCTAssertTrue(exploration.progress.exploredScrollPaths.isEmpty)
+        XCTAssertTrue(exploration.progress.pendingScrollPaths.isEmpty)
+        XCTAssertTrue(exploration.progress.scrollCountByContainerPath.isEmpty)
+        XCTAssertEqual(exploration.progress.scrollCount, 1)
+        XCTAssertEqual(exploration.progress.maxScrollsPerContainer, 2)
+        XCTAssertEqual(exploration.progress.maxScrollsPerDiscovery, 2)
+        XCTAssertNil(exploration.progress.recordScrollAttempt(in: newPath))
+        XCTAssertEqual(exploration.progress.recordScrollAttempt(in: newPath), .discoveryScrollLimit)
     }
 
     func testCurrentViewportBaselineReplacesOnceThenMergesDiscoveryPages() {

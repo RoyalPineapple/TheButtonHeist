@@ -58,7 +58,7 @@ extension ElementInflation {
                 for: target,
                 treeElement: treeElement,
                 method: method,
-                after: stash.latestSettledSemanticObservationEvent?.sequence,
+                after: stash.semanticObservationStream.latestEvent?.sequence,
                 deadline: deadline,
                 resolution: pendingRetry.resolution
             ) {

@@ -18,7 +18,7 @@ final class RawParserEvidenceAdmissionTests: XCTestCase {
         let retainedCount = stream.retainedObservationEntries(scope: .visible).count
 
         let raw = observation(label: "Raw", heistId: "raw")
-        brains.stash.nextVisibleRefreshScreenForTesting = raw
+        brains.stash.nextVisibleRefreshObservationForTesting = raw
         let refreshed = brains.stash.refreshLiveCapture()
 
         XCTAssertEqual(refreshed?.tree.interfaceHash, raw.tree.interfaceHash)
@@ -31,7 +31,10 @@ final class RawParserEvidenceAdmissionTests: XCTestCase {
         let diagnostic = observation(label: "Diagnostic", heistId: "diagnostic")
         brains.stash.recordFailedSettleDiagnosticEvidence(diagnostic)
 
-        XCTAssertEqual(brains.stash.diagnosticObservation?.tree.interfaceHash, diagnostic.tree.interfaceHash)
+        XCTAssertEqual(
+            brains.stash.latestFailedSettleDiagnosticEvidence?.tree.interfaceHash,
+            diagnostic.tree.interfaceHash
+        )
         XCTAssertEqual(brains.stash.interfaceTree.interfaceHash, committedHash)
         XCTAssertNotNil(brains.stash.interfaceTree.findElement(heistId: "committed"))
         XCTAssertNil(brains.stash.interfaceTree.findElement(heistId: "diagnostic"))
@@ -42,7 +45,7 @@ final class RawParserEvidenceAdmissionTests: XCTestCase {
         let brains = TheBrains(tripwire: TheTripwire())
         let stream = brains.stash.semanticObservationStream
         let raw = observation(label: "Raw", heistId: "raw")
-        brains.stash.nextVisibleRefreshScreenForTesting = raw
+        brains.stash.nextVisibleRefreshObservationForTesting = raw
         _ = brains.stash.refreshLiveCapture()
 
         XCTAssertTrue(brains.stash.interfaceTree.orderedElements.isEmpty)

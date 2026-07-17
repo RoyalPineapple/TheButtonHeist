@@ -203,7 +203,7 @@ the operation returns. Target inflation uses `ViewportExitPosition.current`, so
 the requested element remains visible for dispatch. The caller selects this
 exit policy before traversal; finalization applies it whether traversal matched,
 depleted its rays, hit a budget, or was interrupted after dispatch.
-`Navigation.ExploredScreen` is the finished event and manifest for that
+`Navigation.InterfaceExplorationResult` is the finished event and progress for that
 traversal; it derives from canonical stash truth and owns no second graph or
 publication path. There is no compatibility traversal or publication path.
 

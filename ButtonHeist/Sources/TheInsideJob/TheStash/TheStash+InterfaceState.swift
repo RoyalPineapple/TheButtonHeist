@@ -10,7 +10,7 @@ import TheScore
 
 extension TheStash {
 
-    struct SemanticInterfaceSnapshot {
+    struct HashedInterface {
         let interface: Interface
         let hash: String
     }
@@ -30,9 +30,14 @@ extension TheStash {
     /// Clear stale interface state at a top-level heist boundary while leaving a
     /// queued synthetic visible refresh intact for in-process runtime tests.
     func clearInterfaceForHeistBootstrap() {
-        let queuedVisibleRefresh = nextVisibleRefreshScreenForTesting
+        let queuedVisibleRefresh = nextVisibleRefreshObservationForTesting
         clearInterfaceForLifecycleReset()
-        nextVisibleRefreshScreenForTesting = queuedVisibleRefresh
+        nextVisibleRefreshObservationForTesting = queuedVisibleRefresh
+    }
+
+    func invalidateSettledObservationFromTripwire() {
+        nextVisibleRefreshObservationForTesting = nil
+        semanticObservationStream.invalidateLatestSettledObservation()
     }
 
     /// Read the live accessibility tree and retain its live evidence.
@@ -40,25 +45,25 @@ extension TheStash {
     /// Returns nil if no accessible windows exist (loading screen,
     /// app backgrounded, etc.).
     func parse() -> InterfaceObservation? {
-        guard let screen = parsedInterfaceObservation() else { return nil }
-        recordParsedObservedEvidence(from: screen)
-        return screen
+        guard let observation = parsedInterfaceObservation() else { return nil }
+        recordParsedObservedEvidence(from: observation)
+        return observation
     }
 
     /// Refresh the latest live viewport evidence. The returned value remains the raw
     /// capture-local observation for geometry and exploration consumers.
     @discardableResult
     func refreshLiveCapture() -> InterfaceObservation? {
-        if let visibleTree = nextVisibleRefreshScreenForTesting {
-            recordParsedObservedEvidence(from: visibleTree)
-            return visibleTree
+        if let viewportObservation = nextVisibleRefreshObservationForTesting {
+            recordParsedObservedEvidence(from: viewportObservation)
+            return viewportObservation
         }
         return parse()
     }
 
     /// Produce one raw parser value for the settle runner without committing it.
     func semanticObservationForSettle() -> InterfaceObservation? {
-        guard let observation = nextVisibleRefreshScreenForTesting ?? parsedInterfaceObservation() else {
+        guard let observation = nextVisibleRefreshObservationForTesting ?? parsedInterfaceObservation() else {
             return nil
         }
         recordParsedObservedEvidence(from: observation)
@@ -77,9 +82,9 @@ extension TheStash {
         continuity: ScreenContinuity,
         discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy
     ) -> InterfaceTree {
-        if let queuedVisibleRefresh = nextVisibleRefreshScreenForTesting,
+        if let queuedVisibleRefresh = nextVisibleRefreshObservationForTesting,
            queuedVisibleRefresh.tree.interfaceHash != observation.tree.interfaceHash {
-            nextVisibleRefreshScreenForTesting = nil
+            nextVisibleRefreshObservationForTesting = nil
         }
         switch scope {
         case .visible:
@@ -95,13 +100,13 @@ extension TheStash {
         return interfaceTree
     }
 
-    func recordFailedSettleDiagnosticEvidence(_ screen: InterfaceObservation?) {
-        diagnosticObservation = screen
+    func recordFailedSettleDiagnosticEvidence(_ observation: InterfaceObservation?) {
+        latestFailedSettleDiagnosticEvidence = observation
         semanticObservationStream.invalidateLatestSettledObservation()
     }
 
-    func recordParsedObservedEvidence(_ screen: InterfaceObservation) {
-        recordParsedObservedEvidence(from: screen)
+    func recordParsedObservedEvidence(_ observation: InterfaceObservation) {
+        recordParsedObservedEvidence(from: observation)
     }
 
     /// Starting value for page-by-page exploration. The tree's value-only
@@ -121,8 +126,10 @@ extension TheStash {
     /// from a prior screen can share generated container names with the current
     /// screen, so command-owned interface exploration starts from visible
     /// current-screen state and grows from there.
-    func visibleExplorationBaseline(from screen: InterfaceObservation) -> InterfaceObservation {
-        screen.viewportOnly
+    func visibleExplorationBaseline(
+        from viewportObservation: InterfaceObservation
+    ) -> InterfaceObservation {
+        viewportObservation.viewportOnly
     }
 
     /// Starting value for action-owned target discovery.
@@ -166,37 +173,37 @@ extension TheStash {
     }
 
     /// Single-build semantic variant for state capture and delta projection.
-    func semanticInterfaceWithHash(timestamp: Date = Date()) -> SemanticInterfaceSnapshot {
+    func semanticInterfaceWithHash(timestamp: Date = Date()) -> HashedInterface {
         let interface = semanticInterface(timestamp: timestamp)
-        return SemanticInterfaceSnapshot(interface: interface, hash: AccessibilityTrace.Capture.hash(interface))
+        return HashedInterface(interface: interface, hash: AccessibilityTrace.Capture.hash(interface))
     }
 
     func semanticInterfaceWithHash(
-        for screen: InterfaceObservation,
+        for observation: InterfaceObservation,
         timestamp: Date = Date()
-    ) -> SemanticInterfaceSnapshot {
-        let interface = WireConversion.toSemanticInterface(from: screen.tree, timestamp: timestamp)
-        return SemanticInterfaceSnapshot(interface: interface, hash: AccessibilityTrace.Capture.hash(interface))
+    ) -> HashedInterface {
+        let interface = WireConversion.toSemanticInterface(from: observation.tree, timestamp: timestamp)
+        return HashedInterface(interface: interface, hash: AccessibilityTrace.Capture.hash(interface))
     }
 
     func discoveryInterfaceWithHash(
-        for screen: InterfaceObservation,
+        for observation: InterfaceObservation,
         timestamp: Date = Date()
-    ) -> SemanticInterfaceSnapshot {
-        let interface = WireConversion.toDiscoveryInterface(from: screen.tree, timestamp: timestamp)
-        return SemanticInterfaceSnapshot(interface: interface, hash: AccessibilityTrace.Capture.hash(interface))
+    ) -> HashedInterface {
+        let interface = WireConversion.toDiscoveryInterface(from: observation.tree, timestamp: timestamp)
+        return HashedInterface(interface: interface, hash: AccessibilityTrace.Capture.hash(interface))
     }
 
     private func clearInterfaceForLifecycleReset() {
         latestObservation = .empty
-        diagnosticObservation = nil
+        latestFailedSettleDiagnosticEvidence = nil
         interfaceTree = .empty
-        nextVisibleRefreshScreenForTesting = nil
+        nextVisibleRefreshObservationForTesting = nil
         semanticObservationStream.requireScreenReplacement()
     }
 
-    private func recordParsedObservedEvidence(from screen: InterfaceObservation) {
-        latestObservation = screen
+    private func recordParsedObservedEvidence(from observation: InterfaceObservation) {
+        latestObservation = observation
     }
 
     private func parsedInterfaceObservation() -> InterfaceObservation? {
@@ -205,7 +212,7 @@ extension TheStash {
 
     private func finishCommit(observation: InterfaceObservation) {
         recordParsedObservedEvidence(from: observation)
-        diagnosticObservation = nil
+        latestFailedSettleDiagnosticEvidence = nil
     }
 }
 

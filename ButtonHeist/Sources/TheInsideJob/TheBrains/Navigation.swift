@@ -103,7 +103,7 @@ final class Navigation {
         static let vertical   = ScrollAxis(rawValue: 1 << 1)
     }
 
-    struct ScreenManifest {
+    struct InterfaceExplorationProgress {
         private(set) var exploredScrollPaths = Set<TreePath>()
 
         private(set) var pendingScrollPaths = Set<TreePath>()
@@ -127,8 +127,8 @@ final class Navigation {
         let maxScrollsPerDiscovery: Int
 
         init(
-            maxScrollsPerContainer: Int = ScreenManifest.maxScrollsPerContainer,
-            maxScrollsPerDiscovery: Int = ScreenManifest.maxScrollsPerDiscovery
+            maxScrollsPerContainer: Int = InterfaceExplorationProgress.maxScrollsPerContainer,
+            maxScrollsPerDiscovery: Int = InterfaceExplorationProgress.maxScrollsPerDiscovery
         ) {
             self.maxScrollsPerContainer = maxScrollsPerContainer
             self.maxScrollsPerDiscovery = maxScrollsPerDiscovery
@@ -204,10 +204,10 @@ final class Navigation {
         }
 
         func interfaceDiagnostics(
-            for screen: InterfaceObservation,
+            for observation: InterfaceObservation,
             includedElementCount: Int
         ) -> InterfaceDiagnostics {
-            let omittedContainerDetails = omittedContainerDiagnostics(in: screen)
+            let omittedContainerDetails = omittedContainerDiagnostics(in: observation)
             let reasonCodes = discoveryReasonCodes(omittedContainerDetails)
             let isLimited = !reasonCodes.isEmpty || !omittedContainerDetails.isEmpty
             return InterfaceDiagnostics(discovery: InterfaceDiscoveryDiagnostics(
@@ -249,7 +249,9 @@ final class Navigation {
             return "Retry get_interface with a narrower subtree or after manually scrolling the omitted container."
         }
 
-        private func omittedContainerDiagnostics(in screen: InterfaceObservation) -> [InterfaceDiscoveryOmittedContainer] {
+        private func omittedContainerDiagnostics(
+            in observation: InterfaceObservation
+        ) -> [InterfaceDiscoveryOmittedContainer] {
             var containers = omittedScrollPathReasons
             let pendingReason: InterfaceDiscoveryReasonCode = discoveryLimitHit ? .discoveryScrollLimit : .notExplored
             for containerPath in pendingScrollPaths where !exploredScrollPaths.contains(containerPath) {
@@ -258,7 +260,11 @@ final class Navigation {
 
             let diagnostics: [InterfaceDiscoveryOmittedContainer] = containers.compactMap { entry in
                 let (containerPath, reasons) = entry
-                return omittedContainerDiagnostic(containerPath, reasons: reasons, screen: screen)
+                return omittedContainerDiagnostic(
+                    containerPath,
+                    reasons: reasons,
+                    observation: observation
+                )
             }
 
             return diagnostics.sorted()
@@ -267,9 +273,9 @@ final class Navigation {
         private func omittedContainerDiagnostic(
             _ containerPath: TreePath,
             reasons: Set<InterfaceDiscoveryReasonCode>,
-            screen: InterfaceObservation
+            observation: InterfaceObservation
         ) -> InterfaceDiscoveryOmittedContainer? {
-            guard let semanticContainer = screen.tree.containers[containerPath] else { return nil }
+            guard let semanticContainer = observation.tree.containers[containerPath] else { return nil }
             let container = semanticContainer.container
             let frame = container.frame
             let containerName = semanticContainer.containerName

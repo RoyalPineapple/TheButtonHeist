@@ -7,7 +7,7 @@ import TheScore
 internal struct SemanticObservationRuntimeState {
     // MARK: - Nested Types
 
-    internal typealias DiscoveryObservation = @MainActor () async -> Navigation.ExploredScreen?
+    internal typealias DiscoveryObservation = @MainActor () async -> Navigation.InterfaceExplorationResult?
 
     internal struct RunningObservation {
         let task: Task<Void, Never>
@@ -21,10 +21,10 @@ internal struct SemanticObservationRuntimeState {
     }
 
     internal enum Lineage: Equatable {
-        case continuous(ObservationGeneration)
-        case replacementRequired(ObservationGeneration)
+        case continuous(ScreenGeneration)
+        case replacementRequired(ScreenGeneration)
 
-        internal var generation: ObservationGeneration {
+        internal var generation: ScreenGeneration {
             switch self {
             case .continuous(let value), .replacementRequired(let value): value
             }

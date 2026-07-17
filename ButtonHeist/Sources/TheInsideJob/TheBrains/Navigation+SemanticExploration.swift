@@ -85,36 +85,36 @@ extension Navigation {
         case interrupted
     }
 
-    struct ExploredScreen {
-        let event: SettledSemanticObservationEvent
-        let manifest: ScreenManifest
+    struct InterfaceExplorationResult {
+        let event: SettledObservationEvent
+        let progress: InterfaceExplorationProgress
         let didMoveViewport: Bool
 
         internal init(
-            event: SettledSemanticObservationEvent,
-            manifest: ScreenManifest,
+            event: SettledObservationEvent,
+            progress: InterfaceExplorationProgress,
             didMoveViewport: Bool = false
         ) {
             self.event = event
-            self.manifest = manifest
+            self.progress = progress
             self.didMoveViewport = didMoveViewport
         }
     }
 
     struct SemanticExploration {
-        var manifest: ScreenManifest
+        var progress: InterfaceExplorationProgress
         private(set) var discoveryCommitPolicy: DiscoveryCommitPolicy
         let deadline: SemanticObservationDeadline?
 
         init(
             baseline: ExplorationBaseline,
             deadline: SemanticObservationDeadline? = nil,
-            maxScrollsPerContainer: Int = ScreenManifest.maxScrollsPerContainer,
-            maxScrollsPerDiscovery: Int = ScreenManifest.maxScrollsPerDiscovery
+            maxScrollsPerContainer: Int = InterfaceExplorationProgress.maxScrollsPerContainer,
+            maxScrollsPerDiscovery: Int = InterfaceExplorationProgress.maxScrollsPerDiscovery
         ) {
             discoveryCommitPolicy = baseline.discoveryCommitPolicy
             self.deadline = deadline
-            manifest = ScreenManifest(
+            progress = InterfaceExplorationProgress(
                 maxScrollsPerContainer: maxScrollsPerContainer,
                 maxScrollsPerDiscovery: maxScrollsPerDiscovery
             )
@@ -130,37 +130,37 @@ extension Navigation {
         ) {
             discoveryCommitPolicy = .mergeIntoInterface
             if continuity.isReplacement {
-                let scrollCount = manifest.scrollCount
-                manifest = ScreenManifest(
-                    maxScrollsPerContainer: manifest.maxScrollsPerContainer,
-                    maxScrollsPerDiscovery: manifest.maxScrollsPerDiscovery
+                let scrollCount = progress.scrollCount
+                progress = InterfaceExplorationProgress(
+                    maxScrollsPerContainer: progress.maxScrollsPerContainer,
+                    maxScrollsPerDiscovery: progress.maxScrollsPerDiscovery
                 )
-                manifest.scrollCount = scrollCount
+                progress.scrollCount = scrollCount
             }
             addDiscoveredContainers(scrollableContainers)
         }
 
         mutating func markExplored(_ container: InterfaceTree.Container) {
-            manifest.markExplored(container.path)
+            progress.markExplored(container.path)
         }
 
         mutating func addDiscoveredContainers(_ containers: [InterfaceTree.Container]) {
             let newContainers = containers.filter {
-                !manifest.exploredScrollPaths.contains($0.path)
-                    && !manifest.pendingScrollPaths.contains($0.path)
+                !progress.exploredScrollPaths.contains($0.path)
+                    && !progress.pendingScrollPaths.contains($0.path)
             }
-            manifest.addPendingContainers(newContainers)
+            progress.addPendingContainers(newContainers)
         }
 
         mutating func finish(
             startTime: CFTimeInterval,
-            event: SettledSemanticObservationEvent,
+            event: SettledObservationEvent,
             didMoveViewport: Bool
-        ) -> ExploredScreen {
-            manifest.explorationTime = CACurrentMediaTime() - startTime
-            return ExploredScreen(
+        ) -> InterfaceExplorationResult {
+            progress.explorationTime = CACurrentMediaTime() - startTime
+            return InterfaceExplorationResult(
                 event: event,
-                manifest: manifest,
+                progress: progress,
                 didMoveViewport: didMoveViewport
             )
         }

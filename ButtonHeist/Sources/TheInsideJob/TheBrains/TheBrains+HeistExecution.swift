@@ -108,7 +108,7 @@ extension TheBrains {
         ) async -> RuntimeActionExecution
         internal let wait: @MainActor (HeistRuntimeWaitRequest) async -> HeistWaitReceipt
         internal let selectPredicateCase: @MainActor ([ResolvedPredicateCaseRuntimeInput], Double) async -> HeistCaseSelectionResult
-        internal let observeSemanticState: @MainActor (SemanticObservationScope, SettledObservationSequence?, Double?) async -> HeistSemanticObservation?
+        internal let observeSemanticState: @MainActor (SemanticObservationScope, SettledObservationSequence?, Double?) async -> SettledObservationEvidence?
 
         internal init(
             execute: @escaping @MainActor (
@@ -117,7 +117,7 @@ extension TheBrains {
             ) async -> RuntimeActionExecution,
             wait: @escaping @MainActor (HeistRuntimeWaitRequest) async -> HeistWaitReceipt,
             selectPredicateCase: @escaping @MainActor ([ResolvedPredicateCaseRuntimeInput], Double) async -> HeistCaseSelectionResult,
-            observeSemanticState: @escaping @MainActor (SemanticObservationScope, SettledObservationSequence?, Double?) async -> HeistSemanticObservation?
+            observeSemanticState: @escaping @MainActor (SemanticObservationScope, SettledObservationSequence?, Double?) async -> SettledObservationEvidence?
         ) {
             self.execute = execute
             self.wait = wait
@@ -177,7 +177,7 @@ extension TheBrains {
         interactionObservation.resetAnnouncementWaitCursorForHeist(to: notificationScope.cursor)
         defer { notificationScope.cancel() }
 
-        let demand = stash.beginSemanticObservationDemand(scope: .visible)
+        let demand = stash.semanticObservationStream.beginActiveObservationDemand(scope: .visible)
         defer { demand.cancel() }
 
         let heistStart = CFAbsoluteTimeGetCurrent()

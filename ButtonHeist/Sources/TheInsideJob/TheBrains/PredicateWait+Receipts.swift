@@ -396,7 +396,7 @@ extension PredicateWait {
         private let sequence: SettledObservationSequence
         private let hash: String?
 
-        fileprivate init(event: SettledSemanticObservationEvent) {
+        fileprivate init(event: SettledObservationEvent) {
             sequence = event.sequence
             hash = event.latestCaptureRef?.hash
         }

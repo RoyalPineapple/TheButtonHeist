@@ -42,22 +42,22 @@ final class SettleSessionTests: XCTestCase {
     }
 
     private func recordedObservation(
-        _ screen: InterfaceObservation,
+        _ observation: InterfaceObservation,
         ledger: inout SettleObservationLedger
     ) -> SettleRecordedObservation {
-        ledger.record(screen)
+        ledger.record(observation)
     }
 
     private func reduceObservation(
-        _ screen: InterfaceObservation,
+        _ observation: InterfaceObservation,
         elapsedMs: Int,
         machine: SettleLoopMachine,
         ledger: inout SettleObservationLedger,
         state: inout SettleLoopMachine.State
     ) -> MachineStep {
-        let observation = recordedObservation(screen, ledger: &ledger)
+        let recordedObservation = recordedObservation(observation, ledger: &ledger)
         return send(
-            .observation(observation.sample, elapsedMs: elapsedMs),
+            .observation(recordedObservation.sample, elapsedMs: elapsedMs),
             machine: machine,
             ledger: &ledger,
             state: &state

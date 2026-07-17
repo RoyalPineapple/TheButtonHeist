@@ -15,7 +15,7 @@ enum PredicateEvaluation {
     static func evaluate(
         _ predicate: ResolvedAccessibilityPredicate,
         expression: AccessibilityPredicate,
-        in observation: HeistSemanticObservation
+        in observation: SettledObservationEvidence
     ) -> ExpectationResult {
         guard let evidence = AccessibilityTraceEvidence(
             trace: observation.accessibilityTrace,
@@ -51,7 +51,7 @@ enum PredicateEvaluation {
 
     static func caseMatch(
         _ predicateCase: ResolvedPredicateCaseRuntimeInput,
-        in observation: HeistSemanticObservation
+        in observation: SettledObservationEvidence
     ) -> HeistCaseMatchResult {
         caseMatchResult(
             predicateCase,

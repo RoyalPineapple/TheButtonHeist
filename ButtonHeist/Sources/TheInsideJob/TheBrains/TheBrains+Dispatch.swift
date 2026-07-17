@@ -120,7 +120,7 @@ extension TheBrains {
             observationScope: .discovery,
             afterStatePayload: { context in
                 context.resolvedElementId.flatMap {
-                    self.actions.typeTextPayload(resolvedElementId: $0, in: context.afterState)
+                    self.actions.typeTextPayload(resolvedElementId: $0, in: context.baseline)
                 }
             },
             interaction: {
@@ -159,7 +159,7 @@ extension TheBrains {
         }
     }
 
-    func executeSemanticDiscovery() async -> Navigation.ExploredScreen? {
+    func executeSemanticDiscovery() async -> Navigation.InterfaceExplorationResult? {
         await navigation.exploreScreen(exitPosition: .origin)
     }
 
@@ -206,7 +206,7 @@ extension TheBrains {
         let notificationWindow = stash.accessibilityNotifications.beginActionWindow()
         defer { notificationWindow.cancel() }
 
-        let demand = stash.beginSemanticObservationDemand(scope: observationScope)
+        let demand = stash.semanticObservationStream.beginActiveObservationDemand(scope: observationScope)
         defer { demand.cancel() }
 
         let interactionStart = CFAbsoluteTimeGetCurrent()

@@ -8,10 +8,6 @@ import TheScore
 /// Coordinates semantic observation scheduling, settlement, and publication.
 @MainActor
 internal final class SemanticObservationStream {
-    /// An active stream is an observation lease. Baseline cycles observe the
-    /// visible world; subscribers can widen demand to discovery.
-    internal typealias DiscoveryObservation = @MainActor () async -> Navigation.ExploredScreen?
-
     weak var stash: TheStash?
     let tripwire: TheTripwire
     // MARK: - Observation Bookkeeping
@@ -23,7 +19,7 @@ internal final class SemanticObservationStream {
     // MARK: - Subscriber-Facing Settled Observation History
 
     var runtimeState = SemanticObservationRuntimeState()
-    internal var latestEvent: SettledSemanticObservationEvent? {
+    internal var latestEvent: SettledObservationEvent? {
         observationLog.latestSourceEvent
     }
     /// Invalidates only latest fulfilled events as clean waiter results.
@@ -36,7 +32,7 @@ internal final class SemanticObservationStream {
         runtimeState.settleFailureDiagnostic
     }
 
-    internal var latestObservation: SettledSemanticObservation? {
+    internal var latestObservation: SettledObservation? {
         observationLog.latestObservation
     }
 
@@ -65,7 +61,9 @@ internal final class SemanticObservationStream {
         self.tripwire = tripwire
     }
 
-    internal func start(discovery: @escaping DiscoveryObservation) {
+    internal func start(
+        discovery: @escaping SemanticObservationRuntimeState.DiscoveryObservation
+    ) {
         guard !runtimeState.replaceDiscoveryIfRunning(discovery) else { return }
         if let stash {
             AccessibilityNotificationObserver.shared.subscribe(stash.accessibilityNotifications)

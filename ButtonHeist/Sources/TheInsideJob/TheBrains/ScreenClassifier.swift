@@ -146,6 +146,20 @@ internal enum ScreenLineageEvidence: Sendable, Equatable {
     }
 
     static func classify(
+        from previousTree: InterfaceTree?,
+        to tree: InterfaceTree,
+        notifications: [AccessibilityNotificationKind],
+        lineageEvidence: ScreenLineageEvidence? = nil
+    ) -> ScreenContinuity {
+        classify(
+            before: previousTree.map(snapshot(of:)),
+            after: snapshot(of: tree),
+            notifications: notifications,
+            lineageEvidence: lineageEvidence
+        )
+    }
+
+    static func classify(
         before: Snapshot?,
         after: Snapshot,
         notifications: [AccessibilityNotificationKind],

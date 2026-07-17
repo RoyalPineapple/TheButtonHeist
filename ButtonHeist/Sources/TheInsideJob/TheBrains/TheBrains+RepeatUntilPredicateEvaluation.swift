@@ -30,7 +30,7 @@ extension TheBrains.RepeatUntil {
             summary = receipt.observationSummary
         }
 
-        internal init(_ observation: HeistSemanticObservation) {
+        internal init(_ observation: SettledObservationEvidence) {
             sequence = observation.event.sequence
             traceEvidence = AccessibilityTraceEvidence(
                 trace: observation.accessibilityTrace,

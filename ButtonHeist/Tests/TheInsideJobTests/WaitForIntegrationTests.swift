@@ -162,10 +162,10 @@ final class WaitForIntegrationTests: XCTestCase {
 
         let event = try XCTUnwrap(observation?.event)
         XCTAssertTrue(
-            event.observation.screen.tree.orderedElements.contains { $0.element.label == "PassiveObservation-StableAX" },
+            event.settledObservation.observation.tree.orderedElements.contains { $0.element.label == "PassiveObservation-StableAX" },
             "Passive visible observation should publish a stable AX tree even while unrelated layer motion continues"
         )
-        XCTAssertNil(insideJob.brains.stash.latestSemanticObservationFailureDiagnostic())
+        XCTAssertNil(insideJob.brains.stash.semanticObservationStream.latestSettleFailureDiagnostic)
     }
 
     // MARK: - 1. Element already present — returns immediately
@@ -334,7 +334,7 @@ final class WaitForIntegrationTests: XCTestCase {
             elements: [(visibleElement, "wait_for_offscreen_anchor_staticText")],
             offViewport: [.init(offViewportElement, heistId: offViewportHeistId)]
         )
-        insideJob.brains.stash.installScreenForTesting(screen)
+        insideJob.brains.stash.installObservationForTesting(screen)
         XCTAssertTrue(insideJob.brains.semanticObservationIsActive)
         XCTAssertNotNil(insideJob.brains.stash.interfaceTree.findElement(heistId: offViewportHeistId))
 
@@ -500,7 +500,7 @@ final class WaitForIntegrationTests: XCTestCase {
     }
 
     func testWaitForChangeVisibleUpdatePreservesKnownOffViewportMemory() async throws {
-        insideJob.brains.stash.stopPassiveSemanticObservation()
+        insideJob.brains.stash.semanticObservationStream.stop()
 
         let visibleBefore = AccessibilityElement.make(
             label: "WaitForChange-KnownMemory-Anchor",

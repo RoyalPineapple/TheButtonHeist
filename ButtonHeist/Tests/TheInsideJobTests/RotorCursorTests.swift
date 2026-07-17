@@ -293,7 +293,7 @@ final class RotorCursorTests: XCTestCase {
             shape: .frame(AccessibilityRect(x: 20, y: 80, width: 200, height: 44)),
             activationPoint: CGPoint(x: 120, y: 102)
         )
-        stash.installScreenForTesting(.makeForTests([
+        stash.installObservationForTesting(.makeForTests([
             .init(hostElement, heistId: hostHeistId, object: hostObject),
             .init(resultElement, heistId: resultHeistId, object: resultObject),
         ]))

@@ -75,11 +75,11 @@ final class HeistIdDisambiguationTests: XCTestCase {
     private static let contentPositionSuffixRegex = /_at_-?\d+_-?\d+$/
 
     private func assertNoContentPositionSuffix(
-        in screen: InterfaceObservation,
+        in observation: InterfaceObservation,
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
-        for heistId in screen.tree.elements.keys {
+        for heistId in observation.tree.elements.keys {
             XCTAssertNil(
                 heistId.rawValue.firstMatch(of: Self.contentPositionSuffixRegex),
                 "buildObservation produced an `_at_X_Y` suffix: \(heistId)",

@@ -100,7 +100,7 @@ final class TheBrains {
     }
 
     func treeUnavailableResult(method: ActionMethod) -> ActionResult {
-        let message = stash.latestSemanticObservationFailureDiagnostic()
+        let message = stash.semanticObservationStream.latestSettleFailureDiagnostic
             .map { "Could not observe accessibility tree; \($0)" }
             ?? TheBrains.treeUnavailableMessage
         return .failure(
@@ -125,17 +125,17 @@ final class TheBrains {
     }
 
     func stopSemanticObservation() {
-        stash.stopPassiveSemanticObservation()
+        stash.semanticObservationStream.stop()
     }
 
     func observeInterface(_ query: InterfaceQuery) async -> InterfaceQueryResult {
         guard semanticObservationIsActive else {
             return .failure(.inactiveRuntime)
         }
-        guard let visibleEvidence = await stash.observeVisibleSemanticEvidence(timeout: 2.0),
+        guard let visibleEvidence = await stash.semanticObservationStream.visibleEvidence(timeout: 2.0),
               let exploration = await navigation.exploreScreen(
                 baseline: .currentViewport(
-                    stash.visibleExplorationBaseline(from: visibleEvidence.screen)
+                    stash.visibleExplorationBaseline(from: visibleEvidence.viewportObservation)
                 ),
                 maxScrollsPerContainer: query.maxScrollsPerContainer?.value,
                 maxScrollsPerDiscovery: query.maxScrollsPerDiscovery?.value,
@@ -145,8 +145,8 @@ final class TheBrains {
 
         do {
             let interface = try stash.selectInterface(query)
-            let diagnostics = exploration.manifest.interfaceDiagnostics(
-                for: exploration.event.observation.screen,
+            let diagnostics = exploration.progress.interfaceDiagnostics(
+                for: exploration.event.settledObservation.observation,
                 includedElementCount: interface.projectedElements.count
             )
             return .success(interface

@@ -20,10 +20,10 @@ internal final class ElementInflation {
     internal struct Exploration {
         internal var discoverTarget: @MainActor (
             ResolvedAccessibilityTarget,
-        ) async -> Navigation.ExploredScreen?
+        ) async -> Navigation.InterfaceExplorationResult?
         internal var revealKnownTarget: @MainActor (
             KnownTargetRevealRequest,
-        ) async -> Navigation.ExploredScreen?
+        ) async -> Navigation.InterfaceExplorationResult?
         internal var moveViewport: MoveViewport
     }
 

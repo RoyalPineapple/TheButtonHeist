@@ -66,7 +66,7 @@ private final class PredicateCaseSelectionProjection {
     }
 
     func evaluate(
-        _ observation: HeistSemanticObservation
+        _ observation: SettledObservationEvidence
     ) -> PredicateWaitEvaluation<PredicateCaseSelectionEvidence> {
         let evaluatedCases = inputs.map { PredicateEvaluation.caseMatch($0, in: observation) }
         let selection = PredicateCaseSelectionEvidence(

@@ -5,7 +5,7 @@ import ThePlans
 import TheScore
 
 struct PostActionPayloadContext {
-    let afterState: PostActionObservation.BeforeState
+    let baseline: PostActionObservation.ObservationBaseline
     let resolvedElementId: HeistId?
 }
 
@@ -38,12 +38,12 @@ final class InteractionObservation {
     func prepareBeforeState(
         scope: SemanticObservationScope = .visible,
         timeout: Double? = InteractionObservation.defaultVisibleStateTimeout
-    ) async -> PostActionObservation.BeforeState? {
+    ) async -> PostActionObservation.ObservationBaseline? {
         switch scope {
         case .visible:
             return await observeVisibleState(timeout: timeout)
         case .discovery:
-            return await observeSemanticState(scope: .discovery, after: nil, timeout: timeout)?.state
+            return await observeSemanticState(scope: .discovery, after: nil, timeout: timeout)?.baseline
         }
     }
 
@@ -52,18 +52,18 @@ final class InteractionObservation {
         timeout: Double = InteractionObservation.defaultVisibleStateTimeout
     ) async -> SettledCapture? {
         guard let scope else { return nil }
-        return await stash.observeSettledSemanticObservation(
+        return await stash.semanticObservationStream.settledEvent(
             scope: scope,
             after: nil,
             timeout: timeout
         )?.settledCapture
     }
 
-    func observeVisibleState(timeout: Double? = InteractionObservation.defaultVisibleStateTimeout) async -> PostActionObservation.BeforeState? {
-        baselineState(from: await stash.observeVisibleSemanticEvidence(timeout: timeout))
+    func observeVisibleState(timeout: Double? = InteractionObservation.defaultVisibleStateTimeout) async -> PostActionObservation.ObservationBaseline? {
+        baselineState(from: await stash.semanticObservationStream.visibleEvidence(timeout: timeout))
     }
 
-    func baselineState(from evidence: VisibleSemanticObservationEvidence?) -> PostActionObservation.BeforeState? {
+    func baselineState(from evidence: ViewportObservationEvidence?) -> PostActionObservation.ObservationBaseline? {
         guard let evidence else { return nil }
         return postActionObservation.captureSemanticState(from: evidence)
     }
@@ -72,8 +72,8 @@ final class InteractionObservation {
         scope: SemanticObservationScope,
         after sequence: SettledObservationSequence?,
         timeout: Double?
-    ) async -> HeistSemanticObservation? {
-        let event = await stash.observeSettledSemanticObservation(
+    ) async -> SettledObservationEvidence? {
+        let event = await stash.semanticObservationStream.settledEvent(
             scope: scope,
             after: sequence,
             timeout: timeout ?? SemanticObservationTiming.defaultTimeout
@@ -86,7 +86,7 @@ final class InteractionObservation {
     func finishAfterAction(
         outcome: TheSafecracker.ActionDispatchOutcome,
         afterStatePayload: ((PostActionPayloadContext) -> ActionResultPayload?)? = nil,
-        before: PostActionObservation.BeforeState,
+        before: PostActionObservation.ObservationBaseline,
         postActionCommitScope: SemanticObservationScope = .visible,
         settleOutcome: SettleSession.Outcome? = nil,
         notificationWindow: AccessibilityNotificationActionWindow? = nil

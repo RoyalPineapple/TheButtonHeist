@@ -35,7 +35,7 @@ extension Navigation {
     struct ViewportTransition {
         let result: ScrollSettleResult
         let previousVisibleIds: Set<HeistId>
-        let event: SettledSemanticObservationEvent?
+        let event: SettledObservationEvent?
 
         static func unavailable(previousVisibleIds: Set<HeistId> = []) -> ViewportTransition {
             ViewportTransition(

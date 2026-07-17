@@ -128,7 +128,7 @@ extension TheBrains {
 
         let matchSignature = ForEachMatchSignature(
             matching: resolvedMatching,
-            elements: observation.state.interface.projectedElements
+            elements: observation.baseline.interface.projectedElements
         )
         let matchedCount = matchSignature.count
         if matchedCount > step.limit {
@@ -166,7 +166,7 @@ extension TheBrains {
                     observedSequence = afterObservation.event.sequence
                     let nextSignature = ForEachMatchSignature(
                         matching: resolvedMatching,
-                        elements: afterObservation.state.interface.projectedElements
+                        elements: afterObservation.baseline.interface.projectedElements
                     )
                     if nextSignature == currentSignature {
                         nextOrdinal += 1

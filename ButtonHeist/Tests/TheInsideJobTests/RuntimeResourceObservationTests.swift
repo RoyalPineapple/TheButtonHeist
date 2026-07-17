@@ -137,7 +137,7 @@ final class RuntimeResourceObservationTests: XCTestCase {
             outcome: .timedOut(timeMs: 17),
             events: [],
             finalObservation: SettleSessionFinalObservation(
-                screen: InterfaceObservation.makeForTests()
+                observation: InterfaceObservation.makeForTests()
             ),
             elementsByKey: [:],
             instabilityDescription: "runtime resource diagnostic"

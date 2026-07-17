@@ -3,27 +3,9 @@
 import TheScore
 import ThePlans
 
-internal enum SemanticObservationGenerationClassifier {
-    @MainActor
-    internal static func continuity(
-        from previous: InterfaceObservation?,
-        to candidate: InterfaceObservation,
-        notifications: [AccessibilityNotificationKind],
-        lineageEvidence: ScreenLineageEvidence? = nil
-    ) -> ScreenContinuity {
-        ScreenClassifier.classify(
-            before: previous.map { ScreenClassifier.snapshot(of: $0.tree) },
-            after: ScreenClassifier.snapshot(of: candidate.tree),
-            notifications: notifications,
-            lineageEvidence: lineageEvidence
-        )
-    }
-
-}
-
 /// Builds one publication from the log's latest per-scope events.
 internal struct SemanticObservationPublication {
-    internal typealias EventsByScope = [SemanticObservationScope: SettledSemanticObservationEvent]
+    internal typealias EventsByScope = [SemanticObservationScope: SettledObservationEvent]
 
     internal struct Evidence {
         internal let interface: Interface
@@ -33,21 +15,21 @@ internal struct SemanticObservationPublication {
 
     internal struct Context {
         internal let continuity: ScreenContinuity
-        internal let generation: ObservationGeneration
+        internal let generation: ScreenGeneration
         internal let previousEvents: EventsByScope
     }
 
     internal let sourceScope: SemanticObservationScope
     internal let events: EventsByScope
 
-    internal var sourceEvent: SettledSemanticObservationEvent {
+    internal var sourceEvent: SettledObservationEvent {
         guard let event = events[sourceScope] else {
             preconditionFailure("Semantic observation publication has no source event")
         }
         return event
     }
 
-    internal var generation: ObservationGeneration {
+    internal var generation: ScreenGeneration {
         sourceEvent.generation
     }
 
@@ -69,7 +51,7 @@ internal struct SemanticObservationPublication {
         sourceScope: SemanticObservationScope,
         sequence: SettledObservationSequence,
         notificationBatch: AccessibilityNotificationBatch,
-        screen: InterfaceObservation,
+        observation: InterfaceObservation,
         semanticSignal: TheTripwire.SemanticSignal,
         context: Context,
         evidenceByScope: [SemanticObservationScope: Evidence]
@@ -83,15 +65,15 @@ internal struct SemanticObservationPublication {
                 preconditionFailure("Semantic observation publication has no evidence for fulfilled scope")
             }
             let previousEvent = context.previousEvents[fulfilledScope]
-            let observation = SettledSemanticObservation(
+            let settledObservation = SettledObservation(
                 sequence: sequence,
                 scope: fulfilledScope,
-                screen: screen.semanticObservationProjection(for: fulfilledScope),
+                observation: observation.semanticObservationProjection(for: fulfilledScope),
                 semanticSignal: semanticSignal
             )
             let previousCapture = previousEvent?.trace.captures.last
             let currentCapture = makeCapture(
-                observation: observation,
+                settledObservation: settledObservation,
                 sequence: previousCapture == nil ? 1 : 2,
                 parentHash: previousCapture?.hash,
                 generation: eventGeneration,
@@ -104,13 +86,11 @@ internal struct SemanticObservationPublication {
             } else {
                 AccessibilityTrace(capture: currentCapture)
             }
-            events[fulfilledScope] = SettledSemanticObservationEvent(
+            events[fulfilledScope] = SettledObservationEvent(
                 generation: eventGeneration,
                 continuity: context.continuity,
-                sequence: observation.sequence,
-                scope: observation.scope,
-                observation: observation,
-                previous: previousEvent?.observation,
+                settledObservation: settledObservation,
+                previous: previousEvent?.settledObservation,
                 previousCursor: previousEvent?.cursor,
                 notificationSequence: notificationBatch.through.sequence,
                 trace: trace
@@ -120,15 +100,15 @@ internal struct SemanticObservationPublication {
     }
 
     private static func makeCapture(
-        observation: SettledSemanticObservation,
+        settledObservation: SettledObservation,
         sequence: Int,
         parentHash: String?,
-        generation: ObservationGeneration,
+        generation: ScreenGeneration,
         notificationBatch: AccessibilityNotificationBatch,
         evidence: Evidence,
         fallbackReason: AccessibilityObservationFallbackReason?
     ) -> AccessibilityTrace.Capture {
-        let windows = observation.semanticSignal.windows.enumerated().map { index, window in
+        let windows = settledObservation.semanticSignal.windows.enumerated().map { index, window in
             AccessibilityTrace.WindowContext(
                 index: index,
                 level: window.level,
@@ -141,7 +121,7 @@ internal struct SemanticObservationPublication {
             parentHash: parentHash,
             context: AccessibilityTrace.Context(
                 firstResponder: evidence.firstResponder,
-                screenId: observation.screen.tree.id,
+                screenId: settledObservation.observation.tree.id,
                 observationGeneration: generation.rawValue,
                 windowStack: windows
             ),

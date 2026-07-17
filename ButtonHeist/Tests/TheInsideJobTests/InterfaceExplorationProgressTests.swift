@@ -7,7 +7,7 @@ import ThePlans
 import TheScore
 
 @MainActor
-final class ScreenManifestTests: XCTestCase {
+final class InterfaceExplorationProgressTests: XCTestCase {
 
     // MARK: - Helpers
 
@@ -36,132 +36,132 @@ final class ScreenManifestTests: XCTestCase {
 
     // MARK: - Initial State
 
-    func testEmptyManifest() {
-        let manifest = Navigation.ScreenManifest()
-        XCTAssertTrue(manifest.pendingScrollPaths.isEmpty)
-        XCTAssertTrue(manifest.exploredScrollPaths.isEmpty)
-        XCTAssertEqual(manifest.scrollCount, 0)
-        XCTAssertEqual(manifest.maxScrollsPerContainer, Navigation.ScreenManifest.maxScrollsPerContainer)
-        XCTAssertEqual(manifest.maxScrollsPerDiscovery, Navigation.ScreenManifest.maxScrollsPerDiscovery)
+    func testEmptyProgress() {
+        let progress = Navigation.InterfaceExplorationProgress()
+        XCTAssertTrue(progress.pendingScrollPaths.isEmpty)
+        XCTAssertTrue(progress.exploredScrollPaths.isEmpty)
+        XCTAssertEqual(progress.scrollCount, 0)
+        XCTAssertEqual(progress.maxScrollsPerContainer, Navigation.InterfaceExplorationProgress.maxScrollsPerContainer)
+        XCTAssertEqual(progress.maxScrollsPerDiscovery, Navigation.InterfaceExplorationProgress.maxScrollsPerDiscovery)
     }
 
-    func testManifestAcceptsPerPassScrollLimits() {
-        let manifest = Navigation.ScreenManifest(
+    func testProgressAcceptsPerPassScrollLimits() {
+        let progress = Navigation.InterfaceExplorationProgress(
             maxScrollsPerContainer: 25,
             maxScrollsPerDiscovery: 40
         )
 
-        XCTAssertEqual(manifest.maxScrollsPerContainer, 25)
-        XCTAssertEqual(manifest.maxScrollsPerDiscovery, 40)
+        XCTAssertEqual(progress.maxScrollsPerContainer, 25)
+        XCTAssertEqual(progress.maxScrollsPerDiscovery, 40)
     }
 
     func testRecordScrollAttemptCountsAttemptsAndFlagsDiscoveryCap() {
-        var manifest = Navigation.ScreenManifest(
+        var progress = Navigation.InterfaceExplorationProgress(
             maxScrollsPerContainer: 10,
             maxScrollsPerDiscovery: 2
         )
         let path = TreePath([0])
 
-        XCTAssertNil(manifest.recordScrollAttempt(in: path))
-        XCTAssertNil(manifest.recordScrollAttempt(in: path))
-        XCTAssertEqual(manifest.recordScrollAttempt(in: path), .discoveryScrollLimit)
+        XCTAssertNil(progress.recordScrollAttempt(in: path))
+        XCTAssertNil(progress.recordScrollAttempt(in: path))
+        XCTAssertEqual(progress.recordScrollAttempt(in: path), .discoveryScrollLimit)
 
-        XCTAssertEqual(manifest.scrollCount, 2)
-        XCTAssertTrue(manifest.discoveryLimitHit)
+        XCTAssertEqual(progress.scrollCount, 2)
+        XCTAssertTrue(progress.discoveryLimitHit)
     }
 
     // MARK: - markExplored
 
     func testMarkExploredMovesFromPendingToExplored() {
-        var manifest = Navigation.ScreenManifest()
+        var progress = Navigation.InterfaceExplorationProgress()
         let container = makeScrollableContainer()
         let path = TreePath([0])
-        manifest.addPendingContainers([semanticContainer(container, path: path)])
+        progress.addPendingContainers([semanticContainer(container, path: path)])
 
-        XCTAssertFalse(manifest.pendingScrollPaths.isEmpty)
+        XCTAssertFalse(progress.pendingScrollPaths.isEmpty)
 
-        manifest.markExplored(path)
+        progress.markExplored(path)
 
-        XCTAssertTrue(manifest.pendingScrollPaths.isEmpty)
-        XCTAssertTrue(manifest.exploredScrollPaths.contains(path))
+        XCTAssertTrue(progress.pendingScrollPaths.isEmpty)
+        XCTAssertTrue(progress.exploredScrollPaths.contains(path))
     }
 
     func testMarkOmittedMovesFromPendingToOmittedOnly() {
-        var manifest = Navigation.ScreenManifest()
+        var progress = Navigation.InterfaceExplorationProgress()
         let container = makeScrollableContainer()
         let path = TreePath([0])
-        manifest.addPendingContainers([semanticContainer(container, path: path)])
+        progress.addPendingContainers([semanticContainer(container, path: path)])
 
-        manifest.markOmitted(path, reason: .containerScrollLimit)
+        progress.markOmitted(path, reason: .containerScrollLimit)
 
-        XCTAssertFalse(manifest.pendingScrollPaths.contains(path))
-        XCTAssertFalse(manifest.exploredScrollPaths.contains(path))
-        XCTAssertEqual(manifest.omittedScrollPathReasons[path], [.containerScrollLimit])
+        XCTAssertFalse(progress.pendingScrollPaths.contains(path))
+        XCTAssertFalse(progress.exploredScrollPaths.contains(path))
+        XCTAssertEqual(progress.omittedScrollPathReasons[path], [.containerScrollLimit])
     }
 
     func testOmittedContainerIsNotReaddedToPending() {
-        var manifest = Navigation.ScreenManifest()
+        var progress = Navigation.InterfaceExplorationProgress()
         let container = makeScrollableContainer()
         let path = TreePath([0])
 
-        manifest.markOmitted(path, reason: .containerScrollLimit)
-        manifest.addPendingContainers([semanticContainer(container, path: path)])
+        progress.markOmitted(path, reason: .containerScrollLimit)
+        progress.addPendingContainers([semanticContainer(container, path: path)])
 
-        XCTAssertFalse(manifest.pendingScrollPaths.contains(path))
-        XCTAssertEqual(manifest.omittedScrollPathReasons[path], [.containerScrollLimit])
+        XCTAssertFalse(progress.pendingScrollPaths.contains(path))
+        XCTAssertEqual(progress.omittedScrollPathReasons[path], [.containerScrollLimit])
     }
 
     // MARK: - addPendingContainers
 
     func testAddPendingContainersSkipsAlreadyExplored() {
-        var manifest = Navigation.ScreenManifest()
+        var progress = Navigation.InterfaceExplorationProgress()
         let container = makeScrollableContainer()
         let path = TreePath([0])
-        manifest.markExplored(path)
-        manifest.addPendingContainers([semanticContainer(container, path: path)])
+        progress.markExplored(path)
+        progress.addPendingContainers([semanticContainer(container, path: path)])
 
-        XCTAssertTrue(manifest.pendingScrollPaths.isEmpty,
+        XCTAssertTrue(progress.pendingScrollPaths.isEmpty,
                       "An already-explored container must not be re-added to pending")
     }
 
     func testAddPendingContainersAddsNewContainers() {
-        var manifest = Navigation.ScreenManifest()
+        var progress = Navigation.InterfaceExplorationProgress()
         let containerA = makeScrollableContainer(frame: CGRect(x: 0, y: 0, width: 100, height: 100))
         let containerB = makeScrollableContainer(frame: CGRect(x: 0, y: 100, width: 100, height: 100))
-        manifest.addPendingContainers([
+        progress.addPendingContainers([
             semanticContainer(containerA, path: TreePath([0])),
             semanticContainer(containerB, path: TreePath([1])),
         ])
 
-        XCTAssertEqual(manifest.pendingScrollPaths.count, 2)
+        XCTAssertEqual(progress.pendingScrollPaths.count, 2)
     }
 
     func testEqualContainersAtDifferentPathsHaveIndependentExplorationState() {
-        var manifest = Navigation.ScreenManifest(maxScrollsPerContainer: 1, maxScrollsPerDiscovery: 10)
+        var progress = Navigation.InterfaceExplorationProgress(maxScrollsPerContainer: 1, maxScrollsPerDiscovery: 10)
         let container = makeScrollableContainer()
         let firstPath = TreePath([0])
         let secondPath = TreePath([1])
-        manifest.addPendingContainers([
+        progress.addPendingContainers([
             semanticContainer(container, path: firstPath),
             semanticContainer(container, path: secondPath),
         ])
 
-        XCTAssertNil(manifest.recordScrollAttempt(in: firstPath))
-        XCTAssertEqual(manifest.recordScrollAttempt(in: firstPath), .containerScrollLimit)
-        XCTAssertNil(manifest.recordScrollAttempt(in: secondPath))
+        XCTAssertNil(progress.recordScrollAttempt(in: firstPath))
+        XCTAssertEqual(progress.recordScrollAttempt(in: firstPath), .containerScrollLimit)
+        XCTAssertNil(progress.recordScrollAttempt(in: secondPath))
 
-        manifest.markExplored(firstPath)
+        progress.markExplored(firstPath)
 
-        XCTAssertTrue(manifest.exploredScrollPaths.contains(firstPath))
-        XCTAssertFalse(manifest.exploredScrollPaths.contains(secondPath))
-        XCTAssertFalse(manifest.pendingScrollPaths.contains(firstPath))
-        XCTAssertTrue(manifest.pendingScrollPaths.contains(secondPath))
+        XCTAssertTrue(progress.exploredScrollPaths.contains(firstPath))
+        XCTAssertFalse(progress.exploredScrollPaths.contains(secondPath))
+        XCTAssertFalse(progress.pendingScrollPaths.contains(firstPath))
+        XCTAssertTrue(progress.pendingScrollPaths.contains(secondPath))
     }
 
     // MARK: - Diagnostics
 
     func testDiscoveryDiagnosticsReportOmittedContainersAndNextAction() throws {
-        var manifest = Navigation.ScreenManifest(
+        var progress = Navigation.InterfaceExplorationProgress(
             maxScrollsPerContainer: 3,
             maxScrollsPerDiscovery: 5
         )
@@ -176,10 +176,10 @@ final class ScreenManifestTests: XCTestCase {
             firstResponderHeistId: nil,
         )
 
-        manifest.markOmitted(TreePath([0]), reason: .discoveryScrollLimit)
+        progress.markOmitted(TreePath([0]), reason: .discoveryScrollLimit)
 
         let diagnostics = try XCTUnwrap(
-            manifest.interfaceDiagnostics(for: screen, includedElementCount: 12).discovery
+            progress.interfaceDiagnostics(for: screen, includedElementCount: 12).discovery
         )
         let omitted = try XCTUnwrap(diagnostics.omittedContainers.first)
 
@@ -199,8 +199,8 @@ final class ScreenManifestTests: XCTestCase {
     // MARK: - maxScrollsPerContainer
 
     func testMaxScrollsPerContainerIsReasonable() {
-        XCTAssertEqual(Navigation.ScreenManifest.maxScrollsPerContainer, 200)
-        XCTAssertEqual(Navigation.ScreenManifest.maxScrollsPerDiscovery, 200)
+        XCTAssertEqual(Navigation.InterfaceExplorationProgress.maxScrollsPerContainer, 200)
+        XCTAssertEqual(Navigation.InterfaceExplorationProgress.maxScrollsPerDiscovery, 200)
     }
 }
 

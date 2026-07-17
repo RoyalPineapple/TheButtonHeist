@@ -7,7 +7,7 @@ import TheScore
 
 @MainActor
 extension SemanticObservationStream {
-    internal func visibleEvidence(timeout: Double?) async -> VisibleSemanticObservationEvidence? {
+    internal func visibleEvidence(timeout: Double?) async -> ViewportObservationEvidence? {
         let subscription = subscribe(scope: .visible)
         defer { _ = subscription }
 
@@ -22,8 +22,8 @@ extension SemanticObservationStream {
         )
         guard let proof = admitSettledProof(outcome, stash: stash) else { return nil }
         let event = commitSettledVisibleObservation(proof)
-        return VisibleSemanticObservationEvidence(
-            screen: event.observation.screen,
+        return ViewportObservationEvidence(
+            viewportObservation: event.settledObservation.observation,
             settledObservationSequence: event.sequence,
             settleOutcome: outcome.outcome
         )
@@ -33,13 +33,13 @@ extension SemanticObservationStream {
     internal func commitSettledVisibleObservation(
         _ proof: InterfaceObservationProof,
         notificationBatch: AccessibilityNotificationBatch? = nil,
-        notificationIdentityScreen: InterfaceObservation? = nil
-    ) -> SettledSemanticObservationEvent {
+        notificationIdentityObservation: InterfaceObservation? = nil
+    ) -> SettledObservationEvent {
         publishCommittedObservation(
             proof,
             scope: .visible,
             notificationBatch: notificationBatch,
-            notificationIdentityScreen: notificationIdentityScreen
+            notificationIdentityObservation: notificationIdentityObservation
         )
     }
 
@@ -47,7 +47,7 @@ extension SemanticObservationStream {
     internal func commitSettledDiscoveryObservation(
         _ proof: InterfaceObservationProof,
         notificationBatch: AccessibilityNotificationBatch? = nil
-    ) -> SettledSemanticObservationEvent {
+    ) -> SettledObservationEvent {
         publishCommittedObservation(
             proof,
             scope: .discovery,
@@ -60,8 +60,8 @@ extension SemanticObservationStream {
         _ proof: InterfaceObservationProof,
         scope: SemanticObservationScope,
         notificationBatch: AccessibilityNotificationBatch? = nil,
-        notificationIdentityScreen: InterfaceObservation? = nil
-    ) -> SettledSemanticObservationEvent {
+        notificationIdentityObservation: InterfaceObservation? = nil
+    ) -> SettledObservationEvent {
         guard let stash else {
             preconditionFailure("SemanticObservationStream cannot commit after TheStash is released")
         }
@@ -72,17 +72,15 @@ extension SemanticObservationStream {
         let previousTree = stash.interfaceTree
         let candidateTree = switch scope {
         case .visible:
-            previousTree.updatingViewport(with: proof.screen)
+            previousTree.updatingViewport(with: proof.observation)
         case .discovery:
             proof.discoveryCommitPolicy == .replaceInterface
-                ? proof.screen.tree
-                : previousTree.merging(proof.screen.tree)
+                ? proof.observation.tree
+                : previousTree.merging(proof.observation.tree)
         }
-        let previous = committedInterfaceObservation(from: previousTree)
-        let candidate = committedInterfaceObservation(from: candidateTree) ?? .empty
-        let classifiedContinuity = SemanticObservationGenerationClassifier.continuity(
-            from: previous,
-            to: candidate,
+        let classifiedContinuity = ScreenClassifier.classify(
+            from: previousTree == .empty ? nil : previousTree,
+            to: candidateTree,
             notifications: resolvedNotificationBatch.events.map(\.kind),
             lineageEvidence: proof.lineageEvidence
         )
@@ -91,7 +89,7 @@ extension SemanticObservationStream {
             observationLog.beginScreenReplacement()
         }
         _ = stash.reduceInterfaceGraph(
-            with: proof.screen,
+            with: proof.observation,
             scope: scope,
             continuity: continuity,
             discoveryCommitPolicy: proof.discoveryCommitPolicy
@@ -101,7 +99,7 @@ extension SemanticObservationStream {
             stash: stash,
             notificationBatch: resolvedNotificationBatch,
             continuity: continuity,
-            notificationIdentityScreen: notificationIdentityScreen
+            notificationIdentityObservation: notificationIdentityObservation
         )
     }
 
@@ -110,11 +108,11 @@ extension SemanticObservationStream {
         commitScope: SemanticObservationScope = .visible,
         settleOutcome providedOutcome: SettleSession.Outcome? = nil,
         notificationWindow: AccessibilityNotificationActionWindow? = nil
-    ) async -> PostActionSettleObservation {
+    ) async -> ObservationSettlement {
         guard let stash else {
             let notificationBatch = notificationWindow?.capture()
             notificationWindow?.cancel()
-            return PostActionSettleObservation(
+            return ObservationSettlement(
                 settle: SettleSession.Outcome(
                     outcome: .cancelled(timeMs: 0),
                     events: [],
@@ -145,13 +143,13 @@ extension SemanticObservationStream {
                 ?? stash.accessibilityNotifications.checkpoint(
                     after: runtimeState.notificationCursor
                 )
-            let event: SettledSemanticObservationEvent
+            let event: SettledObservationEvent
             switch commitScope {
             case .visible:
                 event = commitSettledVisibleObservation(
                     proof,
                     notificationBatch: notificationBatch,
-                    notificationIdentityScreen: proof.screen
+                    notificationIdentityObservation: proof.observation
                 )
             case .discovery:
                 event = commitSettledDiscoveryObservation(
@@ -159,9 +157,9 @@ extension SemanticObservationStream {
                     notificationBatch: notificationBatch
                 )
             }
-            return PostActionSettleObservation(settle: outcome, result: .committed(event))
+            return ObservationSettlement(settle: outcome, result: .committed(event))
         }
-        return PostActionSettleObservation(
+        return ObservationSettlement(
             settle: outcome,
             result: postActionFailureResult(
                 outcome,
@@ -205,11 +203,11 @@ extension SemanticObservationStream {
         stash: TheStash,
         notificationBatch: AccessibilityNotificationBatch,
         continuity: ScreenContinuity,
-        notificationIdentityScreen: InterfaceObservation? = nil
-    ) -> SettledSemanticObservationEvent {
-        let settledScreen: InterfaceObservation
+        notificationIdentityObservation: InterfaceObservation? = nil
+    ) -> SettledObservationEvent {
+        let settledObservation: InterfaceObservation
         do {
-            settledScreen = try InterfaceObservation.build(tree: stash.interfaceTree)
+            settledObservation = try InterfaceObservation.build(tree: stash.interfaceTree)
         } catch {
             preconditionFailure("Published semantic observation failed validation: \(error)")
         }
@@ -217,7 +215,7 @@ extension SemanticObservationStream {
             sourceScope: scope,
             sequence: runtimeState.sequence + 1,
             notificationBatch: notificationBatch,
-            screen: settledScreen,
+            observation: settledObservation,
             semanticSignal: tripwire.tripwireSignal().semanticValue,
             context: SemanticObservationPublication.Context(
                 continuity: continuity,
@@ -226,9 +224,9 @@ extension SemanticObservationStream {
             ),
             evidenceByScope: publicationEvidence(
                 sourceScope: scope,
-                screen: settledScreen,
+                observation: settledObservation,
                 notificationBatch: notificationBatch,
-                notificationIdentityScreen: notificationIdentityScreen,
+                notificationIdentityObservation: notificationIdentityObservation,
                 stash: stash
             )
         )
@@ -256,21 +254,21 @@ extension SemanticObservationStream {
 
     private func publicationEvidence(
         sourceScope: SemanticObservationScope,
-        screen: InterfaceObservation,
+        observation: InterfaceObservation,
         notificationBatch: AccessibilityNotificationBatch,
-        notificationIdentityScreen: InterfaceObservation?,
+        notificationIdentityObservation: InterfaceObservation?,
         stash: TheStash
     ) -> [SemanticObservationScope: SemanticObservationPublication.Evidence] {
         Dictionary(uniqueKeysWithValues: sourceScope.fulfilledScopes.map { fulfilledScope in
-            let referenceScreen = screen
+            let referenceObservation = observation
             return (fulfilledScope, SemanticObservationPublication.Evidence(
-                interface: stash.semanticInterfaceWithHash(for: referenceScreen).interface,
+                interface: stash.semanticInterfaceWithHash(for: referenceObservation).interface,
                 accessibilityNotifications: stash.resolveAccessibilityNotificationEvidence(
                     notificationBatch.events,
-                    identityScreen: notificationIdentityScreen ?? referenceScreen,
-                    referenceScreen: referenceScreen
+                    identityObservation: notificationIdentityObservation ?? referenceObservation,
+                    referenceObservation: referenceObservation
                 ),
-                firstResponder: stash.firstResponderTarget(in: referenceScreen.tree)
+                firstResponder: stash.firstResponderTarget(in: referenceObservation.tree)
             ))
         })
     }
@@ -294,7 +292,7 @@ extension SemanticObservationStream {
     private func postActionFailureResult(
         _ outcome: SettleSession.Outcome,
         notificationBatch: AccessibilityNotificationBatch?
-    ) -> PostActionSettleObservation.Result {
+    ) -> ObservationSettlement.Result {
         guard !outcome.outcome.didSettleCleanly,
               case .timedOut = outcome.outcome,
               let tree = outcome.finalObservation?.tree else {
@@ -309,26 +307,16 @@ extension SemanticObservationStream {
         stash: TheStash
     ) {
         runtimeState.recordSettleFailure(diagnostic)
-        let screen = tree.map { tree in
+        let observation = tree.map { tree in
             do {
                 return try InterfaceObservation.build(tree: tree)
             } catch {
                 preconditionFailure("Failed settle diagnostic observation failed validation: \(error)")
             }
         }
-        stash.recordFailedSettleDiagnosticEvidence(screen)
+        stash.recordFailedSettleDiagnosticEvidence(observation)
     }
 
-    private func committedInterfaceObservation(
-        from tree: InterfaceTree
-    ) -> InterfaceObservation? {
-        guard tree != .empty else { return nil }
-        do {
-            return try InterfaceObservation.build(tree: tree)
-        } catch {
-            preconditionFailure("Committed interface observation failed validation: \(error)")
-        }
-    }
 }
 
 #endif // DEBUG

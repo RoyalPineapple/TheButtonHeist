@@ -366,29 +366,29 @@ final class ContainerFingerprintTests: XCTestCase {
         XCTAssertTrue(tree.scrollableContainers.isEmpty)
     }
 
-    // MARK: - ScreenManifest
+    // MARK: - InterfaceExplorationProgress
 
     func testMarkExploredMovesFromPending() {
         let path = TreePath([0])
 
-        var manifest = Navigation.ScreenManifest()
-        manifest.addPendingScrollPaths([path])
-        XCTAssertTrue(manifest.pendingScrollPaths.contains(path))
+        var progress = Navigation.InterfaceExplorationProgress()
+        progress.addPendingScrollPaths([path])
+        XCTAssertTrue(progress.pendingScrollPaths.contains(path))
 
-        manifest.markExplored(path)
-        XCTAssertFalse(manifest.pendingScrollPaths.contains(path))
-        XCTAssertTrue(manifest.exploredScrollPaths.contains(path))
-        XCTAssertTrue(manifest.pendingScrollPaths.isEmpty)
+        progress.markExplored(path)
+        XCTAssertFalse(progress.pendingScrollPaths.contains(path))
+        XCTAssertTrue(progress.exploredScrollPaths.contains(path))
+        XCTAssertTrue(progress.pendingScrollPaths.isEmpty)
     }
 
     func testAddPendingSkipsExplored() {
         let path = TreePath([0])
 
-        var manifest = Navigation.ScreenManifest()
-        manifest.markExplored(path)
-        manifest.addPendingScrollPaths([path])
+        var progress = Navigation.InterfaceExplorationProgress()
+        progress.markExplored(path)
+        progress.addPendingScrollPaths([path])
 
-        XCTAssertTrue(manifest.pendingScrollPaths.isEmpty, "Already-explored container should not be re-added to pending")
+        XCTAssertTrue(progress.pendingScrollPaths.isEmpty, "Already-explored container should not be re-added to pending")
     }
 
 }

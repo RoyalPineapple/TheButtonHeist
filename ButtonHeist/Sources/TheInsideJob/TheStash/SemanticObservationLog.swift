@@ -130,7 +130,7 @@ internal final class SemanticObservationLog {
 
     private var state: SemanticObservationLogState
 
-    internal var latestSourceEvent: SettledSemanticObservationEvent? {
+    internal var latestSourceEvent: SettledObservationEvent? {
         switch state.publicationState {
         case .observing(let sourceScope), .invalidated(.some(let sourceScope)):
             state.latestByScope[sourceScope]?.event
@@ -139,8 +139,8 @@ internal final class SemanticObservationLog {
         }
     }
 
-    internal var latestObservation: SettledSemanticObservation? {
-        latestSourceEvent?.observation
+    internal var latestObservation: SettledObservation? {
+        latestSourceEvent?.settledObservation
     }
 
     internal var latestSettledObservationInvalidated: Bool {
@@ -197,14 +197,14 @@ internal final class SemanticObservationLog {
 
     internal func previousEvent(
         for scope: SemanticObservationScope
-    ) -> SettledSemanticObservationEvent? {
+    ) -> SettledObservationEvent? {
         state.latestByScope[scope]?.event
     }
 
     internal func cleanEvent(
         scope: SemanticObservationScope,
         after sequence: SettledObservationSequence?
-    ) -> SettledSemanticObservationEvent? {
+    ) -> SettledObservationEvent? {
         guard case .observing(let sourceScope) = state.publicationState,
               let currentGeneration = state.latestByScope[sourceScope]?.cursor.generation,
               let latest = state.latestByScope[scope]?.event,
@@ -230,7 +230,7 @@ internal final class SemanticObservationLog {
         state.latestByScope[scope]?.cursor
     }
 
-    internal func event(at cursor: ObservationCursor) -> SettledSemanticObservationEvent? {
+    internal func event(at cursor: ObservationCursor) -> SettledObservationEvent? {
         if let latest = state.latestByScope[cursor.scope], latest.cursor == cursor {
             return latest.event
         }
@@ -240,7 +240,7 @@ internal final class SemanticObservationLog {
     internal func event(
         scope: SemanticObservationScope,
         sequence: SettledObservationSequence
-    ) -> SettledSemanticObservationEvent? {
+    ) -> SettledObservationEvent? {
         if let latest = state.latestByScope[scope], latest.event.sequence == sequence {
             return latest.event
         }
@@ -258,7 +258,7 @@ internal final class SemanticObservationLog {
 
     internal func observationWindow(
         from baseline: SettledCapture,
-        through currentEvent: SettledSemanticObservationEvent
+        through currentEvent: SettledObservationEvent
     ) -> ObservationWindow? {
         let projectedCurrentEvent = event(
             scope: baseline.cursor.scope,
@@ -331,7 +331,7 @@ internal final class SemanticObservationLog {
     }
 
     private static func entry(
-        for event: SettledSemanticObservationEvent,
+        for event: SettledObservationEvent,
         after latest: ObservationEntry?
     ) throws -> ObservationEntry {
         if event.previousCursor != latest?.cursor {

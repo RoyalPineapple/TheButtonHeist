@@ -2,70 +2,70 @@
 @testable import TheInsideJob
 
 extension InterfaceObservationProof {
-    static func forTesting(_ screen: InterfaceObservation) -> Self {
-        .uncheckedForTesting(screen)
+    static func forTesting(_ observation: InterfaceObservation) -> Self {
+        .uncheckedForTesting(observation)
     }
 
-    static func forTestingAfterViewportMovement(_ screen: InterfaceObservation) -> Self {
-        .uncheckedForTesting(screen, lineageEvidence: .viewportMovement)
+    static func forTestingAfterViewportMovement(_ observation: InterfaceObservation) -> Self {
+        .uncheckedForTesting(observation, lineageEvidence: .viewportMovement)
     }
 }
 
 extension SemanticObservationStream {
     @discardableResult
     func commitVisibleObservationForTesting(
-        _ screen: InterfaceObservation,
+        _ observation: InterfaceObservation,
         notificationBatch: AccessibilityNotificationBatch? = nil,
-        notificationIdentityScreen: InterfaceObservation? = nil
-    ) -> SettledSemanticObservationEvent {
+        notificationIdentityObservation: InterfaceObservation? = nil
+    ) -> SettledObservationEvent {
         commitSettledVisibleObservation(
-            .forTesting(screen),
+            .forTesting(observation),
             notificationBatch: notificationBatch,
-            notificationIdentityScreen: notificationIdentityScreen
+            notificationIdentityObservation: notificationIdentityObservation
         )
     }
 
     @discardableResult
     func commitVisibleObservationAfterViewportMovementForTesting(
-        _ screen: InterfaceObservation,
+        _ observation: InterfaceObservation,
         notificationBatch: AccessibilityNotificationBatch? = nil,
-        notificationIdentityScreen: InterfaceObservation? = nil
-    ) -> SettledSemanticObservationEvent {
+        notificationIdentityObservation: InterfaceObservation? = nil
+    ) -> SettledObservationEvent {
         commitSettledVisibleObservation(
-            .forTestingAfterViewportMovement(screen),
+            .forTestingAfterViewportMovement(observation),
             notificationBatch: notificationBatch,
-            notificationIdentityScreen: notificationIdentityScreen
+            notificationIdentityObservation: notificationIdentityObservation
         )
     }
 
     @discardableResult
     func commitDiscoveryObservationForTesting(
-        _ screen: InterfaceObservation,
+        _ observation: InterfaceObservation,
         notificationBatch: AccessibilityNotificationBatch? = nil
-    ) -> SettledSemanticObservationEvent {
-        commitSettledDiscoveryObservation(.forTesting(screen), notificationBatch: notificationBatch)
+    ) -> SettledObservationEvent {
+        commitSettledDiscoveryObservation(.forTesting(observation), notificationBatch: notificationBatch)
     }
 
     @discardableResult
     func commitDiscoveryObservationAfterViewportMovementForTesting(
-        _ screen: InterfaceObservation,
+        _ observation: InterfaceObservation,
         notificationBatch: AccessibilityNotificationBatch? = nil
-    ) -> SettledSemanticObservationEvent {
+    ) -> SettledObservationEvent {
         commitSettledDiscoveryObservation(
-            .forTestingAfterViewportMovement(screen),
+            .forTestingAfterViewportMovement(observation),
             notificationBatch: notificationBatch
         )
     }
 }
 
 extension TheStash {
-    func installScreenForTesting(_ screen: InterfaceObservation) {
-        nextVisibleRefreshScreenForTesting = screen
-        semanticObservationStream.commitVisibleObservationForTesting(screen)
+    func installObservationForTesting(_ observation: InterfaceObservation) {
+        nextVisibleRefreshObservationForTesting = observation
+        semanticObservationStream.commitVisibleObservationForTesting(observation)
     }
 
-    func clearInstalledVisibleRefreshScreenForTesting() {
-        nextVisibleRefreshScreenForTesting = nil
+    func clearInstalledVisibleRefreshObservationForTesting() {
+        nextVisibleRefreshObservationForTesting = nil
     }
 }
 #endif

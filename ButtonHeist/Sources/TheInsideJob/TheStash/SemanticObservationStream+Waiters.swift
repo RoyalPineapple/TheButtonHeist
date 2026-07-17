@@ -91,7 +91,7 @@ extension SemanticObservationStream {
         scope: SemanticObservationScope,
         after sequence: SettledObservationSequence?,
         timeout: Double?
-    ) async -> SettledSemanticObservationEvent? {
+    ) async -> SettledObservationEvent? {
         invalidateSettledObservationIfScreenChangedSinceCommit()
         let requiredSequence = baselineSequence(for: scope, after: sequence)
         if timeout == 0 {
@@ -138,7 +138,7 @@ extension SemanticObservationStream {
 
     internal func observationWindow(
         from baseline: SettledCapture,
-        through currentEvent: SettledSemanticObservationEvent
+        through currentEvent: SettledObservationEvent
     ) -> ObservationWindow? {
         observationLog.observationWindow(from: baseline, through: currentEvent)
     }

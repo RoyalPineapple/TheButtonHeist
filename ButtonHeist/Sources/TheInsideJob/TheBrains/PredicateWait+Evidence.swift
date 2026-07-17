@@ -27,7 +27,7 @@ internal struct PredicateObservationEvidence {
     internal let window: ObservationWindow?
 
     internal init(
-        observation: HeistSemanticObservation,
+        observation: SettledObservationEvidence,
         baseline: SettledCapture?,
         window: ObservationWindow?
     ) {
@@ -37,7 +37,7 @@ internal struct PredicateObservationEvidence {
         self.window = window
     }
 
-    internal var observation: HeistSemanticObservation {
+    internal var observation: SettledObservationEvidence {
         snapshot.observation
     }
 
@@ -88,10 +88,10 @@ extension ObservationWindow {
 }
 
 private struct PredicateObservationSnapshot {
-    fileprivate let observation: HeistSemanticObservation
+    fileprivate let observation: SettledObservationEvidence
     fileprivate let trace: AccessibilityTrace
 
-    fileprivate init(_ observation: HeistSemanticObservation) {
+    fileprivate init(_ observation: SettledObservationEvidence) {
         self.observation = observation
         self.trace = observation.accessibilityTrace
     }

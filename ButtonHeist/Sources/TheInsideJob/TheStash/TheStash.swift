@@ -33,7 +33,7 @@ final class TheStash {
 
     var interfaceTree: InterfaceTree = .empty
     var latestObservation: InterfaceObservation = .empty
-    var diagnosticObservation: InterfaceObservation?
+    var latestFailedSettleDiagnosticEvidence: InterfaceObservation?
 
     var currentLiveCapture: LiveCapture {
         latestObservation.liveCapture
@@ -42,23 +42,11 @@ final class TheStash {
     /// Unit-test fixture for the next explicit viewport refresh. Production
     /// refreshes always parse UIKit; synthetic tests can install one observation as
     /// the current tree without retaining any live object strongly.
-    var nextVisibleRefreshScreenForTesting: InterfaceObservation?
+    var nextVisibleRefreshObservationForTesting: InterfaceObservation?
 
     // MARK: - Observation Scheduling
 
     lazy var semanticObservationStream = SemanticObservationStream(stash: self, tripwire: tripwire)
-
-    var latestSettledSemanticObservationEvent: SettledSemanticObservationEvent? {
-        semanticObservationStream.latestEvent
-    }
-
-    var latestSettledSemanticObservation: SettledSemanticObservation? {
-        semanticObservationStream.latestObservation
-    }
-
-    var latestSettledSemanticObservationInvalidated: Bool {
-        semanticObservationStream.latestSettledObservationInvalidated
-    }
 
     // MARK: - Interaction Cursor State
 
@@ -71,7 +59,7 @@ final class TheStash {
     struct RotorCursor {
         let hostHeistId: HeistId
         let rotorName: RotorName
-        let generation: ObservationGeneration
+        let generation: ScreenGeneration
         let selectionHeistId: HeistId
         let textRange: TextRangeReference?
     }
@@ -79,11 +67,6 @@ final class TheStash {
     /// Drop rotor mode. Called when any non-rotor interaction runs.
     func clearRotorCursor() {
         rotorCursor = nil
-    }
-
-    /// Last failed observation retained for reporting, never target resolution.
-    var latestFailedSettleDiagnosticEvidence: InterfaceObservation? {
-        diagnosticObservation
     }
 
     // MARK: - Computed Accessors

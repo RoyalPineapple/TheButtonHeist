@@ -179,7 +179,7 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
             traits: .button,
             frame: frame
         )
-        stash.installScreenForTesting(.makeForTests(
+        stash.installObservationForTesting(.makeForTests(
             elements: [(element, heistId)],
             objects: [heistId: object]
         ))

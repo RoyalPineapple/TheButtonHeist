@@ -30,7 +30,7 @@ internal struct PredicateObservationStreamState: Sendable, Equatable {
     }
 
     internal func reducing(
-        _ observation: HeistSemanticObservation,
+        _ observation: SettledObservationEvidence,
         predicate: ResolvedAccessibilityPredicate,
         predicateExpression: AccessibilityPredicate,
         baselineSeed: PredicateObservationBaselineSeed = .preserve,
@@ -59,7 +59,7 @@ internal struct PredicateObservationStreamState: Sendable, Equatable {
 }
 
 private extension PredicateObservationBaselineSeed {
-    func baseline(for event: SettledSemanticObservationEvent) -> SettledCapture? {
+    func baseline(for event: SettledObservationEvent) -> SettledCapture? {
         switch self {
         case .preserve:
             nil
@@ -82,7 +82,7 @@ internal struct PredicateObservationReduction {
     internal let evidence: PredicateObservationEvidence
     internal let expectation: ExpectationResult
 
-    internal var observation: HeistSemanticObservation {
+    internal var observation: SettledObservationEvidence {
         evidence.observation
     }
 

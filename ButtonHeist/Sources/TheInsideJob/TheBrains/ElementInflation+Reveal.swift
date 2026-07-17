@@ -52,7 +52,7 @@ extension ElementInflation {
             )
         }
 
-        let settledSequence = stash.latestSettledSemanticObservationEvent?.sequence
+        let settledSequence = stash.semanticObservationStream.latestEvent?.sequence
         let reveal = await revealSemanticTarget(
             treeElement,
             deadline: deadline,
@@ -151,7 +151,7 @@ extension ElementInflation {
 
         while deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) {
             guard !Task.isCancelled else { return .cancelled }
-            guard let event = await stash.observeSettledSemanticObservation(
+            guard let event = await stash.semanticObservationStream.settledEvent(
                 scope: .visible,
                 after: sequence,
                 timeout: deadline.remainingSeconds()

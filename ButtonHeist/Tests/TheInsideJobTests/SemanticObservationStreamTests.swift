@@ -18,7 +18,7 @@ final class SemanticObservationStreamTests: XCTestCase {
     }
 
     override func tearDown() async throws {
-        stash.stopPassiveSemanticObservation()
+        stash.semanticObservationStream.stop()
         stash = nil
     }
 
@@ -309,7 +309,7 @@ final class SemanticObservationStreamTests: XCTestCase {
             sourceScope: .visible,
             sequence: 1,
             notificationBatch: notificationBatch,
-            screen: screen,
+            observation: screen,
             semanticSignal: .empty,
             context: SemanticObservationPublication.Context(
                 continuity: .replacement(.screenChangedNotification),
@@ -329,7 +329,7 @@ final class SemanticObservationStreamTests: XCTestCase {
         state.commit(publication, notificationBatch: notificationBatch, settledReading: nil)
 
         XCTAssertEqual(publication.sourceEvent.sequence, 1)
-        XCTAssertEqual(publication.sourceEvent.generation, ObservationGeneration.initial.advanced())
+        XCTAssertEqual(publication.sourceEvent.generation, ScreenGeneration.initial.advanced())
         XCTAssertEqual(publication.sourceEvent.trace.captures.last?.interface, interface)
         XCTAssertEqual(state.sequence, 1)
         XCTAssertEqual(state.lineage, .continuous(publication.generation))
@@ -527,7 +527,7 @@ final class SemanticObservationStreamTests: XCTestCase {
         var discoveryContinuation: CheckedContinuation<Void, Never>?
         var didProduceFreshDiscovery = false
 
-        stash.startPassiveSemanticObservation {
+        stash.semanticObservationStream.start {
             guard !didProduceFreshDiscovery else { return nil }
             await withCheckedContinuation { continuation in
                 discoveryContinuation = continuation
@@ -537,9 +537,9 @@ final class SemanticObservationStreamTests: XCTestCase {
             self.stash.recordParsedObservedEvidence(freshDiscovery)
             let event = self.stash.semanticObservationStream
                 .commitDiscoveryObservationForTesting(freshDiscovery)
-            return Navigation.ExploredScreen(
+            return Navigation.InterfaceExplorationResult(
                 event: event,
-                manifest: .init()
+                progress: .init()
             )
         }
         defer { discoveryContinuation?.resume() }
@@ -564,7 +564,7 @@ final class SemanticObservationStreamTests: XCTestCase {
         XCTAssertGreaterThan(received.sequence, initialDiscovery.sequence)
         XCTAssertGreaterThan(received.sequence, latestVisible.sequence)
         XCTAssertEqual(
-            received.observation.screen.tree.orderedElements.first?.element.label,
+            received.settledObservation.observation.tree.orderedElements.first?.element.label,
             "Fresh Discovery"
         )
     }
@@ -574,7 +574,7 @@ final class SemanticObservationStreamTests: XCTestCase {
             observation(label: "Retained Discovery", heistId: "retained_discovery")
         )
         let discoveryCompleted = expectation(description: "Empty discovery cycle completed")
-        stash.startPassiveSemanticObservation {
+        stash.semanticObservationStream.start {
             discoveryCompleted.fulfill()
             return nil
         }
@@ -663,7 +663,7 @@ final class SemanticObservationStreamTests: XCTestCase {
 
         let result = await stash.semanticObservationStream.settlePostActionObservation(
             baselineTripwireSignal: stash.tripwire.tripwireSignal(),
-            settleOutcome: settleOutcome(.settled(timeMs: 1), screen: stale)
+            settleOutcome: settleOutcome(.settled(timeMs: 1), observation: stale)
         )
 
         guard case .unavailable = result.result else {
@@ -680,7 +680,7 @@ final class SemanticObservationStreamTests: XCTestCase {
 
         let result = await stash.semanticObservationStream.settlePostActionObservation(
             baselineTripwireSignal: stash.tripwire.tripwireSignal(),
-            settleOutcome: settleOutcome(.timedOut(timeMs: 1), screen: screen)
+            settleOutcome: settleOutcome(.timedOut(timeMs: 1), observation: screen)
         )
 
         guard case .observedUnsettled(let tree, _) = result.result else {
@@ -696,7 +696,7 @@ final class SemanticObservationStreamTests: XCTestCase {
 
         let result = await stash.semanticObservationStream.settlePostActionObservation(
             baselineTripwireSignal: stash.tripwire.tripwireSignal(),
-            settleOutcome: settleOutcome(.cancelled(timeMs: 1), screen: screen)
+            settleOutcome: settleOutcome(.cancelled(timeMs: 1), observation: screen)
         )
 
         guard case .unavailable = result.result else {
@@ -778,12 +778,12 @@ final class SemanticObservationStreamTests: XCTestCase {
 
     private func settleOutcome(
         _ outcome: SettleOutcome,
-        screen: InterfaceObservation
+        observation: InterfaceObservation
     ) -> SettleSession.Outcome {
         SettleSession.Outcome(
             outcome: outcome,
             events: [],
-            finalObservation: SettleSessionFinalObservation(screen: screen),
+            finalObservation: SettleSessionFinalObservation(observation: observation),
             elementsByKey: [:]
         )
     }

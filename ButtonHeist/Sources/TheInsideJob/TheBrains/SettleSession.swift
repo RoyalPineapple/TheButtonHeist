@@ -294,12 +294,12 @@ struct SettleSessionFinalObservation: Equatable, Sendable {
     let captureToken: InterfaceCaptureToken
 
     @MainActor
-    init(screen: InterfaceObservation, fingerprint: Int? = nil) {
-        tree = screen.tree
+    init(observation: InterfaceObservation, fingerprint: Int? = nil) {
+        tree = observation.tree
         self.fingerprint = fingerprint ?? SettleTimeline.fingerprint(
-            of: screen.liveCapture.hierarchy.sortedElements
+            of: observation.liveCapture.hierarchy.sortedElements
         )
-        captureToken = screen.captureToken
+        captureToken = observation.captureToken
     }
 }
 
@@ -562,7 +562,7 @@ struct SettleSessionFinalObservation: Equatable, Sendable {
                 outcome: .settled(timeMs: timeMs),
                 events: state.events,
                 finalObservation: observations.currentGenerationLastObservation.map {
-                    SettleSessionFinalObservation(screen: $0.screen, fingerprint: $0.fingerprint)
+                    SettleSessionFinalObservation(observation: $0.observation, fingerprint: $0.fingerprint)
                 },
                 elementsByKey: observations.elementsByKey
             )
@@ -571,7 +571,7 @@ struct SettleSessionFinalObservation: Equatable, Sendable {
                 outcome: .timedOut(timeMs: timeMs),
                 events: state.events,
                 finalObservation: observations.currentGenerationLastObservation.map {
-                    SettleSessionFinalObservation(screen: $0.screen, fingerprint: $0.fingerprint)
+                    SettleSessionFinalObservation(observation: $0.observation, fingerprint: $0.fingerprint)
                 },
                 elementsByKey: observations.elementsByKey,
                 instabilityDescription: observations.latestChangeDescription
@@ -581,7 +581,7 @@ struct SettleSessionFinalObservation: Equatable, Sendable {
                 outcome: .cancelled(timeMs: timeMs),
                 events: state.events,
                 finalObservation: observations.currentGenerationLastObservation.map {
-                    SettleSessionFinalObservation(screen: $0.screen, fingerprint: $0.fingerprint)
+                    SettleSessionFinalObservation(observation: $0.observation, fingerprint: $0.fingerprint)
                 },
                 elementsByKey: observations.elementsByKey,
                 instabilityDescription: observations.latestChangeDescription
@@ -623,8 +623,8 @@ private struct SettleLoopRunner {
             return transition
         }
 
-        func ingest(_ screen: InterfaceObservation) -> SettleSession.Outcome? {
-            let recorded = observations.record(screen)
+        func ingest(_ observation: InterfaceObservation) -> SettleSession.Outcome? {
+            let recorded = observations.record(observation)
             let transition = send(
                 .observation(
                     recorded.sample,

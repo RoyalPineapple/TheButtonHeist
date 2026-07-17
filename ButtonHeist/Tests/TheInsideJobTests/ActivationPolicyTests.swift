@@ -375,7 +375,7 @@ final class ActivationPolicyTests: XCTestCase {
         let object = ActivationObject()
         object.accessibilityFrame = frame
         let stash = TheStash(tripwire: TheTripwire())
-        stash.installScreenForTesting(.makeForTests(
+        stash.installObservationForTesting(.makeForTests(
             elements: [(element, heistId)],
             objects: [heistId: object]
         ))

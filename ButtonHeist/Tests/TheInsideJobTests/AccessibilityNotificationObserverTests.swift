@@ -481,9 +481,9 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
                 heistId: "destination_header"
             )
         ])
-        brains.stash.nextVisibleRefreshScreenForTesting = freshScreen
+        brains.stash.nextVisibleRefreshObservationForTesting = freshScreen
 
-        let served = await brains.stash.observeSettledSemanticObservation(
+        let served = await brains.stash.semanticObservationStream.settledEvent(
             scope: .visible,
             after: staleEvent.sequence > 0 ? staleEvent.sequence - 1 : nil,
             timeout: 3.0
@@ -521,14 +521,14 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         )
         let actionWindow = brains.stash.accessibilityNotifications.beginActionWindow()
         defer { actionWindow.cancel() }
-        brains.stash.nextVisibleRefreshScreenForTesting = InterfaceObservation.makeForTests([
+        brains.stash.nextVisibleRefreshObservationForTesting = InterfaceObservation.makeForTests([
             InterfaceObservation.TestEntry(
                 AccessibilityElement.make(label: "Destination", traits: .header),
                 heistId: "destination_header"
             )
         ])
 
-        let served = await brains.stash.observeSettledSemanticObservation(
+        let served = await brains.stash.semanticObservationStream.settledEvent(
             scope: .visible,
             after: staleEvent.sequence > 0 ? staleEvent.sequence - 1 : nil,
             timeout: 0.25

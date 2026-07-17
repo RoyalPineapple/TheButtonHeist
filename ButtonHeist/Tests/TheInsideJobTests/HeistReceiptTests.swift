@@ -206,7 +206,7 @@ final class HeistReceiptTests: XCTestCase {
             respondsToUserInteraction: false
         )
         let currentScreen = InterfaceObservation.makeForTests(elements: [(currentHeader, HeistId(rawValue: "buttonheist_demo"))])
-        job.brains.stash.nextVisibleRefreshScreenForTesting = currentScreen
+        job.brains.stash.nextVisibleRefreshObservationForTesting = currentScreen
 
         let plan = try HeistPlan {
             Warn("bootstrapped")
@@ -543,40 +543,38 @@ private final class RuntimeCapture {
 
 @MainActor
 private final class ReceiptWaitScript {
-    private var states: [PostActionObservation.BeforeState]
-    private var previousObservation: SettledSemanticObservation?
+    private var states: [PostActionObservation.ObservationBaseline]
+    private var previousObservation: SettledObservation?
     private var previousCapture: AccessibilityTrace.Capture?
     private var nextSequence: SettledObservationSequence = 0
 
-    init(states: [PostActionObservation.BeforeState]) {
+    init(states: [PostActionObservation.ObservationBaseline]) {
         self.states = states
     }
 
-    func observation(scope: SemanticObservationScope) -> HeistSemanticObservation? {
+    func observation(scope: SemanticObservationScope) -> SettledObservationEvidence? {
         guard !states.isEmpty else { return nil }
         let state = states.removeFirst()
         nextSequence += 1
         let trace = previousCapture.map { AccessibilityTrace(captures: [$0, state.capture]) }
             ?? AccessibilityTrace(capture: state.capture)
-        let settledObservation = SettledSemanticObservation(
+        let settledObservation = SettledObservation(
             sequence: nextSequence,
             scope: scope,
-            screen: .empty,
+            observation: .empty,
             semanticSignal: .empty
         )
-        let event = SettledSemanticObservationEvent(
+        let event = SettledObservationEvent(
             continuity: .sameGeneration,
-            sequence: nextSequence,
-            scope: scope,
-            observation: settledObservation,
+            settledObservation: settledObservation,
             previous: previousObservation,
             trace: trace
         )
         previousObservation = settledObservation
         previousCapture = state.capture
-        return HeistSemanticObservation(
+        return SettledObservationEvidence(
             event: event,
-            state: state,
+            baseline: state,
             accessibilityTrace: trace,
             summary: "interface: \(state.interface.projectedElements.count) elements"
         )
@@ -595,7 +593,7 @@ private final class ReceiptWaitScript {
             )
         }
 
-        let state = observation.state
+        let state = observation.baseline
         let trace = observation.accessibilityTrace
 
         let expectation = PredicateEvaluation.evaluate(
@@ -630,13 +628,13 @@ private final class ReceiptWaitScript {
 private func observedQuantityState(
     job: TheInsideJob,
     value: String
-) -> PostActionObservation.BeforeState {
+) -> PostActionObservation.ObservationBaseline {
     let element = AccessibilityElement.make(
         value: value,
         identifier: "quantity",
         traits: .staticText
     )
-    job.brains.stash.installScreenForTesting(.makeForTests(elements: [(element, HeistId(rawValue: "quantity"))]))
+    job.brains.stash.installObservationForTesting(.makeForTests(elements: [(element, HeistId(rawValue: "quantity"))]))
     return job.brains.postActionObservation.captureSemanticState()
 }
 

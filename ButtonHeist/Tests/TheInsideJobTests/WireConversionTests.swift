@@ -585,7 +585,7 @@ final class WireConverterTests: XCTestCase {
             firstResponderHeistId: nil
         )
         let stash = TheStash(tripwire: TheTripwire())
-        stash.installScreenForTesting(screen)
+        stash.installObservationForTesting(screen)
         let selected = try stash.selectInterface(InterfaceQuery(
             subtree: .predicate(ElementPredicateTemplate(label: "Second"))
         ))
@@ -621,7 +621,7 @@ final class WireConverterTests: XCTestCase {
             firstResponderHeistId: nil
         )
         let stash = TheStash(tripwire: TheTripwire())
-        stash.installScreenForTesting(screen)
+        stash.installObservationForTesting(screen)
         let selected = try stash.selectInterface(InterfaceQuery(
             subtree: .container(.label("Actions"))
         ))
@@ -695,7 +695,7 @@ final class WireConverterTests: XCTestCase {
         XCTAssertEqual(projected.compactMap(\.label), ["aardvark", "zymurgy"])
 
         let stash = TheStash(tripwire: TheTripwire())
-        stash.installScreenForTesting(screen)
+        stash.installObservationForTesting(screen)
         let selectedInterface = try stash.selectInterface(InterfaceQuery(
             subtree: .predicate(ElementPredicateTemplate(label: "zymurgy"))
         ))

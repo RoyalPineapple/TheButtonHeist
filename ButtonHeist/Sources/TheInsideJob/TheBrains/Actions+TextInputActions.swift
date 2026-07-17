@@ -166,9 +166,9 @@ extension Actions {
 
     func typeTextPayload(
         resolvedElementId: HeistId,
-        in afterState: PostActionObservation.BeforeState
+        in baseline: PostActionObservation.ObservationBaseline
     ) -> ActionResultPayload? {
-        guard let element = afterState.screen.tree.findElement(heistId: resolvedElementId),
+        guard let element = baseline.observation.tree.findElement(heistId: resolvedElementId),
               let value = element.element.value else { return nil }
         return .typeText(value)
     }

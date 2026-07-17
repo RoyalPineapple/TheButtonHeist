@@ -198,8 +198,8 @@ final class TheBrainsActionTests: XCTestCase {
         installScreen(elements: [(element, heistId)])
 
         let before = brains.postActionObservation.captureSemanticState()
-        XCTAssertEqual(before.screen.tree.orderedElements.count, 1)
-        XCTAssertEqual(before.screen.tree.orderedElements.first?.heistId, heistId)
+        XCTAssertEqual(before.observation.tree.orderedElements.count, 1)
+        XCTAssertEqual(before.observation.tree.orderedElements.first?.heistId, heistId)
         XCTAssertEqual(before.elements.count, 1)
     }
 
@@ -565,7 +565,7 @@ final class TheBrainsActionTests: XCTestCase {
             frame: CGRect(x: 80, y: 180, width: 180, height: 44),
             activationPoint: CGPoint(x: 170, y: 202)
         )
-        brains.stash.installScreenForTesting(.makeForTests(
+        brains.stash.installObservationForTesting(.makeForTests(
             elements: [(currentElement, heistId)],
             objects: [heistId: liveObject]
         ))
@@ -594,7 +594,7 @@ final class TheBrainsActionTests: XCTestCase {
             traits: .adjustable
         )
         let liveObject = AdjustableGeometryView(frame: .zero, activationPoint: CGPoint(x: 170, y: 202))
-        brains.stash.installScreenForTesting(.makeForTests(
+        brains.stash.installObservationForTesting(.makeForTests(
             elements: [(currentElement, heistId)],
             objects: [heistId: liveObject]
         ))
@@ -1749,7 +1749,7 @@ final class TheBrainsActionTests: XCTestCase {
 
     func testPerformWaitWithBoundedTimeoutDoesNotStartObservationWhenRuntimeInactive() async throws {
         let inactiveBrains = TheBrains(tripwire: TheTripwire())
-        inactiveBrains.stash.installScreenForTesting(.makeForTests(elements: [
+        inactiveBrains.stash.installObservationForTesting(.makeForTests(elements: [
             (makeElement(label: "Home"), HeistId(rawValue: "home")),
         ]))
         XCTAssertFalse(inactiveBrains.stash.semanticObservationStream.isActive)
@@ -1765,7 +1765,7 @@ final class TheBrainsActionTests: XCTestCase {
 
     func testExecuteCommandDoesNotStartObservationWhenRuntimeInactive() async {
         let inactiveBrains = TheBrains(tripwire: TheTripwire())
-        XCTAssertNil(inactiveBrains.stash.latestSettledSemanticObservation)
+        XCTAssertNil(inactiveBrains.stash.semanticObservationStream.latestObservation)
         XCTAssertFalse(inactiveBrains.stash.semanticObservationStream.isActive)
 
         let result = await inactiveBrains.executeRuntimeAction(.activate(.predicate(.label("Home"))))
@@ -1875,7 +1875,7 @@ final class TheBrainsActionTests: XCTestCase {
             settleOutcome: SettleSession.Outcome(
                 outcome: .timedOut(timeMs: 1),
                 events: [],
-                finalObservation: SettleSessionFinalObservation(screen: failedScreen),
+                finalObservation: SettleSessionFinalObservation(observation: failedScreen),
                 elementsByKey: [:]
             ),
             notificationWindow: failedWindow
@@ -1902,7 +1902,7 @@ final class TheBrainsActionTests: XCTestCase {
             settleOutcome: SettleSession.Outcome(
                 outcome: .settled(timeMs: 1),
                 events: [],
-                finalObservation: SettleSessionFinalObservation(screen: successfulScreen),
+                finalObservation: SettleSessionFinalObservation(observation: successfulScreen),
                 elementsByKey: [:]
             ),
             notificationWindow: successfulWindow
@@ -2011,7 +2011,7 @@ observation: .settledTrace(
         let knownScreen = InterfaceObservation.makeForTests(elements: [
             (makeElement(label: "Known"), "known"),
         ])
-        isolatedBrains.stash.installScreenForTesting(knownScreen)
+        isolatedBrains.stash.installObservationForTesting(knownScreen)
 
         let receipt = await isolatedBrains.interactionObservation.waitForPredicate(
             try resolvedWait(WaitStep(
@@ -3431,7 +3431,7 @@ observation: .settledTrace(
             XCTFail("Expected the settled UIKit evidence to be held weakly")
             return
         }
-        brains.stash.nextVisibleRefreshScreenForTesting = .makeForTests(
+        brains.stash.nextVisibleRefreshObservationForTesting = .makeForTests(
             elements: [(refreshedElement, heistId)],
             objects: [heistId: replacementObject]
         )
@@ -3463,7 +3463,7 @@ observation: .settledTrace(
         let staleObject = RefusingActivationView(frame: settledElement.bhFrame)
         let replacementObject = ActionActivationOverrideView(frame: settledElement.bhFrame)
         installScreen(elements: [(settledElement, heistId)], objects: [heistId: staleObject])
-        brains.stash.nextVisibleRefreshScreenForTesting = .makeForTests(
+        brains.stash.nextVisibleRefreshObservationForTesting = .makeForTests(
             elements: [(settledElement, heistId)],
             objects: [heistId: replacementObject]
         )
@@ -3514,7 +3514,7 @@ observation: .settledTrace(
             ]
         )
         _ = brains.stash.semanticObservationStream.commitVisibleObservationForTesting(reorderedScreen)
-        brains.stash.nextVisibleRefreshScreenForTesting = reorderedScreen
+        brains.stash.nextVisibleRefreshObservationForTesting = reorderedScreen
 
         let result = await actionTask.value
 
@@ -3560,7 +3560,7 @@ observation: .settledTrace(
         )
         let staleTextField = ActionActivatingTextField()
         installScreen(elements: [(element, heistId)], objects: [heistId: staleTextField])
-        brains.stash.nextVisibleRefreshScreenForTesting = .makeForTests(
+        brains.stash.nextVisibleRefreshObservationForTesting = .makeForTests(
             elements: [(element, heistId)],
             objects: [heistId: textField]
         )
@@ -3652,7 +3652,7 @@ observation: .settledTrace(
             ]
         )
         _ = brains.stash.semanticObservationStream.commitVisibleObservationForTesting(reorderedScreen)
-        brains.stash.nextVisibleRefreshScreenForTesting = reorderedScreen
+        brains.stash.nextVisibleRefreshObservationForTesting = reorderedScreen
 
         let result = await actionTask.value
 
@@ -3917,12 +3917,12 @@ observation: .settledTrace(
             frame: replacementTextField.frame
         )
         let staleTextField = ResignationTrackingTextField(frame: replacementTextField.frame)
-        brains.stash.installScreenForTesting(.makeForTests(
+        brains.stash.installObservationForTesting(.makeForTests(
             elements: [(element, heistId)],
             objects: [heistId: staleTextField],
             firstResponderHeistId: heistId
         ))
-        brains.stash.nextVisibleRefreshScreenForTesting = .makeForTests(
+        brains.stash.nextVisibleRefreshObservationForTesting = .makeForTests(
             elements: [(element, heistId)],
             objects: [heistId: replacementTextField],
             firstResponderHeistId: heistId
@@ -4222,7 +4222,7 @@ observation: .settledTrace(
             },
         ]
 
-        brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
+        brains.stash.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [
                 hostHeistId: InterfaceTree.Element(
                     heistId: hostHeistId,
@@ -4394,7 +4394,7 @@ observation: .settledTrace(
         elements: [(AccessibilityElement, HeistId)],
         objects: [HeistId: NSObject?] = [:]
     ) {
-        brains.stash.installScreenForTesting(.makeForTests(
+        brains.stash.installObservationForTesting(.makeForTests(
             elements: elements.map { ($0.0, $0.1) },
             objects: objects
         ))
@@ -4403,7 +4403,7 @@ observation: .settledTrace(
     private func installScreen(
         offViewport: [InterfaceObservation.OffViewportEntry]
     ) {
-        brains.stash.installScreenForTesting(.makeForTests(
+        brains.stash.installObservationForTesting(.makeForTests(
             offViewport: offViewport
         ))
     }
@@ -4448,10 +4448,10 @@ observation: .settledTrace(
 
     private func matcherTarget(
         label: String,
-        in screen: InterfaceObservation
+        in observation: InterfaceObservation
     ) throws -> AccessibilityTarget {
-        let treeElement = try XCTUnwrap(screen.tree.orderedElements.first { $0.element.label == label })
-        let elements = screen.tree.orderedElements.map {
+        let treeElement = try XCTUnwrap(observation.tree.orderedElements.first { $0.element.label == label })
+        let elements = observation.tree.orderedElements.map {
             PredicateSelectionSubjectElement(id: $0.heistId.predicateSelectionElementId, element: $0.element)
         }
         return try XCTUnwrap(
@@ -4555,7 +4555,7 @@ observation: .settledTrace(
         labels: [String],
         screenId: String? = nil,
         screenChanged: Bool = false
-    ) -> PostActionObservation.BeforeState {
+    ) -> PostActionObservation.ObservationBaseline {
         observedState(elements: labels.enumerated().map { index, label in
             (makeElement(label: label), HeistId(rawValue: "element_\(index)"))
         }, screenId: screenId, screenChanged: screenChanged)
@@ -4579,8 +4579,8 @@ observation: .settledTrace(
         elements: [(AccessibilityElement, HeistId)],
         screenId: String? = nil,
         screenChanged: Bool = false
-    ) -> PostActionObservation.BeforeState {
-        brains.stash.installScreenForTesting(.makeForTests(elements: elements))
+    ) -> PostActionObservation.ObservationBaseline {
+        brains.stash.installObservationForTesting(.makeForTests(elements: elements))
         let state = brains.postActionObservation.captureSemanticState()
         guard let screenId else { return state }
 
@@ -4607,8 +4607,8 @@ observation: .settledTrace(
                 ])
                 : state.capture.transition
         )
-        return PostActionObservation.BeforeState(
-            screen: state.screen,
+        return PostActionObservation.ObservationBaseline(
+            observation: state.observation,
             capture: capture,
             tripwireSignal: state.tripwireSignal,
             settledObservationSequence: state.settledObservationSequence
@@ -4616,7 +4616,7 @@ observation: .settledTrace(
     }
 
     private func heistRuntime(
-        observations: [PostActionObservation.BeforeState],
+        observations: [PostActionObservation.ObservationBaseline],
         executionBaseline: SettledCapture? = nil,
         execute: (@MainActor (ResolvedHeistActionCommand) async -> ActionResult)? = nil,
         wait: (@MainActor (TheBrains.HeistRuntimeWaitRequest) async -> ActionResult)? = nil,
@@ -4678,7 +4678,7 @@ observation: .settledTrace(
     }
 
     private func repeatUntilReceiptRuntime(
-        observations: [PostActionObservation.BeforeState],
+        observations: [PostActionObservation.ObservationBaseline],
         execute: (@MainActor (ResolvedHeistActionCommand) async -> ActionResult)? = nil,
         wait: @escaping @MainActor (TheBrains.HeistRuntimeWaitRequest) async -> HeistWaitReceipt
     ) -> TheBrains.HeistExecutionRuntime {
@@ -4764,7 +4764,7 @@ observation: .settledTrace(
 
     private func heistWaitReceipt(
         for step: ResolvedWaitRuntimeInput,
-        observation: HeistSemanticObservation
+        observation: SettledObservationEvidence
     ) -> HeistWaitReceipt {
         let expectation = PredicateEvaluation.evaluate(
             step.predicate,
@@ -4916,9 +4916,9 @@ private extension ResolvedHeistActionCommand {
 
 @MainActor
 private final class ScriptedHeistObservationSource {
-    private var remainingObservations: [PostActionObservation.BeforeState]
+    private var remainingObservations: [PostActionObservation.ObservationBaseline]
     private var remainingUnavailableObservations: Int
-    private var previousObservation: SettledSemanticObservation?
+    private var previousObservation: SettledObservation?
     private var previousCapture: AccessibilityTrace.Capture?
     private var nextObservationSequence: SettledObservationSequence = 0
     private let observedScopes: (@MainActor (SemanticObservationScope) -> Void)?
@@ -4927,7 +4927,7 @@ private final class ScriptedHeistObservationSource {
     private let line: UInt
 
     init(
-        observations: [PostActionObservation.BeforeState],
+        observations: [PostActionObservation.ObservationBaseline],
         unavailableObservationCount: Int,
         observedScopes: (@MainActor (SemanticObservationScope) -> Void)?,
         observedTimeouts: (@MainActor (Double?) -> Void)?,
@@ -4949,14 +4949,14 @@ private final class ScriptedHeistObservationSource {
         stash.semanticObservationStream.invalidateLatestSettledObservation()
         guard let observation = next(scope: .visible, timeout: timeout) else { return }
         stash.semanticObservationStream.commitVisibleObservationForTesting(
-            observation.state.screen
+            observation.baseline.observation
         )
     }
 
     func next(
         scope: SemanticObservationScope,
         timeout: Double?
-    ) -> HeistSemanticObservation? {
+    ) -> SettledObservationEvidence? {
         observedScopes?(scope)
         observedTimeouts?(timeout)
         if remainingUnavailableObservations > 0 {
@@ -4974,20 +4974,20 @@ private final class ScriptedHeistObservationSource {
             scope: scope,
             sequence: nextObservationSequence
         )
-        previousObservation = observation.event.observation
+        previousObservation = observation.event.settledObservation
         previousCapture = observation.accessibilityTrace.captures.last
         return observation
     }
 
     private func observation(
-        from state: PostActionObservation.BeforeState,
+        from state: PostActionObservation.ObservationBaseline,
         scope: SemanticObservationScope,
         sequence: SettledObservationSequence
-    ) -> HeistSemanticObservation {
-        let settledObservation = SettledSemanticObservation(
+    ) -> SettledObservationEvidence {
+        let settledObservation = SettledObservation(
             sequence: sequence,
             scope: scope,
-            screen: .empty,
+            observation: .empty,
             semanticSignal: .empty
         )
         let trace = if let previousCapture {
@@ -4995,17 +4995,15 @@ private final class ScriptedHeistObservationSource {
         } else {
             AccessibilityTrace(capture: state.capture)
         }
-        let event = SettledSemanticObservationEvent(
+        let event = SettledObservationEvent(
             continuity: .sameGeneration,
-            sequence: sequence,
-            scope: scope,
-            observation: settledObservation,
+            settledObservation: settledObservation,
             previous: previousObservation,
             trace: trace
         )
-        return HeistSemanticObservation(
+        return SettledObservationEvidence(
             event: event,
-            state: state,
+            baseline: state,
             accessibilityTrace: trace,
             summary: "interface: \(state.interface.projectedElements.count) elements"
         )

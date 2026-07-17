@@ -16,15 +16,15 @@ extension Navigation {
         deadline: SemanticObservationDeadline? = nil,
         maxScrollsPerContainer: Int? = nil,
         maxScrollsPerDiscovery: Int? = nil,
-        onObservation: ((SettledSemanticObservationEvent) -> ViewportExplorationDecision)? = nil,
-    ) async -> ExploredScreen? {
+        onObservation: ((SettledObservationEvent) -> ViewportExplorationDecision)? = nil,
+    ) async -> InterfaceExplorationResult? {
         let explorer = ViewportExplorer(
             navigation: self,
             exploration: SemanticExploration(
                 baseline: baseline ?? .interfaceMemory(stash.explorationBaseline()),
                 deadline: deadline,
-                maxScrollsPerContainer: maxScrollsPerContainer ?? ScreenManifest.maxScrollsPerContainer,
-                maxScrollsPerDiscovery: maxScrollsPerDiscovery ?? ScreenManifest.maxScrollsPerDiscovery
+                maxScrollsPerContainer: maxScrollsPerContainer ?? InterfaceExplorationProgress.maxScrollsPerContainer,
+                maxScrollsPerDiscovery: maxScrollsPerDiscovery ?? InterfaceExplorationProgress.maxScrollsPerDiscovery
             ),
             searchOrder: searchOrder,
         )
@@ -33,7 +33,7 @@ extension Navigation {
                 return .finish
             }
             guard let target else { return .continue }
-            return stash.hasVisibleTerminalResolution(target, in: event.observation.screen.tree)
+            return stash.hasVisibleTerminalResolution(target, in: event.settledObservation.observation.tree)
                 ? .finish
                 : .continue
         }
@@ -46,7 +46,7 @@ extension Navigation {
         discoveryCommitPolicy: DiscoveryCommitPolicy,
         notificationWindow: AccessibilityNotificationActionWindow? = nil,
         requiredAfterMovement: Bool = false
-    ) async -> SettledSemanticObservationEvent? {
+    ) async -> SettledObservationEvent? {
         defer { notificationWindow?.cancel() }
         guard requiredAfterMovement || (!Task.isCancelled && hasTimeRemaining(before: deadline)) else {
             return nil
@@ -98,7 +98,7 @@ extension Navigation {
 extension TheBrains {
 
     func startSemanticObservation() {
-        stash.startPassiveSemanticObservation { [weak self] in
+        stash.semanticObservationStream.start { [weak self] in
             guard let self else { return nil }
             return await self.executeSemanticDiscovery()
         }

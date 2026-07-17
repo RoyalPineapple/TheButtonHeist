@@ -340,7 +340,7 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
             outcome: .timedOut(timeMs: 17),
             events: [],
             finalObservation: SettleSessionFinalObservation(
-                screen: InterfaceObservation.makeForTests()
+                observation: InterfaceObservation.makeForTests()
             ),
             elementsByKey: [:],
             instabilityDescription: "runtime lifecycle diagnostic"

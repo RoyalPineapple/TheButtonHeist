@@ -109,11 +109,11 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
             traits: .textEntry,
             object: expectedObject
         )
-        brains.stash.installScreenForTesting(.makeForTests(
+        brains.stash.installObservationForTesting(.makeForTests(
             [expectedEntry],
             firstResponderHeistId: expected
         ))
-        brains.stash.nextVisibleRefreshScreenForTesting = .makeForTests(
+        brains.stash.nextVisibleRefreshObservationForTesting = .makeForTests(
             [
                 expectedEntry,
                 InterfaceObservation.TestEntry(
@@ -162,7 +162,7 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
             ],
             firstResponderHeistId: expected
         )
-        brains.stash.installScreenForTesting(screen)
+        brains.stash.installObservationForTesting(screen)
         let expectedElement = try XCTUnwrap(brains.stash.interfaceElement(heistId: expected))
         let expectedAuthoredTarget = try XCTUnwrap(brains.stash.minimumUniqueTarget(for: expectedElement))
         let expectedTarget = try expectedAuthoredTarget.resolve(in: .empty)

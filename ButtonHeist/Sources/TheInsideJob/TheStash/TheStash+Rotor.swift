@@ -141,8 +141,8 @@ extension TheStash {
 
 private extension TheStash {
 
-    var currentRotorGeneration: ObservationGeneration {
-        latestSettledSemanticObservationEvent?.generation ?? .initial
+    var currentRotorGeneration: ScreenGeneration {
+        semanticObservationStream.latestEvent?.generation ?? .initial
     }
 
     /// Return the known `InterfaceTree.Element` corresponding to a UIKit accessibility

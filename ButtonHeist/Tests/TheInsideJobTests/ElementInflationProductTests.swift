@@ -85,7 +85,7 @@ final class ElementInflationProductTests: XCTestCase {
             identifier: heistId.rawValue
         )
         let staleObject = UIButton(frame: CGRect(x: 20, y: 20, width: 160, height: 44))
-        brains.stash.installScreenForTesting(.makeForTests([
+        brains.stash.installObservationForTesting(.makeForTests([
             .init(element, heistId: heistId, object: staleObject),
         ]))
         let treeElement = try XCTUnwrap(brains.stash.interfaceElement(heistId: heistId))
@@ -101,7 +101,7 @@ final class ElementInflationProductTests: XCTestCase {
         )
         brains.stopSemanticObservation()
         let replacementObject = UIButton(frame: CGRect(x: 20, y: 20, width: 160, height: 44))
-        brains.stash.nextVisibleRefreshScreenForTesting = .makeForTests([
+        brains.stash.nextVisibleRefreshObservationForTesting = .makeForTests([
             .init(element, heistId: heistId, object: replacementObject),
         ])
         var now: CFAbsoluteTime = 100
@@ -471,8 +471,8 @@ final class ElementInflationProductTests: XCTestCase {
             ordinal: 0
         ).resolve(in: .empty)
         fixture.second.isHidden = true
-        brains.stash.installScreenForTesting(try observation(for: [fixture.first]))
-        brains.stash.clearInstalledVisibleRefreshScreenForTesting()
+        brains.stash.installObservationForTesting(try observation(for: [fixture.first]))
+        brains.stash.clearInstalledVisibleRefreshObservationForTesting()
         guard case .success(let selected) = brains.navigation.elementInflation.knownSemanticTarget(target) else {
             return XCTFail("Expected the original element to satisfy the committed predicate")
         }
@@ -481,8 +481,8 @@ final class ElementInflationProductTests: XCTestCase {
         fixture.second.isHidden = false
         fixture.first.superview?.insertSubview(fixture.second, belowSubview: fixture.first)
         fixture.window.layoutIfNeeded()
-        brains.stash.installScreenForTesting(try observation(for: [fixture.second, fixture.first]))
-        brains.stash.clearInstalledVisibleRefreshScreenForTesting()
+        brains.stash.installObservationForTesting(try observation(for: [fixture.second, fixture.first]))
+        brains.stash.clearInstalledVisibleRefreshObservationForTesting()
 
         let state = await brains.navigation.elementInflation.stateAfterRefresh(
             target: target,
@@ -512,16 +512,16 @@ final class ElementInflationProductTests: XCTestCase {
             ordinal: 0
         ).resolve(in: .empty)
         fixture.second.isHidden = true
-        brains.stash.installScreenForTesting(try observation(for: [fixture.first]))
-        brains.stash.clearInstalledVisibleRefreshScreenForTesting()
+        brains.stash.installObservationForTesting(try observation(for: [fixture.first]))
+        brains.stash.clearInstalledVisibleRefreshObservationForTesting()
         guard case .success(let selected) = brains.navigation.elementInflation.knownSemanticTarget(target) else {
             return XCTFail("Expected the original element to satisfy the committed predicate")
         }
 
         fixture.first.removeFromSuperview()
         fixture.second.isHidden = false
-        brains.stash.installScreenForTesting(try observation(for: [fixture.second]))
-        brains.stash.clearInstalledVisibleRefreshScreenForTesting()
+        brains.stash.installObservationForTesting(try observation(for: [fixture.second]))
+        brains.stash.clearInstalledVisibleRefreshObservationForTesting()
 
         let state = await brains.navigation.elementInflation.stateAfterRefresh(
             target: target,
@@ -1069,12 +1069,12 @@ final class ElementInflationProductTests: XCTestCase {
         var elements = screen.tree.elements
         elements[entry.heistId] = entry
 
-        targetBrains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
+        targetBrains.stash.installObservationForTesting(InterfaceObservation.makeForTests(
             tree: InterfaceTree(elements: elements, containers: screen.tree.containers),
             liveCapture: screen.liveCapture
         ))
         if refreshesFromUIKit {
-            targetBrains.stash.clearInstalledVisibleRefreshScreenForTesting()
+            targetBrains.stash.clearInstalledVisibleRefreshObservationForTesting()
         }
     }
 
@@ -1128,7 +1128,7 @@ final class ElementInflationProductTests: XCTestCase {
         )
         var elements = tree.elements
         elements[heistId] = entry
-        brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
+        brains.stash.installObservationForTesting(InterfaceObservation.makeForTests(
             tree: InterfaceTree(elements: elements, containers: tree.containers),
             liveCapture: brains.stash.latestObservation.liveCapture
         ))
@@ -1221,11 +1221,11 @@ final class ElementInflationProductTests: XCTestCase {
             )
         }
 
-        brains.stash.installScreenForTesting(InterfaceObservation.makeForTests(
+        brains.stash.installObservationForTesting(InterfaceObservation.makeForTests(
             tree: InterfaceTree(elements: elements, containers: containers),
             liveCapture: liveCapture
         ))
-        brains.stash.clearInstalledVisibleRefreshScreenForTesting()
+        brains.stash.clearInstalledVisibleRefreshObservationForTesting()
     }
 
     private func observedContentActivationPoint(
@@ -1255,32 +1255,35 @@ final class ElementInflationProductTests: XCTestCase {
         })
     }
 
-    private func firstLiveScrollableContainerPath(in screen: InterfaceObservation) -> TreePath? {
-        for item in screen.liveCapture.hierarchy.scrollablePathIndexedContainers {
-            guard screen.liveCapture.scrollView(forContainerPath: item.path) != nil else { continue }
+    private func firstLiveScrollableContainerPath(in observation: InterfaceObservation) -> TreePath? {
+        for item in observation.liveCapture.hierarchy.scrollablePathIndexedContainers {
+            guard observation.liveCapture.scrollView(forContainerPath: item.path) != nil else { continue }
             return item.path
         }
         return nil
     }
 
-    private func liveScrollableContainerPath(for scrollView: UIScrollView, in screen: InterfaceObservation) -> TreePath? {
-        let matchingPaths = screen.liveCapture.scrollableContainerViewsByPath
+    private func liveScrollableContainerPath(
+        for scrollView: UIScrollView,
+        in observation: InterfaceObservation
+    ) -> TreePath? {
+        let matchingPaths = observation.liveCapture.scrollableContainerViewsByPath
             .compactMap { path, ref -> TreePath? in
                 guard ref.view === scrollView else { return nil }
                 return path
             }
             .sorted { $0.indices.lexicographicallyPrecedes($1.indices) }
         return matchingPaths.first {
-            screen.liveCapture.containerObject(forPath: $0) === scrollView
+            observation.liveCapture.containerObject(forPath: $0) === scrollView
         } ?? matchingPaths.first
     }
 
     private func nestedInnerScrollContainerPath(
         for scrollView: UIScrollView,
         below outerContainerPath: TreePath,
-        in screen: InterfaceObservation
+        in observation: InterfaceObservation
     ) -> TreePath {
-        if let path = liveScrollableContainerPath(for: scrollView, in: screen) {
+        if let path = liveScrollableContainerPath(for: scrollView, in: observation) {
             return path
         }
 
@@ -1289,11 +1292,11 @@ final class ElementInflationProductTests: XCTestCase {
         return outerContainerPath.appending(0)
     }
 
-    private func scrollContainerDiagnostics(in screen: InterfaceObservation) -> String {
-        let summaries = screen.liveCapture.hierarchy.scrollablePathIndexedContainers
+    private func scrollContainerDiagnostics(in observation: InterfaceObservation) -> String {
+        let summaries = observation.liveCapture.hierarchy.scrollablePathIndexedContainers
             .map { item -> String in
-                let name = screen.tree.containers[item.path]?.containerName
-                let hasLiveScroll = screen.liveCapture.scrollView(forContainerPath: item.path) != nil
+                let name = observation.tree.containers[item.path]?.containerName
+                let hasLiveScroll = observation.liveCapture.scrollView(forContainerPath: item.path) != nil
                 return "path=\(item.path.indices) name=\(name ?? "<nil>") liveScroll=\(hasLiveScroll)"
             }
         return "scrollContainers=[\(summaries.joined(separator: "; "))]"
