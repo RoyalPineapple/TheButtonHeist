@@ -296,7 +296,26 @@ final class TheFenceHandlerTests: XCTestCase {
         ]
     }
 
-    /// Assert that executing a typed operation returns a `.error(...)` response containing the substring.
+    @ButtonHeistActor
+    private func assertValidationFailure(
+        command: TheFence.Command,
+        arguments: [String: HeistValue] = [:],
+        file: StaticString = #filePath,
+        line: UInt = #line,
+        verify: (DiagnosticFailure) -> Void
+    ) async {
+        let (fence, _) = makeConnectedFence()
+        do {
+            let response = try await fence.execute(command: command, values: arguments)
+            guard case .error(let failure) = response else {
+                return XCTFail("Expected .error response, got: \(response)", file: file, line: line)
+            }
+            verify(failure)
+        } catch {
+            XCTFail("Unexpected throw: \(error)", file: file, line: line)
+        }
+    }
+
     @ButtonHeistActor
     private func assertValidationError(
         command: TheFence.Command,
@@ -305,24 +324,21 @@ final class TheFenceHandlerTests: XCTestCase {
         file: StaticString = #filePath,
         line: UInt = #line
     ) async {
-        let (fence, _) = makeConnectedFence()
-        do {
-            let response = try await fence.execute(command: command, values: arguments)
-            if case .error(let failure) = response {
-                XCTAssertTrue(
-                    failure.message.contains(substring),
-                    "Expected error containing '\(substring)', got: \(failure.message)",
-                    file: file, line: line
-                )
-            } else {
-                XCTFail("Expected .error response, got: \(response)", file: file, line: line)
-            }
-        } catch {
-            XCTFail("Unexpected throw: \(error)", file: file, line: line)
+        await assertValidationFailure(
+            command: command,
+            arguments: arguments,
+            file: file,
+            line: line
+        ) { failure in
+            XCTAssertTrue(
+                failure.message.contains(substring),
+                "Expected error containing '\(substring)', got: \(failure.message)",
+                file: file,
+                line: line
+            )
         }
     }
 
-    /// Assert that executing a typed operation returns a `.error(...)` response with the exact message.
     @ButtonHeistActor
     private func assertValidationError(
         command: TheFence.Command,
@@ -331,48 +347,13 @@ final class TheFenceHandlerTests: XCTestCase {
         file: StaticString = #filePath,
         line: UInt = #line
     ) async {
-        let (fence, _) = makeConnectedFence()
-        do {
-            let response = try await fence.execute(command: command, values: arguments)
-            if case .error(let failure) = response {
-                XCTAssertEqual(failure.message, expected, file: file, line: line)
-            } else {
-                XCTFail("Expected .error response, got: \(response)", file: file, line: line)
-            }
-        } catch {
-            XCTFail("Unexpected throw: \(error)", file: file, line: line)
-        }
-    }
-
-    @ButtonHeistActor
-    private func assertContractError(
-        command: TheFence.Command,
-        arguments: [String: HeistValue] = [:],
-        contains expectedSubstrings: [String],
-        code: KnownFailureCode,
-        nextCommand: String,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) async {
-        let (fence, _) = makeConnectedFence()
-        do {
-            let response = try await fence.execute(command: command, values: arguments)
-            guard case .error(let failure) = response else {
-                return XCTFail("Expected .error response, got: \(response)", file: file, line: line)
-            }
-            for substring in expectedSubstrings {
-                XCTAssertTrue(
-                    failure.message.contains(substring),
-                    "Expected error containing '\(substring)', got: \(failure.message)",
-                    file: file, line: line
-                )
-            }
-            XCTAssertEqual(failure.details.code, code, file: file, line: line)
-            XCTAssertEqual(failure.details.phase, .request, file: file, line: line)
-            XCTAssertEqual(failure.details.retryable, false, file: file, line: line)
-            XCTAssertEqual(failure.details.hint, nextCommand, file: file, line: line)
-        } catch {
-            XCTFail("Unexpected throw: \(error)", file: file, line: line)
+        await assertValidationFailure(
+            command: command,
+            arguments: arguments,
+            file: file,
+            line: line
+        ) { failure in
+            XCTAssertEqual(failure.message, expected, file: file, line: line)
         }
     }
 
@@ -2381,17 +2362,21 @@ final class TheFenceHandlerTests: XCTestCase {
         ]
 
         for (command, arguments) in cases {
-            await assertContractError(
+            await assertValidationFailure(
                 command: command,
-                arguments: arguments,
-                contains: [
+                arguments: arguments
+            ) { failure in
+                let expectedMessages = [
                     "\(command.rawValue) request contract failed: missing target",
                     "requires target object",
                     "Next: get_interface()",
-                ],
-                code: .requestMissingTarget,
-                nextCommand: "get_interface()"
-            )
+                ]
+                XCTAssertTrue(expectedMessages.allSatisfy(failure.message.contains))
+                XCTAssertEqual(failure.details.code, .requestMissingTarget)
+                XCTAssertEqual(failure.details.phase, .request)
+                XCTAssertEqual(failure.details.retryable, false)
+                XCTAssertEqual(failure.details.hint, "get_interface()")
+            }
         }
     }
 
@@ -2607,16 +2592,16 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testPureReadCommandsRemainDirectWireMessages() async throws {
-        let (interfaceFence, interfaceConn) = makeConnectedFence()
-        _ = try await interfaceFence.execute(command: .getInterface)
-        guard case .requestInterface = interfaceConn.sent.last?.0 else {
-            return XCTFail("Expected get_interface to send requestInterface, got \(String(describing: interfaceConn.sent.last?.0))")
-        }
+        let cases: [(command: TheFence.Command, wireType: ClientWireMessageType)] = [
+            (.getInterface, .requestInterface),
+            (.getPasteboard, .getPasteboard),
+        ]
 
-        let (pasteboardFence, pasteboardConn) = makeConnectedFence()
-        _ = try await pasteboardFence.execute(command: .getPasteboard)
-        guard case .getPasteboard = pasteboardConn.sent.last?.0 else {
-            return XCTFail("Expected get_pasteboard to send getPasteboard, got \(String(describing: pasteboardConn.sent.last?.0))")
+        for testCase in cases {
+            let (fence, connection) = makeConnectedFence()
+            _ = try await fence.execute(command: testCase.command)
+
+            XCTAssertEqual(connection.sent.last?.0.wireType, testCase.wireType, testCase.command.rawValue)
         }
     }
 
@@ -3003,22 +2988,21 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testParseExpectationAcceptsAnnouncementWithoutMatch() async throws {
-        let result = try parseTypedExpectation(.object([
-            "type": .string("announcement"),
-        ]))
+    func testParseExpectationAcceptsAnnouncementWithOptionalCanonicalMatch() async throws {
+        let cases: [(value: HeistValue, expected: AccessibilityPredicate)] = [
+            (.object(["type": .string("announcement")]), .announcement),
+            (
+                .object([
+                    "type": .string("announcement"),
+                    "match": stringMatchValue(mode: "contains", value: "Payment complete"),
+                ]),
+                .announcement(.contains("Payment complete"))
+            ),
+        ]
 
-        XCTAssertEqual(result, .announcement)
-    }
-
-    @ButtonHeistActor
-    func testParseExpectationAcceptsAnnouncementWithCanonicalMatch() async throws {
-        let result = try parseTypedExpectation(.object([
-            "type": .string("announcement"),
-            "match": stringMatchValue(mode: "contains", value: "Payment complete"),
-        ]))
-
-        XCTAssertEqual(result, .announcement(.contains("Payment complete")))
+        for testCase in cases {
+            XCTAssertEqual(try parseTypedExpectation(testCase.value), testCase.expected)
+        }
     }
 
     @ButtonHeistActor
@@ -3196,33 +3180,33 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testGetInterfaceSubtreeElementRejectsHeistIdAndOrdinal() async {
-        await assertValidationError(
-            command: .getInterface,
-            arguments: [
-                "subtree": .object([
+    func testGetInterfaceSubtreeRejectsUnknownTargetFields() async {
+        let cases: [(subtree: [String: HeistValue], field: String)] = [
+            (
+                [
                     "heistId": .string("button_save"),
                     "ordinal": .int(1),
-                ]),
-            ],
-            contains: "Unknown accessibility target field \"heistId\""
-        )
-    }
-
-    @ButtonHeistActor
-    func testGetInterfaceSubtreeElementRejectsUnknownTargetField() async {
-        await assertValidationError(
-            command: .getInterface,
-            arguments: [
-                "subtree": .object([
+                ],
+                "heistId"
+            ),
+            (
+                [
                     "checks": .array([
                         predicateCheckValue(kind: "label", match: stringMatchValue(mode: "exact", value: "Save")),
                     ]),
                     "unexpectedTargetField": .string("button_save"),
-                ]),
-            ],
-            contains: "unexpectedTargetField"
-        )
+                ],
+                "unexpectedTargetField"
+            ),
+        ]
+
+        for testCase in cases {
+            await assertValidationError(
+                command: .getInterface,
+                arguments: ["subtree": .object(testCase.subtree)],
+                contains: testCase.field
+            )
+        }
     }
 
     func testContainerNameAppearsInSummaryJsonAndCompactOutput() throws {
