@@ -1,6 +1,5 @@
 #if canImport(UIKit)
 #if DEBUG
-import Foundation
 import TheScore
 
 internal enum Completeness: Sendable, Equatable {
@@ -16,11 +15,9 @@ internal enum ObservationWindowConstructionError: Error, Sendable, Equatable {
 internal struct ObservationWindow: Sendable, Equatable {
     internal let baseline: SettledCapture
     internal let completeness: Completeness
-    internal let captures: [SettledCapture]
-
-    internal var current: SettledCapture {
-        captures[captures.count - 1]
-    }
+    internal let priorCaptures: [SettledCapture]
+    internal let current: SettledCapture
+    internal var captures: [SettledCapture] { priorCaptures + [current] }
 
     internal var trace: AccessibilityTrace {
         AccessibilityTrace(captures: captures.map(\.capture))
@@ -31,8 +28,8 @@ internal struct ObservationWindow: Sendable, Equatable {
         retainedEntries: [ObservationEntry]
     ) throws(ObservationWindowConstructionError) {
         var expectedCursor = baseline.cursor
-        var captures = [baseline]
-        captures.reserveCapacity(retainedEntries.count + 1)
+        var current = baseline
+        var priorCaptures: [SettledCapture] = []
         for entry in retainedEntries {
             guard let previousCursor = entry.transition.previousCursor else {
                 throw ObservationWindowConstructionError.unexpectedInitialEntry(entry.cursor)
@@ -43,10 +40,10 @@ internal struct ObservationWindow: Sendable, Equatable {
                     actual: previousCursor
                 )
             }
-            captures.append(entry.settledCapture)
+            priorCaptures.append(current)
+            current = entry.settledCapture
             expectedCursor = entry.cursor
         }
-        let current = captures[captures.count - 1]
         let completeness: Completeness = if retainedEntries.isEmpty {
             .incomplete(ObservationGap(
                 reason: .noObservationAfterBaseline,
@@ -58,19 +55,21 @@ internal struct ObservationWindow: Sendable, Equatable {
         }
         self.init(
             baseline: baseline,
-            captures: captures,
+            current: current,
+            priorCaptures: priorCaptures,
             completeness: completeness
         )
     }
 
     private init(
         baseline: SettledCapture,
-        captures: [SettledCapture],
+        current: SettledCapture,
+        priorCaptures: [SettledCapture],
         completeness: Completeness
     ) {
-        precondition(!captures.isEmpty, "Observation windows require at least one observed capture")
         self.baseline = baseline
-        self.captures = captures
+        self.current = current
+        self.priorCaptures = priorCaptures
         self.completeness = completeness
     }
 
@@ -84,7 +83,8 @@ internal struct ObservationWindow: Sendable, Equatable {
         precondition(gap.current == current.cursor, "Observation gap must describe its current capture")
         return ObservationWindow(
             baseline: baseline,
-            captures: contiguousCapturedSuffix(
+            current: current,
+            priorCaptures: contiguousPriorCaptures(
                 endingAt: current,
                 retainedEntries: retainedEntries
             ),
@@ -92,11 +92,11 @@ internal struct ObservationWindow: Sendable, Equatable {
         )
     }
 
-    private static func contiguousCapturedSuffix(
+    private static func contiguousPriorCaptures(
         endingAt current: SettledCapture,
         retainedEntries: [ObservationEntry]
     ) -> [SettledCapture] {
-        guard retainedEntries.last?.cursor == current.cursor else { return [current] }
+        guard retainedEntries.last?.cursor == current.cursor else { return [] }
         var firstIndex = retainedEntries.index(before: retainedEntries.endIndex)
         while firstIndex > retainedEntries.startIndex {
             let previousIndex = retainedEntries.index(before: firstIndex)
@@ -104,7 +104,7 @@ internal struct ObservationWindow: Sendable, Equatable {
             guard previousCursor == retainedEntries[previousIndex].cursor else { break }
             firstIndex = previousIndex
         }
-        return retainedEntries[firstIndex...].map(\.settledCapture)
+        return retainedEntries[firstIndex...].dropLast().map(\.settledCapture)
     }
 }
 

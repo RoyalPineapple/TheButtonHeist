@@ -227,6 +227,13 @@ final class SemanticObservationLogTests: XCTestCase {
         }
     }
 
+    func testObservationWindowWithoutRetainedEntriesContainsOnlyBaseline() throws {
+        let baseline = capture("A", sequence: 1, generation: 0)
+        let window = try ObservationWindow(baseline: baseline, retainedEntries: [])
+
+        XCTAssertEqual(window.captures, [baseline])
+    }
+
     func testSameGenerationTransitionRejectsCrossGenerationElementEdge() {
         let previous = capture("A", sequence: 1, generation: 0).cursor
         let replacement = capture("B", sequence: 2, generation: 1).cursor
