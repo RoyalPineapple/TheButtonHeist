@@ -290,9 +290,8 @@ pipelines are explicit:
 | Drainable callback work | `TaskTracker.swift` | Lifecycle, listener-generation, and delayed-disconnect owners |
 | Discovery callback delivery | `DeviceDiscoveryEventStream.swift` | `DeviceDiscovery.swift` |
 | Compiler process terminal outcome | `CompilerProcessOwner.swift` | `HeistSwiftFileCompiler.swift`; diagnostic rendering lives in `HeistSwiftFileCompilerError.swift` |
-| Receipt node algebra | `HeistExecutionStepNode.swift` | Typed receipt construction |
-| Receipt node codec | `HeistExecutionStepNode+Codable.swift` | External receipt JSON boundaries |
-| Receipt construction | `HeistExecutionStepResult+Construction.swift` | Runtime step executors |
+| Receipt construction and relationship validity | `HeistExecutionStepResult+Construction.swift` | Runtime step executors and receipt decoding |
+| Receipt private storage codec | `HeistExecutionStepNode.swift` and `HeistExecutionStepNode+Codable.swift` | External receipt JSON projection only |
 | Receipt report facts | `HeistExecutionStepResult+ReportFacts.swift` | Report, compact, JUnit, doctor, and metric adapters |
 | Semantic observation scheduling | `SemanticObservationStream.swift` | Passive settle cycles and observation demand |
 | Semantic observation publication | `SemanticObservationStream+Publication.swift` | The sole `InterfaceTree` reducer and observation-log publisher |
@@ -308,15 +307,16 @@ facts from `HeistExecutionResult`. Formatters, diagnostics, and repair tooling
 consume that projection; they do not rebuild report facts from plan siblings or
 parallel result fields.
 
-`HeistExecutionStepResult` owns a typed execution path, duration, and one
-`HeistExecutionStepNode`. The node type owns the receipt algebra and its single
-`Codable` conformance; file placement is organization, not an architectural
-contract. Typed completion cases make unconstrained nodes legal by construction.
-For action, loop, and repeat nodes whose declaration and evidence must agree,
-`admitted()` is the shared relationship boundary used by runtime construction
-and decoding. There is no `Result` repair path and no synthetic fallback
-receipt. Status and abort paths derive from the node, and the wire decoder
-accepts only fields legal for its `type` and `outcome`.
+`HeistExecutionStepResult` owns a typed execution path, duration, and one private
+`HeistExecutionStepNode` used only for storage and wire projection. Package
+callers cannot construct or pass that node. They use the result's per-kind
+factories, which are the sole owners of action method, loop progress, iteration,
+and repeat predicate relationships. A failed relationship produces no result;
+it never creates a provisional receipt that is admitted or repaired later.
+Decoding immediately routes the private decoded node through the same factories
+and rejects incompatible external fields. There is no `Result` repair path or
+synthetic fallback receipt. Status and abort paths derive from the private node,
+and the wire decoder accepts only fields legal for its `type` and `outcome`.
 
 `ActionDispatchOutcome` is the one result of app-side action dispatch. Its state
 is success, with an optional payload and resolved element id, or failure, with a
