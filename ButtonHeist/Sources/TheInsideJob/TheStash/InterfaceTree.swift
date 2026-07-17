@@ -13,8 +13,9 @@ import AccessibilitySnapshotParser
 /// Button Heist's durable, targetable representation of the accessibility tree.
 ///
 /// `InterfaceTree` contains targetable accessibility identity and value-only
-/// reveal evidence. Its viewport snapshot is value-only bookkeeping used to
-/// reconcile the next observation. Live UIKit references remain in
+/// reveal evidence. Its viewport snapshot records the latest parser hierarchy
+/// and path identity used to reconcile the next observation; semantic values
+/// are not projected into a second store. Live UIKit references remain in
 /// `InterfaceObservation.liveCapture` and are reacquired for every action.
 struct InterfaceTree: Sendable, Equatable {
     let elements: [HeistId: Element]

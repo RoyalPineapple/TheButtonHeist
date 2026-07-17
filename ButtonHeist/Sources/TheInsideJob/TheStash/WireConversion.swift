@@ -111,8 +111,8 @@ extension TheStash {
             },
             containerMetadata: { path, _ in
                 InterfaceContainerProjectionMetadata(
-                    containerName: tree.viewportCapture.containerNamesByPath[path],
-                    scrollInventory: tree.viewportCapture.scrollInventory(forPath: path)
+                    containerName: tree.containers[path]?.containerName,
+                    scrollInventory: tree.containers[path]?.scrollInventory
                 )
             }
         )
@@ -433,8 +433,8 @@ extension TheStash {
             guard case .container = node else { return nil }
             return InterfaceContainerAnnotation(
                 path: path,
-                containerName: tree.viewportCapture.containerNamesByPath[path],
-                scrollInventory: tree.viewportCapture.scrollInventory(forPath: path)
+                containerName: tree.containers[path]?.containerName,
+                scrollInventory: tree.containers[path]?.scrollInventory
             )
         }
     }

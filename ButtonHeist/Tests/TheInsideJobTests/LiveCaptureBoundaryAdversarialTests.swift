@@ -40,7 +40,7 @@ struct LiveCaptureBoundaryAdversarialTests {
         )
         let snapshot = LiveCapture.Snapshot(
             hierarchy: [.element(element, traversalIndex: 0)],
-            elementsByPath: [path: entry]
+            heistIdsByPath: [path: heistId]
         )
         return InterfaceTree(
             elements: [heistId: entry],

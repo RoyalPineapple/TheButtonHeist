@@ -13,15 +13,7 @@ extension InterfaceObservation {
         let pathMap = filteredViewport.pathMap
         let snapshot = LiveCapture.Snapshot(
             hierarchy: filteredViewport.hierarchy,
-            elementsByPath: Self.remapViewportElements(
-                liveCapture.snapshot.elementsByPath,
-                removing: removedIds,
-                using: pathMap
-            ),
-            containersByPath: Self.remapViewportContainers(
-                liveCapture.snapshot.containersByPath,
-                using: pathMap
-            ),
+            heistIdsByPath: filteredViewport.idsByPath,
             firstResponderHeistId: liveCapture.snapshot.firstResponderHeistId.flatMap {
                 removedIds.contains($0) ? nil : $0
             }
@@ -60,63 +52,6 @@ extension InterfaceObservation {
         )
     }
 
-    private static func remapViewportElements(
-        _ elementsByPath: [TreePath: InterfaceTree.Element],
-        removing removedIds: Set<HeistId>,
-        using pathMap: [TreePath: TreePath]
-    ) -> [TreePath: InterfaceTree.Element] {
-        Dictionary(
-            uniqueKeysWithValues: elementsByPath.compactMap { path, entry in
-                guard !removedIds.contains(entry.heistId),
-                      let remappedPath = pathMap[path]
-                else { return nil }
-                return (
-                    remappedPath,
-                    InterfaceTree.Element(
-                        heistId: entry.heistId,
-                        path: remappedPath,
-                        scrollMembership: remapMembership(entry.scrollMembership, using: pathMap),
-                        observedScrollContentActivationPoint: entry.observedScrollContentActivationPoint,
-                        element: entry.element
-                    )
-                )
-            }
-        )
-    }
-
-    private static func remapViewportContainers(
-        _ containersByPath: [TreePath: InterfaceTree.Container],
-        using pathMap: [TreePath: TreePath]
-    ) -> [TreePath: InterfaceTree.Container] {
-        Dictionary(
-            uniqueKeysWithValues: containersByPath.compactMap { path, container in
-                guard let remappedPath = pathMap[path] else { return nil }
-                return (
-                    remappedPath,
-                    InterfaceTree.Container(
-                        container: container.container,
-                        path: remappedPath,
-                        containerName: container.containerName,
-                        contentRect: container.contentFrame,
-                        scrollMembership: remapMembership(container.scrollMembership, using: pathMap),
-                        observedScrollContentActivationPoint: container.observedScrollContentActivationPoint,
-                        scrollInventory: container.scrollInventory
-                    )
-                )
-            }
-        )
-    }
-
-    private static func remapMembership(
-        _ membership: InterfaceTree.ScrollMembership?,
-        using pathMap: [TreePath: TreePath]
-    ) -> InterfaceTree.ScrollMembership? {
-        guard let membership else { return nil }
-        return InterfaceTree.ScrollMembership(
-            containerPath: pathMap[membership.containerPath] ?? membership.containerPath,
-            index: membership.index
-        )
-    }
 }
 
 private extension InterfaceTree {

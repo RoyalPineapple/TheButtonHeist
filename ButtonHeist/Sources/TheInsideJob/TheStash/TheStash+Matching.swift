@@ -74,10 +74,6 @@ extension InterfaceTree.Element: ElementPredicateSubjectBacked {
     package var predicateSubject: AccessibilityElement { element }
 }
 
-extension LiveCapture.LiveElementEntry: ElementPredicateSubjectBacked {
-    package var predicateSubject: AccessibilityElement { element }
-}
-
 private extension CustomContentMatchCore where Text == String {
     func matches(_ content: AccessibilityElement.CustomContent) -> Bool {
         label.matches(content.label)

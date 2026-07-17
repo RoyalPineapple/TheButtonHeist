@@ -1292,7 +1292,7 @@ final class ElementInflationProductTests: XCTestCase {
     private func scrollContainerDiagnostics(in screen: InterfaceObservation) -> String {
         let summaries = screen.liveCapture.hierarchy.scrollablePathIndexedContainers
             .map { item -> String in
-                let name = screen.liveCapture.snapshot.containerNamesByPath[item.path]
+                let name = screen.tree.containers[item.path]?.containerName
                 let hasLiveScroll = screen.liveCapture.scrollView(forContainerPath: item.path) != nil
                 return "path=\(item.path.indices) name=\(name ?? "<nil>") liveScroll=\(hasLiveScroll)"
             }

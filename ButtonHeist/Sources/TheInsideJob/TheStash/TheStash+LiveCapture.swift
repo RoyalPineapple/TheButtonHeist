@@ -49,7 +49,7 @@ extension TheStash {
     }
 
     func liveContainerName(forPath path: TreePath) -> ContainerName? {
-        currentLiveCapture.snapshot.containerNamesByPath[path]
+        latestObservation.tree.containers[path]?.containerName
     }
 
     func liveScrollableContainerView(forPath path: TreePath) -> UIScrollView? {
@@ -61,18 +61,11 @@ extension TheStash {
     }
 
     func liveScrollContainerDiagnostics() -> String {
-        currentLiveCapture.scrollContainerDiagnostics()
-    }
-
-}
-
-private extension LiveCapture {
-    func scrollContainerDiagnostics() -> String {
-        let summaries = hierarchy.scrollablePathIndexedContainers.map { item in
-            let containerName = snapshot.containerNamesByPath[item.path]
-            let hasLiveScrollView = scrollView(forContainerPath: item.path) != nil
-            let pathView = scrollableContainerViewsByPath[item.path]?.view
-            let containerObject = containerRefsByPath[item.path]?.object
+        let summaries = currentLiveCapture.hierarchy.scrollablePathIndexedContainers.map { item in
+            let containerName = latestObservation.tree.containers[item.path]?.containerName
+            let hasLiveScrollView = currentLiveCapture.scrollView(forContainerPath: item.path) != nil
+            let pathView = currentLiveCapture.scrollableContainerViewsByPath[item.path]?.view
+            let containerObject = currentLiveCapture.containerRefsByPath[item.path]?.object
             let objectType = containerObject.map { String(describing: type(of: $0)) } ?? "<nil>"
             return "path=\(item.path.indices) name=\(containerName?.rawValue ?? "<nil>") "
                 + "liveScroll=\(hasLiveScrollView) pathView=\(pathView != nil) "
@@ -82,6 +75,7 @@ private extension LiveCapture {
             ? "available live scroll containers: none"
             : "available live scroll containers: \(summaries.joined(separator: "; "))"
     }
+
 }
 
 #endif // DEBUG

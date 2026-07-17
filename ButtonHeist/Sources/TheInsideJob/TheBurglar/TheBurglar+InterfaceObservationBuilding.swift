@@ -67,10 +67,10 @@ extension TheBurglar {
             indexedElements: identityContext.elements,
             facts: facts
         )
-        let viewportElementsByPath = Dictionary(
-            uniqueKeysWithValues: entries.map { ($0.path, $0.treeElement) }
+        let heistIdsByPath = Dictionary(
+            uniqueKeysWithValues: entries.map { ($0.path, $0.heistId) }
         )
-        let viewportContainersByPath = viewportContainers(
+        let containersByPath = viewportContainers(
             identityContext: identityContext,
             containerNamesByPath: containerNamesByPath,
             facts: facts
@@ -101,15 +101,14 @@ extension TheBurglar {
 
         let snapshot = LiveCapture.Snapshot(
             hierarchy: identityContext.hierarchy,
-            elementsByPath: viewportElementsByPath,
-            containersByPath: viewportContainersByPath,
+            heistIdsByPath: heistIdsByPath,
             firstResponderHeistId: firstResponderHeistId
         )
         let tree = InterfaceTree(
             elements: Dictionary(
                 uniqueKeysWithValues: entries.map { ($0.heistId, $0.treeElement) }
             ),
-            containers: viewportContainersByPath,
+            containers: containersByPath,
             viewportCapture: snapshot
         )
         return InterfaceObservationBuildProjection(

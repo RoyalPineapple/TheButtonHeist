@@ -505,13 +505,13 @@ final class TheBurglarApplyTests: XCTestCase {
             InterfaceTree.ScrollMembership(containerPath: scrollPath, index: 7)
         )
         XCTAssertEqual(element.observedScrollContentActivationPoint, observedElementPoint)
-        XCTAssertEqual(screen.liveCapture.scrollInventory(forPath: scrollPath), inventory)
+        XCTAssertEqual(screen.tree.containers[scrollPath]?.scrollInventory, inventory)
         XCTAssertEqual(
-            screen.liveCapture.containerScrollMembership(forPath: nestedContainerPath),
+            screen.tree.containers[nestedContainerPath]?.scrollMembership,
             InterfaceTree.ScrollMembership(containerPath: scrollPath, index: nil)
         )
         XCTAssertEqual(
-            screen.liveCapture.containerObservedScrollContentActivationPoint(forPath: nestedContainerPath),
+            screen.tree.containers[nestedContainerPath]?.observedScrollContentActivationPoint,
             observedContainerPoint
         )
     }

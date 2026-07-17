@@ -126,20 +126,11 @@ final class TheStash {
 
     /// Latest observed capture payload for a viewport heistId.
     ///
-    /// The parsed accessibility element, live handles, and reveal metadata are
-    /// observational evidence only. For live entries, the newest parse owns
-    /// viewport metadata; retained interface metadata must not override it.
+    /// Snapshot identity proves the element belongs to the latest viewport;
+    /// `InterfaceTree` owns its semantic value and reveal metadata.
     func liveInterfaceElement(heistId: HeistId) -> InterfaceTree.Element? {
-        guard let liveEntry = currentLiveCapture.elementEntry(for: heistId),
-              let observedEntry = latestObservation.tree.findElement(heistId: heistId)
-        else { return nil }
-        return InterfaceTree.Element(
-            heistId: heistId,
-            path: liveEntry.path,
-            scrollMembership: observedEntry.scrollMembership,
-            observedScrollContentActivationPoint: observedEntry.observedScrollContentActivationPoint,
-            element: liveEntry.element
-        )
+        guard currentLiveCapture.contains(heistId: heistId) else { return nil }
+        return latestObservation.tree.findElement(heistId: heistId)
     }
 
     /// Elements in matcher/diagnostic order.

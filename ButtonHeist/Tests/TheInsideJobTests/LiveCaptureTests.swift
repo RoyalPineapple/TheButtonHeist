@@ -13,50 +13,12 @@ struct LiveCaptureTests {
 
     private func makeSnapshot(
         hierarchy: [AccessibilityHierarchy],
-        containerNamesByPath: [TreePath: ContainerName] = [:],
         heistIdsByPath: [TreePath: HeistId] = [:],
-        containerContentFramesByPath: [TreePath: ContentRect] = [:],
-        containerScrollMembershipsByPath: [TreePath: InterfaceTree.ScrollMembership] = [:],
-        containerObservedScrollContentActivationPointsByPath: [
-            TreePath: InterfaceTree.ObservedScrollContentActivationPoint
-        ] = [:],
-        scrollInventoriesByPath: [TreePath: ScrollInventory] = [:],
         firstResponderHeistId: HeistId? = nil
     ) -> LiveCapture.Snapshot {
-        let elementsByPath: [TreePath: InterfaceTree.Element] = Dictionary(
-            uniqueKeysWithValues: hierarchy.pathIndexedElements.compactMap { item in
-                guard let heistId = heistIdsByPath[item.path] else { return nil }
-                return (
-                    item.path,
-                    InterfaceTree.Element(
-                        heistId: heistId,
-                        path: item.path,
-                        scrollMembership: nil,
-                        element: item.element
-                    )
-                )
-            }
-        )
-        let containersByPath = Dictionary(
-            uniqueKeysWithValues: hierarchy.pathIndexedContainers.map { item in
-                (
-                    item.path,
-                    InterfaceTree.Container(
-                        container: item.container,
-                        path: item.path,
-                        containerName: containerNamesByPath[item.path],
-                        contentRect: containerContentFramesByPath[item.path],
-                        scrollMembership: containerScrollMembershipsByPath[item.path],
-                        observedScrollContentActivationPoint: containerObservedScrollContentActivationPointsByPath[item.path],
-                        scrollInventory: scrollInventoriesByPath[item.path]
-                    )
-                )
-            }
-        )
-        return LiveCapture.Snapshot(
+        LiveCapture.Snapshot(
             hierarchy: hierarchy,
-            elementsByPath: elementsByPath,
-            containersByPath: containersByPath,
+            heistIdsByPath: heistIdsByPath,
             firstResponderHeistId: firstResponderHeistId
         )
     }
@@ -128,7 +90,7 @@ struct LiveCaptureTests {
 
     @Test func `rejects semantic containers that mismatch the viewport capture`() {
         let path = TreePath([0])
-        let container = makeTestAccessibilityContainer()
+        let container = makeTestAccessibilityContainer(identifier: "expected")
         let snapshot = makeSnapshot(
             hierarchy: [.container(container, children: [])]
         )
@@ -136,9 +98,9 @@ struct LiveCaptureTests {
             elements: [:],
             containers: [
                 path: InterfaceTree.Container(
-                    container: container,
+                    container: makeTestAccessibilityContainer(identifier: "different"),
                     path: path,
-                    containerName: ContainerName(rawValue: "wrong"),
+                    containerName: nil,
                     contentFrame: nil
                 )
             ],
@@ -223,15 +185,17 @@ struct LiveCaptureTests {
                     ),
                     children: []
                 )
-            ],
-            containerScrollMembershipsByPath: [
-                path: InterfaceTree.ScrollMembership(containerPath: path, index: nil)
             ]
         )
 
         expectValidationError(
             .invalidScrollMembership(path: path, containerPath: path),
-            tree: makeTree(snapshot: snapshot)
+            tree: makeTree(
+                snapshot: snapshot,
+                containerScrollMembershipsByPath: [
+                    path: InterfaceTree.ScrollMembership(containerPath: path, index: nil)
+                ]
+            )
         )
     }
 
@@ -495,7 +459,7 @@ struct LiveCaptureTests {
         #expect(capture.contains(heistId: "save_button"))
         #expect(capture.heistId(forPath: TreePath([0])) == "save_button")
         #expect(capture.heistId(forPath: TreePath([1])) == "cancel_button")
-        #expect(capture.element(for: "cancel_button") == cancel)
+        #expect(observation.tree.findElement(heistId: "cancel_button")?.element == cancel)
         #expect(capture.object(for: "save_button") === saveObject)
         #expect(capture.heistId(matching: saveObject) == "save_button")
         #expect(capture.scrollView(for: "save_button") === saveScrollView)
@@ -514,14 +478,15 @@ struct LiveCaptureTests {
                 TreePath([1]): "repeat_button_2",
             ]
         )
-        let capture = try InterfaceObservation.build(
+        let observation = try InterfaceObservation.build(
             tree: makeTree(snapshot: snapshot)
-        ).liveCapture
+        )
+        let capture = observation.liveCapture
 
         #expect(capture.heistId(forPath: TreePath([0])) == "repeat_button_1")
         #expect(capture.heistId(forPath: TreePath([1])) == "repeat_button_2")
-        #expect(capture.element(for: "repeat_button_1") == repeated)
-        #expect(capture.element(for: "repeat_button_2") == repeated)
+        #expect(observation.tree.findElement(heistId: "repeat_button_1")?.element == repeated)
+        #expect(observation.tree.findElement(heistId: "repeat_button_2")?.element == repeated)
     }
 
     @Test func `dispatch references stay weak`() throws {
@@ -606,22 +571,37 @@ struct LiveCaptureTests {
 
     private func makeTree(
         snapshot: LiveCapture.Snapshot,
-        scrollMembershipsByHeistId: [HeistId: InterfaceTree.ScrollMembership] = [:]
+        scrollMembershipsByHeistId: [HeistId: InterfaceTree.ScrollMembership] = [:],
+        containerScrollMembershipsByPath: [TreePath: InterfaceTree.ScrollMembership] = [:]
     ) -> InterfaceTree {
-        let elements = snapshot.elementsByPath.values.reduce(
+        let elements = snapshot.hierarchy.pathIndexedElements.reduce(
             into: [HeistId: InterfaceTree.Element]()
-        ) { result, entry in
-            result[entry.heistId] = InterfaceTree.Element(
-                heistId: entry.heistId,
-                path: entry.path,
-                scrollMembership: scrollMembershipsByHeistId[entry.heistId] ?? entry.scrollMembership,
-                observedScrollContentActivationPoint: entry.observedScrollContentActivationPoint,
-                element: entry.element
+        ) { result, item in
+            guard let heistId = snapshot.heistIdsByPath[item.path] else { return }
+            result[heistId] = InterfaceTree.Element(
+                heistId: heistId,
+                path: item.path,
+                scrollMembership: scrollMembershipsByHeistId[heistId],
+                element: item.element
             )
         }
+        let containers = Dictionary(
+            uniqueKeysWithValues: snapshot.hierarchy.pathIndexedContainers.map { item in
+                (
+                    item.path,
+                    InterfaceTree.Container(
+                        container: item.container,
+                        path: item.path,
+                        containerName: nil,
+                        contentFrame: nil,
+                        scrollMembership: containerScrollMembershipsByPath[item.path]
+                    )
+                )
+            }
+        )
         return InterfaceTree(
             elements: elements,
-            containers: snapshot.containersByPath,
+            containers: containers,
             viewportCapture: snapshot
         )
     }

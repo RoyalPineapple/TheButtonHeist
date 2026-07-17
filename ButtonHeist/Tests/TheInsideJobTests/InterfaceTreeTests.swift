@@ -100,8 +100,9 @@ final class InterfaceTreeTests: XCTestCase {
 
         XCTAssertEqual(merged.elementIDs, ["button_first", "button_second"])
         XCTAssertEqual(merged.viewportElementIDs, ["button_second"])
-        XCTAssertNil(merged.viewportCapture.elementEntry(for: "button_first"))
-        XCTAssertEqual(merged.viewportCapture.elementEntry(for: "button_second")?.element, second)
+        XCTAssertFalse(merged.viewportCapture.heistIdsByPath.values.contains("button_first"))
+        XCTAssertTrue(merged.viewportCapture.heistIdsByPath.values.contains("button_second"))
+        XCTAssertEqual(merged.findElement(heistId: "button_second")?.element, second)
     }
 
     func testViewportUpdateRetainsElementsThatMoveOffscreenInFullTreeCapture() throws {
@@ -183,7 +184,6 @@ final class InterfaceTreeTests: XCTestCase {
 
         XCTAssertEqual(pruned.liveCapture.heistId(forPath: TreePath([0, 0])), "kept")
         XCTAssertNil(pruned.liveCapture.heistId(forPath: TreePath([1, 0])))
-        XCTAssertEqual(pruned.liveCapture.snapshot.containerNamesByPath[TreePath([0])], "feed")
         XCTAssertEqual(pruned.tree.containers[TreePath([0])]?.containerName, "feed")
         XCTAssertNil(pruned.tree.containers[TreePath([1])])
         XCTAssertEqual(pruned.tree.elements["kept"]?.scrollMembership?.containerPath, TreePath([0]))
