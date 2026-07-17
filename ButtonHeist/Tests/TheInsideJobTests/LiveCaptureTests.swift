@@ -514,6 +514,40 @@ struct LiveCaptureTests {
         #expect(capture.scrollView(for: "save_button") == nil)
     }
 
+    @Test func `scroll resolution owns nested parent and path alias identity`() throws {
+        let outerPath = TreePath([0])
+        let aliasPath = TreePath([0, 0])
+        let innerPath = TreePath([0, 0, 0])
+        let scrollContainer = makeTestAccessibilityContainer(
+            scrollableContentSize: AccessibilitySize(width: 320, height: 1_200)
+        )
+        let snapshot = makeSnapshot(hierarchy: [
+            .container(scrollContainer, children: [
+                .container(scrollContainer, children: [
+                    .container(scrollContainer, children: [])
+                ])
+            ])
+        ])
+        let outer = UIScrollView()
+        let inner = UIScrollView()
+        outer.addSubview(inner)
+        let capture = try LiveCapture.build(
+            validating: makeTree(snapshot: snapshot),
+            dispatchReferences: LiveCapture.DispatchReferences(
+                scrollableContainerViewsByPath: [
+                    outerPath: .init(view: outer),
+                    aliasPath: .init(view: outer),
+                    innerPath: .init(view: inner),
+                ]
+            )
+        )
+
+        #expect(capture.nearestScrollEntry(for: innerPath.appending(0))?.path == innerPath)
+        #expect(capture.isDirectScrollChild(at: aliasPath, of: outer))
+        #expect(capture.isDirectScrollChild(at: innerPath, of: outer))
+        #expect(capture.parentScrollViewID(of: ObjectIdentifier(inner)) == ObjectIdentifier(outer))
+    }
+
     private func expectValidationError(
         _ expected: LiveCapture.ValidationError,
         tree: InterfaceTree,

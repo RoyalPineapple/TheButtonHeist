@@ -202,58 +202,22 @@ extension TheBurglar {
     /// surfaces need UIKit accessibility screen coordinates, so restore those by
     /// applying each parse root's screen offset at the parser boundary.
     private static func screenCoordinateHierarchy(from result: ParseResult) -> [AccessibilityHierarchy] {
-        var offsetsByPath: [TreePath: CGPoint] = [:]
-        var records: [ScreenCoordinateNodeRecord] = []
-        for subtree in result.hierarchy.pathIndexedSubtrees {
-            let inheritedOffset = subtree.path.parent.flatMap { offsetsByPath[$0] } ?? .zero
-            let offset = result.screenCoordinateOffsetsByPath[subtree.path] ?? inheritedOffset
-            offsetsByPath[subtree.path] = offset
-            let content: ScreenCoordinateNodeContent
-            switch subtree.hierarchy {
+        func translated(_ hierarchy: AccessibilityHierarchy, at path: TreePath, inherited: CGPoint) -> AccessibilityHierarchy {
+            let offset = result.screenCoordinateOffsetsByPath[path] ?? inherited
+            switch hierarchy {
             case .element(let element, let traversalIndex):
-                content = .element(
-                    element.translatedBy(x: offset.x, y: offset.y),
-                    traversalIndex: traversalIndex
-                )
+                return .element(element.translatedBy(x: offset.x, y: offset.y), traversalIndex: traversalIndex)
             case .container(let container, let children):
-                content = .container(
+                return .container(
                     container.translatedBy(x: offset.x, y: offset.y),
-                    childCount: children.count
-                )
-            }
-            records.append(ScreenCoordinateNodeRecord(path: subtree.path, content: content))
-        }
-
-        var translatedNodesByPath: [TreePath: AccessibilityHierarchy] = [:]
-        for record in records.reversed() {
-            switch record.content {
-            case .element(let element, let traversalIndex):
-                translatedNodesByPath[record.path] = .element(
-                    element,
-                    traversalIndex: traversalIndex
-                )
-            case .container(let container, let childCount):
-                let children = (0..<childCount).map { childIndex in
-                    let childPath = record.path.appending(childIndex)
-                    guard let child = translatedNodesByPath[childPath] else {
-                        preconditionFailure(
-                            "Missing translated hierarchy child at path \(childPath.indices)"
-                        )
+                    children: children.enumerated().map { index, child in
+                        translated(child, at: path.appending(index), inherited: offset)
                     }
-                    return child
-                }
-                translatedNodesByPath[record.path] = .container(
-                    container,
-                    children: children
                 )
             }
         }
-        return result.hierarchy.indices.map { rootIndex in
-            let path = TreePath([rootIndex])
-            guard let root = translatedNodesByPath[path] else {
-                preconditionFailure("Missing translated hierarchy root at path \(path.indices)")
-            }
-            return root
+        return result.hierarchy.enumerated().map { rootIndex, root in
+            translated(root, at: TreePath([rootIndex]), inherited: .zero)
         }
     }
 
@@ -360,16 +324,6 @@ extension TheBurglar {
     private struct ContainerIdentityPayload: Encodable {
         let path: [Int]
         let subtree: AccessibilityHierarchy
-    }
-
-    private enum ScreenCoordinateNodeContent {
-        case element(AccessibilityElement, traversalIndex: Int)
-        case container(AccessibilityContainer, childCount: Int)
-    }
-
-    private struct ScreenCoordinateNodeRecord {
-        let path: TreePath
-        let content: ScreenCoordinateNodeContent
     }
 
     private struct InterfaceObservationBuildEntry: Equatable {
