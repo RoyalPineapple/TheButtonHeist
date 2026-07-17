@@ -556,11 +556,12 @@ final class WaitForIntegrationTests: XCTestCase {
             updatedVisible,
             notificationBatch: notificationBatch
         )
-        let result = await insideJob.brains.interactionObservation.waitForPredicate(
+        let receipt = await insideJob.brains.interactionObservation.waitForPredicate(
             try resolvedWait(WaitStep(predicate: .changed(.elements()), timeout: 5.0)),
             initialTrace: AccessibilityTrace(capture: baselineCapture.capture),
             changeBaseline: .supplied(baselineCapture)
-        ).actionResult
+        )
+        let result = receipt.result.actionResult
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "changed wait did not observe visible update")
         XCTAssertNotNil(

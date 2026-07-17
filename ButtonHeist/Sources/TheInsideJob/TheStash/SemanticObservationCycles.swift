@@ -2,6 +2,7 @@
 #if DEBUG
 import Foundation
 
+import ButtonHeistSupport
 import TheScore
 
 @MainActor

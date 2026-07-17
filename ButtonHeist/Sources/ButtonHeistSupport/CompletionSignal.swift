@@ -6,7 +6,7 @@ package final class CompletionSignal: Sendable {
         let value = UUID()
     }
 
-    private struct State {
+    private struct State: Sendable {
         var isFinished = false
         var waiters = WaiterStore<WaiterID, TimedOneShot<Bool>>()
     }

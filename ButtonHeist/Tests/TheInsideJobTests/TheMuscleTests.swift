@@ -531,8 +531,8 @@ final class TheMuscleTests: XCTestCase {
             return error
         }.first
         XCTAssertNotNil(validationError)
-        XCTAssertTrue(validationError?.message.contains("Could not decode client message before authentication") == true)
-        XCTAssertTrue(validationError?.message.contains("same Button Heist version") == true)
+        XCTAssertTrue(validationError?.message.description.contains("Could not decode client message before authentication") == true)
+        XCTAssertTrue(validationError?.message.description.contains("same Button Heist version") == true)
     }
 
     // MARK: - Session Rules Tests

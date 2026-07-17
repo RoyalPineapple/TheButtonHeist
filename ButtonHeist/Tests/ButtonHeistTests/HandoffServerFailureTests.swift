@@ -69,14 +69,14 @@ final class HandoffServerFailureTests: XCTestCase {
         authHandoff.handleServerMessage(.error(authError), requestId: nil)
 
         let expectedAuth = HandoffConnectionError.disconnected(.authFailed(
-            authError.message,
-            hint: authError.recoveryHint
+            authError.message.description,
+            hint: authError.recoveryHint?.description
         ))
         assertFailed(authHandoff.connectionPhase, failure: expectedAuth)
         XCTAssertEqual(expectedAuth.failureCode, KnownFailureCode.authFailed.rawValue)
         XCTAssertEqual(expectedAuth.phase, .authentication)
         XCTAssertFalse(expectedAuth.retryable)
-        XCTAssertEqual(expectedAuth.hint, authError.recoveryHint)
+        XCTAssertEqual(expectedAuth.hint, authError.recoveryHint?.description)
         XCTAssertEqual(authConnection.disconnectCount, 1)
 
         let session = SessionLockedPayload(message: "Session owned by another driver", activeConnections: 1)

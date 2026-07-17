@@ -1831,7 +1831,7 @@ final class TheBrainsActionTests: XCTestCase {
             announcementCursorStrategy: .heistScoped
         )
 
-        XCTAssertFalse(staleReceipt.actionResult.outcome.isSuccess)
+        XCTAssertFalse(staleReceipt.result.actionResult.outcome.isSuccess)
 
         notifications.recordForTesting(
             code: 1008,
@@ -1843,14 +1843,14 @@ final class TheBrainsActionTests: XCTestCase {
             announcementCursorStrategy: .heistScoped
         )
 
-        XCTAssertTrue(currentReceipt.actionResult.outcome.isSuccess)
-        XCTAssertEqual(currentReceipt.actionResult.announcement, "Ready")
+        XCTAssertTrue(currentReceipt.result.actionResult.outcome.isSuccess)
+        XCTAssertEqual(currentReceipt.result.actionResult.announcement, "Ready")
 
         let repeatedReceipt = await isolatedBrains.interactionObservation.waitForPredicate(
             try resolvedWait(WaitStep(predicate: .announcement("Ready"), timeout: .milliseconds(1))),
             announcementCursorStrategy: .heistScoped
         )
-        XCTAssertFalse(repeatedReceipt.actionResult.outcome.isSuccess)
+        XCTAssertFalse(repeatedReceipt.result.actionResult.outcome.isSuccess)
     }
 
     func testFailedActionBatchBelongsToDiagnosticAndNextActionClaimsOnlyItsBatch() async {

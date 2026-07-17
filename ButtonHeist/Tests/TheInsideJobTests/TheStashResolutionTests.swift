@@ -2325,10 +2325,12 @@ final class TheStashResolutionTests: XCTestCase {
             frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))
         )
         let checkoutActions = AccessibilityContainer(
-            type: .semanticGroup(label: "Actions", value: nil), identifier: "checkout_actions"
+            type: .semanticGroup(label: "Actions", value: nil), identifier: "checkout_actions",
+            frame: .zero
         )
         let cartActions = AccessibilityContainer(
-            type: .semanticGroup(label: "Actions", value: nil), identifier: "cart_actions"
+            type: .semanticGroup(label: "Actions", value: nil), identifier: "cart_actions",
+            frame: .zero
         )
         let checkoutPay = element(label: "Pay", traits: .button)
         let cartPay = element(label: "Pay", traits: .button)

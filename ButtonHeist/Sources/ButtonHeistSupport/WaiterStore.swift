@@ -9,6 +9,7 @@ package struct WaiterStoreRemoval<Key: Hashable, Waiter> {
 }
 
 extension WaiterStoreRemoval: Equatable where Key: Equatable, Waiter: Equatable {}
+extension WaiterStoreRemoval: Sendable where Key: Sendable, Waiter: Sendable {}
 
 package struct WaiterStore<Key: Hashable, Waiter> {
     private var nextID: UInt64 = 0
@@ -58,6 +59,8 @@ package struct WaiterStore<Key: Hashable, Waiter> {
         }
     }
 }
+
+extension WaiterStore: Sendable where Key: Sendable, Waiter: Sendable {}
 
 package extension WaiterStore where Key == UInt64 {
     mutating func reserveID() -> UInt64 {

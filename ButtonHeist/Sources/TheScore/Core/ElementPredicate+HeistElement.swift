@@ -139,7 +139,7 @@ package struct AccessibilityTargetMatchInput: Sendable, Equatable {
     }
 
     package init(interface: Interface) {
-        let containerRecords = interface.graph.nodesInPathOrder.compactMap { record in
+        let containerRecords = interface.graph.nodesInPathOrder.compactMap { record -> InterfaceGraphContainerRecord? in
             guard case .container(let container) = record.kind else { return nil }
             return container
         }
@@ -339,6 +339,6 @@ package struct AccessibilityTargetMatchSet: Sendable, Equatable {
 
 private extension Array where Element == AccessibilityTargetContainerMatch {
     func paths(matching predicate: ResolvedContainerPredicate) -> [TreePath] {
-        Array(lazy.filter { predicate.matches($0.facts) }.map(\.path))
+        [TreePath](lazy.filter { predicate.matches($0.facts) }.map { $0.path })
     }
 }

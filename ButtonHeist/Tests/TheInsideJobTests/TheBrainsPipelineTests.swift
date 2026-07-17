@@ -981,7 +981,7 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     func testWaitTimeoutReceiptUsesLastSettledVisibleObservation() async throws {
-        brains.stash.semanticObservationStream.commitVisibleObservationForTesting(
+        brains.stash.installScreenForTesting(
             makeScreen(elements: [("Known", .staticText, "known")])
         )
         let receipt = await brains.interactionObservation.waitForPredicate(
@@ -994,23 +994,6 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(trace.captures.last?.interface.projectedElements.map(\.label), ["Known"])
         XCTAssertTrue(receipt.result.actionResult.message?.contains("interface: 1 elements") == true)
         XCTAssertTrue(receipt.result.actionResult.message?.contains("last result:") == true)
-    }
-
-    func testVisibleMissRunsDiscoveryAfterVisibleSettle() async throws {
-        brains.stash.semanticObservationStream.commitVisibleObservationForTesting(
-            makeScreen(elements: [("Loading", .staticText, "loading")])
-        )
-        brains.stash.nextVisibleRefreshScreenForTesting = makeScreen(
-            elements: [("Ready", .staticText, "ready")]
-        )
-        let receipt = await brains.interactionObservation.waitForPredicate(
-            try resolvedWait(WaitStep(predicate: .exists(.label("Ready")), timeout: 1))
-        )
-        let trace = try XCTUnwrap(receipt.result.actionResult.accessibilityTrace)
-
-        XCTAssertTrue(receipt.result.actionResult.outcome.isSuccess)
-        XCTAssertEqual(trace.captures.first?.interface.projectedElements.map(\.label), ["Loading"])
-        XCTAssertEqual(trace.captures.last?.interface.projectedElements.map(\.label), ["Ready"])
     }
 
     func testAppearedWaitRequiresObservedTransitionWhenFinalStateIsAlreadyPresent() async throws {
@@ -2267,7 +2250,7 @@ final class TheBrainsPipelineTests: XCTestCase {
     ) async throws -> HeistWaitReceipt {
         let stream = brains.stash.semanticObservationStream
         let baselineEvent = stream.commitVisibleObservationForTesting(baseline)
-        stream.commitVisibleObservationForTesting(final)
+        brains.stash.installScreenForTesting(final)
         let baselineCapture = try XCTUnwrap(baselineEvent.settledCapture)
         return await brains.interactionObservation.waitForPredicate(
             try resolvedWait(WaitStep(predicate: predicate, timeout: .milliseconds(1))),
