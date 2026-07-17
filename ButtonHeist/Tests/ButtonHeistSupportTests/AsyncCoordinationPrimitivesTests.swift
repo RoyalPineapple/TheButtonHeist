@@ -18,8 +18,10 @@ import Testing
 
         signal.finish()
 
-        await #expect(first.value)
-        await #expect(second.value)
+        let firstFinished = await first.value
+        let secondFinished = await second.value
+        #expect(firstFinished)
+        #expect(secondFinished)
     }
 
     @Test func `completion signal finish is idempotent`() async {
@@ -29,17 +31,20 @@ import Testing
         signal.finish()
         signal.finish()
 
-        await #expect(waiter.value)
+        let didFinish = await waiter.value
+        #expect(didFinish)
         #expect(signal.isFinished)
     }
 
     @Test func `completion signal timeout preserves later completion`() async {
         let signal = CompletionSignal()
 
-        await #expect(!signal.wait(timeout: .milliseconds(1)))
+        let didFinishBeforeTimeout = await signal.wait(timeout: .milliseconds(1))
+        #expect(!didFinishBeforeTimeout)
         #expect(!signal.isFinished)
         signal.finish()
-        await #expect(signal.wait(timeout: .zero))
+        let didFinishImmediately = await signal.wait(timeout: .zero)
+        #expect(didFinishImmediately)
     }
 
     @Test func `resolve before timeout drains waiter and cancels timer`() async {
@@ -48,12 +53,16 @@ import Testing
             await harness.wait(key: "resolve", timeout: .seconds(30), timeoutValue: 99)
         }
 
-        await #expect(waitUntil { await harness.count == 1 })
+        let didRegister = await waitUntil { await harness.count == 1 }
+        #expect(didRegister)
         let didResolve = await harness.resolve("resolve", returning: 7)
         #expect(didResolve)
-        await #expect(task.value == 7)
-        await #expect(harness.count == 0)
-        await #expect(harness.timeoutFireCount == 0)
+        let value = await task.value
+        let waiterCount = await harness.count
+        let timeoutFireCount = await harness.timeoutFireCount
+        #expect(value == 7)
+        #expect(waiterCount == 0)
+        #expect(timeoutFireCount == 0)
     }
 
     @Test func `timeout before resolve drains waiter and rejects stale resolve`() async {
@@ -62,9 +71,12 @@ import Testing
             await harness.wait(key: "timeout", timeout: .milliseconds(1), timeoutValue: 42)
         }
 
-        await #expect(task.value == 42)
-        await #expect(harness.timeoutFireCount == 1)
-        await #expect(harness.count == 0)
+        let value = await task.value
+        let timeoutFireCount = await harness.timeoutFireCount
+        let waiterCount = await harness.count
+        #expect(value == 42)
+        #expect(timeoutFireCount == 1)
+        #expect(waiterCount == 0)
         let didResolve = await harness.resolve("timeout", returning: 7)
         #expect(!didResolve)
     }
@@ -75,11 +87,14 @@ import Testing
             await harness.wait(key: "cancel", timeout: .seconds(30), timeoutValue: 99)
         }
 
-        await #expect(waitUntil { await harness.count == 1 })
+        let didRegister = await waitUntil { await harness.count == 1 }
+        #expect(didRegister)
         task.cancel()
 
-        await #expect(task.value == WaiterHarness.cancelledValue)
-        await #expect(waitUntil { await harness.count == 0 })
+        let value = await task.value
+        let didUnregister = await waitUntil { await harness.count == 0 }
+        #expect(value == WaiterHarness.cancelledValue)
+        #expect(didUnregister)
         let didResolve = await harness.resolve("cancel", returning: 7)
         #expect(!didResolve)
     }
@@ -90,13 +105,16 @@ import Testing
             await harness.wait(key: "once", timeout: nil, timeoutValue: 99)
         }
 
-        await #expect(waitUntil { await harness.count == 1 })
+        let didRegister = await waitUntil { await harness.count == 1 }
+        #expect(didRegister)
         let didResolve = await harness.resolve("once", returning: 3)
         let didResolveAgain = await harness.resolve("once", returning: 4)
         #expect(didResolve)
         #expect(!didResolveAgain)
-        await #expect(task.value == 3)
-        await #expect(harness.count == 0)
+        let value = await task.value
+        let waiterCount = await harness.count
+        #expect(value == 3)
+        #expect(waiterCount == 0)
         let didResolveMissing = await harness.resolve("missing", returning: 5)
         #expect(!didResolveMissing)
     }
@@ -104,8 +122,10 @@ import Testing
     @Test func `synchronous resolution still runs waiter cleanup`() async {
         let harness = WaiterHarness()
 
-        await #expect(harness.waitResolvingDuringRegistration(key: "immediate", returning: 11) == 11)
-        await #expect(harness.count == 0)
+        let value = await harness.waitResolvingDuringRegistration(key: "immediate", returning: 11)
+        let waiterCount = await harness.count
+        #expect(value == 11)
+        #expect(waiterCount == 0)
         let didResolveAgain = await harness.resolve("immediate", returning: 12)
         #expect(!didResolveAgain)
     }
