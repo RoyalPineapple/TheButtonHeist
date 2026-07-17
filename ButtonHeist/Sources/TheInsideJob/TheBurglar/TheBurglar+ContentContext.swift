@@ -154,25 +154,25 @@ extension TheBurglar {
         let facts = container.containerPredicateFacts
         switch facts.role {
         case .none where facts.isScrollable:
-            return ContainerName(rawValue: "scrollable_\(frameHash)")
+            return ContainerName(stringLiteral: "scrollable_\(frameHash)")
         case .none:
             let identifierSlug = facts.identifier ?? "anon"
-            return ContainerName(rawValue: "container_\(identifierSlug)_\(frameHash)")
+            return ContainerName(stringLiteral: "container_\(identifierSlug)_\(frameHash)")
         case .semanticGroup(let label, let value):
             let labelSlug = TheScore.slugify(label) ?? "anon"
             let valueSlug = TheScore.slugify(value) ?? ""
             let identifierSlug = facts.identifier ?? ""
-            return ContainerName(rawValue: "semantic_\(identifierSlug)_\(labelSlug)_\(valueSlug)")
+            return ContainerName(stringLiteral: "semantic_\(identifierSlug)_\(labelSlug)_\(valueSlug)")
         case .list:
-            return ContainerName(rawValue: "list_\(frameHash)")
+            return ContainerName(stringLiteral: "list_\(frameHash)")
         case .landmark:
-            return ContainerName(rawValue: "landmark_\(frameHash)")
+            return ContainerName(stringLiteral: "landmark_\(frameHash)")
         case .tabBar:
-            return ContainerName(rawValue: "tabBar_\(frameHash)")
+            return ContainerName(stringLiteral: "tabBar_\(frameHash)")
         case .series:
-            return ContainerName(rawValue: "series_\(frameHash)")
+            return ContainerName(stringLiteral: "series_\(frameHash)")
         case .dataTable(let rows, let columns):
-            return ContainerName(rawValue: "table_\(rows)x\(columns)_\(frameHash)")
+            return ContainerName(stringLiteral: "table_\(rows)x\(columns)_\(frameHash)")
         }
     }
 

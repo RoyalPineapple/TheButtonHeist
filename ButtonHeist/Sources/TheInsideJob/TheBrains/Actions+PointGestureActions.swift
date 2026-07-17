@@ -79,9 +79,10 @@ extension Actions {
                 duration: duration,
             )
         case .point(let startSelection, let destination):
-            switch await resolveGesturePoint(
-                selection: startSelection,
-                method: .syntheticSwipe,
+            switch resolveGesturePoint(
+                from: nil,
+                selection: .coordinate(startSelection),
+                method: .syntheticSwipe
             ) {
             case .failure(let result):
                 return result

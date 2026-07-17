@@ -1587,7 +1587,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         for level in (0..<depth).reversed() {
             deepNode = .container(
                 makeTestSemanticContainer(label: "Depth \(level)"),
-                containerName: ContainerName(rawValue: "depth_\(level)"),
+                containerName: ContainerName(stringLiteral: "depth_\(level)"),
                 children: [deepNode]
             )
         }

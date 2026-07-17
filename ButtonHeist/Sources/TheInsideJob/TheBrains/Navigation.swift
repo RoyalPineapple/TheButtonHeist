@@ -53,7 +53,7 @@ final class Navigation {
 
     static let swipeGestureDuration: GestureDuration = .scrollSwipeDefault
 
-    @MainActor enum ScrollableTarget { // swiftlint:disable:this agent_main_actor_value_type
+    @MainActor enum ScrollableTarget {
         case uiScrollView(
             container: TheStash.LiveContainerTarget,
             scrollView: UIScrollView

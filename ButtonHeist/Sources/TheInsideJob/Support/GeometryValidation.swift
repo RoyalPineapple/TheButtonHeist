@@ -2,7 +2,7 @@
 #if DEBUG
 import UIKit
 
-@MainActor enum GeometryValidation { // swiftlint:disable:this agent_main_actor_value_type
+@MainActor enum GeometryValidation {
 
     static func validateScreenPoint(_ point: CGPoint, field: String = "point") -> String? {
         guard point.x.isFinite, point.y.isFinite else {

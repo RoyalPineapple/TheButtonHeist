@@ -7,7 +7,7 @@ import ThePlans
 
 import AccessibilitySnapshotParser
 
-@MainActor enum ActionCapabilityDiagnostic { // swiftlint:disable:this agent_main_actor_value_type
+@MainActor enum ActionCapabilityDiagnostic {
 
     // MARK: - Element Actions
 

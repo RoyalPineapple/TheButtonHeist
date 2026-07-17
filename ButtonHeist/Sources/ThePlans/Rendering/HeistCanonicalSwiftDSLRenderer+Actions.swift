@@ -140,12 +140,10 @@ extension HeistCanonicalSwiftDSLRenderer {
             return "Mechanical.Swipe(\(try render(target: target, environment: environment)), from: \(render(unitPoint: start)), to: \(render(unitPoint: end)))"
         case .elementDirection(let target, let direction):
             return "Mechanical.Swipe(\(try render(target: target, environment: environment)), .\(direction.rawValue))"
-        case .point(.coordinate(let start), .coordinate(let end)):
+        case .point(let start, .coordinate(let end)):
             return "Mechanical.Swipe(from: \(render(point: start)), to: \(render(point: end)))"
-        case .point(.coordinate(let start), .direction(let direction)):
+        case .point(let start, .direction(let direction)):
             return "Mechanical.Swipe(from: \(render(point: start)), .\(direction.rawValue))"
-        case .point(.element, _), .point(.elementUnitPoint, _):
-            throw HeistCanonicalSwiftDSLError.unsupportedAction("swipe selection is not a durable heist action")
         }
     }
 

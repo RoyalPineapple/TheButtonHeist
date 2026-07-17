@@ -78,7 +78,7 @@ final class GesturePayloadDecodingTests: XCTestCase {
               case .point(let start, let destination) = target.selection else {
             return XCTFail("Expected pointToPoint swipe payload, got \(message)")
         }
-        XCTAssertEqual(start, .coordinate(ScreenPoint(x: 10, y: 20)))
+        XCTAssertEqual(start, ScreenPoint(x: 10, y: 20))
         XCTAssertEqual(destination, .coordinate(ScreenPoint(x: 30, y: 40)))
     }
 
@@ -98,7 +98,7 @@ final class GesturePayloadDecodingTests: XCTestCase {
               case .point(let start, let destination) = target.selection else {
             return XCTFail("Expected pointDirection swipe payload, got \(message)")
         }
-        XCTAssertEqual(start, .coordinate(ScreenPoint(x: 10, y: 20)))
+        XCTAssertEqual(start, ScreenPoint(x: 10, y: 20))
         XCTAssertEqual(destination, .direction(.down))
     }
 

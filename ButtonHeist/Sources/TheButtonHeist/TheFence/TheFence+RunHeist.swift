@@ -123,7 +123,7 @@ extension TheFence {
                 } else {
                     expectationPolicy = .default
                 }
-                steps.append(.action(try ActionStep(command: command, expectationPolicy: expectationPolicy)))
+                steps.append(.action(ActionStep(command: command, expectationPolicy: expectationPolicy)))
             }
             return try HeistPlan(body: steps)
         }

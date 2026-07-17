@@ -33,7 +33,7 @@ extension TheStash {
     /// `AccessibilityHierarchy`, `InterfaceObservation`) to their wire-facing projections.
     /// Pure transform — no stored state. Delta projection is capture-backed in
     /// TheScore.
-    @MainActor enum WireConversion { // swiftlint:disable:this agent_main_actor_value_type
+    @MainActor enum WireConversion {
 
     // MARK: - Element Conversion
 

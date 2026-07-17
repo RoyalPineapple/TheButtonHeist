@@ -320,7 +320,7 @@ final class HeistReceiptTests: XCTestCase {
                 predicate: .exists(.element(.identifier("quantity"), .value("2"))),
                 timeout: 1,
                 body: [
-                    .action(try ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
+                    .action(ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
                 ]
             )),
         ])
@@ -357,7 +357,7 @@ final class HeistReceiptTests: XCTestCase {
                 predicate: .exists(.element(.identifier("quantity"), .value("2"))),
                 timeout: .milliseconds(1),
                 body: [
-                    .action(try ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
+                    .action(ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
                 ],
                 elseBody: [
                     .warn(WarnStep(message: "quantity did not reach 2")),

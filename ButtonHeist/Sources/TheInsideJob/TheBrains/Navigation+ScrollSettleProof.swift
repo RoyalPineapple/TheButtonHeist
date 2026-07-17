@@ -7,7 +7,7 @@ import TheScore
 
 extension Navigation {
 
-    @MainActor enum ViewportMovementIntent { // swiftlint:disable:this agent_main_actor_value_type
+    @MainActor enum ViewportMovementIntent {
         case page(ScrollableTarget, direction: UIAccessibilityScrollDirection, animated: Bool)
         case edge(ScrollableTarget, edge: ScrollEdge)
         case swipe(ScrollableTarget, direction: UIAccessibilityScrollDirection)

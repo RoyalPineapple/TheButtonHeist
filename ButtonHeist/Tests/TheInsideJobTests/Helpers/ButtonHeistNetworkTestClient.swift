@@ -10,7 +10,7 @@ import TheScore
 /// continuations while teardown may cancel it; `NWConnection` is thread-safe for
 /// these operations, `start` is guarded by `started`, and line buffering has its
 /// own lock.
-final class ButtonHeistNetworkTestClient: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
+final class ButtonHeistNetworkTestClient: @unchecked Sendable {
     private let connection: NWConnection
     private let queue: DispatchQueue
     private let lineBuffer = TestWireLineBuffer()
@@ -152,7 +152,7 @@ final class ButtonHeistNetworkTestClient: @unchecked Sendable { // swiftlint:dis
 
 /// `@unchecked Sendable` justification: this wrapper has immutable configuration
 /// and delegates all mutable network state to `ButtonHeistNetworkTestClient`.
-final class ButtonHeistWireTestClient: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
+final class ButtonHeistWireTestClient: @unchecked Sendable {
     private let token: String
     private let networkClient: ButtonHeistNetworkTestClient
 
@@ -263,7 +263,7 @@ enum TestNetworkTimeout {
 
 /// `@unchecked Sendable` justification: the accumulated bytes are protected by
 /// `lock` and only accessed through `append` / `popLine`.
-private final class TestWireLineBuffer: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
+private final class TestWireLineBuffer: @unchecked Sendable {
     private let lock = NSLock()
     private var storage = Data()
 
@@ -288,7 +288,7 @@ private final class TestWireLineBuffer: @unchecked Sendable { // swiftlint:disab
 
 /// `@unchecked Sendable` justification: network state callbacks can race, so the
 /// optional continuation is consumed exactly once under `lock`.
-private final class TestOneShotVoidContinuation: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
+private final class TestOneShotVoidContinuation: @unchecked Sendable {
     private let lock = NSLock()
     private var continuation: CheckedContinuation<Void, Error>?
 

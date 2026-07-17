@@ -79,12 +79,7 @@ public extension HeistActionCommand {
             if target.duration != nil {
                 return "swipe duration \(String(describing: target.duration)) is not a durable heist action"
             }
-            switch target.selection {
-            case .unitElement, .elementDirection, .point(.coordinate, .coordinate), .point(.coordinate, .direction):
-                return nil
-            case .point(.element, _), .point(.elementUnitPoint, _):
-                return "swipe selection \(target.selection) is not a durable heist action"
-            }
+            return nil
         case .mechanicalDrag(let target):
             if target.duration != nil {
                 return "drag duration \(String(describing: target.duration)) is not a durable heist action"
@@ -140,8 +135,8 @@ private extension SwipeGestureSelection {
         switch self {
         case .unitElement(let target, _, _), .elementDirection(let target, _):
             return [.element(target, role: .gesture, path: .payloadElement)]
-        case .point(let start, _):
-            return start.targetOccurrences(role: .gesture, path: .payloadStartElement)
+        case .point:
+            return []
         }
     }
 }

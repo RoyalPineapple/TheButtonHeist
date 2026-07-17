@@ -535,13 +535,11 @@ If a callback fires on a non-actor thread (network queue, ObjC runtime), still a
 
 The custom SwiftLint rule `agent_unannotated_callback` flags `var on*: ((...) -> Void)?` patterns (public or internal) that are missing an isolation attribute.
 
-## Sendable Value Types Without Actor Isolation
+## Value Isolation and Sendability
 
-Sendable structs and enums must not carry `@MainActor` or `@ButtonHeistActor`. Actor isolation forces every consumer (tests, formatters, off-actor reads) into the actor for fields they're allowed to read concurrently. The `Sendable` conformance is sufficient.
+Data-only `Sendable` structs and enums should not carry `@MainActor` or `@ButtonHeistActor`; their conformance already permits safe cross-actor transfer. Value types whose behavior or stored values are genuinely actor-bound may declare that isolation when the compiler requires it. Caseless namespace enums that expose UIKit or scene-state helpers are a legitimate example.
 
-If the type holds a non-Sendable field (e.g. `FileHandle`, a UIKit reference), use `@unchecked Sendable` with an inline comment justifying the serialization invariant — and explain *why* the actor isolation is enforced by the owner, not by the type itself. SwiftLint's `agent_unchecked_sendable_no_comment` rule blocks unjustified `@unchecked Sendable` at PR time.
-
-Actor types (`actor Foo`) are different — those carry isolation by definition. Caseless namespace enums (`enum Foo { static func ... }`) that touch UIKit / scene state are also fine — `@MainActor` on them matches caller isolation, no instances are constructed. Annotate with `// swiftlint:disable:this agent_main_actor_value_type` and a short rationale.
+If a lock-backed boundary type must use `@unchecked Sendable`, place a safety justification directly above its declaration. Name the synchronization mechanism and the complete mutable state it protects; do not use a lint suppression as the justification.
 
 ## Task Lifetime Tracking
 

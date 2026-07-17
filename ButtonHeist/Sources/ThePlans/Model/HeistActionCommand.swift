@@ -344,7 +344,7 @@ package struct ResolvedLongPressTarget: Sendable, Equatable {
 package enum ResolvedSwipeGestureSelection: Sendable, Equatable {
     case unitElement(ResolvedAccessibilityTarget, start: UnitPoint, end: UnitPoint)
     case elementDirection(ResolvedAccessibilityTarget, SwipeDirection)
-    case point(start: ResolvedGesturePointSelection, destination: SwipeDestinationSelection)
+    case point(start: ScreenPoint, destination: SwipeDestinationSelection)
 }
 
 package struct ResolvedSwipeTarget: Sendable, Equatable {
@@ -423,7 +423,7 @@ package extension SwipeTarget {
             )
         case .point(let start, let destination):
             resolvedSelection = .point(
-                start: try start.resolve(in: environment),
+                start: start,
                 destination: destination
             )
         }

@@ -8,8 +8,9 @@ enum ReadyConnectionAcceptance: Equatable, Sendable {
 /// Cross-queue admission state for a connection while Network.framework
 /// delivers `.ready` and `.cancelled` callbacks. The server actor owns the
 /// client table, but those callbacks arrive on the NWConnection queue before
-/// the actor has necessarily accepted the ready connection.
-final class ConnectionAdmission: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
+/// the actor has necessarily accepted the ready connection. The lock protects
+/// the complete mutable state machine across those queues.
+final class ConnectionAdmission: @unchecked Sendable {
     enum ReadyTransition: Equatable, Sendable {
         case accept
         case ignore

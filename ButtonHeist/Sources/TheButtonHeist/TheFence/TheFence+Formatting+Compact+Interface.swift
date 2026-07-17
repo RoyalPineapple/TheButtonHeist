@@ -254,8 +254,8 @@ extension FenceResponse {
     ) -> String {
         compactContainerLine(
             container,
-            annotation: containerName.map {
-                InterfaceContainerAnnotation(path: .root, containerName: ContainerName(rawValue: $0))
+            annotation: containerName.flatMap {
+                try? InterfaceContainerAnnotation(path: .root, containerName: ContainerName(validating: $0))
             },
             detail: detail,
             observedElementCount: observedElementCount,

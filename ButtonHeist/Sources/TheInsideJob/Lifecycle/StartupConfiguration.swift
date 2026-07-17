@@ -2,6 +2,7 @@
 #if DEBUG
 import Foundation
 
+import ThePlans
 import TheScore
 
 enum StartupConfigurationSource: String, Sendable {

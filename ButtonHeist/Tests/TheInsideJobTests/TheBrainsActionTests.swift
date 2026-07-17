@@ -638,7 +638,7 @@ final class TheBrainsActionTests: XCTestCase {
             let single = await brains.executeRuntimeAction(command)
             brains.clearCache()
             let heist = try await heistStepResult(
-                for: .action(try ActionStep(command: authoredCommand)),
+                for: .action(ActionStep(command: authoredCommand)),
                 label: command.runtimeType.rawValue
             )
             assertSameActionResult(
@@ -670,7 +670,7 @@ final class TheBrainsActionTests: XCTestCase {
             .typeText(text: "hello", target: target),
             .mechanicalTap(TapTarget(selection: point)),
             .mechanicalLongPress(LongPressTarget(selection: point)),
-            .mechanicalSwipe(SwipeTarget(selection: .point(start: .coordinate(ScreenPoint(x: 20, y: 20)), destination: .direction(.left)))),
+            .mechanicalSwipe(SwipeTarget(selection: .point(start: ScreenPoint(x: 20, y: 20), destination: .direction(.left)))),
             .mechanicalDrag(DragTarget(start: .coordinate(ScreenPoint(x: 20, y: 20)), end: ScreenPoint(x: 80, y: 80))),
             .editAction(EditActionTarget(action: .paste)),
             .setPasteboard(SetPasteboardTarget(text: "clipboard")),
@@ -685,7 +685,7 @@ final class TheBrainsActionTests: XCTestCase {
                 message: command.runtimeType.rawValue,
             )
         }
-        let plan = try HeistPlan(body: commands.map { .action(try ActionStep(command: $0)) })
+        let plan = try HeistPlan(body: commands.map { .action(ActionStep(command: $0)) })
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
 
@@ -767,7 +767,7 @@ final class TheBrainsActionTests: XCTestCase {
             }
         )
         let plan = try HeistPlan(body: [
-            .action(try ActionStep(command: .activate(target))),
+            .action(ActionStep(command: .activate(target))),
             .wait(WaitStep(
                 predicate: .exists(.label("Ready")),
                 timeout: .milliseconds(1)
@@ -819,7 +819,7 @@ final class TheBrainsActionTests: XCTestCase {
             }
         )
         let plan = try HeistPlan(body: [
-            .action(try ActionStep(command: .activate(target))),
+            .action(ActionStep(command: .activate(target))),
         ])
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
@@ -860,7 +860,7 @@ final class TheBrainsActionTests: XCTestCase {
             }
         )
         let plan = try HeistPlan(body: [
-            .action(try ActionStep(command: .typeText(
+            .action(ActionStep(command: .typeText(
                 text: "hello",
                 target: target
             ))),
@@ -901,7 +901,7 @@ final class TheBrainsActionTests: XCTestCase {
             )
         }
         let plan = try HeistPlan(body: [
-            .action(try ActionStep(command: .activate(target))),
+            .action(ActionStep(command: .activate(target))),
         ])
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
@@ -938,10 +938,10 @@ final class TheBrainsActionTests: XCTestCase {
             )
         }
         let plan = try HeistPlan(body: [
-            .action(try ActionStep(command: .activate(target))),
-            .action(try ActionStep(command: .setPasteboard(SetPasteboardTarget(text: "not dispatched")))),
+            .action(ActionStep(command: .activate(target))),
+            .action(ActionStep(command: .setPasteboard(SetPasteboardTarget(text: "not dispatched")))),
             .heist(try HeistPlan(body: [
-                .action(try ActionStep(command: .dismissKeyboard)),
+                .action(ActionStep(command: .dismissKeyboard)),
             ])),
         ])
 
@@ -1077,7 +1077,7 @@ final class TheBrainsActionTests: XCTestCase {
                 predicate: .exists(.element(.identifier("quantity"), .value("2"))),
                 timeout: 1,
                 body: [
-                    .action(try ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
+                    .action(ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
                 ]
             )),
         ])
@@ -1118,7 +1118,7 @@ final class TheBrainsActionTests: XCTestCase {
                 predicate: .exists(.identifier("quantity")),
                 timeout: 5,
                 body: [
-                    .action(try ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
+                    .action(ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
                 ]
             )),
         ])
@@ -1156,7 +1156,7 @@ final class TheBrainsActionTests: XCTestCase {
                 predicate: .exists(.identifier("quantity")),
                 timeout: 1,
                 body: [
-                    .action(try ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
+                    .action(ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
                 ]
             )),
         ])
@@ -1247,7 +1247,7 @@ final class TheBrainsActionTests: XCTestCase {
                 predicate: predicate,
                 timeout: 1,
                 body: [
-                    .action(try ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
+                    .action(ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
                 ]
             )),
         ])
@@ -1295,7 +1295,7 @@ final class TheBrainsActionTests: XCTestCase {
                 predicate: .exists(.element(.identifier("quantity"), .value("2"))),
                 timeout: 1,
                 body: [
-                    .action(try ActionStep(command: .activate(.predicate(.identifier("quantity"))))),
+                    .action(ActionStep(command: .activate(.predicate(.identifier("quantity"))))),
                 ]
             )),
         ])
@@ -1343,7 +1343,7 @@ final class TheBrainsActionTests: XCTestCase {
                 predicate: .exists(.element(.identifier("quantity"), .value("2"))),
                 timeout: 1,
                 body: [
-                    .action(try ActionStep(command: .activate(.predicate(.identifier("quantity"))))),
+                    .action(ActionStep(command: .activate(.predicate(.identifier("quantity"))))),
                 ]
             )),
         ])
@@ -1394,7 +1394,7 @@ final class TheBrainsActionTests: XCTestCase {
                 predicate: .exists(.element(.identifier("quantity"), .value("2"))),
                 timeout: .milliseconds(1),
                 body: [
-                    .action(try ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
+                    .action(ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
                 ],
                 elseBody: [
                     .warn(WarnStep(message: "quantity did not reach 2")),
@@ -1475,7 +1475,7 @@ final class TheBrainsActionTests: XCTestCase {
                 predicate: predicate,
                 timeout: 1,
                 body: [
-                    .action(try ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
+                    .action(ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
                 ]
             )),
         ])
@@ -1548,7 +1548,7 @@ final class TheBrainsActionTests: XCTestCase {
                 predicate: predicate,
                 timeout: 1,
                 body: [
-                    .action(try ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
+                    .action(ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
                 ]
             )),
         ])
@@ -1573,7 +1573,7 @@ final class TheBrainsActionTests: XCTestCase {
                 predicate: .exists(.element(.identifier("quantity"), .value("2"))),
                 timeout: .milliseconds(1),
                 body: [
-                    .action(try ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
+                    .action(ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
                 ],
                 elseBody: [
                     .fail(FailStep(message: "quantity did not reach 2")),
@@ -2051,7 +2051,7 @@ observation: .settledTrace(
             }
         )
         let plan = try HeistPlan(body: [
-            .action(try ActionStep(
+            .action(ActionStep(
                 command: .activate(.label("Submit")),
                 expectationPolicy: .expect(try ActionExpectation(expectation)))),
         ])
@@ -2095,7 +2095,7 @@ observation: .settledTrace(
             }
         )
         let plan = try HeistPlan(body: [
-            .action(try ActionStep(
+            .action(ActionStep(
                 command: .activate(.label("Submit")),
                 expectationPolicy: .expect(try ActionExpectation(expectation)))),
         ])
@@ -2131,7 +2131,7 @@ observation: .settledTrace(
             }
         )
         let plan = try HeistPlan(body: [
-            .action(try ActionStep(
+            .action(ActionStep(
                 command: .activate(target),
                 expectationPolicy: .expect(ActionExpectation(
                     predicate: .exists(.label("Long List")),
@@ -2148,7 +2148,7 @@ observation: .settledTrace(
 
     func testHeistRuntimeSafetyRejectsInvalidPlanBeforeDispatchOrObservation() async throws {
         let raw = HeistPlanAdmissionCandidate(body: [
-            .action(try ActionStep(command: .activate(.ref("missing")))),
+            .action(ActionStep(command: .activate(.ref("missing")))),
         ])
 
         XCTAssertThrowsError(try raw.validatedForRuntimeSafety()) { error in
@@ -2163,7 +2163,7 @@ observation: .settledTrace(
                 matching: .label("Delete"),
                 limit: HeistPlanRuntimeSafetyLimits.standard.maxForEachElementLimit + 1,
                 parameter: "target",
-                body: [.action(try ActionStep(command: .activate(.ref("target"))))]
+                body: [.action(ActionStep(command: .activate(.ref("target"))))]
             )),
         ])
 
@@ -2187,13 +2187,13 @@ observation: .settledTrace(
                 parameter: .string(name: "item"),
                 definitions: [
                     HeistPlanAdmissionCandidate(name: "tapAddButton", body: [
-                        .action(try ActionStep(
+                        .action(ActionStep(
                             command: .activate(.label("Add to Cart"))
                         )),
                     ]),
                 ],
                 body: [
-                    .action(try ActionStep(command: .activate(.label(
+                    .action(ActionStep(command: .activate(.label(
                         HeistReferenceName(stringLiteral: "item")
                     )))),
                     .invoke(HeistInvocationStep(path: "tapAddButton")),
@@ -2240,7 +2240,7 @@ observation: .settledTrace(
                             name: "addItem",
                             parameter: .string(name: "item"),
                             body: [
-                                .action(try ActionStep(command: .activate(.label(
+                                .action(ActionStep(command: .activate(.label(
                                     HeistReferenceName(stringLiteral: "item")
                                 )))),
                             ]
@@ -2290,7 +2290,7 @@ observation: .settledTrace(
             definitions: [
                 try HeistPlan(name: "Checkout", definitions: [
                     try HeistPlan(name: "pay", body: [
-                        .action(try ActionStep(command: .activate(.predicate(.label("Pay"))))),
+                        .action(ActionStep(command: .activate(.predicate(.label("Pay"))))),
                     ]),
                 ], body: []),
             ],
@@ -2337,7 +2337,7 @@ observation: .settledTrace(
                         name: "addItem",
                         parameter: .string(name: "item"),
                         body: [
-                            .action(try ActionStep(command: .activate(.label(
+                            .action(ActionStep(command: .activate(.label(
                                 HeistReferenceName(stringLiteral: "item")
                             )))),
                         ]
@@ -2383,7 +2383,7 @@ observation: .settledTrace(
             definitions: [
                 try HeistPlan(name: "Checkout", definitions: [
                     try HeistPlan(name: "pay", body: [
-                        .action(try ActionStep(command: .activate(.predicate(.label("Pay"))))),
+                        .action(ActionStep(command: .activate(.predicate(.label("Pay"))))),
                     ]),
                 ], body: []),
             ],
@@ -2429,7 +2429,7 @@ observation: .settledTrace(
                         name: "addItem",
                         parameter: .string(name: "item"),
                         body: [
-                            .action(try ActionStep(command: .activate(.label(
+                            .action(ActionStep(command: .activate(.label(
                                 HeistReferenceName(stringLiteral: "item")
                             )))),
                         ]
@@ -2478,7 +2478,7 @@ observation: .settledTrace(
         let plan = try HeistPlanAdmissionCandidate(definitions: [
             HeistPlanAdmissionCandidate(name: "lib", definitions: [
                 HeistPlanAdmissionCandidate(name: "payOpen", body: [
-                    .action(try ActionStep(command: .activate(.predicate(.label("Pay"))))),
+                    .action(ActionStep(command: .activate(.predicate(.label("Pay"))))),
                 ]),
                 HeistPlanAdmissionCandidate(name: "checkout", body: [
                     .invoke(HeistInvocationStep(path: "lib.payOpen")),
@@ -2510,7 +2510,7 @@ observation: .settledTrace(
             name: "search",
             parameter: .string(name: "query"),
             body: [
-                .action(try ActionStep(command: .typeText(
+                .action(ActionStep(command: .typeText(
                     reference: "query",
                     target: .predicate(.label("Search"))
                 ))),
@@ -2543,7 +2543,7 @@ observation: .settledTrace(
             name: "tapRow",
             parameter: .accessibilityTarget(name: "row"),
             body: [
-                .action(try ActionStep(command: .activate(.ref("row")))),
+                .action(ActionStep(command: .activate(.ref("row")))),
             ]
         )
 
@@ -2566,7 +2566,7 @@ observation: .settledTrace(
             name: "search",
             parameter: .string(name: "query"),
             body: [
-                .action(try ActionStep(command: .typeText(
+                .action(ActionStep(command: .typeText(
                     reference: "query",
                     target: .predicate(.label("Search"))
                 ))),
@@ -2594,7 +2594,7 @@ observation: .settledTrace(
                 name: "setup",
                 definitions: [
                     try HeistPlan(name: "setup", body: [
-                        .action(try ActionStep(command: .activate(.predicate(.label("Nested Setup"))))),
+                        .action(ActionStep(command: .activate(.predicate(.label("Nested Setup"))))),
                     ]),
                 ],
                 body: [
@@ -2656,7 +2656,7 @@ observation: .settledTrace(
             }
         )
         let plan = try HeistPlan(body: [
-            .action(try ActionStep(
+            .action(ActionStep(
                 command: .activate(.label("Controls Demo")),
                 expectationPolicy: .expect(try ActionExpectation(expectation)))),
         ])
@@ -2714,7 +2714,7 @@ observation: .settledTrace(
             }
         )
         let plan = try HeistPlan(body: [
-            .action(try ActionStep(
+            .action(ActionStep(
                 command: .activate(.label("Controls Demo")),
                 expectationPolicy: .expect(try ActionExpectation(expectation)))),
         ])
@@ -2753,7 +2753,7 @@ observation: .settledTrace(
             }
         )
         let plan = try HeistPlan(body: [
-            .action(try ActionStep(
+            .action(ActionStep(
                 command: .activate(.label("Submit")),
                 expectationPolicy: .expect(try ActionExpectation(expectation)))),
         ])
@@ -2856,7 +2856,7 @@ observation: .settledTrace(
             }
         )
         let plan = try HeistPlan(body: [
-            .action(try ActionStep(command: .activate(.label("Submit")))),
+            .action(ActionStep(command: .activate(.label("Submit")))),
             .conditional(try ConditionalStep(cases: [
                 PredicateCase(
                     predicate: .exists(.label("Ready")),
@@ -2882,9 +2882,9 @@ observation: .settledTrace(
             }
         )
         let plan = try HeistPlan(body: [
-            .action(try ActionStep(command: .activate(.label("1")))),
-            .action(try ActionStep(command: .activate(.label("2")))),
-            .action(try ActionStep(command: .activate(.label("3")))),
+            .action(ActionStep(command: .activate(.label("1")))),
+            .action(ActionStep(command: .activate(.label("2")))),
+            .action(ActionStep(command: .activate(.label("3")))),
         ])
 
         _ = await brains.executeHeistPlanForTest(plan, runtime: runtime)
@@ -3018,7 +3018,7 @@ observation: .settledTrace(
                 matching: matching,
                 limit: 1,
                 parameter: "target",
-                body: [.action(try ActionStep(command: .activate(.ref("target"))))]
+                body: [.action(ActionStep(command: .activate(.ref("target"))))]
             )),
         ])
 
@@ -3058,7 +3058,7 @@ observation: .settledTrace(
                 matching: matching,
                 limit: 10,
                 parameter: "target",
-                body: [.action(try ActionStep(command: .activate(.ref("target"))))]
+                body: [.action(ActionStep(command: .activate(.ref("target"))))]
             )),
         ])
         let originalBody = plan.body
@@ -3105,7 +3105,7 @@ observation: .settledTrace(
                 matching: matching,
                 limit: 10,
                 parameter: "target",
-                body: [.action(try ActionStep(command: .activate(.ref("target"))))]
+                body: [.action(ActionStep(command: .activate(.ref("target"))))]
             )),
         ])
 
@@ -3142,7 +3142,7 @@ observation: .settledTrace(
                 matching: matching,
                 limit: 10,
                 parameter: "target",
-                body: [.action(try ActionStep(command: .activate(.ref("target"))))]
+                body: [.action(ActionStep(command: .activate(.ref("target"))))]
             )),
         ])
 
@@ -3183,7 +3183,7 @@ observation: .settledTrace(
                 matching: matching,
                 limit: 10,
                 parameter: "target",
-                body: [.action(try ActionStep(command: .activate(.ref("target"))))]
+                body: [.action(ActionStep(command: .activate(.ref("target"))))]
             )),
         ])
 
@@ -3220,7 +3220,7 @@ observation: .settledTrace(
                 matching: matching,
                 limit: 10,
                 parameter: "target",
-                body: [.action(try ActionStep(command: .activate(.ref("target"))))]
+                body: [.action(ActionStep(command: .activate(.ref("target"))))]
             )),
         ])
 
@@ -3257,7 +3257,7 @@ observation: .settledTrace(
                 matching: matching,
                 limit: 10,
                 parameter: "target",
-                body: [.action(try ActionStep(command: .activate(.ref("target"))))]
+                body: [.action(ActionStep(command: .activate(.ref("target"))))]
             )),
             .warn(WarnStep(message: "should not run")),
         ])
@@ -3329,7 +3329,7 @@ observation: .settledTrace(
                 limit: 10,
                 parameter: "target",
                 body: [
-                    .action(try ActionStep(
+                    .action(ActionStep(
                         command: .activate(.ref("target")),
                         expectationPolicy: .expect(ActionExpectation(
                             predicate: .missing(.ref("target")),

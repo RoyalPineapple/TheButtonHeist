@@ -40,7 +40,7 @@ internal enum ScreenLineageEvidence: Sendable, Equatable {
 /// Tripwire triggers parsing; this type is the single place that decides
 /// whether the parsed result should be treated as a new screen. Same-screen
 /// element and tree changes are derived from accessibility trace captures.
-@MainActor enum ScreenClassifier { // swiftlint:disable:this agent_main_actor_value_type
+@MainActor enum ScreenClassifier {
 
     struct Snapshot: Equatable {
         let signature: ScreenSignature

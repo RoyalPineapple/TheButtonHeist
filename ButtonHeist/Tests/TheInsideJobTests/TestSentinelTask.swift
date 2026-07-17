@@ -29,7 +29,7 @@ func neverEndingTask(
     }
 }
 
-private final class TestCancellationGate: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
+private final class TestCancellationGate: @unchecked Sendable {
     private let lock = NSLock()
     private var continuation: CheckedContinuation<Void, Never>?
     private var isCancelled = false

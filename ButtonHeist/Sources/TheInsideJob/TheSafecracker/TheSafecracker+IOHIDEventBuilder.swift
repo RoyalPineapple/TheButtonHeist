@@ -27,7 +27,7 @@ extension TheSafecracker {
     /// data and touch array together behind this mechanical-input wrapper.
     ///
     /// `@MainActor` justification: wraps a UIEvent reference.
-    @MainActor struct TouchEvent { // swiftlint:disable:this agent_main_actor_value_type
+    @MainActor struct TouchEvent {
         let event: UIEvent
 
         /// Package touches into a UIEvent with matching IOHIDEvent data.

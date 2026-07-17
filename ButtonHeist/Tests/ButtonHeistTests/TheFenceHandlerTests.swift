@@ -1077,7 +1077,7 @@ final class TheFenceHandlerTests: XCTestCase {
         )
 
         XCTAssertEqual(request.plan.body, [
-            .action(try ActionStep(
+            .action(ActionStep(
                 command: .activate(.predicate(.label("Pay"))),
                 expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 1)))),
         ])
@@ -1096,7 +1096,7 @@ final class TheFenceHandlerTests: XCTestCase {
             return XCTFail("Expected heistExecution response, got \(response)")
         }
         XCTAssertEqual(plan.body, [
-            .action(try ActionStep(command: .activate(.predicate(.label("Pay"))))),
+            .action(ActionStep(command: .activate(.predicate(.label("Pay"))))),
         ])
         XCTAssertEqual(mockConn.sent.sentHeistPlan, plan)
         XCTAssertEqual(result.steps.map(\.kind), [.action])
@@ -1314,7 +1314,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let definition = try HeistPlan(
             name: "addToCart",
             parameter: .string(name: "item"),
-            body: [.action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .exact(item))))))]
+            body: [.action(ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .exact(item))))))]
         )
         let plan = try HeistPlan(definitions: [definition], body: [
             .invoke(HeistInvocationStep(path: "addToCart", argument: .string("Milk"))),
@@ -1330,7 +1330,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let definition = try HeistPlan(
             name: "tapEach",
             parameter: .accessibilityTarget(name: "input"),
-            body: [.action(try ActionStep(command: .activate(.ref("input"))))]
+            body: [.action(ActionStep(command: .activate(.ref("input"))))]
         )
         let plan = try HeistPlan(
             definitions: [definition],
@@ -1347,7 +1347,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let plan = try HeistPlan(
             name: "search",
             parameter: .string(name: "query"),
-            body: [.action(try ActionStep(command: .typeText(
+            body: [.action(ActionStep(command: .typeText(
                 reference: "query",
                 target: .predicate(.label("Search"))
             )))]
@@ -1370,7 +1370,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let plan = try HeistPlan(
             name: "search",
             parameter: .string(name: "query"),
-            body: [.action(try ActionStep(command: .typeText(
+            body: [.action(ActionStep(command: .typeText(
                 reference: "query",
                 target: .predicate(.label("Search"))
             )))]
@@ -1394,7 +1394,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let plan = try HeistPlan(
             name: "tapRow",
             parameter: .accessibilityTarget(name: "row"),
-            body: [.action(try ActionStep(command: .activate(.ref("row"))))]
+            body: [.action(ActionStep(command: .activate(.ref("row"))))]
         )
         var arguments = try Self.planSourceArguments(for: plan).values
         arguments["argument"] = .object([
@@ -1414,7 +1414,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let plan = try HeistPlan(
             name: "search",
             parameter: .string(name: "query"),
-            body: [.action(try ActionStep(command: .typeText(
+            body: [.action(ActionStep(command: .typeText(
                 reference: "query",
                 target: .predicate(.label("Search"))
             )))]
@@ -1475,7 +1475,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let definition = try HeistPlan(
             name: "addToCart",
             parameter: .string(name: "item"),
-            body: [.action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .exact(item))))))]
+            body: [.action(ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .exact(item))))))]
         )
         let plan = try HeistPlan(
             name: "shop",
@@ -1594,12 +1594,12 @@ final class TheFenceHandlerTests: XCTestCase {
                 try HeistPlan(
                     name: "confirm",
                     body: [
-                        .action(try ActionStep(command: .activate(.predicate(.identifier("confirm_button"))))),
+                        .action(ActionStep(command: .activate(.predicate(.identifier("confirm_button"))))),
                     ]
                 ),
             ],
             body: [
-                .action(try ActionStep(
+                .action(ActionStep(
                     command: .activate(.predicate(.label("Checkout"))),
                     expectationPolicy: .expect(ActionExpectation(predicate: .exists(.label("Done")), timeout: 1)))),
                 .wait(WaitStep(predicate: .exists(.label("Receipt")), timeout: 1)),
@@ -1696,7 +1696,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let definition = try HeistPlan(
             name: "checkout",
             body: [
-                .action(try ActionStep(
+                .action(ActionStep(
                     command: .activate(.predicate(.label("Checkout"))),
                     expectationPolicy: .expect(ActionExpectation(predicate: .exists(.label("Done")), timeout: 1)))),
             ]
@@ -3323,7 +3323,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let expectation = AccessibilityPredicate.changed(.elements([
             .updated(.identifier("counter"), .value(after: "5")),
         ]))
-        let sourceStep = HeistStep.action(try ActionStep(
+        let sourceStep = HeistStep.action(ActionStep(
             command: .activate(.predicate(ElementPredicateTemplate(identifier: .exact("counter")))),
             expectationPolicy: .expect(ActionExpectation(predicate: expectation, timeout: 10))))
         let plan = try HeistPlan(body: [sourceStep])

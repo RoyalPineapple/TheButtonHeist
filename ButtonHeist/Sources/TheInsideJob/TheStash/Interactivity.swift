@@ -40,7 +40,7 @@ extension TheStash {
 
     /// Caseless namespace enum for MainActor-bound static helpers that read
     /// UIKit responder / window state. No instances are constructed.
-    @MainActor enum Interactivity { // swiftlint:disable:this agent_main_actor_value_type
+    @MainActor enum Interactivity {
 
     private static func hasInteractiveTraits(_ element: AccessibilityElement) -> Bool {
         !element.traits.isDisjoint(with: AccessibilityPolicy.interactiveTraitsBitmask)

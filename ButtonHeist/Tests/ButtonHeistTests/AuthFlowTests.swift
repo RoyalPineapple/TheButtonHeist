@@ -4,7 +4,7 @@ import Network
 @_spi(ButtonHeistTooling) @testable import ButtonHeist
 
 /// `@unchecked Sendable` justification: all mutable storage is protected by `lock`.
-private final class SendContentRecorder: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
+private final class SendContentRecorder: @unchecked Sendable {
     private let lock = NSLock()
     private var messagesStorage: [ClientMessage] = []
 

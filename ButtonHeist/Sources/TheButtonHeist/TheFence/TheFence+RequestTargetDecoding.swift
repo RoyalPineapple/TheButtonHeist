@@ -49,7 +49,7 @@ extension TheFence.CommandArgumentEnvelope {
 
     func optionalContainerName() throws -> ContainerName? {
         guard let value = try value(FenceParameters.containerName) else { return nil }
-        guard let containerName = ContainerName(parsing: value) else {
+        guard let containerName = try? ContainerName(validating: value) else {
             throw SchemaValidationError(
                 field: field(FenceParameters.containerName.key),
                 observed: value.isEmpty ? "string \"\"" : "blank string",
