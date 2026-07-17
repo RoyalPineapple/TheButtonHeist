@@ -263,20 +263,29 @@ final class StartupConfigurationTests: XCTestCase {
             fingerprintsEnabled: false
         )
 
-        XCTAssertEqual(runtimeConfiguration.token, "api-token")
-        XCTAssertEqual(runtimeConfiguration.tokenSource, .api)
-        XCTAssertEqual(runtimeConfiguration.sessionIdentity.effectiveInstanceId, "api-id")
-        XCTAssertEqual(runtimeConfiguration.instanceIdSource, .api)
-        XCTAssertEqual(runtimeConfiguration.preferredPort, 4242)
-        XCTAssertEqual(runtimeConfiguration.preferredPortSource, .api)
-        XCTAssertEqual(runtimeConfiguration.allowedScopes, [.network])
-        XCTAssertEqual(runtimeConfiguration.allowedScopesSource, .api)
+        XCTAssertEqual(
+            runtimeConfiguration.token,
+            ResolvedStartupValue(value: "api-token", source: .api)
+        )
+        XCTAssertEqual(
+            runtimeConfiguration.sessionIdentity.effectiveInstanceId,
+            ResolvedStartupValue(value: "api-id", source: .api)
+        )
+        XCTAssertEqual(
+            runtimeConfiguration.preferredPort,
+            ResolvedStartupValue(value: 4242, source: .api)
+        )
+        XCTAssertEqual(
+            runtimeConfiguration.allowedScopes,
+            ResolvedStartupValue(value: [.network], source: .api)
+        )
         XCTAssertEqual(runtimeConfiguration.addressFamily, .ipv4)
         XCTAssertEqual(runtimeConfiguration.sessionReleaseTimeout, startupConfiguration.sessionTimeout)
-        XCTAssertFalse(runtimeConfiguration.fingerprintsEnabled)
-        XCTAssertEqual(runtimeConfiguration.fingerprintsEnabledSource, .api)
-        XCTAssertEqual(runtimeConfiguration.failureEvidencePolicy, startupConfiguration.failureEvidencePolicy.value)
-        XCTAssertEqual(runtimeConfiguration.failureEvidencePolicySource, startupConfiguration.failureEvidencePolicy.source)
+        XCTAssertEqual(
+            runtimeConfiguration.fingerprintsEnabled,
+            ResolvedStartupValue(value: false, source: .api)
+        )
+        XCTAssertEqual(runtimeConfiguration.failureEvidencePolicy, startupConfiguration.failureEvidencePolicy)
     }
 
     func testRuntimeConfigurationUsesExplicitStartupSnapshotForSessionDefaults() {
@@ -298,13 +307,19 @@ final class StartupConfigurationTests: XCTestCase {
             port: 0
         )
 
-        XCTAssertEqual(runtimeConfiguration.token, "startup-token")
-        XCTAssertEqual(runtimeConfiguration.tokenSource, .environment)
-        XCTAssertEqual(runtimeConfiguration.instanceIdSource, .generated)
-        XCTAssertEqual(runtimeConfiguration.preferredPort, 0)
-        XCTAssertEqual(runtimeConfiguration.preferredPortSource, .defaultValue)
-        XCTAssertEqual(runtimeConfiguration.allowedScopes, [.usb])
-        XCTAssertEqual(runtimeConfiguration.allowedScopesSource, .infoPlist)
+        XCTAssertEqual(
+            runtimeConfiguration.token,
+            ResolvedStartupValue(value: "startup-token", source: .environment)
+        )
+        XCTAssertEqual(runtimeConfiguration.sessionIdentity.effectiveInstanceId.source, .generated)
+        XCTAssertEqual(
+            runtimeConfiguration.preferredPort,
+            ResolvedStartupValue(value: 0, source: .defaultValue)
+        )
+        XCTAssertEqual(
+            runtimeConfiguration.allowedScopes,
+            ResolvedStartupValue(value: [.usb], source: .infoPlist)
+        )
         XCTAssertEqual(runtimeConfiguration.addressFamily, .dualStack)
         XCTAssertEqual(runtimeConfiguration.sessionReleaseTimeout, startupConfiguration.sessionTimeout)
     }

@@ -7,7 +7,7 @@ extension TheInsideJob {
     @discardableResult
     func advertiseService(on transport: ServerTransport, port: UInt16) -> String? {
         let exposure = ServerExposure(
-            allowedScopes: runtimeConfiguration.allowedScopes,
+            allowedScopes: runtimeConfiguration.allowedScopes.value,
             addressFamily: runtimeConfiguration.addressFamily
         )
         guard exposure.publishesBonjour else {
@@ -35,7 +35,7 @@ extension TheInsideJob {
         actualPort: UInt16,
         bonjourServiceName: String?
     ) {
-        let scopeNames = runtimeConfiguration.allowedScopes.map(\.rawValue).sorted().joined(separator: ",")
+        let scopeNames = runtimeConfiguration.allowedScopes.value.map(\.rawValue).sorted().joined(separator: ",")
         let bonjourDescription = if let bonjourServiceName {
             "bonjour=advertising service=\(bonjourServiceName)"
         } else {
@@ -43,21 +43,21 @@ extension TheInsideJob {
         }
         let fields = [
             "actualPort=\(actualPort)",
-            "preferredPort=\(runtimeConfiguration.preferredPort)(\(runtimeConfiguration.preferredPortSource.label))",
-            "tokenSource=\(runtimeConfiguration.tokenSource.label)",
+            "preferredPort=\(runtimeConfiguration.preferredPort.value)(\(runtimeConfiguration.preferredPort.source.label))",
+            "tokenSource=\(runtimeConfiguration.token.source.label)",
             "sessionId=\(runtimeConfiguration.sessionIdentity.launchId)",
-            "instanceIdentifier=\(effectiveInstanceId)(\(runtimeConfiguration.instanceIdSource.label))",
-            "allowedScopes=\(scopeNames)(\(runtimeConfiguration.allowedScopesSource.label))",
+            "instanceIdentifier=\(effectiveInstanceId)(\(runtimeConfiguration.sessionIdentity.effectiveInstanceId.source.label))",
+            "allowedScopes=\(scopeNames)(\(runtimeConfiguration.allowedScopes.source.label))",
             "addressFamily=\(runtimeConfiguration.addressFamily.rawValue)",
             "sessionTimeout=\(runtimeConfiguration.sessionReleaseTimeout.value)s(\(runtimeConfiguration.sessionReleaseTimeout.source.label))",
-            "fingerprints=\(runtimeConfiguration.fingerprintsEnabled)(\(runtimeConfiguration.fingerprintsEnabledSource.label))",
-            "failureEvidence=\(runtimeConfiguration.failureEvidencePolicy.label)(\(runtimeConfiguration.failureEvidencePolicySource.label))",
+            "fingerprints=\(runtimeConfiguration.fingerprintsEnabled.value)(\(runtimeConfiguration.fingerprintsEnabled.source.label))",
+            "failureEvidence=\(runtimeConfiguration.failureEvidencePolicy.value.label)(\(runtimeConfiguration.failureEvidencePolicy.source.label))",
             "tls=psk",
             bonjourDescription
         ].joined(separator: " ")
         insideJobLogger.info("Startup summary: \(fields, privacy: .public) token=<redacted>")
-        if runtimeConfiguration.tokenSource == .generated {
-            let token = runtimeConfiguration.token
+        if runtimeConfiguration.token.source == .generated {
+            let token = runtimeConfiguration.token.value
             insideJobLogger.warning("Generated ButtonHeist token: BUTTONHEIST_TOKEN=\(token.description, privacy: .public)")
         }
     }

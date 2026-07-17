@@ -18,7 +18,7 @@ extension TheInsideJob {
 
     func makeRuntimeTransport() -> ServerTransport {
         insideJobLogger.info("TLS PSK material ready")
-        return transportFactory(runtimeConfiguration.token, runtimeConfiguration.allowedScopes)
+        return transportFactory(runtimeConfiguration.token.value, runtimeConfiguration.allowedScopes.value)
     }
 
     func startRuntimeResources(
@@ -68,11 +68,11 @@ extension TheInsideJob {
         }
 
         let exposure = ServerExposure(
-            allowedScopes: runtimeConfiguration.allowedScopes,
+            allowedScopes: runtimeConfiguration.allowedScopes.value,
             addressFamily: runtimeConfiguration.addressFamily
         )
         let actualPort = try await request.transport.start(
-            port: runtimeConfiguration.preferredPort,
+            port: runtimeConfiguration.preferredPort.value,
             bindToLoopback: exposure.bindsToLoopbackOnly,
             addressFamily: exposure.addressFamily
         )

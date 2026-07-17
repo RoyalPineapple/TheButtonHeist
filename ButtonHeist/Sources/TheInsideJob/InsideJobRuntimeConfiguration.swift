@@ -5,19 +5,13 @@ import Foundation
 import TheScore
 
 struct InsideJobRuntimeConfiguration: Equatable, Sendable {
-    let token: SessionAuthToken
-    let tokenSource: StartupConfigurationSource
-    let instanceIdSource: StartupConfigurationSource
-    let preferredPort: UInt16
-    let preferredPortSource: StartupConfigurationSource
-    let allowedScopes: Set<ConnectionScope>
-    let allowedScopesSource: StartupConfigurationSource
+    let token: ResolvedStartupValue<SessionAuthToken>
+    let preferredPort: ResolvedStartupValue<UInt16>
+    let allowedScopes: ResolvedStartupValue<Set<ConnectionScope>>
     let addressFamily: ListenerAddressFamily
     let sessionReleaseTimeout: ResolvedStartupValue<TimeInterval>
-    let fingerprintsEnabled: Bool
-    let fingerprintsEnabledSource: StartupConfigurationSource
-    let failureEvidencePolicy: FailureEvidencePolicy
-    let failureEvidencePolicySource: StartupConfigurationSource
+    let fingerprintsEnabled: ResolvedStartupValue<Bool>
+    let failureEvidencePolicy: ResolvedStartupValue<FailureEvidencePolicy>
     let sessionIdentity: InsideJobSessionIdentity
 
     static func resolve(
@@ -35,21 +29,26 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
             explicitToken: explicitToken,
             startupToken: startupConfiguration.token
         )
+        let resolvedInstanceId = ResolvedStartupValue(
+            value: explicitInstanceId,
+            source: explicitInstanceId == nil ? .generated : .api
+        )
         return InsideJobRuntimeConfiguration(
-            token: resolvedToken.value,
-            tokenSource: resolvedToken.source,
-            instanceId: explicitInstanceId,
-            instanceIdSource: explicitInstanceId == nil ? .generated : .api,
-            preferredPort: port,
-            preferredPortSource: port == 0 ? .defaultValue : .api,
-            allowedScopes: allowedScopes ?? startupConfiguration.allowedScopes.value,
-            allowedScopesSource: allowedScopes == nil ? startupConfiguration.allowedScopes.source : .api,
+            token: resolvedToken,
+            preferredPort: ResolvedStartupValue(
+                value: port,
+                source: port == 0 ? .defaultValue : .api
+            ),
+            allowedScopes: allowedScopes.map {
+                ResolvedStartupValue(value: $0, source: .api)
+            } ?? startupConfiguration.allowedScopes,
             addressFamily: addressFamily,
             sessionReleaseTimeout: startupConfiguration.sessionTimeout,
-            fingerprintsEnabled: fingerprintsEnabled ?? startupConfiguration.fingerprintsEnabled.value,
-            fingerprintsEnabledSource: fingerprintsEnabled == nil ? startupConfiguration.fingerprintsEnabled.source : .api,
-            failureEvidencePolicy: startupConfiguration.failureEvidencePolicy.value,
-            failureEvidencePolicySource: startupConfiguration.failureEvidencePolicy.source
+            fingerprintsEnabled: fingerprintsEnabled.map {
+                ResolvedStartupValue(value: $0, source: .api)
+            } ?? startupConfiguration.fingerprintsEnabled,
+            failureEvidencePolicy: startupConfiguration.failureEvidencePolicy,
+            sessionIdentity: InsideJobSessionIdentity.make(instanceId: resolvedInstanceId)
         )
     }
 
@@ -59,20 +58,14 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
             startupToken: startupConfiguration.token
         )
         return InsideJobRuntimeConfiguration(
-            token: resolvedToken.value,
-            tokenSource: resolvedToken.source,
-            instanceId: startupConfiguration.instanceId.value,
-            instanceIdSource: startupConfiguration.instanceId.source,
-            preferredPort: startupConfiguration.preferredPort.value,
-            preferredPortSource: startupConfiguration.preferredPort.source,
-            allowedScopes: startupConfiguration.allowedScopes.value,
-            allowedScopesSource: startupConfiguration.allowedScopes.source,
+            token: resolvedToken,
+            preferredPort: startupConfiguration.preferredPort,
+            allowedScopes: startupConfiguration.allowedScopes,
             addressFamily: .dualStack,
             sessionReleaseTimeout: startupConfiguration.sessionTimeout,
-            fingerprintsEnabled: startupConfiguration.fingerprintsEnabled.value,
-            fingerprintsEnabledSource: startupConfiguration.fingerprintsEnabled.source,
-            failureEvidencePolicy: startupConfiguration.failureEvidencePolicy.value,
-            failureEvidencePolicySource: startupConfiguration.failureEvidencePolicy.source
+            fingerprintsEnabled: startupConfiguration.fingerprintsEnabled,
+            failureEvidencePolicy: startupConfiguration.failureEvidencePolicy,
+            sessionIdentity: InsideJobSessionIdentity.make(instanceId: startupConfiguration.instanceId)
         )
     }
 
@@ -88,47 +81,16 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
         }
         return ResolvedStartupValue(value: GeneratedSessionToken.make(), source: .generated)
     }
-
-    init(
-        token: SessionAuthToken,
-        tokenSource: StartupConfigurationSource,
-        instanceId: InsideJobInstanceID?,
-        instanceIdSource: StartupConfigurationSource,
-        preferredPort: UInt16,
-        preferredPortSource: StartupConfigurationSource,
-        allowedScopes: Set<ConnectionScope>,
-        allowedScopesSource: StartupConfigurationSource,
-        addressFamily: ListenerAddressFamily = .dualStack,
-        sessionReleaseTimeout: ResolvedStartupValue<TimeInterval>,
-        fingerprintsEnabled: Bool = true,
-        fingerprintsEnabledSource: StartupConfigurationSource = .defaultValue,
-        failureEvidencePolicy: FailureEvidencePolicy = .screenshot,
-        failureEvidencePolicySource: StartupConfigurationSource = .defaultValue,
-        sessionIdentity: InsideJobSessionIdentity? = nil
-    ) {
-        self.token = token
-        self.tokenSource = tokenSource
-        self.instanceIdSource = instanceIdSource
-        self.preferredPort = preferredPort
-        self.preferredPortSource = preferredPortSource
-        self.allowedScopes = allowedScopes
-        self.allowedScopesSource = allowedScopesSource
-        self.addressFamily = addressFamily
-        self.sessionReleaseTimeout = sessionReleaseTimeout
-        self.fingerprintsEnabled = fingerprintsEnabled
-        self.fingerprintsEnabledSource = fingerprintsEnabledSource
-        self.failureEvidencePolicy = failureEvidencePolicy
-        self.failureEvidencePolicySource = failureEvidencePolicySource
-        self.sessionIdentity = sessionIdentity ?? InsideJobSessionIdentity.make(instanceId: instanceId)
-    }
 }
 
 struct InsideJobSessionIdentity: Equatable, Sendable {
     let launchId: ServerLaunchID
     let installationId: InstallationID
-    let effectiveInstanceId: InsideJobInstanceID
+    let effectiveInstanceId: ResolvedStartupValue<InsideJobInstanceID>
 
-    static func make(instanceId: InsideJobInstanceID?) -> InsideJobSessionIdentity {
+    static func make(
+        instanceId: ResolvedStartupValue<InsideJobInstanceID?>
+    ) -> InsideJobSessionIdentity {
         guard let launchId = try? ServerLaunchID(validating: UUID().uuidString),
               let generatedInstanceId = try? InsideJobInstanceID(
                 validating: String(launchId.description.prefix(8)).lowercased()
@@ -138,7 +100,9 @@ struct InsideJobSessionIdentity: Equatable, Sendable {
         return InsideJobSessionIdentity(
             launchId: launchId,
             installationId: loadInstallationId(),
-            effectiveInstanceId: instanceId ?? generatedInstanceId
+            effectiveInstanceId: instanceId.value.map {
+                ResolvedStartupValue(value: $0, source: instanceId.source)
+            } ?? ResolvedStartupValue(value: generatedInstanceId, source: .generated)
         )
     }
 
@@ -161,7 +125,7 @@ struct InsideJobSessionIdentity: Equatable, Sendable {
 @MainActor
 extension TheInsideJob {
     var effectiveInstanceId: InsideJobInstanceID {
-        runtimeConfiguration.sessionIdentity.effectiveInstanceId
+        runtimeConfiguration.sessionIdentity.effectiveInstanceId.value
     }
 }
 

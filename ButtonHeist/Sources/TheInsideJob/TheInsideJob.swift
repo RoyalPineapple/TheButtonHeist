@@ -238,20 +238,20 @@ public final class TheInsideJob {
         self.runtimeConfiguration = runtimeConfiguration
         self.transportFactory = transportFactory
         self.muscle = TheMuscle(
-            explicitToken: runtimeConfiguration.token,
+            explicitToken: runtimeConfiguration.token.value,
             sessionReleaseTimeout: runtimeConfiguration.sessionReleaseTimeout.value
         )
         self.brains = TheBrains(
             tripwire: self.tripwire,
-            fingerprintsEnabled: runtimeConfiguration.fingerprintsEnabled,
-            failureEvidencePolicy: runtimeConfiguration.failureEvidencePolicy
+            fingerprintsEnabled: runtimeConfiguration.fingerprintsEnabled.value,
+            failureEvidencePolicy: runtimeConfiguration.failureEvidencePolicy.value
         )
         self.getaway = TheGetaway(
             muscle: self.muscle,
             brains: self.brains,
             identity: TheGetaway.ServerIdentity(
                 launchId: runtimeConfiguration.sessionIdentity.launchId,
-                effectiveInstanceId: runtimeConfiguration.sessionIdentity.effectiveInstanceId,
+                effectiveInstanceId: runtimeConfiguration.sessionIdentity.effectiveInstanceId.value,
                 tlsActive: false
             )
         )
