@@ -78,65 +78,6 @@ extension LiveCapture.LiveElementEntry: ElementPredicateSubjectBacked {
     package var predicateSubject: AccessibilityElement { element }
 }
 
-// MARK: - TheStash Match Pipeline
-
-extension TheStash {
-
-    /// Single entry point for predicate-based element lookup. Returns up to `limit`
-    /// matching ScreenElements using authored predicate semantics: exact
-    /// matching for plain strings, opt-in `contains`/`prefix`/`suffix` matching
-    /// for broad `StringMatch` fields, and exact bitmask comparison on traits.
-    /// There is no automatic substring fallback; a miss gets structured
-    /// suggestions through the `.notFound` diagnostic path. Matches are
-    /// returned in the committed screen's semantic order: live hierarchy
-    /// entries first, then known entries retained from exploration. Viewport
-    /// reachability is handled by action execution, not by target resolution.
-    func matchScreenElements(_ predicate: ElementPredicate, limit: Int) -> [InterfaceTree.Element] {
-        matchScreenElements(predicate, limit: limit, in: interfaceTree)
-    }
-
-    func matchScreenElements(
-        _ predicate: ElementPredicate,
-        limit: Int,
-        in tree: InterfaceTree
-    ) -> [InterfaceTree.Element] {
-        guard limit > 0, predicate.hasPredicates else { return [] }
-        return Array(tree.orderedElements.lazy.filter { predicate.matches($0) }.prefix(limit))
-    }
-
-    /// All matching screen elements in traversal order. Use when diagnostics
-    /// need the exact match-set size rather than an early-exit prefix.
-    func matchScreenElements(_ predicate: ElementPredicate, in tree: InterfaceTree) -> [InterfaceTree.Element] {
-        guard predicate.hasPredicates else { return [] }
-        return tree.orderedElements.filter { predicate.matches($0) }
-    }
-
-}
-
-struct AccessibilityElementPairingKey: Hashable {
-    let text: String
-    let identityTraits: Set<HeistTrait>
-
-    init(_ element: AccessibilityElement) {
-        text = [element.identifier, element.label]
-            .compactMap { value in
-                (value?.isEmpty == false) ? value : nil
-            }
-            .first ?? element.description
-        identityTraits = Set(element.traits.heistTraits.filter {
-            !AccessibilityPolicy.transientTraits.contains($0)
-        })
-    }
-}
-
-extension Sequence where Element == AccessibilityElement {
-    func sharesElementPairing<Other: Sequence>(with other: Other) -> Bool where Other.Element == AccessibilityElement {
-        let keys = Set(map(AccessibilityElementPairingKey.init))
-        guard !keys.isEmpty else { return false }
-        return other.contains { keys.contains(AccessibilityElementPairingKey($0)) }
-    }
-}
-
 private extension CustomContentMatchCore where Text == String {
     func matches(_ content: AccessibilityElement.CustomContent) -> Bool {
         label.matches(content.label)

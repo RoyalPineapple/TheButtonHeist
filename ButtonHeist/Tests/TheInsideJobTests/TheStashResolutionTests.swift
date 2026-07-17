@@ -1280,10 +1280,8 @@ final class TheStashResolutionTests: XCTestCase {
         bagman.recordFailedSettleDiagnosticEvidence(diagnostic)
 
         XCTAssertNotNil(bagman.resolveTarget(literalTarget(ElementPredicate.label("Settled Action"))).resolved)
-        XCTAssertNil(bagman.resolveTarget(literalTarget(ElementPredicate.label("Timeout Action"))).resolved)
-        XCTAssertEqual(
-            bagman.matchScreenElements(ElementPredicate.label("Timeout Action"), limit: 1),
-            []
+        XCTAssertNil(
+            bagman.resolveTarget(literalTarget(ElementPredicate.label("Timeout Action"), ordinal: 0)).resolved
         )
         XCTAssertEqual(bagman.interfaceTree.orderedElements.first?.element.label, "Settled Action")
         XCTAssertEqual(bagman.latestFailedSettleDiagnosticEvidence?.orderedElements.first?.element.label, "Timeout Action")
@@ -2908,89 +2906,7 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertNotNil(result.resolved)
     }
 
-    // MARK: - Direct InterfaceTree Matching
-
-    func testDirectInterfaceTreeMatchingPreservesPredicateSemanticsAndOrder() throws {
-        installMatchingScreen()
-
-        struct MatchCase {
-            let name: String
-            let predicate: ElementPredicate
-            let expectedIds: [HeistId]
-        }
-
-        let cases = [
-            MatchCase(
-                name: "exact substring miss",
-                predicate: ElementPredicate.label("Draft"),
-                expectedIds: []
-            ),
-            MatchCase(
-                name: "exact excludes partial sibling",
-                predicate: ElementPredicate.label("Save"),
-                expectedIds: ["save_button"]
-            ),
-            MatchCase(
-                name: "contains",
-                predicate: try resolvedPredicate(.label(.contains("Save"))),
-                expectedIds: ["save_button", "save_draft_button"]
-            ),
-            MatchCase(
-                name: "prefix",
-                predicate: try resolvedPredicate(.label(.prefix("Save"))),
-                expectedIds: ["save_button", "save_draft_button"]
-            ),
-            MatchCase(
-                name: "suffix",
-                predicate: try resolvedPredicate(.label(.suffix("Draft"))),
-                expectedIds: ["save_draft_button"]
-            ),
-            MatchCase(
-                name: "identifier",
-                predicate: ElementPredicate.identifier("search_field"),
-                expectedIds: ["search_field"]
-            ),
-            MatchCase(
-                name: "value",
-                predicate: ElementPredicate.value("Complete"),
-                expectedIds: ["done_button"]
-            ),
-            MatchCase(
-                name: "traits",
-                predicate: ElementPredicate.traits([.selected]),
-                expectedIds: ["done_button"]
-            ),
-            MatchCase(
-                name: "exclude traits",
-                predicate: try resolvedPredicate(
-                    AccessibilityTarget.label("Delete").excluding(.traits([.notEnabled]))
-                ),
-                expectedIds: ["delete_first"]
-            ),
-            MatchCase(
-                name: "compound checks",
-                predicate: try resolvedPredicate(AccessibilityTarget.element(
-                    .label("Done"),
-                    .identifier("done_button"),
-                    .value("Complete"),
-                    .exclude(.traits([.notEnabled])),
-                    traits: [.button, .selected]
-                )),
-                expectedIds: ["done_button"]
-            ),
-            MatchCase(
-                name: "duplicate labels",
-                predicate: ElementPredicate.label("Delete"),
-                expectedIds: ["delete_first", "delete_second"]
-            ),
-        ]
-
-        for testCase in cases {
-            let stashMatches = bagman.matchScreenElements(testCase.predicate, limit: 100)
-
-            XCTAssertEqual(stashMatches.map(\.heistId), testCase.expectedIds, testCase.name)
-        }
-    }
+    // MARK: - Direct InterfaceTree Resolution
 
     func testDirectInterfaceTreeResolutionPreservesOrdinalsAndDiagnostics() throws {
         installMatchingScreen()
