@@ -39,9 +39,7 @@ final class JSONLinesSession {
         idleMonitor = sessionTimeout > 0 ? makeTimeoutMonitor() : nil
 
         while true {
-            // Swift.readLine() is a blocking syscall; detaching from MainActor keeps JSON-lines input responsive.
-            // swiftlint:disable:next agent_no_task_detached
-            guard let line = await Task.detached(operation: { Swift.readLine() }).value else {
+            guard let line = await Self.readInputLine() else {
                 break
             }
 
@@ -57,6 +55,13 @@ final class JSONLinesSession {
         idleMonitor?.stop()
         idleMonitor = nil
         fence.stop()
+    }
+
+    /// Blocking standard input runs on Swift's generic executor rather than
+    /// inheriting the session actor.
+    @concurrent
+    private nonisolated static func readInputLine() async -> String? {
+        Swift.readLine()
     }
 
     private func makeTimeoutMonitor() -> IdleMonitor {

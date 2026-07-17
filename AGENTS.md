@@ -533,7 +533,7 @@ public var onStatus: ((String) -> Void)?
 
 If a callback fires on a non-actor thread (network queue, ObjC runtime), still annotate explicitly: `@Sendable` for non-isolated, or document with the actor specified.
 
-The custom SwiftLint rule `agent_unannotated_callback` flags `var on*: ((...) -> Void)?` patterns (public or internal) that are missing an isolation attribute.
+The Bumper rule `buttonheist.callback_isolation` requires stored callback types to declare `@Sendable` or a global actor, including file-local callback aliases.
 
 ## Value Isolation and Sendability
 
