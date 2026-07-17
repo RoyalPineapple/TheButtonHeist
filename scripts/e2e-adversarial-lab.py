@@ -11,7 +11,6 @@ import argparse
 import json
 import math
 import os
-import socket
 import subprocess
 import sys
 import time
@@ -21,8 +20,17 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from e2e_runtime import (
+    boot_simulator,
+    free_port,
+    install_app,
+    launch_app,
+    launch_environment,
+    run,
+    terminate_app,
+    wait_port,
+)
 
-BUNDLE_ID = "com.buttonheist.testapp"
 CEILING_HIT_TOLERANCE_MS = 25
 
 
@@ -71,16 +79,6 @@ class IterationObservation:
     @property
     def requires_app_recovery(self) -> bool:
         return self.returncode != 0
-
-
-def run(cmd: list[str], *, env: dict[str, str] | None = None, timeout: float = 60, check: bool = True) -> subprocess.CompletedProcess[str]:
-    result = subprocess.run(cmd, env=env, timeout=timeout, text=True, capture_output=True)
-    if check and result.returncode != 0:
-        raise RuntimeError(
-            f"command failed ({result.returncode}): {' '.join(cmd)}\n"
-            f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
-        )
-    return result
 
 
 def parse_jsonish(text: str) -> Any | None:
@@ -236,29 +234,9 @@ def gate_failed(summary: dict[str, Any]) -> bool:
     return summary["failed"] > 0 or summary["ceilingPolicyViolated"]
 
 
-def free_port() -> int:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind(("127.0.0.1", 0))
-        return int(sock.getsockname()[1])
-
-
-def wait_port(port: int, timeout: float = 30) -> None:
-    deadline = time.time() + timeout
-    last_error: OSError | None = None
-    while time.time() < deadline:
-        try:
-            with socket.create_connection(("127.0.0.1", port), timeout=0.25):
-                return
-        except OSError as error:
-            last_error = error
-            time.sleep(0.1)
-    raise TimeoutError(f"port {port} did not open: {last_error}")
-
-
 class DemoApp:
-    def __init__(self, sim: str, app: Path):
+    def __init__(self, sim: str):
         self.sim = sim
-        self.app = app
         self.port = free_port()
         self.token = f"adversarial-nightly-{self.port}"
 
@@ -266,28 +244,18 @@ class DemoApp:
     def device(self) -> str:
         return f"127.0.0.1:{self.port}"
 
-    def install(self) -> None:
-        run(["xcrun", "simctl", "terminate", self.sim, BUNDLE_ID], check=False, timeout=20)
-        run(["xcrun", "simctl", "uninstall", self.sim, BUNDLE_ID], check=False, timeout=20)
-        run(["xcrun", "simctl", "install", self.sim, str(self.app)], timeout=120)
-
     def launch(self) -> None:
-        env = os.environ.copy()
-        env.update(
-            {
-                "SIMCTL_CHILD_INSIDEJOB_PORT": str(self.port),
-                "SIMCTL_CHILD_INSIDEJOB_TOKEN": self.token,
-                "SIMCTL_CHILD_INSIDEJOB_ID": self.token,
-            }
+        terminate_app(self.sim)
+        result = launch_app(
+            self.sim,
+            launch_environment(self.port, self.token, self.token),
         )
-        run(["xcrun", "simctl", "terminate", self.sim, BUNDLE_ID], check=False, timeout=20)
-        result = run(["xcrun", "simctl", "launch", self.sim, BUNDLE_ID], env=env, check=False, timeout=45)
         if result.returncode != 0:
             raise RuntimeError(f"BHDemo launch failed: stdout={result.stdout!r} stderr={result.stderr!r}")
         wait_port(self.port, timeout=45)
 
     def terminate(self) -> None:
-        run(["xcrun", "simctl", "terminate", self.sim, BUNDLE_ID], check=False, timeout=20)
+        terminate_app(self.sim)
 
 
 OPEN_LAB = """
@@ -669,11 +637,10 @@ def main() -> int:
         if not (app_path / "BHDemo").exists():
             raise RuntimeError(f"missing BHDemo executable under {app_path}")
 
-        run(["xcrun", "simctl", "boot", args.sim_udid], check=False, timeout=30)
-        run(["xcrun", "simctl", "bootstatus", args.sim_udid, "-b"], timeout=120)
+        boot_simulator(args.sim_udid)
 
-        app = DemoApp(args.sim_udid, app_path)
-        app.install()
+        install_app(args.sim_udid, app_path)
+        app = DemoApp(args.sim_udid)
         app.launch()
 
         report["status"] = "running"

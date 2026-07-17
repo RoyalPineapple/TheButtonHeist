@@ -506,7 +506,7 @@ The contract is locked by `SynthesisDeterminismTests` (property test across 200+
 
 There is one version: `buttonHeistVersion` in `ButtonHeist/Sources/TheScore/Wire/Messages.swift`. It uses SemVer (`MAJOR.MINOR.PATCH`), and CLI, MCP, and the iOS server all read it via TheScore. There is no separate "wire protocol version" — the handshake compares the server's and the client's `buttonHeistVersion` for exact equality and rejects on any mismatch. Inside (iOS server) and outside (CLI/MCP) must always be the same release; wire-format changes do not get their own version bump.
 
-`buttonHeistVersion` is bumped only by `scripts/release.sh`. Commits between releases are not releases — the version constant stays put. Treat any temptation to bump the version mid-feature as a sign you're working around the release flow rather than with it. From a clean `main`, the script validates and bumps the source version, builds CLI and MCP, commits and pushes the release source, waits for CI on that exact commit, then tags it. Pushing the tag triggers `.github/workflows/release.yml`, which builds the release artifacts, creates the GitHub release, and updates the Homebrew tap. Local tests are optional through `--full`; exact-commit main CI is the release gate.
+`buttonHeistVersion` is bumped only by `scripts/release.sh`. Commits between releases are not releases — the version constant stays put. Treat any temptation to bump the version mid-feature as a sign you're working around the release flow rather than with it. From a clean `main`, the script validates and bumps the source version, builds CLI and MCP, commits and pushes the release source, waits for CI on that exact commit, then tags it. Pushing the tag triggers `.github/workflows/release.yml`, which builds the release artifacts, creates the GitHub release, and updates the Homebrew tap. `scripts/release-readiness.sh` owns optional local preflight; exact-commit main CI is the release gate.
 
 ```bash
 ./scripts/release.sh               # Patch bump: 0.6.28 -> 0.6.29
@@ -515,7 +515,7 @@ There is one version: `buttonHeistVersion` in `ButtonHeist/Sources/TheScore/Wire
 ./scripts/release.sh 0.7.1         # Explicit version
 ./scripts/release.sh --tag-current # Publish an already-bumped source version
 ./scripts/release.sh --dry-run     # Preview only
-./scripts/release.sh --full        # Include optional local tests
+./scripts/release-readiness.sh     # Run optional local preflight
 ```
 
 ## Callback Isolation Discipline
@@ -574,7 +574,7 @@ func tearDown() {
 }
 ```
 
-The single-line `Task { @MainActor in self.callback(...) }` bridge is its own anti-pattern — the call site has no handle, no cancellation, no ordering guarantee. SwiftLint's `agent_callback_bridge_task` rule flags it; annotate the callback's isolation in its closure type and call it directly.
+The single-line `Task { @MainActor in self.callback(...) }` bridge is its own anti-pattern — the call site has no handle, no cancellation, no ordering guarantee. Annotate the callback's isolation in its closure type and call it directly.
 
 ## One Error Type Per Logical Domain
 
