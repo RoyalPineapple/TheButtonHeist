@@ -63,15 +63,10 @@ extension TheStash {
         let exactMatches: [InterfaceTree.Element]
     }
 
-    enum ContainerNotFoundReason: Equatable {
-        case ordinalOutOfRange(requested: Int, matchCount: Int)
-        case noMatches
-    }
-
     struct ContainerNotFoundFacts {
         let predicate: ResolvedContainerPredicate
         let ordinal: Int?
-        let reason: ContainerNotFoundReason
+        let reason: TargetNotFoundReason
         let resolutionScope: ResolutionScope
         let exactMatches: [InterfaceTree.Container]
     }
@@ -181,14 +176,14 @@ extension TheStash {
         in tree: InterfaceTree,
         resolutionScope: ResolutionScope
     ) -> ContainerTargetResolution {
-        guard let selection = target.terminalContainerSelection else {
+        guard case .container(let predicate, let ordinal) = target.terminalSelection else {
             preconditionFailure("container resolution requires a resolved container target")
         }
         let matches = matchingTreeContainers(for: target, in: tree)
-        if let ordinal = selection.ordinal {
+        if let ordinal {
             guard matches.indices.contains(ordinal) else {
                 return .notFound(ContainerNotFoundFacts(
-                    predicate: selection.predicate,
+                    predicate: predicate,
                     ordinal: ordinal,
                     reason: .ordinalOutOfRange(requested: ordinal, matchCount: matches.count),
                     resolutionScope: resolutionScope,
@@ -202,7 +197,7 @@ extension TheStash {
             return .resolved(matches[0])
         case 0:
             return .notFound(ContainerNotFoundFacts(
-                predicate: selection.predicate,
+                predicate: predicate,
                 ordinal: nil,
                 reason: .noMatches,
                 resolutionScope: resolutionScope,
@@ -210,7 +205,7 @@ extension TheStash {
             ))
         default:
             return .ambiguous(ContainerAmbiguityFacts(
-                predicate: selection.predicate,
+                predicate: predicate,
                 candidates: matches,
                 matchedCount: matches.count,
                 resolutionScope: resolutionScope
@@ -268,15 +263,15 @@ private extension TheStash {
         in tree: InterfaceTree,
         resolutionScope: ResolutionScope
     ) -> TargetResolution {
-        guard let selection = target.terminalElementSelection else {
+        guard case .element(let predicate, let ordinal) = target.terminalSelection else {
             preconditionFailure("element resolution requires a resolved element target")
         }
         let candidates = elementCandidates(for: target, in: tree)
         let matches = matchingTreeElements(for: target, in: tree)
-        if let ordinal = selection.ordinal {
+        if let ordinal {
             guard matches.indices.contains(ordinal) else {
                 return .notFound(TargetNotFoundFacts(
-                    predicate: selection.predicate,
+                    predicate: predicate,
                     ordinal: ordinal,
                     reason: .ordinalOutOfRange(requested: ordinal, matchCount: matches.count),
                     resolutionScope: resolutionScope,
@@ -290,7 +285,7 @@ private extension TheStash {
         switch matches.count {
         case 0:
             return .notFound(TargetNotFoundFacts(
-                predicate: selection.predicate,
+                predicate: predicate,
                 ordinal: nil,
                 reason: .noMatches,
                 resolutionScope: resolutionScope,
@@ -302,7 +297,7 @@ private extension TheStash {
             return .resolved(matches[0])
         default:
             return .ambiguous(TargetAmbiguityFacts(
-                predicate: selection.predicate,
+                predicate: predicate,
                 candidates: matches.prefix(10).map {
                     TargetCandidateFacts(treeElement: $0, visibleHeistIds: tree.viewportElementIDs)
                 },
@@ -314,48 +309,7 @@ private extension TheStash {
     }
 }
 
-private struct TargetTerminalElementSelection {
-    let predicate: ElementPredicate
-    let ordinal: Int?
-}
-
-private struct TargetTerminalContainerSelection {
-    let predicate: ResolvedContainerPredicate
-    let ordinal: Int?
-}
-
-extension ResolvedAccessibilityTarget {
-    var isElementTarget: Bool {
-        terminalElementSelection != nil
-    }
-}
-
 private extension ResolvedAccessibilityTarget {
-    var terminalElementSelection: TargetTerminalElementSelection? {
-        switch self {
-        case .predicate(let predicate, let ordinal):
-            return TargetTerminalElementSelection(
-                predicate: predicate,
-                ordinal: ordinal
-            )
-        case .within(_, let nestedTarget):
-            return nestedTarget.terminalElementSelection
-        case .container:
-            return nil
-        }
-    }
-
-    var terminalContainerSelection: TargetTerminalContainerSelection? {
-        switch self {
-        case .container(let predicate, let ordinal):
-            return TargetTerminalContainerSelection(predicate: predicate, ordinal: ordinal)
-        case .within(_, let nestedTarget):
-            return nestedTarget.terminalContainerSelection
-        case .predicate:
-            return nil
-        }
-    }
-
     var firstMatchTarget: ResolvedAccessibilityTarget {
         switch self {
         case .predicate(let predicate, _):

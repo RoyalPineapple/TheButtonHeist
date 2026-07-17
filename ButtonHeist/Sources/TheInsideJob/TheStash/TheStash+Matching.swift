@@ -118,24 +118,20 @@ extension TheStash {
         for target: ResolvedAccessibilityTarget,
         in tree: InterfaceTree
     ) -> [InterfaceTree.Element] {
-        matchingTreeElements(
-            for: target,
-            among: tree.orderedElements,
-            containers: tree.orderedContainers,
-            containersByPath: tree.containers
-        )
+        let elements = tree.orderedElements
+        return targetMatchGraph(in: tree).matches(for: target).elements.matches.map {
+            elements[$0.traversalOrder]
+        }
     }
 
     func elementCandidates(
         for target: ResolvedAccessibilityTarget,
         in tree: InterfaceTree
     ) -> [InterfaceTree.Element] {
-        elementCandidates(
-            for: target,
-            among: tree.orderedElements,
-            containers: tree.orderedContainers,
-            containersByPath: tree.containers
-        )
+        let elements = tree.orderedElements
+        return targetMatchGraph(in: tree).elementCandidates(in: target).matches.map {
+            elements[$0.traversalOrder]
+        }
     }
 
     /// Match containers in the tree's canonical path order without applying
@@ -144,165 +140,40 @@ extension TheStash {
         for target: ResolvedAccessibilityTarget,
         in tree: InterfaceTree
     ) -> [InterfaceTree.Container] {
-        matchingTreeContainers(
-            for: target,
-            among: tree.orderedContainers,
-            containersByPath: tree.containers
-        )
-    }
-
-    private func matchingTreeElements(
-        for target: ResolvedAccessibilityTarget,
-        among elements: [InterfaceTree.Element],
-        containers: [InterfaceTree.Container],
-        containersByPath: [TreePath: InterfaceTree.Container]
-    ) -> [InterfaceTree.Element] {
-        switch target {
-        case .predicate(let predicate, _):
-            return elements.filter { predicate.matches($0) }
-        case .container:
-            return []
-        case .within(let containerPredicate, let nestedTarget):
-            let matchingPaths = matchingContainerPaths(containerPredicate, among: containers)
-            return matchingTreeElements(
-                for: nestedTarget,
-                among: elements.filter {
-                    isContained($0, inAnyOf: matchingPaths, containersByPath: containersByPath)
-                },
-                containers: containers.filter {
-                    isContained($0, inAnyOf: matchingPaths, containersByPath: containersByPath)
-                },
-                containersByPath: containersByPath
-            )
+        targetMatchGraph(in: tree).matches(for: target).containerPaths.compactMap {
+            tree.containers[$0]
         }
     }
 
-    private func elementCandidates(
-        for target: ResolvedAccessibilityTarget,
-        among elements: [InterfaceTree.Element],
-        containers: [InterfaceTree.Container],
-        containersByPath: [TreePath: InterfaceTree.Container]
-    ) -> [InterfaceTree.Element] {
-        switch target {
-        case .predicate:
-            return elements
-        case .container:
-            return []
-        case .within(let containerPredicate, let nestedTarget):
-            let matchingPaths = matchingContainerPaths(containerPredicate, among: containers)
-            return elementCandidates(
-                for: nestedTarget,
-                among: elements.filter {
-                    isContained($0, inAnyOf: matchingPaths, containersByPath: containersByPath)
-                },
-                containers: containers.filter {
-                    isContained($0, inAnyOf: matchingPaths, containersByPath: containersByPath)
-                },
-                containersByPath: containersByPath
-            )
-        }
-    }
-
-    private func matchingTreeContainers(
-        for target: ResolvedAccessibilityTarget,
-        among containers: [InterfaceTree.Container],
-        containersByPath: [TreePath: InterfaceTree.Container]
-    ) -> [InterfaceTree.Container] {
-        switch target {
-        case .predicate:
-            return []
-        case .container(let predicate, _):
-            return containers.filter { predicate.matches($0.container.containerPredicateFacts) }
-        case .within(let containerPredicate, let nestedTarget):
-            let matchingPaths = matchingContainerPaths(containerPredicate, among: containers)
-            return matchingTreeContainers(
-                for: nestedTarget,
-                among: containers.filter {
-                    isContained($0, inAnyOf: matchingPaths, containersByPath: containersByPath)
-                },
-                containersByPath: containersByPath
-            )
-        }
-    }
-
-    private func matchingContainerPaths(
-        _ predicate: ResolvedContainerPredicate,
-        among containers: [InterfaceTree.Container]
-    ) -> Set<TreePath> {
-        Set(containers.lazy.filter {
-            predicate.matches($0.container.containerPredicateFacts)
-        }.map(\.path))
-    }
-
-    private func isContained(
-        _ element: InterfaceTree.Element,
-        inAnyOf containerPaths: Set<TreePath>,
-        containersByPath: [TreePath: InterfaceTree.Container]
-    ) -> Bool {
-        isContained(
-            parentPath: semanticParentPath(
-                path: element.path,
-                scrollMembership: element.scrollMembership,
-                containersByPath: containersByPath
-            ),
-            inAnyOf: containerPaths,
-            containersByPath: containersByPath
-        )
-    }
-
-    private func isContained(
-        _ container: InterfaceTree.Container,
-        inAnyOf containerPaths: Set<TreePath>,
-        containersByPath: [TreePath: InterfaceTree.Container]
-    ) -> Bool {
-        if containerPaths.contains(container.path) { return true }
-        return isContained(
-            parentPath: semanticParentPath(
-                path: container.path,
-                scrollMembership: container.scrollMembership,
-                containersByPath: containersByPath
-            ),
-            inAnyOf: containerPaths,
-            containersByPath: containersByPath
-        )
-    }
-
-    private func isContained(
-        parentPath: TreePath?,
-        inAnyOf containerPaths: Set<TreePath>,
-        containersByPath: [TreePath: InterfaceTree.Container]
-    ) -> Bool {
-        var path = parentPath
-        var visited = Set<TreePath>()
-        while let candidate = path, visited.insert(candidate).inserted {
-            if containerPaths.contains(candidate) { return true }
-            guard let container = containersByPath[candidate] else { return false }
-            path = semanticParentPath(
-                path: container.path,
-                scrollMembership: container.scrollMembership,
-                containersByPath: containersByPath
-            )
-        }
-        return false
-    }
-
-    private func semanticParentPath(
-        path: TreePath,
-        scrollMembership: InterfaceTree.ScrollMembership?,
-        containersByPath: [TreePath: InterfaceTree.Container]
-    ) -> TreePath? {
-        if let containerPath = scrollMembership?.containerPath,
-           containersByPath[containerPath] != nil {
-            return containerPath
-        }
-
-        var parent = path.parent
-        while let candidate = parent {
-            if candidate == .root { return nil }
-            if containersByPath[candidate] != nil { return candidate }
-            parent = candidate.parent
-        }
-        return nil
+    private func targetMatchGraph(in tree: InterfaceTree) -> ElementMatchGraph {
+        let elements = tree.orderedElements
+        let containers = tree.orderedContainers
+        let containerPaths = Set(tree.containers.keys)
+        return ElementMatchGraph(AccessibilityTargetMatchInput(
+            elements: elements.enumerated().map { offset, entry in
+                AccessibilityTargetElementMatch(
+                    path: entry.path,
+                    traversalOrder: offset,
+                    parentContainerPath: AccessibilityTargetMatchInput.parentContainerPath(
+                        for: entry.path,
+                        preferred: entry.scrollMembership?.containerPath,
+                        among: containerPaths
+                    ),
+                    element: WireConversion.convert(entry.element)
+                )
+            },
+            containers: containers.map { entry in
+                AccessibilityTargetContainerMatch(
+                    path: entry.path,
+                    parentContainerPath: AccessibilityTargetMatchInput.parentContainerPath(
+                        for: entry.path,
+                        preferred: entry.scrollMembership?.containerPath,
+                        among: containerPaths
+                    ),
+                    facts: entry.container.containerPredicateFacts
+                )
+            }
+        ))
     }
 }
 

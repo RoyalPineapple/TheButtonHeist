@@ -290,17 +290,19 @@ final class AccessibilityPredicateTests: XCTestCase {
     }
 
     func testElementMatchGraphPreservesTraversalOrderFromMatches() throws {
-        let later = ElementMatch(
+        let later = AccessibilityTargetElementMatch(
             path: TreePath([9]),
             traversalOrder: 9,
+            parentContainerPath: nil,
             element: makeElement(label: "Row", actions: [.activate])
         )
-        let earlier = ElementMatch(
+        let earlier = AccessibilityTargetElementMatch(
             path: TreePath([1]),
             traversalOrder: 1,
+            parentContainerPath: nil,
             element: makeElement(label: "Row", actions: [.activate])
         )
-        let graph = ElementMatchGraph(ElementMatchSet([later, earlier]))
+        let graph = ElementMatchGraph(AccessibilityTargetMatchInput(elements: [later, earlier], containers: []))
 
         let matches = graph.resolve(ElementPredicate.label("Row"))
 

@@ -2317,7 +2317,7 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(resolved.element.label, "Cancel")
     }
 
-    func testScopedTargetResolvesDescendantOfContainerLabel() throws {
+    func testNestedScopedTargetResolvesDescendantOfContainerLabels() throws {
         let checkoutContainer = AccessibilityContainer(
             type: .semanticGroup(label: "Checkout", value: nil), identifier: nil,
             frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))
@@ -2326,10 +2326,16 @@ final class TheStashResolutionTests: XCTestCase {
             type: .semanticGroup(label: "Cart", value: nil), identifier: nil,
             frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))
         )
+        let checkoutActions = AccessibilityContainer(
+            type: .semanticGroup(label: "Actions", value: nil), identifier: "checkout_actions"
+        )
+        let cartActions = AccessibilityContainer(
+            type: .semanticGroup(label: "Actions", value: nil), identifier: "cart_actions"
+        )
         let checkoutPay = element(label: "Pay", traits: .button)
         let cartPay = element(label: "Pay", traits: .button)
-        let checkoutPath = TreePath([0, 0])
-        let cartPath = TreePath([1, 0])
+        let checkoutPath = TreePath([0, 0, 0])
+        let cartPath = TreePath([1, 0, 0])
         bagman.installScreenForTesting(InterfaceObservation.makeForTests(
             elements: [
                 "checkout_pay": InterfaceTree.Element(
@@ -2346,8 +2352,12 @@ final class TheStashResolutionTests: XCTestCase {
                 ),
             ],
             hierarchy: [
-                .container(checkoutContainer, children: [.element(checkoutPay, traversalIndex: 0)]),
-                .container(cartContainer, children: [.element(cartPay, traversalIndex: 1)]),
+                .container(checkoutContainer, children: [
+                    .container(checkoutActions, children: [.element(checkoutPay, traversalIndex: 0)]),
+                ]),
+                .container(cartContainer, children: [
+                    .container(cartActions, children: [.element(cartPay, traversalIndex: 1)]),
+                ]),
             ],
             heistIdsByPath: [
                 checkoutPath: "checkout_pay",
@@ -2357,7 +2367,10 @@ final class TheStashResolutionTests: XCTestCase {
         ))
 
         let result = bagman.resolveTarget(try resolvedTarget(
-            .within(container: .label("Checkout"), .label("Pay"))
+            .within(
+                container: .label("Checkout"),
+                .within(container: .identifier("checkout_actions"), .label("Pay"))
+            )
         ))
 
         XCTAssertEqual(result.resolved?.heistId, "checkout_pay")
