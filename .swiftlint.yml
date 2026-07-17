@@ -41,6 +41,8 @@ identifier_name:
     warning: 1
   max_length:
     warning: 60
+  excluded:
+    - If
 
 type_name:
   min_length:

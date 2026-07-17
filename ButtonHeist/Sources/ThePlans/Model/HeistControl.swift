@@ -79,37 +79,11 @@ public struct RepeatUntil: HeistContent {
     }
 }
 
-public struct If: HeistContent {
+public struct IfContent: HeistContent {
     public let heistSteps: [HeistStep]
     public let heistDefinitions: [HeistPlanAdmissionCandidate]
     public let heistBuildDiagnostics: [HeistBuildDiagnostic]
     private let step: ConditionalStep
-
-    public init(
-        @PredicateBranchBuilder _ branches: () -> PredicateBranches
-    ) {
-        let branchSet = branches()
-        self.init(
-            step: ConditionalStep(branchSet),
-            definitions: branchSet.definitions,
-            diagnostics: branchSet.diagnostics
-        )
-    }
-
-    public init(
-        _ predicate: ChangeDeclaration.ScreenAssertion,
-        @HeistBuilder _ content: () -> some HeistContent
-    ) {
-        let content = content()
-        self.init(
-            step: ConditionalStep(singleCase: PredicateCase(
-                predicate: predicate,
-                body: content.heistSteps
-            )),
-            definitions: content.heistDefinitions,
-            diagnostics: content.heistBuildDiagnostics
-        )
-    }
 
     public func `else`(
         @HeistBuilder _ content: () -> some HeistContent
@@ -125,16 +99,37 @@ public struct If: HeistContent {
         )
     }
 
-    private init(
-        step: ConditionalStep,
-        definitions: [HeistPlanAdmissionCandidate],
-        diagnostics: [HeistBuildDiagnostic]
+    fileprivate init(
+        predicate: ChangeDeclaration.ScreenAssertion,
+        content: some HeistContent
     ) {
+        let step = ConditionalStep(cases: NonEmptyArray(PredicateCase(
+            predicate: predicate,
+            body: content.heistSteps
+        )))
         self.step = step
         heistSteps = [.conditional(step)]
-        heistDefinitions = definitions
-        heistBuildDiagnostics = diagnostics
+        heistDefinitions = content.heistDefinitions
+        heistBuildDiagnostics = content.heistBuildDiagnostics
     }
+}
+
+public func If(
+    _ predicate: ChangeDeclaration.ScreenAssertion,
+    @HeistBuilder _ content: () -> some HeistContent
+) -> IfContent {
+    IfContent(predicate: predicate, content: content())
+}
+
+public func If(
+    @PredicateBranchBuilder _ branches: () -> PredicateBranches
+) -> some HeistContent {
+    let branches = branches()
+    return CompletedControl(
+        heistSteps: [.conditional(ConditionalStep(cases: branches.cases, elseBody: branches.elseBody))],
+        heistDefinitions: branches.definitions,
+        heistBuildDiagnostics: branches.diagnostics
+    )
 }
 
 public struct Case {
@@ -217,13 +212,13 @@ public struct PredicateCases {
 }
 
 public struct PredicateBranches {
-    public let cases: [PredicateCase]
-    public let elseBody: [HeistStep]?
-    public let definitions: [HeistPlanAdmissionCandidate]
-    public let diagnostics: [HeistBuildDiagnostic]
+    fileprivate let cases: NonEmptyArray<PredicateCase>
+    fileprivate let elseBody: [HeistStep]?
+    fileprivate let definitions: [HeistPlanAdmissionCandidate]
+    fileprivate let diagnostics: [HeistBuildDiagnostic]
 
     fileprivate init(_ cases: PredicateCases, else branch: Else? = nil) {
-        self.cases = cases.cases.elements
+        self.cases = cases.cases
         self.elseBody = branch?.body
         definitions = cases.definitions + (branch?.definitions ?? [])
         diagnostics = cases.diagnostics + (branch?.diagnostics ?? [])
@@ -266,14 +261,9 @@ private struct CompletedControl: HeistContent {
 }
 
 private extension ConditionalStep {
-    init(_ branches: PredicateBranches) {
-        cases = branches.cases
-        elseBody = branches.elseBody
-    }
-
-    init(singleCase: PredicateCase) {
-        cases = [singleCase]
-        elseBody = nil
+    init(cases: NonEmptyArray<PredicateCase>, elseBody: [HeistStep]? = nil) {
+        self.cases = cases.elements
+        self.elseBody = elseBody
     }
 
     init(completing step: ConditionalStep, elseBody: [HeistStep]) {
