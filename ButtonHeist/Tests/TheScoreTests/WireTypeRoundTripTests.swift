@@ -1135,6 +1135,31 @@ final class WireTypeRoundTripTests: XCTestCase {
         ) { error in
             assertDecodingError(error, contains: ["matched_case index 0", "out of range"])
         }
+
+        let matchedCases = ["Ready", "Done"].map {
+            HeistCaseMatchResult(predicate: .exists(.label(StringMatch.exact($0))), met: true)
+        }
+        let valid = HeistCaseSelectionResult.selectingFirstMatch(
+            cases: matchedCases,
+            ifNone: .noMatch,
+            elapsedMs: 1
+        )
+        var object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: encoder.encode(valid)) as? [String: Any]
+        )
+        let contradictoryOutcomes: [[String: Any]] = [
+            ["kind": "no_match"],
+            ["kind": "matched_case", "index": 1],
+        ]
+        for outcome in contradictoryOutcomes {
+            object["outcome"] = outcome
+            XCTAssertThrowsError(
+                try decoder.decode(
+                    HeistCaseSelectionResult.self,
+                    from: JSONSerialization.data(withJSONObject: object)
+                )
+            )
+        }
     }
 
     func testHeistCaseSelectionDerivesItsMatchedCaseFromItsCases() {

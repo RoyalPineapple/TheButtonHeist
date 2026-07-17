@@ -1290,17 +1290,17 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             steps: [
                 HeistReceiptFixture.conditional(
                     status: .passed,
-                    selection: .elseBranch(
+                    selection: .selectingFirstMatch(
                         cases: [
                             HeistCaseMatchResult(
                                 predicate: runtimePredicate,
                                 met: false
                             ),
                         ],
-                        reason: .noMatch,
+                        ifNone: .noMatch,
                         elapsedMs: 1,
                         lastObservedSummary: nil
-                    ),
+                    ).selectingElseBranch(),
                     durationMs: 3,
                     children: [childResult]
                 ),

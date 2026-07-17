@@ -100,21 +100,21 @@ import TheScore
             matching: ElementPredicateTemplate(label: "Row"),
             limit: 1
         ))
-        let passedEvidence = HeistForEachElementEvidence(
+        let passedEvidence = try #require(HeistForEachElementEvidence(
             matchedCount: 2,
             iterationCount: 1
-        ).flatMap(HeistPassedForEachElementEvidence.init)
-        let failedEvidence = HeistForEachElementEvidence(
+        ).flatMap(HeistPassedForEachElementEvidence.init))
+        let failedEvidence = try #require(HeistForEachElementEvidence(
             matchedCount: 2,
             iterationCount: 0,
             failureReason: "matched count exceeded limit"
-        ).flatMap(HeistFailedForEachElementEvidence.init)
+        ).flatMap(HeistFailedForEachElementEvidence.init))
 
         #expect(HeistExecutionStepResult.forEachElement(
             path: "$.body[0]",
             durationMs: 1,
             declaration: declaration,
-            completion: .passed(evidence: try #require(passedEvidence))
+            completion: .passed(evidence: passedEvidence)
         ) == nil)
 
         let valid = try #require(HeistExecutionStepResult.forEachElement(
@@ -122,7 +122,7 @@ import TheScore
             durationMs: 1,
             declaration: declaration,
             completion: .failed(
-                evidence: .observed(try #require(failedEvidence)),
+                evidence: .observed(failedEvidence),
                 failure: .init(
                     category: .loop,
                     contract: "matched count does not exceed limit",

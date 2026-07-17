@@ -112,14 +112,17 @@ public struct HeistCaseSelectionResult: Codable, Sendable, Equatable {
         )
     }
 
-    public static func elseBranch(
-        cases: [HeistCaseMatchResult],
-        reason: HeistCaseSelectionMissReason,
-        elapsedMs: Int,
-        timeout: Double? = nil,
-        lastObservedSummary: String? = nil
-    ) -> Self {
-        Self(
+    package func selectingElseBranch() -> Self {
+        let reason: HeistCaseSelectionMissReason
+        switch outcome {
+        case .noMatch:
+            reason = .noMatch
+        case .timedOut:
+            reason = .timedOut
+        case .matchedCase, .elseBranch:
+            preconditionFailure("only an unmatched case selection can enter the else branch")
+        }
+        return Self(
             cases: cases,
             outcome: .elseBranch(reason: reason),
             elapsedMs: elapsedMs,
@@ -179,19 +182,44 @@ public struct HeistCaseSelectionResult: Codable, Sendable, Equatable {
         cases: [HeistCaseMatchResult],
         codingPath: [CodingKey]
     ) throws {
-        guard case .matchedCase(let index) = outcome else { return }
-        guard cases.indices.contains(index) else {
-            throw DecodingError.dataCorrupted(.init(
-                codingPath: codingPath + [CodingKeys.outcome],
-                debugDescription: "matched_case index \(index) is out of range for \(cases.count) case(s)"
-            ))
+        switch outcome {
+        case .matchedCase(let index):
+            guard cases.indices.contains(index) else {
+                throw invalidOutcome(
+                    codingPath: codingPath,
+                    description: "matched_case index \(index) is out of range for \(cases.count) case(s)"
+                )
+            }
+            guard cases[index].met else {
+                throw invalidOutcome(
+                    codingPath: codingPath,
+                    description: "matched_case index \(index) refers to an unmet case"
+                )
+            }
+            guard cases.firstIndex(where: \.met) == index else {
+                throw invalidOutcome(
+                    codingPath: codingPath,
+                    description: "matched_case index \(index) is not the first matched case"
+                )
+            }
+        case .elseBranch, .timedOut, .noMatch:
+            guard !cases.contains(where: \.met) else {
+                throw invalidOutcome(
+                    codingPath: codingPath,
+                    description: "unmatched case selection outcome cannot contain a matched case"
+                )
+            }
         }
-        guard cases[index].result.met else {
-            throw DecodingError.dataCorrupted(.init(
-                codingPath: codingPath + [CodingKeys.outcome],
-                debugDescription: "matched_case index \(index) refers to an unmet case"
-            ))
-        }
+    }
+
+    private static func invalidOutcome(
+        codingPath: [CodingKey],
+        description: String
+    ) -> DecodingError {
+        .dataCorrupted(.init(
+            codingPath: codingPath + [CodingKeys.outcome],
+            debugDescription: description
+        ))
     }
 }
 
