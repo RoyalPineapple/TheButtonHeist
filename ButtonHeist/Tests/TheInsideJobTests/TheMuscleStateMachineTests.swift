@@ -45,6 +45,10 @@ final class TheMuscleStateMachineTests: XCTestCase {
     }
 
     func testClientAuthenticationRejectsAuthenticationBeforeHello() {
+        XCTAssertEqual(
+            ClientAuthenticationMachine().advance(.connected(address: "127.0.0.1"), with: .completeAuthentication),
+            .rejected(.missingHello, state: .connected(address: "127.0.0.1"))
+        )
         var registry = TheMuscleClientRegistry()
         registry.registerAddress(1, address: "127.0.0.1")
 
@@ -56,6 +60,10 @@ final class TheMuscleStateMachineTests: XCTestCase {
     }
 
     func testClientAuthenticationAdvancesThroughHelloBeforeAuthenticated() {
+        XCTAssertEqual(
+            ClientAuthenticationMachine().advance(.connected(address: "127.0.0.1"), with: .validateHello),
+            .advanced(.helloValidated(address: "127.0.0.1"), effect: .helloValidated)
+        )
         var registry = TheMuscleClientRegistry()
         registry.registerAddress(1, address: "127.0.0.1")
 

@@ -10,7 +10,6 @@ final class StateMachineTests: XCTestCase {
         XCTAssertEqual(change, .changed(to: .unlocked, effects: [.unlocked]))
         XCTAssertEqual(driver.state, .unlocked)
         XCTAssertEqual(change.effects, [.unlocked])
-        XCTAssertEqual(change.singleEffect, .unlocked)
     }
 
     func testDriverLeavesStateUntouchedWhenEventIsRejected() {
@@ -21,7 +20,6 @@ final class StateMachineTests: XCTestCase {
         XCTAssertEqual(change, .rejected(.coinRequired, stayingIn: .locked))
         XCTAssertEqual(driver.state, .locked)
         XCTAssertEqual(change.effects, [])
-        XCTAssertNil(change.singleEffect)
     }
 
     func testChangedTransitionCanBeEffectFree() {

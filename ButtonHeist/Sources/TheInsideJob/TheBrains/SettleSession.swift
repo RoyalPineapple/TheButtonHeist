@@ -4,7 +4,6 @@ import Foundation
 import UIKit
 
 import AccessibilitySnapshotParser
-import ButtonHeistSupport
 
 // MARK: - Settle Event/Outcome
 
@@ -93,7 +92,7 @@ struct SettleObservationSample: Equatable, Sendable {
     let fingerprint: Int
 }
 
-struct SettleLoopMachine: SimpleStateMachine, Equatable {
+struct SettleLoopMachine: Equatable {
     enum State: Equatable, Sendable {
         case consecutiveCycles(ConsecutiveCycleState)
         case quietWindow(QuietWindowState)
@@ -145,8 +144,6 @@ struct SettleLoopMachine: SimpleStateMachine, Equatable {
         case cancelled(timeMs: Int)
         case yieldFailed(timeMs: Int)
     }
-
-    enum Rejection: Equatable, Sendable {}
 
     struct ConsecutiveCycleState: Equatable, Sendable {
         let required: Int
@@ -265,7 +262,7 @@ struct SettleLoopMachine: SimpleStateMachine, Equatable {
     }
 
     private func change(to state: State, effect: Effect) -> SettleLoopTransition {
-        .changed(to: state, effects: [effect])
+        SettleLoopTransition(state: state, effect: effect)
     }
 }
 
@@ -286,26 +283,9 @@ private struct SettleLoopProgress: Equatable, Sendable {
     }
 }
 
-typealias SettleLoopTransition = StateChange<
-    SettleLoopMachine.State,
-    SettleLoopMachine.Effect,
-    SettleLoopMachine.Rejection
->
-
-extension StateChange
-where State == SettleLoopMachine.State,
-      Effect == SettleLoopMachine.Effect,
-      Rejection == SettleLoopMachine.Rejection {
-    var settleState: SettleLoopMachine.State {
-        state
-    }
-
-    var settleEffect: SettleLoopMachine.Effect {
-        guard let effect = singleEffect else {
-            preconditionFailure("SettleLoopMachine must emit exactly one effect per input.")
-        }
-        return effect
-    }
+struct SettleLoopTransition: Equatable, Sendable {
+    let state: SettleLoopMachine.State
+    let effect: SettleLoopMachine.Effect
 }
 
 struct SettleSessionFinalObservation: Equatable, Sendable {
@@ -563,11 +543,11 @@ struct SettleSessionFinalObservation: Equatable, Sendable {
         for transition: SettleLoopTransition,
         observations: SettleObservationLedger
     ) -> Outcome? {
-        switch transition.settleEffect {
+        switch transition.effect {
         case .continuePolling:
             return nil
         case .terminal(let terminal):
-            return outcome(for: terminal, state: transition.settleState, observations: observations)
+            return outcome(for: terminal, state: transition.state, observations: observations)
         }
     }
 
@@ -633,15 +613,19 @@ private struct SettleLoopRunner {
     func run(start: CFAbsoluteTime) async -> SettleSession.Outcome {
         let deadline = SemanticObservationDeadline(start: start, timeoutMs: timeoutMs)
         var observations = SettleObservationLedger()
-        var driver = StateDriver(
-            initial: initial,
-            machine: SettleLoopMachine()
-        )
+        let machine = SettleLoopMachine()
+        var state = initial
         var terminalObservationOutcome: SettleSession.Outcome?
+
+        func send(_ event: SettleLoopMachine.Event) -> SettleLoopTransition {
+            let transition = machine.advance(state, with: event)
+            state = transition.state
+            return transition
+        }
 
         func ingest(_ screen: InterfaceObservation) -> SettleSession.Outcome? {
             let recorded = observations.record(screen)
-            let transition = driver.send(
+            let transition = send(
                 .observation(
                     recorded.sample,
                     elapsedMs: deadline.elapsedMilliseconds(at: clock())
@@ -664,23 +648,23 @@ private struct SettleLoopRunner {
             do {
                 try await observationYield()
             } catch is CancellationError {
-                let transition = driver.send(
+                let transition = send(
                     .yieldFailed(.cancellation, elapsedMs: deadline.elapsedMilliseconds(at: clock()))
                 )
                 return SettleSession.outcome(for: transition, observations: observations)!
             } catch {
-                let transition = driver.send(
+                let transition = send(
                     .yieldFailed(.error, elapsedMs: deadline.elapsedMilliseconds(at: clock()))
                 )
                 return SettleSession.outcome(for: transition, observations: observations)!
             }
 
-            let eventCount = driver.state.events.count
-            let tripwireTransition = driver.send(.tripwireSignal(tripwireSignalProvider()))
+            let eventCount = state.events.count
+            let tripwireTransition = send(.tripwireSignal(tripwireSignalProvider()))
             if let outcome = SettleSession.outcome(for: tripwireTransition, observations: observations) {
                 return outcome
             }
-            if driver.state.events.count > eventCount {
+            if state.events.count > eventCount {
                 observations.resetCurrentGeneration()
                 continue
             }
@@ -691,7 +675,7 @@ private struct SettleLoopRunner {
             }
         }
 
-        let transition = driver.send(.timeout(elapsedMs: deadline.elapsedMilliseconds(at: clock())))
+        let transition = send(.timeout(elapsedMs: deadline.elapsedMilliseconds(at: clock())))
         return SettleSession.outcome(for: transition, observations: observations)!
     }
 }

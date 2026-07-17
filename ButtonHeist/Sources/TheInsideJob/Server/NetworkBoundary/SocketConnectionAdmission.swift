@@ -1,7 +1,5 @@
 import os
 
-import ButtonHeistSupport
-
 enum ReadyConnectionAcceptance: Equatable, Sendable {
     case registered(clientId: Int)
     case rejected
@@ -28,19 +26,13 @@ final class ConnectionAdmission: @unchecked Sendable { // swiftlint:disable:this
         case noRegisteredClient
     }
 
-    private let driver = OSAllocatedUnfairLock<StateDriver<ConnectionAdmissionMachine>>(
-        initialState: StateDriver(initial: .waitingForReady, machine: ConnectionAdmissionMachine())
+    private let machine = OSAllocatedUnfairLock<ConnectionAdmissionMachine>(
+        initialState: ConnectionAdmissionMachine()
     )
 
     func recordReady() -> ReadyTransition {
-        driver.withLock { driver in
-            let change = driver.send(.recordReady)
-            switch change.singleEffect {
-            case .ready(let transition)?:
-                return transition
-            default:
-                preconditionFailure("ConnectionAdmissionMachine produced an unexpected ready effect")
-            }
+        machine.withLock { machine in
+            machine.recordReady().effect
         }
     }
 
@@ -48,33 +40,21 @@ final class ConnectionAdmission: @unchecked Sendable { // swiftlint:disable:this
     /// arrived while the actor was accepting the socket, returns the accepted
     /// client id so the caller can remove that just-registered client.
     func recordAcceptance(_ acceptance: ReadyConnectionAcceptance) -> AcceptanceTransition {
-        driver.withLock { driver in
-            let change = driver.send(.recordAcceptance(acceptance))
-            switch change.singleEffect {
-            case .acceptance(let transition)?:
-                return transition
-            default:
-                preconditionFailure("ConnectionAdmissionMachine produced an unexpected acceptance effect")
-            }
+        machine.withLock { machine in
+            machine.recordAcceptance(acceptance).effect
         }
     }
 
     /// Marks the connection cancelled/failed. Returns an already-accepted
     /// client id when cleanup must be scheduled on the server actor.
     func recordCancellation() -> CancellationTransition {
-        driver.withLock { driver in
-            let change = driver.send(.recordCancellation)
-            switch change.singleEffect {
-            case .cancellation(let transition)?:
-                return transition
-            default:
-                preconditionFailure("ConnectionAdmissionMachine produced an unexpected cancellation effect")
-            }
+        machine.withLock { machine in
+            machine.recordCancellation().effect
         }
     }
 }
 
-private struct ConnectionAdmissionMachine: SimpleStateMachine {
+private struct ConnectionAdmissionMachine {
     enum State: Equatable, Sendable {
         case waitingForReady
         case acceptingReadyConnection
@@ -85,83 +65,93 @@ private struct ConnectionAdmissionMachine: SimpleStateMachine {
         case cancelled
     }
 
-    enum Event: Equatable, Sendable {
-        case recordReady
-        case recordAcceptance(ReadyConnectionAcceptance)
-        case recordCancellation
+    struct ReadyChange: Equatable, Sendable {
+        let state: State
+        let effect: ConnectionAdmission.ReadyTransition
     }
 
-    enum Effect: Equatable, Sendable {
-        case ready(ConnectionAdmission.ReadyTransition)
-        case acceptance(ConnectionAdmission.AcceptanceTransition)
-        case cancellation(ConnectionAdmission.CancellationTransition)
+    struct AcceptanceChange: Equatable, Sendable {
+        let state: State
+        let effect: ConnectionAdmission.AcceptanceTransition
     }
 
-    enum Rejection: Equatable, Sendable {}
-
-    func advance(_ state: State, with event: Event) -> StateChange<State, Effect, Rejection> {
-        switch event {
-        case .recordReady:
-            return advanceReady(from: state)
-        case .recordAcceptance(let acceptance):
-            return advanceAcceptance(acceptance, from: state)
-        case .recordCancellation:
-            return advanceCancellation(from: state)
-        }
+    struct CancellationChange: Equatable, Sendable {
+        let state: State
+        let effect: ConnectionAdmission.CancellationTransition
     }
 
-    private func advanceReady(from state: State) -> StateChange<State, Effect, Rejection> {
+    private(set) var state: State = .waitingForReady
+
+    mutating func recordReady() -> ReadyChange {
+        let change = advanceReady(from: state)
+        state = change.state
+        return change
+    }
+
+    mutating func recordAcceptance(_ acceptance: ReadyConnectionAcceptance) -> AcceptanceChange {
+        let change = advanceAcceptance(acceptance, from: state)
+        state = change.state
+        return change
+    }
+
+    mutating func recordCancellation() -> CancellationChange {
+        let change = advanceCancellation(from: state)
+        state = change.state
+        return change
+    }
+
+    private func advanceReady(from state: State) -> ReadyChange {
         switch state {
         case .waitingForReady:
-            return .changed(to: .acceptingReadyConnection, effects: [.ready(.accept)])
+            return ReadyChange(state: .acceptingReadyConnection, effect: .accept)
         case .acceptingReadyConnection,
              .accepted,
              .rejected,
              .cancelledBeforeAcceptance,
              .cancelledDuringAcceptance,
              .cancelled:
-            return .changed(to: state, effects: [.ready(.ignore)])
+            return ReadyChange(state: state, effect: .ignore)
         }
     }
 
     private func advanceAcceptance(
         _ acceptance: ReadyConnectionAcceptance,
         from state: State
-    ) -> StateChange<State, Effect, Rejection> {
+    ) -> AcceptanceChange {
         switch (state, acceptance) {
         case (.acceptingReadyConnection, .registered(let clientId)):
-            return .changed(
-                to: .accepted(clientId: clientId),
-                effects: [.acceptance(.keepRegisteredClient)]
+            return AcceptanceChange(
+                state: .accepted(clientId: clientId),
+                effect: .keepRegisteredClient
             )
         case (.acceptingReadyConnection, .rejected):
-            return .changed(to: .rejected, effects: [.acceptance(.noRegisteredClient)])
+            return AcceptanceChange(state: .rejected, effect: .noRegisteredClient)
         case (.cancelledDuringAcceptance, .registered(let clientId)):
-            return .changed(
-                to: .cancelled,
-                effects: [.acceptance(.removeRegisteredClient(clientId))]
+            return AcceptanceChange(
+                state: .cancelled,
+                effect: .removeRegisteredClient(clientId)
             )
         case (.cancelledDuringAcceptance, .rejected):
-            return .changed(to: .cancelled, effects: [.acceptance(.noRegisteredClient)])
+            return AcceptanceChange(state: .cancelled, effect: .noRegisteredClient)
         case (.waitingForReady, _),
              (.accepted, _),
              (.rejected, _),
              (.cancelledBeforeAcceptance, _),
              (.cancelled, _):
-            return .changed(to: state, effects: [.acceptance(.noRegisteredClient)])
+            return AcceptanceChange(state: state, effect: .noRegisteredClient)
         }
     }
 
-    private func advanceCancellation(from state: State) -> StateChange<State, Effect, Rejection> {
+    private func advanceCancellation(from state: State) -> CancellationChange {
         switch state {
         case .waitingForReady:
-            return .changed(to: .cancelledBeforeAcceptance, effects: [.cancellation(.noRegisteredClient)])
+            return CancellationChange(state: .cancelledBeforeAcceptance, effect: .noRegisteredClient)
         case .acceptingReadyConnection:
-            return .changed(to: .cancelledDuringAcceptance, effects: [.cancellation(.noRegisteredClient)])
+            return CancellationChange(state: .cancelledDuringAcceptance, effect: .noRegisteredClient)
         case .accepted(let clientId):
-            return .changed(to: .cancelled, effects: [.cancellation(.removeRegisteredClient(clientId))])
+            return CancellationChange(state: .cancelled, effect: .removeRegisteredClient(clientId))
         case .rejected, .cancelledBeforeAcceptance, .cancelledDuringAcceptance, .cancelled:
-            return .changed(to: state, effects: [.cancellation(.noRegisteredClient)])
+            return CancellationChange(state: state, effect: .noRegisteredClient)
         }
     }
 }

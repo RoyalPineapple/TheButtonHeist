@@ -136,7 +136,7 @@ extension TheInsideJob {
                         idleTimerBaseline: suspendedRuntime.idleTimerBaseline
                     )
                 )
-                guard startChange.singleEffect != nil else {
+                guard case .changed = startChange else {
                     await self.cleanupFailedTransportStartup(startedTransport)
                     return
                 }
@@ -147,7 +147,7 @@ extension TheInsideJob {
                 try Task.checkCancellation()
 
                 let finishChange = self.applyLifecycleEvent(.resumeSucceeded(resumeID, resources))
-                guard finishChange.effects.contains(.activateRuntime(resources)) else {
+                guard case .running = finishChange.state else {
                     await self.cleanupFailedTransportStartup(startedTransport)
                     return
                 }

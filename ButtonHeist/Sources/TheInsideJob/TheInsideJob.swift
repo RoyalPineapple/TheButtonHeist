@@ -277,7 +277,7 @@ public final class TheInsideJob {
                 idleTimerBaseline: UIApplication.shared.isIdleTimerDisabled
             )
         )
-        guard startChange.singleEffect != nil else {
+        guard case .changed = startChange else {
             insideJobLogger.info("start() called while already running — ignoring")
             return
         }
@@ -285,17 +285,18 @@ public final class TheInsideJob {
         do {
             let resources = try await startRuntimeResources(from: startChange.effects)
             let finishChange = applyLifecycleEvent(.startSucceeded(attemptID, resources))
-            guard finishChange.effects.contains(.activateRuntime(resources)) else {
+            guard case .running = finishChange.state else {
                 await performLifecycleEffect(.cleanupTransport(resources.transport))
                 throw CancellationError()
             }
             await performLifecycleEffects(finishChange.effects)
         } catch {
             let failureChange = applyLifecycleEvent(.startFailed(attemptID))
-            if failureChange.effects.isEmpty {
-                await performLifecycleEffect(.cleanupTransport(attempt.transport))
-            } else {
+            switch failureChange {
+            case .changed:
                 await performLifecycleEffects(failureChange.effects)
+            case .rejected:
+                await performLifecycleEffect(.cleanupTransport(attempt.transport))
             }
             throw error
         }

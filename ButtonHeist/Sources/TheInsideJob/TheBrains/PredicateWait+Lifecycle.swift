@@ -1,7 +1,6 @@
 #if canImport(UIKit)
 #if DEBUG
 import Foundation
-import ButtonHeistSupport
 import ThePlans
 import TheScore
 
@@ -132,6 +131,19 @@ internal enum PredicateWaitLifecycleRejection: Sendable, Equatable {
     case alreadyFinished
 }
 
+internal enum PredicateWaitLifecycleTransition<Evidence>: Sendable, Equatable
+where Evidence: Sendable & Equatable {
+    case advanced(PredicateWaitLifecycleState<Evidence>, effect: PredicateWaitLifecycleEffect)
+    case rejected(PredicateWaitLifecycleRejection, state: PredicateWaitLifecycleState<Evidence>)
+
+    internal var state: PredicateWaitLifecycleState<Evidence> {
+        switch self {
+        case .advanced(let state, _), .rejected(_, let state):
+            return state
+        }
+    }
+}
+
 extension PredicateWait {
     internal struct LifecycleEvidence: Sendable, Equatable {
         internal let stream: PredicateObservationStreamState
@@ -245,7 +257,7 @@ internal func nextPredicateWaitLifecyclePoll(
     }
 }
 
-internal struct PredicateWaitLifecycleMachine<Evidence>: SimpleStateMachine, Sendable, Equatable
+internal struct PredicateWaitLifecycleMachine<Evidence>: Sendable, Equatable
 where Evidence: Sendable & Equatable {
     private let continuesAfterInitialMiss: Bool
 
@@ -256,11 +268,7 @@ where Evidence: Sendable & Equatable {
     internal func advance(
         _ state: PredicateWaitLifecycleState<Evidence>,
         with event: PredicateWaitLifecycleEvent<Evidence>
-    ) -> StateChange<
-        PredicateWaitLifecycleState<Evidence>,
-        PredicateWaitLifecycleEffect,
-        PredicateWaitLifecycleRejection
-    > {
+    ) -> PredicateWaitLifecycleTransition<Evidence> {
         switch (state, event) {
         case (.initialVisible, .evaluated(let evaluation)):
             if evaluation.matched {
@@ -269,7 +277,7 @@ where Evidence: Sendable & Equatable {
             guard continuesAfterInitialMiss else {
                 return finish(.timedOut, evidence: evaluation.evidence)
             }
-            return change(
+            return advanced(
                 to: .initialDiscovery(evaluation.evidence),
                 effect: .discover(.overall)
             )
@@ -277,7 +285,7 @@ where Evidence: Sendable & Equatable {
         case (.initialDiscovery, .evaluated(let evaluation)):
             return evaluation.matched
                 ? finish(.matched, evidence: evaluation.evidence)
-                : change(
+                : advanced(
                     to: .awaitingObservation(evaluation.evidence),
                     effect: .awaitObservation
                 )
@@ -285,13 +293,13 @@ where Evidence: Sendable & Equatable {
         case (.awaitingObservation, .observation(let evaluation)):
             return evaluation.matched
                 ? finish(.matched, evidence: evaluation.evidence)
-                : change(
+                : advanced(
                     to: .triggeredDiscovery(evaluation.evidence),
                     effect: .discover(.overall)
                 )
 
         case (.awaitingObservation, .deadlineReached):
-            return change(
+            return advanced(
                 to: .terminalVisible(state.evidence),
                 effect: .settleVisible(.viewportTransition)
             )
@@ -299,7 +307,7 @@ where Evidence: Sendable & Equatable {
         case (.triggeredDiscovery, .evaluated(let evaluation)):
             return evaluation.matched
                 ? finish(.matched, evidence: evaluation.evidence)
-                : change(
+                : advanced(
                     to: .awaitingObservation(evaluation.evidence),
                     effect: .awaitObservation
                 )
@@ -307,7 +315,7 @@ where Evidence: Sendable & Equatable {
         case (.terminalVisible, .evaluated(let evaluation)):
             return evaluation.matched
                 ? finish(.matched, evidence: evaluation.evidence)
-                : change(
+                : advanced(
                     to: .terminalDiscovery(evaluation.evidence),
                     effect: .discover(.unbounded)
                 )
@@ -319,47 +327,28 @@ where Evidence: Sendable & Equatable {
             )
 
         case (.finished, _):
-            return .rejected(.alreadyFinished, stayingIn: state)
+            return .rejected(.alreadyFinished, state: state)
 
         case (_, .cancelled):
             return finish(.cancelled, evidence: state.evidence)
 
         default:
-            return .rejected(.unexpectedEvent, stayingIn: state)
+            return .rejected(.unexpectedEvent, state: state)
         }
     }
 
     private func finish(
         _ outcome: PredicateWaitLifecycleOutcome,
         evidence: Evidence
-    ) -> StateChange<
-        PredicateWaitLifecycleState<Evidence>,
-        PredicateWaitLifecycleEffect,
-        PredicateWaitLifecycleRejection
-    > {
-        change(to: .finished(outcome, evidence), effect: .finish(outcome))
+    ) -> PredicateWaitLifecycleTransition<Evidence> {
+        advanced(to: .finished(outcome, evidence), effect: .finish(outcome))
     }
 
-    private func change(
+    private func advanced(
         to state: PredicateWaitLifecycleState<Evidence>,
         effect: PredicateWaitLifecycleEffect
-    ) -> StateChange<
-        PredicateWaitLifecycleState<Evidence>,
-        PredicateWaitLifecycleEffect,
-        PredicateWaitLifecycleRejection
-    > {
-        .changed(to: state, effects: [effect])
-    }
-}
-
-internal extension StateChange
-where Effect == PredicateWaitLifecycleEffect,
-      Rejection == PredicateWaitLifecycleRejection {
-    var predicateWaitEffect: PredicateWaitLifecycleEffect {
-        guard let effect = singleEffect else {
-            preconditionFailure("PredicateWaitLifecycleMachine must emit exactly one effect")
-        }
-        return effect
+    ) -> PredicateWaitLifecycleTransition<Evidence> {
+        .advanced(state, effect: effect)
     }
 }
 

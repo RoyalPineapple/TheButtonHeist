@@ -1,7 +1,5 @@
 import Foundation
 
-import ButtonHeistSupport
-
 /// Per-client authentication lifecycle owned by `TheMuscle`.
 ///
 /// This is the single typed phase enum for the ButtonHeist auth flow:
@@ -31,7 +29,7 @@ enum ClientAuthenticationState: Equatable, Sendable {
     }
 }
 
-struct ClientAuthenticationMachine: SimpleStateMachine, Equatable {
+struct ClientAuthenticationMachine: Equatable {
     enum Event: Equatable, Sendable {
         case validateHello
         case completeAuthentication
@@ -48,26 +46,31 @@ struct ClientAuthenticationMachine: SimpleStateMachine, Equatable {
         case alreadyAuthenticated
     }
 
+    enum Transition: Equatable, Sendable {
+        case advanced(ClientAuthenticationState, effect: Effect)
+        case rejected(Rejection, state: ClientAuthenticationState)
+    }
+
     func advance(
         _ state: ClientAuthenticationState,
         with event: Event
-    ) -> StateChange<ClientAuthenticationState, Effect, Rejection> {
+    ) -> Transition {
         switch (state, event) {
         case (.connected(let address), .validateHello):
-            return .changed(to: .helloValidated(address: address), effects: [.helloValidated])
+            return .advanced(.helloValidated(address: address), effect: .helloValidated)
 
         case (.helloValidated(let address), .completeAuthentication):
-            return .changed(to: .authenticated(address: address), effects: [.authenticated])
+            return .advanced(.authenticated(address: address), effect: .authenticated)
 
         case (.connected, .completeAuthentication):
-            return .rejected(.missingHello, stayingIn: state)
+            return .rejected(.missingHello, state: state)
 
         case (.helloValidated, .validateHello):
-            return .rejected(.helloAlreadyValidated, stayingIn: state)
+            return .rejected(.helloAlreadyValidated, state: state)
 
         case (.authenticated, .validateHello),
              (.authenticated, .completeAuthentication):
-            return .rejected(.alreadyAuthenticated, stayingIn: state)
+            return .rejected(.alreadyAuthenticated, state: state)
         }
     }
 }

@@ -1,7 +1,5 @@
 import Foundation
 
-import ButtonHeistSupport
-
 /// Actor-owned client table for `TheMuscle`.
 ///
 /// **Ownership.** Auth/admission source of truth, owned by `TheMuscleAdmission`.
@@ -15,7 +13,7 @@ import ButtonHeistSupport
 struct TheMuscleClientRegistry {
     private enum ClientRegistration {
         case unregistered
-        case registered(StateDriver<ClientAuthenticationMachine>)
+        case registered(ClientAuthenticationState)
     }
 
     private struct Client {
@@ -33,10 +31,7 @@ struct TheMuscleClientRegistry {
     mutating func registerAddress(_ clientId: Int, address: String) {
         let rateLimiter = clients[clientId]?.rateLimiter ?? MessageRateLimiter()
         clients[clientId] = Client(
-            registration: .registered(StateDriver(
-                initial: .connected(address: address),
-                machine: ClientAuthenticationMachine()
-            )),
+            registration: .registered(.connected(address: address)),
             rateLimiter: rateLimiter
         )
     }
@@ -47,8 +42,8 @@ struct TheMuscleClientRegistry {
 
     mutating func remove(_ clientId: Int) -> ClientAuthenticationState? {
         guard let client = clients.removeValue(forKey: clientId) else { return nil }
-        guard case .registered(let driver) = client.registration else { return nil }
-        return driver.state
+        guard case .registered(let state) = client.registration else { return nil }
+        return state
     }
 
     func contains(_ clientId: Int) -> Bool {
@@ -59,8 +54,8 @@ struct TheMuscleClientRegistry {
 
     func phase(for clientId: Int) -> ClientAuthenticationState? {
         guard let client = clients[clientId] else { return nil }
-        guard case .registered(let driver) = client.registration else { return nil }
-        return driver.state
+        guard case .registered(let state) = client.registration else { return nil }
+        return state
     }
 
     mutating func recordMessage(_ clientId: Int, at now: Date) -> MessageAdmission {
@@ -90,17 +85,15 @@ struct TheMuscleClientRegistry {
         _ event: ClientAuthenticationMachine.Event,
         to clientId: Int
     ) -> ClientAuthenticationTransition {
-        guard var client = clients[clientId] else { return .missingClient }
-        guard case .registered(var driver) = client.registration else { return .missingClient }
-        let change = driver.send(event)
-        client.registration = .registered(driver)
-        clients[clientId] = client
+        guard let client = clients[clientId] else { return .missingClient }
+        guard case .registered(let currentState) = client.registration else { return .missingClient }
+        let transition = ClientAuthenticationMachine().advance(currentState, with: event)
 
-        switch change {
-        case .changed(let state, _):
-            guard let effect = change.singleEffect else {
-                preconditionFailure("ClientAuthenticationMachine must emit exactly one effect.")
-            }
+        switch transition {
+        case .advanced(let state, let effect):
+            var updatedClient = client
+            updatedClient.registration = .registered(state)
+            clients[clientId] = updatedClient
             return .advanced(state, effect: effect)
         case .rejected(let rejection, let state):
             return .rejected(rejection, state: state)
