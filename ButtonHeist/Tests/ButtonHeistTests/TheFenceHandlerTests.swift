@@ -909,7 +909,7 @@ final class TheFenceHandlerTests: XCTestCase {
                         session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
                     ))
                 }
-                return .actionResult(ActionResult.success(method: .activate, evidence: .none))
+                return .actionResult(ActionResult.success(method: .activate))
             }
             return probe
         }
@@ -3124,7 +3124,6 @@ final class TheFenceHandlerTests: XCTestCase {
         mockConn.resolvedWaitResponse = { _ in
             return .actionResult(ActionResult.success(
                 method: .wait,
-                evidence: ActionResultSuccessEvidence(
                     observation: .trace(makeTestTraceEvidence(
                         AccessibilityTrace.elementsChangedForTests(
                             elementCount: 1,
@@ -3132,7 +3131,7 @@ final class TheFenceHandlerTests: XCTestCase {
                         ),
                         completeness: .incomplete
                     ))
-                )
+
             ))
         }
 
@@ -3157,12 +3156,11 @@ final class TheFenceHandlerTests: XCTestCase {
             return .actionResult(ActionResult.success(
                 method: .wait,
                 message: "expectation met after observed change",
-                evidence: ActionResultSuccessEvidence(
                     observation: .trace(makeTestTraceEvidence(
                         AccessibilityTrace.noChangeForTests(elementCount: 1),
                         completeness: .complete
                     ))
-                )
+
             ))
         }
 
@@ -3190,12 +3188,11 @@ final class TheFenceHandlerTests: XCTestCase {
                 method: .wait,
                 errorKind: .timeout,
                 message: "timed out after 0.2s — expectation not met",
-                evidence: ActionResultFailureEvidence(
                     observation: .trace(makeTestTraceEvidence(
                         AccessibilityTrace.noChangeForTests(elementCount: 1),
                         completeness: .incomplete
                     ))
-                )
+
             ))
         }
 
@@ -3246,19 +3243,18 @@ final class TheFenceHandlerTests: XCTestCase {
             case .activate:
                 return .actionResult(ActionResult.success(
                     method: .activate,
-                    evidence: ActionResultSuccessEvidence(observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete)))
+                    observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
                 ))
             default:
-                return .actionResult(ActionResult.success(method: .activate, evidence: .none))
+                return .actionResult(ActionResult.success(method: .activate))
             }
         }
         mockConn.resolvedWaitResponse = { _ in
             .actionResult(ActionResult.success(
                 method: .wait,
                 message: "expectation met after observed change",
-                evidence: ActionResultSuccessEvidence(
                     observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
-                )
+
             ))
         }
 
@@ -3587,7 +3583,7 @@ final class TheFenceHandlerTests: XCTestCase {
             case .requestInterface:
                 return .interface(interfaceFixture)
             default:
-                return .actionResult(ActionResult.success(method: .activate, evidence: .none))
+                return .actionResult(ActionResult.success(method: .activate))
             }
         }
 
@@ -3639,7 +3635,7 @@ final class TheFenceHandlerTests: XCTestCase {
                     }
                 ))
             default:
-                return .actionResult(ActionResult.success(method: .activate, evidence: .none))
+                return .actionResult(ActionResult.success(method: .activate))
             }
         }
 

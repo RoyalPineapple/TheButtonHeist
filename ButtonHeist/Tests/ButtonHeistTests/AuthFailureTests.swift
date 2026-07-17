@@ -48,7 +48,7 @@ final class AuthFailureTests: XCTestCase {
         conn.onEvent = { event in
             if case .message(.error(let serverError), _) = event,
                serverError.kind == .authFailure {
-                authFailedReason = serverError.message
+                authFailedReason = serverError.message.description
             }
         }
 

@@ -1280,10 +1280,8 @@ final class TheStashResolutionTests: XCTestCase {
         bagman.recordFailedSettleDiagnosticEvidence(diagnostic)
 
         XCTAssertNotNil(bagman.resolveTarget(literalTarget(ElementPredicate.label("Settled Action"))).resolved)
-        XCTAssertNil(bagman.resolveTarget(literalTarget(ElementPredicate.label("Timeout Action"))).resolved)
-        XCTAssertEqual(
-            bagman.matchScreenElements(ElementPredicate.label("Timeout Action"), limit: 1),
-            []
+        XCTAssertNil(
+            bagman.resolveTarget(literalTarget(ElementPredicate.label("Timeout Action"), ordinal: 0)).resolved
         )
         XCTAssertEqual(bagman.interfaceTree.orderedElements.first?.element.label, "Settled Action")
         XCTAssertEqual(bagman.latestFailedSettleDiagnosticEvidence?.orderedElements.first?.element.label, "Timeout Action")
@@ -2317,7 +2315,7 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(resolved.element.label, "Cancel")
     }
 
-    func testScopedTargetResolvesDescendantOfContainerLabel() throws {
+    func testNestedScopedTargetResolvesDescendantOfContainerLabels() throws {
         let checkoutContainer = AccessibilityContainer(
             type: .semanticGroup(label: "Checkout", value: nil), identifier: nil,
             frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))
@@ -2326,10 +2324,18 @@ final class TheStashResolutionTests: XCTestCase {
             type: .semanticGroup(label: "Cart", value: nil), identifier: nil,
             frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))
         )
+        let checkoutActions = AccessibilityContainer(
+            type: .semanticGroup(label: "Actions", value: nil), identifier: "checkout_actions",
+            frame: .zero
+        )
+        let cartActions = AccessibilityContainer(
+            type: .semanticGroup(label: "Actions", value: nil), identifier: "cart_actions",
+            frame: .zero
+        )
         let checkoutPay = element(label: "Pay", traits: .button)
         let cartPay = element(label: "Pay", traits: .button)
-        let checkoutPath = TreePath([0, 0])
-        let cartPath = TreePath([1, 0])
+        let checkoutPath = TreePath([0, 0, 0])
+        let cartPath = TreePath([1, 0, 0])
         bagman.installScreenForTesting(InterfaceObservation.makeForTests(
             elements: [
                 "checkout_pay": InterfaceTree.Element(
@@ -2346,8 +2352,12 @@ final class TheStashResolutionTests: XCTestCase {
                 ),
             ],
             hierarchy: [
-                .container(checkoutContainer, children: [.element(checkoutPay, traversalIndex: 0)]),
-                .container(cartContainer, children: [.element(cartPay, traversalIndex: 1)]),
+                .container(checkoutContainer, children: [
+                    .container(checkoutActions, children: [.element(checkoutPay, traversalIndex: 0)]),
+                ]),
+                .container(cartContainer, children: [
+                    .container(cartActions, children: [.element(cartPay, traversalIndex: 1)]),
+                ]),
             ],
             heistIdsByPath: [
                 checkoutPath: "checkout_pay",
@@ -2357,7 +2367,10 @@ final class TheStashResolutionTests: XCTestCase {
         ))
 
         let result = bagman.resolveTarget(try resolvedTarget(
-            .within(container: .label("Checkout"), .label("Pay"))
+            .within(
+                container: .label("Checkout"),
+                .within(container: .identifier("checkout_actions"), .label("Pay"))
+            )
         ))
 
         XCTAssertEqual(result.resolved?.heistId, "checkout_pay")
@@ -2895,89 +2908,7 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertNotNil(result.resolved)
     }
 
-    // MARK: - Direct InterfaceTree Matching
-
-    func testDirectInterfaceTreeMatchingPreservesPredicateSemanticsAndOrder() throws {
-        installMatchingScreen()
-
-        struct MatchCase {
-            let name: String
-            let predicate: ElementPredicate
-            let expectedIds: [HeistId]
-        }
-
-        let cases = [
-            MatchCase(
-                name: "exact substring miss",
-                predicate: ElementPredicate.label("Draft"),
-                expectedIds: []
-            ),
-            MatchCase(
-                name: "exact excludes partial sibling",
-                predicate: ElementPredicate.label("Save"),
-                expectedIds: ["save_button"]
-            ),
-            MatchCase(
-                name: "contains",
-                predicate: try resolvedPredicate(.label(.contains("Save"))),
-                expectedIds: ["save_button", "save_draft_button"]
-            ),
-            MatchCase(
-                name: "prefix",
-                predicate: try resolvedPredicate(.label(.prefix("Save"))),
-                expectedIds: ["save_button", "save_draft_button"]
-            ),
-            MatchCase(
-                name: "suffix",
-                predicate: try resolvedPredicate(.label(.suffix("Draft"))),
-                expectedIds: ["save_draft_button"]
-            ),
-            MatchCase(
-                name: "identifier",
-                predicate: ElementPredicate.identifier("search_field"),
-                expectedIds: ["search_field"]
-            ),
-            MatchCase(
-                name: "value",
-                predicate: ElementPredicate.value("Complete"),
-                expectedIds: ["done_button"]
-            ),
-            MatchCase(
-                name: "traits",
-                predicate: ElementPredicate.traits([.selected]),
-                expectedIds: ["done_button"]
-            ),
-            MatchCase(
-                name: "exclude traits",
-                predicate: try resolvedPredicate(
-                    AccessibilityTarget.label("Delete").excluding(.traits([.notEnabled]))
-                ),
-                expectedIds: ["delete_first"]
-            ),
-            MatchCase(
-                name: "compound checks",
-                predicate: try resolvedPredicate(AccessibilityTarget.element(
-                    .label("Done"),
-                    .identifier("done_button"),
-                    .value("Complete"),
-                    .exclude(.traits([.notEnabled])),
-                    traits: [.button, .selected]
-                )),
-                expectedIds: ["done_button"]
-            ),
-            MatchCase(
-                name: "duplicate labels",
-                predicate: ElementPredicate.label("Delete"),
-                expectedIds: ["delete_first", "delete_second"]
-            ),
-        ]
-
-        for testCase in cases {
-            let stashMatches = bagman.matchScreenElements(testCase.predicate, limit: 100)
-
-            XCTAssertEqual(stashMatches.map(\.heistId), testCase.expectedIds, testCase.name)
-        }
-    }
+    // MARK: - Direct InterfaceTree Resolution
 
     func testDirectInterfaceTreeResolutionPreservesOrdinalsAndDiagnostics() throws {
         installMatchingScreen()

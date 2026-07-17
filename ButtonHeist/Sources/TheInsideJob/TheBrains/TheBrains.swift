@@ -175,8 +175,7 @@ final class TheBrains {
         return .failure(
             method: method,
             errorKind: .accessibilityTreeUnavailable,
-            message: message,
-            evidence: .none
+            message: message
         )
     }
 
@@ -184,8 +183,7 @@ final class TheBrains {
         .failure(
             method: method,
             errorKind: .actionFailed,
-            message: TheBrains.runtimeInactiveMessage,
-            evidence: .none
+            message: TheBrains.runtimeInactiveMessage
         )
     }
 

@@ -27,11 +27,6 @@ where State: Equatable, Effect: Equatable, Rejection: Equatable {
             return []
         }
     }
-
-    package var singleEffect: Effect? {
-        guard effects.count == 1 else { return nil }
-        return effects[0]
-    }
 }
 
 extension StateChange: Sendable where State: Sendable, Effect: Sendable, Rejection: Sendable {}

@@ -23,7 +23,7 @@ private extension ResolvedAccessibilityPredicate {
         _ node: Node,
         evidence: AccessibilityTraceEvidence
     ) -> PredicateEvaluationResult {
-        let current = ElementMatchGraph(interface: evidence.currentInterface)
+        let current = AccessibilityTargetMatchGraph(interface: evidence.currentInterface)
         switch node {
         case .presence(.exists(let target)):
             return currentResult(target, shouldExist: true, graph: current)
@@ -53,7 +53,7 @@ private extension ResolvedAccessibilityPredicate {
     func evaluateScreen(
         _ assertions: [ScreenAssertion],
         evidence: AccessibilityTraceEvidence,
-        current: ElementMatchGraph
+        current: AccessibilityTargetMatchGraph
     ) -> PredicateEvaluationResult {
         let facts = evidence.changeFacts
         guard facts.contains(where: \.isScreenChanged) else {
@@ -72,7 +72,7 @@ private extension ResolvedAccessibilityPredicate {
     func evaluateElements(
         _ assertions: [ElementAssertion],
         evidence: AccessibilityTraceEvidence,
-        current: ElementMatchGraph
+        current: AccessibilityTargetMatchGraph
     ) -> PredicateEvaluationResult {
         let facts = evidence.changeFacts
         let elementFacts = facts.compactMap(\.elementsChanged)
@@ -96,7 +96,7 @@ private extension ResolvedAccessibilityPredicate {
 
     func evaluateCurrentAssertion(
         _ assertion: ScreenAssertion,
-        graph: ElementMatchGraph
+        graph: AccessibilityTargetMatchGraph
     ) -> PredicateEvaluationResult {
         switch assertion {
         case .presence(.exists(let target)):
@@ -110,7 +110,7 @@ private extension ResolvedAccessibilityPredicate {
         _ assertion: ElementAssertion,
         facts: [AccessibilityTrace.ElementsChangeFact],
         evidence: AccessibilityTraceEvidence,
-        current: ElementMatchGraph
+        current: AccessibilityTargetMatchGraph
     ) -> PredicateEvaluationResult {
         switch assertion {
         case .presence(.exists(let target)):
@@ -141,7 +141,7 @@ private extension ResolvedAccessibilityPredicate {
     func currentResult(
         _ target: ResolvedAccessibilityTarget,
         shouldExist: Bool,
-        graph: ElementMatchGraph
+        graph: AccessibilityTargetMatchGraph
     ) -> PredicateEvaluationResult {
         let exists = !graph.resolve(target).isEmpty
         let met = exists == shouldExist
@@ -165,7 +165,7 @@ private extension ResolvedAccessibilityPredicate {
         trace: AccessibilityTrace
     ) -> Bool {
         guard let interface = interface(for: side, metadata: metadata, trace: trace) else { return false }
-        let paths = ElementMatchGraph(interface: interface).resolve(target).paths
+        let paths = AccessibilityTargetMatchGraph(interface: interface).resolve(target).paths
         return nodes.contains { paths.contains($0.path) }
     }
 
@@ -179,8 +179,8 @@ private extension ResolvedAccessibilityPredicate {
             guard let before = interface(for: .before, metadata: fact.metadata, trace: trace),
                   let after = interface(for: .after, metadata: fact.metadata, trace: trace)
             else { return [] }
-            let beforeElements = ElementMatchGraph(interface: before).resolve(target).elements.elements
-            let afterElements = ElementMatchGraph(interface: after).resolve(target).elements.elements
+            let beforeElements = AccessibilityTargetMatchGraph(interface: before).resolve(target).elements.elements
+            let afterElements = AccessibilityTargetMatchGraph(interface: after).resolve(target).elements.elements
             return fact.updated.compactMap { update in
                 guard beforeElements.contains(update.before) || afterElements.contains(update.after) else { return nil }
                 let changes = update.changes.filter { $0.satisfies(change) }

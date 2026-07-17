@@ -12,9 +12,9 @@ extension FenceError {
         case .serverFailure(let serverError):
             let details = serverError.failureDetails
             self = .connectionFailure(ConnectionFailure(
-                message: serverError.message,
+                message: serverError.message.description,
                 failureCode: details.code,
-                hint: serverError.recoveryHint ?? details.hint
+                hint: serverError.recoveryHint?.description ?? details.hint
             ))
         case .disconnected(.sessionLocked(let message)): self = .sessionLocked(message)
         case .disconnected(let reason): self = .connectionFailure(ConnectionFailure(disconnectReason: reason))

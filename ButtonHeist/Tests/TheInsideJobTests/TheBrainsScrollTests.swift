@@ -2372,7 +2372,9 @@ final class TheBrainsScrollTests: XCTestCase {
         })?.path else {
             throw XCTSkip("No live hierarchy available for scroll_to_visible post-reveal regression test")
         }
-        if !brains.stash.matchScreenElements(ElementPredicate.label("Jump Target"), limit: 1).isEmpty {
+        if brains.stash.resolveTarget(
+            literalTarget(ElementPredicate.label("Jump Target"), ordinal: 0)
+        ).resolved != nil {
             throw XCTSkip("Parser exposed offscreen scroll content before semantic reveal")
         }
 

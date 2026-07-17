@@ -146,7 +146,7 @@ that goal callback again. There is no alternate traversal or commit path.
 
 ```mermaid
 flowchart TD
-    Start["PredicateWait.Execution<br/>StateDriver + PredicateWaitLifecycleMachine"] --> Visible["bounded visible check"]
+    Start["PredicateWait.Execution<br/>lifecycle machine + evolving state"] --> Visible["bounded visible check"]
     Visible -->|matched| Match["return matched"]
     Visible -->|unmatched| Route{"one eligible, already-resolvable<br/>terminal element target?"}
     Route -->|yes| Reveal["inflate exact HeistId<br/>reveal + retain .current"]
@@ -176,10 +176,10 @@ Action expectations keep the supplied pre-action baseline. The terminal visible
 check gets the viewport transition's 250 ms settle budget. Terminal search is
 not cancelled by the elapsed wait deadline; normal traversal caps bound it.
 Every stage returns immediately when the predicate is fulfilled, and no
-compatibility wait orchestration exists. `PredicateWaitLifecycleMachine` is the
-sole orchestration owner; `PredicateObservationStreamState` only reduces one
-settled observation against the immutable baseline and owns no lifecycle or
-history.
+compatibility wait orchestration exists. `PredicateWait.Execution` directly
+owns `PredicateWaitLifecycleMachine` and its evolving state;
+`PredicateObservationStreamState` only reduces one settled observation against
+the immutable baseline and owns no lifecycle or history.
 
 ## Screen Boundaries
 

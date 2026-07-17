@@ -15,15 +15,75 @@ public enum ErrorKind: String, Codable, Sendable, CaseIterable {
     case general
 }
 
+struct ReportAdmissionError: Error, Sendable, CustomStringConvertible {
+    let description: String
+}
+
 /// Structured payload for server-broadcast error messages.
+public struct ServerErrorMessage: Codable, Sendable, Equatable, CustomStringConvertible {
+    private let value: String
+
+    public init(validating value: String) throws {
+        self.value = try requireNonEmpty(
+            value,
+            or: ReportAdmissionError(description: "server error message must not be empty")
+        )
+    }
+
+    public init(from decoder: Decoder) throws {
+        self = try decodeSingleValue(from: decoder, admitting: Self.init(validating:))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        try encodeSingleValue(value, to: encoder)
+    }
+
+    public var description: String { value }
+}
+
+extension ServerErrorMessage: ExpressibleByStringLiteral {
+    public init(stringLiteral value: String) {
+        self = requireValidLiteralPayload { try Self(validating: value) }
+    }
+}
+
+public struct ServerErrorRecoveryHint: Codable, Sendable, Equatable, CustomStringConvertible {
+    private let value: String
+
+    public init(validating value: String) throws {
+        self.value = try requireNonEmpty(
+            value,
+            or: ReportAdmissionError(description: "server error recoveryHint must not be empty")
+        )
+    }
+
+    public init(from decoder: Decoder) throws {
+        self = try decodeSingleValue(from: decoder, admitting: Self.init(validating:))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        try encodeSingleValue(value, to: encoder)
+    }
+
+    public var description: String { value }
+}
+
+extension ServerErrorRecoveryHint: ExpressibleByStringLiteral {
+    public init(stringLiteral value: String) {
+        self = requireValidLiteralPayload { try Self(validating: value) }
+    }
+}
+
 public struct ServerError: Codable, Sendable, Equatable {
     public let kind: ErrorKind
-    public let message: String
-    public let recoveryHint: String?
+    public let message: ServerErrorMessage
+    public let recoveryHint: ServerErrorRecoveryHint?
 
-    public init(kind: ErrorKind, message: String, recoveryHint: String? = nil) {
-        precondition(!message.isEmpty, "ServerError message must not be empty")
-        precondition(recoveryHint?.isEmpty != true, "ServerError recoveryHint must not be empty")
+    public init(
+        kind: ErrorKind,
+        message: ServerErrorMessage,
+        recoveryHint: ServerErrorRecoveryHint? = nil
+    ) {
         self.kind = kind
         self.message = message
         self.recoveryHint = recoveryHint
@@ -38,26 +98,11 @@ public struct ServerError: Codable, Sendable, Equatable {
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "server error")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let kind = try container.decode(ErrorKind.self, forKey: .kind)
-        let message = try container.decode(String.self, forKey: .message)
-        let recoveryHint = try container.decodeIfPresent(String.self, forKey: .recoveryHint)
-        guard !message.isEmpty else {
-            throw DecodingError.dataCorruptedError(
-                forKey: .message,
-                in: container,
-                debugDescription: "server error message must not be empty"
-            )
-        }
-        if recoveryHint?.isEmpty == true {
-            throw DecodingError.dataCorruptedError(
-                forKey: .recoveryHint,
-                in: container,
-                debugDescription: "server error recoveryHint must not be empty"
-            )
-        }
-        self.kind = kind
-        self.message = message
-        self.recoveryHint = recoveryHint
+        self.init(
+            kind: try container.decode(ErrorKind.self, forKey: .kind),
+            message: try container.decode(ServerErrorMessage.self, forKey: .message),
+            recoveryHint: try container.decodeIfPresent(ServerErrorRecoveryHint.self, forKey: .recoveryHint)
+        )
     }
 }
 

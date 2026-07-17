@@ -84,20 +84,14 @@ extension TheBrains {
             return .success(
                 payload: .screenshot(payload),
                 message: "Captured screenshot \(Int(payload.width))x\(Int(payload.height))",
-                evidence: ActionResultSuccessEvidence(
-                    observation: .none,
-                    timing: ActionPerformanceTiming(totalMs: elapsedMilliseconds(since: start))
-                )
+                timing: ActionPerformanceTiming(totalMs: elapsedMilliseconds(since: start))
             )
         case .failure(let failure):
             return .failure(
                 method: .takeScreenshot,
                 errorKind: failure.errorKind,
                 message: failure.message,
-                evidence: ActionResultFailureEvidence(
-                    observation: .none,
-                    timing: ActionPerformanceTiming(totalMs: elapsedMilliseconds(since: start))
-                )
+                timing: ActionPerformanceTiming(totalMs: elapsedMilliseconds(since: start))
             )
         }
     }

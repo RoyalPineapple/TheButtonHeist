@@ -174,15 +174,14 @@ extension TheBrains {
         switch result.state {
         case .success(let payload, _):
             guard let payload else {
-                return .success(method: result.method, message: result.message, evidence: .none)
+                return .success(method: result.method, message: result.message)
             }
-            return .success(payload: payload, message: result.message, evidence: .none)
+            return .success(payload: payload, message: result.message)
         case .failure(let failureKind):
             return .failure(
                 method: result.method,
                 errorKind: Self.actionErrorKind(for: failureKind),
-                message: result.message,
-                evidence: .none
+                message: result.message
             )
         }
     }
@@ -234,26 +233,8 @@ extension TheBrains {
         guard semanticObservationIsActive else {
             return runtimeInactiveResult(method: .wait)
         }
-        let receipt = await waitForPredicate(step)
-        return receipt.actionResult
-    }
-
-    func waitForPredicate(
-        _ step: ResolvedWaitRuntimeInput,
-        initialTrace: AccessibilityTrace? = nil,
-        baselineSequence: SettledObservationSequence? = nil,
-        changeBaseline: PredicateChangeBaselineSource = .establishFromFirstObservation,
-        announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly,
-        onReadyToPoll: PredicateWait.ReadyToPoll? = nil
-    ) async -> HeistWaitReceipt {
-        await interactionObservation.waitForPredicate(
-            step,
-            initialTrace: initialTrace,
-            baselineSequence: baselineSequence,
-            changeBaseline: changeBaseline,
-            announcementCursorStrategy: announcementCursorStrategy,
-            onReadyToPoll: onReadyToPoll
-        )
+        let receipt = await interactionObservation.waitForPredicate(step)
+        return receipt.result.actionResult
     }
 
     nonisolated static func actionErrorKind(for failureKind: TheSafecracker.FailureKind) -> ErrorKind {

@@ -41,19 +41,21 @@ extension TheBrains {
             predicate: step.predicateExpression,
             timeout: step.timeout
         )
-        let candidate = HeistExecutionStepResult.admitRepeatUntil(
+        let construction = HeistExecutionStepResult.construct(
             path: context.path,
             durationMs: durationMs,
-            declaration: declaration,
-            completion: .failed(evidence: .unavailable, failure: HeistFailureDetail(
-                category: .loop,
-                contract: "repeat_until execution reaches a terminal state",
-                observed: observed,
-                expected: "terminal repeat_until state"
-            ))
+            node: .repeatUntil(
+                declaration: declaration,
+                completion: .failed(evidence: .unavailable, failure: HeistFailureDetail(
+                    category: .loop,
+                    contract: "repeat_until execution reaches a terminal state",
+                    observed: observed,
+                    expected: "terminal repeat_until state"
+                ))
+            )
         )
-        return admittedReceipt(
-            candidate,
+        return receiptResult(
+            construction,
             path: context.path,
             durationMs: durationMs
         )
@@ -67,19 +69,21 @@ extension TheBrains {
     ) -> HeistExecutionStepResult {
         let durationMs = elapsedMilliseconds(since: start)
         let declaration = HeistRepeatUntilDeclaration(step)
-        let candidate = HeistExecutionStepResult.admitRepeatUntil(
+        let construction = HeistExecutionStepResult.construct(
             path: path,
             durationMs: durationMs,
-            declaration: declaration,
-            completion: .failed(evidence: .unavailable, failure: HeistFailureDetail(
-                category: .validation,
-                contract: "repeat_until predicate resolves before evaluation",
-                observed: "could not resolve heist repeat_until predicate: \(error)",
-                expected: step.predicate.description
-            ))
+            node: .repeatUntil(
+                declaration: declaration,
+                completion: .failed(evidence: .unavailable, failure: HeistFailureDetail(
+                    category: .validation,
+                    contract: "repeat_until predicate resolves before evaluation",
+                    observed: "could not resolve heist repeat_until predicate: \(error)",
+                    expected: step.predicate.description
+                ))
+            )
         )
-        return admittedReceipt(
-            candidate,
+        return receiptResult(
+            construction,
             path: path,
             durationMs: durationMs
         )

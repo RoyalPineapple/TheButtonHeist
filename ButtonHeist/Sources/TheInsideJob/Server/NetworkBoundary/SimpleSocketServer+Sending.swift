@@ -99,7 +99,15 @@ extension SimpleSocketServer {
             sendLogger.error("Failed to decode oversized response envelope for client \(clientId): \(error.localizedDescription); dropping")
             return
         }
-        let message = "Response too large to send over the socket (\(byteCount) bytes)"
+        let message: ServerErrorMessage
+        do {
+            message = try ServerErrorMessage(
+                validating: "Response too large to send over the socket (\(byteCount) bytes)"
+            )
+        } catch {
+            sendLogger.error("Failed to admit oversized-response error for client \(clientId): \(error)")
+            return
+        }
         sendErrorEnvelope(
             clientId: clientId,
             envelope: ResponseEnvelope(

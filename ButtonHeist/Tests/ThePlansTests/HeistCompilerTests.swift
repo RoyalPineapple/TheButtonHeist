@@ -392,6 +392,10 @@ struct HeistCompilerTests {
                         Case(.missing(.label("Loading"))) {
                             Warn("loaded")
                         }
+
+                        Else {
+                            Warn("loading")
+                        }
                     }
                 }
             }

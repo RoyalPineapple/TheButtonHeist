@@ -1,4 +1,5 @@
 import XCTest
+import ThePlans
 @testable import TheScore
 
 final class ActionResultEvidenceContractTests: XCTestCase {
@@ -12,19 +13,19 @@ final class ActionResultEvidenceContractTests: XCTestCase {
             .announcement("Ready"),
             .trace(complete),
             .trace(incomplete),
-            .settledTrace(incomplete, .settled(durationMs: 12)),
+            .settledTrace(incomplete, .settled(duration: 12)),
         ]
 
         for observation in observations {
             let results = [
                 ActionResult.success(
                     method: .wait,
-                    evidence: ActionResultSuccessEvidence(observation: observation)
+                    observation: observation
                 ),
                 ActionResult.failure(
                     method: .wait,
                     errorKind: .timeout,
-                    evidence: ActionResultFailureEvidence(observation: observation)
+                    observation: observation
                 ),
             ]
             for result in results {
@@ -40,11 +41,9 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         let result = ActionResult.success(
             method: .activate,
             message: "done",
-            evidence: ActionResultSuccessEvidence(
-                observation: .settledTrace(traceEvidence, .settled(durationMs: 125)),
-                timing: ActionPerformanceTiming(actionDispatchMs: 4),
-                warning: .activationWeakAffordance(evidence: "label=Checkout")
-            )
+            observation: .settledTrace(traceEvidence, .settled(duration: 125)),
+            subjectEvidence: try weakActivationSubjectEvidence(),
+            timing: ActionPerformanceTiming(actionDispatchMs: 4)
         )
 
         let encoded = try JSONEncoder().encode(result)
@@ -56,7 +55,7 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         let timing = try XCTUnwrap(evidence["timing"] as? [String: Any])
 
         XCTAssertEqual(Set(object.keys), Set(["outcome", "method", "message", "evidence"]))
-        XCTAssertEqual(Set(evidence.keys), Set(["observation", "timing", "warning"]))
+        XCTAssertEqual(Set(evidence.keys), Set(["observation", "subjectEvidence", "timing", "warning"]))
         XCTAssertEqual(observation["kind"] as? String, "settledTrace")
         XCTAssertEqual(Set(observation.keys), Set(["kind", "traceEvidence", "settlement"]))
         XCTAssertEqual(Set(encodedTraceEvidence.keys), Set(["accessibilityTrace", "completeness"]))
@@ -72,8 +71,8 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         XCTAssertEqual(decoded, result)
         XCTAssertEqual(decoded.announcement, "Checkout")
         XCTAssertEqual(decoded.settleTimeMs, 125)
-        XCTAssertEqual(decoded.timing?.settleMs, 125)
-        XCTAssertEqual(decoded.warning, .activationWeakAffordance(evidence: "label=Checkout"))
+        XCTAssertEqual(decoded.timing?.actionDispatchMs, 4)
+        XCTAssertEqual(decoded.warning?.code, "activation_weak_affordance_evidence")
     }
 
     func testFailureEvidenceRoundTripsWithExplicitAbsence() throws {
@@ -81,7 +80,6 @@ final class ActionResultEvidenceContractTests: XCTestCase {
             method: .wait,
             errorKind: .timeout,
             message: "timed out",
-            evidence: .none
         )
 
         let decoded = try JSONDecoder().decode(ActionResult.self, from: JSONEncoder().encode(result))
@@ -91,13 +89,14 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         XCTAssertNil(decoded.accessibilityTrace)
         XCTAssertNil(decoded.announcement)
         XCTAssertNil(decoded.warning)
-        XCTAssertEqual(decoded.evidence, .failure(.timeout, .none))
+        XCTAssertNil(decoded.evidence.subjectEvidence)
+        XCTAssertNil(decoded.evidence.timing)
     }
 
     func testStandaloneAnnouncementIsTheOnlyAnnouncementFact() throws {
         let result = ActionResult.success(
             method: .wait,
-            evidence: ActionResultSuccessEvidence(observation: .announcement("Ready"))
+            observation: .announcement("Ready")
         )
 
         let encoded = try JSONEncoder().encode(result)
@@ -117,32 +116,11 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         let trace = traceWithAnnouncement("Checkout")
         let result = ActionResult.success(
             method: .activate,
-            evidence: ActionResultSuccessEvidence(
-                observation: .trace(traceEvidence(trace, completeness: .incomplete))
-            )
+            observation: .trace(traceEvidence(trace, completeness: .incomplete))
         )
 
         XCTAssertEqual(result.announcement, "Checkout")
         XCTAssertEqual(result.capturedAnnouncement, trace.capturedAnnouncements.first)
-    }
-
-    func testWithTimingUpdatesSettlementOwnerWithoutStoringDuplicate() {
-        let trace = traceWithAnnouncement("Checkout")
-        let traceEvidence = traceEvidence(trace, completeness: .incomplete)
-        let result = ActionResult.success(
-            method: .activate,
-            evidence: ActionResultSuccessEvidence(
-                observation: .settledTrace(traceEvidence, .settled(durationMs: 5)),
-                timing: ActionPerformanceTiming(actionDispatchMs: 1)
-            )
-        )
-
-        let timed = result.withTiming(ActionPerformanceTiming(actionDispatchMs: 2, settleMs: 8))
-
-        XCTAssertEqual(timed.evidence.settlement?.durationMs, 8)
-        XCTAssertNil(timed.evidence.timing?.settleMs)
-        XCTAssertEqual(timed.timing?.actionDispatchMs, 2)
-        XCTAssertEqual(timed.timing?.settleMs, 8)
     }
 
     func testObservationDiscriminatorRejectsFieldsFromAnotherCase() {
@@ -183,7 +161,10 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         """)
     }
 
-    func testEvidenceDecodingRejectsEmptyAnnouncement() throws {
+    func testAnnouncementAdmissionRejectsEmptySourceAndJSONValues() throws {
+        XCTAssertThrowsError(try ActionAnnouncementText(validating: "")) { error in
+            XCTAssertEqual(String(describing: error), "action announcement must not be empty")
+        }
         let json = """
         {
           "outcome": {"kind": "success"},
@@ -199,6 +180,19 @@ final class ActionResultEvidenceContractTests: XCTestCase {
                 return XCTFail("Expected DecodingError.dataCorrupted, got \(error)")
             }
         }
+    }
+
+    func testSettlementDurationAdmissionRejectsNegativeSourceAndJSONValues() {
+        XCTAssertThrowsError(try ActionSettlementDuration(validatingMilliseconds: -1)) { error in
+            XCTAssertEqual(
+                String(describing: error),
+                "action settlement duration must not be negative"
+            )
+        }
+        XCTAssertThrowsError(try JSONDecoder().decode(
+            ActionSettlementEvidence.self,
+            from: Data(#"{"kind":"settled","durationMs":-1}"#.utf8)
+        ))
     }
 
     private func assertActionResultRejects(
@@ -235,6 +229,29 @@ final class ActionResultEvidenceContractTests: XCTestCase {
             )
         )
         return AccessibilityTrace(captures: [first, second])
+    }
+
+    private func weakActivationSubjectEvidence() throws -> ActionSubjectEvidence {
+        let target = try AccessibilityTarget
+            .predicate(ElementPredicateTemplate(label: "Checkout"))
+            .resolve(in: .empty)
+        return ActionSubjectEvidence(
+            source: .resolvedSemanticTarget,
+            target: target,
+            element: HeistElement(
+                description: "Checkout",
+                label: "Checkout",
+                value: nil,
+                identifier: nil,
+                traits: [.staticText],
+                frameX: 0,
+                frameY: 0,
+                frameWidth: 100,
+                frameHeight: 44,
+                actions: []
+            ),
+            resolution: ActionSubjectResolution(origin: .visible)
+        )
     }
 
     private func traceEvidence(

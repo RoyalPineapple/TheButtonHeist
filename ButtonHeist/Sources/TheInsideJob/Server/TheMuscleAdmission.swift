@@ -184,7 +184,14 @@ struct TheMuscleAdmission {
         case .rateLimited(shouldNotify: false):
             return [.log(.rateLimited(clientId: clientId))]
         case .rateLimited(shouldNotify: true):
-            let message = "Rate limited: max \(MessageRateLimiter.defaultMaxMessagesPerSecond) messages per second"
+            let message: ServerErrorMessage
+            do {
+                message = try ServerErrorMessage(
+                    validating: "Rate limited: max \(MessageRateLimiter.defaultMaxMessagesPerSecond) messages per second"
+                )
+            } catch {
+                return [.log(.rateLimited(clientId: clientId))]
+            }
             return [
                 .log(.rateLimited(clientId: clientId)),
                 .sendResponse(

@@ -298,14 +298,14 @@ private struct HeistExecutionMetricProjectionBuilder {
         switch node.step.node {
         case .action:
             guard let evidence = node.step.actionEvidence else { return }
-            appendActionTiming(evidence.dispatchResult?.timing, node: node)
+            appendActionTiming(evidence.dispatchResult, node: node)
             if let expectationResult = evidence.expectationResult {
-                appendWaitTiming(expectationResult.timing, node: node)
+                appendWaitTiming(expectationResult, node: node)
                 append(.expectationWaitMs, valueMs: expectationResult.timing?.totalMs, node: node)
             }
         case .wait(_, let timeout, _):
             guard let evidence = node.step.waitEvidence else { return }
-            appendWaitTiming(evidence.actionResult.timing, node: node)
+            appendWaitTiming(evidence.actionResult, node: node)
             appendCeiling(
                 .intentWaitTimeout,
                 budgetMs: Self.milliseconds(seconds: timeout.seconds),
@@ -314,7 +314,7 @@ private struct HeistExecutionMetricProjectionBuilder {
             )
         case .repeatUntil(let declaration, _), .repeatUntilIteration(let declaration, _):
             guard let evidence = node.step.repeatUntilEvidence else { return }
-            appendWaitTiming(evidence.actionResult?.timing, node: node)
+            appendWaitTiming(evidence.actionResult, node: node)
             appendCeiling(
                 .repeatUntilTimeout,
                 budgetMs: Self.milliseconds(seconds: declaration.timeout.seconds),
@@ -326,7 +326,7 @@ private struct HeistExecutionMetricProjectionBuilder {
         case .invocation:
             guard let evidence = node.step.invocationEvidence else { return }
             let expectationResult = evidence.waitEvidence?.actionResult ?? evidence.expectationActionResult
-            appendWaitTiming(expectationResult?.timing, node: node)
+            appendWaitTiming(expectationResult, node: node)
             append(.expectationWaitMs, valueMs: expectationResult?.timing?.totalMs, node: node)
         case .conditional:
             guard let evidence = node.step.caseSelectionEvidence else { return }
@@ -361,24 +361,24 @@ private struct HeistExecutionMetricProjectionBuilder {
         ))
     }
 
-    private mutating func appendActionTiming(_ timing: ActionPerformanceTiming?, node: HeistExecutionEvidenceNode) {
-        guard let timing else { return }
-        append(.actionPipelineTargetResolutionMs, valueMs: timing.targetResolutionMs, node: node)
-        append(.actionPipelineActionDispatchMs, valueMs: timing.actionDispatchMs, node: node)
-        append(.actionPipelineSettleMs, valueMs: timing.settleMs, node: node)
-        append(.actionPipelineBeforeObservationMs, valueMs: timing.beforeObservationMs, node: node)
-        append(.actionPipelineFinalSemanticEvidenceMs, valueMs: timing.finalSemanticEvidenceMs, node: node)
-        append(.actionPipelineTotalMs, valueMs: timing.totalMs, node: node)
+    private mutating func appendActionTiming(_ result: ActionResult?, node: HeistExecutionEvidenceNode) {
+        guard let result else { return }
+        append(.actionPipelineTargetResolutionMs, valueMs: result.timing?.targetResolutionMs, node: node)
+        append(.actionPipelineActionDispatchMs, valueMs: result.timing?.actionDispatchMs, node: node)
+        append(.actionPipelineSettleMs, valueMs: result.settleTimeMs, node: node)
+        append(.actionPipelineBeforeObservationMs, valueMs: result.timing?.beforeObservationMs, node: node)
+        append(.actionPipelineFinalSemanticEvidenceMs, valueMs: result.timing?.finalSemanticEvidenceMs, node: node)
+        append(.actionPipelineTotalMs, valueMs: result.timing?.totalMs, node: node)
     }
 
-    private mutating func appendWaitTiming(_ timing: ActionPerformanceTiming?, node: HeistExecutionEvidenceNode) {
-        guard let timing else { return }
-        append(.waitPipelineTargetResolutionMs, valueMs: timing.targetResolutionMs, node: node)
-        append(.waitPipelineActionDispatchMs, valueMs: timing.actionDispatchMs, node: node)
-        append(.waitPipelineSettleMs, valueMs: timing.settleMs, node: node)
-        append(.waitPipelineBeforeObservationMs, valueMs: timing.beforeObservationMs, node: node)
-        append(.waitPipelineFinalSemanticEvidenceMs, valueMs: timing.finalSemanticEvidenceMs, node: node)
-        append(.waitPipelineTotalMs, valueMs: timing.totalMs, node: node)
+    private mutating func appendWaitTiming(_ result: ActionResult?, node: HeistExecutionEvidenceNode) {
+        guard let result else { return }
+        append(.waitPipelineTargetResolutionMs, valueMs: result.timing?.targetResolutionMs, node: node)
+        append(.waitPipelineActionDispatchMs, valueMs: result.timing?.actionDispatchMs, node: node)
+        append(.waitPipelineSettleMs, valueMs: result.settleTimeMs, node: node)
+        append(.waitPipelineBeforeObservationMs, valueMs: result.timing?.beforeObservationMs, node: node)
+        append(.waitPipelineFinalSemanticEvidenceMs, valueMs: result.timing?.finalSemanticEvidenceMs, node: node)
+        append(.waitPipelineTotalMs, valueMs: result.timing?.totalMs, node: node)
     }
 
     private mutating func appendCeiling(

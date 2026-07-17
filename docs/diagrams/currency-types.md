@@ -3,7 +3,7 @@
 The type families that carry UI state through the system, and the hard border between internal types and wire types. This diagram answers "which type do I pass here, and which types are allowed to cross the network?"
 
 **Illustrates:** [ARCHITECTURE.md](../ARCHITECTURE.md), [API.md](../API.md)
-**Source of truth:** `submodules/AccessibilitySnapshotBH/AccessibilitySnapshotModel/Sources/AccessibilitySnapshotModel/`, `ButtonHeist/Sources/TheScore/Core/AccessibilityHierarchy+Traversal.swift`, `ButtonHeist/Sources/TheInsideJob/TheStash/InterfaceObservation.swift`, `ButtonHeist/Sources/TheInsideJob/TheStash/InterfaceTree.swift`, `ButtonHeist/Sources/TheInsideJob/TheStash/SemanticObservationLog.swift`, `ButtonHeist/Sources/TheInsideJob/TheStash/TheStash.swift`, `ButtonHeist/Sources/TheInsideJob/TheStash/IdAssignment.swift`, `ButtonHeist/Sources/TheScore/Wire/InterfaceModels.swift`, `ButtonHeist/Sources/ThePlans/Model/AccessibilityTarget.swift`
+**Source of truth:** `submodules/AccessibilitySnapshotBH/AccessibilitySnapshotModel/Sources/AccessibilitySnapshotModel/`, `ButtonHeist/Sources/TheScore/Core/AccessibilityHierarchy+Traversal.swift`, `ButtonHeist/Sources/TheScore/Core/ElementPredicate+HeistElement.swift`, `ButtonHeist/Sources/TheInsideJob/TheStash/InterfaceObservation.swift`, `ButtonHeist/Sources/TheInsideJob/TheStash/InterfaceTree.swift`, `ButtonHeist/Sources/TheInsideJob/TheStash/SemanticObservationLog.swift`, `ButtonHeist/Sources/TheInsideJob/TheStash/TheStash.swift`, `ButtonHeist/Sources/TheInsideJob/TheStash/TheStash+TargetResolution.swift`, `ButtonHeist/Sources/TheInsideJob/TheStash/IdAssignment.swift`, `ButtonHeist/Sources/TheScore/Wire/InterfaceModels.swift`, `ButtonHeist/Sources/ThePlans/Model/AccessibilityTarget.swift`
 
 ```mermaid
 flowchart TD
@@ -37,12 +37,21 @@ flowchart TD
         ET --> EP
     end
 
+    subgraph matching["Shared target matching (TheScore values)"]
+        INPUT["AccessibilityTargetMatchInput<br/>ordered elements + containers + paths"]
+        MATCH["AccessibilityTargetMatchGraph<br/>element + container + within + ordinal"]
+        INPUT --> MATCH
+    end
+
     CLIENT["CLI / MCP / DSL client"]
 
     STASH -- "wire conversion" --> IFACE
     IFACE -- "get_interface response" --> CLIENT
     CLIENT -- "actions, waits, expectations,<br/>CLI/MCP, subtree queries" --> ET
-    ET -- "one delivered-tree resolver" --> STASH
+    IFACE --> INPUT
+    TREE -- "private host adapter" --> INPUT
+    ET --> MATCH
+    MATCH -- "host paths map back to<br/>tree + live evidence" --> STASH
 ```
 
 Notes:
@@ -53,10 +62,13 @@ Notes:
 - `TheStash` owns one `InterfaceTree`, one retained `SemanticObservationLog`,
   one latest live observation, and optional failed-settle diagnostic evidence.
   There is no parallel screen/query store or semantic back map.
-- Each delivered `Interface` validates and stores one package `InterfaceGraph`.
-  Client matching and formatting derive from that graph. Host subtree requests
-  resolve against `TheStash.interfaceTree` before wire projection re-roots the
-  selected path.
+- Each delivered `Interface` validates and stores one package `InterfaceGraph`
+  for structural hierarchy operations and formatting. Both that delivered value
+  and the host's private `InterfaceTree` adapter produce
+  `AccessibilityTargetMatchInput`; one `AccessibilityTargetMatchGraph` evaluates
+  element, container, descendant, and ordinal semantics. Host results map back
+  to `TheStash.interfaceTree` and current live evidence before wire projection
+  re-roots a selected subtree.
 - Element inflation resolves an `AccessibilityTarget` once, then carries a
   `CommittedElementTarget` with the exact capture-local `HeistId` and one
   graph-derived deadline. Refresh and dispatch use that id; they do not choose a

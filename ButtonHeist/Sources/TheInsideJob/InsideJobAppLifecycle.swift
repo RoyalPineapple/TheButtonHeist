@@ -129,25 +129,25 @@ extension TheInsideJob {
                 let transport = self.makeRuntimeTransport()
                 startedTransport = transport
 
-                let startChange = self.applyLifecycleEvent(
-                    .resumeTransportRequested(
-                        resumeID,
-                        transport: transport,
-                        idleTimerBaseline: suspendedRuntime.idleTimerBaseline
-                    )
+                let request = InsideJobTransportStartRequest(
+                    id: resumeID,
+                    phase: .resume,
+                    transport: transport,
+                    idleTimerBaseline: suspendedRuntime.idleTimerBaseline
                 )
-                guard startChange.singleEffect != nil else {
+                let startChange = self.applyLifecycleEvent(.resumeTransportRequested(request))
+                guard case .changed = startChange else {
                     await self.cleanupFailedTransportStartup(startedTransport)
                     return
                 }
 
-                let resources = try await self.startRuntimeResources(from: startChange.effects)
+                let resources = try await self.startRuntimeResources(for: request)
                 startedTransport = resources.transport
 
                 try Task.checkCancellation()
 
                 let finishChange = self.applyLifecycleEvent(.resumeSucceeded(resumeID, resources))
-                guard finishChange.effects.contains(.activateRuntime(resources)) else {
+                guard case .running = finishChange.state else {
                     await self.cleanupFailedTransportStartup(startedTransport)
                     return
                 }

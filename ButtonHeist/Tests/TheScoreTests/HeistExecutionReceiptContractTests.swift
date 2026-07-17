@@ -12,6 +12,8 @@ import TheScore
             HeistReceiptFixture.explicitFailure(path: "$.body[2]", message: "stop"),
         ] + relationshipSteps()
 
+        #expect(steps[1].kind == .warn)
+        #expect(steps[2].kind == .fail)
         for step in steps {
             let data = try JSONEncoder().encode(step)
             #expect(try JSONDecoder().decode(HeistExecutionStepResult.self, from: data) == step)
@@ -92,7 +94,7 @@ import TheScore
         ) == result)
     }
 
-    @Test func `element loop limit admits only explicit over-limit failure evidence`() throws {
+    @Test func `element loop construction accepts only explicit over-limit failure evidence`() throws {
         let declaration = try #require(HeistForEachElementDeclaration(
             parameter: "item",
             matching: ElementPredicateTemplate(label: "Row"),
@@ -108,25 +110,36 @@ import TheScore
             failureReason: "matched count exceeded limit"
         ).flatMap(HeistFailedForEachElementEvidence.init)
 
-        #expect(HeistExecutionStepResult.admitForEachElement(
+        let invalid = HeistExecutionStepResult.construct(
             path: "$.body[0]",
             durationMs: 1,
-            declaration: declaration,
-            completion: .passed(evidence: try #require(passedEvidence))
-        ) == .rejected(.forEachElementEvidenceMismatch))
-        #expect(HeistExecutionStepResult.admitForEachElement(
+            node: .forEachElement(
+                declaration: declaration,
+                completion: .passed(evidence: try #require(passedEvidence))
+            )
+        )
+        guard case .failure(let error) = invalid else {
+            Issue.record("Expected over-limit passing evidence to be rejected")
+            return
+        }
+        #expect(error == .forEachElementEvidenceMismatch)
+
+        let valid = try HeistExecutionStepResult.construct(
             path: "$.body[0]",
             durationMs: 1,
-            declaration: declaration,
-            completion: .failed(
-                evidence: .observed(try #require(failedEvidence)),
-                failure: .init(
-                    category: .loop,
-                    contract: "matched count does not exceed limit",
-                    observed: "matched count exceeded limit"
+            node: .forEachElement(
+                declaration: declaration,
+                completion: .failed(
+                    evidence: .observed(try #require(failedEvidence)),
+                    failure: .init(
+                        category: .loop,
+                        contract: "matched count does not exceed limit",
+                        observed: "matched count exceeded limit"
+                    )
                 )
             )
-        ).receipt != nil)
+        ).get()
+        #expect(valid.kind == .forEachElement)
     }
 
     private func jsonObject<Value: Encodable>(_ value: Value) throws -> [String: Any] {
@@ -168,13 +181,15 @@ import TheScore
         let passedRepeatIteration = try #require(HeistPassedRepeatUntilIterationEvidence(repeatIteration))
 
         return [
-            HeistReceiptFixture.action(command: .dismiss, result: .success(method: .dismiss, evidence: .none)),
-            try #require(HeistExecutionStepResult.admitForEachString(
+            HeistReceiptFixture.action(command: .dismiss, result: .success(method: .dismiss)),
+            try HeistExecutionStepResult.construct(
                 path: "$.body[1]",
                 durationMs: 1,
-                declaration: stringDeclaration,
-                completion: .passed(evidence: passedStringSummary)
-            ).receipt),
+                node: .forEachString(
+                    declaration: stringDeclaration,
+                    completion: .passed(evidence: passedStringSummary)
+                )
+            ).get(),
             HeistReceiptFixture.forEachStringIteration(
                 path: "$.body[2].for_each_string.iterations[0]",
                 count: 2,
@@ -184,30 +199,38 @@ import TheScore
                 status: .passed,
                 children: []
             ),
-            try #require(HeistExecutionStepResult.admitForEachElement(
+            try HeistExecutionStepResult.construct(
                 path: "$.body[3]",
                 durationMs: 1,
-                declaration: elementDeclaration,
-                completion: .passed(evidence: passedElementSummary)
-            ).receipt),
-            try #require(HeistExecutionStepResult.admitForEachElementIteration(
+                node: .forEachElement(
+                    declaration: elementDeclaration,
+                    completion: .passed(evidence: passedElementSummary)
+                )
+            ).get(),
+            try HeistExecutionStepResult.construct(
                 path: "$.body[4].for_each_element.iterations[0]",
                 durationMs: 1,
-                declaration: elementDeclaration,
-                completion: .passed(evidence: passedElementIteration)
-            ).receipt),
-            try #require(HeistExecutionStepResult.admitRepeatUntil(
+                node: .forEachElementIteration(
+                    declaration: elementDeclaration,
+                    completion: .passed(evidence: passedElementIteration)
+                )
+            ).get(),
+            try HeistExecutionStepResult.construct(
                 path: "$.body[5]",
                 durationMs: 1,
-                declaration: repeatDeclaration,
-                completion: .passed(evidence: passedRepeatSummary)
-            ).receipt),
-            try #require(HeistExecutionStepResult.admitRepeatUntilIteration(
+                node: .repeatUntil(
+                    declaration: repeatDeclaration,
+                    completion: .passed(evidence: passedRepeatSummary)
+                )
+            ).get(),
+            try HeistExecutionStepResult.construct(
                 path: "$.body[6].repeat_until.iterations[0]",
                 durationMs: 1,
-                declaration: repeatDeclaration,
-                completion: .passed(evidence: passedRepeatIteration)
-            ).receipt),
+                node: .repeatUntilIteration(
+                    declaration: repeatDeclaration,
+                    completion: .passed(evidence: passedRepeatIteration)
+                )
+            ).get(),
         ]
     }
 

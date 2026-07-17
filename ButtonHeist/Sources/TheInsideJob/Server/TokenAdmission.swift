@@ -1,6 +1,5 @@
 import Foundation
 
-import ButtonHeistSupport
 import TheScore
 
 /// Owns token policy and per-address auth admission state for `TheMuscle`.
@@ -33,13 +32,11 @@ struct TokenAdmission {
         address: String,
         now: Date = Date()
     ) -> TokenDecision {
-        switch transitionAddress(address, with: .checkLockout(now: now)).singleAddressEffect {
+        switch checkLockout(for: address, now: now) {
         case .proceed:
             break
         case .lockedOut:
             return .lockedOut(lockoutError())
-        case .accepted, .invalidToken, .lockoutStarted:
-            preconditionFailure("Lockout check emitted an invalid token decision effect.")
         }
 
         guard constantTimeEqual(token, tokenSource.token) else {
@@ -48,41 +45,48 @@ struct TokenAdmission {
                 message: tokenSource.invalidTokenMessage,
                 recoveryHint: tokenSource.configuredTokenRecoveryHint
             )
-            switch transitionAddress(address, with: .rejectToken(now: now)).singleAddressEffect {
+            switch rejectToken(for: address, now: now) {
             case .invalidToken(let attempts):
                 return .rejected(.invalidToken(error: error, attempts: attempts))
             case .lockoutStarted(let attempts):
                 return .rejected(.lockoutStarted(error: error, attempts: attempts))
             case .lockedOut:
                 return .lockedOut(lockoutError())
-            case .proceed, .accepted:
-                preconditionFailure("Token rejection emitted an invalid address auth effect.")
             }
         }
 
-        switch transitionAddress(address, with: .acceptToken).singleAddressEffect {
-        case .accepted:
-            break
-        case .proceed, .invalidToken, .lockoutStarted, .lockedOut:
-            preconditionFailure("Token acceptance emitted an invalid address auth effect.")
-        }
+        acceptToken(for: address)
         return .accepted(owner: tokenSource.owner(driverId: driverId))
     }
 
-    private mutating func transitionAddress(
-        _ address: String,
-        with event: AddressAuthenticationFailureMachine.Event
-    ) -> AddressAuthenticationTransition {
-        var driver = StateDriver(
-            initial: addressAuthState(for: address),
-            machine: AddressAuthenticationFailureMachine(
-                maxFailedAttempts: maxFailedAttempts,
-                lockoutDuration: lockoutDuration
-            )
+    private var addressAuthenticationMachine: AddressAuthenticationFailureMachine {
+        AddressAuthenticationFailureMachine(
+            maxFailedAttempts: maxFailedAttempts,
+            lockoutDuration: lockoutDuration
         )
-        let change = driver.send(event)
-        storeAddressAuthState(driver.state, for: address)
-        return AddressAuthenticationTransition(change)
+    }
+
+    private mutating func checkLockout(
+        for address: String,
+        now: Date
+    ) -> AddressAuthenticationFailureMachine.LockoutEffect {
+        let transition = addressAuthenticationMachine.checkLockout(addressAuthState(for: address), now: now)
+        storeAddressAuthState(transition.state, for: address)
+        return transition.effect
+    }
+
+    private mutating func rejectToken(
+        for address: String,
+        now: Date
+    ) -> AddressAuthenticationFailureMachine.RejectionEffect {
+        let transition = addressAuthenticationMachine.rejectToken(addressAuthState(for: address), now: now)
+        storeAddressAuthState(transition.state, for: address)
+        return transition.effect
+    }
+
+    private mutating func acceptToken(for address: String) {
+        let state = addressAuthenticationMachine.acceptToken(addressAuthState(for: address))
+        storeAddressAuthState(state, for: address)
     }
 
     private func addressAuthState(for address: String) -> AddressAuthenticationFailureMachine.State {
@@ -117,7 +121,7 @@ struct TokenAdmission {
     }
 }
 
-private struct AddressAuthenticationFailureMachine: SimpleStateMachine {
+private struct AddressAuthenticationFailureMachine {
     let maxFailedAttempts: Int
     let lockoutDuration: TimeInterval
 
@@ -127,90 +131,69 @@ private struct AddressAuthenticationFailureMachine: SimpleStateMachine {
         case lockedOut(until: Date, attempts: Int)
     }
 
-    enum Event: Equatable, Sendable {
-        case checkLockout(now: Date)
-        case rejectToken(now: Date)
-        case acceptToken
+    enum LockoutEffect: Equatable, Sendable {
+        case proceed
+        case lockedOut
     }
 
-    enum Effect: Equatable, Sendable {
-        case proceed
-        case accepted
+    enum RejectionEffect: Equatable, Sendable {
         case invalidToken(attempts: Int)
         case lockoutStarted(attempts: Int)
         case lockedOut
     }
 
-    enum Rejection: Equatable, Sendable {}
-
-    func advance(_ state: State, with event: Event) -> StateChange<State, Effect, Rejection> {
-        switch event {
-        case .checkLockout(let now):
-            return checkLockout(state, now: now)
-        case .rejectToken(let now):
-            return rejectToken(state, now: now)
-        case .acceptToken:
-            return .changed(to: .clean, effects: [.accepted])
-        }
+    struct LockoutTransition: Equatable, Sendable {
+        let state: State
+        let effect: LockoutEffect
     }
 
-    private func checkLockout(_ state: State, now: Date) -> StateChange<State, Effect, Rejection> {
+    struct RejectionTransition: Equatable, Sendable {
+        let state: State
+        let effect: RejectionEffect
+    }
+
+    func checkLockout(_ state: State, now: Date) -> LockoutTransition {
         switch state {
         case .clean, .failing:
-            return .changed(to: state, effects: [.proceed])
+            return LockoutTransition(state: state, effect: .proceed)
         case .lockedOut(let expiry, _) where now < expiry:
-            return .changed(to: state, effects: [.lockedOut])
+            return LockoutTransition(state: state, effect: .lockedOut)
         case .lockedOut:
-            return .changed(to: .clean, effects: [.proceed])
+            return LockoutTransition(state: .clean, effect: .proceed)
         }
     }
 
-    private func rejectToken(_ state: State, now: Date) -> StateChange<State, Effect, Rejection> {
+    func rejectToken(_ state: State, now: Date) -> RejectionTransition {
         switch state {
         case .clean:
             return failedAttempt(previousAttempts: 0, now: now)
         case .failing(let attempts):
             return failedAttempt(previousAttempts: attempts, now: now)
         case .lockedOut(let expiry, _) where now < expiry:
-            return .changed(to: state, effects: [.lockedOut])
+            return RejectionTransition(state: state, effect: .lockedOut)
         case .lockedOut:
             return failedAttempt(previousAttempts: 0, now: now)
         }
     }
 
+    func acceptToken(_: State) -> State {
+        .clean
+    }
+
     private func failedAttempt(
         previousAttempts: Int,
         now: Date
-    ) -> StateChange<State, Effect, Rejection> {
+    ) -> RejectionTransition {
         let attempts = previousAttempts + 1
         guard attempts >= maxFailedAttempts else {
-            return .changed(to: .failing(attempts: attempts), effects: [.invalidToken(attempts: attempts)])
+            return RejectionTransition(
+                state: .failing(attempts: attempts),
+                effect: .invalidToken(attempts: attempts)
+            )
         }
-        return .changed(
-            to: .lockedOut(until: now.addingTimeInterval(lockoutDuration), attempts: attempts),
-            effects: [.lockoutStarted(attempts: attempts)]
+        return RejectionTransition(
+            state: .lockedOut(until: now.addingTimeInterval(lockoutDuration), attempts: attempts),
+            effect: .lockoutStarted(attempts: attempts)
         )
-    }
-}
-
-private struct AddressAuthenticationTransition {
-    let state: AddressAuthenticationFailureMachine.State
-    let singleAddressEffect: AddressAuthenticationFailureMachine.Effect
-
-    init(_ change: StateChange<
-        AddressAuthenticationFailureMachine.State,
-        AddressAuthenticationFailureMachine.Effect,
-        AddressAuthenticationFailureMachine.Rejection
-    >) {
-        switch change {
-        case .changed(let state, _):
-            guard let effect = change.singleEffect else {
-                preconditionFailure("AddressAuthenticationFailureMachine must emit exactly one effect.")
-            }
-            self.state = state
-            self.singleAddressEffect = effect
-        case .rejected(let rejection, _):
-            switch rejection {}
-        }
     }
 }

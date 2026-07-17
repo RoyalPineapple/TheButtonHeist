@@ -98,29 +98,27 @@ import TheScore
             command: command,
             result: .success(
                 method: .activate,
-                evidence: ActionResultSuccessEvidence(
                     observation: .settledTrace(
                         makeTestTraceEvidence(
                             .noChangeForTests(elementCount: 0),
                             completeness: .incomplete
                         ),
-                        .settled(durationMs: 3)
+                        .settled(duration: 3)
                     ),
                     timing: actionTiming
-                )
+
             ),
             expectationActionResult: .success(
                 method: .wait,
-                evidence: ActionResultSuccessEvidence(
                     observation: .settledTrace(
                         makeTestTraceEvidence(
                             .noChangeForTests(elementCount: 0),
                             completeness: .complete
                         ),
-                        .settled(durationMs: 8)
+                        .settled(duration: 8)
                     ),
                     timing: expectationTiming
-                )
+
             ),
             expectation: ExpectationResult(met: true, predicate: predicate),
             durationMs: 15
@@ -131,26 +129,27 @@ import TheScore
         let check = try #require(HeistWaitEvidence.MatchedCheck(
             actionResult: .success(
                 method: .wait,
-                evidence: ActionResultSuccessEvidence(
                     observation: .settledTrace(
                         makeTestTraceEvidence(
                             .noChangeForTests(elementCount: 0),
                             completeness: .complete
                         ),
-                        .settled(durationMs: 13)
+                        .settled(duration: 13)
                     ),
                     timing: waitTiming
-                )
+
             ),
             expectation: ExpectationResult.Met(predicate: predicate)
         ))
-        return .wait(
+        return try HeistExecutionStepResult.construct(
             path: try HeistExecutionPath(validating: "$.body[1]"),
             durationMs: 100,
-            predicate: predicate,
-            timeout: 0.1,
-            completion: .passed(evidence: try #require(HeistPassedWaitEvidence(.matched(check))))
-        )
+            node: .wait(
+                predicate: predicate,
+                timeout: 0.1,
+                completion: .passed(evidence: try #require(HeistPassedWaitEvidence(.matched(check))))
+            )
+        ).get()
     }
 
     private func repeatStep(predicate: AccessibilityPredicate) throws -> HeistExecutionStepResult {
@@ -159,27 +158,28 @@ import TheScore
             expectation: ExpectationResult.Met(predicate: predicate),
             actionResult: .success(
                 method: .wait,
-                evidence: ActionResultSuccessEvidence(
                     observation: .settledTrace(
                         makeTestTraceEvidence(
                             .noChangeForTests(elementCount: 0),
                             completeness: .complete
                         ),
-                        .settled(durationMs: 23)
+                        .settled(duration: 23)
                     ),
                     timing: repeatTiming
-                )
+
             )
         ))
         let completion = HeistRepeatUntilCompletion.passed(
             evidence: try #require(HeistPassedRepeatUntilEvidence(evidence))
         )
-        return try #require(HeistExecutionStepResult.admitRepeatUntil(
+        return try HeistExecutionStepResult.construct(
             path: try HeistExecutionPath(validating: "$.body[2]"),
             durationMs: 60,
-            declaration: HeistRepeatUntilDeclaration(predicate: predicate, timeout: 0.05),
-            completion: completion
-        ).receipt)
+            node: .repeatUntil(
+                declaration: HeistRepeatUntilDeclaration(predicate: predicate, timeout: 0.05),
+                completion: completion
+            )
+        ).get()
     }
 
     private func caseSelectionStep() throws -> HeistExecutionStepResult {

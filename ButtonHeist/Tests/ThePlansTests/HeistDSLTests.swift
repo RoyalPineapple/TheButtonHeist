@@ -501,22 +501,24 @@ func `container predicates and scoped targets render canonically`() throws {
 }
 
 @Test
-func singleIfBuildsConditionalStep() throws {
+func singlePredicateIfElseBuildsConditionalStep() throws {
     let heist = try HeistPlan {
-        If {
-            Case(.exists(.label("Allow"))) {
-                Activate(.label("Allow"))
-            }
+        If(.exists(.label("Allow"))) {
+            Activate(.label("Allow"))
+        }
+        .else {
+            Fail("not allowed")
         }
     }
 
     #expect(try heist == HeistPlan(body: [
-        .conditional(try ConditionalStep(cases: [
-            PredicateCase(
+        .conditional(try ConditionalStep(
+            cases: [PredicateCase(
                 predicate: .exists(.label("Allow")),
                 body: [.action(try ActionStep(command: .activate(.label("Allow"))))]
-            ),
-        ])),
+            )],
+            elseBody: [.fail(FailStep(message: "not allowed"))]
+        )),
     ]))
 }
 

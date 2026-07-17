@@ -21,8 +21,7 @@ extension TheBrains {
             return .failure(
                 method: .wait,
                 errorKind: .actionFailed,
-                message: "wait already in progress",
-                evidence: .none
+                message: "wait already in progress"
             )
         }
         defer { finishChangedWait() }
@@ -41,15 +40,14 @@ extension TheBrains {
             return .failure(
                 method: .wait,
                 errorKind: .validationError,
-                message: "could not resolve changed wait predicate: \(error)",
-                evidence: .none
+                message: "could not resolve changed wait predicate: \(error)"
             )
         }
-        let receipt = await waitForPredicate(
+        let receipt = await interactionObservation.waitForPredicate(
             step,
             onReadyToPoll: onReadyToPoll
         )
-        return receipt.actionResult
+        return receipt.result.actionResult
     }
 }
 

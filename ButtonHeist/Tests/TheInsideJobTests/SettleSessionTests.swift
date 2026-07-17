@@ -72,12 +72,12 @@ final class SettleSessionTests: XCTestCase {
     ) -> MachineStep {
         let eventCount = state.events.count
         let transition = machine.advance(state, with: event)
-        state = transition.settleState
+        state = transition.state
         if state.events.count > eventCount {
             ledger.resetCurrentGeneration()
         }
         return MachineStep(
-            effect: transition.settleEffect,
+            effect: transition.effect,
             outcome: SettleSession.outcome(for: transition, observations: ledger)
         )
     }

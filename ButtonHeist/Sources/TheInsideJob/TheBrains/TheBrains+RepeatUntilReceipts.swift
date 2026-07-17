@@ -266,16 +266,18 @@ extension TheBrains {
         context: RepeatUntilReceiptContext,
         completion: HeistRepeatUntilCompletion?
     ) -> HeistExecutionStepResult {
-        let candidate = completion.flatMap { completion in
-            HeistExecutionStepResult.admitRepeatUntil(
+        let construction = completion.map { completion in
+            HeistExecutionStepResult.construct(
                 path: context.path,
                 durationMs: context.durationMs,
-                declaration: context.declaration,
-                completion: completion
+                node: .repeatUntil(
+                    declaration: context.declaration,
+                    completion: completion
+                )
             )
-        }
-        return admittedReceipt(
-            candidate,
+        } ?? .failure(.evidenceConstructionFailed)
+        return receiptResult(
+            construction,
             path: context.path,
             durationMs: context.durationMs,
             children: context.children
@@ -333,45 +335,49 @@ extension TheBrains {
         )
         switch outcome {
         case .predicateMet, .continued:
-            let candidate: HeistReceiptAdmission?
+            let construction: Result<HeistExecutionStepResult, HeistReceiptConstructionError>
             if case .passed(let admittedChildren) = HeistExecutedChildren(children) {
-                candidate = evidence.flatMap(HeistPassedRepeatUntilIterationEvidence.init).flatMap { evidence in
-                    HeistExecutionStepResult.admitRepeatUntilIteration(
+                construction = evidence.flatMap(HeistPassedRepeatUntilIterationEvidence.init).map { evidence in
+                    HeistExecutionStepResult.construct(
                         path: frame.path,
                         durationMs: durationMs,
-                        declaration: declaration,
-                        completion: .passed(evidence: evidence, children: admittedChildren)
+                        node: .repeatUntilIteration(
+                            declaration: declaration,
+                            completion: .passed(evidence: evidence, children: admittedChildren)
+                        )
                     )
-                }
+                } ?? .failure(.evidenceConstructionFailed)
             } else {
-                candidate = nil
+                construction = .failure(.evidenceConstructionFailed)
             }
-            return admittedReceipt(
-                candidate,
+            return receiptResult(
+                construction,
                 path: frame.path,
                 durationMs: durationMs,
                 children: children
             )
         case .failed(expectation: _, childPath: let childPath):
-            let candidate: HeistReceiptAdmission?
+            let construction: Result<HeistExecutionStepResult, HeistReceiptConstructionError>
             if case .aborted(let admittedChildren) = HeistExecutedChildren(children) {
-                candidate = evidence.flatMap(HeistFailedRepeatUntilEvidence.init).flatMap { evidence in
-                    HeistExecutionStepResult.admitRepeatUntilIteration(
+                construction = evidence.flatMap(HeistFailedRepeatUntilEvidence.init).map { evidence in
+                    HeistExecutionStepResult.construct(
                         path: frame.path,
                         durationMs: durationMs,
-                        declaration: declaration,
-                        completion: .childAborted(
-                            evidence: evidence,
-                            failure: childFailureDetail(category: .loop, childPath: childPath),
-                            children: admittedChildren
+                        node: .repeatUntilIteration(
+                            declaration: declaration,
+                            completion: .childAborted(
+                                evidence: evidence,
+                                failure: childFailureDetail(category: .loop, childPath: childPath),
+                                children: admittedChildren
+                            )
                         )
                     )
-                }
+                } ?? .failure(.evidenceConstructionFailed)
             } else {
-                candidate = nil
+                construction = .failure(.evidenceConstructionFailed)
             }
-            return admittedReceipt(
-                candidate,
+            return receiptResult(
+                construction,
                 path: frame.path,
                 durationMs: durationMs,
                 children: children

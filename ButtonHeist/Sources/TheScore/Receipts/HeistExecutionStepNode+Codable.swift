@@ -44,7 +44,7 @@ extension HeistExecutionStepNode {
         case skipped
     }
 
-    init(from decoder: Decoder) throws {
+    package init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist execution step node")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let type = try container.decode(NodeType.self, forKey: .type)
@@ -112,14 +112,12 @@ extension HeistExecutionStepNode {
             semanticKeys: [.type, .command],
             typeName: NodeType.action.rawValue
         )
-        guard let node = admitAction(command: command, completion: completion) else {
-            throw invalidNode(
-                forKey: .evidence,
-                in: container,
-                "action evidence result method must match the receipt command"
-            )
-        }
-        return node
+        return try validated(
+            .action(command: command, completion: completion),
+            forKey: .evidence,
+            in: container,
+            "action evidence result method must match the receipt command"
+        )
     }
 
     private static func decodeForEachElement(
@@ -138,18 +136,15 @@ extension HeistExecutionStepNode {
             semanticKeys: [.type, .parameter, .matching, .limit],
             typeName: type.rawValue
         )
-        guard let node = admitForEachElement(
-            declaration: declaration,
-            completion: completion,
-            iteration: type == .forEachElementIteration
-        ) else {
-            throw invalidNode(
-                forKey: .evidence,
-                in: container,
-                "for_each_element evidence shape must match the receipt node"
-            )
-        }
-        return node
+        let node: Self = type == .forEachElementIteration
+            ? .forEachElementIteration(declaration: declaration, completion: completion)
+            : .forEachElement(declaration: declaration, completion: completion)
+        return try validated(
+            node,
+            forKey: .evidence,
+            in: container,
+            "for_each_element evidence shape must match the receipt node"
+        )
     }
 
     private static func decodeForEachString(
@@ -167,18 +162,15 @@ extension HeistExecutionStepNode {
             semanticKeys: [.type, .parameter, .count],
             typeName: type.rawValue
         )
-        guard let node = admitForEachString(
-            declaration: declaration,
-            completion: completion,
-            iteration: type == .forEachStringIteration
-        ) else {
-            throw invalidNode(
-                forKey: .evidence,
-                in: container,
-                "for_each_string evidence progress and shape must match the receipt declaration"
-            )
-        }
-        return node
+        let node: Self = type == .forEachStringIteration
+            ? .forEachStringIteration(declaration: declaration, completion: completion)
+            : .forEachString(declaration: declaration, completion: completion)
+        return try validated(
+            node,
+            forKey: .evidence,
+            in: container,
+            "for_each_string evidence progress and shape must match the receipt declaration"
+        )
     }
 
     private static func decodeRepeatUntil(
@@ -193,14 +185,12 @@ extension HeistExecutionStepNode {
             semanticKeys: [.type, .predicate, .timeout],
             typeName: NodeType.repeatUntil.rawValue
         )
-        guard let node = admitRepeatUntil(declaration: declaration, completion: completion) else {
-            throw invalidNode(
-                forKey: .evidence,
-                in: container,
-                "repeat_until evidence predicate and shape must match the receipt declaration"
-            )
-        }
-        return node
+        return try validated(
+            .repeatUntil(declaration: declaration, completion: completion),
+            forKey: .evidence,
+            in: container,
+            "repeat_until evidence predicate and shape must match the receipt declaration"
+        )
     }
 
     private static func decodeRepeatUntilIteration(
@@ -215,12 +205,22 @@ extension HeistExecutionStepNode {
             semanticKeys: [.type, .predicate, .timeout],
             typeName: NodeType.repeatUntilIteration.rawValue
         )
-        guard let node = admitRepeatUntil(declaration: declaration, completion: completion) else {
-            throw invalidNode(
-                forKey: .evidence,
-                in: container,
-                "repeat_until iteration evidence predicate and shape must match the receipt declaration"
-            )
+        return try validated(
+            .repeatUntilIteration(declaration: declaration, completion: completion),
+            forKey: .evidence,
+            in: container,
+            "repeat_until iteration evidence predicate and shape must match the receipt declaration"
+        )
+    }
+
+    private static func validated(
+        _ node: Self,
+        forKey key: CodingKeys,
+        in container: KeyedDecodingContainer<CodingKeys>,
+        _ description: String
+    ) throws -> Self {
+        guard node.constructionError == nil else {
+            throw invalidNode(forKey: key, in: container, description)
         }
         return node
     }
@@ -233,7 +233,7 @@ extension HeistExecutionStepNode {
         .dataCorruptedError(forKey: key, in: container, debugDescription: description)
     }
 
-    func encode(to encoder: Encoder) throws {
+    package func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         switch self {
         case .action(let command, let completion):

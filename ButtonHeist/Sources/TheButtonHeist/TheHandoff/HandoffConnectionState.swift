@@ -24,7 +24,7 @@ enum HandoffConnectionError: Error, LocalizedError, Equatable {
 
     var errorDescription: String? {
         if case .serverFailure(let serverError) = self {
-            return serverError.message
+            return serverError.message.description
         }
         return HandoffFailureFormatter.message(for: diagnostic)
     }
@@ -63,9 +63,9 @@ enum HandoffConnectionError: Error, LocalizedError, Equatable {
             let details = serverError.failureDetails
             return HandoffFailureDiagnostic(
                 target: nil,
-                cause: serverError.message,
+                cause: serverError.message.description,
                 code: details.code,
-                hint: serverError.recoveryHint ?? details.hint
+                hint: serverError.recoveryHint?.description ?? details.hint
             )
         case .disconnected(let reason):
             return reason.diagnostic

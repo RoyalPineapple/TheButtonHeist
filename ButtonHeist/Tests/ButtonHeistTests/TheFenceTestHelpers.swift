@@ -222,7 +222,7 @@ func makeConnectedFence(configuration: TheFence.Configuration = .init()) -> (The
         case .requestScreen:
             return .screen(ScreenPayload(pngData: "", width: 393, height: 852, interface: Interface(timestamp: Date(), tree: [])))
         default:
-            return .actionResult(ActionResult.success(method: .activate, evidence: .none))
+            return .actionResult(ActionResult.success(method: .activate))
         }
     }
 
@@ -247,7 +247,7 @@ func makeConnectedFence(configuration: TheFence.Configuration = .init()) -> (The
                     session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
                 ))
             }
-            return .actionResult(ActionResult.success(method: .activate, evidence: .none))
+            return .actionResult(ActionResult.success(method: .activate))
         }
         return probe
     }

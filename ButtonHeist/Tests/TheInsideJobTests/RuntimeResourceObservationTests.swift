@@ -155,14 +155,14 @@ final class RuntimeResourceObservationTests: XCTestCase {
     }
 
     private func activateRuntime() async {
-        let attempt = TheInsideJob.InsideJobStartAttempt(id: UUID(), transport: resources.transport)
-        _ = job.applyLifecycleEvent(
-            .startRequested(
-                attempt,
-                idleTimerBaseline: resources.idleTimerBaseline
-            )
+        let request = TheInsideJob.InsideJobTransportStartRequest(
+            id: UUID(),
+            phase: .startup,
+            transport: resources.transport,
+            idleTimerBaseline: resources.idleTimerBaseline
         )
-        let change = job.applyLifecycleEvent(.startSucceeded(attempt.id, resources))
+        _ = job.applyLifecycleEvent(.startRequested(request))
+        let change = job.applyLifecycleEvent(.startSucceeded(request.id, resources))
         await job.performLifecycleEffects(change.effects)
     }
 }

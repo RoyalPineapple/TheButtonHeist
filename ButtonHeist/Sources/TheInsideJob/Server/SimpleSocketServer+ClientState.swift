@@ -14,7 +14,7 @@ extension SimpleSocketServer {
         callbacks.onClientDisconnected?(clientId)
     }
 
-    func rejectClientWithServerError(_ clientId: Int, kind: ErrorKind, message: String) {
+    func rejectClientWithServerError(_ clientId: Int, kind: ErrorKind, message: ServerErrorMessage) {
         guard let state = clientRegistry.client(clientId) else { return }
         sendErrorEnvelope(
             clientId: clientId,

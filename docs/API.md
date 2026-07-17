@@ -497,10 +497,20 @@ their typed action error inside `outcome.errorKind`. Fence receipt projections
 add an expectation result when requested and derive a public delta from the
 same trace evidence.
 
-Source construction uses `ActionResultSuccessEvidence` or
-`ActionResultFailureEvidence`, each with one explicit observation case. The
-action-result wire contract nests that evidence under `evidence`; output
-adapters derive their public projections from the same owner.
+Source construction uses `ActionResult.success` and `ActionResult.failure`,
+passing `observation`, `subjectEvidence`, and performance `timing` directly.
+Activation results that carry an `ActivationTrace` use the fixed-method
+`activationSuccess` and `activationFailure` factories. Success and failure
+evidence values are output projections, not assembly inputs; successful
+activation and text-entry warnings are derived from the method and subject.
+
+Standalone announcement observations carry `ActionAnnouncementText`, and
+settled observations carry an `ActionSettlementDuration`; dynamic values enter
+through their throwing validating initializers, while valid literals remain
+concise. `ServerError` likewise accepts `ServerErrorMessage` and an optional
+`ServerErrorRecoveryHint`. These typed values reject empty text and negative
+settlement durations before result construction without changing their JSON
+string and integer shapes.
 
 For `elementsChanged`, public responses include concrete semantic edits under
 `delta.edits.added`, `delta.edits.removed`, and `delta.edits.updated` when

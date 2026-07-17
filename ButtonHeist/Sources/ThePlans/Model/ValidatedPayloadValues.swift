@@ -19,7 +19,7 @@ package struct BoundedSecondsError: Error, Sendable, Equatable {
     package let expected: String
 }
 
-private func requireNonEmpty<Failure: Error>(
+package func requireNonEmpty<Failure: Error>(
     _ value: String,
     or failure: @autoclosure () -> Failure
 ) throws -> String {
@@ -37,13 +37,13 @@ private func requireNonBlank<Failure: Error>(
     return value
 }
 
-private func decodeSingleValueString<Value>(
+package func decodeSingleValue<Payload: Decodable, Value>(
     from decoder: Decoder,
-    admitting: (String) throws -> Value
+    admitting: (Payload) throws -> Value
 ) throws -> Value {
     let container = try decoder.singleValueContainer()
     do {
-        return try admitting(container.decode(String.self))
+        return try admitting(container.decode(Payload.self))
     } catch {
         throw DecodingError.dataCorruptedError(
             in: container,
@@ -52,7 +52,7 @@ private func decodeSingleValueString<Value>(
     }
 }
 
-private func encodeSingleValueString(_ value: String, to encoder: Encoder) throws {
+package func encodeSingleValue<Payload: Encodable>(_ value: Payload, to encoder: Encoder) throws {
     var container = encoder.singleValueContainer()
     try container.encode(value)
 }
@@ -143,11 +143,11 @@ public struct PasteboardText: Codable, Sendable, Equatable, Hashable, CustomStri
     package var rawText: String { text }
 
     public init(from decoder: Decoder) throws {
-        self = try decodeSingleValueString(from: decoder, admitting: Self.init(validating:))
+        self = try decodeSingleValue(from: decoder, admitting: Self.init(validating:))
     }
 
     public func encode(to encoder: Encoder) throws {
-        try encodeSingleValueString(text, to: encoder)
+        try encodeSingleValue(text, to: encoder)
     }
 
     public var description: String { text }
@@ -179,11 +179,11 @@ public struct CustomActionName: Codable, Sendable, Equatable, Hashable, CustomSt
     package var rawValue: String { value }
 
     public init(from decoder: Decoder) throws {
-        self = try decodeSingleValueString(from: decoder, admitting: Self.init(validating:))
+        self = try decodeSingleValue(from: decoder, admitting: Self.init(validating:))
     }
 
     public func encode(to encoder: Encoder) throws {
-        try encodeSingleValueString(value, to: encoder)
+        try encodeSingleValue(value, to: encoder)
     }
 
     public var description: String { value }
@@ -211,11 +211,11 @@ public struct RotorName: Codable, Sendable, Equatable, Hashable, CustomStringCon
     package var rawValue: String { value }
 
     public init(from decoder: Decoder) throws {
-        self = try decodeSingleValueString(from: decoder, admitting: Self.init(validating:))
+        self = try decodeSingleValue(from: decoder, admitting: Self.init(validating:))
     }
 
     public func encode(to encoder: Encoder) throws {
-        try encodeSingleValueString(value, to: encoder)
+        try encodeSingleValue(value, to: encoder)
     }
 
     public var description: String { value }
@@ -243,11 +243,11 @@ public struct HeistWarningMessage: Codable, Sendable, Equatable, Hashable, Custo
     package var rawValue: String { value }
 
     public init(from decoder: Decoder) throws {
-        self = try decodeSingleValueString(from: decoder, admitting: Self.init(validating:))
+        self = try decodeSingleValue(from: decoder, admitting: Self.init(validating:))
     }
 
     public func encode(to encoder: Encoder) throws {
-        try encodeSingleValueString(value, to: encoder)
+        try encodeSingleValue(value, to: encoder)
     }
 
     public var description: String { value }
@@ -275,11 +275,11 @@ public struct HeistFailureMessage: Codable, Sendable, Equatable, Hashable, Custo
     package var rawValue: String { value }
 
     public init(from decoder: Decoder) throws {
-        self = try decodeSingleValueString(from: decoder, admitting: Self.init(validating:))
+        self = try decodeSingleValue(from: decoder, admitting: Self.init(validating:))
     }
 
     public func encode(to encoder: Encoder) throws {
-        try encodeSingleValueString(value, to: encoder)
+        try encodeSingleValue(value, to: encoder)
     }
 
     public var description: String { value }
@@ -297,7 +297,7 @@ public enum HeistFailureMessageError: Error, Sendable, Equatable, CustomStringCo
     public var description: String { "heist failure message must not be blank" }
 }
 
-func requireValidLiteralPayload<Value>(_ construct: () throws -> Value) -> Value {
+package func requireValidLiteralPayload<Value>(_ construct: () throws -> Value) -> Value {
     do {
         return try construct()
     } catch {

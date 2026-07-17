@@ -14,149 +14,25 @@ final class InteractionObservation {
     private static let defaultVisibleStateTimeout = Double(SettleSession.defaultTimeoutMs) / 1_000
 
     private let stash: TheStash
-    private let navigation: Navigation
     private let postActionObservation: PostActionObservation
-    private var heistAnnouncementCursor: AccessibilityNotificationCursor = .origin
+    private let predicateWait: PredicateWait
+
     init(
         stash: TheStash,
         navigation: Navigation,
         postActionObservation: PostActionObservation
     ) {
         self.stash = stash
-        self.navigation = navigation
         self.postActionObservation = postActionObservation
-    }
-
-    private func makePredicateWait(
-    ) -> PredicateWait {
-        let stash = self.stash
-        return PredicateWait(
-            observeEvent: { scope, sequence, timeout in
-                await stash.observeSettledSemanticObservation(
-                    scope: scope,
-                    after: sequence,
-                    timeout: timeout
-                )
-            },
-            latestEvent: { stash.latestSettledSemanticObservationEvent },
-            latestSettleFailure: { stash.latestSemanticObservationFailureDiagnostic() },
-            semanticObservation: { self.postActionObservation.semanticObservation(from: $0) },
-            buildObservationWindow: { baseline, event in
-                stash.semanticObservationStream.observationWindow(
-                    from: baseline,
-                    through: event
-                )
-            },
-            presenceTimeoutMessage: { predicate, elapsed in
-                stash.presenceWaitTimeoutMessage(for: predicate, elapsed: elapsed)
-            },
-            announcementCursor: { strategy in
-                self.announcementCursor(for: strategy)
-            },
-            waitForAnnouncement: { cursor, predicate, timeout in
-                await self.waitForAnnouncement(
-                    after: cursor,
-                    matching: predicate,
-                    timeout: timeout
-                )
-            },
-            settleVisible: { deadline in
-                if !stash.latestSettledSemanticObservationInvalidated,
-                   let current = stash.latestSettledSemanticObservationEvent {
-                    return current
-                }
-                guard deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) else { return nil }
-                guard let evidence = await stash.observeVisibleSemanticEvidence(
-                    timeout: min(Self.defaultVisibleStateTimeout, deadline.remainingSeconds())
-                ),
-                let event = stash.latestSettledSemanticObservationEvent,
-                event.sequence == evidence.settledObservationSequence
-                else { return nil }
-                return event
-            },
-            revealTarget: { target, deadline in
-                guard target.isElementTarget,
-                      stash.resolveTarget(target).resolved != nil
-                else { return nil }
-                if let deadline,
-                   !deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) {
-                    return nil
-                }
-                switch await self.navigation.elementInflation.inflate(
-                    for: target,
-                    method: .scrollToVisible,
-                ) {
-                case .inflated:
-                    return stash.latestSettledSemanticObservationEvent
-                case .failed:
-                    return nil
-                }
-            },
-            discover: { target, deadline, observer in
-                if let deadline,
-                   !deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) {
-                    return nil
-                }
-                let baseline = Navigation.ExplorationBaseline.currentViewport(
-                    stash.visibleExplorationBaseline(from: stash.latestObservation)
-                )
-                guard let exploration = await self.navigation.exploreScreen(
-                    target: target,
-                    baseline: baseline,
-                    exitPosition: .origin,
-                    deadline: deadline,
-                    onObservation: { event in
-                        observer(event) ? .finish : .continue
-                    },
-                ) else { return nil }
-                return exploration.event
-            },
-            latestObservationCursor: {
-                stash.semanticObservationStream.latestObservationCursor(scope: .visible)
-            },
-            observationEntries: { cursor in
-                if let cursor {
-                    return stash.semanticObservationStream.observationEntries(
-                        after: cursor,
-                        scope: .visible
-                    )
-                }
-                return stash.semanticObservationStream.observationEntries(scope: .visible)
-            }
+        self.predicateWait = PredicateWait(
+            stash: stash,
+            navigation: navigation,
+            postActionObservation: postActionObservation
         )
-    }
-
-    private func announcementCursor(
-        for strategy: AnnouncementWaitCursorStrategy
-    ) -> AccessibilityNotificationCursor {
-        switch strategy {
-        case .futureOnly:
-            stash.accessibilityNotifications.cursor()
-        case .heistScoped:
-            heistAnnouncementCursor
-        }
-    }
-
-    private func waitForAnnouncement(
-        after cursor: AccessibilityNotificationCursor,
-        matching predicate: ResolvedAnnouncementPredicate,
-        timeout: Double
-    ) async -> CapturedAnnouncement? {
-        let announcement = await stash.accessibilityNotifications.waitForAnnouncement(
-            after: cursor,
-            matching: predicate,
-            timeout: timeout
-        )
-        if let announcement {
-            heistAnnouncementCursor = AccessibilityNotificationCursor(
-                sequence: max(heistAnnouncementCursor.sequence, announcement.sequence)
-            )
-        }
-        return announcement
     }
 
     func resetAnnouncementWaitCursorForHeist(to cursor: AccessibilityNotificationCursor) {
-        heistAnnouncementCursor = cursor
+        predicateWait.resetAnnouncementWaitCursorForHeist(to: cursor)
     }
 
     func prepareBeforeState(
@@ -262,7 +138,7 @@ final class InteractionObservation {
         case (.establishFromFirstObservation, .none), (.supplied, _):
             baselineSource = changeBaseline
         }
-        return await makePredicateWait().wait(
+        return await predicateWait.wait(
             for: step,
             initialTrace: initialTrace,
             changeBaseline: baselineSource,
@@ -275,7 +151,7 @@ final class InteractionObservation {
         _ cases: [ResolvedPredicateCaseRuntimeInput],
         timeout rawTimeout: Double
     ) async -> HeistCaseSelectionResult {
-        await makePredicateWait().selectPredicateCase(cases, timeout: rawTimeout)
+        await predicateWait.selectPredicateCase(cases, timeout: rawTimeout)
     }
 
 }

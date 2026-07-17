@@ -35,42 +35,9 @@ private struct ServerTransportStopOperation: Equatable, Sendable {
     }
 }
 
-@MainActor
-private final class ServerTransportStartCompletion {
-    private enum State {
-        case pending([CheckedContinuation<Void, Never>])
-        case finished
-    }
-
-    private var state = State.pending([])
-
-    func wait() async {
-        guard case .pending = state else { return }
-        await withCheckedContinuation { continuation in
-            switch state {
-            case .pending(var waiters):
-                waiters.append(continuation)
-                state = .pending(waiters)
-            case .finished:
-                continuation.resume()
-            }
-        }
-    }
-
-    func finish() {
-        switch state {
-        case .pending(let waiters):
-            state = .finished
-            waiters.forEach { $0.resume() }
-        case .finished:
-            return
-        }
-    }
-}
-
 private struct ServerTransportStartOperation: Equatable {
     let id: UUID
-    let completion: ServerTransportStartCompletion
+    let completion: CompletionSignal
 
     static func == (lhs: ServerTransportStartOperation, rhs: ServerTransportStartOperation) -> Bool {
         lhs.id == rhs.id
@@ -165,7 +132,7 @@ final class ServerTransport {
         let params = ButtonHeistTLSPreSharedKey.networkParameters(from: token.description)
         let attempt = ServerTransportStartOperation(
             id: UUID(),
-            completion: ServerTransportStartCompletion()
+            completion: CompletionSignal()
         )
         operation = .start(attempt)
         defer { finishStarting(attempt) }
@@ -259,7 +226,7 @@ final class ServerTransport {
     @MainActor
     @discardableResult
     private func beginStopping(
-        waitingFor startCompletion: ServerTransportStartCompletion?
+        waitingFor startCompletion: CompletionSignal?
     ) -> ServerTransportStopOperation {
         let id = UUID()
         let task = Task { @MainActor [weak self, server] in

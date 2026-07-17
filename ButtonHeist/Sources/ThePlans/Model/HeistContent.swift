@@ -199,7 +199,7 @@ public enum HeistBuilder {
     }
 }
 
-private struct HeistStepList: HeistContent {
+struct HeistStepList: HeistContent {
     let heistSteps: [HeistStep]
     let heistDefinitions: [HeistPlanAdmissionCandidate]
     let heistBuildDiagnostics: [HeistBuildDiagnostic]

@@ -1,7 +1,6 @@
 #if canImport(UIKit)
 #if DEBUG
 import Foundation
-import ButtonHeistSupport
 import ThePlans
 
 import TheScore
@@ -25,46 +24,7 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
     }
 }
 
-// PredicateWait stores main-actor closures and is constructed/used from main-actor observation code.
-@MainActor internal struct PredicateWait { // swiftlint:disable:this agent_main_actor_value_type
-    internal typealias ObserveEvent = @MainActor (
-        SemanticObservationScope,
-        SettledObservationSequence?,
-        Double?
-    ) async -> SettledSemanticObservationEvent?
-    internal typealias LatestEvent = @MainActor () -> SettledSemanticObservationEvent?
-    internal typealias LatestSettleFailure = @MainActor () -> String?
-    internal typealias SemanticObserver = @MainActor (SettledSemanticObservationEvent) -> HeistSemanticObservation
-    internal typealias BuildObservationWindow = @MainActor (
-        SettledCapture,
-        SettledSemanticObservationEvent
-    ) -> ObservationWindow?
-    internal typealias PresenceTimeoutMessage = @MainActor (ResolvedAccessibilityPredicate, String) -> String?
-    internal typealias AnnouncementCursor = @MainActor (AnnouncementWaitCursorStrategy) -> AccessibilityNotificationCursor
-    internal typealias AnnouncementWait = @MainActor (
-        AccessibilityNotificationCursor,
-        ResolvedAnnouncementPredicate,
-        Double
-    ) async -> CapturedAnnouncement?
-    internal typealias SettleVisible = @MainActor (
-        SemanticObservationDeadline
-    ) async -> SettledSemanticObservationEvent?
-    internal typealias RevealTarget = @MainActor (
-        ResolvedAccessibilityTarget,
-        SemanticObservationDeadline?
-    ) async -> SettledSemanticObservationEvent?
-    internal typealias DiscoveryObserver = @MainActor (
-        SettledSemanticObservationEvent
-    ) -> Bool
-    internal typealias Discover = @MainActor (
-        ResolvedAccessibilityTarget?,
-        SemanticObservationDeadline?,
-        @escaping DiscoveryObserver
-    ) async -> SettledSemanticObservationEvent?
-    internal typealias LatestObservationCursor = @MainActor () -> ObservationCursor?
-    internal typealias ObservationEntries = @MainActor (
-        ObservationCursor?
-    ) -> ObservationEntrySequence?
+@MainActor internal final class PredicateWait {
     /// Called after an unmatched initial observation is reduced and before polling begins.
     internal typealias ReadyToPoll = @MainActor (SettledObservationSequence) -> Void
 
@@ -85,54 +45,19 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
         ) -> Result
     }
 
-    internal let observeEvent: ObserveEvent
-    internal let latestEvent: LatestEvent
-    internal let latestSettleFailure: LatestSettleFailure
-    internal let semanticObservation: SemanticObserver
-    internal let buildObservationWindow: BuildObservationWindow
-    internal let presenceTimeoutMessage: PresenceTimeoutMessage
-    internal let announcementCursor: AnnouncementCursor
-    internal let waitForAnnouncement: AnnouncementWait
-    internal let settleVisible: SettleVisible
-    internal let revealTarget: RevealTarget
-    internal let discover: Discover
-    internal let latestObservationCursor: LatestObservationCursor
-    internal let observationEntries: ObservationEntries
+    private let stash: TheStash
+    private let navigation: Navigation
+    private let postActionObservation: PostActionObservation
+    private var heistAnnouncementCursor: AccessibilityNotificationCursor = .origin
 
     internal init(
-        observeEvent: @escaping ObserveEvent,
-        latestEvent: @escaping LatestEvent,
-        latestSettleFailure: @escaping LatestSettleFailure,
-        semanticObservation: @escaping SemanticObserver,
-        buildObservationWindow: @escaping BuildObservationWindow,
-        presenceTimeoutMessage: @escaping PresenceTimeoutMessage,
-        announcementCursor: @escaping AnnouncementCursor,
-        waitForAnnouncement: @escaping AnnouncementWait,
-        settleVisible: SettleVisible? = nil,
-        revealTarget: RevealTarget? = nil,
-        discover: Discover? = nil,
-        latestObservationCursor: @escaping LatestObservationCursor = { nil },
-        observationEntries: @escaping ObservationEntries = { _ in nil }
+        stash: TheStash,
+        navigation: Navigation,
+        postActionObservation: PostActionObservation
     ) {
-        self.observeEvent = observeEvent
-        self.latestEvent = latestEvent
-        self.latestSettleFailure = latestSettleFailure
-        self.semanticObservation = semanticObservation
-        self.buildObservationWindow = buildObservationWindow
-        self.presenceTimeoutMessage = presenceTimeoutMessage
-        self.announcementCursor = announcementCursor
-        self.waitForAnnouncement = waitForAnnouncement
-        self.settleVisible = settleVisible ?? { deadline in
-            await observeEvent(.visible, nil, deadline.remainingSeconds())
-        }
-        self.revealTarget = revealTarget ?? { _, _ in nil }
-        self.discover = discover ?? { _, deadline, observer in
-            let event = await observeEvent(.discovery, nil, deadline?.remainingSeconds())
-            if let event { _ = observer(event) }
-            return event
-        }
-        self.latestObservationCursor = latestObservationCursor
-        self.observationEntries = observationEntries
+        self.stash = stash
+        self.navigation = navigation
+        self.postActionObservation = postActionObservation
     }
 
     internal func wait(
@@ -217,7 +142,8 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
         private let deadline: SemanticObservationDeadline
         private let projection: ExecutionProjection<Result, Evidence>
         private let onReadyToPoll: ReadyToPoll?
-        private var lifecycle: StateDriver<PredicateWaitLifecycleMachine<Evidence>>
+        private let lifecycleMachine: PredicateWaitLifecycleMachine<Evidence>
+        private var lifecycleState: PredicateWaitLifecycleState<Evidence>
         private var effect: PredicateWaitLifecycleEffect
         private var ignoreObservationsThrough: SettledObservationSequence?
 
@@ -232,12 +158,10 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
             deadline = SemanticObservationDeadline(start: start, timeoutSeconds: timeout)
             self.projection = projection
             self.onReadyToPoll = onReadyToPoll
-            lifecycle = StateDriver(
-                initial: .initialVisible(projection.initialEvidence),
-                machine: PredicateWaitLifecycleMachine(
-                    continuesAfterInitialMiss: projection.continuesAfterInitialMiss
-                )
+            lifecycleMachine = PredicateWaitLifecycleMachine(
+                continuesAfterInitialMiss: projection.continuesAfterInitialMiss
             )
+            lifecycleState = .initialVisible(projection.initialEvidence)
             effect = .settleVisible(.overall)
         }
 
@@ -254,12 +178,12 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
                     }
                 case .awaitObservation:
                     guard let iterator = observationIterator else {
-                        effect = lifecycle.send(.deadlineReached).predicateWaitEffect
+                        advanceLifecycle(.deadlineReached)
                         continue
                     }
                     observationIterator = await consumeNextObservation(from: iterator)
                 case .finish(let outcome):
-                    return projection.result(outcome, deadline, lifecycle.state.evidence)
+                    return projection.result(outcome, deadline, lifecycleState.evidence)
                 }
             }
         }
@@ -267,7 +191,7 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
         private func applyCancellation() {
             guard Task.isCancelled else { return }
             guard case .finish = effect else {
-                effect = lifecycle.send(.cancelled).predicateWaitEffect
+                advanceLifecycle(.cancelled)
                 return
             }
         }
@@ -275,19 +199,19 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
         private func settleVisible(_ budget: PredicateWaitVisibleBudget) async {
             let evaluation = evaluate(
                 await wait.settleVisible(budget.deadline(overall: deadline)),
-                lifecyclePhase: lifecycle.state.phase,
-                evidence: lifecycle.state.evidence
+                lifecyclePhase: lifecycleState.phase,
+                evidence: lifecycleState.evidence
             )
-            effect = lifecycle.send(.evaluated(evaluation)).predicateWaitEffect
+            advanceLifecycle(.evaluated(evaluation))
         }
 
         private func runDiscovery(
             _ budget: PredicateWaitDiscoveryBudget
         ) async -> ObservationEntrySequence? {
-            let discoveryPhase = lifecycle.state.phase
+            let discoveryPhase = lifecycleState.phase
             let discoveryDeadline = budget.deadline(overall: deadline)
             var latestEvaluation = PredicateWaitLifecycleEvaluation(
-                evidence: lifecycle.state.evidence,
+                evidence: lifecycleState.evidence,
                 matched: false
             )
             var matchedEvaluation: PredicateWaitLifecycleEvaluation<Evidence>?
@@ -338,7 +262,7 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
                 discoveryPhase: discoveryPhase,
                 matched: evaluation.matched
             )
-            effect = lifecycle.send(.evaluated(evaluation)).predicateWaitEffect
+            advanceLifecycle(.evaluated(evaluation))
             return observations
         }
 
@@ -351,11 +275,15 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
                 if let event {
                     onReadyToPoll?(event.sequence)
                 }
-                if let observations = wait.observationEntries(wait.latestObservationCursor()) {
-                    return observations
+                let stream = wait.stash.semanticObservationStream
+                if let cursor = stream.latestObservationCursor(scope: .visible) {
+                    return stream.observationEntries(after: cursor, scope: .visible)
                 }
+                return stream.observationEntries(scope: .visible)
             } else if discoveryPhase == .triggeredDiscovery {
-                ignoreObservationsThrough = wait.latestObservationCursor()?.sequence
+                ignoreObservationsThrough = wait.stash.semanticObservationStream
+                    .latestObservationCursor(scope: .visible)?
+                    .sequence
             }
             return nil
         }
@@ -378,10 +306,10 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
                     consume(observation)
                     return nextIterator
                 case .deadlineReached:
-                    effect = lifecycle.send(.deadlineReached).predicateWaitEffect
+                    advanceLifecycle(.deadlineReached)
                     return nil
                 case .cancelled:
-                    effect = lifecycle.send(.cancelled).predicateWaitEffect
+                    advanceLifecycle(.cancelled)
                     return nil
                 }
             }
@@ -391,10 +319,24 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
             ignoreObservationsThrough = nil
             let evaluation = evaluate(
                 observation.event,
-                lifecyclePhase: lifecycle.state.phase,
-                evidence: lifecycle.state.evidence
+                lifecyclePhase: lifecycleState.phase,
+                evidence: lifecycleState.evidence
             )
-            effect = lifecycle.send(.observation(evaluation)).predicateWaitEffect
+            advanceLifecycle(.observation(evaluation))
+        }
+
+        private func advanceLifecycle(_ event: PredicateWaitLifecycleEvent<Evidence>) {
+            let transition = lifecycleMachine.advance(lifecycleState, with: event)
+            lifecycleState = transition.state
+            switch transition {
+            case .advanced(_, let nextEffect):
+                effect = nextEffect
+            case .rejected(let rejection, _):
+                insideJobLogger.error(
+                    "Predicate wait lifecycle rejected event: \(String(describing: rejection))"
+                )
+                effect = .finish(.cancelled)
+            }
         }
 
         private func evaluate(
@@ -406,7 +348,7 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
                 return PredicateWaitLifecycleEvaluation(evidence: evidence, matched: false)
             }
             return projection.evaluate(
-                wait.semanticObservation(event),
+                wait.postActionObservation.semanticObservation(from: event),
                 lifecyclePhase,
                 evidence
             )
@@ -499,9 +441,9 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
         )
         guard predicate.requiresChangeBaseline,
               let baseline = seeded.state.observationBaseline else { return seeded }
-        let window = buildObservationWindow(
-            baseline,
-            observation.event
+        let window = stash.semanticObservationStream.observationWindow(
+            from: baseline,
+            through: observation.event
         )
         return stream.reducing(
             observation,
@@ -510,6 +452,118 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
             baselineSeed: .supplied(baseline),
             observationWindow: window
         )
+    }
+
+    internal func resetAnnouncementWaitCursorForHeist(
+        to cursor: AccessibilityNotificationCursor
+    ) {
+        heistAnnouncementCursor = cursor
+    }
+
+    internal func announcementCursor(
+        _ strategy: AnnouncementWaitCursorStrategy
+    ) -> AccessibilityNotificationCursor {
+        switch strategy {
+        case .futureOnly:
+            stash.accessibilityNotifications.cursor()
+        case .heistScoped:
+            heistAnnouncementCursor
+        }
+    }
+
+    internal func waitForAnnouncement(
+        _ cursor: AccessibilityNotificationCursor,
+        _ predicate: ResolvedAnnouncementPredicate,
+        _ timeout: Double
+    ) async -> CapturedAnnouncement? {
+        let announcement = await stash.accessibilityNotifications.waitForAnnouncement(
+            after: cursor,
+            matching: predicate,
+            timeout: timeout
+        )
+        if let announcement {
+            heistAnnouncementCursor = AccessibilityNotificationCursor(
+                sequence: max(heistAnnouncementCursor.sequence, announcement.sequence)
+            )
+        }
+        return announcement
+    }
+
+    internal func latestEvent() -> SettledSemanticObservationEvent? { stash.latestSettledSemanticObservationEvent }
+
+    internal func latestSettleFailure() -> String? { stash.latestSemanticObservationFailureDiagnostic() }
+
+    internal func presenceTimeoutMessage(
+        _ predicate: ResolvedAccessibilityPredicate,
+        _ elapsed: String
+    ) -> String? {
+        stash.presenceWaitTimeoutMessage(for: predicate, elapsed: elapsed)
+    }
+
+    private func settleVisible(
+        _ deadline: SemanticObservationDeadline
+    ) async -> SettledSemanticObservationEvent? {
+        if !stash.latestSettledSemanticObservationInvalidated,
+           let current = stash.latestSettledSemanticObservationEvent {
+            return current
+        }
+        guard deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) else { return nil }
+        guard let evidence = await stash.observeVisibleSemanticEvidence(
+            timeout: min(
+                Double(SettleSession.defaultTimeoutMs) / 1_000,
+                deadline.remainingSeconds()
+            )
+        ),
+        let event = stash.latestSettledSemanticObservationEvent,
+        event.sequence == evidence.settledObservationSequence
+        else { return nil }
+        return event
+    }
+
+    private func revealTarget(
+        _ target: ResolvedAccessibilityTarget,
+        _ deadline: SemanticObservationDeadline?
+    ) async -> SettledSemanticObservationEvent? {
+        guard target.isElementTarget,
+              stash.resolveTarget(target).resolved != nil
+        else { return nil }
+        if let deadline,
+           !deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) {
+            return nil
+        }
+        switch await navigation.elementInflation.inflate(
+            for: target,
+            method: .scrollToVisible,
+        ) {
+        case .inflated:
+            return stash.latestSettledSemanticObservationEvent
+        case .failed:
+            return nil
+        }
+    }
+
+    private func discover(
+        _ target: ResolvedAccessibilityTarget?,
+        _ deadline: SemanticObservationDeadline?,
+        _ observer: @escaping @MainActor (SettledSemanticObservationEvent) -> Bool
+    ) async -> SettledSemanticObservationEvent? {
+        if let deadline,
+           !deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) {
+            return nil
+        }
+        let baseline = Navigation.ExplorationBaseline.currentViewport(
+            stash.visibleExplorationBaseline(from: stash.latestObservation)
+        )
+        guard let exploration = await navigation.exploreScreen(
+            target: target,
+            baseline: baseline,
+            exitPosition: .origin,
+            deadline: deadline,
+            onObservation: { event in
+                observer(event) ? .finish : .continue
+            },
+        ) else { return nil }
+        return exploration.event
     }
 
 }

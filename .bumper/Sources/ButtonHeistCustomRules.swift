@@ -66,16 +66,6 @@ let buttonHeistRules = RuleSet {
         allowed: .files([semanticObservationPublicationPath]),
         id: "buttonheist.semantic_observation_commit_ownership"
     )
-    Rules.boundaryOnly(
-        function: "matchingTreeElements",
-        allowed: .files(interfaceTreeMatchingPaths),
-        id: "buttonheist.interface_tree_element_matching_ownership"
-    )
-    Rules.boundaryOnly(
-        function: "matchingTreeContainers",
-        allowed: .files(interfaceTreeMatchingPaths),
-        id: "buttonheist.interface_tree_container_matching_ownership"
-    )
 }
 
 private let runtimeScope = RuleScope.component(ButtonHeistComponent.runtime)
@@ -104,14 +94,10 @@ private let receiptNodeCodecPath: RelativeFilePath =
 private let receiptConstructionPaths: Set<RelativeFilePath> = [
     "ButtonHeist/Sources/TheScore/Receipts/HeistExecutionStepNode.swift",
     "ButtonHeist/Sources/TheScore/Receipts/HeistExecutionStepNode+Codable.swift",
-    "ButtonHeist/Sources/TheScore/Receipts/HeistExecutionStepResult+Admission.swift",
+    "ButtonHeist/Sources/TheScore/Receipts/HeistExecutionStepResult+Construction.swift",
 ]
 private let semanticObservationPublicationPath: RelativeFilePath =
     "ButtonHeist/Sources/TheInsideJob/TheStash/SemanticObservationStream+Publication.swift"
-private let interfaceTreeMatchingPaths: Set<RelativeFilePath> = [
-    "ButtonHeist/Sources/TheInsideJob/TheStash/TheStash+Matching.swift",
-    "ButtonHeist/Sources/TheInsideJob/TheStash/TheStash+TargetResolution.swift",
-]
 
 private let anyBoundaryRule = Rules.files(
     "buttonheist.any_boundary",
@@ -223,10 +209,10 @@ private let receiptConstructionSafetyRule = Rules.forbid(
     },
     id: "buttonheist.receipt_construction_safety",
     severity: .error,
-    summary: "Internal receipt construction admits typed evidence instead of trapping.",
+    summary: "Receipt construction reports typed errors instead of trapping.",
     scope: .files(receiptConstructionPaths)
 ) { match in
-    "receipt construction trap: \(match.node.calleeBaseName); use typed receipt admission or a decoding error"
+    "receipt construction trap: \(match.node.calleeBaseName); return a typed construction or decoding error"
 }
 
 private let receiptNodeCodecOwnershipRule = Rules.files(

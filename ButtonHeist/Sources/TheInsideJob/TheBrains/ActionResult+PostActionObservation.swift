@@ -12,59 +12,78 @@ extension ActionResult {
         let resultOutcome = settledObservation.resultOutcome(for: outcome)
         let message = settledObservation.message(explicit: outcome.message)
         let payload = settledObservation.payload(for: outcome, afterStatePayload: afterStatePayload)
+        let duration: ActionSettlementDuration
+        do {
+            duration = try ActionSettlementDuration(
+                validatingMilliseconds: settledObservation.settleTimeMs
+            )
+        } catch {
+            self = ActionResult.failure(
+                method: outcome.method,
+                errorKind: .actionFailed,
+                message: String(describing: error),
+                observation: .trace(settledObservation.traceEvidence),
+                subjectEvidence: outcome.subjectEvidence
+            )
+            return
+        }
         let settlement: ActionSettlementEvidence = settledObservation.settled
-            ? .settled(durationMs: settledObservation.settleTimeMs)
-            : .timedOut(durationMs: settledObservation.settleTimeMs)
+            ? .settled(duration: duration)
+            : .timedOut(duration: duration)
         let observation = ActionResultObservationEvidence.settledTrace(
             settledObservation.traceEvidence,
             settlement
         )
         switch resultOutcome {
         case .success:
-            let evidence = ActionResultSuccessEvidence(
-                observation: observation,
-                subjectEvidence: outcome.subjectEvidence,
-                activationTrace: outcome.activationTrace,
-                warning: Self.warning(method: outcome.method, subjectEvidence: outcome.subjectEvidence)
-            )
-            self = payload.map { ActionResult.success(payload: $0, message: message, evidence: evidence) }
-                ?? ActionResult.success(method: outcome.method, message: message, evidence: evidence)
+            if let activationTrace = outcome.activationTrace {
+                self = ActionResult.activationSuccess(
+                    message: message,
+                    observation: observation,
+                    subjectEvidence: outcome.subjectEvidence,
+                    activationTrace: activationTrace
+                )
+            } else if let payload {
+                self = ActionResult.success(
+                    payload: payload,
+                    message: message,
+                    observation: observation,
+                    subjectEvidence: outcome.subjectEvidence
+                )
+            } else {
+                self = ActionResult.success(
+                    method: outcome.method,
+                    message: message,
+                    observation: observation,
+                    subjectEvidence: outcome.subjectEvidence
+                )
+            }
         case .failure(let errorKind):
-            let evidence = ActionResultFailureEvidence(
-                observation: observation,
-                subjectEvidence: outcome.subjectEvidence,
-                activationTrace: outcome.activationTrace
-            )
-            self = payload.map {
-                ActionResult.failure(payload: $0, errorKind: errorKind, message: message, evidence: evidence)
-            } ?? ActionResult.failure(
-                method: outcome.method,
-                errorKind: errorKind,
-                message: message,
-                evidence: evidence
-            )
-        }
-    }
-
-    private static func warning(
-        method: ActionMethod,
-        subjectEvidence: ActionSubjectEvidence?
-    ) -> HeistActionWarning? {
-        guard let element = subjectEvidence?.element else { return nil }
-        let evidence = ElementDiagnosticSummary(
-            label: element.label,
-            identifier: element.identifier,
-            traits: AccessibilityPolicy.orderedMatcherTraits(element.traits),
-            actions: element.actions.sorted { $0.description < $1.description }
-        ).rendered(using: .activationAffordanceEvidence)
-
-        switch method {
-        case .activate where !AccessibilityPolicy.advertisesActivationAffordance(element.traits):
-            return .activationWeakAffordance(evidence: evidence)
-        case .typeText where !AccessibilityPolicy.supportsTextEntry(element.traits):
-            return .textEntryWeakAffordance(evidence: evidence)
-        default:
-            return nil
+            if let activationTrace = outcome.activationTrace {
+                self = ActionResult.activationFailure(
+                    errorKind: errorKind,
+                    message: message,
+                    observation: observation,
+                    subjectEvidence: outcome.subjectEvidence,
+                    activationTrace: activationTrace
+                )
+            } else if let payload {
+                self = ActionResult.failure(
+                    payload: payload,
+                    errorKind: errorKind,
+                    message: message,
+                    observation: observation,
+                    subjectEvidence: outcome.subjectEvidence
+                )
+            } else {
+                self = ActionResult.failure(
+                    method: outcome.method,
+                    errorKind: errorKind,
+                    message: message,
+                    observation: observation,
+                    subjectEvidence: outcome.subjectEvidence
+                )
+            }
         }
     }
 }

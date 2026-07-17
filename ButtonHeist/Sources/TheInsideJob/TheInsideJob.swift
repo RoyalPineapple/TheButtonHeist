@@ -238,20 +238,20 @@ public final class TheInsideJob {
         self.runtimeConfiguration = runtimeConfiguration
         self.transportFactory = transportFactory
         self.muscle = TheMuscle(
-            explicitToken: runtimeConfiguration.token,
+            explicitToken: runtimeConfiguration.token.value,
             sessionReleaseTimeout: runtimeConfiguration.sessionReleaseTimeout.value
         )
         self.brains = TheBrains(
             tripwire: self.tripwire,
-            fingerprintsEnabled: runtimeConfiguration.fingerprintsEnabled,
-            failureEvidencePolicy: runtimeConfiguration.failureEvidencePolicy
+            fingerprintsEnabled: runtimeConfiguration.fingerprintsEnabled.value,
+            failureEvidencePolicy: runtimeConfiguration.failureEvidencePolicy.value
         )
         self.getaway = TheGetaway(
             muscle: self.muscle,
             brains: self.brains,
             identity: TheGetaway.ServerIdentity(
                 launchId: runtimeConfiguration.sessionIdentity.launchId,
-                effectiveInstanceId: runtimeConfiguration.sessionIdentity.effectiveInstanceId,
+                effectiveInstanceId: runtimeConfiguration.sessionIdentity.effectiveInstanceId.value,
                 tlsActive: false
             )
         )
@@ -270,32 +270,33 @@ public final class TheInsideJob {
         insideJobLogger.info("Starting TheInsideJob with ServerTransport...")
 
         let attemptID = UUID()
-        let attempt = makeRuntimeStartAttempt(id: attemptID)
-        let startChange = applyLifecycleEvent(
-            .startRequested(
-                attempt,
-                idleTimerBaseline: UIApplication.shared.isIdleTimerDisabled
-            )
+        let request = InsideJobTransportStartRequest(
+            id: attemptID,
+            phase: .startup,
+            transport: makeRuntimeTransport(),
+            idleTimerBaseline: UIApplication.shared.isIdleTimerDisabled
         )
-        guard startChange.singleEffect != nil else {
+        let startChange = applyLifecycleEvent(.startRequested(request))
+        guard case .changed = startChange else {
             insideJobLogger.info("start() called while already running — ignoring")
             return
         }
 
         do {
-            let resources = try await startRuntimeResources(from: startChange.effects)
+            let resources = try await startRuntimeResources(for: request)
             let finishChange = applyLifecycleEvent(.startSucceeded(attemptID, resources))
-            guard finishChange.effects.contains(.activateRuntime(resources)) else {
+            guard case .running = finishChange.state else {
                 await performLifecycleEffect(.cleanupTransport(resources.transport))
                 throw CancellationError()
             }
             await performLifecycleEffects(finishChange.effects)
         } catch {
             let failureChange = applyLifecycleEvent(.startFailed(attemptID))
-            if failureChange.effects.isEmpty {
-                await performLifecycleEffect(.cleanupTransport(attempt.transport))
-            } else {
+            switch failureChange {
+            case .changed:
                 await performLifecycleEffects(failureChange.effects)
+            case .rejected:
+                await performLifecycleEffect(.cleanupTransport(request.transport))
             }
             throw error
         }

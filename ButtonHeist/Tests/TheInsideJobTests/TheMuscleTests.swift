@@ -531,8 +531,8 @@ final class TheMuscleTests: XCTestCase {
             return error
         }.first
         XCTAssertNotNil(validationError)
-        XCTAssertTrue(validationError?.message.contains("Could not decode client message before authentication") == true)
-        XCTAssertTrue(validationError?.message.contains("same Button Heist version") == true)
+        XCTAssertTrue(validationError?.message.description.contains("Could not decode client message before authentication") == true)
+        XCTAssertTrue(validationError?.message.description.contains("same Button Heist version") == true)
     }
 
     // MARK: - Session Rules Tests
@@ -764,7 +764,7 @@ final class TheMuscleTests: XCTestCase {
         let serverMessages = responses().compactMap { decodeServerMessage($0) }
         let hasAuthFailed = serverMessages.contains { msg in
             if case .error(let serverError) = msg, serverError.kind == .authFailure {
-                return !serverError.message.contains("Too many")
+                return !serverError.message.description.contains("Too many")
             }
             return false
         }
@@ -785,7 +785,7 @@ final class TheMuscleTests: XCTestCase {
         let serverMessages = responses().compactMap { decodeServerMessage($0) }
         let hasLockout = serverMessages.contains { msg in
             if case .error(let serverError) = msg, serverError.kind == .authFailure {
-                return serverError.message.contains("Too many")
+                return serverError.message.description.contains("Too many")
             }
             return false
         }
@@ -839,7 +839,7 @@ final class TheMuscleTests: XCTestCase {
         let serverMessages = responses().compactMap { decodeServerMessage($0) }
         let hasLockout = serverMessages.contains { msg in
             if case .error(let serverError) = msg, serverError.kind == .authFailure {
-                return serverError.message.contains("Too many")
+                return serverError.message.description.contains("Too many")
             }
             return false
         }

@@ -37,10 +37,18 @@ struct MuscleAuthenticationRejection {
         envelope: RequestEnvelope,
         respond: @escaping TheMuscleAdmission.ResponseHandler
     ) -> [MuscleAdmissionEffect] {
-        let error = ServerError(
-            kind: .validationError,
-            message: "Protocol message \(envelope.message.wireType.rawValue) is not an app command after authentication."
-        )
+        let message: ServerErrorMessage
+        do {
+            message = try ServerErrorMessage(
+                validating: "Protocol message \(envelope.message.wireType.rawValue) is not an app command after authentication."
+            )
+        } catch {
+            return [.log(.authenticatedProtocolMessage(
+                clientId: clientId,
+                wireType: envelope.message.wireType
+            ))]
+        }
+        let error = ServerError(kind: .validationError, message: message)
         return [
             .log(.authenticatedProtocolMessage(clientId: clientId, wireType: envelope.message.wireType)),
             .sendResponse(.error(error), requestId: envelope.requestId, respond: respond),
@@ -53,7 +61,16 @@ struct MuscleAuthenticationRejection {
         requestId: RequestID?,
         respond: @escaping TheMuscleAdmission.ResponseHandler
     ) -> [MuscleAdmissionEffect] {
-        let error = ServerError(kind: .authFailure, message: message)
+        let serverMessage: ServerErrorMessage
+        do {
+            serverMessage = try ServerErrorMessage(validating: message)
+        } catch {
+            return [
+                .log(.unauthenticatedMessage(clientId: clientId, message: message)),
+                .delayedDisconnect(clientId: clientId),
+            ]
+        }
+        let error = ServerError(kind: .authFailure, message: serverMessage)
         return [
             .log(.unauthenticatedMessage(clientId: clientId, message: message)),
             .sendResponse(.error(error), requestId: requestId, respond: respond),

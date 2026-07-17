@@ -20,11 +20,11 @@ enum SessionTokenSource: Sendable {
         }
     }
 
-    var invalidTokenMessage: String {
-        "Invalid token. \(configuredTokenRecoveryHint)"
+    var invalidTokenMessage: ServerErrorMessage {
+        "Invalid token. Retry with the configured token."
     }
 
-    var configuredTokenRecoveryHint: String {
+    var configuredTokenRecoveryHint: ServerErrorRecoveryHint {
         "Retry with the configured token."
     }
 

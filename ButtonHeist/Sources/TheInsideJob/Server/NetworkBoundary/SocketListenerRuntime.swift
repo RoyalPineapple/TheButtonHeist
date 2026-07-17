@@ -2,6 +2,7 @@ import Foundation
 import Network
 import os
 
+import ButtonHeistSupport
 import TheScore
 
 private let listenerLogger = ButtonHeistLog.logger(.handoff(.server))
@@ -102,38 +103,6 @@ private final class PendingSocketConnections: Sendable {
     #endif
 }
 
-private actor SocketListenerStopSignal {
-    private enum State {
-        case pending([CheckedContinuation<Void, Never>])
-        case stopped
-    }
-
-    private var state = State.pending([])
-
-    func wait() async {
-        guard case .pending = state else { return }
-        await withCheckedContinuation { continuation in
-            switch state {
-            case .pending(var waiters):
-                waiters.append(continuation)
-                state = .pending(waiters)
-            case .stopped:
-                continuation.resume()
-            }
-        }
-    }
-
-    func finish() {
-        switch state {
-        case .pending(let waiters):
-            state = .stopped
-            waiters.forEach { $0.resume() }
-        case .stopped:
-            return
-        }
-    }
-}
-
 actor SocketListenerRuntime: Equatable {
     private enum Phase {
         case idle
@@ -144,7 +113,7 @@ actor SocketListenerRuntime: Equatable {
 
     nonisolated private let pendingConnections = PendingSocketConnections()
     nonisolated private let callbackTasks = TaskTracker()
-    private let stopSignal = SocketListenerStopSignal()
+    private let stopSignal = CompletionSignal()
     private var phase = Phase.idle
 
     #if DEBUG
@@ -206,7 +175,7 @@ actor SocketListenerRuntime: Equatable {
         }
         #endif
         await callbackTasks.drain()
-        await stopSignal.finish()
+        stopSignal.finish()
     }
 
     func isAcceptingConnections() -> Bool {

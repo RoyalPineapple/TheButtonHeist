@@ -166,7 +166,6 @@ final class WireTypeRoundTripTests: XCTestCase {
             targetResolutionMs: 0,
             actionDispatchMs: 2,
             interactionMs: 12,
-            settleMs: 74,
             finalSemanticEvidenceMs: 23,
             receiptGenerationMs: 0,
             totalMs: 116
@@ -175,12 +174,10 @@ final class WireTypeRoundTripTests: XCTestCase {
         _ = try assertRoundTrip(timing, encoder: encoder, decoder: decoder)
     }
 
-    func testActionPerformanceTimingDecodesPartialPayload() throws {
+    func testActionPerformanceTimingRejectsFormerSettlementField() {
         let json = #"{"settleMs":74}"#
 
-        let decoded = try decoder.decode(ActionPerformanceTiming.self, from: Data(json.utf8))
-
-        XCTAssertEqual(decoded, ActionPerformanceTiming(settleMs: 74))
+        XCTAssertThrowsError(try decoder.decode(ActionPerformanceTiming.self, from: Data(json.utf8)))
     }
 
     func testActivationTraceRejectsMismatchedTapFields() throws {
@@ -226,7 +223,6 @@ final class WireTypeRoundTripTests: XCTestCase {
             targetResolutionMs: 2,
             actionDispatchMs: 3,
             interactionMs: 4,
-            settleMs: 5,
             finalSemanticEvidenceMs: 6,
             receiptGenerationMs: 7,
             totalMs: 8
@@ -244,7 +240,6 @@ final class WireTypeRoundTripTests: XCTestCase {
             targetResolutionMs: 20,
             actionDispatchMs: 3,
             interactionMs: 40,
-            settleMs: 5,
             finalSemanticEvidenceMs: 6,
             receiptGenerationMs: 70,
             totalMs: 80
@@ -257,7 +252,6 @@ final class WireTypeRoundTripTests: XCTestCase {
             targetResolutionMs: 0,
             actionDispatchMs: 2,
             interactionMs: 12,
-            settleMs: 74,
             finalSemanticEvidenceMs: 23,
             receiptGenerationMs: 0,
             totalMs: 116
@@ -265,14 +259,12 @@ final class WireTypeRoundTripTests: XCTestCase {
         let result = ActionResult.success(
             method: .activate,
             message: "activated",
-            evidence: ActionResultSuccessEvidence(
-                observation: .settledTrace(
-                    makeTestTraceEvidence(
-                        .noChangeForTests(elementCount: 0),
-                        completeness: .incomplete
-                    ),
-                    .settled(durationMs: 74)
-                )
+            observation: .settledTrace(
+                makeTestTraceEvidence(
+                    .noChangeForTests(elementCount: 0),
+                    completeness: .incomplete
+                ),
+                .settled(duration: 74)
             )
         ).withTiming(timing)
 
@@ -286,27 +278,23 @@ final class WireTypeRoundTripTests: XCTestCase {
             targetResolutionMs: 2,
             actionDispatchMs: 3,
             interactionMs: 4,
-            settleMs: 5,
             finalSemanticEvidenceMs: 6,
             receiptGenerationMs: 7,
             totalMs: 8
         )
         let result = ActionResult.success(
             method: .activate,
-            evidence: ActionResultSuccessEvidence(
-                observation: .settledTrace(
-                    makeTestTraceEvidence(
-                        .noChangeForTests(elementCount: 0),
-                        completeness: .incomplete
-                    ),
-                    .settled(durationMs: 5)
-                )
+            observation: .settledTrace(
+                makeTestTraceEvidence(
+                    .noChangeForTests(elementCount: 0),
+                    completeness: .incomplete
+                ),
+                .settled(duration: 5)
             )
         ).withTiming(initialTiming)
         let overlay = ActionPerformanceTiming(
             beforeObservationMs: 10,
             actionDispatchMs: 30,
-            settleMs: 50,
             finalSemanticEvidenceMs: 60
         )
 
@@ -316,11 +304,11 @@ final class WireTypeRoundTripTests: XCTestCase {
             targetResolutionMs: 2,
             actionDispatchMs: 30,
             interactionMs: 4,
-            settleMs: 50,
             finalSemanticEvidenceMs: 60,
             receiptGenerationMs: 7,
             totalMs: 8
         ))
+        XCTAssertEqual(result.withTiming(overlay).settleTimeMs, 5)
     }
 
     // MARK: - CustomActionTarget
@@ -1025,14 +1013,11 @@ final class WireTypeRoundTripTests: XCTestCase {
         )
         let step = HeistReceiptFixture.action(
             command: command,
-            result: .failure(
-                method: .activate,
+            result: .activationFailure(
                 errorKind: .elementNotFound,
                 message: "No element matching label \"Save\"",
-                evidence: ActionResultFailureEvidence(
-                    observation: .none,
-                    activationTrace: activationTrace
-                )
+                observation: .none,
+                activationTrace: activationTrace
             ),
             durationMs: 0,
             failure: failure
@@ -1061,7 +1046,7 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testInvocationExpectationDerivesSummaryFromWaitEvidence() throws {
         let predicate = AccessibilityPredicate.exists(.label("Done"))
-        let actionResult = ActionResult.success(method: .wait, evidence: .none)
+        let actionResult = ActionResult.success(method: .wait)
         let expectation = ExpectationResult.Met(predicate: predicate)
         let check = try XCTUnwrap(HeistWaitEvidence.MatchedCheck(
             actionResult: actionResult,

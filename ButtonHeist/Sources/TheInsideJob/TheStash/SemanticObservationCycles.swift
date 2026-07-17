@@ -88,63 +88,72 @@ final class SemanticObservationCycles {
         }
     }
 
-    private enum CycleEvent: Equatable, Sendable {
-        case begin(scope: SemanticObservationScope)
-        case finish(Cycle, result: CycleResult)
-        case cancel
+    private struct CycleAdmissionTransition: Equatable, Sendable {
+        let state: CyclePhase
+        let effect: CycleAdmission
     }
 
-    private enum CycleEffect: Equatable, Sendable {
-        case admission(CycleAdmission)
-        case completion(CycleCompletion)
-        case completeWaiters
+    private struct CycleFinishTransition: Equatable, Sendable {
+        let state: CyclePhase
+        let completion: CycleCompletion
+        let shouldCompleteWaiters: Bool
     }
 
-    private enum CycleRejection: Equatable, Sendable {}
-
-    private struct CycleMachine: SimpleStateMachine {
-        func advance(_ state: CyclePhase, with event: CycleEvent) -> StateChange<CyclePhase, CycleEffect, CycleRejection> {
-            switch (state, event) {
-            case (.idle(var progress), .begin(let scope)):
+    private enum CycleMachine {
+        static func begin(
+            _ state: CyclePhase,
+            scope: SemanticObservationScope
+        ) -> CycleAdmissionTransition {
+            switch state {
+            case .idle(var progress):
                 progress.latestStarted = progress.latestStarted.advanced()
                 let cycle = Cycle(cursor: progress.latestStarted, scope: scope)
-                return .changed(
-                    to: .running(cycle, progress: progress),
-                    effects: [.admission(.started(cycle))]
+                return CycleAdmissionTransition(
+                    state: .running(cycle, progress: progress),
+                    effect: .started(cycle)
                 )
+            case .running(let cycle, _):
+                return CycleAdmissionTransition(state: state, effect: .alreadyRunning(cycle))
+            }
+        }
 
-            case (.running(let cycle, _), .begin):
-                return .changed(to: state, effects: [.admission(.alreadyRunning(cycle))])
-
-            case (
-                .running(let running, let progress),
-                .finish(let cycle, .completed(let settledSequence))
-            ) where running == cycle:
-                return .changed(
-                    to: .idle(progress.recordingCompletion(
+        static func finish(
+            _ state: CyclePhase,
+            cycle: Cycle,
+            result: CycleResult
+        ) -> CycleFinishTransition {
+            switch (state, result) {
+            case (.running(let running, let progress), .completed(let settledSequence))
+                where running == cycle:
+                return CycleFinishTransition(
+                    state: .idle(progress.recordingCompletion(
                         of: cycle,
                         settledSequence: settledSequence
                     )),
-                    effects: [.completion(.completed), .completeWaiters]
+                    completion: .completed,
+                    shouldCompleteWaiters: true
                 )
-
-            case (
-                .running(let running, let progress),
-                .finish(let cycle, .interrupted)
-            ) where running == cycle:
-                return .changed(
-                    to: .idle(progress),
-                    effects: [.completion(.completed)]
+            case (.running(let running, let progress), .interrupted) where running == cycle:
+                return CycleFinishTransition(
+                    state: .idle(progress),
+                    completion: .completed,
+                    shouldCompleteWaiters: false
                 )
+            case (.idle, _), (.running, _):
+                return CycleFinishTransition(
+                    state: state,
+                    completion: .ignoredStaleToken,
+                    shouldCompleteWaiters: false
+                )
+            }
+        }
 
-            case (_, .finish):
-                return .changed(to: state, effects: [.completion(.ignoredStaleToken)])
-
-            case (.running(_, let progress), .cancel):
-                return .changed(to: .idle(progress))
-
-            case (.idle, .cancel):
-                return .changed(to: state)
+        static func cancel(_ state: CyclePhase) -> CyclePhase {
+            switch state {
+            case .running(_, let progress):
+                return .idle(progress)
+            case .idle:
+                return state
             }
         }
     }
@@ -155,13 +164,9 @@ final class SemanticObservationCycles {
         let afterCursor: Cursor
     }
 
-    private var driver = StateDriver(initial: CyclePhase.idle(CycleProgress()), machine: CycleMachine())
+    private var phase = CyclePhase.idle(CycleProgress())
     private var nextWaiterID: UInt64 = 0
     private var waiters = WaiterStore<WaiterKey, TimedOneShot<CycleFulfillment?>>()
-
-    private var phase: CyclePhase {
-        driver.state
-    }
 
     var waiterCount: Int {
         waiters.count
@@ -172,35 +177,23 @@ final class SemanticObservationCycles {
     }
 
     func beginCycle(scope: SemanticObservationScope) -> CycleAdmission {
-        let change = driver.send(.begin(scope: scope))
-        guard case .admission(let admission)? = change.singleEffect else {
-            preconditionFailure("Semantic observation cycle begin must emit one admission")
-        }
-        return admission
+        let transition = CycleMachine.begin(phase, scope: scope)
+        phase = transition.state
+        return transition.effect
     }
 
     @discardableResult
     func finishCycle(token cycle: Cycle, result: CycleResult) -> CycleCompletion {
-        let change = driver.send(.finish(cycle, result: result))
-        var completion: CycleCompletion?
-        for effect in change.effects {
-            switch effect {
-            case .admission:
-                preconditionFailure("Semantic observation cycle finish emitted admission")
-            case .completion(let nextCompletion):
-                completion = nextCompletion
-            case .completeWaiters:
-                completeWaiters()
-            }
+        let transition = CycleMachine.finish(phase, cycle: cycle, result: result)
+        phase = transition.state
+        if transition.shouldCompleteWaiters {
+            completeWaiters()
         }
-        guard let completion else {
-            preconditionFailure("Semantic observation cycle finish must emit completion")
-        }
-        return completion
+        return transition.completion
     }
 
     func cancelRunningCycle() {
-        driver.send(.cancel)
+        phase = CycleMachine.cancel(phase)
     }
 
     func waitForNextCycle(
