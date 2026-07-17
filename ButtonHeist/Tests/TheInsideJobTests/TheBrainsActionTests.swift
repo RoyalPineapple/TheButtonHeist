@@ -1817,9 +1817,9 @@ final class TheBrainsActionTests: XCTestCase {
                 timeout: 1
             ))
         )
-        let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
+        let trace = try XCTUnwrap(receipt.result.actionResult.accessibilityTrace)
 
-        XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
+        XCTAssertTrue(receipt.result.actionResult.outcome.isSuccess)
         XCTAssertEqual(trace.captures.first?.interface.projectedElements.map(\.label), ["Before"])
         XCTAssertEqual(trace.captures.last?.interface.projectedElements.map(\.label), ["Before", "Loaded"])
         XCTAssertTrue(trace.changeFacts.contains { if case .elementsChanged = $0 { true } else { false } })
@@ -2019,8 +2019,8 @@ final class TheBrainsActionTests: XCTestCase {
             initialTrace: actionResult.accessibilityTrace
         )
 
-        XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
-        XCTAssertTrue(receipt.actionResult.accessibilityTrace?.changeFacts.contains {
+        XCTAssertTrue(receipt.result.actionResult.outcome.isSuccess)
+        XCTAssertTrue(receipt.result.actionResult.accessibilityTrace?.changeFacts.contains {
             if case .screenChanged = $0 { true } else { false }
         } == true)
     }
@@ -2038,10 +2038,10 @@ final class TheBrainsActionTests: XCTestCase {
                 timeout: .milliseconds(1)
             ))
         )
-        let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
+        let trace = try XCTUnwrap(receipt.result.actionResult.accessibilityTrace)
 
-        XCTAssertFalse(receipt.actionResult.outcome.isSuccess)
-        XCTAssertEqual(receipt.actionResult.outcome.errorKind, .timeout)
+        XCTAssertFalse(receipt.result.actionResult.outcome.isSuccess)
+        XCTAssertEqual(receipt.result.actionResult.outcome.errorKind, .timeout)
         XCTAssertEqual(trace.captures.last?.interface.projectedElements.map(\.label), ["Known"])
     }
 

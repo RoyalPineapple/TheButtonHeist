@@ -144,13 +144,15 @@ import TheScore
             ),
             expectation: ExpectationResult.Met(predicate: predicate)
         ))
-        return .wait(
+        return try HeistExecutionStepResult.construct(
             path: try HeistExecutionPath(validating: "$.body[1]"),
             durationMs: 100,
-            predicate: predicate,
-            timeout: 0.1,
-            completion: .passed(evidence: try #require(HeistPassedWaitEvidence(.matched(check))))
-        )
+            node: .wait(
+                predicate: predicate,
+                timeout: 0.1,
+                completion: .passed(evidence: try #require(HeistPassedWaitEvidence(.matched(check))))
+            )
+        ).get()
     }
 
     private func repeatStep(predicate: AccessibilityPredicate) throws -> HeistExecutionStepResult {
@@ -174,12 +176,14 @@ import TheScore
         let completion = HeistRepeatUntilCompletion.passed(
             evidence: try #require(HeistPassedRepeatUntilEvidence(evidence))
         )
-        return try #require(HeistExecutionStepResult.admitRepeatUntil(
+        return try HeistExecutionStepResult.construct(
             path: try HeistExecutionPath(validating: "$.body[2]"),
             durationMs: 60,
-            declaration: HeistRepeatUntilDeclaration(predicate: predicate, timeout: 0.05),
-            completion: completion
-        ).receipt)
+            node: .repeatUntil(
+                declaration: HeistRepeatUntilDeclaration(predicate: predicate, timeout: 0.05),
+                completion: completion
+            )
+        ).get()
     }
 
     private func caseSelectionStep() throws -> HeistExecutionStepResult {

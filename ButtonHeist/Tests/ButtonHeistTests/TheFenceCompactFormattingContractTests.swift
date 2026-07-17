@@ -1378,20 +1378,22 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         )))
         let abortedChildren = try XCTUnwrap(HeistAbortedChildren([firstIteration, secondIteration]))
         let declaration = try XCTUnwrap(HeistForEachStringDeclaration(parameter: "item", count: 2))
-        let loopReceipt = try XCTUnwrap(HeistExecutionStepResult.admitForEachString(
+        let loopReceipt = try HeistExecutionStepResult.construct(
             path: try HeistExecutionPath(validating: "$.body[0]"),
             durationMs: 30,
-            declaration: declaration,
-            completion: .childAborted(
-                evidence: failedLoopEvidence,
-                failure: HeistFailureDetail(
-                    category: .loop,
-                    contract: "for_each_string completes all 2 value(s)",
-                    observed: "for_each_string stopped after 2 of 2 iteration(s): iteration 1 failed for value \"Eggs\""
-                ),
-                children: abortedChildren
+            node: .forEachString(
+                declaration: declaration,
+                completion: .childAborted(
+                    evidence: failedLoopEvidence,
+                    failure: HeistFailureDetail(
+                        category: .loop,
+                        contract: "for_each_string completes all 2 value(s)",
+                        observed: "for_each_string stopped after 2 of 2 iteration(s): iteration 1 failed for value \"Eggs\""
+                    ),
+                    children: abortedChildren
+                )
             )
-        ).receipt)
+        ).get()
         let result = HeistExecutionResult(
             steps: [
                 loopReceipt,

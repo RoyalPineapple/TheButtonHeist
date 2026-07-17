@@ -7,12 +7,11 @@ import TheScore
         let command = HeistActionCommand.activate(
             .predicate(ElementPredicateTemplate(label: "Checkout"))
         )
-        let step = try #require(HeistExecutionStepResult.admitAction(
+        let step = try HeistExecutionStepResult.construct(
             path: try HeistExecutionPath(validating: "$.body[0]"),
             durationMs: 0,
-            command: command,
-            completion: .skipped()
-        ).receipt)
+            node: .action(command: command, completion: .skipped())
+        ).get()
 
         #expect(step.actionEvidence == nil)
         #expect(step.reportFacts.command == .activate)

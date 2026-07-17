@@ -196,10 +196,10 @@ extension TheBrains {
         receipt: HeistWaitReceipt,
         context: InvocationExpectationContext?
     ) -> HeistWaitEvidence {
-        let finalSummary = receipt.observationSummary ?? receipt.expectation.actual
-        if let expectation = ExpectationResult.Met(receipt.expectation),
+        let finalSummary = receipt.observationSummary ?? receipt.result.expectation.actual
+        if let expectation = ExpectationResult.Met(receipt.result.expectation),
            let check = HeistWaitEvidence.MatchedCheck(
-               actionResult: receipt.actionResult,
+               actionResult: receipt.result.actionResult,
                expectation: expectation
            ) {
             return .matched(
@@ -209,8 +209,8 @@ extension TheBrains {
             )
         }
         guard let check = HeistWaitEvidence.UnmatchedCheck(
-            actionResult: receipt.actionResult,
-            expectation: receipt.expectation
+            actionResult: receipt.result.actionResult,
+            expectation: receipt.result.expectation
         ) else {
             preconditionFailure("Failed invocation expectation evidence requires a failed action result or unmet expectation")
         }

@@ -34,18 +34,24 @@ final class HeistReceiptTests: XCTestCase {
             expectation: unmet
         )
 
-        XCTAssertTrue(matched.succeeded)
-        XCTAssertTrue(matched.actionResult.outcome.isSuccess)
-        XCTAssertTrue(matched.expectation.met)
-        XCTAssertEqual(matched.actionResult.method, .wait)
+        guard case .matched(let matchedResult, let matchedExpectation) = matched.result else {
+            return XCTFail("matched receipt must carry a matched result")
+        }
+        XCTAssertTrue(matchedResult.outcome.isSuccess)
+        XCTAssertEqual(matchedExpectation, met)
+        XCTAssertEqual(matchedResult.method, .wait)
 
-        XCTAssertFalse(timedOut.succeeded)
-        XCTAssertEqual(timedOut.actionResult.outcome.errorKind, .timeout)
-        XCTAssertFalse(timedOut.expectation.met)
+        guard case .unmatched(let timeoutResult, let timeoutExpectation) = timedOut.result else {
+            return XCTFail("timed-out receipt must carry an unmatched result")
+        }
+        XCTAssertEqual(timeoutResult.outcome.errorKind, .timeout)
+        XCTAssertEqual(timeoutExpectation, unmet)
 
-        XCTAssertFalse(failed.succeeded)
-        XCTAssertEqual(failed.actionResult.outcome.errorKind, .actionFailed)
-        XCTAssertFalse(failed.expectation.met)
+        guard case .unmatched(let failedResult, let failedExpectation) = failed.result else {
+            return XCTFail("failed receipt must carry an unmatched result")
+        }
+        XCTAssertEqual(failedResult.outcome.errorKind, .actionFailed)
+        XCTAssertEqual(failedExpectation, unmet)
     }
 
     func testRunHeistFacadeProducesCanonicalInvocationReceipt() async throws {

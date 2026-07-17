@@ -974,11 +974,11 @@ final class TheBrainsPipelineTests: XCTestCase {
         let receipt = await brains.interactionObservation.waitForPredicate(
             try resolvedWait(WaitStep(predicate: .exists(.label("Home")), timeout: .milliseconds(1)))
         )
-        let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
+        let trace = try XCTUnwrap(receipt.result.actionResult.accessibilityTrace)
 
-        XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
+        XCTAssertTrue(receipt.result.actionResult.outcome.isSuccess)
         XCTAssertEqual(trace.captures.last?.interface.projectedElements.map(\.label), ["Home"])
-        XCTAssertTrue(receipt.expectation.met)
+        XCTAssertTrue(receipt.result.expectation.met)
     }
 
     func testWaitTimeoutReceiptUsesLastSettledVisibleObservation() async throws {
@@ -988,13 +988,13 @@ final class TheBrainsPipelineTests: XCTestCase {
         let receipt = await brains.interactionObservation.waitForPredicate(
             try resolvedWait(WaitStep(predicate: .exists(.label("Missing")), timeout: .milliseconds(1)))
         )
-        let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
+        let trace = try XCTUnwrap(receipt.result.actionResult.accessibilityTrace)
 
-        XCTAssertFalse(receipt.actionResult.outcome.isSuccess)
-        XCTAssertEqual(receipt.actionResult.outcome.errorKind, .timeout)
+        XCTAssertFalse(receipt.result.actionResult.outcome.isSuccess)
+        XCTAssertEqual(receipt.result.actionResult.outcome.errorKind, .timeout)
         XCTAssertEqual(trace.captures.last?.interface.projectedElements.map(\.label), ["Known"])
-        XCTAssertTrue(receipt.actionResult.message?.contains("interface: 1 elements") == true)
-        XCTAssertTrue(receipt.actionResult.message?.contains("last result:") == true)
+        XCTAssertTrue(receipt.result.actionResult.message?.contains("interface: 1 elements") == true)
+        XCTAssertTrue(receipt.result.actionResult.message?.contains("last result:") == true)
     }
 
     func testVisibleMissRunsDiscoveryAfterVisibleSettle() async throws {
@@ -1007,9 +1007,9 @@ final class TheBrainsPipelineTests: XCTestCase {
         let receipt = await brains.interactionObservation.waitForPredicate(
             try resolvedWait(WaitStep(predicate: .exists(.label("Ready")), timeout: 1))
         )
-        let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
+        let trace = try XCTUnwrap(receipt.result.actionResult.accessibilityTrace)
 
-        XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
+        XCTAssertTrue(receipt.result.actionResult.outcome.isSuccess)
         XCTAssertEqual(trace.captures.first?.interface.projectedElements.map(\.label), ["Loading"])
         XCTAssertEqual(trace.captures.last?.interface.projectedElements.map(\.label), ["Ready"])
     }
@@ -1022,9 +1022,9 @@ final class TheBrainsPipelineTests: XCTestCase {
             final: ready
         )
 
-        XCTAssertFalse(receipt.actionResult.outcome.isSuccess)
-        XCTAssertEqual(receipt.actionResult.outcome.errorKind, .timeout)
-        XCTAssertFalse(receipt.expectation.met)
+        XCTAssertFalse(receipt.result.actionResult.outcome.isSuccess)
+        XCTAssertEqual(receipt.result.actionResult.outcome.errorKind, .timeout)
+        XCTAssertFalse(receipt.result.expectation.met)
         XCTAssertTrue(elementChanges(in: receipt).isEmpty)
     }
 
@@ -1036,8 +1036,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
         let changes = try XCTUnwrap(elementChanges(in: receipt).first)
 
-        XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
-        XCTAssertTrue(receipt.expectation.met)
+        XCTAssertTrue(receipt.result.actionResult.outcome.isSuccess)
+        XCTAssertTrue(receipt.result.expectation.met)
         XCTAssertEqual(changes.appeared.count, 1)
         XCTAssertTrue(changes.disappeared.isEmpty)
         XCTAssertTrue(changes.updated.isEmpty)
@@ -1050,9 +1050,9 @@ final class TheBrainsPipelineTests: XCTestCase {
             final: .empty
         )
 
-        XCTAssertFalse(receipt.actionResult.outcome.isSuccess)
-        XCTAssertEqual(receipt.actionResult.outcome.errorKind, .timeout)
-        XCTAssertFalse(receipt.expectation.met)
+        XCTAssertFalse(receipt.result.actionResult.outcome.isSuccess)
+        XCTAssertEqual(receipt.result.actionResult.outcome.errorKind, .timeout)
+        XCTAssertFalse(receipt.result.expectation.met)
         XCTAssertTrue(elementChanges(in: receipt).isEmpty)
     }
 
@@ -1064,8 +1064,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
         let changes = try XCTUnwrap(elementChanges(in: receipt).first)
 
-        XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
-        XCTAssertTrue(receipt.expectation.met)
+        XCTAssertTrue(receipt.result.actionResult.outcome.isSuccess)
+        XCTAssertTrue(receipt.result.expectation.met)
         XCTAssertTrue(changes.appeared.isEmpty)
         XCTAssertEqual(changes.disappeared.count, 1)
         XCTAssertTrue(changes.updated.isEmpty)
@@ -1082,9 +1082,9 @@ final class TheBrainsPipelineTests: XCTestCase {
             final: quantity
         )
 
-        XCTAssertFalse(receipt.actionResult.outcome.isSuccess)
-        XCTAssertEqual(receipt.actionResult.outcome.errorKind, .timeout)
-        XCTAssertFalse(receipt.expectation.met)
+        XCTAssertFalse(receipt.result.actionResult.outcome.isSuccess)
+        XCTAssertEqual(receipt.result.actionResult.outcome.errorKind, .timeout)
+        XCTAssertFalse(receipt.result.expectation.met)
         XCTAssertTrue(elementChanges(in: receipt).isEmpty)
     }
 
@@ -1099,8 +1099,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
         let changes = try XCTUnwrap(elementChanges(in: receipt).first)
 
-        XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
-        XCTAssertTrue(receipt.expectation.met)
+        XCTAssertTrue(receipt.result.actionResult.outcome.isSuccess)
+        XCTAssertTrue(receipt.result.expectation.met)
         XCTAssertTrue(changes.appeared.isEmpty)
         XCTAssertTrue(changes.disappeared.isEmpty)
         XCTAssertEqual(changes.updated.count, 1)
@@ -1118,8 +1118,8 @@ final class TheBrainsPipelineTests: XCTestCase {
             initialTrace: after.trace
         )
 
-        XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
-        XCTAssertTrue(receipt.expectation.met)
+        XCTAssertTrue(receipt.result.actionResult.outcome.isSuccess)
+        XCTAssertTrue(receipt.result.expectation.met)
     }
 
     func testSuppliedCanonicalBaselineOverridesStaleInitialTrace() async throws {
@@ -1140,13 +1140,13 @@ final class TheBrainsPipelineTests: XCTestCase {
             changeBaseline: .supplied(before)
         )
 
-        XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
-        XCTAssertTrue(receipt.expectation.met)
+        XCTAssertTrue(receipt.result.actionResult.outcome.isSuccess)
+        XCTAssertTrue(receipt.result.expectation.met)
         XCTAssertEqual(
-            receipt.actionResult.accessibilityTrace?.captures.map(\.hash),
+            receipt.result.actionResult.accessibilityTrace?.captures.map(\.hash),
             [before.capture.hash, after.capture.hash]
         )
-        XCTAssertFalse(receipt.actionResult.accessibilityTrace?.captures.contains { $0.hash == staleHash } == true)
+        XCTAssertFalse(receipt.result.actionResult.accessibilityTrace?.captures.contains { $0.hash == staleHash } == true)
     }
 
     func testPredicateWaitBuildsScreenChangeHistoryOnlyFromCanonicalObservationLog() async throws {
@@ -1175,10 +1175,10 @@ final class TheBrainsPipelineTests: XCTestCase {
             changeBaseline: .supplied(before)
         )
 
-        XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
-        XCTAssertTrue(receipt.expectation.met)
-        XCTAssertEqual(receipt.traceEvidence?.completeness, .complete)
-        let receiptTrace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
+        XCTAssertTrue(receipt.result.actionResult.outcome.isSuccess)
+        XCTAssertTrue(receipt.result.expectation.met)
+        XCTAssertEqual(receipt.result.actionResult.traceEvidence?.completeness, .complete)
+        let receiptTrace = try XCTUnwrap(receipt.result.actionResult.accessibilityTrace)
         XCTAssertEqual(
             receiptTrace.captures.map(\.hash),
             [before.capture.hash, actionEndpoint.capture.hash, destination.capture.hash]
@@ -1300,11 +1300,11 @@ final class TheBrainsPipelineTests: XCTestCase {
             changeBaseline: .supplied(baseline)
         )
 
-        XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
-        XCTAssertTrue(receipt.expectation.met)
-        XCTAssertEqual(receipt.traceEvidence?.completeness, .complete)
-        XCTAssertEqual(receipt.actionResult.traceEvidence?.completeness, .complete)
-        XCTAssertTrue(predicate.validate(against: receipt.actionResult).met)
+        XCTAssertTrue(receipt.result.actionResult.outcome.isSuccess)
+        XCTAssertTrue(receipt.result.expectation.met)
+        XCTAssertEqual(receipt.result.actionResult.traceEvidence?.completeness, .complete)
+        XCTAssertEqual(receipt.result.actionResult.traceEvidence?.completeness, .complete)
+        XCTAssertTrue(predicate.validate(against: receipt.result.actionResult).met)
     }
 
     func testIncompleteObservationWindowTimesOutUnchangedWait() async throws {
@@ -1335,15 +1335,15 @@ final class TheBrainsPipelineTests: XCTestCase {
             changeBaseline: .supplied(baseline)
         )
         let laterValidation = predicate.validate(
-            against: receipt.actionResult
+            against: receipt.result.actionResult
         )
 
-        XCTAssertFalse(receipt.actionResult.outcome.isSuccess)
-        XCTAssertEqual(receipt.actionResult.outcome.errorKind, .timeout)
-        XCTAssertFalse(receipt.expectation.met)
-        XCTAssertEqual(receipt.expectation.actual, "observation history incomplete")
-        XCTAssertEqual(receipt.traceEvidence?.completeness, .incomplete)
-        XCTAssertEqual(receipt.actionResult.traceEvidence?.completeness, .incomplete)
+        XCTAssertFalse(receipt.result.actionResult.outcome.isSuccess)
+        XCTAssertEqual(receipt.result.actionResult.outcome.errorKind, .timeout)
+        XCTAssertFalse(receipt.result.expectation.met)
+        XCTAssertEqual(receipt.result.expectation.actual, "observation history incomplete")
+        XCTAssertEqual(receipt.result.actionResult.traceEvidence?.completeness, .incomplete)
+        XCTAssertEqual(receipt.result.actionResult.traceEvidence?.completeness, .incomplete)
         XCTAssertFalse(laterValidation.met)
         XCTAssertEqual(laterValidation.actual, "observation history incomplete")
     }
@@ -2279,7 +2279,7 @@ final class TheBrainsPipelineTests: XCTestCase {
     private func elementChanges(
         in receipt: HeistWaitReceipt
     ) -> [AccessibilityTrace.ElementsChangeFact] {
-        receipt.actionResult.accessibilityTrace?.changeFacts.compactMap { fact in
+        receipt.result.actionResult.accessibilityTrace?.changeFacts.compactMap { fact in
             guard case .elementsChanged(let changes) = fact else { return nil }
             return changes
         } ?? []

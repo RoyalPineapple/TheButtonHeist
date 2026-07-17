@@ -2,52 +2,170 @@
 #if DEBUG
 import Foundation
 import ThePlans
-
 import TheScore
 
 extension TheBrains {
+    internal struct HeistStandaloneWaitResolutionFailure {
+        let wait: WaitStep
+        let errorDescription: String
+    }
+
     func executeWaitStep(
         _ step: WaitStep,
-        index: Int,
+        index _: Int,
         path: HeistExecutionPath,
         start: CFAbsoluteTime,
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {
-        // A wait is a step with no command: just the predicate wait.
-        await executeStep(
-            .wait(step, scope: scope),
-            index: index,
+        let resolvedWait: ResolvedWaitRuntimeInput
+        do {
+            resolvedWait = try ResolvedWaitRuntimeInput(resolving: step, in: environment)
+        } catch {
+            return standaloneWaitResolutionFailureResult(
+                HeistStandaloneWaitResolutionFailure(
+                    wait: step,
+                    errorDescription: String(describing: error)
+                ),
+                path: path,
+                start: start
+            )
+        }
+
+        let receipt = await runtime.wait(.standalone(resolvedWait))
+        switch receipt.result {
+        case .matched(let actionResult, let expectation):
+            let completion = HeistWaitEvidence.MatchedCheck(
+                actionResult: actionResult,
+                expectation: expectation
+            ).flatMap {
+                HeistPassedWaitEvidence(.matched($0, finalSummary: expectation.actual))
+            }.map {
+                HeistWaitCompletion.passed(evidence: $0)
+            }
+            return waitReceipt(
+                step: step,
+                completion: completion,
+                path: path,
+                start: start
+            )
+
+        case .unmatched(let actionResult, let expectation):
+            guard let elseBody = step.elseBody else {
+                let completion = HeistWaitEvidence.UnmatchedCheck(
+                    actionResult: actionResult,
+                    expectation: expectation.result
+                ).flatMap {
+                    HeistFailedWaitEvidence(.failed($0, finalSummary: expectation.actual))
+                }.map {
+                    HeistWaitCompletion.failed(
+                        evidence: .observed($0),
+                        failure: standaloneWaitFailureDetail(wait: step, receipt: receipt)
+                    )
+                }
+                return waitReceipt(
+                    step: step,
+                    completion: completion,
+                    path: path,
+                    start: start
+                )
+            }
+
+            let children = await executeHeistSteps(
+                elseBody,
+                runtime: runtime,
+                environment: environment,
+                scope: scope,
+                path: path.waitElseBody()
+            )
+            let evidence = HeistWaitEvidence.UnmatchedCheck(
+                actionResult: actionResult,
+                expectation: expectation.result
+            ).flatMap {
+                HeistPassedWaitEvidence(.handledElse($0, finalSummary: expectation.actual))
+            }
+            let completion: HeistWaitCompletion?
+            switch HeistExecutedChildren(children) {
+            case .passed(let children):
+                completion = evidence.map {
+                    .passed(evidence: $0, children: children)
+                }
+            case .aborted(let children):
+                completion = evidence.map {
+                    .childAborted(
+                        evidence: $0,
+                        failure: childFailureDetail(category: .wait, childPath: children.abortedAtPath),
+                        children: children
+                    )
+                }
+            }
+            return waitReceipt(
+                step: step,
+                completion: completion,
+                path: path,
+                start: start,
+                children: children
+            )
+        }
+    }
+
+    private func waitReceipt(
+        step: WaitStep,
+        completion: HeistWaitCompletion?,
+        path: HeistExecutionPath,
+        start: CFAbsoluteTime,
+        children: [HeistExecutionStepResult] = []
+    ) -> HeistExecutionStepResult {
+        let durationMs = elapsedMilliseconds(since: start)
+        let construction = completion.map {
+            HeistExecutionStepResult.construct(
+                path: path,
+                durationMs: durationMs,
+                node: .wait(predicate: step.predicate, timeout: step.timeout, completion: $0)
+            )
+        } ?? .failure(.evidenceConstructionFailed)
+        return receiptResult(
+            construction,
             path: path,
-            start: start,
-            runtime: runtime,
-            environment: environment
+            durationMs: durationMs,
+            children: children
         )
     }
 }
 
 struct HeistWaitReceipt {
-    let actionResult: ActionResult
-    let expectation: ExpectationResult
+    enum Result {
+        case matched(ActionResult, ExpectationResult.Met)
+        case unmatched(ActionResult, ExpectationResult.Unmet)
+
+        var actionResult: ActionResult {
+            switch self {
+            case .matched(let actionResult, _), .unmatched(let actionResult, _):
+                return actionResult
+            }
+        }
+
+        var expectation: ExpectationResult {
+            switch self {
+            case .matched(_, let expectation):
+                return expectation.result
+            case .unmatched(_, let expectation):
+                return expectation.result
+            }
+        }
+    }
+
+    let result: Result
     let observedSequence: SettledObservationSequence?
     let observationSummary: String?
 
-    var message: String? { actionResult.message }
-    var traceEvidence: AccessibilityTraceEvidence? { actionResult.traceEvidence }
-
-    var succeeded: Bool {
-        actionResult.outcome.isSuccess && expectation.met
-    }
-
     private init(
-        actionResult: ActionResult,
-        expectation: ExpectationResult,
+        result: Result,
         observedSequence: SettledObservationSequence?,
         observationSummary: String?
     ) {
-        self.actionResult = actionResult
-        self.expectation = expectation
+        self.result = result
         self.observedSequence = observedSequence
         self.observationSummary = observationSummary
     }
@@ -61,13 +179,15 @@ struct HeistWaitReceipt {
         announcement: String? = nil
     ) -> HeistWaitReceipt {
         HeistWaitReceipt(
-            actionResult: makeActionResult(
-                errorKind: nil,
-                message: message,
-                traceEvidence: traceEvidence,
-                announcement: announcement
+            result: .matched(
+                makeActionResult(
+                    errorKind: nil,
+                    message: message,
+                    traceEvidence: traceEvidence,
+                    announcement: announcement
+                ),
+                expectation
             ),
-            expectation: expectation.result,
             observedSequence: observedSequence,
             observationSummary: observationSummary
         )
@@ -81,13 +201,15 @@ struct HeistWaitReceipt {
         observationSummary: String? = nil
     ) -> HeistWaitReceipt {
         HeistWaitReceipt(
-            actionResult: makeActionResult(
-                errorKind: .timeout,
-                message: message,
-                traceEvidence: traceEvidence,
-                announcement: nil
+            result: .unmatched(
+                makeActionResult(
+                    errorKind: .timeout,
+                    message: message,
+                    traceEvidence: traceEvidence,
+                    announcement: nil
+                ),
+                expectation
             ),
-            expectation: expectation.result,
             observedSequence: observedSequence,
             observationSummary: observationSummary
         )
@@ -101,13 +223,15 @@ struct HeistWaitReceipt {
         announcement: String? = nil
     ) -> HeistWaitReceipt {
         HeistWaitReceipt(
-            actionResult: makeActionResult(
-                errorKind: errorKind,
-                message: message,
-                traceEvidence: traceEvidence,
-                announcement: announcement
+            result: .unmatched(
+                makeActionResult(
+                    errorKind: errorKind,
+                    message: message,
+                    traceEvidence: traceEvidence,
+                    announcement: announcement
+                ),
+                expectation
             ),
-            expectation: expectation.result,
             observedSequence: nil,
             observationSummary: nil
         )
@@ -125,13 +249,7 @@ struct HeistWaitReceipt {
             observation = .none
         case (nil, let announcement?):
             observation = .announcement(announcement)
-        case (let evidence?, nil):
-            observation = .trace(evidence)
-        case (let evidence?, let announcement?):
-            precondition(
-                evidence.trace.capturedAnnouncements.first?.text == announcement,
-                "wait announcement must belong to its accessibility trace"
-            )
+        case (let evidence?, _):
             observation = .trace(evidence)
         }
         if let errorKind {
@@ -141,13 +259,12 @@ struct HeistWaitReceipt {
                 message: message,
                 evidence: ActionResultFailureEvidence(observation: observation)
             )
-        } else {
-            return ActionResult.success(
-                method: .wait,
-                message: message,
-                evidence: ActionResultSuccessEvidence(observation: observation)
-            )
         }
+        return ActionResult.success(
+            method: .wait,
+            message: message,
+            evidence: ActionResultSuccessEvidence(observation: observation)
+        )
     }
 }
 

@@ -235,7 +235,7 @@ extension TheBrains {
             return runtimeInactiveResult(method: .wait)
         }
         let receipt = await waitForPredicate(step)
-        return receipt.actionResult
+        return receipt.result.actionResult
     }
 
     func waitForPredicate(

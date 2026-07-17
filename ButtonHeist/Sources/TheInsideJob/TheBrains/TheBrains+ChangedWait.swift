@@ -49,7 +49,7 @@ extension TheBrains {
             step,
             onReadyToPoll: onReadyToPoll
         )
-        return receipt.actionResult
+        return receipt.result.actionResult
     }
 }
 

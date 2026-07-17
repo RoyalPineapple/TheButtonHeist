@@ -216,13 +216,13 @@ extension TheBrains {
         if let observedSequence = context.baseline.observedSequence {
             receipt = await runtime.wait(.afterObservation(
                 context.input,
-                baselineTrace: context.baseline.actionResult.accessibilityTrace,
+                baselineTrace: context.baseline.result.actionResult.accessibilityTrace,
                 sequence: observedSequence
             ))
         } else {
             receipt = await runtime.wait(.baselineTraceOnly(
                 context.input,
-                trace: context.baseline.actionResult.accessibilityTrace
+                trace: context.baseline.result.actionResult.accessibilityTrace
             ))
         }
         guard let failure = invocationExpectationFailure(
@@ -238,7 +238,7 @@ extension TheBrains {
         predicateExpression: AccessibilityPredicate,
         receipt: HeistWaitReceipt
     ) -> HeistFailureDetail? {
-        guard !receipt.actionResult.outcome.isSuccess || !receipt.expectation.met else { return nil }
+        guard !receipt.result.actionResult.outcome.isSuccess || !receipt.result.expectation.met else { return nil }
         return HeistFailureDetail(
             category: .expectation,
             contract: "heist invocation expectation is met",
@@ -249,10 +249,10 @@ extension TheBrains {
 
     private func invocationExpectationObserved(_ receipt: HeistWaitReceipt) -> String {
         [
-            receipt.expectation.actual,
-            receipt.actionResult.message,
-            receipt.actionResult.outcome.errorKind.map { "errorKind=\($0.rawValue)" },
-            receipt.actionResult.settled.map { "settled=\($0)" },
+            receipt.result.expectation.actual,
+            receipt.result.actionResult.message,
+            receipt.result.actionResult.outcome.errorKind.map { "errorKind=\($0.rawValue)" },
+            receipt.result.actionResult.settled.map { "settled=\($0)" },
         ].compactMap { $0 }.joined(separator: "; ")
     }
 }

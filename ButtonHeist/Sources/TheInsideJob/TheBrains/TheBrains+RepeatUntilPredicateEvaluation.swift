@@ -26,7 +26,7 @@ extension TheBrains.RepeatUntil {
         internal init?(_ receipt: HeistWaitReceipt) {
             guard let sequence = receipt.observedSequence else { return nil }
             self.sequence = sequence
-            traceEvidence = receipt.traceEvidence
+            traceEvidence = receipt.result.actionResult.traceEvidence
             summary = receipt.observationSummary
         }
 
@@ -83,7 +83,7 @@ extension TheBrains.RepeatUntil {
             guard let observation = Observation(receipt) else { return nil }
             self.init(
                 observation: observation,
-                check: expectation ?? receipt.expectation,
+                check: expectation ?? receipt.result.expectation,
                 receipt: receipt
             )
         }
@@ -218,8 +218,8 @@ extension TheBrains {
         let expectation = repeatUntilStopExpectation(
             authored: step.predicateExpression,
             resolved: step.predicate,
-            evidence: receipt.traceEvidence,
-            fallback: receipt.message ?? receipt.expectation.actual
+            evidence: receipt.result.actionResult.traceEvidence,
+            fallback: receipt.result.actionResult.message ?? receipt.result.expectation.actual
         )
         let stopCheck = expectation
         let observedCheck = RepeatUntil.Observation(receipt).map {
@@ -248,7 +248,7 @@ extension TheBrains {
         case .met(let check):
             return .met(check)
         case .unmet(let check):
-            guard receipt.succeeded else {
+            guard case .matched = receipt.result else {
                 return .noProgress(
                     observation: check.observation,
                     expectation: check.expectation,
