@@ -5,10 +5,9 @@ that Swift, SwiftLint, and behavioral tests cannot express directly. SwiftPM
 and Tuist own target dependencies, Swift access control owns private
 construction, and tests own runtime and wire contracts.
 
-Every retained rule below protects a current typed boundary or canonical
-owner. Rules that preserve an implementation helper, a deleted pipeline, or a
-state that access control already makes unconstructible are intentionally
-absent.
+Every retained rule below protects a current typed or capability boundary.
+Rules that preserve an implementation helper, a deleted pipeline, or a state
+that access control already makes unconstructible are intentionally absent.
 
 ## Architecture Scope
 
@@ -53,13 +52,12 @@ resolve Swift types or infer runtime ownership.
 
 ## Canonical Runtime Owners
 
-The retained shaper guards a semantic effect boundary that Swift access control
-cannot express across source files. Helper names and file placement are not
-architecture contracts.
+This shaper guards a semantic effect boundary that Swift access control cannot
+express across files in the runtime target.
 
 | Rule ID | Invariant | Repair | Proof and deletion condition |
 | --- | --- | --- | --- |
-| `buttonheist.semantic_observation_commit_ownership` | `SemanticObservationStream+Publication.swift` is the only caller that reduces settled observations into the committed interface graph. | Publish proof-bearing observations through the semantic stream. | Proof: standard `boundaryOnly` with an invalid competing committer fixture and repository evaluation of the publication owner. Delete when graph reduction is inaccessible outside the publication owner. |
+| `buttonheist.semantic_observation_commit_ownership` | `SemanticObservationStream+Publication.swift` is the only caller that reduces settled observations into the committed interface graph. | Publish proof-bearing observations through the semantic stream. | Proof: standard `boundaryOnly` with an invalid competing committer fixture and repository evaluation of the publication owner. Delete when graph reduction becomes inaccessible outside the publication owner. |
 
 ## Rule Lifecycle
 

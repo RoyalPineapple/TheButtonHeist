@@ -1,4 +1,3 @@
-import Foundation
 import ThePlans
 
 import TheScore
@@ -13,7 +12,7 @@ extension TheFence {
         let command: Command
     }
 
-    typealias ParsedRequestHandler = @ButtonHeistActor @Sendable (TheFence) async throws -> FenceResponse
+    typealias RequestHandler = @ButtonHeistActor @Sendable (TheFence) async throws -> FenceResponse
 
     struct DurableHeistActionCommands: Sendable {
         private let actions: NonEmptyArray<HeistActionCommand>
@@ -51,27 +50,22 @@ extension TheFence {
     enum DecodedRequestDispatch: Sendable {
         case singleStepHeist(SingleStepHeistRequest)
         case directAction(DirectActionRequest)
-        case handler(ParsedRequestHandler)
+        case handler(RequestHandler)
 
-        init(handler: @escaping ParsedRequestHandler) {
+        init(handler: @escaping RequestHandler) {
             self = .handler(handler)
         }
     }
 
-    fileprivate struct CommandAdmission: Sendable {
-        let command: Command
-        let requestId: RequestID
-        let dispatch: DecodedRequestDispatch
-
+    private enum RequestDecoder {
         @ButtonHeistActor
-        init(
+        static func decode(
             fence: TheFence,
             input: FenceCommandInput
-        ) throws {
+        ) throws -> FenceOperationRequest {
             let command = input.command
             let arguments = input.arguments
             try Self.validateBoundaryShape(command: command, arguments: arguments)
-            let requestId = try Self.requestId(arguments: arguments)
             let expectationPayload = try ExpectationPayload(arguments: arguments)
             let dispatch: DecodedRequestDispatch
             switch command {
@@ -83,7 +77,7 @@ extension TheFence {
                 let request = try fence.makeGetInterfaceRequest(arguments)
                 dispatch = DecodedRequestDispatch { fence in try await fence.handleGetInterface(request) }
             case .getScreen:
-                let request = try fence.makeScreenRequest(arguments, requestId: requestId)
+                let request = try fence.makeScreenRequest(arguments)
                 dispatch = DecodedRequestDispatch { fence in try await fence.handleGetScreen(request) }
             case .getPasteboard:
                 dispatch = DecodedRequestDispatch { fence in try await fence.handleGetPasteboard() }
@@ -159,9 +153,7 @@ extension TheFence {
                 dispatch = DecodedRequestDispatch { fence in fence.handleListTargets() }
             }
 
-            self.command = command
-            self.requestId = requestId
-            self.dispatch = dispatch
+            return FenceOperationRequest(command: command, dispatch: dispatch)
         }
 
         private static func validateBoundaryShape(
@@ -175,7 +167,7 @@ extension TheFence {
                     expected: "public command for The Button Heist"
                 )
             }
-            let allowedKeys = command.descriptor.topLevelParameterKeys.union([FenceParameterKey.requestId.rawValue])
+            let allowedKeys = command.descriptor.topLevelParameterKeys
             if let unexpectedKey = arguments.keys.sorted().first(where: { !allowedKeys.contains($0) }) {
                 throw SchemaValidationError(
                     field: arguments.field(forUnknownKey: unexpectedKey),
@@ -195,21 +187,6 @@ extension TheFence {
                 try parameter.validatePayload(
                     value,
                     field: arguments.field(forUnknownKey: parameter.key)
-                )
-            }
-        }
-
-        private static func requestId(arguments: CommandArgumentEnvelope) throws -> RequestID {
-            guard let value = try arguments.value(FenceParameters.requestId) else {
-                return try RequestID(validating: UUID().uuidString)
-            }
-            do {
-                return try RequestID(validating: value)
-            } catch {
-                throw SchemaValidationError(
-                    field: arguments.field(.requestId),
-                    observed: "string \"\"",
-                    expected: "non-empty string"
                 )
             }
         }
@@ -374,41 +351,16 @@ extension TheFence {
         }
     }
 
-    struct ParsedRequest: Sendable {
-        fileprivate let admission: CommandAdmission
-
-        fileprivate init(admission: CommandAdmission) {
-            self.admission = admission
-        }
-
-        var command: Command { admission.command }
-
-        var requestId: RequestID { admission.requestId }
-
-        var dispatch: DecodedRequestDispatch { admission.dispatch }
-
-        var singleStepHeistRequest: SingleStepHeistRequest? {
-            guard case .singleStepHeist(let request) = dispatch else { return nil }
-            return request
-        }
-
-        var directActionRequest: DirectActionRequest? {
-            guard case .directAction(let request) = dispatch else { return nil }
-            return request
-        }
-    }
-
-    static func waitDispatch(_ command: Command, _ step: WaitStep) -> DecodedRequestDispatch {
+    private static func waitDispatch(_ command: Command, _ step: WaitStep) -> DecodedRequestDispatch {
         .singleStepHeist(.wait(command: command, step))
     }
 
-    static func appInteractionDispatch(
+    private static func appInteractionDispatch(
         _ command: Command,
         _ firstCommand: HeistActionCommand,
         _ additionalCommands: HeistActionCommand...,
         expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        precondition(command.dispatchesAppInteraction, "\(command.rawValue) is not registered as an app interaction command")
         let actions = NonEmptyArray(firstCommand, rest: additionalCommands)
         if let durableActions = DurableHeistActionCommands(actions) {
             return .singleStepHeist(.actions(command: command, durableActions, expectation: expectationPayload))
@@ -429,7 +381,7 @@ extension TheFence {
 
     /// Admit a routed public command input into TheFence's typed runtime.
     @_spi(ButtonHeistTooling) public func admit(_ input: FenceCommandInput) throws -> FenceOperationRequest {
-        FenceOperationRequest(parsed: ParsedRequest(admission: try CommandAdmission(fence: self, input: input)))
+        try RequestDecoder.decode(fence: self, input: input)
     }
 
 }

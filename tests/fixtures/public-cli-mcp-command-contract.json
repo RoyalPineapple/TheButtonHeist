@@ -3,13 +3,11 @@
     {
       "cliExposure" : "directCommand",
       "description" : "Perform primary accessibility activation on a semantic UI element, or one of its named accessibility actions.",
-      "failureProjection" : "diagnosticFailure",
       "family" : "semanticAction",
       "inputSchemaSHA256" : "22edaab0fd328b0a17ffb3b4531a654577d9f859b7388d1d6ef085f11cf99f7c",
       "mcpExposure" : "notExposed",
       "name" : "activate",
       "requiresConnectionBeforeDispatch" : true,
-      "responseProjection" : "heistExecution",
       "timeout" : {
         "base" : "standardAction",
         "kind" : "singleStepAction",
@@ -19,13 +17,11 @@
     {
       "cliExposure" : "directCommand",
       "description" : "Establish or switch the active connection to an app running The Button Heist.",
-      "failureProjection" : "diagnosticFailure",
       "family" : "session",
       "inputSchemaSHA256" : "2bb55a6321fa4f761fbe7bab5cda7b672cfcabd68ee884616aa7bccee3968740",
       "mcpExposure" : "directTool",
       "name" : "connect",
       "requiresConnectionBeforeDispatch" : false,
-      "responseProjection" : "sessionState",
       "timeout" : {
         "kind" : "none"
       }
@@ -33,7 +29,6 @@
     {
       "cliExposure" : "directCommand",
       "description" : "Describe one root entry or reusable heist from a plan so an agent can call it safely.",
-      "failureProjection" : "diagnosticFailure",
       "family" : "heistRuntime",
       "inputSchemaSHA256" : "cd6f582e70db6a557c0a3448dcd840dbf1a83a2a95defc7c8557349731f2bc81",
       "mcpAnnotations" : {
@@ -43,7 +38,6 @@
       "mcpExposure" : "directTool",
       "name" : "describe_heist",
       "requiresConnectionBeforeDispatch" : false,
-      "responseProjection" : "heistDescription",
       "timeout" : {
         "kind" : "none"
       }
@@ -51,13 +45,11 @@
     {
       "cliExposure" : "directCommand",
       "description" : "Dismiss the on-screen keyboard through the current first responder or keyboard action path.",
-      "failureProjection" : "diagnosticFailure",
       "family" : "semanticAction",
       "inputSchemaSHA256" : "04ffdc5bb139e52fa2f79e1ac5f034f7bc1e76c0cf5c81b2bbfc8153c3f90af6",
       "mcpExposure" : "notExposed",
       "name" : "dismiss_keyboard",
       "requiresConnectionBeforeDispatch" : true,
-      "responseProjection" : "heistExecution",
       "timeout" : {
         "base" : "standardAction",
         "kind" : "singleStepAction",
@@ -67,13 +59,11 @@
     {
       "cliExposure" : "directCommand",
       "description" : "Explicit mechanical/spatial drag using exactly one typed intent: elementToPoint (activation point or unit start override) or pointToPoint.",
-      "failureProjection" : "diagnosticFailure",
       "family" : "spatialAction",
       "inputSchemaSHA256" : "2357ec08cc5950270eaa1284846d495c4e98958dd7111d4a10e89d8f4cd2c891",
       "mcpExposure" : "notExposed",
       "name" : "drag",
       "requiresConnectionBeforeDispatch" : true,
-      "responseProjection" : "heistExecution",
       "timeout" : {
         "base" : "standardAction",
         "kind" : "singleStepAction",
@@ -83,13 +73,11 @@
     {
       "cliExposure" : "directCommand",
       "description" : "Perform an edit action on the current first responder.",
-      "failureProjection" : "diagnosticFailure",
       "family" : "semanticAction",
       "inputSchemaSHA256" : "d711d34b74042914d8c6f2774c38bad33f25ec26b6a9416ddeefed02d61ba732",
       "mcpExposure" : "notExposed",
       "name" : "edit_action",
       "requiresConnectionBeforeDispatch" : true,
-      "responseProjection" : "heistExecution",
       "timeout" : {
         "base" : "standardAction",
         "kind" : "singleStepAction",
@@ -99,7 +87,6 @@
     {
       "cliExposure" : "directCommand",
       "description" : "Read recent spoken accessibility text captured from announcement, elementChanged, valueChanged, or screenChanged notifications.",
-      "failureProjection" : "diagnosticFailure",
       "family" : "observation",
       "inputSchemaSHA256" : "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
       "mcpAnnotations" : {
@@ -109,7 +96,6 @@
       "mcpExposure" : "directTool",
       "name" : "get_announcements",
       "requiresConnectionBeforeDispatch" : true,
-      "responseProjection" : "announcements",
       "timeout" : {
         "base" : "health",
         "kind" : "fixed",
@@ -119,7 +105,6 @@
     {
       "cliExposure" : "directCommand",
       "description" : "Read the app accessibility hierarchy, optionally scoped to a subtree.\n\nBuild DSL targets from returned accessibility language: `.label(\"Pay\")`,\n`.identifier(\"pay_button\")`, `.value(\"Milk\")`, `.element(.label(\"Pay\"),\n.traits([.button]))`, or `.target(..., ordinal: n)` for duplicates.\nPass `subtree` a canonical accessibility target. Element target checks use\n`{ \"kind\": \"label|identifier|value|hint|customContent\", \"match\": ... }`,\n`{ \"kind\": \"traits|actions|rotors\", \"values\": [...] }`, or\n`{ \"kind\": \"exclude\", \"check\": { ... } }`.\nCustom actions use `{ \"custom\": \"Sub\" }`.\n`containerName` is for inspection and viewport/debug commands only; it is\nnot a semantic target or durable heist selector.\n`maxScrollsPerContainer` and `maxScrollsPerDiscovery` bound the command-owned\ninterface discovery pass; omit them to use Inside Job runtime defaults.",
-      "failureProjection" : "diagnosticFailure",
       "family" : "observation",
       "inputSchemaSHA256" : "b6e7e0bd09ad1ca156ed6ebefb33b16cf660f52a489aa846bd12e918bb288ecc",
       "mcpAnnotations" : {
@@ -129,7 +114,6 @@
       "mcpExposure" : "directTool",
       "name" : "get_interface",
       "requiresConnectionBeforeDispatch" : true,
-      "responseProjection" : "interface",
       "timeout" : {
         "base" : "explore",
         "kind" : "fixed",
@@ -139,7 +123,6 @@
     {
       "cliExposure" : "directCommand",
       "description" : "Read text from the general pasteboard.",
-      "failureProjection" : "diagnosticFailure",
       "family" : "observation",
       "inputSchemaSHA256" : "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
       "mcpAnnotations" : {
@@ -148,7 +131,6 @@
       "mcpExposure" : "directTool",
       "name" : "get_pasteboard",
       "requiresConnectionBeforeDispatch" : true,
-      "responseProjection" : "action",
       "timeout" : {
         "base" : "health",
         "kind" : "fixed",
@@ -158,7 +140,6 @@
     {
       "cliExposure" : "directCommand",
       "description" : "Capture a PNG screenshot with visible interface state. Pass mode=accessibility to render accessibility markers and legend.",
-      "failureProjection" : "diagnosticFailure",
       "family" : "observation",
       "inputSchemaSHA256" : "dbb5413c3dfad9b85cc658b9255e11fe832a1e104dd5685c4cd7e36818c35259",
       "mcpAnnotations" : {
@@ -168,7 +149,6 @@
       "mcpExposure" : "directTool",
       "name" : "get_screen",
       "requiresConnectionBeforeDispatch" : true,
-      "responseProjection" : "screenshot",
       "timeout" : {
         "base" : "screenCapture",
         "kind" : "fixed",
@@ -178,7 +158,6 @@
     {
       "cliExposure" : "directCommand",
       "description" : "Inspect connection, device, and last-action session state.",
-      "failureProjection" : "diagnosticFailure",
       "family" : "session",
       "inputSchemaSHA256" : "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
       "mcpAnnotations" : {
@@ -188,7 +167,6 @@
       "mcpExposure" : "directTool",
       "name" : "get_session_state",
       "requiresConnectionBeforeDispatch" : false,
-      "responseProjection" : "sessionState",
       "timeout" : {
         "kind" : "none"
       }
@@ -196,7 +174,6 @@
     {
       "cliExposure" : "directCommand",
       "description" : "List discovered iOS devices and configured connection targets.",
-      "failureProjection" : "diagnosticFailure",
       "family" : "session",
       "inputSchemaSHA256" : "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
       "mcpAnnotations" : {
@@ -206,7 +183,6 @@
       "mcpExposure" : "notExposed",
       "name" : "list_devices",
       "requiresConnectionBeforeDispatch" : false,
-      "responseProjection" : "devices",
       "timeout" : {
         "kind" : "none"
       }
@@ -214,7 +190,6 @@
     {
       "cliExposure" : "directCommand",
       "description" : "List the root entry and reusable heists in a plan. Use `detail: \"detailed\"` when composing against available capabilities.",
-      "failureProjection" : "diagnosticFailure",
       "family" : "heistRuntime",
       "inputSchemaSHA256" : "1ec1597d2274342c00aaa64e589a7ff85e876ebced37c1d28d7cda38b5260522",
       "mcpAnnotations" : {
@@ -224,7 +199,6 @@
       "mcpExposure" : "directTool",
       "name" : "list_heists",
       "requiresConnectionBeforeDispatch" : false,
-      "responseProjection" : "heistCatalog",
       "timeout" : {
         "kind" : "none"
       }
@@ -232,7 +206,6 @@
     {
       "cliExposure" : "directCommand",
       "description" : "List configured connection targets and the default target.",
-      "failureProjection" : "diagnosticFailure",
       "family" : "session",
       "inputSchemaSHA256" : "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
       "mcpAnnotations" : {
@@ -242,7 +215,6 @@
       "mcpExposure" : "notExposed",
       "name" : "list_targets",
       "requiresConnectionBeforeDispatch" : false,
-      "responseProjection" : "targets",
       "timeout" : {
         "kind" : "none"
       }
@@ -250,13 +222,11 @@
     {
       "cliExposure" : "directCommand",
       "description" : "Explicit mechanical/spatial long press. Element targets dispatch at their activation point unless unitPoint supplies an element-frame override; point supplies a raw screen coordinate.",
-      "failureProjection" : "diagnosticFailure",
       "family" : "spatialAction",
       "inputSchemaSHA256" : "d55e29beebc26e4ee5587d1323fad2de413a30b673119ddd1b002a0b7369b43b",
       "mcpExposure" : "notExposed",
       "name" : "long_press",
       "requiresConnectionBeforeDispatch" : true,
-      "responseProjection" : "heistExecution",
       "timeout" : {
         "base" : "standardAction",
         "kind" : "singleStepAction",
@@ -266,13 +236,11 @@
     {
       "cliExposure" : "directCommand",
       "description" : "Explicit mechanical/spatial tap. Element targets dispatch at their activation point unless unitPoint supplies an element-frame override; point supplies a raw screen coordinate. ordinary accessible controls should use the semantic command path.",
-      "failureProjection" : "diagnosticFailure",
       "family" : "spatialAction",
       "inputSchemaSHA256" : "6ef23f829a4acfe015cc31161318ea50e863ad44e3561cd0a4db9bc525b96d0e",
       "mcpExposure" : "notExposed",
       "name" : "one_finger_tap",
       "requiresConnectionBeforeDispatch" : true,
-      "responseProjection" : "heistExecution",
       "timeout" : {
         "base" : "standardAction",
         "kind" : "singleStepAction",
@@ -282,13 +250,11 @@
     {
       "cliExposure" : "notExposed",
       "description" : "Run one durable ButtonHeist DSL instruction from `step`: one action or one `WaitFor(...)` statement.\n\nExamples:\n`Activate(.label(\"Pay\")).expect(.changed(.screen()))`\n`TypeText(\"milk\", into: .label(\"Search\")).expect(.changed(.elements()))`\n`Increment(.label(\"Quantity\"))`\n`Decrement(.label(\"Quantity\"))`\n`CustomAction(\"Archive\", on: .label(\"Message\"))`\n`Rotor(\"Headings\", on: .label(\"Article\"))`\n`ScreenActions.Dismiss()`\n`ScreenActions.MagicTap()`\n`SetPasteboard(\"hello\")`\n`Edit(.paste)`\n`DismissKeyboard()`\n`Mechanical.Tap(.label(\"Map\"))`\n`Mechanical.Tap(ScreenPoint(x: 888, y: 372))`\n`Mechanical.Tap(.label(\"Map\"), at: UnitPoint(x: 0.5, y: 0.25))`\n`Mechanical.LongPress(.label(\"Message\"), at: UnitPoint(x: 0.5, y: 0.5))`\n`Mechanical.Swipe(.label(\"Carousel\"), .left)`\n`Mechanical.Drag(.label(\"Slider\"), to: ScreenPoint(x: 200, y: 40))`\n`WaitFor(.label(\"Checkout\"), timeout: 5)`\n\nUse `perform` when one line is enough. Use `run_heist` when the job needs\nmultiple instructions, reusable heists, `RunHeist`, `If`,\n`WaitFor(...).else { ... }`, `ForEach`, `Warn`, or `Fail`.",
-      "failureProjection" : "diagnosticFailure",
       "family" : "heistRuntime",
       "inputSchemaSHA256" : "160bda4f9f66a3802a1026a26581c31999c01d489db5c8fb76adc30f8661ad74",
       "mcpExposure" : "directTool",
       "name" : "perform",
       "requiresConnectionBeforeDispatch" : true,
-      "responseProjection" : "heistExecution",
       "timeout" : {
         "kind" : "performStep"
       }
@@ -296,7 +262,6 @@
     {
       "cliExposure" : "directCommand",
       "description" : "Check connection health without reading accessibility state.",
-      "failureProjection" : "diagnosticFailure",
       "family" : "session",
       "inputSchemaSHA256" : "99334726611ccf58a148b0814696bfa6fe08c1b2d027e946beccf5a74331c9aa",
       "mcpAnnotations" : {
@@ -306,7 +271,6 @@
       "mcpExposure" : "notExposed",
       "name" : "ping",
       "requiresConnectionBeforeDispatch" : false,
-      "responseProjection" : "pong",
       "timeout" : {
         "base" : "health",
         "kind" : "fixed",
@@ -316,13 +280,11 @@
     {
       "cliExposure" : "directCommand",
       "description" : "Move through an element rotor by direction. The server holds the rotor cursor while in rotor mode (entering at the first item); any other interaction exits rotor mode and drops the cursor.",
-      "failureProjection" : "diagnosticFailure",
       "family" : "semanticAction",
       "inputSchemaSHA256" : "e62a07d272c04881cb3ca5ecf95fdd8c6b895114a0e810c3e29c4bb14bf7a501",
       "mcpExposure" : "notExposed",
       "name" : "rotor",
       "requiresConnectionBeforeDispatch" : true,
-      "responseProjection" : "heistExecution",
       "timeout" : {
         "base" : "standardAction",
         "kind" : "singleStepAction",
@@ -332,13 +294,11 @@
     {
       "cliExposure" : "directCommand",
       "description" : "Run a durable heist from a ButtonHeist source plan in `plan`, or from a generated `.heist` package at `path`.\n\nAuthor plans as ButtonHeist source, not raw JSON IR:\n`HeistPlan(\"shop\") { ... }`\n`HeistDef<String>(\"Cart.addItem\", parameter: \"item\") { item in ... }`\n`RunHeist(\"Cart.addItem\", \"Milk\").expect(.changed(.elements([.appeared(.element(.label(\"subtotal\"), .value(.contains(\"1 item\"))))])))`\n`If(.label(\"Pay\")) { ... }.else { ... }`\n`WaitFor(.changed(.screen()), timeout: 10).else { ... }`\n`ForEach(\"Milk\", \"Bread\") { item in ... }`\n`ForEach(.element(.label(.prefix(\"Delete\")), .traits([.button])), limit: 20) { target in ... }`\n`Warn(\"message\")`\n`Fail(\"message\")`\n\nProvide exactly one source: `path` or `plan`. Use `argument` when the root\nheist takes a string or accessibility target. Runtime source is restricted\nButtonHeist DSL, not arbitrary Swift.",
-      "failureProjection" : "diagnosticFailure",
       "family" : "heistRuntime",
       "inputSchemaSHA256" : "6aa76922c485bc436fb81792a67c687e2398c363b5f6d62d987c40863302ac92",
       "mcpExposure" : "directTool",
       "name" : "run_heist",
       "requiresConnectionBeforeDispatch" : true,
-      "responseProjection" : "heistExecution",
       "timeout" : {
         "base" : "longAction",
         "kind" : "fixed",
@@ -348,13 +308,11 @@
     {
       "cliExposure" : "directCommand",
       "description" : "Explicit viewport/debug operation: scroll one page in the visible viewport, within a semantic target's owning scroll ancestor, or for direct debug requests, within a current containerName.",
-      "failureProjection" : "diagnosticFailure",
       "family" : "viewportDebug",
       "inputSchemaSHA256" : "7835685680309328600a3185ff39f81d4ee6aeb569c93726db48a4152b4e4d1d",
       "mcpExposure" : "notExposed",
       "name" : "scroll",
       "requiresConnectionBeforeDispatch" : true,
-      "responseProjection" : "action",
       "timeout" : {
         "base" : "standardAction",
         "kind" : "fixed",
@@ -364,13 +322,11 @@
     {
       "cliExposure" : "directCommand",
       "description" : "Explicit viewport/debug operation: scroll the visible viewport, a semantic target's owning scroll ancestor, or for direct debug requests, a current containerName, to a requested edge.",
-      "failureProjection" : "diagnosticFailure",
       "family" : "viewportDebug",
       "inputSchemaSHA256" : "663c408be838ffec261e558ae97ef95a811c99898e9669d0fcbc2951d08b463e",
       "mcpExposure" : "notExposed",
       "name" : "scroll_to_edge",
       "requiresConnectionBeforeDispatch" : true,
-      "responseProjection" : "action",
       "timeout" : {
         "base" : "standardAction",
         "kind" : "fixed",
@@ -380,13 +336,11 @@
     {
       "cliExposure" : "directCommand",
       "description" : "Explicit viewport/debug operation: move the viewport until a semantic target is visible and report its fresh geometry.",
-      "failureProjection" : "diagnosticFailure",
       "family" : "viewportDebug",
       "inputSchemaSHA256" : "149c9ff8ca384a697e832452770a1989f4359f35d840f161eae2b996e0399426",
       "mcpExposure" : "notExposed",
       "name" : "scroll_to_visible",
       "requiresConnectionBeforeDispatch" : true,
-      "responseProjection" : "action",
       "timeout" : {
         "base" : "standardAction",
         "kind" : "fixed",
@@ -396,13 +350,11 @@
     {
       "cliExposure" : "directCommand",
       "description" : "Write text to the general pasteboard from within the app.",
-      "failureProjection" : "diagnosticFailure",
       "family" : "semanticAction",
       "inputSchemaSHA256" : "c0569798d32b35e081a8249296b1c23f8915619a97905fd3d654763b01fba43a",
       "mcpExposure" : "notExposed",
       "name" : "set_pasteboard",
       "requiresConnectionBeforeDispatch" : true,
-      "responseProjection" : "heistExecution",
       "timeout" : {
         "base" : "standardAction",
         "kind" : "singleStepAction",
@@ -412,13 +364,11 @@
     {
       "cliExposure" : "directCommand",
       "description" : "Explicit mechanical/spatial swipe using exactly one typed intent: elementDirection, elementUnitPoints, pointToPoint, or pointDirection.",
-      "failureProjection" : "diagnosticFailure",
       "family" : "spatialAction",
       "inputSchemaSHA256" : "2d804ad98a7c642c6034487a5a248a863b424afaa8d5fe247ff97225eec2cd0e",
       "mcpExposure" : "notExposed",
       "name" : "swipe",
       "requiresConnectionBeforeDispatch" : true,
-      "responseProjection" : "heistExecution",
       "timeout" : {
         "base" : "standardAction",
         "kind" : "singleStepAction",
@@ -428,13 +378,11 @@
     {
       "cliExposure" : "directCommand",
       "description" : "Type text. Replace mode clears the focused field before typing.",
-      "failureProjection" : "diagnosticFailure",
       "family" : "semanticAction",
       "inputSchemaSHA256" : "a52eeda25659cfbaab5e060f9055824de0234695df695ff5588a36a3a61b984e",
       "mcpExposure" : "notExposed",
       "name" : "type_text",
       "requiresConnectionBeforeDispatch" : true,
-      "responseProjection" : "heistExecution",
       "timeout" : {
         "base" : "longAction",
         "kind" : "singleStepAction",
@@ -444,7 +392,6 @@
     {
       "cliExposure" : "directCommand",
       "description" : "Validate a durable Button Heist plan without connecting to an app.\nReturns runtime-admission diagnostics, optional authoring lint, and\ncanonical source. Provide exactly one of `plan` or `path`. This cannot\nverify live targets or UI outcomes. Call `run_heist` only after\n`admissible` is true.",
-      "failureProjection" : "diagnosticFailure",
       "family" : "heistRuntime",
       "inputSchemaSHA256" : "3683497f34d697e38a8aa6539cfab69f9608370c6ed284f64f0b7774922bd53d",
       "mcpAnnotations" : {
@@ -454,7 +401,6 @@
       "mcpExposure" : "directTool",
       "name" : "validate_heist",
       "requiresConnectionBeforeDispatch" : false,
-      "responseProjection" : "heistValidation",
       "timeout" : {
         "kind" : "none"
       }
@@ -462,7 +408,6 @@
     {
       "cliExposure" : "directCommand",
       "description" : "Assert that an accessibility predicate is satisfied within timeout by evaluating settled accessibility state.",
-      "failureProjection" : "diagnosticFailure",
       "family" : "assertion",
       "inputSchemaSHA256" : "3c01fd25ab35752b4369a5927eb0f5a82f6d172a233bd770fd67f589d0bfc27e",
       "mcpAnnotations" : {
@@ -471,7 +416,6 @@
       "mcpExposure" : "notExposed",
       "name" : "wait",
       "requiresConnectionBeforeDispatch" : true,
-      "responseProjection" : "heistExecution",
       "timeout" : {
         "kind" : "wait"
       }

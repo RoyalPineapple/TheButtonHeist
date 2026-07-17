@@ -42,6 +42,14 @@ extension TheStash {
 
     }
 
+    struct LiveScrollTarget {
+        let container: LiveContainerTarget
+        let scrollView: UIScrollView
+
+        var path: TreePath { container.containerTarget.path }
+        var scrollViewID: ObjectIdentifier { ObjectIdentifier(scrollView) }
+    }
+
     enum LiveContainerTargetResolution {
         case resolved(LiveContainerTarget)
         case objectUnavailable
@@ -147,51 +155,85 @@ extension TheStash {
         dispatchObject(for: treeElement)
     }
 
-    func nearestLiveScrollContainerPath(for path: TreePath) -> TreePath? {
-        var candidatePath: TreePath? = path
-        while let candidate = candidatePath {
-            if liveScrollableContainerView(forPath: candidate) != nil {
-                return candidate
-            }
-            candidatePath = candidate.parent
+    func liveScrollTarget(at path: TreePath) -> LiveScrollTarget? {
+        guard let semanticContainer = latestObservation.tree.containers[path],
+              case .resolved(let liveContainer) = resolveLiveContainerTarget(for: semanticContainer),
+              let scrollView = liveScrollableContainerView(forPath: path)
+        else { return nil }
+        return LiveScrollTarget(container: liveContainer, scrollView: scrollView)
+    }
+
+    func nearestLiveScrollTarget(for path: TreePath) -> LiveScrollTarget? {
+        guard let containerPath = nearestLiveScrollContainerPath(for: path) else { return nil }
+        return liveScrollTarget(at: containerPath)
+    }
+
+    func liveScrollTarget(matching scrollViewID: ObjectIdentifier) -> LiveScrollTarget? {
+        for entry in currentLiveCapture.scrollEntries(matching: scrollViewID) {
+            if let target = liveScrollTarget(at: entry.path) { return target }
         }
         return nil
     }
 
-    func liveScrollView(forContainerPath path: TreePath) -> UIScrollView? {
-        nearestLiveScrollContainerPath(for: path)
-            .flatMap { liveScrollableContainerView(forPath: $0) }
+    func liveProgrammaticScrollTargets(
+        descendedFrom rootScrollViewID: ObjectIdentifier? = nil
+    ) -> [LiveScrollTarget] {
+        var admittedScrollViewIDs = Set<ObjectIdentifier>()
+        let targets = currentLiveCapture.scrollEntries().compactMap { entry -> LiveScrollTarget? in
+            guard !admittedScrollViewIDs.contains(entry.scrollViewID),
+                  let target = liveScrollTarget(at: entry.path),
+                  !target.scrollView.bhIsUnsafeForProgrammaticScrolling
+            else { return nil }
+            admittedScrollViewIDs.insert(entry.scrollViewID)
+            return target
+        }
+        guard let rootScrollViewID else { return targets }
+
+        return targets.filter { target in
+            var current = target.scrollViewID
+            var visited = Set<ObjectIdentifier>()
+            while visited.insert(current).inserted {
+                if current == rootScrollViewID { return true }
+                guard admittedScrollViewIDs.contains(current),
+                      let parent = currentLiveCapture.parentScrollViewID(of: current) else { return false }
+                current = parent
+            }
+            return false
+        }
+    }
+
+    func liveScrollViewIDForRevealing(heistId: HeistId) -> ObjectIdentifier? {
+        guard let membership = interfaceElement(heistId: heistId)?.scrollMembership else { return nil }
+        var visitedPaths = Set<TreePath>()
+        var path: TreePath? = membership.containerPath
+        while let currentPath = path, visitedPaths.insert(currentPath).inserted {
+            if let scrollView = liveScrollableContainerView(forPath: currentPath),
+               liveContainerObject(forPath: currentPath) != nil,
+               liveContainer(forPath: currentPath) != nil,
+               !scrollView.bhIsUnsafeForProgrammaticScrolling {
+                return ObjectIdentifier(scrollView)
+            }
+            path = interfaceTree.containers[currentPath]?.scrollMembership?.containerPath
+        }
+        return nil
     }
 
     func refreshedLiveScrollView(
         for semanticContainer: InterfaceTree.Container,
         directChildOf parent: UIScrollView? = nil
     ) -> UIScrollView? {
-        var matches = latestObservation.tree.containers.values.compactMap { candidate -> LiveContainerMatch? in
+        var matches = latestObservation.tree.orderedContainers.compactMap { candidate -> LiveCapture.ScrollEntry? in
             guard Self.container(candidate, matches: semanticContainer),
                   let view = liveScrollableContainerView(forPath: candidate.path) else { return nil }
-            return LiveContainerMatch(path: candidate.path, view: view)
+            return LiveCapture.ScrollEntry(path: candidate.path, view: view)
         }
         if let parent {
-            guard scrollableContainerViewsByPath.values.contains(where: { $0 === parent }) else { return nil }
             matches = matches.filter { match in
-                match.view.nearestScrollableSuperview === parent
-                    || (match.view === parent && livePathHasAncestor(match.path, backedBy: parent))
+                isDirectLiveScrollChild(at: match.path, of: parent)
             }
         }
         guard matches.count == 1 else { return nil }
         return matches[0].view
-    }
-
-    private func livePathHasAncestor(_ path: TreePath, backedBy scrollView: UIScrollView) -> Bool {
-        var ancestor = path.parent
-        while let current = ancestor {
-            if liveScrollableContainerView(forPath: current) === scrollView {
-                return true
-            }
-            ancestor = current.parent
-        }
-        return false
     }
 
     private func dispatchObject(for treeElement: InterfaceTree.Element) -> NSObject? {
@@ -258,24 +300,6 @@ extension TheStash.LiveTargetStaleness where Identity == HeistId {
         case .geometryUnavailable(let heistId):
             "Live target \(heistId.rawValue) has no current actionable geometry at dispatch"
         }
-    }
-}
-
-private struct LiveContainerMatch {
-    let path: TreePath
-    let view: UIScrollView
-}
-
-private extension UIView {
-    var nearestScrollableSuperview: UIScrollView? {
-        var ancestor = superview
-        while let current = ancestor {
-            if let scrollView = current as? UIScrollView {
-                return scrollView
-            }
-            ancestor = current.superview
-        }
-        return nil
     }
 }
 

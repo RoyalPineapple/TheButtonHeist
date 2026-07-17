@@ -63,33 +63,12 @@ blanket_disable_command:
 
 inclusive_language: {}
 
-# Custom rules: catch canonical agent-code patterns that survived prior cleanups.
-# Each rule has a low-false-positive regex; tune rather than disable inline.
+# Repository invariants not covered by standard SwiftLint rules.
 custom_rules:
-  agent_empty_else_if:
-    name: "Agent: empty else-if branch"
-    regex: '\}\s*else\s+if\s+(?:case\s+)?[^{]+\{\s*//[^\n]*\s*\}'
-    message: "Empty else-if branch with only a comment looks like a stub left by an agent. Either implement the branch or remove it."
-    severity: warning
-
-  agent_xctassert_unwrap_doublet:
-    name: "Agent: XCTAssertNotNil followed by force-unwrap"
-    regex: 'XCTAssertNotNil\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)[^\n]*\n(?:[^\n]*\n){0,2}[^\n]*\b\1!'
-    message: "Force-unwrapping a value right after XCTAssertNotNil is a doublet — use XCTUnwrap or guard let instead."
-    severity: error
-
-  agent_reserved_for_future:
-    name: "Agent: reserved-for-future placeholder"
-    regex: '//\s*[Rr]eserved\s+for\s+future'
-    message: "Reserved-for-future placeholders rarely materialise. Use the symbol now or delete it."
-    severity: warning
-
   agent_test_task_sleep:
     name: "Agent: Task.sleep / Thread.sleep in tests"
     regex: '(?<!cancellable)(?<!\.)\b(?:Task|Thread)\.sleep\b'
-    # Match any Swift file under a `Tests/` directory, not just files literally
-    # named `*Tests.swift` — helpers (`*Helpers.swift`, `*Task.swift`) live in
-    # the same dirs and the rule must catch their sleeps too.
+    # Include helpers under Tests/, not only files named *Tests.swift.
     included: ".*/Tests/.*\\.swift"
     match_kinds:
       - identifier
@@ -97,94 +76,9 @@ custom_rules:
     message: "Tests must not sleep on wall-clock time. See the test-sleep-avoidance skill for expectation / AsyncStream patterns."
     severity: warning
 
-  agent_callback_bridge_task:
-    name: "Agent: single-line MainActor callback bridge"
-    # Single-line `Task { @MainActor in self.foo(...) }` and the `[weak self]`
-    # capture-list variant. The capture list may sit before or after `@MainActor`
-    # (Swift accepts both orderings). `self?\.` covers the weak-capture call form.
-    regex: 'Task\s*\{\s*(?:\[[^\]]*\]\s*)?@MainActor(?:\s+\[[^\]]*\])?\s+in\s+self\??\.\w+\([^)]*\)\s*\}'
-    message: "Single-line `Task { @MainActor in self.foo(...) }` bridges fire-and-forget. Annotate the callback's isolation in its type and call it directly."
-    severity: error
-
-  agent_callback_bridge_task_multiline:
-    name: "Agent: multi-line MainActor callback bridge"
-    # Multi-line cousin of `agent_callback_bridge_task`. Matches the *opening*
-    # of an unstored `Task { @MainActor [weak self] in` whose body spans
-    # multiple lines. The leading anchor `^[ \t]+` is the key disambiguator:
-    # stored Tasks read as `let task = Task { @MainActor in` or
-    # `eventConsumerTask = Task { @MainActor in`, which never sit at the start
-    # of an indented line.
-    #
-    # The trailing negative-lookahead `(?![ \t]+guard\s+let\s+self\s+else\b)`
-    # excludes factory functions like `makePollingTask` that return the Task —
-    # those bodies open with `guard let self else { return }` before doing
-    # real work. The lookahead anchors before the indent so `[ \t]+`
-    # backtracking can't fool it. Callback bridges, by contrast, dive straight
-    # into a method call on `self?`, `self`, or a captured presenter.
-    # `included:` further restricts this to production source so test helpers
-    # (e.g. `TestSentinelTask.neverEndingTask`) that match the bare opener
-    # don't trip it.
-    #
-    # PR #383 M3: also catch `Task` that opens *after* a trailing-closure
-    # brace on the same line (e.g. `events.observe { Task { @MainActor in`).
-    # The first alternation is the original "Task at start of indented
-    # line"; the second matches "Task immediately after an opening `{` and
-    # whitespace, not preceded by assignment/return". Both feed the same
-    # body-shape lookahead.
-    regex: '(?:^[ \t]+|\{\s+)Task\s*\{\s*(?:\[[^\]]*\]\s*)?@MainActor(?:\s+\[[^\]]*\])?\s+in\s*\n(?![ \t]+guard\s+let\s+self\s+else\b)[ \t]+\S'
-    included: ".*/(ButtonHeist|ButtonHeistCLI|ButtonHeistMCP)/Sources/.*\\.swift$"
-    message: "Multi-line `Task { @MainActor in ... }` bridges fire-and-forget — no handle, no cancellation, no ordering guarantee. Annotate the callback's isolation in its declared closure type and call it directly, or store the Task on a tracked lifecycle field."
-    severity: error
-
-  agent_callback_bridge_task_unstored_await:
-    name: "Agent: unstored fire-and-forget actor-hop Task"
-    # Catches `Task { await self.foo(...) }` and `Task { await self?.foo(...) }`
-    # patterns spawned from NWConnection / NWListener callbacks (the audit's
-    # SimpleSocketServer 5.4 cluster, plus the two inner `self?` Tasks in
-    # 5.2's `showApprovalAlert`). The leading
-    # `^[ \t]+` anchor restricts this to statement-position Tasks — stored Tasks
-    # (`let task = Task { await ... }`, `pendingTasks.insert(Task { ... })`,
-    # `return Task { ... }`) never start at the line's indentation column.
-    # Scoped to production sources so test helpers that build returned tasks
-    # don't trip it.
-    regex: '^[ \t]+Task\s*\{\s*await\s+self\??\.'
-    included: ".*/(ButtonHeist|ButtonHeistCLI|ButtonHeistMCP)/Sources/.*\\.swift$"
-    message: "Unstored `Task { await self.foo(...) }` from a callback fires and forgets — there is no handle, so `stop()` / teardown cannot cancel work in flight. Track the Task in a `Set<Task<Void, Never>>` and cancel on teardown, or refactor the callback to call the actor method directly."
-    severity: error
-
-  # Known gap: bare `Task { await freeFunction() }` or `Task { await someActor.foo() }`
-  # in callback bodies is not caught. Adding it produces too many false positives
-  # on legitimate one-shot actor hops (`Task { await stakeout.noteScreenChange() }`
-  # in TheGetaway, `Task { await getaway.broadcastIfChanged() }` in TheInsideJob).
-  # The audit flagged these as 5.3 / 5.5 medium-severity — Wave 2b will track
-  # them by hand. Revisit if a structural distinguishing feature emerges.
-
   agent_no_task_detached:
     name: "Agent: Task.detached banned"
-    # Match both `Task.detached(...)` and `Task.detached { ... }` (trailing closure).
-    #
-    # PR #361 M3: leading `\b` anchor prevents matching identifiers that end
-    # in `Task` (e.g. `MyTask.detached`, `pollingTask.detached`). Without it
-    # the regex hits `mTask.detached`/`oneTask.detached` on any custom type
-    # whose name happens to end in `Task`.
+    # Match calls and trailing closures without matching custom types ending in Task.
     regex: '\bTask\.detached\s*[({]'
-    message: "Task.detached escapes the calling isolation context. Use Task { ... } (inherits caller isolation) or refactor to structured concurrency. If you genuinely need to escape isolation, document why with `// swiftlint:disable:next agent_no_task_detached` and a rationale comment."
+    message: "Task.detached escapes the calling isolation context. Use structured concurrency or a tracked Task that inherits caller isolation."
     severity: error
-
-  agent_wire_message_arm_no_op_break:
-    name: "Agent: wire-message switch arm with bare `break`"
-    # A `case .X: break` in a wire-message dispatch silently drops the message.
-    # Recording bug #348's root cause was exactly this: a `.pong` arm broke
-    # without flowing through `onEvent`. Scoped to the known wire-message
-    # dispatch files so the rule has a meaningful denominator. Files outside
-    # the include list are not checked — a future wire-dispatch site needs to
-    # be added here when it lands.
-    regex: 'case\s+\.[A-Za-z_][A-Za-z0-9_]*(?:\s*,\s*\.[A-Za-z_][A-Za-z0-9_]*)*\s*:[ \t]*\n[ \t]+break[ \t]*(?://[^\n]*)?\n'
-    # PR #361 H1: TheGetaway.swift has the server-side dispatch mirror of
-    # TheHandoff's client-side dispatch. Both fan messages out by switching
-    # on the wire enum, so a bare `break` in either drops a message. Keep
-    # this list narrow — only files that genuinely dispatch wire-message
-    # enums belong here.
-    included: ".*(DeviceConnection|TheHandoff|SimpleSocketServer|TheGetaway)\\.swift$"
-    message: "Wire-message switch arms that `break` silently drop messages. Either flow the message through `onEvent` (or the equivalent dispatch), or annotate with `// swiftlint:disable:next agent_wire_message_arm_no_op_break` and explain who consumes this case elsewhere."
-    severity: warning

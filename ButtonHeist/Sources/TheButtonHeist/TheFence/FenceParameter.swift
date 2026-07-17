@@ -92,7 +92,6 @@ import TheScore
     static let plan = Self("plan"), policy = Self("policy"), predicate = Self("predicate"), property = Self("property")
     static let radius = Self("radius")
     static let ref = Self("ref")
-    static let requestId = Self("requestId")
     static let rotor = Self("rotor"), rotorIndex = Self("rotorIndex"), rotors = Self("rotors")
     static let rowCount = Self("rowCount")
     static let scale = Self("scale"), scope = Self("scope"), semantic = Self("semantic"), spread = Self("spread"), start = Self("start")

@@ -7,7 +7,7 @@ final class DocumentationContractTests: XCTestCase {
     func testHandwrittenMarkdownLinksResolve() throws {
         var failures: [String] = []
 
-        for file in handwrittenMarkdownFiles() {
+        for file in try documentationMarkdownFiles() {
             let contents = try String(contentsOf: file, encoding: .utf8)
             for link in try markdownLinks(in: contents) {
                 guard let target = localPathTarget(from: link) else { continue }
@@ -29,7 +29,7 @@ final class DocumentationContractTests: XCTestCase {
     func testJSONLinesExamplesUseCLIExposedCommands() throws {
         var failures: [String] = []
 
-        for file in handwrittenMarkdownFiles() {
+        for file in try documentationMarkdownFiles() {
             let contents = try String(contentsOf: file, encoding: .utf8)
             for example in jsonLinesExamples(in: contents) {
                 let data = Data(example.json.utf8)
@@ -296,30 +296,29 @@ final class DocumentationContractTests: XCTestCase {
         return target.isEmpty ? nil : target.removingPercentEncoding ?? target
     }
 
-    private func handwrittenMarkdownFiles() -> [URL] {
-        let relativePaths = [
-            "README.md",
-            "ButtonHeistCLI/README.md",
-            "ButtonHeistMCP/README.md",
-            "examples/README.md",
-            "examples/adoption-examples.md",
-            "examples/semantic-command.md",
-            "docs/ACCESSIBILITY-CONTRACT.md",
-            "docs/API.md",
-            "docs/ARCHITECTURE.md",
-            "docs/AUTH.md",
-            "docs/BONJOUR_TROUBLESHOOTING.md",
-            "docs/CI.md",
-            "docs/HEIST-DOCTOR.md",
-            "docs/HEIST-FORMAT.md",
-            "docs/MCP-AGENT-GUIDE.md",
-            "docs/README.md",
-            "docs/SCOPE-AND-LIMITS.md",
-            "docs/SWIFT-HEIST-AUTHORING.md",
-            "docs/USB_DEVICE_CONNECTIVITY.md",
-            "docs/WIRE-PROTOCOL.md",
-        ]
-        return relativePaths.map { repositoryRoot().appendingPathComponent($0) }
+    private func documentationMarkdownFiles() throws -> [URL] {
+        let root = repositoryRoot()
+        let rootFiles = try FileManager.default.contentsOfDirectory(
+            at: root,
+            includingPropertiesForKeys: nil
+        ).filter { $0.pathExtension == "md" }
+        let componentReadmes = ["ButtonHeistCLI", "ButtonHeistMCP", "TestApp"]
+            .map { root.appendingPathComponent($0).appendingPathComponent("README.md") }
+        let documentationFiles = try ["docs", "examples"].flatMap {
+            try markdownFiles(in: root.appendingPathComponent($0))
+        }
+        return (rootFiles + componentReadmes + documentationFiles)
+            .sorted { $0.path < $1.path }
+    }
+
+    private func markdownFiles(in directory: URL) throws -> [URL] {
+        let enumerator = try XCTUnwrap(FileManager.default.enumerator(
+            at: directory,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        ))
+        return enumerator.compactMap { $0 as? URL }
+            .filter { $0.pathExtension == "md" }
     }
 
     private func contents(relativePath: String) throws -> String {

@@ -14,7 +14,6 @@ extension TheFence.Command {
                     FenceParameters.maxScrollsPerDiscovery.spec,
                 ],
                 timeout: .fixed(.explore),
-                responseProjection: .interface,
                 projection: .cliAndMCP(
                     """
                     Read the app accessibility hierarchy, optionally scoped to a subtree.
@@ -40,7 +39,6 @@ extension TheFence.Command {
                 family: .observation,
                 parameters: [FenceParameters.output.spec, FenceParameters.inlineData.spec, FenceParameters.screenMode.spec],
                 timeout: .fixed(.screenCapture),
-                responseProjection: .screenshot,
                 projection: .cliAndMCP(
                     "Capture a PNG screenshot with visible interface state. Pass mode=accessibility to render accessibility markers and legend.",
                     mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
@@ -50,7 +48,6 @@ extension TheFence.Command {
             return makeDescriptor(
                 family: .observation,
                 timeout: .fixed(.health),
-                responseProjection: .action,
                 projection: .cliAndMCP(
                     "Read text from the general pasteboard.",
                     mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true)
@@ -60,7 +57,6 @@ extension TheFence.Command {
             return makeDescriptor(
                 family: .observation,
                 timeout: .fixed(.health),
-                responseProjection: .announcements,
                 projection: .cliAndMCP(
                     "Read recent spoken accessibility text captured from announcement, elementChanged, valueChanged, or screenChanged notifications.",
                     mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
@@ -84,8 +80,6 @@ extension TheFence.Command {
             family: .assertion,
             parameters: FenceParameterBlocks.wait,
             timeout: .wait,
-            responseProjection: .heistExecution,
-            execution: [.heistPrimitive],
             projection: .cliOnly(
                 "Assert that an accessibility predicate is satisfied within timeout "
                     + "by evaluating settled accessibility state.",

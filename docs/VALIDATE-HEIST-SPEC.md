@@ -92,7 +92,7 @@ The same typed `TheFence.Command.validateHeist` command is exposed through:
 
 - the MCP `validate_heist` tool;
 - `buttonheist validate_heist`;
-- `buttonheist json_lines` with `{"command":"validate_heist", ...}`.
+- `buttonheist json_lines` with `{"command":"validate_heist","plan":"..."}`.
 
 Existing `heist-plan` commands remain the lower-level local compiler and
 artifact tools.

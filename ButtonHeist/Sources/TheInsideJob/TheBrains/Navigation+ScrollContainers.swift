@@ -15,12 +15,6 @@ extension Navigation {
         let path: TreePath
     }
 
-    private struct ScrollContainerEvidence {
-        let container: AccessibilityContainer
-        let path: TreePath
-        let contentSize: AccessibilitySize
-    }
-
     @MainActor enum ContainerScrollResolution {
         case resolved(ScrollableTarget)
         case failed(ContainerScrollFailure)
@@ -143,13 +137,12 @@ extension Navigation {
                 return .failed(liveScrollElementFailure(target, command: command))
             }
             let targetDescription = Self.ScrollTargetDescription(resolved)
-            guard let containerPath = stash.nearestLiveScrollContainerPath(for: resolved.path),
-                  let semanticContainer = stash.latestObservation.tree.containers[containerPath],
-                  let contentSize = semanticContainer.container.scrollableContentSize,
-                  let scrollView = stash.liveScrollableContainerView(forPath: containerPath)
+            guard let liveScrollTarget = stash.nearestLiveScrollTarget(for: resolved.path),
+                  let contentSize = liveScrollTarget.container.container.scrollableContentSize
             else {
                 return .failed(.missingScrollableAncestor(targetDescription, command: command))
             }
+            let scrollView = liveScrollTarget.scrollView
             guard !scrollView.bhIsUnsafeForProgrammaticScrolling else {
                 return .failed(.unsafeProgrammaticScroll(targetDescription, command: command))
             }
@@ -163,7 +156,8 @@ extension Navigation {
                 ))
             }
             guard let scrollTarget = scrollableTarget(
-                for: semanticContainer,
+                for: liveScrollTarget.container.container,
+                path: liveScrollTarget.path,
                 contentSize: contentSize,
                 safeSwipeBounds: currentSwipeSafeBounds()
             ) else {
@@ -214,11 +208,9 @@ extension Navigation {
                 return nil
             }
             guard let target = self.scrollableTarget(
-                for: ScrollContainerEvidence(
-                    container: container,
-                    path: path,
-                    contentSize: contentSize
-                ),
+                for: container,
+                path: path,
+                contentSize: contentSize,
                 safeSwipeBounds: safeSwipeBounds
             ) else {
                 return nil
@@ -230,52 +222,12 @@ extension Navigation {
     func scrollableTarget(
         for container: AccessibilityContainer,
         path: TreePath? = nil,
-        contentSize: AccessibilitySize
-    ) -> ScrollableTarget? {
-        scrollableTarget(
-            for: container,
-            path: path,
-            contentSize: contentSize,
-            safeSwipeBounds: currentSwipeSafeBounds()
-        )
-    }
-
-    private func scrollableTarget(
-        for evidence: ScrollContainerEvidence,
-        safeSwipeBounds: CGRect
-    ) -> ScrollableTarget? {
-        guard let semanticContainer = stash.latestObservation.tree.containers[evidence.path] else {
-            return nil
-        }
-        return scrollableTarget(
-            for: semanticContainer,
-            contentSize: evidence.contentSize,
-            safeSwipeBounds: safeSwipeBounds
-        )
-    }
-
-    private func scrollableTarget(
-        for container: AccessibilityContainer,
-        path: TreePath? = nil,
         contentSize: AccessibilitySize,
-        safeSwipeBounds: CGRect
+        safeSwipeBounds: CGRect? = nil
     ) -> ScrollableTarget? {
         guard let path,
               let semanticContainer = stash.latestObservation.tree.containers[path]
         else { return nil }
-        return scrollableTarget(
-            for: semanticContainer,
-            contentSize: contentSize,
-            safeSwipeBounds: safeSwipeBounds
-        )
-    }
-
-    private func scrollableTarget(
-        for semanticContainer: InterfaceTree.Container,
-        contentSize: AccessibilitySize,
-        safeSwipeBounds: CGRect
-    ) -> ScrollableTarget? {
-        let cgContentSize = contentSize.cgSize
         guard case .resolved(let liveContainer) = stash.resolveLiveContainerTarget(for: semanticContainer) else {
             return nil
         }
@@ -287,12 +239,15 @@ extension Navigation {
                 scrollView: scrollView
             )
         }
-        guard safeSwipeFrame(from: liveContainer.frame, safeBounds: safeSwipeBounds) != nil else {
+        guard safeSwipeFrame(
+            from: liveContainer.frame,
+            safeBounds: safeSwipeBounds ?? currentSwipeSafeBounds()
+        ) != nil else {
             return nil
         }
         return .swipeable(
             container: liveContainer,
-            contentSize: cgContentSize
+            contentSize: contentSize.cgSize
         )
     }
 

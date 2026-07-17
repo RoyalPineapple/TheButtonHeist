@@ -45,7 +45,7 @@ extension SemanticObservationStream {
             return .deadlineReached
         }
 
-        let waiterID = reserveObservationWaiterID()
+        let waiterID = observationWaiters.reserveID()
         let oneShot = TimedOneShot<SemanticObservationWaitResult>()
         let subscription = subscribe(scope: scope)
         defer { subscription.cancel() }
@@ -53,17 +53,17 @@ extension SemanticObservationStream {
         return await oneShot.wait(
             cancellationValue: .cancelled,
             onRegistered: { oneShot in
-                observationWaiters[waiterID] = SemanticObservationWaiter(
+                observationWaiters.insert(SemanticObservationWaiter(
                     cursor: cursor,
                     scope: scope,
                     completesAfterObservationCycle: completingAfterCurrentCycle,
                     oneShot: oneShot
-                )
+                ), id: waiterID)
                 resolveObservationWaiterIfAvailable(waiterID)
                 armObservationDeadline(deadline, waiterID: waiterID, oneShot: oneShot)
             },
             onFinished: {
-                observationWaiters.removeValue(forKey: waiterID)?.oneShot.cancelTimeout()
+                observationWaiters.remove(id: waiterID)?.oneShot.cancelTimeout()
             }
         )
     }
@@ -153,14 +153,23 @@ extension SemanticObservationStream {
     func completeObservationWaiters(
         completedScope: SemanticObservationScope? = nil
     ) {
-        for waiterID in observationWaiters.keys.sorted() {
-            resolveObservationWaiterIfAvailable(waiterID, completedScope: completedScope)
+        let waiters = observationWaiters.removeAll {
+            observationWaitResult(for: $0, completedScope: completedScope) != nil
+        }
+        for waiter in waiters {
+            guard let result = observationWaitResult(
+                for: waiter,
+                completedScope: completedScope
+            ) else {
+                preconditionFailure("removed an unresolved semantic observation waiter")
+            }
+            waiter.oneShot.resolve(returning: result)
         }
     }
 
     func cancelObservationWaiters() {
-        for waiterID in observationWaiters.keys.sorted() {
-            resolveObservationWaiter(waiterID, with: .cancelled)
+        for waiter in observationWaiters.removeAll() {
+            waiter.oneShot.resolve(returning: .cancelled)
         }
     }
 
@@ -178,27 +187,34 @@ extension SemanticObservationStream {
         return nil
     }
 
-    private func reserveObservationWaiterID() -> UInt64 {
-        defer { nextObservationWaiterID &+= 1 }
-        return nextObservationWaiterID
-    }
-
     private func resolveObservationWaiterIfAvailable(
         _ waiterID: UInt64,
         completedScope: SemanticObservationScope? = nil
     ) {
-        guard let waiter = observationWaiters[waiterID] else { return }
+        guard let waiter = observationWaiters[waiterID],
+              let result = observationWaitResult(
+            for: waiter,
+            completedScope: completedScope
+        ) else { return }
+        resolveObservationWaiter(waiterID, with: result)
+    }
+
+    private func observationWaitResult(
+        for waiter: SemanticObservationWaiter,
+        completedScope: SemanticObservationScope?
+    ) -> SemanticObservationWaitResult? {
         switch observationLog.read(after: waiter.cursor, scope: waiter.scope) {
         case .entry(let entry):
-            resolveObservationWaiter(waiterID, with: .observation(entry))
+            return .observation(entry)
         case .failure(let error):
-            resolveObservationWaiter(waiterID, with: .unavailable(error))
+            return .unavailable(error)
         case .pending:
             if waiter.completesAfterObservationCycle,
                let completedScope,
                completedScope.canFulfill(waiter.scope) {
-                resolveObservationWaiter(waiterID, with: .cycleCompleted)
+                return .cycleCompleted
             }
+            return nil
         }
     }
 
@@ -206,7 +222,7 @@ extension SemanticObservationStream {
         _ waiterID: UInt64,
         with result: SemanticObservationWaitResult
     ) {
-        guard let waiter = observationWaiters.removeValue(forKey: waiterID) else { return }
+        guard let waiter = observationWaiters.remove(id: waiterID) else { return }
         waiter.oneShot.resolve(returning: result)
     }
 

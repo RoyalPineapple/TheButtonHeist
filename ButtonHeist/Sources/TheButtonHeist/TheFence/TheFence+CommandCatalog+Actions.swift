@@ -9,8 +9,6 @@ extension TheFence.Command {
                 family: .spatialAction,
                 parameters: FenceParameterBlocks.gesturePointSelection + FenceParameterBlocks.expectation,
                 timeout: .singleStepAction(base: .standardAction),
-                responseProjection: .heistExecution,
-                execution: [.appInteraction, .heistPrimitive, .payloadCheckedHeistPrimitive],
                 projection: .cliOnly(
                     "Explicit mechanical/spatial tap. Element targets dispatch at their activation point "
                         + "unless unitPoint supplies an element-frame override; point supplies a raw screen coordinate. "
@@ -23,8 +21,6 @@ extension TheFence.Command {
                 parameters: FenceParameterBlocks.gesturePointSelection
                     + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation,
                 timeout: .singleStepAction(base: .standardAction),
-                responseProjection: .heistExecution,
-                execution: [.appInteraction, .heistPrimitive, .payloadCheckedHeistPrimitive],
                 projection: .cliOnly(
                     "Explicit mechanical/spatial long press. Element targets dispatch at their activation point "
                         + "unless unitPoint supplies an element-frame override; point supplies a raw screen coordinate."
@@ -36,8 +32,6 @@ extension TheFence.Command {
                 parameters: FenceParameterBlocks.swipeIntents
                     + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation,
                 timeout: .singleStepAction(base: .standardAction),
-                responseProjection: .heistExecution,
-                execution: [.appInteraction, .heistPrimitive, .payloadCheckedHeistPrimitive],
                 projection: .cliOnly(
                     "Explicit mechanical/spatial swipe using exactly one typed intent: "
                         + "elementDirection, elementUnitPoints, pointToPoint, or pointDirection."
@@ -49,8 +43,6 @@ extension TheFence.Command {
                 parameters: FenceParameterBlocks.dragIntents
                     + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation,
                 timeout: .singleStepAction(base: .standardAction),
-                responseProjection: .heistExecution,
-                execution: [.appInteraction, .heistPrimitive, .payloadCheckedHeistPrimitive],
                 projection: .cliOnly(
                     "Explicit mechanical/spatial drag using exactly one typed intent: "
                         + "elementToPoint (activation point or unit start override) or pointToPoint."
@@ -74,8 +66,6 @@ extension TheFence.Command {
                     FenceParameters.scrollDirection.spec,
                 ] + FenceParameterBlocks.expectation,
                 timeout: .fixed(.standardAction),
-                responseProjection: .action,
-                execution: [.appInteraction],
                 projection: .cliOnly(
                     "Explicit viewport/debug operation: scroll one page in the visible viewport, "
                         + "within a semantic target's owning scroll ancestor, or for direct debug requests, "
@@ -87,8 +77,6 @@ extension TheFence.Command {
                 family: .viewportDebug,
                 parameters: FenceParameterBlocks.target + FenceParameterBlocks.expectation,
                 timeout: .fixed(.standardAction),
-                responseProjection: .action,
-                execution: [.appInteraction],
                 projection: .cliOnly(
                     "Explicit viewport/debug operation: move the viewport until a "
                         + "semantic target is visible and report its fresh geometry."
@@ -102,8 +90,6 @@ extension TheFence.Command {
                     FenceParameters.scrollEdge.spec,
                 ] + FenceParameterBlocks.expectation,
                 timeout: .fixed(.standardAction),
-                responseProjection: .action,
-                execution: [.appInteraction],
                 projection: .cliOnly(
                     "Explicit viewport/debug operation: scroll the visible viewport, "
                         + "a semantic target's owning scroll ancestor, or for direct debug requests, "
@@ -126,8 +112,6 @@ extension TheFence.Command {
                 parameters: FenceParameterBlocks.target
                     + [FenceParameters.actionName.spec] + FenceParameterBlocks.expectation,
                 timeout: .singleStepAction(base: .standardAction),
-                responseProjection: .heistExecution,
-                execution: [.appInteraction, .heistPrimitive],
                 projection: .cliOnly(
                     "Perform primary accessibility activation on a semantic UI element, "
                         + "or one of its named accessibility actions."
@@ -142,8 +126,6 @@ extension TheFence.Command {
                     FenceParameters.rotorDirection.spec,
                 ] + FenceParameterBlocks.expectation,
                 timeout: .singleStepAction(base: .standardAction),
-                responseProjection: .heistExecution,
-                execution: [.appInteraction, .heistPrimitive],
                 projection: .cliOnly(
                     "Move through an element rotor by direction. The server holds the rotor cursor "
                         + "while in rotor mode (entering at the first item); any other interaction exits rotor mode "
@@ -158,8 +140,6 @@ extension TheFence.Command {
                     FenceParameters.textInputMode.spec,
                 ] + FenceParameterBlocks.expectation,
                 timeout: .singleStepAction(base: .longAction),
-                responseProjection: .heistExecution,
-                execution: [.appInteraction, .heistPrimitive],
                 projection: .cliOnly(
                     "Type text. Replace mode clears the focused field before typing."
                 )
@@ -169,8 +149,6 @@ extension TheFence.Command {
                 family: .semanticAction,
                 parameters: [FenceParameters.editAction.spec] + FenceParameterBlocks.expectation,
                 timeout: .singleStepAction(base: .standardAction),
-                responseProjection: .heistExecution,
-                execution: [.appInteraction, .heistPrimitive],
                 projection: .cliOnly("Perform an edit action on the current first responder.")
             )
         case .setPasteboard:
@@ -178,8 +156,6 @@ extension TheFence.Command {
                 family: .semanticAction,
                 parameters: [FenceParameters.pasteboardText.spec] + FenceParameterBlocks.expectation,
                 timeout: .singleStepAction(base: .standardAction),
-                responseProjection: .heistExecution,
-                execution: [.appInteraction, .heistPrimitive],
                 projection: .cliOnly("Write text to the general pasteboard from within the app.")
             )
         case .dismissKeyboard:
@@ -187,8 +163,6 @@ extension TheFence.Command {
                 family: .semanticAction,
                 parameters: FenceParameterBlocks.expectation,
                 timeout: .singleStepAction(base: .standardAction),
-                responseProjection: .heistExecution,
-                execution: [.appInteraction, .heistPrimitive],
                 projection: .cliOnly("Dismiss the on-screen keyboard through the current first responder or keyboard action path.")
             )
         case .ping, .listDevices, .getInterface, .getScreen, .getPasteboard, .getAnnouncements,

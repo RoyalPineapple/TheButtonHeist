@@ -31,11 +31,8 @@ import TheScore
 
 /// Fully admitted operation ready to enter TheFence's execution pipeline.
 @_spi(ButtonHeistTooling) public struct FenceOperationRequest: Sendable {
-    let parsed: TheFence.ParsedRequest
-
-    @_spi(ButtonHeistTooling) public var command: TheFence.Command {
-        parsed.command
-    }
+    @_spi(ButtonHeistTooling) public let command: TheFence.Command
+    let dispatch: TheFence.DecodedRequestDispatch
 }
 
 @_spi(ButtonHeistTooling) public extension TheFence.Command {

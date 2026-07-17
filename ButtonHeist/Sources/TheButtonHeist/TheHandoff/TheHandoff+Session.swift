@@ -91,7 +91,7 @@ extension TheHandoff {
             guard connectionLifecycle.isCurrentRun(run) else { return }
             connectionLifecycle.markReconnecting(target: target, runID: run.id)
 
-            let sleepDuration = policy.sleepDuration(afterConsecutiveDiscoveryMisses: 0)
+            let sleepDuration = policy.sleepDuration()
             guard await reconnectSleeper(sleepDuration) else { return }
             guard connectionLifecycle.isCurrentRun(run) else { return }
 

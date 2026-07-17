@@ -16,16 +16,11 @@ for arg in "$@"; do
 done
 
 pbxproj_paths=()
-while IFS= read -r -d '' path; do
-    pbxproj_paths+=("$path")
-done < <(
-    find . \
-        -name 'project.pbxproj' \
-        -not -path './Tuist/.build/*' \
-        -not -path './submodules/*' \
-        -not -path './.context/*' \
-        -print0
-)
+for path in \
+    ButtonHeist.xcodeproj/project.pbxproj \
+    TestApp/TestApp.xcodeproj/project.pbxproj; do
+    [[ -f "$path" ]] && pbxproj_paths+=("$path")
+done
 
 if [[ ${#pbxproj_paths[@]} -eq 0 ]]; then
     pbxproj_status=0
@@ -37,14 +32,10 @@ else
 fi
 
 if [[ "$check_only" == false ]]; then
-    # Tuist also emits workspace-level schemes that this repo intentionally does
-    # not track. Remove only the known generated names, and only when they are
-    # not already in the git index.
+    # Tuist also emits workspace-level schemes that this repo does not use.
     for scheme in ButtonHeist-Workspace.xcscheme "Generate Project.xcscheme"; do
         scheme_path="ButtonHeist.xcworkspace/xcshareddata/xcschemes/$scheme"
-        if [[ -f "$scheme_path" ]] && ! git ls-files --error-unmatch "$scheme_path" >/dev/null 2>&1; then
-            rm -f "$scheme_path"
-        fi
+        rm -f "$scheme_path"
     done
 
     if [[ -d ButtonHeist.xcworkspace/xcshareddata/xcschemes ]]; then

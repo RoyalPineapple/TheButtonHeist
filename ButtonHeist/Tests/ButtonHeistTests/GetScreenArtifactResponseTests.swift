@@ -82,7 +82,7 @@ final class GetScreenArtifactResponseTests: XCTestCase {
         ])
         let config = TheFence.Configuration(artifactBaseDirectory: tempDirectory)
         let (fence, mockConnection) = makeConnectedFence(configuration: config)
-        mockConnection.autoResponse = { message in
+        mockConnection.responseScript = { message in
             switch message {
             case .requestScreen:
                 return .screen(ScreenPayload(
@@ -236,7 +236,7 @@ final class GetScreenArtifactResponseTests: XCTestCase {
     ) -> TheFence {
         let config = TheFence.Configuration(artifactBaseDirectory: tempDirectory)
         let (fence, mockConnection) = makeConnectedFence(configuration: config)
-        mockConnection.autoResponse = { message in
+        mockConnection.responseScript = { message in
             switch message {
             case .requestScreen:
                 return .screen(ScreenPayload(

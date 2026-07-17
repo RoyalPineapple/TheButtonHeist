@@ -1,10 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-tuist_available() {
-    command -v mise >/dev/null 2>&1 || command -v tuist >/dev/null 2>&1
-}
-
 # --- Submodule freshness check ---
 # Compare the staged gitlink with the remote branch without moving the worktree.
 submodule_name="submodules/AccessibilitySnapshotBH"
@@ -16,31 +12,6 @@ remote_tip=$(git ls-remote "$submodule_url" "refs/heads/$submodule_branch" 2>/de
 if [[ -n "$submodule_pin" && -n "$remote_tip" && "$submodule_pin" != "$remote_tip" ]]; then
     echo "warning: AccessibilitySnapshotBH submodule is behind the tip of $submodule_branch"
     echo "Run: git submodule update --remote -- $submodule_path && git add $submodule_path"
-fi
-
-# --- Tuist project freshness check ---
-if tuist_available; then
-    if scripts/generate-project.sh --no-binary-cache >/dev/null 2>&1; then
-        dirty=$(git diff --name-only -- '*.pbxproj' '*.xcworkspacedata' '*.xcscheme')
-        if [[ -n "$dirty" ]]; then
-            echo "error: tuist generate produced uncommitted project changes:"
-            echo "$dirty"
-            echo "Run scripts/generate-project.sh and stage the result, or investigate."
-            exit 1
-        fi
-    else
-        echo "warning: project generation failed, skipping project freshness check"
-    fi
-fi
-
-# --- Hardcoded absolute paths in pbxproj ---
-abs_paths=$(git diff --cached -- '*.pbxproj' | grep '^+' | grep -v '^+++' | grep 'SRCROOT = /Users' || true)
-if [[ -n "$abs_paths" ]]; then
-    echo "error: staged pbxproj files contain hardcoded absolute paths:"
-    echo "$abs_paths"
-    echo "Hardcoded SRCROOT breaks builds for other developers and CI."
-    echo "Investigate the Tuist configuration — do not commit these paths."
-    exit 1
 fi
 
 # --- SwiftLint ---

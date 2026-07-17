@@ -41,8 +41,6 @@ struct ToolSyncTests {
             #expect(fields["requiresConnectionBeforeDispatch"] != nil)
             #expect(fields["cliExposure"]?.stringValue != nil)
             #expect(fields["mcpExposure"]?.stringValue != nil)
-            #expect(fields["responseProjection"]?.stringValue != nil)
-            #expect(fields["failureProjection"]?.stringValue != nil)
             let timeoutKind = try #require(timeout["kind"]?.stringValue)
             let hasFixedBase = timeoutKind == "fixed" || timeoutKind == "singleStepAction"
             #expect((timeout["base"] != nil) == hasFixedBase)

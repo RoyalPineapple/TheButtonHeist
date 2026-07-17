@@ -31,7 +31,7 @@ enum TheFenceFixtures {
 
 extension TheFence {
     @ButtonHeistActor
-    func parseRequest(command: Command, values: [String: HeistValue] = [:]) throws -> ParsedRequest {
+    func parseRequest(command: Command, values: [String: HeistValue] = [:]) throws -> FenceOperationRequest {
         try parseRequest(
             command: command,
             arguments: CommandArgumentEnvelope(values: values)
@@ -39,8 +39,8 @@ extension TheFence {
     }
 
     @ButtonHeistActor
-    func parseRequest(command: Command, arguments: CommandArgumentEnvelope) throws -> ParsedRequest {
-        try admit(FenceCommandInput(command: command, arguments: arguments)).parsed
+    func parseRequest(command: Command, arguments: CommandArgumentEnvelope) throws -> FenceOperationRequest {
+        try admit(FenceCommandInput(command: command, arguments: arguments))
     }
 
     @ButtonHeistActor
@@ -56,13 +56,7 @@ extension TheFence {
 
     @ButtonHeistActor
     func execute(command: Command, values: [String: HeistValue] = [:]) async throws -> FenceResponse {
-        let request: FenceOperationRequest
-        do {
-            request = try admit(FenceCommandInput(command: command, arguments: CommandArgumentEnvelope(values: values)))
-        } catch {
-            return .failure(error)
-        }
-        return try await execute(request)
+        try await execute(command: command, arguments: CommandArgumentEnvelope(values: values))
     }
 }
 
@@ -183,6 +177,12 @@ func targetArgumentValue(
     return .object(target)
 }
 
+func scriptedHeistResponse(
+    _ result: HeistExecutionResult = HeistReceiptFixture.result(steps: [HeistReceiptFixture.action()])
+) -> ServerMessage {
+    .actionResult(.success(payload: .heistExecution(result)))
+}
+
 func stringMatchArgumentValue(_ value: String, mode: String = "exact") -> HeistValue {
     .object([
         "mode": .string(mode),
@@ -205,7 +205,7 @@ private func predicateCheckArgumentValue(
 func makeConnectedFence(configuration: TheFence.Configuration = .init()) -> (TheFence, MockConnection) {
     let mockConn = MockConnection()
     mockConn.serverInfo = TheFenceFixtures.testServerInfo
-    mockConn.autoResponse = { message in
+    mockConn.responseScript = { message in
         switch message {
         case .ping:
             return .pong(PongPayload(
@@ -221,6 +221,8 @@ func makeConnectedFence(configuration: TheFence.Configuration = .init()) -> (The
             return .interface(Interface(timestamp: Date(), tree: []))
         case .requestScreen:
             return .screen(ScreenPayload(pngData: "", width: 393, height: 852, interface: Interface(timestamp: Date(), tree: [])))
+        case .heistPlan:
+            return scriptedHeistResponse()
         default:
             return .actionResult(ActionResult.success(method: .activate))
         }
@@ -236,7 +238,7 @@ func makeConnectedFence(configuration: TheFence.Configuration = .init()) -> (The
     makeReachabilityConnection = { _ in
         let probe = MockConnection()
         probe.emitTransportReadyOnConnect = true
-        probe.autoResponse = { message in
+        probe.responseScript = { message in
             if case .status = message {
                 return .status(StatusPayload(
                     identity: StatusIdentity(

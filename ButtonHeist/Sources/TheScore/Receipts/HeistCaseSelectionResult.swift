@@ -15,7 +15,7 @@ public enum HeistCaseSelectionMissReason: String, Codable, Sendable, Equatable {
 }
 
 public enum HeistCaseSelectionOutcome: Codable, Sendable, Equatable {
-    case matchedCase(index: Int)
+    case matchedCase(index: UInt)
     case elseBranch(reason: HeistCaseSelectionMissReason)
     case timedOut
     case noMatch
@@ -41,18 +41,11 @@ public enum HeistCaseSelectionOutcome: Codable, Sendable, Equatable {
         switch kind {
         case .matchedCase:
             try container.rejectIncompatibleFields(allowing: [.kind, .index], typeName: typeName)
-            guard let index = try container.decodeIfPresent(Int.self, forKey: .index) else {
+            guard let index = try container.decodeIfPresent(UInt.self, forKey: .index) else {
                 throw DecodingError.dataCorruptedError(
                     forKey: .index,
                     in: container,
                     debugDescription: "matched_case outcome requires index"
-                )
-            }
-            guard index >= 0 else {
-                throw DecodingError.dataCorruptedError(
-                    forKey: .index,
-                    in: container,
-                    debugDescription: "matched_case index must be non-negative"
                 )
             }
             self = .matchedCase(index: index)
@@ -101,8 +94,18 @@ public struct HeistCaseSelectionResult: Codable, Sendable, Equatable {
         timeout: Double? = nil,
         lastObservedSummary: String? = nil
     ) -> Self {
-        let outcome = cases.firstIndex(where: \.met).map(HeistCaseSelectionOutcome.matchedCase(index:))
+        let matchedIndex = cases.firstIndex(where: \.met).map(UInt.init)
+        let outcome = matchedIndex.map(HeistCaseSelectionOutcome.matchedCase(index:))
             ?? (ifNone == .timedOut ? .timedOut : .noMatch)
+        requireValidLiteralPayload {
+            try Self.validate(
+                outcome: outcome,
+                cases: cases,
+                elapsedMs: elapsedMs,
+                timeout: timeout,
+                codingPath: []
+            )
+        }
         return Self(
             cases: cases,
             outcome: outcome,
@@ -158,12 +161,20 @@ public struct HeistCaseSelectionResult: Codable, Sendable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let cases = try container.decode([HeistCaseMatchResult].self, forKey: .cases)
         let outcome = try container.decode(HeistCaseSelectionOutcome.self, forKey: .outcome)
-        try Self.validate(outcome: outcome, cases: cases, codingPath: container.codingPath)
+        let elapsedMs = try container.decode(Int.self, forKey: .elapsedMs)
+        let timeout = try container.decodeIfPresent(Double.self, forKey: .timeout)
+        try Self.validate(
+            outcome: outcome,
+            cases: cases,
+            elapsedMs: elapsedMs,
+            timeout: timeout,
+            codingPath: container.codingPath
+        )
         self.init(
             cases: cases,
             outcome: outcome,
-            elapsedMs: try container.decode(Int.self, forKey: .elapsedMs),
-            timeout: try container.decodeIfPresent(Double.self, forKey: .timeout),
+            elapsedMs: elapsedMs,
+            timeout: timeout,
             lastObservedSummary: try container.decodeIfPresent(String.self, forKey: .lastObservedSummary)
         )
     }
@@ -180,26 +191,41 @@ public struct HeistCaseSelectionResult: Codable, Sendable, Equatable {
     private static func validate(
         outcome: HeistCaseSelectionOutcome,
         cases: [HeistCaseMatchResult],
+        elapsedMs: Int,
+        timeout: Double?,
         codingPath: [CodingKey]
     ) throws {
+        guard elapsedMs >= 0 else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: codingPath + [CodingKeys.elapsedMs],
+                debugDescription: "case selection elapsedMs must be non-negative"
+            ))
+        }
+        guard timeout.map({ $0.isFinite && $0 >= 0 }) ?? true else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: codingPath + [CodingKeys.timeout],
+                debugDescription: "case selection timeout must be finite and non-negative"
+            ))
+        }
+
         switch outcome {
-        case .matchedCase(let index):
-            guard cases.indices.contains(index) else {
+        case .matchedCase(let ordinal):
+            guard let index = Int(exactly: ordinal), cases.indices.contains(index) else {
                 throw invalidOutcome(
                     codingPath: codingPath,
-                    description: "matched_case index \(index) is out of range for \(cases.count) case(s)"
+                    description: "matched_case index \(ordinal) is out of range for \(cases.count) case(s)"
                 )
             }
             guard cases[index].met else {
                 throw invalidOutcome(
                     codingPath: codingPath,
-                    description: "matched_case index \(index) refers to an unmet case"
+                    description: "matched_case index \(ordinal) refers to an unmet case"
                 )
             }
             guard cases.firstIndex(where: \.met) == index else {
                 throw invalidOutcome(
                     codingPath: codingPath,
-                    description: "matched_case index \(index) is not the first matched case"
+                    description: "matched_case index \(ordinal) is not the first matched case"
                 )
             }
         case .elseBranch, .timedOut, .noMatch:
@@ -209,6 +235,18 @@ public struct HeistCaseSelectionResult: Codable, Sendable, Equatable {
                     description: "unmatched case selection outcome cannot contain a matched case"
                 )
             }
+        }
+
+        switch outcome {
+        case .timedOut, .elseBranch(reason: .timedOut):
+            guard timeout.map({ $0 > 0 }) ?? false else {
+                throw invalidOutcome(
+                    codingPath: codingPath,
+                    description: "timed_out outcome requires a positive timeout"
+                )
+            }
+        case .matchedCase, .elseBranch, .noMatch:
+            break
         }
     }
 

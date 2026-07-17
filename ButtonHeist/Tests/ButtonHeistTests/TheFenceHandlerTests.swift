@@ -875,7 +875,7 @@ final class TheFenceHandlerTests: XCTestCase {
         makeReachabilityConnection = { _ in
             let probe = MockConnection()
             probe.emitTransportReadyOnConnect = true
-            probe.autoResponse = { message in
+            probe.responseScript = { message in
                 if case .status = message {
                     return .status(StatusPayload(
                         identity: StatusIdentity(
@@ -1233,8 +1233,12 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testRunHeistExecutesPureRuntimeSourceThroughValidatedPlan() async throws {
+    func testRunHeistSendsValidatedPlanAndProjectsServerReceipt() async throws {
         let (fence, mockConn) = makeConnectedFence()
+        let scriptedResult = HeistReceiptFixture.result(steps: [
+            HeistReceiptFixture.warning(message: "server receipt"),
+        ])
+        mockConn.responseScript = { _ in scriptedHeistResponse(scriptedResult) }
         fence.handoff.connect(to: TheFenceFixtures.testDevice)
 
         let response = try await fence.execute(command: .runHeist, values: [
@@ -1247,8 +1251,7 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(plan.name, "agentFlow")
         XCTAssertEqual(mockConn.sent.sentHeistPlan, plan)
         XCTAssertEqual(mockConn.sent.sentHeistRun?.argument, HeistArgument.none)
-        XCTAssertEqual(result.steps.map(\.kind), [.warn, .action, .forEachString])
-        XCTAssertFalse(result.isFailure)
+        XCTAssertEqual(result.steps, scriptedResult.steps)
     }
 
     @ButtonHeistActor
@@ -1263,7 +1266,11 @@ final class TheFenceHandlerTests: XCTestCase {
                 setEnvironment(EnvironmentKey.buttonheistReceiptsMode.rawValue, previousMode)
             }
 
-            let (fence, _) = makeConnectedFence()
+            let (fence, mockConn) = makeConnectedFence()
+            let scriptedResult = HeistReceiptFixture.result(steps: [
+                HeistReceiptFixture.warning(message: "recorded receipt"),
+            ])
+            mockConn.responseScript = { _ in scriptedHeistResponse(scriptedResult) }
             fence.handoff.connect(to: TheFenceFixtures.testDevice)
 
             let response = try await fence.execute(command: .runHeist, values: [
@@ -1273,6 +1280,7 @@ final class TheFenceHandlerTests: XCTestCase {
             guard case .heistExecution(_, let result, _) = response else {
                 return XCTFail("Expected heistExecution response, got \(response)")
             }
+            XCTAssertEqual(result.steps, scriptedResult.steps)
             let receiptURL = try assertSingleReceiptArtifactURL(in: directory)
             XCTAssertEqual(try HeistReceiptCodec.decode(contentsOf: receiptURL), result)
         }
@@ -2065,7 +2073,15 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testDirectTapReturnsHeistExecutionBeforeFormatting() async throws {
-        let (fence, _) = makeConnectedFence()
+        let (fence, mockConn) = makeConnectedFence()
+        let point = ScreenPoint(x: 12, y: 34)
+        let scriptedResult = HeistReceiptFixture.result(steps: [
+            HeistReceiptFixture.action(
+                command: .mechanicalTap(TapTarget(selection: .coordinate(point))),
+                result: HeistReceiptFixture.actionResult(method: .syntheticTap)
+            ),
+        ])
+        mockConn.responseScript = { _ in scriptedHeistResponse(scriptedResult) }
 
         let response = try await fence.execute(command: .oneFingerTap, values: [
             "point": .object(["x": .double(12), "y": .double(34)]),
@@ -2650,7 +2666,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testPingTimeoutUsesPongTracker() async throws {
         let (fence, mockConn) = makeConnectedFence()
         fence.handoff.connect(to: TheFenceFixtures.testDevice)
-        mockConn.autoResponse = nil
+        mockConn.responseScript = nil
 
         do {
             _ = try await fence.sendAndAwaitPong(timeout: 0.01)
@@ -2746,19 +2762,8 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testDirectWaitReturnsHeistExecutionBeforeFormatting() async throws {
         let (fence, mockConn) = makeConnectedFence()
-        mockConn.resolvedWaitResponse = { _ in
-            return .actionResult(ActionResult.success(
-                method: .wait,
-                    observation: .trace(makeTestTraceEvidence(
-                        AccessibilityTrace.elementsChangedForTests(
-                            elementCount: 1,
-                            edits: ElementEdits()
-                        ),
-                        completeness: .incomplete
-                    ))
-
-            ))
-        }
+        let scriptedResult = HeistReceiptFixture.result(steps: [HeistReceiptFixture.wait()])
+        mockConn.responseScript = { _ in scriptedHeistResponse(scriptedResult) }
 
         let response = try await fence.execute(command: .wait, values: [
             "predicate": .object([
@@ -2772,70 +2777,6 @@ final class TheFenceHandlerTests: XCTestCase {
         let json = try publicJSONProbe(response).object()
         try json.assertMissing("method")
         try json.assertPresent("report")
-    }
-
-    @ButtonHeistActor
-    func testWaitChangedRequiresTraceDerivedExpectationMatch() async throws {
-        let (fence, mockConn) = makeConnectedFence()
-        mockConn.resolvedWaitResponse = { _ in
-            return .actionResult(ActionResult.success(
-                method: .wait,
-                message: "expectation met after observed change",
-                    observation: .trace(makeTestTraceEvidence(
-                        AccessibilityTrace.noChangeForTests(elementCount: 1),
-                        completeness: .complete
-                    ))
-
-            ))
-        }
-
-        let response = try await fence.execute(command: .wait, values: [
-            "predicate": .object([
-                "type": .string("changed"),
-                "scope": .string("elements"),
-                "assertions": .array([]),
-            ]),
-        ])
-
-        guard case .heistExecution(_, let result, _) = response else {
-            return XCTFail("Expected heistExecution response, got \(response)")
-        }
-        let waitEvidence = try XCTUnwrap(result.steps.first?.waitEvidence)
-        XCTAssertEqual(waitEvidence.expectation.met, false)
-        XCTAssertEqual(waitEvidence.expectation.actual, "noChange")
-    }
-
-    @ButtonHeistActor
-    func testWaitChangedTimeoutDoesNotClaimExpectationMet() async throws {
-        let (fence, mockConn) = makeConnectedFence()
-        mockConn.resolvedWaitResponse = { _ in
-            return .actionResult(ActionResult.failure(
-                method: .wait,
-                errorKind: .timeout,
-                message: "timed out after 0.2s — expectation not met",
-                    observation: .trace(makeTestTraceEvidence(
-                        AccessibilityTrace.noChangeForTests(elementCount: 1),
-                        completeness: .incomplete
-                    ))
-
-            ))
-        }
-
-        let response = try await fence.execute(command: .wait, values: [
-            "predicate": .object([
-                "type": .string("changed"),
-                "scope": .string("elements"),
-                "assertions": .array([]),
-            ]),
-            "timeout": .double(0.2),
-        ])
-
-        guard case .heistExecution(_, let result, _) = response else {
-            return XCTFail("Expected heistExecution response, got \(response)")
-        }
-        let waitEvidence = try XCTUnwrap(result.steps.first?.waitEvidence)
-        XCTAssertEqual(waitEvidence.expectation.met, false)
-        XCTAssertEqual(waitEvidence.actionResult.message, "timed out after 0.2s — expectation not met")
     }
 
     @ButtonHeistActor
@@ -2855,35 +2796,11 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testActionExpectationExecutesAsServerSideExpectationStep() async throws {
+    func testActionExpectationIsSentAsServerSideExpectationStep() async throws {
         let (fence, mockConn) = makeConnectedFence()
         let predicate = AccessibilityPredicate.exists(.label("Home"))
-        let interface = makeTestInterface(elements: [
-            makeTestHeistElement(label: "Home"),
-        ])
-        let trace = AccessibilityTrace.screenChangedForTests(replacementInterface: interface)
 
-        mockConn.runtimeActionResponse = { message in
-            switch message {
-            case .activate:
-                return .actionResult(ActionResult.success(
-                    method: .activate,
-                    observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
-                ))
-            default:
-                return .actionResult(ActionResult.success(method: .activate))
-            }
-        }
-        mockConn.resolvedWaitResponse = { _ in
-            .actionResult(ActionResult.success(
-                method: .wait,
-                message: "expectation met after observed change",
-                    observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
-
-            ))
-        }
-
-        let response = try await fence.execute(command: .activate, values: [
+        _ = try await fence.execute(command: .activate, values: [
             "target": targetValue(identifier: "myElement"),
             "expect": .object([
                 "type": .string("exists"),
@@ -2899,11 +2816,6 @@ final class TheFenceHandlerTests: XCTestCase {
             return XCTFail("Expected a single action step, got \(String(describing: mockConn.sent.sentHeistPlan))")
         }
         XCTAssertEqual(step.expectationPolicy.expectedStep?.predicate, predicate)
-
-        guard let leaf = response.leafAction else {
-            return XCTFail("Expected single-step action response, got \(response)")
-        }
-        XCTAssertEqual(leaf.expectation?.met, true)
     }
 
     // MARK: - Expectation Parsing
@@ -3187,7 +3099,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testGetInterfaceDefaultNoSubtreeReturnsWholeHierarchy() async throws {
         let (fence, mockConn) = makeConnectedFence()
         let interfaceFixture = selectionTestInterface()
-        mockConn.autoResponse = { message in
+        mockConn.responseScript = { message in
             switch message {
             case .requestInterface:
                 return .interface(interfaceFixture)
@@ -3216,7 +3128,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testGetInterfaceQueryIsSentToInsideJobBoundaryAndReturnsSelectedInterface() async throws {
         let (fence, mockConn) = makeConnectedFence()
-        mockConn.autoResponse = { message in
+        mockConn.responseScript = { message in
             switch message {
             case .requestInterface:
                 let source = self.selectionTestInterface()

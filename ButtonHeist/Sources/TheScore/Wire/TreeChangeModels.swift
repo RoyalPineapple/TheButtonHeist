@@ -40,14 +40,14 @@ public struct ElementPropertyPoint: Codable, Sendable, Equatable, Hashable {
 /// derived at projection/rendering edges through `displayText`.
 public enum ElementPropertyValue: Codable, Sendable, Equatable {
     case text(String)
-    case traits([HeistTrait])
+    case traits(Set<HeistTrait>)
     case actions(ElementActionSet)
     case frame(ElementPropertyFrame)
     case activationPoint(ElementPropertyPoint)
     case customContent([HeistCustomContent])
     case rotors([HeistRotor])
 
-    private enum CodingKeys: String, CodingKey {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
         case kind
         case value
         case traits
@@ -69,24 +69,37 @@ public enum ElementPropertyValue: Codable, Sendable, Equatable {
     }
 
     public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "element property value")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let kind = try container.decode(Kind.self, forKey: .kind)
+        let allowedKeys: Set<CodingKeys>
         switch kind {
         case .text:
+            allowedKeys = [.kind, .value]
             self = .text(try container.decode(String.self, forKey: .value))
         case .traits:
-            self = .traits(try container.decode([HeistTrait].self, forKey: .traits))
+            allowedKeys = [.kind, .traits]
+            self = .traits(try container.decode([HeistTrait].self, forKey: .traits).heistTraitSet)
         case .actions:
+            allowedKeys = [.kind, .actions]
             self = .actions(try container.decode(ElementActionSet.self, forKey: .actions))
         case .frame:
+            allowedKeys = [.kind, .frame]
             self = .frame(try container.decode(ElementPropertyFrame.self, forKey: .frame))
         case .activationPoint:
+            allowedKeys = [.kind, .activationPoint]
             self = .activationPoint(try container.decode(ElementPropertyPoint.self, forKey: .activationPoint))
         case .customContent:
+            allowedKeys = [.kind, .customContent]
             self = .customContent(try container.decode([HeistCustomContent].self, forKey: .customContent))
         case .rotors:
+            allowedKeys = [.kind, .rotors]
             self = .rotors(try container.decode([HeistRotor].self, forKey: .rotors))
         }
+        try container.rejectIncompatibleFields(
+            allowing: allowedKeys,
+            typeName: "\(kind.rawValue) property value"
+        )
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -97,7 +110,7 @@ public enum ElementPropertyValue: Codable, Sendable, Equatable {
             try container.encode(value, forKey: .value)
         case .traits(let traits):
             try container.encode(Kind.traits, forKey: .kind)
-            try container.encode(traits, forKey: .traits)
+            try container.encode(traits.canonicalHeistTraitArray, forKey: .traits)
         case .actions(let actions):
             try container.encode(Kind.actions, forKey: .kind)
             try container.encode(actions, forKey: .actions)
@@ -116,33 +129,12 @@ public enum ElementPropertyValue: Codable, Sendable, Equatable {
         }
     }
 
-    public static func == (lhs: ElementPropertyValue, rhs: ElementPropertyValue) -> Bool {
-        switch (lhs, rhs) {
-        case (.text(let lhs), .text(let rhs)):
-            return lhs == rhs
-        case (.traits(let lhs), .traits(let rhs)):
-            return Set(lhs) == Set(rhs)
-        case (.actions(let lhs), .actions(let rhs)):
-            return lhs == rhs
-        case (.frame(let lhs), .frame(let rhs)):
-            return lhs == rhs
-        case (.activationPoint(let lhs), .activationPoint(let rhs)):
-            return lhs == rhs
-        case (.customContent(let lhs), .customContent(let rhs)):
-            return lhs == rhs
-        case (.rotors(let lhs), .rotors(let rhs)):
-            return lhs == rhs
-        default:
-            return false
-        }
-    }
-
     public var displayText: String {
         switch self {
         case .text(let value):
             return value
         case .traits(let traits):
-            return traits.map(\.rawValue).joined(separator: ", ")
+            return traits.canonicalHeistTraitArray.map(\.rawValue).joined(separator: ", ")
         case .actions(let actions):
             return actions.displayText
         case .frame(let frame):
@@ -162,7 +154,6 @@ public enum ElementPropertyValue: Codable, Sendable, Equatable {
             return rotors.map(\.name).joined(separator: ", ")
         }
     }
-
 }
 
 public struct ElementPropertyValueChange<Value: Sendable & Equatable>: Sendable, Equatable {
@@ -195,7 +186,7 @@ public enum PropertyChange: Sendable, Equatable {
     case label(ElementPropertyValueChange<String>)
     case identifier(ElementPropertyValueChange<String>)
     case value(ElementPropertyValueChange<String>)
-    case traits(ElementPropertyValueChange<[HeistTrait]>)
+    case traits(ElementPropertyValueChange<Set<HeistTrait>>)
     case hint(ElementPropertyValueChange<String>)
     case actions(ElementPropertyValueChange<ElementActionSet>)
     case frame(ElementPropertyValueChange<ElementPropertyFrame>)
@@ -216,8 +207,8 @@ public enum PropertyChange: Sendable, Equatable {
     }
 
     public static func traits(old: [HeistTrait]?, new: [HeistTrait]?) -> Self? {
-        let old = old.map(Self.canonicalTraits)
-        let new = new.map(Self.canonicalTraits)
+        let old = old.map(\.heistTraitSet)
+        let new = new.map(\.heistTraitSet)
         return ElementPropertyValueChange.difference(old: old, new: new).map(Self.traits)
     }
 
@@ -307,13 +298,14 @@ public enum PropertyChange: Sendable, Equatable {
 }
 
 extension PropertyChange: Codable {
-    private enum CodingKeys: String, CodingKey {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
         case property
         case old
         case new
     }
 
     public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "property change")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let property = try container.decode(ElementProperty.self, forKey: .property)
         switch property {
@@ -327,7 +319,7 @@ extension PropertyChange: Codable {
             self = .traits(try Self.decodeChange(
                 [HeistTrait].self,
                 from: container,
-                normalizing: Self.canonicalTraits
+                normalizing: \.heistTraitSet
             ))
         case .hint:
             self = .hint(try Self.decodeChange(String.self, from: container))
@@ -355,7 +347,8 @@ extension PropertyChange: Codable {
         case .value(let change):
             try Self.encodeChange(change, to: &container)
         case .traits(let change):
-            try Self.encodeChange(change, to: &container)
+            try container.encodeIfPresent(change.old?.canonicalHeistTraitArray, forKey: .old)
+            try container.encodeIfPresent(change.new?.canonicalHeistTraitArray, forKey: .new)
         case .hint(let change):
             try Self.encodeChange(change, to: &container)
         case .actions(let change):
@@ -381,11 +374,19 @@ extension PropertyChange: Codable {
 
     private static func decodeChange<Value>(
         _ value: Value.Type,
-        from container: KeyedDecodingContainer<CodingKeys>,
-        normalizing: (Value) -> Value = { $0 }
+        from container: KeyedDecodingContainer<CodingKeys>
     ) throws -> ElementPropertyValueChange<Value> where Value: Codable & Sendable & Equatable {
-        let old = try container.decodeIfPresent(Value.self, forKey: .old).map(normalizing)
-        let new = try container.decodeIfPresent(Value.self, forKey: .new).map(normalizing)
+        try decodeChange(value, from: container, normalizing: { $0 })
+    }
+
+    private static func decodeChange<WireValue, Value>(
+        _ value: WireValue.Type,
+        from container: KeyedDecodingContainer<CodingKeys>,
+        normalizing: (WireValue) -> Value
+    ) throws -> ElementPropertyValueChange<Value>
+    where WireValue: Decodable, Value: Sendable & Equatable {
+        let old = try container.decodeIfPresent(WireValue.self, forKey: .old).map(normalizing)
+        let new = try container.decodeIfPresent(WireValue.self, forKey: .new).map(normalizing)
         guard let change = ElementPropertyValueChange.difference(old: old, new: new) else {
             throw DecodingError.dataCorruptedError(
                 forKey: .property,
@@ -394,10 +395,6 @@ extension PropertyChange: Codable {
             )
         }
         return change
-    }
-
-    private static func canonicalTraits(_ traits: [HeistTrait]) -> [HeistTrait] {
-        Set(traits).sorted { $0.rawValue < $1.rawValue }
     }
 }
 
@@ -423,11 +420,10 @@ extension PropertyChange {
         }
     }
 
-    private static func matchesTraits(_ checker: TraitSetMatch, _ value: [HeistTrait]?) -> Bool {
+    private static func matchesTraits(_ checker: TraitSetMatch, _ value: Set<HeistTrait>?) -> Bool {
         guard let value else { return false }
-        let traits = Set(value)
-        return checker.include.isSubset(of: traits)
-            && checker.exclude.isDisjoint(with: traits)
+        return checker.include.isSubset(of: value)
+            && checker.exclude.isDisjoint(with: value)
     }
 
     private static func matchesActions(_ checker: ActionSetMatch, _ value: ElementActionSet?) -> Bool {

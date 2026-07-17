@@ -56,25 +56,23 @@ extension Navigation {
         let primitiveResult = await dispatchViewportMovement(intent)
         switch primitiveResult {
         case .moved:
-            return await Task { @MainActor in
-                let event = await self.settledExplorationPage(
-                    deadline: deadline,
-                    discoveryCommitPolicy: discoveryCommitPolicy,
-                    notificationWindow: notificationWindow,
-                    requiredAfterMovement: true
-                )
-                guard let event else {
-                    return .unavailable(previousVisibleIds: previousVisibleIds)
-                }
-                return ViewportTransition(
-                    result: self.movementResult(
-                        for: intent,
-                        previousVisibleIds: previousVisibleIds
-                    ),
-                    previousVisibleIds: previousVisibleIds,
-                    event: event
-                )
-            }.value
+            let event = await settledExplorationPage(
+                deadline: deadline,
+                discoveryCommitPolicy: discoveryCommitPolicy,
+                notificationWindow: notificationWindow,
+                requiredAfterMovement: true
+            )
+            guard let event else {
+                return .unavailable(previousVisibleIds: previousVisibleIds)
+            }
+            return ViewportTransition(
+                result: movementResult(
+                    for: intent,
+                    previousVisibleIds: previousVisibleIds
+                ),
+                previousVisibleIds: previousVisibleIds,
+                event: event
+            )
         case .alreadyInPosition:
             notificationWindow.cancel()
             return ViewportTransition(

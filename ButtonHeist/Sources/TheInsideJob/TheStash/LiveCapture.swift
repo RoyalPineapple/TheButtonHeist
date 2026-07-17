@@ -107,6 +107,55 @@ struct LiveCapture {
         dispatchReferences.scrollableContainerViewsByPath[path]?.view
     }
 
+    func nearestScrollEntry(for path: TreePath) -> ScrollEntry? {
+        var candidate: TreePath? = path
+        while let current = candidate {
+            if let view = scrollView(forContainerPath: current) {
+                return ScrollEntry(path: current, view: view)
+            }
+            candidate = current.parent
+        }
+        return nil
+    }
+
+    func scrollEntries() -> [ScrollEntry] {
+        dispatchReferences.scrollableContainerViewsByPath.keys.sorted().compactMap { path in
+            scrollView(forContainerPath: path).map { ScrollEntry(path: path, view: $0) }
+        }
+    }
+
+    func scrollEntries(matching scrollViewID: ObjectIdentifier) -> [ScrollEntry] {
+        scrollEntries().filter { $0.scrollViewID == scrollViewID }
+    }
+
+    @MainActor func isDirectScrollChild(at path: TreePath, of parent: UIScrollView) -> Bool {
+        guard scrollEntries().contains(where: { $0.view === parent }),
+              let child = scrollView(forContainerPath: path) else { return false }
+        if Self.nearestScrollSuperview(of: child) === parent { return true }
+        guard child === parent else { return false }
+        var ancestor = path.parent
+        while let current = ancestor {
+            if scrollView(forContainerPath: current) === parent { return true }
+            ancestor = current.parent
+        }
+        return false
+    }
+
+    @MainActor func parentScrollViewID(of scrollViewID: ObjectIdentifier) -> ObjectIdentifier? {
+        guard let view = scrollEntries(matching: scrollViewID).first?.view,
+              let parent = Self.nearestScrollSuperview(of: view) else { return nil }
+        return ObjectIdentifier(parent)
+    }
+
+    @MainActor private static func nearestScrollSuperview(of view: UIView) -> UIScrollView? {
+        var ancestor = view.superview
+        while let current = ancestor {
+            if let scrollView = current as? UIScrollView { return scrollView }
+            ancestor = current.superview
+        }
+        return nil
+    }
+
     // MARK: - Snapshot
 
     /// Value-only capture metadata retained by settled semantic storage.
@@ -184,6 +233,15 @@ struct LiveCapture {
 
     struct ScrollableViewRef {
         weak var view: UIScrollView?
+    }
+
+    struct ScrollEntry {
+        let path: TreePath
+        let view: UIScrollView
+
+        var scrollViewID: ObjectIdentifier {
+            ObjectIdentifier(view)
+        }
     }
 
     struct ElementRef {

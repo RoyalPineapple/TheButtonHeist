@@ -280,7 +280,6 @@ private extension TheFence {
         dropping keys: Set<FenceParameterKey>
     ) -> Set<HeistPlanRejectedPublicSourceField> {
         var fieldNames = arguments.keySet
-        fieldNames.remove(FenceParameterKey.requestId.rawValue)
         fieldNames.subtract(keys.map(\.rawValue))
         return HeistPlanRejectedPublicSourceField.sourceFields(in: fieldNames)
     }

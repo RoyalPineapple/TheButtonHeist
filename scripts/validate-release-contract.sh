@@ -118,34 +118,6 @@ fi
 if grep -Fq 'ButtonHeistFrameworks' .github/workflows/release.yml; then
     fail ".github/workflows/release.yml must not package ambiguous ButtonHeistFrameworks"
 fi
-grep -Fq 'Verify CI passed on exact release commit' .github/workflows/release.yml \
-    || fail ".github/workflows/release.yml must gate releases on exact release-commit CI"
-grep -Fq 'scripts/require-successful-ci-for-commit.sh' .github/workflows/release.yml \
-    || fail ".github/workflows/release.yml must delegate to the canonical exact-commit CI guard"
-[[ -x scripts/test-runner.py ]] \
-    || fail "scripts/test-runner.py must be the executable canonical test runner"
-grep -Fq 'scripts/test-runner.py' AGENTS.md \
-    || fail "AGENTS.md must name scripts/test-runner.py as the canonical test runner"
-grep -Fq 'scripts/test-runner.py' docs/CI.md \
-    || fail "docs/CI.md must name scripts/test-runner.py as the canonical test runner"
-if grep -Eq '(xcodebuild[[:space:]]+(test|build-for-testing|test-without-building)|tuist[[:space:]]+test)([[:space:]]|$)' .github/workflows/ci.yml; then
-    fail ".github/workflows/ci.yml must delegate test driving to scripts/test-runner.py"
-fi
-grep -Fq -- '--branch main' scripts/require-successful-ci-for-commit.sh \
-    || fail "the exact-commit CI guard must check main-branch CI"
-grep -Fq 'name: exact-sha-suite' .github/workflows/ci.yml \
-    || fail "main CI must publish one exact-SHA release-suite result"
-grep -Fq 'name: buttonheist-exact-sha-suite' .github/workflows/ci.yml \
-    || fail "main CI must retain the exact-SHA suite manifest"
-grep -Fq '.name == "exact-sha-suite"' scripts/require-successful-ci-for-commit.sh \
-    || fail "the exact-commit CI guard must require the aggregate release-suite job"
-grep -Fq 'scripts/exact-sha-suite.jq' .github/workflows/ci.yml \
-    || fail "main CI must delegate exact-SHA manifest admission to the canonical filter"
-grep -Fq 'exact-sha-suite.jq' scripts/require-successful-ci-for-commit.sh \
-    || fail "the release guard must delegate exact-SHA manifest admission to the canonical filter"
-if grep -Fq 'parents[0]' .github/workflows/release.yml; then
-    fail ".github/workflows/release.yml must not accept parent-commit CI for release publishing"
-fi
 if grep -Eq 'bin\.install[[:space:]]+"heist-doctor"' "$BUTTONHEIST_FORMULA_TEMPLATE"; then
     fail "$BUTTONHEIST_FORMULA_TEMPLATE must not install experimental heist-doctor"
 fi

@@ -6,7 +6,6 @@ extension TheFence.Command {
                 family: .session,
                 requiresConnectionBeforeDispatch: false,
                 timeout: .fixed(.health),
-                responseProjection: .pong,
                 projection: .cliOnly(
                     "Check connection health without reading accessibility state.",
                     mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
@@ -16,7 +15,6 @@ extension TheFence.Command {
             return makeDescriptor(
                 family: .session,
                 requiresConnectionBeforeDispatch: false,
-                responseProjection: .devices,
                 projection: .cliOnly(
                     "List discovered iOS devices and configured connection targets.",
                     mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
@@ -26,7 +24,6 @@ extension TheFence.Command {
             return makeDescriptor(
                 family: .session,
                 requiresConnectionBeforeDispatch: false,
-                responseProjection: .sessionState,
                 projection: .cliAndMCP(
                     "Inspect connection, device, and last-action session state.",
                     mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
@@ -41,14 +38,12 @@ extension TheFence.Command {
                     FenceParameters.device.spec,
                     FenceParameters.token.spec,
                 ],
-                responseProjection: .sessionState,
                 projection: .cliAndMCP("Establish or switch the active connection to an app running The Button Heist.")
             )
         case .listTargets:
             return makeDescriptor(
                 family: .session,
                 requiresConnectionBeforeDispatch: false,
-                responseProjection: .targets,
                 projection: .cliOnly(
                     "List configured connection targets and the default target.",
                     mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)

@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 #if DEBUG
 import Foundation
+import ButtonHeistSupport
 
 import TheScore
 
@@ -17,8 +18,7 @@ internal final class SemanticObservationStream {
 
     var scopePressure = SemanticObservationScopePressure()
     let observationLog = SemanticObservationLog()
-    var nextObservationWaiterID: UInt64 = 0
-    var observationWaiters: [UInt64: SemanticObservationWaiter] = [:]
+    var observationWaiters = WaiterStore<UInt64, SemanticObservationWaiter>()
 
     // MARK: - Subscriber-Facing Settled Observation History
 

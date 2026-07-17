@@ -67,28 +67,12 @@ final class Navigation {
             }
         }
 
-        var object: NSObject {
-            switch self {
-            case .uiScrollView(let container, _), .swipeable(let container, _):
-                return container.object
-            }
-        }
-
         static func programmatic(
             _ scrollView: UIScrollView,
             in stash: TheStash
         ) -> ScrollableTarget? {
-            let paths = stash.scrollableContainerViewsByPath
-                .compactMap { path, reference in reference === scrollView ? path : nil }
-                .sorted()
-            for path in paths {
-                guard let semanticContainer = stash.latestObservation.tree.containers[path],
-                      case .resolved(let liveContainer) = stash.resolveLiveContainerTarget(
-                          for: semanticContainer
-                      ) else { continue }
-                return .uiScrollView(container: liveContainer, scrollView: scrollView)
-            }
-            return nil
+            guard let target = stash.liveScrollTarget(matching: ObjectIdentifier(scrollView)) else { return nil }
+            return .uiScrollView(container: target.container, scrollView: target.scrollView)
         }
 
         func dispatchOnFreshScrollView<Value: Sendable>(

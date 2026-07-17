@@ -3,8 +3,8 @@
 #
 # Wraps `tuist install && tuist generate --no-open` and then auto-cleans the
 # generated pbxproj files (see scripts/clean-pbxproj.py for what gets removed).
-# Use this instead of calling tuist directly so dirty pbxproj patterns
-# (hardcoded SRCROOT, duplicated header search paths) never reach a commit.
+# Use this instead of calling tuist directly so local generated projects do not
+# retain hardcoded SRCROOT or duplicate search-path entries.
 
 set -euo pipefail
 

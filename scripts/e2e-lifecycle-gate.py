@@ -16,7 +16,6 @@ import queue
 import random
 import re
 import shutil
-import socket
 import subprocess
 import sys
 import threading
@@ -25,8 +24,21 @@ import traceback
 from pathlib import Path
 from typing import Any
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
 
-BUNDLE_ID = "com.buttonheist.testapp"
+from e2e_runtime import (  # noqa: E402
+    boot_simulator,
+    free_port,
+    install_app,
+    launch_app,
+    launch_environment,
+    run,
+    terminate_app,
+    wait_port,
+)
+
 DEFAULT_REPORT = Path(os.environ.get("TMPDIR", "/tmp")) / "buttonheist-lifecycle-report.json"
 
 
@@ -49,46 +61,6 @@ def failure_kind(error: BaseException, *, scenario_started: bool) -> str:
     if isinstance(error, (TimeoutError, subprocess.TimeoutExpired)):
         return "infrastructure-timeout"
     return "infrastructure-setup-failure"
-
-
-def run(
-    cmd: list[str],
-    *,
-    env: dict[str, str] | None = None,
-    timeout: float = 60,
-    check: bool = True,
-) -> subprocess.CompletedProcess[str]:
-    try:
-        result = subprocess.run(
-            cmd,
-            env=env,
-            timeout=timeout,
-            text=True,
-            capture_output=True,
-        )
-    except subprocess.TimeoutExpired as error:
-        if check:
-            raise
-        stdout = (
-            error.stdout.decode(errors="replace")
-            if isinstance(error.stdout, bytes)
-            else (error.stdout or "")
-        )
-        stderr = (
-            error.stderr.decode(errors="replace")
-            if isinstance(error.stderr, bytes)
-            else (error.stderr or "")
-        )
-        if stderr:
-            stderr += "\n"
-        stderr += f"timed out after {timeout:g} seconds"
-        return subprocess.CompletedProcess(cmd, 124, stdout, stderr)
-    if check and result.returncode != 0:
-        raise RuntimeError(
-            f"command failed ({result.returncode}): {' '.join(cmd)}\n"
-            f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
-        )
-    return result
 
 
 def parse_jsonish(text: str | None) -> Any | None:
@@ -114,30 +86,6 @@ def contains_text(obj: Any | None, needle: str) -> bool:
     return needle in json.dumps(obj, sort_keys=True) if obj is not None else False
 
 
-def free_port() -> int:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind(("127.0.0.1", 0))
-        return sock.getsockname()[1]
-
-
-def wait_port(port: int, *, open_expected: bool = True, timeout: float = 20) -> None:
-    deadline = time.time() + timeout
-    last_error: OSError | None = None
-    while time.time() < deadline:
-        try:
-            with socket.create_connection(("127.0.0.1", port), timeout=0.25):
-                if open_expected:
-                    return
-        except OSError as exc:
-            last_error = exc
-            if not open_expected:
-                return
-        time.sleep(0.1)
-    if open_expected:
-        raise TimeoutError(f"port {port} did not open: {last_error}")
-    raise TimeoutError(f"port {port} did not close")
-
-
 def choose_simulator(explicit: str | None) -> str:
     if explicit:
         return explicit
@@ -160,11 +108,6 @@ def choose_simulator(explicit: str | None) -> str:
     return str(candidates[0]["udid"])
 
 
-def boot_simulator(sim: str) -> None:
-    run(["xcrun", "simctl", "boot", sim], check=False, timeout=30)
-    run(["xcrun", "simctl", "bootstatus", sim, "-b"], timeout=120)
-
-
 def prepare_app(sim: str, app_path: str | None, demo_zip: str | None, work_dir: Path) -> Path:
     if app_path:
         app = Path(app_path)
@@ -185,9 +128,7 @@ def prepare_app(sim: str, app_path: str | None, demo_zip: str | None, work_dir: 
     else:
         raise RuntimeError("pass --app or --demo-zip")
 
-    run(["xcrun", "simctl", "terminate", sim, BUNDLE_ID], check=False, timeout=20)
-    run(["xcrun", "simctl", "uninstall", sim, BUNDLE_ID], check=False, timeout=20)
-    run(["xcrun", "simctl", "install", sim, str(app)], timeout=120)
+    install_app(sim, app)
     return app
 
 
@@ -205,27 +146,19 @@ class DemoApp:
         return f"127.0.0.1:{self.port}"
 
     def launch(self) -> int | None:
-        env = os.environ.copy()
-        env.update(
-            {
-                "SIMCTL_CHILD_INSIDEJOB_PORT": str(self.port),
-                "SIMCTL_CHILD_INSIDEJOB_TOKEN": self.token,
-                "SIMCTL_CHILD_INSIDEJOB_ID": self.app_id,
-                "SIMCTL_CHILD_INSIDEJOB_SESSION_TIMEOUT": str(self.server_timeout),
-            }
+        env = launch_environment(
+            self.port,
+            self.token,
+            self.app_id,
+            session_timeout=self.server_timeout,
         )
         failures: list[dict[str, Any]] = []
         for attempt in range(1, 4):
             if attempt > 1:
-                run(["xcrun", "simctl", "terminate", self.sim, BUNDLE_ID], check=False, timeout=20)
+                terminate_app(self.sim)
                 time.sleep(attempt)
 
-            result = run(
-                ["xcrun", "simctl", "launch", self.sim, BUNDLE_ID],
-                env=env,
-                timeout=45,
-                check=False,
-            )
+            result = launch_app(self.sim, env)
             match = re.search(r":\s*(\d+)\s*$", result.stdout.strip())
             self.pid = int(match.group(1)) if match else None
 
@@ -258,7 +191,7 @@ class DemoApp:
         raise TimeoutError(f"BHDemo did not open port {self.port} after launch attempts: {failures}")
 
     def terminate(self, *, require_stopped: bool = False) -> bool:
-        result = run(["xcrun", "simctl", "terminate", self.sim, BUNDLE_ID], check=False, timeout=20)
+        result = terminate_app(self.sim)
         try:
             wait_port(self.port, open_expected=False, timeout=8)
             return True

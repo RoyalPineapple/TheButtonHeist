@@ -53,7 +53,15 @@ extension TheStash {
     }
 
     func liveScrollableContainerView(forPath path: TreePath) -> UIScrollView? {
-        currentLiveCapture.scrollableContainerViewsByPath[path]?.view
+        currentLiveCapture.scrollView(forContainerPath: path)
+    }
+
+    func nearestLiveScrollContainerPath(for path: TreePath) -> TreePath? {
+        currentLiveCapture.nearestScrollEntry(for: path)?.path
+    }
+
+    func isDirectLiveScrollChild(at path: TreePath, of parent: UIScrollView) -> Bool {
+        currentLiveCapture.isDirectScrollChild(at: path, of: parent)
     }
 
     func capturedLiveScrollView(forContainerPath path: TreePath) -> UIScrollView? {

@@ -98,7 +98,6 @@ extension Navigation {
 extension TheBrains {
 
     func startSemanticObservation() {
-        semanticObservationIsActive = true
         stash.startPassiveSemanticObservation { [weak self] in
             guard let self else { return nil }
             return await self.executeSemanticDiscovery()

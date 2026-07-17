@@ -40,12 +40,6 @@ extension Navigation {
         var path: TreePath { semantic.path }
     }
 
-    private struct LiveScrollableTarget {
-        let path: TreePath
-        let target: ScrollableTarget
-        let scrollViewID: ObjectIdentifier
-    }
-
     private struct PendingContainer {
         let container: InterfaceTree.Container
         let overflow: CGFloat
@@ -291,14 +285,15 @@ extension Navigation {
             inside parent: ActiveContainerExploration,
             onObservation: (SettledSemanticObservationEvent) -> ViewportExplorationDecision
         ) async -> ScrollScanOutcome? {
-            guard let parentTarget = currentLiveScrollableTarget(for: parent.scrollViewID),
-                  case .uiScrollView(_, let parentScrollView) = parentTarget.target else {
+            guard let parentTarget = currentLiveScrollableTarget(for: parent.scrollViewID) else {
                 return .interrupted
             }
             let nestedContainers = sortedPendingContainers().filter {
-                guard let target = currentProgrammaticScrollTarget(for: $0.path),
-                      case .uiScrollView(_, let scrollView) = target else { return false }
-                return nearestScrollableSuperview(of: scrollView) === parentScrollView
+                guard currentProgrammaticScrollTarget(for: $0.path) != nil else { return false }
+                return navigation.stash.isDirectLiveScrollChild(
+                    at: $0.path,
+                    of: parentTarget.scrollView
+                )
             }
             for semanticContainer in nestedContainers {
                 guard !Task.isCancelled, exploration.hasTimeRemaining else { return .interrupted }
@@ -455,64 +450,25 @@ extension Navigation {
         private func currentProgrammaticScrollTarget(
             for scrollViewID: ObjectIdentifier
         ) -> ScrollableTarget? {
-            currentLiveScrollableTarget(for: scrollViewID)?.target
+            currentLiveScrollableTarget(for: scrollViewID).map(Self.scrollableTarget)
         }
 
         private func currentProgrammaticScrollTarget(for path: TreePath) -> ScrollableTarget? {
-            guard let semanticContainer = navigation.stash.latestObservation.tree.containers[path]
-                    ?? navigation.stash.interfaceTree.containers[path],
-                  case .resolved(let liveContainer) = navigation.stash.resolveLiveContainerTarget(
-                      for: semanticContainer
-                  ),
-                  let scrollView = navigation.stash.liveScrollableContainerView(forPath: path),
-                  !scrollView.bhIsUnsafeForProgrammaticScrolling else { return nil }
-            return .uiScrollView(
-                container: liveContainer,
-                scrollView: scrollView
-            )
+            guard let target = navigation.stash.liveScrollTarget(at: path),
+                  !target.scrollView.bhIsUnsafeForProgrammaticScrolling else { return nil }
+            return Self.scrollableTarget(target)
         }
 
-        private func currentLiveScrollableTargets() -> [LiveScrollableTarget] {
-            let containers = navigation.stash.latestObservation.tree.orderedContainers
-            var targetByScrollViewID: [ObjectIdentifier: LiveScrollableTarget] = [:]
-            for container in containers {
-                guard let target = currentProgrammaticScrollTarget(for: container.path),
-                      case .uiScrollView(_, let scrollView) = target else { continue }
-                let candidate = LiveScrollableTarget(
-                    path: container.path,
-                    target: target,
-                    scrollViewID: ObjectIdentifier(scrollView)
-                )
-                if let current = targetByScrollViewID[candidate.scrollViewID],
-                   current.path <= candidate.path {
-                    continue
-                }
-                targetByScrollViewID[candidate.scrollViewID] = candidate
-            }
-            let liveTargets = targetByScrollViewID.values.sorted { $0.path < $1.path }
-            guard let revealRootScrollViewID else { return liveTargets }
-
-            var eligibleIDs: Set<ObjectIdentifier> = [revealRootScrollViewID]
-            var didAddNestedScrollView = true
-            while didAddNestedScrollView {
-                didAddNestedScrollView = false
-                for liveTarget in liveTargets where !eligibleIDs.contains(liveTarget.scrollViewID) {
-                    guard case .uiScrollView(_, let scrollView) = liveTarget.target,
-                          let parent = nearestScrollableSuperview(of: scrollView),
-                          eligibleIDs.contains(ObjectIdentifier(parent)) else { continue }
-                    eligibleIDs.insert(liveTarget.scrollViewID)
-                    didAddNestedScrollView = true
-                }
-            }
-            return liveTargets.filter { eligibleIDs.contains($0.scrollViewID) }
+        private func currentLiveScrollableTargets() -> [TheStash.LiveScrollTarget] {
+            navigation.stash.liveProgrammaticScrollTargets(
+                descendedFrom: revealRootScrollViewID
+            )
         }
 
         private func currentLiveScrollableTarget(
             for scrollViewID: ObjectIdentifier
-        ) -> LiveScrollableTarget? {
-            let matches = currentLiveScrollableTargets().filter { $0.scrollViewID == scrollViewID }
-            guard matches.count == 1 else { return nil }
-            return matches[0]
+        ) -> TheStash.LiveScrollTarget? {
+            currentLiveScrollableTargets().first { $0.scrollViewID == scrollViewID }
         }
 
         private func currentScrollableContainers() -> [InterfaceTree.Container] {
@@ -521,13 +477,8 @@ extension Navigation {
             }
         }
 
-        private func nearestScrollableSuperview(of view: UIView) -> UIScrollView? {
-            var ancestor = view.superview
-            while let current = ancestor {
-                if let scrollView = current as? UIScrollView { return scrollView }
-                ancestor = current.superview
-            }
-            return nil
+        private static func scrollableTarget(_ target: TheStash.LiveScrollTarget) -> ScrollableTarget {
+            .uiScrollView(container: target.container, scrollView: target.scrollView)
         }
 
         private func markExplored(_ container: ActiveContainerExploration) {
@@ -572,25 +523,7 @@ extension Navigation {
     }
 
     private func revealRootScrollViewID(for heistId: HeistId) -> ObjectIdentifier? {
-        guard let membership = stash.interfaceElement(heistId: heistId)?.scrollMembership else { return nil }
-        var visitedPaths = Set<TreePath>()
-        var path: TreePath? = membership.containerPath
-        while let currentPath = path, visitedPaths.insert(currentPath).inserted {
-            if let scrollView = liveProgrammaticScrollView(at: currentPath) {
-                return ObjectIdentifier(scrollView)
-            }
-            guard let container = stash.interfaceTree.containers[currentPath] else { return nil }
-            path = container.scrollMembership?.containerPath
-        }
-        return nil
-    }
-
-    private func liveProgrammaticScrollView(at path: TreePath) -> UIScrollView? {
-        guard let scrollView = stash.liveScrollableContainerView(forPath: path),
-              stash.liveContainerObject(forPath: path) != nil,
-              stash.liveContainer(forPath: path) != nil,
-              !scrollView.bhIsUnsafeForProgrammaticScrolling else { return nil }
-        return scrollView
+        stash.liveScrollViewIDForRevealing(heistId: heistId)
     }
 
     static func visualOrigin(in scrollView: UIScrollView) -> CGPoint {

@@ -45,14 +45,6 @@ extension TheFence {
     }
 }
 
-struct FenceCommandExecution: OptionSet, Sendable, Equatable {
-    let rawValue: Int
-
-    static let appInteraction = FenceCommandExecution(rawValue: 1 << 0)
-    static let heistPrimitive = FenceCommandExecution(rawValue: 1 << 1)
-    static let payloadCheckedHeistPrimitive = FenceCommandExecution(rawValue: 1 << 2)
-}
-
 @_spi(ButtonHeistTooling) public enum FenceCommandFixedTimeout: String, Sendable, Equatable, CaseIterable {
     case health
     case standardAction
@@ -117,25 +109,6 @@ struct FenceCommandExecution: OptionSet, Sendable, Equatable {
     }
 }
 
-@_spi(ButtonHeistTooling) public enum FenceCommandResponseProjection: String, Sendable, Equatable, CaseIterable {
-    case pong
-    case devices
-    case interface
-    case screenshot
-    case announcements
-    case action
-    case heistExecution
-    case heistValidation
-    case heistCatalog
-    case heistDescription
-    case sessionState
-    case targets
-}
-
-@_spi(ButtonHeistTooling) public enum FenceCommandFailureProjection: String, Sendable, Equatable, CaseIterable {
-    case diagnosticFailure
-}
-
 @_spi(ButtonHeistTooling) public struct FenceCommandDescriptor: Sendable, Equatable {
     public let command: TheFence.Command
     public let family: FenceCommandFamily
@@ -143,9 +116,6 @@ struct FenceCommandExecution: OptionSet, Sendable, Equatable {
     public let parameters: [FenceParameterSpec]
     public let projection: FenceCommandProjection
     public let timeout: FenceCommandTimeoutSemantics
-    public let responseProjection: FenceCommandResponseProjection
-    public let failureProjection: FenceCommandFailureProjection
-    let execution: FenceCommandExecution
 
     public var cliExposure: CLIExposure { projection.cliExposure }
     public var mcpExposure: MCPExposure { projection.mcpExposure }
@@ -154,11 +124,6 @@ struct FenceCommandExecution: OptionSet, Sendable, Equatable {
 
     public var isPublicRequestContract: Bool {
         projection.isPublicRequestContract
-    }
-
-    public var elementTargetParameterKeys: [String] {
-        let elementTargetKeys = Set(FenceParameterBlocks.target.map(\.key))
-        return parameters.map(\.key).filter(elementTargetKeys.contains)
     }
 
     public var topLevelParameterKeys: Set<String> {
@@ -200,9 +165,6 @@ struct FenceCommandExecution: OptionSet, Sendable, Equatable {
         requiresConnectionBeforeDispatch: Bool = true,
         parameters: [FenceParameterSpec],
         timeout: FenceCommandTimeoutSemantics = .none,
-        responseProjection: FenceCommandResponseProjection,
-        failureProjection: FenceCommandFailureProjection = .diagnosticFailure,
-        execution: FenceCommandExecution = [],
         projection: FenceCommandProjection
     ) {
         self.command = command
@@ -210,9 +172,6 @@ struct FenceCommandExecution: OptionSet, Sendable, Equatable {
         self.requiresConnectionBeforeDispatch = requiresConnectionBeforeDispatch
         self.parameters = parameters
         self.timeout = timeout
-        self.responseProjection = responseProjection
-        self.failureProjection = failureProjection
-        self.execution = execution
         self.projection = projection
     }
 
@@ -222,18 +181,6 @@ struct FenceCommandExecution: OptionSet, Sendable, Equatable {
             preconditionFailure("No matching parameter registered for \(command.rawValue).\(parameter.key.rawValue)")
         }
         return spec
-    }
-
-    public static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.command == rhs.command &&
-            lhs.family == rhs.family &&
-            lhs.requiresConnectionBeforeDispatch == rhs.requiresConnectionBeforeDispatch &&
-            lhs.parameters == rhs.parameters &&
-            lhs.timeout == rhs.timeout &&
-            lhs.responseProjection == rhs.responseProjection &&
-            lhs.failureProjection == rhs.failureProjection &&
-            lhs.execution == rhs.execution &&
-            lhs.projection == rhs.projection
     }
 }
 
@@ -302,8 +249,6 @@ struct FenceCommandExecution: OptionSet, Sendable, Equatable {
         }
     }
 
-    var family: FenceCommandFamily { descriptor.family }
-
     static var descriptors: [FenceCommandDescriptor] { allCases.map(\.descriptor) }
 
     static var cliDirectCommandDescriptors: [FenceCommandDescriptor] {
@@ -312,43 +257,11 @@ struct FenceCommandExecution: OptionSet, Sendable, Equatable {
 }
 
 extension TheFence.Command {
-
-    var dispatchesAppInteraction: Bool {
-        descriptor.execution.contains(.appInteraction)
-    }
-
-    var lowersToHeistPrimitive: Bool {
-        descriptor.execution.contains(.heistPrimitive)
-    }
-
-    var usesPayloadCheckedHeistPrimitive: Bool {
-        descriptor.execution.contains(.payloadCheckedHeistPrimitive)
-    }
-
-    var isViewportDebugCommand: Bool {
-        descriptor.family == .viewportDebug
-    }
-
-    static var heistPrimitiveCases: [Self] {
-        descriptors
-            .filter { $0.execution.contains(.heistPrimitive) }
-            .map(\.command)
-    }
-}
-
-extension TheFence.Command {
-    static func descriptor(for command: Self) -> FenceCommandDescriptor {
-        command.descriptor
-    }
-
     func makeDescriptor(
         family: FenceCommandFamily,
         requiresConnectionBeforeDispatch: Bool = true,
         parameters: [FenceParameterSpec] = [],
         timeout: FenceCommandTimeoutSemantics = .none,
-        responseProjection: FenceCommandResponseProjection,
-        failureProjection: FenceCommandFailureProjection = .diagnosticFailure,
-        execution: FenceCommandExecution = [],
         projection: FenceCommandProjection
     ) -> FenceCommandDescriptor {
         FenceCommandDescriptor(
@@ -357,9 +270,6 @@ extension TheFence.Command {
             requiresConnectionBeforeDispatch: requiresConnectionBeforeDispatch,
             parameters: parameters,
             timeout: timeout,
-            responseProjection: responseProjection,
-            failureProjection: failureProjection,
-            execution: execution,
             projection: projection
         )
     }
