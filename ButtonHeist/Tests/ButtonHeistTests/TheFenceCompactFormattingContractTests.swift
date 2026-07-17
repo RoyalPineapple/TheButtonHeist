@@ -1328,7 +1328,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let forEach = try ForEachStringStep(
             values: ["Milk", "Eggs"],
             parameter: "item",
-            body: [try HeistStep.action(ActionStep(command: .typeText(reference: "item", target: nil)))]
+            body: [.action(ActionStep(command: .typeText(reference: "item", target: nil)))]
         )
         let plan = try HeistPlan(body: [.forEachString(forEach)])
         let firstIteration = HeistReceiptFixture.forEachStringIteration(

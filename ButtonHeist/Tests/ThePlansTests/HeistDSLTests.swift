@@ -329,7 +329,7 @@ func `unsupported chained change expectations fail validation without replacemen
                 .expect(.changed(.screen()))
         }
     }
-    #expect(try step == ActionStep(
+    #expect(step == ActionStep(
         command: .activate(.label("Save")),
         expectationPolicy: .expect(ActionExpectation(predicate: .changed(.elements()), timeout: 1)),
         expectationValidationDiagnostics: [diagnostic]

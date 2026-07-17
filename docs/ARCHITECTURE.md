@@ -35,11 +35,13 @@ a drift sentinel; it is not a second schema.
 ThePlans admits public payload values before they enter a command. Gesture and
 wait durations are backed by one bounded-seconds primitive with domain-specific
 bounds. Authored strings use distinct currencies for text input, pasteboard
-content, custom action names, rotor names, warnings, and failures. These types
-share private admission and single-value JSON mechanics, never a generic public
-string wrapper. Public Swift construction and decoding call the same admission
-owner. Execution therefore consumes admitted values directly and never clamps
-or repairs them.
+content, custom action names, rotor names, warnings, and failures. Exact
+nonblank currencies share the `NonBlankStringValue` construction and
+single-value JSON mechanics but remain distinct concrete types that cannot be
+interchanged. Text input and pasteboard values retain their different validity
+rules. Public Swift construction and decoding call each currency's validating
+initializer. Execution therefore consumes admitted values directly and never
+clamps or repairs them.
 
 Wire identities follow the same rule. Envelopes decode version and correlation
 strings into `ButtonHeistVersion` and `RequestID`; authentication and session
@@ -58,6 +60,14 @@ so client predicates and host resolution cannot drift into separate recursive
 implementations. `InterfaceGraph` remains the validated structural projection
 used for formatting and hierarchy operations. There is no semantic back map,
 alternate flat screen, or second target-matching projection.
+
+Parser element actions and custom content are normalized once before any
+consumer sees them. `AccessibilityElement.projectedActionSet` is the sole
+action projection used by matching, capability diagnostics, wire conversion,
+and discovery grafting; live UIKit evidence may only augment that semantic
+projection. `AccessibilityElement.projectedCustomContent` is likewise shared by
+matching, diagnostics, and wire conversion. Those consumers do not independently
+reinterpret parser fields.
 
 `InterfaceObservation` pairs an `InterfaceTree` with the viewport-local
 `LiveCapture` from one parser read. Raw parser samples remain live evidence or
@@ -314,9 +324,12 @@ typed failure kind. `PostActionObservation` consumes that value, coordinates
 settlement, and constructs `ActionResult`; it does not translate through a
 second interaction-result model.
 
-`ActionResult.success` and `ActionResult.failure` accept observation, subject,
-and timing values directly. Activation trace evidence enters only through the
-fixed-method activation factories. `ActionResultSuccessEvidence` and
+`ActionResult.success` and `ActionResult.failure` accept either a method-only
+action or an `ActionResultPayload` that binds its payload to the only legal
+method, plus observation, subject, and timing values. Activation trace evidence
+enters only through the fixed-method activation factories. Decoding reconstructs
+the same method-and-payload currency and rejects mismatched wire pairs.
+`ActionResultSuccessEvidence` and
 `ActionResultFailureEvidence` are output projections backed by one common body,
 not public assembly inputs. Each result supplies exactly one observation case:
 `none`, `announcement`, `trace`, or `settledTrace`; only `settledTrace` carries
