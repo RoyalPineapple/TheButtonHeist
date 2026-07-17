@@ -670,7 +670,7 @@ final class TheBrainsActionTests: XCTestCase {
             .typeText(text: "hello", target: target),
             .mechanicalTap(TapTarget(selection: point)),
             .mechanicalLongPress(LongPressTarget(selection: point)),
-            .mechanicalSwipe(SwipeTarget(selection: .point(start: ScreenPoint(x: 20, y: 20), destination: .direction(.left)))),
+            .mechanicalSwipe(SwipeTarget(selection: .pointDirection(start: ScreenPoint(x: 20, y: 20), direction: .left))),
             .mechanicalDrag(DragTarget(start: .coordinate(ScreenPoint(x: 20, y: 20)), end: ScreenPoint(x: 80, y: 80))),
             .editAction(EditActionTarget(action: .paste)),
             .setPasteboard(SetPasteboardTarget(text: "clipboard")),

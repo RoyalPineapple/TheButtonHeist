@@ -135,7 +135,7 @@ private extension SwipeGestureSelection {
         switch self {
         case .unitElement(let target, _, _), .elementDirection(let target, _):
             return [.element(target, role: .gesture, path: .payloadElement)]
-        case .point:
+        case .pointToPoint, .pointDirection:
             return []
         }
     }

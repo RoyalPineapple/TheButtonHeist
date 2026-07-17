@@ -274,9 +274,9 @@ func canonicalSwiftRendererRendersMechanicalActionForms() throws {
             .predicate(.label("List")),
             .up
         ))))),
-        .action(ActionStep(command: .mechanicalSwipe(SwipeTarget(selection: .point(
+        .action(ActionStep(command: .mechanicalSwipe(SwipeTarget(selection: .pointDirection(
             start: ScreenPoint(x: 10, y: 20),
-            destination: .direction(.left)
+            direction: .left
         ))))),
         .action(ActionStep(command: .mechanicalDrag(DragTarget(
             start: .element(.predicate(.label("Slider"))),

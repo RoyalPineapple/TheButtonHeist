@@ -399,11 +399,11 @@ public enum Mechanical {
         }
 
         public init(from start: ScreenPoint, to end: ScreenPoint) {
-            self.init(command: .mechanicalSwipe(SwipeTarget(selection: .point(start: start, destination: .coordinate(end)))))
+            self.init(command: .mechanicalSwipe(SwipeTarget(selection: .pointToPoint(start: start, end: end))))
         }
 
         public init(from start: ScreenPoint, _ direction: SwipeDirection) {
-            self.init(command: .mechanicalSwipe(SwipeTarget(selection: .point(start: start, destination: .direction(direction)))))
+            self.init(command: .mechanicalSwipe(SwipeTarget(selection: .pointDirection(start: start, direction: direction))))
         }
 
         init(command: HeistActionCommand, expectationPolicy: ActionExpectationPolicy = .default) {

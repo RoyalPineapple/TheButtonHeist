@@ -140,9 +140,9 @@ extension HeistCanonicalSwiftDSLRenderer {
             return "Mechanical.Swipe(\(try render(target: target, environment: environment)), from: \(render(unitPoint: start)), to: \(render(unitPoint: end)))"
         case .elementDirection(let target, let direction):
             return "Mechanical.Swipe(\(try render(target: target, environment: environment)), .\(direction.rawValue))"
-        case .point(let start, .coordinate(let end)):
+        case .pointToPoint(let start, let end):
             return "Mechanical.Swipe(from: \(render(point: start)), to: \(render(point: end)))"
-        case .point(let start, .direction(let direction)):
+        case .pointDirection(let start, let direction):
             return "Mechanical.Swipe(from: \(render(point: start)), .\(direction.rawValue))"
         }
     }

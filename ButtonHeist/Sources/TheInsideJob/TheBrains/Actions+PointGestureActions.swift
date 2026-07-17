@@ -78,44 +78,56 @@ extension Actions {
                 end: direction.defaultEnd,
                 duration: duration,
             )
-        case .point(let startSelection, let destination):
-            switch resolveGesturePoint(
-                from: nil,
-                selection: .coordinate(startSelection),
-                method: .syntheticSwipe
+        case .pointToPoint(let start, let end):
+            return await performPointSwipe(start: start, duration: duration) { _ in end.cgPoint }
+        case .pointDirection(let start, let direction):
+            return await performPointSwipe(start: start, duration: duration) { startPoint in
+                self.swipeEndPoint(from: startPoint, direction: direction)
+            }
+        }
+    }
+
+    private func performPointSwipe(
+        start: ScreenPoint,
+        duration: GestureDuration,
+        resolveEndPoint: (CGPoint) -> CGPoint
+    ) async -> TheSafecracker.ActionDispatchOutcome {
+        switch resolveGesturePoint(
+            from: nil,
+            selection: .coordinate(start),
+            method: .syntheticSwipe
+        ) {
+        case .failure(let result):
+            return result
+        case .success(let resolvedPoint):
+            switch prepareGestureDispatch(
+                for: resolvedPoint,
+                method: .syntheticSwipe,
+                prepare: { startPoint -> GestureResolution<TheSafecracker.PreparedTouchDispatch?> in
+                    let endPoint = resolveEndPoint(startPoint)
+                    if let failure = self.geometryFailure(
+                        method: .syntheticSwipe,
+                        field: "swipe point",
+                        points: [startPoint, endPoint]
+                    ) {
+                        return .failure(failure)
+                    }
+                    return .success(self.safecracker.prepareSwipe(
+                        from: startPoint,
+                        to: endPoint,
+                        duration: duration
+                    ))
+                }
             ) {
             case .failure(let result):
                 return result
-            case .success(let resolvedPoint):
-                switch prepareGestureDispatch(
-                    for: resolvedPoint,
+            case .success(let prepared):
+                return await completePreparedGesture(
+                    prepared,
                     method: .syntheticSwipe,
-                    prepare: { startPoint -> GestureResolution<TheSafecracker.PreparedTouchDispatch?> in
-                        let endPoint = self.swipeEndPoint(from: startPoint, destination: destination)
-                        if let failure = self.geometryFailure(
-                            method: .syntheticSwipe,
-                            field: "swipe point",
-                            points: [startPoint, endPoint]
-                        ) {
-                            return .failure(failure)
-                        }
-                        return .success(self.safecracker.prepareSwipe(
-                            from: startPoint,
-                            to: endPoint,
-                            duration: duration
-                        ))
-                    }
-                ) {
-                case .failure(let result):
-                    return result
-                case .success(let prepared):
-                    return await completePreparedGesture(
-                        prepared,
-                        method: .syntheticSwipe,
-                        subjectEvidence: resolvedPoint.subjectEvidence,
-                        complete: safecracker.completePreparedTouch
-                    )
-                }
+                    subjectEvidence: resolvedPoint.subjectEvidence,
+                    complete: safecracker.completePreparedTouch
+                )
             }
         }
     }
@@ -243,19 +255,14 @@ extension Actions {
 
     private func swipeEndPoint(
         from startPoint: CGPoint,
-        destination: SwipeDestinationSelection
+        direction: SwipeDirection
     ) -> CGPoint {
-        switch destination {
-        case .coordinate(let point):
-            return point.cgPoint
-        case .direction(let direction):
-            let distance = Self.defaultSwipeDistance
-            switch direction {
-            case .up: return CGPoint(x: startPoint.x, y: startPoint.y - distance)
-            case .down: return CGPoint(x: startPoint.x, y: startPoint.y + distance)
-            case .left: return CGPoint(x: startPoint.x - distance, y: startPoint.y)
-            case .right: return CGPoint(x: startPoint.x + distance, y: startPoint.y)
-            }
+        let distance = Self.defaultSwipeDistance
+        switch direction {
+        case .up: return CGPoint(x: startPoint.x, y: startPoint.y - distance)
+        case .down: return CGPoint(x: startPoint.x, y: startPoint.y + distance)
+        case .left: return CGPoint(x: startPoint.x - distance, y: startPoint.y)
+        case .right: return CGPoint(x: startPoint.x + distance, y: startPoint.y)
         }
     }
 

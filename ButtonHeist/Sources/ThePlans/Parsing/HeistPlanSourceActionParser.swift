@@ -237,10 +237,10 @@ extension HeistPlanSourceParser {
             if lookaheadLabel("to") {
                 try expectIdentifier("to")
                 try expectSymbol(":")
-                selection = .point(start: start, destination: .coordinate(try parseScreenPoint()))
+                selection = .pointToPoint(start: start, end: try parseScreenPoint())
             } else {
                 let direction = try parseEnumCase(SwipeDirection.self, role: "swipe direction")
-                selection = .point(start: start, destination: .direction(direction))
+                selection = .pointDirection(start: start, direction: direction)
             }
         } else {
             let target = try parseTargetExpr()

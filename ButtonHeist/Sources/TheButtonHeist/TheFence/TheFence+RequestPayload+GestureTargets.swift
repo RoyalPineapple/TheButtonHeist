@@ -72,7 +72,7 @@ private extension SwipeTarget {
             try end.validatePublicGestureUnitPoint(field: "elementUnitPoints.end")
         case .elementDirection(let target, _):
             _ = try target.validatedElementTarget(command: command)
-        case .point:
+        case .pointToPoint, .pointDirection:
             break
         }
     }

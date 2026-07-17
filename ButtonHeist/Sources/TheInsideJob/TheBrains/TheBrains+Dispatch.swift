@@ -264,7 +264,7 @@ extension TheBrains {
         switch target.selection {
         case .unitElement, .elementDirection:
             return .discovery
-        case .point:
+        case .pointToPoint, .pointDirection:
             return .visible
         }
     }

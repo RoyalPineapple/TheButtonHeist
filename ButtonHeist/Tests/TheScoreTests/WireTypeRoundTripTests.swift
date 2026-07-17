@@ -517,9 +517,9 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testGestureResolvedDefaultsAreContractOwned() {
         XCTAssertEqual(
-            SwipeTarget(selection: .point(
+            SwipeTarget(selection: .pointDirection(
                 start: ScreenPoint(x: 10, y: 20),
-                destination: .direction(.down)
+                direction: .down
             )).resolvedDuration,
             .swipeDefault
         )

@@ -189,14 +189,14 @@ struct SwipeSubcommand: ConnectedOneShotCLICommand {
             }
             selection = .elementDirection(target, swipeDirection)
         } else if let swipeDirection {
-            selection = .point(
+            selection = .pointDirection(
                 start: try requiredScreenPoint(x: fromX, y: fromY, label: "--from-x/--from-y"),
-                destination: .direction(swipeDirection)
+                direction: swipeDirection
             )
         } else {
-            selection = .point(
+            selection = .pointToPoint(
                 start: try requiredScreenPoint(x: fromX, y: fromY, label: "--from-x/--from-y"),
-                destination: .coordinate(try requiredScreenPoint(x: toX, y: toY, label: "--to-x/--to-y"))
+                end: try requiredScreenPoint(x: toX, y: toY, label: "--to-x/--to-y")
             )
         }
         return Self.fenceArguments(payload: SwipeTarget(
