@@ -118,7 +118,7 @@ struct DoctorDemoFixture {
         let target = AccessibilityTarget.predicate(.label("Checkout"))
         let plan = try HeistPlan(
             name: "doctorDemoCheckout",
-            body: [.action(try ActionStep(command: .activate(target)))]
+            body: [.action(ActionStep(command: .activate(target)))]
         )
         let configuration = HeistReceiptRecordingConfiguration(
             rootDirectory: receiptsDirectory,

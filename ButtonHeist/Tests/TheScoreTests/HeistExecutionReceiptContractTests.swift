@@ -133,6 +133,58 @@ import TheScore
         #expect(valid.kind == .forEachElement)
     }
 
+    @Test func `loop factories admit only complete summaries and current iterations`() throws {
+        let stringDeclaration = try #require(HeistForEachStringDeclaration(parameter: "item", count: 2))
+        let partialStringSummary = try #require(HeistForEachStringEvidence(iterationCount: 1)
+            .flatMap(HeistPassedForEachStringEvidence.init))
+        let staleStringIteration = try #require(HeistForEachStringEvidence(
+            iterationCount: 2,
+            iterationOrdinal: 0,
+            value: "one"
+        ).flatMap(HeistPassedForEachStringEvidence.init))
+        let elementDeclaration = try #require(HeistForEachElementDeclaration(
+            parameter: "item",
+            matching: ElementPredicateTemplate(label: "Row"),
+            limit: 2
+        ))
+        let partialElementSummary = try #require(HeistForEachElementEvidence(
+            matchedCount: 2,
+            iterationCount: 1
+        ).flatMap(HeistPassedForEachElementEvidence.init))
+        let staleElementIteration = try #require(HeistForEachElementEvidence(
+            matchedCount: 2,
+            iterationCount: 2,
+            iterationOrdinal: 0,
+            targetOrdinal: 0,
+            targetSummary: "Row"
+        ).flatMap(HeistPassedForEachElementEvidence.init))
+
+        #expect(HeistExecutionStepResult.forEachString(
+            path: "$.body[0]",
+            durationMs: 1,
+            declaration: stringDeclaration,
+            completion: .passed(evidence: partialStringSummary)
+        ) == nil)
+        #expect(HeistExecutionStepResult.forEachStringIteration(
+            path: "$.body[0].for_each_string.iterations[0]",
+            durationMs: 1,
+            declaration: stringDeclaration,
+            completion: .passed(evidence: staleStringIteration)
+        ) == nil)
+        #expect(HeistExecutionStepResult.forEachElement(
+            path: "$.body[1]",
+            durationMs: 1,
+            declaration: elementDeclaration,
+            completion: .passed(evidence: partialElementSummary)
+        ) == nil)
+        #expect(HeistExecutionStepResult.forEachElementIteration(
+            path: "$.body[1].for_each_element.iterations[0]",
+            durationMs: 1,
+            declaration: elementDeclaration,
+            completion: .passed(evidence: staleElementIteration)
+        ) == nil)
+    }
+
     private func jsonObject<Value: Encodable>(_ value: Value) throws -> [String: Any] {
         let data = try JSONEncoder().encode(value)
         return try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])

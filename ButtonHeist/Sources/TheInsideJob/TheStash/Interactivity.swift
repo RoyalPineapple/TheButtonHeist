@@ -30,9 +30,7 @@ package extension AccessibilityElement {
 
 extension TheStash {
 
-    /// Pure predicates for element interactivity — no mutable state.
-    /// Used by WireConverter (to build action lists) and ActionExecutor
-    /// (to gate interaction attempts).
+    /// Pure predicates for interactivity and default-activation classification.
     enum InteractivityCheck {
         case interactive(warning: String?)
         case blocked(reason: String)

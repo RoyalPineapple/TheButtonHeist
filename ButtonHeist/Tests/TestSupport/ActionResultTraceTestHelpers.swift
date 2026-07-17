@@ -294,7 +294,7 @@ package enum HeistReceiptFixture {
     ) -> HeistExecutionStepResult {
         let resolvedPath = path ?? "$.body[0].for_each_string.iterations[\(ordinal)]"
         guard let evidence = HeistForEachStringEvidence(
-            iterationCount: iterationCount ?? count,
+            iterationCount: iterationCount ?? ordinal + 1,
             iterationOrdinal: ordinal,
             value: value,
             failureReason: failureReason

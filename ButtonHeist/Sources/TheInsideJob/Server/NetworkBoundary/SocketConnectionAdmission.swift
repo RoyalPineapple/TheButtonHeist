@@ -10,6 +10,8 @@ enum ReadyConnectionAcceptance: Equatable, Sendable {
 /// client table, but those callbacks arrive on the NWConnection queue before
 /// the actor has necessarily accepted the ready connection. The lock protects
 /// the complete mutable state machine across those queues.
+/// `@unchecked Sendable` justification: `OSAllocatedUnfairLock` protects the
+/// complete `ConnectionAdmissionMachine` mutable state.
 final class ConnectionAdmission: @unchecked Sendable {
     enum ReadyTransition: Equatable, Sendable {
         case accept

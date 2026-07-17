@@ -152,20 +152,24 @@ extension HeistExecutionStepResult {
         completion: HeistForEachElementCompletion,
         iteration: Bool
     ) -> Bool {
-        let relationship: (evidence: HeistForEachElementEvidence?, requiresBoundedCount: Bool)
+        let relationship: (evidence: HeistForEachElementEvidence?, passed: Bool, requiresBoundedCount: Bool)
         switch completion {
         case .passed(let value, _):
-            relationship = (value.value, true)
+            relationship = (value.value, true, true)
         case .childAborted(let value, _, _):
-            relationship = (value.value, true)
+            relationship = (value.value, false, true)
         case .failed(let value, _, _):
-            relationship = (value.value?.value, false)
+            relationship = (value.value?.value, false, false)
         case .skipped:
-            relationship = (nil, false)
+            relationship = (nil, false, false)
         }
         guard let evidence = relationship.evidence else { return true }
-        return (!relationship.requiresBoundedCount || evidence.matchedCount <= declaration.limit)
-            && (evidence.iterationOrdinal != nil) == iteration
+        guard !relationship.requiresBoundedCount || evidence.matchedCount <= declaration.limit else { return false }
+        if iteration {
+            return evidence.iterationOrdinal == evidence.iterationCount - 1
+        }
+        return evidence.iterationOrdinal == nil
+            && (!relationship.passed || evidence.iterationCount == evidence.matchedCount)
     }
 
     private static func stringRelationshipMatches(
@@ -173,16 +177,20 @@ extension HeistExecutionStepResult {
         completion: HeistForEachStringCompletion,
         iteration: Bool
     ) -> Bool {
-        let evidence: HeistForEachStringEvidence?
+        let relationship: (evidence: HeistForEachStringEvidence?, passed: Bool)
         switch completion {
-        case .passed(let value, _): evidence = value.value
-        case .failed(let value, _, _): evidence = value.value?.value
-        case .childAborted(let value, _, _): evidence = value.value
-        case .skipped: evidence = nil
+        case .passed(let value, _): relationship = (value.value, true)
+        case .failed(let value, _, _): relationship = (value.value?.value, false)
+        case .childAborted(let value, _, _): relationship = (value.value, false)
+        case .skipped: relationship = (nil, false)
         }
-        guard let evidence else { return true }
-        return evidence.iterationCount <= declaration.count
-            && (evidence.iterationOrdinal != nil) == iteration
+        guard let evidence = relationship.evidence else { return true }
+        guard evidence.iterationCount <= declaration.count else { return false }
+        if iteration {
+            return evidence.iterationOrdinal == evidence.iterationCount - 1
+        }
+        return evidence.iterationOrdinal == nil
+            && (!relationship.passed || evidence.iterationCount == declaration.count)
     }
 
     private static func repeatRelationshipMatches<Passed>(

@@ -115,8 +115,8 @@ The ownership rules for the remaining evidence boundaries are explicit:
   checkpoints select evidence without clearing or stealing it from another
   consumer.
 - UIKit/ObjC `@unchecked Sendable` is confined to the TheInsideJob platform
-  boundary, where each use is allowlisted and justified. Typed core and wire
-  values remain checked `Sendable` values.
+  boundary, where each declaration documents its synchronization proof. Typed
+  core and wire values remain checked `Sendable` values.
 
 ## Pipeline
 

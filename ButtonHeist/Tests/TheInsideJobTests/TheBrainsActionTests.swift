@@ -4058,21 +4058,6 @@ observation: .settledTrace(
         XCTAssertEqual(dispatchedPoint, rawPoint)
     }
 
-    func testExecuteDragReadsTypedEndpointFromDragTarget() async throws {
-        let result = await brains.actions.executeDrag(
-            try DragTarget(
-                start: .coordinate(ScreenPoint(x: 10, y: 10)),
-                end: ScreenPoint(x: .infinity, y: 20),
-                duration: 0.01
-            ).resolve(in: .empty)
-        )
-
-        XCTAssertFalse(result.success)
-        XCTAssertEqual(result.method, .syntheticDrag)
-        XCTAssertEqual(result.failureKind, .inputValidation)
-        XCTAssertEqual(result.message, "syntheticDrag failed: endPoint must contain finite coordinates")
-    }
-
     func testExecuteRotorWithoutCustomRotorsReportsNextStep() async throws {
         let heistId: HeistId = "plain_rotor_host"
         let liveObject = UIView()

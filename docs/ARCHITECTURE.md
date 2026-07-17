@@ -374,8 +374,8 @@ reference is the record's `TreePath` and traversal index, never a UIKit object
 identity, semantic back map, or parallel element index.
 
 UIKit/ObjC `@unchecked Sendable` is a platform-boundary escape hatch only. Such
-uses stay in TheInsideJob, require an exact source-shape allowlist entry and a
-justification, and must not cross into the typed core or wire/report layers.
+uses stay in TheInsideJob, require a synchronization justification directly
+above the declaration, and must not cross into typed core or wire/report layers.
 
 ### One Driver Owns the Session
 
