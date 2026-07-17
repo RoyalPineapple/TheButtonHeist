@@ -36,7 +36,6 @@ import TheScore
     public static let pasteboardText = FenceParameter<String>.string(.text, required: true, minLength: 1)
     public static let performStep = FenceParameter<String>.string(.step, required: true, minLength: 1)
     public static let planPath = FenceParameter<String>.string(.path)
-    public static let requestId = FenceParameter<String>.string(.requestId)
     public static let screenPointX = FenceParameter<Double>.number(.x, required: true)
     public static let screenPointY = FenceParameter<Double>.number(.y, required: true)
     public static let screenMode = FenceParameter<ScreenCaptureMode>.enumValue(.mode, defaultValue: .raw)

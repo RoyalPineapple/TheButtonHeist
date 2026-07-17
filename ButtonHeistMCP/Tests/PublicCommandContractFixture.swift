@@ -109,8 +109,6 @@ private extension PublicCommandContractFixture {
         let mcpExposure: String
         let description: String
         let timeout: Timeout
-        let responseProjection: String
-        let failureProjection: String
         let inputSchemaSHA256: String
         let mcpAnnotations: MCPAnnotations?
 
@@ -122,8 +120,6 @@ private extension PublicCommandContractFixture {
             mcpExposure = descriptor.mcpExposure.contractValue
             description = descriptor.description
             timeout = Timeout(descriptor.timeout)
-            responseProjection = descriptor.responseProjection.rawValue
-            failureProjection = descriptor.failureProjection.rawValue
             inputSchemaSHA256 = try PublicCommandContractFixture.inputSchemaSHA256(
                 descriptor.inputJSONSchema
             )

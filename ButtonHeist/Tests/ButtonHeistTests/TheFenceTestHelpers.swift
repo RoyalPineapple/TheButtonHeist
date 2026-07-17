@@ -31,7 +31,7 @@ enum TheFenceFixtures {
 
 extension TheFence {
     @ButtonHeistActor
-    func parseRequest(command: Command, values: [String: HeistValue] = [:]) throws -> ParsedRequest {
+    func parseRequest(command: Command, values: [String: HeistValue] = [:]) throws -> FenceOperationRequest {
         try parseRequest(
             command: command,
             arguments: CommandArgumentEnvelope(values: values)
@@ -39,8 +39,8 @@ extension TheFence {
     }
 
     @ButtonHeistActor
-    func parseRequest(command: Command, arguments: CommandArgumentEnvelope) throws -> ParsedRequest {
-        try admit(FenceCommandInput(command: command, arguments: arguments)).parsed
+    func parseRequest(command: Command, arguments: CommandArgumentEnvelope) throws -> FenceOperationRequest {
+        try admit(FenceCommandInput(command: command, arguments: arguments))
     }
 
     @ButtonHeistActor
@@ -56,13 +56,7 @@ extension TheFence {
 
     @ButtonHeistActor
     func execute(command: Command, values: [String: HeistValue] = [:]) async throws -> FenceResponse {
-        let request: FenceOperationRequest
-        do {
-            request = try admit(FenceCommandInput(command: command, arguments: CommandArgumentEnvelope(values: values)))
-        } catch {
-            return .failure(error)
-        }
-        return try await execute(request)
+        try await execute(command: command, arguments: CommandArgumentEnvelope(values: values))
     }
 }
 

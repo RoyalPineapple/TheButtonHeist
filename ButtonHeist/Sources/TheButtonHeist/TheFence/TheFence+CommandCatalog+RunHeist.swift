@@ -10,7 +10,6 @@ extension TheFence.Command {
                     FenceParameters.performStep.spec,
                 ],
                 timeout: .performStep,
-                responseProjection: .heistExecution,
                 projection: .mcpOnly(Self.performDescription)
             )
         case .runHeist:
@@ -18,7 +17,6 @@ extension TheFence.Command {
                 family: .heistRuntime,
                 parameters: [Self.rootArgumentParameter] + Self.planSourceParameters,
                 timeout: .fixed(.longAction),
-                responseProjection: .heistExecution,
                 projection: .cliAndMCP(Self.runHeistDescription)
             )
         case .validateHeist:
@@ -29,7 +27,6 @@ extension TheFence.Command {
                     Self.rootArgumentParameter,
                     FenceParameters.heistValidationLint.spec,
                 ] + Self.planSourceParameters,
-                responseProjection: .heistValidation,
                 projection: .cliAndMCP(
                     Self.validateHeistDescription,
                     mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
@@ -42,7 +39,6 @@ extension TheFence.Command {
                 parameters: [
                     FenceParameters.heistCatalogDetail.spec,
                 ] + Self.planSourceParameters,
-                responseProjection: .heistCatalog,
                 projection: .cliAndMCP(
                     "List the root entry and reusable heists in a plan. Use `detail: \"detailed\"` " +
                         "when composing against available capabilities.",
@@ -56,7 +52,6 @@ extension TheFence.Command {
                 parameters: [
                     FenceParameters.heistName.spec,
                 ] + Self.planSourceParameters,
-                responseProjection: .heistDescription,
                 projection: .cliAndMCP(
                     "Describe one root entry or reusable heist from a plan so an agent can call it safely.",
                     mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)

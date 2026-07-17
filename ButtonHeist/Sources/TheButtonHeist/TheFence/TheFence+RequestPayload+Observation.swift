@@ -13,7 +13,6 @@ extension TheFence {
     struct ScreenRequest {
         let destination: ScreenshotDestination
         let mode: ScreenCaptureMode
-        let requestId: RequestID
     }
 
     package enum ScreenshotDestination: Sendable, Equatable {
@@ -51,14 +50,10 @@ extension TheFence {
         return try InterfaceDiscoveryLimit(validating: value)
     }
 
-    func makeScreenRequest(
-        _ arguments: CommandArgumentEnvelope,
-        requestId: RequestID
-    ) throws -> ScreenRequest {
+    func makeScreenRequest(_ arguments: CommandArgumentEnvelope) throws -> ScreenRequest {
         return ScreenRequest(
             destination: try screenshotDestination(arguments),
-            mode: try arguments.value(FenceParameters.screenMode, defaultFrom: Command.getScreen.descriptor),
-            requestId: requestId
+            mode: try arguments.value(FenceParameters.screenMode, defaultFrom: Command.getScreen.descriptor)
         )
     }
 

@@ -126,15 +126,10 @@ public final class TheFence {
         pendingRequests.resolveTransientFailure(FenceError(failure), requestId: requestId)
     }
 
-    /// Execute an admitted command request.
-    @_spi(ButtonHeistTooling) public func execute(_ request: FenceOperationRequest) async throws -> FenceResponse {
-        try await execute(parsed: request.parsed)
-    }
-
     // MARK: - Command Dispatch (thin router)
 
-    func dispatch(_ parsed: ParsedRequest) async throws -> FenceResponse {
-        switch parsed.dispatch {
+    func dispatch(_ request: FenceOperationRequest) async throws -> FenceResponse {
+        switch request.dispatch {
         case .singleStepHeist(let request):
             return try await executeSingleStepHeist(request)
         case .directAction(let request):
