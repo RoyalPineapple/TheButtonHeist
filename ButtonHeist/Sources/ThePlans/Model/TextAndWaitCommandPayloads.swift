@@ -198,21 +198,48 @@ extension EditActionTarget: CustomStringConvertible {
     }
 }
 
+package enum WaitTimeoutEnvironmentKey: String, Sendable {
+    case maximum = "BUTTONHEIST_MAX_WAIT_TIMEOUT"
+}
+
 public struct WaitTimeout: Codable, Sendable, Equatable, Comparable, CustomStringConvertible,
     ExpressibleByFloatLiteral, ExpressibleByIntegerLiteral {
-    public static let maximumSeconds: Double = 30
+    public static let defaultMaximumSeconds: Double = 60
+
+    public static var maximumSeconds: Double {
+        maximumSeconds(environment: ProcessInfo.processInfo.environment)
+    }
 
     private let boundedSeconds: BoundedSeconds
 
     public init(validatingSeconds seconds: Double) throws(WaitTimeoutError) {
+        try self.init(validatingSeconds: seconds, maximumSeconds: Self.maximumSeconds)
+    }
+
+    package init(
+        validatingSeconds seconds: Double,
+        maximumSeconds: Double
+    ) throws(WaitTimeoutError) {
         do {
             self.init(boundedSeconds: try BoundedSeconds(
                 value: seconds,
-                maximum: Self.maximumSeconds
+                maximum: maximumSeconds
             ))
         } catch let error {
             throw WaitTimeoutError.invalid(observed: error.observed, expected: error.expected)
         }
+    }
+
+    package static func maximumSeconds(environment: [String: String]) -> Double {
+        guard
+            let rawValue = environment[WaitTimeoutEnvironmentKey.maximum.rawValue],
+            let configured = Double(rawValue),
+            configured.isFinite,
+            configured >= 30
+        else {
+            return defaultMaximumSeconds
+        }
+        return configured
     }
 
     public init(floatLiteral value: Double) {
@@ -283,7 +310,8 @@ public enum WaitTimeoutError: Error, Sendable, Equatable, CustomStringConvertibl
 public struct WaitTarget: Codable, Sendable, Equatable {
     /// The predicate to wait on.
     public let predicate: AccessibilityPredicate
-    /// Maximum time to wait (default: 30 seconds, max: 30 seconds).
+    /// Optional wait duration. Omitted waits use the 30-second default; explicit
+    /// values are admitted up to the configured maximum, which defaults to 60 seconds.
     public let timeout: WaitTimeout?
 
     public init(predicate: AccessibilityPredicate, timeout: WaitTimeout? = nil) {

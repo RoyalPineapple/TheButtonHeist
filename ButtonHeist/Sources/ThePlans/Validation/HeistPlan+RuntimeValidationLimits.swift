@@ -10,7 +10,6 @@ package struct HeistPlanRuntimeSafetyLimits: Sendable, Equatable {
     package let maxAllPredicateChildren: Int
     package let maxForEachStringValues: Int
     package let maxForEachElementLimit: Int
-    package let maxRepeatUntilTimeout: WaitTimeout
     package let maxStringBytes: Int
     package let maxTotalStringBytes: Int
     package let maxParameterBytes: Int
@@ -23,7 +22,6 @@ package struct HeistPlanRuntimeSafetyLimits: Sendable, Equatable {
         maxAllPredicateChildren: Int = 20,
         maxForEachStringValues: Int = 100,
         maxForEachElementLimit: Int = 100,
-        maxRepeatUntilTimeout: WaitTimeout = defaultWaitTimeout,
         maxStringBytes: Int = 4_096,
         maxTotalStringBytes: Int = 65_536,
         maxParameterBytes: Int = 64,
@@ -35,7 +33,6 @@ package struct HeistPlanRuntimeSafetyLimits: Sendable, Equatable {
         self.maxAllPredicateChildren = maxAllPredicateChildren
         self.maxForEachStringValues = maxForEachStringValues
         self.maxForEachElementLimit = maxForEachElementLimit
-        self.maxRepeatUntilTimeout = maxRepeatUntilTimeout
         self.maxStringBytes = maxStringBytes
         self.maxTotalStringBytes = maxTotalStringBytes
         self.maxParameterBytes = maxParameterBytes

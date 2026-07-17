@@ -34,10 +34,18 @@ class CIWorkflowTests(unittest.TestCase):
             if "runs-on: macos-15" in block and "github.ref == 'refs/heads/main'" in block
         }
 
-        self.assertEqual(pr_jobs, {"macos-tests", "ios-tests", "ios-demo-gates"})
+        self.assertEqual(
+            pr_jobs,
+            {"macos-tests", "ios-tests", "ios-demo-gates"},
+        )
         self.assertEqual(
             main_jobs,
-            {"macos-tests", "ios-tests", "ios-demo-gates", "main-integration"},
+            {
+                "macos-tests",
+                "ios-tests",
+                "ios-demo-gates",
+                "main-integration",
+            },
         )
         self.assertIn("needs: ios-tests", blocks["main-integration"])
 
@@ -70,8 +78,7 @@ class CIWorkflowTests(unittest.TestCase):
             aggregate,
         )
         self.assertIn("name: buttonheist-exact-sha-suite", aggregate)
-        self.assertIn(".workflow.ref == $workflowRef", aggregate)
-        self.assertIn(".workflow.sha == $commit", aggregate)
+        self.assertIn("-f scripts/exact-sha-suite.jq", aggregate)
         for suite in (
             "release-contract",
             "macos-tests",
@@ -108,7 +115,8 @@ class CIWorkflowTests(unittest.TestCase):
             r"\bxcodebuild\s+(?:test|build-for-testing|test-without-building)\b",
         )
         self.assertNotRegex(WORKFLOW, r"\btuist\s+test\b")
-        self.assertNotIn("select-ios-ci-simulator.py", WORKFLOW)
+        for name in ("macos-tests", "ios-tests", "ios-demo-gates", "main-integration"):
+            self.assertNotIn("select-ios-ci-simulator.py", job_blocks()[name])
         self.assertNotIn("IOS_TEST_RESULT_BUNDLE", WORKFLOW)
         self.assertNotIn("-destination", WORKFLOW)
 

@@ -239,14 +239,14 @@ extension SemanticObservationStream {
     private static func observationWaitTimeout(_ timeout: Double?) -> Duration? {
         guard let timeout else { return nil }
         guard timeout > 0 else { return .zero }
-        let nanoseconds = UInt64((timeout * 1_000_000_000).rounded(.up))
-        return .nanoseconds(nanoseconds)
+        return .seconds(timeout)
     }
 
     static func timeoutMilliseconds(from timeout: Double?) -> Int {
         guard let timeout else { return SettleSession.defaultTimeoutMs }
         guard timeout > 0 else { return 0 }
-        return max(1, Int((timeout * 1_000).rounded(.up)))
+        let milliseconds = (timeout * 1_000).rounded(.up)
+        return milliseconds >= Double(Int.max) ? Int.max : max(1, Int(milliseconds))
     }
 
     private func baselineSequence(

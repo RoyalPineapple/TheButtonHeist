@@ -3101,7 +3101,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testWaitSendsCorrectMessage() async {
+    func testWaitSendsDefaultMaximumTimeout() async {
         let (fence, mockConn) = makeConnectedFence()
         _ = try? await fence.execute(command: .wait, values: [
             "predicate": .object([
@@ -3109,13 +3109,13 @@ final class TheFenceHandlerTests: XCTestCase {
                 "scope": .string("screen"),
                 "assertions": .array([]),
             ]),
-            "timeout": .double(8.0),
+            "timeout": .double(60.0),
         ])
         guard let step = mockConn.sent.sentWaitSteps.last else {
             return XCTFail("Expected wait step")
         }
         XCTAssertEqual(step.predicate, .changed(.screen()))
-        XCTAssertEqual(step.timeout, 8.0)
+        XCTAssertEqual(step.timeout, 60.0)
     }
 
     @ButtonHeistActor

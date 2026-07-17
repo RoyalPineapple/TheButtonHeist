@@ -185,7 +185,6 @@ internal final class ElementInflation {
         guard !Task.isCancelled else {
             return .failed(.cancelled("element inflation was cancelled before committed target refresh"))
         }
-        stash.refreshLiveCapture()
         guard let treeElement = stash.interfaceElement(heistId: target.heistId) else {
             return .failed(.staleRefresh(
                 "committed target \(target.heistId) disappeared before \(method.rawValue) refresh",

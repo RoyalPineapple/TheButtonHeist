@@ -89,9 +89,11 @@ investigation only.
 Public ThePlans payload values are admitted when they are constructed, not
 repaired when they reach execution. `GestureDuration` accepts only finite
 values greater than zero and no more than 60 seconds. `WaitTarget` accepts an
-omitted timeout or a finite value greater than zero and no more than 30
-seconds. Immediate predicate evaluation is a separate operation, not a zero
-timeout. A timeout above the maximum is rejected rather than clamped.
+omitted timeout or a finite value greater than zero and no more than the
+configured `WaitTimeout` maximum. That maximum defaults to 60 seconds and can
+be overridden with `BUTTONHEIST_MAX_WAIT_TIMEOUT`. Immediate predicate
+evaluation is a separate operation, not a zero timeout. A timeout above the
+maximum is rejected rather than clamped.
 
 Appending text and pasteboard writes require non-empty text. Replacement text
 may be empty because that is the typed clear operation. Swift construction,
@@ -330,6 +332,7 @@ unprefixed name wins when it is valid.
 | `BH_TRIPWIRE_PULSE_HZ` | `10` | `1...120` | Accessibility tripwire polling frequency. |
 | `BH_MAX_SCROLLS_PER_CONTAINER` | `200` | `1...2000` | Per-container scroll exploration safety limit. |
 | `BH_MAX_SCROLLS_PER_DISCOVERY` | `200` | `1...2000` | Whole-discovery scroll exploration safety limit. |
+| `BUTTONHEIST_MAX_WAIT_TIMEOUT` | `60` | finite seconds, at least `30` | Maximum duration accepted by `WaitTimeout`; no additional fixed policy cap. |
 | `BH_SCROLL_SUBTREE_ELEMENT_BUDGET` | `300` | `0...1000` | Per-scroll-container public projection budget. |
 | `BH_TOTAL_NODE_BUDGET` | `5000` | `0...5000` | Whole-interface public projection budget. |
 

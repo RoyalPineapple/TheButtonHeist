@@ -50,7 +50,7 @@ import TheScore
     public static let textInputMode = FenceParameter<TextInputText.Mode>.enumValue(.mode, defaultValue: .append)
     public static let timeout = FenceParameter<Double>.number(
         .timeout,
-        maximum: defaultWaitTimeout.seconds,
+        maximum: WaitTimeout.maximumSeconds,
         exclusiveMinimum: 0
     )
     public static let token = FenceParameter<String>.string(.token)

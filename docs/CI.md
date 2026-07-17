@@ -137,6 +137,20 @@ Run the complete portable framework suite with:
 scripts/test-runner.py run MacFrameworkTests --selection full
 ```
 
+For a vertical contract or critical invariant, use a named focus from the same
+catalog instead of reconstructing scheme and test selectors:
+
+```bash
+scripts/test-runner.py catalog
+scripts/test-runner.py run --focus contract-receipts --selection full
+```
+
+Every invocation writes `run.json` beside its result artifacts. The record
+includes the exact commit, whether the tracked source tree was clean, the
+selected tests, phase, outcome, exit code, timeout state, duration, and executed
+test count. Tuist-backed runs reject a missing result bundle or zero executed
+tests.
+
 Run the core, integration, and combined behavior schemes for complete hosted coverage:
 
 ```bash

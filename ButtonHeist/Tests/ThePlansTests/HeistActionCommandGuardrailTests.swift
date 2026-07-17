@@ -227,12 +227,36 @@ import Testing
     let waitTargetCases: [(String, WaitTarget, WaitTimeout?, WaitTimeout)] = [
         ("default runtime timeout", WaitTarget(predicate: predicate), nil, defaultWaitTimeout),
         ("explicit runtime timeout", WaitTarget(predicate: predicate, timeout: 12), 12, 12),
-        ("maximum runtime timeout", WaitTarget(predicate: predicate, timeout: 30), 30, 30),
+        ("maximum runtime timeout", WaitTarget(predicate: predicate, timeout: 60), 60, 60),
     ]
 
     for (name, target, timeout, resolvedTimeout) in waitTargetCases {
         #expect(target.timeout == timeout, "\(name)")
         #expect(target.resolvedTimeout == resolvedTimeout, "\(name)")
+    }
+}
+
+@Test func `wait timeout maximum has one external override`() throws {
+    let configuredMaximum = WaitTimeout.maximumSeconds(environment: [
+        WaitTimeoutEnvironmentKey.maximum.rawValue: "120",
+    ])
+
+    #expect(WaitTimeout.maximumSeconds(environment: [:]) == 60)
+    #expect(configuredMaximum == 120)
+    for invalidValue in ["", "not-a-number", "0", "29", "-1", "nan", "infinity"] {
+        #expect(
+            WaitTimeout.maximumSeconds(environment: [
+                WaitTimeoutEnvironmentKey.maximum.rawValue: invalidValue,
+            ]) == 60,
+            "invalid override: \(invalidValue)"
+        )
+    }
+    #expect(try WaitTimeout(validatingSeconds: 120, maximumSeconds: configuredMaximum).seconds == 120)
+    #expect(throws: WaitTimeoutError.self) {
+        _ = try WaitTimeout(
+            validatingSeconds: configuredMaximum.nextUp,
+            maximumSeconds: configuredMaximum
+        )
     }
 }
 
@@ -284,7 +308,7 @@ import Testing
     }
 
     let waitPrefix = #"{"predicate":{"type":"exists","target":{"checks":[{"kind":"label","match":{"mode":"exact","value":"Home"}}]}},"timeout":"#
-    for timeout in ["0", "-1", "30.0000000001"] {
+    for timeout in ["0", "-1", "60.0000000001"] {
         expectDataCorrupted("wait timeout \(timeout)", contains: "wait timeout must be") {
             _ = try JSONDecoder().decode(WaitTarget.self, from: Data("\(waitPrefix)\(timeout)}".utf8))
         }

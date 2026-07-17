@@ -407,14 +407,6 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
         _ step: RepeatUntilStep,
         path: HeistPlanPath
     ) {
-        if step.timeout > limits.maxRepeatUntilTimeout {
-            fail(
-                path: path.child(.timeout),
-                contract: "max repeat_until timeout",
-                observed: "\(ScoreDescription.decimal(step.timeout.seconds)) seconds",
-                correction: "Use a timeout of \(ScoreDescription.decimal(limits.maxRepeatUntilTimeout.seconds)) seconds or less."
-            )
-        }
         guard !step.body.isEmpty else {
             fail(
                 path: path.child(.body),

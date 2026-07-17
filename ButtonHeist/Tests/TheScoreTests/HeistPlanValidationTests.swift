@@ -554,43 +554,23 @@ func runtimeSafetyRequiresForEachStringExplicitValuesUnderConfiguredMax() throws
 }
 
 @Test
-func runtimeSafetyEnforcesConfiguredRepeatUntilTimeoutCap() throws {
-    let validTimeouts: [WaitTimeout] = [0.5, 1]
-    for timeout in validTimeouts {
-        let raw = HeistPlanAdmissionCandidate(body: [
-            .repeatUntil(try RepeatUntilStep(
-                predicate: .exists(.label("Done")),
-                timeout: timeout,
-                body: [.warn(WarnStep(message: "retry"))]
-            )),
-        ])
-
-        let failures = runtimeSafetyFailures(
-            for: raw,
-            limits: HeistPlanRuntimeSafetyLimits(maxRepeatUntilTimeout: 1)
-        )
-
-        #expect(failures.isEmpty, "\(timeout): \(failures)")
-    }
-
-    let excessive = HeistPlanAdmissionCandidate(body: [
+func runtimeSafetyUsesTheAdmittedWaitTimeoutWithoutASecondRepeatUntilCap() throws {
+    let configuredMaximum = WaitTimeout.maximumSeconds(environment: [
+        WaitTimeoutEnvironmentKey.maximum.rawValue: "120",
+    ])
+    let timeout = try WaitTimeout(
+        validatingSeconds: configuredMaximum,
+        maximumSeconds: configuredMaximum
+    )
+    let raw = HeistPlanAdmissionCandidate(body: [
         .repeatUntil(try RepeatUntilStep(
             predicate: .exists(.label("Done")),
-            timeout: 2,
+            timeout: timeout,
             body: [.warn(WarnStep(message: "retry"))]
         )),
     ])
 
-    let excessiveFailures = runtimeSafetyFailures(
-        for: excessive,
-        limits: HeistPlanRuntimeSafetyLimits(maxRepeatUntilTimeout: 1)
-    )
-
-    #expect(excessiveFailures.contains {
-        $0.path.description == "$.body[0].repeat_until.timeout"
-            && $0.contract == "max repeat_until timeout"
-            && $0.observed == "2 seconds"
-    }, "\(excessiveFailures)")
+    #expect(runtimeSafetyFailures(for: raw).isEmpty)
 }
 
 @Test

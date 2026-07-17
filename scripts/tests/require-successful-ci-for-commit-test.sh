@@ -62,8 +62,14 @@ expect_failure() {
     local runs="$2"
     local jobs="$3"
     local manifest="$4"
+    local expected_output="${5:-}"
     if run_guard "$runs" "$jobs" "$manifest" > "$TMP_DIR/output" 2>&1; then
         echo "FAIL: expected failure for $label" >&2
+        cat "$TMP_DIR/output" >&2
+        exit 1
+    fi
+    if [[ -n "$expected_output" ]] && ! grep -Fq "$expected_output" "$TMP_DIR/output"; then
+        echo "FAIL: missing diagnostic for $label: $expected_output" >&2
         cat "$TMP_DIR/output" >&2
         exit 1
     fi
@@ -96,6 +102,45 @@ successful_manifest=$(jq -cn --arg sha "$COMMIT" '{
 }')
 
 expect_success "complete exact-SHA aggregate" "$successful_run" "$successful_suite" "$successful_manifest"
+
+for conclusion in failure cancelled timed_out action_required startup_failure stale; do
+    rejected_manifest=$(jq -c --arg conclusion "$conclusion" \
+        '.suites[0].conclusion = $conclusion' <<< "$successful_manifest")
+    expect_failure \
+        "required suite conclusion $conclusion" \
+        "$successful_run" \
+        "$successful_suite" \
+        "$rejected_manifest"
+done
+skipped_manifest=$(jq -c '.suites[0].conclusion = "skipped"' <<< "$successful_manifest")
+expect_failure \
+    "required suite conclusion skipped" \
+    "$successful_run" \
+    "$successful_suite" \
+    "$skipped_manifest" \
+    "release-contract=skipped"
+null_conclusion_manifest=$(jq -c '.suites[0].conclusion = null' <<< "$successful_manifest")
+expect_failure \
+    "required suite null conclusion" \
+    "$successful_run" \
+    "$successful_suite" \
+    "$null_conclusion_manifest"
+
+for status in queued pending requested waiting in_progress; do
+    incomplete_run=$(jq -cn --arg sha "$COMMIT" --arg status "$status" '[{
+        databaseId: 41,
+        event: "push",
+        headSha: $sha,
+        status: $status,
+        conclusion: "success"
+    }]')
+    expect_failure \
+        "aggregate status $status" \
+        "$incomplete_run" \
+        "$successful_suite" \
+        "$successful_manifest"
+done
+
 expect_failure \
     "missing aggregate" \
     "$successful_run" \
@@ -115,6 +160,18 @@ expect_failure \
 incomplete_manifest=$(jq -c 'del(.suites[-1])' <<< "$successful_manifest")
 expect_failure "incomplete manifest" "$successful_run" "$successful_suite" "$incomplete_manifest"
 
+duplicate_manifest=$(jq -c '.suites += [.suites[0]]' <<< "$successful_manifest")
+expect_failure "duplicate suite" "$successful_run" "$successful_suite" "$duplicate_manifest"
+
+optional_substitution_manifest=$(jq -c \
+    'del(.suites[-1]) | .suites += [{name: "optional", conclusion: "success"}]' \
+    <<< "$successful_manifest")
+expect_failure \
+    "optional suite substitution" \
+    "$successful_run" \
+    "$successful_suite" \
+    "$optional_substitution_manifest"
+
 wrong_manifest_sha=$(jq -c '.commit = "ffffffffffffffffffffffffffffffffffffffff"' <<< "$successful_manifest")
 expect_failure "wrong manifest SHA" "$successful_run" "$successful_suite" "$wrong_manifest_sha"
 
@@ -125,6 +182,9 @@ wrong_workflow_ref=$(jq -c \
     '.workflow.ref = "RoyalPineapple/TheButtonHeist/.github/workflows/release.yml@refs/heads/main"' \
     <<< "$successful_manifest")
 expect_failure "wrong workflow ref" "$successful_run" "$successful_suite" "$wrong_workflow_ref"
+
+wrong_run_id=$(jq -c '.workflow.runId = "99"' <<< "$successful_manifest")
+expect_failure "wrong run ID" "$successful_run" "$successful_suite" "$wrong_run_id"
 
 wrong_sha_run=$(jq -cn '[{
     databaseId: 42,
