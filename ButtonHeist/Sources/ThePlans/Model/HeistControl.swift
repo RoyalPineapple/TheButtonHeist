@@ -19,14 +19,14 @@ public struct WaitFor: HeistContent {
         @HeistBuilder _ content: () -> some HeistContent
     ) -> some HeistContent {
         let content = content()
-        return CompletedControl(
-            heistSteps: [.wait(WaitStep(
+        return HeistStepList(
+            [.wait(WaitStep(
                 predicate: step.predicate,
                 timeout: step.timeout,
                 elseBody: content.heistSteps
             ))],
-            heistDefinitions: content.heistDefinitions,
-            heistBuildDiagnostics: content.heistBuildDiagnostics
+            definitions: content.heistDefinitions,
+            diagnostics: content.heistBuildDiagnostics
         )
     }
 }
@@ -71,10 +71,10 @@ public struct RepeatUntil: HeistContent {
         let completedSteps = step.map {
             [HeistStep.repeatUntil(RepeatUntilStep(completing: $0, elseBody: content.heistSteps))]
         } ?? []
-        return CompletedControl(
-            heistSteps: completedSteps,
-            heistDefinitions: step == nil ? [] : heistDefinitions + content.heistDefinitions,
-            heistBuildDiagnostics: heistBuildDiagnostics + content.heistBuildDiagnostics
+        return HeistStepList(
+            completedSteps,
+            definitions: step == nil ? [] : heistDefinitions + content.heistDefinitions,
+            diagnostics: heistBuildDiagnostics + content.heistBuildDiagnostics
         )
     }
 }
@@ -89,13 +89,13 @@ public struct IfContent: HeistContent {
         @HeistBuilder _ content: () -> some HeistContent
     ) -> some HeistContent {
         let content = content()
-        return CompletedControl(
-            heistSteps: [.conditional(ConditionalStep(
+        return HeistStepList(
+            [.conditional(ConditionalStep(
                 completing: step,
                 elseBody: content.heistSteps
             ))],
-            heistDefinitions: heistDefinitions + content.heistDefinitions,
-            heistBuildDiagnostics: heistBuildDiagnostics + content.heistBuildDiagnostics
+            definitions: heistDefinitions + content.heistDefinitions,
+            diagnostics: heistBuildDiagnostics + content.heistBuildDiagnostics
         )
     }
 
@@ -125,10 +125,10 @@ public func If(
     @PredicateBranchBuilder _ branches: () -> PredicateBranches
 ) -> some HeistContent {
     let branches = branches()
-    return CompletedControl(
-        heistSteps: [.conditional(ConditionalStep(cases: branches.cases, elseBody: branches.elseBody))],
-        heistDefinitions: branches.definitions,
-        heistBuildDiagnostics: branches.diagnostics
+    return HeistStepList(
+        [.conditional(ConditionalStep(cases: branches.cases, elseBody: branches.elseBody))],
+        definitions: branches.definitions,
+        diagnostics: branches.diagnostics
     )
 }
 
@@ -252,12 +252,6 @@ public enum PredicateBranchBuilder {
     public static func buildFinalResult(_ branches: PredicateBranches) -> PredicateBranches {
         branches
     }
-}
-
-private struct CompletedControl: HeistContent {
-    let heistSteps: [HeistStep]
-    let heistDefinitions: [HeistPlanAdmissionCandidate]
-    let heistBuildDiagnostics: [HeistBuildDiagnostic]
 }
 
 private extension ConditionalStep {

@@ -135,7 +135,7 @@ extension TheBrains {
                     )
                 },
                 wait: { request in
-                    return await brains.waitForPredicate(
+                    return await brains.interactionObservation.waitForPredicate(
                         request.step,
                         initialTrace: request.initialTrace,
                         baselineSequence: request.afterSequence,

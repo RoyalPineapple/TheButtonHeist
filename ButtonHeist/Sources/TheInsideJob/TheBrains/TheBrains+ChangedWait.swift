@@ -43,7 +43,7 @@ extension TheBrains {
                 message: "could not resolve changed wait predicate: \(error)"
             )
         }
-        let receipt = await waitForPredicate(
+        let receipt = await interactionObservation.waitForPredicate(
             step,
             onReadyToPoll: onReadyToPoll
         )

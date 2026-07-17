@@ -270,10 +270,6 @@ package struct AccessibilityTargetMatchGraph: Sendable, Equatable {
         }
     }
 
-    package func containsContainer(matching predicate: ResolvedContainerPredicate) -> Bool {
-        containers.contains { predicate.matches($0.facts) }
-    }
-
     private func scoped(to predicate: ResolvedContainerPredicate) -> AccessibilityTargetMatchGraph {
         let containerPaths = Set(containers
             .filter { predicate.matches($0.facts) }

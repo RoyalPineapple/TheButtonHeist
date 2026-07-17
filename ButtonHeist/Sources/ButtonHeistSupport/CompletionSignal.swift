@@ -2,13 +2,9 @@ import Foundation
 import os
 
 package final class CompletionSignal: Sendable {
-    private struct WaiterID: Hashable, Sendable {
-        let value = UUID()
-    }
-
     private struct State: Sendable {
         var isFinished = false
-        var waiters = WaiterStore<WaiterID, TimedOneShot<Bool>>()
+        var waiters = WaiterStore<UUID, TimedOneShot<Bool>>()
     }
 
     private let state = OSAllocatedUnfairLock(initialState: State())
@@ -21,7 +17,7 @@ package final class CompletionSignal: Sendable {
 
     package func wait() async {
         let waiter = TimedOneShot<Bool>()
-        let waiterID = WaiterID()
+        let waiterID = UUID()
         _ = await waiter.wait(
             cancellationValue: false,
             onRegistered: { waiter in
@@ -37,7 +33,7 @@ package final class CompletionSignal: Sendable {
         guard timeout > .zero else { return isFinished }
 
         let waiter = TimedOneShot<Bool>()
-        let waiterID = WaiterID()
+        let waiterID = UUID()
         return await waiter.wait(
             cancellationValue: false,
             onRegistered: { waiter in
@@ -62,7 +58,7 @@ package final class CompletionSignal: Sendable {
     }
 
     @discardableResult
-    private func register(_ waiter: TimedOneShot<Bool>, id: WaiterID) -> Bool {
+    private func register(_ waiter: TimedOneShot<Bool>, id: UUID) -> Bool {
         let isAlreadyFinished = state.withLock { state -> Bool in
             guard !state.isFinished else { return true }
             state.waiters.insert(waiter, for: id)
@@ -74,12 +70,12 @@ package final class CompletionSignal: Sendable {
         return !isAlreadyFinished
     }
 
-    private func timeout(_ waiterID: WaiterID) {
+    private func timeout(_ waiterID: UUID) {
         let waiter = state.withLock { $0.waiters.remove(waiterID) }
         waiter?.resolve(returning: false)
     }
 
-    private func remove(_ waiterID: WaiterID) {
+    private func remove(_ waiterID: UUID) {
         state.withLock { state in
             _ = state.waiters.remove(waiterID)
         }

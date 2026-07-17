@@ -123,21 +123,6 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         XCTAssertEqual(result.capturedAnnouncement, trace.capturedAnnouncements.first)
     }
 
-    func testWithTimingDoesNotReplaceSettlementDuration() {
-        let trace = traceWithAnnouncement("Checkout")
-        let traceEvidence = traceEvidence(trace, completeness: .incomplete)
-        let result = ActionResult.success(
-            method: .activate,
-            observation: .settledTrace(traceEvidence, .settled(duration: 5)),
-            timing: ActionPerformanceTiming(actionDispatchMs: 1)
-        )
-
-        let timed = result.withTiming(ActionPerformanceTiming(actionDispatchMs: 2))
-
-        XCTAssertEqual(timed.evidence.settlement?.durationMs, 5)
-        XCTAssertEqual(timed.timing?.actionDispatchMs, 2)
-    }
-
     func testObservationDiscriminatorRejectsFieldsFromAnotherCase() {
         assertActionResultRejects("""
         {

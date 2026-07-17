@@ -233,26 +233,8 @@ extension TheBrains {
         guard semanticObservationIsActive else {
             return runtimeInactiveResult(method: .wait)
         }
-        let receipt = await waitForPredicate(step)
+        let receipt = await interactionObservation.waitForPredicate(step)
         return receipt.result.actionResult
-    }
-
-    func waitForPredicate(
-        _ step: ResolvedWaitRuntimeInput,
-        initialTrace: AccessibilityTrace? = nil,
-        baselineSequence: SettledObservationSequence? = nil,
-        changeBaseline: PredicateChangeBaselineSource = .establishFromFirstObservation,
-        announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly,
-        onReadyToPoll: PredicateWait.ReadyToPoll? = nil
-    ) async -> HeistWaitReceipt {
-        await interactionObservation.waitForPredicate(
-            step,
-            initialTrace: initialTrace,
-            baselineSequence: baselineSequence,
-            changeBaseline: changeBaseline,
-            announcementCursorStrategy: announcementCursorStrategy,
-            onReadyToPoll: onReadyToPoll
-        )
     }
 
     nonisolated static func actionErrorKind(for failureKind: TheSafecracker.FailureKind) -> ErrorKind {
