@@ -162,14 +162,15 @@ extension TheBrains {
         start: CFAbsoluteTime
     ) -> HeistExecutionStepResult {
         let durationMs = elapsedMilliseconds(since: start)
-        let construction = completion.map {
-            HeistExecutionStepResult.construct(
-                path: path,
-                durationMs: durationMs,
-                node: .action(command: command, completion: $0)
-            )
-        } ?? .failure(.evidenceConstructionFailed)
-        return receiptResult(construction, path: path, durationMs: durationMs)
+        let admittedCompletion = requireAdmitted(
+            completion,
+            "action receipt evidence must match the receipt command"
+        )
+        return admittedReceipt(
+            path: path,
+            durationMs: durationMs,
+            node: .action(command: command, completion: admittedCompletion)
+        )
     }
 
     internal func failureScreenshotStep(
@@ -198,14 +199,15 @@ extension TheBrains {
         }
         let path = failedPath.failureAction(at: 0)
         let durationMs = elapsedMilliseconds(since: start)
-        let construction = completion.map {
-            HeistExecutionStepResult.construct(
-                path: path,
-                durationMs: durationMs,
-                node: .action(command: command, completion: $0)
-            )
-        } ?? .failure(.evidenceConstructionFailed)
-        return receiptResult(construction, path: path, durationMs: durationMs)
+        let admittedCompletion = requireAdmitted(
+            completion,
+            "failure screenshot receipt evidence must match the screenshot command"
+        )
+        return admittedReceipt(
+            path: path,
+            durationMs: durationMs,
+            node: .action(command: command, completion: admittedCompletion)
+        )
     }
 }
 

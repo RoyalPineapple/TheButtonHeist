@@ -42,7 +42,7 @@ final class HandoffServerFailureTests: XCTestCase {
 
             let expected = HandoffConnectionError.serverFailure(serverError)
             assertFailed(handoff.connectionPhase, failure: expected)
-            XCTAssertEqual(handoff.connectionDiagnosticFailure, expected)
+            XCTAssertEqual(handoff.connectionLifecycle.diagnosticFailure, expected)
             XCTAssertEqual(expected.failureCode, failureCode.rawValue)
             XCTAssertEqual(expected.phase, phase)
             XCTAssertEqual(expected.retryable, retryable)

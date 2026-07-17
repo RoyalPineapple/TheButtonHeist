@@ -545,7 +545,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         let result = await brains.interactionObservation.finishAfterAction(
             outcome: outcome,
             afterStatePayload: { context in
-                guard let value = context.afterState.screen.findElement(heistId: "status")?.element.value else {
+                guard let value = context.afterState.screen.tree.findElement(heistId: "status")?.element.value else {
                     return nil
                 }
                 return .typeText(value)
@@ -579,7 +579,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         let result = await brains.interactionObservation.finishAfterAction(
             outcome: outcome,
             afterStatePayload: { context in
-                guard let value = context.afterState.screen.findElement(heistId: "status")?.element.value else {
+                guard let value = context.afterState.screen.tree.findElement(heistId: "status")?.element.value else {
                     return nil
                 }
                 return .typeText(value)
@@ -854,7 +854,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             )
         }
 
-        for _ in 0..<50 where brains.stash.semanticObservationStream.observationReplayWaiterCount == 0 {
+        for _ in 0..<50 where brains.stash.semanticObservationStream.observationWaiterCount == 0 {
             await Task.yield()
         }
         brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(discoveryAfter)
@@ -893,12 +893,15 @@ final class TheBrainsPipelineTests: XCTestCase {
             "timeout evidence must not be published as a new settled observation"
         )
         XCTAssertEqual(
-            brains.stash.latestSettledSemanticObservationEvent?.observation.screen.orderedElements.first?.element.label,
+            brains.stash.latestSettledSemanticObservationEvent?.observation.screen.tree.orderedElements.first?.element.label,
             "Menu"
         )
         XCTAssertTrue(brains.stash.latestSettledSemanticObservationInvalidated)
         XCTAssertEqual(brains.stash.interfaceTree.orderedElements.first?.element.label, "Menu")
-        XCTAssertEqual(brains.stash.latestFailedSettleDiagnosticEvidence?.orderedElements.first?.element.label, "Details")
+        XCTAssertEqual(
+            brains.stash.latestFailedSettleDiagnosticEvidence?.tree.orderedElements.first?.element.label,
+            "Details"
+        )
         XCTAssertEqual(result.accessibilityTrace?.captures.count, 2)
         XCTAssertEqual(result.accessibilityTrace?.captures.last?.interface.projectedElements.first?.label, "Details")
         XCTAssertEqual(
@@ -915,7 +918,7 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         XCTAssertNil(baseline)
         XCTAssertEqual(
-            brains.stash.latestFailedSettleDiagnosticEvidence?.orderedElements.first?.element.label,
+            brains.stash.latestFailedSettleDiagnosticEvidence?.tree.orderedElements.first?.element.label,
             "Timeout"
         )
     }
@@ -1740,7 +1743,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         let state = brains.postActionObservation.captureSemanticState()
 
         XCTAssertEqual(
-            Set(state.screen.orderedElements.map(\.heistId)),
+            Set(state.screen.tree.orderedElements.map(\.heistId)),
             ["button_visible", "button_below_fold"]
         )
         XCTAssertEqual(
@@ -1761,11 +1764,11 @@ final class TheBrainsPipelineTests: XCTestCase {
             settledObservationSequence: captured.settledObservationSequence
         )
 
-        XCTAssertEqual(state.elements, screen.orderedElements.map(\.element))
+        XCTAssertEqual(state.elements, screen.tree.orderedElements.map(\.element))
         XCTAssertEqual(state.interface, captured.capture.interface)
         XCTAssertEqual(state.interfaceHash, screen.tree.interfaceHash)
         XCTAssertEqual(state.screenSnapshot, ScreenClassifier.snapshot(of: screen.tree))
-        XCTAssertEqual(state.screenId, screen.id)
+        XCTAssertEqual(state.screenId, screen.tree.id)
     }
 
     func testNotificationRemapPreservesUnknownNotificationKind() throws {
@@ -1800,7 +1803,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             sequence: 1,
             screen: screen,
             tripwireSignal: .empty,
-            screenId: screen.id
+            screenId: screen.tree.id
         )
         let trace = AccessibilityTrace(capture: traceCapture)
         let settled = SettledSemanticObservation(
@@ -2023,8 +2026,8 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     func testExploreScreenStopsEarlyWhenTargetAlreadyResolved() async throws {
         guard let screen = brains.stash.refreshLiveCapture(),
-              let label = screen.viewportElementIDs
-                  .compactMap({ screen.findElement(heistId: $0)?.element.label })
+              let label = screen.tree.viewportElementIDs
+                  .compactMap({ screen.tree.findElement(heistId: $0)?.element.label })
                   .first(where: { !$0.isEmpty }) else {
             throw XCTSkip("No live labeled element available for target short-circuit test")
         }

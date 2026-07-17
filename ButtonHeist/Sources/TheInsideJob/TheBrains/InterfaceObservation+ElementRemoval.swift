@@ -8,24 +8,21 @@ extension InterfaceObservation {
         guard !removedIds.isEmpty else { return self }
         let filteredViewport = liveCapture.hierarchy.removingElements(
             withIds: removedIds,
-            idsByPath: liveCapture.heistIdsByPath
+            idsByPath: liveCapture.snapshot.heistIdsByPath
         )
         let pathMap = filteredViewport.pathMap
         let snapshot = LiveCapture.Snapshot(
             hierarchy: filteredViewport.hierarchy,
-            containerNamesByPath: Self.remap(liveCapture.containerNamesByPath, using: pathMap),
-            heistIdsByPath: filteredViewport.idsByPath,
-            containerContentFramesByPath: Self.remap(liveCapture.containerContentFramesByPath, using: pathMap),
-            containerScrollMembershipsByPath: Self.remapMemberships(
-                liveCapture.containerScrollMembershipsByPath,
+            elementsByPath: Self.remapViewportElements(
+                liveCapture.snapshot.elementsByPath,
+                removing: removedIds,
                 using: pathMap
             ),
-            containerObservedScrollContentActivationPointsByPath: Self.remap(
-                liveCapture.containerObservedScrollContentActivationPointsByPath,
+            containersByPath: Self.remapViewportContainers(
+                liveCapture.snapshot.containersByPath,
                 using: pathMap
             ),
-            scrollInventoriesByPath: Self.remap(liveCapture.scrollInventoriesByPath, using: pathMap),
-            firstResponderHeistId: liveCapture.firstResponderHeistId.flatMap {
+            firstResponderHeistId: liveCapture.snapshot.firstResponderHeistId.flatMap {
                 removedIds.contains($0) ? nil : $0
             }
         )
@@ -63,23 +60,61 @@ extension InterfaceObservation {
         )
     }
 
-    private static func remapMemberships(
-        _ memberships: [TreePath: InterfaceTree.ScrollMembership],
+    private static func remapViewportElements(
+        _ elementsByPath: [TreePath: InterfaceTree.Element],
+        removing removedIds: Set<HeistId>,
         using pathMap: [TreePath: TreePath]
-    ) -> [TreePath: InterfaceTree.ScrollMembership] {
+    ) -> [TreePath: InterfaceTree.Element] {
         Dictionary(
-            uniqueKeysWithValues: memberships.compactMap { path, membership in
-                guard let remappedPath = pathMap[path],
-                      let remappedContainerPath = pathMap[membership.containerPath]
+            uniqueKeysWithValues: elementsByPath.compactMap { path, entry in
+                guard !removedIds.contains(entry.heistId),
+                      let remappedPath = pathMap[path]
                 else { return nil }
                 return (
                     remappedPath,
-                    InterfaceTree.ScrollMembership(
-                        containerPath: remappedContainerPath,
-                        index: membership.index
+                    InterfaceTree.Element(
+                        heistId: entry.heistId,
+                        path: remappedPath,
+                        scrollMembership: remapMembership(entry.scrollMembership, using: pathMap),
+                        observedScrollContentActivationPoint: entry.observedScrollContentActivationPoint,
+                        element: entry.element
                     )
                 )
             }
+        )
+    }
+
+    private static func remapViewportContainers(
+        _ containersByPath: [TreePath: InterfaceTree.Container],
+        using pathMap: [TreePath: TreePath]
+    ) -> [TreePath: InterfaceTree.Container] {
+        Dictionary(
+            uniqueKeysWithValues: containersByPath.compactMap { path, container in
+                guard let remappedPath = pathMap[path] else { return nil }
+                return (
+                    remappedPath,
+                    InterfaceTree.Container(
+                        container: container.container,
+                        path: remappedPath,
+                        containerName: container.containerName,
+                        contentRect: container.contentFrame,
+                        scrollMembership: remapMembership(container.scrollMembership, using: pathMap),
+                        observedScrollContentActivationPoint: container.observedScrollContentActivationPoint,
+                        scrollInventory: container.scrollInventory
+                    )
+                )
+            }
+        )
+    }
+
+    private static func remapMembership(
+        _ membership: InterfaceTree.ScrollMembership?,
+        using pathMap: [TreePath: TreePath]
+    ) -> InterfaceTree.ScrollMembership? {
+        guard let membership else { return nil }
+        return InterfaceTree.ScrollMembership(
+            containerPath: pathMap[membership.containerPath] ?? membership.containerPath,
+            index: membership.index
         )
     }
 }

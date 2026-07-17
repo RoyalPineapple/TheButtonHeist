@@ -29,10 +29,10 @@ final class TheHandoffStateTests: XCTestCase {
     func testInitialState() async {
         let handoff = TheHandoff()
 
-        XCTAssertTrue(handoff.discoveredDevices.isEmpty)
-        XCTAssertNil(handoff.connectedDevice)
-        XCTAssertNil(handoff.serverInfo)
-        XCTAssertFalse(handoff.isDiscovering)
+        XCTAssertTrue(handoff.discoveryLifecycle.discoveredDevices.isEmpty)
+        XCTAssertNil(handoff.connectionLifecycle.connectedDevice)
+        XCTAssertNil(handoff.connectionLifecycle.serverInfo)
+        XCTAssertFalse(handoff.discoveryLifecycle.isDiscovering)
         assertDisconnected(handoff.connectionPhase)
     }
 
@@ -48,7 +48,7 @@ final class TheHandoffStateTests: XCTestCase {
         mock.onTransportReady?()
 
         assertConnecting(handoff.connectionPhase, device: device)
-        XCTAssertNil(handoff.connectedDevice)
+        XCTAssertNil(handoff.connectionLifecycle.connectedDevice)
     }
 
     @ButtonHeistActor
@@ -57,8 +57,8 @@ final class TheHandoffStateTests: XCTestCase {
 
         handoff.disconnect()
 
-        XCTAssertNil(handoff.connectedDevice)
-        XCTAssertNil(handoff.serverInfo)
+        XCTAssertNil(handoff.connectionLifecycle.connectedDevice)
+        XCTAssertNil(handoff.connectionLifecycle.serverInfo)
         assertDisconnected(handoff.connectionPhase)
     }
 
@@ -69,7 +69,7 @@ final class TheHandoffStateTests: XCTestCase {
         handoff.startDiscovery()
         handoff.stopDiscovery()
 
-        XCTAssertFalse(handoff.isDiscovering)
+        XCTAssertFalse(handoff.discoveryLifecycle.isDiscovering)
     }
 
     @ButtonHeistActor
@@ -80,7 +80,7 @@ final class TheHandoffStateTests: XCTestCase {
         handoff.handleServerMessage(.error(serverError), requestId: nil)
 
         assertFailed(handoff.connectionPhase, failure: .serverFailure(serverError))
-        XCTAssertEqual(handoff.connectionDiagnosticFailure, .serverFailure(serverError))
+        XCTAssertEqual(handoff.connectionLifecycle.diagnosticFailure, .serverFailure(serverError))
     }
 
     @ButtonHeistActor
@@ -219,7 +219,7 @@ final class TheHandoffStateTests: XCTestCase {
 
         handoff.handleServerMessage(.pong(PongPayload(bundleIdentifier: "com.buttonheist.test")), requestId: "ping-1")
 
-        XCTAssertEqual(handoff.missedPongCount, 0)
+        XCTAssertEqual(handoff.connectionLifecycle.missedPongCount, 0)
         XCTAssertEqual(forwarded.count, 1)
         XCTAssertEqual(forwarded.first?.1, "ping-1")
         guard case .pong = forwarded.first?.0 else {
@@ -258,7 +258,7 @@ final class TheHandoffStateTests: XCTestCase {
 
         handoff.handleServerMessage(.pong(PongPayload(bundleIdentifier: "com.buttonheist.test")), requestId: nil)
 
-        XCTAssertEqual(handoff.missedPongCount, 0)
+        XCTAssertEqual(handoff.connectionLifecycle.missedPongCount, 0)
         XCTAssertEqual(handoff.tickKeepalive(), 1)
         assertConnected(handoff.connectionPhase)
     }
@@ -537,7 +537,7 @@ final class TheHandoffStateTests: XCTestCase {
         handoff.connect(to: device)
 
         assertReconnecting(handoff.connectionPhase, device: device)
-        XCTAssertEqual(handoff.connectionDiagnosticFailure, .disconnected(.serverClosed))
+        XCTAssertEqual(handoff.connectionLifecycle.diagnosticFailure, .disconnected(.serverClosed))
         XCTAssertTrue(observedPhases.contains { phase in
             guard case .reconnecting(let attempt) = phase else { return false }
             return attempt.target.device == device
@@ -724,7 +724,7 @@ final class TheHandoffStateTests: XCTestCase {
 
         connectionA.onEvent?(.connected)
         assertConnecting(handoff.connectionPhase, device: deviceB)
-        XCTAssertNil(handoff.connectedDevice)
+        XCTAssertNil(handoff.connectionLifecycle.connectedDevice)
 
         connectionB.onEvent?(.connected)
         assertConnected(handoff.connectionPhase, device: deviceB)
@@ -839,7 +839,7 @@ final class TheHandoffStateTests: XCTestCase {
         }
 
         XCTAssertTrue(timedOutAttemptDisconnected, "Timed-out reconnect attempt must close before any later retry")
-        XCTAssertFalse(handoff.isConnected)
+        XCTAssertFalse(handoff.connectionLifecycle.isConnected)
         guard connections.indices.contains(1) else {
             XCTFail("Expected a reconnect attempt")
             return
@@ -847,7 +847,7 @@ final class TheHandoffStateTests: XCTestCase {
 
         connections[1].onEvent?(.connected)
 
-        XCTAssertFalse(handoff.isConnected, "Late success from a timed-out reconnect attempt must not resurrect stale state")
+        XCTAssertFalse(handoff.connectionLifecycle.isConnected, "Late success from a timed-out reconnect attempt must not resurrect stale state")
         handoff.disableAutoReconnect()
     }
 
@@ -932,15 +932,15 @@ final class TheHandoffStateTests: XCTestCase {
         handoff.onDeviceFound = { foundDevices.append($0) }
 
         handoff.startDiscovery()
-        XCTAssertTrue(handoff.isDiscovering)
+        XCTAssertTrue(handoff.discoveryLifecycle.isDiscovering)
 
         handoff.stopDiscovery()
         mockDiscovery.discoveredDevices = [staleDevice]
         mockDiscovery.onEvent?(.stateChanged(isReady: true))
         mockDiscovery.onEvent?(.found(staleDevice))
 
-        XCTAssertFalse(handoff.isDiscovering)
-        XCTAssertEqual(handoff.discoveredDevices, [])
+        XCTAssertFalse(handoff.discoveryLifecycle.isDiscovering)
+        XCTAssertEqual(handoff.discoveryLifecycle.discoveredDevices, [])
         XCTAssertEqual(foundDevices, [])
     }
 
@@ -957,14 +957,14 @@ final class TheHandoffStateTests: XCTestCase {
         handoff.makeDiscovery = { mockDiscovery }
 
         handoff.startDiscovery()
-        XCTAssertTrue(handoff.isDiscovering)
-        XCTAssertEqual(handoff.discoveredDevices, [device])
+        XCTAssertTrue(handoff.discoveryLifecycle.isDiscovering)
+        XCTAssertEqual(handoff.discoveryLifecycle.discoveredDevices, [device])
 
         mockDiscovery.onEvent?(.failed(.noDeviceFound))
 
-        XCTAssertFalse(handoff.isDiscovering)
-        XCTAssertEqual(handoff.discoveredDevices, [])
-        XCTAssertFalse(handoff.hasActiveDiscoverySession)
+        XCTAssertFalse(handoff.discoveryLifecycle.isDiscovering)
+        XCTAssertEqual(handoff.discoveryLifecycle.discoveredDevices, [])
+        XCTAssertFalse(handoff.discoveryLifecycle.hasDiscoverySession)
         XCTAssertEqual(mockDiscovery.stopCount, 1)
     }
 
@@ -997,8 +997,8 @@ final class TheHandoffStateTests: XCTestCase {
         staleDiscovery.onEvent?(.stateChanged(isReady: false))
         staleDiscovery.onEvent?(.found(staleDevice))
 
-        XCTAssertTrue(handoff.isDiscovering)
-        XCTAssertEqual(handoff.discoveredDevices, [currentDevice])
+        XCTAssertTrue(handoff.discoveryLifecycle.isDiscovering)
+        XCTAssertEqual(handoff.discoveryLifecycle.discoveredDevices, [currentDevice])
         XCTAssertEqual(foundDevices, [currentDevice])
     }
 
@@ -1220,14 +1220,14 @@ final class TheHandoffStateTests: XCTestCase {
         defer { makeReachabilityConnection = previousFactory }
 
         handoff.startDiscovery()
-        XCTAssertTrue(handoff.isDiscovering)
-        XCTAssertEqual(handoff.discoveredDevices, [reachableDevice])
+        XCTAssertTrue(handoff.discoveryLifecycle.isDiscovering)
+        XCTAssertEqual(handoff.discoveryLifecycle.discoveredDevices, [reachableDevice])
 
         let devices = await handoff.discoverReachableDevices(timeout: 0.3)
 
         XCTAssertEqual(devices, [reachableDevice])
-        XCTAssertTrue(handoff.isDiscovering)
-        XCTAssertEqual(handoff.discoveredDevices, [reachableDevice])
+        XCTAssertTrue(handoff.discoveryLifecycle.isDiscovering)
+        XCTAssertEqual(handoff.discoveryLifecycle.discoveredDevices, [reachableDevice])
         XCTAssertEqual(mockDiscovery.startCount, 1)
         XCTAssertEqual(mockDiscovery.stopCount, 0)
     }
@@ -1267,8 +1267,8 @@ final class TheHandoffStateTests: XCTestCase {
         try await handoff.connectWithDiscovery(filter: nil, timeout: 0.5)
 
         XCTAssertEqual(connectedDeviceID, discoveredDevice.id)
-        XCTAssertEqual(handoff.connectedDevice, discoveredDevice)
-        XCTAssertTrue(handoff.isConnected)
+        XCTAssertEqual(handoff.connectionLifecycle.connectedDevice, discoveredDevice)
+        XCTAssertTrue(handoff.connectionLifecycle.isConnected)
     }
 
     @ButtonHeistActor
@@ -1310,8 +1310,8 @@ final class TheHandoffStateTests: XCTestCase {
 
         try await handoff.connectWithDiscovery(filter: nil, timeout: 0.5)
 
-        XCTAssertEqual(handoff.connectedDevice, device)
-        XCTAssertTrue(handoff.isConnected)
+        XCTAssertEqual(handoff.connectionLifecycle.connectedDevice, device)
+        XCTAssertTrue(handoff.connectionLifecycle.isConnected)
     }
 
     @ButtonHeistActor
@@ -1368,7 +1368,7 @@ final class TheHandoffStateTests: XCTestCase {
 
         var disconnectReasons: [DisconnectReason] = []
         handoff.onConnectionStateChanged = { _ in
-            if case .disconnected(let reason) = handoff.connectionDiagnosticFailure {
+            if case .disconnected(let reason) = handoff.connectionLifecycle.diagnosticFailure {
                 disconnectReasons.append(reason)
             }
         }
@@ -1400,7 +1400,7 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertEqual(disconnectReasons, [.localDisconnect])
         assertDisconnected(handoff.connectionPhase)
         XCTAssertEqual(
-            handoff.connectionDiagnosticFailure,
+            handoff.connectionLifecycle.diagnosticFailure,
             .ambiguousDeviceTarget(filter: "(none)", matches: [firstDevice.name, secondDevice.name])
         )
     }
@@ -1435,7 +1435,7 @@ final class TheHandoffStateTests: XCTestCase {
 
         var disconnectReasons: [DisconnectReason] = []
         handoff.onConnectionStateChanged = { _ in
-            if case .disconnected(let reason) = handoff.connectionDiagnosticFailure {
+            if case .disconnected(let reason) = handoff.connectionLifecycle.diagnosticFailure {
                 disconnectReasons.append(reason)
             }
         }
@@ -1454,7 +1454,7 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertTrue(replacementConnection.isConnected)
         XCTAssertEqual(disconnectReasons, [.localDisconnect])
         assertConnected(handoff.connectionPhase, device: replacementDevice)
-        XCTAssertNil(handoff.connectionDiagnosticFailure)
+        XCTAssertNil(handoff.connectionLifecycle.diagnosticFailure)
     }
 
     // MARK: - waitForConnectionResult continuation
@@ -1479,7 +1479,7 @@ final class TheHandoffStateTests: XCTestCase {
         handoff.makeConnection = { _ in mock }
 
         handoff.connect(to: device)
-        XCTAssertTrue(handoff.isConnected)
+        XCTAssertTrue(handoff.connectionLifecycle.isConnected)
 
         // Already connected — should return immediately without throwing.
         try await handoff.waitForConnectionResult(timeout: 5)
@@ -1531,7 +1531,7 @@ final class TheHandoffStateTests: XCTestCase {
 
         // Fire the connected transition.
         mock.onEvent?(.connected)
-        XCTAssertTrue(handoff.isConnected)
+        XCTAssertTrue(handoff.connectionLifecycle.isConnected)
 
         try await waitTask.value
     }
@@ -1802,7 +1802,7 @@ final class TheHandoffStateTests: XCTestCase {
             requestId: "request-1"
         ))
 
-        XCTAssertNil(handoff.serverInfo)
+        XCTAssertNil(handoff.connectionLifecycle.serverInfo)
         assertFailed(handoff.connectionPhase, failure: .serverFailure(serverError))
     }
 
@@ -1953,7 +1953,7 @@ final class TheHandoffStateTests: XCTestCase {
         mock.onEvent?(.connected)
 
         try await waitTask.value
-        XCTAssertTrue(handoff.isConnected)
+        XCTAssertTrue(handoff.connectionLifecycle.isConnected)
     }
 
     @ButtonHeistActor

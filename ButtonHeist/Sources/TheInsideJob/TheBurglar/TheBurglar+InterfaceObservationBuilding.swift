@@ -62,11 +62,17 @@ extension TheBurglar {
         let containerNamesByPath = buildContainerNamesByPath(
             identityContext: identityContext
         )
-        let containerContentFramesByPath = identityContext.contentFramesByPath
-        let containerScrollMembershipsByPath = identityContext.scrollMembershipsByPath
 
         let entries = buildObservationEntries(
             indexedElements: identityContext.elements,
+            facts: facts
+        )
+        let viewportElementsByPath = Dictionary(
+            uniqueKeysWithValues: entries.map { ($0.path, $0.treeElement) }
+        )
+        let viewportContainersByPath = viewportContainers(
+            identityContext: identityContext,
+            containerNamesByPath: containerNamesByPath,
             facts: facts
         )
 
@@ -93,36 +99,21 @@ extension TheBurglar {
             ? firstResponders.first?.heistId
             : nil
 
-        let heistIdsByPath = Dictionary(
-            uniqueKeysWithValues: entries.map { ($0.path, $0.heistId) }
-        )
         let snapshot = LiveCapture.Snapshot(
             hierarchy: identityContext.hierarchy,
-            containerNamesByPath: containerNamesByPath,
-            heistIdsByPath: heistIdsByPath,
-            containerContentFramesByPath: containerContentFramesByPath,
-            containerScrollMembershipsByPath: containerScrollMembershipsByPath,
-            containerObservedScrollContentActivationPointsByPath: facts.scroll.containerObservedScrollContentActivationPointsByPath,
-            scrollInventoriesByPath: facts.scroll.inventoriesByPath,
+            elementsByPath: viewportElementsByPath,
+            containersByPath: viewportContainersByPath,
             firstResponderHeistId: firstResponderHeistId
         )
         let tree = InterfaceTree(
             elements: Dictionary(
                 uniqueKeysWithValues: entries.map { ($0.heistId, $0.treeElement) }
             ),
-            containers: semanticContainers(
-                identityContext: identityContext,
-                containerNamesByPath: containerNamesByPath,
-                containerContentFramesByPath: containerContentFramesByPath,
-                containerScrollMembershipsByPath: containerScrollMembershipsByPath,
-                containerObservedScrollContentActivationPointsByPath: facts.scroll.containerObservedScrollContentActivationPointsByPath,
-                scrollInventoriesByPath: facts.scroll.inventoriesByPath
-            ),
+            containers: viewportContainersByPath,
             viewportCapture: snapshot
         )
         return InterfaceObservationBuildProjection(
             tree: tree,
-            snapshot: snapshot,
             entries: entries,
             logEvents: logEvents
         )
@@ -134,7 +125,7 @@ extension TheBurglar {
     ) -> InterfaceObservation {
         let liveReferences = InterfaceObservationBuildLiveReferences(
             result: result,
-            hierarchy: projection.snapshot.hierarchy,
+            hierarchy: projection.tree.viewportCapture.hierarchy,
             entries: projection.entries
         )
         let dispatchReferences = LiveCapture.DispatchReferences(
@@ -183,13 +174,10 @@ extension TheBurglar {
         }
     }
 
-    private static func semanticContainers(
+    private static func viewportContainers(
         identityContext: HierarchyIdentityContext,
         containerNamesByPath: [TreePath: ContainerName],
-        containerContentFramesByPath: [TreePath: ContentRect],
-        containerScrollMembershipsByPath: [TreePath: InterfaceTree.ScrollMembership],
-        containerObservedScrollContentActivationPointsByPath: [TreePath: InterfaceTree.ObservedScrollContentActivationPoint],
-        scrollInventoriesByPath: [TreePath: ScrollInventory]
+        facts: InterfaceObservationBuildFacts
     ) -> [TreePath: InterfaceTree.Container] {
         Dictionary(
             uniqueKeysWithValues: identityContext.containers.map { identity in
@@ -199,10 +187,11 @@ extension TheBurglar {
                         container: identity.container,
                         path: identity.path,
                         containerName: containerNamesByPath[identity.path],
-                        contentRect: containerContentFramesByPath[identity.path],
-                        scrollMembership: containerScrollMembershipsByPath[identity.path],
-                        observedScrollContentActivationPoint: containerObservedScrollContentActivationPointsByPath[identity.path],
-                        scrollInventory: scrollInventoriesByPath[identity.path]
+                        contentRect: identity.contentFrame,
+                        scrollMembership: identity.scrollMembership,
+                        observedScrollContentActivationPoint: facts.scroll
+                            .containerObservedScrollContentActivationPointsByPath[identity.path],
+                        scrollInventory: facts.scroll.inventoriesByPath[identity.path]
                     )
                 )
             }
@@ -452,7 +441,6 @@ extension TheBurglar {
 
     private struct InterfaceObservationBuildProjection {
         let tree: InterfaceTree
-        let snapshot: LiveCapture.Snapshot
         let entries: [InterfaceObservationBuildEntry]
         let logEvents: [InterfaceObservationBuildLogEvent]
     }

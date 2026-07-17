@@ -2,6 +2,10 @@ import Foundation
 import TheScore
 
 public enum HeistDoctor {
+    public static func diagnosis(for request: HeistRepairRequest) -> HeistRepairDiagnosis {
+        RepairDiagnosisPipeline.run(request)
+    }
+
     public static func diagnosis(
         lastPass: HeistExecutionResult,
         newFail: HeistExecutionResult,
@@ -13,24 +17,7 @@ public enum HeistDoctor {
             lastSuccess: repairEvidence(from: lastStep),
             currentFailure: repairEvidence(from: currentStep)
         )
-        return HeistRepairSuggester.diagnosis(for: request)
-    }
-
-    public static func suggestions(
-        lastPass: HeistExecutionResult,
-        newFail: HeistExecutionResult,
-        stepPath requestedStepPath: HeistExecutionPath? = nil
-    ) throws -> [HeistRepairSuggestion] {
-        let diagnosis = try diagnosis(lastPass: lastPass, newFail: newFail, stepPath: requestedStepPath)
-        switch diagnosis {
-        case .suggested(let diagnosis):
-            return diagnosis.suggestions
-        case .refused(let diagnosis):
-            throw HeistDoctorError.noSafeSuggestion(
-                path: diagnosis.stepPath,
-                reason: diagnosis.refusal.message
-            )
-        }
+        return diagnosis(for: request)
     }
 
     private static func selectedCurrentFailure(
@@ -80,7 +67,6 @@ public enum HeistDoctorError: Error, Sendable, Equatable, CustomStringConvertibl
     case missingTarget(path: HeistExecutionPath)
     case missingActionResult(path: HeistExecutionPath)
     case missingTrace(path: HeistExecutionPath)
-    case noSafeSuggestion(path: HeistExecutionPath, reason: String)
 
     public var description: String {
         switch self {
@@ -100,8 +86,6 @@ public enum HeistDoctorError: Error, Sendable, Equatable, CustomStringConvertibl
             return "action step at \(path) has no action result"
         case .missingTrace(let path):
             return "action step at \(path) has no accessibility trace"
-        case .noSafeSuggestion(let path, let reason):
-            return "unable to make a repair suggestion for action step at \(path): \(reason)"
         }
     }
 

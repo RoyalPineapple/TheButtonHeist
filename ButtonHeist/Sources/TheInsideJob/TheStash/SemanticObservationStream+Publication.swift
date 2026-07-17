@@ -245,6 +245,7 @@ extension SemanticObservationStream {
         } catch {
             preconditionFailure("Semantic observation log rejected publication: \(error)")
         }
+        completeObservationWaiters()
         runtimeState.commit(
             publication,
             notificationBatch: notificationBatch,

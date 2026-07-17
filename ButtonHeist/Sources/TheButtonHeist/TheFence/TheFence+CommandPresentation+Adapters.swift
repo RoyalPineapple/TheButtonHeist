@@ -23,8 +23,6 @@ public extension TheFence.Command {
 
         return """
         Commands:
-
-        Commands:
         \(commandLines.joined(separator: "\n"))
 
         StringMatch:

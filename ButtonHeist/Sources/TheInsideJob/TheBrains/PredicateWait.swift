@@ -24,6 +24,12 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
     }
 }
 
+private struct PredicateWaitDiscoveryResult<Evidence>
+where Evidence: Sendable & Equatable {
+    let evaluation: PredicateWaitEvaluation<Evidence>
+    let event: SettledSemanticObservationEvent?
+}
+
 @MainActor internal final class PredicateWait {
     /// Called after an unmatched initial observation is reduced and before polling begins.
     internal typealias ReadyToPoll = @MainActor (SettledObservationSequence) -> Void
@@ -35,11 +41,11 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
         let initialEvidence: Evidence
         let evaluate: @MainActor (
             HeistSemanticObservation,
-            PredicateWaitLifecyclePhase,
+            Bool,
             Evidence
-        ) -> PredicateWaitLifecycleEvaluation<Evidence>
+        ) -> PredicateWaitEvaluation<Evidence>
         let result: @MainActor (
-            PredicateWaitLifecycleOutcome,
+            PredicateWaitOutcome,
             SemanticObservationDeadline,
             Evidence
         ) -> Result
@@ -106,10 +112,10 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
                 target: step.predicate.waitTarget,
                 continuesAfterInitialMiss: true,
                 initialEvidence: projection.initialEvidence,
-                evaluate: { observation, lifecyclePhase, evidence in
+                evaluate: { observation, isInitialVisible, evidence in
                     projection.evaluate(
                         observation,
-                        lifecyclePhase: lifecyclePhase,
+                        isInitialVisible: isInitialVisible,
                         evidence: evidence
                     )
                 },
@@ -142,10 +148,6 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
         private let deadline: SemanticObservationDeadline
         private let projection: ExecutionProjection<Result, Evidence>
         private let onReadyToPoll: ReadyToPoll?
-        private let lifecycleMachine: PredicateWaitLifecycleMachine<Evidence>
-        private var lifecycleState: PredicateWaitLifecycleState<Evidence>
-        private var effect: PredicateWaitLifecycleEffect
-        private var ignoreObservationsThrough: SettledObservationSequence?
 
         init(
             wait: PredicateWait,
@@ -158,71 +160,128 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
             deadline = SemanticObservationDeadline(start: start, timeoutSeconds: timeout)
             self.projection = projection
             self.onReadyToPoll = onReadyToPoll
-            lifecycleMachine = PredicateWaitLifecycleMachine(
-                continuesAfterInitialMiss: projection.continuesAfterInitialMiss
-            )
-            lifecycleState = .initialVisible(projection.initialEvidence)
-            effect = .settleVisible(.overall)
         }
 
         func run() async -> Result {
-            var observationIterator: ObservationEntrySequence.Iterator?
+            var evaluation = evaluate(
+                await wait.settleVisible(
+                    PredicateWaitVisibleBudget.overall.deadline(overall: deadline)
+                ),
+                isInitialVisible: true,
+                evidence: projection.initialEvidence
+            )
+            if evaluation.matched {
+                return finish(.matched, evidence: evaluation.evidence)
+            }
+            if Task.isCancelled {
+                return finish(.cancelled, evidence: evaluation.evidence)
+            }
+            guard projection.continuesAfterInitialMiss else {
+                return finish(.timedOut, evidence: evaluation.evidence)
+            }
+
+            let initialDiscovery = await runDiscovery(
+                deadline: deadline,
+                evidence: evaluation.evidence
+            )
+            evaluation = initialDiscovery.evaluation
+            if evaluation.matched {
+                return finish(.matched, evidence: evaluation.evidence)
+            }
+            if Task.isCancelled {
+                return finish(.cancelled, evidence: evaluation.evidence)
+            }
+            if let event = initialDiscovery.event {
+                onReadyToPoll?(event.sequence)
+            }
+
+            let stream = wait.stash.semanticObservationStream
+            var cursor = stream.latestObservationCursor(scope: .visible)
             while true {
-                applyCancellation()
-                switch effect {
-                case .settleVisible(let budget):
-                    await settleVisible(budget)
-                case .discover(let budget):
-                    if let observations = await runDiscovery(budget) {
-                        observationIterator = observations.makeAsyncIterator()
+                switch await stream.waitForObservation(
+                    after: cursor,
+                    scope: .visible,
+                    deadline: deadline
+                ) {
+                case .observation(let observation):
+                    cursor = observation.cursor
+                    evaluation = evaluate(
+                        observation.event,
+                        isInitialVisible: false,
+                        evidence: evaluation.evidence
+                    )
+                    if evaluation.matched {
+                        return finish(.matched, evidence: evaluation.evidence)
                     }
-                case .awaitObservation:
-                    guard let iterator = observationIterator else {
-                        advanceLifecycle(.deadlineReached)
-                        continue
+                    if Task.isCancelled {
+                        return finish(.cancelled, evidence: evaluation.evidence)
                     }
-                    observationIterator = await consumeNextObservation(from: iterator)
-                case .finish(let outcome):
-                    return projection.result(outcome, deadline, lifecycleState.evidence)
+
+                    let discovery = await runDiscovery(
+                        deadline: deadline,
+                        evidence: evaluation.evidence
+                    )
+                    evaluation = discovery.evaluation
+                    if evaluation.matched {
+                        return finish(.matched, evidence: evaluation.evidence)
+                    }
+                    if Task.isCancelled {
+                        return finish(.cancelled, evidence: evaluation.evidence)
+                    }
+                    cursor = stream.latestObservationCursor(scope: .visible) ?? cursor
+                case .deadlineReached, .unavailable:
+                    return await terminalVerification(evidence: evaluation.evidence)
+                case .cancelled:
+                    return finish(.cancelled, evidence: evaluation.evidence)
                 }
             }
         }
 
-        private func applyCancellation() {
-            guard Task.isCancelled else { return }
-            guard case .finish = effect else {
-                advanceLifecycle(.cancelled)
-                return
-            }
-        }
-
-        private func settleVisible(_ budget: PredicateWaitVisibleBudget) async {
-            let evaluation = evaluate(
-                await wait.settleVisible(budget.deadline(overall: deadline)),
-                lifecyclePhase: lifecycleState.phase,
-                evidence: lifecycleState.evidence
+        private func terminalVerification(evidence: Evidence) async -> Result {
+            let visibleEvaluation = evaluate(
+                await wait.settleVisible(
+                    PredicateWaitVisibleBudget.viewportTransition.deadline(overall: deadline)
+                ),
+                isInitialVisible: false,
+                evidence: evidence
             )
-            advanceLifecycle(.evaluated(evaluation))
+            if visibleEvaluation.matched {
+                return finish(.matched, evidence: visibleEvaluation.evidence)
+            }
+            if Task.isCancelled {
+                return finish(.cancelled, evidence: visibleEvaluation.evidence)
+            }
+
+            let discovery = await runDiscovery(
+                deadline: nil,
+                evidence: visibleEvaluation.evidence
+            )
+            if discovery.evaluation.matched {
+                return finish(.matched, evidence: discovery.evaluation.evidence)
+            }
+            return finish(
+                Task.isCancelled ? .cancelled : .timedOut,
+                evidence: discovery.evaluation.evidence
+            )
         }
 
         private func runDiscovery(
-            _ budget: PredicateWaitDiscoveryBudget
-        ) async -> ObservationEntrySequence? {
-            let discoveryPhase = lifecycleState.phase
-            let discoveryDeadline = budget.deadline(overall: deadline)
-            var latestEvaluation = PredicateWaitLifecycleEvaluation(
-                evidence: lifecycleState.evidence,
+            deadline: SemanticObservationDeadline?,
+            evidence: Evidence
+        ) async -> PredicateWaitDiscoveryResult<Evidence> {
+            var latestEvaluation = PredicateWaitEvaluation(
+                evidence: evidence,
                 matched: false
             )
-            var matchedEvaluation: PredicateWaitLifecycleEvaluation<Evidence>?
+            var matchedEvaluation: PredicateWaitEvaluation<Evidence>?
             var evaluatedSequence: SettledObservationSequence?
             let event: SettledSemanticObservationEvent?
             if let waitTarget = projection.target,
-               let revealed = await wait.revealTarget(waitTarget, discoveryDeadline) {
+               let revealed = await wait.revealTarget(waitTarget, deadline) {
                 evaluatedSequence = revealed.sequence
                 let evaluation = evaluate(
                     revealed,
-                    lifecyclePhase: discoveryPhase,
+                    isInitialVisible: false,
                     evidence: latestEvaluation.evidence
                 )
                 latestEvaluation = evaluation
@@ -231,11 +290,11 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
                 }
                 event = revealed
             } else {
-                event = await wait.discover(projection.target, discoveryDeadline) { event in
+                event = await wait.discover(projection.target, deadline) { event in
                     evaluatedSequence = event.sequence
                     let evaluation = self.evaluate(
                         event,
-                        lifecyclePhase: discoveryPhase,
+                        isInitialVisible: false,
                         evidence: latestEvaluation.evidence
                     )
                     latestEvaluation = evaluation
@@ -248,7 +307,7 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
             if matchedEvaluation == nil, event?.sequence != evaluatedSequence {
                 let evaluation = evaluate(
                     event,
-                    lifecyclePhase: discoveryPhase,
+                    isInitialVisible: false,
                     evidence: latestEvaluation.evidence
                 )
                 latestEvaluation = evaluation
@@ -256,102 +315,29 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
                     matchedEvaluation = evaluation
                 }
             }
-            let evaluation = matchedEvaluation ?? latestEvaluation
-            let observations = prepareObservationPolling(
-                after: event,
-                discoveryPhase: discoveryPhase,
-                matched: evaluation.matched
+            return PredicateWaitDiscoveryResult(
+                evaluation: matchedEvaluation ?? latestEvaluation,
+                event: event
             )
-            advanceLifecycle(.evaluated(evaluation))
-            return observations
-        }
-
-        private func prepareObservationPolling(
-            after event: SettledSemanticObservationEvent?,
-            discoveryPhase: PredicateWaitLifecyclePhase,
-            matched: Bool
-        ) -> ObservationEntrySequence? {
-            if discoveryPhase == .initialDiscovery, !matched {
-                if let event {
-                    onReadyToPoll?(event.sequence)
-                }
-                let stream = wait.stash.semanticObservationStream
-                if let cursor = stream.latestObservationCursor(scope: .visible) {
-                    return stream.observationEntries(after: cursor, scope: .visible)
-                }
-                return stream.observationEntries(scope: .visible)
-            } else if discoveryPhase == .triggeredDiscovery {
-                ignoreObservationsThrough = wait.stash.semanticObservationStream
-                    .latestObservationCursor(scope: .visible)?
-                    .sequence
-            }
-            return nil
-        }
-
-        private func consumeNextObservation(
-            from initialIterator: ObservationEntrySequence.Iterator
-        ) async -> ObservationEntrySequence.Iterator? {
-            var iterator = initialIterator
-            while true {
-                switch await nextPredicateWaitLifecyclePoll(
-                    iterator: iterator,
-                    timeout: deadline.remainingSeconds()
-                ) {
-                case .observation(let observation, let nextIterator):
-                    iterator = nextIterator
-                    if let ignored = ignoreObservationsThrough,
-                       observation.event.sequence <= ignored {
-                        continue
-                    }
-                    consume(observation)
-                    return nextIterator
-                case .deadlineReached:
-                    advanceLifecycle(.deadlineReached)
-                    return nil
-                case .cancelled:
-                    advanceLifecycle(.cancelled)
-                    return nil
-                }
-            }
-        }
-
-        private func consume(_ observation: ObservationEntry) {
-            ignoreObservationsThrough = nil
-            let evaluation = evaluate(
-                observation.event,
-                lifecyclePhase: lifecycleState.phase,
-                evidence: lifecycleState.evidence
-            )
-            advanceLifecycle(.observation(evaluation))
-        }
-
-        private func advanceLifecycle(_ event: PredicateWaitLifecycleEvent<Evidence>) {
-            let transition = lifecycleMachine.advance(lifecycleState, with: event)
-            lifecycleState = transition.state
-            switch transition {
-            case .advanced(_, let nextEffect):
-                effect = nextEffect
-            case .rejected(let rejection, _):
-                insideJobLogger.error(
-                    "Predicate wait lifecycle rejected event: \(String(describing: rejection))"
-                )
-                effect = .finish(.cancelled)
-            }
         }
 
         private func evaluate(
             _ event: SettledSemanticObservationEvent?,
-            lifecyclePhase: PredicateWaitLifecyclePhase,
+            isInitialVisible: Bool,
             evidence: Evidence
-        ) -> PredicateWaitLifecycleEvaluation<Evidence> {
+        ) -> PredicateWaitEvaluation<Evidence> {
             guard let event else {
-                return PredicateWaitLifecycleEvaluation(evidence: evidence, matched: false)
+                return PredicateWaitEvaluation(evidence: evidence, matched: false)
             }
             return projection.evaluate(
                 wait.postActionObservation.semanticObservation(from: event),
-                lifecyclePhase,
+                isInitialVisible,
                 evidence
             )
+        }
+
+        private func finish(_ outcome: PredicateWaitOutcome, evidence: Evidence) -> Result {
+            projection.result(outcome, deadline, evidence)
         }
     }
 
@@ -380,28 +366,28 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
 
         func evaluate(
             _ observation: HeistSemanticObservation,
-            lifecyclePhase: PredicateWaitLifecyclePhase,
+            isInitialVisible: Bool,
             evidence: LifecycleEvidence
-        ) -> PredicateWaitLifecycleEvaluation<LifecycleEvidence> {
+        ) -> PredicateWaitEvaluation<LifecycleEvidence> {
             let reduced = wait.reduceObservation(
                 observation,
                 predicate: step.predicate,
                 predicateExpression: step.predicateExpression,
                 baselineSeed: baselineSeed(
-                    for: lifecyclePhase,
+                    isInitialVisible: isInitialVisible,
                     evidence: evidence
                 ),
                 stream: evidence.stream
             )
             let recorded = evidence.recording(reduced)
-            return PredicateWaitLifecycleEvaluation(
+            return PredicateWaitEvaluation(
                 evidence: recorded,
                 matched: recorded.evaluation.met
             )
         }
 
         func result(
-            _ outcome: PredicateWaitLifecycleOutcome,
+            _ outcome: PredicateWaitOutcome,
             evidence: LifecycleEvidence
         ) -> HeistWaitReceipt {
             wait.waitReceipt(
@@ -413,7 +399,7 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
         }
 
         private func baselineSeed(
-            for lifecyclePhase: PredicateWaitLifecyclePhase,
+            isInitialVisible: Bool,
             evidence: LifecycleEvidence
         ) -> PredicateObservationBaselineSeed {
             guard evidence.stream.observationBaseline == nil else { return .preserve }
@@ -421,7 +407,7 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
             case .supplied(let supplied):
                 return supplied.map(PredicateObservationBaselineSeed.supplied) ?? .preserve
             case .establishFromFirstObservation:
-                return lifecyclePhase == .initialVisible ? .preserve : .currentObservation
+                return isInitialVisible ? .preserve : .currentObservation
             }
         }
     }

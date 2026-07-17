@@ -49,7 +49,7 @@ extension TheStash {
     }
 
     func liveContainerName(forPath path: TreePath) -> ContainerName? {
-        currentLiveCapture.containerNamesByPath[path]
+        currentLiveCapture.snapshot.containerNamesByPath[path]
     }
 
     func liveScrollableContainerView(forPath path: TreePath) -> UIScrollView? {
@@ -69,7 +69,7 @@ extension TheStash {
 private extension LiveCapture {
     func scrollContainerDiagnostics() -> String {
         let summaries = hierarchy.scrollablePathIndexedContainers.map { item in
-            let containerName = containerNamesByPath[item.path]
+            let containerName = snapshot.containerNamesByPath[item.path]
             let hasLiveScrollView = scrollView(forContainerPath: item.path) != nil
             let pathView = scrollableContainerViewsByPath[item.path]?.view
             let containerObject = containerRefsByPath[item.path]?.object

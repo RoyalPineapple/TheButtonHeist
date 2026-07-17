@@ -14,7 +14,7 @@ extension TheHandoff {
     ) async throws {
         disconnectForReplacement()
         onStatus?("Searching for iOS devices...")
-        let startedDiscovery = !hasActiveDiscoverySession
+        let startedDiscovery = !discoveryLifecycle.hasDiscoverySession
         if startedDiscovery { startDiscovery() }
 
         let resolutionTimeout = Self.connectionResolutionTimeout(for: timeout)
@@ -67,7 +67,7 @@ extension TheHandoff {
 
     /// Compute display name with disambiguation when multiple devices have the same app.
     func displayName(for device: DiscoveredDevice) -> String {
-        device.displayName(among: discoveredDevices)
+        device.displayName(among: discoveryLifecycle.discoveredDevices)
     }
 
     private func resolveTargetDevice(
@@ -77,7 +77,7 @@ extension TheHandoff {
         let resolver = DeviceResolver(
             target: target,
             discoveryTimeout: discoveryTimeout,
-            getDiscoveredDevices: { [weak self] in self?.discoveredDevices ?? [] }
+            getDiscoveredDevices: { [weak self] in self?.discoveryLifecycle.discoveredDevices ?? [] }
         )
         return try await resolver.resolve()
     }
@@ -110,7 +110,7 @@ extension TheHandoff {
             }
 
             guard connectionLifecycle.isCurrentRun(run) else { return }
-            if isConnected {
+            if connectionLifecycle.isConnected {
                 guard connectionLifecycle.finishSuccess(run) else { return }
                 onStatus?("Reconnected to \(device.name)")
                 return

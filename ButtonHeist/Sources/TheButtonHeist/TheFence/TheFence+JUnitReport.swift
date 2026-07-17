@@ -20,7 +20,7 @@ extension TheFence {
         let steps = junitSteps(projection: projection)
         return HeistJUnitReport(
             heistName: heistName,
-            app: handoff.serverInfo?.bundleIdentifier.description ?? "unknown",
+            app: handoff.connectionLifecycle.serverInfo?.bundleIdentifier.description ?? "unknown",
             totalTimeSeconds: totalTimeSeconds,
             steps: steps
         )

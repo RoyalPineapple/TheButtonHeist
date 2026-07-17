@@ -11,10 +11,60 @@ import TheScore
 @Suite("LiveCapture")
 struct LiveCaptureTests {
 
+    private func makeSnapshot(
+        hierarchy: [AccessibilityHierarchy],
+        containerNamesByPath: [TreePath: ContainerName] = [:],
+        heistIdsByPath: [TreePath: HeistId] = [:],
+        containerContentFramesByPath: [TreePath: ContentRect] = [:],
+        containerScrollMembershipsByPath: [TreePath: InterfaceTree.ScrollMembership] = [:],
+        containerObservedScrollContentActivationPointsByPath: [
+            TreePath: InterfaceTree.ObservedScrollContentActivationPoint
+        ] = [:],
+        scrollInventoriesByPath: [TreePath: ScrollInventory] = [:],
+        firstResponderHeistId: HeistId? = nil
+    ) -> LiveCapture.Snapshot {
+        let elementsByPath: [TreePath: InterfaceTree.Element] = Dictionary(
+            uniqueKeysWithValues: hierarchy.pathIndexedElements.compactMap { item in
+                guard let heistId = heistIdsByPath[item.path] else { return nil }
+                return (
+                    item.path,
+                    InterfaceTree.Element(
+                        heistId: heistId,
+                        path: item.path,
+                        scrollMembership: nil,
+                        element: item.element
+                    )
+                )
+            }
+        )
+        let containersByPath = Dictionary(
+            uniqueKeysWithValues: hierarchy.pathIndexedContainers.map { item in
+                (
+                    item.path,
+                    InterfaceTree.Container(
+                        container: item.container,
+                        path: item.path,
+                        containerName: containerNamesByPath[item.path],
+                        contentRect: containerContentFramesByPath[item.path],
+                        scrollMembership: containerScrollMembershipsByPath[item.path],
+                        observedScrollContentActivationPoint: containerObservedScrollContentActivationPointsByPath[item.path],
+                        scrollInventory: scrollInventoriesByPath[item.path]
+                    )
+                )
+            }
+        )
+        return LiveCapture.Snapshot(
+            hierarchy: hierarchy,
+            elementsByPath: elementsByPath,
+            containersByPath: containersByPath,
+            firstResponderHeistId: firstResponderHeistId
+        )
+    }
+
     @Test func `rejects duplicate live HeistIds in one snapshot`() {
         let first = AccessibilityElement.make(label: "First", traits: .button)
         let second = AccessibilityElement.make(label: "Second", traits: .button)
-        let snapshot = LiveCapture.Snapshot(
+        let snapshot = makeSnapshot(
             hierarchy: [
                 .element(first, traversalIndex: 0),
                 .element(second, traversalIndex: 1),
@@ -38,7 +88,7 @@ struct LiveCaptureTests {
     @Test func `rejects semantic viewport elements without HeistIds`() {
         let element = AccessibilityElement.make(label: "Save", traits: .button)
         let path = TreePath([0])
-        let snapshot = LiveCapture.Snapshot(
+        let snapshot = makeSnapshot(
             hierarchy: [.element(element, traversalIndex: 0)]
         )
         let tree = InterfaceTree(
@@ -61,7 +111,7 @@ struct LiveCaptureTests {
 
     @Test func `rejects viewport elements without HeistIds when absent from semantic tree`() {
         let path = TreePath([0])
-        let snapshot = LiveCapture.Snapshot(
+        let snapshot = makeSnapshot(
             hierarchy: [
                 .element(
                     AccessibilityElement.make(label: "Unindexed", traits: .button),
@@ -76,23 +126,10 @@ struct LiveCaptureTests {
         )
     }
 
-    @Test func `rejects container metadata for missing paths`() {
-        let path = TreePath([4])
-        let snapshot = LiveCapture.Snapshot(
-            hierarchy: [],
-            containerNamesByPath: [path: ContainerName(rawValue: "missing")]
-        )
-
-        expectValidationError(
-            .containerMetadataForMissingPath(path: path),
-            tree: makeTree(snapshot: snapshot)
-        )
-    }
-
     @Test func `rejects semantic containers that mismatch the viewport capture`() {
         let path = TreePath([0])
         let container = makeTestAccessibilityContainer()
-        let snapshot = LiveCapture.Snapshot(
+        let snapshot = makeSnapshot(
             hierarchy: [.container(container, children: [])]
         )
         let tree = InterfaceTree(
@@ -118,7 +155,7 @@ struct LiveCaptureTests {
         let element = AccessibilityElement.make(label: "Save", traits: .button)
         let path = TreePath([0])
         let missingContainerPath = TreePath([9])
-        let snapshot = LiveCapture.Snapshot(
+        let snapshot = makeSnapshot(
             hierarchy: [.element(element, traversalIndex: 0)],
             heistIdsByPath: [path: "save_button"]
         )
@@ -147,7 +184,7 @@ struct LiveCaptureTests {
         let element = AccessibilityElement.make(label: "Save", traits: .button)
         let elementPath = TreePath([1])
         let containerPath = TreePath([0])
-        let snapshot = LiveCapture.Snapshot(
+        let snapshot = makeSnapshot(
             hierarchy: [
                 .container(
                     makeTestAccessibilityContainer(
@@ -177,7 +214,7 @@ struct LiveCaptureTests {
 
     @Test func `rejects self-referential container scroll membership`() {
         let path = TreePath([0])
-        let snapshot = LiveCapture.Snapshot(
+        let snapshot = makeSnapshot(
             hierarchy: [
                 .container(
                     makeTestAccessibilityContainer(
@@ -216,7 +253,7 @@ struct LiveCaptureTests {
 
     @Test func `rejects first responder id outside viewport entries`() {
         let element = AccessibilityElement.make(label: "Save", traits: .button)
-        let snapshot = LiveCapture.Snapshot(
+        let snapshot = makeSnapshot(
             hierarchy: [.element(element, traversalIndex: 0)],
             heistIdsByPath: [TreePath([0]): "save_button"],
             firstResponderHeistId: "missing_button"
@@ -279,7 +316,7 @@ struct LiveCaptureTests {
     @Test func `rejects scroll view refs on non-scrollable containers`() {
         let path = TreePath([0])
         let container = makeTestAccessibilityContainer()
-        let snapshot = LiveCapture.Snapshot(
+        let snapshot = makeSnapshot(
             hierarchy: [.container(container, children: [])]
         )
         expectValidationError(
@@ -296,7 +333,7 @@ struct LiveCaptureTests {
     @Test func `rejects viewport snapshots with missing semantic elements`() {
         let element = AccessibilityElement.make(label: "Save", traits: .button)
         let path = TreePath([0])
-        let snapshot = LiveCapture.Snapshot(
+        let snapshot = makeSnapshot(
             hierarchy: [.element(element, traversalIndex: 0)],
             heistIdsByPath: [path: "save_button"]
         )
@@ -310,7 +347,7 @@ struct LiveCaptureTests {
         let element = AccessibilityElement.make(label: "Save", traits: .button)
         let snapshotPath = TreePath([0])
         let treePath = TreePath([1])
-        let snapshot = LiveCapture.Snapshot(
+        let snapshot = makeSnapshot(
             hierarchy: [.element(element, traversalIndex: 0)],
             heistIdsByPath: [snapshotPath: "save_button"]
         )
@@ -340,7 +377,7 @@ struct LiveCaptureTests {
         let snapshotElement = AccessibilityElement.make(label: "Save", traits: .button)
         let treeElement = AccessibilityElement.make(label: "Delete", traits: .button)
         let path = TreePath([0])
-        let snapshot = LiveCapture.Snapshot(
+        let snapshot = makeSnapshot(
             hierarchy: [.element(snapshotElement, traversalIndex: 0)],
             heistIdsByPath: [path: "save_button"]
         )
@@ -414,7 +451,7 @@ struct LiveCaptureTests {
             activationPoint: CGPoint(x: CGFloat.nan, y: CGFloat.infinity)
         )
         let path = TreePath([0])
-        let snapshot = LiveCapture.Snapshot(
+        let snapshot = makeSnapshot(
             hierarchy: [.element(element, traversalIndex: 0)],
             heistIdsByPath: [path: "loading_button"]
         )
@@ -430,7 +467,7 @@ struct LiveCaptureTests {
         let cancel = AccessibilityElement.make(label: "Cancel", traits: .button)
         let saveObject = NSObject()
         let saveScrollView = UIScrollView()
-        let snapshot = LiveCapture.Snapshot(
+        let snapshot = makeSnapshot(
             hierarchy: [
                 .element(save, traversalIndex: 10),
                 .element(cancel, traversalIndex: 0),
@@ -467,7 +504,7 @@ struct LiveCaptureTests {
 
     @Test func `duplicate equal elements keep separate live entries by path`() throws {
         let repeated = AccessibilityElement.make(label: "Repeat", traits: .button)
-        let snapshot = LiveCapture.Snapshot(
+        let snapshot = makeSnapshot(
             hierarchy: [
                 .element(repeated, traversalIndex: 0),
                 .element(repeated, traversalIndex: 1),
@@ -536,7 +573,7 @@ struct LiveCaptureTests {
     ) {
         let path = TreePath([0])
         let heistId: HeistId = "save_button"
-        let snapshot = LiveCapture.Snapshot(
+        let snapshot = makeSnapshot(
             hierarchy: [.element(snapshotElement, traversalIndex: 0)],
             heistIdsByPath: [path: heistId]
         )
@@ -560,7 +597,7 @@ struct LiveCaptureTests {
 
     private func makeSingleElementTree() -> InterfaceTree {
         let element = AccessibilityElement.make(label: "Save", traits: .button)
-        let snapshot = LiveCapture.Snapshot(
+        let snapshot = makeSnapshot(
             hierarchy: [.element(element, traversalIndex: 0)],
             heistIdsByPath: [TreePath([0]): "save_button"]
         )
@@ -571,37 +608,20 @@ struct LiveCaptureTests {
         snapshot: LiveCapture.Snapshot,
         scrollMembershipsByHeistId: [HeistId: InterfaceTree.ScrollMembership] = [:]
     ) -> InterfaceTree {
-        let elements = snapshot.hierarchy.pathIndexedElements.reduce(
+        let elements = snapshot.elementsByPath.values.reduce(
             into: [HeistId: InterfaceTree.Element]()
-        ) { result, item in
-            guard let heistId = snapshot.heistIdsByPath[item.path] else { return }
-            result[heistId] = InterfaceTree.Element(
-                heistId: heistId,
-                path: item.path,
-                scrollMembership: scrollMembershipsByHeistId[heistId],
-                element: item.element
+        ) { result, entry in
+            result[entry.heistId] = InterfaceTree.Element(
+                heistId: entry.heistId,
+                path: entry.path,
+                scrollMembership: scrollMembershipsByHeistId[entry.heistId] ?? entry.scrollMembership,
+                observedScrollContentActivationPoint: entry.observedScrollContentActivationPoint,
+                element: entry.element
             )
         }
-        let containers = Dictionary(
-            uniqueKeysWithValues: snapshot.hierarchy.pathIndexedContainers.map { item in
-                (
-                    item.path,
-                    InterfaceTree.Container(
-                        container: item.container,
-                        path: item.path,
-                        containerName: snapshot.containerNamesByPath[item.path],
-                        contentRect: snapshot.containerContentFramesByPath[item.path],
-                        scrollMembership: snapshot.containerScrollMembershipsByPath[item.path],
-                        observedScrollContentActivationPoint: snapshot
-                            .containerObservedScrollContentActivationPointsByPath[item.path],
-                        scrollInventory: snapshot.scrollInventoriesByPath[item.path]
-                    )
-                )
-            }
-        )
         return InterfaceTree(
             elements: elements,
-            containers: containers,
+            containers: snapshot.containersByPath,
             viewportCapture: snapshot
         )
     }

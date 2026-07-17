@@ -5,19 +5,63 @@ import ButtonHeistSupport
 
 import TheScore
 
+internal enum SemanticObservationWaitResult: Sendable, Equatable {
+    case observation(ObservationEntry)
+    case deadlineReached
+    case cancelled
+    case unavailable(ObservationLogReadError)
+}
+
+internal struct SemanticObservationWaiter: Sendable {
+    let cursor: ObservationCursor?
+    let scope: SemanticObservationScope
+    let oneShot: TimedOneShot<SemanticObservationWaitResult>
+}
+
 @MainActor
 extension SemanticObservationStream {
-    internal func observationEntries(
-        after cursor: ObservationCursor,
-        scope: SemanticObservationScope
-    ) -> ObservationEntrySequence {
-        observationLog.entries(after: cursor, scope: scope)
-    }
+    internal func waitForObservation(
+        after cursor: ObservationCursor?,
+        scope: SemanticObservationScope,
+        deadline: SemanticObservationDeadline?
+    ) async -> SemanticObservationWaitResult {
+        switch observationLog.read(after: cursor, scope: scope) {
+        case .entry(let entry):
+            return .observation(entry)
+        case .failure(let error):
+            return .unavailable(error)
+        case .pending:
+            break
+        }
 
-    internal func observationEntries(
-        scope: SemanticObservationScope
-    ) -> ObservationEntrySequence {
-        observationLog.entries(scope: scope)
+        if Task.isCancelled {
+            return .cancelled
+        }
+        if let deadline,
+           !deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) {
+            return .deadlineReached
+        }
+
+        let waiterID = reserveObservationWaiterID()
+        let oneShot = TimedOneShot<SemanticObservationWaitResult>()
+        let subscription = subscribe(scope: scope)
+        defer { _ = subscription }
+
+        return await oneShot.wait(
+            cancellationValue: .cancelled,
+            onRegistered: { oneShot in
+                observationWaiters[waiterID] = SemanticObservationWaiter(
+                    cursor: cursor,
+                    scope: scope,
+                    oneShot: oneShot
+                )
+                resolveObservationWaiterIfAvailable(waiterID)
+                armObservationDeadline(deadline, waiterID: waiterID, oneShot: oneShot)
+            },
+            onFinished: {
+                observationWaiters.removeValue(forKey: waiterID)?.oneShot.cancelTimeout()
+            }
+        )
     }
 
     internal func latestObservationCursor(
@@ -52,142 +96,21 @@ extension SemanticObservationStream {
         timeout: Double?
     ) async -> SettledSemanticObservationEvent? {
         invalidateSettledObservationIfScreenChangedSinceCommit()
-        let subscription = subscribe(scope: scope)
-        defer { _ = subscription }
-
         let requiredSequence = baselineSequence(for: scope, after: sequence)
-
         if timeout == 0 {
             guard isActive else { return nil }
-            if scope == .discovery {
-                let fulfillment = await cycles.waitForNextCycle(
-                    scope: scope,
-                    after: cycles.cursor()
-                )
-                guard let fulfillment else { return nil }
-                if let event = fulfilledEvent(
-                    fulfillment,
-                    scope: scope,
-                    after: requiredSequence
-                ) {
-                    return event
-                }
+            if scope != .discovery {
+                return observationLog.cleanEvent(scope: scope, after: requiredSequence)
             }
-            return observationLog.cleanEvent(scope: scope, after: requiredSequence)
         }
-
         let requiresFreshVisibleObservation = sequence == nil && scope == .visible && isActive
+
         if !requiresFreshVisibleObservation,
            let latest = observationLog.cleanEvent(scope: scope, after: requiredSequence) {
             return latest
         }
 
-        if isActive {
-            let fulfillment = await cycles.waitForNextCycle(
-                scope: scope,
-                after: cycles.cursor()
-            )
-            guard let fulfillment else { return nil }
-            if let event = fulfilledEvent(
-                fulfillment,
-                scope: scope,
-                after: requiredSequence
-            ) {
-                return event
-            }
-            if let latest = observationLog.cleanEvent(scope: scope, after: requiredSequence) {
-                return latest
-            }
-        }
-
-        return await waitForNextSettledEvent(scope: scope, after: requiredSequence, timeout: timeout)
-    }
-
-    internal func observationWindow(
-        from baseline: SettledCapture,
-        through currentEvent: SettledSemanticObservationEvent
-    ) -> ObservationWindow? {
-        let projectedCurrentEvent = observationLog.event(
-            scope: baseline.cursor.scope,
-            sequence: currentEvent.sequence
-        ) ?? currentEvent
-        guard let currentCursor = projectedCurrentEvent.cursor,
-              let current = observationLog.event(at: currentCursor)?.settledCapture else { return nil }
-        guard baseline.cursor.scope == current.cursor.scope else {
-            return ObservationWindow.incomplete(
-                baseline: baseline,
-                current: current,
-                retainedEntries: [],
-                gap: ObservationGap(
-                    reason: .scopeChanged,
-                    baseline: baseline.cursor,
-                    current: current.cursor
-                )
-            )
-        }
-        guard current.cursor.sequence > baseline.cursor.sequence else {
-            return ObservationWindow.incomplete(
-                baseline: baseline,
-                current: current,
-                retainedEntries: [],
-                gap: ObservationGap(
-                    reason: .noObservationAfterBaseline,
-                    baseline: baseline.cursor,
-                    current: current.cursor
-                )
-            )
-        }
-
-        let scopeEntries = observationLog.retainedEntries(scope: current.cursor.scope)
-        let retainedEntries = scopeEntries.filter {
-            $0.cursor.sequence > baseline.cursor.sequence
-                && $0.cursor.sequence <= current.cursor.sequence
-        }
-        let baselineIsRetained = scopeEntries.contains { $0.cursor == baseline.cursor }
-        let currentIsRetained = retainedEntries.last?.cursor == current.cursor
-        let retainedLineageStartsAtBaseline = retainedEntries.first?.transition.previousCursor == baseline.cursor
-        if currentIsRetained,
-           baselineIsRetained || retainedLineageStartsAtBaseline {
-            do {
-                return try ObservationWindow(
-                    baseline: baseline,
-                    retainedEntries: retainedEntries
-                )
-            } catch {
-                preconditionFailure("Observation log admitted discontinuous retained lineage: \(error)")
-            }
-        }
-
-        let reason: ObservationGap.Reason = if let first = scopeEntries.first,
-                                              baseline.cursor.sequence < first.cursor.sequence {
-            .historyEvicted
-        } else {
-            .historyUnavailable
-        }
-        return ObservationWindow.incomplete(
-            baseline: baseline,
-            current: current,
-            retainedEntries: retainedEntries,
-            gap: ObservationGap(
-                reason: reason,
-                baseline: baseline.cursor,
-                current: current.cursor
-            )
-        )
-    }
-
-    private func waitForNextSettledEvent(
-        scope: SemanticObservationScope = .visible,
-        after sequence: SettledObservationSequence?,
-        timeout: Double?
-    ) async -> SettledSemanticObservationEvent? {
-        let requiredSequence = baselineSequence(for: scope, after: sequence)
-
-        if let latest = observationLog.cleanEvent(scope: scope, after: requiredSequence) {
-            return latest
-        }
-
-        let deadline = timeout.map {
+        let deadline = timeout == 0 ? nil : timeout.map {
             SemanticObservationDeadline(
                 start: CFAbsoluteTimeGetCurrent(),
                 timeoutSeconds: $0
@@ -195,51 +118,27 @@ extension SemanticObservationStream {
         }
         var cursor = observationLog.latestCursor(scope: scope)
         while true {
-            let now = CFAbsoluteTimeGetCurrent()
-            guard deadline?.hasTimeRemaining(at: now) != false else { return nil }
-            guard let entry = await nextObservationEntry(
-                scope: scope,
+            switch await waitForObservation(
                 after: cursor,
-                timeout: deadline?.remainingSeconds(at: now)
-            ) else { return nil }
-            if let latest = observationLog.cleanEvent(scope: scope, after: requiredSequence) {
-                return latest
-            }
-            cursor = entry.cursor
-        }
-    }
-
-    private func nextObservationEntry(
-        scope: SemanticObservationScope,
-        after cursor: ObservationCursor?,
-        timeout: Double?
-    ) async -> ObservationEntry? {
-        let sequence = if let cursor {
-            observationLog.entries(after: cursor, scope: scope)
-        } else {
-            observationLog.entries(scope: scope)
-        }
-        return await withTaskGroup(of: ObservationEntry?.self) { group in
-            group.addTask {
-                var iterator = sequence.makeAsyncIterator()
-                return try? await iterator.next()
-            }
-            if let timeoutDuration = Self.observationWaitTimeout(timeout) {
-                group.addTask {
-                    guard await Task.cancellableSleep(for: timeoutDuration) else { return nil }
-                    return nil
+                scope: scope,
+                deadline: deadline
+            ) {
+            case .observation(let entry):
+                cursor = entry.cursor
+                if let latest = observationLog.cleanEvent(scope: scope, after: requiredSequence) {
+                    return latest
                 }
+            case .deadlineReached, .cancelled, .unavailable:
+                return nil
             }
-            let result = await group.next() ?? nil
-            group.cancelAll()
-            return result
         }
     }
 
-    private static func observationWaitTimeout(_ timeout: Double?) -> Duration? {
-        guard let timeout else { return nil }
-        guard timeout > 0 else { return .zero }
-        return .seconds(timeout)
+    internal func observationWindow(
+        from baseline: SettledCapture,
+        through currentEvent: SettledSemanticObservationEvent
+    ) -> ObservationWindow? {
+        observationLog.observationWindow(from: baseline, through: currentEvent)
     }
 
     static func timeoutMilliseconds(from timeout: Double?) -> Int {
@@ -247,6 +146,18 @@ extension SemanticObservationStream {
         guard timeout > 0 else { return 0 }
         let milliseconds = (timeout * 1_000).rounded(.up)
         return milliseconds >= Double(Int.max) ? Int.max : max(1, Int(milliseconds))
+    }
+
+    func completeObservationWaiters() {
+        for waiterID in observationWaiters.keys.sorted() {
+            resolveObservationWaiterIfAvailable(waiterID)
+        }
+    }
+
+    func cancelObservationWaiters() {
+        for waiterID in observationWaiters.keys.sorted() {
+            resolveObservationWaiter(waiterID, with: .cancelled)
+        }
     }
 
     private func baselineSequence(
@@ -257,25 +168,52 @@ extension SemanticObservationStream {
             return sequence
         }
         let currentSequence = latestEvent?.sequence
-        if scope == .discovery {
-            return currentSequence
-        }
-        if !isActive {
+        if scope == .discovery || !isActive {
             return currentSequence
         }
         return nil
     }
 
-    private func fulfilledEvent(
-        _ fulfillment: SemanticObservationCycles.CycleFulfillment,
-        scope: SemanticObservationScope,
-        after sequence: SettledObservationSequence?
-    ) -> SettledSemanticObservationEvent? {
-        guard let settledSequence = fulfillment.settledSequence,
-              settledSequence > (sequence ?? 0) else { return nil }
-        return observationLog.event(scope: scope, sequence: settledSequence)
+    private func reserveObservationWaiterID() -> UInt64 {
+        defer { nextObservationWaiterID &+= 1 }
+        return nextObservationWaiterID
     }
 
+    private func resolveObservationWaiterIfAvailable(_ waiterID: UInt64) {
+        guard let waiter = observationWaiters[waiterID] else { return }
+        switch observationLog.read(after: waiter.cursor, scope: waiter.scope) {
+        case .entry(let entry):
+            resolveObservationWaiter(waiterID, with: .observation(entry))
+        case .failure(let error):
+            resolveObservationWaiter(waiterID, with: .unavailable(error))
+        case .pending:
+            break
+        }
+    }
+
+    private func resolveObservationWaiter(
+        _ waiterID: UInt64,
+        with result: SemanticObservationWaitResult
+    ) {
+        guard let waiter = observationWaiters.removeValue(forKey: waiterID) else { return }
+        waiter.oneShot.resolve(returning: result)
+    }
+
+    private func armObservationDeadline(
+        _ deadline: SemanticObservationDeadline?,
+        waiterID: UInt64,
+        oneShot: TimedOneShot<SemanticObservationWaitResult>
+    ) {
+        guard let deadline else { return }
+        let remaining = deadline.remainingSeconds()
+        guard remaining > 0 else {
+            resolveObservationWaiter(waiterID, with: .deadlineReached)
+            return
+        }
+        oneShot.armTimeout(after: .seconds(remaining)) { [weak self] in
+            await self?.resolveObservationWaiter(waiterID, with: .deadlineReached)
+        }
+    }
 }
 
 #endif // DEBUG

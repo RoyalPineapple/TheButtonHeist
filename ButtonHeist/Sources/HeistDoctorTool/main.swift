@@ -47,12 +47,12 @@ struct HeistDoctorCommand: ParsableCommand {
         let lastPassReceipt = try Self.decodeReceipt(at: lastPass)
         let newFailReceipt = try Self.decodeReceipt(at: newFail)
         let requestedStepPath = try stepPath.map(HeistExecutionPath.init(validating:))
-        let suggestions = try HeistDoctor.suggestions(
+        let diagnosis = try HeistDoctor.diagnosis(
             lastPass: lastPassReceipt,
             newFail: newFailReceipt,
             stepPath: requestedStepPath
         )
-        let report = HeistDoctorReport(suggestions: suggestions)
+        let report = HeistDoctorReport(suggestions: diagnosis.suggestions)
 
         switch format {
         case .human:

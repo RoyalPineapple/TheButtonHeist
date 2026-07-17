@@ -45,7 +45,7 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
     ),
 ])
 
-@Suite struct HeistRepairSuggesterTests {
+@Suite struct HeistDoctorTests {
     @Test func `container-only targets are refused without element coercion`() {
         let target = AccessibilityTarget.container(.label("Checkout"))
         let interface = makeTestInterface(elements: [
@@ -56,7 +56,7 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
             failedEvidence(target: target, before: interface)
         )
 
-        guard case .refused(let diagnosis) = HeistRepairSuggester.diagnosis(for: request) else {
+        guard case .refused(let diagnosis) = HeistDoctor.diagnosis(for: request) else {
             Issue.record("Expected container-only target refusal")
             return
         }
@@ -83,7 +83,7 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
             ])
         )
 
-        #expect(HeistRepairSuggester.suggestions(for: request(last, current)).isEmpty)
+        #expect(HeistDoctor.diagnosis(for: request(last, current)).suggestions.isEmpty)
     }
 
     @Test("Last success missing target returns no suggestion")
@@ -102,7 +102,7 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
             ])
         )
 
-        #expect(HeistRepairSuggester.suggestions(for: request(last, current)).isEmpty)
+        #expect(HeistDoctor.diagnosis(for: request(last, current)).suggestions.isEmpty)
     }
 
     @Test("Evidence must belong to the same failing step")
@@ -123,7 +123,7 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
             ])
         )
 
-        #expect(HeistRepairSuggester.suggestions(for: request(last, current)).isEmpty)
+        #expect(HeistDoctor.diagnosis(for: request(last, current)).suggestions.isEmpty)
     }
 
     @Test("Incompatible heist fingerprints return no suggestion")
@@ -144,7 +144,7 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
             ])
         )
 
-        #expect(HeistRepairSuggester.suggestions(for: request(last, current)).isEmpty)
+        #expect(HeistDoctor.diagnosis(for: request(last, current)).suggestions.isEmpty)
     }
 
     @Test("Current target that still resolves needs no target repair")
@@ -163,7 +163,7 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
             expectation: ExpectationResult(met: false, predicate: nil, actual: "Expected item count to change")
         )
 
-        #expect(HeistRepairSuggester.suggestions(for: request(last, current)).isEmpty)
+        #expect(HeistDoctor.diagnosis(for: request(last, current)).suggestions.isEmpty)
     }
 
     @Test("No suggestion reason reports no target repair needed")
@@ -181,7 +181,7 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
             before: before
         )
 
-        let reason = HeistRepairSuggester.noSuggestionReason(for: request(last, current))
+        let reason = HeistDoctor.diagnosis(for: request(last, current)).noSuggestionReason
 
         #expect(reason == "old target still resolves and supports the requested action; no target repair needed")
     }
@@ -202,7 +202,7 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
             ])
         )
 
-        let reason = HeistRepairSuggester.noSuggestionReason(for: request(last, current))
+        let reason = HeistDoctor.diagnosis(for: request(last, current)).noSuggestionReason
         let expectedReason = "old target is missing in the current before snapshot; "
             + "no safe successor satisfied semantic continuity and unique-matcher requirements"
 
@@ -231,7 +231,7 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
             ])
         )
 
-        let suggestion = try #require(HeistRepairSuggester.suggestions(for: request(last, current)).first)
+        let suggestion = try #require(HeistDoctor.diagnosis(for: request(last, current)).suggestions.first)
 
         #expect(suggestion.failureKind == .missingTarget)
         #expect(suggestion.newTarget == .predicate(ElementPredicateTemplate(label: "Remove")))
@@ -258,7 +258,7 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
             ])
         )
 
-        let result = HeistRepairSuggester.diagnosis(for: request(last, current))
+        let result = HeistDoctor.diagnosis(for: request(last, current))
         guard case .suggested(let diagnosis) = result else {
             Issue.record("Expected suggested diagnosis")
             return
@@ -271,8 +271,8 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
         #expect(suggestion.newTarget == .predicate(ElementPredicateTemplate(label: "Remove")))
         #expect(candidate.source == .semanticContinuityScan)
         #expect(candidate.validation == .suggested(target: suggestion.newTarget, confidence: suggestion.confidence))
-        #expect(HeistRepairSuggester.suggestions(for: request(last, current)) == diagnosis.suggestions)
-        #expect(HeistRepairSuggester.noSuggestionReason(for: request(last, current)) == nil)
+        #expect(result.suggestions == diagnosis.suggestions)
+        #expect(result.noSuggestionReason == nil)
     }
 
     @Test func `diagnosis exposes typed candidate ranking refusal`() throws {
@@ -290,7 +290,7 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
             ])
         )
 
-        let result = HeistRepairSuggester.diagnosis(for: request(last, current))
+        let result = HeistDoctor.diagnosis(for: request(last, current))
         guard case .refused(let diagnosis) = result else {
             Issue.record("Expected refused diagnosis")
             return
@@ -305,7 +305,7 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
         #expect(context.failureKind == .missingTarget)
         #expect(refusal.stage == .candidateRanking)
         #expect(refusal.reason == .noCandidateMetScoreThreshold)
-        #expect(refusal.message == HeistRepairSuggester.noSuggestionReason(for: request(last, current)))
+        #expect(result.noSuggestionReason == refusal.message)
     }
 
     @Test("Missing target chooses renamed duplicate by neighbor context")
@@ -325,7 +325,7 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
             ])
         )
 
-        let suggestion = try #require(HeistRepairSuggester.suggestions(for: request(last, current)).first)
+        let suggestion = try #require(HeistDoctor.diagnosis(for: request(last, current)).suggestions.first)
 
         #expect(suggestion.failureKind == .missingTarget)
         #expect(suggestion.newResolvedElement.element.label == "Remove")
@@ -350,7 +350,7 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
             ])
         )
 
-        #expect(HeistRepairSuggester.suggestions(for: request(last, current)).isEmpty)
+        #expect(HeistDoctor.diagnosis(for: request(last, current)).suggestions.isEmpty)
     }
 
     @Test("Missing target does not use traversal ordinal without matching neighbors")
@@ -370,7 +370,7 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
             ])
         )
 
-        #expect(HeistRepairSuggester.suggestions(for: request(last, current)).isEmpty)
+        #expect(HeistDoctor.diagnosis(for: request(last, current)).suggestions.isEmpty)
     }
 
     @Test("Missing target prefers contained label rename over broad screen context")
@@ -385,7 +385,7 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
             before: broadMenuInterface(primaryAction: "Go to Checkout")
         )
 
-        let suggestion = try #require(HeistRepairSuggester.suggestions(for: request(last, current)).first)
+        let suggestion = try #require(HeistDoctor.diagnosis(for: request(last, current)).suggestions.first)
 
         #expect(suggestion.newTarget == .predicate(ElementPredicateTemplate(label: "Go to Checkout")))
         #expect(suggestion.newResolvedElement.element.label == "Go to Checkout")
@@ -404,7 +404,7 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
             before: broadMenuInterface(primaryAction: nil)
         )
 
-        #expect(HeistRepairSuggester.suggestions(for: request(last, current)).isEmpty)
+        #expect(HeistDoctor.diagnosis(for: request(last, current)).suggestions.isEmpty)
     }
 
     @Test("Ambiguous duplicate labels produce minimum disambiguating matcher")
@@ -427,7 +427,7 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
             ])
         )
 
-        let suggestion = try #require(HeistRepairSuggester.suggestions(for: request(last, current)).first)
+        let suggestion = try #require(HeistDoctor.diagnosis(for: request(last, current)).suggestions.first)
 
         #expect(suggestion.failureKind == .ambiguousTarget)
         #expect(suggestion.newTarget == .predicate(ElementPredicateTemplate(label: "Delete", traits: [.button]), ordinal: 0))
@@ -456,7 +456,7 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
             ])
         )
 
-        #expect(HeistRepairSuggester.suggestions(for: request(last, current)).isEmpty)
+        #expect(HeistDoctor.diagnosis(for: request(last, current)).suggestions.isEmpty)
     }
 
     @Test("Wrong action capability can suggest a compatible successor with lowered confidence")
@@ -478,7 +478,7 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
             ])
         )
 
-        let suggestion = try #require(HeistRepairSuggester.suggestions(for: request(last, current)).first)
+        let suggestion = try #require(HeistDoctor.diagnosis(for: request(last, current)).suggestions.first)
 
         #expect(suggestion.failureKind == .wrongCapability)
         #expect(suggestion.newTarget == .predicate(ElementPredicateTemplate(label: "Quantity stepper")))
@@ -652,7 +652,7 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
             before: sectionInterface(primaryAction: "Delete item now")
         )
 
-        guard case .suggested(let diagnosis) = HeistRepairSuggester.diagnosis(for: request(last, current)) else {
+        guard case .suggested(let diagnosis) = HeistDoctor.diagnosis(for: request(last, current)) else {
             Issue.record("Expected a repair suggestion")
             return
         }
@@ -718,7 +718,7 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
             expectation: ExpectationResult(met: false, predicate: nil, actual: "Quantity stayed 1")
         )
 
-        let suggestion = try #require(HeistRepairSuggester.suggestions(for: request(last, current)).first)
+        let suggestion = try #require(HeistDoctor.diagnosis(for: request(last, current)).suggestions.first)
 
         #expect(suggestion.newTarget == .predicate(ElementPredicateTemplate(label: "Amount")))
         #expect(suggestion.reasons.contains(.changeFact(.lastSuccess, .valueChange(old: "1", new: "2"))))
@@ -755,7 +755,7 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
         )
         let current = failedEvidence(target: target, before: newScreen)
 
-        let suggestion = try #require(HeistRepairSuggester.suggestions(for: request(last, current)).first)
+        let suggestion = try #require(HeistDoctor.diagnosis(for: request(last, current)).suggestions.first)
         let factReasons = suggestion.reasons.compactMap { reason -> RepairChangeFactObservation? in
             guard case .changeFact(.lastSuccess, let observation) = reason else { return nil }
             return observation
@@ -786,7 +786,7 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
             changeFacts: []
         )
 
-        let suggestion = try #require(HeistRepairSuggester.suggestions(for: request(last, current)).first)
+        let suggestion = try #require(HeistDoctor.diagnosis(for: request(last, current)).suggestions.first)
 
         #expect(suggestion.newTarget == .predicate(ElementPredicateTemplate(label: "Remove")))
         #expect(suggestion.reasons.contains(.changeFact(.lastSuccess, .noSemanticChange)))
@@ -822,7 +822,7 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
             actionSucceeded: false
         )
 
-        let suggestion = try #require(HeistDoctor.suggestions(lastPass: lastPass, newFail: newFail).first)
+        let suggestion = try #require(HeistDoctor.diagnosis(lastPass: lastPass, newFail: newFail).suggestions.first)
 
         #expect(suggestion.stepPath == "$.body[0]")
         #expect(suggestion.failureKind == .missingTarget)
@@ -920,9 +920,8 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
         #expect(refusal.stage == .candidateRanking)
         #expect(refusal.reason == .noCandidateMetScoreThreshold)
         #expect(refusal.message.contains("old target is missing"))
-        #expect(throws: HeistDoctorError.self) {
-            _ = try HeistDoctor.suggestions(lastPass: lastPass, newFail: newFail)
-        }
+        #expect(result.suggestions.isEmpty)
+        #expect(result.noSuggestionReason == refusal.message)
     }
 
     private func request(

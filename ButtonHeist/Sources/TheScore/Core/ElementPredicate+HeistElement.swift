@@ -59,13 +59,14 @@ public extension ElementPredicate {
     }
 }
 
-package struct AccessibilityTargetElementMatch: Sendable, Equatable {
+package struct AccessibilityTargetElementMatch<Subject>: Sendable, Equatable
+where Subject: ElementPredicateSubject & Sendable & Equatable {
     package let path: TreePath
     package let traversalOrder: Int
     package let parentContainerPath: TreePath?
-    package let element: HeistElement
+    package let element: Subject
 
-    package init(path: TreePath, traversalOrder: Int, parentContainerPath: TreePath?, element: HeistElement) {
+    package init(path: TreePath, traversalOrder: Int, parentContainerPath: TreePath?, element: Subject) {
         self.path = path
         self.traversalOrder = traversalOrder
         self.parentContainerPath = parentContainerPath
@@ -74,15 +75,16 @@ package struct AccessibilityTargetElementMatch: Sendable, Equatable {
 }
 
 extension AccessibilityTargetElementMatch: ElementPredicateSubjectBacked {
-    package var predicateSubject: HeistElement { element }
+    package var predicateSubject: Subject { element }
 }
 
-package struct AccessibilityTargetElementMatchSet: Sendable, Equatable {
-    package static let empty = Self([])
-    package let matches: [AccessibilityTargetElementMatch]
+package struct AccessibilityTargetElementMatchSet<Subject>: Sendable, Equatable
+where Subject: ElementPredicateSubject & Sendable & Equatable {
+    package static var empty: Self { Self([]) }
+    package let matches: [AccessibilityTargetElementMatch<Subject>]
     private let traversalOrders: Set<Int>
 
-    package init(_ matches: [AccessibilityTargetElementMatch]) {
+    package init(_ matches: [AccessibilityTargetElementMatch<Subject>]) {
         var traversalOrders = Set<Int>()
         self.matches = matches.filter { traversalOrders.insert($0.traversalOrder).inserted }
         self.traversalOrders = traversalOrders
@@ -90,7 +92,7 @@ package struct AccessibilityTargetElementMatchSet: Sendable, Equatable {
 
     package var isEmpty: Bool { matches.isEmpty }
     package var count: Int { matches.count }
-    package var elements: [HeistElement] { matches.map(\.element) }
+    package var elements: [Subject] { matches.map(\.element) }
     package var orderedPaths: [TreePath] { matches.map(\.path) }
 
     package func intersection(_ other: Self) -> Self {
@@ -118,16 +120,22 @@ package struct AccessibilityTargetContainerMatch: Sendable, Equatable {
     }
 }
 
-package struct AccessibilityTargetMatchInput: Sendable, Equatable {
-    package let elements: [AccessibilityTargetElementMatch]
+package struct AccessibilityTargetMatchInput<Subject>: Sendable, Equatable
+where Subject: ElementPredicateSubject & Sendable & Equatable {
+    package let elements: [AccessibilityTargetElementMatch<Subject>]
     package let containers: [AccessibilityTargetContainerMatch]
 
-    package init(elements: [AccessibilityTargetElementMatch], containers: [AccessibilityTargetContainerMatch]) {
+    package init(
+        elements: [AccessibilityTargetElementMatch<Subject>],
+        containers: [AccessibilityTargetContainerMatch]
+    ) {
         self.elements = elements
         self.containers = containers
     }
+}
 
-    package init(elements: [HeistElement]) {
+package extension AccessibilityTargetMatchInput where Subject == HeistElement {
+    init(elements: [HeistElement]) {
         self.init(elements: elements.enumerated().map { offset, element in
             AccessibilityTargetElementMatch(
                 path: TreePath([offset]),
@@ -138,7 +146,7 @@ package struct AccessibilityTargetMatchInput: Sendable, Equatable {
         }, containers: [])
     }
 
-    package init(interface: Interface) {
+    init(interface: Interface) {
         let containerRecords = interface.graph.nodesInPathOrder.compactMap { record -> InterfaceGraphContainerRecord? in
             guard case .container(let container) = record.kind else { return nil }
             return container
@@ -163,7 +171,10 @@ package struct AccessibilityTargetMatchInput: Sendable, Equatable {
         )
     }
 
-    package static func parentContainerPath(
+}
+
+package extension AccessibilityTargetMatchInput {
+    static func parentContainerPath(
         for path: TreePath,
         preferred: TreePath? = nil,
         among containerPaths: Set<TreePath>
@@ -204,12 +215,13 @@ package extension ResolvedAccessibilityTarget {
     }
 }
 
-package struct AccessibilityTargetMatchGraph: Sendable, Equatable {
-    package let all: AccessibilityTargetElementMatchSet
+package struct AccessibilityTargetMatchGraph<Subject>: Sendable, Equatable
+where Subject: ElementPredicateSubject & Sendable & Equatable {
+    package let all: AccessibilityTargetElementMatchSet<Subject>
     private let containers: [AccessibilityTargetContainerMatch]
     private let parentContainerPathByPath: [TreePath: TreePath]
 
-    package init(_ input: AccessibilityTargetMatchInput) {
+    package init(_ input: AccessibilityTargetMatchInput<Subject>) {
         self.init(
             all: AccessibilityTargetElementMatchSet(input.elements),
             containers: input.containers,
@@ -222,7 +234,7 @@ package struct AccessibilityTargetMatchGraph: Sendable, Equatable {
     }
 
     private init(
-        all: AccessibilityTargetElementMatchSet,
+        all: AccessibilityTargetElementMatchSet<Subject>,
         containers: [AccessibilityTargetContainerMatch],
         parentContainerPathByPath: [TreePath: TreePath]
     ) {
@@ -231,23 +243,15 @@ package struct AccessibilityTargetMatchGraph: Sendable, Equatable {
         self.parentContainerPathByPath = parentContainerPathByPath
     }
 
-    package init(elements: [HeistElement]) {
-        self.init(AccessibilityTargetMatchInput(elements: elements))
-    }
-
-    package init(interface: Interface) {
-        self.init(AccessibilityTargetMatchInput(interface: interface))
-    }
-
-    package func resolve(_ predicate: ElementPredicate) -> AccessibilityTargetElementMatchSet {
+    package func resolve(_ predicate: ElementPredicate) -> AccessibilityTargetElementMatchSet<Subject> {
         AccessibilityTargetElementMatchSet(predicateGraph.resolve(predicate).matches.map(\.subject))
     }
 
-    package func resolve(_ target: ResolvedAccessibilityTarget) -> AccessibilityTargetMatchSet {
+    package func resolve(_ target: ResolvedAccessibilityTarget) -> AccessibilityTargetMatchSet<Subject> {
         matches(for: target).selecting(ordinal: target.terminalSelection.ordinal)
     }
 
-    package func matches(for target: ResolvedAccessibilityTarget) -> AccessibilityTargetMatchSet {
+    package func matches(for target: ResolvedAccessibilityTarget) -> AccessibilityTargetMatchSet<Subject> {
         switch target {
         case .predicate(let predicate, _):
             let matches = predicateGraph.resolve(predicate).matches.map(\.subject)
@@ -259,7 +263,9 @@ package struct AccessibilityTargetMatchGraph: Sendable, Equatable {
         }
     }
 
-    package func elementCandidates(in target: ResolvedAccessibilityTarget) -> AccessibilityTargetElementMatchSet {
+    package func elementCandidates(
+        in target: ResolvedAccessibilityTarget
+    ) -> AccessibilityTargetElementMatchSet<Subject> {
         switch target {
         case .predicate:
             return all
@@ -270,7 +276,7 @@ package struct AccessibilityTargetMatchGraph: Sendable, Equatable {
         }
     }
 
-    private func scoped(to predicate: ResolvedContainerPredicate) -> AccessibilityTargetMatchGraph {
+    private func scoped(to predicate: ResolvedContainerPredicate) -> AccessibilityTargetMatchGraph<Subject> {
         let containerPaths = Set(containers
             .filter { predicate.matches($0.facts) }
             .map(\.path))
@@ -295,7 +301,7 @@ package struct AccessibilityTargetMatchGraph: Sendable, Equatable {
         return false
     }
 
-    private var predicateGraph: ElementPredicateGraph<Int, AccessibilityTargetElementMatch> {
+    private var predicateGraph: ElementPredicateGraph<Int, AccessibilityTargetElementMatch<Subject>> {
         ElementPredicateGraph(
             subjects: all.matches,
             identity: \.traversalOrder,
@@ -304,14 +310,25 @@ package struct AccessibilityTargetMatchGraph: Sendable, Equatable {
     }
 }
 
-package struct AccessibilityTargetMatchSet: Sendable, Equatable {
-    package static let empty = AccessibilityTargetMatchSet()
+package extension AccessibilityTargetMatchGraph where Subject == HeistElement {
+    init(elements: [HeistElement]) {
+        self.init(AccessibilityTargetMatchInput(elements: elements))
+    }
 
-    package let elements: AccessibilityTargetElementMatchSet
+    init(interface: Interface) {
+        self.init(AccessibilityTargetMatchInput(interface: interface))
+    }
+}
+
+package struct AccessibilityTargetMatchSet<Subject>: Sendable, Equatable
+where Subject: ElementPredicateSubject & Sendable & Equatable {
+    package static var empty: Self { Self() }
+
+    package let elements: AccessibilityTargetElementMatchSet<Subject>
     package let containerPaths: [TreePath]
 
     package init(
-        elements: AccessibilityTargetElementMatchSet = .empty,
+        elements: AccessibilityTargetElementMatchSet<Subject> = .empty,
         containerPaths: [TreePath] = []
     ) {
         self.elements = elements

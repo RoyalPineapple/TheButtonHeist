@@ -78,7 +78,7 @@ extension TheStash {
         discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy
     ) -> InterfaceTree {
         if let queuedVisibleRefresh = nextVisibleRefreshScreenForTesting,
-           queuedVisibleRefresh.interfaceHash != observation.interfaceHash {
+           queuedVisibleRefresh.tree.interfaceHash != observation.tree.interfaceHash {
             nextVisibleRefreshScreenForTesting = nil
         }
         switch scope {

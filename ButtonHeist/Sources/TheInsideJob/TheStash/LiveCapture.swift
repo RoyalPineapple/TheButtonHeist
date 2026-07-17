@@ -24,36 +24,12 @@ struct LiveCapture {
         snapshot.hierarchy
     }
 
-    var containerNamesByPath: [TreePath: ContainerName] {
-        snapshot.containerNamesByPath
-    }
-
-    var heistIdsByPath: [TreePath: HeistId] {
-        snapshot.heistIdsByPath
-    }
-
     var elementRefs: [HeistId: ElementRef] {
         dispatchReferences.elementRefs
     }
 
     var containerRefsByPath: [TreePath: ContainerRef] {
         dispatchReferences.containerRefsByPath
-    }
-
-    var containerContentFramesByPath: [TreePath: ContentRect] {
-        snapshot.containerContentFramesByPath
-    }
-
-    var containerScrollMembershipsByPath: [TreePath: InterfaceTree.ScrollMembership] {
-        snapshot.containerScrollMembershipsByPath
-    }
-
-    var containerObservedScrollContentActivationPointsByPath: [TreePath: InterfaceTree.ObservedScrollContentActivationPoint] {
-        snapshot.containerObservedScrollContentActivationPointsByPath
-    }
-
-    var scrollInventoriesByPath: [TreePath: ScrollInventory] {
-        snapshot.scrollInventoriesByPath
     }
 
     var firstResponderHeistId: HeistId? {
@@ -92,18 +68,17 @@ struct LiveCapture {
     }
 
     func heistId(forPath path: TreePath) -> HeistId? {
-        snapshot.heistIdsByPath[path]
+        snapshot.heistId(forPath: path)
     }
 
     func element(for heistId: HeistId) -> AccessibilityElement? {
-        snapshot.element(for: heistId)
+        snapshot.elementEntry(for: heistId)?.element
     }
 
     func elementEntry(for heistId: HeistId) -> LiveElementEntry? {
-        guard let path = snapshot.path(for: heistId),
-              case .element(let element, _) = snapshot.hierarchy.node(at: path)
-        else { return nil }
-        return LiveElementEntry(path: path, heistId: heistId, element: element)
+        snapshot.elementEntry(for: heistId).map {
+            LiveElementEntry(path: $0.path, heistId: $0.heistId, element: $0.element)
+        }
     }
 
     func object(for heistId: HeistId) -> NSObject? {
@@ -162,38 +137,26 @@ struct LiveCapture {
 
     /// Value-only capture metadata retained by settled semantic storage.
     ///
-    /// This preserves parser hierarchy, ids, first-responder identity, container
-    /// names, and scroll membership evidence without carrying weak UIKit refs or
-    /// live dispatch lookup tables.
+    /// This preserves parser hierarchy, visible element/container facts, and
+    /// first-responder identity without carrying weak UIKit refs or live
+    /// dispatch lookup tables.
     struct Snapshot: Sendable, Equatable {
         let hierarchy: [AccessibilityHierarchy]
-        let containerNamesByPath: [TreePath: ContainerName]
-        let heistIdsByPath: [TreePath: HeistId]
-        let containerContentFramesByPath: [TreePath: ContentRect]
-        let containerScrollMembershipsByPath: [TreePath: InterfaceTree.ScrollMembership]
-        let containerObservedScrollContentActivationPointsByPath: [TreePath: InterfaceTree.ObservedScrollContentActivationPoint]
-        let scrollInventoriesByPath: [TreePath: ScrollInventory]
+        let elementsByPath: [TreePath: InterfaceTree.Element]
+        let containersByPath: [TreePath: InterfaceTree.Container]
         /// Value-only first-responder evidence from this capture.
         /// Live UIKit identity remains in weak dispatch references.
         let firstResponderHeistId: HeistId?
 
         init(
             hierarchy: [AccessibilityHierarchy],
-            containerNamesByPath: [TreePath: ContainerName] = [:],
-            heistIdsByPath: [TreePath: HeistId] = [:],
-            containerContentFramesByPath: [TreePath: ContentRect] = [:],
-            containerScrollMembershipsByPath: [TreePath: InterfaceTree.ScrollMembership] = [:],
-            containerObservedScrollContentActivationPointsByPath: [TreePath: InterfaceTree.ObservedScrollContentActivationPoint] = [:],
-            scrollInventoriesByPath: [TreePath: ScrollInventory] = [:],
+            elementsByPath: [TreePath: InterfaceTree.Element] = [:],
+            containersByPath: [TreePath: InterfaceTree.Container] = [:],
             firstResponderHeistId: HeistId? = nil
         ) {
             self.hierarchy = hierarchy
-            self.containerNamesByPath = containerNamesByPath
-            self.heistIdsByPath = heistIdsByPath
-            self.containerContentFramesByPath = containerContentFramesByPath
-            self.containerScrollMembershipsByPath = containerScrollMembershipsByPath
-            self.containerObservedScrollContentActivationPointsByPath = containerObservedScrollContentActivationPointsByPath
-            self.scrollInventoriesByPath = scrollInventoriesByPath
+            self.elementsByPath = elementsByPath
+            self.containersByPath = containersByPath
             self.firstResponderHeistId = firstResponderHeistId
         }
 
@@ -201,10 +164,58 @@ struct LiveCapture {
             hierarchy: []
         )
 
+        var heistIdsByPath: [TreePath: HeistId] {
+            Dictionary(
+                uniqueKeysWithValues: elementsByPath.map { path, entry in
+                    (path, entry.heistId)
+                }
+            )
+        }
+
+        var containerNamesByPath: [TreePath: ContainerName] {
+            Dictionary(
+                uniqueKeysWithValues: containersByPath.compactMap { path, container in
+                    container.containerName.map { (path, $0) }
+                }
+            )
+        }
+
+        var containerContentFramesByPath: [TreePath: ContentRect] {
+            Dictionary(
+                uniqueKeysWithValues: containersByPath.compactMap { path, container in
+                    container.contentFrame.map { (path, $0) }
+                }
+            )
+        }
+
+        var containerScrollMembershipsByPath: [TreePath: InterfaceTree.ScrollMembership] {
+            Dictionary(
+                uniqueKeysWithValues: containersByPath.compactMap { path, container in
+                    container.scrollMembership.map { (path, $0) }
+                }
+            )
+        }
+
+        var containerObservedScrollContentActivationPointsByPath: [TreePath: InterfaceTree.ObservedScrollContentActivationPoint] {
+            Dictionary(
+                uniqueKeysWithValues: containersByPath.compactMap { path, container in
+                    container.observedScrollContentActivationPoint.map { (path, $0) }
+                }
+            )
+        }
+
+        var scrollInventoriesByPath: [TreePath: ScrollInventory] {
+            Dictionary(
+                uniqueKeysWithValues: containersByPath.compactMap { path, container in
+                    container.scrollInventory.map { (path, $0) }
+                }
+            )
+        }
+
         var heistIds: Set<HeistId> {
             Set(hierarchy.pathIndexedElements.compactMap { entry in
                 guard entry.element.visibility == .onscreen else { return nil }
-                return heistIdsByPath[entry.path]
+                return elementsByPath[entry.path]?.heistId
             })
         }
 
@@ -212,37 +223,34 @@ struct LiveCapture {
             heistIds.contains(heistId)
         }
 
-        func element(for heistId: HeistId) -> AccessibilityElement? {
-            guard let path = path(for: heistId),
-                  case .element(let element, _) = hierarchy.node(at: path)
-            else { return nil }
-            return element
+        func elementEntry(for heistId: HeistId) -> InterfaceTree.Element? {
+            elementsByPath.values.first { $0.heistId == heistId }
         }
 
-        fileprivate func path(for heistId: HeistId) -> TreePath? {
-            heistIdsByPath.first { $0.value == heistId }?.key
+        func heistId(forPath path: TreePath) -> HeistId? {
+            elementsByPath[path]?.heistId
         }
 
         fileprivate var orderedHeistIds: [HeistId] {
-            hierarchy.pathIndexedElements.compactMap { heistIdsByPath[$0.path] }
+            hierarchy.pathIndexedElements.compactMap { elementsByPath[$0.path]?.heistId }
         }
 
         func containerContentFrame(forPath path: TreePath) -> ContentRect? {
-            containerContentFramesByPath[path]
+            containersByPath[path]?.contentFrame
         }
 
         func containerScrollMembership(forPath path: TreePath) -> InterfaceTree.ScrollMembership? {
-            containerScrollMembershipsByPath[path]
+            containersByPath[path]?.scrollMembership
         }
 
         func containerObservedScrollContentActivationPoint(
             forPath path: TreePath
         ) -> InterfaceTree.ObservedScrollContentActivationPoint? {
-            containerObservedScrollContentActivationPointsByPath[path]
+            containersByPath[path]?.observedScrollContentActivationPoint
         }
 
         func scrollInventory(forPath path: TreePath) -> ScrollInventory? {
-            scrollInventoriesByPath[path]
+            containersByPath[path]?.scrollInventory
         }
     }
 
@@ -300,7 +308,6 @@ struct LiveCapture {
     ) throws {
         let snapshot = tree.viewportCapture
         let indexedElements = snapshot.hierarchy.pathIndexedElements
-        let elementPaths = Set(indexedElements.map(\.path))
 
         for (heistId, element) in tree.elements.sorted(by: { $0.key < $1.key })
         where element.heistId != heistId {
@@ -317,18 +324,44 @@ struct LiveCapture {
             )
         }
 
-        for (path, heistId) in snapshot.heistIdsByPath.sorted(by: { $0.key < $1.key }) {
-            guard snapshot.hierarchy.node(at: path) != nil else {
-                throw ValidationError.heistIdForMissingPath(heistId: heistId, path: path)
+        for (path, entry) in snapshot.elementsByPath.sorted(by: { $0.key < $1.key }) {
+            switch snapshot.hierarchy.node(at: path) {
+            case nil:
+                throw ValidationError.heistIdForMissingPath(heistId: entry.heistId, path: path)
+            case .container:
+                throw ValidationError.heistIdForNonElementPath(heistId: entry.heistId, path: path)
+            case .element:
+                break
             }
-            guard elementPaths.contains(path) else {
-                throw ValidationError.heistIdForNonElementPath(heistId: heistId, path: path)
+            guard entry.path == path else {
+                throw ValidationError.treeElementPathMismatch(
+                    heistId: entry.heistId,
+                    snapshotPath: path,
+                    treePath: entry.path
+                )
+            }
+        }
+
+        for (path, container) in snapshot.containersByPath.sorted(by: { $0.key < $1.key }) {
+            switch snapshot.hierarchy.node(at: path) {
+            case nil:
+                throw ValidationError.containerMetadataForMissingPath(path: path)
+            case .element:
+                throw ValidationError.containerMetadataForElementPath(path: path)
+            case .container:
+                break
+            }
+            guard container.path == path else {
+                throw ValidationError.treeContainerPathMismatch(
+                    dictionaryPath: path,
+                    containerPath: container.path
+                )
             }
         }
 
         var pathsByHeistId: [HeistId: TreePath] = [:]
         for item in indexedElements {
-            guard let heistId = snapshot.heistIdsByPath[item.path] else {
+            guard let heistId = snapshot.heistId(forPath: item.path) else {
                 throw ValidationError.missingHeistId(path: item.path)
             }
             if let firstPath = pathsByHeistId[heistId] {
@@ -342,9 +375,10 @@ struct LiveCapture {
         }
 
         for item in indexedElements {
-            guard let heistId = snapshot.heistIdsByPath[item.path] else {
+            guard let snapshotEntry = snapshot.elementsByPath[item.path] else {
                 throw ValidationError.missingHeistId(path: item.path)
             }
+            let heistId = snapshotEntry.heistId
             guard let treeElement = tree.elements[heistId] else {
                 throw ValidationError.missingTreeElement(heistId: heistId, path: item.path)
             }
@@ -355,7 +389,7 @@ struct LiveCapture {
                     treePath: treeElement.path
                 )
             }
-            guard capturedElementsMatch(treeElement.element, item.element) else {
+            guard capturedElementsMatch(snapshotEntry.element, item.element) else {
                 throw ValidationError.treeElementMismatch(heistId: heistId, path: item.path)
             }
             try validateScrollEvidence(
@@ -364,6 +398,12 @@ struct LiveCapture {
                 observedPoint: treeElement.observedScrollContentActivationPoint,
                 hierarchy: snapshot.hierarchy
             )
+            guard treeElement.heistId == snapshotEntry.heistId,
+                  treeElement.scrollMembership == snapshotEntry.scrollMembership,
+                  treeElement.observedScrollContentActivationPoint == snapshotEntry.observedScrollContentActivationPoint,
+                  capturedElementsMatch(treeElement.element, snapshotEntry.element) else {
+                throw ValidationError.treeElementMismatch(heistId: heistId, path: item.path)
+            }
         }
 
         try validateContainers(in: tree)
@@ -383,47 +423,26 @@ struct LiveCapture {
 
     private static func validateContainers(in tree: InterfaceTree) throws {
         let snapshot = tree.viewportCapture
-        let metadataPaths = Set(snapshot.containerNamesByPath.keys)
-            .union(snapshot.containerContentFramesByPath.keys)
-            .union(snapshot.containerScrollMembershipsByPath.keys)
-            .union(snapshot.containerObservedScrollContentActivationPointsByPath.keys)
-            .union(snapshot.scrollInventoriesByPath.keys)
-
-        for path in metadataPaths.sorted() {
-            switch snapshot.hierarchy.node(at: path) {
-            case nil:
-                throw ValidationError.containerMetadataForMissingPath(path: path)
-            case .element:
-                throw ValidationError.containerMetadataForElementPath(path: path)
-            case .container:
-                break
-            }
-        }
-
         for item in snapshot.hierarchy.pathIndexedContainers {
+            guard let snapshotContainer = snapshot.containersByPath[item.path] else {
+                throw ValidationError.missingTreeContainer(path: item.path)
+            }
             guard let treeContainer = tree.containers[item.path] else {
                 throw ValidationError.missingTreeContainer(path: item.path)
             }
-            let expected = InterfaceTree.Container(
-                container: item.container,
-                path: item.path,
-                containerName: snapshot.containerNamesByPath[item.path],
-                contentRect: snapshot.containerContentFramesByPath[item.path],
-                scrollMembership: snapshot.containerScrollMembershipsByPath[item.path],
-                observedScrollContentActivationPoint: snapshot
-                    .containerObservedScrollContentActivationPointsByPath[item.path],
-                scrollInventory: snapshot.scrollInventoriesByPath[item.path]
-            )
-            guard treeContainer == expected else {
+            guard snapshotContainer.container == item.container else {
+                throw ValidationError.treeContainerMismatch(path: item.path)
+            }
+            guard treeContainer == snapshotContainer else {
                 throw ValidationError.treeContainerMismatch(path: item.path)
             }
             try validateScrollEvidence(
                 at: item.path,
-                membership: treeContainer.scrollMembership,
-                observedPoint: treeContainer.observedScrollContentActivationPoint,
+                membership: snapshotContainer.scrollMembership,
+                observedPoint: snapshotContainer.observedScrollContentActivationPoint,
                 hierarchy: snapshot.hierarchy
             )
-            if treeContainer.scrollInventory != nil, !item.container.isScrollable {
+            if snapshotContainer.scrollInventory != nil, !item.container.isScrollable {
                 throw ValidationError.scrollInventoryForNonScrollablePath(path: item.path)
             }
         }

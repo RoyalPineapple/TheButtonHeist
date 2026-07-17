@@ -5,37 +5,51 @@ import ThePlans
 import TheScore
 
 extension TheBrains {
-    internal func receiptResult(
-        _ construction: Result<HeistExecutionStepResult, HeistReceiptConstructionError>,
+    internal func admittedReceipt(
         path: HeistExecutionPath,
         durationMs: Int,
-        children: [HeistExecutionStepResult] = []
+        node: @autoclosure () -> HeistExecutionStepNode,
+        children _: [HeistExecutionStepResult] = []
     ) -> HeistExecutionStepResult {
-        let error: HeistReceiptConstructionError
-        switch construction {
-        case .success(let receipt):
-            return receipt
-        case .failure(let constructionError):
-            error = constructionError
+        do {
+            return try HeistExecutionStepResult.construct(
+                path: path,
+                durationMs: durationMs,
+                node: node()
+            )
+        } catch {
+            preconditionFailure("runtime values must form a legal receipt node: \(error)")
         }
-        let failure = HeistFailureDetail(
-            category: .internalInvariant,
-            contract: "runtime values form a legal receipt node",
-            observed: error.description
-        )
-        let completion: HeistFailureCompletion
-        switch HeistExecutedChildren(children) {
-        case .passed(let children):
-            completion = .failed(failure: failure, children: children)
-        case .aborted(let children):
-            completion = .childAborted(failure: failure, children: children)
+    }
+
+    internal func requireAdmitted<Value>(
+        _ value: Value?,
+        _ message: @autoclosure () -> String
+    ) -> Value {
+        guard let value else {
+            preconditionFailure(message())
         }
-        return .failure(
-            path: path,
-            durationMs: durationMs,
-            message: "receipt invariant failed",
-            completion: completion
-        )
+        return value
+    }
+
+    internal func requirePassingChildren(
+        _ children: [HeistExecutionStepResult],
+        _ context: @autoclosure () -> String
+    ) -> HeistPassingChildren {
+        guard case .passed(let admittedChildren) = HeistExecutedChildren(children) else {
+            preconditionFailure(context())
+        }
+        return admittedChildren
+    }
+
+    internal func requireAbortedChildren(
+        _ children: [HeistExecutionStepResult],
+        _ context: @autoclosure () -> String
+    ) -> HeistAbortedChildren {
+        guard case .aborted(let admittedChildren) = HeistExecutedChildren(children) else {
+            preconditionFailure(context())
+        }
+        return admittedChildren
     }
 
     internal func actionResolutionFailureResult(
@@ -103,26 +117,22 @@ extension TheBrains {
         start: CFAbsoluteTime
     ) -> HeistExecutionStepResult {
         let durationMs = elapsedMilliseconds(since: start)
-        return receiptResult(
-            HeistExecutionStepResult.construct(
-                path: path,
-                durationMs: durationMs,
-                node: .wait(
-                    predicate: failure.wait.predicate,
-                    timeout: failure.wait.timeout,
-                    completion: .failed(
-                        evidence: .unavailable,
-                        failure: HeistFailureDetail(
-                            category: .wait,
-                            contract: "wait predicate resolves before evaluation",
-                            observed: "could not resolve heist wait predicate: \(failure.errorDescription)",
-                            expected: failure.wait.predicate.description
-                        )
+        return admittedReceipt(
+            path: path,
+            durationMs: durationMs,
+            node: .wait(
+                predicate: failure.wait.predicate,
+                timeout: failure.wait.timeout,
+                completion: .failed(
+                    evidence: .unavailable,
+                    failure: HeistFailureDetail(
+                        category: .wait,
+                        contract: "wait predicate resolves before evaluation",
+                        observed: "could not resolve heist wait predicate: \(failure.errorDescription)",
+                        expected: failure.wait.predicate.description
                     )
                 )
-            ),
-            path: path,
-            durationMs: durationMs
+            )
         )
     }
 
@@ -190,14 +200,15 @@ extension TheBrains {
         start: CFAbsoluteTime
     ) -> HeistExecutionStepResult {
         let durationMs = elapsedMilliseconds(since: start)
-        let construction = completion.map {
-            HeistExecutionStepResult.construct(
-                path: path,
-                durationMs: durationMs,
-                node: .action(command: command, completion: $0)
-            )
-        } ?? .failure(.evidenceConstructionFailed)
-        return receiptResult(construction, path: path, durationMs: durationMs)
+        let admittedCompletion = requireAdmitted(
+            completion,
+            "action receipt evidence must match the receipt command"
+        )
+        return admittedReceipt(
+            path: path,
+            durationMs: durationMs,
+            node: .action(command: command, completion: admittedCompletion)
+        )
     }
 
     private func actionObserved(_ result: ActionResult, command: HeistActionCommand) -> String {

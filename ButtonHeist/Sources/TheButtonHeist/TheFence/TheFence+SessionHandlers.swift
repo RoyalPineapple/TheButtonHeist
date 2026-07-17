@@ -53,7 +53,7 @@ extension TheFence {
                 id: DiscoveryDeviceID(stringLiteral: "config-\(targetName.rawValue)"),
                 name: targetName.rawValue
             )
-        } else if handoff.isConnected || config.deviceFilter != nil || config.directDevice != nil {
+        } else if handoff.connectionLifecycle.isConnected || config.deviceFilter != nil || config.directDevice != nil {
             return try await establishSessionOnly()
         } else {
             throw FenceError.invalidRequest(

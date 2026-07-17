@@ -6,15 +6,16 @@ tuist_available() {
 }
 
 # --- Submodule freshness check ---
-# Warn if AccessibilitySnapshotBH doesn't track the tip of main.
-# .gitmodules declares branch = main; this fetches to check, but does NOT
-# auto-stage — the developer must update and commit the pin intentionally.
-if git submodule update --remote --quiet -- submodules/AccessibilitySnapshotBH 2>/dev/null; then
-    submodule_dirty=$(git diff --name-only -- submodules/AccessibilitySnapshotBH)
-    if [[ -n "$submodule_dirty" ]]; then
-        echo "warning: AccessibilitySnapshotBH submodule is behind the tip of main"
-        echo "Run: git submodule update --remote -- submodules/AccessibilitySnapshotBH && git add submodules/AccessibilitySnapshotBH"
-    fi
+# Compare the staged gitlink with the remote branch without moving the worktree.
+submodule_name="submodules/AccessibilitySnapshotBH"
+submodule_path=$(git config -f .gitmodules --get "submodule.$submodule_name.path")
+submodule_url=$(git config -f .gitmodules --get "submodule.$submodule_name.url")
+submodule_branch=$(git config -f .gitmodules --get "submodule.$submodule_name.branch")
+submodule_pin=$(git ls-files --stage "$submodule_path" | awk '{print $2}')
+remote_tip=$(git ls-remote "$submodule_url" "refs/heads/$submodule_branch" 2>/dev/null | awk '{print $1}' || true)
+if [[ -n "$submodule_pin" && -n "$remote_tip" && "$submodule_pin" != "$remote_tip" ]]; then
+    echo "warning: AccessibilitySnapshotBH submodule is behind the tip of $submodule_branch"
+    echo "Run: git submodule update --remote -- $submodule_path && git add $submodule_path"
 fi
 
 # --- Tuist project freshness check ---

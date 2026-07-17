@@ -14,38 +14,22 @@ final class SemanticObservationLogTests: XCTestCase {
         XCTAssertEqual(settled.cursor.observedAt, Date(timeIntervalSince1970: 42))
     }
 
-    func testCursorlessIteratorReceivesFirstEntry() async throws {
+    func testCursorlessReadReturnsPendingBeforeAnyPublication() {
+        let log = SemanticObservationLog()
+
+        XCTAssertEqual(log.read(after: nil, scope: .visible), .pending)
+    }
+
+    func testCursorlessReadReturnsFirstRetainedEntry() throws {
         let log = SemanticObservationLog()
         let entry = initialEntry("A", sequence: 1, generation: 0)
-        let task = Task { @MainActor in
-            var iterator = log.entries(scope: .visible).makeAsyncIterator()
-            return try await iterator.next()
-        }
-        await waitForWaiterCount(1, in: log)
 
         try publish(entry.event, to: log)
 
-        let received = try await task.value
-        XCTAssertEqual(received, entry)
-        XCTAssertEqual(log.waiterCount, 0)
+        XCTAssertEqual(log.read(after: nil, scope: .visible), .entry(entry))
     }
 
-    func testCancellingCursorlessIteratorRemovesFirstEntryWaiter() async throws {
-        let log = SemanticObservationLog()
-        let task = Task { @MainActor in
-            var iterator = log.entries(scope: .visible).makeAsyncIterator()
-            return try await iterator.next()
-        }
-        await waitForWaiterCount(1, in: log)
-
-        task.cancel()
-
-        let received = try await task.value
-        XCTAssertNil(received)
-        XCTAssertEqual(log.waiterCount, 0)
-    }
-
-    func testIteratorReplaysRetainedEntriesAfterExplicitCursor() async throws {
+    func testReadAfterExplicitCursorReplaysRetainedEntriesInOrder() throws {
         let log = SemanticObservationLog()
         let entryA = initialEntry("A", sequence: 1, generation: 0)
         let entryB = try sameGenerationEntry("B", sequence: 2, after: entryA)
@@ -54,15 +38,14 @@ final class SemanticObservationLogTests: XCTestCase {
         try publish(entryB.event, to: log)
         try publish(entryC.event, to: log)
 
-        var iterator = log.entries(after: entryA.cursor, scope: .visible).makeAsyncIterator()
-        let replayedB = try await iterator.next()
-        let replayedC = try await iterator.next()
+        let replayedB = log.read(after: entryA.cursor, scope: .visible)
+        let replayedC = log.read(after: entryB.cursor, scope: .visible)
 
-        XCTAssertEqual(replayedB, entryB)
-        XCTAssertEqual(replayedC, entryC)
+        XCTAssertEqual(replayedB, .entry(entryB))
+        XCTAssertEqual(replayedC, .entry(entryC))
     }
 
-    func testIndependentIteratorsDoNotShareCursorProgress() async throws {
+    func testReadAfterExplicitCursorDoesNotShareProgressAcrossCallers() throws {
         let log = SemanticObservationLog()
         let entryA = initialEntry("A", sequence: 1, generation: 0)
         let entryB = try sameGenerationEntry("B", sequence: 2, after: entryA)
@@ -71,66 +54,32 @@ final class SemanticObservationLogTests: XCTestCase {
         try publish(entryB.event, to: log)
         try publish(entryC.event, to: log)
 
-        var first = log.entries(after: entryA.cursor, scope: .visible).makeAsyncIterator()
-        var second = log.entries(after: entryA.cursor, scope: .visible).makeAsyncIterator()
-
-        let firstB = try await first.next()
-        let firstC = try await first.next()
-        let secondB = try await second.next()
-        let secondC = try await second.next()
-
-        XCTAssertEqual(firstB, entryB)
-        XCTAssertEqual(firstC, entryC)
-        XCTAssertEqual(secondB, entryB)
-        XCTAssertEqual(secondC, entryC)
+        XCTAssertEqual(log.read(after: entryA.cursor, scope: .visible), .entry(entryB))
+        XCTAssertEqual(log.read(after: entryA.cursor, scope: .visible), .entry(entryB))
+        XCTAssertEqual(log.read(after: entryB.cursor, scope: .visible), .entry(entryC))
+        XCTAssertEqual(log.read(after: entryB.cursor, scope: .visible), .entry(entryC))
     }
 
-    func testCancellingSuspendedIteratorRemovesWaiter() async throws {
+    func testReadAfterLatestRetainedEntryReturnsPending() throws {
         let log = SemanticObservationLog()
         let entryA = initialEntry("A", sequence: 1, generation: 0)
         try publish(entryA.event, to: log)
 
-        let task = Task { @MainActor in
-            var iterator = log.entries(after: entryA.cursor, scope: .visible).makeAsyncIterator()
-            return try await iterator.next()
-        }
-        await waitForWaiterCount(1, in: log)
-
-        task.cancel()
-        let result = try await task.value
-
-        XCTAssertNil(result)
-        XCTAssertEqual(log.waiterCount, 0)
+        XCTAssertEqual(log.read(after: entryA.cursor, scope: .visible), .pending)
     }
 
-    func testSuspendedIteratorReceivesAtoBtoCExactlyOnceInOrder() async throws {
+    func testReadRejectsCrossScopeCursor() throws {
         let log = SemanticObservationLog()
         let entryA = initialEntry("A", sequence: 1, generation: 0)
-        let entryB = try sameGenerationEntry("B", sequence: 2, after: entryA)
-        let entryC = try sameGenerationEntry("C", sequence: 3, after: entryB)
         try publish(entryA.event, to: log)
 
-        let task = Task { @MainActor in
-            var iterator = log.entries(after: entryA.cursor, scope: .visible).makeAsyncIterator()
-            var delivered: [ObservationEntry] = []
-            for _ in 0..<2 {
-                guard let entry = try await iterator.next() else { break }
-                delivered.append(entry)
-            }
-            return delivered
-        }
-        await waitForWaiterCount(1, in: log)
-
-        try publish(entryB.event, to: log)
-        await waitForWaiterCount(1, in: log)
-        try publish(entryC.event, to: log)
-        let delivered = try await task.value
-
-        XCTAssertEqual(delivered, [entryB, entryC])
-        XCTAssertEqual(log.waiterCount, 0)
+        XCTAssertEqual(
+            log.read(after: entryA.cursor, scope: .discovery),
+            .failure(.scopeMismatch(cursor: .visible, requested: .discovery))
+        )
     }
 
-    func testEvictionReportsTypedIncompleteHistoryOnlyAfterAnEntryIsLost() async throws {
+    func testEvictionReportsTypedIncompleteHistoryOnlyAfterAnEntryIsLost() throws {
         let log = SemanticObservationLog(retentionLimit: 2)
         let entryA = initialEntry("A", sequence: 1, generation: 0)
         let entryB = try sameGenerationEntry("B", sequence: 2, after: entryA)
@@ -140,33 +89,18 @@ final class SemanticObservationLogTests: XCTestCase {
         try publish(entryB.event, to: log)
         try publish(entryC.event, to: log)
 
-        var completeIterator = log.entries(
-            after: entryA.cursor,
-            scope: .visible
-        ).makeAsyncIterator()
-        let replayedB = try await completeIterator.next()
-        let replayedC = try await completeIterator.next()
-        XCTAssertEqual(replayedB, entryB)
-        XCTAssertEqual(replayedC, entryC)
+        XCTAssertEqual(log.read(after: entryA.cursor, scope: .visible), .entry(entryB))
+        XCTAssertEqual(log.read(after: entryB.cursor, scope: .visible), .entry(entryC))
 
         try publish(entryD.event, to: log)
-        var incompleteIterator = log.entries(
-            after: entryA.cursor,
-            scope: .visible
-        ).makeAsyncIterator()
-        do {
-            _ = try await incompleteIterator.next()
-            XCTFail("Expected an eviction gap")
-        } catch {
-            XCTAssertEqual(
-                error,
-                .historyEvicted(ObservationGap(
-                    reason: .historyEvicted,
-                    baseline: entryA.cursor,
-                    current: entryD.cursor
-                ))
-            )
-        }
+        XCTAssertEqual(
+            log.read(after: entryA.cursor, scope: .visible),
+            .failure(.historyEvicted(ObservationGap(
+                reason: .historyEvicted,
+                baseline: entryA.cursor,
+                current: entryD.cursor
+            )))
+        )
         XCTAssertEqual(log.retainedEntries(scope: .visible), [entryC, entryD])
     }
 
@@ -503,16 +437,6 @@ final class SemanticObservationLogTests: XCTestCase {
         )
     }
 
-    private func waitForWaiterCount(
-        _ expectedCount: Int,
-        in log: SemanticObservationLog
-    ) async {
-        for _ in 0..<1_000 {
-            guard log.waiterCount != expectedCount else { return }
-            await Task.yield()
-        }
-        XCTFail("Timed out waiting for \(expectedCount) observation iterator waiters")
-    }
 }
 
 #endif // DEBUG

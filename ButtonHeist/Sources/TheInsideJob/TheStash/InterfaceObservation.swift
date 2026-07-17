@@ -68,46 +68,8 @@ struct InterfaceObservation {
         self.captureToken = captureToken
     }
 
-    // MARK: - Derived Properties
-
-    var summaryElement: AccessibilityElement? {
-        tree.summaryElement
-    }
-
-    var name: String? {
-        tree.name
-    }
-
-    var id: String? {
-        tree.id
-    }
-
-    var elementIDs: Set<HeistId> {
-        tree.elementIDs
-    }
-
-    var elementCount: Int {
-        tree.elementCount
-    }
-
-    var viewportElementIDs: Set<HeistId> {
-        tree.viewportElementIDs
-    }
-
-    var interfaceHash: String {
-        tree.interfaceHash
-    }
-
-    func findElement(heistId: HeistId) -> InterfaceTree.Element? {
-        tree.findElement(heistId: heistId)
-    }
-
-    var orderedContainers: [InterfaceTree.Container] {
-        tree.orderedContainers
-    }
-
     var viewportOnly: InterfaceObservation {
-        removingElements(withIds: elementIDs.subtracting(viewportElementIDs))
+        removingElements(withIds: tree.elementIDs.subtracting(tree.viewportElementIDs))
     }
 
     func replacingTreeWithCurrentCapture(_ tree: InterfaceTree) throws -> InterfaceObservation {
@@ -116,10 +78,6 @@ struct InterfaceObservation {
             dispatchReferences: liveCapture.dispatchReferences,
             captureToken: captureToken
         )
-    }
-
-    var orderedElements: [InterfaceTree.Element] {
-        tree.orderedElements
     }
 
 }

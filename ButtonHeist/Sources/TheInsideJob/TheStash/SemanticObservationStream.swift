@@ -1,7 +1,6 @@
 #if canImport(UIKit)
 #if DEBUG
 import Foundation
-import ButtonHeistSupport
 
 import TheScore
 
@@ -17,8 +16,9 @@ internal final class SemanticObservationStream {
     // MARK: - Observation Bookkeeping
 
     var scopePressure = SemanticObservationScopePressure()
-    let cycles = SemanticObservationCycles()
     let observationLog = SemanticObservationLog()
+    var nextObservationWaiterID: UInt64 = 0
+    var observationWaiters: [UInt64: SemanticObservationWaiter] = [:]
 
     // MARK: - Subscriber-Facing Settled Observation History
 
@@ -44,12 +44,8 @@ internal final class SemanticObservationStream {
         runtimeState.isRunning
     }
 
-    internal var observationReplayWaiterCount: Int {
-        observationLog.waiterCount
-    }
-
-    internal var cycleWaiterCount: Int {
-        cycles.waiterCount
+    internal var observationWaiterCount: Int {
+        observationWaiters.count
     }
 
     internal var activeObservationDemandCount: Int {
@@ -86,9 +82,7 @@ internal final class SemanticObservationStream {
 
     internal func stop() {
         runtimeState.stop()?.cancel()
-        cycles.cancelRunningCycle()
-        cycles.completeAllWaiters()
-        observationLog.cancelAllWaiters()
+        cancelObservationWaiters()
         if let stash {
             AccessibilityNotificationObserver.shared.unsubscribe(stash.accessibilityNotifications)
         }
@@ -118,30 +112,18 @@ internal final class SemanticObservationStream {
 
     private func runPassiveObservationCycle() async {
         let scope = subscribedObservationScope()
-        guard case .started(let cycle) = cycles.beginCycle(scope: scope) else {
-            _ = await Task.cancellableSleep(for: .milliseconds(10))
-            return
-        }
-        guard !Task.isCancelled else {
-            cycles.finishCycle(token: cycle, result: .interrupted)
-            return
-        }
-        let result = await performObservationCycle(scope: scope)
-        guard !Task.isCancelled else {
-            cycles.finishCycle(token: cycle, result: .interrupted)
-            return
-        }
-        cycles.finishCycle(token: cycle, result: result)
-        guard case .completed = result else { return }
+        guard !Task.isCancelled,
+              await performObservationCycle(scope: scope),
+              !Task.isCancelled else { return }
         await Task.yield()
     }
 
     private func performObservationCycle(
         scope: SemanticObservationScope
-    ) async -> SemanticObservationCycles.CycleResult {
+    ) async -> Bool {
         guard let stash else {
             stop()
-            return .interrupted
+            return false
         }
         switch scope {
         case .visible:
@@ -149,20 +131,20 @@ internal final class SemanticObservationStream {
         case .discovery:
             guard let discovery = runtimeState.discovery else {
                 invalidateLatestSettledObservation()
-                return .completed(settledSequence: nil)
+                return true
             }
             guard let exploration = await discovery() else {
                 invalidateLatestSettledObservation()
-                return .completed(settledSequence: nil)
+                return true
             }
-            guard !Task.isCancelled else { return .interrupted }
-            return .completed(settledSequence: exploration.event.sequence)
+            _ = exploration
+            return !Task.isCancelled
         }
     }
 
     private func observeVisibleSemanticState(
         stash: TheStash
-    ) async -> SemanticObservationCycles.CycleResult {
+    ) async -> Bool {
         let baselineSignal = tripwire.tripwireSignal()
         let settle: SettleSession.Outcome
         let layerGateWasClear: Bool?
@@ -180,7 +162,7 @@ internal final class SemanticObservationStream {
                !latestSettledObservationInvalidated,
                runtimeState.settledReading?.tick == reading.tick {
                 _ = await Task.cancellableSleep(for: .milliseconds(100))
-                return .completed(settledSequence: nil)
+                return !Task.isCancelled
             }
             // Layer quiet is advisory. AX-tree stability is the commit proof.
             layerGateWasClear = tripwire.latestReading?.isSettled ?? tripwire.allClear()
@@ -190,15 +172,15 @@ internal final class SemanticObservationStream {
             )
         }
 
-        guard !Task.isCancelled else { return .interrupted }
+        guard !Task.isCancelled else { return false }
         guard let proof = admitSettledProof(
             settle,
             stash: stash,
             layerGateWasClear: layerGateWasClear
-        ) else { return .completed(settledSequence: nil) }
-        guard !Task.isCancelled else { return .interrupted }
-        let event = commitSettledVisibleObservation(proof)
-        return .completed(settledSequence: event.sequence)
+        ) else { return true }
+        guard !Task.isCancelled else { return false }
+        _ = commitSettledVisibleObservation(proof)
+        return true
     }
 
 }

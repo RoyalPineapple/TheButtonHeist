@@ -34,57 +34,15 @@ extension ActionResult {
             settledObservation.traceEvidence,
             settlement
         )
-        switch resultOutcome {
-        case .success:
-            if let activationTrace = outcome.activationTrace {
-                self = ActionResult.activationSuccess(
-                    message: message,
-                    observation: observation,
-                    subjectEvidence: outcome.subjectEvidence,
-                    activationTrace: activationTrace
-                )
-            } else if let payload {
-                self = ActionResult.success(
-                    payload: payload,
-                    message: message,
-                    observation: observation,
-                    subjectEvidence: outcome.subjectEvidence
-                )
-            } else {
-                self = ActionResult.success(
-                    method: outcome.method,
-                    message: message,
-                    observation: observation,
-                    subjectEvidence: outcome.subjectEvidence
-                )
-            }
-        case .failure(let errorKind):
-            if let activationTrace = outcome.activationTrace {
-                self = ActionResult.activationFailure(
-                    errorKind: errorKind,
-                    message: message,
-                    observation: observation,
-                    subjectEvidence: outcome.subjectEvidence,
-                    activationTrace: activationTrace
-                )
-            } else if let payload {
-                self = ActionResult.failure(
-                    payload: payload,
-                    errorKind: errorKind,
-                    message: message,
-                    observation: observation,
-                    subjectEvidence: outcome.subjectEvidence
-                )
-            } else {
-                self = ActionResult.failure(
-                    method: outcome.method,
-                    errorKind: errorKind,
-                    message: message,
-                    observation: observation,
-                    subjectEvidence: outcome.subjectEvidence
-                )
-            }
-        }
+        self = ActionResult(
+            outcome: resultOutcome,
+            method: outcome.method,
+            payload: payload,
+            message: message,
+            observation: observation,
+            subjectEvidence: outcome.subjectEvidence,
+            activationTrace: outcome.activationTrace
+        )
     }
 }
 

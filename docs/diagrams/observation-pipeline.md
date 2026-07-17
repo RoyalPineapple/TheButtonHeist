@@ -12,7 +12,6 @@ tree; temporal predicates and receipts read replayable retained entries.
 `ButtonHeist/Sources/TheInsideJob/TheStash/TheStash+InterfaceState.swift`,
 `ButtonHeist/Sources/TheInsideJob/TheStash/SemanticObservationValues.swift`,
 `ButtonHeist/Sources/TheInsideJob/TheStash/SemanticObservationLog.swift`,
-`ButtonHeist/Sources/TheInsideJob/TheStash/ObservationEntrySequence.swift`,
 `ButtonHeist/Sources/TheInsideJob/TheStash/SemanticObservationPublication.swift`,
 `ButtonHeist/Sources/TheInsideJob/TheStash/SemanticObservationStream.swift`,
 `ButtonHeist/Sources/TheInsideJob/TheBrains/SettleSession.swift`,
@@ -22,7 +21,7 @@ tree; temporal predicates and receipts read replayable retained entries.
 `ButtonHeist/Sources/TheInsideJob/TheBrains/Navigation+SemanticExploration.swift`,
 `ButtonHeist/Sources/TheInsideJob/TheBrains/InteractionObservation.swift`,
 `ButtonHeist/Sources/TheInsideJob/TheBrains/PredicateWait.swift`,
-`ButtonHeist/Sources/TheInsideJob/TheBrains/PredicateWait+Lifecycle.swift`,
+`ButtonHeist/Sources/TheInsideJob/TheBrains/PredicateWait+Evaluation.swift`,
 `ButtonHeist/Sources/TheInsideJob/TheBrains/PredicateWait+ObservationStream.swift`,
 `ButtonHeist/Sources/TheInsideJob/TheTripwire/AccessibilityNotificationBus.swift`
 
@@ -47,7 +46,7 @@ flowchart TD
     Publication --> Log["private SemanticObservationLog<br/>publish retained entry"]
     Log --> Runtime["advance runtime generation<br/>and settled sequence"]
     Runtime --> Cursor["ObservationCursor<br/>generation + sequence order<br/>capture-derived timestamp metadata"]
-    Cursor --> Entries["ObservationEntrySequence<br/>scope plus cursor replay"]
+    Cursor --> Entries["SemanticObservationLog.read<br/>scope plus cursor replay"]
 
     Current["committed InterfaceTree"] --> Presence["presence and target resolution"]
     Graph --> Current
@@ -146,7 +145,7 @@ that goal callback again. There is no alternate traversal or commit path.
 
 ```mermaid
 flowchart TD
-    Start["PredicateWait.Execution<br/>lifecycle machine + evolving state"] --> Visible["bounded visible check"]
+    Start["PredicateWait.Execution<br/>one direct wait pipeline"] --> Visible["bounded visible check"]
     Visible -->|matched| Match["return matched"]
     Visible -->|unmatched| Route{"one eligible, already-resolvable<br/>terminal element target?"}
     Route -->|yes| Reveal["inflate exact HeistId<br/>reveal + retain .current"]
@@ -156,7 +155,7 @@ flowchart TD
     ActionBaseline["supplied pre-action SettledCapture"] -.-> Prepare
     Prepare --> Evaluate["evaluate current tree or accumulated<br/>baseline-through-current window"]
     Evaluate -->|matched| Match
-    Evaluate -->|unmatched| Idle["idle on retained<br/>ObservationEntrySequence"]
+    Evaluate -->|unmatched| Idle["idle on retained log<br/>stream waiters"]
     Idle -->|retained entry| Window["build every accumulated<br/>baseline-through-entry window"]
     Window --> EntryEvaluation{"matched?"}
     EntryEvaluation -->|yes| Match
@@ -177,9 +176,9 @@ check gets the viewport transition's 250 ms settle budget. Terminal search is
 not cancelled by the elapsed wait deadline; normal traversal caps bound it.
 Every stage returns immediately when the predicate is fulfilled, and no
 compatibility wait orchestration exists. `PredicateWait.Execution` directly
-owns `PredicateWaitLifecycleMachine` and its evolving state;
-`PredicateObservationStreamState` only reduces one settled observation against
-the immutable baseline and owns no lifecycle or history.
+coordinates the visible, reveal/discovery, retained-log waiter, and terminal
+verification stages. `PredicateObservationStreamState` only reduces one settled
+observation against the immutable baseline and owns no lifecycle or history.
 
 ## Screen Boundaries
 

@@ -4,7 +4,7 @@ extension TheFence {
 
     /// Connect to a device and optionally enable auto-reconnect.
     public func start() async throws {
-        if handoff.isConnected {
+        if handoff.connectionLifecycle.isConnected {
             return
         }
 
@@ -30,7 +30,7 @@ extension TheFence {
         case .failed(let failure):
             clearClientSessionState(error: sessionStateError(for: failure))
         case .disconnected:
-            guard let failure = handoff.connectionDiagnosticFailure,
+            guard let failure = handoff.connectionLifecycle.diagnosticFailure,
                   case .disconnected = failure
             else { return }
             clearClientSessionState(error: sessionStateError(for: failure))
@@ -70,7 +70,7 @@ extension TheFence {
         handoff.onStatus?("Connecting to \(device.name)...")
         let resolutionTimeout = TheHandoff.connectionResolutionTimeout(for: config.connectionTimeout)
         switch await device.reachability(
-            token: handoff.serverMessages.authToken,
+            token: handoff.serverMessageRouter.authToken,
             timeout: resolutionTimeout
         ) {
         case .reachable:

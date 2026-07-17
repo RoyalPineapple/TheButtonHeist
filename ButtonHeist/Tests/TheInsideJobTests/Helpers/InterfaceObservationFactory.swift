@@ -18,37 +18,20 @@ private func makeTestTree(
     snapshot: LiveCapture.Snapshot,
     elements: [HeistId: InterfaceTree.Element] = [:]
 ) -> InterfaceTree {
-    let normalizedElements = snapshot.hierarchy.pathIndexedElements.reduce(into: elements) { result, item in
-        guard let heistId = snapshot.heistIdsByPath[item.path] else { return }
-        let supplied = elements[heistId]
-        result[heistId] = InterfaceTree.Element(
-            heistId: heistId,
-            path: item.path,
-            scrollMembership: supplied?.scrollMembership,
-            observedScrollContentActivationPoint: supplied?.observedScrollContentActivationPoint,
-            element: item.element
+    let normalizedElements = snapshot.elementsByPath.values.reduce(into: elements) { result, visibleEntry in
+        let supplied = elements[visibleEntry.heistId]
+        result[visibleEntry.heistId] = InterfaceTree.Element(
+            heistId: visibleEntry.heistId,
+            path: visibleEntry.path,
+            scrollMembership: supplied?.scrollMembership ?? visibleEntry.scrollMembership,
+            observedScrollContentActivationPoint: supplied?.observedScrollContentActivationPoint
+                ?? visibleEntry.observedScrollContentActivationPoint,
+            element: visibleEntry.element
         )
     }
-    let containers = Dictionary(
-        uniqueKeysWithValues: snapshot.hierarchy.pathIndexedContainers.map { item in
-            (
-                item.path,
-                InterfaceTree.Container(
-                    container: item.container,
-                    path: item.path,
-                    containerName: snapshot.containerNamesByPath[item.path],
-                    contentRect: snapshot.containerContentFramesByPath[item.path],
-                    scrollMembership: snapshot.containerScrollMembershipsByPath[item.path],
-                    observedScrollContentActivationPoint: snapshot
-                        .containerObservedScrollContentActivationPointsByPath[item.path],
-                    scrollInventory: snapshot.scrollInventoriesByPath[item.path]
-                )
-            )
-        }
-    )
     return InterfaceTree(
         elements: normalizedElements,
-        containers: containers,
+        containers: snapshot.containersByPath,
         viewportCapture: snapshot
     )
 }
@@ -69,14 +52,40 @@ extension LiveCapture {
         firstResponderHeistId: HeistId? = nil,
         scrollableContainerViewsByPath: [TreePath: ScrollableViewRef] = [:]
     ) -> LiveCapture {
+        let elementsByPath: [TreePath: InterfaceTree.Element] = Dictionary(
+            uniqueKeysWithValues: hierarchy.pathIndexedElements.compactMap { item in
+                guard let heistId = heistIdsByPath[item.path] else { return nil }
+                return (
+                    item.path,
+                    InterfaceTree.Element(
+                        heistId: heistId,
+                        path: item.path,
+                        scrollMembership: nil,
+                        element: item.element
+                    )
+                )
+            }
+        )
+        let containersByPath = Dictionary(
+            uniqueKeysWithValues: hierarchy.pathIndexedContainers.map { item in
+                (
+                    item.path,
+                    InterfaceTree.Container(
+                        container: item.container,
+                        path: item.path,
+                        containerName: containerNamesByPath[item.path],
+                        contentRect: containerContentFramesByPath[item.path],
+                        scrollMembership: containerScrollMembershipsByPath[item.path],
+                        observedScrollContentActivationPoint: containerObservedScrollContentActivationPointsByPath[item.path],
+                        scrollInventory: scrollInventoriesByPath[item.path]
+                    )
+                )
+            }
+        )
         let snapshot = Snapshot(
             hierarchy: hierarchy,
-            containerNamesByPath: containerNamesByPath,
-            heistIdsByPath: heistIdsByPath,
-            containerContentFramesByPath: containerContentFramesByPath,
-            containerScrollMembershipsByPath: containerScrollMembershipsByPath,
-            containerObservedScrollContentActivationPointsByPath: containerObservedScrollContentActivationPointsByPath,
-            scrollInventoriesByPath: scrollInventoriesByPath,
+            elementsByPath: elementsByPath,
+            containersByPath: containersByPath,
             firstResponderHeistId: firstResponderHeistId
         )
         return requireValidTestValue {
@@ -151,14 +160,42 @@ extension InterfaceObservation {
         firstResponderHeistId: HeistId?,
         scrollableContainerViewsByPath: [TreePath: LiveCapture.ScrollableViewRef] = [:]
     ) -> InterfaceObservation {
+        let visibleElementsByPath: [TreePath: InterfaceTree.Element] = Dictionary(
+            uniqueKeysWithValues: hierarchy.pathIndexedElements.compactMap { item in
+                guard let heistId = heistIdsByPath[item.path] else { return nil }
+                let supplied = elements[heistId]
+                return (
+                    item.path,
+                    InterfaceTree.Element(
+                        heistId: heistId,
+                        path: item.path,
+                        scrollMembership: supplied?.scrollMembership,
+                        observedScrollContentActivationPoint: supplied?.observedScrollContentActivationPoint,
+                        element: item.element
+                    )
+                )
+            }
+        )
+        let containersByPath = Dictionary(
+            uniqueKeysWithValues: hierarchy.pathIndexedContainers.map { item in
+                (
+                    item.path,
+                    InterfaceTree.Container(
+                        container: item.container,
+                        path: item.path,
+                        containerName: containerNamesByPath[item.path],
+                        contentRect: containerContentFramesByPath[item.path],
+                        scrollMembership: containerScrollMembershipsByPath[item.path],
+                        observedScrollContentActivationPoint: containerObservedScrollContentActivationPointsByPath[item.path],
+                        scrollInventory: scrollInventoriesByPath[item.path]
+                    )
+                )
+            }
+        )
         let snapshot = LiveCapture.Snapshot(
             hierarchy: hierarchy,
-            containerNamesByPath: containerNamesByPath,
-            heistIdsByPath: heistIdsByPath,
-            containerContentFramesByPath: containerContentFramesByPath,
-            containerScrollMembershipsByPath: containerScrollMembershipsByPath,
-            containerObservedScrollContentActivationPointsByPath: containerObservedScrollContentActivationPointsByPath,
-            scrollInventoriesByPath: scrollInventoriesByPath,
+            elementsByPath: visibleElementsByPath,
+            containersByPath: containersByPath,
             firstResponderHeistId: firstResponderHeistId
         )
         return requireValidTestValue {
@@ -261,6 +298,7 @@ extension InterfaceObservation {
         for (index, pair) in liveElements.enumerated() {
             treeElements[pair.heistId] = InterfaceTree.Element(
                 heistId: pair.heistId,
+                path: TreePath([index]),
                 scrollMembership: nil,
                 element: pair.element
             )

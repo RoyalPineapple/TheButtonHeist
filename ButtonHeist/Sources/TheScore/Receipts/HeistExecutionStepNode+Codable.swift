@@ -112,12 +112,7 @@ extension HeistExecutionStepNode {
             semanticKeys: [.type, .command],
             typeName: NodeType.action.rawValue
         )
-        return try validated(
-            .action(command: command, completion: completion),
-            forKey: .evidence,
-            in: container,
-            "action evidence result method must match the receipt command"
-        )
+        return try admitted(.action(command: command, completion: completion), forKey: .evidence, in: container)
     }
 
     private static func decodeForEachElement(
@@ -139,12 +134,7 @@ extension HeistExecutionStepNode {
         let node: Self = type == .forEachElementIteration
             ? .forEachElementIteration(declaration: declaration, completion: completion)
             : .forEachElement(declaration: declaration, completion: completion)
-        return try validated(
-            node,
-            forKey: .evidence,
-            in: container,
-            "for_each_element evidence shape must match the receipt node"
-        )
+        return try admitted(node, forKey: .evidence, in: container)
     }
 
     private static func decodeForEachString(
@@ -165,12 +155,7 @@ extension HeistExecutionStepNode {
         let node: Self = type == .forEachStringIteration
             ? .forEachStringIteration(declaration: declaration, completion: completion)
             : .forEachString(declaration: declaration, completion: completion)
-        return try validated(
-            node,
-            forKey: .evidence,
-            in: container,
-            "for_each_string evidence progress and shape must match the receipt declaration"
-        )
+        return try admitted(node, forKey: .evidence, in: container)
     }
 
     private static func decodeRepeatUntil(
@@ -185,12 +170,7 @@ extension HeistExecutionStepNode {
             semanticKeys: [.type, .predicate, .timeout],
             typeName: NodeType.repeatUntil.rawValue
         )
-        return try validated(
-            .repeatUntil(declaration: declaration, completion: completion),
-            forKey: .evidence,
-            in: container,
-            "repeat_until evidence predicate and shape must match the receipt declaration"
-        )
+        return try admitted(.repeatUntil(declaration: declaration, completion: completion), forKey: .evidence, in: container)
     }
 
     private static func decodeRepeatUntilIteration(
@@ -205,24 +185,25 @@ extension HeistExecutionStepNode {
             semanticKeys: [.type, .predicate, .timeout],
             typeName: NodeType.repeatUntilIteration.rawValue
         )
-        return try validated(
+        return try admitted(
             .repeatUntilIteration(declaration: declaration, completion: completion),
             forKey: .evidence,
-            in: container,
-            "repeat_until iteration evidence predicate and shape must match the receipt declaration"
+            in: container
         )
     }
 
-    private static func validated(
+    private static func admitted(
         _ node: Self,
         forKey key: CodingKeys,
-        in container: KeyedDecodingContainer<CodingKeys>,
-        _ description: String
+        in container: KeyedDecodingContainer<CodingKeys>
     ) throws -> Self {
-        guard node.constructionError == nil else {
-            throw invalidNode(forKey: key, in: container, description)
+        do {
+            return try node.admitted()
+        } catch let error as HeistReceiptAdmissionError {
+            throw invalidNode(forKey: key, in: container, error.description)
+        } catch {
+            throw invalidNode(forKey: key, in: container, String(describing: error))
         }
-        return node
     }
 
     private static func invalidNode(

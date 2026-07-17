@@ -162,7 +162,7 @@ private extension TheStash {
     func parseLiveObject(_ object: NSObject) -> InterfaceTree.Element? {
         guard let screen = parse() else { return nil }
         guard let heistId = screen.liveCapture.heistId(matching: object) else { return nil }
-        return screen.findElement(heistId: heistId)
+        return screen.tree.findElement(heistId: heistId)
     }
 
     func parseRotorResultObject(_ object: NSObject) -> InterfaceTree.Element? {

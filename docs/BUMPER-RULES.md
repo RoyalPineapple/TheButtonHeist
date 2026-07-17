@@ -53,17 +53,12 @@ resolve Swift types or infer runtime ownership.
 
 ## Canonical Runtime Owners
 
-These positive shapers name current owners. They do not ban old helper names or
-preserve compatibility paths.
+The retained shaper guards a semantic effect boundary that Swift access control
+cannot express across source files. Helper names and file placement are not
+architecture contracts.
 
 | Rule ID | Invariant | Repair | Proof and deletion condition |
 | --- | --- | --- | --- |
-| `buttonheist.predicate_wait_lifecycle_ownership` | `PredicateWait.swift` directly owns `PredicateWaitLifecycleMachine` and its evolving `PredicateWaitLifecycleState`; no second wait lifecycle may be constructed elsewhere. | Add wait behavior as a lifecycle state, event, or effect and advance it inside `PredicateWait`. | Proof: standard `canonicalConstruction` with an authorized owner fixture, an unauthorized construction fixture, and repository evaluation. Delete when the machine initializer is inaccessible outside `PredicateWait`. |
-| `buttonheist.task_tracker_ownership` | Socket callbacks, delayed disconnects, and lifecycle boundary tasks use the one drainable `TaskTracker` primitive at three named owners. | Add owned asynchronous work through an existing owner or explicitly extend the owner set instead of creating parallel task bookkeeping. | Proof: standard `canonicalConstruction` with an unauthorized construction fixture and repository evaluation of the three owners. Delete when tracker construction is inaccessible outside a dedicated task-ownership module. |
-| `buttonheist.interaction_request_executor_ownership` | `TheBrains.swift` owns the one bounded interaction queue and its cancellation deadline. | Submit UI work through TheBrains instead of constructing another interaction backlog. | Proof: standard `canonicalConstruction` with an unauthorized construction fixture and repository evaluation of the owner. Delete when executor construction is inaccessible outside a dedicated interaction target. |
-| `buttonheist.receipt_node_ownership` | `HeistExecutionStepNode.swift` owns the receipt algebra's single repository-wide nominal declaration. | Add semantic cases to the canonical node and update its exhaustive projections. | Proof: standard `singleDeclaration` with the canonical fixture plus repository evaluation. Delete when a build boundary prevents competing receipt node declarations. |
-| `buttonheist.receipt_node_codec_ownership` | `HeistExecutionStepNode+Codable.swift` is the only file that may extend the receipt node, keeping its JSON projection with the canonical codec. | Extend the canonical codec instead of creating another receipt-node projection. | Proof: an invalid competing-extension fixture plus repository evaluation of the canonical extension. Delete when the codec moves into the node declaration or an inaccessible target owns the extension. |
-| `buttonheist.receipt_construction_safety` | Receipt node construction and decoding report semantic mismatches as `HeistReceiptConstructionError` or `DecodingError`; these paths never trap. | Return a typed construction error or throw a decoding error. | Proof: an invalid trap fixture plus repository evaluation of the construction and codec files. Delete when every receipt pairing is structurally valid and no runtime construction validation remains. |
 | `buttonheist.semantic_observation_commit_ownership` | `SemanticObservationStream+Publication.swift` is the only caller that reduces settled observations into the committed interface graph. | Publish proof-bearing observations through the semantic stream. | Proof: standard `boundaryOnly` with an invalid competing committer fixture and repository evaluation of the publication owner. Delete when graph reduction is inaccessible outside the publication owner. |
 
 ## Rule Lifecycle

@@ -162,7 +162,7 @@ final class WaitForIntegrationTests: XCTestCase {
 
         let event = try XCTUnwrap(observation?.event)
         XCTAssertTrue(
-            event.observation.screen.orderedElements.contains { $0.element.label == "PassiveObservation-StableAX" },
+            event.observation.screen.tree.orderedElements.contains { $0.element.label == "PassiveObservation-StableAX" },
             "Passive visible observation should publish a stable AX tree even while unrelated layer motion continues"
         )
         XCTAssertNil(insideJob.brains.stash.latestSemanticObservationFailureDiagnostic())

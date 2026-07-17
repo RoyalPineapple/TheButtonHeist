@@ -535,7 +535,7 @@ final class TargetConfigTests: XCTestCase {
         XCTAssertEqual(fence.config.deviceFilter, "127.0.0.1:9999")
         XCTAssertEqual(fence.config.token, "bad-tok")
         XCTAssertEqual(connectAttempt, 1)
-        XCTAssertFalse(fence.handoff.isConnected)
+        XCTAssertFalse(fence.handoff.connectionLifecycle.isConnected)
     }
 
     @ButtonHeistActor

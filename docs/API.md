@@ -244,8 +244,8 @@ for the full matching contract.
 `SemanticObservationLog` is the runtime observation owner. It retains settled
 `ObservationEntry` values, each pairing one `SettledCapture` with an initial,
 same-generation, or screen-boundary transition. Consumers read that history
-through cursor-backed `ObservationEntrySequence` values; reads and notification
-checkpoints do not consume shared history.
+through scope-plus-cursor log reads coordinated by `SemanticObservationStream`;
+reads and notification checkpoints do not consume shared history.
 
 Temporal evaluation builds one `ObservationWindow` from an immutable baseline
 cursor through the current retained entry. Presence predicates bypass temporal

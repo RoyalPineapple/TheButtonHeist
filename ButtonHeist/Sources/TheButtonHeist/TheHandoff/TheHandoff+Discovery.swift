@@ -8,7 +8,7 @@ private let handoffDiscoveryLogger = ButtonHeistLog.logger(.handoff(.discovery))
 @ButtonHeistActor
 extension TheHandoff {
     func startDiscovery() {
-        handoffDiscoveryLogger.info("startDiscovery called, hasSession=\(self.hasActiveDiscoverySession)")
+        handoffDiscoveryLogger.info("startDiscovery called, hasSession=\(self.discoveryLifecycle.hasDiscoverySession)")
         guard !discoveryLifecycle.hasDiscoverySession else {
             handoffDiscoveryLogger.info("Already discovering, skipping")
             return
@@ -32,7 +32,7 @@ extension TheHandoff {
         probeTimeout: TimeInterval = 0.5,
         retryInterval: TimeInterval = 0.2
     ) async -> [DiscoveredDevice] {
-        let startedTemporaryDiscovery = !hasActiveDiscoverySession
+        let startedTemporaryDiscovery = !discoveryLifecycle.hasDiscoverySession
         if startedTemporaryDiscovery {
             startDiscovery()
         }
@@ -43,8 +43,8 @@ extension TheHandoff {
         }
 
         return await ReachableDeviceScanner(getDiscoveredDevices: { [weak self] in
-            self?.discoveredDevices ?? []
-        }, token: serverMessages.authToken).scan(
+            self?.discoveryLifecycle.discoveredDevices ?? []
+        }, token: serverMessageRouter.authToken).scan(
             timeout: timeout,
             probeTimeout: probeTimeout,
             retryInterval: retryInterval

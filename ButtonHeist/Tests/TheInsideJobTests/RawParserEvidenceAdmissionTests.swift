@@ -21,8 +21,8 @@ final class RawParserEvidenceAdmissionTests: XCTestCase {
         brains.stash.nextVisibleRefreshScreenForTesting = raw
         let refreshed = brains.stash.refreshLiveCapture()
 
-        XCTAssertEqual(refreshed?.interfaceHash, raw.interfaceHash)
-        XCTAssertEqual(brains.stash.latestObservation.interfaceHash, raw.interfaceHash)
+        XCTAssertEqual(refreshed?.tree.interfaceHash, raw.tree.interfaceHash)
+        XCTAssertEqual(brains.stash.latestObservation.tree.interfaceHash, raw.tree.interfaceHash)
         XCTAssertEqual(brains.stash.interfaceTree.interfaceHash, committedHash)
         XCTAssertNotNil(brains.stash.interfaceTree.findElement(heistId: "committed"))
         XCTAssertNil(brains.stash.interfaceTree.findElement(heistId: "raw"))
@@ -31,7 +31,7 @@ final class RawParserEvidenceAdmissionTests: XCTestCase {
         let diagnostic = observation(label: "Diagnostic", heistId: "diagnostic")
         brains.stash.recordFailedSettleDiagnosticEvidence(diagnostic)
 
-        XCTAssertEqual(brains.stash.diagnosticObservation?.interfaceHash, diagnostic.interfaceHash)
+        XCTAssertEqual(brains.stash.diagnosticObservation?.tree.interfaceHash, diagnostic.tree.interfaceHash)
         XCTAssertEqual(brains.stash.interfaceTree.interfaceHash, committedHash)
         XCTAssertNotNil(brains.stash.interfaceTree.findElement(heistId: "committed"))
         XCTAssertNil(brains.stash.interfaceTree.findElement(heistId: "diagnostic"))

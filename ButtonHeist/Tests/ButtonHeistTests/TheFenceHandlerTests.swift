@@ -207,6 +207,95 @@ final class TheFenceHandlerTests: XCTestCase {
         ),
     ]
 
+    private static var expectedDiagnosticFailures: [ExpectedDiagnosticFailure] {
+        let validationError = SchemaValidationError(
+            field: "target",
+            observed: "string",
+            expected: "object"
+        )
+        return [
+            ExpectedDiagnosticFailure(
+                name: "server",
+                response: FenceResponse.failure(FenceError.serverError(ServerError(
+                    kind: .general,
+                    message: "server crashed"
+                ))),
+                code: .serverGeneral,
+                kind: .server,
+                phase: .server,
+                message: "Action failed: server crashed",
+                retryable: false
+            ),
+            ExpectedDiagnosticFailure(
+                name: "routing",
+                response: FenceResponse.failure(FenceOperationRoutingError(message: "Unknown tool: warp")),
+                code: .requestInvalid,
+                kind: .request,
+                phase: .request,
+                message: "Unknown tool: warp",
+                retryable: false
+            ),
+            ExpectedDiagnosticFailure(
+                name: "validation",
+                response: FenceResponse.failure(validationError),
+                code: .requestValidationError,
+                kind: .request,
+                phase: .request,
+                message: validationError.message,
+                retryable: false
+            ),
+            ExpectedDiagnosticFailure(
+                name: "action",
+                response: FenceResponse.failure(FenceError.actionFailed("could not activate target")),
+                code: .requestActionFailed,
+                kind: .request,
+                phase: .request,
+                message: "Action failed: could not activate target",
+                retryable: false
+            ),
+            ExpectedDiagnosticFailure(
+                name: "discovery",
+                response: FenceResponse.failure(FenceError.noDeviceFound),
+                code: .discoveryNoDeviceFound,
+                kind: .discovery,
+                phase: .discovery,
+                message: "No devices found within timeout. Is the app running?",
+                retryable: true
+            ),
+            ExpectedDiagnosticFailure(
+                name: "transport",
+                response: FenceResponse.failure(FenceError.connectionFailure(ConnectionFailure(
+                    message: "network down",
+                    failureCode: .transportNetworkError,
+                    hint: "retry"
+                ))),
+                code: .transportNetworkError,
+                kind: .connection,
+                phase: .transport,
+                message: "network down",
+                retryable: true
+            ),
+            ExpectedDiagnosticFailure(
+                name: "known-fence",
+                response: FenceResponse.failure(FenceError.notConnected),
+                code: .connectionNotConnected,
+                kind: .connection,
+                phase: .request,
+                message: "Not connected to device.",
+                retryable: true
+            ),
+            ExpectedDiagnosticFailure(
+                name: "connection-domain",
+                response: FenceResponse.failure(HandoffConnectionError.timeout),
+                code: .setupTimeout,
+                kind: .connection,
+                phase: .setup,
+                message: "Connection timed out",
+                retryable: true
+            ),
+        ]
+    }
+
     /// Assert that executing a typed operation returns a `.error(...)` response containing the substring.
     @ButtonHeistActor
     private func assertValidationError(
@@ -568,112 +657,12 @@ final class TheFenceHandlerTests: XCTestCase {
         }
     }
 
-    func testDiagnosticFailureJSONPreservesRawKnownCodesAcrossRepresentativeKinds() throws {
-        let cases: [(String, FenceResponse, KnownFailureCode, DiagnosticFailureKind, FailurePhase)] = [
-            (
-                "request",
-                FenceResponse.failure(FenceOperationRoutingError(message: "Unknown tool: warp")),
-                .requestInvalid,
-                .request,
-                .request
-            ),
-            (
-                "discovery",
-                FenceResponse.failure(FenceError.noDeviceFound),
-                .discoveryNoDeviceFound,
-                .discovery,
-                .discovery
-            ),
-            (
-                "transport",
-                FenceResponse.failure(FenceError.connectionFailure(ConnectionFailure(
-                    message: "network down",
-                    failureCode: .transportNetworkError,
-                    hint: "retry"
-                ))),
-                .transportNetworkError,
-                .connection,
-                .transport
-            ),
-            (
-                "action",
-                FenceResponse.failure(FenceError.actionFailed("could not activate target")),
-                .requestActionFailed,
-                .request,
-                .request
-            ),
-        ]
-
-        for (name, response, knownCode, kind, phase) in cases {
-            let failure = try XCTUnwrap(response.diagnosticFailure, name)
-            let json = try publicJSONProbe(response).object()
+    func testKnownFailuresExposeCompleteDiagnosticFields() throws {
+        for expected in Self.expectedDiagnosticFailures {
+            let failure = try XCTUnwrap(expected.response.diagnosticFailure, expected.name)
+            let json = try publicJSONProbe(expected.response).object()
             let detailsJSON = try json.object("details")
 
-            XCTAssertEqual(failure.failureCode, knownCode, name)
-            XCTAssertEqual(failure.code, knownCode.rawValue, name)
-            XCTAssertEqual(failure.kind, kind, name)
-            XCTAssertEqual(failure.phase, phase, name)
-            XCTAssertEqual(try json.string("code"), knownCode.rawValue, name)
-            XCTAssertNoThrow(try json.assertMissing("errorCode"), name)
-            XCTAssertNoThrow(try json.assertMissing("kind"), name)
-            XCTAssertNoThrow(try json.assertMissing("phase"), name)
-            XCTAssertNoThrow(try detailsJSON.assertMissing("code"), name)
-            XCTAssertNoThrow(try detailsJSON.assertMissing("errorCode"), name)
-            XCTAssertEqual(try detailsJSON.string("kind"), kind.rawValue, name)
-            XCTAssertEqual(try detailsJSON.string("phase"), phase.rawValue, name)
-        }
-    }
-
-    func testKnownFailuresExposeCompleteDiagnosticFields() throws {
-        let validationError = SchemaValidationError(
-            field: "target",
-            observed: "string",
-            expected: "object"
-        )
-        let cases: [ExpectedDiagnosticFailure] = [
-            ExpectedDiagnosticFailure(
-                name: "server",
-                response: FenceResponse.failure(FenceError.serverError(ServerError(
-                    kind: .general,
-                    message: "server crashed"
-                ))),
-                code: .serverGeneral,
-                kind: .server,
-                phase: .server,
-                message: "Action failed: server crashed",
-                retryable: false
-            ),
-            ExpectedDiagnosticFailure(
-                name: "routing",
-                response: FenceResponse.failure(FenceOperationRoutingError(message: "Unknown tool: warp")),
-                code: .requestInvalid,
-                kind: .request,
-                phase: .request,
-                message: "Unknown tool: warp",
-                retryable: false
-            ),
-            ExpectedDiagnosticFailure(
-                name: "validation",
-                response: FenceResponse.failure(validationError),
-                code: .requestValidationError,
-                kind: .request,
-                phase: .request,
-                message: validationError.message,
-                retryable: false
-            ),
-            ExpectedDiagnosticFailure(
-                name: "action",
-                response: FenceResponse.failure(FenceError.actionFailed("could not activate target")),
-                code: .requestActionFailed,
-                kind: .request,
-                phase: .request,
-                message: "Action failed: could not activate target",
-                retryable: false
-            ),
-        ]
-
-        for expected in cases {
-            let failure = try XCTUnwrap(expected.response.diagnosticFailure, expected.name)
             XCTAssertEqual(failure.failureCode, expected.code, expected.name)
             XCTAssertEqual(failure.failureCode.rawValue, expected.code.rawValue, expected.name)
             XCTAssertEqual(failure.code, expected.code.rawValue, expected.name)
@@ -688,32 +677,20 @@ final class TheFenceHandlerTests: XCTestCase {
             XCTAssertFalse(failure.code.isEmpty, expected.name)
             XCTAssertFalse(failure.kind.rawValue.isEmpty, expected.name)
             XCTAssertFalse(failure.message.isEmpty, expected.name)
+            XCTAssertEqual(try json.string("status"), "error", expected.name)
+            XCTAssertEqual(try json.string("message"), expected.message, expected.name)
+            XCTAssertEqual(try json.string("code"), expected.code.rawValue, expected.name)
+            XCTAssertNoThrow(try json.assertMissing("errorCode"), expected.name)
+            XCTAssertNoThrow(try json.assertMissing("kind"), expected.name)
+            XCTAssertNoThrow(try json.assertMissing("phase"), expected.name)
+            XCTAssertNoThrow(try json.assertMissing("retryable"), expected.name)
+            XCTAssertNoThrow(try json.assertMissing("hint"), expected.name)
+            XCTAssertNoThrow(try detailsJSON.assertMissing("code"), expected.name)
+            XCTAssertNoThrow(try detailsJSON.assertMissing("errorCode"), expected.name)
+            XCTAssertEqual(try detailsJSON.string("kind"), expected.kind.rawValue, expected.name)
+            XCTAssertEqual(try detailsJSON.string("phase"), expected.phase.rawValue, expected.name)
+            XCTAssertEqual(try detailsJSON.bool("retryable"), expected.retryable, expected.name)
         }
-    }
-
-    func testDiagnosticFailureMapperMapsKnownFenceError() throws {
-        let response = FenceResponse.failure(FenceError.notConnected)
-        let failure = try XCTUnwrap(response.diagnosticFailure)
-
-        XCTAssertEqual(failure.failureCode, .connectionNotConnected)
-        XCTAssertEqual(failure.code, KnownFailureCode.connectionNotConnected.rawValue)
-        XCTAssertEqual(failure.kind, .connection)
-        XCTAssertEqual(failure.message, "Not connected to device.")
-        XCTAssertEqual(failure.details.code, .connectionNotConnected)
-        XCTAssertEqual(failure.details.phase, .request)
-        XCTAssertEqual(failure.details.retryable, true)
-    }
-
-    func testDiagnosticFailureMapperMapsConnectionDomainError() throws {
-        let response = FenceResponse.failure(HandoffConnectionError.timeout)
-        let failure = try XCTUnwrap(response.diagnosticFailure)
-
-        XCTAssertEqual(failure.failureCode, .setupTimeout)
-        XCTAssertEqual(failure.code, KnownFailureCode.setupTimeout.rawValue)
-        XCTAssertEqual(failure.kind, .connection)
-        XCTAssertEqual(failure.message, "Connection timed out")
-        XCTAssertEqual(failure.details.phase, .setup)
-        XCTAssertEqual(failure.details.retryable, true)
     }
 
     func testAmbiguousDeviceTargetKeepsDistinctFailureProjection() throws {
@@ -915,7 +892,7 @@ final class TheFenceHandlerTests: XCTestCase {
         }
         defer { makeReachabilityConnection = previousReachability }
 
-        XCTAssertFalse(fence.handoff.isConnected)
+        XCTAssertFalse(fence.handoff.connectionLifecycle.isConnected)
         XCTAssertFalse(mockConn.isConnected)
         let response = try await fence.execute(command: .connect)
 
@@ -953,7 +930,7 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(report.invocation.state, .valid)
         XCTAssertEqual(report.lint.mode, .compositionQuality)
         XCTAssertNotNil(report.canonicalPlan)
-        XCTAssertFalse(fence.handoff.isConnected)
+        XCTAssertFalse(fence.handoff.connectionLifecycle.isConnected)
     }
 
     @ButtonHeistActor

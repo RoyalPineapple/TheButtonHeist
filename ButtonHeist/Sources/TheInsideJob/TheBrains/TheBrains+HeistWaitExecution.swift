@@ -118,17 +118,14 @@ extension TheBrains {
         children: [HeistExecutionStepResult] = []
     ) -> HeistExecutionStepResult {
         let durationMs = elapsedMilliseconds(since: start)
-        let construction = completion.map {
-            HeistExecutionStepResult.construct(
-                path: path,
-                durationMs: durationMs,
-                node: .wait(predicate: step.predicate, timeout: step.timeout, completion: $0)
-            )
-        } ?? .failure(.evidenceConstructionFailed)
-        return receiptResult(
-            construction,
+        let admittedCompletion = requireAdmitted(
+            completion,
+            "wait receipt completion must match the child execution and admitted evidence"
+        )
+        return admittedReceipt(
             path: path,
             durationMs: durationMs,
+            node: .wait(predicate: step.predicate, timeout: step.timeout, completion: admittedCompletion),
             children: children
         )
     }

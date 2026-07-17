@@ -211,6 +211,24 @@ public struct HeistRepairCandidateDiagnosis: Codable, Sendable, Equatable {
 public enum HeistRepairDiagnosis: Codable, Sendable, Equatable {
     case suggested(HeistRepairSuggestedDiagnosis)
     case refused(HeistRepairRefusedDiagnosis)
+
+    public var suggestions: [HeistRepairSuggestion] {
+        switch self {
+        case .suggested(let diagnosis):
+            return diagnosis.suggestions
+        case .refused:
+            return []
+        }
+    }
+
+    public var noSuggestionReason: String? {
+        switch self {
+        case .suggested:
+            return nil
+        case .refused(let diagnosis):
+            return diagnosis.refusal.message
+        }
+    }
 }
 
 public struct HeistRepairSuggestedDiagnosis: Codable, Sendable, Equatable {

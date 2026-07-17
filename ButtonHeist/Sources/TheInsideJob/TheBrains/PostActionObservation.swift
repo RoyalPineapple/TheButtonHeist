@@ -69,11 +69,11 @@ final class PostActionObservation {
         let tripwireSignal: TheTripwire.TripwireSignal
         let settledObservationSequence: SettledObservationSequence?
 
-        var elements: [AccessibilityElement] { screen.orderedElements.map(\.element) }
+        var elements: [AccessibilityElement] { screen.tree.orderedElements.map(\.element) }
         var interface: Interface { capture.interface }
         var interfaceHash: String { screen.tree.interfaceHash }
         @MainActor var screenSnapshot: ScreenClassifier.Snapshot { ScreenClassifier.snapshot(of: screen.tree) }
-        var screenId: String? { screen.id }
+        var screenId: String? { screen.tree.id }
     }
 
     enum SettledObservationResult {
@@ -297,7 +297,7 @@ final class PostActionObservation {
             sequence: 0,
             screen: screen,
             tripwireSignal: tripwireSignal,
-            screenId: screen.id
+            screenId: screen.tree.id
         )
         return BeforeState(
             screen: screen,

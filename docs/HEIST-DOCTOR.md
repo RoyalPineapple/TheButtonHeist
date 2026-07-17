@@ -171,15 +171,14 @@ The repair engine now exposes the suggestion flow as a typed diagnosis:
 evidence eligibility -> candidate ranking -> candidate validation -> suggestion or refusal
 ```
 
-`HeistRepairSuggester.diagnosis(for:)` accepts already-extracted repair
-evidence. `HeistDoctor.diagnosis(lastPass:newFail:stepPath:)` runs the same
-pipeline from receipt pairs. Both return `HeistRepairDiagnosis`, which records
-validated suggestions, ranked candidate diagnostics, and typed refusal facts.
+`HeistDoctor.diagnosis(for:)` accepts already-extracted repair evidence.
+`HeistDoctor.diagnosis(lastPass:newFail:stepPath:)` runs the same pipeline from
+receipt pairs. Both return `HeistRepairDiagnosis`, which records validated
+suggestions, ranked candidate diagnostics, and typed refusal facts.
 
-The existing `suggestions` APIs remain suggestion-only wrappers over that
-diagnosis. If valid receipts produce no safe repair, `HeistDoctor.suggestions`
-still throws `noSafeSuggestion`; use `HeistDoctor.diagnosis` when callers need to
-inspect why the pipeline refused.
+Diagnosis is the public product. Callers that only need the rendered views read
+them from the diagnosis itself: `diagnosis.suggestions` for validated repairs
+and `diagnosis.noSuggestionReason` when the pipeline refused.
 
 The artifact boundary stays deliberately boring for now:
 

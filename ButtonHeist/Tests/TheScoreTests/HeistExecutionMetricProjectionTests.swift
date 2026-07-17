@@ -149,7 +149,7 @@ import TheScore
                 timeout: 0.1,
                 completion: .passed(evidence: try #require(HeistPassedWaitEvidence(.matched(check))))
             )
-        ).get()
+        )
     }
 
     private func repeatStep(predicate: AccessibilityPredicate) throws -> HeistExecutionStepResult {
@@ -179,7 +179,7 @@ import TheScore
                 declaration: HeistRepeatUntilDeclaration(predicate: predicate, timeout: 0.05),
                 completion: completion
             )
-        ).get()
+        )
     }
 
     private func caseSelectionStep() throws -> HeistExecutionStepResult {

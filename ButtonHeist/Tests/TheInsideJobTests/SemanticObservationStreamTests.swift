@@ -27,21 +27,28 @@ final class SemanticObservationStreamTests: XCTestCase {
             observation(label: "Baseline", heistId: "baseline")
         )
         let cursor = try XCTUnwrap(baseline.cursor)
-        var publications = stash.semanticObservationStream
-            .observationEntries(after: cursor, scope: .visible)
-            .makeAsyncIterator()
 
         let first = observation(label: "First", heistId: "first")
         let second = observation(label: "Second", heistId: "second")
         let firstEvent = stash.semanticObservationStream.commitVisibleObservationForTesting(first)
         let secondEvent = stash.semanticObservationStream.commitVisibleObservationForTesting(second)
 
-        let publishedFirstValue = try await publications.next()
-        let publishedSecondValue = try await publications.next()
-        let publishedFirst = try XCTUnwrap(publishedFirstValue)
-        let publishedSecond = try XCTUnwrap(publishedSecondValue)
-        XCTAssertEqual(publishedFirst.cursor, firstEvent.cursor)
-        XCTAssertEqual(publishedSecond.cursor, secondEvent.cursor)
+        let publishedFirst = await stash.semanticObservationStream.waitForObservation(
+            after: cursor,
+            scope: .visible,
+            deadline: nil
+        )
+        let publishedSecond = await stash.semanticObservationStream.waitForObservation(
+            after: try XCTUnwrap(firstEvent.cursor),
+            scope: .visible,
+            deadline: nil
+        )
+        guard case .observation(let firstEntry) = publishedFirst,
+              case .observation(let secondEntry) = publishedSecond else {
+            return XCTFail("Expected retained visible observations")
+        }
+        XCTAssertEqual(firstEntry.cursor, firstEvent.cursor)
+        XCTAssertEqual(secondEntry.cursor, secondEvent.cursor)
     }
 
     func testLifecycleResetClearsCommittedTruth() {
@@ -416,15 +423,36 @@ final class SemanticObservationStreamTests: XCTestCase {
         _ = stash.semanticObservationStream.commitVisibleObservationForTesting(screen)
         let cursor = try XCTUnwrap(baseline.cursor)
 
-        var first = stash.semanticObservationStream
-            .observationEntries(after: cursor, scope: .visible)
-            .makeAsyncIterator()
-        var second = stash.semanticObservationStream
-            .observationEntries(after: cursor, scope: .visible)
-            .makeAsyncIterator()
-
-        let firstEntries = [try await first.next(), try await first.next()].compactMap { $0 }
-        let secondEntries = [try await second.next(), try await second.next()].compactMap { $0 }
+        let firstEntries = [
+            await stash.semanticObservationStream.waitForObservation(
+                after: cursor,
+                scope: .visible,
+                deadline: nil
+            ),
+            await stash.semanticObservationStream.waitForObservation(
+                after: stash.semanticObservationStream.retainedObservationEntries(scope: .visible)[1].cursor,
+                scope: .visible,
+                deadline: nil
+            ),
+        ].compactMap { result -> ObservationEntry? in
+            guard case .observation(let entry) = result else { return nil }
+            return entry
+        }
+        let secondEntries = [
+            await stash.semanticObservationStream.waitForObservation(
+                after: cursor,
+                scope: .visible,
+                deadline: nil
+            ),
+            await stash.semanticObservationStream.waitForObservation(
+                after: stash.semanticObservationStream.retainedObservationEntries(scope: .visible)[1].cursor,
+                scope: .visible,
+                deadline: nil
+            ),
+        ].compactMap { result -> ObservationEntry? in
+            guard case .observation(let entry) = result else { return nil }
+            return entry
+        }
 
         XCTAssertEqual(firstEntries.count, 2)
         XCTAssertEqual(firstEntries, secondEntries)
@@ -438,7 +466,7 @@ final class SemanticObservationStreamTests: XCTestCase {
                 timeout: 1
             )
         }
-        await waitForReplayWaiterCount(1)
+        await waitForObservationWaiterCount(1)
 
         let committed = stash.semanticObservationStream.commitVisibleObservationForTesting(
             observation(label: "Initial", heistId: "initial")
@@ -446,7 +474,7 @@ final class SemanticObservationStreamTests: XCTestCase {
 
         let received = await task.value
         XCTAssertEqual(received?.cursor, committed.cursor)
-        XCTAssertEqual(stash.semanticObservationStream.observationReplayWaiterCount, 0)
+        XCTAssertEqual(stash.semanticObservationStream.observationWaiterCount, 0)
     }
 
     func testFreshDiscoveryCycleCompletesBeforeTimedReplayFallbackBegins() async throws {
@@ -488,8 +516,7 @@ final class SemanticObservationStreamTests: XCTestCase {
         await fulfillment(of: [discoveryStarted], timeout: 5)
 
         XCTAssertNotNil(discoveryContinuation)
-        XCTAssertEqual(stash.semanticObservationStream.cycleWaiterCount, 1)
-        XCTAssertEqual(stash.semanticObservationStream.observationReplayWaiterCount, 0)
+        XCTAssertEqual(stash.semanticObservationStream.observationWaiterCount, 1)
 
         discoveryContinuation?.resume()
         discoveryContinuation = nil
@@ -499,7 +526,7 @@ final class SemanticObservationStreamTests: XCTestCase {
         XCTAssertGreaterThan(received.sequence, initialDiscovery.sequence)
         XCTAssertGreaterThan(received.sequence, latestVisible.sequence)
         XCTAssertEqual(
-            received.observation.screen.orderedElements.first?.element.label,
+            received.observation.screen.tree.orderedElements.first?.element.label,
             "Fresh Discovery"
         )
     }
@@ -512,13 +539,13 @@ final class SemanticObservationStreamTests: XCTestCase {
                 timeout: nil
             )
         }
-        await waitForReplayWaiterCount(1)
+        await waitForObservationWaiterCount(1)
 
         task.cancel()
 
         let received = await task.value
         XCTAssertNil(received)
-        XCTAssertEqual(stash.semanticObservationStream.observationReplayWaiterCount, 0)
+        XCTAssertEqual(stash.semanticObservationStream.observationWaiterCount, 0)
     }
 
     func testStoppingStreamCancelsSettledEventReplayWaiters() async {
@@ -529,13 +556,13 @@ final class SemanticObservationStreamTests: XCTestCase {
                 timeout: nil
             )
         }
-        await waitForReplayWaiterCount(1)
+        await waitForObservationWaiterCount(1)
 
         stash.semanticObservationStream.stop()
 
         let received = await task.value
         XCTAssertNil(received)
-        XCTAssertEqual(stash.semanticObservationStream.observationReplayWaiterCount, 0)
+        XCTAssertEqual(stash.semanticObservationStream.observationWaiterCount, 0)
     }
 
     func testSettledEventContinuesAfterInvalidatedRetainedEntry() async {
@@ -549,13 +576,13 @@ final class SemanticObservationStreamTests: XCTestCase {
                 timeout: 1
             )
         }
-        await waitForReplayWaiterCount(1)
+        await waitForObservationWaiterCount(1)
 
         _ = stash.semanticObservationStream.commitVisibleObservationForTesting(
             observation(label: "Invalidated", heistId: "invalidated")
         )
         stash.semanticObservationStream.invalidateLatestSettledObservation()
-        await waitForReplayWaiterCount(1)
+        await waitForObservationWaiterCount(1)
 
         let final = stash.semanticObservationStream.commitVisibleObservationForTesting(
             observation(label: "Final", heistId: "final")
@@ -563,7 +590,7 @@ final class SemanticObservationStreamTests: XCTestCase {
         let received = await task.value
 
         XCTAssertEqual(received?.cursor, final.cursor)
-        XCTAssertEqual(stash.semanticObservationStream.observationReplayWaiterCount, 0)
+        XCTAssertEqual(stash.semanticObservationStream.observationWaiterCount, 0)
     }
 
     func testPostActionAdmissionRejectsCleanProofFromSupersededCapture() async {
@@ -699,14 +726,14 @@ final class SemanticObservationStreamTests: XCTestCase {
         )
     }
 
-    private func waitForReplayWaiterCount(_ expectedCount: Int) async {
+    private func waitForObservationWaiterCount(_ expectedCount: Int) async {
         for _ in 0..<1_000 {
-            guard stash.semanticObservationStream.observationReplayWaiterCount != expectedCount else {
+            guard stash.semanticObservationStream.observationWaiterCount != expectedCount else {
                 return
             }
             await Task.yield()
         }
-        XCTFail("Timed out waiting for \(expectedCount) observation replay waiters")
+        XCTFail("Timed out waiting for \(expectedCount) observation waiters")
     }
 }
 
