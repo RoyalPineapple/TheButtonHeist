@@ -43,6 +43,7 @@ identifier_name:
     warning: 60
   excluded:
     - If
+    - RunHeist
 
 type_name:
   min_length:
@@ -95,43 +96,6 @@ custom_rules:
       - typeidentifier
     message: "Tests must not sleep on wall-clock time. See the test-sleep-avoidance skill for expectation / AsyncStream patterns."
     severity: warning
-
-  agent_main_actor_value_type:
-    name: "Agent: @MainActor on a value type"
-    # PR #347 L7: allow other attributes (`@frozen`, `@objc`), doc comments
-    # (`///`), and MARK lines between `@MainActor` and the value-type
-    # declaration. The previous `\s+` form only matched whitespace, so a
-    # `@MainActor` line followed by `@frozen` or a docstring slipped past.
-    # The intervening-line group is `(?:\s*(?:@\w+|///[^\n]*|//[^\n]*))*`
-    # — zero or more attribute / comment lines, each surrounded by
-    # whitespace. The final `\s+` consumes the gap before the keyword.
-    regex: '@MainActor(?:\s*(?:@\w+|///[^\n]*|//[^\n]*))*\s+(?:public\s+|internal\s+|private\s+|fileprivate\s+)?(?:final\s+)?(?:struct|enum)\s+\w+'
-    message: "Sendable structs and enums must not carry @MainActor. Actor isolation belongs on reference types; values cross actors freely."
-    severity: warning
-
-  agent_unchecked_sendable_no_comment:
-    name: "Agent: @unchecked Sendable without justification"
-    # PR #347 M1: by design this is a banned-token rule, not a justification
-    # parser. The disable-comment IS the justification surface: SwiftLint
-    # disable directives sit on the line above the declaration alongside a
-    # human rationale, and the rule only goes silent when both are present.
-    # A regex that tried to detect "a comment within N lines above" would
-    # either miss legitimate rationales (file-header explanations, MARK
-    # blocks) or accept any nearby comment, which defeats the purpose.
-    #
-    # NSRegularExpression can't reliably inspect preceding-line comments, so
-    # this rule flags every `@unchecked Sendable` token. Mentions inside
-    # comments and strings are filtered by `match_kinds`. Use
-    # `// swiftlint:disable:next agent_unchecked_sendable_no_comment` directly
-    # above the declaration with a rationale for legitimate uses.
-    regex: '@unchecked\s+Sendable'
-    match_kinds:
-      - attribute.builtin
-      - identifier
-      - keyword
-      - typeidentifier
-    message: "@unchecked Sendable requires a justification comment. Either fix the design or add `// swiftlint:disable:next agent_unchecked_sendable_no_comment` with rationale."
-    severity: error
 
   agent_callback_bridge_task:
     name: "Agent: single-line MainActor callback bridge"

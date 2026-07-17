@@ -4,6 +4,20 @@ import ThePlans
 
 final class ActionResultEvidenceContractTests: XCTestCase {
 
+    func testPackageConstructionUsesOneMethodAndPayloadCurrency() {
+        let result = ActionResult(
+            outcome: .success,
+            methodAndPayload: .payload(.typeText("typed")),
+            message: nil,
+            observation: .none,
+            subjectEvidence: nil,
+            activationTrace: nil
+        )
+
+        XCTAssertEqual(result.method, .typeText)
+        XCTAssertEqual(result.payload, .value("typed"))
+    }
+
     func testEveryOutcomeRoundTripsWithEveryObservationCase() throws {
         let trace = traceWithAnnouncement("Ready")
         let complete = traceEvidence(trace, completeness: .complete)

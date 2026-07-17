@@ -12,7 +12,7 @@ import TheScore
 /// Callbacks installed on `TheMuscle` are `@Sendable` and may fire from any
 /// context, so storage needs a lock. `@unchecked Sendable` justification:
 /// all access goes through `NSLock`.
-private final class CallbackSink: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
+private final class CallbackSink: @unchecked Sendable {
     private var sentMessagesStorage: [(data: Data, clientId: Int)] = []
     private var disconnectedClientsStorage: [Int] = []
     private var authenticatedCallbacksStorage: [(clientId: Int, respond: SocketResponseHandler)] = []
@@ -149,7 +149,7 @@ final class TheMuscleTests: XCTestCase {
     private func collectResponses() -> (respond: SocketResponseHandler, responses: () -> [Data]) {
         // Test-only inspection box. Mutated only from within the @Sendable
         // closure that captures it; not shared across threads in practice.
-        final class Box: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
+        final class Box: @unchecked Sendable {
             var items: [Data] = []
             let lock = NSLock()
         }

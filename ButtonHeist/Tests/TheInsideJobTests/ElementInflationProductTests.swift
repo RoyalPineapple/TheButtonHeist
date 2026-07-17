@@ -681,7 +681,7 @@ final class ElementInflationProductTests: XCTestCase {
 
         if heist {
             let plan = try HeistPlan(body: [
-                .action(try ActionStep(command: .activate(
+                .action(ActionStep(command: .activate(
                     .element(.identifier(identifier), traits: [.button])
                 ))),
             ])

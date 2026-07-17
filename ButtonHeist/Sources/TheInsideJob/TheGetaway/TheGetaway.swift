@@ -187,7 +187,6 @@ final class TheGetaway {
             requestId: requestId,
             respond: respond
         )
-        await brains.recordSentState()
     }
 
     func sendInterface(
@@ -203,7 +202,6 @@ final class TheGetaway {
                 requestId: requestId,
                 respond: respond
             )
-            await brains.recordSentState()
         case .failure(let error):
             let message: ServerErrorMessage
             do {

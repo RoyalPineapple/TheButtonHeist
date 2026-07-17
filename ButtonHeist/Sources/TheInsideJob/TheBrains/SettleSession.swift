@@ -340,7 +340,7 @@ struct SettleSessionFinalObservation: Equatable, Sendable {
 ///
 /// `@MainActor` justification: drives a MainActor-bound parse loop and stores
 /// `@MainActor`-typed provider closures.
-@MainActor struct SettleSession { // swiftlint:disable:this agent_main_actor_value_type
+@MainActor struct SettleSession {
 
     /// Number of consecutive identical-fingerprint cycles required before the
     /// AX tree is considered stable. Three is the smallest value that filters

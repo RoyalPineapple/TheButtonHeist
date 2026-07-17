@@ -163,21 +163,12 @@ extension TheStash {
             }
         case .actions:
             return { element in
-                element.predicateActions.canonicalElementActionArray.map(\.description).joined(separator: ", ")
+                element.projectedActionSet.orderedActions.map(\.description).joined(separator: ", ")
             }
         case .customContent:
             return { element in
-                element.customContent.compactMap { content -> String? in
-                    switch (content.label.isEmpty, content.value.isEmpty) {
-                    case (false, false):
-                        return "\(content.label): \(content.value)"
-                    case (false, true):
-                        return content.label
-                    case (true, false):
-                        return content.value
-                    case (true, true):
-                        return nil
-                    }
+                element.projectedCustomContent.map { content in
+                    [content.label, content.value].filter { !$0.isEmpty }.joined(separator: ": ")
                 }.joined(separator: "; ")
             }
         case .rotors:

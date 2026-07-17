@@ -21,19 +21,19 @@ final class CommandProjectionTests: XCTestCase {
         )
     }
 
-    func testSwipeProjectionSeparatesStartAndDestination() throws {
+    func testSwipeProjectionPreservesPointDirectionIntent() throws {
         let target = SwipeTarget(
-            selection: .point(
-                start: .coordinate(ScreenPoint(x: 10, y: 20)),
-                destination: .direction(.down)
+            selection: .pointDirection(
+                start: ScreenPoint(x: 10, y: 20),
+                direction: .down
             )
         )
 
         XCTAssertEqual(
             target.selection,
-            .point(
-                start: .coordinate(ScreenPoint(x: 10, y: 20)),
-                destination: .direction(.down)
+            .pointDirection(
+                start: ScreenPoint(x: 10, y: 20),
+                direction: .down
             )
         )
     }

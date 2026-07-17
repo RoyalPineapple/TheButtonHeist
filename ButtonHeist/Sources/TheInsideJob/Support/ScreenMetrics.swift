@@ -9,7 +9,7 @@ import UIKit
 ///
 /// Caseless namespace enum: reads UIApplication / UIScene state. No instances
 /// are constructed; the `@MainActor` attribute matches caller isolation.
-@MainActor enum ScreenMetrics { // swiftlint:disable:this agent_main_actor_value_type
+@MainActor enum ScreenMetrics {
 
     static var current: UIScreen {
         let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }

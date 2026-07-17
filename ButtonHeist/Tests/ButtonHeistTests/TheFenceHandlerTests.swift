@@ -1077,7 +1077,7 @@ final class TheFenceHandlerTests: XCTestCase {
         )
 
         XCTAssertEqual(request.plan.body, [
-            .action(try ActionStep(
+            .action(ActionStep(
                 command: .activate(.predicate(.label("Pay"))),
                 expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 1)))),
         ])
@@ -1096,7 +1096,7 @@ final class TheFenceHandlerTests: XCTestCase {
             return XCTFail("Expected heistExecution response, got \(response)")
         }
         XCTAssertEqual(plan.body, [
-            .action(try ActionStep(command: .activate(.predicate(.label("Pay"))))),
+            .action(ActionStep(command: .activate(.predicate(.label("Pay"))))),
         ])
         XCTAssertEqual(mockConn.sent.sentHeistPlan, plan)
         XCTAssertEqual(result.steps.map(\.kind), [.action])
@@ -1314,7 +1314,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let definition = try HeistPlan(
             name: "addToCart",
             parameter: .string(name: "item"),
-            body: [.action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .exact(item))))))]
+            body: [.action(ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .exact(item))))))]
         )
         let plan = try HeistPlan(definitions: [definition], body: [
             .invoke(HeistInvocationStep(path: "addToCart", argument: .string("Milk"))),
@@ -1330,7 +1330,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let definition = try HeistPlan(
             name: "tapEach",
             parameter: .accessibilityTarget(name: "input"),
-            body: [.action(try ActionStep(command: .activate(.ref("input"))))]
+            body: [.action(ActionStep(command: .activate(.ref("input"))))]
         )
         let plan = try HeistPlan(
             definitions: [definition],
@@ -1347,7 +1347,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let plan = try HeistPlan(
             name: "search",
             parameter: .string(name: "query"),
-            body: [.action(try ActionStep(command: .typeText(
+            body: [.action(ActionStep(command: .typeText(
                 reference: "query",
                 target: .predicate(.label("Search"))
             )))]
@@ -1370,7 +1370,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let plan = try HeistPlan(
             name: "search",
             parameter: .string(name: "query"),
-            body: [.action(try ActionStep(command: .typeText(
+            body: [.action(ActionStep(command: .typeText(
                 reference: "query",
                 target: .predicate(.label("Search"))
             )))]
@@ -1394,7 +1394,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let plan = try HeistPlan(
             name: "tapRow",
             parameter: .accessibilityTarget(name: "row"),
-            body: [.action(try ActionStep(command: .activate(.ref("row"))))]
+            body: [.action(ActionStep(command: .activate(.ref("row"))))]
         )
         var arguments = try Self.planSourceArguments(for: plan).values
         arguments["argument"] = .object([
@@ -1414,7 +1414,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let plan = try HeistPlan(
             name: "search",
             parameter: .string(name: "query"),
-            body: [.action(try ActionStep(command: .typeText(
+            body: [.action(ActionStep(command: .typeText(
                 reference: "query",
                 target: .predicate(.label("Search"))
             )))]
@@ -1475,7 +1475,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let definition = try HeistPlan(
             name: "addToCart",
             parameter: .string(name: "item"),
-            body: [.action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .exact(item))))))]
+            body: [.action(ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .exact(item))))))]
         )
         let plan = try HeistPlan(
             name: "shop",
@@ -1594,12 +1594,12 @@ final class TheFenceHandlerTests: XCTestCase {
                 try HeistPlan(
                     name: "confirm",
                     body: [
-                        .action(try ActionStep(command: .activate(.predicate(.identifier("confirm_button"))))),
+                        .action(ActionStep(command: .activate(.predicate(.identifier("confirm_button"))))),
                     ]
                 ),
             ],
             body: [
-                .action(try ActionStep(
+                .action(ActionStep(
                     command: .activate(.predicate(.label("Checkout"))),
                     expectationPolicy: .expect(ActionExpectation(predicate: .exists(.label("Done")), timeout: 1)))),
                 .wait(WaitStep(predicate: .exists(.label("Receipt")), timeout: 1)),
@@ -1696,7 +1696,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let definition = try HeistPlan(
             name: "checkout",
             body: [
-                .action(try ActionStep(
+                .action(ActionStep(
                     command: .activate(.predicate(.label("Checkout"))),
                     expectationPolicy: .expect(ActionExpectation(predicate: .exists(.label("Done")), timeout: 1)))),
             ]
@@ -1823,12 +1823,61 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testAccessibilityTargetWithIdentifier() async throws {
-        guard let target = try decodedAccessibilityTarget(target: targetValue(identifier: "myButton")),
-              case .predicate(let matcher, _) = target else {
-            return XCTFail("Expected .matcher")
+    func testAccessibilityTargetPayloadShapesDecodeCanonically() async throws {
+        let publicExpected = AccessibilityTarget.predicate(
+            ElementPredicateTemplate(label: "Save", identifier: "saveButton", traits: [.button]),
+            ordinal: 1
+        )
+        let jsonMCPShape = accessibilityTargetValue([
+            "checks": .array([
+                predicateCheckValue(kind: "label", match: stringMatchValue(mode: "exact", value: "Save")),
+                predicateCheckValue(kind: "identifier", match: stringMatchValue(mode: "exact", value: "saveButton")),
+                predicateCheckValue(kind: "traits", values: [.string("button")]),
+            ]),
+            "ordinal": .int(1),
+        ])
+        let containerShape = accessibilityTargetValue([
+            "container": .object([
+                "checks": .array([.object([
+                    "kind": .string("scrollable"),
+                    "value": .bool(true),
+                ])]),
+            ]),
+        ])
+        let cases: [(String, HeistValue?, AccessibilityTarget?)] = [
+            (
+                "identifier",
+                targetValue(identifier: "myButton"),
+                .predicate(ElementPredicateTemplate(identifier: "myButton"))
+            ),
+            (
+                "matcher fields",
+                targetValue(label: "Save", traits: ["button"]),
+                .predicate(ElementPredicateTemplate(label: "Save", traits: [.button]))
+            ),
+            (
+                "CLI public shape",
+                targetValue(label: "Save", identifier: "saveButton", traits: ["button"], ordinal: 1),
+                publicExpected
+            ),
+            ("JSON/MCP public shape", jsonMCPShape, publicExpected),
+            (
+                "ordinal",
+                targetValue(label: "Save", ordinal: 2),
+                .predicate(ElementPredicateTemplate(label: "Save"), ordinal: 2)
+            ),
+            (
+                "no ordinal",
+                targetValue(label: "Save"),
+                .predicate(ElementPredicateTemplate(label: "Save"))
+            ),
+            ("missing", nil, nil),
+            ("container", containerShape, .container(.matching(.scrollable(true)))),
+        ]
+
+        for (name, value, expected) in cases {
+            XCTAssertEqual(try decodedAccessibilityTarget(target: value), expected, name)
         }
-        XCTAssertEqual(matcher.checks, [.identifier(.exact("myButton"))])
     }
 
     @ButtonHeistActor
@@ -1866,51 +1915,6 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testAccessibilityTargetWithMatcherFields() async throws {
-        guard let target = try decodedAccessibilityTarget(target: targetValue(label: "Save", traits: ["button"])),
-              case .predicate(let matcher, _) = target else {
-            return XCTFail("Expected .matcher")
-        }
-        XCTAssertEqual(matcher.checks, [
-            .label(.exact("Save")),
-            .traits([.button]),
-        ])
-    }
-
-    @ButtonHeistActor
-    func testAccessibilityTargetPublicPayloadShapesDecodeThroughSamePath() async throws {
-        let expected = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Save", identifier: "saveButton", traits: [.button]),
-            ordinal: 1
-        )
-        let cliBuiltShape = targetValue(
-            label: "Save",
-            identifier: "saveButton",
-            traits: ["button"],
-            ordinal: 1
-        )
-        let jsonMCPShape = accessibilityTargetValue([
-            "checks": .array([
-                .object([
-                    "kind": .string("label"),
-                    "match": stringMatchValue(mode: "exact", value: "Save"),
-                ]),
-                .object([
-                    "kind": .string("identifier"),
-                    "match": stringMatchValue(mode: "exact", value: "saveButton"),
-                ]),
-                .object([
-                    "kind": .string("traits"),
-                    "values": .array([.string("button")]),
-                ]),
-            ]),
-            "ordinal": .int(1),
-        ])
-
-        XCTAssertEqual(try decodedAccessibilityTarget(target: cliBuiltShape), expected)
-        XCTAssertEqual(try decodedAccessibilityTarget(target: jsonMCPShape), expected)
-    }
-
-    @ButtonHeistActor
     func testAccessibilityTargetRejectsUnknownTargetField() async throws {
         XCTAssertThrowsError(
             try decodedAccessibilityTarget(
@@ -1930,50 +1934,12 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testAccessibilityTargetWithOrdinal() async throws {
-        guard let target = try decodedAccessibilityTarget(target: targetValue(label: "Save", ordinal: 2)),
-              case .predicate(let matcher, let ordinal) = target else {
-            return XCTFail("Expected .matcher with ordinal")
-        }
-        XCTAssertEqual(matcher.checks, [.label(.exact("Save"))])
-        XCTAssertEqual(ordinal, 2)
-    }
-
-    @ButtonHeistActor
     func testRequestTargetRejectsNegativeOrdinal() async {
         await assertValidationError(
             command: .activate,
             arguments: ["target": targetValue(label: "Save", ordinal: -1)],
             equals: "schema validation failed for target.ordinal: observed integer -1; expected ordinal must be non-negative, got -1"
         )
-    }
-
-    @ButtonHeistActor
-    func testAccessibilityTargetWithoutOrdinal() async throws {
-        guard let target = try decodedAccessibilityTarget(target: targetValue(label: "Save")),
-              case .predicate(_, let ordinal) = target else {
-            return XCTFail("Expected .matcher")
-        }
-        XCTAssertNil(ordinal)
-    }
-
-    @ButtonHeistActor
-    func testAccessibilityTargetMissing() async throws {
-        XCTAssertNil(try decodedAccessibilityTarget())
-    }
-
-    @ButtonHeistActor
-    func testAccessibilityTargetDecodesContainerOnlyTarget() async throws {
-        let target = try decodedAccessibilityTarget(target: .object([
-            "container": .object([
-                "checks": .array([.object([
-                    "kind": .string("scrollable"),
-                    "value": .bool(true),
-                ])]),
-            ]),
-        ]))
-
-        XCTAssertEqual(target, .container(.matching(.scrollable(true))))
     }
 
     @ButtonHeistActor
@@ -2008,15 +1974,6 @@ final class TheFenceHandlerTests: XCTestCase {
     // MARK: - Schema Validation Diagnostics
 
     @ButtonHeistActor
-    func testSchemaValidationReportsBadFieldType() async {
-        await assertValidationError(
-            command: .typeText,
-            arguments: ["text": .int(3)],
-            equals: "schema validation failed for text: observed integer 3; expected string"
-        )
-    }
-
-    @ButtonHeistActor
     func testSchemaValidationReportsBadCoercedValue() async {
         await assertValidationError(
             command: .wait,
@@ -2035,66 +1992,75 @@ final class TheFenceHandlerTests: XCTestCase {
     // MARK: - Gesture Validation
 
     @ButtonHeistActor
-    func testOneFingerTapMissingTarget() async {
-        await assertValidationError(
-            command: .oneFingerTap,
-            contains: "point requires element, element with unitPoint, or ScreenPoint"
-        )
+    func testTapAndLongPressValidPayloadsPassValidation() async {
+        let cases: [(TheFence.Command, [String: HeistValue])] = [
+            (.oneFingerTap, ["point": .object(["x": .double(100), "y": .double(200)])]),
+            (.oneFingerTap, ["element": targetValue(identifier: "myButton")]),
+            (.longPress, ["point": .object(["x": .double(50), "y": .double(50)])]),
+        ]
+
+        for (command, arguments) in cases {
+            await assertPassesValidation(command: command, arguments: arguments)
+        }
     }
 
     @ButtonHeistActor
-    func testOneFingerTapWithCoordinatesPassesValidation() async {
-        await assertPassesValidation(
-            command: .oneFingerTap,
-            arguments: ["point": .object(["x": .double(100.0), "y": .double(200.0)])]
-        )
+    func testTapAndLongPressMissingTargetsAreRejected() async {
+        for command in [TheFence.Command.oneFingerTap, .longPress] {
+            await assertValidationError(
+                command: command,
+                contains: "point requires element, element with unitPoint, or ScreenPoint"
+            )
+        }
     }
 
     @ButtonHeistActor
-    func testOneFingerTapRejectsPartialCoordinates() async {
-        await assertValidationError(
-            command: .oneFingerTap,
-            arguments: ["point": .object(["x": .double(100.0)])],
-            equals: "schema validation failed for point.y: observed missing; expected number"
-        )
-    }
+    func testTapAndLongPressInvalidPayloadsAreRejected() async {
+        let cases: [(TheFence.Command, [String: HeistValue], String)] = [
+            (
+                .oneFingerTap,
+                ["point": .object(["x": .double(100)])],
+                "schema validation failed for point.y: observed missing; expected number"
+            ),
+            (
+                .oneFingerTap,
+                [
+                    "element": targetValue(identifier: "myButton"),
+                    "unitPoint": .object(["x": .double(1.2), "y": .double(0.5)]),
+                ],
+                "schema validation failed for unitPoint.x: observed number 1.2; expected number in 0...1"
+            ),
+            (
+                .oneFingerTap,
+                ["point": .object(["x": .double(Double.nan), "y": .double(200)])],
+                "schema validation failed for point.x: observed number nan; expected number"
+            ),
+            (
+                .oneFingerTap,
+                ["point": .object(["x": .double(Double.infinity), "y": .double(200)])],
+                "schema validation failed for point.x: observed number inf; expected number"
+            ),
+            (
+                .longPress,
+                [
+                    "point": .object(["x": .double(50), "y": .double(50)]),
+                    "duration": .double(-1),
+                ],
+                "schema validation failed for duration: observed number -1.0; expected number > 0"
+            ),
+            (
+                .longPress,
+                [
+                    "point": .object(["x": .double(50), "y": .double(50)]),
+                    "duration": .double(61),
+                ],
+                "schema validation failed for duration: observed number 61.0; expected number in 0...60.0"
+            ),
+        ]
 
-    @ButtonHeistActor
-    func testOneFingerTapRejectsOutOfRangeUnitPoint() async {
-        await assertValidationError(
-            command: .oneFingerTap,
-            arguments: [
-                "element": targetValue(identifier: "myButton"),
-                "unitPoint": .object(["x": .double(1.2), "y": .double(0.5)]),
-            ],
-            equals: "schema validation failed for unitPoint.x: observed number 1.2; expected number in 0...1"
-        )
-    }
-
-    @ButtonHeistActor
-    func testOneFingerTapRejectsNaNCoordinate() async {
-        await assertValidationError(
-            command: .oneFingerTap,
-            arguments: ["point": .object(["x": .double(Double.nan), "y": .double(200.0)])],
-            equals: "schema validation failed for point.x: observed number nan; expected number"
-        )
-    }
-
-    @ButtonHeistActor
-    func testOneFingerTapRejectsInfiniteCoordinate() async {
-        await assertValidationError(
-            command: .oneFingerTap,
-            arguments: ["point": .object(["x": .double(Double.infinity), "y": .double(200.0)])],
-            equals: "schema validation failed for point.x: observed number inf; expected number"
-        )
-    }
-
-    @ButtonHeistActor
-    func testOneFingerTapWithIdentifierPassesValidation() async {
-        await assertPassesValidation(
-            command: .oneFingerTap,
-            arguments: ["element": targetValue(identifier: "myButton")]
-        )
+        for (command, arguments, message) in cases {
+            await assertValidationError(command: command, arguments: arguments, equals: message)
+        }
     }
 
     @ButtonHeistActor
@@ -2128,125 +2094,99 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testLongPressMissingTarget() async {
-        await assertValidationError(
-            command: .longPress,
-            contains: "point requires element, element with unitPoint, or ScreenPoint"
-        )
-    }
-
-    @ButtonHeistActor
-    func testLongPressWithCoordinatesPassesValidation() async {
-        await assertPassesValidation(
-            command: .longPress,
-            arguments: ["point": .object(["x": .double(50.0), "y": .double(50.0)])]
-        )
-    }
-
-    @ButtonHeistActor
-    func testLongPressRejectsNegativeDuration() async {
-        await assertValidationError(
-            command: .longPress,
-            arguments: [
-                "point": .object(["x": .double(50.0), "y": .double(50.0)]),
-                "duration": .double(-1.0),
-            ],
-            equals: "schema validation failed for duration: observed number -1.0; expected number > 0"
-        )
-    }
-
-    @ButtonHeistActor
-    func testLongPressRejectsOversizedDurationBeforeExecution() async {
-        await assertValidationError(
-            command: .longPress,
-            arguments: [
-                "point": .object(["x": .double(50.0), "y": .double(50.0)]),
-                "duration": .double(61.0),
-            ],
-            equals: "schema validation failed for duration: observed number 61.0; expected number in 0...60.0"
-        )
-    }
-
-    @ButtonHeistActor
-    func testSwipeInvalidDirection() async {
-        await assertValidationError(
-            command: .swipe,
-            arguments: [
-                "pointDirection": .object([
-                    "start": .object(["x": .double(10.0), "y": .double(20.0)]),
-                    "direction": .string("diagonal"),
-                ]),
-            ],
-            equals: "schema validation failed for pointDirection.direction: observed string \"diagonal\"; " +
-                "expected enum one of up, down, left, right"
-        )
-    }
-
-    @ButtonHeistActor
-    func testSwipeDirectionWithoutTargetOrCoordinatesIsRejected() async {
-        await assertValidationError(
-            command: .swipe,
-            arguments: [
-                "pointDirection": .object(["direction": .string("up")]),
-            ],
-            equals: "schema validation failed for pointDirection.start: observed missing; expected object"
-        )
-    }
-
-    @ButtonHeistActor
-    func testSwipeRejectsPartialStartCoordinates() async {
-        await assertValidationError(
-            command: .swipe,
-            arguments: [
-                "pointToPoint": .object([
-                    "start": .object(["x": .double(10.0)]),
-                    "end": .object(["x": .double(100.0), "y": .double(200.0)]),
-                ]),
-            ],
-            equals: "schema validation failed for pointToPoint.start.y: observed missing; expected number"
-        )
-    }
-
-    @ButtonHeistActor
-    func testSwipeWithUnitPointsPassesValidation() async {
-        await assertPassesValidation(
-            command: .swipe,
-            arguments: [
-                "elementUnitPoints": .object([
+    func testSwipeAndDragValidPayloadsPassValidation() async {
+        let cases: [(TheFence.Command, [String: HeistValue])] = [
+            (
+                .swipe,
+                ["elementUnitPoints": .object([
                     "element": targetValue(identifier: "row_5"),
                     "start": .object(["x": .double(0.8), "y": .double(0.5)]),
                     "end": .object(["x": .double(0.2), "y": .double(0.5)]),
-                ]),
-            ]
-        )
+                ])]
+            ),
+            (
+                .drag,
+                ["elementToPoint": .object([
+                    "element": targetValue(identifier: "source"),
+                    "end": .object(["x": .double(100), "y": .double(200)]),
+                ])]
+            ),
+        ]
+
+        for (command, arguments) in cases {
+            await assertPassesValidation(command: command, arguments: arguments)
+        }
     }
 
     @ButtonHeistActor
-    func testSwipeUnitPointsRejectOutOfRangeCoordinate() async {
-        await assertValidationError(
-            command: .swipe,
-            arguments: [
-                "elementUnitPoints": .object([
+    func testSwipeAndDragInvalidPayloadsAreRejected() async {
+        let point = HeistValue.object(["x": .double(10), "y": .double(20)])
+        let dragStart = HeistValue.object(["x": .double(10), "y": .double(10)])
+        let end = HeistValue.object(["x": .double(100), "y": .double(200)])
+        let swipeEnd = HeistValue.object(["x": .double(30), "y": .double(40)])
+        let cases: [(TheFence.Command, [String: HeistValue], String)] = [
+            (
+                .swipe,
+                ["pointDirection": .object(["start": point, "direction": .string("diagonal")])],
+                "schema validation failed for pointDirection.direction: observed string \"diagonal\"; " +
+                    "expected enum one of up, down, left, right"
+            ),
+            (
+                .swipe,
+                ["pointDirection": .object(["direction": .string("up")])],
+                "schema validation failed for pointDirection.start: observed missing; expected object"
+            ),
+            (
+                .swipe,
+                ["pointToPoint": .object([
+                    "start": .object(["x": .double(10)]),
+                    "end": end,
+                ])],
+                "schema validation failed for pointToPoint.start.y: observed missing; expected number"
+            ),
+            (
+                .swipe,
+                ["elementUnitPoints": .object([
                     "element": targetValue(identifier: "row_5"),
                     "start": .object(["x": .double(1.2), "y": .double(0.5)]),
                     "end": .object(["x": .double(0.2), "y": .double(0.5)]),
-                ]),
-            ],
-            equals: "schema validation failed for elementUnitPoints.start.x: observed number 1.2; expected number in 0...1"
-        )
-    }
+                ])],
+                "schema validation failed for elementUnitPoints.start.x: observed number 1.2; expected number in 0...1"
+            ),
+            (
+                .swipe,
+                [
+                    "pointDirection": .object(["start": point, "direction": .string("down")]),
+                    "pointToPoint": .object(["start": point, "end": swipeEnd]),
+                ],
+                "swipe accepts exactly one gesture intent"
+            ),
+            (
+                .drag,
+                ["pointToPoint": .object(["start": dragStart])],
+                "schema validation failed for pointToPoint.end: observed missing; expected object"
+            ),
+            (
+                .drag,
+                ["pointToPoint": .object(["end": end])],
+                "schema validation failed for pointToPoint.start: observed missing; expected object"
+            ),
+            (
+                .drag,
+                [
+                    "elementToPoint": .object([
+                        "element": targetValue(identifier: "source"),
+                        "end": end,
+                    ]),
+                    "pointToPoint": .object(["start": point, "end": end]),
+                ],
+                "drag accepts exactly one gesture intent"
+            ),
+        ]
 
-    @ButtonHeistActor
-    func testSwipeDirectionWithElementPassesValidation() async {
-        await assertPassesValidation(
-            command: .swipe,
-            arguments: [
-                "elementDirection": .object([
-                    "element": targetValue(identifier: "row_5"),
-                    "direction": .string("left"),
-                ]),
-            ]
-        )
+        for (command, arguments, message) in cases {
+            await assertValidationError(command: command, arguments: arguments, equals: message)
+        }
     }
 
     @ButtonHeistActor
@@ -2269,63 +2209,6 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testSwipeRejectsMixedIntentObjects() async {
-        await assertValidationError(
-            command: .swipe,
-            arguments: [
-                "pointDirection": .object([
-                    "start": .object(["x": .double(10.0), "y": .double(20.0)]),
-                    "direction": .string("down"),
-                ]),
-                "pointToPoint": .object([
-                    "start": .object(["x": .double(10.0), "y": .double(20.0)]),
-                    "end": .object(["x": .double(30.0), "y": .double(40.0)]),
-                ]),
-            ],
-            equals: "swipe accepts exactly one gesture intent"
-        )
-    }
-
-    @ButtonHeistActor
-    func testDragMissingEndCoordinates() async {
-        await assertValidationError(
-            command: .drag,
-            arguments: [
-                "pointToPoint": .object([
-                    "start": .object(["x": .double(10.0), "y": .double(10.0)]),
-                ]),
-            ],
-            equals: "schema validation failed for pointToPoint.end: observed missing; expected object"
-        )
-    }
-
-    @ButtonHeistActor
-    func testDragWithoutStartTargetIsRejected() async {
-        await assertValidationError(
-            command: .drag,
-            arguments: [
-                "pointToPoint": .object([
-                    "end": .object(["x": .double(100.0), "y": .double(200.0)]),
-                ]),
-            ],
-            equals: "schema validation failed for pointToPoint.start: observed missing; expected object"
-        )
-    }
-
-    @ButtonHeistActor
-    func testDragWithAccessibilityTargetAndEndCoordinatesPassesValidation() async {
-        await assertPassesValidation(
-            command: .drag,
-            arguments: [
-                "elementToPoint": .object([
-                    "element": targetValue(identifier: "source"),
-                    "end": .object(["x": .double(100.0), "y": .double(200.0)]),
-                ]),
-            ]
-        )
-    }
-
-    @ButtonHeistActor
     func testDragWithStartCoordinatesDispatchesCanonicalPayload() async {
         let (fence, mockConn) = makeConnectedFence()
         _ = try? await fence.execute(command: .drag, values: [
@@ -2342,24 +2225,6 @@ final class TheFenceHandlerTests: XCTestCase {
         }
         XCTAssertEqual(start, ScreenPoint(x: 100.0, y: 300.0))
         XCTAssertEqual(end, ScreenPoint(x: 300.0, y: 600.0))
-    }
-
-    @ButtonHeistActor
-    func testDragRejectsMixedIntentObjects() async {
-        await assertValidationError(
-            command: .drag,
-            arguments: [
-                "elementToPoint": .object([
-                    "element": targetValue(identifier: "source"),
-                    "end": .object(["x": .double(100.0), "y": .double(200.0)]),
-                ]),
-                "pointToPoint": .object([
-                    "start": .object(["x": .double(10.0), "y": .double(20.0)]),
-                    "end": .object(["x": .double(100.0), "y": .double(200.0)]),
-                ]),
-            ],
-            equals: "drag accepts exactly one gesture intent"
-        )
     }
 
     @ButtonHeistActor
@@ -2434,252 +2299,131 @@ final class TheFenceHandlerTests: XCTestCase {
     // MARK: - Scroll Action Validation
 
     @ButtonHeistActor
-    func testScrollDefaultsDirection() async {
-        await assertPassesValidation(
-            command: .scroll,
-            arguments: ["target": targetValue(identifier: "scrollView")]
-        )
+    func testScrollPayloadsPassValidation() async {
+        let target = targetValue(identifier: "scrollView")
+        let cases: [(TheFence.Command, [String: HeistValue])] = [
+            (.scroll, ["target": target]),
+            (.scroll, ["direction": .string("down")]),
+            (.scroll, ["direction": .string("down"), "target": target]),
+            (.scroll, ["direction": .string("down"), "containerName": .string("main_scroll")]),
+            (.scroll, [:]),
+            (.scrollToVisible, ["target": targetValue(identifier: "targetElement")]),
+            (.scrollToEdge, ["edge": .string("bottom"), "containerName": .string("main_scroll")]),
+            (.scrollToEdge, ["target": target]),
+            (.scrollToEdge, ["edge": .string("bottom")]),
+            (.scrollToEdge, ["edge": .string("bottom"), "target": target]),
+        ]
+
+        for (command, arguments) in cases {
+            await assertPassesValidation(command: command, arguments: arguments)
+        }
     }
 
     @ButtonHeistActor
-    func testScrollInvalidDirection() async {
-        await assertValidationError(
-            command: .scroll,
-            arguments: ["target": targetValue(identifier: "scrollView"), "direction": .string("diagonal")],
-            equals: "schema validation failed for direction: observed string \"diagonal\"; expected enum one of up, down, left, right"
-        )
+    func testInvalidScrollEnumsAreRejected() async {
+        let cases: [(TheFence.Command, [String: HeistValue], String)] = [
+            (
+                .scroll,
+                ["target": targetValue(identifier: "scrollView"), "direction": .string("diagonal")],
+                "schema validation failed for direction: observed string \"diagonal\"; expected enum one of up, down, left, right"
+            ),
+            (
+                .scrollToEdge,
+                ["target": targetValue(identifier: "scrollView"), "edge": .string("middle")],
+                "schema validation failed for edge: observed string \"middle\"; expected enum one of top, bottom, left, right"
+            ),
+        ]
+
+        for (command, arguments, message) in cases {
+            await assertValidationError(command: command, arguments: arguments, equals: message)
+        }
     }
 
     @ButtonHeistActor
-    func testScrollAllowsMissingElement() async {
-        await assertPassesValidation(
-            command: .scroll,
-            arguments: ["direction": .string("down")]
-        )
+    func testLegacyScrollContainerPayloadsAreRejected() async {
+        let cases: [(TheFence.Command, [String: HeistValue])] = [
+            (.scroll, ["container": .object(["unexpected": .string("main_scroll")])]),
+            (.scroll, ["container": .string("main_scroll")]),
+            (.scrollToEdge, ["edge": .string("bottom"), "container": .string("main_scroll")]),
+        ]
+
+        for (command, arguments) in cases {
+            await assertValidationError(
+                command: command,
+                arguments: arguments,
+                contains: "schema validation failed for container"
+            )
+        }
     }
 
     @ButtonHeistActor
-    func testScrollValidPassesValidation() async {
-        await assertPassesValidation(
-            command: .scroll,
-            arguments: ["direction": .string("down"), "target": targetValue(identifier: "scrollView")]
-        )
-    }
+    func testElementCommandsReportMissingTargetContracts() async {
+        let cases: [(TheFence.Command, [String: HeistValue])] = [
+            (.scrollToVisible, [:]),
+            (.activate, [:]),
+            (.rotor, ["rotor": .string("Errors")]),
+        ]
 
-    @ButtonHeistActor
-    func testScrollRejectsContainerObject() async {
-        await assertValidationError(
-            command: .scroll,
-            arguments: ["container": .object(["unexpected": .string("main_scroll")])],
-            contains: "schema validation failed for container"
-        )
-    }
-
-    @ButtonHeistActor
-    func testScrollAllowsContainerNameArgument() async {
-        await assertPassesValidation(
-            command: .scroll,
-            arguments: ["direction": .string("down"), "containerName": .string("main_scroll")]
-        )
-    }
-
-    @ButtonHeistActor
-    func testScrollToEdgeAllowsContainerNameArgument() async {
-        await assertPassesValidation(
-            command: .scrollToEdge,
-            arguments: ["edge": .string("bottom"), "containerName": .string("main_scroll")]
-        )
-    }
-
-    @ButtonHeistActor
-    func testScrollRejectsLegacyContainerArgument() async {
-        await assertValidationError(
-            command: .scroll,
-            arguments: ["container": .string("main_scroll")],
-            contains: "schema validation failed for container"
-        )
-    }
-
-    @ButtonHeistActor
-    func testScrollToEdgeRejectsLegacyContainerArgument() async {
-        await assertValidationError(
-            command: .scrollToEdge,
-            arguments: ["edge": .string("bottom"), "container": .string("main_scroll")],
-            contains: "schema validation failed for container"
-        )
-    }
-
-    @ButtonHeistActor
-    func testScrollDefaultsDirectionAndAllowsMissingTarget() async {
-        await assertPassesValidation(
-            command: .scroll
-        )
-    }
-
-    @ButtonHeistActor
-    func testScrollToVisibleMissingElement() async {
-        await assertContractError(
-            command: .scrollToVisible,
-            contains: [
-                "scroll_to_visible request contract failed: missing target",
-                "requires target object",
-                "Next: get_interface()",
-            ],
-            code: .requestMissingTarget,
-            nextCommand: "get_interface()"
-        )
-    }
-
-    @ButtonHeistActor
-    func testScrollToVisibleValidPassesValidation() async {
-        await assertPassesValidation(
-            command: .scrollToVisible,
-            arguments: ["target": targetValue(identifier: "targetElement")]
-        )
-    }
-
-    @ButtonHeistActor
-    func testScrollToEdgeDefaultsEdge() async {
-        await assertPassesValidation(
-            command: .scrollToEdge,
-            arguments: ["target": targetValue(identifier: "scrollView")]
-        )
-    }
-
-    @ButtonHeistActor
-    func testScrollToEdgeInvalidEdge() async {
-        await assertValidationError(
-            command: .scrollToEdge,
-            arguments: ["target": targetValue(identifier: "scrollView"), "edge": .string("middle")],
-            equals: "schema validation failed for edge: observed string \"middle\"; expected enum one of top, bottom, left, right"
-        )
-    }
-
-    @ButtonHeistActor
-    func testScrollToEdgeAllowsMissingTarget() async {
-        await assertPassesValidation(
-            command: .scrollToEdge,
-            arguments: ["edge": .string("bottom")]
-        )
-    }
-
-    @ButtonHeistActor
-    func testScrollToEdgeValidPassesValidation() async {
-        await assertPassesValidation(
-            command: .scrollToEdge,
-            arguments: ["edge": .string("bottom"), "target": targetValue(identifier: "scrollView")]
-        )
+        for (command, arguments) in cases {
+            await assertContractError(
+                command: command,
+                arguments: arguments,
+                contains: [
+                    "\(command.rawValue) request contract failed: missing target",
+                    "requires target object",
+                    "Next: get_interface()",
+                ],
+                code: .requestMissingTarget,
+                nextCommand: "get_interface()"
+            )
+        }
     }
 
     // MARK: - Accessibility Action Validation
 
     @ButtonHeistActor
-    func testActivateMissingElement() async {
-        await assertContractError(
-            command: .activate,
-            contains: [
-                "activate request contract failed: missing target",
-                "requires target object",
-                "Next: get_interface()",
-            ],
-            code: .requestMissingTarget,
-            nextCommand: "get_interface()"
-        )
+    func testInvalidRotorAndActivateEnumsAreRejected() async {
+        let target = targetValue(identifier: "myElement")
+        let cases: [(TheFence.Command, [String: HeistValue], String)] = [
+            (
+                .rotor,
+                ["target": target, "rotorIndex": .int(-1)],
+                "schema validation failed for rotorIndex: observed integer -1; expected integer >= 0"
+            ),
+            (
+                .rotor,
+                ["target": target, "direction": .string("sideways")],
+                "schema validation failed for direction: observed string \"sideways\"; expected enum one of next, previous"
+            ),
+            (
+                .activate,
+                ["target": target, "action": .string("")],
+                "schema validation failed for action: observed string \"\"; expected non-empty string"
+            ),
+        ]
+
+        for (command, arguments, message) in cases {
+            await assertValidationError(command: command, arguments: arguments, equals: message)
+        }
     }
 
     @ButtonHeistActor
-    func testActivateWithElementPassesValidation() async {
-        await assertPassesValidation(
-            command: .activate,
-            arguments: ["target": targetValue(identifier: "myElement")]
-        )
-    }
+    func testMixedAndLegacyRotorSelectorsAreRejected() async {
+        let target = targetValue(identifier: "myElement")
+        let cases: [([String: HeistValue], String)] = [
+            (
+                ["target": target, "rotor": .string("Errors"), "rotorIndex": .int(1)],
+                "either rotor or rotorIndex"
+            ),
+            (
+                ["target": target, "currentTextStartOffset": .int(4)],
+                "schema validation failed for currentTextStartOffset:"
+            ),
+        ]
 
-    @ButtonHeistActor
-    func testRotorMissingElement() async {
-        await assertContractError(
-            command: .rotor,
-            arguments: ["rotor": .string("Errors")],
-            contains: [
-                "rotor request contract failed: missing target",
-                "requires target object",
-                "Next: get_interface()",
-            ],
-            code: .requestMissingTarget,
-            nextCommand: "get_interface()"
-        )
-    }
-
-    @ButtonHeistActor
-    func testRotorNegativeIndex() async {
-        await assertValidationError(
-            command: .rotor,
-            arguments: ["target": targetValue(identifier: "myElement"), "rotorIndex": .int(-1)],
-            equals: "schema validation failed for rotorIndex: observed integer -1; expected integer >= 0"
-        )
-    }
-
-    @ButtonHeistActor
-    func testRotorRejectsMixedSelectorShape() async {
-        await assertValidationError(
-            command: .rotor,
-            arguments: [
-                "target": targetValue(identifier: "myElement"),
-                "rotor": .string("Errors"),
-                "rotorIndex": .int(1),
-            ],
-            contains: "either rotor or rotorIndex"
-        )
-    }
-
-    @ButtonHeistActor
-    func testRotorInvalidDirection() async {
-        await assertValidationError(
-            command: .rotor,
-            arguments: ["target": targetValue(identifier: "myElement"), "direction": .string("sideways")],
-            equals: "schema validation failed for direction: observed string \"sideways\"; expected enum one of next, previous"
-        )
-    }
-
-    @ButtonHeistActor
-    func testRotorRejectsLegacyLooseContinuationFields() async {
-        await assertValidationError(
-            command: .rotor,
-            arguments: ["target": targetValue(identifier: "myElement"), "currentTextStartOffset": .int(4)],
-            contains: "schema validation failed for currentTextStartOffset:"
-        )
-    }
-
-    @ButtonHeistActor
-    func testRotorValidPassesValidation() async {
-        await assertPassesValidation(
-            command: .rotor,
-            arguments: ["target": targetValue(identifier: "myElement"), "rotor": .string("Errors")]
-        )
-    }
-
-    @ButtonHeistActor
-    func testActivateWithCustomActionDispatches() async {
-        await assertPassesValidation(
-            command: .activate,
-            arguments: ["target": targetValue(identifier: "myElement"), "action": .string("Delete")]
-        )
-    }
-
-    @ButtonHeistActor
-    func testActivateWithIncrementDispatches() async {
-        await assertPassesValidation(
-            command: .activate,
-            arguments: ["target": targetValue(identifier: "myElement"), "action": .string("increment")]
-        )
-    }
-
-    @ButtonHeistActor
-    func testActivateWithDecrementDispatches() async {
-        await assertPassesValidation(
-            command: .activate,
-            arguments: ["target": targetValue(identifier: "myElement"), "action": .string("decrement")]
-        )
+        for (arguments, message) in cases {
+            await assertValidationError(command: .rotor, arguments: arguments, contains: message)
+        }
     }
 
     @ButtonHeistActor
@@ -2712,32 +2456,28 @@ final class TheFenceHandlerTests: XCTestCase {
         assertCompactHeistSummary(response, stepLine: "  [0] activate")
     }
 
-    @ButtonHeistActor
-    func testActivateRejectsEmptyActionNameAtRequestBoundary() async {
-        await assertValidationError(
-            command: .activate,
-            arguments: ["target": targetValue(identifier: "myElement"), "action": .string("")],
-            equals: "schema validation failed for action: observed string \"\"; expected non-empty string"
-        )
-    }
-
     // MARK: - Text Input Validation
 
     @ButtonHeistActor
-    func testTypeTextMissingBothFields() async {
-        await assertValidationError(
-            command: .typeText,
-            equals: "schema validation failed for text: observed missing; expected string"
-        )
-    }
+    func testRequiredTextAndEditFieldsAreValidated() async {
+        let cases: [(TheFence.Command, [String: HeistValue], String)] = [
+            (.typeText, [:], "schema validation failed for text: observed missing; expected string"),
+            (
+                .typeText,
+                ["text": .string("")],
+                "schema validation failed for text: observed string \"\"; expected non-empty string"
+            ),
+            (
+                .editAction,
+                [:],
+                "schema validation failed for action: observed missing; expected enum one of copy, paste, cut, select, selectAll, delete"
+            ),
+            (.setPasteboard, [:], "schema validation failed for text: observed missing; expected string"),
+        ]
 
-    @ButtonHeistActor
-    func testTypeTextRejectsEmptyText() async {
-        await assertValidationError(
-            command: .typeText,
-            arguments: ["text": .string("")],
-            equals: "schema validation failed for text: observed string \"\"; expected non-empty string"
-        )
+        for (command, arguments, message) in cases {
+            await assertValidationError(command: command, arguments: arguments, equals: message)
+        }
     }
 
     @ButtonHeistActor
@@ -2745,17 +2485,6 @@ final class TheFenceHandlerTests: XCTestCase {
         await assertPassesValidation(
             command: .typeText,
             arguments: ["text": .string("hello")]
-        )
-    }
-
-    @ButtonHeistActor
-    func testTypeTextWithEmptyTextAndReplacingExistingPassesValidation() async {
-        await assertPassesValidation(
-            command: .typeText,
-            arguments: [
-                "text": .string(""),
-                "mode": .string("replace"),
-            ]
         )
     }
 
@@ -2798,42 +2527,41 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testTypeTextRejectsNonStringTextBeforeDispatch() async throws {
-        let (fence, mockConn) = makeConnectedFence()
+    func testInvalidTextPayloadsAreRejectedBeforeDispatch() async throws {
+        let cases: [(TheFence.Command, [String: HeistValue], String)] = [
+            (
+                .typeText,
+                ["text": .int(3)],
+                "schema validation failed for text: observed integer 3; expected string"
+            ),
+            (
+                .setPasteboard,
+                ["text": .string("")],
+                "schema validation failed for text: observed string \"\"; expected non-empty string"
+            ),
+        ]
 
-        let response = try await fence.execute(command: .typeText, values: [
-            "text": .int(3),
-        ])
+        for (command, arguments, message) in cases {
+            let (fence, connection) = makeConnectedFence()
+            let response = try await fence.execute(command: command, values: arguments)
 
-        guard case .error(let failure) = response else {
-            return XCTFail("Expected error response, got \(response)")
+            guard case .error(let failure) = response else {
+                XCTFail("Expected error response, got \(response)")
+                continue
+            }
+            XCTAssertEqual(failure.message, message)
+            XCTAssertTrue(connection.sent.isEmpty)
         }
-        XCTAssertEqual(failure.message, "schema validation failed for text: observed integer 3; expected string")
-        XCTAssertTrue(mockConn.sent.isEmpty)
     }
 
     @ButtonHeistActor
-    func testEditActionMissingAction() async {
-        await assertValidationError(
-            command: .editAction,
-            equals: "schema validation failed for action: observed missing; expected enum one of copy, paste, cut, select, selectAll, delete"
-        )
-    }
-
-    @ButtonHeistActor
-    func testEditActionValidPassesValidation() async {
-        await assertPassesValidation(
-            command: .editAction,
-            arguments: ["action": .string("copy")]
-        )
-    }
-
-    @ButtonHeistActor
-    func testEditActionDeletePassesValidation() async {
-        await assertPassesValidation(
-            command: .editAction,
-            arguments: ["action": .string("delete")]
-        )
+    func testEditActionValuesPassValidation() async {
+        for action in ["copy", "delete"] {
+            await assertPassesValidation(
+                command: .editAction,
+                arguments: ["action": .string(action)]
+            )
+        }
     }
 
     // MARK: - Pasteboard Validation
@@ -2846,42 +2574,6 @@ final class TheFenceHandlerTests: XCTestCase {
             return XCTFail("Expected text parameter schema")
         }
         XCTAssertEqual(schema["minLength"], .int(1))
-    }
-
-    @ButtonHeistActor
-    func testSetPasteboardMissingText() async {
-        await assertValidationError(
-            command: .setPasteboard,
-            equals: "schema validation failed for text: observed missing; expected string"
-        )
-    }
-
-    @ButtonHeistActor
-    func testSetPasteboardRejectsEmptyTextBeforeRuntimeDispatch() async throws {
-        let (fence, mockConn) = makeConnectedFence()
-
-        let response = try await fence.execute(command: .setPasteboard, values: ["text": .string("")])
-
-        guard case .error(let failure) = response else {
-            return XCTFail("Expected error response, got \(response)")
-        }
-        XCTAssertEqual(failure.message, "schema validation failed for text: observed string \"\"; expected non-empty string")
-        XCTAssertTrue(mockConn.sent.isEmpty)
-    }
-
-    @ButtonHeistActor
-    func testSetPasteboardWithTextPassesValidation() async {
-        await assertPassesValidation(
-            command: .setPasteboard,
-            arguments: ["text": .string("hello")]
-        )
-    }
-
-    @ButtonHeistActor
-    func testGetPasteboardPassesValidation() async {
-        await assertPassesValidation(
-            command: .getPasteboard
-        )
     }
 
     @ButtonHeistActor
@@ -2980,101 +2672,57 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testWaitMissingPredicate() async {
-        let (fence, _) = makeConnectedFence()
-        do {
-            let response = try await fence.execute(command: .wait, values: [:])
-            if case .error(let failure) = response {
-                XCTAssertTrue(
-                    failure.message.contains("predicate"),
-                    "Expected predicate error, got: \(failure.message)"
-                )
-            } else {
-                XCTFail("Expected error response, got \(response)")
-            }
-        } catch let error as FenceError {
-            XCTAssertTrue("\(error)".contains("predicate"), "Expected predicate error, got: \(error)")
-        } catch {
-            XCTFail("Unexpected throw: \(error)")
-        }
+        await assertValidationError(command: .wait, contains: "predicate")
     }
 
     @ButtonHeistActor
-    func testWaitPresentWithLabelPassesValidation() async {
-        await assertPassesValidation(
-            command: .wait,
-            arguments: ["predicate": .object([
+    func testWaitPredicateShapesPassValidation() async {
+        let cases: [[String: HeistValue]] = [
+            ["predicate": .object([
                 "type": .string("exists"),
                 "target": elementPredicateValue(label: "Loading"),
-            ])]
-        )
-    }
-
-    @ButtonHeistActor
-    func testWaitAbsentWithLabelPassesValidation() async {
-        await assertPassesValidation(
-            command: .wait,
-            arguments: ["predicate": .object([
-                "type": .string("missing"),
-                "target": elementPredicateValue(label: "Loading"),
-            ]), "timeout": .double(5.0)]
-        )
-    }
-
-    @ButtonHeistActor
-    func testWaitChangedScreenPassesValidation() async {
-        await assertPassesValidation(
-            command: .wait,
-            arguments: ["predicate": .object([
+            ])],
+            [
+                "predicate": .object([
+                    "type": .string("missing"),
+                    "target": elementPredicateValue(label: "Loading"),
+                ]),
+                "timeout": .double(5),
+            ],
+            ["predicate": .object([
                 "type": .string("changed"),
                 "scope": .string("screen"),
                 "assertions": .array([]),
-            ])]
-        )
-    }
-
-    @ButtonHeistActor
-    func testWaitChangedWithTimeoutPassesValidation() async {
-        await assertPassesValidation(
-            command: .wait,
-            arguments: [
+            ])],
+            [
                 "predicate": .object([
                     "type": .string("changed"),
                     "scope": .string("elements"),
                     "assertions": .array([]),
                 ]),
-                "timeout": .double(5.0),
-            ]
-        )
-    }
-
-    @ButtonHeistActor
-    func testWaitScreenAssertionsPassValidation() async {
-        await assertPassesValidation(
-            command: .wait,
-            arguments: ["predicate": .object([
+                "timeout": .double(5),
+            ],
+            ["predicate": .object([
                 "type": .string("changed"),
                 "scope": .string("screen"),
                 "assertions": .array([
                     .object(["type": .string("exists"), "target": elementPredicateValue(label: "Done")]),
                     .object(["type": .string("missing"), "target": elementPredicateValue(label: "Loading")]),
                 ]),
-            ])]
-        )
-    }
-
-    @ButtonHeistActor
-    func testWaitScreenChangedWhereClausePassesValidation() async {
-        await assertPassesValidation(
-            command: .wait,
-            arguments: ["predicate": .object([
+            ])],
+            ["predicate": .object([
                 "type": .string("changed"),
                 "scope": .string("screen"),
                 "assertions": .array([.object([
                     "type": .string("exists"),
                     "target": elementPredicateValue(label: "Home"),
                 ])]),
-            ])]
-        )
+            ])],
+        ]
+
+        for arguments in cases {
+            await assertPassesValidation(command: .wait, arguments: arguments)
+        }
     }
 
     @ButtonHeistActor
@@ -3296,8 +2944,8 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(command, .perform)
     }
 
-    func testNormalizeToolCallRejectsGranularActionCommands() {
-        for tool in ["activate", "type_text", "wait", "swipe", "scroll"] {
+    func testNormalizeToolCallRejectsNonMCPCommands() {
+        for tool in ["activate", "type_text", "wait", "swipe", "scroll", "help"] {
             let result = TheFence.Command.routeToolCall(named: tool)
 
             guard case .failure(let error) = result else {
@@ -3308,22 +2956,12 @@ final class TheFenceHandlerTests: XCTestCase {
         }
     }
 
-    func testNormalizeToolCallRejectsNonMCPCommands() {
-        let result = TheFence.Command.routeToolCall(named: "help")
-
-        guard case .failure(let error) = result else {
-            return XCTFail("Expected non-MCP command rejection, got \(result)")
-        }
-
-        XCTAssertEqual(error.message, "Unknown tool: help")
-    }
-
     @ButtonHeistActor
     func testHeistPlanCarriesTypedActionExpectation() async throws {
         let expectation = AccessibilityPredicate.changed(.elements([
             .updated(.identifier("counter"), .value(after: "5")),
         ]))
-        let sourceStep = HeistStep.action(try ActionStep(
+        let sourceStep = HeistStep.action(ActionStep(
             command: .activate(.predicate(ElementPredicateTemplate(identifier: .exact("counter")))),
             expectationPolicy: .expect(ActionExpectation(predicate: expectation, timeout: 10))))
         let plan = try HeistPlan(body: [sourceStep])
@@ -3516,39 +3154,33 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testUnexpectedParameterIsRejectedByCommandContract() async {
-        await assertValidationError(
-            command: .activate,
-            arguments: ["target": targetValue(identifier: "save"), "mode": .string("tap")],
-            equals: "schema validation failed for mode: observed string \"tap\"; expected valid activate parameter"
-        )
-    }
+    func testCommandContractsRejectInvalidParameters() async {
+        let cases: [(TheFence.Command, [String: HeistValue], String)] = [
+            (
+                .activate,
+                ["target": targetValue(identifier: "save"), "mode": .string("tap")],
+                "schema validation failed for mode: observed string \"tap\"; expected valid activate parameter"
+            ),
+            (
+                .getScreen,
+                ["target": targetValue(label: "Save")],
+                "schema validation failed for target: observed object; expected valid get_screen parameter"
+            ),
+            (
+                .getInterface,
+                ["timeout": .int(15)],
+                "schema validation failed for timeout: observed integer 15; expected valid get_interface parameter"
+            ),
+            (
+                .getInterface,
+                ["maxScrollsPerContainer": .int(0)],
+                "schema validation failed for maxScrollsPerContainer: observed integer 0; expected integer between 1 and 2000"
+            ),
+        ]
 
-    @ButtonHeistActor
-    func testTargetPayloadIsRejectedForCommandWithoutTargetParameter() async throws {
-        await assertValidationError(
-            command: .getScreen,
-            arguments: ["target": targetValue(label: "Save")],
-            equals: "schema validation failed for target: observed object; expected valid get_screen parameter"
-        )
-    }
-
-    @ButtonHeistActor
-    func testTimeoutIsRejectedWhenCommandDoesNotConsumeIt() async {
-        await assertValidationError(
-            command: .getInterface,
-            arguments: ["timeout": .int(15)],
-            equals: "schema validation failed for timeout: observed integer 15; expected valid get_interface parameter"
-        )
-    }
-
-    @ButtonHeistActor
-    func testGetInterfaceRejectsDiscoveryLimitOutsideRuntimeRange() async {
-        await assertValidationError(
-            command: .getInterface,
-            arguments: ["maxScrollsPerContainer": .int(0)],
-            equals: "schema validation failed for maxScrollsPerContainer: observed integer 0; expected integer between 1 and 2000"
-        )
+        for (command, arguments, message) in cases {
+            await assertValidationError(command: command, arguments: arguments, equals: message)
+        }
     }
 
     @ButtonHeistActor

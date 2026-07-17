@@ -435,7 +435,6 @@ public extension HeistDef where Input == AccessibilityTarget {
 
 // MARK: - RunHeist
 
-// swiftlint:disable identifier_name
 /// Run a named heist capability from inside a heist body.
 ///
 /// `RunHeist` is the public Button Heist verb for composing capabilities. It
@@ -468,8 +467,6 @@ private func runHeistInvocation(_ path: HeistInvocationPath, argument: HeistArgu
         heistDefinitions: []
     )
 }
-// swiftlint:enable identifier_name
-
 public struct ForEach<Content: HeistContent>: HeistContent {
     public let heistSteps: [HeistStep]
     public let heistDefinitions: [HeistPlanAdmissionCandidate]

@@ -122,10 +122,12 @@ extension TheBrains {
             completion,
             "wait receipt completion must match the child execution and admitted evidence"
         )
-        return admittedReceipt(
+        return .wait(
             path: path,
             durationMs: durationMs,
-            node: .wait(predicate: step.predicate, timeout: step.timeout, completion: admittedCompletion)
+            predicate: step.predicate,
+            timeout: step.timeout,
+            completion: admittedCompletion
         )
     }
 }

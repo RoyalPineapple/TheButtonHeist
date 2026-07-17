@@ -73,7 +73,7 @@ extension Navigation {
         case finished
         case completed
         case screenReplaced
-        case omitted(ExplorationOmissionReason)
+        case omitted(InterfaceDiscoveryReasonCode)
         case interrupted
     }
 
@@ -81,7 +81,7 @@ extension Navigation {
         case finished
         case exhausted
         case screenReplaced
-        case limitHit(ExplorationOmissionReason)
+        case limitHit(InterfaceDiscoveryReasonCode)
         case interrupted
     }
 

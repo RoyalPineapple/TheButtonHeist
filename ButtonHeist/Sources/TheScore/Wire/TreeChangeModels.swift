@@ -165,14 +165,18 @@ public enum ElementPropertyValue: Codable, Sendable, Equatable {
 
 }
 
-public struct ElementPropertyValueChange<Value: Codable & Sendable & Equatable>: Codable, Sendable, Equatable {
+public struct ElementPropertyValueChange<Value: Sendable & Equatable>: Sendable, Equatable {
     public let old: Value?
     public let new: Value?
 
-    public init(old: Value?, new: Value?) {
-        precondition(old != new, "property changes must carry different old and new values")
+    private init(old: Value?, new: Value?) {
         self.old = old
         self.new = new
+    }
+
+    public static func difference(old: Value?, new: Value?) -> Self? {
+        guard old != new else { return nil }
+        return Self(old: old, new: new)
     }
 
     fileprivate func satisfies<Checker>(
@@ -199,53 +203,53 @@ public enum PropertyChange: Sendable, Equatable {
     case customContent(ElementPropertyValueChange<[HeistCustomContent]>)
     case rotors(ElementPropertyValueChange<[HeistRotor]>)
 
-    public static func label(old: String?, new: String?) -> Self {
-        .label(ElementPropertyValueChange(old: old, new: new))
+    public static func label(old: String?, new: String?) -> Self? {
+        ElementPropertyValueChange.difference(old: old, new: new).map(Self.label)
     }
 
-    public static func identifier(old: String?, new: String?) -> Self {
-        .identifier(ElementPropertyValueChange(old: old, new: new))
+    public static func identifier(old: String?, new: String?) -> Self? {
+        ElementPropertyValueChange.difference(old: old, new: new).map(Self.identifier)
     }
 
-    public static func value(old: String?, new: String?) -> Self {
-        .value(ElementPropertyValueChange(old: old, new: new))
+    public static func value(old: String?, new: String?) -> Self? {
+        ElementPropertyValueChange.difference(old: old, new: new).map(Self.value)
     }
 
-    public static func traits(old: [HeistTrait]?, new: [HeistTrait]?) -> Self {
+    public static func traits(old: [HeistTrait]?, new: [HeistTrait]?) -> Self? {
         let old = old.map(Self.canonicalTraits)
         let new = new.map(Self.canonicalTraits)
-        return .traits(ElementPropertyValueChange(old: old, new: new))
+        return ElementPropertyValueChange.difference(old: old, new: new).map(Self.traits)
     }
 
-    public static func hint(old: String?, new: String?) -> Self {
-        .hint(ElementPropertyValueChange(old: old, new: new))
+    public static func hint(old: String?, new: String?) -> Self? {
+        ElementPropertyValueChange.difference(old: old, new: new).map(Self.hint)
     }
 
-    public static func actions(old: ElementActionSet?, new: ElementActionSet?) -> Self {
-        .actions(ElementPropertyValueChange(old: old, new: new))
+    public static func actions(old: ElementActionSet?, new: ElementActionSet?) -> Self? {
+        ElementPropertyValueChange.difference(old: old, new: new).map(Self.actions)
     }
 
-    public static func actions(old: [ElementAction]?, new: [ElementAction]?) -> Self {
-        .actions(
+    public static func actions(old: [ElementAction]?, new: [ElementAction]?) -> Self? {
+        actions(
             old: old.map { ElementActionSet($0) },
             new: new.map { ElementActionSet($0) }
         )
     }
 
-    public static func frame(old: ElementPropertyFrame?, new: ElementPropertyFrame?) -> Self {
-        .frame(ElementPropertyValueChange(old: old, new: new))
+    public static func frame(old: ElementPropertyFrame?, new: ElementPropertyFrame?) -> Self? {
+        ElementPropertyValueChange.difference(old: old, new: new).map(Self.frame)
     }
 
-    public static func activationPoint(old: ElementPropertyPoint?, new: ElementPropertyPoint?) -> Self {
-        .activationPoint(ElementPropertyValueChange(old: old, new: new))
+    public static func activationPoint(old: ElementPropertyPoint?, new: ElementPropertyPoint?) -> Self? {
+        ElementPropertyValueChange.difference(old: old, new: new).map(Self.activationPoint)
     }
 
-    public static func customContent(old: [HeistCustomContent]?, new: [HeistCustomContent]?) -> Self {
-        .customContent(ElementPropertyValueChange(old: old, new: new))
+    public static func customContent(old: [HeistCustomContent]?, new: [HeistCustomContent]?) -> Self? {
+        ElementPropertyValueChange.difference(old: old, new: new).map(Self.customContent)
     }
 
-    public static func rotors(old: [HeistRotor]?, new: [HeistRotor]?) -> Self {
-        .rotors(ElementPropertyValueChange(old: old, new: new))
+    public static func rotors(old: [HeistRotor]?, new: [HeistRotor]?) -> Self? {
+        ElementPropertyValueChange.difference(old: old, new: new).map(Self.rotors)
     }
 
     public var property: ElementProperty {
@@ -320,7 +324,11 @@ extension PropertyChange: Codable {
         case .value:
             self = .value(try Self.decodeChange(String.self, from: container))
         case .traits:
-            self = .traits(try Self.decodeTraitsChange(from: container))
+            self = .traits(try Self.decodeChange(
+                [HeistTrait].self,
+                from: container,
+                normalizing: Self.canonicalTraits
+            ))
         case .hint:
             self = .hint(try Self.decodeChange(String.self, from: container))
         case .actions:
@@ -366,43 +374,26 @@ extension PropertyChange: Codable {
     private static func encodeChange<Value>(
         _ change: ElementPropertyValueChange<Value>,
         to container: inout KeyedEncodingContainer<CodingKeys>
-    ) throws where Value: Codable & Sendable & Equatable {
+    ) throws where Value: Encodable & Sendable & Equatable {
         try container.encodeIfPresent(change.old, forKey: .old)
         try container.encodeIfPresent(change.new, forKey: .new)
     }
 
     private static func decodeChange<Value>(
         _ value: Value.Type,
-        from container: KeyedDecodingContainer<CodingKeys>
+        from container: KeyedDecodingContainer<CodingKeys>,
+        normalizing: (Value) -> Value = { $0 }
     ) throws -> ElementPropertyValueChange<Value> where Value: Codable & Sendable & Equatable {
-        let old = try container.decodeIfPresent(Value.self, forKey: .old)
-        let new = try container.decodeIfPresent(Value.self, forKey: .new)
-        guard old != new else {
+        let old = try container.decodeIfPresent(Value.self, forKey: .old).map(normalizing)
+        let new = try container.decodeIfPresent(Value.self, forKey: .new).map(normalizing)
+        guard let change = ElementPropertyValueChange.difference(old: old, new: new) else {
             throw DecodingError.dataCorruptedError(
                 forKey: .property,
                 in: container,
                 debugDescription: "property change must carry different old and new values"
             )
         }
-        return ElementPropertyValueChange(
-            old: old,
-            new: new
-        )
-    }
-
-    private static func decodeTraitsChange(
-        from container: KeyedDecodingContainer<CodingKeys>
-    ) throws -> ElementPropertyValueChange<[HeistTrait]> {
-        let old = try container.decodeIfPresent([HeistTrait].self, forKey: .old).map(Self.canonicalTraits)
-        let new = try container.decodeIfPresent([HeistTrait].self, forKey: .new).map(Self.canonicalTraits)
-        guard old != new else {
-            throw DecodingError.dataCorruptedError(
-                forKey: .property,
-                in: container,
-                debugDescription: "property change must carry different old and new values"
-            )
-        }
-        return ElementPropertyValueChange(old: old, new: new)
+        return change
     }
 
     private static func canonicalTraits(_ traits: [HeistTrait]) -> [HeistTrait] {

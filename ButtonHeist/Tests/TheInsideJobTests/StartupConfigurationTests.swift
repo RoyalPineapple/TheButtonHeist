@@ -170,7 +170,7 @@ final class StartupConfigurationTests: XCTestCase {
         XCTAssertEqual(
             StartupConfiguration.resolve(
                 env: environment([.failureEvidence: "hierarchy"]),
-                infoPlist: makeInfoPlist([.failureEvidence: "accessibility"])
+                infoPlist: makeInfoPlist([.failureEvidence: "accessibilitySnapshot"])
             ).failureEvidencePolicy,
             ResolvedStartupValue(value: .hierarchy, source: .environment)
         )

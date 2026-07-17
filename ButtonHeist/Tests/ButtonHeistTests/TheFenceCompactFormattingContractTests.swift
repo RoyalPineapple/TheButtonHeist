@@ -932,14 +932,14 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let result = HeistExecutionResult(steps: [
                 HeistReceiptFixture.conditional(
                     status: .passed,
-                    selection: HeistCaseSelectionResult(
+                    selection: .selectingFirstMatch(
                         cases: [
                             HeistCaseMatchResult(
                                 predicate: casePredicateRuntime,
                                 met: true
                             ),
                         ],
-                        outcome: .matchedCase(index: 0),
+                        ifNone: .noMatch,
                         elapsedMs: 1
                     ),
                     durationMs: 3,
@@ -1216,14 +1216,14 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             steps: [
                 HeistReceiptFixture.conditional(
                     status: .failed,
-                    selection: HeistCaseSelectionResult(
+                    selection: .selectingFirstMatch(
                         cases: [
                             HeistCaseMatchResult(
                                 predicate: casePredicateRuntime,
                                 met: true
                             ),
                         ],
-                        outcome: .matchedCase(index: 0),
+                        ifNone: .noMatch,
                         elapsedMs: 1
                     ),
                     durationMs: 3,
@@ -1290,17 +1290,17 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             steps: [
                 HeistReceiptFixture.conditional(
                     status: .passed,
-                    selection: HeistCaseSelectionResult(
+                    selection: .selectingFirstMatch(
                         cases: [
                             HeistCaseMatchResult(
                                 predicate: runtimePredicate,
                                 met: false
                             ),
                         ],
-                        outcome: .elseBranch(reason: .noMatch),
+                        ifNone: .noMatch,
                         elapsedMs: 1,
                         lastObservedSummary: nil
-                    ),
+                    ).selectingElseBranch(),
                     durationMs: 3,
                     children: [childResult]
                 ),
@@ -1328,7 +1328,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let forEach = try ForEachStringStep(
             values: ["Milk", "Eggs"],
             parameter: "item",
-            body: [try HeistStep.action(ActionStep(command: .typeText(reference: "item", target: nil)))]
+            body: [.action(ActionStep(command: .typeText(reference: "item", target: nil)))]
         )
         let plan = try HeistPlan(body: [.forEachString(forEach)])
         let firstIteration = HeistReceiptFixture.forEachStringIteration(
@@ -1372,22 +1372,20 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         )))
         let abortedChildren = try XCTUnwrap(HeistAbortedChildren([firstIteration, secondIteration]))
         let declaration = try XCTUnwrap(HeistForEachStringDeclaration(parameter: "item", count: 2))
-        let loopReceipt = try HeistExecutionStepResult.construct(
+        let loopReceipt = try XCTUnwrap(HeistExecutionStepResult.forEachString(
             path: try HeistExecutionPath(validating: "$.body[0]"),
             durationMs: 30,
-            node: .forEachString(
-                declaration: declaration,
-                completion: .childAborted(
-                    evidence: failedLoopEvidence,
-                    failure: HeistFailureDetail(
-                        category: .loop,
-                        contract: "for_each_string completes all 2 value(s)",
-                        observed: "for_each_string stopped after 2 of 2 iteration(s): iteration 1 failed for value \"Eggs\""
-                    ),
-                    children: abortedChildren
-                )
+            declaration: declaration,
+            completion: .childAborted(
+                evidence: failedLoopEvidence,
+                failure: HeistFailureDetail(
+                    category: .loop,
+                    contract: "for_each_string completes all 2 value(s)",
+                    observed: "for_each_string stopped after 2 of 2 iteration(s): iteration 1 failed for value \"Eggs\""
+                ),
+                children: abortedChildren
             )
-        )
+        ))
         let result = HeistExecutionResult(
             steps: [
                 loopReceipt,
@@ -1587,7 +1585,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         for level in (0..<depth).reversed() {
             deepNode = .container(
                 makeTestSemanticContainer(label: "Depth \(level)"),
-                containerName: ContainerName(rawValue: "depth_\(level)"),
+                containerName: ContainerName(stringLiteral: "depth_\(level)"),
                 children: [deepNode]
             )
         }

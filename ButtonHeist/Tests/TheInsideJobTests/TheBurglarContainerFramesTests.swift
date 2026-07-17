@@ -325,7 +325,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
         let interface = TheStash.WireConversion.toInterface(from: screen.tree)
         let containerNames = interface.annotations.containers.compactMap(\.containerName)
         let repeatedFramePrefix = "scrollable_\(TheBurglar.coarseFrameHash(frame))-"
-        let pagerName = ContainerName(rawValue: "scrollable_\(TheBurglar.coarseFrameHash(pagerFrame))")
+        let pagerName = ContainerName(stringLiteral: "scrollable_\(TheBurglar.coarseFrameHash(pagerFrame))")
         let repeatedFrameIds = containerNames.filter { $0.rawValue.hasPrefix(repeatedFramePrefix) }
 
         XCTAssertEqual(containerNames.count, 4)
@@ -356,7 +356,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
 
         XCTAssertEqual(
             interface.annotations.containers.first?.containerName,
-            ContainerName(rawValue: "list_\(TheBurglar.coarseFrameHash(container.frame.cgRect))")
+            ContainerName(stringLiteral: "list_\(TheBurglar.coarseFrameHash(container.frame.cgRect))")
         )
     }
 }

@@ -1,27 +1,14 @@
 import Foundation
 
-public struct ActionExpectationWaiver: Codable, Sendable, Equatable, CustomStringConvertible {
+public struct ActionExpectationWaiver: NonBlankStringValue {
     public let reason: String
 
-    public init(_ reason: String) throws {
-        let trimmed = reason.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            throw HeistPlanError.emptyExpectationWaiver
-        }
-        self.reason = trimmed
+    public init(validating reason: String) throws {
+        self.reason = try validateNonBlank(reason, kind: "expectation waiver")
     }
 
     public var description: String {
         reason
-    }
-
-    public init(from decoder: Decoder) throws {
-        try self.init(decoder.singleValueContainer().decode(String.self))
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        try container.encode(reason)
     }
 }
 
@@ -131,7 +118,7 @@ public struct ActionStep: Codable, Sendable, Equatable {
         command: HeistActionCommand,
         expectationPolicy: ActionExpectationPolicy = .default,
         expectationValidationDiagnostics: [HeistBuildDiagnostic] = []
-    ) throws {
+    ) {
         self.command = command
         self.expectationPolicy = expectationPolicy
         self.expectationValidationDiagnostics = expectationValidationDiagnostics
@@ -151,7 +138,7 @@ public struct ActionStep: Codable, Sendable, Equatable {
             waiverKey: .expectationWaiver,
             ambiguousError: HeistPlanError.ambiguousExpectationContract
         )
-        try self.init(
+        self.init(
             command: try container.decode(HeistActionCommand.self, forKey: .command),
             expectationPolicy: expectationPolicy
         )

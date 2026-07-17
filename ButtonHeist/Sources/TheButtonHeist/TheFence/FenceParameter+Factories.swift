@@ -24,13 +24,13 @@ import TheScore
     public static let interfaceDetail = FenceParameter<InterfaceDetail>.enumValue(.detail, defaultValue: .summary)
     public static let maxScrollsPerContainer = FenceParameter<Int>.integer(
         .maxScrollsPerContainer,
-        minimum: 1,
-        maximum: 2_000
+        minimum: Double(InterfaceDiscoveryLimit.allowedRange.lowerBound),
+        maximum: Double(InterfaceDiscoveryLimit.allowedRange.upperBound)
     )
     public static let maxScrollsPerDiscovery = FenceParameter<Int>.integer(
         .maxScrollsPerDiscovery,
-        minimum: 1,
-        maximum: 2_000
+        minimum: Double(InterfaceDiscoveryLimit.allowedRange.lowerBound),
+        maximum: Double(InterfaceDiscoveryLimit.allowedRange.upperBound)
     )
     public static let output = FenceParameter<String>.string(.output)
     public static let pasteboardText = FenceParameter<String>.string(.text, required: true, minLength: 1)

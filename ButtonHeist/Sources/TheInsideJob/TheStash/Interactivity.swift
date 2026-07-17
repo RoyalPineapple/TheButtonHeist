@@ -2,17 +2,35 @@
 #if DEBUG
 import UIKit
 
+import ThePlans
 import TheScore
 
 import AccessibilitySnapshotParser
 
 // MARK: - Element Interactivity
 
+package extension AccessibilityElement {
+    var projectedActionSet: ElementActionSet {
+        let isInteractive = respondsToUserInteraction
+            || !traits.isDisjoint(with: AccessibilityPolicy.interactiveTraitsBitmask)
+            || !customActions.isEmpty
+        var actions: [ElementAction] = isInteractive ? [.activate] : []
+        if AccessibilityPolicy.supportsTextEntry(traits.heistTraits) {
+            actions.append(.typeText)
+        }
+        if isInteractive, traits.contains(.adjustable) {
+            actions.append(contentsOf: [.increment, .decrement])
+        }
+        actions.append(contentsOf: customActions
+            .compactMap { try? CustomActionName(validating: $0.name) }
+            .map(ElementAction.custom))
+        return ElementActionSet(actions)
+    }
+}
+
 extension TheStash {
 
-    /// Pure predicates for element interactivity — no mutable state.
-    /// Used by WireConverter (to build action lists) and ActionExecutor
-    /// (to gate interaction attempts).
+    /// Pure predicates for interactivity and default-activation classification.
     enum InteractivityCheck {
         case interactive(warning: String?)
         case blocked(reason: String)
@@ -20,7 +38,7 @@ extension TheStash {
 
     /// Caseless namespace enum for MainActor-bound static helpers that read
     /// UIKit responder / window state. No instances are constructed.
-    @MainActor enum Interactivity { // swiftlint:disable:this agent_main_actor_value_type
+    @MainActor enum Interactivity {
 
     private static func hasInteractiveTraits(_ element: AccessibilityElement) -> Bool {
         !element.traits.isDisjoint(with: AccessibilityPolicy.interactiveTraitsBitmask)
@@ -47,10 +65,8 @@ extension TheStash {
 
     /// Check if an element is interactive based on its parsed accessibility data.
     static func isInteractive(element: AccessibilityElement, object: NSObject? = nil) -> Bool {
-        element.respondsToUserInteraction
+        element.projectedActionSet.actions.contains(.activate)
             || supportsDefaultActivation(object)
-            || hasInteractiveTraits(element)
-            || !element.customActions.isEmpty
     }
 
     /// Validate whether an element can receive interaction based on its traits.

@@ -85,7 +85,6 @@ public enum HeistCaseSelectionOutcome: Codable, Sendable, Equatable {
             try container.encode(Kind.noMatch, forKey: .kind)
         }
     }
-
 }
 
 public struct HeistCaseSelectionResult: Codable, Sendable, Equatable {
@@ -95,18 +94,50 @@ public struct HeistCaseSelectionResult: Codable, Sendable, Equatable {
     public let timeout: Double?
     public let lastObservedSummary: String?
 
-    public init(
+    public static func selectingFirstMatch(
         cases: [HeistCaseMatchResult],
-        outcome: HeistCaseSelectionOutcome,
+        ifNone: HeistCaseSelectionMissReason,
         elapsedMs: Int,
         timeout: Double? = nil,
         lastObservedSummary: String? = nil
-    ) {
-        do {
-            try Self.validate(outcome: outcome, cases: cases, codingPath: [])
-        } catch {
-            preconditionFailure("Invalid heist case selection result: \(error)")
+    ) -> Self {
+        let outcome = cases.firstIndex(where: \.met).map(HeistCaseSelectionOutcome.matchedCase(index:))
+            ?? (ifNone == .timedOut ? .timedOut : .noMatch)
+        return Self(
+            cases: cases,
+            outcome: outcome,
+            elapsedMs: elapsedMs,
+            timeout: timeout,
+            lastObservedSummary: lastObservedSummary
+        )
+    }
+
+    package func selectingElseBranch() -> Self {
+        let reason: HeistCaseSelectionMissReason
+        switch outcome {
+        case .noMatch:
+            reason = .noMatch
+        case .timedOut:
+            reason = .timedOut
+        case .matchedCase, .elseBranch:
+            preconditionFailure("only an unmatched case selection can enter the else branch")
         }
+        return Self(
+            cases: cases,
+            outcome: .elseBranch(reason: reason),
+            elapsedMs: elapsedMs,
+            timeout: timeout,
+            lastObservedSummary: lastObservedSummary
+        )
+    }
+
+    private init(
+        cases: [HeistCaseMatchResult],
+        outcome: HeistCaseSelectionOutcome,
+        elapsedMs: Int,
+        timeout: Double?,
+        lastObservedSummary: String?
+    ) {
         self.cases = cases
         self.outcome = outcome
         self.elapsedMs = elapsedMs
@@ -128,12 +159,13 @@ public struct HeistCaseSelectionResult: Codable, Sendable, Equatable {
         let cases = try container.decode([HeistCaseMatchResult].self, forKey: .cases)
         let outcome = try container.decode(HeistCaseSelectionOutcome.self, forKey: .outcome)
         try Self.validate(outcome: outcome, cases: cases, codingPath: container.codingPath)
-
-        self.cases = cases
-        self.outcome = outcome
-        elapsedMs = try container.decode(Int.self, forKey: .elapsedMs)
-        timeout = try container.decodeIfPresent(Double.self, forKey: .timeout)
-        lastObservedSummary = try container.decodeIfPresent(String.self, forKey: .lastObservedSummary)
+        self.init(
+            cases: cases,
+            outcome: outcome,
+            elapsedMs: try container.decode(Int.self, forKey: .elapsedMs),
+            timeout: try container.decodeIfPresent(Double.self, forKey: .timeout),
+            lastObservedSummary: try container.decodeIfPresent(String.self, forKey: .lastObservedSummary)
+        )
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -150,19 +182,44 @@ public struct HeistCaseSelectionResult: Codable, Sendable, Equatable {
         cases: [HeistCaseMatchResult],
         codingPath: [CodingKey]
     ) throws {
-        guard case .matchedCase(let index) = outcome else { return }
-        guard cases.indices.contains(index) else {
-            throw DecodingError.dataCorrupted(.init(
-                codingPath: codingPath + [CodingKeys.outcome],
-                debugDescription: "matched_case index \(index) is out of range for \(cases.count) case(s)"
-            ))
+        switch outcome {
+        case .matchedCase(let index):
+            guard cases.indices.contains(index) else {
+                throw invalidOutcome(
+                    codingPath: codingPath,
+                    description: "matched_case index \(index) is out of range for \(cases.count) case(s)"
+                )
+            }
+            guard cases[index].met else {
+                throw invalidOutcome(
+                    codingPath: codingPath,
+                    description: "matched_case index \(index) refers to an unmet case"
+                )
+            }
+            guard cases.firstIndex(where: \.met) == index else {
+                throw invalidOutcome(
+                    codingPath: codingPath,
+                    description: "matched_case index \(index) is not the first matched case"
+                )
+            }
+        case .elseBranch, .timedOut, .noMatch:
+            guard !cases.contains(where: \.met) else {
+                throw invalidOutcome(
+                    codingPath: codingPath,
+                    description: "unmatched case selection outcome cannot contain a matched case"
+                )
+            }
         }
-        guard cases[index].result.met else {
-            throw DecodingError.dataCorrupted(.init(
-                codingPath: codingPath + [CodingKeys.outcome],
-                debugDescription: "matched_case index \(index) refers to an unmet case"
-            ))
-        }
+    }
+
+    private static func invalidOutcome(
+        codingPath: [CodingKey],
+        description: String
+    ) -> DecodingError {
+        .dataCorrupted(.init(
+            codingPath: codingPath + [CodingKeys.outcome],
+            debugDescription: description
+        ))
     }
 }
 

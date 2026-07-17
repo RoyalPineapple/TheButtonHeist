@@ -41,10 +41,10 @@ extension TheBrains {
             predicate: step.predicateExpression,
             timeout: step.timeout
         )
-        return admittedReceipt(
-            path: context.path,
-            durationMs: durationMs,
-            node: .repeatUntil(
+        return requireAdmitted(
+            HeistExecutionStepResult.repeatUntil(
+                path: context.path,
+                durationMs: durationMs,
                 declaration: declaration,
                 completion: .failed(evidence: .unavailable, failure: HeistFailureDetail(
                     category: .loop,
@@ -52,7 +52,8 @@ extension TheBrains {
                     observed: observed,
                     expected: "terminal repeat_until state"
                 ))
-            )
+            ),
+            "repeat_until internal failure receipt must match its declaration"
         )
     }
 
@@ -64,10 +65,10 @@ extension TheBrains {
     ) -> HeistExecutionStepResult {
         let durationMs = elapsedMilliseconds(since: start)
         let declaration = HeistRepeatUntilDeclaration(step)
-        return admittedReceipt(
-            path: path,
-            durationMs: durationMs,
-            node: .repeatUntil(
+        return requireAdmitted(
+            HeistExecutionStepResult.repeatUntil(
+                path: path,
+                durationMs: durationMs,
                 declaration: declaration,
                 completion: .failed(evidence: .unavailable, failure: HeistFailureDetail(
                     category: .validation,
@@ -75,7 +76,8 @@ extension TheBrains {
                     observed: "could not resolve heist repeat_until predicate: \(error)",
                     expected: step.predicate.description
                 ))
-            )
+            ),
+            "repeat_until resolution failure receipt must match its declaration"
         )
     }
 }

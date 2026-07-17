@@ -10,9 +10,9 @@ extension PredicateWait {
         timeout: Double
     ) async -> HeistCaseSelectionResult {
         guard !cases.isEmpty else {
-            return HeistCaseSelectionResult(
+            return .selectingFirstMatch(
                 cases: [],
-                outcome: .noMatch,
+                ifNone: .noMatch,
                 elapsedMs: 0,
                 timeout: timeout,
                 lastObservedSummary: nil
@@ -39,7 +39,6 @@ extension PredicateWait {
 
 private struct PredicateCaseSelectionEvidence: Sendable, Equatable {
     let cases: [HeistCaseMatchResult]
-    let selectedCaseIndex: Int?
     let observationSummary: String?
 }
 
@@ -57,7 +56,6 @@ private final class PredicateCaseSelectionProjection {
                     actual: "no settled accessibility state observed"
                 )
             },
-            selectedCaseIndex: nil,
             observationSummary: nil
         )
     }
@@ -71,15 +69,13 @@ private final class PredicateCaseSelectionProjection {
         _ observation: HeistSemanticObservation
     ) -> PredicateWaitEvaluation<PredicateCaseSelectionEvidence> {
         let evaluatedCases = inputs.map { PredicateEvaluation.caseMatch($0, in: observation) }
-        let selectedCaseIndex = evaluatedCases.firstIndex(where: \.met)
         let selection = PredicateCaseSelectionEvidence(
             cases: evaluatedCases,
-            selectedCaseIndex: selectedCaseIndex,
             observationSummary: observation.summary
         )
         return PredicateWaitEvaluation(
             evidence: selection,
-            matched: selectedCaseIndex != nil
+            matched: evaluatedCases.contains(where: \.met)
         )
     }
 
@@ -88,16 +84,12 @@ private final class PredicateCaseSelectionProjection {
         deadline: SemanticObservationDeadline,
         evidence: PredicateCaseSelectionEvidence
     ) -> HeistCaseSelectionResult {
-        let outcome: HeistCaseSelectionOutcome
-        if let selectedCaseIndex = evidence.selectedCaseIndex {
-            outcome = .matchedCase(index: selectedCaseIndex)
-        } else {
+        if !evidence.cases.contains(where: \.met) {
             precondition(executionOutcome != .matched, "matched case wait requires a selected case")
-            outcome = timeout > 0 ? .timedOut : .noMatch
         }
-        return HeistCaseSelectionResult(
+        return .selectingFirstMatch(
             cases: evidence.cases,
-            outcome: outcome,
+            ifNone: timeout > 0 ? .timedOut : .noMatch,
             elapsedMs: deadline.elapsedMilliseconds(),
             timeout: timeout,
             lastObservedSummary: evidence.observationSummary

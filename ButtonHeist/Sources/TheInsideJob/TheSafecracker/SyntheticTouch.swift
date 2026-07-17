@@ -81,7 +81,7 @@ extension TheSafecracker {
     /// The only way to get a `TouchTarget` is through `resolve(at:in:)`.
     ///
     /// `@MainActor` justification: holds UIWindow + UIResponder references.
-    @MainActor struct TouchTarget { // swiftlint:disable:this agent_main_actor_value_type
+    @MainActor struct TouchTarget {
         let window: UIWindow
         let windowPoint: CGPoint
         let responder: UIResponder
@@ -133,7 +133,7 @@ extension TheSafecracker {
     /// the correct window, view, and gesture target set.
     ///
     /// `@MainActor` justification: wraps a UITouch reference.
-    @MainActor struct SyntheticTouch { // swiftlint:disable:this agent_main_actor_value_type
+    @MainActor struct SyntheticTouch {
         let touch: UITouch
         private let runtime: TouchMutationRuntime
         private(set) var location: CGPoint

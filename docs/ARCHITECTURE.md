@@ -35,11 +35,13 @@ a drift sentinel; it is not a second schema.
 ThePlans admits public payload values before they enter a command. Gesture and
 wait durations are backed by one bounded-seconds primitive with domain-specific
 bounds. Authored strings use distinct currencies for text input, pasteboard
-content, custom action names, rotor names, warnings, and failures. These types
-share private admission and single-value JSON mechanics, never a generic public
-string wrapper. Public Swift construction and decoding call the same admission
-owner. Execution therefore consumes admitted values directly and never clamps
-or repairs them.
+content, custom action names, rotor names, warnings, and failures. Exact
+nonblank currencies share the `NonBlankStringValue` construction and
+single-value JSON mechanics but remain distinct concrete types that cannot be
+interchanged. Text input and pasteboard values retain their different validity
+rules. Public Swift construction and decoding call each currency's validating
+initializer. Execution therefore consumes admitted values directly and never
+clamps or repairs them.
 
 Wire identities follow the same rule. Envelopes decode version and correlation
 strings into `ButtonHeistVersion` and `RequestID`; authentication and session
@@ -58,6 +60,14 @@ so client predicates and host resolution cannot drift into separate recursive
 implementations. `InterfaceGraph` remains the validated structural projection
 used for formatting and hierarchy operations. There is no semantic back map,
 alternate flat screen, or second target-matching projection.
+
+Parser element actions and custom content are normalized once before any
+consumer sees them. `AccessibilityElement.projectedActionSet` is the sole
+action projection used by matching, capability diagnostics, wire conversion,
+and discovery grafting; live UIKit evidence may only augment that semantic
+projection. `AccessibilityElement.projectedCustomContent` is likewise shared by
+matching, diagnostics, and wire conversion. Those consumers do not independently
+reinterpret parser fields.
 
 `InterfaceObservation` pairs an `InterfaceTree` with the viewport-local
 `LiveCapture` from one parser read. Raw parser samples remain live evidence or
@@ -280,9 +290,8 @@ pipelines are explicit:
 | Drainable callback work | `TaskTracker.swift` | Lifecycle, listener-generation, and delayed-disconnect owners |
 | Discovery callback delivery | `DeviceDiscoveryEventStream.swift` | `DeviceDiscovery.swift` |
 | Compiler process terminal outcome | `CompilerProcessOwner.swift` | `HeistSwiftFileCompiler.swift`; diagnostic rendering lives in `HeistSwiftFileCompilerError.swift` |
-| Receipt node algebra | `HeistExecutionStepNode.swift` | Typed receipt construction |
-| Receipt node codec | `HeistExecutionStepNode+Codable.swift` | External receipt JSON boundaries |
-| Receipt construction | `HeistExecutionStepResult+Construction.swift` | Runtime step executors |
+| Receipt construction and relationship validity | `HeistExecutionStepResult+Construction.swift` | Runtime step executors and receipt decoding |
+| Receipt private storage codec | `HeistExecutionStepNode.swift` and `HeistExecutionStepNode+Codable.swift` | External receipt JSON projection only |
 | Receipt report facts | `HeistExecutionStepResult+ReportFacts.swift` | Report, compact, JUnit, doctor, and metric adapters |
 | Semantic observation scheduling | `SemanticObservationStream.swift` | Passive settle cycles and observation demand |
 | Semantic observation publication | `SemanticObservationStream+Publication.swift` | The sole `InterfaceTree` reducer and observation-log publisher |
@@ -298,15 +307,16 @@ facts from `HeistExecutionResult`. Formatters, diagnostics, and repair tooling
 consume that projection; they do not rebuild report facts from plan siblings or
 parallel result fields.
 
-`HeistExecutionStepResult` owns a typed execution path, duration, and one
-`HeistExecutionStepNode`. The node type owns the receipt algebra and its single
-`Codable` conformance; file placement is organization, not an architectural
-contract. Typed completion cases make unconstrained nodes legal by construction.
-For action, loop, and repeat nodes whose declaration and evidence must agree,
-`admitted()` is the shared relationship boundary used by runtime construction
-and decoding. There is no `Result` repair path and no synthetic fallback
-receipt. Status and abort paths derive from the node, and the wire decoder
-accepts only fields legal for its `type` and `outcome`.
+`HeistExecutionStepResult` owns a typed execution path, duration, and one private
+`HeistExecutionStepNode` used only for storage and wire projection. Package
+callers cannot construct or pass that node. They use the result's per-kind
+factories, which are the sole owners of action method, loop progress, iteration,
+and repeat predicate relationships. A failed relationship produces no result;
+it never creates a provisional receipt that is admitted or repaired later.
+Decoding immediately routes the private decoded node through the same factories
+and rejects incompatible external fields. There is no `Result` repair path or
+synthetic fallback receipt. Status and abort paths derive from the private node,
+and the wire decoder accepts only fields legal for its `type` and `outcome`.
 
 `ActionDispatchOutcome` is the one result of app-side action dispatch. Its state
 is success, with an optional payload and resolved element id, or failure, with a
@@ -314,9 +324,12 @@ typed failure kind. `PostActionObservation` consumes that value, coordinates
 settlement, and constructs `ActionResult`; it does not translate through a
 second interaction-result model.
 
-`ActionResult.success` and `ActionResult.failure` accept observation, subject,
-and timing values directly. Activation trace evidence enters only through the
-fixed-method activation factories. `ActionResultSuccessEvidence` and
+`ActionResult.success` and `ActionResult.failure` accept either a method-only
+action or an `ActionResultPayload` that binds its payload to the only legal
+method, plus observation, subject, and timing values. Activation trace evidence
+enters only through the fixed-method activation factories. Decoding reconstructs
+the same method-and-payload currency and rejects mismatched wire pairs.
+`ActionResultSuccessEvidence` and
 `ActionResultFailureEvidence` are output projections backed by one common body,
 not public assembly inputs. Each result supplies exactly one observation case:
 `none`, `announcement`, `trace`, or `settledTrace`; only `settledTrace` carries
@@ -361,8 +374,8 @@ reference is the record's `TreePath` and traversal index, never a UIKit object
 identity, semantic back map, or parallel element index.
 
 UIKit/ObjC `@unchecked Sendable` is a platform-boundary escape hatch only. Such
-uses stay in TheInsideJob, require an exact source-shape allowlist entry and a
-justification, and must not cross into the typed core or wire/report layers.
+uses stay in TheInsideJob, require a synchronization justification directly
+above the declaration, and must not cross into typed core or wire/report layers.
 
 ### One Driver Owns the Session
 

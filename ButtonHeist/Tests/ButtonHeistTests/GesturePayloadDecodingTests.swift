@@ -75,11 +75,11 @@ final class GesturePayloadDecodingTests: XCTestCase {
         )
 
         guard case .mechanicalSwipe(let target) = message,
-              case .point(let start, let destination) = target.selection else {
+              case .pointToPoint(let start, let end) = target.selection else {
             return XCTFail("Expected pointToPoint swipe payload, got \(message)")
         }
-        XCTAssertEqual(start, .coordinate(ScreenPoint(x: 10, y: 20)))
-        XCTAssertEqual(destination, .coordinate(ScreenPoint(x: 30, y: 40)))
+        XCTAssertEqual(start, ScreenPoint(x: 10, y: 20))
+        XCTAssertEqual(end, ScreenPoint(x: 30, y: 40))
     }
 
     @ButtonHeistActor
@@ -95,11 +95,11 @@ final class GesturePayloadDecodingTests: XCTestCase {
         )
 
         guard case .mechanicalSwipe(let target) = message,
-              case .point(let start, let destination) = target.selection else {
+              case .pointDirection(let start, let direction) = target.selection else {
             return XCTFail("Expected pointDirection swipe payload, got \(message)")
         }
-        XCTAssertEqual(start, .coordinate(ScreenPoint(x: 10, y: 20)))
-        XCTAssertEqual(destination, .direction(.down))
+        XCTAssertEqual(start, ScreenPoint(x: 10, y: 20))
+        XCTAssertEqual(direction, .down)
     }
 
     @ButtonHeistActor

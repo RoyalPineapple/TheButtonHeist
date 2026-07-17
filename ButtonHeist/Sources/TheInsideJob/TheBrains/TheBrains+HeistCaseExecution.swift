@@ -143,26 +143,5 @@ private struct PredicateCaseDispatch {
     let start: CFAbsoluteTime
 }
 
-private extension HeistCaseSelectionResult {
-    func selectingElseBranch() -> HeistCaseSelectionResult {
-        HeistCaseSelectionResult(
-            cases: cases,
-            outcome: .elseBranch(reason: elseBranchReason),
-            elapsedMs: elapsedMs,
-            timeout: timeout,
-            lastObservedSummary: lastObservedSummary
-        )
-    }
-
-    var elseBranchReason: HeistCaseSelectionMissReason {
-        switch outcome {
-        case .timedOut, .elseBranch(reason: .timedOut):
-            return .timedOut
-        case .matchedCase, .elseBranch(reason: .noMatch), .noMatch:
-            return .noMatch
-        }
-    }
-}
-
 #endif // DEBUG
 #endif // canImport(UIKit)

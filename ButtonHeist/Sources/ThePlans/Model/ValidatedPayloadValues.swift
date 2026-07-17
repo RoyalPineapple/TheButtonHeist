@@ -1,3 +1,38 @@
+import Foundation
+
+/// Shared mechanics for open string values whose identity is their exact, nonblank spelling.
+public protocol NonBlankStringValue: Codable, Sendable, Hashable, Equatable,
+    ExpressibleByStringLiteral, CustomStringConvertible {
+    init(validating value: String) throws
+}
+
+public extension NonBlankStringValue {
+    init(stringLiteral value: String) {
+        self = requireValidLiteralPayload { try Self(validating: value) }
+    }
+
+    init(from decoder: Decoder) throws {
+        self = try decodeSingleValue(from: decoder, admitting: Self.init(validating:))
+    }
+
+    func encode(to encoder: Encoder) throws {
+        try encodeSingleValue(description, to: encoder)
+    }
+}
+
+private struct BlankStringValueError: Error, CustomStringConvertible {
+    let kind: String
+
+    var description: String { "\(kind) must not be blank" }
+}
+
+package func validateNonBlank(_ value: String, kind: String = "value") throws -> String {
+    guard value.contains(where: { !$0.isWhitespace }) else {
+        throw BlankStringValueError(kind: kind)
+    }
+    return value
+}
+
 package struct BoundedSeconds: Sendable, Equatable {
     package let value: Double
 
@@ -24,16 +59,6 @@ package func requireNonEmpty<Failure: Error>(
     or failure: @autoclosure () -> Failure
 ) throws -> String {
     guard !value.isEmpty else { throw failure() }
-    return value
-}
-
-private func requireNonBlank<Failure: Error>(
-    _ value: String,
-    or failure: @autoclosure () -> Failure
-) throws -> String {
-    guard !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-        throw failure()
-    }
     return value
 }
 
@@ -169,132 +194,52 @@ public enum PasteboardTextError: Error, Sendable, Equatable, CustomStringConvert
     }
 }
 
-public struct CustomActionName: Codable, Sendable, Equatable, Hashable, CustomStringConvertible {
+public struct CustomActionName: NonBlankStringValue {
     private let value: String
 
     public init(validating value: String) throws {
-        self.value = try requireNonBlank(value, or: CustomActionNameError.blank)
+        self.value = try validateNonBlank(value, kind: "custom action name")
     }
 
     package var rawValue: String { value }
 
-    public init(from decoder: Decoder) throws {
-        self = try decodeSingleValue(from: decoder, admitting: Self.init(validating:))
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        try encodeSingleValue(value, to: encoder)
-    }
-
     public var description: String { value }
 }
 
-extension CustomActionName: ExpressibleByStringLiteral {
-    public init(stringLiteral value: String) {
-        self = requireValidLiteralPayload { try Self(validating: value) }
-    }
-}
-
-public enum CustomActionNameError: Error, Sendable, Equatable, CustomStringConvertible {
-    case blank
-
-    public var description: String { "custom action name must not be blank" }
-}
-
-public struct RotorName: Codable, Sendable, Equatable, Hashable, CustomStringConvertible {
+public struct RotorName: NonBlankStringValue {
     private let value: String
 
     public init(validating value: String) throws {
-        self.value = try requireNonBlank(value, or: RotorNameError.blank)
+        self.value = try validateNonBlank(value, kind: "rotor name")
     }
 
     package var rawValue: String { value }
 
-    public init(from decoder: Decoder) throws {
-        self = try decodeSingleValue(from: decoder, admitting: Self.init(validating:))
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        try encodeSingleValue(value, to: encoder)
-    }
-
     public var description: String { value }
 }
 
-extension RotorName: ExpressibleByStringLiteral {
-    public init(stringLiteral value: String) {
-        self = requireValidLiteralPayload { try Self(validating: value) }
-    }
-}
-
-public enum RotorNameError: Error, Sendable, Equatable, CustomStringConvertible {
-    case blank
-
-    public var description: String { "rotor name must not be blank" }
-}
-
-public struct HeistWarningMessage: Codable, Sendable, Equatable, Hashable, CustomStringConvertible {
+public struct HeistWarningMessage: NonBlankStringValue {
     private let value: String
 
     public init(validating value: String) throws {
-        self.value = try requireNonBlank(value, or: HeistWarningMessageError.blank)
+        self.value = try validateNonBlank(value, kind: "heist warning message")
     }
 
     package var rawValue: String { value }
 
-    public init(from decoder: Decoder) throws {
-        self = try decodeSingleValue(from: decoder, admitting: Self.init(validating:))
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        try encodeSingleValue(value, to: encoder)
-    }
-
     public var description: String { value }
 }
 
-extension HeistWarningMessage: ExpressibleByStringLiteral {
-    public init(stringLiteral value: String) {
-        self = requireValidLiteralPayload { try Self(validating: value) }
-    }
-}
-
-public enum HeistWarningMessageError: Error, Sendable, Equatable, CustomStringConvertible {
-    case blank
-
-    public var description: String { "heist warning message must not be blank" }
-}
-
-public struct HeistFailureMessage: Codable, Sendable, Equatable, Hashable, CustomStringConvertible {
+public struct HeistFailureMessage: NonBlankStringValue {
     private let value: String
 
     public init(validating value: String) throws {
-        self.value = try requireNonBlank(value, or: HeistFailureMessageError.blank)
+        self.value = try validateNonBlank(value, kind: "heist failure message")
     }
 
     package var rawValue: String { value }
 
-    public init(from decoder: Decoder) throws {
-        self = try decodeSingleValue(from: decoder, admitting: Self.init(validating:))
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        try encodeSingleValue(value, to: encoder)
-    }
-
     public var description: String { value }
-}
-
-extension HeistFailureMessage: ExpressibleByStringLiteral {
-    public init(stringLiteral value: String) {
-        self = requireValidLiteralPayload { try Self(validating: value) }
-    }
-}
-
-public enum HeistFailureMessageError: Error, Sendable, Equatable, CustomStringConvertible {
-    case blank
-
-    public var description: String { "heist failure message must not be blank" }
 }
 
 package func requireValidLiteralPayload<Value>(_ construct: () throws -> Value) -> Value {

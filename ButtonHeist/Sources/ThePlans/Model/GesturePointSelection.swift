@@ -10,6 +10,7 @@ public struct ScreenPoint: Codable, Sendable, Equatable, Hashable, CustomStringC
     public let y: Double
 
     public init(x: Double, y: Double) {
+        requireFinitePointCoordinates(x: x, y: y, kind: "screen point")
         self.x = x
         self.y = y
     }
@@ -17,9 +18,12 @@ public struct ScreenPoint: Codable, Sendable, Equatable, Hashable, CustomStringC
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "screen point")
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        let x = try container.decode(Double.self, forKey: .x)
+        let y = try container.decode(Double.self, forKey: .y)
+        try rejectNonFinitePointCoordinates(x: x, y: y, kind: "screen point", codingPath: container.codingPath)
         self.init(
-            x: try container.decode(Double.self, forKey: .x),
-            y: try container.decode(Double.self, forKey: .y)
+            x: x,
+            y: y
         )
     }
 
@@ -35,6 +39,24 @@ public struct ScreenPoint: Codable, Sendable, Equatable, Hashable, CustomStringC
 
     public var description: String {
         "point(\(ScoreDescription.decimal(x)),\(ScoreDescription.decimal(y)))"
+    }
+}
+
+func requireFinitePointCoordinates(x: Double, y: Double, kind: String) {
+    precondition(x.isFinite && y.isFinite, "\(kind) coordinates must be finite")
+}
+
+func rejectNonFinitePointCoordinates(
+    x: Double,
+    y: Double,
+    kind: String,
+    codingPath: [CodingKey]
+) throws {
+    guard x.isFinite, y.isFinite else {
+        throw DecodingError.dataCorrupted(.init(
+            codingPath: codingPath,
+            debugDescription: "\(kind) coordinates must be finite"
+        ))
     }
 }
 

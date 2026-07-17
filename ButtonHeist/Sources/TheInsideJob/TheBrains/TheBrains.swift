@@ -193,16 +193,6 @@ final class TheBrains {
         stash.clearCache()
     }
 
-    // MARK: - Response State Tracking
-
-    /// Response boundary hook retained for the wire lifecycle. Observation
-    /// state now lives in the settled event stream, not in command-local
-    /// baselines.
-    func recordSentState() async {
-        // Settled observation events carry their own previous observation and
-        // delta, so the runtime no longer records a command-local baseline.
-    }
-
     func stopSemanticObservation() {
         semanticObservationIsActive = false
         stash.stopPassiveSemanticObservation()
@@ -217,8 +207,8 @@ final class TheBrains {
                 baseline: .currentViewport(
                     stash.visibleExplorationBaseline(from: visibleEvidence.screen)
                 ),
-                maxScrollsPerContainer: query.maxScrollsPerContainer,
-                maxScrollsPerDiscovery: query.maxScrollsPerDiscovery,
+                maxScrollsPerContainer: query.maxScrollsPerContainer?.value,
+                maxScrollsPerDiscovery: query.maxScrollsPerDiscovery?.value,
               ) else {
             return .failure(.rootViewUnavailable)
         }

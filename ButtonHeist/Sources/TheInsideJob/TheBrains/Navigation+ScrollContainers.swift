@@ -9,7 +9,7 @@ import ThePlans
 
 extension Navigation {
 
-    @MainActor struct ScrollPlan { // swiftlint:disable:this agent_main_actor_value_type
+    @MainActor struct ScrollPlan {
         let target: ScrollableTarget
         let container: AccessibilityContainer
         let path: TreePath
@@ -21,7 +21,7 @@ extension Navigation {
         let contentSize: AccessibilitySize
     }
 
-    @MainActor enum ContainerScrollResolution { // swiftlint:disable:this agent_main_actor_value_type
+    @MainActor enum ContainerScrollResolution {
         case resolved(ScrollableTarget)
         case failed(ContainerScrollFailure)
     }

@@ -143,14 +143,14 @@ import ThePlans
         )
         let warning = HeistReceiptFixture.warning(message: "Heads up")
         let wait = HeistReceiptFixture.wait()
-        let selection = HeistCaseSelectionResult(
+        let selection = HeistCaseSelectionResult.selectingFirstMatch(
             cases: [
                 HeistCaseMatchResult(
                     predicate: AccessibilityPredicate.exists(.label("Ready")),
                     met: true
                 ),
             ],
-            outcome: .matchedCase(index: 0),
+            ifNone: .noMatch,
             elapsedMs: 1
         )
         let conditional = HeistReceiptFixture.conditional(

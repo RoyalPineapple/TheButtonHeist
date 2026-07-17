@@ -412,7 +412,7 @@ final class AccessibilityPredicateTests: XCTestCase {
     }
 
     func testScreenChangedNotMetWhenTraceOnlyChangesElements() throws {
-        let trace = makeUpdateTrace(label: "counter", property: .value, old: "0", new: "1")
+        let trace = try makeUpdateTrace(label: "counter", property: .value, old: "0", new: "1")
         let action = makeResult(success: true, trace: trace, completeness: .incomplete)
         let result = try AccessibilityPredicate.changed(.screen()).resolve(in: .empty).validate(against: action)
         XCTAssertFalse(result.met)
@@ -630,7 +630,7 @@ final class AccessibilityPredicateTests: XCTestCase {
     // MARK: - Validation: elements changed (superset rule)
 
     func testElementsChangedMetWhenTraceChangesElements() throws {
-        let trace = makeUpdateTrace(label: "counter", property: .value, old: "0", new: "1")
+        let trace = try makeUpdateTrace(label: "counter", property: .value, old: "0", new: "1")
         let action = makeResult(success: true, trace: trace, completeness: .incomplete)
         let result = try AccessibilityPredicate.changed(.elements()).resolve(in: .empty).validate(against: action)
         XCTAssertTrue(result.met)
@@ -680,7 +680,7 @@ final class AccessibilityPredicateTests: XCTestCase {
     // MARK: - Validation: element updated
 
     func testElementUpdatedMetWhenNewValueMatches() throws {
-        let trace = makeUpdateTrace(label: "counter", property: .value, old: "3", new: "5")
+        let trace = try makeUpdateTrace(label: "counter", property: .value, old: "3", new: "5")
         let action = makeResult(success: true, trace: trace, completeness: .incomplete)
         let predicate = AccessibilityPredicate.changed(.elements([
             .updated(.label("counter"), .value(after: "5")),
@@ -689,7 +689,7 @@ final class AccessibilityPredicateTests: XCTestCase {
     }
 
     func testElementUpdatedPassReportsObservedPropertyProof() throws {
-        let trace = makeUpdateTrace(label: "Quantity", property: .value, old: "2", new: "3")
+        let trace = try makeUpdateTrace(label: "Quantity", property: .value, old: "2", new: "3")
         let action = makeResult(success: true, trace: trace, completeness: .incomplete)
         let predicate = AccessibilityPredicate.changed(.elements([
             .updated(.label("Quantity"), .value(before: "2", after: "3")),
@@ -712,7 +712,7 @@ final class AccessibilityPredicateTests: XCTestCase {
     }
 
     func testElementUpdatedNotMetWhenNoMatch() throws {
-        let trace = makeUpdateTrace(label: "counter", property: .value, old: "3", new: "4")
+        let trace = try makeUpdateTrace(label: "counter", property: .value, old: "3", new: "4")
         let action = makeResult(success: true, trace: trace, completeness: .incomplete)
         let predicate = AccessibilityPredicate.changed(.elements([
             .updated(.label("counter"), .value(after: "5")),
@@ -722,8 +722,8 @@ final class AccessibilityPredicateTests: XCTestCase {
 
     func testElementUpdatedMetWhenElementPredicateAndNewValueMatch() throws {
         let trace = AccessibilityTrace.elementsChangedForTests(elementCount: 5, edits: ElementEdits(updated: [
-            makeUpdate(label: "Other", property: .value, old: "1", new: "5"),
-            makeUpdate(label: "Counter", property: .value, old: "3", new: "5"),
+            try makeUpdate(label: "Other", property: .value, old: "1", new: "5"),
+            try makeUpdate(label: "Counter", property: .value, old: "3", new: "5"),
         ]))
         let action = makeResult(success: true, trace: trace, completeness: .incomplete)
         let predicate = AccessibilityPredicate.changed(.elements([
@@ -733,7 +733,7 @@ final class AccessibilityPredicateTests: XCTestCase {
     }
 
     func testElementUpdatedNotMetWhenElementPredicateDoesNotMatch() throws {
-        let trace = makeUpdateTrace(label: "Other", property: .value, old: "3", new: "5")
+        let trace = try makeUpdateTrace(label: "Other", property: .value, old: "3", new: "5")
         let action = makeResult(success: true, trace: trace, completeness: .incomplete)
         let predicate = AccessibilityPredicate.changed(.elements([
             .updated(.label("Counter"), .value(after: "5")),
@@ -742,7 +742,7 @@ final class AccessibilityPredicateTests: XCTestCase {
     }
 
     func testElementUpdatedMetWhenOldAndNewValueMatch() throws {
-        let trace = makeUpdateTrace(label: "counter", property: .value, old: "3", new: "5")
+        let trace = try makeUpdateTrace(label: "counter", property: .value, old: "3", new: "5")
         let action = makeResult(success: true, trace: trace, completeness: .incomplete)
         let predicate = AccessibilityPredicate.changed(.elements([
             .updated(.label("counter"), .value(before: "3", after: "5")),
@@ -751,7 +751,7 @@ final class AccessibilityPredicateTests: XCTestCase {
     }
 
     func testElementUpdatedUsesConfiguredStringMatchForOldAndNewValues() throws {
-        let trace = makeUpdateTrace(label: "cart", property: .value, old: "cart: empty", new: "3 items")
+        let trace = try makeUpdateTrace(label: "cart", property: .value, old: "cart: empty", new: "3 items")
         let action = makeResult(success: true, trace: trace, completeness: .incomplete)
         let predicate = AccessibilityPredicate.changed(.elements([
             .updated(.label("cart"), .value(before: .prefix("cart:"), after: .suffix("items"))),
@@ -761,7 +761,12 @@ final class AccessibilityPredicateTests: XCTestCase {
     }
 
     func testElementUpdatedUsesConfiguredStringMatchForEveryModeAcrossBeforeAndAfter() throws {
-        let trace = makeUpdateTrace(label: "Search Field", property: .value, old: "Search for tea", new: "John Smith")
+        let trace = try makeUpdateTrace(
+            label: "Search Field",
+            property: .value,
+            old: "Search for tea",
+            new: "John Smith"
+        )
         let action = makeResult(success: true, trace: trace, completeness: .incomplete)
         let changes: [ElementPropertyChange] = [
             .value(before: .exact("Search for tea"), after: .exact("John Smith")),
@@ -779,8 +784,8 @@ final class AccessibilityPredicateTests: XCTestCase {
     }
 
     func testElementUpdatedMatchesTraitGainAndLossAcrossBeforeAndAfter() throws {
-        let gained = makeTraitUpdate(label: "Favorites", beforeTraits: [.button], afterTraits: [.button, .selected])
-        let lost = makeTraitUpdate(label: "Disabled", beforeTraits: [.button, .notEnabled], afterTraits: [.button])
+        let gained = try makeTraitUpdate(label: "Favorites", beforeTraits: [.button], afterTraits: [.button, .selected])
+        let lost = try makeTraitUpdate(label: "Disabled", beforeTraits: [.button, .notEnabled], afterTraits: [.button])
         let action = makeResult(
             success: true,
             trace: .elementsChangedForTests(elementCount: 2, edits: ElementEdits(updated: [gained, lost])),
@@ -1023,7 +1028,7 @@ final class AccessibilityPredicateTests: XCTestCase {
     }
 
     func testElementUpdatedWithPropertyOnlyMetWhenTargetUpdates() throws {
-        let trace = makeUpdateTrace(label: "counter", property: .value, old: "a", new: "b")
+        let trace = try makeUpdateTrace(label: "counter", property: .value, old: "a", new: "b")
         let action = makeResult(success: true, trace: trace, completeness: .incomplete)
         let predicate = AccessibilityPredicate.changed(.elements([
             .updated(.label("counter"), .value()),
@@ -1053,7 +1058,7 @@ final class AccessibilityPredicateTests: XCTestCase {
     }
 
     func testElementUpdatedDiagnosticOnMiss() throws {
-        let trace = makeUpdateTrace(label: "counter", property: .value, old: "3", new: "4")
+        let trace = try makeUpdateTrace(label: "counter", property: .value, old: "3", new: "4")
         let action = makeResult(success: true, trace: trace, completeness: .incomplete)
         let predicate = AccessibilityPredicate.changed(.elements([
             .updated(.label("counter"), .value(after: "5")),
@@ -1065,8 +1070,8 @@ final class AccessibilityPredicateTests: XCTestCase {
 
     func testElementUpdatedMatchesAnyAmongMultipleUpdates() throws {
         let trace = AccessibilityTrace.elementsChangedForTests(elementCount: 10, edits: ElementEdits(updated: [
-            makeUpdate(label: "label", property: .value, old: "A", new: "B"),
-            makeUpdate(label: "counter", property: .value, old: "3", new: "5"),
+            try makeUpdate(label: "label", property: .value, old: "A", new: "B"),
+            try makeUpdate(label: "counter", property: .value, old: "3", new: "5"),
         ]))
         let action = makeResult(success: true, trace: trace, completeness: .incomplete)
         let predicate = AccessibilityPredicate.changed(.elements([
@@ -1081,8 +1086,8 @@ final class AccessibilityPredicateTests: XCTestCase {
                 before: makeElement(label: "Toggle", traits: [.button]),
                 after: makeElement(label: "Toggle", value: "5", traits: [.button, .selected]),
                 changes: [
-                    .traits(old: [.button], new: [.button, .selected]),
-                    .value(old: "3", new: "5"),
+                    try XCTUnwrap(PropertyChange.traits(old: [.button], new: [.button, .selected])),
+                    try XCTUnwrap(PropertyChange.value(old: "3", new: "5")),
                 ]
             ),
         ]))
@@ -1111,7 +1116,7 @@ final class AccessibilityPredicateTests: XCTestCase {
                     .elementsChangedForTests(
                         elementCount: 5,
                         edits: ElementEdits(updated: [
-                            makeUpdate(label: "btn_1", property: .value, old: "OFF", new: "ON"),
+                            try makeUpdate(label: "btn_1", property: .value, old: "OFF", new: "ON"),
                         ])
                     ),
                     completeness: .incomplete
@@ -1131,7 +1136,7 @@ final class AccessibilityPredicateTests: XCTestCase {
                     .elementsChangedForTests(
                         elementCount: 5,
                         edits: ElementEdits(updated: [
-                            makeUpdate(label: "any", property: .value, old: "A", new: "B"),
+                            try makeUpdate(label: "any", property: .value, old: "A", new: "B"),
                         ])
                     ),
                     completeness: .incomplete
@@ -1168,7 +1173,7 @@ final class AccessibilityPredicateTests: XCTestCase {
                     .elementsChangedForTests(
                         elementCount: 5,
                         edits: ElementEdits(updated: [
-                            makeUpdate(label: "btn_1", property: .hint, old: "A", new: "B"),
+                            try makeUpdate(label: "btn_1", property: .hint, old: "A", new: "B"),
                         ])
                     ),
                     completeness: .incomplete
@@ -1407,11 +1412,11 @@ final class AccessibilityPredicateTests: XCTestCase {
         old: String?,
         new: String?,
         elementCount: Int = 5
-    ) -> AccessibilityTrace {
+    ) throws -> AccessibilityTrace {
         .elementsChangedForTests(
             elementCount: elementCount,
             edits: ElementEdits(updated: [
-                makeUpdate(label: label, property: property, old: old, new: new),
+                try makeUpdate(label: label, property: property, old: old, new: new),
             ])
         )
     }
@@ -1423,11 +1428,11 @@ final class AccessibilityPredicateTests: XCTestCase {
         new: String?,
         beforeTraits: [HeistTrait] = [],
         afterTraits: [HeistTrait] = []
-    ) -> ElementUpdate {
+    ) throws -> ElementUpdate {
         ElementUpdate(
             before: makeElementForUpdate(label: label, property: property, value: old, traits: beforeTraits),
             after: makeElementForUpdate(label: label, property: property, value: new, traits: afterTraits),
-            changes: [propertyChange(
+            changes: [try propertyChange(
                 property: property,
                 old: old,
                 new: new,
@@ -1441,12 +1446,12 @@ final class AccessibilityPredicateTests: XCTestCase {
         label: String,
         beforeTraits: [HeistTrait],
         afterTraits: [HeistTrait]
-    ) -> ElementUpdate {
+    ) throws -> ElementUpdate {
         ElementUpdate(
             before: makeElement(label: label, traits: beforeTraits),
             after: makeElement(label: label, traits: afterTraits),
             changes: [
-                .traits(old: beforeTraits, new: afterTraits),
+                try XCTUnwrap(PropertyChange.traits(old: beforeTraits, new: afterTraits)),
             ]
         )
     }
@@ -1457,18 +1462,18 @@ final class AccessibilityPredicateTests: XCTestCase {
         new: String?,
         beforeTraits: [HeistTrait],
         afterTraits: [HeistTrait]
-    ) -> PropertyChange {
+    ) throws -> PropertyChange {
         switch property {
         case .label:
-            return .label(old: old, new: new)
+            return try XCTUnwrap(PropertyChange.label(old: old, new: new))
         case .identifier:
-            return .identifier(old: old, new: new)
+            return try XCTUnwrap(PropertyChange.identifier(old: old, new: new))
         case .value:
-            return .value(old: old, new: new)
+            return try XCTUnwrap(PropertyChange.value(old: old, new: new))
         case .hint:
-            return .hint(old: old, new: new)
+            return try XCTUnwrap(PropertyChange.hint(old: old, new: new))
         case .traits:
-            return .traits(old: beforeTraits, new: afterTraits)
+            return try XCTUnwrap(PropertyChange.traits(old: beforeTraits, new: afterTraits))
         case .actions, .frame, .activationPoint, .customContent, .rotors:
             fatalError("Unsupported test property \(property)")
         }

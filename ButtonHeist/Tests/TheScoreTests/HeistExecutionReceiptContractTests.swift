@@ -94,49 +94,95 @@ import TheScore
         ) == result)
     }
 
-    @Test func `element loop construction accepts only explicit over-limit failure evidence`() throws {
+    @Test func `element loop factory accepts only explicit over-limit failure evidence`() throws {
         let declaration = try #require(HeistForEachElementDeclaration(
             parameter: "item",
             matching: ElementPredicateTemplate(label: "Row"),
             limit: 1
         ))
-        let passedEvidence = HeistForEachElementEvidence(
+        let passedEvidence = try #require(HeistForEachElementEvidence(
             matchedCount: 2,
             iterationCount: 1
-        ).flatMap(HeistPassedForEachElementEvidence.init)
-        let failedEvidence = HeistForEachElementEvidence(
+        ).flatMap(HeistPassedForEachElementEvidence.init))
+        let failedEvidence = try #require(HeistForEachElementEvidence(
             matchedCount: 2,
             iterationCount: 0,
             failureReason: "matched count exceeded limit"
-        ).flatMap(HeistFailedForEachElementEvidence.init)
+        ).flatMap(HeistFailedForEachElementEvidence.init))
 
-        #expect(throws: HeistReceiptAdmissionError.self) {
-            _ = try HeistExecutionStepResult.construct(
-                path: "$.body[0]",
-                durationMs: 1,
-                node: .forEachElement(
-                    declaration: declaration,
-                    completion: .passed(evidence: try #require(passedEvidence))
-                )
-            )
-        }
-
-        let valid = try HeistExecutionStepResult.construct(
+        #expect(HeistExecutionStepResult.forEachElement(
             path: "$.body[0]",
             durationMs: 1,
-            node: .forEachElement(
-                declaration: declaration,
-                completion: .failed(
-                    evidence: .observed(try #require(failedEvidence)),
-                    failure: .init(
-                        category: .loop,
-                        contract: "matched count does not exceed limit",
-                        observed: "matched count exceeded limit"
-                    )
+            declaration: declaration,
+            completion: .passed(evidence: passedEvidence)
+        ) == nil)
+
+        let valid = try #require(HeistExecutionStepResult.forEachElement(
+            path: "$.body[0]",
+            durationMs: 1,
+            declaration: declaration,
+            completion: .failed(
+                evidence: .observed(failedEvidence),
+                failure: .init(
+                    category: .loop,
+                    contract: "matched count does not exceed limit",
+                    observed: "matched count exceeded limit"
                 )
             )
-        )
+        ))
         #expect(valid.kind == .forEachElement)
+    }
+
+    @Test func `loop factories admit only complete summaries and current iterations`() throws {
+        let stringDeclaration = try #require(HeistForEachStringDeclaration(parameter: "item", count: 2))
+        let partialStringSummary = try #require(HeistForEachStringEvidence(iterationCount: 1)
+            .flatMap(HeistPassedForEachStringEvidence.init))
+        let staleStringIteration = try #require(HeistForEachStringEvidence(
+            iterationCount: 2,
+            iterationOrdinal: 0,
+            value: "one"
+        ).flatMap(HeistPassedForEachStringEvidence.init))
+        let elementDeclaration = try #require(HeistForEachElementDeclaration(
+            parameter: "item",
+            matching: ElementPredicateTemplate(label: "Row"),
+            limit: 2
+        ))
+        let partialElementSummary = try #require(HeistForEachElementEvidence(
+            matchedCount: 2,
+            iterationCount: 1
+        ).flatMap(HeistPassedForEachElementEvidence.init))
+        let staleElementIteration = try #require(HeistForEachElementEvidence(
+            matchedCount: 2,
+            iterationCount: 2,
+            iterationOrdinal: 0,
+            targetOrdinal: 0,
+            targetSummary: "Row"
+        ).flatMap(HeistPassedForEachElementEvidence.init))
+
+        #expect(HeistExecutionStepResult.forEachString(
+            path: "$.body[0]",
+            durationMs: 1,
+            declaration: stringDeclaration,
+            completion: .passed(evidence: partialStringSummary)
+        ) == nil)
+        #expect(HeistExecutionStepResult.forEachStringIteration(
+            path: "$.body[0].for_each_string.iterations[0]",
+            durationMs: 1,
+            declaration: stringDeclaration,
+            completion: .passed(evidence: staleStringIteration)
+        ) == nil)
+        #expect(HeistExecutionStepResult.forEachElement(
+            path: "$.body[1]",
+            durationMs: 1,
+            declaration: elementDeclaration,
+            completion: .passed(evidence: partialElementSummary)
+        ) == nil)
+        #expect(HeistExecutionStepResult.forEachElementIteration(
+            path: "$.body[1].for_each_element.iterations[0]",
+            durationMs: 1,
+            declaration: elementDeclaration,
+            completion: .passed(evidence: staleElementIteration)
+        ) == nil)
     }
 
     private func jsonObject<Value: Encodable>(_ value: Value) throws -> [String: Any] {
@@ -179,14 +225,12 @@ import TheScore
 
         return [
             HeistReceiptFixture.action(command: .dismiss, result: .success(method: .dismiss)),
-            try HeistExecutionStepResult.construct(
+            try #require(HeistExecutionStepResult.forEachString(
                 path: "$.body[1]",
                 durationMs: 1,
-                node: .forEachString(
-                    declaration: stringDeclaration,
-                    completion: .passed(evidence: passedStringSummary)
-                )
-            ),
+                declaration: stringDeclaration,
+                completion: .passed(evidence: passedStringSummary)
+            )),
             HeistReceiptFixture.forEachStringIteration(
                 path: "$.body[2].for_each_string.iterations[0]",
                 count: 2,
@@ -196,38 +240,30 @@ import TheScore
                 status: .passed,
                 children: []
             ),
-            try HeistExecutionStepResult.construct(
+            try #require(HeistExecutionStepResult.forEachElement(
                 path: "$.body[3]",
                 durationMs: 1,
-                node: .forEachElement(
-                    declaration: elementDeclaration,
-                    completion: .passed(evidence: passedElementSummary)
-                )
-            ),
-            try HeistExecutionStepResult.construct(
+                declaration: elementDeclaration,
+                completion: .passed(evidence: passedElementSummary)
+            )),
+            try #require(HeistExecutionStepResult.forEachElementIteration(
                 path: "$.body[4].for_each_element.iterations[0]",
                 durationMs: 1,
-                node: .forEachElementIteration(
-                    declaration: elementDeclaration,
-                    completion: .passed(evidence: passedElementIteration)
-                )
-            ),
-            try HeistExecutionStepResult.construct(
+                declaration: elementDeclaration,
+                completion: .passed(evidence: passedElementIteration)
+            )),
+            try #require(HeistExecutionStepResult.repeatUntil(
                 path: "$.body[5]",
                 durationMs: 1,
-                node: .repeatUntil(
-                    declaration: repeatDeclaration,
-                    completion: .passed(evidence: passedRepeatSummary)
-                )
-            ),
-            try HeistExecutionStepResult.construct(
+                declaration: repeatDeclaration,
+                completion: .passed(evidence: passedRepeatSummary)
+            )),
+            try #require(HeistExecutionStepResult.repeatUntilIteration(
                 path: "$.body[6].repeat_until.iterations[0]",
                 durationMs: 1,
-                node: .repeatUntilIteration(
-                    declaration: repeatDeclaration,
-                    completion: .passed(evidence: passedRepeatIteration)
-                )
-            ),
+                declaration: repeatDeclaration,
+                completion: .passed(evidence: passedRepeatIteration)
+            )),
         ]
     }
 

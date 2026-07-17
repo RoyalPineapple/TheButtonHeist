@@ -517,9 +517,9 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testGestureResolvedDefaultsAreContractOwned() {
         XCTAssertEqual(
-            SwipeTarget(selection: .point(
-                start: .element(.predicate(ElementPredicateTemplate(label: "list"))),
-                destination: .direction(.down)
+            SwipeTarget(selection: .pointDirection(
+                start: ScreenPoint(x: 10, y: 20),
+                direction: .down
             )).resolvedDuration,
             .swipeDefault
         )
@@ -724,11 +724,20 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(decoded, query)
     }
 
+    func testInterfaceDiscoveryLimitAdmitsDynamicValues() throws {
+        let limit = try InterfaceDiscoveryLimit(validating: 25)
+        let query = InterfaceQuery(maxScrollsPerContainer: limit)
+
+        XCTAssertEqual(query.maxScrollsPerContainer?.value, 25)
+        XCTAssertThrowsError(try InterfaceDiscoveryLimit(validating: 0))
+        XCTAssertThrowsError(try InterfaceDiscoveryLimit(validating: 2_001))
+    }
+
     func testInterfaceQueryRejectsNegativeDiscoveryLimit() {
         let json = #"{"maxScrollsPerContainer":-1}"#
 
         XCTAssertThrowsError(try decoder.decode(InterfaceQuery.self, from: Data(json.utf8))) { error in
-            assertDecodingError(error, contains: ["maxScrollsPerContainer must be between 1 and 2000"])
+            assertDecodingError(error, contains: ["interface discovery limit must be between 1 and 2000"])
         }
     }
 
@@ -736,7 +745,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         let json = #"{"maxScrollsPerDiscovery":2001}"#
 
         XCTAssertThrowsError(try decoder.decode(InterfaceQuery.self, from: Data(json.utf8))) { error in
-            assertDecodingError(error, contains: ["maxScrollsPerDiscovery must be between 1 and 2000"])
+            assertDecodingError(error, contains: ["interface discovery limit must be between 1 and 2000"])
         }
     }
 
@@ -951,13 +960,13 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testHeistPlanRoundTripPreservesCommandStepWireShape() throws {
         let plan = try HeistPlan(body: [
-                .action(try ActionStep(
+                .action(ActionStep(
                     command: .activate(.predicate(
                         ElementPredicateTemplate(label: "Settings", traits: [.button]),
                         ordinal: 1
                     )),
                     expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 2.5)))),
-                .action(try ActionStep(
+                .action(ActionStep(
                     command: .setPasteboard(SetPasteboardTarget(text: "ready"))
                 )),
                 .warn(WarnStep(message: "optional step skipped")),
@@ -1126,6 +1135,49 @@ final class WireTypeRoundTripTests: XCTestCase {
         ) { error in
             assertDecodingError(error, contains: ["matched_case index 0", "out of range"])
         }
+
+        let matchedCases = ["Ready", "Done"].map {
+            HeistCaseMatchResult(predicate: .exists(.label(StringMatch.exact($0))), met: true)
+        }
+        let valid = HeistCaseSelectionResult.selectingFirstMatch(
+            cases: matchedCases,
+            ifNone: .noMatch,
+            elapsedMs: 1
+        )
+        var object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: encoder.encode(valid)) as? [String: Any]
+        )
+        let contradictoryOutcomes: [[String: Any]] = [
+            ["kind": "no_match"],
+            ["kind": "matched_case", "index": 1],
+        ]
+        for outcome in contradictoryOutcomes {
+            object["outcome"] = outcome
+            XCTAssertThrowsError(
+                try decoder.decode(
+                    HeistCaseSelectionResult.self,
+                    from: JSONSerialization.data(withJSONObject: object)
+                )
+            )
+        }
+    }
+
+    func testHeistCaseSelectionDerivesItsMatchedCaseFromItsCases() {
+        let matched = HeistCaseMatchResult(
+            predicate: .exists(.label("Ready")),
+            met: true
+        )
+        let missed = HeistCaseMatchResult(
+            predicate: .exists(.label("Waiting")),
+            met: false
+        )
+        let result = HeistCaseSelectionResult.selectingFirstMatch(
+            cases: [missed, matched],
+            ifNone: .noMatch,
+            elapsedMs: 4
+        )
+
+        XCTAssertEqual(result.outcome, .matchedCase(index: 1))
     }
 
     func testForEachStringEvidenceRejectsPartialIterationShape() throws {
@@ -1196,10 +1248,17 @@ final class WireTypeRoundTripTests: XCTestCase {
     // MARK: - PropertyChange / ElementUpdate
 
     func testPropertyChangeRoundTrip() throws {
-        let change = PropertyChange.value(old: "OK", new: "Cancel")
+        let change = try XCTUnwrap(PropertyChange.value(old: "OK", new: "Cancel"))
         let data = try encoder.encode(change)
         let decoded = try decoder.decode(PropertyChange.self, from: data)
         XCTAssertEqual(decoded, change)
+    }
+
+    func testPropertyChangeOmitsEqualValuesAndRejectsEqualWireValues() {
+        XCTAssertNil(PropertyChange.value(old: "same", new: "same"))
+        let json = #"{"property":"value","old":"same","new":"same"}"#
+
+        XCTAssertThrowsError(try decoder.decode(PropertyChange.self, from: Data(json.utf8)))
     }
 
     func testElementPropertyIsGeometry() {
@@ -1241,8 +1300,8 @@ final class WireTypeRoundTripTests: XCTestCase {
             before: before,
             after: after,
             changes: [
-                .value(old: "A", new: "B"),
-                .value(old: nil, new: "active"),
+                try XCTUnwrap(PropertyChange.value(old: "A", new: "B")),
+                try XCTUnwrap(PropertyChange.value(old: nil, new: "active")),
             ]
         )
         let data = try encoder.encode(update)

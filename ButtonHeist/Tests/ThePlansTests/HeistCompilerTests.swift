@@ -265,7 +265,7 @@ struct HeistCompilerTests {
         #expect(diagnostics.isEmpty)
         #expect(plan.name == "TrustedFrontend")
         #expect(plan.body == [
-            .action(try ActionStep(
+            .action(ActionStep(
                 command: .activate(.predicate(.label("Pay"))),
                 expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 1)))),
         ])

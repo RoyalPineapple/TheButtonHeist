@@ -41,7 +41,7 @@ final class ClientMessageTests: XCTestCase {
 
         XCTAssertThrowsError(try JSONDecoder().decode(ClientMessage.self, from: data)) { error in
             XCTAssertTrue(
-                "\(error)".contains("maxScrollsPerContainer must be between 1 and 2000"),
+                "\(error)".contains("interface discovery limit must be between 1 and 2000"),
                 "\(error)"
             )
         }
@@ -109,7 +109,7 @@ final class ClientMessageTests: XCTestCase {
             .getAnnouncements,
             .requestScreen(),
             .heistPlan(HeistPlanRun(plan: try HeistPlan(body: [
-                .action(try ActionStep(
+                .action(ActionStep(
                     command: .activate(.predicate(ElementPredicateTemplate(label: "Save")))
                 )),
             ]))),
@@ -150,7 +150,7 @@ final class ClientMessageTests: XCTestCase {
     func testHeistPlanClientMessageRoundTrip() throws {
         let saveTarget = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Save", traits: [.button]))
         let plan = try HeistPlan(body: [
-                .action(try ActionStep(
+                .action(ActionStep(
                     command: .activate(saveTarget),
                     expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 10)))),
                 .wait(WaitStep(
@@ -186,7 +186,7 @@ final class ClientMessageTests: XCTestCase {
             name: "search",
             parameter: .string(name: "query"),
             body: [
-                .action(try ActionStep(command: .typeText(
+                .action(ActionStep(command: .typeText(
                     reference: "query",
                     target: .predicate(.label("Search"))
                 ))),
@@ -209,7 +209,7 @@ final class ClientMessageTests: XCTestCase {
 
     func testHeistPlanEnvelopeRoundTrip() throws {
         let plan = try HeistPlan(body: [
-            .action(try ActionStep(
+            .action(ActionStep(
                 command: .typeText(
                     text: "hello",
                     target: .predicate(ElementPredicateTemplate(identifier: "nameField"))
@@ -240,7 +240,7 @@ final class ClientMessageTests: XCTestCase {
     }
 
     func testHeistActionDescriptionUsesNormalCommandIdentity() throws {
-        let step = try ActionStep(
+        let step = ActionStep(
             command: .activate(.predicate(ElementPredicateTemplate(label: "Save"))),
             expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 10)))
 
@@ -293,7 +293,7 @@ final class ClientMessageTests: XCTestCase {
 
     func testSingleActivateWireShapeIsHeistPlan() throws {
         let plan = try HeistPlan(body: [
-            .action(try ActionStep(
+            .action(ActionStep(
                 command: .activate(.predicate(ElementPredicateTemplate(label: "Log In")))
             )),
         ])
@@ -415,7 +415,7 @@ final class ClientMessageTests: XCTestCase {
 
     func testSetPasteboardEnvelopeUsesHeistPlan() throws {
         let plan = try HeistPlan(body: [
-            .action(try ActionStep(command: .setPasteboard(SetPasteboardTarget(text: "hello")))),
+            .action(ActionStep(command: .setPasteboard(SetPasteboardTarget(text: "hello")))),
         ])
         let envelope = RequestEnvelope(
             requestId: "pb-set",

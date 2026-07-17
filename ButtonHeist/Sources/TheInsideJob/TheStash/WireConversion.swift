@@ -33,7 +33,7 @@ extension TheStash {
     /// `AccessibilityHierarchy`, `InterfaceObservation`) to their wire-facing projections.
     /// Pure transform — no stored state. Delta projection is capture-backed in
     /// TheScore.
-    @MainActor enum WireConversion { // swiftlint:disable:this agent_main_actor_value_type
+    @MainActor enum WireConversion {
 
     // MARK: - Element Conversion
 
@@ -54,14 +54,14 @@ extension TheStash {
             activationPointEvidence: activationPoint,
             respondsToUserInteraction: element.respondsToUserInteraction,
             customContent: {
-                let projected = element.customContent.compactMap { HeistCustomContent(projecting: $0) }
+                let projected = element.projectedCustomContent
                 return projected.isEmpty ? nil : projected
             }(),
             rotors: {
                 let valid = element.customRotors.filter { !$0.name.isEmpty }
                 return valid.isEmpty ? nil : valid.map { HeistRotor(name: $0.name) }
             }(),
-            actions: buildActions(for: element)
+            actions: element.projectedActionSet.orderedActions
         )
     }
 
@@ -72,21 +72,6 @@ extension TheStash {
         return element.usesDefaultActivationPoint
             ? .defaultCenter(screenPoint)
             : .explicit(screenPoint)
-    }
-
-    static func buildActions(for element: AccessibilityElement) -> [ElementAction] {
-        let isInteractive = Interactivity.isInteractive(element: element)
-        let activate: [ElementAction] = isInteractive ? [.activate] : []
-        let textEntry: [ElementAction] = AccessibilityPolicy.supportsTextEntry(element.traits.heistTraits)
-            ? [.typeText]
-            : []
-        let adjustable: [ElementAction] = (isInteractive && element.traits.contains(.adjustable))
-            ? [.increment, .decrement]
-            : []
-        let custom = element.customActions
-            .compactMap { try? CustomActionName(validating: $0.name) }
-            .map(ElementAction.custom)
-        return activate + textEntry + adjustable + custom
     }
 
     // MARK: - Interface Conversion
@@ -103,7 +88,7 @@ extension TheStash {
             projecting: tree.viewportCapture.hierarchy,
             elementMetadata: { path, element, _ in
                 InterfaceElementProjectionMetadata(
-                    actions: buildActions(for: element),
+                    actions: element.projectedActionSet.orderedActions,
                     traceIdentity: tree.viewportCapture.heistIdsByPath[path]?.traceElementIdentity
                 )
             },
@@ -170,7 +155,7 @@ extension TheStash {
                     traceIdentitiesByPath[childPath] = entry.heistId.traceElementIdentity
                     elementAnnotations.append(InterfaceElementAnnotation(
                         path: childPath,
-                        actions: buildActions(for: entry.element)
+                        actions: entry.element.projectedActionSet.orderedActions
                     ))
                 case .container(let entry):
                     guard emittedContainerPaths.insert(entry.path).inserted else {
@@ -296,7 +281,7 @@ extension TheStash {
                 traversalIndex += 1
                 elementAnnotations.append(InterfaceElementAnnotation(
                     path: path,
-                    actions: buildActions(for: entry.element)
+                    actions: entry.element.projectedActionSet.orderedActions
                 ))
                 traceIdentities[path] = entry.heistId.traceElementIdentity
                 return .element(entry.element, traversalIndex: traversalIndexByHeistId[entry.heistId] ?? index)
@@ -415,7 +400,7 @@ extension TheStash {
             guard case .element(let element, _) = node else { return nil }
             return InterfaceElementAnnotation(
                 path: path,
-                actions: buildActions(for: element)
+                actions: element.projectedActionSet.orderedActions
             )
         }
     }

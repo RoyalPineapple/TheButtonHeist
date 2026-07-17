@@ -12,6 +12,8 @@ extension ActionResult {
         let resultOutcome = settledObservation.resultOutcome(for: outcome)
         let message = settledObservation.message(explicit: outcome.message)
         let payload = settledObservation.payload(for: outcome, afterStatePayload: afterStatePayload)
+        let methodAndPayload = payload.map(ActionResult.MethodAndPayload.payload)
+            ?? .methodOnly(outcome.method)
         let duration: ActionSettlementDuration
         do {
             duration = try ActionSettlementDuration(
@@ -36,8 +38,7 @@ extension ActionResult {
         )
         self = ActionResult(
             outcome: resultOutcome,
-            method: outcome.method,
-            payload: payload,
+            methodAndPayload: methodAndPayload,
             message: message,
             observation: observation,
             subjectEvidence: outcome.subjectEvidence,

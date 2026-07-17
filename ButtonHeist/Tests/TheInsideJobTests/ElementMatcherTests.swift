@@ -123,17 +123,62 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertFalse(try resolvedPredicate(.label("Coke").and(.rotors(["Headings"]))).matches(element))
     }
 
-    func testHostAndDeliveredPredicatesIgnoreUndeliverableCustomContent() throws {
-        let source = element(
-            label: "Report",
-            customContent: [.init(label: "", value: "", isImportant: false)]
-        )
-        let predicate = try resolvedPredicate(
-            .customContent(.init(label: .isEmpty, value: .isEmpty))
-        )
+    func testHostAndDeliveredActionPredicatesShareCanonicalProjection() {
+        let sources = [
+            element(label: "Static"),
+            element(label: "Button", traits: .button),
+            element(label: "Search", traits: .searchField),
+            element(label: "Quantity", traits: .adjustable),
+            element(
+                label: "Editable",
+                customActions: [AccessibilityElement.CustomAction(name: "Modify")]
+            ),
+        ]
+        let predicates = [
+            ElementPredicate.actions([.activate]),
+            ElementPredicate.actions([.typeText]),
+            ElementPredicate.actions([.increment]),
+            ElementPredicate.actions([.decrement]),
+            ElementPredicate.actions([.custom("Modify")]),
+            ElementPredicate.actions([.activate, .typeText]),
+        ]
 
-        XCTAssertFalse(predicate.matches(source))
-        XCTAssertFalse(TheStash.WireConversion.convert(source).matches(predicate))
+        for source in sources {
+            let delivered = TheStash.WireConversion.convert(source)
+            XCTAssertEqual(delivered.actions, source.projectedActionSet.orderedActions)
+            for predicate in predicates {
+                XCTAssertEqual(predicate.matches(source), delivered.matches(predicate))
+            }
+        }
+    }
+
+    func testHostAndDeliveredCustomContentPredicatesShareOrdinalCandidates() throws {
+        let sources = [
+            element(
+                label: "Undeliverable",
+                customContent: [.init(label: "", value: "", isImportant: false)]
+            ),
+            element(
+                label: "Available",
+                customContent: [.init(label: "", value: "In stock", isImportant: false)]
+            ),
+            element(
+                label: "Named",
+                customContent: [.init(label: "Status", value: "", isImportant: false)]
+            ),
+        ]
+        let predicate = try resolvedPredicate(
+            .customContent(.init(label: .isEmpty))
+        )
+        let hostCandidates = sources.indices.filter { predicate.matches(sources[$0]) }
+        let delivered = sources.map { TheStash.WireConversion.convert($0) }
+        let deliveredCandidates = delivered.indices.filter { predicate.matches(delivered[$0]) }
+
+        for index in sources.indices {
+            XCTAssertEqual(delivered[index].customContent ?? [], sources[index].projectedCustomContent)
+        }
+        XCTAssertEqual(hostCandidates, [1])
+        XCTAssertEqual(hostCandidates, deliveredCandidates)
     }
 
     func testTextInputTraitsExposeTypeTextActionToMatcher() throws {

@@ -8,7 +8,7 @@ final class HeistPlanTests: XCTestCase {
     func testHeistPlanRoundTrip() throws {
         let heist = try HeistPlan(body: [
             try activateStep(label: "Login", traits: [.button]),
-            .action(try ActionStep(command: .typeText(text: "user@example.com", target: nil))),
+            .action(ActionStep(command: .typeText(text: "user@example.com", target: nil))),
             try activateStep(label: "Submit", traits: [.button]),
         ])
 
@@ -319,7 +319,7 @@ final class HeistPlanTests: XCTestCase {
     }
 
     func testActionStepDescriptionComposesCommandAndExpectation() throws {
-        let step = try ActionStep(
+        let step = ActionStep(
             command: .activate(.predicate(ElementPredicateTemplate(label: "Save", traits: [.button]))),
             expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 2)))
 
@@ -350,7 +350,7 @@ final class HeistPlanTests: XCTestCase {
             limit: 5,
             parameter: "target",
             body: [
-                .action(try ActionStep(
+                .action(ActionStep(
                     command: .activate(target),
                     expectationPolicy: .expect(ActionExpectation(
                         predicate: .missing(target),
@@ -363,7 +363,7 @@ final class HeistPlanTests: XCTestCase {
         XCTAssertEqual(
             step.body,
             [
-                .action(try ActionStep(
+                .action(ActionStep(
                     command: .activate(target),
                     expectationPolicy: .expect(ActionExpectation(
                         predicate: .missing(target),
@@ -381,7 +381,7 @@ final class HeistPlanTests: XCTestCase {
                 matching: matching,
                 limit: 5,
                 parameter: "target",
-                body: [.action(try ActionStep(
+                body: [.action(ActionStep(
                     command: .activate(AccessibilityTarget(ref: "target"))
                 ))]
             )),
@@ -548,7 +548,7 @@ private func activateStep(
     label: String,
     traits: [HeistTrait] = []
 ) throws -> HeistStep {
-    .action(try ActionStep(
+    .action(ActionStep(
         command: .activate(.predicate(ElementPredicateTemplate(label: .exact(label), traits: traits)))
     ))
 }

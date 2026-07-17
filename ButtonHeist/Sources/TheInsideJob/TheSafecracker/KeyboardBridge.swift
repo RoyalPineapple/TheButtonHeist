@@ -168,7 +168,7 @@ final class UIKeyboardImplTextInjection {
 ///
 /// `@MainActor` justification: wraps a UIKit singleton (`NSObject`); the
 /// stored impl is non-Sendable.
-@MainActor struct KeyboardBridge { // swiftlint:disable:this agent_main_actor_value_type
+@MainActor struct KeyboardBridge {
 
     private let impl: NSObject
     private let textInjection: UIKeyboardImplTextInjection

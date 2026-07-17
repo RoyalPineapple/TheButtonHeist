@@ -101,9 +101,9 @@ private func invalidForEachElementJSON(parameter: String) throws -> Data {
 
 @Test
 func actionStepExpectationWaiverRoundTrips() throws {
-    let step = try ActionStep(
+    let step = ActionStep(
         command: .activate(.predicate(.label("Save"))),
-        expectationPolicy: .waived(try ActionExpectationWaiver("No durable semantic outcome")))
+        expectationPolicy: .waived("No durable semantic outcome"))
 
     let data = try JSONEncoder().encode(step)
     let json = try JSONDecoder().decode(EncodedActionStepContract.self, from: data)
@@ -145,7 +145,7 @@ func actionStepRejectsExpectationAndWaiverTogether() {
 @Test
 func strictValidationRequiresSemanticActionExpectation() throws {
     let plan = try HeistPlan(body: [
-        .action(try ActionStep(command: .activate(.predicate(.label("Save"))))),
+        .action(ActionStep(command: .activate(.predicate(.label("Save"))))),
     ])
 
     let findings = plan.lint(.strictTest)
@@ -161,9 +161,9 @@ func strictValidationRequiresSemanticActionExpectation() throws {
 @Test
 func `composition quality allows explicit expectation waiver`() throws {
     let plan = try HeistPlan(body: [
-        .action(try ActionStep(
+        .action(ActionStep(
             command: .activate(.predicate(.label("Save"))),
-            expectationPolicy: .waived(try ActionExpectationWaiver("No durable semantic outcome")))),
+            expectationPolicy: .waived("No durable semantic outcome"))),
     ])
 
     #expect(plan.lint(.compositionQuality).isEmpty)
@@ -173,8 +173,8 @@ func `composition quality allows explicit expectation waiver`() throws {
 @Test
 func lintFlagsMechanicalCommands() throws {
     let plan = try HeistPlan(body: [
-        .action(try ActionStep(command: .mechanicalTap(TapTarget(selection: .coordinate(ScreenPoint(x: 10, y: 20)))))),
-        .action(try ActionStep(
+        .action(ActionStep(command: .mechanicalTap(TapTarget(selection: .coordinate(ScreenPoint(x: 10, y: 20)))))),
+        .action(ActionStep(
             command: .activate(.predicate(.label("Save"))),
             expectationPolicy: .expect(ActionExpectation(predicate: .exists(.label("Done")), timeout: 1)))),
     ])
@@ -187,7 +187,7 @@ func lintFlagsMechanicalCommands() throws {
 @Test
 func lintReportsTypeTextWithoutTarget() throws {
     let plan = try HeistPlan(body: [
-        .action(try ActionStep(command: .typeText(text: "milk", target: nil))),
+        .action(ActionStep(command: .typeText(text: "milk", target: nil))),
     ])
 
     let findings = plan.lint(.compositionQuality)
@@ -242,12 +242,12 @@ func runtimeSafetyRejectsInvalidRefs() throws {
     let cases: [(String, HeistPlanAdmissionCandidate, String)] = [
         (
             "unknown target ref",
-            HeistPlanAdmissionCandidate(body: [.action(try ActionStep(command: .activate(.ref("target"))))]),
+            HeistPlanAdmissionCandidate(body: [.action(ActionStep(command: .activate(.ref("target"))))]),
             "target ref must resolve"
         ),
         (
             "unknown text ref",
-            HeistPlanAdmissionCandidate(body: [.action(try ActionStep(command: .typeText(
+            HeistPlanAdmissionCandidate(body: [.action(ActionStep(command: .typeText(
                 reference: "item",
                 target: .predicate(.label("Search"))
             )))]),
@@ -255,7 +255,7 @@ func runtimeSafetyRejectsInvalidRefs() throws {
         ),
         (
             "long target ref",
-            HeistPlanAdmissionCandidate(body: [.action(try ActionStep(command: .activate(.ref(
+            HeistPlanAdmissionCandidate(body: [.action(ActionStep(command: .activate(.ref(
                 try HeistReferenceName(validating: tooLong)
             ))))]),
             "max parameter/ref length"
@@ -278,7 +278,7 @@ func heistPlanConstructionRejectsNonDurableActions() throws {
     let expectedFailure = try #require(command.durableHeistActionFailure)
 
     do {
-        _ = try HeistPlan(body: [.action(try ActionStep(command: command))])
+        _ = try HeistPlan(body: [.action(ActionStep(command: command))])
         Issue.record("Expected non-durable action to fail plan construction")
     } catch let error as HeistPlanRuntimeSafetyError {
         expectNonDurableHeistActionFailure(error.failures, observed: expectedFailure)
@@ -332,7 +332,7 @@ func runtimeSafetyRejectsRefsOutsideTheirLoopScope() throws {
             parameter: "item",
             body: [.warn(WarnStep(message: "inside string loop"))]
         )),
-        .action(try ActionStep(command: .typeText(
+        .action(ActionStep(command: .typeText(
             reference: "item",
             target: .predicate(.label("Search"))
         ))),
@@ -342,7 +342,7 @@ func runtimeSafetyRejectsRefsOutsideTheirLoopScope() throws {
             parameter: "target",
             body: [.warn(WarnStep(message: "inside element loop"))]
         )),
-        .action(try ActionStep(command: .activate(.ref("target")))),
+        .action(ActionStep(command: .activate(.ref("target")))),
     ])
 
     let failures = runtimeSafetyFailures(for: raw)
@@ -364,7 +364,7 @@ func runtimeSafetyRejectsStringRefThatLowersToInvalidCommandPayload() throws {
             values: [""],
             parameter: "item",
             body: [
-                .action(try ActionStep(command: .typeText(
+                .action(ActionStep(command: .typeText(
                     reference: "item",
                     target: .predicate(.label("Search"))
                 ))),
@@ -402,7 +402,7 @@ func runtimeSafetyRejectsEmptyBroadConcreteAccessibilityTargets() throws {
 
     for (label, target) in targets {
         let raw = HeistPlanAdmissionCandidate(body: [
-            .action(try ActionStep(command: .activate(target))),
+            .action(ActionStep(command: .activate(target))),
         ])
 
         let failures = runtimeSafetyFailures(for: raw)
@@ -417,10 +417,10 @@ func runtimeSafetyRejectsEmptyBroadConcreteAccessibilityTargets() throws {
 @Test
 func runtimeSafetyRejectsNegativeOrdinalsBeforeRuntimeUse() throws {
     let concreteRaw = HeistPlanAdmissionCandidate(body: [
-        .action(try ActionStep(command: .activate(.predicate(.label("Save"), ordinal: -1)))),
+        .action(ActionStep(command: .activate(.predicate(.label("Save"), ordinal: -1)))),
     ])
     let expressionRaw = HeistPlanAdmissionCandidate(body: [
-        .action(try ActionStep(command: .activate(.predicate(.label("Save"), ordinal: -1)))),
+        .action(ActionStep(command: .activate(.predicate(.label("Save"), ordinal: -1)))),
     ])
 
     for raw in [concreteRaw, expressionRaw] {
@@ -646,7 +646,7 @@ func runtimeSafetyAllowsCollectionLoopsInsideControlFlowButRejectsNestedCollecti
         matching: .label("Delete"),
         limit: 1,
         parameter: "target",
-        body: [.action(try ActionStep(command: .activate(.ref("target"))))]
+        body: [.action(ActionStep(command: .activate(.ref("target"))))]
     )
     let allowedCases: [HeistPlanAdmissionCandidate] = [
         HeistPlanAdmissionCandidate(body: [
@@ -718,7 +718,7 @@ func runtimeSafetyEnforcesBoundsOnCollectionLoopsInsideControlFlow() throws {
                     matching: .label("Delete"),
                     limit: 2,
                     parameter: "target",
-                    body: [.action(try ActionStep(command: .activate(.ref("target"))))]
+                    body: [.action(ActionStep(command: .activate(.ref("target"))))]
                 )),
             ]),
         ])),
@@ -739,7 +739,7 @@ func runtimeSafetyRejectsInvalidHeistDefinitionsAndInvocations() throws {
     let definition = HeistPlanAdmissionCandidate(
         name: "addToCart",
         parameter: .string(name: "item"),
-        body: [.action(try ActionStep(command: .activate(.predicate(
+        body: [.action(ActionStep(command: .activate(.predicate(
             ElementPredicateTemplate(label: .exact(itemReference))
         ))))]
     )
@@ -893,7 +893,7 @@ func runtimeSafetyAcceptsSingularAccessibilityTargetCapability() throws {
     let definition = HeistPlanAdmissionCandidate(
         name: "deleteItem",
         parameter: .accessibilityTarget(name: "target"),
-        body: [.action(try ActionStep(command: .activate(.ref("target"))))]
+        body: [.action(ActionStep(command: .activate(.ref("target"))))]
     )
     let raw = HeistPlanAdmissionCandidate(definitions: [definition], body: [
         .invoke(HeistInvocationStep(
@@ -909,7 +909,7 @@ func runtimeSafetyAcceptsParameterizedRootAndScratchRootCaller() throws {
     let parameterizedRoot = HeistPlanAdmissionCandidate(
         name: "search",
         parameter: .string(name: "query"),
-        body: [.action(try ActionStep(command: .typeText(
+        body: [.action(ActionStep(command: .typeText(
             reference: "query",
             target: .predicate(.label("Search"))
         )))]
@@ -919,7 +919,7 @@ func runtimeSafetyAcceptsParameterizedRootAndScratchRootCaller() throws {
     let scratchRoot = HeistPlanAdmissionCandidate(
         definitions: [
             HeistPlanAdmissionCandidate(name: "search", parameter: .string(name: "query"), body: [
-                .action(try ActionStep(command: .typeText(
+                .action(ActionStep(command: .typeText(
                     reference: "query",
                     target: .predicate(.label("Search"))
                 ))),
@@ -939,11 +939,11 @@ func runtimeSafetyUsesInvokedDefinitionScopeForHelperDependencies() throws {
             parameter: .string(name: "item"),
             definitions: [
                 HeistPlanAdmissionCandidate(name: "tapAddButton", body: [
-                    .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: "Add to Cart"))))),
+                    .action(ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: "Add to Cart"))))),
                 ]),
             ],
             body: [
-                .action(try ActionStep(command: .activate(.predicate(
+                .action(ActionStep(command: .activate(.predicate(
                     ElementPredicateTemplate(label: .exact(itemReference))
                 )))),
                 .invoke(HeistInvocationStep(path: "tapAddButton")),
@@ -987,7 +987,7 @@ func runtimeSafetyValidatesInvokedBodiesWithBoundArguments() throws {
             name: "typeSearch",
             parameter: .string(name: "query"),
             body: [
-                .action(try ActionStep(command: .typeText(
+                .action(ActionStep(command: .typeText(
                     reference: "query",
                     target: .predicate(.label("Search"))
                 ))),
@@ -1010,7 +1010,7 @@ func runtimeSafetyValidatesInvokedBodiesWithBoundArguments() throws {
 func runtimeSafetyAcceptsRepresentativeCanonicalPlan() throws {
     let itemReference: HeistReferenceName = "item"
     let plan = try HeistPlan(body: [
-        .action(try ActionStep(
+        .action(ActionStep(
             command: .activate(.predicate(.label("Sign In"))),
             expectationPolicy: .expect(ActionExpectation(predicate: .exists(.label("Home")), timeout: 5)))),
         .wait(WaitStep(predicate: .missing(.label("Loading")), timeout: 1)),
@@ -1028,7 +1028,7 @@ func runtimeSafetyAcceptsRepresentativeCanonicalPlan() throws {
             limit: 20,
             parameter: "target",
             body: [
-                .action(try ActionStep(
+                .action(ActionStep(
                     command: .activate(.ref("target")),
                     expectationPolicy: .expect(ActionExpectation(predicate: .missing(.ref("target")), timeout: 2)))),
             ]
@@ -1037,7 +1037,7 @@ func runtimeSafetyAcceptsRepresentativeCanonicalPlan() throws {
             values: ["Milk", "Eggs"],
             parameter: "item",
             body: [
-                .action(try ActionStep(
+                .action(ActionStep(
                     command: .typeText(reference: itemReference, target: .predicate(.label("Add item"))),
                     expectationPolicy: .expect(ActionExpectation(
                         predicate: .exists(.predicate(ElementPredicateTemplate(label: .exact(itemReference)))),
@@ -1045,9 +1045,9 @@ func runtimeSafetyAcceptsRepresentativeCanonicalPlan() throws {
                     )))),
             ]
         )),
-        .action(try ActionStep(command: .setPasteboard(SetPasteboardTarget(text: "milk")))),
-        .action(try ActionStep(command: .editAction(EditActionTarget(action: .paste)))),
-        .action(try ActionStep(command: .dismissKeyboard)),
+        .action(ActionStep(command: .setPasteboard(SetPasteboardTarget(text: "milk")))),
+        .action(ActionStep(command: .editAction(EditActionTarget(action: .paste)))),
+        .action(ActionStep(command: .dismissKeyboard)),
         .warn(WarnStep(message: "done")),
         .fail(FailStep(message: "stop")),
     ])

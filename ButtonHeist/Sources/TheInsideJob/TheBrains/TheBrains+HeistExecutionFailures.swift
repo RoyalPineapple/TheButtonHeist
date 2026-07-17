@@ -5,22 +5,6 @@ import ThePlans
 import TheScore
 
 extension TheBrains {
-    internal func admittedReceipt(
-        path: HeistExecutionPath,
-        durationMs: Int,
-        node: HeistExecutionStepNode
-    ) -> HeistExecutionStepResult {
-        do {
-            return try HeistExecutionStepResult.construct(
-                path: path,
-                durationMs: durationMs,
-                node: node
-            )
-        } catch {
-            preconditionFailure("runtime values must form a legal receipt node: \(error)")
-        }
-    }
-
     internal func requireAdmitted<Value>(
         _ value: Value?,
         _ message: @autoclosure () -> String
@@ -116,20 +100,18 @@ extension TheBrains {
         start: CFAbsoluteTime
     ) -> HeistExecutionStepResult {
         let durationMs = elapsedMilliseconds(since: start)
-        return admittedReceipt(
+        return .wait(
             path: path,
             durationMs: durationMs,
-            node: .wait(
-                predicate: failure.wait.predicate,
-                timeout: failure.wait.timeout,
-                completion: .failed(
-                    evidence: .unavailable,
-                    failure: HeistFailureDetail(
-                        category: .wait,
-                        contract: "wait predicate resolves before evaluation",
-                        observed: "could not resolve heist wait predicate: \(failure.errorDescription)",
-                        expected: failure.wait.predicate.description
-                    )
+            predicate: failure.wait.predicate,
+            timeout: failure.wait.timeout,
+            completion: .failed(
+                evidence: .unavailable,
+                failure: HeistFailureDetail(
+                    category: .wait,
+                    contract: "wait predicate resolves before evaluation",
+                    observed: "could not resolve heist wait predicate: \(failure.errorDescription)",
+                    expected: failure.wait.predicate.description
                 )
             )
         )
@@ -203,10 +185,14 @@ extension TheBrains {
             completion,
             "action receipt evidence must match the receipt command"
         )
-        return admittedReceipt(
-            path: path,
-            durationMs: durationMs,
-            node: .action(command: command, completion: admittedCompletion)
+        return requireAdmitted(
+            HeistExecutionStepResult.action(
+                path: path,
+                durationMs: durationMs,
+                command: command,
+                completion: admittedCompletion
+            ),
+            "action failure receipt evidence must match the receipt command"
         )
     }
 

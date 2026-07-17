@@ -160,17 +160,9 @@ public struct ActionSettlementEvidence: Codable, Sendable, Equatable {
 
 /// The outcome of executing an action command, including post-action diagnostics.
 public struct ActionResult: Codable, Sendable, Equatable {
-    private enum MethodAndPayload: Sendable, Equatable {
+    package enum MethodAndPayload: Sendable, Equatable {
         case methodOnly(ActionMethod)
         case payload(ActionResultPayload)
-
-        init(method: ActionMethod) {
-            self = .methodOnly(method)
-        }
-
-        init(payload: ActionResultPayload) {
-            self = .payload(payload)
-        }
 
         init(
             decodedMethod method: ActionMethod,
@@ -356,16 +348,15 @@ public struct ActionResult: Codable, Sendable, Equatable {
 
     package init(
         outcome: ActionResultOutcome,
-        method: ActionMethod,
-        payload: ActionResultPayload?,
+        methodAndPayload: MethodAndPayload,
         message: String?,
         observation: ActionResultObservationEvidence,
         subjectEvidence: ActionSubjectEvidence?,
         activationTrace: ActivationTrace?
     ) {
-        precondition(activationTrace == nil || method == .activate)
+        precondition(activationTrace == nil || methodAndPayload.method == .activate)
         self = Self.construct(
-            payload.map(MethodAndPayload.payload) ?? .methodOnly(method),
+            methodAndPayload,
             outcome,
             message,
             observation,

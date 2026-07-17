@@ -585,7 +585,7 @@ final class PublicActionResultJSONTests: XCTestCase {
 
     private func minimalPlan() throws -> HeistPlan {
         try HeistPlan(body: [
-            .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: "Button"))))),
+            .action(ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: "Button"))))),
         ])
     }
 

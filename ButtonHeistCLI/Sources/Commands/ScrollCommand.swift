@@ -14,13 +14,16 @@ struct ScrollSelectionInput: ParsableArguments {
 
     func scrollSelection() throws -> ScrollContainerSelection {
         if let containerName {
-            guard let containerName = ContainerName(parsing: containerName) else {
+            let parsedContainerName: ContainerName
+            do {
+                parsedContainerName = try ContainerName(validating: containerName)
+            } catch {
                 throw ValidationError("--container-name must not be empty")
             }
             if try element.hasTarget {
                 throw ValidationError("--container-name cannot be combined with element target options")
             }
-            return .container(containerName)
+            return .container(parsedContainerName)
         }
         if let target = try element.parsedTarget() {
             return .element(target)

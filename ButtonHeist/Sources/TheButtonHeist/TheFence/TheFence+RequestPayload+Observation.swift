@@ -38,7 +38,7 @@ extension TheFence {
     private func interfaceDiscoveryLimit(
         _ arguments: CommandArgumentEnvelope,
         _ key: FenceParameterKey
-    ) throws -> Int? {
+    ) throws -> InterfaceDiscoveryLimit? {
         let parameter: FenceParameter<Int>
         if key == .maxScrollsPerContainer {
             parameter = FenceParameters.maxScrollsPerContainer
@@ -47,7 +47,8 @@ extension TheFence {
         } else {
             preconditionFailure("Unsupported interface discovery limit parameter \(key.rawValue)")
         }
-        return try arguments.value(parameter)
+        guard let value = try arguments.value(parameter) else { return nil }
+        return try InterfaceDiscoveryLimit(validating: value)
     }
 
     func makeScreenRequest(

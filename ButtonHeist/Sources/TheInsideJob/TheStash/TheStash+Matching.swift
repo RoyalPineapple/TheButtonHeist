@@ -29,13 +29,11 @@ extension AccessibilityElement: PredicateSelectionSubject {
     }
 
     package func satisfiesRequiredActions(_ required: Set<ElementAction>) -> Bool {
-        required.isSubset(of: predicateActions)
+        required.isSubset(of: projectedActionSet.actions)
     }
 
     package func containsCustomContent(matching match: CustomContentMatchCore<String>) -> Bool {
-        customContent.contains {
-            HeistCustomContent(projecting: $0) != nil && match.matches($0)
-        }
+        projectedCustomContent.contains { match.matches($0) }
     }
 
     package func satisfiesRequiredRotors(_ required: [StringMatchCore<String>]) -> Bool {
@@ -45,21 +43,8 @@ extension AccessibilityElement: PredicateSelectionSubject {
         }
     }
 
-    package var predicateActions: Set<ElementAction> {
-        let isInteractive = respondsToUserInteraction
-            || !traits.isDisjoint(with: AccessibilityPolicy.interactiveTraitsBitmask)
-            || !customActions.isEmpty
-        let activate: [ElementAction] = isInteractive ? [.activate] : []
-        let textEntry: [ElementAction] = AccessibilityPolicy.supportsTextEntry(traits.heistTraits)
-            ? [.typeText]
-            : []
-        let adjustable: [ElementAction] = (isInteractive && traits.contains(.adjustable))
-            ? [.increment, .decrement]
-            : []
-        let custom = customActions
-            .compactMap { try? CustomActionName(validating: $0.name) }
-            .map(ElementAction.custom)
-        return Set(activate + textEntry + adjustable + custom)
+    package var projectedCustomContent: [HeistCustomContent] {
+        customContent.compactMap { HeistCustomContent(projecting: $0) }
     }
 
     package var predicateMatcherFacts: [AccessibilityMatcherFact] {
@@ -77,7 +62,7 @@ extension InterfaceTree.Element: ElementPredicateSubjectBacked {
 }
 
 private extension CustomContentMatchCore where Text == String {
-    func matches(_ content: AccessibilityElement.CustomContent) -> Bool {
+    func matches(_ content: HeistCustomContent) -> Bool {
         label.matches(content.label)
             && value.matches(content.value)
             && (isImportant.map { $0 == content.isImportant } ?? true)

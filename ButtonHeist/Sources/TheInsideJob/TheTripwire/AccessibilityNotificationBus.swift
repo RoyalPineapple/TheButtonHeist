@@ -10,7 +10,7 @@ import TheScore
 /// `@unchecked Sendable` justification: all mutable state is protected by
 /// `lock`; waiter continuations are resumed outside the lock and timeout
 /// tasks reference the bus weakly.
-final class AccessibilityNotificationBus: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
+final class AccessibilityNotificationBus: @unchecked Sendable {
     private struct IngressLog {
         let retentionLimit: Int
         private(set) var retainedEvents: [PendingAccessibilityNotificationEvent] = []
@@ -434,7 +434,7 @@ enum AccessibilityNotificationProvenance: Sendable, Equatable {
 /// Lifetime token for a heist-level notification stream.
 /// `@unchecked Sendable` justification: mutable `bus` access is protected by `lock`;
 /// cancellation may cross task boundaries while closing scoped observation.
-final class AccessibilityNotificationHeistScope: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
+final class AccessibilityNotificationHeistScope: @unchecked Sendable {
     let cursor: AccessibilityNotificationCursor
 
     private let lock = NSLock()
@@ -463,7 +463,7 @@ final class AccessibilityNotificationHeistScope: @unchecked Sendable { // swiftl
 /// Lifetime token for a single action's notification attribution window.
 /// `@unchecked Sendable` justification: mutable `bus` access is protected by `lock`;
 /// cancellation may cross task boundaries while closing the action window.
-final class AccessibilityNotificationActionWindow: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
+final class AccessibilityNotificationActionWindow: @unchecked Sendable {
     let cursor: AccessibilityNotificationCursor
 
     private let lock = NSLock()

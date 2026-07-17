@@ -19,7 +19,7 @@ struct CoarseFrameKey: Hashable {
     }
 }
 
-@MainActor enum CoarseFrameComparison { // swiftlint:disable:this agent_main_actor_value_type
+@MainActor enum CoarseFrameComparison {
     static var currentBucket: CGFloat {
         bucket(for: UIDevice.current.userInterfaceIdiom)
     }

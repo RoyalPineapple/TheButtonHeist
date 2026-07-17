@@ -2,7 +2,7 @@
 #if DEBUG
 import UIKit
 
-@MainActor enum ScrollViewHierarchySearch { // swiftlint:disable:this agent_main_actor_value_type
+@MainActor enum ScrollViewHierarchySearch {
     static func descendantScrollViews(in view: UIView) -> [UIScrollView] {
         view.subviews.flatMap { subview -> [UIScrollView] in
             let current = (subview as? UIScrollView).map { [$0] } ?? []

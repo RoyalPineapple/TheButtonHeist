@@ -1,5 +1,6 @@
 import Foundation
 
+import ThePlans
 import TheScore
 
 public struct DiscoveryDeviceID: NonBlankStringValue, CustomDebugStringConvertible {

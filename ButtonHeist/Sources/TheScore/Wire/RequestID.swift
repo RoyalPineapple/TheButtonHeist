@@ -1,3 +1,5 @@
+import ThePlans
+
 /// A nonblank Button Heist wire request identifier used to correlate requests and responses.
 public struct RequestID: NonBlankStringValue {
     private let value: String

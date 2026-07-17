@@ -59,8 +59,8 @@ public struct HeistReceiptRecordingConfiguration: Sendable, Equatable {
     }
 
     private static func rootDirectory(for value: String) -> URL {
-        switch value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
-        case processTemporaryDirectoryValue, "temporary-directory", "__tmp__":
+        switch value {
+        case processTemporaryDirectoryValue:
             return FileManager.default.temporaryDirectory
                 .appendingPathComponent("buttonheist-receipts", isDirectory: true)
         default:

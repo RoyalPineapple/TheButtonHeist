@@ -141,14 +141,12 @@ import TheScore
             ),
             expectation: ExpectationResult.Met(predicate: predicate)
         ))
-        return try HeistExecutionStepResult.construct(
+        return .wait(
             path: try HeistExecutionPath(validating: "$.body[1]"),
             durationMs: 100,
-            node: .wait(
-                predicate: predicate,
-                timeout: 0.1,
-                completion: .passed(evidence: try #require(HeistPassedWaitEvidence(.matched(check))))
-            )
+            predicate: predicate,
+            timeout: 0.1,
+            completion: .passed(evidence: try #require(HeistPassedWaitEvidence(.matched(check))))
         )
     }
 
@@ -172,26 +170,24 @@ import TheScore
         let completion = HeistRepeatUntilCompletion.passed(
             evidence: try #require(HeistPassedRepeatUntilEvidence(evidence))
         )
-        return try HeistExecutionStepResult.construct(
+        return try #require(HeistExecutionStepResult.repeatUntil(
             path: try HeistExecutionPath(validating: "$.body[2]"),
             durationMs: 60,
-            node: .repeatUntil(
-                declaration: HeistRepeatUntilDeclaration(predicate: predicate, timeout: 0.05),
-                completion: completion
-            )
-        )
+            declaration: HeistRepeatUntilDeclaration(predicate: predicate, timeout: 0.05),
+            completion: completion
+        ))
     }
 
     private func caseSelectionStep() throws -> HeistExecutionStepResult {
         .conditional(
             path: try HeistExecutionPath(validating: "$.body[3]"),
             durationMs: 490,
-            completion: .passed(evidence: HeistCaseSelectionEvidence(selection: HeistCaseSelectionResult(
-                    cases: [],
-                    outcome: .timedOut,
-                    elapsedMs: 490,
-                    timeout: 0.5
-                )))
+            completion: .passed(evidence: HeistCaseSelectionEvidence(selection: .selectingFirstMatch(
+                cases: [],
+                ifNone: .timedOut,
+                elapsedMs: 490,
+                timeout: 0.5
+            )))
         )
     }
 

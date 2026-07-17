@@ -41,7 +41,7 @@ extension AccessibilityElement {
     }
 }
 
-@MainActor struct SettleObservationLedger { // swiftlint:disable:this agent_main_actor_value_type
+@MainActor struct SettleObservationLedger {
     private(set) var elementsByKey: [TimelineKey: AccessibilityElement] = [:]
     private(set) var currentGenerationLastObservation: SettleRecordedObservation?
     private(set) var latestChangeDescription: String?
@@ -91,7 +91,7 @@ struct SettleRecordedObservation {
     }
 }
 
-@MainActor enum SettleTimeline { // swiftlint:disable:this agent_main_actor_value_type
+@MainActor enum SettleTimeline {
     static func fingerprint(
         of elements: [AccessibilityElement],
         bucket: CGFloat = CoarseFrameComparison.currentBucket
