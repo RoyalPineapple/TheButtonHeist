@@ -55,7 +55,7 @@ private extension Optional where Wrapped == StringMatchCore<String> {
 public extension ElementPredicate {
     /// Whether any observed element in the collection satisfies this predicate.
     func anyMatch(in elements: [HeistElement]) -> Bool {
-        !ElementMatchGraph(elements: elements).resolve(self).isEmpty
+        !AccessibilityTargetMatchGraph(elements: elements).resolve(self).isEmpty
     }
 }
 
@@ -204,7 +204,7 @@ package extension ResolvedAccessibilityTarget {
     }
 }
 
-package struct ElementMatchGraph: Sendable, Equatable {
+package struct AccessibilityTargetMatchGraph: Sendable, Equatable {
     package let all: AccessibilityTargetElementMatchSet
     private let containers: [AccessibilityTargetContainerMatch]
     private let parentContainerPathByPath: [TreePath: TreePath]
@@ -274,11 +274,11 @@ package struct ElementMatchGraph: Sendable, Equatable {
         containers.contains { predicate.matches($0.facts) }
     }
 
-    private func scoped(to predicate: ResolvedContainerPredicate) -> ElementMatchGraph {
+    private func scoped(to predicate: ResolvedContainerPredicate) -> AccessibilityTargetMatchGraph {
         let containerPaths = Set(containers
             .filter { predicate.matches($0.facts) }
             .map(\.path))
-        return ElementMatchGraph(
+        return AccessibilityTargetMatchGraph(
             all: AccessibilityTargetElementMatchSet(
                 all.matches.filter { isContained(parent: $0.parentContainerPath, in: containerPaths) }
             ),

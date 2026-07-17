@@ -685,7 +685,7 @@ private struct ForEachMatchSignature: Equatable {
     var count: Int { identities.count }
 
     init(matching: ElementPredicate, elements: [HeistElement]) {
-        identities = ElementMatchGraph(elements: elements)
+        identities = AccessibilityTargetMatchGraph(elements: elements)
             .resolve(matching)
             .elements
             .map(AccessibilityPolicy.matcherIdentityFacts(for:))

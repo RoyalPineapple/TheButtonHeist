@@ -61,7 +61,7 @@ enum EvidenceMinimumMatcher {
     }
 
     static func index(of target: ResolvedAccessibilityTarget, in interface: Interface) -> Int? {
-        let matches = ElementMatchGraph(interface: interface).resolve(target).elements.matches
+        let matches = AccessibilityTargetMatchGraph(interface: interface).resolve(target).elements.matches
         return matches.count == 1 ? matches[0].traversalOrder : nil
     }
 }

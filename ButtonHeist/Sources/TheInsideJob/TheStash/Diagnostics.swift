@@ -240,7 +240,7 @@ extension TheStash {
         limit: Int = 3
     ) -> String? {
         guard limit > 0, let diagnosticPredicate = diagnosticContainsPredicate(from: predicate) else { return nil }
-        let hits = ElementMatchGraph(elements: elements)
+        let hits = AccessibilityTargetMatchGraph(elements: elements)
             .resolve(diagnosticPredicate)
             .elements
             .prefix(limit + 1)

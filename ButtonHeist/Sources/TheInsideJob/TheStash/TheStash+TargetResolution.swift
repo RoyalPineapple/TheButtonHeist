@@ -179,7 +179,10 @@ extension TheStash {
         guard case .container(let predicate, let ordinal) = target.terminalSelection else {
             preconditionFailure("container resolution requires a resolved container target")
         }
-        let matches = matchingTreeContainers(for: target, in: tree)
+        let matches = AccessibilityTargetMatchGraph(targetMatchInput(for: tree))
+            .matches(for: target)
+            .containerPaths
+            .compactMap { tree.containers[$0] }
         if let ordinal {
             guard matches.indices.contains(ordinal) else {
                 return .notFound(ContainerNotFoundFacts(
@@ -258,6 +261,37 @@ extension TheStash {
 
 private extension TheStash {
 
+    func targetMatchInput(for tree: InterfaceTree) -> AccessibilityTargetMatchInput {
+        let elements = tree.orderedElements
+        let containers = tree.orderedContainers
+        let containerPaths = Set(tree.containers.keys)
+        return AccessibilityTargetMatchInput(
+            elements: elements.enumerated().map { offset, entry in
+                AccessibilityTargetElementMatch(
+                    path: entry.path,
+                    traversalOrder: offset,
+                    parentContainerPath: AccessibilityTargetMatchInput.parentContainerPath(
+                        for: entry.path,
+                        preferred: entry.scrollMembership?.containerPath,
+                        among: containerPaths
+                    ),
+                    element: WireConversion.convert(entry.element)
+                )
+            },
+            containers: containers.map { entry in
+                AccessibilityTargetContainerMatch(
+                    path: entry.path,
+                    parentContainerPath: AccessibilityTargetMatchInput.parentContainerPath(
+                        for: entry.path,
+                        preferred: entry.scrollMembership?.containerPath,
+                        among: containerPaths
+                    ),
+                    facts: entry.container.containerPredicateFacts
+                )
+            }
+        )
+    }
+
     func resolveTarget(
         _ target: ResolvedAccessibilityTarget,
         in tree: InterfaceTree,
@@ -266,8 +300,14 @@ private extension TheStash {
         guard case .element(let predicate, let ordinal) = target.terminalSelection else {
             preconditionFailure("element resolution requires a resolved element target")
         }
-        let candidates = elementCandidates(for: target, in: tree)
-        let matches = matchingTreeElements(for: target, in: tree)
+        let elements = tree.orderedElements
+        let matchGraph = AccessibilityTargetMatchGraph(targetMatchInput(for: tree))
+        let candidates = matchGraph.elementCandidates(in: target).matches.map {
+            elements[$0.traversalOrder]
+        }
+        let matches = matchGraph.matches(for: target).elements.matches.map {
+            elements[$0.traversalOrder]
+        }
         if let ordinal {
             guard matches.indices.contains(ordinal) else {
                 return .notFound(TargetNotFoundFacts(

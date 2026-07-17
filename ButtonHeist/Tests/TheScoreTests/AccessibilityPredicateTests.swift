@@ -218,7 +218,7 @@ final class AccessibilityPredicateTests: XCTestCase {
         XCTAssertFalse(try AccessibilityPredicate.missing(.label("Ready")).resolve(in: .empty).validate(against: action).met)
     }
 
-    func testElementMatchGraphKeepsEqualInterfaceElementsDistinctByTreePath() throws {
+    func testAccessibilityTargetMatchGraphKeepsEqualInterfaceElementsDistinctByTreePath() throws {
         let duplicate = makeElement(label: "Save", traits: [.button])
         let interface = makeTestInterface(nodes: [
             testContainer(makeTestAccessibilityContainer(), children: [
@@ -227,7 +227,7 @@ final class AccessibilityPredicateTests: XCTestCase {
             ]),
         ])
 
-        let matches = ElementMatchGraph(interface: interface)
+        let matches = AccessibilityTargetMatchGraph(interface: interface)
             .resolve(ElementPredicate.label("Save"))
 
         XCTAssertEqual(matches.count, 2)
@@ -242,7 +242,7 @@ final class AccessibilityPredicateTests: XCTestCase {
             makeElement(label: "Cancel", identifier: "primary", traits: [.button]),
         ]
 
-        let graph = ElementMatchGraph(elements: elements)
+        let graph = AccessibilityTargetMatchGraph(elements: elements)
         let predicate = try ElementPredicateTemplate(
             label: "Save",
             identifier: "primary",
@@ -270,7 +270,7 @@ final class AccessibilityPredicateTests: XCTestCase {
             .exclude(.actions([.custom("Sub")])),
         ]).resolve(in: .empty)
 
-        let matches = ElementMatchGraph(elements: elements).resolve(predicate)
+        let matches = AccessibilityTargetMatchGraph(elements: elements).resolve(predicate)
 
         XCTAssertEqual(matches.elements, [elements[0], elements[2]])
         XCTAssertEqual(matches.orderedPaths, [TreePath([0]), TreePath([2])])
@@ -282,14 +282,14 @@ final class AccessibilityPredicateTests: XCTestCase {
             makeElement(label: "Other"),
             makeElement(label: "Cancel"),
         ]
-        let graph = ElementMatchGraph(elements: elements)
+        let graph = AccessibilityTargetMatchGraph(elements: elements)
         let cancelMatches = graph.resolve(ElementPredicate.label("Cancel"))
         let saveMatches = graph.resolve(ElementPredicate.label("Save"))
 
         XCTAssertEqual(cancelMatches.union(saveMatches).orderedPaths, [TreePath([0]), TreePath([2])])
     }
 
-    func testElementMatchGraphPreservesTraversalOrderFromMatches() throws {
+    func testAccessibilityTargetMatchGraphPreservesTraversalOrderFromMatches() throws {
         let later = AccessibilityTargetElementMatch(
             path: TreePath([9]),
             traversalOrder: 9,
@@ -302,7 +302,9 @@ final class AccessibilityPredicateTests: XCTestCase {
             parentContainerPath: nil,
             element: makeElement(label: "Row", actions: [.activate])
         )
-        let graph = ElementMatchGraph(AccessibilityTargetMatchInput(elements: [later, earlier], containers: []))
+        let graph = AccessibilityTargetMatchGraph(
+            AccessibilityTargetMatchInput(elements: [later, earlier], containers: [])
+        )
 
         let matches = graph.resolve(ElementPredicate.label("Row"))
 
@@ -315,7 +317,7 @@ final class AccessibilityPredicateTests: XCTestCase {
             makeElement(label: "Save", traits: [.staticText]),
             makeElement(label: "Save", traits: [.button]),
         ]
-        let graph = ElementMatchGraph(elements: elements)
+        let graph = AccessibilityTargetMatchGraph(elements: elements)
 
         let authored = AccessibilityTarget.predicate(
             ElementPredicateTemplate(label: "Save", traits: [.button]),
@@ -352,7 +354,7 @@ final class AccessibilityPredicateTests: XCTestCase {
         ])
 
         let authored = AccessibilityTarget.within(container: .label("Checkout"), target: .label("Pay"))
-        let selected = ElementMatchGraph(interface: interface)
+        let selected = AccessibilityTargetMatchGraph(interface: interface)
             .resolve(try authored.resolve(in: .empty))
 
         XCTAssertEqual(selected.elements.elements, [pay])
