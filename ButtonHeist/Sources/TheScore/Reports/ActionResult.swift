@@ -354,6 +354,27 @@ public struct ActionResult: Codable, Sendable, Equatable {
         return ActionResult(methodAndPayload: methodAndPayload, message: message, evidence: evidence)
     }
 
+    package init(
+        outcome: ActionResultOutcome,
+        method: ActionMethod,
+        payload: ActionResultPayload?,
+        message: String?,
+        observation: ActionResultObservationEvidence,
+        subjectEvidence: ActionSubjectEvidence?,
+        activationTrace: ActivationTrace?
+    ) {
+        precondition(activationTrace == nil || method == .activate)
+        self = Self.construct(
+            payload.map(MethodAndPayload.payload) ?? .methodOnly(method),
+            outcome,
+            message,
+            observation,
+            subjectEvidence,
+            activationTrace: activationTrace,
+            timing: nil
+        )
+    }
+
     private init(
         methodAndPayload: MethodAndPayload,
         message: String?,

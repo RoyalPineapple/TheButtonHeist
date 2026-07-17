@@ -12,26 +12,9 @@ func evaluateButtonHeistRules(
 }
 
 func evaluateButtonHeistRules(
-    mutations: [VirtualSourceFile] = []
+    mutations: [VirtualSourceFile]
 ) throws -> RuleReport {
-    let mutatedPaths = Set(mutations.map(\.path))
-    let files = canonicalButtonHeistRuleFixtures.filter {
-        !mutatedPaths.contains($0.path)
-    } + mutations
     return try RuleTestHarness(buttonHeistRules).evaluate(
-        VirtualRepository(files: files)
+        VirtualRepository(files: mutations)
     )
 }
-
-private let canonicalButtonHeistRuleFixtures: [VirtualSourceFile] = [
-    .swift(
-        "ButtonHeist/Sources/TheScore/Receipts/HeistExecutionStepNode.swift",
-        component: ButtonHeistComponent.score,
-        source: "enum HeistExecutionStepNode {}"
-    ),
-    .swift(
-        "ButtonHeist/Sources/TheInsideJob/TheBrains/PredicateWait.swift",
-        component: ButtonHeistComponent.runtime,
-        source: "func runWait() { _ = PredicateWaitLifecycleMachine() }"
-    ),
-]

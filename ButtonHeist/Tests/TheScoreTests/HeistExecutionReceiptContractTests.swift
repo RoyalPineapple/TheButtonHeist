@@ -110,19 +110,16 @@ import TheScore
             failureReason: "matched count exceeded limit"
         ).flatMap(HeistFailedForEachElementEvidence.init)
 
-        let invalid = HeistExecutionStepResult.construct(
-            path: "$.body[0]",
-            durationMs: 1,
-            node: .forEachElement(
-                declaration: declaration,
-                completion: .passed(evidence: try #require(passedEvidence))
+        #expect(throws: HeistReceiptAdmissionError.self) {
+            _ = try HeistExecutionStepResult.construct(
+                path: "$.body[0]",
+                durationMs: 1,
+                node: .forEachElement(
+                    declaration: declaration,
+                    completion: .passed(evidence: try #require(passedEvidence))
+                )
             )
-        )
-        guard case .failure(let error) = invalid else {
-            Issue.record("Expected over-limit passing evidence to be rejected")
-            return
         }
-        #expect(error == .forEachElementEvidenceMismatch)
 
         let valid = try HeistExecutionStepResult.construct(
             path: "$.body[0]",
@@ -138,7 +135,7 @@ import TheScore
                     )
                 )
             )
-        ).get()
+        )
         #expect(valid.kind == .forEachElement)
     }
 
@@ -189,7 +186,7 @@ import TheScore
                     declaration: stringDeclaration,
                     completion: .passed(evidence: passedStringSummary)
                 )
-            ).get(),
+            ),
             HeistReceiptFixture.forEachStringIteration(
                 path: "$.body[2].for_each_string.iterations[0]",
                 count: 2,
@@ -206,7 +203,7 @@ import TheScore
                     declaration: elementDeclaration,
                     completion: .passed(evidence: passedElementSummary)
                 )
-            ).get(),
+            ),
             try HeistExecutionStepResult.construct(
                 path: "$.body[4].for_each_element.iterations[0]",
                 durationMs: 1,
@@ -214,7 +211,7 @@ import TheScore
                     declaration: elementDeclaration,
                     completion: .passed(evidence: passedElementIteration)
                 )
-            ).get(),
+            ),
             try HeistExecutionStepResult.construct(
                 path: "$.body[5]",
                 durationMs: 1,
@@ -222,7 +219,7 @@ import TheScore
                     declaration: repeatDeclaration,
                     completion: .passed(evidence: passedRepeatSummary)
                 )
-            ).get(),
+            ),
             try HeistExecutionStepResult.construct(
                 path: "$.body[6].repeat_until.iterations[0]",
                 durationMs: 1,
@@ -230,7 +227,7 @@ import TheScore
                     declaration: repeatDeclaration,
                     completion: .passed(evidence: passedRepeatIteration)
                 )
-            ).get(),
+            ),
         ]
     }
 

@@ -56,16 +56,16 @@ final class InterfaceTreeTests: XCTestCase {
     }
 
     func testEmptyHasNoName() {
-        XCTAssertNil(InterfaceObservation.empty.name)
-        XCTAssertNil(InterfaceObservation.empty.id)
+        XCTAssertNil(InterfaceObservation.empty.tree.name)
+        XCTAssertNil(InterfaceObservation.empty.tree.id)
     }
 
     func testEmptyInterfaceIdsIsEmpty() {
-        XCTAssertTrue(InterfaceObservation.empty.elementIDs.isEmpty)
+        XCTAssertTrue(InterfaceObservation.empty.tree.elementIDs.isEmpty)
     }
 
     func testEmptyViewportIdsIsEmpty() {
-        XCTAssertTrue(InterfaceObservation.empty.viewportElementIDs.isEmpty)
+        XCTAssertTrue(InterfaceObservation.empty.tree.viewportElementIDs.isEmpty)
     }
 
     // MARK: - InterfaceTree / LiveInterface
@@ -100,8 +100,9 @@ final class InterfaceTreeTests: XCTestCase {
 
         XCTAssertEqual(merged.elementIDs, ["button_first", "button_second"])
         XCTAssertEqual(merged.viewportElementIDs, ["button_second"])
-        XCTAssertNil(merged.viewportCapture.element(for: "button_first"))
-        XCTAssertEqual(merged.viewportCapture.element(for: "button_second"), second)
+        XCTAssertFalse(merged.viewportCapture.heistIdsByPath.values.contains("button_first"))
+        XCTAssertTrue(merged.viewportCapture.heistIdsByPath.values.contains("button_second"))
+        XCTAssertEqual(merged.findElement(heistId: "button_second")?.element, second)
     }
 
     func testViewportUpdateRetainsElementsThatMoveOffscreenInFullTreeCapture() throws {
@@ -183,7 +184,6 @@ final class InterfaceTreeTests: XCTestCase {
 
         XCTAssertEqual(pruned.liveCapture.heistId(forPath: TreePath([0, 0])), "kept")
         XCTAssertNil(pruned.liveCapture.heistId(forPath: TreePath([1, 0])))
-        XCTAssertEqual(pruned.liveCapture.containerNamesByPath[TreePath([0])], "feed")
         XCTAssertEqual(pruned.tree.containers[TreePath([0])]?.containerName, "feed")
         XCTAssertNil(pruned.tree.containers[TreePath([1])])
         XCTAssertEqual(pruned.tree.elements["kept"]?.scrollMembership?.containerPath, TreePath([0]))
@@ -213,11 +213,11 @@ final class InterfaceTreeTests: XCTestCase {
 
         let visibleOnly = screen.viewportOnly
 
-        XCTAssertEqual(visibleOnly.elementIDs, ["button_visible"])
-        XCTAssertEqual(visibleOnly.viewportElementIDs, ["button_visible"])
+        XCTAssertEqual(visibleOnly.tree.elementIDs, ["button_visible"])
+        XCTAssertEqual(visibleOnly.tree.viewportElementIDs, ["button_visible"])
         XCTAssertEqual(visibleOnly.liveCapture.hierarchy, screen.liveCapture.hierarchy)
         XCTAssertEqual(visibleOnly.liveCapture.firstResponderHeistId, "button_visible")
-        XCTAssertNil(visibleOnly.findElement(heistId: "button_known"))
+        XCTAssertNil(visibleOnly.tree.findElement(heistId: "button_known"))
     }
 
     func testSemanticHashIgnoresViewportGeometry() {
@@ -239,7 +239,7 @@ final class InterfaceTreeTests: XCTestCase {
         let afterInterfaceHash = AccessibilityTrace.Capture.hash(TheStash.WireConversion.toInterface(from: after.tree))
 
         XCTAssertEqual(beforeInterfaceHash, afterInterfaceHash)
-        XCTAssertEqual(before.interfaceHash, after.interfaceHash)
+        XCTAssertEqual(before.tree.interfaceHash, after.tree.interfaceHash)
     }
 
     func testSemanticHashChangesForAccessibilityState() {
@@ -248,7 +248,7 @@ final class InterfaceTreeTests: XCTestCase {
         let before = InterfaceObservation.makeForTests(elements: [(oldTotal, "total_staticText")])
         let after = InterfaceObservation.makeForTests(elements: [(newTotal, "total_staticText")])
 
-        XCTAssertNotEqual(before.interfaceHash, after.interfaceHash)
+        XCTAssertNotEqual(before.tree.interfaceHash, after.tree.interfaceHash)
     }
 
     func testOrderedElementsReturnsViewportOrderThenOffViewportSortedByHeistId() {
@@ -268,7 +268,7 @@ final class InterfaceTreeTests: XCTestCase {
         )
 
         XCTAssertEqual(
-            screen.orderedElements.map(\.heistId),
+            screen.tree.orderedElements.map(\.heistId),
             ["button_second", "button_first", "a_known", "z_known"]
         )
     }
@@ -281,7 +281,7 @@ final class InterfaceTreeTests: XCTestCase {
             hierarchy: [],
             firstResponderHeistId: nil,
         )
-        XCTAssertNil(screen.findElement(heistId: "missing"))
+        XCTAssertNil(screen.tree.findElement(heistId: "missing"))
     }
 
     func testFindElementReturnsEntryForExistingId() {
@@ -291,7 +291,7 @@ final class InterfaceTreeTests: XCTestCase {
             hierarchy: [],
             firstResponderHeistId: nil,
         )
-        XCTAssertEqual(screen.findElement(heistId: "save_button")?.heistId, "save_button")
+        XCTAssertEqual(screen.tree.findElement(heistId: "save_button")?.heistId, "save_button")
     }
 
     // MARK: - name / id
@@ -305,8 +305,8 @@ final class InterfaceTreeTests: XCTestCase {
                 (button, "save_button"),
             ]
         )
-        XCTAssertEqual(screen.name, "Controls Demo")
-        XCTAssertEqual(screen.id, "controls_demo")
+        XCTAssertEqual(screen.tree.name, "Controls Demo")
+        XCTAssertEqual(screen.tree.id, "controls_demo")
     }
 
     func testNameDerivesFromTopmostHeaderInHierarchy() {
@@ -326,9 +326,9 @@ final class InterfaceTreeTests: XCTestCase {
                 (navigationTitle, "navigation_title"),
             ]
         )
-        XCTAssertEqual(screen.name, "Display")
-        XCTAssertEqual(screen.id, "display")
-        XCTAssertEqual(screen.summaryElement, navigationTitle)
+        XCTAssertEqual(screen.tree.name, "Display")
+        XCTAssertEqual(screen.tree.id, "display")
+        XCTAssertEqual(screen.tree.summaryElement, navigationTitle)
     }
 
     func testSummaryElementTraitTakesPrecedenceOverTopmostHeader() {
@@ -349,9 +349,9 @@ final class InterfaceTreeTests: XCTestCase {
             ]
         )
 
-        XCTAssertEqual(screen.summaryElement, explicitSummary)
-        XCTAssertEqual(screen.name, "Messages")
-        XCTAssertEqual(screen.id, "messages")
+        XCTAssertEqual(screen.tree.summaryElement, explicitSummary)
+        XCTAssertEqual(screen.tree.name, "Messages")
+        XCTAssertEqual(screen.tree.id, "messages")
     }
 
     func testNameIgnoresHeaderWithoutLabel() {
@@ -363,15 +363,15 @@ final class InterfaceTreeTests: XCTestCase {
                 (realHeader, "page_title"),
             ]
         )
-        XCTAssertEqual(screen.name, "Page Title")
+        XCTAssertEqual(screen.tree.name, "Page Title")
     }
 
     func testNameNilWhenNoHeader() {
         let screen = InterfaceObservation.makeForTests(
             elements: [(makeElement(label: "Body"), "body")]
         )
-        XCTAssertNil(screen.name)
-        XCTAssertNil(screen.id)
+        XCTAssertNil(screen.tree.name)
+        XCTAssertNil(screen.tree.id)
     }
 
     // MARK: - merging — disjoint sets

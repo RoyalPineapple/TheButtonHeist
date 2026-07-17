@@ -124,10 +124,7 @@ internal final class ElementInflation {
                 case .failure(let failure):
                     nextState = .failed(failure)
                 }
-                if let failure = transition(&state, to: nextState) {
-                    await revealTransaction.rollBack(using: exploration.moveViewport)
-                    return .failed(failure)
-                }
+                state = transition(from: state, to: nextState)
 
             case .revealing(let target, let treeElement, let deadline, let resolution):
                 let nextState = await stateAfterReveal(
@@ -137,10 +134,7 @@ internal final class ElementInflation {
                     resolution: resolution,
                     transaction: revealTransaction
                 )
-                if let failure = transition(&state, to: nextState) {
-                    await revealTransaction.rollBack(using: exploration.moveViewport)
-                    return .failed(failure)
-                }
+                state = transition(from: state, to: nextState)
 
             case .refreshing(let target, let treeElement, let deadline, let resolution):
                 let nextState = await stateAfterRefresh(
@@ -151,10 +145,7 @@ internal final class ElementInflation {
                     activationPointPolicy: activationPointPolicy,
                     deadline: deadline
                 )
-                if let failure = transition(&state, to: nextState) {
-                    await revealTransaction.rollBack(using: exploration.moveViewport)
-                    return .failed(failure)
-                }
+                state = transition(from: state, to: nextState)
 
             case .placing(let inflatedTarget):
                 let nextState = await stateAfterPlacement(
@@ -162,10 +153,7 @@ internal final class ElementInflation {
                     method: method,
                     transaction: revealTransaction
                 )
-                if let failure = transition(&state, to: nextState) {
-                    await revealTransaction.rollBack(using: exploration.moveViewport)
-                    return .failed(failure)
-                }
+                state = transition(from: state, to: nextState)
 
             case .inflated(let result):
                 revealTransaction.commit()
@@ -236,40 +224,25 @@ internal final class ElementInflation {
     }
 
     private func transition(
-        _ state: inout State,
+        from state: State,
         to proposedState: State
-    ) -> ElementInflationFailure? {
+    ) -> State {
         let nextState: State
-        let event: StateEvent
         if proposedState.isCancellationFailure {
             nextState = proposedState
-            event = .cancelled
         } else if Task.isCancelled {
             nextState = .failed(.cancelled(
-                "element inflation was cancelled while \(state.phase.rawValue)"
+                "element inflation was cancelled while \(state)"
             ))
-            event = .cancelled
         } else {
             nextState = proposedState
-            event = .advance(to: nextState.phase)
         }
-
-        switch StateMachine().advance(state.phase, with: event) {
-        case .rejected(let rejection, _):
-            return .invalidTransition(rejection)
-        case .changed(let expectedPhase, _):
-            guard expectedPhase == nextState.phase else {
-                return .invalidTransition(.init(state: state.phase, event: event))
-            }
-
-            let currentDescription = state.description
-            let nextDescription = nextState.description
-            insideJobLogger.debug(
-                "inflation: \(currentDescription, privacy: .public) -> \(nextDescription, privacy: .public)"
-            )
-            state = nextState
-            return nil
-        }
+        let currentDescription = state.description
+        let nextDescription = nextState.description
+        insideJobLogger.debug(
+            "inflation: \(currentDescription, privacy: .public) -> \(nextDescription, privacy: .public)"
+        )
+        return nextState
     }
 }
 

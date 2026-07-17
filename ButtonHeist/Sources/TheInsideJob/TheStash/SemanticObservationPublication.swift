@@ -141,7 +141,7 @@ internal struct SemanticObservationPublication {
             parentHash: parentHash,
             context: AccessibilityTrace.Context(
                 firstResponder: evidence.firstResponder,
-                screenId: observation.screen.id,
+                screenId: observation.screen.tree.id,
                 observationGeneration: generation.rawValue,
                 windowStack: windows
             ),

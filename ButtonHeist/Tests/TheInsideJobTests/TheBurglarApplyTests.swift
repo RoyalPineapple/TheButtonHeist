@@ -39,7 +39,7 @@ final class TheBurglarApplyTests: XCTestCase {
 
         XCTAssertEqual(screen.tree.elements.count, 2, "InterfaceObservation should have one entry per parsed element")
         for heistId in screen.tree.elements.keys {
-            XCTAssertNotNil(screen.findElement(heistId: heistId),
+            XCTAssertNotNil(screen.tree.findElement(heistId: heistId),
                             "Each heistId should map to an entry")
         }
     }
@@ -104,12 +104,12 @@ final class TheBurglarApplyTests: XCTestCase {
 
         let screen = TheBurglar.buildObservation(from: result)
 
-        XCTAssertEqual(screen.elementIDs, ["visible_button", "offscreen_button"])
-        XCTAssertEqual(screen.viewportElementIDs, ["visible_button"])
+        XCTAssertEqual(screen.tree.elementIDs, ["visible_button", "offscreen_button"])
+        XCTAssertEqual(screen.tree.viewportElementIDs, ["visible_button"])
         XCTAssertEqual(screen.liveCapture.heistIds, ["visible_button"])
         XCTAssertFalse(screen.liveCapture.contains(heistId: "offscreen_button"))
-        XCTAssertEqual(screen.viewportOnly.elementIDs, ["visible_button"])
-        XCTAssertNotNil(screen.findElement(heistId: "offscreen_button"))
+        XCTAssertEqual(screen.viewportOnly.tree.elementIDs, ["visible_button"])
+        XCTAssertNotNil(screen.tree.findElement(heistId: "offscreen_button"))
     }
 
     // MARK: - InterfaceObservation name derivation
@@ -126,7 +126,7 @@ final class TheBurglarApplyTests: XCTestCase {
 
         let screen = TheBurglar.buildObservation(from: result)
 
-        XCTAssertEqual(screen.name, "Settings")
+        XCTAssertEqual(screen.tree.name, "Settings")
     }
 
     func testScreenIdIsSlugifiedName() {
@@ -137,7 +137,7 @@ final class TheBurglarApplyTests: XCTestCase {
 
         let screen = TheBurglar.buildObservation(from: result)
 
-        XCTAssertEqual(screen.id, TheScore.slugify("My Profile"))
+        XCTAssertEqual(screen.tree.id, TheScore.slugify("My Profile"))
     }
 
     func testScreenNameNilWhenNoHeaders() {
@@ -148,8 +148,8 @@ final class TheBurglarApplyTests: XCTestCase {
 
         let screen = TheBurglar.buildObservation(from: result)
 
-        XCTAssertNil(screen.name)
-        XCTAssertNil(screen.id)
+        XCTAssertNil(screen.tree.name)
+        XCTAssertNil(screen.tree.id)
     }
 
     func testScreenNameIgnoresHeaderWithNilLabel() {
@@ -164,7 +164,7 @@ final class TheBurglarApplyTests: XCTestCase {
 
         let screen = TheBurglar.buildObservation(from: result)
 
-        XCTAssertNil(screen.name)
+        XCTAssertNil(screen.tree.name)
     }
 
     // MARK: - First responder detection
@@ -427,7 +427,7 @@ final class TheBurglarApplyTests: XCTestCase {
             return
         }
 
-        XCTAssertEqual(screen.findElement(heistId: heistId)?.scrollMembership?.containerPath, TreePath([0]))
+        XCTAssertEqual(screen.tree.findElement(heistId: heistId)?.scrollMembership?.containerPath, TreePath([0]))
     }
 
     func testLeavesScrollMembershipNilOutsideScrollableContainer() {
@@ -443,7 +443,7 @@ final class TheBurglarApplyTests: XCTestCase {
             return
         }
 
-        XCTAssertNil(screen.findElement(heistId: heistId)?.scrollMembership)
+        XCTAssertNil(screen.tree.findElement(heistId: heistId)?.scrollMembership)
     }
 
     func testBuildObservationUsesSyntheticScrollFactsForPureProjection() throws {
@@ -498,20 +498,20 @@ final class TheBurglarApplyTests: XCTestCase {
 
         let screen = TheBurglar.buildObservation(from: result, facts: facts)
         let heistId = try XCTUnwrap(screen.liveCapture.heistId(forPath: childPath))
-        let element = try XCTUnwrap(screen.findElement(heistId: heistId))
+        let element = try XCTUnwrap(screen.tree.findElement(heistId: heistId))
 
         XCTAssertEqual(
             element.scrollMembership,
             InterfaceTree.ScrollMembership(containerPath: scrollPath, index: 7)
         )
         XCTAssertEqual(element.observedScrollContentActivationPoint, observedElementPoint)
-        XCTAssertEqual(screen.liveCapture.scrollInventory(forPath: scrollPath), inventory)
+        XCTAssertEqual(screen.tree.containers[scrollPath]?.scrollInventory, inventory)
         XCTAssertEqual(
-            screen.liveCapture.containerScrollMembership(forPath: nestedContainerPath),
+            screen.tree.containers[nestedContainerPath]?.scrollMembership,
             InterfaceTree.ScrollMembership(containerPath: scrollPath, index: nil)
         )
         XCTAssertEqual(
-            screen.liveCapture.containerObservedScrollContentActivationPoint(forPath: nestedContainerPath),
+            screen.tree.containers[nestedContainerPath]?.observedScrollContentActivationPoint,
             observedContainerPoint
         )
     }

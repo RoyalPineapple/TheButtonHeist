@@ -1,0 +1,124 @@
+#if canImport(UIKit)
+#if DEBUG
+import Foundation
+import ThePlans
+import TheScore
+
+internal struct PredicateWaitEvaluation<Evidence>: Sendable, Equatable
+where Evidence: Sendable & Equatable {
+    internal let evidence: Evidence
+    internal let matched: Bool
+}
+
+internal enum PredicateWaitOutcome: Sendable, Equatable {
+    case matched
+    case timedOut
+    case cancelled
+}
+
+internal enum PredicateWaitVisibleBudget: Sendable, Equatable {
+    case overall
+    case viewportTransition
+
+    @MainActor
+    internal func deadline(
+        overall: SemanticObservationDeadline
+    ) -> SemanticObservationDeadline {
+        switch self {
+        case .overall:
+            return overall
+        case .viewportTransition:
+            return SemanticObservationDeadline(
+                start: CFAbsoluteTimeGetCurrent(),
+                timeoutMs: SettleSession.viewportTransitionTimeoutMs
+            )
+        }
+    }
+}
+
+extension PredicateWait {
+    internal struct LifecycleEvidence: Sendable, Equatable {
+        internal let stream: PredicateObservationStreamState
+        private let initialExpectation: ExpectationResult
+        private let snapshot: Snapshot?
+
+        internal init(predicate: AccessibilityPredicate) {
+            stream = PredicateObservationStreamState()
+            initialExpectation = ExpectationResult(
+                met: false,
+                predicate: predicate,
+                actual: "no settled semantic observation available"
+            )
+            snapshot = nil
+        }
+
+        private init(
+            stream: PredicateObservationStreamState,
+            initialExpectation: ExpectationResult,
+            snapshot: Snapshot
+        ) {
+            self.stream = stream
+            self.initialExpectation = initialExpectation
+            self.snapshot = snapshot
+        }
+
+        internal var evaluation: ExpectationResult {
+            snapshot?.expectation ?? initialExpectation
+        }
+
+        internal var lastTrace: AccessibilityTrace? {
+            snapshot?.observation.trace
+        }
+
+        internal var lastObservationSummary: String? {
+            snapshot?.observation.summary
+        }
+
+        internal var observedSequence: SettledObservationSequence? {
+            snapshot?.observation.sequence
+        }
+
+        internal var changeBaseline: SettledCapture? {
+            snapshot?.baseline
+        }
+
+        internal var observationWindow: ObservationWindow? {
+            snapshot?.window
+        }
+
+        internal func recording(_ reduction: PredicateObservationStreamReduction) -> LifecycleEvidence {
+            LifecycleEvidence(
+                stream: reduction.state,
+                initialExpectation: initialExpectation,
+                snapshot: Snapshot(reduction.reduction)
+            )
+        }
+    }
+
+    internal struct Snapshot: Sendable, Equatable {
+        internal let observation: WaitObservation
+        internal let expectation: ExpectationResult
+        internal let baseline: SettledCapture?
+        internal let window: ObservationWindow?
+
+        internal init(_ reduction: PredicateObservationReduction) {
+            observation = WaitObservation(
+                trace: reduction.trace,
+                summary: reduction.observation.summary,
+                sequence: reduction.observation.event.sequence
+            )
+            expectation = reduction.expectation
+            baseline = reduction.changeBaseline
+            window = reduction.observationWindow
+        }
+    }
+
+    internal struct WaitObservation: Sendable, Equatable {
+        internal let trace: AccessibilityTrace?
+        internal let summary: String
+        internal let sequence: SettledObservationSequence
+    }
+}
+
+#endif // DEBUG
+#endif // canImport(UIKit)

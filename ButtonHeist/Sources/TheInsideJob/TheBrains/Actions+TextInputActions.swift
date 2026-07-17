@@ -168,7 +168,7 @@ extension Actions {
         resolvedElementId: HeistId,
         in afterState: PostActionObservation.BeforeState
     ) -> ActionResultPayload? {
-        guard let element = afterState.screen.findElement(heistId: resolvedElementId),
+        guard let element = afterState.screen.tree.findElement(heistId: resolvedElementId),
               let value = element.element.value else { return nil }
         return .typeText(value)
     }

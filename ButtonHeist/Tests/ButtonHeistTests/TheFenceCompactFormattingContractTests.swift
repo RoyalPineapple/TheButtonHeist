@@ -1387,7 +1387,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                     children: abortedChildren
                 )
             )
-        ).get()
+        )
         let result = HeistExecutionResult(
             steps: [
                 loopReceipt,

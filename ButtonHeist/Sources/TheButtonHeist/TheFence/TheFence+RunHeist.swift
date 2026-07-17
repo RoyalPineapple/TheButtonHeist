@@ -213,9 +213,8 @@ extension TheFence {
     // MARK: - Session State
 
     func currentSessionState() -> SessionStatePayload {
-        let connection = sessionConnectionSnapshot
         return SessionStatePayload(
-            state: connection.state,
+            state: sessionConnectionState,
             actionTimeoutSeconds: Command.activate.descriptor.timeout.requiredSingleStepBaseSeconds,
             longActionTimeoutSeconds: Command.typeText.descriptor.timeout.requiredSingleStepBaseSeconds
         )

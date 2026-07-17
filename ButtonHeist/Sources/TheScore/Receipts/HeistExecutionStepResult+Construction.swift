@@ -6,11 +6,8 @@ extension HeistExecutionStepResult {
         path: HeistExecutionPath,
         durationMs: Int,
         node: HeistExecutionStepNode
-    ) -> Result<Self, HeistReceiptConstructionError> {
-        if let error = node.constructionError {
-            return .failure(error)
-        }
-        return .success(.init(path: path, durationMs: durationMs, node: node))
+    ) throws -> Self {
+        .init(path: path, durationMs: durationMs, node: try node.admitted())
     }
 
     package static func conditional(
@@ -90,12 +87,6 @@ extension HeistExecutionStepResult {
 
 }
 
-package enum HeistReceiptConstructionError: String, Error, Sendable, Equatable, CustomStringConvertible {
-    case actionEvidenceMismatch
-    case evidenceConstructionFailed
-    case forEachElementEvidenceMismatch
-    case forEachStringEvidenceMismatch
-    case repeatUntilEvidenceMismatch
-
-    package var description: String { rawValue }
+package struct HeistReceiptAdmissionError: Error, Sendable, Equatable, CustomStringConvertible {
+    package let description: String
 }

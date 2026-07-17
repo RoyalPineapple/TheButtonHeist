@@ -1,6 +1,5 @@
 #if canImport(UIKit)
 import XCTest
-import ButtonHeistSupport
 import ThePlans
 
 @testable import AccessibilitySnapshotParser
@@ -27,65 +26,6 @@ final class ElementInflationProductTests: XCTestCase {
         }
         brains = nil
         try await super.tearDown()
-    }
-
-    func testElementInflationStateMachineDefinesEveryPhaseTransition() {
-        typealias Phase = ElementInflation.StatePhase
-        let machine = ElementInflation.StateMachine()
-        let legalTransitions: [(from: Phase, to: Phase)] = [
-            (.resolving, .revealing),
-            (.resolving, .refreshing),
-            (.resolving, .failed),
-            (.revealing, .refreshing),
-            (.revealing, .failed),
-            (.refreshing, .placing),
-            (.refreshing, .inflated),
-            (.refreshing, .failed),
-            (.placing, .inflated),
-            (.placing, .failed),
-        ]
-
-        for from in Phase.allCases {
-            for to in Phase.allCases {
-                let change = machine.advance(from, with: .advance(to: to))
-                let isLegal = legalTransitions.contains { $0 == (from, to) }
-                if isLegal {
-                    XCTAssertEqual(change, .changed(to: to), "Expected \(from) -> \(to) to be legal")
-                } else {
-                    XCTAssertEqual(
-                        change,
-                        .rejected(.init(state: from, event: .advance(to: to)), stayingIn: from),
-                        "Expected \(from) -> \(to) to be rejected"
-                    )
-                }
-            }
-        }
-    }
-
-    func testElementInflationCancellationTerminatesEveryAwaitingPhase() {
-        let machine = ElementInflation.StateMachine()
-        let awaitingPhases: [ElementInflation.StatePhase] = [
-            .resolving,
-            .revealing,
-            .refreshing,
-            .placing,
-        ]
-
-        for phase in awaitingPhases {
-            XCTAssertEqual(
-                machine.advance(phase, with: .cancelled),
-                .changed(to: .failed),
-                "Expected cancellation to terminate \(phase)"
-            )
-        }
-
-        for phase in [ElementInflation.StatePhase.inflated, .failed] {
-            XCTAssertEqual(
-                machine.advance(phase, with: .cancelled),
-                .rejected(.init(state: phase, event: .cancelled), stayingIn: phase),
-                "Expected terminal phase \(phase) to reject cancellation"
-            )
-        }
     }
 
     func testHandoffTickCountFollowsNestedScrollMembershipGraph() {
@@ -785,8 +725,7 @@ final class ElementInflationProductTests: XCTestCase {
         XCTAssertFalse(brains.semanticObservationIsActive, file: file, line: line)
         XCTAssertFalse(brains.tripwire.isPulseRunning, file: file, line: line)
         XCTAssertFalse(observationStream.isActive, file: file, line: line)
-        XCTAssertEqual(observationStream.observationReplayWaiterCount, 0, file: file, line: line)
-        XCTAssertEqual(observationStream.cycleWaiterCount, 0, file: file, line: line)
+        XCTAssertEqual(observationStream.observationWaiterCount, 0, file: file, line: line)
         XCTAssertEqual(observationStream.activeObservationDemandCount, 0, file: file, line: line)
     }
 
@@ -1353,7 +1292,7 @@ final class ElementInflationProductTests: XCTestCase {
     private func scrollContainerDiagnostics(in screen: InterfaceObservation) -> String {
         let summaries = screen.liveCapture.hierarchy.scrollablePathIndexedContainers
             .map { item -> String in
-                let name = screen.liveCapture.containerNamesByPath[item.path]
+                let name = screen.tree.containers[item.path]?.containerName
                 let hasLiveScroll = screen.liveCapture.scrollView(forContainerPath: item.path) != nil
                 return "path=\(item.path.indices) name=\(name ?? "<nil>") liveScroll=\(hasLiveScroll)"
             }

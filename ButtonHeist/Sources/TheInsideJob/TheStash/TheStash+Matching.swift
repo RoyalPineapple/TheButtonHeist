@@ -33,7 +33,9 @@ extension AccessibilityElement: PredicateSelectionSubject {
     }
 
     package func containsCustomContent(matching match: CustomContentMatchCore<String>) -> Bool {
-        customContent.contains { match.matches($0) }
+        customContent.contains {
+            HeistCustomContent(projecting: $0) != nil && match.matches($0)
+        }
     }
 
     package func satisfiesRequiredRotors(_ required: [StringMatchCore<String>]) -> Bool {
@@ -71,10 +73,6 @@ extension AccessibilityElement: PredicateSelectionSubject {
 }
 
 extension InterfaceTree.Element: ElementPredicateSubjectBacked {
-    package var predicateSubject: AccessibilityElement { element }
-}
-
-extension LiveCapture.LiveElementEntry: ElementPredicateSubjectBacked {
     package var predicateSubject: AccessibilityElement { element }
 }
 

@@ -84,13 +84,13 @@ final class TheBrainsScrollTests: XCTestCase {
         line: UInt = #line
     ) async {
         let deadline = CFAbsoluteTimeGetCurrent() + 1
-        while brains.stash.semanticObservationStream.observationReplayWaiterCount == 0,
+        while brains.stash.semanticObservationStream.observationWaiterCount == 0,
               CFAbsoluteTimeGetCurrent() < deadline {
             await Task.yield()
             guard await Task.cancellableSleep(for: .milliseconds(5)) else { break }
         }
         XCTAssertEqual(
-            brains.stash.semanticObservationStream.observationReplayWaiterCount,
+            brains.stash.semanticObservationStream.observationWaiterCount,
             1,
             file: file,
             line: line
@@ -397,7 +397,7 @@ final class TheBrainsScrollTests: XCTestCase {
         ))
 
         XCTAssertEqual(
-            brains.stash.latestObservation.orderedElements.map(\.heistId),
+            brains.stash.latestObservation.tree.orderedElements.map(\.heistId),
             [firstEntry.heistId, secondEntry.heistId]
         )
     }
@@ -1038,7 +1038,7 @@ final class TheBrainsScrollTests: XCTestCase {
         }
         await waitForSettledSemanticWaiter()
 
-        XCTAssertEqual(brains.stash.latestObservation.orderedElements.first?.element.label, "Raw Replacement")
+        XCTAssertEqual(brains.stash.latestObservation.tree.orderedElements.first?.element.label, "Raw Replacement")
         XCTAssertEqual(brains.stash.interfaceTree.orderedElements.first?.element.label, "Gone Target")
         if let committed = brains.stash.interfaceElement(heistId: targetId) {
             XCTAssertNil(brains.stash.visibleLiveElementAliasing(committed))
@@ -1556,8 +1556,8 @@ final class TheBrainsScrollTests: XCTestCase {
             try resolvedTarget(.label("Controls Demo").and(.traits([.button])))
         )
 
-        XCTAssertNotNil(discovered?.event.observation.screen.findElement(heistId: "current_controls_header"))
-        XCTAssertNil(discovered?.event.observation.screen.findElement(heistId: "stale_controls_button"))
+        XCTAssertNotNil(discovered?.event.observation.screen.tree.findElement(heistId: "current_controls_header"))
+        XCTAssertNil(discovered?.event.observation.screen.tree.findElement(heistId: "stale_controls_button"))
     }
 
     func testInterfaceDiscoveryDoesNotGraftStaleRowsFromReusedScrollContainerName() async throws {
@@ -1595,7 +1595,7 @@ final class TheBrainsScrollTests: XCTestCase {
         guard let visibleScreen = brains.stash.refreshLiveCapture() else {
             throw XCTSkip("No live hierarchy available for interface discovery contamination regression test")
         }
-        guard let scrollContainerPath = visibleScreen.orderedContainers.compactMap({ container -> TreePath? in
+        guard let scrollContainerPath = visibleScreen.tree.orderedContainers.compactMap({ container -> TreePath? in
             guard container.container.isScrollable else { return nil }
             return container.path
         }).first else {
@@ -1746,7 +1746,7 @@ final class TheBrainsScrollTests: XCTestCase {
             return XCTFail("Expected wait discovery to find the offscreen target")
         }
 
-        XCTAssertNotNil(exploration.event.observation.screen.orderedElements.first {
+        XCTAssertNotNil(exploration.event.observation.screen.tree.orderedElements.first {
             $0.element.label == "Wait Discovery Target"
         })
         XCTAssertEqual(
@@ -1803,7 +1803,7 @@ final class TheBrainsScrollTests: XCTestCase {
 
         XCTAssertTrue(result.success, "Expected scroll_to_visible to discover the target above; got \(result)")
         XCTAssertLessThanOrEqual(scrollView.contentOffset.y, 10)
-        XCTAssertTrue(brains.stash.latestObservation.orderedElements.contains {
+        XCTAssertTrue(brains.stash.latestObservation.tree.orderedElements.contains {
             $0.element.label == "Top Target"
         })
     }
@@ -1950,7 +1950,7 @@ final class TheBrainsScrollTests: XCTestCase {
             firstResponderHeistId: nil,
             scrollableContainerViewsByPath: [:]
         )
-        XCTAssertTrue(recoveredScreen.viewportElementIDs.contains(recoveredEntry.heistId))
+        XCTAssertTrue(recoveredScreen.tree.viewportElementIDs.contains(recoveredEntry.heistId))
         XCTAssertNotNil(recoveredScreen.liveCapture.object(for: recoveredEntry.heistId))
         var revealAttempts = 0
         brains.navigation.elementInflation.exploration.revealKnownTarget = { request in

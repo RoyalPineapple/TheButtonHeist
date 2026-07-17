@@ -23,7 +23,7 @@ extension TheFence {
     }
 
     private func ensureConnectedIfNeeded(for command: Command) async throws {
-        guard !handoff.isConnected, command.descriptor.requiresConnectionBeforeDispatch else { return }
+        guard !handoff.connectionLifecycle.isConnected, command.descriptor.requiresConnectionBeforeDispatch else { return }
         try await start()
     }
 

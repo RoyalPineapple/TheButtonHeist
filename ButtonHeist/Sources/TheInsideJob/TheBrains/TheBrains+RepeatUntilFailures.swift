@@ -41,7 +41,7 @@ extension TheBrains {
             predicate: step.predicateExpression,
             timeout: step.timeout
         )
-        let construction = HeistExecutionStepResult.construct(
+        return admittedReceipt(
             path: context.path,
             durationMs: durationMs,
             node: .repeatUntil(
@@ -54,11 +54,6 @@ extension TheBrains {
                 ))
             )
         )
-        return receiptResult(
-            construction,
-            path: context.path,
-            durationMs: durationMs
-        )
     }
 
     internal func repeatUntilResolutionFailure(
@@ -69,7 +64,7 @@ extension TheBrains {
     ) -> HeistExecutionStepResult {
         let durationMs = elapsedMilliseconds(since: start)
         let declaration = HeistRepeatUntilDeclaration(step)
-        let construction = HeistExecutionStepResult.construct(
+        return admittedReceipt(
             path: path,
             durationMs: durationMs,
             node: .repeatUntil(
@@ -81,11 +76,6 @@ extension TheBrains {
                     expected: step.predicate.description
                 ))
             )
-        )
-        return receiptResult(
-            construction,
-            path: path,
-            durationMs: durationMs
         )
     }
 }

@@ -32,19 +32,18 @@ struct LiveCaptureBoundaryAdversarialTests {
     private func makeTree(heistId: HeistId) -> InterfaceTree {
         let element = AccessibilityElement.make(label: "Save", traits: .button)
         let path = TreePath([0])
+        let entry = InterfaceTree.Element(
+            heistId: heistId,
+            path: path,
+            scrollMembership: nil,
+            element: element
+        )
         let snapshot = LiveCapture.Snapshot(
             hierarchy: [.element(element, traversalIndex: 0)],
             heistIdsByPath: [path: heistId]
         )
         return InterfaceTree(
-            elements: [
-                heistId: InterfaceTree.Element(
-                    heistId: heistId,
-                    path: path,
-                    scrollMembership: nil,
-                    element: element
-                )
-            ],
+            elements: [heistId: entry],
             viewportCapture: snapshot
         )
     }

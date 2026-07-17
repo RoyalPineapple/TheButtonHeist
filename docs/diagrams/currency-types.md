@@ -11,7 +11,7 @@ flowchart TD
         WALK["AccessibilityHierarchy traversal algebra<br/>folded or foldedPreorder"]
         AXE["AccessibilityElement /<br/>AccessibilityHierarchy<br/>(AccessibilitySnapshotModel)"]
         OBS["InterfaceObservation<br/>tree: InterfaceTree<br/>liveCapture: LiveCapture"]
-        TREE["InterfaceTree<br/>elements + containers + HeistIds<br/>value-only viewport capture"]
+        TREE["InterfaceTree<br/>elements + containers + HeistIds<br/>canonical viewport snapshot"]
         LOG["SemanticObservationLog<br/>cursor-backed retained entries"]
         STASH["TheStash<br/>InterfaceTree targetable truth<br/>SemanticObservationLog temporal truth<br/>latest live evidence"]
         PIN["CommittedElementTarget<br/>source target + exact HeistId<br/>+ graph-derived deadline"]
@@ -37,19 +37,21 @@ flowchart TD
         ET --> EP
     end
 
-    subgraph matching["Shared target matching (TheScore values)"]
-        INPUT["AccessibilityTargetMatchInput<br/>ordered elements + containers + paths"]
-        MATCH["AccessibilityTargetMatchGraph<br/>element + container + within + ordinal"]
+    subgraph matching["Shared target matching algebra"]
+        SUBJECT["Subject<br/>InterfaceTree.Element in-app<br/>HeistElement after delivery"]
+        INPUT["AccessibilityTargetMatchInput&lt;Subject&gt;<br/>ordered elements + containers + paths"]
+        MATCH["AccessibilityTargetMatchGraph&lt;Subject&gt;<br/>element + container + within + ordinal"]
+        SUBJECT --> INPUT
         INPUT --> MATCH
     end
 
     CLIENT["CLI / MCP / DSL client"]
 
-    STASH -- "wire conversion" --> IFACE
+    STASH -- "get_interface response projection" --> IFACE
     IFACE -- "get_interface response" --> CLIENT
     CLIENT -- "actions, waits, expectations,<br/>CLI/MCP, subtree queries" --> ET
-    IFACE --> INPUT
-    TREE -- "private host adapter" --> INPUT
+    IFACE -- "HeistElement subject" --> INPUT
+    TREE -- "InterfaceTree.Element subject" --> INPUT
     ET --> MATCH
     MATCH -- "host paths map back to<br/>tree + live evidence" --> STASH
 ```
@@ -58,17 +60,22 @@ Notes:
 
 - `AccessibilityElement` and `AccessibilityHierarchy` are the parser's output and the internal working currency. They never cross the wire; the wire representation of an element is `HeistElement` (TheScore, Codable).
 - The settled `InterfaceTree` is the sole current semantic truth. It contains value types only; `merging(_:)` is pure last-read-wins and retains the newest viewport capture.
-- `InterfaceObservation` pairs an interface tree with one viewport's disposable `LiveCapture`. Live references are replaced on every parse and never unioned across exploration pages.
+- `InterfaceObservation` pairs an interface tree with one viewport's disposable
+  `LiveCapture`. `LiveCapture.Snapshot` stores the viewport's canonical element
+  and container entries once; its path-indexed convenience views are derived.
+  Live references are replaced on every parse and never unioned across
+  exploration pages.
 - `TheStash` owns one `InterfaceTree`, one retained `SemanticObservationLog`,
   one latest live observation, and optional failed-settle diagnostic evidence.
   There is no parallel screen/query store or semantic back map.
 - Each delivered `Interface` validates and stores one package `InterfaceGraph`
-  for structural hierarchy operations and formatting. Both that delivered value
-  and the host's private `InterfaceTree` adapter produce
-  `AccessibilityTargetMatchInput`; one `AccessibilityTargetMatchGraph` evaluates
-  element, container, descendant, and ordinal semantics. Host results map back
-  to `TheStash.interfaceTree` and current live evidence before wire projection
-  re-roots a selected subtree.
+  for structural hierarchy operations and formatting. The delivered value
+  supplies `HeistElement` subjects while the host supplies
+  `InterfaceTree.Element` subjects directly. One generic
+  `AccessibilityTargetMatchGraph` evaluates element, container, descendant, and
+  ordinal semantics for either subject. Internal resolution never converts
+  through the wire element model; host results already carry their tree value
+  when `TheStash` joins them to current live evidence.
 - Element inflation resolves an `AccessibilityTarget` once, then carries a
   `CommittedElementTarget` with the exact capture-local `HeistId` and one
   graph-derived deadline. Refresh and dispatch use that id; they do not choose a

@@ -198,8 +198,8 @@ final class TheBrainsActionTests: XCTestCase {
         installScreen(elements: [(element, heistId)])
 
         let before = brains.postActionObservation.captureSemanticState()
-        XCTAssertEqual(before.screen.orderedElements.count, 1)
-        XCTAssertEqual(before.screen.orderedElements.first?.heistId, heistId)
+        XCTAssertEqual(before.screen.tree.orderedElements.count, 1)
+        XCTAssertEqual(before.screen.tree.orderedElements.first?.heistId, heistId)
         XCTAssertEqual(before.elements.count, 1)
     }
 
@@ -4464,8 +4464,8 @@ observation: .settledTrace(
         label: String,
         in screen: InterfaceObservation
     ) throws -> AccessibilityTarget {
-        let treeElement = try XCTUnwrap(screen.orderedElements.first { $0.element.label == label })
-        let elements = screen.orderedElements.map {
+        let treeElement = try XCTUnwrap(screen.tree.orderedElements.first { $0.element.label == label })
+        let elements = screen.tree.orderedElements.map {
             PredicateSelectionSubjectElement(id: $0.heistId.predicateSelectionElementId, element: $0.element)
         }
         return try XCTUnwrap(
@@ -4581,12 +4581,12 @@ observation: .settledTrace(
         line: UInt = #line
     ) async {
         let deadline = CFAbsoluteTimeGetCurrent() + 1
-        while stash.semanticObservationStream.observationReplayWaiterCount == 0,
+        while stash.semanticObservationStream.observationWaiterCount == 0,
               CFAbsoluteTimeGetCurrent() < deadline {
             await Task.yield()
             guard await Task.cancellableSleep(for: .milliseconds(5)) else { break }
         }
-        XCTAssertEqual(stash.semanticObservationStream.observationReplayWaiterCount, 1, file: file, line: line)
+        XCTAssertEqual(stash.semanticObservationStream.observationWaiterCount, 1, file: file, line: line)
     }
 
     private func observedState(

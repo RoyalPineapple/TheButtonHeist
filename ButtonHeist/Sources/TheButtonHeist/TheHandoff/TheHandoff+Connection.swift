@@ -17,7 +17,7 @@ extension TheHandoff {
     func openConnection(to device: DiscoveredDevice) -> UUID {
         let connection = makeConnection?(device) ?? DeviceConnection(
             device: device,
-            token: serverMessages.authToken
+            token: serverMessageRouter.authToken
         )
         let attemptID = connectionLifecycle.beginConnecting(device: device, connection: connection)
         connection.onEvent = { [weak self, attemptID] event in
@@ -29,7 +29,7 @@ extension TheHandoff {
     }
 
     func handleServerMessage(_ message: ServerMessage, requestId: RequestID?) {
-        applyServerMessageRoute(serverMessages.route(message, requestId: requestId))
+        applyServerMessageRoute(serverMessageRouter.route(message, requestId: requestId))
     }
 
     func disconnect() {
@@ -70,9 +70,9 @@ extension TheHandoff {
            connectionLifecycle.activeAttemptID != expectedAttemptID {
             return
         }
-        guard isConnected else { return }
+        guard connectionLifecycle.isConnected else { return }
         handoffConnectionLogger.warning("Force-disconnecting stale connection")
-        let reconnectDevice = connectedDevice
+        let reconnectDevice = connectionLifecycle.connectedDevice
         tearDownConnection(cancelAutoReconnect: true, replacementReason: .localDisconnect)
         if let reconnectDevice {
             scheduleAutoReconnectIfNeeded(disconnectedDevice: reconnectDevice)

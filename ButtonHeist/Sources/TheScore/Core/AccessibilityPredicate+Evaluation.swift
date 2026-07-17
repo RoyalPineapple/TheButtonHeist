@@ -53,7 +53,7 @@ private extension ResolvedAccessibilityPredicate {
     func evaluateScreen(
         _ assertions: [ScreenAssertion],
         evidence: AccessibilityTraceEvidence,
-        current: AccessibilityTargetMatchGraph
+        current: AccessibilityTargetMatchGraph<HeistElement>
     ) -> PredicateEvaluationResult {
         let facts = evidence.changeFacts
         guard facts.contains(where: \.isScreenChanged) else {
@@ -72,7 +72,7 @@ private extension ResolvedAccessibilityPredicate {
     func evaluateElements(
         _ assertions: [ElementAssertion],
         evidence: AccessibilityTraceEvidence,
-        current: AccessibilityTargetMatchGraph
+        current: AccessibilityTargetMatchGraph<HeistElement>
     ) -> PredicateEvaluationResult {
         let facts = evidence.changeFacts
         let elementFacts = facts.compactMap(\.elementsChanged)
@@ -96,7 +96,7 @@ private extension ResolvedAccessibilityPredicate {
 
     func evaluateCurrentAssertion(
         _ assertion: ScreenAssertion,
-        graph: AccessibilityTargetMatchGraph
+        graph: AccessibilityTargetMatchGraph<HeistElement>
     ) -> PredicateEvaluationResult {
         switch assertion {
         case .presence(.exists(let target)):
@@ -110,7 +110,7 @@ private extension ResolvedAccessibilityPredicate {
         _ assertion: ElementAssertion,
         facts: [AccessibilityTrace.ElementsChangeFact],
         evidence: AccessibilityTraceEvidence,
-        current: AccessibilityTargetMatchGraph
+        current: AccessibilityTargetMatchGraph<HeistElement>
     ) -> PredicateEvaluationResult {
         switch assertion {
         case .presence(.exists(let target)):
@@ -141,7 +141,7 @@ private extension ResolvedAccessibilityPredicate {
     func currentResult(
         _ target: ResolvedAccessibilityTarget,
         shouldExist: Bool,
-        graph: AccessibilityTargetMatchGraph
+        graph: AccessibilityTargetMatchGraph<HeistElement>
     ) -> PredicateEvaluationResult {
         let exists = !graph.resolve(target).isEmpty
         let met = exists == shouldExist

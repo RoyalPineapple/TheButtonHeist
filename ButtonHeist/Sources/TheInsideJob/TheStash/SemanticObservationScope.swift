@@ -36,6 +36,7 @@ final class SemanticObservationSubscription {
     let id: UInt64
     let scope: SemanticObservationScope
     private weak var stream: SemanticObservationStream?
+    private var isCancelled = false
 
     init(id: UInt64, scope: SemanticObservationScope, stream: SemanticObservationStream) {
         self.id = id
@@ -43,8 +44,16 @@ final class SemanticObservationSubscription {
         self.stream = stream
     }
 
+    func cancel() {
+        guard !isCancelled else { return }
+        isCancelled = true
+        stream?.removeSubscription(id)
+        stream = nil
+    }
+
     deinit {
         MainActor.assumeIsolated {
+            guard !isCancelled else { return }
             stream?.removeSubscription(id)
         }
     }

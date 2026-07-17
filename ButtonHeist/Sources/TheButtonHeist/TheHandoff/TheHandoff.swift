@@ -12,45 +12,12 @@ final class TheHandoff {
 
     let connectionLifecycle = HandoffConnectionLifecycle()
     let discoveryLifecycle = HandoffDiscoveryLifecycle()
-    var serverMessages = HandoffServerMessageRouter()
+    var serverMessageRouter = HandoffServerMessageRouter()
     let keepalive = HandoffKeepalive()
 
     // MARK: - Derived State
 
     var connectionPhase: HandoffConnectionPhase { connectionLifecycle.phase }
-
-    var isConnected: Bool {
-        connectionLifecycle.isConnected
-    }
-
-    var connectionDiagnosticFailure: HandoffConnectionError? {
-        connectionLifecycle.diagnosticFailure
-    }
-
-    var connectedDevice: DiscoveredDevice? {
-        connectionLifecycle.connectedDevice
-    }
-
-    var serverInfo: ServerInfo? {
-        connectionLifecycle.serverInfo
-    }
-
-    /// Test seam: how many pings have been sent on the live connection
-    /// without a corresponding `.pong` reply. Resets to zero when a pong
-    /// arrives, and is automatically discarded when the connection phase
-    /// leaves `.connected`. Returns zero in any non-connected phase.
-    var missedPongCount: Int {
-        connectionLifecycle.missedPongCount
-    }
-
-    var discoveredDevices: [DiscoveredDevice] {
-        discoveryLifecycle.discoveredDevices
-    }
-
-    var isDiscovering: Bool {
-        discoveryLifecycle.isDiscovering
-    }
-
     // MARK: - Discovery Callbacks
 
     // All callbacks below fire on `@ButtonHeistActor`.
@@ -73,14 +40,14 @@ final class TheHandoff {
     // MARK: - Configuration
 
     var authToken: SessionAuthToken? {
-        get { serverMessages.authToken }
-        set { serverMessages.authToken = newValue }
+        get { serverMessageRouter.authToken }
+        set { serverMessageRouter.authToken = newValue }
     }
     /// Explicit driver ID override (e.g. from BUTTONHEIST_DRIVER_ID env var).
     /// When nil, a persistent auto-generated ID is used instead.
     var driverID: DriverID? {
-        get { serverMessages.driverId }
-        set { serverMessages.driverId = newValue }
+        get { serverMessageRouter.driverId }
+        set { serverMessageRouter.driverId = newValue }
     }
 
     // MARK: - Internal Reconnect Settings
@@ -103,10 +70,6 @@ final class TheHandoff {
 
     var makeDiscovery: () -> any DeviceDiscovering = { DeviceDiscovery() }
     var makeConnection: ((DiscoveredDevice) -> any DeviceConnecting)?
-
-    var hasActiveDiscoverySession: Bool {
-        discoveryLifecycle.hasDiscoverySession
-    }
 
     // MARK: - Init
 

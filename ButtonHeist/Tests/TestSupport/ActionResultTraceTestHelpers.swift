@@ -121,29 +121,25 @@ package enum HeistReceiptFixture {
             guard let evidence = HeistFailedActionEvidence(evidence) else {
                 preconditionFailure("failed action receipt fixture requires failing evidence")
             }
-            guard case .success(let receipt) = HeistExecutionStepResult.construct(
+            return constructReceipt(
+                "failed action receipt fixture must match its command",
                 path: executionPath(path),
                 durationMs: durationMs,
                 node: .action(
                     command: command,
                     completion: .failed(evidence: evidence, failure: resolvedFailure)
                 )
-            ) else {
-                preconditionFailure("failed action receipt fixture must match its command")
-            }
-            return receipt
+            )
         }
         guard let evidence = HeistPassedActionEvidence(evidence) else {
             preconditionFailure("passed action receipt fixture requires passing evidence")
         }
-        guard case .success(let receipt) = HeistExecutionStepResult.construct(
+        return constructReceipt(
+            "passed action receipt fixture must match its command",
             path: executionPath(path),
             durationMs: durationMs,
             node: .action(command: command, completion: .passed(evidence: evidence))
-        ) else {
-            preconditionFailure("passed action receipt fixture must match its command")
-        }
-        return receipt
+        )
     }
 
     package static func wait(
@@ -190,7 +186,8 @@ package enum HeistReceiptFixture {
             }
             completion = .passed(evidence: evidence)
         }
-        guard case .success(let receipt) = HeistExecutionStepResult.construct(
+        return constructReceipt(
+            "wait receipt fixture construction failed",
             path: executionPath(path),
             durationMs: durationMs,
             node: .wait(
@@ -198,10 +195,7 @@ package enum HeistReceiptFixture {
                 timeout: 1,
                 completion: completion
             )
-        ) else {
-            preconditionFailure("wait receipt fixture construction failed")
-        }
-        return receipt
+        )
     }
 
     package static func warning(
@@ -320,7 +314,8 @@ package enum HeistReceiptFixture {
                   let admittedChildren = HeistAbortedChildren(children) else {
                 preconditionFailure("aborted loop fixture requires failed evidence and children")
             }
-            guard case .success(let receipt) = HeistExecutionStepResult.construct(
+            return constructReceipt(
+                "aborted string iteration fixture admission failed",
                 path: executionPath(resolvedPath),
                 durationMs: durationMs,
                 node: .forEachStringIteration(
@@ -335,16 +330,14 @@ package enum HeistReceiptFixture {
                         children: admittedChildren
                     )
                 )
-            ) else {
-                preconditionFailure("aborted string iteration fixture admission failed")
-            }
-            return receipt
+            )
         }
         if status == .failed, let failure {
             guard let evidence = HeistFailedForEachStringEvidence(evidence) else {
                 preconditionFailure("failed loop fixture requires a failure reason")
             }
-            guard case .success(let receipt) = HeistExecutionStepResult.construct(
+            return constructReceipt(
+                "failed string iteration fixture admission failed",
                 path: executionPath(resolvedPath),
                 durationMs: durationMs,
                 node: .forEachStringIteration(
@@ -355,25 +348,20 @@ package enum HeistReceiptFixture {
                         children: passingChildren(children)
                     )
                 )
-            ) else {
-                preconditionFailure("failed string iteration fixture admission failed")
-            }
-            return receipt
+            )
         }
         guard let evidence = HeistPassedForEachStringEvidence(evidence) else {
             preconditionFailure("passed loop fixture cannot carry a failure reason")
         }
-        guard case .success(let receipt) = HeistExecutionStepResult.construct(
+        return constructReceipt(
+            "passed string iteration fixture admission failed",
             path: executionPath(resolvedPath),
             durationMs: durationMs,
             node: .forEachStringIteration(
                 declaration: declaration,
                 completion: .passed(evidence: evidence, children: passingChildren(children))
             )
-        ) else {
-            preconditionFailure("passed string iteration fixture admission failed")
-        }
-        return receipt
+        )
     }
 
     package static func result(
@@ -399,6 +387,23 @@ package enum HeistReceiptFixture {
             preconditionFailure("passing receipt fixture cannot contain failed children")
         }
         return children
+    }
+
+    private static func constructReceipt(
+        _ failureMessage: String,
+        path: HeistExecutionPath,
+        durationMs: Int,
+        node: HeistExecutionStepNode
+    ) -> HeistExecutionStepResult {
+        do {
+            return try HeistExecutionStepResult.construct(
+                path: path,
+                durationMs: durationMs,
+                node: node
+            )
+        } catch {
+            preconditionFailure("\(failureMessage): \(error)")
+        }
     }
 
     private static func inferredActionFailure(_ result: ActionResult) -> HeistFailureDetail? {

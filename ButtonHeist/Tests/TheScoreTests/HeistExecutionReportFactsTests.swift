@@ -11,7 +11,7 @@ import TheScore
             path: try HeistExecutionPath(validating: "$.body[0]"),
             durationMs: 0,
             node: .action(command: command, completion: .skipped())
-        ).get()
+        )
 
         #expect(step.actionEvidence == nil)
         #expect(step.reportFacts.command == .activate)

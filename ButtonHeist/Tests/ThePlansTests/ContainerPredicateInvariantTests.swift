@@ -37,31 +37,6 @@ struct ContainerPredicateInvariantTests {
         }
     }
 
-    @Test("removed duplicate wire spellings are rejected")
-    func removedWireSpellings() {
-        #expect(throws: DecodingError.self) {
-            _ = try JSONDecoder().decode(
-                ContainerPredicate.self,
-                from: Data(#"{"identifier":"orders"}"#.utf8)
-            )
-        }
-        #expect(throws: DecodingError.self) {
-            _ = try JSONDecoder().decode(
-                ContainerPredicateCheck.self,
-                from: Data(
-                    (#"{"kind":"semantic","semantic":{"kind":"identifier","# +
-                        #""match":{"mode":"exact","value":"orders"}}}"#).utf8
-                )
-            )
-        }
-        #expect(throws: DecodingError.self) {
-            _ = try JSONDecoder().decode(
-                ContainerPredicateCheck.self,
-                from: Data(#"{"kind":"type","type":"scrollable"}"#.utf8)
-            )
-        }
-    }
-
     @Test("container check kinds reject payload keys owned by other kinds", arguments: [
         #"{"kind":"identifier","match":{"mode":"exact","value":"orders"},"semantic":{"kind":"label","match":{"mode":"exact","value":"Orders"}}}"#,
         #"{"kind":"semantic","semantic":{"kind":"label","match":{"mode":"exact","value":"Orders"}},"match":{"mode":"exact","value":"orders"}}"#,

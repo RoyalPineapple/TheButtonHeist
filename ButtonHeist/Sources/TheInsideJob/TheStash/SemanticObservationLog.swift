@@ -1,8 +1,6 @@
 #if canImport(UIKit)
 #if DEBUG
 
-import ButtonHeistSupport
-
 internal enum SemanticObservationLogAppendError: Error, Sendable, Equatable {
     case initialEntryAlreadyExists(scope: SemanticObservationScope)
     case missingInitialEntry(scope: SemanticObservationScope)
@@ -15,33 +13,16 @@ internal enum SemanticObservationLogAppendError: Error, Sendable, Equatable {
     case scopeKeyMismatch(key: SemanticObservationScope, event: SemanticObservationScope)
 }
 
-internal enum ObservationEntrySequenceError: Error, Sendable, Equatable {
+internal enum ObservationLogReadError: Error, Sendable, Equatable {
     case scopeMismatch(cursor: SemanticObservationScope, requested: SemanticObservationScope)
     case cursorUnavailable(ObservationCursor)
     case historyEvicted(ObservationGap)
 }
 
-internal struct ObservationLogPosition: Sendable, Equatable {
-    fileprivate let rawValue: UInt64
-}
-
-private struct RetainedObservationRecord: Sendable, Equatable {
-    let position: ObservationLogPosition
-    let entry: ObservationEntry
-}
-
-private struct ObservationRecordReference: Sendable, Equatable {
-    let position: ObservationLogPosition
-    let entry: ObservationEntry
-
-    var cursor: ObservationCursor {
-        entry.cursor
-    }
-}
-
-private struct ObservationCursorReference: Sendable, Equatable {
-    let position: ObservationLogPosition
-    let cursor: ObservationCursor
+internal enum ObservationLogRead: Sendable, Equatable {
+    case entry(ObservationEntry)
+    case pending
+    case failure(ObservationLogReadError)
 }
 
 private enum SemanticObservationPublicationState: Sendable, Equatable {
@@ -50,273 +31,96 @@ private enum SemanticObservationPublicationState: Sendable, Equatable {
     case invalidated(sourceScope: SemanticObservationScope?)
 }
 
-private struct ObservationLogWaiterID: Sendable, Equatable, Hashable {
-    let rawValue: UInt64
-}
+private struct SemanticObservationLogState {
+    let retentionLimit: Int
+    var entries: [ObservationEntry] = []
+    var latestByScope: [SemanticObservationScope: ObservationEntry] = [:]
+    var evictedThrough: [SemanticObservationScope: ObservationCursor] = [:]
+    var publicationState = SemanticObservationPublicationState.empty
 
-private struct ObservationLogWaiter: Sendable, Equatable {
-    let scope: SemanticObservationScope
-    var position: ObservationLogPosition
-}
-
-private enum ObservationLogDelivery: Sendable, Equatable {
-    case entry(RetainedObservationRecord)
-    case failure(ObservationEntrySequenceError)
-    case cancelled
-}
-
-private struct ObservationLogEffect: Sendable, Equatable {
-    let waiterID: ObservationLogWaiterID
-    let delivery: ObservationLogDelivery
-}
-
-private enum SemanticObservationLogReducer {
-    struct State {
-        let retentionLimit: Int
-        var records: [RetainedObservationRecord] = []
-        var latestByScope: [SemanticObservationScope: ObservationRecordReference] = [:]
-        var evictedThrough: [SemanticObservationScope: ObservationCursorReference] = [:]
-        var waiters: [ObservationLogWaiterID: ObservationLogWaiter] = [:]
-        var publicationState = SemanticObservationPublicationState.empty
-        var nextPosition: UInt64 = 0
-        var nextWaiterID: UInt64 = 0
-
-        var retainedRecords: ArraySlice<RetainedObservationRecord> {
-            records[...]
-        }
-
-        var latestPosition: ObservationLogPosition? {
-            records.last?.position
-        }
-
-        func retainedRecords(
-            after position: ObservationLogPosition
-        ) -> ArraySlice<RetainedObservationRecord> {
-            let index = records.firstIndex {
-                $0.position.rawValue > position.rawValue
-            } ?? records.endIndex
-            return records[index...]
-        }
-
-        init(retentionLimit: Int) {
-            precondition(retentionLimit > 0, "Observation history retention must be positive")
-            self.retentionLimit = retentionLimit
-        }
+    init(retentionLimit: Int) {
+        precondition(retentionLimit > 0, "Observation history retention must be positive")
+        self.retentionLimit = retentionLimit
     }
 
-    enum Input {
-        case append(ObservationEntry)
-        case next(
-            id: ObservationLogWaiterID,
-            cursor: ObservationCursor?,
-            scope: SemanticObservationScope,
-            position: ObservationLogPosition?
-        )
-        case cancel(ObservationLogWaiterID)
-        case cancelAll
-    }
-
-    enum Output {
-        case accepted([ObservationLogEffect])
-        case rejected(SemanticObservationLogAppendError)
-    }
-
-    static func reserveWaiterID(in state: inout State) -> ObservationLogWaiterID {
-        let id = ObservationLogWaiterID(rawValue: state.nextWaiterID)
-        state.nextWaiterID += 1
-        return id
-    }
-
-    static func reduce(_ input: Input, state: inout State) -> Output {
-        switch input {
-        case .append(let entry):
-            return append(entry, state: &state)
-        case .next(let id, let cursor, let scope, let position):
-            return .accepted(next(
-                id: id,
-                cursor: cursor,
-                scope: scope,
-                position: position,
-                state: &state
-            ))
-        case .cancel(let id):
-            guard state.waiters.removeValue(forKey: id) != nil else {
-                return .accepted([])
-            }
-            return .accepted([ObservationLogEffect(waiterID: id, delivery: .cancelled)])
-        case .cancelAll:
-            let effects = state.waiters.keys.sorted {
-                $0.rawValue < $1.rawValue
-            }.map {
-                ObservationLogEffect(waiterID: $0, delivery: .cancelled)
-            }
-            state.waiters.removeAll()
-            return .accepted(effects)
-        }
-    }
-
-    private static func append(_ entry: ObservationEntry, state: inout State) -> Output {
+    mutating func append(_ entry: ObservationEntry) throws {
         let scope = entry.cursor.scope
-        switch (state.latestByScope[scope], entry.transition) {
+        switch (latestByScope[scope], entry.transition) {
         case (.none, .initial):
             break
         case (.some, .initial):
-            return .rejected(.initialEntryAlreadyExists(scope: scope))
+            throw SemanticObservationLogAppendError.initialEntryAlreadyExists(scope: scope)
         case (.none, .sameGeneration), (.none, .screenBoundary):
-            return .rejected(.missingInitialEntry(scope: scope))
+            throw SemanticObservationLogAppendError.missingInitialEntry(scope: scope)
         case (.some(let latest), .sameGeneration(let transition)):
             guard transition.previousCursor == latest.cursor else {
-                return .rejected(.discontinuousLineage(
+                throw SemanticObservationLogAppendError.discontinuousLineage(
                     expected: latest.cursor,
                     actual: transition.previousCursor
-                ))
+                )
             }
         case (.some(let latest), .screenBoundary(let transition)):
             guard transition.previousCursor == latest.cursor else {
-                return .rejected(.discontinuousLineage(
+                throw SemanticObservationLogAppendError.discontinuousLineage(
                     expected: latest.cursor,
                     actual: transition.previousCursor
-                ))
+                )
             }
         }
 
-        let record = RetainedObservationRecord(
-            position: ObservationLogPosition(rawValue: state.nextPosition),
-            entry: entry
-        )
-        state.nextPosition += 1
-        state.records.append(record)
-        state.latestByScope[scope] = ObservationRecordReference(
-            position: record.position,
-            entry: entry
-        )
-        evictIfNeeded(scope: scope, state: &state)
-
-        var effects: [ObservationLogEffect] = []
-        let waiterIDs = Array(state.waiters.keys)
-        for id in waiterIDs {
-            guard var waiter = state.waiters[id] else { continue }
-            if waiter.scope == scope {
-                state.waiters.removeValue(forKey: id)
-                effects.append(ObservationLogEffect(waiterID: id, delivery: .entry(record)))
-            } else {
-                waiter.position = record.position
-                state.waiters[id] = waiter
-            }
-        }
-        return .accepted(effects)
+        entries.append(entry)
+        latestByScope[scope] = entry
+        evictIfNeeded(scope: scope)
     }
 
-    private static func next(
-        id: ObservationLogWaiterID,
-        cursor: ObservationCursor?,
-        scope: SemanticObservationScope,
-        position startingPosition: ObservationLogPosition?,
-        state: inout State
-    ) -> [ObservationLogEffect] {
-        if let cursor, cursor.scope != scope {
-            return [ObservationLogEffect(
-                waiterID: id,
-                delivery: .failure(.scopeMismatch(cursor: cursor.scope, requested: scope))
-            )]
+    func read(
+        after cursor: ObservationCursor?,
+        scope: SemanticObservationScope
+    ) -> ObservationLogRead {
+        guard let cursor else {
+            return entries.first(where: { $0.cursor.scope == scope })
+                .map(ObservationLogRead.entry) ?? .pending
         }
-        if let cursor, let gap = historyGap(after: cursor, scope: scope, state: state) {
-            return [ObservationLogEffect(
-                waiterID: id,
-                delivery: .failure(.historyEvicted(gap))
-            )]
+        guard cursor.scope == scope else {
+            return .failure(.scopeMismatch(cursor: cursor.scope, requested: scope))
         }
-
-        let resolvedPosition: ObservationLogPosition
-        if let startingPosition {
-            resolvedPosition = startingPosition
-        } else if cursor == nil {
-            if let record = state.retainedRecords.first(where: {
-                $0.entry.cursor.scope == scope
-            }) {
-                return [ObservationLogEffect(waiterID: id, delivery: .entry(record))]
-            }
-            let suspendedPosition = state.latestPosition ?? ObservationLogPosition(rawValue: 0)
-            state.waiters[id] = ObservationLogWaiter(
-                scope: scope,
-                position: suspendedPosition
-            )
-            return []
-        } else {
-            guard let cursor else {
-                preconditionFailure("Observation cursor resolution requires a cursor")
-            }
-            switch position(of: cursor, scope: scope, state: state) {
-            case .success(let position):
-                resolvedPosition = position
-            case .failure(let error):
-                return [ObservationLogEffect(waiterID: id, delivery: .failure(error))]
-            }
+        if let gap = historyGap(after: cursor, scope: scope) {
+            return .failure(.historyEvicted(gap))
         }
-
-        if let record = state.retainedRecords(after: resolvedPosition).first(where: {
-            $0.entry.cursor.scope == scope
-        }) {
-            return [ObservationLogEffect(waiterID: id, delivery: .entry(record))]
+        let cursorIsKnown = entries.contains { $0.cursor == cursor }
+            || latestByScope[scope]?.cursor == cursor
+            || evictedThrough[scope] == cursor
+        guard cursorIsKnown else {
+            return .failure(.cursorUnavailable(cursor))
         }
-
-        let suspendedPosition = state.latestPosition ?? resolvedPosition
-        state.waiters[id] = ObservationLogWaiter(
-            scope: scope,
-            position: suspendedPosition
-        )
-        return []
+        return entries.first(where: {
+            $0.cursor.scope == scope && $0.cursor.sequence > cursor.sequence
+        }).map(ObservationLogRead.entry) ?? .pending
     }
 
-    private static func position(
-        of cursor: ObservationCursor,
-        scope: SemanticObservationScope,
-        state: State
-    ) -> Result<ObservationLogPosition, ObservationEntrySequenceError> {
-        if let retained = state.retainedRecords.first(where: { $0.entry.cursor == cursor }) {
-            return .success(retained.position)
-        }
-        if let latest = state.latestByScope[scope], latest.cursor == cursor {
-            return .success(latest.position)
-        }
-        if let evicted = state.evictedThrough[scope], evicted.cursor == cursor {
-            return .success(evicted.position)
-        }
-        return .failure(.cursorUnavailable(cursor))
-    }
-
-    private static func historyGap(
+    private func historyGap(
         after cursor: ObservationCursor,
-        scope: SemanticObservationScope,
-        state: State
+        scope: SemanticObservationScope
     ) -> ObservationGap? {
-        guard let evicted = state.evictedThrough[scope],
-              evicted.cursor.sequence > cursor.sequence else { return nil }
-        let current = state.latestByScope[scope]?.cursor ?? evicted.cursor
+        guard let evicted = evictedThrough[scope],
+              evicted.sequence > cursor.sequence else { return nil }
         return ObservationGap(
             reason: .historyEvicted,
             baseline: cursor,
-            current: current
+            current: latestByScope[scope]?.cursor ?? evicted
         )
     }
 
-    private static func evictIfNeeded(
-        scope: SemanticObservationScope,
-        state: inout State
-    ) {
-        guard state.records.lazy.filter({
-            $0.entry.cursor.scope == scope
-        }).count > state.retentionLimit else { return }
-        guard let index = state.records.firstIndex(where: {
-            $0.entry.cursor.scope == scope
+    private mutating func evictIfNeeded(scope: SemanticObservationScope) {
+        guard entries.lazy.filter({
+            $0.cursor.scope == scope
+        }).count > retentionLimit else { return }
+        guard let index = entries.firstIndex(where: {
+            $0.cursor.scope == scope
         }) else {
             preconditionFailure("Observation scope retention count lost its matching record")
         }
-        let evicted = state.records.remove(at: index)
-        state.evictedThrough[evicted.entry.cursor.scope] = ObservationCursorReference(
-            position: evicted.position,
-            cursor: evicted.entry.cursor
-        )
+        evictedThrough[scope] = entries.remove(at: index).cursor
     }
 }
 
@@ -324,23 +128,12 @@ private enum SemanticObservationLogReducer {
 internal final class SemanticObservationLog {
     internal nonisolated static let defaultRetentionLimit = 256
 
-    internal enum IteratorDelivery: Sendable, Equatable {
-        case entry(ObservationEntry, position: ObservationLogPosition)
-        case failure(ObservationEntrySequenceError)
-        case cancelled
-    }
-
-    private var state: SemanticObservationLogReducer.State
-    private var continuations: [ObservationLogWaiterID: TimedOneShot<IteratorDelivery>] = [:]
-
-    internal var waiterCount: Int {
-        state.waiters.count
-    }
+    private var state: SemanticObservationLogState
 
     internal var latestSourceEvent: SettledSemanticObservationEvent? {
         switch state.publicationState {
         case .observing(let sourceScope), .invalidated(.some(let sourceScope)):
-            state.latestByScope[sourceScope]?.entry.event
+            state.latestByScope[sourceScope]?.event
         case .empty, .invalidated(.none):
             nil
         }
@@ -361,17 +154,16 @@ internal final class SemanticObservationLog {
 
     internal var latestEventsByScope: SemanticObservationPublication.EventsByScope {
         Dictionary(uniqueKeysWithValues: state.latestByScope.map { scope, reference in
-            (scope, reference.entry.event)
+            (scope, reference.event)
         })
     }
 
     internal init(retentionLimit: Int = defaultRetentionLimit) {
-        state = SemanticObservationLogReducer.State(retentionLimit: retentionLimit)
+        state = SemanticObservationLogState(retentionLimit: retentionLimit)
     }
 
     internal func publish(_ publication: SemanticObservationPublication) throws {
         var candidate = state
-        var publicationEffects: [ObservationLogEffect] = []
         for (scope, event) in publication.events.sorted(by: { $0.key < $1.key }) {
             guard scope == event.scope else {
                 throw SemanticObservationLogAppendError.scopeKeyMismatch(
@@ -379,20 +171,13 @@ internal final class SemanticObservationLog {
                     event: event.scope
                 )
             }
-            let entry = try Self.entry(
+            try candidate.append(Self.entry(
                 for: event,
                 after: candidate.latestByScope[scope]
-            )
-            switch SemanticObservationLogReducer.reduce(.append(entry), state: &candidate) {
-            case .accepted(let effects):
-                publicationEffects.append(contentsOf: effects)
-            case .rejected(let error):
-                throw error
-            }
+            ))
         }
         candidate.publicationState = .observing(sourceScope: publication.sourceScope)
         state = candidate
-        perform(publicationEffects)
     }
 
     internal func beginScreenReplacement() {
@@ -413,7 +198,7 @@ internal final class SemanticObservationLog {
     internal func previousEvent(
         for scope: SemanticObservationScope
     ) -> SettledSemanticObservationEvent? {
-        state.latestByScope[scope]?.entry.event
+        state.latestByScope[scope]?.event
     }
 
     internal func cleanEvent(
@@ -422,7 +207,7 @@ internal final class SemanticObservationLog {
     ) -> SettledSemanticObservationEvent? {
         guard case .observing(let sourceScope) = state.publicationState,
               let currentGeneration = state.latestByScope[sourceScope]?.cursor.generation,
-              let latest = state.latestByScope[scope]?.entry.event,
+              let latest = state.latestByScope[scope]?.event,
               latest.generation == currentGeneration,
               latest.sequence > (sequence ?? 0) else {
             return nil
@@ -430,21 +215,15 @@ internal final class SemanticObservationLog {
         return latest
     }
 
-    internal func entries(
-        after cursor: ObservationCursor,
+    internal func read(
+        after cursor: ObservationCursor?,
         scope: SemanticObservationScope
-    ) -> ObservationEntrySequence {
-        ObservationEntrySequence(log: self, cursor: cursor, scope: scope)
-    }
-
-    internal func entries(scope: SemanticObservationScope) -> ObservationEntrySequence {
-        ObservationEntrySequence(log: self, cursor: nil, scope: scope)
+    ) -> ObservationLogRead {
+        state.read(after: cursor, scope: scope)
     }
 
     internal func retainedEntries(scope: SemanticObservationScope) -> [ObservationEntry] {
-        state.retainedRecords.compactMap { record in
-            record.entry.cursor.scope == scope ? record.entry : nil
-        }
+        state.entries.filter { $0.cursor.scope == scope }
     }
 
     internal func latestCursor(scope: SemanticObservationScope) -> ObservationCursor? {
@@ -453,21 +232,21 @@ internal final class SemanticObservationLog {
 
     internal func event(at cursor: ObservationCursor) -> SettledSemanticObservationEvent? {
         if let latest = state.latestByScope[cursor.scope], latest.cursor == cursor {
-            return latest.entry.event
+            return latest.event
         }
-        return state.retainedRecords.first(where: { $0.entry.cursor == cursor })?.entry.event
+        return state.entries.first(where: { $0.cursor == cursor })?.event
     }
 
     internal func event(
         scope: SemanticObservationScope,
         sequence: SettledObservationSequence
     ) -> SettledSemanticObservationEvent? {
-        if let latest = state.latestByScope[scope], latest.entry.event.sequence == sequence {
-            return latest.entry.event
+        if let latest = state.latestByScope[scope], latest.event.sequence == sequence {
+            return latest.event
         }
-        return state.retainedRecords.first(where: {
-            $0.entry.event.scope == scope && $0.entry.event.sequence == sequence
-        })?.entry.event
+        return state.entries.first(where: {
+            $0.event.scope == scope && $0.event.sequence == sequence
+        })?.event
     }
 
     internal func settledCapture(
@@ -477,52 +256,83 @@ internal final class SemanticObservationLog {
         event(scope: scope, sequence: sequence)?.settledCapture
     }
 
-    internal func next(
-        after cursor: ObservationCursor?,
-        scope: SemanticObservationScope,
-        position: ObservationLogPosition?
-    ) async -> IteratorDelivery {
-        let waiterID = SemanticObservationLogReducer.reserveWaiterID(in: &state)
-        let oneShot = TimedOneShot<IteratorDelivery>()
-        let delivery = await oneShot.wait(
-            cancellationValue: .cancelled,
-            onRegistered: { continuation in
-                continuations[waiterID] = continuation
-                let output = SemanticObservationLogReducer.reduce(
-                    .next(id: waiterID, cursor: cursor, scope: scope, position: position),
-                    state: &state
+    internal func observationWindow(
+        from baseline: SettledCapture,
+        through currentEvent: SettledSemanticObservationEvent
+    ) -> ObservationWindow? {
+        let projectedCurrentEvent = event(
+            scope: baseline.cursor.scope,
+            sequence: currentEvent.sequence
+        ) ?? currentEvent
+        guard let currentCursor = projectedCurrentEvent.cursor,
+              let current = event(at: currentCursor)?.settledCapture else { return nil }
+        guard baseline.cursor.scope == current.cursor.scope else {
+            return ObservationWindow.incomplete(
+                baseline: baseline,
+                current: current,
+                retainedEntries: [],
+                gap: ObservationGap(
+                    reason: .scopeChanged,
+                    baseline: baseline.cursor,
+                    current: current.cursor
                 )
-                guard case .accepted(let effects) = output else {
-                    preconditionFailure("Observation iterator request cannot reject an append")
-                }
-                perform(effects)
+            )
+        }
+        guard current.cursor.sequence > baseline.cursor.sequence else {
+            return ObservationWindow.incomplete(
+                baseline: baseline,
+                current: current,
+                retainedEntries: [],
+                gap: ObservationGap(
+                    reason: .noObservationAfterBaseline,
+                    baseline: baseline.cursor,
+                    current: current.cursor
+                )
+            )
+        }
+
+        let scopeEntries = retainedEntries(scope: current.cursor.scope)
+        let retainedEntries = scopeEntries.filter {
+            $0.cursor.sequence > baseline.cursor.sequence
+                && $0.cursor.sequence <= current.cursor.sequence
+        }
+        let baselineIsRetained = scopeEntries.contains { $0.cursor == baseline.cursor }
+        let currentIsRetained = retainedEntries.last?.cursor == current.cursor
+        let retainedLineageStartsAtBaseline =
+            retainedEntries.first?.transition.previousCursor == baseline.cursor
+        if currentIsRetained,
+           baselineIsRetained || retainedLineageStartsAtBaseline {
+            do {
+                return try ObservationWindow(
+                    baseline: baseline,
+                    retainedEntries: retainedEntries
+                )
+            } catch {
+                preconditionFailure("Observation log admitted discontinuous retained lineage: \(error)")
             }
+        }
+
+        let reason: ObservationGap.Reason = if let first = scopeEntries.first,
+                                              baseline.cursor.sequence < first.cursor.sequence {
+            .historyEvicted
+        } else {
+            .historyUnavailable
+        }
+        return ObservationWindow.incomplete(
+            baseline: baseline,
+            current: current,
+            retainedEntries: retainedEntries,
+            gap: ObservationGap(
+                reason: reason,
+                baseline: baseline.cursor,
+                current: current.cursor
+            )
         )
-        if case .cancelled = delivery {
-            cancel(waiterID)
-        }
-        return delivery
-    }
-
-    internal func cancelAllWaiters() {
-        let output = SemanticObservationLogReducer.reduce(.cancelAll, state: &state)
-        guard case .accepted(let effects) = output else {
-            preconditionFailure("Observation iterator shutdown cannot reject")
-        }
-        perform(effects)
-    }
-
-    private func cancel(_ waiterID: ObservationLogWaiterID) {
-        let output = SemanticObservationLogReducer.reduce(.cancel(waiterID), state: &state)
-        guard case .accepted(let effects) = output else {
-            preconditionFailure("Observation iterator cancellation cannot reject an append")
-        }
-        perform(effects)
     }
 
     private static func entry(
         for event: SettledSemanticObservationEvent,
-        after latest: ObservationRecordReference?
+        after latest: ObservationEntry?
     ) throws -> ObservationEntry {
         if event.previousCursor != latest?.cursor {
             throw SemanticObservationLogAppendError.eventLineageMismatch(
@@ -538,23 +348,6 @@ internal final class SemanticObservationLog {
             return try .sameGeneration(event, after: latest.cursor)
         }
         return try .screenBoundary(event, replacing: latest.cursor)
-    }
-
-    private func perform(_ effects: [ObservationLogEffect]) {
-        for effect in effects {
-            guard let continuation = continuations.removeValue(forKey: effect.waiterID) else {
-                preconditionFailure("Observation waiter effect has no continuation")
-            }
-            let delivery: IteratorDelivery = switch effect.delivery {
-            case .entry(let record):
-                .entry(record.entry, position: record.position)
-            case .failure(let error):
-                .failure(error)
-            case .cancelled:
-                .cancelled
-            }
-            continuation.resolve(returning: delivery)
-        }
     }
 }
 

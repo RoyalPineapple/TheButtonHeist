@@ -215,6 +215,37 @@ final class ScreenClassifierTests: XCTestCase {
         )
     }
 
+    func testStableSemanticScrollContainerDoesNotOverrideNavigationHeaderChange() {
+        let scroll = AccessibilityContainer(
+            type: .list,
+            identifier: "menu_list",
+            scrollableContentSize: AccessibilitySize(width: 320, height: 1_200),
+            frame: AccessibilityRect(x: 0, y: 80, width: 320, height: 560)
+        )
+        let navigation = AccessibilityContainer(
+            type: .semanticGroup(label: nil, value: nil),
+            frame: AccessibilityRect(x: 0, y: 0, width: 320, height: 80)
+        )
+        func viewport(title: String, row: String) -> InterfaceObservation {
+            screen(hierarchy: [
+                .container(scroll, children: [
+                    .element(element(label: row, traits: .button), traversalIndex: 0),
+                ]),
+                .container(navigation, children: [
+                    .element(element(label: title, traits: .header), traversalIndex: 1),
+                ]),
+            ])
+        }
+
+        XCTAssertEqual(
+            classify(
+                before: viewport(title: "Menu", row: "Greek Salad"),
+                after: viewport(title: "Checkout", row: "Confirm Payment")
+            ),
+            .replacement(.inferred(.primaryHeaderChanged))
+        )
+    }
+
     func testSameTitleAndScrollPathWithDisjointIdentityIsReplacement() {
         let scroll = AccessibilityContainer(
             type: .list,

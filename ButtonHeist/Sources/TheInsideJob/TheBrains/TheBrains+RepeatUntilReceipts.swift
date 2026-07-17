@@ -266,21 +266,17 @@ extension TheBrains {
         context: RepeatUntilReceiptContext,
         completion: HeistRepeatUntilCompletion?
     ) -> HeistExecutionStepResult {
-        let construction = completion.map { completion in
-            HeistExecutionStepResult.construct(
-                path: context.path,
-                durationMs: context.durationMs,
-                node: .repeatUntil(
-                    declaration: context.declaration,
-                    completion: completion
-                )
-            )
-        } ?? .failure(.evidenceConstructionFailed)
-        return receiptResult(
-            construction,
+        let admittedCompletion = requireAdmitted(
+            completion,
+            "repeat_until receipt completion must match the terminal state and admitted evidence"
+        )
+        return admittedReceipt(
             path: context.path,
             durationMs: context.durationMs,
-            children: context.children
+            node: .repeatUntil(
+                declaration: context.declaration,
+                completion: admittedCompletion
+            )
         )
     }
 
@@ -335,52 +331,42 @@ extension TheBrains {
         )
         switch outcome {
         case .predicateMet, .continued:
-            let construction: Result<HeistExecutionStepResult, HeistReceiptConstructionError>
-            if case .passed(let admittedChildren) = HeistExecutedChildren(children) {
-                construction = evidence.flatMap(HeistPassedRepeatUntilIterationEvidence.init).map { evidence in
-                    HeistExecutionStepResult.construct(
-                        path: frame.path,
-                        durationMs: durationMs,
-                        node: .repeatUntilIteration(
-                            declaration: declaration,
-                            completion: .passed(evidence: evidence, children: admittedChildren)
-                        )
-                    )
-                } ?? .failure(.evidenceConstructionFailed)
-            } else {
-                construction = .failure(.evidenceConstructionFailed)
-            }
-            return receiptResult(
-                construction,
+            let admittedEvidence = requireAdmitted(
+                evidence.flatMap(HeistPassedRepeatUntilIterationEvidence.init),
+                "repeat_until iteration passing evidence must match the iteration declaration"
+            )
+            let admittedChildren = requirePassingChildren(
+                children,
+                "repeat_until passing iteration must not contain a failed child"
+            )
+            return admittedReceipt(
                 path: frame.path,
                 durationMs: durationMs,
-                children: children
+                node: .repeatUntilIteration(
+                    declaration: declaration,
+                    completion: .passed(evidence: admittedEvidence, children: admittedChildren)
+                )
             )
         case .failed(expectation: _, childPath: let childPath):
-            let construction: Result<HeistExecutionStepResult, HeistReceiptConstructionError>
-            if case .aborted(let admittedChildren) = HeistExecutedChildren(children) {
-                construction = evidence.flatMap(HeistFailedRepeatUntilEvidence.init).map { evidence in
-                    HeistExecutionStepResult.construct(
-                        path: frame.path,
-                        durationMs: durationMs,
-                        node: .repeatUntilIteration(
-                            declaration: declaration,
-                            completion: .childAborted(
-                                evidence: evidence,
-                                failure: childFailureDetail(category: .loop, childPath: childPath),
-                                children: admittedChildren
-                            )
-                        )
-                    )
-                } ?? .failure(.evidenceConstructionFailed)
-            } else {
-                construction = .failure(.evidenceConstructionFailed)
-            }
-            return receiptResult(
-                construction,
+            let admittedEvidence = requireAdmitted(
+                evidence.flatMap(HeistFailedRepeatUntilEvidence.init),
+                "repeat_until iteration child-aborted evidence must match the iteration declaration"
+            )
+            let admittedChildren = requireAbortedChildren(
+                children,
+                "repeat_until failed iteration must carry the aborted child path"
+            )
+            return admittedReceipt(
                 path: frame.path,
                 durationMs: durationMs,
-                children: children
+                node: .repeatUntilIteration(
+                    declaration: declaration,
+                    completion: .childAborted(
+                        evidence: admittedEvidence,
+                        failure: childFailureDetail(category: .loop, childPath: childPath),
+                        children: admittedChildren
+                    )
+                )
             )
         }
     }

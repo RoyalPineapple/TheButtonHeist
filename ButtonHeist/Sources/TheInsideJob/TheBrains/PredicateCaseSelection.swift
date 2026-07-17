@@ -69,7 +69,7 @@ private final class PredicateCaseSelectionProjection {
 
     func evaluate(
         _ observation: HeistSemanticObservation
-    ) -> PredicateWaitLifecycleEvaluation<PredicateCaseSelectionEvidence> {
+    ) -> PredicateWaitEvaluation<PredicateCaseSelectionEvidence> {
         let evaluatedCases = inputs.map { PredicateEvaluation.caseMatch($0, in: observation) }
         let selectedCaseIndex = evaluatedCases.firstIndex(where: \.met)
         let selection = PredicateCaseSelectionEvidence(
@@ -77,14 +77,14 @@ private final class PredicateCaseSelectionProjection {
             selectedCaseIndex: selectedCaseIndex,
             observationSummary: observation.summary
         )
-        return PredicateWaitLifecycleEvaluation(
+        return PredicateWaitEvaluation(
             evidence: selection,
             matched: selectedCaseIndex != nil
         )
     }
 
     func result(
-        _ executionOutcome: PredicateWaitLifecycleOutcome,
+        _ executionOutcome: PredicateWaitOutcome,
         deadline: SemanticObservationDeadline,
         evidence: PredicateCaseSelectionEvidence
     ) -> HeistCaseSelectionResult {

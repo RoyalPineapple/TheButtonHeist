@@ -60,10 +60,15 @@ internal enum ScreenLineageEvidence: Sendable, Equatable {
 
     struct ScreenSignature: Equatable {
         let modalMarkers: [Marker]
-        let primaryHeader: String?
+        let primaryHeader: PrimaryHeader?
         let backButton: Marker?
         let selectedTabs: Set<Marker>
         let rootShape: [RootShapeToken]
+    }
+
+    struct PrimaryHeader: Equatable {
+        let label: String?
+        let belongsToScrollableContent: Bool
     }
 
     struct Marker: Equatable, Hashable {
@@ -156,11 +161,13 @@ internal enum ScreenLineageEvidence: Sendable, Equatable {
 
         let beforeSignature = before.signature
         let afterSignature = after.signature
-        let sameGenerationIsProven = hasSameGenerationEvidence(
+        let directLineageIsProven = hasDirectLineageEvidence(
             before: before,
             after: after,
             lineageEvidence: lineageEvidence
         )
+        let sharedScrollContainer = sharesSemanticScrollContainer(before: before, after: after)
+        let sameGenerationIsProven = directLineageIsProven || sharedScrollContainer
 
         if beforeSignature.modalMarkers != afterSignature.modalMarkers {
             return .replacement(.inferred(.modalBoundaryChanged))
@@ -172,7 +179,12 @@ internal enum ScreenLineageEvidence: Sendable, Equatable {
             return .replacement(.inferred(.navigationMarkerChanged))
         }
         if beforeSignature.primaryHeader != afterSignature.primaryHeader,
-           !sameGenerationIsProven {
+           !directLineageIsProven,
+           !isScrollableContentHeaderChange(
+               before: beforeSignature.primaryHeader,
+               after: afterSignature.primaryHeader,
+               sharingScrollContainer: sharedScrollContainer
+           ) {
             return .replacement(.inferred(.primaryHeaderChanged))
         }
         if !before.semanticElementIDs.isEmpty,
@@ -195,19 +207,19 @@ internal enum ScreenLineageEvidence: Sendable, Equatable {
     ) -> ScreenSignature {
         ScreenSignature(
             modalMarkers: modalMarkers(in: hierarchy),
-            primaryHeader: summaryElement(in: hierarchy, elements: elements)?.label,
+            primaryHeader: primaryHeader(in: hierarchy, elements: elements),
             backButton: elements.first(where: isBackButton).map(marker(for:)),
             selectedTabs: selectedTabMarkers(in: hierarchy),
             rootShape: rootShapeTokens(in: hierarchy)
         )
     }
 
-    private static func summaryElement(
+    private static func primaryHeader(
         in hierarchy: [AccessibilityHierarchy],
         elements: [AccessibilityElement]
-    ) -> AccessibilityElement? {
+    ) -> PrimaryHeader? {
         if let explicit = elements.first(where: { $0.traits.contains(.summaryElement) }) {
-            return explicit
+            return PrimaryHeader(label: explicit.label, belongsToScrollableContent: false)
         }
         let navigationHeaders: [AccessibilityElement] = hierarchy.compactMap(
             context: false,
@@ -221,12 +233,14 @@ internal enum ScreenLineageEvidence: Sendable, Equatable {
             }
         )
         if let navigationHeader = navigationHeaders.first {
-            return navigationHeader
+            return PrimaryHeader(label: navigationHeader.label, belongsToScrollableContent: false)
         }
-        return elements.first { $0.traits.contains(.header) && $0.label != nil }
+        return elements.first { $0.traits.contains(.header) && $0.label != nil }.map {
+            PrimaryHeader(label: $0.label, belongsToScrollableContent: true)
+        }
     }
 
-    private static func hasSameGenerationEvidence(
+    private static func hasDirectLineageEvidence(
         before: Snapshot,
         after: Snapshot,
         lineageEvidence: ScreenLineageEvidence?
@@ -239,9 +253,26 @@ internal enum ScreenLineageEvidence: Sendable, Equatable {
            beforeResponder == afterResponder {
             return true
         }
+        return false
+    }
+
+    private static func sharesSemanticScrollContainer(
+        before: Snapshot,
+        after: Snapshot
+    ) -> Bool {
         return !before.semanticScrollContainerIdentities.isDisjoint(
             with: after.semanticScrollContainerIdentities
         )
+    }
+
+    private static func isScrollableContentHeaderChange(
+        before: PrimaryHeader?,
+        after: PrimaryHeader?,
+        sharingScrollContainer: Bool
+    ) -> Bool {
+        sharingScrollContainer
+            && before?.belongsToScrollableContent == true
+            && after?.belongsToScrollableContent == true
     }
 
     private static func semanticScrollContainerIdentity(

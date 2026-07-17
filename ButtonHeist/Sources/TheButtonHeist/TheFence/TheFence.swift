@@ -2,10 +2,6 @@ import Foundation
 
 import TheScore
 
-struct SessionConnectionSnapshot {
-    let state: SessionConnectionState
-}
-
 /// Centralized command dispatch layer. Both the CLI and MCP server are thin wrappers over TheFence.
 @ButtonHeistActor
 public final class TheFence {
@@ -63,9 +59,6 @@ public final class TheFence {
     // Dependencies
     var config: Configuration
     let handoff = TheHandoff()
-    var sessionConnectionSnapshot: SessionConnectionSnapshot {
-        SessionConnectionSnapshot(state: sessionConnectionState)
-    }
     let screenshotArtifacts: ScreenshotArtifactWriter
     let pendingRequests = PendingRequestRegistry()
 
@@ -77,12 +70,12 @@ public final class TheFence {
         wireUpResponseCallbacks()
     }
 
-    private var sessionConnectionState: SessionConnectionState {
+    var sessionConnectionState: SessionConnectionState {
         switch handoff.connectionPhase {
         case .disconnected:
-            return .disconnected(lastFailure: handoff.connectionDiagnosticFailure.map(sessionFailurePayload(for:)))
+            return .disconnected(lastFailure: handoff.connectionLifecycle.diagnosticFailure.map(sessionFailurePayload(for:)))
         case .reconnecting, .connecting:
-            return .connecting(lastFailure: handoff.connectionDiagnosticFailure.map(sessionFailurePayload(for:)))
+            return .connecting(lastFailure: handoff.connectionLifecycle.diagnosticFailure.map(sessionFailurePayload(for:)))
         case .connected(let session):
             return .connected(device: sessionDevicePayload(for: session.device))
         case .failed(let failure):

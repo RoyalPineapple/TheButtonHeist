@@ -8,24 +8,13 @@ extension InterfaceObservation {
         guard !removedIds.isEmpty else { return self }
         let filteredViewport = liveCapture.hierarchy.removingElements(
             withIds: removedIds,
-            idsByPath: liveCapture.heistIdsByPath
+            idsByPath: liveCapture.snapshot.heistIdsByPath
         )
         let pathMap = filteredViewport.pathMap
         let snapshot = LiveCapture.Snapshot(
             hierarchy: filteredViewport.hierarchy,
-            containerNamesByPath: Self.remap(liveCapture.containerNamesByPath, using: pathMap),
             heistIdsByPath: filteredViewport.idsByPath,
-            containerContentFramesByPath: Self.remap(liveCapture.containerContentFramesByPath, using: pathMap),
-            containerScrollMembershipsByPath: Self.remapMemberships(
-                liveCapture.containerScrollMembershipsByPath,
-                using: pathMap
-            ),
-            containerObservedScrollContentActivationPointsByPath: Self.remap(
-                liveCapture.containerObservedScrollContentActivationPointsByPath,
-                using: pathMap
-            ),
-            scrollInventoriesByPath: Self.remap(liveCapture.scrollInventoriesByPath, using: pathMap),
-            firstResponderHeistId: liveCapture.firstResponderHeistId.flatMap {
+            firstResponderHeistId: liveCapture.snapshot.firstResponderHeistId.flatMap {
                 removedIds.contains($0) ? nil : $0
             }
         )
@@ -63,25 +52,6 @@ extension InterfaceObservation {
         )
     }
 
-    private static func remapMemberships(
-        _ memberships: [TreePath: InterfaceTree.ScrollMembership],
-        using pathMap: [TreePath: TreePath]
-    ) -> [TreePath: InterfaceTree.ScrollMembership] {
-        Dictionary(
-            uniqueKeysWithValues: memberships.compactMap { path, membership in
-                guard let remappedPath = pathMap[path],
-                      let remappedContainerPath = pathMap[membership.containerPath]
-                else { return nil }
-                return (
-                    remappedPath,
-                    InterfaceTree.ScrollMembership(
-                        containerPath: remappedContainerPath,
-                        index: membership.index
-                    )
-                )
-            }
-        )
-    }
 }
 
 private extension InterfaceTree {

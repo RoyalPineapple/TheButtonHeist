@@ -82,7 +82,8 @@ settled sequence, capture hash, notification sequence, and `observedAt`.
 `observedAt` is derived automatically from the capture's interface timestamp;
 it is descriptive metadata, not an ordering input. Generation and settled
 sequence provide correctness ordering. Consumers read the log through
-replayable `ObservationEntrySequence` values; an
+`SemanticObservationLog.read(after:scope:)`, and
+`SemanticObservationStream` owns the single waiter path for future entries. An
 `ObservationWindow` is built from one immutable baseline cursor through the
 current retained entry. No predicate, action, or adapter owns another history.
 
@@ -198,10 +199,11 @@ publication path. There is no compatibility traversal or publication path.
 
 Publication appends each settled capture to the same private
 `SemanticObservationLog` used by waits and action expectations. Consumers read
-that history only through replayable `ObservationEntrySequence` values selected
-by scope and cursor; they do not subscribe to parser samples, build private
-capture arrays, or claim notification events. Retained-history eviction is
-explicit incomplete evidence, never an inferred `noChange`.
+that history only through log reads selected by scope and cursor, with
+`SemanticObservationStream` owning waiter registration and wakeup; they do not
+subscribe to parser samples, build private capture arrays, or claim
+notification events. Retained-history eviction is explicit incomplete evidence,
+never an inferred `noChange`.
 
 Waits first evaluate settled visible truth. A wait with one eligible predicate
 target reveals and retains an element that already resolves before a standalone
@@ -297,14 +299,14 @@ consume that projection; they do not rebuild report facts from plan siblings or
 parallel result fields.
 
 `HeistExecutionStepResult` owns a typed execution path, duration, and one
-`HeistExecutionStepNode`. `HeistExecutionStepNode.swift` owns the algebra,
-`HeistExecutionStepNode+Codable.swift` owns its one codec, and
-`HeistExecutionStepResult+Construction.swift` turns a legal node into the
-standard `Result` returned to runtime executors. The node's typed completion
-shapes and `constructionError` are the sole legality owner; no later admission
-or repair layer reconstructs intent from parallel fields. Status and abort paths
-derive from that node. The wire decoder accepts only fields legal for the node's
-`type` and `outcome`.
+`HeistExecutionStepNode`. The node type owns the receipt algebra and its single
+`Codable` conformance; file placement is organization, not an architectural
+contract. Typed completion cases make unconstrained nodes legal by construction.
+For action, loop, and repeat nodes whose declaration and evidence must agree,
+`admitted()` is the shared relationship boundary used by runtime construction
+and decoding. There is no `Result` repair path and no synthetic fallback
+receipt. Status and abort paths derive from the node, and the wire decoder
+accepts only fields legal for its `type` and `outcome`.
 
 `ActionDispatchOutcome` is the one result of app-side action dispatch. Its state
 is success, with an optional payload and resolved element id, or failure, with a
@@ -453,12 +455,12 @@ flowchart TD
     StopMet -->|no, progress + time remains| RunBody
     StopMet -->|no progress or deadline elapsed| Fail["fail / timeout"]
 
-    WaitForPath --> Lifecycle["PredicateWaitLifecycleMachine<br/>visible check → target reveal or canonical discovery<br/>→ observation stream → re-reveal/discovery → terminal verification"]
+    WaitForPath --> Lifecycle["PredicateWait execution<br/>visible check → target reveal or canonical discovery<br/>→ retained-log waiter → re-reveal/discovery → terminal verification"]
     ExpectPath --> Lifecycle
 
     Lifecycle --> PredicateKind{"Predicate kind"}
     PredicateKind -->|exists / missing| Current["Current InterfaceTree"]
-    PredicateKind -->|changed / noChange| Observe["Read next settled ObservationEntry<br/>from cursor-backed sequence"]
+    PredicateKind -->|changed / noChange| Observe["Read next settled ObservationEntry<br/>through the stream waiter"]
     Observe --> Log["SemanticObservationLog<br/>retained, non-destructive"]
     Log --> Window["ObservationWindow<br/>baseline through current"]
     Current --> HostAdapter["Private InterfaceTree adapter"]
@@ -601,8 +603,8 @@ an unmatched entry triggers another reveal before the wait returns to idle.
 Appearance assertions, unresolved element targets, container targets, and
 predicates containing multiple targets use the canonical viewport explorer
 instead. Discovery searches both directional rays and exits `.origin`. The wait
-then sits idle on an `ObservationEntrySequence` rather than polling or reparsing;
-an unmatched retained entry permits one bounded rediscovery. Action
+then sits idle on retained-log waiter coordination rather than polling or
+reparsing; an unmatched retained entry permits one bounded rediscovery. Action
 expectations do not establish a standalone baseline in either route: they keep
 the supplied pre-action `SettledCapture`.
 
