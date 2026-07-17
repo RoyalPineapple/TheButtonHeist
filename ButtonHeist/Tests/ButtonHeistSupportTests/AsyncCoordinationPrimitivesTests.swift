@@ -15,7 +15,6 @@ import Testing
         let signal = CompletionSignal()
         let first = Task { await signal.wait(timeout: .seconds(30)) }
         let second = Task { await signal.wait(timeout: .seconds(30)) }
-        await Task.yield()
 
         signal.finish()
 
@@ -26,7 +25,6 @@ import Testing
     @Test func `completion signal finish is idempotent`() async {
         let signal = CompletionSignal()
         let waiter = Task { await signal.wait(timeout: .seconds(30)) }
-        await Task.yield()
 
         signal.finish()
         signal.finish()

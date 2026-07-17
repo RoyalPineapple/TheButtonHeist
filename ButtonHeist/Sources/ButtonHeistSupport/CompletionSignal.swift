@@ -22,10 +22,15 @@ package final class CompletionSignal: Sendable {
     package func wait() async {
         let waiter = TimedOneShot<Bool>()
         let waiterID = WaiterID()
-        _ = await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
-            precondition(waiter.register(continuation))
-            register(waiter, id: waiterID)
-        }
+        _ = await waiter.wait(
+            cancellationValue: false,
+            onRegistered: { waiter in
+                register(waiter, id: waiterID)
+            },
+            onFinished: { [weak self] in
+                self?.remove(waiterID)
+            }
+        )
     }
 
     package func wait(timeout: Duration) async -> Bool {
