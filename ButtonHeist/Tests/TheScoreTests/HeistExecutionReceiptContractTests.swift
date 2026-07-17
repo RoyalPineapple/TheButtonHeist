@@ -12,6 +12,8 @@ import TheScore
             HeistReceiptFixture.explicitFailure(path: "$.body[2]", message: "stop"),
         ] + relationshipSteps()
 
+        #expect(steps[1].kind == .warn)
+        #expect(steps[2].kind == .fail)
         for step in steps {
             let data = try JSONEncoder().encode(step)
             #expect(try JSONDecoder().decode(HeistExecutionStepResult.self, from: data) == step)

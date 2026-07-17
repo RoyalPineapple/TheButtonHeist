@@ -134,7 +134,7 @@ final class DeviceDiscovery: DeviceDiscovering {
             for await event in eventStream.events {
                 guard eventStream.isGenerationActive else { break }
                 guard let self else { return }
-                self.handleBrowserEvent(event, sessionID: sessionID)
+                self.handleBrowserEvent(event)
             }
             guard let terminalReason = eventStream.terminalReason else { return }
             switch terminalReason {
@@ -177,27 +177,26 @@ final class DeviceDiscovery: DeviceDiscovering {
         activeDiscovery.browser.cancel()
     }
 
-    private func handleBrowserEvent(_ event: DeviceDiscoveryBrowserEvent, sessionID: UUID) {
+    private func handleBrowserEvent(_ event: DeviceDiscoveryBrowserEvent) {
         switch event {
         case .resultsChanged(let results, let changes):
             logger.info("Results changed: \(results.count) results, \(changes.count) changes")
-            handleResults(results, changes: changes, sessionID: sessionID)
+            handleResults(results, changes: changes)
         case .stateChanged(let state):
             logger.info("Browser state: \(String(describing: state))")
-            handleStateUpdate(state, sessionID: sessionID)
+            handleStateUpdate(state)
         }
     }
 
-    private func handleStateUpdate(_ state: DeviceDiscoveryBrowserState, sessionID: UUID) {
-        guard case .active(var activeDiscovery) = discoveryPhase,
-              activeDiscovery.id == sessionID else { return }
+    private func handleStateUpdate(_ state: DeviceDiscoveryBrowserState) {
+        guard case .active(var activeDiscovery) = discoveryPhase else { return }
 
         switch state {
         case .ready:
             activeDiscovery.browserState = .ready
             discoveryPhase = .active(activeDiscovery)
             onEvent?(.stateChanged(isReady: true))
-            startReachabilityValidation(sessionID: sessionID)
+            startReachabilityValidation(sessionID: activeDiscovery.id)
         case .setup, .waiting:
             activeDiscovery.browserState = state
             activeDiscovery.reachabilityTask?.cancel()
@@ -247,11 +246,9 @@ final class DeviceDiscovery: DeviceDiscovering {
 
     private func handleResults(
         _ results: Set<NWBrowser.Result>,
-        changes: Set<NWBrowser.Result.Change>,
-        sessionID: UUID
+        changes: Set<NWBrowser.Result.Change>
     ) {
-        guard case .active(var activeDiscovery) = discoveryPhase,
-              activeDiscovery.id == sessionID else { return }
+        guard case .active(var activeDiscovery) = discoveryPhase else { return }
         for change in changes {
             switch change {
             case .added(let result):

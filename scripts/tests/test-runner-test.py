@@ -44,7 +44,7 @@ class TestRunnerTests(unittest.TestCase):
             },
         )
 
-    def test_focus_catalog_owns_vertical_contracts(self) -> None:
+    def test_focus_catalog_owns_bounded_maintained_projections(self) -> None:
         self.assertEqual(
             set(FOCUSES),
             {

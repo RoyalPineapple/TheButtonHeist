@@ -137,8 +137,8 @@ Run the complete portable framework suite with:
 scripts/test-runner.py run MacFrameworkTests --selection full
 ```
 
-For a vertical contract or critical invariant, use a named focus from the same
-catalog instead of reconstructing scheme and test selectors:
+For a bounded, maintained projection of a contract or critical invariant, use a
+named focus instead of reconstructing scheme and test selectors:
 
 ```bash
 scripts/test-runner.py catalog
