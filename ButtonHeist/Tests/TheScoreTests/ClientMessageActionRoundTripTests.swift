@@ -129,7 +129,6 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
             method: .activate,
             errorKind: .elementNotFound,
             message: "Element not found",
-            evidence: .none
         )
         let data = try JSONEncoder().encode(result)
         let encoded = try JSONDecoder().decode(EncodedActionResultProbe.self, from: data)

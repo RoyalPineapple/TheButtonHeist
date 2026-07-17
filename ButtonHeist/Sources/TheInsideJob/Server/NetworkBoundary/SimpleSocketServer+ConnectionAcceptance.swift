@@ -49,11 +49,23 @@ extension SimpleSocketServer {
             let interfaceNames = interfaceNameList.joined(separator: ", ")
             if !scopeFilter.contains(scope) {
                 connectionLogger.warning("Rejecting \(scope.rawValue) connection from \(hostDescription) via [\(interfaceNames)]")
+                let message: ServerErrorMessage
+                do {
+                    message = try ServerErrorMessage(
+                        validating: "Connection rejected: \(scope.rawValue) connections are not allowed by this server."
+                    )
+                } catch {
+                    connectionLogger.error("Failed to admit connection rejection error: \(error)")
+                    if !generation.cancelIfOwned(connection) {
+                        connection.cancel()
+                    }
+                    return .rejected
+                }
                 rejectStartedConnectionWithServerError(
                     connection,
                     generation: generation,
                     kind: .general,
-                    message: "Connection rejected: \(scope.rawValue) connections are not allowed by this server."
+                    message: message
                 )
                 return .rejected
             }
@@ -81,7 +93,7 @@ extension SimpleSocketServer {
         _ connection: NWConnection,
         generation: SocketListenerGeneration,
         kind: ErrorKind,
-        message: String
+        message: ServerErrorMessage
     ) {
         let response: Data
         do {

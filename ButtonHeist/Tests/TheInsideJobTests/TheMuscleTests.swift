@@ -764,7 +764,7 @@ final class TheMuscleTests: XCTestCase {
         let serverMessages = responses().compactMap { decodeServerMessage($0) }
         let hasAuthFailed = serverMessages.contains { msg in
             if case .error(let serverError) = msg, serverError.kind == .authFailure {
-                return !serverError.message.contains("Too many")
+                return !serverError.message.description.contains("Too many")
             }
             return false
         }
@@ -785,7 +785,7 @@ final class TheMuscleTests: XCTestCase {
         let serverMessages = responses().compactMap { decodeServerMessage($0) }
         let hasLockout = serverMessages.contains { msg in
             if case .error(let serverError) = msg, serverError.kind == .authFailure {
-                return serverError.message.contains("Too many")
+                return serverError.message.description.contains("Too many")
             }
             return false
         }
@@ -839,7 +839,7 @@ final class TheMuscleTests: XCTestCase {
         let serverMessages = responses().compactMap { decodeServerMessage($0) }
         let hasLockout = serverMessages.contains { msg in
             if case .error(let serverError) = msg, serverError.kind == .authFailure {
-                return serverError.message.contains("Too many")
+                return serverError.message.description.contains("Too many")
             }
             return false
         }

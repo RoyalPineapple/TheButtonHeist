@@ -10,10 +10,18 @@ struct MuscleAuthenticationDeadlinePhase {
     ) -> [MuscleAdmissionEffect] {
         guard let phase, !phase.isAuthenticated else { return [] }
 
-        let error = ServerError(
-            kind: .authFailure,
-            message: "Authentication timed out after \(deadlineSeconds) seconds."
-        )
+        let message: ServerErrorMessage
+        do {
+            message = try ServerErrorMessage(
+                validating: "Authentication timed out after \(deadlineSeconds) seconds."
+            )
+        } catch {
+            return [
+                .log(.authenticationDeadline(clientId: clientId, deadlineSeconds: deadlineSeconds)),
+                .delayedDisconnect(clientId: clientId),
+            ]
+        }
+        let error = ServerError(kind: .authFailure, message: message)
 
         return [
             .log(.authenticationDeadline(clientId: clientId, deadlineSeconds: deadlineSeconds)),

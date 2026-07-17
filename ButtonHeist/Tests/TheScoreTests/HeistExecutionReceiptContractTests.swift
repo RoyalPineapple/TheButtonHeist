@@ -181,7 +181,7 @@ import TheScore
         let passedRepeatIteration = try #require(HeistPassedRepeatUntilIterationEvidence(repeatIteration))
 
         return [
-            HeistReceiptFixture.action(command: .dismiss, result: .success(method: .dismiss, evidence: .none)),
+            HeistReceiptFixture.action(command: .dismiss, result: .success(method: .dismiss)),
             try HeistExecutionStepResult.construct(
                 path: "$.body[1]",
                 durationMs: 1,

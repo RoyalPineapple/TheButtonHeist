@@ -253,7 +253,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         .withTiming(ActionPerformanceTiming(beforeObservationMs: 5, totalMs: 20))
         .withSubjectEvidence(replacementEvidence)
         .withActivationTrace(activationTrace)
-        .withTiming(ActionPerformanceTiming(settleMs: 7, totalMs: 30))
+        .withTiming(ActionPerformanceTiming(totalMs: 30))
 
         XCTAssertTrue(success.success)
         XCTAssertEqual(success.method, .setPasteboard)
@@ -264,7 +264,6 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(success.activationTrace, activationTrace)
         XCTAssertEqual(success.timing, ActionPerformanceTiming(
             beforeObservationMs: 5,
-            settleMs: 7,
             totalMs: 30
         ))
 

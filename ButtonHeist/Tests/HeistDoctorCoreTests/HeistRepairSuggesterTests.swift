@@ -855,13 +855,13 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
             command: .activate(target),
             result: ActionResult.success(
                 method: .activate,
-                evidence: ActionResultSuccessEvidence(observation: .trace(makeTestTraceEvidence(dispatchTrace, completeness: .incomplete)))
+                observation: .trace(makeTestTraceEvidence(dispatchTrace, completeness: .incomplete))
             ),
             expectationActionResult: ActionResult.failure(
                 method: .wait,
                 errorKind: .timeout,
                 message: "wait timed out",
-                evidence: ActionResultFailureEvidence(observation: .trace(makeTestTraceEvidence(expectationTrace, completeness: .incomplete)))
+                observation: .trace(makeTestTraceEvidence(expectationTrace, completeness: .incomplete))
             ),
             expectation: ExpectationResult(
                 met: false,
@@ -1110,14 +1110,14 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
         let actionResult = if actionSucceeded {
             ActionResult.success(
                 method: .activate,
-                evidence: ActionResultSuccessEvidence(observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete)))
+                observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
             )
         } else {
             ActionResult.failure(
                 method: .activate,
                 errorKind: .elementNotFound,
                 message: "No element matching \(target)",
-                evidence: ActionResultFailureEvidence(observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete)))
+                observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
             )
         }
         let step = status == .failed

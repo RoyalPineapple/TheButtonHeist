@@ -35,6 +35,21 @@ extension PredicateWait {
                 expectation: expectation
             )
         }
+        let announcementText: ActionAnnouncementText
+        do {
+            announcementText = try ActionAnnouncementText(validating: announcement.text)
+        } catch {
+            let message = String(describing: error)
+            return .failed(
+                errorKind: .validationError,
+                message: message,
+                traceEvidence: nil,
+                expectation: ExpectationResult.Unmet(
+                    predicate: step.predicateExpression,
+                    actual: message
+                )
+            )
+        }
 
         let elapsed = Self.elapsedSeconds(since: start)
         let expectation = ExpectationResult.Met(
@@ -45,7 +60,7 @@ extension PredicateWait {
             message: Self.announcementMatchedMessage(announcement, elapsed: elapsed),
             traceEvidence: nil,
             expectation: expectation,
-            announcement: announcement.text
+            announcement: announcementText
         )
     }
 
@@ -58,6 +73,21 @@ extension PredicateWait {
         guard let announcement = trace.capturedAnnouncements.first else {
             let message = Self.missingActionAnnouncementMessage(predicate)
             return .timedOut(
+                message: message,
+                traceEvidence: Self.incompleteTraceEvidence(trace),
+                expectation: ExpectationResult.Unmet(
+                    predicate: step.predicateExpression,
+                    actual: message
+                )
+            )
+        }
+        let announcementText: ActionAnnouncementText
+        do {
+            announcementText = try ActionAnnouncementText(validating: announcement.text)
+        } catch {
+            let message = String(describing: error)
+            return .failed(
+                errorKind: .validationError,
                 message: message,
                 traceEvidence: Self.incompleteTraceEvidence(trace),
                 expectation: ExpectationResult.Unmet(
@@ -80,7 +110,7 @@ extension PredicateWait {
                     predicate: step.predicateExpression,
                     actual: message
                 ),
-                announcement: announcement.text
+                announcement: announcementText
             )
         }
 
@@ -94,7 +124,7 @@ extension PredicateWait {
                 predicate: step.predicateExpression,
                 actual: announcement.text
             ),
-            announcement: announcement.text
+            announcement: announcementText
         )
     }
 

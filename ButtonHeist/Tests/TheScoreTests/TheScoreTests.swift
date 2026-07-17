@@ -189,24 +189,42 @@ final class MessageIntegrationTests: XCTestCase {
         ]
 
         for errorMsg in errorMessages {
-            let msg = ServerMessage.error(ServerError(kind: .general, message: errorMsg))
+            let admittedMessage = try ServerErrorMessage(validating: errorMsg)
+            let msg = ServerMessage.error(ServerError(kind: .general, message: admittedMessage))
             let data = try JSONEncoder().encode(msg)
             let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
 
             if case .error(let serverError) = decoded {
                 XCTAssertEqual(serverError.kind, .general)
-                XCTAssertEqual(serverError.message, errorMsg)
+                XCTAssertEqual(serverError.message.description, errorMsg)
             } else {
                 XCTFail("Expected error message")
             }
         }
     }
 
-    func testErrorMessageRejectsEmptyMessageOnDecode() {
+    func testErrorMessageRejectsEmptySourceAndJSONValues() {
+        XCTAssertThrowsError(try ServerErrorMessage(validating: "")) { error in
+            XCTAssertEqual(String(describing: error), "server error message must not be empty")
+        }
         let json = #"{"type":"error","payload":{"kind":"general","message":""}}"#
 
         XCTAssertThrowsError(try JSONDecoder().decode(ServerMessage.self, from: Data(json.utf8))) { error in
             XCTAssertTrue("\(error)".contains("server error message must not be empty"), "\(error)")
+        }
+    }
+
+    func testErrorRecoveryHintRejectsEmptySourceAndJSONValues() {
+        XCTAssertThrowsError(try ServerErrorRecoveryHint(validating: "")) { error in
+            XCTAssertEqual(
+                String(describing: error),
+                "server error recoveryHint must not be empty"
+            )
+        }
+        let json = #"{"type":"error","payload":{"kind":"general","message":"oops","recoveryHint":""}}"#
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ServerMessage.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("server error recoveryHint must not be empty"), "\(error)")
         }
     }
 }

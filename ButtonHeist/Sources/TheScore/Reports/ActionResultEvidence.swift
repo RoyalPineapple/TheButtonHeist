@@ -1,16 +1,5 @@
 import Foundation
 
-extension ActionResultObservationEvidence {
-    fileprivate var constructionViolation: String? {
-        guard case .announcement(let text) = self, text.isEmpty else { return nil }
-        return "action announcement must not be empty"
-    }
-
-    fileprivate func validateForConstruction() {
-        precondition(constructionViolation == nil, constructionViolation ?? "")
-    }
-}
-
 struct ActionResultEvidenceBody: Codable, Sendable, Equatable {
     let observation: ActionResultObservationEvidence
     let subjectEvidence: ActionSubjectEvidence?
@@ -23,8 +12,6 @@ struct ActionResultEvidenceBody: Codable, Sendable, Equatable {
         activationTrace: ActivationTrace? = nil,
         timing: ActionPerformanceTiming? = nil
     ) {
-        observation.validateForConstruction()
-        precondition(timing?.settleMs == nil, "settlement duration belongs to action observation")
         self.observation = observation
         self.subjectEvidence = subjectEvidence
         self.activationTrace = activationTrace
@@ -40,26 +27,10 @@ struct ActionResultEvidenceBody: Codable, Sendable, Equatable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let observation = try container.decode(ActionResultObservationEvidence.self, forKey: .observation)
-        if let violation = observation.constructionViolation {
-            throw DecodingError.dataCorruptedError(
-                forKey: .observation,
-                in: container,
-                debugDescription: violation
-            )
-        }
-        let timing = try container.decodeIfPresent(ActionPerformanceTiming.self, forKey: .timing)
-        guard timing?.settleMs == nil else {
-            throw DecodingError.dataCorruptedError(
-                forKey: .timing,
-                in: container,
-                debugDescription: "settlement duration belongs to action observation"
-            )
-        }
-        self.observation = observation
+        observation = try container.decode(ActionResultObservationEvidence.self, forKey: .observation)
         subjectEvidence = try container.decodeIfPresent(ActionSubjectEvidence.self, forKey: .subjectEvidence)
         activationTrace = try container.decodeIfPresent(ActivationTrace.self, forKey: .activationTrace)
-        self.timing = timing
+        timing = try container.decodeIfPresent(ActionPerformanceTiming.self, forKey: .timing)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -79,24 +50,6 @@ public struct ActionResultSuccessEvidence: Codable, Sendable, Equatable {
     public var subjectEvidence: ActionSubjectEvidence? { body.subjectEvidence }
     public var activationTrace: ActivationTrace? { body.activationTrace }
     public var timing: ActionPerformanceTiming? { body.timing }
-
-    public static let none = ActionResultSuccessEvidence(observation: .none)
-
-    public init(
-        observation: ActionResultObservationEvidence,
-        subjectEvidence: ActionSubjectEvidence? = nil,
-        activationTrace: ActivationTrace? = nil,
-        timing: ActionPerformanceTiming? = nil,
-        warning: HeistActionWarning? = nil
-    ) {
-        body = ActionResultEvidenceBody(
-            observation: observation,
-            subjectEvidence: subjectEvidence,
-            activationTrace: activationTrace,
-            timing: timing
-        )
-        self.warning = warning
-    }
 
     init(body: ActionResultEvidenceBody, warning: HeistActionWarning?) {
         self.body = body
@@ -134,22 +87,6 @@ public struct ActionResultFailureEvidence: Codable, Sendable, Equatable {
     public var subjectEvidence: ActionSubjectEvidence? { body.subjectEvidence }
     public var activationTrace: ActivationTrace? { body.activationTrace }
     public var timing: ActionPerformanceTiming? { body.timing }
-
-    public static let none = ActionResultFailureEvidence(observation: .none)
-
-    public init(
-        observation: ActionResultObservationEvidence,
-        subjectEvidence: ActionSubjectEvidence? = nil,
-        activationTrace: ActivationTrace? = nil,
-        timing: ActionPerformanceTiming? = nil
-    ) {
-        body = ActionResultEvidenceBody(
-            observation: observation,
-            subjectEvidence: subjectEvidence,
-            activationTrace: activationTrace,
-            timing: timing
-        )
-    }
 
     init(body: ActionResultEvidenceBody) {
         self.body = body
@@ -210,4 +147,19 @@ public enum ActionResultEvidence: Sendable, Equatable {
     }
 
     private var observation: ActionResultObservationEvidence { body.observation }
+
+    func withTiming(_ timing: ActionPerformanceTiming) -> ActionResultEvidence {
+        let body = ActionResultEvidenceBody(
+            observation: body.observation,
+            subjectEvidence: body.subjectEvidence,
+            activationTrace: body.activationTrace,
+            timing: body.timing?.merging(timing) ?? timing
+        )
+        switch self {
+        case .success(let evidence):
+            return .success(ActionResultSuccessEvidence(body: body, warning: evidence.warning))
+        case .failure(let errorKind, _):
+            return .failure(errorKind, ActionResultFailureEvidence(body: body))
+        }
+    }
 }

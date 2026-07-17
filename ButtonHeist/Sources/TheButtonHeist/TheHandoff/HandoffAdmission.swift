@@ -38,8 +38,8 @@ struct HandoffAdmission {
             switch serverError.kind {
             case .authFailure:
                 return .terminalFailure(.disconnected(.authFailed(
-                    serverError.message,
-                    hint: serverError.recoveryHint
+                    serverError.message.description,
+                    hint: serverError.recoveryHint?.description
                 )))
             default:
                 return nil

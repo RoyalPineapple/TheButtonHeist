@@ -50,7 +50,6 @@ private func semanticActionResult(
 ) throws -> ActionResult {
     ActionResult.success(
         method: method,
-        evidence: ActionResultSuccessEvidence(
             observation: .settledTrace(
                 makeTestTraceEvidence(
                     makeTestTrace(
@@ -59,7 +58,7 @@ private func semanticActionResult(
                     ),
                     completeness: settled ? .complete : .incomplete
                 ),
-                settled ? .settled(durationMs: 0) : .timedOut(durationMs: 0)
+                settled ? .settled(duration: 0) : .timedOut(duration: 0)
             ),
             subjectEvidence: ActionSubjectEvidence(
                 source: source,
@@ -68,6 +67,6 @@ private func semanticActionResult(
                 resolution: ActionSubjectResolution(origin: .visible),
                 settledObservationSequence: 1
             )
-        )
+
     )
 }

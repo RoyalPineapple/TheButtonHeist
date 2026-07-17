@@ -362,7 +362,7 @@ final class AccessibilityPredicateTests: XCTestCase {
     }
 
     func testStatePredicateRequiresObservedTraceForActionResultValidation() throws {
-        let action = ActionResult.success(method: .activate, evidence: .none)
+        let action = ActionResult.success(method: .activate)
         let result = try AccessibilityPredicate.missing(.label("Loading")).resolve(in: .empty).validate(against: action)
 
         XCTAssertFalse(result.met)
@@ -453,12 +453,11 @@ final class AccessibilityPredicateTests: XCTestCase {
         )
         let result = ActionResult.success(
             method: .activate,
-            evidence: ActionResultSuccessEvidence(
                 observation: .trace(traceEvidence(
                     AccessibilityTrace(captures: [first, last]),
                     completeness: .incomplete
                 ))
-            )
+
         )
 
         let outcome = try AccessibilityPredicate.changed(.screen()).resolve(in: .empty).validate(against: result)
@@ -569,12 +568,11 @@ final class AccessibilityPredicateTests: XCTestCase {
 
         let explicitlyIncomplete = ActionResult.success(
             method: .syntheticTap,
-            evidence: ActionResultSuccessEvidence(
                 observation: .settledTrace(
                     traceEvidence(factFreeTrace, completeness: .incomplete),
-                    .settled(durationMs: 0)
+                    .settled(duration: 0)
                 )
-            )
+
         )
         let explicitlyIncompleteResult = try predicate.resolve(in: .empty).validate(against: explicitlyIncomplete)
         XCTAssertFalse(explicitlyIncompleteResult.met)
@@ -599,9 +597,8 @@ final class AccessibilityPredicateTests: XCTestCase {
 
         let action = ActionResult.success(
             method: .activate,
-            evidence: ActionResultSuccessEvidence(
                 observation: .trace(traceEvidence(trace, completeness: .incomplete))
-            )
+
         )
         let changePredicate = AccessibilityPredicate.changed(.elements([
             .updated(.label("Counter"), .value(before: "0", after: "1")),
@@ -614,7 +611,6 @@ final class AccessibilityPredicateTests: XCTestCase {
     func testScreenChangedRequiresTraceEndpointEdge() throws {
         let result = ActionResult.success(
             method: .activate,
-            evidence: ActionResultSuccessEvidence(
                 observation: .trace(traceEvidence(
                     AccessibilityTrace(interface: Interface(
                         timestamp: Date(timeIntervalSince1970: 0),
@@ -622,7 +618,7 @@ final class AccessibilityPredicateTests: XCTestCase {
                     )),
                     completeness: .incomplete
                 ))
-            )
+
         )
 
         let outcome = try AccessibilityPredicate.changed(.screen()).resolve(in: .empty).validate(against: result)
@@ -1111,7 +1107,6 @@ final class AccessibilityPredicateTests: XCTestCase {
     func testElementUpdatedAllFieldsMatch() throws {
         let result = ActionResult.success(
             method: .activate,
-            evidence: ActionResultSuccessEvidence(
                 observation: .trace(traceEvidence(
                     .elementsChangedForTests(
                         elementCount: 5,
@@ -1121,7 +1116,7 @@ final class AccessibilityPredicateTests: XCTestCase {
                     ),
                     completeness: .incomplete
                 ))
-            )
+
         )
         let predicate = AccessibilityPredicate.changed(.elements([
             .updated(.label("btn_1"), .value(before: "OFF", after: "ON")),
@@ -1132,7 +1127,6 @@ final class AccessibilityPredicateTests: XCTestCase {
     func testElementUpdatedPropertyOnly() throws {
         let result = ActionResult.success(
             method: .activate,
-            evidence: ActionResultSuccessEvidence(
                 observation: .trace(traceEvidence(
                     .elementsChangedForTests(
                         elementCount: 5,
@@ -1142,7 +1136,7 @@ final class AccessibilityPredicateTests: XCTestCase {
                     ),
                     completeness: .incomplete
                 ))
-            )
+
         )
         let predicate = AccessibilityPredicate.changed(.elements([
             .updated(.label("any"), .value()),
@@ -1153,12 +1147,11 @@ final class AccessibilityPredicateTests: XCTestCase {
     func testElementUpdatedNoUpdatesInResult() throws {
         let result = ActionResult.success(
             method: .activate,
-            evidence: ActionResultSuccessEvidence(
                 observation: .trace(traceEvidence(
                     .elementsChangedForTests(elementCount: 5, edits: ElementEdits()),
                     completeness: .incomplete
                 ))
-            )
+
         )
         let predicate = AccessibilityPredicate.changed(.elements([
             .updated(.label("any"), .value()),
@@ -1171,7 +1164,6 @@ final class AccessibilityPredicateTests: XCTestCase {
     func testElementUpdatedPropertyMismatch() throws {
         let result = ActionResult.success(
             method: .activate,
-            evidence: ActionResultSuccessEvidence(
                 observation: .trace(traceEvidence(
                     .elementsChangedForTests(
                         elementCount: 5,
@@ -1181,7 +1173,7 @@ final class AccessibilityPredicateTests: XCTestCase {
                     ),
                     completeness: .incomplete
                 ))
-            )
+
         )
         let predicate = AccessibilityPredicate.changed(.elements([
             .updated(.label("btn_1"), .value()),
@@ -1203,12 +1195,11 @@ final class AccessibilityPredicateTests: XCTestCase {
         let replacementInterface = makeTestInterface(elements: [newElement], timestamp: Date())
         let result = ActionResult.success(
             method: .wait,
-            evidence: ActionResultSuccessEvidence(
                 observation: .trace(traceEvidence(
                     .screenChangedForTests(replacementInterface: replacementInterface),
                     completeness: .incomplete
                 ))
-            )
+
         )
         let predicate = AccessibilityPredicate.exists(.label("No receipt"))
         XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: result).met)
@@ -1219,12 +1210,11 @@ final class AccessibilityPredicateTests: XCTestCase {
         let replacementInterface = makeTestInterface(elements: [otherElement], timestamp: Date())
         let result = ActionResult.success(
             method: .wait,
-            evidence: ActionResultSuccessEvidence(
                 observation: .trace(traceEvidence(
                     .screenChangedForTests(replacementInterface: replacementInterface),
                     completeness: .incomplete
                 ))
-            )
+
         )
         let predicate = AccessibilityPredicate.exists(.label("No receipt"))
         let outcome = try predicate.resolve(in: .empty).validate(against: result)
@@ -1244,12 +1234,11 @@ final class AccessibilityPredicateTests: XCTestCase {
         let replacementInterface = makeTestInterface(elements: [newElement], timestamp: Date())
         let result = ActionResult.success(
             method: .wait,
-            evidence: ActionResultSuccessEvidence(
                 observation: .trace(traceEvidence(
                     .screenChangedForTests(replacementInterface: replacementInterface),
                     completeness: .incomplete
                 ))
-            )
+
         )
         let predicate = AccessibilityPredicate.missing(.label("Recording payment"))
         XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: result).met)
@@ -1260,12 +1249,11 @@ final class AccessibilityPredicateTests: XCTestCase {
         let replacementInterface = makeTestInterface(elements: [sameElement], timestamp: Date())
         let result = ActionResult.success(
             method: .wait,
-            evidence: ActionResultSuccessEvidence(
                 observation: .trace(traceEvidence(
                     .screenChangedForTests(replacementInterface: replacementInterface),
                     completeness: .incomplete
                 ))
-            )
+
         )
         let predicate = AccessibilityPredicate.missing(.label("Header"))
         let outcome = try predicate.resolve(in: .empty).validate(against: result)
@@ -1537,14 +1525,14 @@ final class AccessibilityPredicateTests: XCTestCase {
             return ActionResult.success(
                 method: .syntheticTap,
                 message: message,
-                evidence: ActionResultSuccessEvidence(observation: observation)
+                observation: observation
             )
         }
         return ActionResult.failure(
             method: .syntheticTap,
             errorKind: .actionFailed,
             message: message,
-            evidence: ActionResultFailureEvidence(observation: observation)
+            observation: observation
         )
     }
 

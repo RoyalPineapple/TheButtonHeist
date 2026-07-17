@@ -9,8 +9,8 @@ import TheScore
         let predicate = AccessibilityPredicate.exists(.label("Done"))
         let met = ExpectationResult.Met(predicate: predicate)
         let unmet = ExpectationResult.Unmet(predicate: predicate, actual: "not found")
-        let success = ActionResult.success(method: .wait, evidence: .none)
-        let timeout = ActionResult.failure(method: .wait, errorKind: .timeout, evidence: .none)
+        let success = ActionResult.success(method: .wait)
+        let timeout = ActionResult.failure(method: .wait, errorKind: .timeout)
 
         let matchedCheck = try #require(HeistWaitEvidence.MatchedCheck(actionResult: success, expectation: met))
         let matched = HeistWaitEvidence.matched(matchedCheck)
@@ -43,7 +43,7 @@ import TheScore
     @Test func `decode rejects invalid wait evidence polarity at boundary`() throws {
         let predicate = AccessibilityPredicate.exists(.label("Done"))
         let check = try #require(HeistWaitEvidence.MatchedCheck(
-            actionResult: .success(method: .wait, evidence: .none),
+            actionResult: .success(method: .wait),
             expectation: ExpectationResult.Met(predicate: predicate)
         ))
         let evidence = HeistWaitEvidence.matched(check)

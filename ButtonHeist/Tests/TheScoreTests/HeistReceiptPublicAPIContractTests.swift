@@ -7,10 +7,10 @@ import TheScore
 @Suite struct HeistReceiptPublicAPIContractTests {
     @Test func `evidence proofs admit only their legal completion polarity`() {
         let passedAction = HeistActionEvidence.dispatch(
-            dispatchResult: .success(method: .dismiss, evidence: .none)
+            dispatchResult: .success(method: .dismiss)
         )
         let failedAction = HeistActionEvidence.dispatch(
-            dispatchResult: .failure(method: .dismiss, errorKind: .actionFailed, evidence: .none)
+            dispatchResult: .failure(method: .dismiss, errorKind: .actionFailed)
         )
 
         #expect(HeistPassedActionEvidence(passedAction) != nil)

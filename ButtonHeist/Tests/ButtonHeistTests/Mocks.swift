@@ -232,12 +232,11 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
             durationMs: 0
         )
         if abortedAtPath == nil {
-            return .actionResult(ActionResult.success(payload: .heistExecution(result), evidence: .none))
+            return .actionResult(ActionResult.success(payload: .heistExecution(result)))
         }
         return .actionResult(ActionResult.failure(
             payload: .heistExecution(result),
             errorKind: .actionFailed,
-            evidence: .none
         ))
     }
 
@@ -344,7 +343,7 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
                     ))
                 )
             ) else {
-                preconditionFailure("mock action receipt admission failed")
+                preconditionFailure("mock action receipt construction failed")
             }
             return receipt
         }
@@ -372,7 +371,7 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
                     completion: .failed(evidence: evidence, failure: failure)
                 )
             ) else {
-                preconditionFailure("failed mock action receipt admission failed")
+                preconditionFailure("failed mock action receipt construction failed")
             }
             return receipt
         }
@@ -384,7 +383,7 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
             durationMs: heistStepDurationMs,
             node: .action(command: action.command, completion: .passed(evidence: evidence))
         ) else {
-            preconditionFailure("passed mock action receipt admission failed")
+            preconditionFailure("passed mock action receipt construction failed")
         }
         return receipt
     }
@@ -596,7 +595,7 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
             let result = ActionResult.failure(
                 method: .wait,
                 errorKind: .validationError,
-                message: "mock could not resolve heist expectation predicate", evidence: .none)
+                message: "mock could not resolve heist expectation predicate")
             return (
                 result,
                 ExpectationResult(
@@ -660,9 +659,9 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
             return ActionResult.failure(
                 method: actionMethod(for: command),
                 errorKind: .general,
-                message: error.message, evidence: .none)
+                message: error.message.description)
         default:
-            return ActionResult.success(method: actionMethod(for: command), evidence: .none)
+            return ActionResult.success(method: actionMethod(for: command))
         }
     }
 
@@ -674,11 +673,10 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
             return ActionResult.failure(
                 method: .wait,
                 errorKind: .general,
-                message: error.message,
-                evidence: .none
+                message: error.message.description,
             )
         default:
-            return ActionResult.success(method: .wait, evidence: .none)
+            return ActionResult.success(method: .wait)
         }
     }
 

@@ -11,7 +11,16 @@ extension DeviceConnection {
                 deviceConnectionLogger.error("Failed to decode: \(str.prefix(200))")
             }
             let detail = String(data: data.prefix(200), encoding: .utf8) ?? "<binary data>"
-            let error = ServerError(kind: .general, message: "Failed to decode server message: \(detail)")
+            let message: ServerErrorMessage
+            do {
+                message = try ServerErrorMessage(
+                    validating: "Failed to decode server message: \(detail)"
+                )
+            } catch {
+                deviceConnectionLogger.error("Failed to admit local decode error: \(error)")
+                return
+            }
+            let error = ServerError(kind: .general, message: message)
             emitMessage(.error(error), requestId: nil)
             return
         }

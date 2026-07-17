@@ -313,7 +313,7 @@ final class HeistReceiptTests: XCTestCase {
             if case .increment = command {
                 incrementCount += 1
             }
-            return ActionResult.success(method: .increment, evidence: .none)
+            return ActionResult.success(method: .increment)
         }
         let plan = try HeistPlan(body: [
             .repeatUntil(try RepeatUntilStep(
@@ -350,7 +350,7 @@ final class HeistReceiptTests: XCTestCase {
             if case .increment = command {
                 incrementCount += 1
             }
-            return ActionResult.success(method: .increment, evidence: .none)
+            return ActionResult.success(method: .increment)
         }
         let plan = try HeistPlan(body: [
             .repeatUntil(try RepeatUntilStep(
@@ -455,7 +455,6 @@ final class HeistReceiptTests: XCTestCase {
                     command: .takeScreenshot,
                     result: ActionResult.success(
                         payload: .screenshot(screenshot),
-                        evidence: .none
                     )
                 ),
             ],

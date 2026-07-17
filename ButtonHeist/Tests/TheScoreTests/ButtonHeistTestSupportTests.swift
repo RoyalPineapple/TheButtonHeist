@@ -131,7 +131,7 @@ import ThePlans
     @Test func `receipt fixture constructs terminal and child aborted nodes`() {
         let passed = HeistReceiptFixture.action(
             command: .dismiss,
-            result: .success(method: .dismiss, evidence: .none)
+            result: .success(method: .dismiss)
         )
         let failed = HeistReceiptFixture.action(
             command: .dismiss,
@@ -139,7 +139,6 @@ import ThePlans
                 method: .dismiss,
                 errorKind: .actionFailed,
                 message: "blocked",
-                evidence: .none
             )
         )
         let warning = HeistReceiptFixture.warning(message: "Heads up")

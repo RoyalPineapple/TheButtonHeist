@@ -29,31 +29,70 @@ package enum HeistReceiptFixture {
     ) -> ActionResult {
         let observation = traceEvidence.map(ActionResultObservationEvidence.trace) ?? .none
         if succeeded {
-            let evidence = ActionResultSuccessEvidence(
+            if let activationTrace {
+                guard payload == nil, method == .activate else {
+                    preconditionFailure("activation trace fixture requires method-only activate result")
+                }
+                return .activationSuccess(
+                    message: message,
+                    observation: observation,
+                    subjectEvidence: subjectEvidence,
+                    activationTrace: activationTrace,
+                    timing: timing
+                )
+            }
+            if let payload {
+                return .success(
+                    payload: payload,
+                    message: message,
+                    observation: observation,
+                    subjectEvidence: subjectEvidence,
+                    timing: timing
+                )
+            }
+            return .success(
+                method: method,
+                message: message,
                 observation: observation,
                 subjectEvidence: subjectEvidence,
-                activationTrace: activationTrace,
                 timing: timing
             )
-            if let payload {
-                return .success(payload: payload, message: message, evidence: evidence)
-            }
-            return .success(method: method, message: message, evidence: evidence)
         }
 
         guard let errorKind else {
             preconditionFailure("failed test ActionResult requires errorKind")
         }
-        let evidence = ActionResultFailureEvidence(
+        if let activationTrace {
+            guard payload == nil, method == .activate else {
+                preconditionFailure("activation trace fixture requires method-only activate result")
+            }
+            return .activationFailure(
+                errorKind: errorKind,
+                message: message,
+                observation: observation,
+                subjectEvidence: subjectEvidence,
+                activationTrace: activationTrace,
+                timing: timing
+            )
+        }
+        if let payload {
+            return .failure(
+                payload: payload,
+                errorKind: errorKind,
+                message: message,
+                observation: observation,
+                subjectEvidence: subjectEvidence,
+                timing: timing
+            )
+        }
+        return .failure(
+            method: method,
+            errorKind: errorKind,
+            message: message,
             observation: observation,
             subjectEvidence: subjectEvidence,
-            activationTrace: activationTrace,
             timing: timing
         )
-        if let payload {
-            return .failure(payload: payload, errorKind: errorKind, message: message, evidence: evidence)
-        }
-        return .failure(method: method, errorKind: errorKind, message: message, evidence: evidence)
     }
 
     package static func action(
@@ -109,7 +148,7 @@ package enum HeistReceiptFixture {
 
     package static func wait(
         path: String = "$.body[0]",
-        actionResult: ActionResult = .success(method: .wait, evidence: .none),
+        actionResult: ActionResult = .success(method: .wait),
         expectation: ExpectationResult = ExpectationResult(
             met: true,
             predicate: .exists(.label("Done"))

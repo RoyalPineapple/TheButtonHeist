@@ -26,7 +26,6 @@ final class PublicActionResultJSONTests: XCTestCase {
             result: ActionResult.success(
                 payload: .typeText("Hello"),
                 message: "typed",
-                evidence: .none
             )
         )
 
@@ -43,7 +42,6 @@ final class PublicActionResultJSONTests: XCTestCase {
             result: ActionResult.success(
                 payload: .screenshot(ScreenPayload(pngData: "abc", width: 393, height: 852)),
                 message: "captured",
-                evidence: .none
             )
         )
 
@@ -69,7 +67,6 @@ final class PublicActionResultJSONTests: XCTestCase {
             result: ActionResult.success(
                 payload: .heistExecution(heistResult),
                 message: "ran",
-                evidence: .none
             )
         )
 
@@ -87,7 +84,6 @@ final class PublicActionResultJSONTests: XCTestCase {
             result: ActionResult.success(
                 method: .activate,
                 message: "activated",
-                evidence: .none
             )
         )
 
@@ -100,30 +96,28 @@ final class PublicActionResultJSONTests: XCTestCase {
     }
 
     func testStandaloneActionResponseProjectsOwnedWarning() throws {
+        let subjectEvidence = try weakActivationSubjectEvidence()
         let response = FenceResponse.action(
             command: .activate,
             result: ActionResult.success(
                 method: .activate,
-                evidence: ActionResultSuccessEvidence(
-                    observation: .none,
-                    warning: .activationWeakAffordance(evidence: "label=Continue")
-                )
+                subjectEvidence: subjectEvidence
             )
         )
 
         let warning = try publicJSONProbe(response).object().object("warning")
 
         XCTAssertEqual(try warning.string("code"), "activation_weak_affordance_evidence")
-        XCTAssertEqual(try warning.string("evidence"), "label=Continue")
+        XCTAssertEqual(
+            try warning.string("evidence"),
+            #"label="Continue" traits=[staticText] actions=[]"#
+        )
     }
 
     func testStandaloneAndNestedActionsShareWarningProjection() throws {
         let actionResult = ActionResult.success(
             method: .activate,
-            evidence: ActionResultSuccessEvidence(
-                observation: .none,
-                warning: .activationWeakAffordance(evidence: "label=Continue")
-            )
+            subjectEvidence: try weakActivationSubjectEvidence()
         )
 
         let standalone = try publicJSONProbe(FenceResponse.action(
@@ -138,6 +132,17 @@ final class PublicActionResultJSONTests: XCTestCase {
         XCTAssertEqual(
             try standalone.decode(JSONValue.self),
             try nested.decode(JSONValue.self)
+        )
+    }
+
+    private func weakActivationSubjectEvidence() throws -> ActionSubjectEvidence {
+        ActionSubjectEvidence(
+            source: .resolvedSemanticTarget,
+            target: try AccessibilityTarget
+                .predicate(ElementPredicateTemplate(label: "Continue"))
+                .resolve(in: .empty),
+            element: makeTestHeistElement(label: "Continue", traits: [.staticText]),
+            resolution: ActionSubjectResolution(origin: .visible)
         )
     }
 
@@ -195,7 +200,7 @@ final class PublicActionResultJSONTests: XCTestCase {
         let actionResult = ActionResult.failure(
             method: .activate,
             errorKind: .elementNotFound,
-            message: "Delete not found", evidence: .none)
+            message: "Delete not found")
         let response = FenceResponse.heistExecution(
             plan: try minimalPlan(),
             result: HeistExecutionResult(
@@ -248,9 +253,8 @@ final class PublicActionResultJSONTests: XCTestCase {
             method: .activate,
             errorKind: .elementNotFound,
             message: "Pay not found",
-            evidence: ActionResultFailureEvidence(
                 observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
-            )
+
         )
         let response = FenceResponse.heistExecution(
             plan: try minimalPlan(),
@@ -291,7 +295,6 @@ final class PublicActionResultJSONTests: XCTestCase {
         let subject = makeTestHeistElement(label: "Pay", identifier: "pay")
         let actionResult = ActionResult.success(
             method: .activate,
-            evidence: ActionResultSuccessEvidence(
                 observation: .none,
                 subjectEvidence: ActionSubjectEvidence(
                     source: .resolvedSemanticTarget,
@@ -301,7 +304,7 @@ final class PublicActionResultJSONTests: XCTestCase {
                     element: subject,
                     resolution: ActionSubjectResolution(origin: .visible)
                 )
-            )
+
         )
 
         let result = try nestedHeistActionResultJSON(result: actionResult, status: .passed)
@@ -321,15 +324,14 @@ final class PublicActionResultJSONTests: XCTestCase {
         let result = try standaloneActionResultJSON(
             result: ActionResult.success(
                 method: .activate,
-                evidence: ActionResultSuccessEvidence(
                     observation: .settledTrace(
                         makeTestTraceEvidence(
                             makeTestTrace(before: interface, after: interface),
                             completeness: .incomplete
                         ),
-                        .timedOut(durationMs: 0)
+                        .timedOut(duration: 0)
                     )
-                )
+
             ),
             profile: .mcp
         )
@@ -343,7 +345,6 @@ final class PublicActionResultJSONTests: XCTestCase {
         }
         let actionResult = ActionResult.success(
             method: .activate,
-            evidence: ActionResultSuccessEvidence(
                 observation: .trace(makeTestTraceEvidence(
                     makeTestTrace(
                         before: makeTestInterface(elements: []),
@@ -351,7 +352,7 @@ final class PublicActionResultJSONTests: XCTestCase {
                     ),
                     completeness: .incomplete
                 ))
-            )
+
         )
 
         let result = try nestedHeistActionResultJSON(result: actionResult, status: .passed)
@@ -375,7 +376,6 @@ final class PublicActionResultJSONTests: XCTestCase {
         }
         let actionResult = ActionResult.success(
             method: .activate,
-            evidence: ActionResultSuccessEvidence(
                 observation: .trace(makeTestTraceEvidence(
                     makeTestTrace(
                         before: makeTestInterface(elements: []),
@@ -383,7 +383,7 @@ final class PublicActionResultJSONTests: XCTestCase {
                     ),
                     completeness: .incomplete
                 ))
-            )
+
         )
 
         let standalone = try standaloneActionResultJSON(result: actionResult, profile: .mcp)
@@ -418,12 +418,11 @@ final class PublicActionResultJSONTests: XCTestCase {
         )
         let actionResult = ActionResult.success(
             method: .activate,
-            evidence: ActionResultSuccessEvidence(
                 observation: .trace(makeTestTraceEvidence(
                     AccessibilityTrace(captures: [before, after]),
                     completeness: .incomplete
                 ))
-            )
+
         )
 
         let result = try nestedHeistActionResultJSON(result: actionResult, status: .passed)
@@ -461,12 +460,11 @@ final class PublicActionResultJSONTests: XCTestCase {
         )
         let actionResult = ActionResult.success(
             method: .activate,
-            evidence: ActionResultSuccessEvidence(
                 observation: .trace(makeTestTraceEvidence(
                     AccessibilityTrace(captures: [before, after]),
                     completeness: .incomplete
                 ))
-            )
+
         )
 
         let standalone = try standaloneActionResultJSON(result: actionResult, profile: .mcp)
@@ -493,7 +491,6 @@ final class PublicActionResultJSONTests: XCTestCase {
                 )
             )),
             message: "moved to next heading",
-            evidence: .none
         )
     }
 
@@ -503,7 +500,7 @@ final class PublicActionResultJSONTests: XCTestCase {
             method: .activate,
             errorKind: .accessibilityTreeUnavailable,
             message: Self.treeUnavailableMessage,
-            evidence: ActionResultFailureEvidence(observation: observation)
+            observation: observation
         )
     }
 

@@ -188,8 +188,7 @@ extension TheBrains {
             return .failure(
                 method: .heistPlan,
                 errorKind: .validationError,
-                message: "Could not bind root heist argument: \(error)",
-                evidence: .none
+                message: "Could not bind root heist argument: \(error)"
             )
         }
         let execution = await executeHeistStepAccumulator(
@@ -219,13 +218,12 @@ extension TheBrains {
         )
 
         if abortedAtPath == nil {
-            return .success(payload: .heistExecution(heistResult), message: message, evidence: .none)
+            return .success(payload: .heistExecution(heistResult), message: message)
         }
         return .failure(
             payload: .heistExecution(heistResult),
             errorKind: .actionFailed,
-            message: message,
-            evidence: .none
+            message: message
         )
     }
 

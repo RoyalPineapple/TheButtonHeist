@@ -127,7 +127,7 @@ final class AuthFlowTests: XCTestCase {
         conn.onEvent = { event in
             switch event {
             case .message(.error(let serverError), _) where serverError.kind == .authFailure:
-                authFailedReason = serverError.message
+                authFailedReason = serverError.message.description
             case .disconnected:
                 disconnected = true
             default:

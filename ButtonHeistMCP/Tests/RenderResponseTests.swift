@@ -275,7 +275,7 @@ struct RenderResponseTests {
         let evidence = HeistActionEvidence.dispatch(
             dispatchResult: .success(
                 method: .activate,
-                evidence: ActionResultSuccessEvidence(observation: .trace(traceEvidence))
+                observation: .trace(traceEvidence)
             )
         )
         let step: [String: Any] = [

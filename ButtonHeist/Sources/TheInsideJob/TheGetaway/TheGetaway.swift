@@ -116,8 +116,7 @@ final class TheGetaway {
             return .failure(
                 method: method,
                 errorKind: .validationError,
-                message: "Direct runtimeAction accepts only transient non-durable commands; durable commands must run as heistPlan",
-                evidence: .none
+                message: "Direct runtimeAction accepts only transient non-durable commands; durable commands must run as heistPlan"
             )
         }
         guard brains.semanticObservationIsActive else {
@@ -129,8 +128,7 @@ final class TheGetaway {
             return .failure(
                 method: method,
                 errorKind: .validationError,
-                message: "Could not resolve direct runtime action: \(error)",
-                evidence: .none
+                message: "Could not resolve direct runtime action: \(error)"
             )
         }
     }
@@ -207,8 +205,15 @@ final class TheGetaway {
             )
             await brains.recordSentState()
         case .failure(let error):
+            let message: ServerErrorMessage
+            do {
+                message = try ServerErrorMessage(validating: error.message)
+            } catch {
+                insideJobLogger.error("Failed to admit interface error response: \(error)")
+                return
+            }
             await sendMessage(
-                .error(ServerError(kind: error.errorKind, message: error.message)),
+                .error(ServerError(kind: error.errorKind, message: message)),
                 requestId: requestId,
                 respond: respond
             )
@@ -229,8 +234,15 @@ final class TheGetaway {
             await sendMessage(.screen(payload), requestId: requestId, respond: respond)
             insideJobLogger.debug("InterfaceObservation sent: \(payload.pngData.count) base64 characters")
         case .failure(let failure):
+            let message: ServerErrorMessage
+            do {
+                message = try ServerErrorMessage(validating: failure.message)
+            } catch {
+                insideJobLogger.error("Failed to admit screen-capture error response: \(error)")
+                return
+            }
             await sendMessage(
-                .error(ServerError(kind: failure.errorKind, message: failure.message)),
+                .error(ServerError(kind: failure.errorKind, message: message)),
                 requestId: requestId,
                 respond: respond
             )

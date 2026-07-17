@@ -100,8 +100,7 @@ extension TheBrains {
         let expectationActionResult = ActionResult.failure(
             method: .wait,
             errorKind: .actionFailed,
-            message: observed,
-            evidence: .none
+            message: observed
         )
         let expectationResult = ExpectationResult(
             met: false,

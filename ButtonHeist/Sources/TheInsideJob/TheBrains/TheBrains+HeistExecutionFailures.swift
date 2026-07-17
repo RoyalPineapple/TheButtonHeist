@@ -70,8 +70,7 @@ extension TheBrains {
         let observed = "could not resolve heist expectation: \(failure.errorDescription)"
         let expectationResult = ActionResult.failure(
             method: .wait,
-            errorKind: .actionFailed,
-            evidence: .none
+            errorKind: .actionFailed
         )
         let expectation = ExpectationResult.Unmet(predicate: nil, actual: observed)
         let evidence = HeistActionEvidence.expectation(

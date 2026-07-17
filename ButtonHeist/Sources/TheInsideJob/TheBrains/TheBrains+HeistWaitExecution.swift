@@ -176,7 +176,7 @@ struct HeistWaitReceipt {
         expectation: ExpectationResult.Met,
         observedSequence: SettledObservationSequence? = nil,
         observationSummary: String? = nil,
-        announcement: String? = nil
+        announcement: ActionAnnouncementText? = nil
     ) -> HeistWaitReceipt {
         HeistWaitReceipt(
             result: .matched(
@@ -220,7 +220,7 @@ struct HeistWaitReceipt {
         message: String?,
         traceEvidence: AccessibilityTraceEvidence?,
         expectation: ExpectationResult.Unmet,
-        announcement: String? = nil
+        announcement: ActionAnnouncementText? = nil
     ) -> HeistWaitReceipt {
         HeistWaitReceipt(
             result: .unmatched(
@@ -241,7 +241,7 @@ struct HeistWaitReceipt {
         errorKind: ErrorKind?,
         message: String?,
         traceEvidence: AccessibilityTraceEvidence?,
-        announcement: String?
+        announcement: ActionAnnouncementText?
     ) -> ActionResult {
         let observation: ActionResultObservationEvidence
         switch (traceEvidence, announcement) {
@@ -257,13 +257,13 @@ struct HeistWaitReceipt {
                 method: .wait,
                 errorKind: errorKind,
                 message: message,
-                evidence: ActionResultFailureEvidence(observation: observation)
+                observation: observation
             )
         }
         return ActionResult.success(
             method: .wait,
             message: message,
-            evidence: ActionResultSuccessEvidence(observation: observation)
+            observation: observation
         )
     }
 }

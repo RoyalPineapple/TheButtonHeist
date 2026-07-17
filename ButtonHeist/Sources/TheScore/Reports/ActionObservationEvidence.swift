@@ -7,7 +7,6 @@ public struct ActionPerformanceTiming: Codable, Sendable, Equatable {
     public let targetResolutionMs: Int?
     public let actionDispatchMs: Int?
     public let interactionMs: Int?
-    public let settleMs: Int?
     public let finalSemanticEvidenceMs: Int?
     public let receiptGenerationMs: Int?
     public let totalMs: Int?
@@ -17,7 +16,6 @@ public struct ActionPerformanceTiming: Codable, Sendable, Equatable {
         targetResolutionMs: Int? = nil,
         actionDispatchMs: Int? = nil,
         interactionMs: Int? = nil,
-        settleMs: Int? = nil,
         finalSemanticEvidenceMs: Int? = nil,
         receiptGenerationMs: Int? = nil,
         totalMs: Int? = nil
@@ -26,7 +24,6 @@ public struct ActionPerformanceTiming: Codable, Sendable, Equatable {
         self.targetResolutionMs = targetResolutionMs
         self.actionDispatchMs = actionDispatchMs
         self.interactionMs = interactionMs
-        self.settleMs = settleMs
         self.finalSemanticEvidenceMs = finalSemanticEvidenceMs
         self.receiptGenerationMs = receiptGenerationMs
         self.totalMs = totalMs
@@ -39,18 +36,68 @@ public struct ActionPerformanceTiming: Codable, Sendable, Equatable {
             targetResolutionMs: other.targetResolutionMs ?? targetResolutionMs,
             actionDispatchMs: other.actionDispatchMs ?? actionDispatchMs,
             interactionMs: other.interactionMs ?? interactionMs,
-            settleMs: other.settleMs ?? settleMs,
             finalSemanticEvidenceMs: other.finalSemanticEvidenceMs ?? finalSemanticEvidenceMs,
             receiptGenerationMs: other.receiptGenerationMs ?? receiptGenerationMs,
             totalMs: other.totalMs ?? totalMs
         )
     }
 
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case beforeObservationMs
+        case targetResolutionMs
+        case actionDispatchMs
+        case interactionMs
+        case finalSemanticEvidenceMs
+        case receiptGenerationMs
+        case totalMs
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "ActionPerformanceTiming")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            beforeObservationMs: try container.decodeIfPresent(Int.self, forKey: .beforeObservationMs),
+            targetResolutionMs: try container.decodeIfPresent(Int.self, forKey: .targetResolutionMs),
+            actionDispatchMs: try container.decodeIfPresent(Int.self, forKey: .actionDispatchMs),
+            interactionMs: try container.decodeIfPresent(Int.self, forKey: .interactionMs),
+            finalSemanticEvidenceMs: try container.decodeIfPresent(Int.self, forKey: .finalSemanticEvidenceMs),
+            receiptGenerationMs: try container.decodeIfPresent(Int.self, forKey: .receiptGenerationMs),
+            totalMs: try container.decodeIfPresent(Int.self, forKey: .totalMs)
+        )
+    }
+
+}
+
+public struct ActionAnnouncementText: Codable, Sendable, Equatable, CustomStringConvertible {
+    private let value: String
+
+    public init(validating value: String) throws {
+        self.value = try requireNonEmpty(
+            value,
+            or: ReportAdmissionError(description: "action announcement must not be empty")
+        )
+    }
+
+    public init(from decoder: Decoder) throws {
+        self = try decodeSingleValue(from: decoder, admitting: Self.init(validating:))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        try encodeSingleValue(value, to: encoder)
+    }
+
+    public var description: String { value }
+}
+
+extension ActionAnnouncementText: ExpressibleByStringLiteral {
+    public init(stringLiteral value: String) {
+        self = requireValidLiteralPayload { try Self(validating: value) }
+    }
 }
 
 public enum ActionResultObservationEvidence: Codable, Sendable, Equatable {
     case none
-    case announcement(String)
+    case announcement(ActionAnnouncementText)
     case trace(AccessibilityTraceEvidence)
     case settledTrace(AccessibilityTraceEvidence, ActionSettlementEvidence)
 
@@ -77,7 +124,7 @@ public enum ActionResultObservationEvidence: Codable, Sendable, Equatable {
         case .none:
             return nil
         case .announcement(let text):
-            return text
+            return text.description
         case .trace(let evidence), .settledTrace(let evidence, _):
             return evidence.trace.capturedAnnouncements.first?.text
         }
@@ -112,15 +159,7 @@ public enum ActionResultObservationEvidence: Codable, Sendable, Equatable {
                 allowing: [.kind, .announcement],
                 typeName: "announcement action observation"
             )
-            let text = try container.decode(String.self, forKey: .announcement)
-            guard !text.isEmpty else {
-                throw DecodingError.dataCorruptedError(
-                    forKey: .announcement,
-                    in: container,
-                    debugDescription: "action announcement must not be empty"
-                )
-            }
-            self = .announcement(text)
+            self = .announcement(try container.decode(ActionAnnouncementText.self, forKey: .announcement))
         case .trace:
             try container.rejectIncompatibleFields(
                 allowing: [.kind, .traceEvidence],

@@ -235,8 +235,7 @@ extension TheInsideJob {
         .failure(
             method: .heistPlan,
             errorKind: .actionFailed,
-            message: message,
-            evidence: .none
+            message: message
         )
     }
 
