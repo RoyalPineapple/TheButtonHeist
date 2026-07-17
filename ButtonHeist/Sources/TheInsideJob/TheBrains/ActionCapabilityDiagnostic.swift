@@ -197,34 +197,25 @@ import AccessibilitySnapshotParser
         for treeElement: InterfaceTree.Element,
         liveObject: NSObject? = nil
     ) -> [ElementAction] {
-        var actions: [ElementAction] = []
         let element = treeElement.element
-        let isInteractive = TheStash.Interactivity.isInteractive(element: element, object: liveObject)
-        if isInteractive {
-            actions.append(.activate)
+        var actions = element.projectedActionSet.actions
+        if TheStash.Interactivity.isInteractive(element: element, object: liveObject) {
+            actions.insert(.activate)
         }
-        if isInteractive, element.traits.contains(.adjustable) {
-            actions.append(.increment)
-            actions.append(.decrement)
-        }
-        if AccessibilityPolicy.supportsTextEntry(element.traits.heistTraits) {
-            actions.append(.typeText)
-        }
-        let semanticActions = element.customActions.compactMap { try? CustomActionName(validating: $0.name) }
-            .map(ElementAction.custom)
-        actions += semanticActions.uniqued(on: \.description, excluding: Set(actions.map(\.description)))
         let liveNames = liveObject?.accessibilityCustomActions?
             .compactMap { try? CustomActionName(validating: $0.name) } ?? []
-        actions += liveNames.map(ElementAction.custom)
-            .uniqued(on: \.description, excluding: Set(actions.map(\.description)))
-        return actions
+        actions.formUnion(liveNames.map(ElementAction.custom))
+        return ElementActionSet(actions).orderedActions
     }
 
     private static func availableCustomActions(
         for treeElement: InterfaceTree.Element,
         liveObject: NSObject? = nil
     ) -> [CustomActionName] {
-        var names = treeElement.element.customActions.compactMap { try? CustomActionName(validating: $0.name) }
+        var names = treeElement.element.projectedActionSet.orderedActions.compactMap { action -> CustomActionName? in
+            guard case .custom(let name) = action else { return nil }
+            return name
+        }
         let liveNames = liveObject?.accessibilityCustomActions?
             .compactMap { try? CustomActionName(validating: $0.name) } ?? []
         names += liveNames.uniqued(on: \.self, excluding: Set(names))

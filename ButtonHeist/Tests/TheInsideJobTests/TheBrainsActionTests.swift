@@ -287,8 +287,8 @@ final class TheBrainsActionTests: XCTestCase {
             "custom action failed",
             "requestedAction=\"Share\"",
             "label=\"Options\"",
-            "actions=[activate, Delete, Archive]",
-            "try use one of custom actions [\"Delete\", \"Archive\"]",
+            "actions=[activate, Archive, Delete]",
+            "try use one of custom actions [\"Archive\", \"Delete\"]",
         ])
     }
 
@@ -320,7 +320,7 @@ final class TheBrainsActionTests: XCTestCase {
             "custom action failed",
             "requestedAction=\"Delete\" declined by handler",
             "label=\"Options\"",
-            "actions=[activate, Delete, Archive]",
+            "actions=[activate, Archive, Delete]",
             "try use another custom action [\"Archive\"]",
         ])
     }

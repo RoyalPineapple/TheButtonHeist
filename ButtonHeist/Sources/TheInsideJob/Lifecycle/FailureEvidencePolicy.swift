@@ -1,6 +1,5 @@
 #if canImport(UIKit)
 #if DEBUG
-import Foundation
 
 import TheScore
 
@@ -21,10 +20,10 @@ enum FailureEvidencePolicy: Equatable, Sendable {
     }
 
     init?(rawValue: String) {
-        switch rawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        switch rawValue {
         case "hierarchy":
             self = .hierarchy
-        case "hierarchy+accessibilitysnapshot", "accessibility", "accessibilitysnapshot":
+        case "accessibilitySnapshot":
             self = .accessibilitySnapshot
         case "screenshot":
             self = .screenshot

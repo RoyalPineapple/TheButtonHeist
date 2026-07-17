@@ -119,13 +119,6 @@ final class Navigation {
         static let vertical   = ScrollAxis(rawValue: 1 << 1)
     }
 
-    enum ExplorationOmissionReason: String, Hashable, Sendable {
-        case discoveryScrollLimit = "scroll-attempt-budget"
-        case containerScrollLimit = "container-scroll-budget"
-        case leadingEdgeResetLimit = "leading-edge-reset-budget"
-        case notExplored = "not-explored"
-    }
-
     struct ScreenManifest {
         private(set) var exploredScrollPaths = Set<TreePath>()
 
@@ -135,7 +128,7 @@ final class Navigation {
 
         var scrollCountByContainerPath: [TreePath: Int] = [:]
 
-        var omittedScrollPathReasons: [TreePath: Set<ExplorationOmissionReason>] = [:]
+        var omittedScrollPathReasons: [TreePath: Set<InterfaceDiscoveryReasonCode>] = [:]
 
         private(set) var discoveryLimitHit = false
 
@@ -167,7 +160,7 @@ final class Navigation {
 
         mutating func recordScrollAttempt(
             in containerPath: TreePath
-        ) -> ExplorationOmissionReason? {
+        ) -> InterfaceDiscoveryReasonCode? {
             guard scrollCount < maxScrollsPerDiscovery else {
                 discoveryLimitHit = true
                 return .discoveryScrollLimit
@@ -209,7 +202,7 @@ final class Navigation {
 
         mutating func markOmitted(
             _ containerPath: TreePath,
-            reason: ExplorationOmissionReason
+            reason: InterfaceDiscoveryReasonCode
         ) {
             pendingScrollPaths.remove(containerPath)
             exploredScrollPaths.remove(containerPath)
@@ -274,7 +267,7 @@ final class Navigation {
 
         private func omittedContainerDiagnostics(in screen: InterfaceObservation) -> [InterfaceDiscoveryOmittedContainer] {
             var containers = omittedScrollPathReasons
-            let pendingReason: ExplorationOmissionReason = discoveryLimitHit ? .discoveryScrollLimit : .notExplored
+            let pendingReason: InterfaceDiscoveryReasonCode = discoveryLimitHit ? .discoveryScrollLimit : .notExplored
             for containerPath in pendingScrollPaths where !exploredScrollPaths.contains(containerPath) {
                 containers[containerPath, default: []].insert(pendingReason)
             }
@@ -289,7 +282,7 @@ final class Navigation {
 
         private func omittedContainerDiagnostic(
             _ containerPath: TreePath,
-            reasons: Set<ExplorationOmissionReason>,
+            reasons: Set<InterfaceDiscoveryReasonCode>,
             screen: InterfaceObservation
         ) -> InterfaceDiscoveryOmittedContainer? {
             guard let semanticContainer = screen.tree.containers[containerPath] else { return nil }
@@ -301,7 +294,7 @@ final class Navigation {
                 return InterfaceDiscoveryOmittedContainer(
                     containerName: containerName,
                     type: container.containerPredicateFacts.role.kind,
-                    reasonCodes: reasons.interfaceDiscoveryReasonCodes,
+                    reasonCodes: reasons.sorted(),
                     viewportWidth: Double(frame.size.width),
                     viewportHeight: Double(frame.size.height)
                 )
@@ -316,7 +309,7 @@ final class Navigation {
             return InterfaceDiscoveryOmittedContainer(
                 containerName: containerName,
                 type: container.containerPredicateFacts.role.kind,
-                reasonCodes: reasons.interfaceDiscoveryReasonCodes,
+                reasonCodes: reasons.sorted(),
                 scrollAxis: scrollAxis,
                 viewportWidth: Double(frame.size.width),
                 viewportHeight: Double(frame.size.height),
@@ -327,27 +320,6 @@ final class Navigation {
 
     }
 
-}
-
-private extension Set where Element == Navigation.ExplorationOmissionReason {
-    var interfaceDiscoveryReasonCodes: [InterfaceDiscoveryReasonCode] {
-        map(\.interfaceDiscoveryReasonCode).sorted()
-    }
-}
-
-private extension Navigation.ExplorationOmissionReason {
-    var interfaceDiscoveryReasonCode: InterfaceDiscoveryReasonCode {
-        switch self {
-        case .discoveryScrollLimit:
-            .discoveryScrollLimit
-        case .containerScrollLimit:
-            .containerScrollLimit
-        case .leadingEdgeResetLimit:
-            .leadingEdgeResetLimit
-        case .notExplored:
-            .notExplored
-        }
-    }
 }
 
 #endif // DEBUG

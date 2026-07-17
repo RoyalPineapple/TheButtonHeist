@@ -2,11 +2,31 @@
 #if DEBUG
 import UIKit
 
+import ThePlans
 import TheScore
 
 import AccessibilitySnapshotParser
 
 // MARK: - Element Interactivity
+
+package extension AccessibilityElement {
+    var projectedActionSet: ElementActionSet {
+        let isInteractive = respondsToUserInteraction
+            || !traits.isDisjoint(with: AccessibilityPolicy.interactiveTraitsBitmask)
+            || !customActions.isEmpty
+        var actions: [ElementAction] = isInteractive ? [.activate] : []
+        if AccessibilityPolicy.supportsTextEntry(traits.heistTraits) {
+            actions.append(.typeText)
+        }
+        if isInteractive, traits.contains(.adjustable) {
+            actions.append(contentsOf: [.increment, .decrement])
+        }
+        actions.append(contentsOf: customActions
+            .compactMap { try? CustomActionName(validating: $0.name) }
+            .map(ElementAction.custom))
+        return ElementActionSet(actions)
+    }
+}
 
 extension TheStash {
 
@@ -47,10 +67,8 @@ extension TheStash {
 
     /// Check if an element is interactive based on its parsed accessibility data.
     static func isInteractive(element: AccessibilityElement, object: NSObject? = nil) -> Bool {
-        element.respondsToUserInteraction
+        element.projectedActionSet.actions.contains(.activate)
             || supportsDefaultActivation(object)
-            || hasInteractiveTraits(element)
-            || !element.customActions.isEmpty
     }
 
     /// Validate whether an element can receive interaction based on its traits.
