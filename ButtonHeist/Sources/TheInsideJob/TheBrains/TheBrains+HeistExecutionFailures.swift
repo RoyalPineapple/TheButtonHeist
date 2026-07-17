@@ -20,7 +20,7 @@ extension TheBrains {
         }
         let failure = HeistFailureDetail(
             category: .internalInvariant,
-            contract: "runtime values form an admitted receipt node",
+            contract: "runtime values form a legal receipt node",
             observed: error.description
         )
         let completion: HeistFailureCompletion

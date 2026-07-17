@@ -65,7 +65,6 @@ public struct ActionPerformanceTiming: Codable, Sendable, Equatable {
             totalMs: try container.decodeIfPresent(Int.self, forKey: .totalMs)
         )
     }
-
 }
 
 public struct ActionAnnouncementText: Codable, Sendable, Equatable, CustomStringConvertible {

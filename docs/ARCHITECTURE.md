@@ -49,12 +49,15 @@ encode as single JSON strings but are not interchangeable strings in core logic.
 ### Trees and Observations Are the Currency
 
 The committed `TheStash.interfaceTree` is the sole current semantic truth.
-TheStash resolves every element, container, and descendant-scoped
-`AccessibilityTarget` directly against that tree, including `get_interface`
-subtree requests. Only after resolution does wire conversion project and re-root
-the selected path. A delivered `Interface` builds one validated `InterfaceGraph`
-for client matching and formatting, not host target resolution. There is no
-semantic back map, alternate flat screen, or separate query projection.
+TheStash privately projects that tree into `AccessibilityTargetMatchInput`; the
+shared `AccessibilityTargetMatchGraph` evaluates every element, container,
+ordinal, and descendant-scoped `AccessibilityTarget`. TheStash maps the result
+paths back to `InterfaceTree` values and current live evidence for diagnostics,
+inflation, and dispatch. A delivered `Interface` feeds the same matching graph,
+so client predicates and host resolution cannot drift into separate recursive
+implementations. `InterfaceGraph` remains the validated structural projection
+used for formatting and hierarchy operations. There is no semantic back map,
+alternate flat screen, or second target-matching projection.
 
 `InterfaceObservation` pairs an `InterfaceTree` with the viewport-local
 `LiveCapture` from one parser read. Raw parser samples remain live evidence or
@@ -275,9 +278,9 @@ pipelines are explicit:
 | Drainable callback work | `TaskTracker.swift` | Lifecycle, listener-generation, and delayed-disconnect owners |
 | Discovery callback delivery | `DeviceDiscoveryEventStream.swift` | `DeviceDiscovery.swift` |
 | Compiler process terminal outcome | `CompilerProcessOwner.swift` | `HeistSwiftFileCompiler.swift`; diagnostic rendering lives in `HeistSwiftFileCompilerError.swift` |
-| Receipt node algebra | `HeistExecutionStepNode.swift` | Admitted receipt construction |
+| Receipt node algebra | `HeistExecutionStepNode.swift` | Typed receipt construction |
 | Receipt node codec | `HeistExecutionStepNode+Codable.swift` | External receipt JSON boundaries |
-| Receipt admission | `HeistExecutionStepResult+Admission.swift` | Runtime receipt construction |
+| Receipt construction | `HeistExecutionStepResult+Construction.swift` | Runtime step executors |
 | Receipt report facts | `HeistExecutionStepResult+ReportFacts.swift` | Report, compact, JUnit, doctor, and metric adapters |
 | Semantic observation scheduling | `SemanticObservationStream.swift` | Passive settle cycles and observation demand |
 | Semantic observation publication | `SemanticObservationStream+Publication.swift` | The sole `InterfaceTree` reducer and observation-log publisher |
@@ -296,12 +299,12 @@ parallel result fields.
 `HeistExecutionStepResult` owns a typed execution path, duration, and one
 `HeistExecutionStepNode`. `HeistExecutionStepNode.swift` owns the algebra,
 `HeistExecutionStepNode+Codable.swift` owns its one codec, and
-`HeistExecutionStepResult+Admission.swift` binds authored declarations to legal
-evidence before constructing a result. The node combines authored step semantics with its
-legal completion; typed completion and evidence wrappers prevent mismatched
-outcome, evidence, failure, and child shapes. Status and abort paths are derived
-from that node. The wire decoder accepts only the fields legal for the node's
-`type` and `outcome`; there are no parallel intent, evidence, or outcome owners.
+`HeistExecutionStepResult+Construction.swift` turns a legal node into the
+standard `Result` returned to runtime executors. The node's typed completion
+shapes and `constructionError` are the sole legality owner; no later admission
+or repair layer reconstructs intent from parallel fields. Status and abort paths
+derive from that node. The wire decoder accepts only fields legal for the node's
+`type` and `outcome`.
 
 `ActionDispatchOutcome` is the one result of app-side action dispatch. Its state
 is success, with an optional payload and resolved element id, or failure, with a
@@ -309,12 +312,14 @@ typed failure kind. `PostActionObservation` consumes that value, coordinates
 settlement, and constructs `ActionResult`; it does not translate through a
 second interaction-result model.
 
-`ActionResult` owns outcome-bound `ActionResultSuccessEvidence` or
-`ActionResultFailureEvidence`, both backed by one common evidence body. Each
-supplies exactly one observation case: `none`, `announcement`, `trace`, or
-`settledTrace`. Only `settledTrace` carries settlement evidence. Action warnings
-are constructible only for success; heist receipts and report projections derive
-them from their dispatch result instead of storing a sibling warning.
+`ActionResult.success` and `ActionResult.failure` accept observation, subject,
+and timing values directly. Activation trace evidence enters only through the
+fixed-method activation factories. `ActionResultSuccessEvidence` and
+`ActionResultFailureEvidence` are output projections backed by one common body,
+not public assembly inputs. Each result supplies exactly one observation case:
+`none`, `announcement`, `trace`, or `settledTrace`; only `settledTrace` carries
+the typed settlement duration. Successful activation and text-entry warnings
+derive from the method and subject evidence instead of entering as caller data.
 
 `AccessibilityNotificationBus` owns one retained ingress log. Each action opens
 one cursor-bounded attribution window. A clean post-action settle checkpoints
@@ -456,7 +461,11 @@ flowchart TD
     PredicateKind -->|changed / noChange| Observe["Read next settled ObservationEntry<br/>from cursor-backed sequence"]
     Observe --> Log["SemanticObservationLog<br/>retained, non-destructive"]
     Log --> Window["ObservationWindow<br/>baseline through current"]
-    Current --> Target["Resolve AccessibilityTarget"]
+    Current --> HostAdapter["Private InterfaceTree adapter"]
+    HostAdapter --> MatchInput["AccessibilityTargetMatchInput"]
+    Delivered["Delivered Interface"] --> MatchInput
+    MatchInput --> MatchGraph["AccessibilityTargetMatchGraph<br/>one element + container matcher"]
+    MatchGraph --> Target["Resolve AccessibilityTarget"]
     Target --> ElementTarget["element predicate"]
     Target --> ContainerTarget["container predicate"]
     Target --> WithinTarget["within container"]

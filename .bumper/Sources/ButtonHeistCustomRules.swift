@@ -94,7 +94,7 @@ private let receiptNodeCodecPath: RelativeFilePath =
 private let receiptConstructionPaths: Set<RelativeFilePath> = [
     "ButtonHeist/Sources/TheScore/Receipts/HeistExecutionStepNode.swift",
     "ButtonHeist/Sources/TheScore/Receipts/HeistExecutionStepNode+Codable.swift",
-    "ButtonHeist/Sources/TheScore/Receipts/HeistExecutionStepResult+Admission.swift",
+    "ButtonHeist/Sources/TheScore/Receipts/HeistExecutionStepResult+Construction.swift",
 ]
 private let semanticObservationPublicationPath: RelativeFilePath =
     "ButtonHeist/Sources/TheInsideJob/TheStash/SemanticObservationStream+Publication.swift"
