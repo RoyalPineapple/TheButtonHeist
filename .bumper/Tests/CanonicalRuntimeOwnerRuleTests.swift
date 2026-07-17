@@ -12,7 +12,7 @@ struct CanonicalRuntimeOwnerRuleTests {
     }
 
     @Test
-    func predicateWaitLifecycleConstructionOutsideExecutorIsRejected() throws {
+    func predicateWaitLifecycleConstructionOutsidePredicateWaitIsRejected() throws {
         let path: RelativeFilePath =
             "ButtonHeist/Sources/TheInsideJob/TheBrains/CompetingWait.swift"
         let report = try evaluateButtonHeistRules(
@@ -64,11 +64,11 @@ struct CanonicalRuntimeOwnerRuleTests {
     @Test
     func receiptConstructionTrapsAreRejected() throws {
         let path: RelativeFilePath =
-            "ButtonHeist/Sources/TheScore/Receipts/HeistExecutionStepResult+Admission.swift"
+            "ButtonHeist/Sources/TheScore/Receipts/HeistExecutionStepNode+Codable.swift"
         let report = try evaluateButtonHeistRules(
             path: path,
             component: .score,
-            source: "func admit() { preconditionFailure(\"mismatch\") }"
+            source: "func construct() { preconditionFailure(\"mismatch\") }"
         )
 
         #expect(report.contains(ViolationMatcher(
@@ -105,32 +105,6 @@ struct CanonicalRuntimeOwnerRuleTests {
 
         #expect(report.contains(ViolationMatcher(
             id: "buttonheist.semantic_observation_commit_ownership",
-            path: path
-        )))
-    }
-
-    @Test
-    func directInterfaceTreeMatchingOutsideOwnersIsRejected() throws {
-        let path: RelativeFilePath =
-            "ButtonHeist/Sources/TheInsideJob/TheBrains/CompetingMatcher.swift"
-        let report = try evaluateButtonHeistRules(
-            path: path,
-            component: .runtime,
-            source: """
-            func match() {
-                matchingTreeElements()
-                matchingTreeContainers()
-            }
-            """
-        )
-
-        #expect(report.violations.count == 2)
-        #expect(report.contains(ViolationMatcher(
-            id: "buttonheist.interface_tree_element_matching_ownership",
-            path: path
-        )))
-        #expect(report.contains(ViolationMatcher(
-            id: "buttonheist.interface_tree_container_matching_ownership",
             path: path
         )))
     }

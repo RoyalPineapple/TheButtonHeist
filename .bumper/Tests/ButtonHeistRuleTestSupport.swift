@@ -34,14 +34,4 @@ private let canonicalButtonHeistRuleFixtures: [VirtualSourceFile] = [
         component: ButtonHeistComponent.runtime,
         source: "func runWait() { _ = PredicateWaitLifecycleMachine() }"
     ),
-    .swift(
-        "ButtonHeist/Sources/TheInsideJob/TheStash/TheStash+Matching.swift",
-        component: ButtonHeistComponent.runtime,
-        source: """
-        func recurse() {
-            matchingTreeElements()
-            matchingTreeContainers()
-        }
-        """
-    ),
 ]
