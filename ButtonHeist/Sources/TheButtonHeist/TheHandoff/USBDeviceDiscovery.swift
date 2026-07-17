@@ -39,15 +39,6 @@ final class USBDeviceDiscovery: DeviceDiscovering {
                 return Array(session.knownDevices.values)
             }
         }
-
-        var activeSessionID: UUID? {
-            switch self {
-            case .stopped:
-                return nil
-            case .polling(let session):
-                return session.id
-            }
-        }
     }
 
     private var runtimePhase: RuntimePhase = .stopped

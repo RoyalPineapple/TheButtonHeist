@@ -231,57 +231,31 @@ struct HandoffReconnectTarget: Equatable, Sendable {
 enum HandoffDriverIdentity {
     static func effectiveDriverId(explicit driverId: DriverID?) -> DriverID { driverId ?? persistentDriverId }
 
-    private static let driverIdFile: URL = {
-        let configDir = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".buttonheist", isDirectory: true)
-        return configDir.appendingPathComponent("driver-id")
-    }()
+    private static let driverIdFile = PrivateStorage.resolveBaseDirectory()
+        .appendingPathComponent("driver-id")
 
     private static let persistentDriverId: DriverID = {
         let fileURL = driverIdFile
-        let existingValue: String?
-        do {
-            existingValue = try String(contentsOf: fileURL, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
-        } catch {
-            existingValue = nil
-        }
-        if let existing = existingValue,
+        if let existing = try? String(contentsOf: fileURL, encoding: .utf8)
+            .trimmingCharacters(in: .whitespacesAndNewlines),
            let driverId = try? DriverID(validating: existing) {
-            repairDriverIdPermissions(fileURL)
+            do {
+                try PrivateStorage.createPrivateDirectory(at: fileURL.deletingLastPathComponent())
+                try PrivateStorage.createPrivateFile(at: fileURL)
+            } catch {
+                driverIdentityLogger.warning("Failed to repair driver-id permissions: \(error.localizedDescription)")
+            }
             return driverId
         }
 
         guard let generated = try? DriverID(validating: UUID().uuidString.lowercased()) else {
             preconditionFailure("UUID generation produced a blank driver ID")
         }
-        let dir = fileURL.deletingLastPathComponent()
         do {
-            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+            try PrivateStorage.writePrivateData(Data(generated.description.utf8), to: fileURL)
         } catch {
-            driverIdentityLogger.warning("Failed to create driver-id directory: \(error.localizedDescription)")
-        }
-        if !FileManager.default.createFile(
-            atPath: fileURL.path,
-            contents: Data(generated.description.utf8),
-            attributes: [.posixPermissions: 0o600]
-        ) {
             driverIdentityLogger.warning("Failed to persist driver-id to \(fileURL.path)")
         }
         return generated
     }()
-
-    private static func repairDriverIdPermissions(_ fileURL: URL) {
-        let fileManager = FileManager.default
-        let dir = fileURL.deletingLastPathComponent()
-        do {
-            try fileManager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: dir.path)
-        } catch {
-            driverIdentityLogger.warning("Failed to repair driver-id directory permissions: \(error.localizedDescription)")
-        }
-        do {
-            try fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
-        } catch {
-            driverIdentityLogger.warning("Failed to repair driver-id file permissions: \(error.localizedDescription)")
-        }
-    }
 }

@@ -245,12 +245,6 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
 
     // MARK: - Private
 
-    /// The NWConnection currently owned by this state machine, regardless of
-    /// phase. Used to filter stale callbacks from prior connect attempts.
-    var currentConnection: NWConnection? {
-        runtimePhase.connection
-    }
-
     /// Internal for testing: state updates are normally dispatched by the
     /// AsyncStream consumer in `connect()`. Tests inject states directly.
     func handleStateChange(

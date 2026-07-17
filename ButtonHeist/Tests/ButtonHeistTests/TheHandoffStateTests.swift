@@ -903,12 +903,11 @@ final class TheHandoffStateTests: XCTestCase {
         )
     }
 
-    func testAutoReconnectRecoveryPolicyBacksOffDiscoveryMissesAndNamesTerminalFailure() {
+    func testAutoReconnectRecoveryPolicyUsesFixedJitterAndNamesTerminalFailure() {
         let policy = AutoReconnectRecoveryPolicy(maxAttempts: 3, baseInterval: 2)
 
-        XCTAssertEqual(policy.delay(afterConsecutiveDiscoveryMisses: 0), 2)
-        XCTAssertEqual(policy.delay(afterConsecutiveDiscoveryMisses: 1), 4)
-        XCTAssertEqual(policy.delay(afterConsecutiveDiscoveryMisses: 10), 30)
+        let sleepDurations = (0..<100).map { _ in policy.sleepDuration() }
+        XCTAssertTrue(sleepDurations.allSatisfy { 2...2.4 ~= $0 })
         XCTAssertEqual(
             policy.terminalFailureMessage(targetDisplayName: "Checkout#old"),
             "Auto-reconnect gave up after 3 attempts to Checkout#old. Retry the connection or choose a new target."
@@ -916,6 +915,19 @@ final class TheHandoffStateTests: XCTestCase {
     }
 
     // MARK: - Discovery (existing)
+
+    @ButtonHeistActor
+    func testDiscoveryDevicesComeDirectlyFromCurrentSession() async {
+        let handoff = TheHandoff()
+        let mockDiscovery = MockDiscovery()
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        handoff.makeDiscovery = { mockDiscovery }
+
+        handoff.startDiscovery()
+        mockDiscovery.discoveredDevices = [device]
+
+        XCTAssertEqual(handoff.discoveryLifecycle.discoveredDevices, [device])
+    }
 
     @ButtonHeistActor
     func testStoppedDiscoveryIgnoresStaleCallbacks() async {
