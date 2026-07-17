@@ -657,7 +657,7 @@ private func repeatUntilRuntime(
             waitScript.receipt(for: request.step)
         },
         selectPredicateCase: { _, _ in
-            HeistCaseSelectionResult(cases: [], outcome: .noMatch, elapsedMs: 0)
+            .selectingFirstMatch(cases: [], ifNone: .noMatch, elapsedMs: 0)
         },
         observeSemanticState: { scope, _, _ in
             waitScript.observation(scope: scope)

@@ -145,9 +145,9 @@ private struct PredicateCaseDispatch {
 
 private extension HeistCaseSelectionResult {
     func selectingElseBranch() -> HeistCaseSelectionResult {
-        HeistCaseSelectionResult(
+        .elseBranch(
             cases: cases,
-            outcome: .elseBranch(reason: elseBranchReason),
+            reason: elseBranchReason,
             elapsedMs: elapsedMs,
             timeout: timeout,
             lastObservedSummary: lastObservedSummary

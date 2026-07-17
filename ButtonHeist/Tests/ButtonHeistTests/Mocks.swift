@@ -474,9 +474,9 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
         .conditional(
             path: receiptPath(path),
             durationMs: heistStepDurationMs,
-            completion: .passed(evidence: HeistCaseSelectionEvidence(selection: HeistCaseSelectionResult(
+            completion: .passed(evidence: HeistCaseSelectionEvidence(selection: .selectingFirstMatch(
                 cases: mockCaseResults(for: conditional.cases),
-                outcome: .noMatch,
+                ifNone: .noMatch,
                 elapsedMs: heistStepDurationMs
             )))
         )

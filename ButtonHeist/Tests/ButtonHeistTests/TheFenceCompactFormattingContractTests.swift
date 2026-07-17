@@ -932,14 +932,14 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let result = HeistExecutionResult(steps: [
                 HeistReceiptFixture.conditional(
                     status: .passed,
-                    selection: HeistCaseSelectionResult(
+                    selection: .selectingFirstMatch(
                         cases: [
                             HeistCaseMatchResult(
                                 predicate: casePredicateRuntime,
                                 met: true
                             ),
                         ],
-                        outcome: .matchedCase(index: 0),
+                        ifNone: .noMatch,
                         elapsedMs: 1
                     ),
                     durationMs: 3,
@@ -1216,14 +1216,14 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             steps: [
                 HeistReceiptFixture.conditional(
                     status: .failed,
-                    selection: HeistCaseSelectionResult(
+                    selection: .selectingFirstMatch(
                         cases: [
                             HeistCaseMatchResult(
                                 predicate: casePredicateRuntime,
                                 met: true
                             ),
                         ],
-                        outcome: .matchedCase(index: 0),
+                        ifNone: .noMatch,
                         elapsedMs: 1
                     ),
                     durationMs: 3,
@@ -1290,14 +1290,14 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             steps: [
                 HeistReceiptFixture.conditional(
                     status: .passed,
-                    selection: HeistCaseSelectionResult(
+                    selection: .elseBranch(
                         cases: [
                             HeistCaseMatchResult(
                                 predicate: runtimePredicate,
                                 met: false
                             ),
                         ],
-                        outcome: .elseBranch(reason: .noMatch),
+                        reason: .noMatch,
                         elapsedMs: 1,
                         lastObservedSummary: nil
                     ),

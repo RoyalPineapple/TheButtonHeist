@@ -4719,7 +4719,7 @@ observation: .settledTrace(
             },
             wait: wait,
             selectPredicateCase: { _, _ in
-                HeistCaseSelectionResult(cases: [], outcome: .noMatch, elapsedMs: 0)
+                .selectingFirstMatch(cases: [], ifNone: .noMatch, elapsedMs: 0)
             },
             observeSemanticState: { scope, _, timeout in
                 observationSource.next(scope: scope, timeout: timeout)
