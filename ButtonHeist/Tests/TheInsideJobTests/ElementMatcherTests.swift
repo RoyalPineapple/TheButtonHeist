@@ -123,6 +123,19 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertFalse(try resolvedPredicate(.label("Coke").and(.rotors(["Headings"]))).matches(element))
     }
 
+    func testHostAndDeliveredPredicatesIgnoreUndeliverableCustomContent() throws {
+        let source = element(
+            label: "Report",
+            customContent: [.init(label: "", value: "", isImportant: false)]
+        )
+        let predicate = try resolvedPredicate(
+            .customContent(.init(label: .isEmpty, value: .isEmpty))
+        )
+
+        XCTAssertFalse(predicate.matches(source))
+        XCTAssertFalse(TheStash.WireConversion.convert(source).matches(predicate))
+    }
+
     func testTextInputTraitsExposeTypeTextActionToMatcher() throws {
         let element = element(label: "Search", traits: .searchField)
 

@@ -54,10 +54,8 @@ extension TheStash {
             activationPointEvidence: activationPoint,
             respondsToUserInteraction: element.respondsToUserInteraction,
             customContent: {
-                let valid = element.customContent.filter { !$0.label.isEmpty || !$0.value.isEmpty }
-                return valid.isEmpty ? nil : valid.map {
-                    HeistCustomContent(label: $0.label, value: $0.value, isImportant: $0.isImportant)
-                }
+                let projected = element.customContent.compactMap { HeistCustomContent(projecting: $0) }
+                return projected.isEmpty ? nil : projected
             }(),
             rotors: {
                 let valid = element.customRotors.filter { !$0.name.isEmpty }

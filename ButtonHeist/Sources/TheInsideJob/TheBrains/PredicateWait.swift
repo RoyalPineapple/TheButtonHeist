@@ -231,6 +231,8 @@ where Evidence: Sendable & Equatable {
                     cursor = stream.latestObservationCursor(scope: .visible) ?? cursor
                 case .deadlineReached, .unavailable:
                     return await terminalVerification(evidence: evaluation.evidence)
+                case .cycleCompleted:
+                    continue
                 case .cancelled:
                     return finish(.cancelled, evidence: evaluation.evidence)
                 }

@@ -311,8 +311,7 @@ extension TheBrains {
             node: .forEachElementIteration(
                 declaration: HeistForEachElementDeclaration(step),
                 completion: completion
-            ),
-            children: children
+            )
         )
     }
 
@@ -349,8 +348,7 @@ extension TheBrains {
             node: .forEachElement(
                 declaration: HeistForEachElementDeclaration(step),
                 completion: completion
-            ),
-            children: outcome.iterationNodes
+            )
         )
     }
 
@@ -437,8 +435,7 @@ extension TheBrains {
             node: .forEachStringIteration(
                 declaration: HeistForEachStringDeclaration(step),
                 completion: completion
-            ),
-            children: children
+            )
         )
     }
 
@@ -474,8 +471,7 @@ extension TheBrains {
             node: .forEachString(
                 declaration: HeistForEachStringDeclaration(step),
                 completion: completion
-            ),
-            children: outcome.iterationNodes
+            )
         )
     }
 

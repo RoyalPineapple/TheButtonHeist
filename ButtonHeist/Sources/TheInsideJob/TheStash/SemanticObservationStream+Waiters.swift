@@ -7,6 +7,7 @@ import TheScore
 
 internal enum SemanticObservationWaitResult: Sendable, Equatable {
     case observation(ObservationEntry)
+    case cycleCompleted
     case deadlineReached
     case cancelled
     case unavailable(ObservationLogReadError)
@@ -15,6 +16,7 @@ internal enum SemanticObservationWaitResult: Sendable, Equatable {
 internal struct SemanticObservationWaiter: Sendable {
     let cursor: ObservationCursor?
     let scope: SemanticObservationScope
+    let completesAfterObservationCycle: Bool
     let oneShot: TimedOneShot<SemanticObservationWaitResult>
 }
 
@@ -23,7 +25,8 @@ extension SemanticObservationStream {
     internal func waitForObservation(
         after cursor: ObservationCursor?,
         scope: SemanticObservationScope,
-        deadline: SemanticObservationDeadline?
+        deadline: SemanticObservationDeadline?,
+        completingAfterCurrentCycle: Bool = false
     ) async -> SemanticObservationWaitResult {
         switch observationLog.read(after: cursor, scope: scope) {
         case .entry(let entry):
@@ -45,7 +48,7 @@ extension SemanticObservationStream {
         let waiterID = reserveObservationWaiterID()
         let oneShot = TimedOneShot<SemanticObservationWaitResult>()
         let subscription = subscribe(scope: scope)
-        defer { _ = subscription }
+        defer { subscription.cancel() }
 
         return await oneShot.wait(
             cancellationValue: .cancelled,
@@ -53,6 +56,7 @@ extension SemanticObservationStream {
                 observationWaiters[waiterID] = SemanticObservationWaiter(
                     cursor: cursor,
                     scope: scope,
+                    completesAfterObservationCycle: completingAfterCurrentCycle,
                     oneShot: oneShot
                 )
                 resolveObservationWaiterIfAvailable(waiterID)
@@ -83,13 +87,6 @@ extension SemanticObservationStream {
         observationLog.settledCapture(scope: scope, at: sequence)
     }
 
-    internal func observationEvent(
-        scope: SemanticObservationScope,
-        at sequence: SettledObservationSequence
-    ) -> SettledSemanticObservationEvent? {
-        observationLog.event(scope: scope, sequence: sequence)
-    }
-
     internal func settledEvent(
         scope: SemanticObservationScope,
         after sequence: SettledObservationSequence?,
@@ -104,8 +101,10 @@ extension SemanticObservationStream {
             }
         }
         let requiresFreshVisibleObservation = sequence == nil && scope == .visible && isActive
+        let requiresFreshDiscoveryCycle = timeout == 0 && scope == .discovery
 
         if !requiresFreshVisibleObservation,
+           !requiresFreshDiscoveryCycle,
            let latest = observationLog.cleanEvent(scope: scope, after: requiredSequence) {
             return latest
         }
@@ -121,13 +120,16 @@ extension SemanticObservationStream {
             switch await waitForObservation(
                 after: cursor,
                 scope: scope,
-                deadline: deadline
+                deadline: deadline,
+                completingAfterCurrentCycle: timeout == 0 && scope == .discovery
             ) {
             case .observation(let entry):
                 cursor = entry.cursor
                 if let latest = observationLog.cleanEvent(scope: scope, after: requiredSequence) {
                     return latest
                 }
+            case .cycleCompleted:
+                return observationLog.cleanEvent(scope: scope, after: requiredSequence)
             case .deadlineReached, .cancelled, .unavailable:
                 return nil
             }
@@ -148,9 +150,11 @@ extension SemanticObservationStream {
         return milliseconds >= Double(Int.max) ? Int.max : max(1, Int(milliseconds))
     }
 
-    func completeObservationWaiters() {
+    func completeObservationWaiters(
+        completedScope: SemanticObservationScope? = nil
+    ) {
         for waiterID in observationWaiters.keys.sorted() {
-            resolveObservationWaiterIfAvailable(waiterID)
+            resolveObservationWaiterIfAvailable(waiterID, completedScope: completedScope)
         }
     }
 
@@ -179,7 +183,10 @@ extension SemanticObservationStream {
         return nextObservationWaiterID
     }
 
-    private func resolveObservationWaiterIfAvailable(_ waiterID: UInt64) {
+    private func resolveObservationWaiterIfAvailable(
+        _ waiterID: UInt64,
+        completedScope: SemanticObservationScope? = nil
+    ) {
         guard let waiter = observationWaiters[waiterID] else { return }
         switch observationLog.read(after: waiter.cursor, scope: waiter.scope) {
         case .entry(let entry):
@@ -187,7 +194,11 @@ extension SemanticObservationStream {
         case .failure(let error):
             resolveObservationWaiter(waiterID, with: .unavailable(error))
         case .pending:
-            break
+            if waiter.completesAfterObservationCycle,
+               let completedScope,
+               completedScope.canFulfill(waiter.scope) {
+                resolveObservationWaiter(waiterID, with: .cycleCompleted)
+            }
         }
     }
 

@@ -276,8 +276,7 @@ extension TheBrains {
             node: .repeatUntil(
                 declaration: context.declaration,
                 completion: admittedCompletion
-            ),
-            children: context.children
+            )
         )
     }
 
@@ -346,8 +345,7 @@ extension TheBrains {
                 node: .repeatUntilIteration(
                     declaration: declaration,
                     completion: .passed(evidence: admittedEvidence, children: admittedChildren)
-                ),
-                children: children
+                )
             )
         case .failed(expectation: _, childPath: let childPath):
             let admittedEvidence = requireAdmitted(
@@ -368,8 +366,7 @@ extension TheBrains {
                         failure: childFailureDetail(category: .loop, childPath: childPath),
                         children: admittedChildren
                     )
-                ),
-                children: children
+                )
             )
         }
     }

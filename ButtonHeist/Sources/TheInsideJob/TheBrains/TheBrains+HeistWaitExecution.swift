@@ -125,8 +125,7 @@ extension TheBrains {
         return admittedReceipt(
             path: path,
             durationMs: durationMs,
-            node: .wait(predicate: step.predicate, timeout: step.timeout, completion: admittedCompletion),
-            children: children
+            node: .wait(predicate: step.predicate, timeout: step.timeout, completion: admittedCompletion)
         )
     }
 }

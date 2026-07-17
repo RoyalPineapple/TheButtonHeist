@@ -115,6 +115,7 @@ internal final class SemanticObservationStream {
         guard !Task.isCancelled,
               await performObservationCycle(scope: scope),
               !Task.isCancelled else { return }
+        completeObservationWaiters(completedScope: scope)
         await Task.yield()
     }
 

@@ -13,7 +13,7 @@ import AccessibilitySnapshotParser
 ///
 /// **Ownership.** Owned by `TheStash` as viewport-tied live state; carried by
 /// `InterfaceObservation` only as part of an observed capture. `Snapshot` owns
-/// value identity and geometry; `DispatchReferences` owns viewport-local weak
+/// raw parser hierarchy and path identity; `DispatchReferences` owns viewport-local weak
 /// UIKit references. Neither is unioned across exploration pages or treated as
 /// stable identity. `Snapshot` records viewport hierarchy and path identity;
 /// `InterfaceTree` remains the sole owner of semantic element and container
@@ -230,11 +230,15 @@ struct LiveCapture {
             }
         }
 
-        var pathsByHeistId: [HeistId: TreePath] = [:]
-        for item in indexedElements {
+        let indexedHeistIds = try indexedElements.map { item in
             guard let heistId = snapshot.heistId(forPath: item.path) else {
                 throw ValidationError.missingHeistId(path: item.path)
             }
+            return (item, heistId)
+        }
+
+        var pathsByHeistId: [HeistId: TreePath] = [:]
+        for (item, heistId) in indexedHeistIds {
             if let firstPath = pathsByHeistId[heistId] {
                 throw ValidationError.duplicateHeistId(
                     heistId: heistId,
@@ -243,6 +247,9 @@ struct LiveCapture {
                 )
             }
             pathsByHeistId[heistId] = item.path
+        }
+
+        for (item, heistId) in indexedHeistIds {
             guard let treeElement = tree.elements[heistId] else {
                 throw ValidationError.missingTreeElement(heistId: heistId, path: item.path)
             }

@@ -25,29 +25,6 @@ internal enum ObservationLogRead: Sendable, Equatable {
     case failure(ObservationLogReadError)
 }
 
-private struct ObservationLogPosition: Sendable, Equatable {
-    let rawValue: UInt64
-}
-
-private struct RetainedObservationRecord: Sendable, Equatable {
-    let position: ObservationLogPosition
-    let entry: ObservationEntry
-}
-
-private struct ObservationRecordReference: Sendable, Equatable {
-    let position: ObservationLogPosition
-    let entry: ObservationEntry
-
-    var cursor: ObservationCursor {
-        entry.cursor
-    }
-}
-
-private struct ObservationCursorReference: Sendable, Equatable {
-    let position: ObservationLogPosition
-    let cursor: ObservationCursor
-}
-
 private enum SemanticObservationPublicationState: Sendable, Equatable {
     case empty
     case observing(sourceScope: SemanticObservationScope)
@@ -56,11 +33,10 @@ private enum SemanticObservationPublicationState: Sendable, Equatable {
 
 private struct SemanticObservationLogState {
     let retentionLimit: Int
-    var records: [RetainedObservationRecord] = []
-    var latestByScope: [SemanticObservationScope: ObservationRecordReference] = [:]
-    var evictedThrough: [SemanticObservationScope: ObservationCursorReference] = [:]
+    var entries: [ObservationEntry] = []
+    var latestByScope: [SemanticObservationScope: ObservationEntry] = [:]
+    var evictedThrough: [SemanticObservationScope: ObservationCursor] = [:]
     var publicationState = SemanticObservationPublicationState.empty
-    var nextPosition: UInt64 = 0
 
     init(retentionLimit: Int) {
         precondition(retentionLimit > 0, "Observation history retention must be positive")
@@ -92,16 +68,8 @@ private struct SemanticObservationLogState {
             }
         }
 
-        let record = RetainedObservationRecord(
-            position: ObservationLogPosition(rawValue: nextPosition),
-            entry: entry
-        )
-        nextPosition += 1
-        records.append(record)
-        latestByScope[scope] = ObservationRecordReference(
-            position: record.position,
-            entry: entry
-        )
+        entries.append(entry)
+        latestByScope[scope] = entry
         evictIfNeeded(scope: scope)
     }
 
@@ -110,8 +78,8 @@ private struct SemanticObservationLogState {
         scope: SemanticObservationScope
     ) -> ObservationLogRead {
         guard let cursor else {
-            return records.first(where: { $0.entry.cursor.scope == scope })
-                .map { .entry($0.entry) } ?? .pending
+            return entries.first(where: { $0.cursor.scope == scope })
+                .map(ObservationLogRead.entry) ?? .pending
         }
         guard cursor.scope == scope else {
             return .failure(.scopeMismatch(cursor: cursor.scope, requested: scope))
@@ -119,28 +87,15 @@ private struct SemanticObservationLogState {
         if let gap = historyGap(after: cursor, scope: scope) {
             return .failure(.historyEvicted(gap))
         }
-        guard let position = position(of: cursor, scope: scope) else {
+        let cursorIsKnown = entries.contains { $0.cursor == cursor }
+            || latestByScope[scope]?.cursor == cursor
+            || evictedThrough[scope] == cursor
+        guard cursorIsKnown else {
             return .failure(.cursorUnavailable(cursor))
         }
-        return records.first(where: {
-            $0.position.rawValue > position.rawValue && $0.entry.cursor.scope == scope
-        }).map { .entry($0.entry) } ?? .pending
-    }
-
-    private func position(
-        of cursor: ObservationCursor,
-        scope: SemanticObservationScope
-    ) -> ObservationLogPosition? {
-        if let retained = records.first(where: { $0.entry.cursor == cursor }) {
-            return retained.position
-        }
-        if let latest = latestByScope[scope], latest.cursor == cursor {
-            return latest.position
-        }
-        if let evicted = evictedThrough[scope], evicted.cursor == cursor {
-            return evicted.position
-        }
-        return nil
+        return entries.first(where: {
+            $0.cursor.scope == scope && $0.cursor.sequence > cursor.sequence
+        }).map(ObservationLogRead.entry) ?? .pending
     }
 
     private func historyGap(
@@ -148,28 +103,24 @@ private struct SemanticObservationLogState {
         scope: SemanticObservationScope
     ) -> ObservationGap? {
         guard let evicted = evictedThrough[scope],
-              evicted.cursor.sequence > cursor.sequence else { return nil }
+              evicted.sequence > cursor.sequence else { return nil }
         return ObservationGap(
             reason: .historyEvicted,
             baseline: cursor,
-            current: latestByScope[scope]?.cursor ?? evicted.cursor
+            current: latestByScope[scope]?.cursor ?? evicted
         )
     }
 
     private mutating func evictIfNeeded(scope: SemanticObservationScope) {
-        guard records.lazy.filter({
-            $0.entry.cursor.scope == scope
+        guard entries.lazy.filter({
+            $0.cursor.scope == scope
         }).count > retentionLimit else { return }
-        guard let index = records.firstIndex(where: {
-            $0.entry.cursor.scope == scope
+        guard let index = entries.firstIndex(where: {
+            $0.cursor.scope == scope
         }) else {
             preconditionFailure("Observation scope retention count lost its matching record")
         }
-        let evicted = records.remove(at: index)
-        evictedThrough[scope] = ObservationCursorReference(
-            position: evicted.position,
-            cursor: evicted.entry.cursor
-        )
+        evictedThrough[scope] = entries.remove(at: index).cursor
     }
 }
 
@@ -182,7 +133,7 @@ internal final class SemanticObservationLog {
     internal var latestSourceEvent: SettledSemanticObservationEvent? {
         switch state.publicationState {
         case .observing(let sourceScope), .invalidated(.some(let sourceScope)):
-            state.latestByScope[sourceScope]?.entry.event
+            state.latestByScope[sourceScope]?.event
         case .empty, .invalidated(.none):
             nil
         }
@@ -203,7 +154,7 @@ internal final class SemanticObservationLog {
 
     internal var latestEventsByScope: SemanticObservationPublication.EventsByScope {
         Dictionary(uniqueKeysWithValues: state.latestByScope.map { scope, reference in
-            (scope, reference.entry.event)
+            (scope, reference.event)
         })
     }
 
@@ -247,7 +198,7 @@ internal final class SemanticObservationLog {
     internal func previousEvent(
         for scope: SemanticObservationScope
     ) -> SettledSemanticObservationEvent? {
-        state.latestByScope[scope]?.entry.event
+        state.latestByScope[scope]?.event
     }
 
     internal func cleanEvent(
@@ -256,7 +207,7 @@ internal final class SemanticObservationLog {
     ) -> SettledSemanticObservationEvent? {
         guard case .observing(let sourceScope) = state.publicationState,
               let currentGeneration = state.latestByScope[sourceScope]?.cursor.generation,
-              let latest = state.latestByScope[scope]?.entry.event,
+              let latest = state.latestByScope[scope]?.event,
               latest.generation == currentGeneration,
               latest.sequence > (sequence ?? 0) else {
             return nil
@@ -272,9 +223,7 @@ internal final class SemanticObservationLog {
     }
 
     internal func retainedEntries(scope: SemanticObservationScope) -> [ObservationEntry] {
-        state.records.compactMap { record in
-            record.entry.cursor.scope == scope ? record.entry : nil
-        }
+        state.entries.filter { $0.cursor.scope == scope }
     }
 
     internal func latestCursor(scope: SemanticObservationScope) -> ObservationCursor? {
@@ -283,21 +232,21 @@ internal final class SemanticObservationLog {
 
     internal func event(at cursor: ObservationCursor) -> SettledSemanticObservationEvent? {
         if let latest = state.latestByScope[cursor.scope], latest.cursor == cursor {
-            return latest.entry.event
+            return latest.event
         }
-        return state.records.first(where: { $0.entry.cursor == cursor })?.entry.event
+        return state.entries.first(where: { $0.cursor == cursor })?.event
     }
 
     internal func event(
         scope: SemanticObservationScope,
         sequence: SettledObservationSequence
     ) -> SettledSemanticObservationEvent? {
-        if let latest = state.latestByScope[scope], latest.entry.event.sequence == sequence {
-            return latest.entry.event
+        if let latest = state.latestByScope[scope], latest.event.sequence == sequence {
+            return latest.event
         }
-        return state.records.first(where: {
-            $0.entry.event.scope == scope && $0.entry.event.sequence == sequence
-        })?.entry.event
+        return state.entries.first(where: {
+            $0.event.scope == scope && $0.event.sequence == sequence
+        })?.event
     }
 
     internal func settledCapture(
@@ -383,7 +332,7 @@ internal final class SemanticObservationLog {
 
     private static func entry(
         for event: SettledSemanticObservationEvent,
-        after latest: ObservationRecordReference?
+        after latest: ObservationEntry?
     ) throws -> ObservationEntry {
         if event.previousCursor != latest?.cursor {
             throw SemanticObservationLogAppendError.eventLineageMismatch(

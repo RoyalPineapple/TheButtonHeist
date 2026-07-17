@@ -299,14 +299,14 @@ consume that projection; they do not rebuild report facts from plan siblings or
 parallel result fields.
 
 `HeistExecutionStepResult` owns a typed execution path, duration, and one
-`HeistExecutionStepNode`. `HeistExecutionStepNode.swift` owns the algebra,
-`HeistExecutionStepNode+Codable.swift` owns its one codec, and
-`HeistExecutionStepResult+Construction.swift` admits a legal node into the
-runtime receipt. The node's typed completion shapes and `admitted()` check are
-the sole legality boundary; runtime builders and the wire decoder use that same
-boundary. There is no `Result` repair path and no synthetic fallback receipt.
-Status and abort paths derive from the admitted node. The wire decoder accepts
-only fields legal for the node's `type` and `outcome`.
+`HeistExecutionStepNode`. The node type owns the receipt algebra and its single
+`Codable` conformance; file placement is organization, not an architectural
+contract. Typed completion cases make unconstrained nodes legal by construction.
+For action, loop, and repeat nodes whose declaration and evidence must agree,
+`admitted()` is the shared relationship boundary used by runtime construction
+and decoding. There is no `Result` repair path and no synthetic fallback
+receipt. Status and abort paths derive from the node, and the wire decoder
+accepts only fields legal for its `type` and `outcome`.
 
 `ActionDispatchOutcome` is the one result of app-side action dispatch. Its state
 is success, with an optional payload and resolved element id, or failure, with a

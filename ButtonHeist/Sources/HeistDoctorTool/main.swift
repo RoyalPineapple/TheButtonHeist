@@ -52,17 +52,16 @@ struct HeistDoctorCommand: ParsableCommand {
             newFail: newFailReceipt,
             stepPath: requestedStepPath
         )
-        let report = HeistDoctorReport(suggestions: diagnosis.suggestions)
 
         switch format {
         case .human:
-            HeistDoctorToolOutput.writeLine(Self.humanReport(report))
+            HeistDoctorToolOutput.writeLine(Self.humanReport(diagnosis))
         case .json:
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            let data = try encoder.encode(report)
+            let data = try encoder.encode(diagnosis)
             guard let json = String(data: data, encoding: .utf8) else {
-                throw ValidationError("failed to encode heist-doctor JSON report")
+                throw ValidationError("failed to encode heist-doctor JSON diagnosis")
             }
             HeistDoctorToolOutput.writeLine(json)
         }
@@ -81,13 +80,17 @@ struct HeistDoctorCommand: ParsableCommand {
         }
     }
 
-    private static func humanReport(_ report: HeistDoctorReport) -> String {
-        let suggestions = report.suggestions
-        guard !suggestions.isEmpty else {
-            return "No repair suggestions."
+    private static func humanReport(_ diagnosis: HeistRepairDiagnosis) -> String {
+        let suggestions: [HeistRepairSuggestion]
+        switch diagnosis {
+        case .suggested(let suggested):
+            suggestions = suggested.suggestions
+        case .refused(let refused):
+            return "No repair suggestions (\(refused.refusal.stage.rawValue)/"
+                + "\(refused.refusal.reason.rawValue)): \(refused.refusal.message)"
         }
 
-        var lines = ["Repair suggestions (\(report.status.rawValue), \(suggestions.count))"]
+        var lines = ["Repair suggestions (\(suggestions.count))"]
         for (index, suggestion) in suggestions.enumerated() {
             lines.append("")
             lines.append("[\(index + 1)] \(suggestion.failureKind.rawValue) confidence=\(suggestion.confidence.rawValue)")

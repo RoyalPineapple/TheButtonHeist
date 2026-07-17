@@ -20,30 +20,40 @@ private func reportElement(label: String) -> HeistElement {
     )
 }
 
-private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
-    HeistRepairSuggestion(
+private let repairSuggestionFixture = HeistRepairSuggestion(
+    stepPath: "$.body[0]",
+    failureKind: .missingTarget,
+    oldTarget: .predicate(ElementPredicateTemplate(label: "Delete")),
+    oldResolvedElement: HeistRepairElementContext(
+        element: reportElement(label: "Delete"),
+        siblingText: ["Milk"],
+        headerText: []
+    ),
+    newTarget: .predicate(ElementPredicateTemplate(label: "Remove")),
+    newResolvedElement: HeistRepairElementContext(
+        element: reportElement(label: "Remove"),
+        siblingText: ["Milk"],
+        headerText: []
+    ),
+    confidence: .medium,
+    reasons: [
+        .oldTargetResolvedInLastSuccessfulSnapshot,
+        .suggestedMatcherResolvesExactlyOneElement,
+    ],
+    caveats: []
+)
+
+private let repairJSONDiagnosisFixture = HeistRepairDiagnosis.suggested(
+    HeistRepairSuggestedDiagnosis(
         stepPath: "$.body[0]",
         failureKind: .missingTarget,
-        oldTarget: .predicate(ElementPredicateTemplate(label: "Delete")),
-        oldResolvedElement: HeistRepairElementContext(
-            element: reportElement(label: "Delete"),
-            siblingText: ["Milk"],
-            headerText: []
-        ),
-        newTarget: .predicate(ElementPredicateTemplate(label: "Remove")),
-        newResolvedElement: HeistRepairElementContext(
-            element: reportElement(label: "Remove"),
-            siblingText: ["Milk"],
-            headerText: []
-        ),
-        confidence: .medium,
-        reasons: [
-            .oldTargetResolvedInLastSuccessfulSnapshot,
-            .suggestedMatcherResolvesExactlyOneElement,
-        ],
-        caveats: []
-    ),
-])
+        oldTarget: repairSuggestionFixture.oldTarget,
+        oldResolvedElement: repairSuggestionFixture.oldResolvedElement,
+        currentMatchCount: 0,
+        candidates: [],
+        suggestions: [repairSuggestionFixture]
+    )
+)
 
 @Suite struct HeistDoctorTests {
     @Test func `container-only targets are refused without element coercion`() {
@@ -487,26 +497,26 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
         #expect(resolvedCount(suggestion.newTarget, in: current.beforeSnapshot) == 1)
     }
 
-    @Test("JSON report stores canonical elements inside Doctor context")
-    func jsonReportStoresCanonicalElementsInsideDoctorContext() throws {
+    @Test("JSON diagnosis stores canonical elements inside Doctor context")
+    func jsonDiagnosisStoresCanonicalElementsInsideDoctorContext() throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
 
-        let data = try encoder.encode(repairJSONReportFixture)
+        let data = try encoder.encode(repairJSONDiagnosisFixture)
         let probe = try JSONProbe(data: data).object()
-        let decodedReport = try JSONDecoder().decode(HeistDoctorReport.self, from: data)
-        let suggestions = try probe.array("suggestions")
+        let decodedDiagnosis = try JSONDecoder().decode(HeistRepairDiagnosis.self, from: data)
+        let suggested = try probe.object("suggested").object("_0")
+        let suggestions = try suggested.array("suggestions")
         let suggestion = try #require(suggestions.first)
         let context = try suggestion.object("newResolvedElement")
         let element = try context.object("element")
 
-        #expect(try probe.string("status") == HeistDoctorFeatureStatus.alpha.rawValue)
         #expect(try context.array("siblingText").count == 1)
         #expect(try element.string("description") == "Remove")
         #expect(try element.string("label") == "Remove")
         #expect(try element.double("frameWidth") == 100)
-        try probe.assertRecursivelyMissingKeys(["featureStatus", "action" + "Kind"])
-        #expect(decodedReport == repairJSONReportFixture)
+        try probe.assertRecursivelyMissingKeys(["status", "featureStatus", "action" + "Kind"])
+        #expect(decodedDiagnosis == repairJSONDiagnosisFixture)
     }
 
     @Test("Repair request round trips one evidence body and rejects reversed outcomes")
@@ -527,34 +537,6 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
         #expect(decoded.currentFailure.command == .activate(target))
         #expect(throws: (any Error).self) {
             _ = try HeistRepairRequest(lastSuccess: current, currentFailure: last)
-        }
-    }
-
-    @Test
-    func `JSON report rejects legacy feature status key`() {
-        let payload = """
-        {
-          "featureStatus" : "alpha",
-          "suggestions" : []
-        }
-        """
-
-        #expect(throws: DecodingError.self) {
-            _ = try JSONDecoder().decode(HeistDoctorReport.self, from: Data(payload.utf8))
-        }
-    }
-
-    @Test
-    func `JSON report rejects unknown feature status`() {
-        let payload = """
-        {
-          "status" : "beta",
-          "suggestions" : []
-        }
-        """
-
-        #expect(throws: DecodingError.self) {
-            _ = try JSONDecoder().decode(HeistDoctorReport.self, from: Data(payload.utf8))
         }
     }
 

@@ -219,7 +219,7 @@ public extension HeistElement {
             sourceFrame: frame,
             projectedFrame: frame
         )
-        let validCustomContent = element.customContent.filter { !$0.label.isEmpty || !$0.value.isEmpty }
+        let validCustomContent = element.customContent.compactMap { HeistCustomContent(projecting: $0) }
         let validRotors = element.customRotors.filter { !$0.name.isEmpty }
         self.init(
             description: element.description,
@@ -234,9 +234,7 @@ public extension HeistElement {
             frameHeight: sanitizedDouble(frame.size.height),
             activationPointEvidence: activationPoint,
             respondsToUserInteraction: element.respondsToUserInteraction,
-            customContent: validCustomContent.isEmpty ? nil : validCustomContent.map {
-                HeistCustomContent(label: $0.label, value: $0.value, isImportant: $0.isImportant)
-            },
+            customContent: validCustomContent.isEmpty ? nil : validCustomContent,
             rotors: validRotors.isEmpty ? nil : validRotors.map { HeistRotor(name: $0.name) },
             actions: annotation?.actions ?? []
         )
@@ -343,5 +341,10 @@ public struct HeistCustomContent: Codable, Equatable, Hashable, Sendable {
         self.label = label
         self.value = value
         self.isImportant = isImportant
+    }
+
+    package init?(projecting content: AccessibilityElement.CustomContent) {
+        guard !content.label.isEmpty || !content.value.isEmpty else { return nil }
+        self.init(label: content.label, value: content.value, isImportant: content.isImportant)
     }
 }

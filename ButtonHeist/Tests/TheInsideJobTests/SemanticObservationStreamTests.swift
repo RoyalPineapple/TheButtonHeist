@@ -531,6 +531,30 @@ final class SemanticObservationStreamTests: XCTestCase {
         )
     }
 
+    func testZeroTimeoutDiscoveryReturnsAfterEmptyCycle() async {
+        _ = stash.semanticObservationStream.commitDiscoveryObservationForTesting(
+            observation(label: "Retained Discovery", heistId: "retained_discovery")
+        )
+        let discoveryCompleted = expectation(description: "Empty discovery cycle completed")
+        stash.startPassiveSemanticObservation {
+            discoveryCompleted.fulfill()
+            return nil
+        }
+
+        let task = Task { @MainActor in
+            await self.stash.semanticObservationStream.settledEvent(
+                scope: .discovery,
+                after: nil,
+                timeout: 0
+            )
+        }
+        await fulfillment(of: [discoveryCompleted], timeout: 5)
+
+        let result = await task.value
+        XCTAssertNil(result)
+        XCTAssertEqual(stash.semanticObservationStream.observationWaiterCount, 0)
+    }
+
     func testCancellingSettledEventRemovesReplayWaiter() async {
         let task = Task { @MainActor in
             await self.stash.semanticObservationStream.settledEvent(

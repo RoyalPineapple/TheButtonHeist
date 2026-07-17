@@ -8,14 +8,13 @@ extension TheBrains {
     internal func admittedReceipt(
         path: HeistExecutionPath,
         durationMs: Int,
-        node: @autoclosure () -> HeistExecutionStepNode,
-        children _: [HeistExecutionStepResult] = []
+        node: HeistExecutionStepNode
     ) -> HeistExecutionStepResult {
         do {
             return try HeistExecutionStepResult.construct(
                 path: path,
                 durationMs: durationMs,
-                node: node()
+                node: node
             )
         } catch {
             preconditionFailure("runtime values must form a legal receipt node: \(error)")
