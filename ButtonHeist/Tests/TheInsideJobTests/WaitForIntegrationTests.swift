@@ -552,29 +552,12 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertNotNil(insideJob.brains.stash.interfaceTree.findElement(heistId: offViewportHeistId))
 
         let updatedVisible = InterfaceObservation.makeForTests(elements: [(visibleAfter, visibleHeistId)])
-        let updatedEvent = stream.commitVisibleObservationForTesting(
+        stream.commitVisibleObservationForTesting(
             updatedVisible,
             notificationBatch: notificationBatch
         )
-        let wait = PredicateWait(
-            observeEvent: { _, sequence, _ in
-                XCTAssertNil(sequence)
-                return updatedEvent
-            },
-            latestEvent: { updatedEvent },
-            latestSettleFailure: { nil },
-            semanticObservation: { event in
-                self.insideJob.brains.postActionObservation.semanticObservation(from: event)
-            },
-            buildObservationWindow: { baseline, event in
-                stream.observationWindow(from: baseline, through: event)
-            },
-            presenceTimeoutMessage: { _, _ in nil },
-            announcementCursor: { _ in .origin },
-            waitForAnnouncement: { _, _, _ in nil }
-        )
-        let result = await wait.wait(
-            for: try resolvedWait(WaitStep(predicate: .changed(.elements()), timeout: 5.0)),
+        let result = await insideJob.brains.interactionObservation.waitForPredicate(
+            try resolvedWait(WaitStep(predicate: .changed(.elements()), timeout: 5.0)),
             initialTrace: AccessibilityTrace(capture: baselineCapture.capture),
             changeBaseline: .supplied(baselineCapture)
         ).actionResult

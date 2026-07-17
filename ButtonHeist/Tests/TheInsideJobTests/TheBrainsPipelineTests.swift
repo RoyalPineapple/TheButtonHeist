@@ -15,12 +15,6 @@ import UIKit
 /// require a live window and are covered by integration/benchmark runs.
 @MainActor
 final class TheBrainsPipelineTests: XCTestCase {
-
-    private enum WaitCheck: Equatable {
-        case visible
-        case discovery
-    }
-
     private var brains: TheBrains!
 
     override func setUp() async throws {
@@ -974,15 +968,11 @@ final class TheBrainsPipelineTests: XCTestCase {
     // MARK: - Wait Evidence Path
 
     func testWaitSuccessReceiptUsesSettledVisibleObservation() async throws {
-        let event = brains.stash.semanticObservationStream.commitVisibleObservationForTesting(
+        brains.stash.semanticObservationStream.commitVisibleObservationForTesting(
             makeScreen(elements: [("Home", .header, "home")])
         )
-        let wait = makeStreamBackedPredicateWait(
-            settleVisible: { _ in event }
-        )
-
-        let receipt = await wait.wait(
-            for: try resolvedWait(WaitStep(predicate: .exists(.label("Home")), timeout: .milliseconds(1)))
+        let receipt = await brains.interactionObservation.waitForPredicate(
+            try resolvedWait(WaitStep(predicate: .exists(.label("Home")), timeout: .milliseconds(1)))
         )
         let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
 
@@ -992,15 +982,11 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     func testWaitTimeoutReceiptUsesLastSettledVisibleObservation() async throws {
-        let event = brains.stash.semanticObservationStream.commitVisibleObservationForTesting(
+        brains.stash.semanticObservationStream.commitVisibleObservationForTesting(
             makeScreen(elements: [("Known", .staticText, "known")])
         )
-        let wait = makeStreamBackedPredicateWait(
-            settleVisible: { _ in event }
-        )
-
-        let receipt = await wait.wait(
-            for: try resolvedWait(WaitStep(predicate: .exists(.label("Missing")), timeout: .milliseconds(1)))
+        let receipt = await brains.interactionObservation.waitForPredicate(
+            try resolvedWait(WaitStep(predicate: .exists(.label("Missing")), timeout: .milliseconds(1)))
         )
         let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
 
@@ -1012,31 +998,20 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     func testVisibleMissRunsDiscoveryAfterVisibleSettle() async throws {
-        let visible = brains.stash.semanticObservationStream.commitVisibleObservationForTesting(
+        brains.stash.semanticObservationStream.commitVisibleObservationForTesting(
             makeScreen(elements: [("Loading", .staticText, "loading")])
         )
-        let discovered = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
-            makeScreen(elements: [("Ready", .staticText, "ready")])
+        brains.stash.nextVisibleRefreshScreenForTesting = makeScreen(
+            elements: [("Ready", .staticText, "ready")]
         )
-        var checks: [WaitCheck] = []
-        let wait = makeStreamBackedPredicateWait(
-            settleVisible: { _ in
-                checks.append(.visible)
-                return visible
-            },
-            discover: { _, _, observer in
-                checks.append(.discovery)
-                _ = observer(discovered)
-                return discovered
-            }
+        let receipt = await brains.interactionObservation.waitForPredicate(
+            try resolvedWait(WaitStep(predicate: .exists(.label("Ready")), timeout: 1))
         )
-
-        let receipt = await wait.wait(
-            for: try resolvedWait(WaitStep(predicate: .exists(.label("Ready")), timeout: 1))
-        )
+        let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
 
         XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
-        XCTAssertEqual(checks, [.visible, .discovery])
+        XCTAssertEqual(trace.captures.first?.interface.projectedElements.map(\.label), ["Loading"])
+        XCTAssertEqual(trace.captures.last?.interface.projectedElements.map(\.label), ["Ready"])
     }
 
     func testAppearedWaitRequiresObservedTransitionWhenFinalStateIsAlreadyPresent() async throws {
@@ -1138,22 +1113,13 @@ final class TheBrainsPipelineTests: XCTestCase {
         let after = brains.stash.semanticObservationStream.commitVisibleObservationForTesting(
             volumeScreen(value: "3")
         )
-        var settleCount = 0
-        let wait = makeStreamBackedPredicateWait(
-            settleVisible: { _ in
-                settleCount += 1
-                return after
-            }
-        )
-
-        let receipt = await wait.wait(
-            for: try resolvedWait(WaitStep(predicate: .changed(.elements()), timeout: .milliseconds(1))),
+        let receipt = await brains.interactionObservation.waitForPredicate(
+            try resolvedWait(WaitStep(predicate: .changed(.elements()), timeout: .milliseconds(1))),
             initialTrace: after.trace
         )
 
         XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
         XCTAssertTrue(receipt.expectation.met)
-        XCTAssertEqual(settleCount, 0)
     }
 
     func testSuppliedCanonicalBaselineOverridesStaleInitialTrace() async throws {
@@ -1168,12 +1134,8 @@ final class TheBrainsPipelineTests: XCTestCase {
             volumeScreen(value: "1")
         )
         let staleHash = try XCTUnwrap(staleEvent.trace.captures.last?.hash)
-        let wait = makeStreamBackedPredicateWait(
-            settleVisible: { _ in afterEvent }
-        )
-
-        let receipt = await wait.wait(
-            for: try resolvedWait(WaitStep(predicate: .changed(.elements()), timeout: .milliseconds(1))),
+        let receipt = await brains.interactionObservation.waitForPredicate(
+            try resolvedWait(WaitStep(predicate: .changed(.elements()), timeout: .milliseconds(1))),
             initialTrace: staleEvent.trace,
             changeBaseline: .supplied(before)
         )
@@ -1205,12 +1167,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         let before = try XCTUnwrap(beforeEvent.settledCapture)
         let actionEndpoint = try XCTUnwrap(actionEndpointEvent.settledCapture)
         let destination = try XCTUnwrap(destinationEvent.settledCapture)
-        let wait = makeStreamBackedPredicateWait(
-            settleVisible: { _ in destinationEvent }
-        )
-
-        let receipt = await wait.wait(
-            for: try resolvedWait(WaitStep(
+        let receipt = await brains.interactionObservation.waitForPredicate(
+            try resolvedWait(WaitStep(
                 predicate: .changed(.screen([.exists(.label("Menu"))])),
                 timeout: .milliseconds(1)
             )),
@@ -1337,11 +1295,8 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         let expression = AccessibilityPredicate.noChange
         let predicate = try resolvedPredicate(expression)
-        let wait = makeStreamBackedPredicateWait(
-            settleVisible: { _ in currentEvent }
-        )
-        let receipt = await wait.wait(
-            for: try resolvedWait(WaitStep(predicate: expression, timeout: .milliseconds(1))),
+        let receipt = await brains.interactionObservation.waitForPredicate(
+            try resolvedWait(WaitStep(predicate: expression, timeout: .milliseconds(1))),
             changeBaseline: .supplied(baseline)
         )
 
@@ -1375,11 +1330,8 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         let expression = AccessibilityPredicate.noChange
         let predicate = try resolvedPredicate(expression)
-        let wait = makeStreamBackedPredicateWait(
-            settleVisible: { _ in currentEvent }
-        )
-        let receipt = await wait.wait(
-            for: try resolvedWait(WaitStep(predicate: expression, timeout: .milliseconds(1))),
+        let receipt = await brains.interactionObservation.waitForPredicate(
+            try resolvedWait(WaitStep(predicate: expression, timeout: .milliseconds(1))),
             changeBaseline: .supplied(baseline)
         )
         let laterValidation = predicate.validate(
@@ -2309,29 +2261,6 @@ final class TheBrainsPipelineTests: XCTestCase {
         ])
     }
 
-    private func makeStreamBackedPredicateWait(
-        settleVisible: @escaping PredicateWait.SettleVisible,
-        discover: @escaping PredicateWait.Discover = { _, _, _ in nil }
-    ) -> PredicateWait {
-        let stream = brains.stash.semanticObservationStream
-        return PredicateWait(
-            observeEvent: { _, _, _ in nil },
-            latestEvent: { stream.latestEvent },
-            latestSettleFailure: { stream.latestSettleFailureDiagnostic },
-            semanticObservation: { event in
-                self.brains.postActionObservation.semanticObservation(from: event)
-            },
-            buildObservationWindow: { baseline, event in
-                stream.observationWindow(from: baseline, through: event)
-            },
-            presenceTimeoutMessage: { _, _ in nil },
-            announcementCursor: { _ in .origin },
-            waitForAnnouncement: { _, _, _ in nil },
-            settleVisible: settleVisible,
-            discover: discover
-        )
-    }
-
     private func temporalWaitReceipt(
         predicate: AccessibilityPredicate,
         baseline: InterfaceObservation,
@@ -2339,13 +2268,10 @@ final class TheBrainsPipelineTests: XCTestCase {
     ) async throws -> HeistWaitReceipt {
         let stream = brains.stash.semanticObservationStream
         let baselineEvent = stream.commitVisibleObservationForTesting(baseline)
-        let finalEvent = stream.commitVisibleObservationForTesting(final)
+        stream.commitVisibleObservationForTesting(final)
         let baselineCapture = try XCTUnwrap(baselineEvent.settledCapture)
-        let wait = makeStreamBackedPredicateWait(
-            settleVisible: { _ in finalEvent }
-        )
-        return await wait.wait(
-            for: try resolvedWait(WaitStep(predicate: predicate, timeout: .milliseconds(1))),
+        return await brains.interactionObservation.waitForPredicate(
+            try resolvedWait(WaitStep(predicate: predicate, timeout: .milliseconds(1))),
             changeBaseline: .supplied(baselineCapture)
         )
     }

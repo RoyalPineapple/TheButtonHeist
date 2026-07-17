@@ -1806,29 +1806,17 @@ final class TheBrainsActionTests: XCTestCase {
             (makeElement(label: "Loaded"), "loaded"),
         ])
 
-        let beforeDiscoveryEvent = isolatedBrains.stash.semanticObservationStream
+        isolatedBrains.stash.semanticObservationStream
             .commitDiscoveryObservationForTesting(beforeScreen)
-        let beforeEvent = try XCTUnwrap(
-            isolatedBrains.stash.semanticObservationStream.observationEvent(
-                scope: .visible,
-                at: beforeDiscoveryEvent.sequence
-            )
-        )
-        let matchedEvent = isolatedBrains.stash.semanticObservationStream
+        isolatedBrains.stash.semanticObservationStream
             .commitDiscoveryObservationForTesting(matchedScreen)
-        let wait = predicateWait(
-            brains: isolatedBrains,
-            settleVisible: { _ in beforeEvent },
-            discover: { _, _, observer in
-                XCTAssertTrue(observer(matchedEvent))
-                return matchedEvent
-            }
-        )
 
-        let receipt = await wait.wait(for: try resolvedWait(WaitStep(
-            predicate: .exists(.label("Loaded")),
-            timeout: 1
-        )))
+        let receipt = await isolatedBrains.interactionObservation.waitForPredicate(
+            try resolvedWait(WaitStep(
+                predicate: .exists(.label("Loaded")),
+                timeout: 1
+            ))
+        )
         let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
 
         XCTAssertTrue(receipt.actionResult.outcome.isSuccess)
@@ -1877,6 +1865,12 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertTrue(currentReceipt.actionResult.outcome.isSuccess)
         XCTAssertEqual(currentReceipt.actionResult.announcement, "Ready")
+
+        let repeatedReceipt = await isolatedBrains.interactionObservation.waitForPredicate(
+            try resolvedWait(WaitStep(predicate: .announcement("Ready"), timeout: .milliseconds(1))),
+            announcementCursorStrategy: .heistScoped
+        )
+        XCTAssertFalse(repeatedReceipt.actionResult.outcome.isSuccess)
     }
 
     func testFailedActionBatchBelongsToDiagnosticAndNextActionClaimsOnlyItsBatch() async {
@@ -2036,30 +2030,14 @@ final class TheBrainsActionTests: XCTestCase {
         let knownScreen = InterfaceObservation.makeForTests(elements: [
             (makeElement(label: "Known"), "known"),
         ])
-        let initialVisible = isolatedBrains.stash.semanticObservationStream
-            .commitVisibleObservationForTesting(knownScreen)
-        let initialDiscovery = isolatedBrains.stash.semanticObservationStream
-            .commitDiscoveryObservationForTesting(knownScreen)
-        let finalVisible = isolatedBrains.stash.semanticObservationStream
-            .commitVisibleObservationForTesting(knownScreen)
-        let finalDiscovery = isolatedBrains.stash.semanticObservationStream
-            .commitDiscoveryObservationForTesting(knownScreen)
-        var visibleEvents = [initialVisible, finalVisible]
-        var discoveryEvents = [initialDiscovery, finalDiscovery]
-        let wait = predicateWait(
-            brains: isolatedBrains,
-            settleVisible: { _ in visibleEvents.removeFirst() },
-            discover: { _, _, observer in
-                let event = discoveryEvents.removeFirst()
-                _ = observer(event)
-                return event
-            }
-        )
+        isolatedBrains.stash.installScreenForTesting(knownScreen)
 
-        let receipt = await wait.wait(for: try resolvedWait(WaitStep(
-            predicate: .exists(.label("Missing")),
-            timeout: .milliseconds(1)
-        )))
+        let receipt = await isolatedBrains.interactionObservation.waitForPredicate(
+            try resolvedWait(WaitStep(
+                predicate: .exists(.label("Missing")),
+                timeout: .milliseconds(1)
+            ))
+        )
         let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
 
         XCTAssertFalse(receipt.actionResult.outcome.isSuccess)
@@ -4675,49 +4653,6 @@ final class TheBrainsActionTests: XCTestCase {
         )
     }
 
-    private func predicateWait(
-        brains: TheBrains,
-        settleVisible: @escaping PredicateWait.SettleVisible,
-        discover: @escaping PredicateWait.Discover
-    ) -> PredicateWait {
-        PredicateWait(
-            observeEvent: { _, _, _ in nil },
-            latestEvent: { brains.stash.latestSettledSemanticObservationEvent },
-            latestSettleFailure: { nil },
-            semanticObservation: { event in
-                brains.postActionObservation.semanticObservation(from: event)
-            },
-            buildObservationWindow: { baseline, event in
-                brains.stash.semanticObservationStream.observationWindow(
-                    from: baseline,
-                    through: event
-                )
-            },
-            presenceTimeoutMessage: { _, _ in nil },
-            announcementCursor: { _ in .origin },
-            waitForAnnouncement: { _, _, _ in nil },
-            settleVisible: settleVisible,
-            discover: discover
-        )
-    }
-
-    private func scriptedPredicateWait(
-        _ source: ScriptedHeistObservationSource
-    ) -> PredicateWait {
-        PredicateWait(
-            observeEvent: { scope, _, timeout in
-                source.nextEvent(scope: scope, timeout: timeout)
-            },
-            latestEvent: { nil },
-            latestSettleFailure: { nil },
-            semanticObservation: { source.semanticObservation(for: $0) },
-            buildObservationWindow: { _, _ in nil },
-            presenceTimeoutMessage: { _, _ in nil },
-            announcementCursor: { _ in .origin },
-            waitForAnnouncement: { _, _, _ in nil }
-        )
-    }
-
     private func heistRuntime(
         observations: [PostActionObservation.BeforeState],
         executionBaseline: SettledCapture? = nil,
@@ -4738,7 +4673,7 @@ final class TheBrainsActionTests: XCTestCase {
             file: file,
             line: line
         )
-        let caseWait = scriptedPredicateWait(observationSource)
+        let caseBrains = TheBrains(tripwire: TheTripwire())
 
         return TheBrains.HeistExecutionRuntime(
             execute: { command, baselineScope in
@@ -4766,7 +4701,14 @@ final class TheBrainsActionTests: XCTestCase {
                 )
             },
             selectPredicateCase: { cases, timeout in
-                await caseWait.selectPredicateCase(cases, timeout: timeout)
+                observationSource.prepareCaseSelection(
+                    in: caseBrains.stash,
+                    timeout: timeout
+                )
+                return await caseBrains.interactionObservation.waitForPredicateCases(
+                    cases,
+                    timeout: timeout
+                )
             },
             observeSemanticState: { scope, _, timeout in
                 observationSource.next(scope: scope, timeout: timeout)
@@ -5020,7 +4962,6 @@ private final class ScriptedHeistObservationSource {
     private var previousObservation: SettledSemanticObservation?
     private var previousCapture: AccessibilityTrace.Capture?
     private var nextObservationSequence: SettledObservationSequence = 0
-    private var emittedObservations: [SettledObservationSequence: HeistSemanticObservation] = [:]
     private let observedScopes: (@MainActor (SemanticObservationScope) -> Void)?
     private let observedTimeouts: (@MainActor (Double?) -> Void)?
     private let file: StaticString
@@ -5040,6 +4981,17 @@ private final class ScriptedHeistObservationSource {
         self.observedTimeouts = observedTimeouts
         self.file = file
         self.line = line
+    }
+
+    func prepareCaseSelection(
+        in stash: TheStash,
+        timeout: Double
+    ) {
+        stash.semanticObservationStream.invalidateLatestSettledObservation()
+        guard let observation = next(scope: .visible, timeout: timeout) else { return }
+        stash.semanticObservationStream.commitVisibleObservationForTesting(
+            observation.state.screen
+        )
     }
 
     func next(
@@ -5065,24 +5017,6 @@ private final class ScriptedHeistObservationSource {
         )
         previousObservation = observation.event.observation
         previousCapture = observation.accessibilityTrace.captures.last
-        return observation
-    }
-
-    func nextEvent(
-        scope: SemanticObservationScope,
-        timeout: Double?
-    ) -> SettledSemanticObservationEvent? {
-        guard let observation = next(scope: scope, timeout: timeout) else { return nil }
-        emittedObservations[observation.event.sequence] = observation
-        return observation.event
-    }
-
-    func semanticObservation(
-        for event: SettledSemanticObservationEvent
-    ) -> HeistSemanticObservation {
-        guard let observation = emittedObservations[event.sequence] else {
-            preconditionFailure("scripted observation must be emitted before evaluation")
-        }
         return observation
     }
 
