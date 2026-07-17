@@ -48,7 +48,8 @@ extension TheBrains {
         scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {
         switch dispatch.selection.outcome {
-        case .matchedCase(let selectedCaseIndex):
+        case .matchedCase(let selectedCaseOrdinal):
+            let selectedCaseIndex = Int(selectedCaseOrdinal)
             let children = await executeHeistSteps(
                 dispatch.cases[selectedCaseIndex].body,
                 runtime: runtime,

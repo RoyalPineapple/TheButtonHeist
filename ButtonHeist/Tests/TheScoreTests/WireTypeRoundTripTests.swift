@@ -1069,96 +1069,70 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(evidence.waitEvidence, waitEvidence)
     }
 
-    func testHeistCaseSelectionRejectsLegacyAndLooseOutcomeShapes() throws {
-        let legacy = """
-        {
-          "cases": [],
-          "selectedCaseIndex": 0,
-          "elapsedMs": 1,
-          "timedOut": false,
-          "elseRan": false
-        }
-        """
-        XCTAssertThrowsError(try decoder.decode(HeistCaseSelectionResult.self, from: Data(legacy.utf8))) { error in
-            guard case DecodingError.dataCorrupted(let context) = error else {
-                return XCTFail("Expected DecodingError.dataCorrupted, got \(error)")
-            }
-            XCTAssertTrue(
-                ["selectedCaseIndex", "timedOut", "elseRan"].contains { context.debugDescription.contains($0) },
-                context.debugDescription
-            )
-        }
-
-        let looseOutcome = """
-        {
-          "cases": [],
-          "outcome": {
-            "kind": "no_match",
-            "index": 0
-          },
-          "elapsedMs": 1
-        }
-        """
-        XCTAssertThrowsError(
-            try decoder.decode(HeistCaseSelectionResult.self, from: Data(looseOutcome.utf8))
-        ) { error in
-            assertDecodingError(error, contains: ["no_match", "index"])
-        }
-
-        let missingMatchedIndex = """
-        {
-          "cases": [],
-          "outcome": {
-            "kind": "matched_case"
-          },
-          "elapsedMs": 1
-        }
-        """
-        XCTAssertThrowsError(
-            try decoder.decode(HeistCaseSelectionResult.self, from: Data(missingMatchedIndex.utf8))
-        ) { error in
-            assertDecodingError(error, contains: ["matched_case", "requires index"])
-        }
-
-        let outOfRangeMatchedIndex = """
+    func testHeistCaseSelectionOutcomeRequiresUnsignedIndex() {
+        let json = """
         {
           "cases": [],
           "outcome": {
             "kind": "matched_case",
-            "index": 0
+            "index": -1
           },
           "elapsedMs": 1
         }
         """
-        XCTAssertThrowsError(
-            try decoder.decode(HeistCaseSelectionResult.self, from: Data(outOfRangeMatchedIndex.utf8))
-        ) { error in
-            assertDecodingError(error, contains: ["matched_case index 0", "out of range"])
-        }
+        XCTAssertThrowsError(try decoder.decode(HeistCaseSelectionResult.self, from: Data(json.utf8)))
+    }
 
-        let matchedCases = ["Ready", "Done"].map {
-            HeistCaseMatchResult(predicate: .exists(.label(StringMatch.exact($0))), met: true)
+    func testHeistCaseSelectionRejectsInvalidTiming() {
+        let json = """
+        {
+          "cases": [],
+          "outcome": {"kind": "no_match"},
+          "elapsedMs": -1
         }
+        """
+        XCTAssertThrowsError(
+            try decoder.decode(HeistCaseSelectionResult.self, from: Data(json.utf8))
+        ) { error in
+            assertDecodingError(error, contains: ["elapsedMs", "non-negative"])
+        }
+    }
+
+    func testHeistCaseSelectionRejectsOutcomeContradictingCases() throws {
+        let matched = HeistCaseMatchResult(
+            predicate: .exists(.label("Ready")),
+            met: true
+        )
         let valid = HeistCaseSelectionResult.selectingFirstMatch(
-            cases: matchedCases,
+            cases: [matched],
             ifNone: .noMatch,
             elapsedMs: 1
         )
         var object = try XCTUnwrap(
             JSONSerialization.jsonObject(with: encoder.encode(valid)) as? [String: Any]
         )
-        let contradictoryOutcomes: [[String: Any]] = [
-            ["kind": "no_match"],
-            ["kind": "matched_case", "index": 1],
-        ]
-        for outcome in contradictoryOutcomes {
-            object["outcome"] = outcome
-            XCTAssertThrowsError(
-                try decoder.decode(
-                    HeistCaseSelectionResult.self,
-                    from: JSONSerialization.data(withJSONObject: object)
-                )
-            )
+        object["outcome"] = ["kind": "no_match"]
+
+        XCTAssertThrowsError(try decoder.decode(
+            HeistCaseSelectionResult.self,
+            from: JSONSerialization.data(withJSONObject: object)
+        )) { error in
+            assertDecodingError(error, contains: ["cannot contain a matched case"])
+        }
+    }
+
+    func testHeistCaseSelectionRejectsTimeoutOutcomeWithoutTimeout() {
+        let json = """
+        {
+          "cases": [],
+          "outcome": {"kind": "timed_out"},
+          "elapsedMs": 1
+        }
+        """
+        XCTAssertThrowsError(
+            try decoder.decode(HeistCaseSelectionResult.self, from: Data(json.utf8))
+        ) { error in
+            assertDecodingError(error, contains: ["timed_out", "positive timeout"])
         }
     }
 
@@ -1259,6 +1233,47 @@ final class WireTypeRoundTripTests: XCTestCase {
         let json = #"{"property":"value","old":"same","new":"same"}"#
 
         XCTAssertThrowsError(try decoder.decode(PropertyChange.self, from: Data(json.utf8)))
+    }
+
+    func testTreeChangeTraitsUseCanonicalSetSemantics() throws {
+        XCTAssertNil(PropertyChange.traits(
+            old: [.selected, .button],
+            new: [.button, .selected, .button]
+        ))
+
+        let value = ElementPropertyValue.traits([.selected, .button, .button])
+        let data = try encoder.encode(value)
+        let wire = try JSONProbe(data: data)
+
+        XCTAssertEqual(try wire.strings("traits"), ["button", "selected"])
+        XCTAssertEqual(try decoder.decode(ElementPropertyValue.self, from: data), value)
+    }
+
+    func testTraitPropertyChangesUseCanonicalSetValues() throws {
+        let json = #"{"property":"traits","old":["selected","button","button"],"new":["header"]}"#
+        let change = try decoder.decode(PropertyChange.self, from: Data(json.utf8))
+
+        XCTAssertEqual(change.oldValue, .traits([.button, .selected]))
+        XCTAssertEqual(change.newValue, .traits([.header]))
+        let encoded = try JSONProbe(data: encoder.encode(change))
+        XCTAssertEqual(try encoded.strings("old"), ["button", "selected"])
+    }
+
+    func testTreeChangePolymorphicPayloadsRejectExtraFields() {
+        let incompatibleValue = #"{"kind":"text","value":"Ready","traits":["button"]}"#
+
+        XCTAssertThrowsError(
+            try decoder.decode(ElementPropertyValue.self, from: Data(incompatibleValue.utf8))
+        ) { error in
+            assertDecodingError(error, contains: ["text", "traits"])
+        }
+
+        let unknownChange = #"{"property":"value","old":"Ready","new":"Done","display":"Ready -> Done"}"#
+        XCTAssertThrowsError(
+            try decoder.decode(PropertyChange.self, from: Data(unknownChange.utf8))
+        ) { error in
+            assertDecodingError(error, contains: ["property change", "display"])
+        }
     }
 
     func testElementPropertyIsGeometry() {
