@@ -133,7 +133,6 @@ private func appendSemanticChanges(
     appendChangeIfNeeded(
         old.traits,
         new.traits,
-        valuesEqual: { Set($0) == Set($1) },
         change: PropertyChange.traits,
         to: &changes
     )
@@ -177,15 +176,14 @@ private func appendGeometryChanges(
     )
 }
 
-private func appendChangeIfNeeded<Value: Equatable>(
+private func appendChangeIfNeeded<Value>(
     _ old: Value,
     _ new: Value,
-    valuesEqual: (Value, Value) -> Bool = (==),
-    change: (Value, Value) -> PropertyChange,
+    change: (Value, Value) -> PropertyChange?,
     to changes: inout [PropertyChange]
 ) {
-    guard !valuesEqual(old, new) else { return }
-    changes.append(change(old, new))
+    guard let change = change(old, new) else { return }
+    changes.append(change)
 }
 
 private func semanticCustomContent(_ element: HeistElement) -> [HeistCustomContent]? {

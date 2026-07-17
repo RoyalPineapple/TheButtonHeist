@@ -414,8 +414,12 @@ final class AccessibilityTraceTests: XCTestCase {
         }
         let valueChanges = updates.flatMap(\.changes).filter { $0.property == .value }
 
-        XCTAssertTrue(valueChanges.contains(.value(old: "0", new: "50")))
-        XCTAssertTrue(valueChanges.contains(.value(old: "50", new: "100")))
+        XCTAssertTrue(valueChanges.contains(
+            try XCTUnwrap(PropertyChange.value(old: "0", new: "50"))
+        ))
+        XCTAssertTrue(valueChanges.contains(
+            try XCTUnwrap(PropertyChange.value(old: "50", new: "100"))
+        ))
     }
 
     func testTraceKeepsElementFactBeforeFallbackScreenBoundaryFacts() throws {
@@ -437,7 +441,9 @@ final class AccessibilityTraceTests: XCTestCase {
         guard case .elementsChanged(let elementFact) = trace.changeFacts[0] else {
             return XCTFail("Expected the first edge to be an element fact")
         }
-        XCTAssertTrue(elementFact.updated.flatMap(\.changes).contains(.value(old: "0", new: "50")))
+        XCTAssertTrue(elementFact.updated.flatMap(\.changes).contains(
+            try XCTUnwrap(PropertyChange.value(old: "0", new: "50"))
+        ))
         guard case .screenChanged = trace.changeFacts[2] else {
             return XCTFail("Expected screen marker after departure facts")
         }
@@ -487,7 +493,9 @@ final class AccessibilityTraceTests: XCTestCase {
         guard case .elementsChanged(let elementFact) = trace.changeFacts[0] else {
             return XCTFail("Expected outgoing same-screen update to stay on its own edge")
         }
-        XCTAssertTrue(elementFact.updated.flatMap(\.changes).contains(.value(old: "0", new: "1")))
+        XCTAssertTrue(elementFact.updated.flatMap(\.changes).contains(
+            try XCTUnwrap(PropertyChange.value(old: "0", new: "1"))
+        ))
         guard case .elementsChanged(let screenDepartures) = trace.changeFacts[1] else {
             return XCTFail("Expected screen departure fact after the outgoing update")
         }

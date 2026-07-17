@@ -41,7 +41,7 @@ final class ClientMessageTests: XCTestCase {
 
         XCTAssertThrowsError(try JSONDecoder().decode(ClientMessage.self, from: data)) { error in
             XCTAssertTrue(
-                "\(error)".contains("maxScrollsPerContainer must be between 1 and 2000"),
+                "\(error)".contains("interface discovery limit must be between 1 and 2000"),
                 "\(error)"
             )
         }

@@ -127,7 +127,7 @@ final class AccessibilityTraceChangeFactRoundTripTests: XCTestCase {
         let update = ElementUpdate(
             before: makeElement(label: "Counter", value: "1"),
             after: makeElement(label: "Counter", value: "2"),
-            changes: [.value(old: "1", new: "2")]
+            changes: [try XCTUnwrap(PropertyChange.value(old: "1", new: "2"))]
         )
         let fact = AccessibilityTrace.ChangeFact.elementsChanged(.init(
             appeared: [appeared],

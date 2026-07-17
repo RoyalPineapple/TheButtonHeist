@@ -85,7 +85,6 @@ public enum HeistCaseSelectionOutcome: Codable, Sendable, Equatable {
             try container.encode(Kind.noMatch, forKey: .kind)
         }
     }
-
 }
 
 public struct HeistCaseSelectionResult: Codable, Sendable, Equatable {
@@ -95,18 +94,47 @@ public struct HeistCaseSelectionResult: Codable, Sendable, Equatable {
     public let timeout: Double?
     public let lastObservedSummary: String?
 
-    public init(
+    public static func selectingFirstMatch(
         cases: [HeistCaseMatchResult],
-        outcome: HeistCaseSelectionOutcome,
+        ifNone: HeistCaseSelectionMissReason,
         elapsedMs: Int,
         timeout: Double? = nil,
         lastObservedSummary: String? = nil
+    ) -> Self {
+        let outcome = cases.firstIndex(where: \.met).map(HeistCaseSelectionOutcome.matchedCase(index:))
+            ?? (ifNone == .timedOut ? .timedOut : .noMatch)
+        return Self(
+            cases: cases,
+            outcome: outcome,
+            elapsedMs: elapsedMs,
+            timeout: timeout,
+            lastObservedSummary: lastObservedSummary
+        )
+    }
+
+    public static func elseBranch(
+        cases: [HeistCaseMatchResult],
+        reason: HeistCaseSelectionMissReason,
+        elapsedMs: Int,
+        timeout: Double? = nil,
+        lastObservedSummary: String? = nil
+    ) -> Self {
+        Self(
+            cases: cases,
+            outcome: .elseBranch(reason: reason),
+            elapsedMs: elapsedMs,
+            timeout: timeout,
+            lastObservedSummary: lastObservedSummary
+        )
+    }
+
+    private init(
+        cases: [HeistCaseMatchResult],
+        outcome: HeistCaseSelectionOutcome,
+        elapsedMs: Int,
+        timeout: Double?,
+        lastObservedSummary: String?
     ) {
-        do {
-            try Self.validate(outcome: outcome, cases: cases, codingPath: [])
-        } catch {
-            preconditionFailure("Invalid heist case selection result: \(error)")
-        }
         self.cases = cases
         self.outcome = outcome
         self.elapsedMs = elapsedMs
@@ -128,12 +156,13 @@ public struct HeistCaseSelectionResult: Codable, Sendable, Equatable {
         let cases = try container.decode([HeistCaseMatchResult].self, forKey: .cases)
         let outcome = try container.decode(HeistCaseSelectionOutcome.self, forKey: .outcome)
         try Self.validate(outcome: outcome, cases: cases, codingPath: container.codingPath)
-
-        self.cases = cases
-        self.outcome = outcome
-        elapsedMs = try container.decode(Int.self, forKey: .elapsedMs)
-        timeout = try container.decodeIfPresent(Double.self, forKey: .timeout)
-        lastObservedSummary = try container.decodeIfPresent(String.self, forKey: .lastObservedSummary)
+        self.init(
+            cases: cases,
+            outcome: outcome,
+            elapsedMs: try container.decode(Int.self, forKey: .elapsedMs),
+            timeout: try container.decodeIfPresent(Double.self, forKey: .timeout),
+            lastObservedSummary: try container.decodeIfPresent(String.self, forKey: .lastObservedSummary)
+        )
     }
 
     public func encode(to encoder: Encoder) throws {

@@ -207,8 +207,8 @@ final class TheBrains {
                 baseline: .currentViewport(
                     stash.visibleExplorationBaseline(from: visibleEvidence.screen)
                 ),
-                maxScrollsPerContainer: query.maxScrollsPerContainer,
-                maxScrollsPerDiscovery: query.maxScrollsPerDiscovery,
+                maxScrollsPerContainer: query.maxScrollsPerContainer?.value,
+                maxScrollsPerDiscovery: query.maxScrollsPerDiscovery?.value,
               ) else {
             return .failure(.rootViewUnavailable)
         }

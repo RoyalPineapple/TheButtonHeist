@@ -186,12 +186,12 @@ import TheScore
         .conditional(
             path: try HeistExecutionPath(validating: "$.body[3]"),
             durationMs: 490,
-            completion: .passed(evidence: HeistCaseSelectionEvidence(selection: HeistCaseSelectionResult(
-                    cases: [],
-                    outcome: .timedOut,
-                    elapsedMs: 490,
-                    timeout: 0.5
-                )))
+            completion: .passed(evidence: HeistCaseSelectionEvidence(selection: .selectingFirstMatch(
+                cases: [],
+                ifNone: .timedOut,
+                elapsedMs: 490,
+                timeout: 0.5
+            )))
         )
     }
 
