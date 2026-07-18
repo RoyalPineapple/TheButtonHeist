@@ -1859,7 +1859,9 @@ final class TheBrainsActionTests: XCTestCase {
             (makeElement(label: "Before"), "before"),
         ])
         let baselineEvent = isolatedBrains.vault.semanticObservationStream.commitVisibleObservationForTesting(baseline)
-        let before = isolatedBrains.postActionObservation.captureSemanticState(from: baselineEvent.observation)
+        let before = isolatedBrains.postActionObservation.captureSemanticState(
+            from: baselineEvent.settledObservation
+        )
         let failedScreen = InterfaceObservation.makeForTests(elements: [
             (makeElement(label: "Unstable"), "unstable"),
         ])
@@ -1876,7 +1878,8 @@ final class TheBrainsActionTests: XCTestCase {
                 outcome: .timedOut(timeMs: 1),
                 events: [],
                 finalObservation: SettleSessionFinalObservation(observation: failedScreen),
-                elementsByKey: [:]
+                elementsByKey: [:],
+                tripwireSignal: isolatedBrains.vault.semanticObservationStream.currentTripwireSignal()
             ),
             notificationWindow: failedWindow
         )
@@ -1903,7 +1906,8 @@ final class TheBrainsActionTests: XCTestCase {
                 outcome: .settled(timeMs: 1),
                 events: [],
                 finalObservation: SettleSessionFinalObservation(observation: successfulScreen),
-                elementsByKey: [:]
+                elementsByKey: [:],
+                tripwireSignal: isolatedBrains.vault.semanticObservationStream.currentTripwireSignal()
             ),
             notificationWindow: successfulWindow
         )

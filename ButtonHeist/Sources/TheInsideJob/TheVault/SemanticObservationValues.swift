@@ -311,34 +311,35 @@ internal struct SettledObservationEvent: Sendable, Equatable {
     }
 }
 
-/// Settled visible evidence returned to an observation consumer.
-internal struct ViewportObservationEvidence {
-    internal let viewportObservation: InterfaceObservation
-    internal let settledObservationSequence: SettledObservationSequence?
-    internal let settleOutcome: SettleOutcome
-}
-
 /// Validated evidence admitted for a semantic observation commit.
 internal struct InterfaceObservationProof {
     internal let observation: InterfaceObservation
+    internal let tripwireSignal: TheTripwire.TripwireSignal
     internal let discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy
     internal let lineageEvidence: ScreenLineageEvidence?
 
     private init(
         observation: InterfaceObservation,
+        tripwireSignal: TheTripwire.TripwireSignal,
         discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy = .mergeIntoInterface,
         lineageEvidence: ScreenLineageEvidence? = nil
     ) {
         self.observation = observation
+        self.tripwireSignal = tripwireSignal
         self.discoveryCommitPolicy = discoveryCommitPolicy
         self.lineageEvidence = lineageEvidence
     }
 
     internal static func uncheckedForTesting(
         _ observation: InterfaceObservation,
+        tripwireSignal: TheTripwire.TripwireSignal,
         lineageEvidence: ScreenLineageEvidence? = nil
     ) -> Self {
-        Self(observation: observation, lineageEvidence: lineageEvidence)
+        Self(
+            observation: observation,
+            tripwireSignal: tripwireSignal,
+            lineageEvidence: lineageEvidence
+        )
     }
 
     @MainActor internal static func settled(
@@ -382,6 +383,7 @@ internal struct InterfaceObservationProof {
                 == finalObservation.fingerprint else { return nil }
         return InterfaceObservationProof(
             observation: observation,
+            tripwireSignal: outcome.tripwireSignal,
             discoveryCommitPolicy: discoveryCommitPolicy,
             lineageEvidence: lineageEvidence
         )

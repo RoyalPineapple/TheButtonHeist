@@ -505,7 +505,7 @@ where Evidence: Sendable & Equatable {
             )
         ),
         let event = vault.semanticObservationStream.latestEvent,
-        event.sequence == evidence.settledObservationSequence
+        event.sequence == evidence.event.sequence
         else { return nil }
         return event
     }

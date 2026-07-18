@@ -25,9 +25,14 @@ internal enum ObservationLogRead: Sendable, Equatable {
     case failure(ObservationLogReadError)
 }
 
+internal struct CleanSettledObservation: Sendable, Equatable {
+    internal let event: SettledObservationEvent
+    internal let tripwireSignal: TheTripwire.TripwireSignal
+}
+
 private enum SemanticObservationPublicationState: Sendable, Equatable {
     case empty
-    case observing(sourceScope: SemanticObservationScope)
+    case observing(sourceScope: SemanticObservationScope, tripwireSignal: TheTripwire.TripwireSignal)
     case invalidated(sourceScope: SemanticObservationScope?)
 }
 
@@ -132,7 +137,7 @@ internal final class SemanticObservationLog {
 
     internal var latestSourceEvent: SettledObservationEvent? {
         switch state.publicationState {
-        case .observing(let sourceScope), .invalidated(.some(let sourceScope)):
+        case .observing(let sourceScope, _), .invalidated(.some(let sourceScope)):
             state.latestByScope[sourceScope]?.event
         case .empty, .invalidated(.none):
             nil
@@ -162,7 +167,10 @@ internal final class SemanticObservationLog {
         state = SemanticObservationLogState(retentionLimit: retentionLimit)
     }
 
-    internal func publish(_ publication: SemanticObservationPublication) throws {
+    internal func publish(
+        _ publication: SemanticObservationPublication,
+        tripwireSignal: TheTripwire.TripwireSignal
+    ) throws {
         var candidate = state
         for (scope, event) in publication.events.sorted(by: { $0.key < $1.key }) {
             guard scope == event.scope else {
@@ -176,7 +184,10 @@ internal final class SemanticObservationLog {
                 after: candidate.latestByScope[scope]
             ))
         }
-        candidate.publicationState = .observing(sourceScope: publication.sourceScope)
+        candidate.publicationState = .observing(
+            sourceScope: publication.sourceScope,
+            tripwireSignal: tripwireSignal
+        )
         state = candidate
     }
 
@@ -188,11 +199,21 @@ internal final class SemanticObservationLog {
         switch state.publicationState {
         case .empty:
             state.publicationState = .invalidated(sourceScope: nil)
-        case .observing(let sourceScope):
+        case .observing(let sourceScope, _):
             state.publicationState = .invalidated(sourceScope: sourceScope)
         case .invalidated:
             break
         }
+    }
+
+    @discardableResult
+    internal func invalidateIfSignalChanged(
+        to tripwireSignal: TheTripwire.TripwireSignal
+    ) -> Bool {
+        guard case .observing(let sourceScope, let admittedSignal) = state.publicationState,
+              admittedSignal != tripwireSignal else { return false }
+        state.publicationState = .invalidated(sourceScope: sourceScope)
+        return true
     }
 
     internal func previousEvent(
@@ -201,18 +222,18 @@ internal final class SemanticObservationLog {
         state.latestByScope[scope]?.event
     }
 
-    internal func cleanEvent(
+    internal func cleanObservation(
         scope: SemanticObservationScope,
         after sequence: SettledObservationSequence?
-    ) -> SettledObservationEvent? {
-        guard case .observing(let sourceScope) = state.publicationState,
+    ) -> CleanSettledObservation? {
+        guard case .observing(let sourceScope, let tripwireSignal) = state.publicationState,
               let currentGeneration = state.latestByScope[sourceScope]?.cursor.generation,
               let latest = state.latestByScope[scope]?.event,
               latest.generation == currentGeneration,
               latest.sequence > (sequence ?? 0) else {
             return nil
         }
-        return latest
+        return CleanSettledObservation(event: latest, tripwireSignal: tripwireSignal)
     }
 
     internal func read(

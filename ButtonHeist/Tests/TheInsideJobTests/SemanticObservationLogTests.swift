@@ -111,7 +111,7 @@ final class SemanticObservationLogTests: XCTestCase {
         try log.publish(publication(
             sourceScope: .discovery,
             events: [visibleA, discoveryA]
-        ))
+        ), tripwireSignal: .empty)
         let visibleB = event(
             "visible-b",
             sequence: 2,
@@ -214,7 +214,7 @@ final class SemanticObservationLogTests: XCTestCase {
         try log.publish(publication(
             sourceScope: .discovery,
             events: [initialVisible, initialDiscovery]
-        ))
+        ), tripwireSignal: .empty)
         let nextVisible = event(
             "visible-b",
             sequence: 2,
@@ -235,7 +235,7 @@ final class SemanticObservationLogTests: XCTestCase {
         XCTAssertThrowsError(try log.publish(publication(
             sourceScope: .discovery,
             events: [nextVisible, invalidDiscovery]
-        ))) { error in
+        ), tripwireSignal: .empty)) { error in
             XCTAssertEqual(
                 error as? SemanticObservationLogAppendError,
                 .eventLineageMismatch(
@@ -265,14 +265,14 @@ final class SemanticObservationLogTests: XCTestCase {
 
         XCTAssertTrue(log.latestSettledObservationInvalidated)
         XCTAssertEqual(log.latestSourceEvent, initial)
-        XCTAssertNil(log.cleanEvent(scope: .visible, after: nil))
+        XCTAssertNil(log.cleanObservation(scope: .visible, after: nil))
         XCTAssertEqual(log.retainedEntries(scope: .visible).map(\.event), [initial])
 
         let next = event("B", sequence: 2, generation: 0, previous: initial)
         try publish(next, to: log)
 
         XCTAssertFalse(log.latestSettledObservationInvalidated)
-        XCTAssertEqual(log.cleanEvent(scope: .visible, after: initial.sequence), next)
+        XCTAssertEqual(log.cleanObservation(scope: .visible, after: initial.sequence)?.event, next)
         XCTAssertEqual(log.retainedEntries(scope: .visible).map(\.event), [initial, next])
     }
 
@@ -283,7 +283,11 @@ final class SemanticObservationLogTests: XCTestCase {
         try log.publish(publication(
             sourceScope: .discovery,
             events: [initialVisible, initialDiscovery]
-        ))
+        ), tripwireSignal: .empty)
+        XCTAssertEqual(
+            log.cleanObservation(scope: .visible, after: nil),
+            CleanSettledObservation(event: initialVisible, tripwireSignal: .empty)
+        )
         let replacementVisible = event(
             "visible-b",
             sequence: 2,
@@ -293,8 +297,8 @@ final class SemanticObservationLogTests: XCTestCase {
         )
         try publish(replacementVisible, to: log)
 
-        XCTAssertEqual(log.cleanEvent(scope: .visible, after: nil), replacementVisible)
-        XCTAssertNil(log.cleanEvent(scope: .discovery, after: nil))
+        XCTAssertEqual(log.cleanObservation(scope: .visible, after: nil)?.event, replacementVisible)
+        XCTAssertNil(log.cleanObservation(scope: .discovery, after: nil))
         XCTAssertEqual(log.retainedEntries(scope: .discovery).map(\.event), [initialDiscovery])
     }
 
@@ -307,7 +311,7 @@ final class SemanticObservationLogTests: XCTestCase {
 
         XCTAssertTrue(log.latestSettledObservationInvalidated)
         XCTAssertNil(log.latestSourceEvent)
-        XCTAssertNil(log.cleanEvent(scope: .visible, after: nil))
+        XCTAssertNil(log.cleanObservation(scope: .visible, after: nil))
         XCTAssertEqual(log.retainedEntries(scope: .visible).map(\.event), [initial])
     }
 
@@ -359,7 +363,10 @@ final class SemanticObservationLogTests: XCTestCase {
         _ event: SettledObservationEvent,
         to log: SemanticObservationLog
     ) throws {
-        try log.publish(publication(sourceScope: event.scope, events: [event]))
+        try log.publish(
+            publication(sourceScope: event.scope, events: [event]),
+            tripwireSignal: .empty
+        )
     }
 
     private func publication(

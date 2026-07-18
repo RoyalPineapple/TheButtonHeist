@@ -50,7 +50,7 @@ struct SemanticObservationDeadline: Sendable, Equatable {
 }
 
 /// Builds traces, captures, change facts, and action receipts from supplied semantic
-/// states. The post-action contract is: refresh/settle → before → action →
+/// states. The post-action contract is: admitted clean state → before → action →
 /// refresh/settle → after → result.
 @MainActor
 final class PostActionObservation {
@@ -102,11 +102,11 @@ final class PostActionObservation {
         )
     }
 
-    func captureSemanticState(from evidence: ViewportObservationEvidence) -> ObservationBaseline {
+    func captureSemanticState(from evidence: CleanSettledObservation) -> ObservationBaseline {
         captureSemanticState(
-            from: evidence.viewportObservation,
-            tripwireSignal: vault.tripwire.tripwireSignal(),
-            settledObservationSequence: evidence.settledObservationSequence
+            from: evidence.event.settledObservation.observation,
+            tripwireSignal: evidence.tripwireSignal,
+            settledObservationSequence: evidence.event.sequence
         )
     }
 

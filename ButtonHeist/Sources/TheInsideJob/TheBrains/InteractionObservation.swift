@@ -63,7 +63,7 @@ final class InteractionObservation {
         baselineState(from: await vault.semanticObservationStream.visibleEvidence(timeout: timeout))
     }
 
-    func baselineState(from evidence: ViewportObservationEvidence?) -> PostActionObservation.ObservationBaseline? {
+    func baselineState(from evidence: CleanSettledObservation?) -> PostActionObservation.ObservationBaseline? {
         guard let evidence else { return nil }
         return postActionObservation.captureSemanticState(from: evidence)
     }

@@ -92,20 +92,17 @@ extension SemanticObservationStream {
         after sequence: SettledObservationSequence?,
         timeout: Double?
     ) async -> SettledObservationEvent? {
-        invalidateSettledObservationIfScreenChangedSinceCommit()
         let requiredSequence = baselineSequence(for: scope, after: sequence)
         if timeout == 0 {
             guard isActive else { return nil }
             if scope != .discovery {
-                return observationLog.cleanEvent(scope: scope, after: requiredSequence)
+                return cleanObservation(scope: scope, after: requiredSequence)?.event
             }
         }
-        let requiresFreshVisibleObservation = sequence == nil && scope == .visible && isActive
         let requiresFreshDiscoveryCycle = timeout == 0 && scope == .discovery
 
-        if !requiresFreshVisibleObservation,
-           !requiresFreshDiscoveryCycle,
-           let latest = observationLog.cleanEvent(scope: scope, after: requiredSequence) {
+        if !requiresFreshDiscoveryCycle,
+           let latest = cleanObservation(scope: scope, after: requiredSequence)?.event {
             return latest
         }
 
@@ -125,11 +122,11 @@ extension SemanticObservationStream {
             ) {
             case .observation(let entry):
                 cursor = entry.cursor
-                if let latest = observationLog.cleanEvent(scope: scope, after: requiredSequence) {
+                if let latest = cleanObservation(scope: scope, after: requiredSequence)?.event {
                     return latest
                 }
             case .cycleCompleted:
-                return observationLog.cleanEvent(scope: scope, after: requiredSequence)
+                return cleanObservation(scope: scope, after: requiredSequence)?.event
             case .deadlineReached, .cancelled, .unavailable:
                 return nil
             }

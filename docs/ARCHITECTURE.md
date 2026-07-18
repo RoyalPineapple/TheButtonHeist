@@ -85,6 +85,14 @@ sequence, and notification cursors. There is no parser-to-log path and no
 subscriber-driven graph mutation. The stream's graph reducer is the only graph
 mutation path; no compatibility reducer or publication route exists.
 
+The stream is also the one visible-observation producer. `TheTripwire` is its
+serialized refresh trigger: a changed signal invalidates the current cursor and
+clean admission, settled-read admission pauses, and one capture/settle/commit cycle
+runs. Concurrent consumers join that cycle. Once publication installs a clean
+seal, waits and action before-state acquisition reuse the committed event until
+the next trip, explicit invalidation, or screen replacement. After-action
+observation always requests a fresh cycle from the same producer.
+
 `SemanticObservationLog` is the retained temporal owner. Each
 `ObservationEntry` pairs a settled capture with an initial, same-generation, or
 screen-boundary transition. `ObservationCursor` records generation, scope,
@@ -267,7 +275,8 @@ The approved long-lived owners are:
 
 - `TheVault`: committed `InterfaceTree`, latest disposable `LiveCapture`, and
   non-clean settle diagnostics. Its `SemanticObservationStream` is the sole
-  ordered committer and owns the private retained `SemanticObservationLog`.
+  visible-observation producer and ordered committer, and owns the private
+  retained `SemanticObservationLog`.
 - `TheMuscle`: auth, admission, and session state inside the app.
 - `TheHandoff`: external connection phase and discovery state outside the app.
 - `PendingRequestRegistry`: typed `RequestID` to continuation correlation,

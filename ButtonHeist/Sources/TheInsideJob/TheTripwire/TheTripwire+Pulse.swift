@@ -62,7 +62,6 @@ extension TheTripwire {
         for waiter in waiters {
             waiter.continuation.resolve(returning: false)
         }
-
         pulsePhase = .idle
     }
 

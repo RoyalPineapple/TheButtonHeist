@@ -8,8 +8,40 @@ import TheScore
 /// Coordinates semantic observation scheduling, settlement, and publication.
 @MainActor
 internal final class SemanticObservationStream {
+    private static let passiveSettleTimeoutMs = 1_000
+    private static let activeQuietWindowMs = 60
+
+    internal typealias VisibleObservationSettler = @MainActor (
+        TheVault,
+        TheTripwire,
+        SemanticObservationDemandState,
+        TheTripwire.TripwireSignal,
+        Int
+    ) async -> SettleSession.Outcome
+
+    @MainActor
+    final class VisibleRefreshCompletion {
+        let settlement: ObservationSettlement
+
+        init(_ settlement: ObservationSettlement) {
+            self.settlement = settlement
+        }
+    }
+
+    @MainActor
+    final class VisibleRefreshSession {
+        let task: Task<VisibleRefreshCompletion, Never>
+
+        init(task: Task<VisibleRefreshCompletion, Never>) {
+            self.task = task
+        }
+    }
+
     weak var vault: TheVault?
     let tripwire: TheTripwire
+    var visibleRefreshSession: VisibleRefreshSession?
+    var settleVisibleObservation: VisibleObservationSettler
+    var readTripwireSignal: @MainActor () -> TheTripwire.TripwireSignal
     // MARK: - Observation Bookkeeping
 
     var scopePressure = SemanticObservationScopePressure()
@@ -56,9 +88,31 @@ internal final class SemanticObservationStream {
         scopePressure.hasActiveDemand
     }
 
-    internal init(vault: TheVault, tripwire: TheTripwire) {
+    internal init(
+        vault: TheVault,
+        tripwire: TheTripwire,
+        settleVisibleObservation: VisibleObservationSettler? = nil
+    ) {
         self.vault = vault
         self.tripwire = tripwire
+        self.readTripwireSignal = { tripwire.tripwireSignal() }
+        self.settleVisibleObservation = settleVisibleObservation ?? { vault, tripwire, demand, baseline, timeoutMs in
+            let policy: SettlePolicy = switch demand {
+            case .active:
+                .quietWindow(milliseconds: Self.activeQuietWindowMs)
+            case .idle:
+                .consecutiveCycles(required: SettleSession.defaultCyclesRequired)
+            }
+            return await SettleSession.live(
+                vault: vault,
+                tripwire: tripwire,
+                timeoutMs: timeoutMs,
+                policy: policy
+            ).run(
+                start: CFAbsoluteTimeGetCurrent(),
+                baselineTripwireSignal: baseline
+            )
+        }
     }
 
     internal func start(
@@ -80,6 +134,8 @@ internal final class SemanticObservationStream {
 
     internal func stop() {
         runtimeState.stop()?.cancel()
+        visibleRefreshSession?.task.cancel()
+        visibleRefreshSession = nil
         cancelObservationWaiters()
         if let vault {
             AccessibilityNotificationObserver.shared.unsubscribe(vault.accessibilityNotifications)
@@ -108,6 +164,10 @@ internal final class SemanticObservationStream {
         scopePressure.subscribedObservationScope()
     }
 
+    internal func currentTripwireSignal() -> TheTripwire.TripwireSignal {
+        readTripwireSignal()
+    }
+
     private func runPassiveObservationCycle() async {
         let scope = subscribedObservationScope()
         guard !Task.isCancelled,
@@ -120,13 +180,13 @@ internal final class SemanticObservationStream {
     private func performObservationCycle(
         scope: SemanticObservationScope
     ) async -> Bool {
-        guard let vault else {
+        guard vault != nil else {
             stop()
             return false
         }
         switch scope {
         case .visible:
-            return await observeVisibleSemanticState(vault: vault)
+            return await observeVisibleSemanticState()
         case .discovery:
             guard let discovery = runtimeState.discovery else {
                 invalidateLatestSettledObservation()
@@ -141,45 +201,22 @@ internal final class SemanticObservationStream {
         }
     }
 
-    private func observeVisibleSemanticState(
-        vault: TheVault
-    ) async -> Bool {
-        let baselineSignal = tripwire.tripwireSignal()
-        let settle: SettleSession.Outcome
-        let layerGateWasClear: Bool?
-        switch activeObservationDemandState {
-        case .active:
-            settle = await SemanticObservationSettleCadence.settleVisibleObservationAtActiveCadence(
-                vault: vault,
-                tripwire: tripwire,
-                baselineTripwireSignal: baselineSignal,
-                timeoutMs: SemanticObservationSettleCadence.activePassiveSettleTimeoutMs
-            )
-            layerGateWasClear = nil
-        case .idle:
-            if let reading = tripwire.latestReading,
-               !latestSettledObservationInvalidated,
-               runtimeState.settledReading?.tick == reading.tick {
-                _ = await Task.cancellableSleep(for: .milliseconds(100))
-                return !Task.isCancelled
-            }
-            // Layer quiet is advisory. AX-tree stability is the commit proof.
-            layerGateWasClear = tripwire.latestReading?.isSettled ?? tripwire.allClear()
-            settle = await SettleSession.live(vault: vault, tripwire: tripwire, timeoutMs: 1_000).run(
-                start: CFAbsoluteTimeGetCurrent(),
-                baselineTripwireSignal: baselineSignal
-            )
+    private func observeVisibleSemanticState() async -> Bool {
+        if hasActiveObservationDemand {
+            _ = await Task.cancellableSleep(for: .milliseconds(10))
+            return !Task.isCancelled
         }
 
-        guard !Task.isCancelled else { return false }
-        guard let proof = admitSettledProof(
-            settle,
-            vault: vault,
-            layerGateWasClear: layerGateWasClear
-        ) else { return true }
-        guard !Task.isCancelled else { return false }
-        _ = commitSettledVisibleObservation(proof)
-        return true
+        if cleanObservation(scope: .visible, after: nil) != nil {
+            _ = await Task.cancellableSleep(for: .milliseconds(100))
+            observationLog.invalidateIfSignalChanged(to: currentTripwireSignal())
+            return !Task.isCancelled
+        }
+
+        _ = await refreshVisibleObservation(
+            timeoutMs: Self.passiveSettleTimeoutMs
+        )
+        return !Task.isCancelled
     }
 
 }

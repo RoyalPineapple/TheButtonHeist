@@ -1,16 +1,6 @@
 #if canImport(UIKit)
 @testable import TheInsideJob
 
-extension InterfaceObservationProof {
-    static func forTesting(_ observation: InterfaceObservation) -> Self {
-        .uncheckedForTesting(observation)
-    }
-
-    static func forTestingAfterViewportMovement(_ observation: InterfaceObservation) -> Self {
-        .uncheckedForTesting(observation, lineageEvidence: .viewportMovement)
-    }
-}
-
 extension SemanticObservationStream {
     @discardableResult
     func commitVisibleObservationForTesting(
@@ -19,7 +9,7 @@ extension SemanticObservationStream {
         notificationIdentityObservation: InterfaceObservation? = nil
     ) -> SettledObservationEvent {
         commitSettledVisibleObservation(
-            .forTesting(observation),
+            .uncheckedForTesting(observation, tripwireSignal: currentTripwireSignal()),
             notificationBatch: notificationBatch,
             notificationIdentityObservation: notificationIdentityObservation
         )
@@ -32,7 +22,11 @@ extension SemanticObservationStream {
         notificationIdentityObservation: InterfaceObservation? = nil
     ) -> SettledObservationEvent {
         commitSettledVisibleObservation(
-            .forTestingAfterViewportMovement(observation),
+            .uncheckedForTesting(
+                observation,
+                tripwireSignal: currentTripwireSignal(),
+                lineageEvidence: .viewportMovement
+            ),
             notificationBatch: notificationBatch,
             notificationIdentityObservation: notificationIdentityObservation
         )
@@ -43,7 +37,10 @@ extension SemanticObservationStream {
         _ observation: InterfaceObservation,
         notificationBatch: AccessibilityNotificationBatch? = nil
     ) -> SettledObservationEvent {
-        commitSettledDiscoveryObservation(.forTesting(observation), notificationBatch: notificationBatch)
+        commitSettledDiscoveryObservation(
+            .uncheckedForTesting(observation, tripwireSignal: currentTripwireSignal()),
+            notificationBatch: notificationBatch
+        )
     }
 
     @discardableResult
@@ -52,7 +49,11 @@ extension SemanticObservationStream {
         notificationBatch: AccessibilityNotificationBatch? = nil
     ) -> SettledObservationEvent {
         commitSettledDiscoveryObservation(
-            .forTestingAfterViewportMovement(observation),
+            .uncheckedForTesting(
+                observation,
+                tripwireSignal: currentTripwireSignal(),
+                lineageEvidence: .viewportMovement
+            ),
             notificationBatch: notificationBatch
         )
     }

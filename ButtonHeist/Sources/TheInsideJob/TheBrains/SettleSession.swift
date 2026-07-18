@@ -496,6 +496,8 @@ struct SettleSessionFinalObservation: Equatable, Sendable {
         /// Every `(key, element)` pair observed in any cycle of the loop.
         /// Includes spinner cycles and other intermediate states.
         let elementsByKey: [TimelineKey: AccessibilityElement]
+        /// Full tripwire signal paired with the final observed generation.
+        let tripwireSignal: TheTripwire.TripwireSignal
         /// Compact explanation of the most recent semantic instability when
         /// the loop exits without a clean settle.
         let instabilityDescription: String?
@@ -505,6 +507,7 @@ struct SettleSessionFinalObservation: Equatable, Sendable {
             events: [SettleEvent],
             finalObservation: SettleSessionFinalObservation?,
             elementsByKey: [TimelineKey: AccessibilityElement],
+            tripwireSignal: TheTripwire.TripwireSignal,
             instabilityDescription: String? = nil
         ) {
             precondition(
@@ -515,6 +518,7 @@ struct SettleSessionFinalObservation: Equatable, Sendable {
             self.events = events
             self.finalObservation = finalObservation
             self.elementsByKey = elementsByKey
+            self.tripwireSignal = tripwireSignal
             self.instabilityDescription = instabilityDescription
         }
     }
@@ -564,7 +568,8 @@ struct SettleSessionFinalObservation: Equatable, Sendable {
                 finalObservation: observations.currentGenerationLastObservation.map {
                     SettleSessionFinalObservation(observation: $0.observation, fingerprint: $0.fingerprint)
                 },
-                elementsByKey: observations.elementsByKey
+                elementsByKey: observations.elementsByKey,
+                tripwireSignal: state.progress.tripwireBaseline
             )
         case .timedOut(let timeMs), .yieldFailed(let timeMs):
             return Outcome(
@@ -574,6 +579,7 @@ struct SettleSessionFinalObservation: Equatable, Sendable {
                     SettleSessionFinalObservation(observation: $0.observation, fingerprint: $0.fingerprint)
                 },
                 elementsByKey: observations.elementsByKey,
+                tripwireSignal: state.progress.tripwireBaseline,
                 instabilityDescription: observations.latestChangeDescription
             )
         case .cancelled(let timeMs):
@@ -584,6 +590,7 @@ struct SettleSessionFinalObservation: Equatable, Sendable {
                     SettleSessionFinalObservation(observation: $0.observation, fingerprint: $0.fingerprint)
                 },
                 elementsByKey: observations.elementsByKey,
+                tripwireSignal: state.progress.tripwireBaseline,
                 instabilityDescription: observations.latestChangeDescription
             )
         }

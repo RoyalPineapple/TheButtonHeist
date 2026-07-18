@@ -579,7 +579,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         let result = await brains.interactionObservation.finishAfterAction(
             outcome: outcome,
             afterStatePayload: { context in
-                guard let value = context.afterState.observation.tree.findElement(heistId: "status")?.element.value else {
+                guard let value = context.baseline.observation.tree.findElement(heistId: "status")?.element.value else {
                     return nil
                 }
                 return .typeText(value)
@@ -613,7 +613,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         let result = await brains.interactionObservation.finishAfterAction(
             outcome: outcome,
             afterStatePayload: { context in
-                guard let value = context.afterState.observation.tree.findElement(heistId: "status")?.element.value else {
+                guard let value = context.baseline.observation.tree.findElement(heistId: "status")?.element.value else {
                     return nil
                 }
                 return .typeText(value)
@@ -2341,7 +2341,8 @@ final class TheBrainsPipelineTests: XCTestCase {
             outcome: outcome,
             events: [],
             finalObservation: finalScreen.map { SettleSessionFinalObservation(observation: $0) },
-            elementsByKey: elementsByKey
+            elementsByKey: elementsByKey,
+            tripwireSignal: brains.vault.semanticObservationStream.currentTripwireSignal()
         )
     }
 

@@ -12,7 +12,6 @@ internal struct SemanticObservationRuntimeState {
     internal struct RunningObservation {
         let task: Task<Void, Never>
         var discovery: DiscoveryObservation
-        var settledReading: TheTripwire.PulseReading?
     }
 
     internal enum Lifecycle {
@@ -55,15 +54,11 @@ internal struct SemanticObservationRuntimeState {
         if case .running(let observation) = lifecycle { observation.discovery } else { nil }
     }
 
-    internal var settledReading: TheTripwire.PulseReading? {
-        if case .running(let observation) = lifecycle { observation.settledReading } else { nil }
-    }
-
     // MARK: - Lifecycle
 
     internal mutating func start(task: Task<Void, Never>, discovery: @escaping DiscoveryObservation) {
         precondition(!isRunning, "semantic observation is already running")
-        lifecycle = .running(RunningObservation(task: task, discovery: discovery, settledReading: nil))
+        lifecycle = .running(RunningObservation(task: task, discovery: discovery))
     }
 
     internal mutating func replaceDiscoveryIfRunning(_ discovery: @escaping DiscoveryObservation) -> Bool {
@@ -83,14 +78,12 @@ internal struct SemanticObservationRuntimeState {
 
     internal mutating func requireReplacement() {
         lineage = .replacementRequired(lineage.generation)
-        updateSettledReading(nil)
         settleFailureDiagnostic = nil
     }
 
     internal mutating func commit(
         _ publication: SemanticObservationPublication,
-        notificationBatch: AccessibilityNotificationBatch,
-        settledReading: TheTripwire.PulseReading?
+        notificationBatch: AccessibilityNotificationBatch
     ) {
         precondition(publication.sourceEvent.sequence == sequence + 1)
         sequence = publication.sourceEvent.sequence
@@ -98,17 +91,10 @@ internal struct SemanticObservationRuntimeState {
         notificationCursor = notificationBatch.through
         scopedScreenChangedSequence = notificationBatch.scopedScreenChangedThrough
         settleFailureDiagnostic = nil
-        updateSettledReading(settledReading)
     }
 
     internal mutating func recordSettleFailure(_ diagnostic: String?) {
         settleFailureDiagnostic = diagnostic
-    }
-
-    private mutating func updateSettledReading(_ reading: TheTripwire.PulseReading?) {
-        guard case .running(var observation) = lifecycle else { return }
-        observation.settledReading = reading
-        lifecycle = .running(observation)
     }
 }
 

@@ -576,7 +576,8 @@ final class TheVaultResolutionTests: XCTestCase {
             outcome: .cancelled(timeMs: 1),
             events: [],
             finalObservation: nil,
-            elementsByKey: [:]
+            elementsByKey: [:],
+            tripwireSignal: bagman.tripwire.tripwireSignal()
         )
         let result = await bagman.semanticObservationStream.settlePostActionObservation(
             baselineTripwireSignal: bagman.tripwire.tripwireSignal(),
@@ -649,8 +650,8 @@ final class TheVaultResolutionTests: XCTestCase {
 
         let evidence = bagman.resolveAccessibilityNotificationEvidence(
             [event],
-            identityScreen: source,
-            referenceScreen: reference
+            identityObservation: source,
+            referenceObservation: reference
         )
 
         guard case .element(let reference)? = evidence.first?.notificationData else {
@@ -693,8 +694,8 @@ final class TheVaultResolutionTests: XCTestCase {
 
         let evidence = bagman.resolveAccessibilityNotificationEvidence(
             [event],
-            identityScreen: source,
-            referenceScreen: reference
+            identityObservation: source,
+            referenceObservation: reference
         )
 
         guard case .element(let resolved)? = evidence.first?.notificationData else {
@@ -795,7 +796,8 @@ final class TheVaultResolutionTests: XCTestCase {
             outcome: .timedOut(timeMs: 1),
             events: [],
             finalObservation: SettleSessionFinalObservation(observation: observation),
-            elementsByKey: [:]
+            elementsByKey: [:],
+            tripwireSignal: bagman.tripwire.tripwireSignal()
         )
 
         _ = await bagman.semanticObservationStream.settlePostActionObservation(
@@ -869,7 +871,8 @@ final class TheVaultResolutionTests: XCTestCase {
             outcome: .settled(timeMs: 1),
             events: [],
             finalObservation: SettleSessionFinalObservation(observation: observation),
-            elementsByKey: [:]
+            elementsByKey: [:],
+            tripwireSignal: bagman.tripwire.tripwireSignal()
         )
 
         let result = await bagman.semanticObservationStream.settlePostActionObservation(
@@ -898,7 +901,8 @@ final class TheVaultResolutionTests: XCTestCase {
             outcome: .settled(timeMs: 1),
             events: [],
             finalObservation: finalObservation,
-            elementsByKey: [:]
+            elementsByKey: [:],
+            tripwireSignal: bagman.tripwire.tripwireSignal()
         )
         bagman.recordParsedObservedEvidence(settled)
 
@@ -920,7 +924,8 @@ final class TheVaultResolutionTests: XCTestCase {
                 observation: settled,
                 fingerprint: wrongFingerprint
             ),
-            elementsByKey: [:]
+            elementsByKey: [:],
+            tripwireSignal: bagman.tripwire.tripwireSignal()
         )
         XCTAssertNil(InterfaceObservationProof.settled(mismatchedOutcome, vault: bagman))
     }
@@ -932,7 +937,8 @@ final class TheVaultResolutionTests: XCTestCase {
             outcome: .settled(timeMs: 1),
             events: [],
             finalObservation: SettleSessionFinalObservation(observation: observation),
-            elementsByKey: [:]
+            elementsByKey: [:],
+            tripwireSignal: bagman.tripwire.tripwireSignal()
         )
 
         let ordinary = try XCTUnwrap(InterfaceObservationProof.settled(outcome, vault: bagman))
@@ -962,7 +968,8 @@ final class TheVaultResolutionTests: XCTestCase {
                 outcome: .settled(timeMs: 1),
                 events: [],
                 finalObservation: SettleSessionFinalObservation(observation: observation),
-                elementsByKey: [:]
+                elementsByKey: [:],
+                tripwireSignal: bagman.tripwire.tripwireSignal()
             ),
             notificationWindow: action
         )
@@ -1004,7 +1011,8 @@ final class TheVaultResolutionTests: XCTestCase {
                 outcome: .settled(timeMs: 1),
                 events: [],
                 finalObservation: SettleSessionFinalObservation(observation: after),
-                elementsByKey: [:]
+                elementsByKey: [:],
+                tripwireSignal: bagman.tripwire.tripwireSignal()
             ),
             notificationWindow: action
         )
@@ -1043,7 +1051,8 @@ final class TheVaultResolutionTests: XCTestCase {
                 outcome: .settled(timeMs: 1),
                 events: [],
                 finalObservation: SettleSessionFinalObservation(observation: observation),
-                elementsByKey: [:]
+                elementsByKey: [:],
+                tripwireSignal: bagman.tripwire.tripwireSignal()
             ),
             notificationWindow: action
         )
@@ -1120,7 +1129,8 @@ final class TheVaultResolutionTests: XCTestCase {
             outcome: .timedOut(timeMs: 1),
             events: [],
             finalObservation: SettleSessionFinalObservation(observation: observation),
-            elementsByKey: [:]
+            elementsByKey: [:],
+            tripwireSignal: bagman.tripwire.tripwireSignal()
         )
 
         _ = await bagman.semanticObservationStream.settlePostActionObservation(
@@ -1148,7 +1158,8 @@ final class TheVaultResolutionTests: XCTestCase {
             outcome: .timedOut(timeMs: 1),
             events: [],
             finalObservation: SettleSessionFinalObservation(observation: observation),
-            elementsByKey: [:]
+            elementsByKey: [:],
+            tripwireSignal: bagman.tripwire.tripwireSignal()
         )
 
         let result = await bagman.semanticObservationStream.settlePostActionObservation(
@@ -1193,7 +1204,8 @@ final class TheVaultResolutionTests: XCTestCase {
             outcome: .settled(timeMs: 1),
             events: [],
             finalObservation: SettleSessionFinalObservation(observation: screenA),
-            elementsByKey: [:]
+            elementsByKey: [:],
+            tripwireSignal: bagman.tripwire.tripwireSignal()
         )
         bagman.recordParsedObservedEvidence(screenA)
         bagman.recordParsedObservedEvidence(screenB)

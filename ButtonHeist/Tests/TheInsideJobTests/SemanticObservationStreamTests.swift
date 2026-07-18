@@ -62,6 +62,58 @@ final class SemanticObservationStreamTests: XCTestCase {
         XCTAssertEqual(vault.latestObservation.tree, InterfaceObservation.empty.tree)
     }
 
+    func testConcurrentVisibleConsumersShareOneRefresh() async throws {
+        let stream = vault.semanticObservationStream
+        let signal = tripwireSignal(sequence: 1)
+        var releaseSettle: CheckedContinuation<Void, Never>?
+        let settleCount = installSettler(signal: { signal }, beforeSettle: {
+            await withCheckedContinuation { releaseSettle = $0 }
+        })
+        defer { releaseSettle?.resume() }
+
+        var firstEvidence: CleanSettledObservation?
+        var secondEvidence: CleanSettledObservation?
+        let firstTask = Task { @MainActor in
+            firstEvidence = await stream.visibleEvidence(timeout: 1)
+        }
+        await waitForSettleCount(1, current: settleCount)
+        let secondTask = Task { @MainActor in
+            secondEvidence = await stream.visibleEvidence(timeout: 1)
+        }
+        await Task.yield()
+
+        releaseSettle?.resume()
+        releaseSettle = nil
+        await firstTask.value
+        await secondTask.value
+        let first = try XCTUnwrap(firstEvidence)
+        let second = try XCTUnwrap(secondEvidence)
+        XCTAssertEqual(settleCount(), 1)
+        XCTAssertEqual(first.event.sequence, second.event.sequence)
+    }
+
+    func testCleanStateIsReusedUntilTripInvalidationOrScreenReplacement() async throws {
+        let stream = vault.semanticObservationStream
+        let initialSignal = tripwireSignal(sequence: 1)
+        let settleCount = installSettler(signal: { initialSignal })
+
+        let initial = try await visibleEvidence()
+        let reused = try await visibleEvidence()
+        let changedSignal = tripwireSignal(sequence: 2)
+        stream.readTripwireSignal = { changedSignal }
+        let afterTrip = try await visibleEvidence()
+        stream.invalidateLatestSettledObservation()
+        let afterInvalidation = try await visibleEvidence()
+        stream.requireScreenReplacement()
+        let afterReplacement = try await visibleEvidence()
+
+        XCTAssertEqual(settleCount(), 4)
+        XCTAssertEqual(reused.event.sequence, initial.event.sequence)
+        XCTAssertNotEqual(afterTrip.event.sequence, reused.event.sequence)
+        XCTAssertNotEqual(afterInvalidation.event.sequence, afterTrip.event.sequence)
+        XCTAssertNotEqual(afterInvalidation.event.sequence, afterReplacement.event.sequence)
+    }
+
     func testSameCaptureInDifferentScopeGetsItsOwnPublication() {
         let screen = observation(label: "Shared", heistId: "shared")
 
@@ -326,7 +378,7 @@ final class SemanticObservationStreamTests: XCTestCase {
         )
         var state = SemanticObservationRuntimeState()
         state.requireReplacement()
-        state.commit(publication, notificationBatch: notificationBatch, settledReading: nil)
+        state.commit(publication, notificationBatch: notificationBatch)
 
         XCTAssertEqual(publication.sourceEvent.sequence, 1)
         XCTAssertEqual(publication.sourceEvent.generation, ScreenGeneration.initial.advanced())
@@ -663,7 +715,11 @@ final class SemanticObservationStreamTests: XCTestCase {
 
         let result = await vault.semanticObservationStream.settlePostActionObservation(
             baselineTripwireSignal: vault.tripwire.tripwireSignal(),
-            settleOutcome: settleOutcome(.settled(timeMs: 1), observation: stale)
+            settleOutcome: settleOutcome(
+                .settled(timeMs: 1),
+                observation: stale,
+                tripwireSignal: vault.semanticObservationStream.currentTripwireSignal()
+            )
         )
 
         guard case .unavailable = result.result else {
@@ -680,7 +736,11 @@ final class SemanticObservationStreamTests: XCTestCase {
 
         let result = await vault.semanticObservationStream.settlePostActionObservation(
             baselineTripwireSignal: vault.tripwire.tripwireSignal(),
-            settleOutcome: settleOutcome(.timedOut(timeMs: 1), observation: screen)
+            settleOutcome: settleOutcome(
+                .timedOut(timeMs: 1),
+                observation: screen,
+                tripwireSignal: vault.semanticObservationStream.currentTripwireSignal()
+            )
         )
 
         guard case .observedUnsettled(let tree, _) = result.result else {
@@ -696,7 +756,11 @@ final class SemanticObservationStreamTests: XCTestCase {
 
         let result = await vault.semanticObservationStream.settlePostActionObservation(
             baselineTripwireSignal: vault.tripwire.tripwireSignal(),
-            settleOutcome: settleOutcome(.cancelled(timeMs: 1), observation: screen)
+            settleOutcome: settleOutcome(
+                .cancelled(timeMs: 1),
+                observation: screen,
+                tripwireSignal: vault.semanticObservationStream.currentTripwireSignal()
+            )
         )
 
         guard case .unavailable = result.result else {
@@ -778,14 +842,61 @@ final class SemanticObservationStreamTests: XCTestCase {
 
     private func settleOutcome(
         _ outcome: SettleOutcome,
-        observation: InterfaceObservation
+        observation: InterfaceObservation,
+        tripwireSignal: TheTripwire.TripwireSignal
     ) -> SettleSession.Outcome {
         SettleSession.Outcome(
             outcome: outcome,
             events: [],
             finalObservation: SettleSessionFinalObservation(observation: observation),
-            elementsByKey: [:]
+            elementsByKey: [:],
+            tripwireSignal: tripwireSignal
         )
+    }
+
+    private func tripwireSignal(sequence: UInt64) -> TheTripwire.TripwireSignal {
+        TheTripwire.TripwireSignal(
+            topmostVC: nil,
+            navigation: .empty,
+            windowStack: .empty,
+            accessibilityNotificationSequence: sequence
+        )
+    }
+
+    private func installSettler(
+        signal: @escaping @MainActor () -> TheTripwire.TripwireSignal,
+        beforeSettle: @escaping @MainActor () async -> Void = {}
+    ) -> @MainActor () -> Int {
+        var count = 0
+        vault.semanticObservationStream.readTripwireSignal = signal
+        vault.semanticObservationStream.settleVisibleObservation = { vault, _, _, baseline, _ in
+            count += 1
+            await beforeSettle()
+            let observation = self.observation(label: "Stable", heistId: "stable")
+            vault.recordParsedObservedEvidence(observation)
+            return self.settleOutcome(
+                .settled(timeMs: count),
+                observation: observation,
+                tripwireSignal: baseline
+            )
+        }
+        return { count }
+    }
+
+    private func visibleEvidence() async throws -> CleanSettledObservation {
+        let evidence = await vault.semanticObservationStream.visibleEvidence(timeout: 1)
+        return try XCTUnwrap(evidence)
+    }
+
+    private func waitForSettleCount(
+        _ expectedCount: Int,
+        current: () -> Int
+    ) async {
+        for _ in 0..<1_000 {
+            guard current() != expectedCount else { return }
+            await Task.yield()
+        }
+        XCTFail("Timed out waiting for \(expectedCount) settle sessions")
     }
 
     private func waitForObservationWaiterCount(_ expectedCount: Int) async {

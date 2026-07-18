@@ -343,6 +343,7 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
                 observation: InterfaceObservation.makeForTests()
             ),
             elementsByKey: [:],
+            tripwireSignal: job.brains.vault.semanticObservationStream.currentTripwireSignal(),
             instabilityDescription: "runtime lifecycle diagnostic"
         )
         _ = await job.brains.vault.semanticObservationStream.settlePostActionObservation(

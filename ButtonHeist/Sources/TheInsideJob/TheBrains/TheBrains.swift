@@ -135,7 +135,9 @@ final class TheBrains {
         guard let visibleEvidence = await vault.semanticObservationStream.visibleEvidence(timeout: 2.0),
               let exploration = await navigation.exploreScreen(
                 baseline: .currentViewport(
-                    vault.visibleExplorationBaseline(from: visibleEvidence.viewportObservation)
+                    vault.visibleExplorationBaseline(
+                        from: visibleEvidence.event.settledObservation.observation
+                    )
                 ),
                 maxScrollsPerContainer: query.maxScrollsPerContainer?.value,
                 maxScrollsPerDiscovery: query.maxScrollsPerDiscovery?.value,

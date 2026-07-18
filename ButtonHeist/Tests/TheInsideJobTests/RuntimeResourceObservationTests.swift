@@ -140,6 +140,7 @@ final class RuntimeResourceObservationTests: XCTestCase {
                 observation: InterfaceObservation.makeForTests()
             ),
             elementsByKey: [:],
+            tripwireSignal: job.brains.vault.semanticObservationStream.currentTripwireSignal(),
             instabilityDescription: "runtime resource diagnostic"
         )
         _ = await job.brains.vault.semanticObservationStream.settlePostActionObservation(
