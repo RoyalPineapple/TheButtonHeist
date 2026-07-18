@@ -4,8 +4,6 @@ import XCTest
 import ThePlans
 @testable import TheScore
 
-private typealias Fixture = AccessibilityPredicateTestFixture
-
 extension AccessibilityPredicateTests {
 
     // MARK: - Update Decode Rejection
@@ -124,11 +122,11 @@ extension AccessibilityPredicateTests {
     }
 
     func testPresentMetAgainstFinalInterface() throws {
-        let newElement = Fixture.element(label: "No receipt", traits: [.button])
+        let newElement = element(label: "No receipt", traits: [.button])
         let replacementInterface = makeTestInterface(elements: [newElement], timestamp: Date())
         let result = ActionResult.success(
             method: .wait,
-                observation: .trace(Fixture.traceEvidence(
+                observation: .trace(traceEvidence(
                     .screenChangedForTests(replacementInterface: replacementInterface),
                     completeness: .incomplete
                 ))
@@ -139,11 +137,11 @@ extension AccessibilityPredicateTests {
     }
 
     func testPresentNotMetAgainstFinalInterfaceWhenAbsent() throws {
-        let otherElement = Fixture.element(label: "New sale", traits: [.button])
+        let otherElement = element(label: "New sale", traits: [.button])
         let replacementInterface = makeTestInterface(elements: [otherElement], timestamp: Date())
         let result = ActionResult.success(
             method: .wait,
-                observation: .trace(Fixture.traceEvidence(
+                observation: .trace(traceEvidence(
                     .screenChangedForTests(replacementInterface: replacementInterface),
                     completeness: .incomplete
                 ))
@@ -163,11 +161,11 @@ extension AccessibilityPredicateTests {
     }
 
     func testAbsentMetAgainstFinalInterface() throws {
-        let newElement = Fixture.element(label: "Done", traits: [.button])
+        let newElement = element(label: "Done", traits: [.button])
         let replacementInterface = makeTestInterface(elements: [newElement], timestamp: Date())
         let result = ActionResult.success(
             method: .wait,
-                observation: .trace(Fixture.traceEvidence(
+                observation: .trace(traceEvidence(
                     .screenChangedForTests(replacementInterface: replacementInterface),
                     completeness: .incomplete
                 ))
@@ -178,11 +176,11 @@ extension AccessibilityPredicateTests {
     }
 
     func testAbsentNotMetAgainstFinalInterfaceWhenStillPresent() throws {
-        let sameElement = Fixture.element(label: "Header", traits: [.header])
+        let sameElement = element(label: "Header", traits: [.header])
         let replacementInterface = makeTestInterface(elements: [sameElement], timestamp: Date())
         let result = ActionResult.success(
             method: .wait,
-                observation: .trace(Fixture.traceEvidence(
+                observation: .trace(traceEvidence(
                     .screenChangedForTests(replacementInterface: replacementInterface),
                     completeness: .incomplete
                 ))

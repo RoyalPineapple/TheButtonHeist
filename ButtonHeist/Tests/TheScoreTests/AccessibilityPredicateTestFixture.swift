@@ -3,9 +3,9 @@ import Foundation
 import ThePlans
 @testable import TheScore
 
-enum AccessibilityPredicateTestFixture {
+extension AccessibilityPredicateTests {
 
-    static func element(
+    func element(
         label: String? = nil,
         value: String? = nil,
         identifier: String? = nil,
@@ -38,14 +38,14 @@ enum AccessibilityPredicateTestFixture {
         )
     }
 
-    static func result(
+    func result(
         success: Bool,
         message: String? = nil
     ) -> ActionResult {
         result(success: success, message: message, observation: .none)
     }
 
-    static func result(
+    func result(
         success: Bool,
         message: String? = nil,
         trace: AccessibilityTrace,
@@ -58,7 +58,7 @@ enum AccessibilityPredicateTestFixture {
         )
     }
 
-    static func result(
+    func result(
         success: Bool,
         message: String?,
         observation: ActionResultObservationEvidence
@@ -78,7 +78,7 @@ enum AccessibilityPredicateTestFixture {
         )
     }
 
-    static func traceEvidence(
+    func traceEvidence(
         _ trace: AccessibilityTrace,
         completeness: AccessibilityTraceEvidence.Completeness
     ) -> AccessibilityTraceEvidence {
@@ -88,7 +88,7 @@ enum AccessibilityPredicateTestFixture {
         return evidence
     }
 
-    static func screenTrace(before: Interface, after: Interface) -> AccessibilityTrace {
+    func screenTrace(before: Interface, after: Interface) -> AccessibilityTrace {
         AccessibilityTrace(
             capture: AccessibilityTrace.Capture(
                 sequence: 1,
@@ -102,7 +102,7 @@ enum AccessibilityPredicateTestFixture {
         )
     }
 
-    static func screenChangedTransition() -> AccessibilityTrace.Transition {
+    func screenChangedTransition() -> AccessibilityTrace.Transition {
         AccessibilityTrace.Transition(accessibilityNotifications: [
             AccessibilityNotificationEvidence(
                 sequence: 1,
@@ -114,7 +114,7 @@ enum AccessibilityPredicateTestFixture {
         ])
     }
 
-    static func evidence(_ trace: AccessibilityTrace) -> AccessibilityTraceEvidence {
+    func evidence(_ trace: AccessibilityTrace) -> AccessibilityTraceEvidence {
         guard let evidence = AccessibilityTraceEvidence(trace: trace, completeness: .complete) else {
             preconditionFailure("test trace requires at least one capture")
         }

@@ -4,8 +4,6 @@ import XCTest
 import ThePlans
 @testable import TheScore
 
-private typealias Fixture = AccessibilityPredicateTestFixture
-
 extension AccessibilityPredicateTests {
 
     // MARK: - Codable
@@ -21,21 +19,21 @@ extension AccessibilityPredicateTests {
 
     func testScreenChangedMetWhenTraceChangesScreen() throws {
         let interface = Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
-        let action = Fixture.result(success: true, trace: .screenChangedForTests(replacementInterface: interface), completeness: .incomplete)
+        let action = result(success: true, trace: .screenChangedForTests(replacementInterface: interface), completeness: .incomplete)
         let result = try AccessibilityPredicate.changed(.screen()).resolve(in: .empty).validate(against: action)
         XCTAssertTrue(result.met)
     }
 
     func testScreenChangedNotMetWhenTraceOnlyChangesElements() throws {
         let trace = try makeUpdateTrace(label: "counter", property: .value, old: "0", new: "1")
-        let action = Fixture.result(success: true, trace: trace, completeness: .incomplete)
+        let action = result(success: true, trace: trace, completeness: .incomplete)
         let result = try AccessibilityPredicate.changed(.screen()).resolve(in: .empty).validate(against: action)
         XCTAssertFalse(result.met)
         XCTAssertEqual(result.actual, "elementsChanged")
     }
 
     func testScreenChangedNotMetWithoutTrace() throws {
-        let action = Fixture.result(success: true)
+        let action = result(success: true)
         let result = try AccessibilityPredicate.changed(.screen()).resolve(in: .empty).validate(against: action)
         XCTAssertFalse(result.met)
         XCTAssertEqual(result.actual, "no observed accessibility trace")
@@ -64,11 +62,11 @@ extension AccessibilityPredicateTests {
             interface: after,
             parentHash: first.hash,
             context: AccessibilityTrace.Context(screenId: "settings"),
-            transition: Fixture.screenChangedTransition()
+            transition: screenChangedTransition()
         )
         let result = ActionResult.success(
             method: .activate,
-                observation: .trace(Fixture.traceEvidence(
+                observation: .trace(traceEvidence(
                     AccessibilityTrace(captures: [first, last]),
                     completeness: .incomplete
                 ))
@@ -82,22 +80,22 @@ extension AccessibilityPredicateTests {
     }
 
     func testScreenAssertionsUseCurrentReplacementInterface() throws {
-        let trace = Fixture.screenTrace(
-            before: makeTestInterface(elements: [Fixture.element(label: "Home")]),
-            after: makeTestInterface(elements: [Fixture.element(label: "Settings")])
+        let trace = screenTrace(
+            before: makeTestInterface(elements: [element(label: "Home")]),
+            after: makeTestInterface(elements: [element(label: "Settings")])
         )
         let predicate = AccessibilityPredicate.changed(.screen([
             .exists(.label("Settings")),
             .missing(.label("Home")),
         ]))
 
-        XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: Fixture.result(success: true, trace: trace, completeness: .incomplete)).met)
+        XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: result(success: true, trace: trace, completeness: .incomplete)).met)
     }
 
     func testScreenChangedRequiresTraceEndpointEdge() throws {
         let result = ActionResult.success(
             method: .activate,
-                observation: .trace(Fixture.traceEvidence(
+                observation: .trace(traceEvidence(
                     AccessibilityTrace(interface: Interface(
                         timestamp: Date(timeIntervalSince1970: 0),
                         tree: []

@@ -4,8 +4,6 @@ import XCTest
 import ThePlans
 @testable import TheScore
 
-private typealias Fixture = AccessibilityPredicateTestFixture
-
 extension AccessibilityPredicateTests {
 
     // MARK: - Codable
@@ -18,21 +16,21 @@ extension AccessibilityPredicateTests {
     }
 
     func testScreenDepartureAndArrivalSatisfyElementLifecycleAssertions() throws {
-        let trace = Fixture.screenTrace(
-            before: makeTestInterface(elements: [Fixture.element(label: "Home")]),
-            after: makeTestInterface(elements: [Fixture.element(label: "Settings")])
+        let trace = screenTrace(
+            before: makeTestInterface(elements: [element(label: "Home")]),
+            after: makeTestInterface(elements: [element(label: "Settings")])
         )
         let predicate = AccessibilityPredicate.changed(.elements([
             .disappeared(.label("Home")),
             .appeared(.label("Settings")),
         ]))
 
-        XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: Fixture.result(success: true, trace: trace, completeness: .incomplete)).met)
+        XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: result(success: true, trace: trace, completeness: .incomplete)).met)
     }
 
     func testIdenticalTargetCanDisappearAndReappearAcrossScreenBoundary() throws {
-        let shared = Fixture.element(label: "Continue", traits: [.button])
-        let trace = Fixture.screenTrace(
+        let shared = element(label: "Continue", traits: [.button])
+        let trace = screenTrace(
             before: makeTestInterface(elements: [shared]),
             after: makeTestInterface(elements: [shared])
         )
@@ -41,24 +39,24 @@ extension AccessibilityPredicateTests {
             .appeared(.label("Continue")),
         ]))
 
-        XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: Fixture.result(success: true, trace: trace, completeness: .incomplete)).met)
+        XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: result(success: true, trace: trace, completeness: .incomplete)).met)
     }
 
     func testUpdatedOnlyMatchesSameScreenElementFacts() throws {
-        let before = makeTestInterface(elements: [Fixture.element(label: "Count", value: "1")])
-        let after = makeTestInterface(elements: [Fixture.element(label: "Count", value: "2")])
+        let before = makeTestInterface(elements: [element(label: "Count", value: "1")])
+        let after = makeTestInterface(elements: [element(label: "Count", value: "2")])
         let sameScreen = AccessibilityTrace(first: before).appending(after)
-        let screenBoundary = Fixture.screenTrace(before: before, after: after)
+        let screenBoundary = screenTrace(before: before, after: after)
         let predicate = AccessibilityPredicate.changed(.elements([
             .updated(.label("Count"), .value(before: "1", after: "2")),
         ]))
 
-        XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: Fixture.result(success: true, trace: sameScreen, completeness: .incomplete)).met)
-        XCTAssertFalse(try predicate.resolve(in: .empty).validate(against: Fixture.result(success: true, trace: screenBoundary, completeness: .incomplete)).met)
+        XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: result(success: true, trace: sameScreen, completeness: .incomplete)).met)
+        XCTAssertFalse(try predicate.resolve(in: .empty).validate(against: result(success: true, trace: screenBoundary, completeness: .incomplete)).met)
     }
 
     func testNotificationOnlyFactSatisfiesGenericElementsChange() throws {
-        let interface = makeTestInterface(elements: [Fixture.element(label: "Status")])
+        let interface = makeTestInterface(elements: [element(label: "Status")])
         let notification = AccessibilityNotificationEvidence(
             sequence: 1,
             kind: .elementChanged(.layout),
@@ -74,31 +72,31 @@ extension AccessibilityPredicateTests {
         XCTAssertTrue(
             try AccessibilityPredicate.changed(.elements())
                 .resolve(in: .empty)
-                .validate(against: Fixture.result(success: true, trace: trace, completeness: .incomplete)).met
+                .validate(against: result(success: true, trace: trace, completeness: .incomplete)).met
         )
     }
 
     func testNoChangeRequiresCompleteFactFreeWindow() throws {
-        let interface = makeTestInterface(elements: [Fixture.element(label: "Ready")])
+        let interface = makeTestInterface(elements: [element(label: "Ready")])
         let factFreeTrace = AccessibilityTrace(first: interface).appending(interface)
         let changed = AccessibilityTrace(first: interface).appending(
-            makeTestInterface(elements: [Fixture.element(label: "Done")])
+            makeTestInterface(elements: [element(label: "Done")])
         )
         let predicate = AccessibilityPredicate.noChange
 
-        let incompleteResult = try predicate.resolve(in: .empty).validate(against: Fixture.result(
+        let incompleteResult = try predicate.resolve(in: .empty).validate(against: result(
             success: true,
             trace: factFreeTrace,
             completeness: .incomplete
         ))
         XCTAssertFalse(incompleteResult.met)
         XCTAssertEqual(incompleteResult.actual, "observation history incomplete")
-        XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: Fixture.result(
+        XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: result(
             success: true,
             trace: factFreeTrace,
             completeness: .complete
         )).met)
-        XCTAssertFalse(try predicate.resolve(in: .empty).validate(against: Fixture.result(
+        XCTAssertFalse(try predicate.resolve(in: .empty).validate(against: result(
             success: true,
             trace: changed,
             completeness: .complete
@@ -107,7 +105,7 @@ extension AccessibilityPredicateTests {
         let explicitlyIncomplete = ActionResult.success(
             method: .syntheticTap,
                 observation: .settledTrace(
-                    Fixture.traceEvidence(factFreeTrace, completeness: .incomplete),
+                    traceEvidence(factFreeTrace, completeness: .incomplete),
                     .settled(duration: 0)
                 )
 
@@ -119,13 +117,13 @@ extension AccessibilityPredicateTests {
 
     func testActionResultValidationUsesAccumulatedTraceEvidence() throws {
         let baseline = makeTestInterface(elements: [
-            Fixture.element(label: "Counter", value: "0"),
+            element(label: "Counter", value: "0"),
         ])
         let updated = makeTestInterface(elements: [
-            Fixture.element(label: "Counter", value: "1"),
+            element(label: "Counter", value: "1"),
         ])
         let final = makeTestInterface(elements: [
-            Fixture.element(label: "Counter", value: "0"),
+            element(label: "Counter", value: "0"),
         ])
         let trace = AccessibilityTrace(first: baseline)
             .appending(updated)
@@ -135,7 +133,7 @@ extension AccessibilityPredicateTests {
 
         let action = ActionResult.success(
             method: .activate,
-                observation: .trace(Fixture.traceEvidence(trace, completeness: .incomplete))
+                observation: .trace(traceEvidence(trace, completeness: .incomplete))
 
         )
         let changePredicate = AccessibilityPredicate.changed(.elements([
@@ -150,13 +148,13 @@ extension AccessibilityPredicateTests {
 
     func testElementsChangedMetWhenTraceChangesElements() throws {
         let trace = try makeUpdateTrace(label: "counter", property: .value, old: "0", new: "1")
-        let action = Fixture.result(success: true, trace: trace, completeness: .incomplete)
+        let action = result(success: true, trace: trace, completeness: .incomplete)
         let result = try AccessibilityPredicate.changed(.elements()).resolve(in: .empty).validate(against: action)
         XCTAssertTrue(result.met)
     }
 
     func testElementsChangedNotMetWhenTraceHasNoChange() throws {
-        let action = Fixture.result(success: true, trace: .noChangeForTests(elementCount: 5), completeness: .incomplete)
+        let action = result(success: true, trace: .noChangeForTests(elementCount: 5), completeness: .incomplete)
         let result = try AccessibilityPredicate.changed(.elements()).resolve(in: .empty).validate(against: action)
         XCTAssertFalse(result.met)
         XCTAssertEqual(result.actual, "noChange")
@@ -164,7 +162,7 @@ extension AccessibilityPredicateTests {
 
     func testElementsChangedMetForScreenDepartureAndArrivalFacts() throws {
         let interface = Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
-        let action = Fixture.result(success: true, trace: .screenChangedForTests(replacementInterface: interface), completeness: .incomplete)
+        let action = result(success: true, trace: .screenChangedForTests(replacementInterface: interface), completeness: .incomplete)
         let result = try AccessibilityPredicate.changed(.elements()).resolve(in: .empty).validate(against: action)
         XCTAssertTrue(result.met)
     }
@@ -200,7 +198,7 @@ extension AccessibilityPredicateTests {
 
     func testElementUpdatedMetWhenNewValueMatches() throws {
         let trace = try makeUpdateTrace(label: "counter", property: .value, old: "3", new: "5")
-        let action = Fixture.result(success: true, trace: trace, completeness: .incomplete)
+        let action = result(success: true, trace: trace, completeness: .incomplete)
         let predicate = AccessibilityPredicate.changed(.elements([
             .updated(.label("counter"), .value(after: "5")),
         ]))
@@ -209,7 +207,7 @@ extension AccessibilityPredicateTests {
 
     func testElementUpdatedPassReportsObservedPropertyProof() throws {
         let trace = try makeUpdateTrace(label: "Quantity", property: .value, old: "2", new: "3")
-        let action = Fixture.result(success: true, trace: trace, completeness: .incomplete)
+        let action = result(success: true, trace: trace, completeness: .incomplete)
         let predicate = AccessibilityPredicate.changed(.elements([
             .updated(.label("Quantity"), .value(before: "2", after: "3")),
         ]))
@@ -224,7 +222,7 @@ extension AccessibilityPredicateTests {
             .updated(.label("Quantity"), .value(before: "3", after: "3")),
         ]))
         let trace = AccessibilityTrace.noChangeForTests(elementCount: 1)
-        let result = try predicate.resolve(in: .empty).evaluate(in: Fixture.evidence(trace))
+        let result = try predicate.resolve(in: .empty).evaluate(in: evidence(trace))
 
         XCTAssertFalse(result.met)
         XCTAssertEqual(result.actual, "noChange")
@@ -232,7 +230,7 @@ extension AccessibilityPredicateTests {
 
     func testElementUpdatedNotMetWhenNoMatch() throws {
         let trace = try makeUpdateTrace(label: "counter", property: .value, old: "3", new: "4")
-        let action = Fixture.result(success: true, trace: trace, completeness: .incomplete)
+        let action = result(success: true, trace: trace, completeness: .incomplete)
         let predicate = AccessibilityPredicate.changed(.elements([
             .updated(.label("counter"), .value(after: "5")),
         ]))
@@ -244,7 +242,7 @@ extension AccessibilityPredicateTests {
             try makeUpdate(label: "Other", property: .value, old: "1", new: "5"),
             try makeUpdate(label: "Counter", property: .value, old: "3", new: "5"),
         ]))
-        let action = Fixture.result(success: true, trace: trace, completeness: .incomplete)
+        let action = result(success: true, trace: trace, completeness: .incomplete)
         let predicate = AccessibilityPredicate.changed(.elements([
             .updated(.label("Counter"), .value(after: "5")),
         ]))
@@ -253,7 +251,7 @@ extension AccessibilityPredicateTests {
 
     func testElementUpdatedNotMetWhenElementPredicateDoesNotMatch() throws {
         let trace = try makeUpdateTrace(label: "Other", property: .value, old: "3", new: "5")
-        let action = Fixture.result(success: true, trace: trace, completeness: .incomplete)
+        let action = result(success: true, trace: trace, completeness: .incomplete)
         let predicate = AccessibilityPredicate.changed(.elements([
             .updated(.label("Counter"), .value(after: "5")),
         ]))
@@ -262,7 +260,7 @@ extension AccessibilityPredicateTests {
 
     func testElementUpdatedMetWhenOldAndNewValueMatch() throws {
         let trace = try makeUpdateTrace(label: "counter", property: .value, old: "3", new: "5")
-        let action = Fixture.result(success: true, trace: trace, completeness: .incomplete)
+        let action = result(success: true, trace: trace, completeness: .incomplete)
         let predicate = AccessibilityPredicate.changed(.elements([
             .updated(.label("counter"), .value(before: "3", after: "5")),
         ]))
@@ -271,7 +269,7 @@ extension AccessibilityPredicateTests {
 
     func testElementUpdatedUsesConfiguredStringMatchForOldAndNewValues() throws {
         let trace = try makeUpdateTrace(label: "cart", property: .value, old: "cart: empty", new: "3 items")
-        let action = Fixture.result(success: true, trace: trace, completeness: .incomplete)
+        let action = result(success: true, trace: trace, completeness: .incomplete)
         let predicate = AccessibilityPredicate.changed(.elements([
             .updated(.label("cart"), .value(before: .prefix("cart:"), after: .suffix("items"))),
         ]))
@@ -286,7 +284,7 @@ extension AccessibilityPredicateTests {
             old: "Search for tea",
             new: "John Smith"
         )
-        let action = Fixture.result(success: true, trace: trace, completeness: .incomplete)
+        let action = result(success: true, trace: trace, completeness: .incomplete)
         let changes: [ElementPropertyChange] = [
             .value(before: .exact("Search for tea"), after: .exact("John Smith")),
             .value(before: .contains("for"), after: .contains("Smith")),
@@ -305,7 +303,7 @@ extension AccessibilityPredicateTests {
     func testElementUpdatedMatchesTraitGainAndLossAcrossBeforeAndAfter() throws {
         let gained = try makeTraitUpdate(label: "Favorites", beforeTraits: [.button], afterTraits: [.button, .selected])
         let lost = try makeTraitUpdate(label: "Disabled", beforeTraits: [.button, .notEnabled], afterTraits: [.button])
-        let action = Fixture.result(
+        let action = result(
             success: true,
             trace: .elementsChangedForTests(elementCount: 2, edits: ElementEdits(updated: [gained, lost])),
             completeness: .incomplete
@@ -330,10 +328,10 @@ extension AccessibilityPredicateTests {
 
     func testElementUpdatedMatchesTypedActionChecker() throws {
         let update = try XCTUnwrap(projectElementStateChange(
-            old: Fixture.element(label: "Stepper", actions: [.increment]),
-            new: Fixture.element(label: "Stepper", actions: [.increment, .activate])
+            old: element(label: "Stepper", actions: [.increment]),
+            new: element(label: "Stepper", actions: [.increment, .activate])
         ))
-        let action = Fixture.result(
+        let action = result(
             success: true,
             trace: .elementsChangedForTests(elementCount: 1, edits: ElementEdits(updated: [update])),
             completeness: .incomplete
@@ -358,14 +356,14 @@ extension AccessibilityPredicateTests {
 
     func testElementUpdatedMatchesTypedGeometryCheckers() throws {
         let frameUpdate = try XCTUnwrap(projectElementStateChange(
-            old: Fixture.element(label: "Card", frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44),
-            new: Fixture.element(label: "Card", frameX: 12, frameY: 20, frameWidth: 120, frameHeight: 44)
+            old: element(label: "Card", frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44),
+            new: element(label: "Card", frameX: 12, frameY: 20, frameWidth: 120, frameHeight: 44)
         ))
         let pointUpdate = try XCTUnwrap(projectElementStateChange(
-            old: Fixture.element(label: "Knob", activationPointEvidence: .explicit(ScreenPoint(x: 10, y: 12))),
-            new: Fixture.element(label: "Knob", activationPointEvidence: .explicit(ScreenPoint(x: 42, y: 64)))
+            old: element(label: "Knob", activationPointEvidence: .explicit(ScreenPoint(x: 10, y: 12))),
+            new: element(label: "Knob", activationPointEvidence: .explicit(ScreenPoint(x: 42, y: 64)))
         ))
-        let action = Fixture.result(
+        let action = result(
             success: true,
             trace: .elementsChangedForTests(
                 elementCount: 2,
@@ -392,14 +390,14 @@ extension AccessibilityPredicateTests {
     func testElementUpdatedMatchesTypedCustomContentAndRotorCheckers() throws {
         let customContent = HeistCustomContent(label: "Status", value: "Ready to submit", isImportant: true)
         let customUpdate = try XCTUnwrap(projectElementStateChange(
-            old: Fixture.element(label: "Form", customContent: [HeistCustomContent(label: "Help", value: "Optional", isImportant: false)]),
-            new: Fixture.element(label: "Form", customContent: [customContent])
+            old: element(label: "Form", customContent: [HeistCustomContent(label: "Help", value: "Optional", isImportant: false)]),
+            new: element(label: "Form", customContent: [customContent])
         ))
         let rotorUpdate = try XCTUnwrap(projectElementStateChange(
-            old: Fixture.element(label: "Article", rotors: [HeistRotor(name: "Links")]),
-            new: Fixture.element(label: "Article", rotors: [HeistRotor(name: "Headings"), HeistRotor(name: "Links")])
+            old: element(label: "Article", rotors: [HeistRotor(name: "Links")]),
+            new: element(label: "Article", rotors: [HeistRotor(name: "Headings"), HeistRotor(name: "Links")])
         ))
-        let action = Fixture.result(
+        let action = result(
             success: true,
             trace: .elementsChangedForTests(
                 elementCount: 2,
@@ -448,7 +446,7 @@ extension AccessibilityPredicateTests {
         XCTAssertEqual(trace.capture(ref: edge.before)?.sequence, edge.before.sequence)
         XCTAssertEqual(trace.capture(ref: edge.after)?.sequence, edge.after.sequence)
 
-        let action = Fixture.result(success: true, trace: trace, completeness: .incomplete)
+        let action = result(success: true, trace: trace, completeness: .incomplete)
         let predicate = AccessibilityPredicate.changed(.elements([
             .updated(.label("counter"), .value()),
         ]))
@@ -456,7 +454,7 @@ extension AccessibilityPredicateTests {
     }
 
     func testElementUpdatedNotMetWithoutTrace() throws {
-        let action = Fixture.result(success: true)
+        let action = result(success: true)
         let predicate = AccessibilityPredicate.changed(.elements([
             .updated(.label("counter"), .value(after: "5")),
         ]))
@@ -467,7 +465,7 @@ extension AccessibilityPredicateTests {
 
     func testElementUpdatedNotMetWhenEmptyUpdates() throws {
         let trace = AccessibilityTrace.elementsChangedForTests(elementCount: 5, edits: ElementEdits())
-        let action = Fixture.result(success: true, trace: trace, completeness: .incomplete)
+        let action = result(success: true, trace: trace, completeness: .incomplete)
         let predicate = AccessibilityPredicate.changed(.elements([
             .updated(.label("counter"), .value(after: "5")),
         ]))
@@ -478,7 +476,7 @@ extension AccessibilityPredicateTests {
 
     func testElementUpdatedDiagnosticOnMiss() throws {
         let trace = try makeUpdateTrace(label: "counter", property: .value, old: "3", new: "4")
-        let action = Fixture.result(success: true, trace: trace, completeness: .incomplete)
+        let action = result(success: true, trace: trace, completeness: .incomplete)
         let predicate = AccessibilityPredicate.changed(.elements([
             .updated(.label("counter"), .value(after: "5")),
         ]))
@@ -492,7 +490,7 @@ extension AccessibilityPredicateTests {
             try makeUpdate(label: "label", property: .value, old: "A", new: "B"),
             try makeUpdate(label: "counter", property: .value, old: "3", new: "5"),
         ]))
-        let action = Fixture.result(success: true, trace: trace, completeness: .incomplete)
+        let action = result(success: true, trace: trace, completeness: .incomplete)
         let predicate = AccessibilityPredicate.changed(.elements([
             .updated(.label("counter"), .value(after: "5")),
         ]))
@@ -502,15 +500,15 @@ extension AccessibilityPredicateTests {
     func testElementUpdatedWithPropertyFilter() throws {
         let trace = AccessibilityTrace.elementsChangedForTests(elementCount: 5, edits: ElementEdits(updated: [
             ElementUpdate(
-                before: Fixture.element(label: "Toggle", traits: [.button]),
-                after: Fixture.element(label: "Toggle", value: "5", traits: [.button, .selected]),
+                before: element(label: "Toggle", traits: [.button]),
+                after: element(label: "Toggle", value: "5", traits: [.button, .selected]),
                 changes: [
                     try XCTUnwrap(PropertyChange.traits(old: [.button], new: [.button, .selected])),
                     try XCTUnwrap(PropertyChange.value(old: "3", new: "5")),
                 ]
             ),
         ]))
-        let action = Fixture.result(success: true, trace: trace, completeness: .incomplete)
+        let action = result(success: true, trace: trace, completeness: .incomplete)
         let traitsPredicate = AccessibilityPredicate.changed(.elements([
             .updated(.label("Toggle"), .traits()),
         ]))
@@ -531,7 +529,7 @@ extension AccessibilityPredicateTests {
     func testElementUpdatedAllFieldsMatch() throws {
         let result = ActionResult.success(
             method: .activate,
-                observation: .trace(Fixture.traceEvidence(
+                observation: .trace(traceEvidence(
                     .elementsChangedForTests(
                         elementCount: 5,
                         edits: ElementEdits(updated: [
@@ -551,7 +549,7 @@ extension AccessibilityPredicateTests {
     func testElementUpdatedPropertyOnly() throws {
         let result = ActionResult.success(
             method: .activate,
-                observation: .trace(Fixture.traceEvidence(
+                observation: .trace(traceEvidence(
                     .elementsChangedForTests(
                         elementCount: 5,
                         edits: ElementEdits(updated: [
@@ -571,7 +569,7 @@ extension AccessibilityPredicateTests {
     func testElementUpdatedNoUpdatesInResult() throws {
         let result = ActionResult.success(
             method: .activate,
-                observation: .trace(Fixture.traceEvidence(
+                observation: .trace(traceEvidence(
                     .elementsChangedForTests(elementCount: 5, edits: ElementEdits()),
                     completeness: .incomplete
                 ))
@@ -588,7 +586,7 @@ extension AccessibilityPredicateTests {
     func testElementUpdatedPropertyMismatch() throws {
         let result = ActionResult.success(
             method: .activate,
-                observation: .trace(Fixture.traceEvidence(
+                observation: .trace(traceEvidence(
                     .elementsChangedForTests(
                         elementCount: 5,
                         edits: ElementEdits(updated: [
@@ -607,7 +605,7 @@ extension AccessibilityPredicateTests {
 
     // MARK: - Helpers
 
-    private func makeUpdateTrace(
+    func makeUpdateTrace(
         label: String,
         property: ElementProperty,
         old: String?,
@@ -649,8 +647,8 @@ extension AccessibilityPredicateTests {
         afterTraits: [HeistTrait]
     ) throws -> ElementUpdate {
         ElementUpdate(
-            before: Fixture.element(label: label, traits: beforeTraits),
-            after: Fixture.element(label: label, traits: afterTraits),
+            before: element(label: label, traits: beforeTraits),
+            after: element(label: label, traits: afterTraits),
             changes: [
                 try XCTUnwrap(PropertyChange.traits(old: beforeTraits, new: afterTraits)),
             ]
@@ -688,17 +686,17 @@ extension AccessibilityPredicateTests {
     ) -> HeistElement {
         switch property {
         case .label:
-            return Fixture.element(label: value ?? label, traits: traits)
+            return element(label: value ?? label, traits: traits)
         case .identifier:
-            return Fixture.element(label: label, identifier: value, traits: traits)
+            return element(label: label, identifier: value, traits: traits)
         case .value:
-            return Fixture.element(label: label, value: value, traits: traits)
+            return element(label: label, value: value, traits: traits)
         case .traits:
-            return Fixture.element(label: label, traits: traits)
+            return element(label: label, traits: traits)
         case .hint:
-            return Fixture.element(label: label, hint: value, traits: traits)
+            return element(label: label, hint: value, traits: traits)
         default:
-            return Fixture.element(label: label, value: value, traits: traits)
+            return element(label: label, value: value, traits: traits)
         }
     }
 
