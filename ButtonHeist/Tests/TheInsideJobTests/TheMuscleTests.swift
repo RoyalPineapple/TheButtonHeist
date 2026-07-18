@@ -806,7 +806,7 @@ final class TheMuscleTests: XCTestCase {
     }
 
     func testSuccessfulAuthClearsFailedAttempts() async throws {
-        let address = "192.168.1.100"
+        let address: ClientNetworkAddress = "192.168.1.100"
 
         // Fail 3 times from same address with different clientIds
         for i in 1...3 {

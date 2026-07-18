@@ -47,6 +47,91 @@ final class TheMuscleStateMachineTests: XCTestCase {
         XCTAssertEqual(error.message, "Too many failed attempts. Try again later.")
     }
 
+    func testTokenAdmissionPrunesExpiredFailureHistory() throws {
+        var admission = ClientAdmission.TokenAuthentication(
+            tokenSource: .configured("good-token"),
+            policy: try XCTUnwrap(.init(
+                maximumFailedAttempts: 2,
+                failedAddressRetentionDuration: 5
+            ))
+        )
+        let start = Date(timeIntervalSince1970: 100)
+        _ = admission.admit("bad-token", driverId: nil, address: "expired", now: start)
+
+        guard case .rejected(.invalidToken(_, let attempts)) = admission.admit(
+            "bad-token",
+            driverId: nil,
+            address: "expired",
+            now: start.addingTimeInterval(6)
+        ) else {
+            return XCTFail("Expected the expired address to start fresh")
+        }
+        XCTAssertEqual(attempts, 1)
+    }
+
+    func testTokenAdmissionEvictsOldestFailingAddressAtCapacity() throws {
+        var admission = ClientAdmission.TokenAuthentication(
+            tokenSource: .configured("good-token"),
+            policy: try XCTUnwrap(.init(
+                maximumFailedAttempts: 3,
+                maximumTrackedFailedAddresses: 1
+            ))
+        )
+        let start = Date(timeIntervalSince1970: 100)
+        _ = admission.admit("bad-token", driverId: nil, address: "oldest", now: start)
+        _ = admission.admit(
+            "bad-token",
+            driverId: nil,
+            address: "newest",
+            now: start.addingTimeInterval(1)
+        )
+
+        guard case .rejected(.invalidToken(_, let attempts)) = admission.admit(
+            "bad-token",
+            driverId: nil,
+            address: "oldest",
+            now: start.addingTimeInterval(2)
+        ) else {
+            return XCTFail("Expected the evicted address to start fresh")
+        }
+        XCTAssertEqual(attempts, 1)
+    }
+
+    func testTokenAdmissionPreservesActiveLockoutAtCapacity() throws {
+        var admission = ClientAdmission.TokenAuthentication(
+            tokenSource: .configured("good-token"),
+            policy: try XCTUnwrap(.init(
+                maximumFailedAttempts: 1,
+                maximumTrackedFailedAddresses: 1
+            ))
+        )
+        let start = Date(timeIntervalSince1970: 100)
+        guard case .rejected(.lockoutStarted) = admission.admit(
+            "bad-token",
+            driverId: nil,
+            address: "locked",
+            now: start
+        ) else {
+            return XCTFail("Expected the first address to enter lockout")
+        }
+        guard case .rejected(.invalidToken) = admission.admit(
+            "bad-token",
+            driverId: nil,
+            address: "untracked",
+            now: start.addingTimeInterval(1)
+        ) else {
+            return XCTFail("Capacity exhaustion must not claim a new address is locked out")
+        }
+        guard case .lockedOut = admission.admit(
+            "good-token",
+            driverId: nil,
+            address: "locked",
+            now: start.addingTimeInterval(2)
+        ) else {
+            return XCTFail("Active lockout must survive capacity pressure")
+        }
+    }
+
     func testClientAuthenticationRejectsAuthenticationBeforeHello() {
         XCTAssertEqual(
             ClientAdmission.Authentication.Reducer().reduce(

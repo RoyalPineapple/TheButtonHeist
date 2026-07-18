@@ -21,11 +21,6 @@ private struct TokenFailureState: Equatable, Sendable {
     let lockedOutUntil: Date?
 }
 
-private enum TokenFailureEffect: Equatable, Sendable {
-    case invalidToken(attempts: Int)
-    case lockoutStarted(attempts: Int)
-}
-
 struct TokenAuthentication {
     private let tokenSource: SessionTokenSource
     private let policy: InsideJobAuthenticationPolicy
@@ -58,12 +53,7 @@ struct TokenAuthentication {
             message: tokenSource.invalidTokenMessage,
             recoveryHint: tokenSource.configuredTokenRecoveryHint
         )
-        switch rejectToken(for: address, now: now) {
-        case .invalidToken(let attempts):
-            return .rejected(.invalidToken(error: error, attempts: attempts))
-        case .lockoutStarted(let attempts):
-            return .rejected(.lockoutStarted(error: error, attempts: attempts))
-        }
+        return .rejected(rejectToken(for: address, now: now, error: error))
     }
 
     mutating func admit(
@@ -108,8 +98,9 @@ struct TokenAuthentication {
 
     private mutating func rejectToken(
         for address: ClientNetworkAddress,
-        now: Date
-    ) -> TokenFailureEffect {
+        now: Date,
+        error: ServerError
+    ) -> TokenAuthenticationRejection {
         let attempts = (addressAuthStates[address]?.attempts ?? 0) + 1
         let startsLockout = attempts >= policy.maximumFailedAttempts
         let state = TokenFailureState(
@@ -117,8 +108,10 @@ struct TokenAuthentication {
             lastFailureAt: now,
             lockedOutUntil: startsLockout ? now.addingTimeInterval(policy.lockoutDuration) : nil
         )
-        guard retain(state, for: address) else { return .invalidToken(attempts: attempts) }
-        return startsLockout ? .lockoutStarted(attempts: attempts) : .invalidToken(attempts: attempts)
+        guard retain(state, for: address), startsLockout else {
+            return .invalidToken(error: error, attempts: attempts)
+        }
+        return .lockoutStarted(error: error, attempts: attempts)
     }
 
     private mutating func retain(
