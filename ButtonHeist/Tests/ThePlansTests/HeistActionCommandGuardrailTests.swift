@@ -93,6 +93,33 @@ import Testing
     }
 }
 
+@Test func `runtime gesture coordinates require finite admission`() throws {
+    let screenX: Double = 12.5
+    let screenY: Double = -34
+    let unitX: Double = 0.25
+    let unitY: Double = 0.75
+
+    let screenPoint = ScreenPoint(
+        x: try FiniteCoordinate(validating: screenX),
+        y: try FiniteCoordinate(validating: screenY)
+    )
+    let unitPoint = UnitPoint(
+        x: try FiniteCoordinate(validating: unitX),
+        y: try FiniteCoordinate(validating: unitY)
+    )
+
+    #expect(screenPoint.x == screenX)
+    #expect(screenPoint.y == screenY)
+    #expect(unitPoint.x == unitX)
+    #expect(unitPoint.y == unitY)
+
+    for value in [Double.nan, .infinity, -.infinity] {
+        #expect(throws: FiniteCoordinate.ValidationError.self) {
+            _ = try FiniteCoordinate(validating: value)
+        }
+    }
+}
+
 @Test func `action command wire durability report target and canonical source contracts stay aligned`() throws {
     for testCase in actionCommandContractCases {
         let data = try JSONEncoder().encode(testCase.command)

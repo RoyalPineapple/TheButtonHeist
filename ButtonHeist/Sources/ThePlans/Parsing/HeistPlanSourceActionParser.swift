@@ -292,31 +292,40 @@ extension HeistPlanSourceParser {
         return .mechanicalDrag(DragTarget(selection: selection))
     }
 
-    mutating func parseXYArguments() throws -> ScreenPoint {
+    mutating func parsePointCoordinates() throws -> (x: FiniteCoordinate, y: FiniteCoordinate) {
         try expectIdentifier("x")
         try expectSymbol(":")
-        let x = try parseNumber()
+        let x = try parseFiniteCoordinate()
         try expectSymbol(",")
         try expectIdentifier("y")
         try expectSymbol(":")
-        let y = try parseNumber()
-        return ScreenPoint(x: x, y: y)
+        return (x, try parseFiniteCoordinate())
+    }
+
+    mutating func parseFiniteCoordinate() throws -> FiniteCoordinate {
+        let coordinateToken = currentToken
+        let value = try parseNumber()
+        do {
+            return try FiniteCoordinate(validating: value)
+        } catch let validationError {
+            throw error(coordinateToken, String(describing: validationError))
+        }
     }
 
     mutating func parseScreenPoint() throws -> ScreenPoint {
         try expectIdentifier("ScreenPoint")
         try expectSymbol("(")
-        let point = try parseXYArguments()
+        let coordinates = try parsePointCoordinates()
         try expectSymbol(")")
-        return point
+        return ScreenPoint(x: coordinates.x, y: coordinates.y)
     }
 
     mutating func parseUnitPoint() throws -> UnitPoint {
         try expectIdentifier("UnitPoint")
         try expectSymbol("(")
-        let point = try parseXYArguments()
+        let coordinates = try parsePointCoordinates()
         try expectSymbol(")")
-        return UnitPoint(x: point.x, y: point.y)
+        return UnitPoint(x: coordinates.x, y: coordinates.y)
     }
 
     mutating func parseGestureDuration() throws -> GestureDuration {
