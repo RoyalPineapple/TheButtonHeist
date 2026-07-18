@@ -10,17 +10,17 @@ import Glibc
 
 #if os(macOS) || os(Linux)
 @Suite(.serialized)
-struct CompilerProcessOwnerTests {
+struct CompilerProcessTests {
     @Test
     func `nonzero exit and signal termination are distinct outcomes`() async throws {
-        let owner = CompilerProcessOwner()
+        let runner = CompilerProcess.Runner()
 
-        let nonzero = try await owner.run(
+        let nonzero = try await runner.execute(
             shell("exit 23"),
             purpose: .execution,
             limits: limits()
         )
-        let signaled = try await owner.run(
+        let signaled = try await runner.execute(
             shell("kill -KILL $$"),
             purpose: .execution,
             limits: limits()
@@ -52,7 +52,7 @@ struct CompilerProcessOwnerTests {
             bufferingPolicy: .bufferingNewest(1)
         )
         let task = Task {
-            try await CompilerProcessOwner().run(
+            try await CompilerProcess.Runner().execute(
                 shell(script, arguments: [ready.path]),
                 purpose: .execution,
                 limits: limits(
@@ -96,7 +96,7 @@ struct CompilerProcessOwnerTests {
             bufferingPolicy: .bufferingNewest(1)
         )
         let task = Task {
-            try await CompilerProcessOwner().run(
+            try await CompilerProcess.Runner().execute(
                 command,
                 purpose: .execution,
                 limits: limits(
@@ -127,7 +127,7 @@ struct CompilerProcessOwnerTests {
     @Test
     func `stdout overflow is terminal and retains its bounded prefix`() async throws {
         let byteLimit = 8
-        let outcome = try await CompilerProcessOwner().run(
+        let outcome = try await CompilerProcess.Runner().execute(
             shell(
                 """
                 printf 'stdout-overflow'
@@ -150,7 +150,7 @@ struct CompilerProcessOwnerTests {
     @Test
     func `stderr overflow is terminal and retains its bounded prefix`() async throws {
         let byteLimit = 8
-        let outcome = try await CompilerProcessOwner().run(
+        let outcome = try await CompilerProcess.Runner().execute(
             shell("printf 'stderr-overflow' >&2"),
             purpose: .execution,
             limits: limits(capturedByteLimitPerStream: byteLimit)
@@ -171,7 +171,7 @@ struct CompilerProcessOwnerTests {
         printf 'stdout-overflow'
         printf 'stderr-overflow' >&2
         """
-        let outcome = try await CompilerProcessOwner().run(
+        let outcome = try await CompilerProcess.Runner().execute(
             shell(script),
             purpose: .execution,
             limits: limits(capturedByteLimitPerStream: 8)
@@ -198,7 +198,7 @@ struct CompilerProcessOwnerTests {
             bufferingPolicy: .bufferingNewest(1)
         )
         let task = Task {
-            try await CompilerProcessOwner().run(
+            try await CompilerProcess.Runner().execute(
                 shell(script),
                 purpose: .execution,
                 limits: limits(
@@ -223,16 +223,16 @@ struct CompilerProcessOwnerTests {
     }
 
     @Test
-    func `owner is reusable after terminal overflow`() async throws {
-        let owner = CompilerProcessOwner()
+    func `runner is reusable after terminal overflow`() async throws {
+        let runner = CompilerProcess.Runner()
         let processLimits = limits(capturedByteLimitPerStream: 8)
 
-        let overflow = try await owner.run(
+        let overflow = try await runner.execute(
             shell("printf 'stdout-overflow'"),
             purpose: .execution,
             limits: processLimits
         )
-        let success = try await owner.run(
+        let success = try await runner.execute(
             shell("printf 'second'"),
             purpose: .execution,
             limits: processLimits
@@ -334,8 +334,8 @@ struct CompilerProcessOwnerTests {
     private func shell(
         _ script: String,
         arguments: [String] = []
-    ) -> CompilerProcessCommand {
-        CompilerProcessCommand(
+    ) -> CompilerProcess.Command {
+        CompilerProcess.Command(
             executable: URL(fileURLWithPath: "/bin/sh"),
             arguments: ["-c", script, "compiler-process-test"] + arguments
         )
@@ -346,8 +346,8 @@ struct CompilerProcessOwnerTests {
         executionTimeout: Duration = .seconds(2),
         terminationGrace: Duration = .milliseconds(50),
         capturedByteLimitPerStream: Int = 1_048_576
-    ) -> CompilerProcessLimits {
-        CompilerProcessLimits(
+    ) -> CompilerProcess.Limits {
+        CompilerProcess.Limits(
             compilationTimeout: compilationTimeout,
             executionTimeout: executionTimeout,
             terminationGrace: terminationGrace,

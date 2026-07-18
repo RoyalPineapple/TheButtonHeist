@@ -39,12 +39,12 @@ private extension Dictionary where Key == String, Value == String {
 
 struct HeistSwiftFileCompiler: Sendable {
     let packageRoot: URL?
-    let processLimits: CompilerProcessLimits
+    let processLimits: CompilerProcess.Limits
     let temporaryDirectory: URL
 
     init(
         packageRoot: URL? = nil,
-        processLimits: CompilerProcessLimits = .default,
+        processLimits: CompilerProcess.Limits = .default,
         temporaryDirectory: URL = FileManager.default.temporaryDirectory
     ) {
         self.packageRoot = packageRoot
@@ -111,8 +111,8 @@ struct HeistSwiftFileCompiler: Sendable {
     ) async throws -> HeistPlan {
         let executableURL = buildDirectory.appendingPathComponent("plan-compiler")
         HeistSwiftFileCompilerTrace.write("compiling Swift heist wrapper against built ThePlans artifacts")
-        let compilerResult = try await CompilerProcessOwner.shared.run(
-            CompilerProcessCommand(
+        let compilerResult = try await CompilerProcess.Runner.shared.execute(
+            CompilerProcess.Command(
                 executable: URL(fileURLWithPath: "/usr/bin/env"),
                 arguments: swiftcPlanCompilerArguments(
                     compileDirectory: compileDirectory,
@@ -130,8 +130,8 @@ struct HeistSwiftFileCompiler: Sendable {
         )
 
         HeistSwiftFileCompilerTrace.write("running Swift heist wrapper")
-        let executionResult = try await CompilerProcessOwner.shared.run(
-            CompilerProcessCommand(executable: executableURL, arguments: []),
+        let executionResult = try await CompilerProcess.Runner.shared.execute(
+            CompilerProcess.Command(executable: executableURL, arguments: []),
             purpose: .execution,
             limits: processLimits
         )
@@ -152,9 +152,9 @@ struct HeistSwiftFileCompiler: Sendable {
     }
 
     private func successfulOutput(
-        from outcome: CompilerProcessOutcome,
+        from outcome: CompilerProcess.Outcome,
         phase: HeistSwiftFileCompilerProcessPhase
-    ) throws -> CompilerProcessOutput {
+    ) throws -> CompilerProcess.Output {
         switch outcome {
         case .succeeded(let output):
             return output
