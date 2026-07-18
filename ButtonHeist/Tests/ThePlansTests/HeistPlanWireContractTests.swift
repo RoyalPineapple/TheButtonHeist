@@ -79,6 +79,19 @@ func `invalid external plan remains a candidate until runtime safety admission`(
 }
 
 @Test
+func `external plan version remains candidate data until semantic admission`() throws {
+    let data = Data(#"{"version":3,"body":[{"type":"warn","warn":{"message":"future"}}]}"#.utf8)
+    let sourceURL = URL(fileURLWithPath: "/tmp/future-plan.json")
+
+    let candidate = try HeistArtifactCodec.decodeAdmissionCandidateJSON(data, at: sourceURL)
+
+    #expect(candidate.version == 3)
+    #expect(throws: HeistPlanVersionAdmissionError.self) {
+        _ = try candidate.validatedSemantics()
+    }
+}
+
+@Test
 func `JSONDecoder decode of nested collection loops is rejected by runtime safety validation`() throws {
     let nestedCollectionLoop = Data("""
     {
