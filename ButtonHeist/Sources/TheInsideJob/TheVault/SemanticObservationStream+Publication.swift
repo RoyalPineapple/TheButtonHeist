@@ -377,15 +377,14 @@ extension SemanticObservationStream {
         vault: TheVault
     ) -> [SemanticObservationScope: SemanticObservationPublication.Evidence] {
         Dictionary(uniqueKeysWithValues: sourceScope.fulfilledScopes.map { fulfilledScope in
-            let referenceObservation = observation.semanticObservationProjection(for: fulfilledScope)
             return (fulfilledScope, SemanticObservationPublication.Evidence(
-                interface: vault.semanticInterfaceWithHash(for: referenceObservation).interface,
+                interface: vault.semanticInterfaceWithHash(for: observation).interface,
                 accessibilityNotifications: vault.resolveAccessibilityNotificationEvidence(
                     notificationBatch.events,
-                    identityObservation: notificationIdentityObservation ?? referenceObservation,
-                    referenceObservation: referenceObservation
+                    identityObservation: notificationIdentityObservation ?? observation,
+                    referenceObservation: observation
                 ),
-                firstResponder: vault.firstResponderTarget(in: referenceObservation.tree)
+                firstResponder: vault.firstResponderTarget(in: observation.tree)
             ))
         })
     }

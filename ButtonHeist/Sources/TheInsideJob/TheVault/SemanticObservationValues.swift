@@ -388,18 +388,5 @@ internal struct ObservationSettlement {
     internal let result: Result
 }
 
-// MARK: - Semantic Observation Projection
-
-internal extension InterfaceObservation {
-    func semanticObservationProjection(for scope: SemanticObservationScope) -> InterfaceObservation {
-        switch scope {
-        case .visible:
-            return viewportOnly
-        case .discovery:
-            return self
-        }
-    }
-}
-
 #endif // DEBUG
 #endif // canImport(UIKit)

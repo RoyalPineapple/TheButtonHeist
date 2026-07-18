@@ -466,9 +466,11 @@ extension TheFence.Command {
                     mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true)
                 )
             ) { _, arguments in
-                let expectation = try ExpectationPayload(arguments: arguments)
+                let expectation = try TheFence.ExpectationPayload(arguments: arguments)
                 return WaitStep(
-                    predicate: try ExpectationPayload.parseRequiredPredicate(arguments.value(for: .predicate)),
+                    predicate: try TheFence.ExpectationPayload.parseRequiredPredicate(
+                        arguments.value(for: .predicate)
+                    ),
                     timeout: expectation.timeout ?? defaultWaitTimeout
                 )
             }

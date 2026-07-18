@@ -68,7 +68,7 @@ internal struct SemanticObservationPublication {
             let settledObservation = SettledObservation(
                 sequence: sequence,
                 scope: fulfilledScope,
-                observation: observation.semanticObservationProjection(for: fulfilledScope),
+                observation: observation,
                 semanticSignal: semanticSignal
             )
             let previousCapture = previousEvent?.trace.captures.last

@@ -420,7 +420,7 @@ final class TheVaultResolutionTests: XCTestCase {
         }, ["Toast"])
     }
 
-    func testVisibleObservationTraceProjectsOnlyVisibleCommittedElements() throws {
+    func testVisibleObservationTraceCarriesCanonicalCommittedGraph() throws {
         let visible = element(label: "Custom Rotors", traits: .button)
         let discovered = element(label: "ButtonHeist Demo", traits: .button)
         let discovery = InterfaceObservation.makeForTests(
@@ -446,7 +446,7 @@ final class TheVaultResolutionTests: XCTestCase {
             .interface
             .projectedElements
             .compactMap(\.label)
-        XCTAssertEqual(labels, ["Custom Rotors"])
+        XCTAssertEqual(labels, ["Custom Rotors", "ButtonHeist Demo"])
     }
 
     func testDiagnosticEvidenceInvalidatesLatestSettledObservationWithoutReplacingIt() {
@@ -1306,7 +1306,7 @@ final class TheVaultResolutionTests: XCTestCase {
         XCTAssertEqual(observation?.settledObservation.observation.tree.orderedElements.first?.element.label, "Discovery")
     }
 
-    func testVisibleWaiterProjectsVisibleEvidenceFromDiscoveryObservation() async {
+    func testVisibleWaiterReceivesCanonicalGraphFromDiscoveryObservation() async {
         let sharedHeader = element(label: "Catalog", traits: .header)
         let first = InterfaceObservation.makeForTests(elements: [
             (sharedHeader, "catalog"),
@@ -1350,11 +1350,11 @@ final class TheVaultResolutionTests: XCTestCase {
         XCTAssertEqual(observation?.sequence, 2)
         XCTAssertEqual(
             observation?.settledObservation.observation.tree.orderedElements.compactMap(\.element.label),
-            ["Catalog", "Visible Discovery"]
+            ["Catalog", "Visible Discovery", "First", "Known Discovery"]
         )
         XCTAssertEqual(
             observation?.trace.captures.last?.interface.projectedElements.compactMap(\.label),
-            ["Catalog", "Visible Discovery"]
+            ["Catalog", "Visible Discovery", "First", "Known Discovery"]
         )
         XCTAssertEqual(bagman.semanticObservationStream.latestObservation?.scope, .discovery)
         XCTAssertEqual(
@@ -1364,7 +1364,7 @@ final class TheVaultResolutionTests: XCTestCase {
         XCTAssertEqual(bagman.semanticObservationStream.observationWaiterCount, 0)
     }
 
-    func testCleanVisibleEventAfterDiscoveryProjectsVisibleEvidence() async {
+    func testCleanVisibleEventAfterDiscoveryCarriesCanonicalGraph() async {
         let sharedHeader = element(label: "Catalog", traits: .header)
         let first = InterfaceObservation.makeForTests(elements: [
             (sharedHeader, "catalog"),
@@ -1400,11 +1400,11 @@ final class TheVaultResolutionTests: XCTestCase {
         XCTAssertEqual(observation?.sequence, 2)
         XCTAssertEqual(
             observation?.settledObservation.observation.tree.orderedElements.compactMap(\.element.label),
-            ["Catalog", "Visible Discovery"]
+            ["Catalog", "Visible Discovery", "First", "Known Discovery"]
         )
         XCTAssertEqual(
             observation?.trace.captures.last?.interface.projectedElements.compactMap(\.label),
-            ["Catalog", "Visible Discovery"]
+            ["Catalog", "Visible Discovery", "First", "Known Discovery"]
         )
     }
 

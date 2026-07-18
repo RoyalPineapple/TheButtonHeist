@@ -154,7 +154,7 @@ final class SemanticObservationStreamTests: XCTestCase {
         XCTAssertEqual(transition.previousCursor, entries[0].cursor)
     }
 
-    func testVisiblePublicationRetainsKnownGraphButProjectsScopedTraceEvidence() throws {
+    func testVisiblePublicationRetainsKnownGraphInStateAndTraceEvidence() throws {
         let visibleBefore = AccessibilityElement.make(
             label: "Anchor",
             value: "Before",
@@ -180,10 +180,14 @@ final class SemanticObservationStreamTests: XCTestCase {
 
         XCTAssertEqual(currentEvent.generation, baselineEvent.generation)
         XCTAssertNotNil(vault.interfaceTree.findElement(heistId: offViewportId))
-        XCTAssertFalse(
+        XCTAssertTrue(
             currentEvent.trace.captures.last?.interface.projectedElements.contains {
                 $0.label == "Known Offscreen"
             } == true
+        )
+        XCTAssertEqual(
+            currentEvent.settledObservation.observation.tree.orderedElements.compactMap(\.element.label),
+            currentEvent.trace.captures.last?.interface.projectedElements.compactMap(\.label)
         )
     }
 
@@ -285,7 +289,7 @@ final class SemanticObservationStreamTests: XCTestCase {
         )
     }
 
-    func testDiscoveryPublicationProjectsVisibleTreeAndEvidenceFromTheSameScope() throws {
+    func testDiscoveryPublicationCarriesCanonicalGraphAndEvidenceAcrossFulfilledScopes() throws {
         let visible = AccessibilityElement.make(label: "Visible", traits: .header)
         let offViewport = AccessibilityElement.make(label: "Off Viewport", traits: .button)
         let observation = InterfaceObservation.makeForTests(
@@ -304,11 +308,11 @@ final class SemanticObservationStreamTests: XCTestCase {
             discoveryEvent.trace.captures.last?.interface.projectedElements.compactMap(\.label),
             ["Visible", "Off Viewport"]
         )
-        XCTAssertEqual(visibleEvent.settledObservation.observation.tree.elementIDs, ["visible"])
+        XCTAssertEqual(visibleEvent.settledObservation.observation.tree.elementIDs, ["visible", "off_viewport"])
         XCTAssertEqual(visibleEvent.settledObservation.observation.captureToken, observation.captureToken)
         XCTAssertEqual(
             visibleEvent.trace.captures.last?.interface.projectedElements.compactMap(\.label),
-            ["Visible"]
+            ["Visible", "Off Viewport"]
         )
         XCTAssertEqual(vault.latestObservation.captureToken, observation.captureToken)
     }
@@ -676,8 +680,12 @@ final class SemanticObservationStreamTests: XCTestCase {
             observation(label: "Retained Discovery", heistId: "retained_discovery")
         )
         let discoveryCompleted = expectation(description: "Empty discovery cycle completed")
+        var didRecordCompletion = false
         vault.semanticObservationStream.start {
-            discoveryCompleted.fulfill()
+            if !didRecordCompletion {
+                didRecordCompletion = true
+                discoveryCompleted.fulfill()
+            }
             return nil
         }
 

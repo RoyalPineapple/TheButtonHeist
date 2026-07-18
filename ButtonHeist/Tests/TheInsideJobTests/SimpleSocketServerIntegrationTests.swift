@@ -187,6 +187,7 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
     }
 
     func testSendToMissingClientFailsTyped() async throws {
+        _ = try await server.startPlaintextForTests(port: 0, bindToLoopback: true)
         let outcome = await server.send(Data("late-response".utf8), to: 404)
 
         guard case .failed(.clientNotFound(404)) = outcome else {

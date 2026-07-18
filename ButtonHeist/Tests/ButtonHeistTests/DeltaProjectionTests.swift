@@ -24,13 +24,17 @@ final class DeltaProjectionTests: XCTestCase {
             remaining.removeAll { $0 == removedIndex }
             interfaces.append(makeTestInterface(elements: remaining.map { allElements[$0] }))
         }
-        let trace = AccessibilityTrace(captures: interfaces.enumerated().map { index, interface in
-            AccessibilityTrace.Capture(
-                sequence: index + 1,
-                interface: interface,
+        var trace = AccessibilityTrace(capture: AccessibilityTrace.Capture(
+            sequence: 1,
+            interface: interfaces[0],
+            context: AccessibilityTrace.Context(screenId: "rows")
+        ))
+        for interface in interfaces.dropFirst() {
+            trace = trace.appending(
+                interface,
                 context: AccessibilityTrace.Context(screenId: "rows")
             )
-        })
+        }
 
         let projection = try XCTUnwrap(DeltaProjection(
             trace: trace,
@@ -119,24 +123,20 @@ final class DeltaProjectionTests: XCTestCase {
             makeTestHeistElement(label: "Checkout", identifier: "checkout", traits: [.header]),
             makeTestHeistElement(label: "Pay", identifier: "pay", traits: [.button]),
         ])
-        let trace = AccessibilityTrace(captures: [
-            AccessibilityTrace.Capture(
-                sequence: 1,
-                interface: cart,
+        let trace = AccessibilityTrace(capture: AccessibilityTrace.Capture(
+            sequence: 1,
+            interface: cart,
+            context: AccessibilityTrace.Context(screenId: "cart")
+        ))
+            .appending(
+                cartWithToast,
                 context: AccessibilityTrace.Context(screenId: "cart")
-            ),
-            AccessibilityTrace.Capture(
-                sequence: 2,
-                interface: cartWithToast,
-                context: AccessibilityTrace.Context(screenId: "cart")
-            ),
-            AccessibilityTrace.Capture(
-                sequence: 3,
-                interface: checkout,
+            )
+            .appending(
+                checkout,
                 context: AccessibilityTrace.Context(screenId: "checkout"),
                 transition: makeTestScreenChangedTransition()
-            ),
-        ])
+            )
 
         let projection = try XCTUnwrap(DeltaProjection(
             trace: trace,
