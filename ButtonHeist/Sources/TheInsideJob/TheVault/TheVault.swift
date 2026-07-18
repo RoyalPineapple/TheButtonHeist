@@ -13,18 +13,17 @@ import AccessibilitySnapshotParser
 /// observation carries disposable UIKit evidence for actionability, while a
 /// failed observation may be retained only for diagnostics.
 @MainActor
-final class TheStash {
+final class TheVault {
 
     init(tripwire: TheTripwire) {
         self.tripwire = tripwire
-        self.burglar = TheBurglar(tripwire: tripwire)
     }
 
     /// TheTripwire handles window access and animation detection.
     let tripwire: TheTripwire
 
-    /// TheBurglar handles parsing.
-    let burglar: TheBurglar
+    /// Parser used only while capturing a live accessibility hierarchy.
+    let hierarchyParser = AccessibilityHierarchyParser()
 
     /// Pending accessibility notifications captured while semantic observation is active.
     let accessibilityNotifications = AccessibilityNotificationBus()
@@ -46,7 +45,7 @@ final class TheStash {
 
     // MARK: - Observation Scheduling
 
-    lazy var semanticObservationStream = SemanticObservationStream(stash: self, tripwire: tripwire)
+    lazy var semanticObservationStream = SemanticObservationStream(vault: self, tripwire: tripwire)
 
     // MARK: - Interaction Cursor State
 

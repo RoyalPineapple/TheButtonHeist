@@ -9,11 +9,11 @@ tree; temporal predicates and receipts read replayable retained entries.
 [API.md](../API.md), [WIRE-PROTOCOL.md](../WIRE-PROTOCOL.md)
 
 **Source of truth:**
-`ButtonHeist/Sources/TheInsideJob/TheStash/TheStash+InterfaceState.swift`,
-`ButtonHeist/Sources/TheInsideJob/TheStash/SemanticObservationValues.swift`,
-`ButtonHeist/Sources/TheInsideJob/TheStash/SemanticObservationLog.swift`,
-`ButtonHeist/Sources/TheInsideJob/TheStash/SemanticObservationPublication.swift`,
-`ButtonHeist/Sources/TheInsideJob/TheStash/SemanticObservationStream.swift`,
+`ButtonHeist/Sources/TheInsideJob/TheVault/TheVault+InterfaceState.swift`,
+`ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationValues.swift`,
+`ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationLog.swift`,
+`ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationPublication.swift`,
+`ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStream.swift`,
 `ButtonHeist/Sources/TheInsideJob/TheBrains/SettleSession.swift`,
 `ButtonHeist/Sources/TheInsideJob/TheBrains/Navigation+ScrollSettleProof.swift`,
 `ButtonHeist/Sources/TheInsideJob/TheBrains/Navigation+Explore.swift`,
@@ -41,7 +41,7 @@ flowchart TD
 
     Proof --> Committer["SemanticObservationStream<br/>sole ordered committer"]
     Committer --> Continuity["classify continuity once"]
-    Continuity --> Graph["canonical graph reducer<br/>reduce TheStash.interfaceTree"]
+    Continuity --> Graph["canonical graph reducer<br/>reduce TheVault.interfaceTree"]
     Graph --> Publication["construct settled publication<br/>from committed graph"]
     Publication --> Log["private SemanticObservationLog<br/>publish retained entry"]
     Log --> Runtime["advance runtime generation<br/>and settled sequence"]
@@ -84,7 +84,7 @@ sequenceDiagram
     participant UIKit as UIKit viewport
     participant Settle as SettleSession
     participant Stream as SemanticObservationStream
-    participant Graph as TheStash graph
+    participant Graph as TheVault graph
     participant Log as Private observation log
     participant Callback as Observation callback
 

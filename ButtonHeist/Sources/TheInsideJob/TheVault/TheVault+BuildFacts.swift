@@ -7,9 +7,9 @@ import ThePlans
 
 import AccessibilitySnapshotParser
 
-extension TheBurglar {
+extension TheVault {
 
-    struct InterfaceObservationBuildElementScrollFacts: Equatable {
+    struct ElementScrollFacts: Equatable {
         let membership: InterfaceTree.ScrollMembership
         let observedScrollContentActivationPoint: InterfaceTree.ObservedScrollContentActivationPoint?
 
@@ -33,15 +33,15 @@ extension TheBurglar {
         }
     }
 
-    struct InterfaceObservationBuildScrollFacts: Equatable {
+    struct ScrollFacts: Equatable {
         let contextContainerPaths: Set<TreePath>
-        let elementsByPath: [TreePath: InterfaceObservationBuildElementScrollFacts]
+        let elementsByPath: [TreePath: ElementScrollFacts]
         let containerObservedScrollContentActivationPointsByPath: [TreePath: InterfaceTree.ObservedScrollContentActivationPoint]
         let inventoriesByPath: [TreePath: ScrollInventory]
 
         init(
             contextContainerPaths: Set<TreePath> = [],
-            elementsByPath: [TreePath: InterfaceObservationBuildElementScrollFacts] = [:],
+            elementsByPath: [TreePath: ElementScrollFacts] = [:],
             containerObservedScrollContentActivationPointsByPath: [TreePath: InterfaceTree.ObservedScrollContentActivationPoint] = [:],
             inventoriesByPath: [TreePath: ScrollInventory] = [:]
         ) {
@@ -51,12 +51,12 @@ extension TheBurglar {
             self.inventoriesByPath = inventoriesByPath
         }
 
-        func element(at path: TreePath) -> InterfaceObservationBuildElementScrollFacts? {
+        func element(at path: TreePath) -> ElementScrollFacts? {
             elementsByPath[path]
         }
     }
 
-    struct InterfaceObservationBuildFocusFacts: Equatable {
+    struct FocusFacts: Equatable {
         let firstResponderPaths: Set<TreePath>
 
         init(firstResponderPaths: Set<TreePath> = []) {
@@ -70,13 +70,13 @@ extension TheBurglar {
 
     /// Value facts extracted from live UIKit / Objective-C accessibility
     /// objects before pure interface projection.
-    struct InterfaceObservationBuildFacts: Equatable {
-        let scroll: InterfaceObservationBuildScrollFacts
-        let focus: InterfaceObservationBuildFocusFacts
+    struct BuildFacts: Equatable {
+        let scroll: ScrollFacts
+        let focus: FocusFacts
 
         init(
-            scroll: InterfaceObservationBuildScrollFacts = InterfaceObservationBuildScrollFacts(),
-            focus: InterfaceObservationBuildFocusFacts = InterfaceObservationBuildFocusFacts()
+            scroll: ScrollFacts = ScrollFacts(),
+            focus: FocusFacts = FocusFacts()
         ) {
             self.scroll = scroll
             self.focus = focus
@@ -86,23 +86,23 @@ extension TheBurglar {
 }
 
 @MainActor
-extension TheBurglar.InterfaceObservationBuildFacts {
+extension TheVault.BuildFacts {
 
     /// UIKit boundary for observation-building facts. Keep Objective-C accessibility
     /// inventory/index reads, responder checks, scroll safety checks, and
     /// coordinate conversion here rather than in projection.
     static func extract(
-        from result: TheBurglar.ParseResult,
-        identityContext: TheBurglar.HierarchyIdentityContext
-    ) -> TheBurglar.InterfaceObservationBuildFacts {
+        from result: TheVault.CaptureResult,
+        identityContext: TheVault.IdentityContext
+    ) -> TheVault.BuildFacts {
         let elementScrollExtraction = elementScrollFacts(
             identityContext: identityContext,
             objectsByPath: result.objectsByPath,
             scrollViewsByPath: result.scrollViewsByPath
         )
 
-        return TheBurglar.InterfaceObservationBuildFacts(
-            scroll: TheBurglar.InterfaceObservationBuildScrollFacts(
+        return TheVault.BuildFacts(
+            scroll: TheVault.ScrollFacts(
                 contextContainerPaths: identityContext.scrollableContainerPaths,
                 elementsByPath: elementScrollExtraction.elementsByPath,
                 containerObservedScrollContentActivationPointsByPath: containerObservedScrollContentActivationPoints(
@@ -114,14 +114,14 @@ extension TheBurglar.InterfaceObservationBuildFacts {
                     scrollViewsByPath: result.scrollViewsByPath
                 )
             ),
-            focus: TheBurglar.InterfaceObservationBuildFocusFacts(
+            focus: TheVault.FocusFacts(
                 firstResponderPaths: firstResponderPaths(in: result.objectsByPath)
             )
         )
     }
 
     static func scrollContextContainerPaths(
-        from result: TheBurglar.ParseResult
+        from result: TheVault.CaptureResult
     ) -> Set<TreePath> {
         Set(
             result.scrollViewsByPath.compactMap { path, scrollView in
@@ -131,7 +131,7 @@ extension TheBurglar.InterfaceObservationBuildFacts {
     }
 
     private struct ElementScrollFactsExtraction {
-        let elementsByPath: [TreePath: TheBurglar.InterfaceObservationBuildElementScrollFacts]
+        let elementsByPath: [TreePath: TheVault.ElementScrollFacts]
         let visibleIndicesByContainerPath: [TreePath: Set<Int>]
     }
 
@@ -144,11 +144,11 @@ extension TheBurglar.InterfaceObservationBuildFacts {
     }
 
     private static func elementScrollFacts(
-        identityContext: TheBurglar.HierarchyIdentityContext,
+        identityContext: TheVault.IdentityContext,
         objectsByPath: [TreePath: NSObject],
         scrollViewsByPath: [TreePath: UIScrollView]
     ) -> ElementScrollFactsExtraction {
-        var elementsByPath: [TreePath: TheBurglar.InterfaceObservationBuildElementScrollFacts] = [:]
+        var elementsByPath: [TreePath: TheVault.ElementScrollFacts] = [:]
         var visibleIndicesByContainerPath: [TreePath: Set<Int>] = [:]
 
         for identity in identityContext.elements {
@@ -160,7 +160,7 @@ extension TheBurglar.InterfaceObservationBuildFacts {
             if let index {
                 visibleIndicesByContainerPath[membership.containerPath, default: []].insert(index)
             }
-            elementsByPath[identity.path] = TheBurglar.InterfaceObservationBuildElementScrollFacts(
+            elementsByPath[identity.path] = TheVault.ElementScrollFacts(
                 membership: InterfaceTree.ScrollMembership(
                     containerPath: membership.containerPath,
                     index: index
@@ -220,7 +220,7 @@ extension TheBurglar.InterfaceObservationBuildFacts {
     }
 
     private static func containerObservedScrollContentActivationPoints(
-        identityContext: TheBurglar.HierarchyIdentityContext,
+        identityContext: TheVault.IdentityContext,
         scrollViewsByPath: [TreePath: UIScrollView]
     ) -> [TreePath: InterfaceTree.ObservedScrollContentActivationPoint] {
         Dictionary(

@@ -22,7 +22,7 @@ extension Actions {
                 .editAction,
                 message: ActionCapabilityDiagnostic.editActionFailed(
                     target.action,
-                    stash: stash,
+                    vault: vault,
                     safecracker: safecracker
                 )
             )
@@ -31,7 +31,7 @@ extension Actions {
         case .inflated(let target):
             inflatedTarget = target
         }
-        let dispatch = stash.dispatchOnFreshLiveActionTarget(
+        let dispatch = vault.dispatchOnFreshLiveActionTarget(
             inflatedTarget.liveTarget,
         ) { liveTarget in
             safecracker.performEditAction(target.action, on: liveTarget.object)
@@ -45,7 +45,7 @@ extension Actions {
         }
         let message = success ? nil : ActionCapabilityDiagnostic.editActionFailed(
             target.action,
-            stash: stash,
+            vault: vault,
             safecracker: safecracker
         )
         return success
@@ -85,7 +85,7 @@ extension Actions {
             return .failure(
                 .resignFirstResponder,
                 message: ActionCapabilityDiagnostic.resignFirstResponderFailed(
-                    stash: stash,
+                    vault: vault,
                     safecracker: safecracker
                 )
             )
@@ -94,7 +94,7 @@ extension Actions {
         case .inflated(let target):
             inflatedTarget = target
         }
-        let dispatch = stash.dispatchOnFreshLiveActionTarget(
+        let dispatch = vault.dispatchOnFreshLiveActionTarget(
             inflatedTarget.liveTarget,
         ) { liveTarget in
             safecracker.resignFirstResponder(liveTarget.object)
@@ -116,7 +116,7 @@ extension Actions {
         return .failure(
             .resignFirstResponder,
             message: ActionCapabilityDiagnostic.resignFirstResponderFailed(
-                stash: stash,
+                vault: vault,
                 safecracker: safecracker
             )
         )
@@ -180,7 +180,7 @@ extension Actions {
         guard diagnostic.reason == .noActiveInput else { return diagnostic.message }
         return "\(diagnostic.message); " + ActionCapabilityDiagnostic.textEntryFailed(
             operation: operation,
-            stash: stash,
+            vault: vault,
             safecracker: safecracker,
             suggestion: "focus an editable text field before \(operation)"
         )
@@ -207,7 +207,7 @@ extension Actions {
                     .typeText,
                     message: ActionCapabilityDiagnostic.textEntryFailed(
                         operation: "initial focus check",
-                        stash: stash,
+                        vault: vault,
                         safecracker: safecracker,
                         suggestion: "provide target for a text field or focus an editable field before typing"
                     )
@@ -253,7 +253,7 @@ extension Actions {
 
         let activateOutcome: AccessibilityActionDispatcher.ActivateOutcome
         let activationPoint: CGPoint
-        switch stash.dispatchOnFreshLiveActionTarget(
+        switch vault.dispatchOnFreshLiveActionTarget(
             refreshedTarget.liveTarget,
             operation: { liveTarget in
                 ActivationDispatchEvidence(
@@ -280,7 +280,7 @@ extension Actions {
 
         let preparedDispatch: TheSafecracker.PreparedTouchDispatch?
         let point: CGPoint
-        switch stash.dispatchOnFreshLiveActionTarget(
+        switch vault.dispatchOnFreshLiveActionTarget(
             refreshedTarget.liveTarget,
             operation: { liveTarget in
                 let point = liveTarget.activationPoint
@@ -313,7 +313,7 @@ extension Actions {
                 .typeText,
                 message: ActionCapabilityDiagnostic.textEntryFailed(
                     operation: "post-activation keyboard readiness",
-                    stash: stash,
+                    vault: vault,
                     safecracker: safecracker,
                     suggestion: "target an editable text field"
                 )
@@ -330,7 +330,7 @@ extension Actions {
             guard waitForInput,
                   await safecracker.waitForActiveTextInput() else { return nil }
         }
-        let liveFocus = stash.dispatchOnFreshLiveActionTarget(
+        let liveFocus = vault.dispatchOnFreshLiveActionTarget(
             candidate.liveTarget,
             operation: { liveTarget -> FocusedTextInput? in
                 guard isFirstResponder(liveTarget.object) else { return nil }
@@ -358,7 +358,7 @@ extension Actions {
 
     private func focusedTextInput(
         from inflatedTarget: ElementInflation.InflatedElementTarget,
-        liveTarget: TheStash.LiveActionTarget
+        liveTarget: TheVault.LiveActionTarget
     ) -> FocusedTextInput {
         FocusedTextInput(
             subjectEvidence: inflatedTarget.subjectEvidence(source: .textInputTarget),

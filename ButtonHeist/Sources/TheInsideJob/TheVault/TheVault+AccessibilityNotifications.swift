@@ -5,7 +5,7 @@ import Foundation
 import AccessibilitySnapshotParser
 import TheScore
 
-extension TheStash {
+extension TheVault {
     func resolveAccessibilityNotificationEvidence(
         _ pendingEvents: [PendingAccessibilityNotificationEvent],
         in observation: InterfaceObservation
@@ -61,7 +61,7 @@ extension TheStash {
                let elementReference = traceElementReference(for: heistId, in: referenceObservation, resolution: .identity) {
                 return .element(elementReference)
             }
-            if let parsedElement = burglar.parseObject(object),
+            if let parsedElement = captureObject(object),
                let elementReference = uniqueTraceElementReference(
                 matching: parsedElement,
                 in: referenceObservation,

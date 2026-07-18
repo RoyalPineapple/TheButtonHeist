@@ -439,10 +439,10 @@ struct SettleSessionFinalObservation: Equatable, Sendable {
         )
     }
 
-    /// Live wiring against the real stash/tripwire. The policy selects the
+    /// Live wiring against the real vault/tripwire. The policy selects the
     /// stability proof while this type continues to own the entire loop.
     static func live(
-        stash: TheStash,
+        vault: TheVault,
         tripwire: TheTripwire,
         timeoutMs: Int = SettleSession.defaultTimeoutMs,
         policy: SettlePolicy = .consecutiveCycles(
@@ -456,7 +456,7 @@ struct SettleSessionFinalObservation: Equatable, Sendable {
             { await tripwire.yieldRealFrames(1) }
         }
         return SettleSession(
-            parseProvider: { stash.semanticObservationForSettle() },
+            parseProvider: { vault.semanticObservationForSettle() },
             tripwireSignalProvider: { tripwire.tripwireSignal() },
             observationYield: observationYield,
             policy: policy,
@@ -469,12 +469,12 @@ struct SettleSessionFinalObservation: Equatable, Sendable {
     /// one run-loop turn to lay out the new viewport, then the parser must
     /// return the same semantic fingerprint on consecutive captures.
     static func viewportTransition(
-        stash: TheStash,
+        vault: TheVault,
         tripwire: TheTripwire,
         timeoutMs: Int
     ) -> SettleSession {
         SettleSession(
-            parseProvider: { stash.semanticObservationForSettle() },
+            parseProvider: { vault.semanticObservationForSettle() },
             tripwireSignalProvider: { tripwire.tripwireSignal() },
             observationYield: { await tripwire.yieldRealFrames(1) },
             policy: .consecutiveCycles(required: 1),
@@ -491,7 +491,7 @@ struct SettleSessionFinalObservation: Equatable, Sendable {
         /// whether the AX tree became stable.
         let events: [SettleEvent]
         /// Last semantic observation from the settle loop, paired with the
-        /// token and fingerprint needed to reacquire its live capture from TheStash.
+        /// token and fingerprint needed to reacquire its live capture from TheVault.
         let finalObservation: SettleSessionFinalObservation?
         /// Every `(key, element)` pair observed in any cycle of the loop.
         /// Includes spinner cycles and other intermediate states.

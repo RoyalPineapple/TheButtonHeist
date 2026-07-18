@@ -29,7 +29,7 @@ extension ElementInflation {
         _ treeElement: InterfaceTree.Element,
         deadline: SemanticObservationDeadline,
     ) async -> SemanticRevealResult {
-        let transaction = RevealTransaction(stash: stash)
+        let transaction = RevealTransaction(vault: vault)
         transaction.captureScrollableHierarchy()
         let result = await revealSemanticTarget(
             treeElement,
@@ -53,7 +53,7 @@ extension ElementInflation {
         if let interruption = semanticRevealInterruption(deadline: deadline) {
             return interruption
         }
-        if stash.visibleLiveElementAliasing(treeElement) != nil {
+        if vault.visibleLiveElementAliasing(treeElement) != nil {
             return .alreadyVisible
         }
         guard treeElement.scrollMembership != nil else {
@@ -69,7 +69,7 @@ extension ElementInflation {
                in: scrollView,
                deadline: deadline,
                transaction: transaction
-           ), stash.visibleLiveElementAliasing(treeElement) != nil {
+           ), vault.visibleLiveElementAliasing(treeElement) != nil {
             return .revealed
         }
         if let interruption = semanticRevealInterruption(deadline: deadline) {
@@ -86,7 +86,7 @@ extension ElementInflation {
         if let interruption = semanticRevealInterruption(deadline: deadline) {
             return interruption
         }
-        guard stash.visibleLiveElementAliasing(treeElement) != nil else {
+        guard vault.visibleLiveElementAliasing(treeElement) != nil else {
             return .failed(.scanDidNotRevealTarget)
         }
         return .revealed
@@ -115,10 +115,10 @@ extension ElementInflation {
         guard semanticRevealInterruption(deadline: deadline) == nil else { return nil }
         var visited = visited
         guard visited.insert(path).inserted,
-              let container = stash.interfaceTree.containers[path]
+              let container = vault.interfaceTree.containers[path]
         else { return nil }
         guard let membership = container.scrollMembership else {
-            return stash.refreshedLiveScrollView(for: container)
+            return vault.refreshedLiveScrollView(for: container)
         }
         guard let parent = await revealScrollContainer(
             at: membership.containerPath,
@@ -135,7 +135,7 @@ extension ElementInflation {
         else { return nil }
 
         transaction.captureScrollableHierarchy()
-        return stash.refreshedLiveScrollView(for: container, directChildOf: parent)
+        return vault.refreshedLiveScrollView(for: container, directChildOf: parent)
     }
 
     private func moveToObservedContentPoint(
@@ -146,7 +146,7 @@ extension ElementInflation {
     ) async -> Bool {
         guard semanticRevealInterruption(deadline: deadline) == nil else { return false }
         transaction.record(scrollView)
-        guard let scrollTarget = Navigation.ScrollableTarget.programmatic(scrollView, in: stash) else {
+        guard let scrollTarget = Navigation.ScrollableTarget.programmatic(scrollView, in: vault) else {
             return false
         }
         let transition = await exploration.moveViewport(

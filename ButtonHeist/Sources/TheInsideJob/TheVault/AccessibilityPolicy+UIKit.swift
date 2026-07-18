@@ -17,27 +17,27 @@ import AccessibilitySnapshotParser
 extension AccessibilityPolicy {
 
     /// Bitmask form of `transientTraits`. Consumed by
-    /// `TheBurglar.stableTraitNames`.
+    /// `TheVault.stableTraitNames`.
     static let transientTraitsBitmask: AccessibilityTraits =
         AccessibilityTraits.fromNames(transientTraits.map(\.rawValue))
 
     /// Set of trait *names* in `transientTraits`. Consumed by
-    /// `TheBurglar.stableTraitNames` for `Set<String>` subtraction.
+    /// `TheVault.stableTraitNames` for `Set<String>` subtraction.
     static let transientTraitNames: Set<String> =
         Set(transientTraits.map(\.rawValue))
 
     /// Bitmask form of `interactiveTraits`. Consumed by
-    /// `TheStash.Interactivity.hasInteractiveTraits`.
+    /// `TheVault.Interactivity.hasInteractiveTraits`.
     static let interactiveTraitsBitmask: AccessibilityTraits =
         AccessibilityTraits.fromNames(interactiveTraits.map(\.rawValue))
 
     /// Bitmask form of `staticOnlyTraits`. Consumed by
-    /// `TheStash.Interactivity.checkInteractivity` for subset checks.
+    /// `TheVault.Interactivity.checkInteractivity` for subset checks.
     static let staticOnlyTraitsBitmask: AccessibilityTraits =
         AccessibilityTraits.fromNames(staticOnlyTraits.map(\.rawValue))
 
     /// Synthesis priority resolved to `(name, bitmask)` pairs in priority
-    /// order. Consumed by `TheStash.IdAssignment.synthesizeBaseId` to find
+    /// order. Consumed by `TheVault.IdAssignment.synthesizeBaseId` to find
     /// the first matching trait an element carries.
     static let synthesisPriorityWithMasks: [(name: String, mask: AccessibilityTraits)] =
         synthesisPriority.map { trait in

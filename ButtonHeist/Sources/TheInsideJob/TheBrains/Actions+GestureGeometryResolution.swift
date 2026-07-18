@@ -13,7 +13,7 @@ extension Actions {
     }
 
     enum GesturePointSource {
-        case liveTarget(TheStash.LiveActionTarget, unitPoint: UnitPoint?)
+        case liveTarget(TheVault.LiveActionTarget, unitPoint: UnitPoint?)
         case coordinate(CGPoint)
     }
 
@@ -88,7 +88,7 @@ extension Actions {
         case .coordinate(let point):
             return prepareGestureDispatch(at: point, method: method, prepare: prepare)
         case .liveTarget(let liveTarget, let unitPoint):
-            switch stash.dispatchOnFreshLiveActionTarget(
+            switch vault.dispatchOnFreshLiveActionTarget(
                 liveTarget,
                 operation: { currentTarget
                 -> GestureResolution<PreparedGestureDispatch<PreparedDispatch>> in

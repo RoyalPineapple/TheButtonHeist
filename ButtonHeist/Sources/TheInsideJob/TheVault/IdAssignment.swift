@@ -55,7 +55,7 @@ struct HeistId: RawRepresentable, Hashable, Sendable, Codable, Comparable, Custo
 
 // MARK: - HeistId Assignment
 
-extension TheStash {
+extension TheVault {
 
     /// Assigns deterministic heistIds to accessibility elements.
     /// Pure value-in, value-out — no mutable state.

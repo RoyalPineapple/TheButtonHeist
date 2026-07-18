@@ -5,7 +5,7 @@ import ThePlans
 @testable import TheInsideJob
 @testable import TheScore
 
-/// Property + regression tests for `TheStash.IdAssignment.synthesizeBaseId(_:)`.
+/// Property + regression tests for `TheVault.IdAssignment.synthesizeBaseId(_:)`.
 ///
 /// HeistId synthesis is wire-format. Changes to its output break recorded
 /// heists and the agent's predict-the-heistId pattern that benchmarks rely
@@ -16,7 +16,7 @@ import ThePlans
 @MainActor
 final class SynthesisDeterminismTests: XCTestCase {
 
-    private typealias IdAssignment = TheStash.IdAssignment
+    private typealias IdAssignment = TheVault.IdAssignment
 
     // MARK: - Helpers
 

@@ -11,16 +11,16 @@ extension SemanticObservationStream {
         let subscription = subscribe(scope: .visible)
         defer { _ = subscription }
 
-        guard let stash else { return nil }
+        guard let vault else { return nil }
 
         let outcome = await SemanticObservationSettleCadence.settleVisibleObservationForCurrentDemand(
             demandState: activeObservationDemandState,
-            stash: stash,
+            vault: vault,
             tripwire: tripwire,
             baselineTripwireSignal: tripwire.tripwireSignal(),
             timeoutMs: Self.timeoutMilliseconds(from: timeout)
         )
-        guard let proof = admitSettledProof(outcome, stash: stash) else { return nil }
+        guard let proof = admitSettledProof(outcome, vault: vault) else { return nil }
         let event = commitSettledVisibleObservation(proof)
         return ViewportObservationEvidence(
             viewportObservation: event.settledObservation.observation,
@@ -62,14 +62,14 @@ extension SemanticObservationStream {
         notificationBatch: AccessibilityNotificationBatch? = nil,
         notificationIdentityObservation: InterfaceObservation? = nil
     ) -> SettledObservationEvent {
-        guard let stash else {
-            preconditionFailure("SemanticObservationStream cannot commit after TheStash is released")
+        guard let vault else {
+            preconditionFailure("SemanticObservationStream cannot commit after TheVault is released")
         }
         let resolvedNotificationBatch = notificationBatch
-            ?? stash.accessibilityNotifications.checkpoint(
+            ?? vault.accessibilityNotifications.checkpoint(
                 after: runtimeState.notificationCursor
             )
-        let previousTree = stash.interfaceTree
+        let previousTree = vault.interfaceTree
         let candidateTree = switch scope {
         case .visible:
             previousTree.updatingViewport(with: proof.observation)
@@ -88,7 +88,7 @@ extension SemanticObservationStream {
         if continuity.isReplacement {
             observationLog.beginScreenReplacement()
         }
-        _ = stash.reduceInterfaceGraph(
+        _ = vault.reduceInterfaceGraph(
             with: proof.observation,
             scope: scope,
             continuity: continuity,
@@ -96,7 +96,7 @@ extension SemanticObservationStream {
         )
         return publishCurrentSettledObservation(
             scope: scope,
-            stash: stash,
+            vault: vault,
             notificationBatch: resolvedNotificationBatch,
             continuity: continuity,
             notificationIdentityObservation: notificationIdentityObservation
@@ -109,7 +109,7 @@ extension SemanticObservationStream {
         settleOutcome providedOutcome: SettleSession.Outcome? = nil,
         notificationWindow: AccessibilityNotificationActionWindow? = nil
     ) async -> ObservationSettlement {
-        guard let stash else {
+        guard let vault else {
             let notificationBatch = notificationWindow?.capture()
             notificationWindow?.cancel()
             return ObservationSettlement(
@@ -128,7 +128,7 @@ extension SemanticObservationStream {
         } else {
             outcome = await SemanticObservationSettleCadence.settleVisibleObservationForCurrentDemand(
                 demandState: activeObservationDemandState,
-                stash: stash,
+                vault: vault,
                 tripwire: tripwire,
                 baselineTripwireSignal: baselineTripwireSignal,
                 timeoutMs: SettleSession.defaultTimeoutMs
@@ -138,9 +138,9 @@ extension SemanticObservationStream {
         let terminalActionNotificationBatch = notificationWindow?.capture()
         notificationWindow?.cancel()
 
-        if let proof = admitSettledProof(outcome, stash: stash) {
+        if let proof = admitSettledProof(outcome, vault: vault) {
             let notificationBatch = terminalActionNotificationBatch
-                ?? stash.accessibilityNotifications.checkpoint(
+                ?? vault.accessibilityNotifications.checkpoint(
                     after: runtimeState.notificationCursor
                 )
             let event: SettledObservationEvent
@@ -189,10 +189,10 @@ extension SemanticObservationStream {
     /// also fires for in-place updates and would starve reads on chatty
     /// screens.
     func invalidateSettledObservationIfScreenChangedSinceCommit() {
-        guard let stash,
+        guard let vault,
               !latestSettledObservationInvalidated,
               latestEvent != nil,
-              stash.accessibilityNotifications.latestScopedScreenChangedSequence
+              vault.accessibilityNotifications.latestScopedScreenChangedSequence
               > runtimeState.scopedScreenChangedSequence
         else { return }
         observationLog.invalidateCurrentPublication()
@@ -200,14 +200,14 @@ extension SemanticObservationStream {
 
     private func publishCurrentSettledObservation(
         scope: SemanticObservationScope = .visible,
-        stash: TheStash,
+        vault: TheVault,
         notificationBatch: AccessibilityNotificationBatch,
         continuity: ScreenContinuity,
         notificationIdentityObservation: InterfaceObservation? = nil
     ) -> SettledObservationEvent {
         let settledObservation: InterfaceObservation
         do {
-            settledObservation = try InterfaceObservation.build(tree: stash.interfaceTree)
+            settledObservation = try InterfaceObservation.build(tree: vault.interfaceTree)
         } catch {
             preconditionFailure("Published semantic observation failed validation: \(error)")
         }
@@ -227,7 +227,7 @@ extension SemanticObservationStream {
                 observation: settledObservation,
                 notificationBatch: notificationBatch,
                 notificationIdentityObservation: notificationIdentityObservation,
-                stash: stash
+                vault: vault
             )
         )
         for fallbackReason in scope.fulfilledScopes.compactMap({ fulfilledScope in
@@ -257,32 +257,32 @@ extension SemanticObservationStream {
         observation: InterfaceObservation,
         notificationBatch: AccessibilityNotificationBatch,
         notificationIdentityObservation: InterfaceObservation?,
-        stash: TheStash
+        vault: TheVault
     ) -> [SemanticObservationScope: SemanticObservationPublication.Evidence] {
         Dictionary(uniqueKeysWithValues: sourceScope.fulfilledScopes.map { fulfilledScope in
             let referenceObservation = observation
             return (fulfilledScope, SemanticObservationPublication.Evidence(
-                interface: stash.semanticInterfaceWithHash(for: referenceObservation).interface,
-                accessibilityNotifications: stash.resolveAccessibilityNotificationEvidence(
+                interface: vault.semanticInterfaceWithHash(for: referenceObservation).interface,
+                accessibilityNotifications: vault.resolveAccessibilityNotificationEvidence(
                     notificationBatch.events,
                     identityObservation: notificationIdentityObservation ?? referenceObservation,
                     referenceObservation: referenceObservation
                 ),
-                firstResponder: stash.firstResponderTarget(in: referenceObservation.tree)
+                firstResponder: vault.firstResponderTarget(in: referenceObservation.tree)
             ))
         })
     }
 
     func admitSettledProof(
         _ outcome: SettleSession.Outcome,
-        stash: TheStash,
+        vault: TheVault,
         layerGateWasClear: Bool? = nil
     ) -> InterfaceObservationProof? {
-        guard let proof = InterfaceObservationProof.settled(outcome, stash: stash) else {
+        guard let proof = InterfaceObservationProof.settled(outcome, vault: vault) else {
             recordFailedSettle(
                 SettleFailureDiagnostic.message(for: outcome, layerGateWasClear: layerGateWasClear),
                 tree: outcome.finalObservation?.tree,
-                stash: stash
+                vault: vault
             )
             return nil
         }
@@ -304,7 +304,7 @@ extension SemanticObservationStream {
     private func recordFailedSettle(
         _ diagnostic: String?,
         tree: InterfaceTree?,
-        stash: TheStash
+        vault: TheVault
     ) {
         runtimeState.recordSettleFailure(diagnostic)
         let observation = tree.map { tree in
@@ -314,7 +314,7 @@ extension SemanticObservationStream {
                 preconditionFailure("Failed settle diagnostic observation failed validation: \(error)")
             }
         }
-        stash.recordFailedSettleDiagnosticEvidence(observation)
+        vault.recordFailedSettleDiagnosticEvidence(observation)
     }
 
 }

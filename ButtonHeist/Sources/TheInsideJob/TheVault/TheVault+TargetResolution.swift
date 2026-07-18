@@ -9,7 +9,7 @@ import TheScore
 
 // MARK: - Target Resolution
 
-extension TheStash {
+extension TheVault {
 
     /// Which part of the interface state a lookup should read.
     enum InterfaceElementScope {
@@ -259,7 +259,7 @@ extension TheStash {
     }
 }
 
-private extension TheStash {
+private extension TheVault {
 
     func targetMatchInput(for tree: InterfaceTree) -> AccessibilityTargetMatchInput<InterfaceTree.Element> {
         let elements = tree.orderedElements

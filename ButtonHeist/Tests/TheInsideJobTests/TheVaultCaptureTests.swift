@@ -4,23 +4,23 @@ import XCTest
 @testable import TheInsideJob
 
 @MainActor
-final class TheBurglarParseTests: XCTestCase {
+final class TheVaultCaptureTests: XCTestCase {
 
-    private var stash: TheStash!
+    private var vault: TheVault!
 
     override func setUp() async throws {
         try await super.setUp()
-        stash = TheStash(tripwire: TheTripwire())
+        vault = TheVault(tripwire: TheTripwire())
     }
 
     override func tearDown() async throws {
-        stash = nil
+        vault = nil
         try await super.tearDown()
     }
 
     func testParseReturnsNilWhenNoAccessibleWindows() throws {
         let result = withNoTraversableWindows {
-            stash.parse()
+            vault.parse()
         }
         XCTAssertNil(result)
     }
@@ -45,7 +45,7 @@ final class TheBurglarParseTests: XCTestCase {
         }
 
         XCTAssertTrue(contentVC.navigationItem.hidesSearchBarWhenScrolling)
-        XCTAssertNotNil(stash.parse())
+        XCTAssertNotNil(vault.parse())
         XCTAssertTrue(
             contentVC.navigationItem.hidesSearchBarWhenScrolling,
             "parse() should not change hidesSearchBarWhenScrolling"
@@ -67,7 +67,7 @@ final class TheBurglarParseTests: XCTestCase {
                 windowB.isHidden = true
             }
 
-            return stash.parse()
+            return vault.parse()
         }
 
         guard let result else {
@@ -103,7 +103,7 @@ final class TheBurglarParseTests: XCTestCase {
                 overlay.isHidden = true
             }
 
-            return stash.parse()
+            return vault.parse()
         }
 
         guard let result else {
@@ -136,7 +136,7 @@ final class TheBurglarParseTests: XCTestCase {
                 lower.isHidden = true
             }
 
-            return stash.parse()
+            return vault.parse()
         }
 
         guard let result else {
@@ -164,7 +164,7 @@ final class TheBurglarParseTests: XCTestCase {
                 keyWindow.isHidden = true
             }
 
-            return stash.parse()
+            return vault.parse()
         }
 
         guard let result else {
@@ -190,7 +190,7 @@ final class TheBurglarParseTests: XCTestCase {
                 lowerModal.isHidden = true
             }
 
-            return stash.parse()
+            return vault.parse()
         }
 
         guard let result else {
@@ -221,7 +221,7 @@ final class TheBurglarParseTests: XCTestCase {
                 keyWindow.isHidden = true
             }
 
-            return stash.parse()
+            return vault.parse()
         }
 
         guard let result else {
@@ -253,7 +253,7 @@ final class TheBurglarParseTests: XCTestCase {
                 keyWindow.isHidden = true
             }
 
-            return stash.parse()
+            return vault.parse()
         }
 
         guard let result else {
@@ -283,7 +283,7 @@ final class TheBurglarParseTests: XCTestCase {
                 lower.isHidden = true
             }
 
-            return stash.parse()
+            return vault.parse()
         }
 
         guard let result else {
@@ -329,7 +329,7 @@ final class TheBurglarParseTests: XCTestCase {
             window.isHidden = true
         }
 
-        guard let result = stash.parse() else {
+        guard let result = vault.parse() else {
             XCTFail("Expected parse result for popover-style modal window")
             return
         }
@@ -405,7 +405,7 @@ final class TheBurglarParseTests: XCTestCase {
     private func withNoTraversableWindows<T>(
         _ operation: () -> T
     ) -> T {
-        let windows = stash.tripwire.getTraversableWindows().map(\.window)
+        let windows = vault.tripwire.getTraversableWindows().map(\.window)
         let originalHiddenStates = windows.map(\.isHidden)
         for window in windows {
             window.isHidden = true

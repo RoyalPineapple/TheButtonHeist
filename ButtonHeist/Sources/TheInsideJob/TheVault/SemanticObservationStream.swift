@@ -8,7 +8,7 @@ import TheScore
 /// Coordinates semantic observation scheduling, settlement, and publication.
 @MainActor
 internal final class SemanticObservationStream {
-    weak var stash: TheStash?
+    weak var vault: TheVault?
     let tripwire: TheTripwire
     // MARK: - Observation Bookkeeping
 
@@ -23,7 +23,7 @@ internal final class SemanticObservationStream {
         observationLog.latestSourceEvent
     }
     /// Invalidates only latest fulfilled events as clean waiter results.
-    /// Settled semantic truth remains in `TheStash` until the next explicit
+    /// Settled semantic truth remains in `TheVault` until the next explicit
     /// commit.
     internal var latestSettledObservationInvalidated: Bool {
         observationLog.latestSettledObservationInvalidated
@@ -56,8 +56,8 @@ internal final class SemanticObservationStream {
         scopePressure.hasActiveDemand
     }
 
-    internal init(stash: TheStash, tripwire: TheTripwire) {
-        self.stash = stash
+    internal init(vault: TheVault, tripwire: TheTripwire) {
+        self.vault = vault
         self.tripwire = tripwire
     }
 
@@ -65,8 +65,8 @@ internal final class SemanticObservationStream {
         discovery: @escaping SemanticObservationRuntimeState.DiscoveryObservation
     ) {
         guard !runtimeState.replaceDiscoveryIfRunning(discovery) else { return }
-        if let stash {
-            AccessibilityNotificationObserver.shared.subscribe(stash.accessibilityNotifications)
+        if let vault {
+            AccessibilityNotificationObserver.shared.subscribe(vault.accessibilityNotifications)
         }
         observationLog.invalidateCurrentPublication()
         let task = Task { [weak self] in
@@ -81,8 +81,8 @@ internal final class SemanticObservationStream {
     internal func stop() {
         runtimeState.stop()?.cancel()
         cancelObservationWaiters()
-        if let stash {
-            AccessibilityNotificationObserver.shared.unsubscribe(stash.accessibilityNotifications)
+        if let vault {
+            AccessibilityNotificationObserver.shared.unsubscribe(vault.accessibilityNotifications)
         }
     }
 
@@ -120,13 +120,13 @@ internal final class SemanticObservationStream {
     private func performObservationCycle(
         scope: SemanticObservationScope
     ) async -> Bool {
-        guard let stash else {
+        guard let vault else {
             stop()
             return false
         }
         switch scope {
         case .visible:
-            return await observeVisibleSemanticState(stash: stash)
+            return await observeVisibleSemanticState(vault: vault)
         case .discovery:
             guard let discovery = runtimeState.discovery else {
                 invalidateLatestSettledObservation()
@@ -142,7 +142,7 @@ internal final class SemanticObservationStream {
     }
 
     private func observeVisibleSemanticState(
-        stash: TheStash
+        vault: TheVault
     ) async -> Bool {
         let baselineSignal = tripwire.tripwireSignal()
         let settle: SettleSession.Outcome
@@ -150,7 +150,7 @@ internal final class SemanticObservationStream {
         switch activeObservationDemandState {
         case .active:
             settle = await SemanticObservationSettleCadence.settleVisibleObservationAtActiveCadence(
-                stash: stash,
+                vault: vault,
                 tripwire: tripwire,
                 baselineTripwireSignal: baselineSignal,
                 timeoutMs: SemanticObservationSettleCadence.activePassiveSettleTimeoutMs
@@ -165,7 +165,7 @@ internal final class SemanticObservationStream {
             }
             // Layer quiet is advisory. AX-tree stability is the commit proof.
             layerGateWasClear = tripwire.latestReading?.isSettled ?? tripwire.allClear()
-            settle = await SettleSession.live(stash: stash, tripwire: tripwire, timeoutMs: 1_000).run(
+            settle = await SettleSession.live(vault: vault, tripwire: tripwire, timeoutMs: 1_000).run(
                 start: CFAbsoluteTimeGetCurrent(),
                 baselineTripwireSignal: baselineSignal
             )
@@ -174,7 +174,7 @@ internal final class SemanticObservationStream {
         guard !Task.isCancelled else { return false }
         guard let proof = admitSettledProof(
             settle,
-            stash: stash,
+            vault: vault,
             layerGateWasClear: layerGateWasClear
         ) else { return true }
         guard !Task.isCancelled else { return false }

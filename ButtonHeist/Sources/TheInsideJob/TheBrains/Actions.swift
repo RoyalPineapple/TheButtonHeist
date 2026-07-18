@@ -4,26 +4,26 @@
 @MainActor
 final class Actions {
 
-    let stash: TheStash
+    let vault: TheVault
     let safecracker: TheSafecracker
     let tripwire: TheTripwire
     let navigation: Navigation
     let accessibilityActions = AccessibilityActionDispatcher()
 
     init(
-        stash: TheStash,
+        vault: TheVault,
         safecracker: TheSafecracker,
         tripwire: TheTripwire,
         navigation: Navigation
     ) {
-        self.stash = stash
+        self.vault = vault
         self.safecracker = safecracker
         self.tripwire = tripwire
         self.navigation = navigation
     }
 
     func staleLiveTargetFailure(
-        _ staleness: TheStash.LiveTargetStaleness<HeistId>,
+        _ staleness: TheVault.LiveTargetStaleness<HeistId>,
         method: ActionMethod
     ) -> TheSafecracker.ActionDispatchOutcome {
         .failure(

@@ -4,7 +4,7 @@ import UIKit
 import TheScore
 import ThePlans
 
-extension TheStash {
+extension TheVault {
     func firstResponderTarget(in tree: InterfaceTree) -> AccessibilityTarget? {
         guard let firstResponderHeistId = tree.firstResponderHeistId else { return nil }
         return minimumUniqueTarget(for: firstResponderHeistId, in: tree)

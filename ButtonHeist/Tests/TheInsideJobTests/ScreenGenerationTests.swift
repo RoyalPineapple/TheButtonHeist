@@ -13,54 +13,54 @@ final class ScreenGenerationTests: XCTestCase {
     func testCommittedDiscoveryPagesMergeWithinGeneration() {
         let brains = TheBrains(tripwire: TheTripwire())
 
-        let first = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
+        let first = brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             screen(header: "Catalog", entries: [("Visible", .staticText, "visible")])
         )
-        let second = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
+        let second = brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             screen(header: "Catalog", entries: [("Discovered", .button, "discovered")])
         )
 
         XCTAssertEqual(second.generation, first.generation)
-        XCTAssertNotNil(brains.stash.interfaceTree.findElement(heistId: "visible"))
-        XCTAssertNotNil(brains.stash.interfaceTree.findElement(heistId: "discovered"))
+        XCTAssertNotNil(brains.vault.interfaceTree.findElement(heistId: "visible"))
+        XCTAssertNotNil(brains.vault.interfaceTree.findElement(heistId: "discovered"))
     }
 
     func testCommittedDiscoveryReplacementRemovesPriorGeneration() {
         let brains = TheBrains(tripwire: TheTripwire())
-        let before = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
+        let before = brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             screen(header: "Home", entries: [("Old Action", .button, "old_action")])
         )
-        let actionWindow = brains.stash.accessibilityNotifications.beginActionWindow()
+        let actionWindow = brains.vault.accessibilityNotifications.beginActionWindow()
         defer { actionWindow.cancel() }
-        brains.stash.accessibilityNotifications.recordForTesting(
+        brains.vault.accessibilityNotifications.recordForTesting(
             code: UInt32(UIAccessibility.Notification.screenChanged.rawValue),
             notificationData: .none,
             associatedElement: .none
         )
-        let after = brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
+        let after = brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             screen(header: "Settings", entries: [("New Action", .button, "new_action")]),
             notificationBatch: actionWindow.capture()
         )
 
         XCTAssertEqual(after.generation, before.generation.advanced())
-        XCTAssertNil(brains.stash.interfaceTree.findElement(heistId: "old_action"))
-        XCTAssertNotNil(brains.stash.interfaceTree.findElement(heistId: "new_action"))
+        XCTAssertNil(brains.vault.interfaceTree.findElement(heistId: "old_action"))
+        XCTAssertNotNil(brains.vault.interfaceTree.findElement(heistId: "new_action"))
     }
 
     func testDiagnosticEvidenceCannotBecomeCommittedTarget() {
         let brains = TheBrains(tripwire: TheTripwire())
-        brains.stash.recordFailedSettleDiagnosticEvidence(
+        brains.vault.recordFailedSettleDiagnosticEvidence(
             screen(
                 header: "Checkout",
                 entries: [("Unsettled Purchase", .button, "unsettled_purchase")]
             )
         )
-        brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(
+        brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             screen(header: "Receipt", entries: [("Done", .button, "done")])
         )
 
-        XCTAssertNil(brains.stash.interfaceTree.findElement(heistId: "unsettled_purchase"))
-        XCTAssertNotNil(brains.stash.interfaceTree.findElement(heistId: "done"))
+        XCTAssertNil(brains.vault.interfaceTree.findElement(heistId: "unsettled_purchase"))
+        XCTAssertNotNil(brains.vault.interfaceTree.findElement(heistId: "done"))
     }
 
     func testScreenReplacementResetsManifestWithoutResettingDiscoveryBound() {

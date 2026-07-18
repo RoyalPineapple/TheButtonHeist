@@ -7,7 +7,7 @@ import TheScore
 
 /// Runtime dispatcher for UIKit accessibility actions.
 ///
-/// The stash resolves live semantic targets; this type performs user intent on
+/// The vault resolves live semantic targets; this type performs user intent on
 /// the resolved live object.
 @MainActor
 final class AccessibilityActionDispatcher {
@@ -30,27 +30,27 @@ final class AccessibilityActionDispatcher {
         case noHandler
     }
 
-    func activate(_ liveTarget: TheStash.LiveActionTarget) -> ActivateOutcome {
+    func activate(_ liveTarget: TheVault.LiveActionTarget) -> ActivateOutcome {
         liveTarget.object.accessibilityActivate() ? .success : .refused
     }
 
     @discardableResult
-    func increment(_ liveTarget: TheStash.LiveActionTarget) -> Bool {
+    func increment(_ liveTarget: TheVault.LiveActionTarget) -> Bool {
         liveTarget.object.accessibilityIncrement()
         return true
     }
 
     @discardableResult
-    func decrement(_ liveTarget: TheStash.LiveActionTarget) -> Bool {
+    func decrement(_ liveTarget: TheVault.LiveActionTarget) -> Bool {
         liveTarget.object.accessibilityDecrement()
         return true
     }
 
-    func performCustomAction(named name: CustomActionName, on liveTarget: TheStash.LiveActionTarget) -> CustomActionOutcome {
+    func performCustomAction(named name: CustomActionName, on liveTarget: TheVault.LiveActionTarget) -> CustomActionOutcome {
         performCustomAction(named: name, on: liveTarget.object)
     }
 
-    func needsPreDispatchRefresh(named name: CustomActionName, on liveTarget: TheStash.LiveActionTarget) -> Bool {
+    func needsPreDispatchRefresh(named name: CustomActionName, on liveTarget: TheVault.LiveActionTarget) -> Bool {
         guard !(liveTarget.object is UIView),
               let action = liveTarget.object.accessibilityCustomActions?.first(where: { $0.name == name.rawValue })
         else { return false }

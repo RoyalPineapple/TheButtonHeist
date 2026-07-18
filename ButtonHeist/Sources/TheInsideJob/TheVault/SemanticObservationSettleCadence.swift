@@ -9,7 +9,7 @@ enum SemanticObservationSettleCadence {
     @MainActor
     static func settleVisibleObservationForCurrentDemand(
         demandState: SemanticObservationDemandState,
-        stash: TheStash,
+        vault: TheVault,
         tripwire: TheTripwire,
         baselineTripwireSignal: TheTripwire.TripwireSignal,
         timeoutMs: Int
@@ -17,14 +17,14 @@ enum SemanticObservationSettleCadence {
         switch demandState {
         case .active:
             return await settleVisibleObservationAtActiveCadence(
-                stash: stash,
+                vault: vault,
                 tripwire: tripwire,
                 baselineTripwireSignal: baselineTripwireSignal,
                 timeoutMs: timeoutMs
             )
         case .idle:
             return await settleVisibleObservationAtIdleCadence(
-                stash: stash,
+                vault: vault,
                 tripwire: tripwire,
                 baselineTripwireSignal: baselineTripwireSignal,
                 timeoutMs: timeoutMs
@@ -34,13 +34,13 @@ enum SemanticObservationSettleCadence {
 
     @MainActor
     static func settleVisibleObservationAtIdleCadence(
-        stash: TheStash,
+        vault: TheVault,
         tripwire: TheTripwire,
         baselineTripwireSignal: TheTripwire.TripwireSignal,
         timeoutMs: Int
     ) async -> SettleSession.Outcome {
         let settleSession = SettleSession.live(
-            stash: stash,
+            vault: vault,
             tripwire: tripwire,
             timeoutMs: timeoutMs
         )
@@ -52,13 +52,13 @@ enum SemanticObservationSettleCadence {
 
     @MainActor
     static func settleVisibleObservationAtActiveCadence(
-        stash: TheStash,
+        vault: TheVault,
         tripwire: TheTripwire,
         baselineTripwireSignal: TheTripwire.TripwireSignal,
         timeoutMs: Int
     ) async -> SettleSession.Outcome {
         let settleSession = SettleSession.live(
-            stash: stash,
+            vault: vault,
             tripwire: tripwire,
             timeoutMs: timeoutMs,
             policy: .quietWindow(milliseconds: activeQuietWindowMs)

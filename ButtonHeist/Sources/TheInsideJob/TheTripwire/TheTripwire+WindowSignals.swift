@@ -184,7 +184,7 @@ extension TheTripwire {
     /// This filter intentionally does not inspect the view hierarchy for
     /// `accessibilityViewIsModal`. It excludes system passthrough windows and
     /// preserves every remaining app window. The parser owns modal-scope
-    /// discovery, and `TheBurglar` stops parsing lower windows when the parser
+    /// discovery, and `TheVault` stops parsing lower windows when the parser
     /// emits a modal boundary container.
     ///
     /// Resolution steps, in order:

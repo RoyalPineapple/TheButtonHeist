@@ -28,7 +28,7 @@ package extension AccessibilityElement {
     }
 }
 
-extension TheStash {
+extension TheVault {
 
     /// Pure predicates for interactivity and default-activation classification.
     enum InteractivityCheck {

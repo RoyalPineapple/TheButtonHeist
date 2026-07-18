@@ -22,7 +22,7 @@ private struct Relaxation {
     let actual: (AccessibilityElement) -> String
 }
 
-extension TheStash {
+extension TheVault {
 
     func presenceWaitTimeoutMessage(
         for predicate: ResolvedAccessibilityPredicate,

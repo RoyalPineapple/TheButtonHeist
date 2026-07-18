@@ -4,7 +4,7 @@ import UIKit
 
 // MARK: - InterfaceObservation Capture
 
-extension TheStash {
+extension TheVault {
 
     struct ScreenCapture {
         let image: UIImage

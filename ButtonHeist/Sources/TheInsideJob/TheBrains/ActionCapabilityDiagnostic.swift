@@ -68,29 +68,29 @@ import AccessibilitySnapshotParser
 
     static func textEntryFailed(
         operation: String,
-        stash: TheStash,
+        vault: TheVault,
         safecracker: TheSafecracker,
         suggestion: String
     ) -> String {
-        "text entry failed: observed \(formatFocusState(stash: stash, safecracker: safecracker)) "
+        "text entry failed: observed \(formatFocusState(vault: vault, safecracker: safecracker)) "
             + "during \(operation); try \(suggestion)."
     }
 
     static func editActionFailed(
         _ action: EditAction,
-        stash: TheStash,
+        vault: TheVault,
         safecracker: TheSafecracker
     ) -> String {
         "edit action failed: observed action=\(stringProfile.renderString(action.rawValue)) "
-            + "\(formatFocusState(stash: stash, safecracker: safecracker)); "
+            + "\(formatFocusState(vault: vault, safecracker: safecracker)); "
             + "try focus editable text before \(action.rawValue)."
     }
 
     static func resignFirstResponderFailed(
-        stash: TheStash,
+        vault: TheVault,
         safecracker: TheSafecracker
     ) -> String {
-        "resign first responder failed: observed \(formatFocusState(stash: stash, safecracker: safecracker)); "
+        "resign first responder failed: observed \(formatFocusState(vault: vault, safecracker: safecracker)); "
             + "try focus a text input before dismissing the keyboard."
     }
 
@@ -148,18 +148,18 @@ import AccessibilitySnapshotParser
     }
 
     private static func formatFocusState(
-        stash: TheStash,
+        vault: TheVault,
         safecracker: TheSafecracker
     ) -> String {
-        let focus = formatFirstResponder(stash: stash)
+        let focus = formatFirstResponder(vault: vault)
         let keyboardVisible = safecracker.isKeyboardVisible()
         let activeTextInput = safecracker.hasActiveTextInput()
         return "focus=\(focus) keyboardVisible=\(keyboardVisible) activeTextInput=\(activeTextInput)"
     }
 
-    private static func formatFirstResponder(stash: TheStash) -> String {
-        guard let heistId = stash.firstResponderHeistId else { return "none" }
-        guard let element = stash.firstResponderInterfaceElement() else {
+    private static func formatFirstResponder(vault: TheVault) -> String {
+        guard let heistId = vault.firstResponderHeistId else { return "none" }
+        guard let element = vault.firstResponderInterfaceElement() else {
             return "focused element \(stringProfile.renderString(heistId.description)) liveObject=unknown"
         }
         return elementObservation(element)
@@ -199,7 +199,7 @@ import AccessibilitySnapshotParser
     ) -> [ElementAction] {
         let element = treeElement.element
         var actions = element.projectedActionSet.actions
-        if TheStash.Interactivity.isInteractive(element: element, object: liveObject) {
+        if TheVault.Interactivity.isInteractive(element: element, object: liveObject) {
             actions.insert(.activate)
         }
         let liveNames = liveObject?.accessibilityCustomActions?

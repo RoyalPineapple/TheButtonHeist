@@ -9,7 +9,7 @@ import ThePlans
 
 // MARK: - Rotor Actions
 
-extension TheStash {
+extension TheVault {
 
     struct RotorHit: Sendable {
         let rotor: RotorName
@@ -139,7 +139,7 @@ extension TheStash {
     }
 }
 
-private extension TheStash {
+private extension TheVault {
 
     var currentRotorGeneration: ScreenGeneration {
         semanticObservationStream.latestEvent?.generation ?? .initial

@@ -11,49 +11,49 @@ import XCTest
 final class RawParserEvidenceAdmissionTests: XCTestCase {
     func testRawParserAndDiagnosticEvidenceCannotMutateCommittedInterfaceTree() {
         let brains = TheBrains(tripwire: TheTripwire())
-        let stream = brains.stash.semanticObservationStream
+        let stream = brains.vault.semanticObservationStream
         let committed = observation(label: "Committed", heistId: "committed")
         _ = stream.commitVisibleObservationForTesting(committed)
-        let committedHash = brains.stash.interfaceTree.interfaceHash
+        let committedHash = brains.vault.interfaceTree.interfaceHash
         let retainedCount = stream.retainedObservationEntries(scope: .visible).count
 
         let raw = observation(label: "Raw", heistId: "raw")
-        brains.stash.nextVisibleRefreshObservationForTesting = raw
-        let refreshed = brains.stash.refreshLiveCapture()
+        brains.vault.nextVisibleRefreshObservationForTesting = raw
+        let refreshed = brains.vault.refreshLiveCapture()
 
         XCTAssertEqual(refreshed?.tree.interfaceHash, raw.tree.interfaceHash)
-        XCTAssertEqual(brains.stash.latestObservation.tree.interfaceHash, raw.tree.interfaceHash)
-        XCTAssertEqual(brains.stash.interfaceTree.interfaceHash, committedHash)
-        XCTAssertNotNil(brains.stash.interfaceTree.findElement(heistId: "committed"))
-        XCTAssertNil(brains.stash.interfaceTree.findElement(heistId: "raw"))
+        XCTAssertEqual(brains.vault.latestObservation.tree.interfaceHash, raw.tree.interfaceHash)
+        XCTAssertEqual(brains.vault.interfaceTree.interfaceHash, committedHash)
+        XCTAssertNotNil(brains.vault.interfaceTree.findElement(heistId: "committed"))
+        XCTAssertNil(brains.vault.interfaceTree.findElement(heistId: "raw"))
         XCTAssertEqual(stream.retainedObservationEntries(scope: .visible).count, retainedCount)
 
         let diagnostic = observation(label: "Diagnostic", heistId: "diagnostic")
-        brains.stash.recordFailedSettleDiagnosticEvidence(diagnostic)
+        brains.vault.recordFailedSettleDiagnosticEvidence(diagnostic)
 
         XCTAssertEqual(
-            brains.stash.latestFailedSettleDiagnosticEvidence?.tree.interfaceHash,
+            brains.vault.latestFailedSettleDiagnosticEvidence?.tree.interfaceHash,
             diagnostic.tree.interfaceHash
         )
-        XCTAssertEqual(brains.stash.interfaceTree.interfaceHash, committedHash)
-        XCTAssertNotNil(brains.stash.interfaceTree.findElement(heistId: "committed"))
-        XCTAssertNil(brains.stash.interfaceTree.findElement(heistId: "diagnostic"))
+        XCTAssertEqual(brains.vault.interfaceTree.interfaceHash, committedHash)
+        XCTAssertNotNil(brains.vault.interfaceTree.findElement(heistId: "committed"))
+        XCTAssertNil(brains.vault.interfaceTree.findElement(heistId: "diagnostic"))
         XCTAssertEqual(stream.retainedObservationEntries(scope: .visible).count, retainedCount)
     }
 
     func testCommittedObservationAdmitsPreviouslyRawEvidenceToInterfaceTree() {
         let brains = TheBrains(tripwire: TheTripwire())
-        let stream = brains.stash.semanticObservationStream
+        let stream = brains.vault.semanticObservationStream
         let raw = observation(label: "Raw", heistId: "raw")
-        brains.stash.nextVisibleRefreshObservationForTesting = raw
-        _ = brains.stash.refreshLiveCapture()
+        brains.vault.nextVisibleRefreshObservationForTesting = raw
+        _ = brains.vault.refreshLiveCapture()
 
-        XCTAssertTrue(brains.stash.interfaceTree.orderedElements.isEmpty)
+        XCTAssertTrue(brains.vault.interfaceTree.orderedElements.isEmpty)
 
         let event = stream.commitVisibleObservationForTesting(raw)
 
         XCTAssertNotNil(event.settledCapture)
-        XCTAssertNotNil(brains.stash.interfaceTree.findElement(heistId: "raw"))
+        XCTAssertNotNil(brains.vault.interfaceTree.findElement(heistId: "raw"))
         XCTAssertEqual(stream.retainedObservationEntries(scope: .visible).count, 1)
     }
 

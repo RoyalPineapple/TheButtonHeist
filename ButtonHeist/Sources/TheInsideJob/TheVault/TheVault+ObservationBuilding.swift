@@ -8,22 +8,22 @@ import ThePlans
 
 import AccessibilitySnapshotParser
 
-extension TheBurglar {
+extension TheVault {
 
     // MARK: - Build Interface Observation From Parse
 
     /// Build an `InterfaceObservation` from a parse result. UIKit/Objective-C reads are
     /// extracted into typed facts first; projection then assigns heistIds,
     /// resolves context, computes container names, and applies live facts.
-    static func buildObservation(from result: ParseResult) -> InterfaceObservation {
+    static func buildObservation(from result: CaptureResult) -> InterfaceObservation {
         let hierarchy = screenCoordinateHierarchy(from: result)
-        let identityContext = buildHierarchyIdentityContext(
+        let identityContext = buildIdentityContext(
             hierarchy: hierarchy,
-            scrollableContainerPaths: InterfaceObservationBuildFacts.scrollContextContainerPaths(
+            scrollableContainerPaths: BuildFacts.scrollContextContainerPaths(
                 from: result
             )
         )
-        let facts = InterfaceObservationBuildFacts.extract(
+        let facts = BuildFacts.extract(
             from: result,
             identityContext: identityContext
         )
@@ -40,8 +40,8 @@ extension TheBurglar {
 
     /// Entry used by focused tests with synthetic facts. Projection stays pure;
     /// live refs are attached afterward at the live-capture boundary.
-    static func buildObservation(from result: ParseResult, facts: InterfaceObservationBuildFacts) -> InterfaceObservation {
-        let identityContext = buildHierarchyIdentityContext(
+    static func buildObservation(from result: CaptureResult, facts: BuildFacts) -> InterfaceObservation {
+        let identityContext = buildIdentityContext(
             hierarchy: screenCoordinateHierarchy(from: result),
             scrollableContainerPaths: facts.scroll.contextContainerPaths
         )
@@ -56,9 +56,9 @@ extension TheBurglar {
     }
 
     private static func buildObservationProjection(
-        identityContext: HierarchyIdentityContext,
-        facts: InterfaceObservationBuildFacts
-    ) -> InterfaceObservationBuildProjection {
+        identityContext: IdentityContext,
+        facts: BuildFacts
+    ) -> ObservationBuildProjection {
         let containerNamesByPath = buildContainerNamesByPath(
             identityContext: identityContext
         )
@@ -76,7 +76,7 @@ extension TheBurglar {
             facts: facts
         )
 
-        var logEvents: [InterfaceObservationBuildLogEvent] = []
+        var logEvents: [ObservationBuildLogEvent] = []
         for entry in entries {
             if let observedScrollContentActivationPoint = entry.treeElement.observedScrollContentActivationPoint,
                let scrollMembership = entry.treeElement.scrollMembership {
@@ -111,7 +111,7 @@ extension TheBurglar {
             containers: containersByPath,
             viewportCapture: snapshot
         )
-        return InterfaceObservationBuildProjection(
+        return ObservationBuildProjection(
             tree: tree,
             entries: entries,
             logEvents: logEvents
@@ -119,10 +119,10 @@ extension TheBurglar {
     }
 
     private static func buildObservation(
-        from projection: InterfaceObservationBuildProjection,
-        result: ParseResult
+        from projection: ObservationBuildProjection,
+        result: CaptureResult
     ) -> InterfaceObservation {
-        let liveReferences = InterfaceObservationBuildLiveReferences(
+        let liveReferences = ObservationLiveReferences(
             result: result,
             hierarchy: projection.tree.viewportCapture.hierarchy,
             entries: projection.entries
@@ -147,10 +147,10 @@ extension TheBurglar {
     }
 
     private static func buildObservationEntries(
-        indexedElements: [HierarchyElementIdentity],
-        facts: InterfaceObservationBuildFacts
-    ) -> [InterfaceObservationBuildEntry] {
-        let heistIds = TheStash.IdAssignment.assign(indexedElements.map(\.element))
+        indexedElements: [ElementIdentity],
+        facts: BuildFacts
+    ) -> [ObservationBuildEntry] {
+        let heistIds = TheVault.IdAssignment.assign(indexedElements.map(\.element))
         precondition(
             heistIds.count == indexedElements.count,
             "IdAssignment must return one HeistId for each screen-build element"
@@ -159,7 +159,7 @@ extension TheBurglar {
             let indexedElement = indexedElements[index]
             let heistId = heistIds[index]
             let scrollFacts = facts.scroll.element(at: indexedElement.path)
-            return InterfaceObservationBuildEntry(
+            return ObservationBuildEntry(
                 path: indexedElement.path,
                 treeElement: InterfaceTree.Element(
                     heistId: heistId,
@@ -174,9 +174,9 @@ extension TheBurglar {
     }
 
     private static func viewportContainers(
-        identityContext: HierarchyIdentityContext,
+        identityContext: IdentityContext,
         containerNamesByPath: [TreePath: ContainerName],
-        facts: InterfaceObservationBuildFacts
+        facts: BuildFacts
     ) -> [TreePath: InterfaceTree.Container] {
         Dictionary(
             uniqueKeysWithValues: identityContext.containers.map { identity in
@@ -201,7 +201,7 @@ extension TheBurglar {
     /// coordinate space. Button Heist's interface tree and wire/element-inflation
     /// surfaces need UIKit accessibility screen coordinates, so restore those by
     /// applying each parse root's screen offset at the parser boundary.
-    private static func screenCoordinateHierarchy(from result: ParseResult) -> [AccessibilityHierarchy] {
+    private static func screenCoordinateHierarchy(from result: CaptureResult) -> [AccessibilityHierarchy] {
         func translated(_ hierarchy: AccessibilityHierarchy, at path: TreePath, inherited: CGPoint) -> AccessibilityHierarchy {
             let offset = result.screenCoordinateOffsetsByPath[path] ?? inherited
             switch hierarchy {
@@ -221,7 +221,7 @@ extension TheBurglar {
         }
     }
 
-    private static func logObservationBuildEvents(_ events: [InterfaceObservationBuildLogEvent]) {
+    private static func logObservationBuildEvents(_ events: [ObservationBuildLogEvent]) {
         for event in events {
             switch event {
             case .capturedObservedScrollContentActivationPoint(let heistId, let containerPath, let index, let point):
@@ -248,7 +248,7 @@ extension TheBurglar {
     // MARK: - Container Name Index
 
     private static func buildContainerNamesByPath(
-        identityContext: HierarchyIdentityContext
+        identityContext: IdentityContext
     ) -> [TreePath: ContainerName] {
         let candidates = identityContext.containers.map { identity in
             let readableName = containerName(
@@ -326,86 +326,86 @@ extension TheBurglar {
         let subtree: AccessibilityHierarchy
     }
 
-    private struct InterfaceObservationBuildEntry: Equatable {
-        let path: TreePath
-        let treeElement: InterfaceTree.Element
-        let isFirstResponder: Bool
+    private struct ObservationBuildEntry: Equatable {
+            let path: TreePath
+            let treeElement: InterfaceTree.Element
+            let isFirstResponder: Bool
 
-        var heistId: HeistId {
-            treeElement.heistId
-        }
+            var heistId: HeistId {
+                treeElement.heistId
+            }
     }
 
-    private struct InterfaceObservationBuildLiveReferences {
-        private let objectsByPath: [TreePath: NSObject]
-        private let scrollViewsByPath: [TreePath: UIScrollView]
-        let containerRefsByPath: [TreePath: LiveCapture.ContainerRef]
-        let scrollableContainerViewsByPath: [TreePath: LiveCapture.ScrollableViewRef]
+    private struct ObservationLiveReferences {
+            private let objectsByPath: [TreePath: NSObject]
+            private let scrollViewsByPath: [TreePath: UIScrollView]
+            let containerRefsByPath: [TreePath: LiveCapture.ContainerRef]
+            let scrollableContainerViewsByPath: [TreePath: LiveCapture.ScrollableViewRef]
 
-        init(
-            result: ParseResult,
-            hierarchy: [AccessibilityHierarchy],
-            entries: [InterfaceObservationBuildEntry]
-        ) {
-            let elementPaths = Set(entries.map(\.path))
-            for path in result.objectsByPath.keys.sorted() where !elementPaths.contains(path) {
-                preconditionFailure(
-                    "InterfaceObservation build received live element object for non-element entry path \(path.indices)"
+            init(
+                result: CaptureResult,
+                hierarchy: [AccessibilityHierarchy],
+                entries: [ObservationBuildEntry]
+            ) {
+                let elementPaths = Set(entries.map(\.path))
+                for path in result.objectsByPath.keys.sorted() where !elementPaths.contains(path) {
+                    preconditionFailure(
+                        "InterfaceObservation build received live element object for non-element entry path \(path.indices)"
+                    )
+                }
+                for path in result.containerObjectsByPath.keys.sorted() {
+                    guard case .container = hierarchy.node(at: path) else {
+                        preconditionFailure(
+                            "InterfaceObservation build received live container object for non-container path \(path.indices)"
+                        )
+                    }
+                }
+                for path in result.scrollViewsByPath.keys.sorted() {
+                    guard case .container(let container, _) = hierarchy.node(at: path),
+                          container.isScrollable else {
+                        preconditionFailure(
+                            "InterfaceObservation build received live scroll view for non-scrollable container path \(path.indices)"
+                        )
+                    }
+                }
+
+                objectsByPath = result.objectsByPath
+                scrollViewsByPath = result.scrollViewsByPath
+                containerRefsByPath = result.containerObjectsByPath.mapValues {
+                    LiveCapture.ContainerRef(object: $0)
+                }
+                scrollableContainerViewsByPath = result.scrollViewsByPath.mapValues {
+                    LiveCapture.ScrollableViewRef(view: $0)
+                }
+            }
+
+            func elementRef(for entry: ObservationBuildEntry) -> LiveCapture.ElementRef? {
+                let object = objectsByPath[entry.path]
+                let scrollView = entry.treeElement.scrollMembership.flatMap { membership in
+                    scrollViewsByPath[membership.containerPath]
+                }
+                guard object != nil || scrollView != nil else { return nil }
+                return LiveCapture.ElementRef(
+                    object: object,
+                    scrollView: scrollView
                 )
             }
-            for path in result.containerObjectsByPath.keys.sorted() {
-                guard case .container = hierarchy.node(at: path) else {
-                    preconditionFailure(
-                        "InterfaceObservation build received live container object for non-container path \(path.indices)"
-                    )
-                }
-            }
-            for path in result.scrollViewsByPath.keys.sorted() {
-                guard case .container(let container, _) = hierarchy.node(at: path),
-                      container.isScrollable else {
-                    preconditionFailure(
-                        "InterfaceObservation build received live scroll view for non-scrollable container path \(path.indices)"
-                    )
-                }
-            }
+    }
 
-            objectsByPath = result.objectsByPath
-            scrollViewsByPath = result.scrollViewsByPath
-            containerRefsByPath = result.containerObjectsByPath.mapValues {
-                LiveCapture.ContainerRef(object: $0)
-            }
-            scrollableContainerViewsByPath = result.scrollViewsByPath.mapValues {
-                LiveCapture.ScrollableViewRef(view: $0)
-            }
-        }
+    private struct ObservationBuildProjection {
+            let tree: InterfaceTree
+        let entries: [ObservationBuildEntry]
+        let logEvents: [ObservationBuildLogEvent]
+    }
 
-        func elementRef(for entry: InterfaceObservationBuildEntry) -> LiveCapture.ElementRef? {
-            let object = objectsByPath[entry.path]
-            let scrollView = entry.treeElement.scrollMembership.flatMap { membership in
-                scrollViewsByPath[membership.containerPath]
-            }
-            guard object != nil || scrollView != nil else { return nil }
-            return LiveCapture.ElementRef(
-                object: object,
-                scrollView: scrollView
+    private enum ObservationBuildLogEvent: Equatable {
+            case capturedObservedScrollContentActivationPoint(
+                heistId: HeistId,
+                containerPath: TreePath,
+                index: Int?,
+                point: CGPoint
             )
-        }
-    }
-
-    private struct InterfaceObservationBuildProjection {
-        let tree: InterfaceTree
-        let entries: [InterfaceObservationBuildEntry]
-        let logEvents: [InterfaceObservationBuildLogEvent]
-    }
-
-    private enum InterfaceObservationBuildLogEvent: Equatable {
-        case capturedObservedScrollContentActivationPoint(
-            heistId: HeistId,
-            containerPath: TreePath,
-            index: Int?,
-            point: CGPoint
-        )
-        case multipleFirstResponders([HeistId])
+            case multipleFirstResponders([HeistId])
     }
 
 }

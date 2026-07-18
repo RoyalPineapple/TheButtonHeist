@@ -27,7 +27,7 @@ extension Double {
 
 // MARK: - Wire Conversion
 
-extension TheStash {
+extension TheVault {
 
     /// Convert internal accessibility types (`AccessibilityElement`,
     /// `AccessibilityHierarchy`, `InterfaceObservation`) to their wire-facing projections.
@@ -425,7 +425,7 @@ extension TheStash {
     }
 }
 
-extension TheStash.WireConversion {
+extension TheVault.WireConversion {
     struct DiscoveryProjection {
         let interface: Interface
         let containerPathBySourcePath: [TreePath: TreePath]

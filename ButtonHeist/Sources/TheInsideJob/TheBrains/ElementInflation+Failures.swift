@@ -106,7 +106,7 @@ extension ElementInflation {
     }
 
     internal func noScrollViewFailure(
-        for liveTarget: TheStash.LiveActionTarget,
+        for liveTarget: TheVault.LiveActionTarget,
         description: String,
         method: ActionMethod
     ) -> ElementInflationFailure {

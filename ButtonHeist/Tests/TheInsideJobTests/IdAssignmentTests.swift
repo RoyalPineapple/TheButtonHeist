@@ -8,7 +8,7 @@ import ThePlans
 @MainActor
 final class IdAssignerTests: XCTestCase {
 
-    private typealias IdAssignment = TheStash.IdAssignment
+    private typealias IdAssignment = TheVault.IdAssignment
 
     // MARK: - Helpers
 

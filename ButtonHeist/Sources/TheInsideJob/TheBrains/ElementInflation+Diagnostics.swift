@@ -5,7 +5,7 @@ import TheScore
 
 extension ElementInflation {
 
-    static func liveGeometrySummary(_ liveTarget: TheStash.LiveActionTarget) -> String {
+    static func liveGeometrySummary(_ liveTarget: TheVault.LiveActionTarget) -> String {
         "liveFrame=\(formatRect(liveTarget.frame)) "
             + "activationPoint=\(formatPoint(liveTarget.activationPoint)) "
             + "screenBounds=\(formatRect(ScreenMetrics.current.bounds))"
@@ -28,7 +28,7 @@ extension ElementInflation {
             }
             return "off-viewport target \(description) has no live scrollable ancestor in the interface tree;"
                 + scrollContainer
-                + " \(stash.liveScrollContainerDiagnostics())"
+                + " \(vault.liveScrollContainerDiagnostics())"
         case .scanDidNotRevealTarget:
             return "off-viewport target \(description) was not visible after scroll scan"
         }

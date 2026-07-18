@@ -6,7 +6,7 @@ import UIKit
 
 import TheScore
 
-extension TheStash {
+extension TheVault {
 
     struct LiveActionTarget {
         let treeElement: InterfaceTree.Element
@@ -290,7 +290,7 @@ extension TheStash {
     }
 }
 
-extension TheStash.LiveTargetStaleness where Identity == HeistId {
+extension TheVault.LiveTargetStaleness where Identity == HeistId {
     var message: String {
         switch self {
         case .semanticTargetUnavailable(let heistId):

@@ -29,26 +29,26 @@ private final class RotorCustomActionHandler: NSObject {
 }
 
 @MainActor
-final class TheStashRotorTests: XCTestCase {
+final class TheVaultCustomRotorTests: XCTestCase {
 
-    private var stash: TheStash!
+    private var vault: TheVault!
     private var hostedWindows: [UIWindow] = []
 
     override func setUp() async throws {
         try await super.setUp()
-        stash = TheStash(tripwire: TheTripwire())
+        vault = TheVault(tripwire: TheTripwire())
     }
 
     override func tearDown() async throws {
         cleanupHostedWindows()
-        stash = nil
+        vault = nil
         try await super.tearDown()
     }
 
     private func liveTarget(
         for treeElement: InterfaceTree.Element
-    ) -> TheStash.LiveActionTarget? {
-        guard case .resolved(let liveTarget) = stash.resolveLiveActionTarget(for: treeElement) else {
+    ) -> TheVault.LiveActionTarget? {
+        guard case .resolved(let liveTarget) = vault.resolveLiveActionTarget(for: treeElement) else {
             return nil
         }
         return liveTarget
@@ -85,20 +85,20 @@ final class TheStashRotorTests: XCTestCase {
             rootView: rootView
         )
 
-        guard let screen = stash.parse() else {
+        guard let observation = vault.parse() else {
             XCTFail("Expected live parse result")
             return
         }
-        stash.installObservationForTesting(screen)
+        vault.installObservationForTesting(observation)
 
-        let resolvedHost = stash.resolveTarget(literalTarget(ElementPredicate.identifier("rotor_host"))).resolved
+        let resolvedHost = vault.resolveTarget(literalTarget(ElementPredicate.identifier("rotor_host"))).resolved
         guard let resolvedHost else {
             XCTFail("Expected rotor host to resolve")
             return
         }
         let liveHost = try XCTUnwrap(liveTarget(for: resolvedHost))
 
-        let outcome = stash.performRotor(
+        let outcome = vault.performRotor(
             selection: .named("Errors"),
             direction: .next,
             on: liveHost
@@ -145,13 +145,13 @@ final class TheStashRotorTests: XCTestCase {
             rootView: rootView
         )
 
-        guard let screen = stash.parse() else {
+        guard let observation = vault.parse() else {
             XCTFail("Expected live parse result")
             return
         }
-        stash.installObservationForTesting(screen)
+        vault.installObservationForTesting(observation)
 
-        let resolvedHost = stash.resolveTarget(literalTarget(ElementPredicate.identifier("system_rotor_host"))).resolved
+        let resolvedHost = vault.resolveTarget(literalTarget(ElementPredicate.identifier("system_rotor_host"))).resolved
         guard let resolvedHost else {
             XCTFail("Expected rotor host to resolve")
             return
@@ -161,7 +161,7 @@ final class TheStashRotorTests: XCTestCase {
         XCTAssertEqual(rotorHost.accessibilityCustomRotors?.first?.name, "")
         XCTAssertEqual(resolvedHost.element.customRotors.map { $0.name }, ["Links"])
 
-        let outcome = stash.performRotor(
+        let outcome = vault.performRotor(
             selection: .named("Links"),
             direction: .next,
             on: liveHost
@@ -266,13 +266,13 @@ final class TheStashRotorTests: XCTestCase {
         )
 
         let brains = TheBrains(tripwire: TheTripwire())
-        guard let screen = brains.stash.refreshLiveCapture() else {
+        guard let observation = brains.vault.refreshLiveCapture() else {
             XCTFail("Expected live parse result")
             return
         }
 
         let cachedHeistId = HeistId(rawValue: "cached_virtual_result")
-        var elements = screen.tree.elements
+        var elements = observation.tree.elements
         elements[cachedHeistId] = InterfaceTree.Element(
             heistId: cachedHeistId,
             scrollMembership: nil,
@@ -283,9 +283,9 @@ final class TheStashRotorTests: XCTestCase {
                 frame: CGRect(x: 20, y: 120, width: 280, height: 44)
             )
         )
-        brains.stash.installObservationForTesting(InterfaceObservation.makeForTests(
-            tree: InterfaceTree(elements: elements, containers: screen.tree.containers),
-            liveCapture: screen.liveCapture
+        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
+            tree: InterfaceTree(elements: elements, containers: observation.tree.containers),
+            liveCapture: observation.liveCapture
         ))
 
         let search = await brains.actions.executeRotor(
@@ -322,7 +322,7 @@ final class TheStashRotorTests: XCTestCase {
         host.accessibilityCustomRotors = [
             UIAccessibilityCustomRotor(name: "Warnings") { _ in nil }
         ]
-        stash.installObservationForTesting(InterfaceObservation.makeForTests(
+        vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [treeElement.heistId: treeElement],
             hierarchy: [.element(element, traversalIndex: 0)],
             heistIdsByPath: [TreePath([0]): treeElement.heistId],
@@ -332,7 +332,7 @@ final class TheStashRotorTests: XCTestCase {
             firstResponderHeistId: nil,
         ))
 
-        let outcome = stash.performRotor(
+        let outcome = vault.performRotor(
             selection: .named("Errors"),
             direction: .next,
             on: try XCTUnwrap(liveTarget(for: treeElement))

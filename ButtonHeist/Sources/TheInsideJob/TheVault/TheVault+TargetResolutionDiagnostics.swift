@@ -5,7 +5,7 @@ import Foundation
 import TheScore
 
 enum TargetResolutionDiagnostics {
-    static func message(for resolution: TheStash.TargetResolution) -> String {
+    static func message(for resolution: TheVault.TargetResolution) -> String {
         switch resolution {
         case .resolved:
             return ""
@@ -16,7 +16,7 @@ enum TargetResolutionDiagnostics {
         }
     }
 
-    static func message(for resolution: TheStash.ContainerTargetResolution) -> String {
+    static func message(for resolution: TheVault.ContainerTargetResolution) -> String {
         switch resolution {
         case .resolved:
             return ""
@@ -27,7 +27,7 @@ enum TargetResolutionDiagnostics {
         }
     }
 
-    static func elementCandidateDescription(_ candidate: TheStash.TargetCandidateFacts) -> String {
+    static func elementCandidateDescription(_ candidate: TheVault.TargetCandidateFacts) -> String {
         ElementDiagnosticSummary(
             label: candidate.label,
             identifier: candidate.identifier,
@@ -57,7 +57,7 @@ enum TargetResolutionDiagnostics {
         ))
     }
 
-    private static func notFoundMessage(_ facts: TheStash.TargetNotFoundFacts) -> String {
+    private static func notFoundMessage(_ facts: TheVault.TargetNotFoundFacts) -> String {
         switch facts.reason {
         case .ordinalOutOfRange(let requested, let matchCount):
             let nextMove: String
@@ -72,7 +72,7 @@ enum TargetResolutionDiagnostics {
                 \(nextMove)
                 """
         case .noMatches:
-            return TheStash.Diagnostics.matcherNotFound(
+            return TheVault.Diagnostics.matcherNotFound(
                 facts.predicate,
                 treeElements: facts.treeElements,
                 visibleHeistIds: facts.visibleHeistIds,
@@ -81,10 +81,10 @@ enum TargetResolutionDiagnostics {
         }
     }
 
-    private static func ambiguousMessage(_ facts: TheStash.TargetAmbiguityFacts) -> String {
+    private static func ambiguousMessage(_ facts: TheVault.TargetAmbiguityFacts) -> String {
         let countLabel = facts.matchedCount > 10 ? "10+" : "\(facts.matchedCount)"
         let rangeLabel = facts.matchedCount > 10 ? "0, 1, 2, ..." : "0–\(facts.matchedCount - 1)"
-        let query = TheStash.Diagnostics.formatMatcher(facts.predicate)
+        let query = TheVault.Diagnostics.formatMatcher(facts.predicate)
         let candidates = facts.candidates.map(elementCandidateDescription)
         var lines = [
             "\(countLabel) elements match: \(query) (scope: \(facts.resolutionScope.rawValue)) — use ordinal \(rangeLabel) to select one"
@@ -96,14 +96,14 @@ enum TargetResolutionDiagnostics {
         return lines.joined(separator: "\n")
     }
 
-    private static func availability(_ candidate: TheStash.TargetCandidateFacts) -> ElementDiagnosticSummary.Availability {
+    private static func availability(_ candidate: TheVault.TargetCandidateFacts) -> ElementDiagnosticSummary.Availability {
         if candidate.isVisible {
             return .visible
         }
         return .offscreen(isReachable: candidate.isReachable)
     }
 
-    private static func containerNotFoundMessage(_ facts: TheStash.ContainerNotFoundFacts) -> String {
+    private static func containerNotFoundMessage(_ facts: TheVault.ContainerNotFoundFacts) -> String {
         switch facts.reason {
         case .ordinalOutOfRange(let requested, let matchCount):
             return "container target ordinal \(requested) is outside \(matchCount) matching container(s); "
@@ -113,7 +113,7 @@ enum TargetResolutionDiagnostics {
         }
     }
 
-    private static func containerAmbiguousMessage(_ facts: TheStash.ContainerAmbiguityFacts) -> String {
+    private static func containerAmbiguousMessage(_ facts: TheVault.ContainerAmbiguityFacts) -> String {
         let candidates = facts.candidates.map(containerCandidateDescription)
         return "container target is ambiguous across \(facts.matchedCount) containers; "
             + "narrow by semantic facts or target an element inside the intended region. Candidates: "

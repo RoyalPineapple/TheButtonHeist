@@ -90,7 +90,7 @@ private final class WireActivationOverrideView: UIView {
 @MainActor
 final class WireConverterTests: XCTestCase {
 
-    private typealias WireConversion = TheStash.WireConversion
+    private typealias WireConversion = TheVault.WireConversion
 
     // MARK: - Helpers
 
@@ -162,7 +162,7 @@ final class WireConverterTests: XCTestCase {
     private func wireLeaf(_ element: InterfaceTree.Element) -> TestInterfaceNode {
         .parsedElement(
             element.element,
-            actions: TheStash.WireConversion.convert(element.element).actions
+            actions: TheVault.WireConversion.convert(element.element).actions
         )
     }
 
@@ -325,11 +325,11 @@ final class WireConverterTests: XCTestCase {
             respondsToUserInteraction: false
         )
         let liveObject = WireActivationOverrideView()
-        let parse = TheBurglar.ParseResult(
+        let parse = TheVault.CaptureResult(
             hierarchy: [.element(element, traversalIndex: 0)],
             objectsByPath: [TreePath([0]): liveObject],
         )
-        let screen = TheBurglar.buildObservation(from: parse)
+        let screen = TheVault.buildObservation(from: parse)
 
         let annotations = WireConversion.toInterface(from: screen.tree).annotations.elements
 
@@ -384,10 +384,10 @@ final class WireConverterTests: XCTestCase {
             frame: .zero,
             isModalBoundary: true
         )
-        let parse = TheBurglar.ParseResult(
+        let parse = TheVault.CaptureResult(
             hierarchy: [.container(container, children: [.element(element, traversalIndex: 0)])],
         )
-        let screen = TheBurglar.buildObservation(from: parse)
+        let screen = TheVault.buildObservation(from: parse)
 
         let tree = WireConversion.toInterface(from: screen.tree).tree
 
@@ -584,9 +584,9 @@ final class WireConverterTests: XCTestCase {
             ],
             firstResponderHeistId: nil
         )
-        let stash = TheStash(tripwire: TheTripwire())
-        stash.installObservationForTesting(screen)
-        let selected = try stash.selectInterface(InterfaceQuery(
+        let vault = TheVault(tripwire: TheTripwire())
+        vault.installObservationForTesting(screen)
+        let selected = try vault.selectInterface(InterfaceQuery(
             subtree: .predicate(ElementPredicateTemplate(label: "Second"))
         ))
         let record = try XCTUnwrap(selected.projectedElementRecords.single)
@@ -620,9 +620,9 @@ final class WireConverterTests: XCTestCase {
             ],
             firstResponderHeistId: nil
         )
-        let stash = TheStash(tripwire: TheTripwire())
-        stash.installObservationForTesting(screen)
-        let selected = try stash.selectInterface(InterfaceQuery(
+        let vault = TheVault(tripwire: TheTripwire())
+        vault.installObservationForTesting(screen)
+        let selected = try vault.selectInterface(InterfaceQuery(
             subtree: .container(.label("Actions"))
         ))
         let records = selected.projectedElementRecords
@@ -694,9 +694,9 @@ final class WireConverterTests: XCTestCase {
         let projected = interface.projectedElements
         XCTAssertEqual(projected.compactMap(\.label), ["aardvark", "zymurgy"])
 
-        let stash = TheStash(tripwire: TheTripwire())
-        stash.installObservationForTesting(screen)
-        let selectedInterface = try stash.selectInterface(InterfaceQuery(
+        let vault = TheVault(tripwire: TheTripwire())
+        vault.installObservationForTesting(screen)
+        let selectedInterface = try vault.selectInterface(InterfaceQuery(
             subtree: .predicate(ElementPredicateTemplate(label: "zymurgy"))
         ))
         let selectedProjection = try XCTUnwrap(selectedInterface.projectedElements.first)

@@ -175,7 +175,7 @@ extension TheBrains {
             return nil
         }
         guard let predicate = failureSuggestionPredicate(for: target) else { return nil }
-        return TheStash.Diagnostics.failureInterfaceSuggestion(for: predicate, elements: elements)
+        return TheVault.Diagnostics.failureInterfaceSuggestion(for: predicate, elements: elements)
     }
 
     private func failureSuggestionPredicate(for target: AccessibilityTarget) -> ElementPredicate? {

@@ -8,7 +8,7 @@ import TheScore
 
 // MARK: - Interface State
 
-extension TheStash {
+extension TheVault {
 
     struct HashedInterface {
         let interface: Interface
@@ -207,7 +207,7 @@ extension TheStash {
     }
 
     private func parsedInterfaceObservation() -> InterfaceObservation? {
-        burglar.parse().map(TheBurglar.buildObservation(from:))
+        capture().map(Self.buildObservation(from:))
     }
 
     private func finishCommit(observation: InterfaceObservation) {

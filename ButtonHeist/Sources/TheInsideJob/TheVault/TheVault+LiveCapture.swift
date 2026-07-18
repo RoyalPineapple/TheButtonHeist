@@ -7,7 +7,7 @@ import ThePlans
 
 // MARK: - Live Capture
 
-extension TheStash {
+extension TheVault {
 
     func liveHeistIds() -> Set<HeistId> {
         currentLiveCapture.heistIds

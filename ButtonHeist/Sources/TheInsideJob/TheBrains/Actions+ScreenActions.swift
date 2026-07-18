@@ -38,8 +38,8 @@ extension Actions {
     }
 
     private func screenActionStartingObject() -> NSObject? {
-        guard let treeElement = stash.firstResponderInterfaceElement() else { return nil }
-        return stash.liveObject(for: treeElement)
+        guard let treeElement = vault.firstResponderInterfaceElement() else { return nil }
+        return vault.liveObject(for: treeElement)
     }
 
     private func screenActionResult(

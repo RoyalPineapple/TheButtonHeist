@@ -13,19 +13,19 @@ struct PostActionPayloadContext {
 final class InteractionObservation {
     private static let defaultVisibleStateTimeout = Double(SettleSession.defaultTimeoutMs) / 1_000
 
-    private let stash: TheStash
+    private let vault: TheVault
     private let postActionObservation: PostActionObservation
     private let predicateWait: PredicateWait
 
     init(
-        stash: TheStash,
+        vault: TheVault,
         navigation: Navigation,
         postActionObservation: PostActionObservation
     ) {
-        self.stash = stash
+        self.vault = vault
         self.postActionObservation = postActionObservation
         self.predicateWait = PredicateWait(
-            stash: stash,
+            vault: vault,
             navigation: navigation,
             postActionObservation: postActionObservation
         )
@@ -52,7 +52,7 @@ final class InteractionObservation {
         timeout: Double = InteractionObservation.defaultVisibleStateTimeout
     ) async -> SettledCapture? {
         guard let scope else { return nil }
-        return await stash.semanticObservationStream.settledEvent(
+        return await vault.semanticObservationStream.settledEvent(
             scope: scope,
             after: nil,
             timeout: timeout
@@ -60,7 +60,7 @@ final class InteractionObservation {
     }
 
     func observeVisibleState(timeout: Double? = InteractionObservation.defaultVisibleStateTimeout) async -> PostActionObservation.ObservationBaseline? {
-        baselineState(from: await stash.semanticObservationStream.visibleEvidence(timeout: timeout))
+        baselineState(from: await vault.semanticObservationStream.visibleEvidence(timeout: timeout))
     }
 
     func baselineState(from evidence: ViewportObservationEvidence?) -> PostActionObservation.ObservationBaseline? {
@@ -73,7 +73,7 @@ final class InteractionObservation {
         after sequence: SettledObservationSequence?,
         timeout: Double?
     ) async -> SettledObservationEvidence? {
-        let event = await stash.semanticObservationStream.settledEvent(
+        let event = await vault.semanticObservationStream.settledEvent(
             scope: scope,
             after: sequence,
             timeout: timeout ?? SemanticObservationTiming.defaultTimeout
@@ -131,7 +131,7 @@ final class InteractionObservation {
         let baselineSource: PredicateChangeBaselineSource
         switch (changeBaseline, baselineSequence) {
         case (.establishFromFirstObservation, .some(let sequence)):
-            baselineSource = .supplied(stash.semanticObservationStream.settledCapture(
+            baselineSource = .supplied(vault.semanticObservationStream.settledCapture(
                 scope: .visible,
                 at: sequence
             ))

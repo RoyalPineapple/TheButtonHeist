@@ -324,7 +324,7 @@ final class ActivationPolicyTests: XCTestCase {
     }
 
     private func makePolicy(
-        accessibilityActivate: @escaping @MainActor (TheStash.LiveActionTarget) -> AccessibilityActionDispatcher.ActivateOutcome,
+        accessibilityActivate: @escaping @MainActor (TheVault.LiveActionTarget) -> AccessibilityActionDispatcher.ActivateOutcome,
         refreshAndResolve: @escaping @MainActor () async -> ActivationRefreshResult,
         prepareActivationPointDispatch: @escaping @MainActor (
             CGPoint
@@ -359,7 +359,7 @@ final class ActivationPolicyTests: XCTestCase {
         traits: UIAccessibilityTraits = [],
         frame: CGRect = CGRect(x: 0, y: 0, width: 44, height: 44),
         activationPoint: CGPoint
-    ) -> TheStash.LiveActionTarget {
+    ) -> TheVault.LiveActionTarget {
         let element = AccessibilityElement.make(
             label: label,
             traits: traits,
@@ -374,19 +374,19 @@ final class ActivationPolicyTests: XCTestCase {
         )
         let object = ActivationObject()
         object.accessibilityFrame = frame
-        let stash = TheStash(tripwire: TheTripwire())
-        stash.installObservationForTesting(.makeForTests(
+        let vault = TheVault(tripwire: TheTripwire())
+        vault.installObservationForTesting(.makeForTests(
             elements: [(element, heistId)],
             objects: [heistId: object]
         ))
-        guard case .resolved(let target) = stash.resolveLiveActionTarget(for: treeElement) else {
+        guard case .resolved(let target) = vault.resolveLiveActionTarget(for: treeElement) else {
             preconditionFailure("Activation policy fixture did not produce a live target")
         }
         return target
     }
 
     private func makeInflatedTarget(
-        _ liveTarget: TheStash.LiveActionTarget,
+        _ liveTarget: TheVault.LiveActionTarget,
         resolution: ActionSubjectResolution = ActionSubjectResolution(origin: .visible)
     ) throws -> ElementInflation.InflatedElementTarget {
         let label = try XCTUnwrap(

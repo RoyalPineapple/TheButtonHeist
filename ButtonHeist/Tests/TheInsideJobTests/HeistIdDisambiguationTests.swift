@@ -6,7 +6,7 @@ import XCTest
 
 // MARK: - Regression: duplicate-heistId disambiguation through buildObservation
 
-/// `TheBurglar.buildObservation(from:)` is the production path that turns parsed
+/// `TheVault.buildObservation(from:)` is the production path that turns parsed
 /// accessibility elements into externally visible heistIds. These cases lock
 /// the current duplicate-disambiguation contract for scrollable content:
 /// duplicated synthesized ids get traversal-order `_N` suffixes through
@@ -32,11 +32,11 @@ final class HeistIdDisambiguationTests: XCTestCase {
         try await super.tearDown()
     }
 
-    /// Build a `ParseResult` with one scrollable container whose children are
+    /// Build a `CaptureResult` with one scrollable container whose children are
     /// the given elements.
     private func makeScrollableParseResult(
         elements: [AccessibilityElement]
-    ) -> TheBurglar.ParseResult {
+    ) -> TheVault.CaptureResult {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 2000))
         scrollView.contentSize = CGSize(width: 320, height: 4000)
         anchorWindow?.addSubview(scrollView)
@@ -48,7 +48,7 @@ final class HeistIdDisambiguationTests: XCTestCase {
         let children: [AccessibilityHierarchy] = elements.enumerated().map { index, element in
             .element(element, traversalIndex: index)
         }
-        return TheBurglar.ParseResult(
+        return TheVault.CaptureResult(
             hierarchy: [.container(container, children: children)],
             scrollViewsByPath: [TreePath([0]): scrollView]
         )
@@ -98,7 +98,7 @@ final class HeistIdDisambiguationTests: XCTestCase {
         let lower = makeButton(label: "Row", frame: CGRect(x: 0, y: 400, width: 320, height: 44))
 
         let result = makeScrollableParseResult(elements: [upper, lower])
-        let screen = TheBurglar.buildObservation(from: result)
+        let screen = TheVault.buildObservation(from: result)
 
         XCTAssertEqual(screen.tree.elements.count, 2,
                        "Both elements should survive disambiguation")
@@ -114,7 +114,7 @@ final class HeistIdDisambiguationTests: XCTestCase {
         let third = makeButton(label: "Item", frame: CGRect(x: 0, y: 250, width: 320, height: 44))
 
         let result = makeScrollableParseResult(elements: [first, second, third])
-        let screen = TheBurglar.buildObservation(from: result)
+        let screen = TheVault.buildObservation(from: result)
 
         XCTAssertEqual(screen.tree.elements.count, 3,
                        "All three same-matcher rows should produce distinct heistIds")
@@ -132,7 +132,7 @@ final class HeistIdDisambiguationTests: XCTestCase {
         let second = makeButton(label: "Cell", frame: CGRect(x: 0, y: 0.3, width: 320, height: 44))
 
         let result = makeScrollableParseResult(elements: [first, second])
-        let screen = TheBurglar.buildObservation(from: result)
+        let screen = TheVault.buildObservation(from: result)
 
         XCTAssertEqual(screen.tree.elements.count, 2,
                        "Phase 2 distinct-ifies before content-position epsilon collapse applies")
@@ -162,7 +162,7 @@ final class HeistIdDisambiguationTests: XCTestCase {
         )
 
         let result = makeScrollableParseResult(elements: [first, second])
-        let screen = TheBurglar.buildObservation(from: result)
+        let screen = TheVault.buildObservation(from: result)
 
         XCTAssertEqual(screen.tree.elements.count, 2)
         XCTAssertEqual(screen.liveCapture.heistId(forPath: TreePath([0, 0])), "thing_element_1",

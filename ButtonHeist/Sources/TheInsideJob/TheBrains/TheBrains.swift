@@ -5,7 +5,7 @@ import TheScore
 /// The brains of the operation — plans the play, sequences the crew.
 ///
 /// TheBrains takes a command and works it through to a result by coordinating
-/// TheStash (the screen value), TheSafecracker (gestures), and TheTripwire
+/// TheVault (the screen value), TheSafecracker (gestures), and TheTripwire
 /// (timing). Command dispatch, scroll/explore, action handlers, and
 /// post-action observation are internal components with separate owners.
 @MainActor
@@ -15,7 +15,7 @@ final class TheBrains {
     nonisolated static let treeUnavailableMessage = "Could not access accessibility tree: no traversable app windows"
     nonisolated static let runtimeInactiveMessage = "ButtonHeist runtime is not active; start TheInsideJob before executing commands"
 
-    let stash: TheStash
+    let vault: TheVault
     let safecracker: TheSafecracker
     let tripwire: TheTripwire
     let navigation: Navigation
@@ -27,11 +27,11 @@ final class TheBrains {
     private var changedWaitInProgress = false
 
     var semanticObservationIsActive: Bool {
-        stash.semanticObservationStream.isActive
+        vault.semanticObservationStream.isActive
     }
 
     func capturedAnnouncements() -> AnnouncementListPayload {
-        AnnouncementListPayload(announcements: stash.accessibilityNotifications.announcements())
+        AnnouncementListPayload(announcements: vault.accessibilityNotifications.announcements())
     }
 
     enum InterfaceQueryResult {
@@ -74,33 +74,33 @@ final class TheBrains {
         self.tripwire = tripwire
         self.failureEvidencePolicy = failureEvidencePolicy
         self.requestExecutor = requestExecutor ?? InteractionRequestExecutor()
-        let stash = TheStash(tripwire: tripwire)
+        let vault = TheVault(tripwire: tripwire)
         let safecracker = TheSafecracker(fingerprintsEnabled: fingerprintsEnabled)
-        self.stash = stash
+        self.vault = vault
         self.safecracker = safecracker
         let navigation = Navigation(
-            stash: stash,
+            vault: vault,
             safecracker: safecracker,
             tripwire: tripwire
         )
         self.navigation = navigation
         self.actions = Actions(
-            stash: stash,
+            vault: vault,
             safecracker: safecracker,
             tripwire: tripwire,
             navigation: navigation
         )
-        let postActionObservation = PostActionObservation(stash: stash, safecracker: safecracker)
+        let postActionObservation = PostActionObservation(vault: vault, safecracker: safecracker)
         self.postActionObservation = postActionObservation
         self.interactionObservation = InteractionObservation(
-            stash: stash,
+            vault: vault,
             navigation: navigation,
             postActionObservation: postActionObservation
         )
     }
 
     func treeUnavailableResult(method: ActionMethod) -> ActionResult {
-        let message = stash.semanticObservationStream.latestSettleFailureDiagnostic
+        let message = vault.semanticObservationStream.latestSettleFailureDiagnostic
             .map { "Could not observe accessibility tree; \($0)" }
             ?? TheBrains.treeUnavailableMessage
         return .failure(
@@ -121,21 +121,21 @@ final class TheBrains {
     // MARK: - Clear
 
     func clearCache() {
-        stash.clearCache()
+        vault.clearCache()
     }
 
     func stopSemanticObservation() {
-        stash.semanticObservationStream.stop()
+        vault.semanticObservationStream.stop()
     }
 
     func observeInterface(_ query: InterfaceQuery) async -> InterfaceQueryResult {
         guard semanticObservationIsActive else {
             return .failure(.inactiveRuntime)
         }
-        guard let visibleEvidence = await stash.semanticObservationStream.visibleEvidence(timeout: 2.0),
+        guard let visibleEvidence = await vault.semanticObservationStream.visibleEvidence(timeout: 2.0),
               let exploration = await navigation.exploreScreen(
                 baseline: .currentViewport(
-                    stash.visibleExplorationBaseline(from: visibleEvidence.viewportObservation)
+                    vault.visibleExplorationBaseline(from: visibleEvidence.viewportObservation)
                 ),
                 maxScrollsPerContainer: query.maxScrollsPerContainer?.value,
                 maxScrollsPerDiscovery: query.maxScrollsPerDiscovery?.value,
@@ -144,7 +144,7 @@ final class TheBrains {
         }
 
         do {
-            let interface = try stash.selectInterface(query)
+            let interface = try vault.selectInterface(query)
             let diagnostics = exploration.progress.interfaceDiagnostics(
                 for: exploration.event.settledObservation.observation,
                 includedElementCount: interface.projectedElements.count

@@ -141,8 +141,8 @@ internal enum ScreenLineageEvidence: Sendable, Equatable {
         }
     }
 
-    static func snapshot(of stash: TheStash) -> Snapshot {
-        snapshot(of: stash.interfaceTree)
+    static func snapshot(of vault: TheVault) -> Snapshot {
+        snapshot(of: vault.interfaceTree)
     }
 
     static func classify(

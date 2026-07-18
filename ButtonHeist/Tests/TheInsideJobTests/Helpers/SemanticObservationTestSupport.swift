@@ -58,7 +58,7 @@ extension SemanticObservationStream {
     }
 }
 
-extension TheStash {
+extension TheVault {
     func installObservationForTesting(_ observation: InterfaceObservation) {
         nextVisibleRefreshObservationForTesting = observation
         semanticObservationStream.commitVisibleObservationForTesting(observation)

@@ -84,13 +84,13 @@ final class TheBrainsScrollTests: XCTestCase {
         line: UInt = #line
     ) async {
         let deadline = CFAbsoluteTimeGetCurrent() + 1
-        while brains.stash.semanticObservationStream.observationWaiterCount == 0,
+        while brains.vault.semanticObservationStream.observationWaiterCount == 0,
               CFAbsoluteTimeGetCurrent() < deadline {
             await Task.yield()
             guard await Task.cancellableSleep(for: .milliseconds(5)) else { break }
         }
         XCTAssertEqual(
-            brains.stash.semanticObservationStream.observationWaiterCount,
+            brains.vault.semanticObservationStream.observationWaiterCount,
             1,
             file: file,
             line: line
@@ -131,7 +131,7 @@ final class TheBrainsScrollTests: XCTestCase {
 
     func testScanForHeistIdReturnsNoProofWhenInitialSettlementIsCancelled() async {
         let staleId: HeistId = "stale_action_target"
-        brains.stash.installObservationForTesting(.makeForTests([
+        brains.vault.installObservationForTesting(.makeForTests([
             .init(
                 AccessibilityElement.make(label: "Stale action target", traits: .button),
                 heistId: staleId
@@ -166,11 +166,11 @@ final class TheBrainsScrollTests: XCTestCase {
             shape: .frame(AccessibilityRect(CGRect(x: 40, y: 120, width: 200, height: 44)))
         )
         let object = retainedLiveObject()
-        brains.stash.installObservationForTesting(InterfaceObservation.makeForTests([
+        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests([
             .init(element, heistId: targetId, object: object),
         ]))
-        let treeElement = try XCTUnwrap(brains.stash.interfaceElement(heistId: targetId))
-        guard case .resolved(let liveTarget) = brains.stash.resolveLiveActionTarget(for: treeElement) else {
+        let treeElement = try XCTUnwrap(brains.vault.interfaceElement(heistId: targetId))
+        guard case .resolved(let liveTarget) = brains.vault.resolveLiveActionTarget(for: treeElement) else {
             return XCTFail("Expected live geometry fixture to resolve")
         }
         var now: CFAbsoluteTime = 100
@@ -235,12 +235,12 @@ final class TheBrainsScrollTests: XCTestCase {
         window.layoutIfNeeded()
         await brains.tripwire.yieldFrames(3)
 
-        guard brains.stash.refreshLiveCapture() != nil else {
+        guard brains.vault.refreshLiveCapture() != nil else {
             throw XCTSkip("No live hierarchy available for UIPageViewController regression test")
         }
 
         var seenUnsafeTargets = Set<ObjectIdentifier>()
-        let unsafeTargets = brains.stash.scrollableContainerViewsByPath.values.filter {
+        let unsafeTargets = brains.vault.scrollableContainerViewsByPath.values.filter {
             guard $0.bhIsUnsafeForProgrammaticScrolling else { return false }
             return seenUnsafeTargets.insert(ObjectIdentifier($0)).inserted
         }
@@ -376,7 +376,7 @@ final class TheBrainsScrollTests: XCTestCase {
             element: duplicate
         )
 
-        brains.stash.installObservationForTesting(InterfaceObservation.makeForTests(
+        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [
                 firstEntry.heistId: firstEntry,
                 secondEntry.heistId: secondEntry,
@@ -397,7 +397,7 @@ final class TheBrainsScrollTests: XCTestCase {
         ))
 
         XCTAssertEqual(
-            brains.stash.latestObservation.tree.orderedElements.map(\.heistId),
+            brains.vault.latestObservation.tree.orderedElements.map(\.heistId),
             [firstEntry.heistId, secondEntry.heistId]
         )
     }
@@ -410,7 +410,7 @@ final class TheBrainsScrollTests: XCTestCase {
             element: element
         )
         var object: NSObject? = NSObject()
-        brains.stash.installObservationForTesting(InterfaceObservation.makeForTests(
+        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [entry.heistId: entry],
             hierarchy: [.element(element, traversalIndex: 0)],
             heistIdsByPath: [TreePath([0]): entry.heistId],
@@ -419,7 +419,7 @@ final class TheBrainsScrollTests: XCTestCase {
         ))
         object = nil
 
-        switch brains.stash.resolveLiveActionTarget(for: entry) {
+        switch brains.vault.resolveLiveActionTarget(for: entry) {
         case .objectUnavailable:
             break
         case .resolved(let target):
@@ -448,7 +448,7 @@ final class TheBrainsScrollTests: XCTestCase {
         liveHierarchy: [(AccessibilityElement, HeistId)],
         offViewport: [InterfaceObservation.OffViewportEntry]
     ) {
-        brains.stash.installObservationForTesting(makeScreenWithOffViewportEntry(
+        brains.vault.installObservationForTesting(makeScreenWithOffViewportEntry(
             liveHierarchy: liveHierarchy,
             offViewport: offViewport
         ))
@@ -499,7 +499,7 @@ final class TheBrainsScrollTests: XCTestCase {
             observedScrollContentActivationPoint: offscreen.observedActivationPoint,
             element: offscreen.element
         )
-        brains.stash.installObservationForTesting(InterfaceObservation.makeForTests(
+        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [
                 visibleEntry.heistId: visibleEntry,
                 offscreenEntry.heistId: offscreenEntry,
@@ -520,7 +520,7 @@ final class TheBrainsScrollTests: XCTestCase {
                 : [:]
         ))
         if revealsTargetOnRefresh {
-            brains.stash.nextVisibleRefreshObservationForTesting = InterfaceObservation.makeForTests(
+            brains.vault.nextVisibleRefreshObservationForTesting = InterfaceObservation.makeForTests(
                 elements: [offscreenEntry.heistId: offscreenEntry],
                 hierarchy: [
                     .container(scrollContainer, children: [
@@ -576,7 +576,7 @@ final class TheBrainsScrollTests: XCTestCase {
                 scrollView: scrollView
             )
         )
-        brains.stash.nextVisibleRefreshObservationForTesting = InterfaceObservation.makeForTests([
+        brains.vault.nextVisibleRefreshObservationForTesting = InterfaceObservation.makeForTests([
             .init(
                 makeElement(label: "Replacement Target", traits: .button),
                 heistId: targetId,
@@ -585,7 +585,7 @@ final class TheBrainsScrollTests: XCTestCase {
         ])
         brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in nil }
         scrollView.setContentOffsetAnimations.removeAll()
-        let treeElement = try XCTUnwrap(brains.stash.interfaceElement(heistId: targetId))
+        let treeElement = try XCTUnwrap(brains.vault.interfaceElement(heistId: targetId))
 
         let result = await brains.navigation.elementInflation.revealSemanticTarget(
             treeElement,
@@ -616,7 +616,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
 
         let entry = try XCTUnwrap(
-            brains.stash.interfaceTree.findElement(heistId: "settings_button")
+            brains.vault.interfaceTree.findElement(heistId: "settings_button")
         )
         let result = await brains.navigation.elementInflation.revealSemanticTarget(
             entry, deadline: semanticRevealDeadline()
@@ -642,7 +642,7 @@ final class TheBrainsScrollTests: XCTestCase {
             ),
             includeLiveScrollAncestor: false
         )
-        let entry = try XCTUnwrap(brains.stash.interfaceTree.findElement(heistId: "settings_button"))
+        let entry = try XCTUnwrap(brains.vault.interfaceTree.findElement(heistId: "settings_button"))
         var knownTargetAttempts = 0
         brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in
             knownTargetAttempts += 1
@@ -658,7 +658,7 @@ final class TheBrainsScrollTests: XCTestCase {
             target: try resolvedTarget(.label("Settings")),
             deadline: deadline,
             resolution: ActionSubjectResolution(origin: .known),
-            transaction: .init(stash: brains.stash)
+            transaction: .init(vault: brains.vault)
         )
 
         guard case .failed(let failure) = state else {
@@ -682,7 +682,7 @@ final class TheBrainsScrollTests: XCTestCase {
             ),
             includeLiveScrollAncestor: false
         )
-        let entry = try XCTUnwrap(brains.stash.interfaceTree.findElement(heistId: "settings_button"))
+        let entry = try XCTUnwrap(brains.vault.interfaceTree.findElement(heistId: "settings_button"))
         var knownTargetAttempts = 0
         brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in
             knownTargetAttempts += 1
@@ -695,7 +695,7 @@ final class TheBrainsScrollTests: XCTestCase {
                 target: target,
                 deadline: self.semanticRevealDeadline(),
                 resolution: ActionSubjectResolution(origin: .known),
-                transaction: .init(stash: self.brains.stash)
+                transaction: .init(vault: self.brains.vault)
             )
             guard case .failed(let failure) = state else { return false }
             return failure.failedStep == .cancelled
@@ -710,7 +710,7 @@ final class TheBrainsScrollTests: XCTestCase {
 
     func testScrollToVisibleUnknownTargetUsesCurrentSemanticDiagnostics() async throws {
         let visible = makeElement(label: "Visible")
-        brains.stash.installObservationForTesting(.makeForTests(
+        brains.vault.installObservationForTesting(.makeForTests(
             elements: [(visible, HeistId(rawValue: "visible_element"))]
         ))
 
@@ -755,7 +755,7 @@ final class TheBrainsScrollTests: XCTestCase {
 
     func testInflationRecordsDiscoveredOriginWhenExplorationFindsTarget() async throws {
         let baselineObject = retainedLiveObject()
-        brains.stash.installObservationForTesting(.makeForTests([
+        brains.vault.installObservationForTesting(.makeForTests([
             .init(makeElement(label: "Home"), heistId: "home", object: baselineObject),
         ]))
         let discoveredFrame = CGRect(x: 40, y: 120, width: 240, height: 44)
@@ -772,10 +772,10 @@ final class TheBrainsScrollTests: XCTestCase {
                 object: discoveredObject
             ),
         ])
-        brains.stash.nextVisibleRefreshObservationForTesting = discoveredScreen
+        brains.vault.nextVisibleRefreshObservationForTesting = discoveredScreen
         brains.navigation.elementInflation.exploration.discoverTarget = { _ in
-            self.brains.stash.recordParsedObservedEvidence(discoveredScreen)
-            let event = self.brains.stash.semanticObservationStream
+            self.brains.vault.recordParsedObservedEvidence(discoveredScreen)
+            let event = self.brains.vault.semanticObservationStream
                 .commitDiscoveryObservationForTesting(discoveredScreen)
             return Navigation.InterfaceExplorationResult(
                 event: event,
@@ -845,8 +845,8 @@ final class TheBrainsScrollTests: XCTestCase {
             )
         }
         await waitForSettledSemanticWaiter()
-        brains.stash.nextVisibleRefreshObservationForTesting = visibleScreen
-        brains.stash.semanticObservationStream.commitVisibleObservationForTesting(visibleScreen)
+        brains.vault.nextVisibleRefreshObservationForTesting = visibleScreen
+        brains.vault.semanticObservationStream.commitVisibleObservationForTesting(visibleScreen)
         await inflation.value
 
         guard case .inflated(let inflatedTarget)? = resultBox.value else {
@@ -903,8 +903,8 @@ final class TheBrainsScrollTests: XCTestCase {
             )
         }
         await waitForSettledSemanticWaiter()
-        brains.stash.nextVisibleRefreshObservationForTesting = arrivedScreen
-        brains.stash.semanticObservationStream.commitVisibleObservationForTesting(arrivedScreen)
+        brains.vault.nextVisibleRefreshObservationForTesting = arrivedScreen
+        brains.vault.semanticObservationStream.commitVisibleObservationForTesting(arrivedScreen)
 
         await inflation.value
 
@@ -958,11 +958,11 @@ final class TheBrainsScrollTests: XCTestCase {
             )
         }
         await waitForSettledSemanticWaiter()
-        brains.stash.nextVisibleRefreshObservationForTesting = freshKnownScreen
-        brains.stash.semanticObservationStream.commitVisibleObservationForTesting(freshKnownScreen)
+        brains.vault.nextVisibleRefreshObservationForTesting = freshKnownScreen
+        brains.vault.semanticObservationStream.commitVisibleObservationForTesting(freshKnownScreen)
         await waitForSettledSemanticWaiter()
         XCTAssertEqual(revealAttempts, 1)
-        brains.stash.semanticObservationStream.commitVisibleObservationForTesting(freshKnownScreen)
+        brains.vault.semanticObservationStream.commitVisibleObservationForTesting(freshKnownScreen)
         await waitForSettledSemanticWaiter()
         XCTAssertEqual(revealAttempts, 1)
         inflation.cancel()
@@ -1010,7 +1010,7 @@ final class TheBrainsScrollTests: XCTestCase {
             traits: .button,
             frame: CGRect(x: 40, y: 120, width: 240, height: 44)
         )
-        brains.stash.installObservationForTesting(InterfaceObservation.makeForTests(
+        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [(staleTarget, targetId)],
             objects: [targetId: nil]
         ))
@@ -1020,7 +1020,7 @@ final class TheBrainsScrollTests: XCTestCase {
             traits: .button,
             frame: CGRect(x: 48, y: 136, width: 260, height: 44)
         )
-        brains.stash.nextVisibleRefreshObservationForTesting = InterfaceObservation.makeForTests([
+        brains.vault.nextVisibleRefreshObservationForTesting = InterfaceObservation.makeForTests([
             InterfaceObservation.TestEntry(
                 rawTarget,
                 heistId: targetId,
@@ -1038,10 +1038,10 @@ final class TheBrainsScrollTests: XCTestCase {
         }
         await waitForSettledSemanticWaiter()
 
-        XCTAssertEqual(brains.stash.latestObservation.tree.orderedElements.first?.element.label, "Raw Replacement")
-        XCTAssertEqual(brains.stash.interfaceTree.orderedElements.first?.element.label, "Gone Target")
-        if let committed = brains.stash.interfaceElement(heistId: targetId) {
-            XCTAssertNil(brains.stash.visibleLiveElementAliasing(committed))
+        XCTAssertEqual(brains.vault.latestObservation.tree.orderedElements.first?.element.label, "Raw Replacement")
+        XCTAssertEqual(brains.vault.interfaceTree.orderedElements.first?.element.label, "Gone Target")
+        if let committed = brains.vault.interfaceElement(heistId: targetId) {
+            XCTAssertNil(brains.vault.visibleLiveElementAliasing(committed))
         } else {
             XCTFail("Expected committed semantic target to remain available")
         }
@@ -1063,7 +1063,7 @@ final class TheBrainsScrollTests: XCTestCase {
             traits: .button,
             frame: staleFrame
         )
-        brains.stash.installObservationForTesting(InterfaceObservation.makeForTests(
+        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [(staleTarget, targetId)],
             objects: [targetId: nil]
         ))
@@ -1091,8 +1091,8 @@ final class TheBrainsScrollTests: XCTestCase {
             )
         }
         await waitForSettledSemanticWaiter()
-        brains.stash.nextVisibleRefreshObservationForTesting = recoveredScreen
-        brains.stash.semanticObservationStream.commitVisibleObservationForTesting(recoveredScreen)
+        brains.vault.nextVisibleRefreshObservationForTesting = recoveredScreen
+        brains.vault.semanticObservationStream.commitVisibleObservationForTesting(recoveredScreen)
 
         await inflation.value
 
@@ -1125,12 +1125,12 @@ final class TheBrainsScrollTests: XCTestCase {
                 object: retainedLiveObject()
             ),
         ])
-        brains.stash.installObservationForTesting(originalScreen)
-        let selected = try XCTUnwrap(brains.stash.interfaceElement(heistId: targetId))
+        brains.vault.installObservationForTesting(originalScreen)
+        let selected = try XCTUnwrap(brains.vault.interfaceElement(heistId: targetId))
 
         let emptyScreen = InterfaceObservation.makeForTests()
-        brains.stash.installObservationForTesting(emptyScreen)
-        brains.stash.nextVisibleRefreshObservationForTesting = emptyScreen
+        brains.vault.installObservationForTesting(emptyScreen)
+        brains.vault.nextVisibleRefreshObservationForTesting = emptyScreen
 
         let recoveredFrame = CGRect(x: 40, y: 120, width: 240, height: 44)
         let recoveredElement = makeElement(
@@ -1166,8 +1166,8 @@ final class TheBrainsScrollTests: XCTestCase {
             return inflatedTarget.resolution
         }
         await waitForSettledSemanticWaiter()
-        brains.stash.nextVisibleRefreshObservationForTesting = recoveredScreen
-        brains.stash.semanticObservationStream.commitVisibleObservationForTesting(recoveredScreen)
+        brains.vault.nextVisibleRefreshObservationForTesting = recoveredScreen
+        brains.vault.semanticObservationStream.commitVisibleObservationForTesting(recoveredScreen)
 
         let resolution = await resolutionTask.value
         XCTAssertEqual(
@@ -1207,11 +1207,11 @@ final class TheBrainsScrollTests: XCTestCase {
             object: object,
             scrollView: scrollView
         )
-        brains.stash.installObservationForTesting(initialScreen)
-        guard let committed = brains.stash.interfaceElement(heistId: targetId) else {
+        brains.vault.installObservationForTesting(initialScreen)
+        guard let committed = brains.vault.interfaceElement(heistId: targetId) else {
             return XCTFail("Expected placement target in committed semantic state")
         }
-        switch brains.stash.resolveLiveActionTarget(for: committed) {
+        switch brains.vault.resolveLiveActionTarget(for: committed) {
         case .resolved:
             break
         case .objectUnavailable:
@@ -1219,10 +1219,10 @@ final class TheBrainsScrollTests: XCTestCase {
         case .geometryUnavailable:
             return XCTFail(
                 "Expected placement target to have fresh live geometry: "
-                    + String(describing: brains.stash.liveInterfaceElement(heistId: targetId)?.element.shape)
+                    + String(describing: brains.vault.liveInterfaceElement(heistId: targetId)?.element.shape)
             )
         }
-        XCTAssertTrue(brains.stash.liveScrollView(for: committed) === scrollView)
+        XCTAssertTrue(brains.vault.liveScrollView(for: committed) === scrollView)
 
         let placedFrame = CGRect(
             x: ElementInflation.interactionComfortZone.midX - 100,
@@ -1247,7 +1247,7 @@ final class TheBrainsScrollTests: XCTestCase {
         brains.navigation.elementInflation.exploration.moveViewport = { intent in
             object.accessibilityFrame = placedFrame
             object.accessibilityActivationPoint = placedActivationPoint
-            self.brains.stash.nextVisibleRefreshObservationForTesting = placedScreen
+            self.brains.vault.nextVisibleRefreshObservationForTesting = placedScreen
             return await originalMoveViewport(intent)
         }
         defer {
@@ -1323,7 +1323,7 @@ final class TheBrainsScrollTests: XCTestCase {
             scrollMembership: nil,
             element: element
         )
-        brains.stash.installObservationForTesting(InterfaceObservation.makeForTests(
+        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [entry.heistId: entry],
             hierarchy: [.element(element, traversalIndex: 0)],
             heistIdsByPath: [TreePath([0]): entry.heistId],
@@ -1360,7 +1360,7 @@ final class TheBrainsScrollTests: XCTestCase {
             scrollMembership: nil,
             element: element
         )
-        brains.stash.installObservationForTesting(InterfaceObservation.makeForTests(
+        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [entry.heistId: entry],
             hierarchy: [.element(element, traversalIndex: 0)],
             heistIdsByPath: [TreePath([0]): entry.heistId],
@@ -1415,8 +1415,8 @@ final class TheBrainsScrollTests: XCTestCase {
         let screen = InterfaceObservation.makeForTests([
             .init(element, heistId: "refreshable_button", object: object),
         ])
-        brains.stash.installObservationForTesting(screen)
-        brains.stash.nextVisibleRefreshObservationForTesting = screen
+        brains.vault.installObservationForTesting(screen)
+        brains.vault.nextVisibleRefreshObservationForTesting = screen
         let target = try resolvedTarget(AccessibilityTarget.label("Refreshable").and(.traits([.button])))
         let finalResolution = ActionSubjectResolution(
             origin: .known,
@@ -1433,7 +1433,7 @@ final class TheBrainsScrollTests: XCTestCase {
                 subjectEvidence: ActionSubjectEvidence(
                     source: .resolvedSemanticTarget,
                     target: target,
-                    element: TheStash.WireConversion.convert(context.treeElement.element),
+                    element: TheVault.WireConversion.convert(context.treeElement.element),
                     resolution: finalResolution
                 )
             )
@@ -1467,7 +1467,7 @@ final class TheBrainsScrollTests: XCTestCase {
             window.isHidden = true
         }
         await brains.tripwire.yieldFrames(3)
-        brains.stash.clearInstalledVisibleRefreshObservationForTesting()
+        brains.vault.clearInstalledVisibleRefreshObservationForTesting()
 
         let result = await brains.executeRuntimeAction(
             .activate(try resolvedTarget(.label("Old Offscreen")))
@@ -1504,7 +1504,7 @@ final class TheBrainsScrollTests: XCTestCase {
             (currentHeader, "current_controls_header"),
             (currentBackButton, "current_back_button"),
         ])
-        brains.stash.semanticObservationStream.commitVisibleObservationForTesting(currentScreen)
+        brains.vault.semanticObservationStream.commitVisibleObservationForTesting(currentScreen)
         var discoveryAttempts = 0
         brains.navigation.elementInflation.exploration.discoverTarget = { _ in
             discoveryAttempts += 1
@@ -1541,7 +1541,7 @@ final class TheBrainsScrollTests: XCTestCase {
                 )
             ]
         )
-        brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(staleRootScreen)
+        brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(staleRootScreen)
 
         let currentHeader = makeElement(label: "Controls Demo", traits: .header)
         let currentBackButton = makeElement(label: "ButtonHeist Demo", traits: [.button, .backButton])
@@ -1549,8 +1549,8 @@ final class TheBrainsScrollTests: XCTestCase {
             (currentHeader, "current_controls_header"),
             (currentBackButton, "current_back_button"),
         ])
-        brains.stash.recordParsedObservedEvidence(currentScreen)
-        brains.stash.nextVisibleRefreshObservationForTesting = currentScreen
+        brains.vault.recordParsedObservedEvidence(currentScreen)
+        brains.vault.nextVisibleRefreshObservationForTesting = currentScreen
 
         let discovered = await brains.navigation.elementInflation.exploration.discoverTarget(
             try resolvedTarget(.label("Controls Demo").and(.traits([.button])))
@@ -1592,7 +1592,7 @@ final class TheBrainsScrollTests: XCTestCase {
         }
         await brains.tripwire.yieldFrames(3)
 
-        guard let visibleScreen = brains.stash.refreshLiveCapture() else {
+        guard let visibleScreen = brains.vault.refreshLiveCapture() else {
             throw XCTSkip("No live hierarchy available for interface discovery contamination regression test")
         }
         guard let scrollContainerPath = visibleScreen.tree.orderedContainers.compactMap({ container -> TreePath? in
@@ -1601,7 +1601,7 @@ final class TheBrainsScrollTests: XCTestCase {
         }).first else {
             throw XCTSkip("Parser did not expose the test scroll view as a scroll container")
         }
-        let visibleEvent = brains.stash.semanticObservationStream.commitVisibleObservationForTesting(visibleScreen)
+        let visibleEvent = brains.vault.semanticObservationStream.commitVisibleObservationForTesting(visibleScreen)
 
         let staleRootRow = makeElement(label: "Auto-Settle Fixtures", traits: .button)
         let staleEntry = InterfaceTree.Element(
@@ -1616,16 +1616,16 @@ final class TheBrainsScrollTests: XCTestCase {
             ),
             liveCapture: visibleScreen.liveCapture
         )
-        brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(staleScreen)
+        brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(staleScreen)
 
         guard let exploration = await brains.navigation.exploreScreen(
-            baseline: .currentViewport(brains.stash.visibleExplorationBaseline(from: visibleScreen)),
+            baseline: .currentViewport(brains.vault.visibleExplorationBaseline(from: visibleScreen)),
             maxScrollsPerContainer: 3,
             maxScrollsPerDiscovery: 3
         ) else {
             return XCTFail("Expected word-list exploration to settle")
         }
-        let labels = brains.stash.discoveryInterface().projectedElements.compactMap(\.label)
+        let labels = brains.vault.discoveryInterface().projectedElements.compactMap(\.label)
         XCTAssertEqual(
             exploration.event.generation,
             visibleEvent.generation,
@@ -1674,13 +1674,13 @@ final class TheBrainsScrollTests: XCTestCase {
         }
         await brains.tripwire.yieldFrames(3)
         let initialVisualOrigin = Navigation.visualOrigin(in: scrollView)
-        guard let visibleScreen = brains.stash.refreshLiveCapture() else {
+        guard let visibleScreen = brains.vault.refreshLiveCapture() else {
             throw XCTSkip("No live hierarchy available for blank-page discovery")
         }
 
         guard let exploration = await brains.navigation.exploreScreen(
             target: try resolvedTarget(.label("Beyond Blank Page")),
-            baseline: .currentViewport(brains.stash.visibleExplorationBaseline(from: visibleScreen)),
+            baseline: .currentViewport(brains.vault.visibleExplorationBaseline(from: visibleScreen)),
             exitPosition: .origin,
             maxScrollsPerContainer: 4,
             maxScrollsPerDiscovery: 4
@@ -1689,7 +1689,7 @@ final class TheBrainsScrollTests: XCTestCase {
         }
 
         XCTAssertGreaterThanOrEqual(exploration.progress.scrollCount, 2)
-        XCTAssertNotNil(brains.stash.interfaceTree.orderedElements.first {
+        XCTAssertNotNil(brains.vault.interfaceTree.orderedElements.first {
             $0.element.label == "Beyond Blank Page"
         })
         XCTAssertEqual(
@@ -1733,12 +1733,12 @@ final class TheBrainsScrollTests: XCTestCase {
         await brains.tripwire.yieldFrames(3)
         let initialVisualOrigin = Navigation.visualOrigin(in: scrollView)
 
-        guard let visibleScreen = brains.stash.refreshLiveCapture() else {
+        guard let visibleScreen = brains.vault.refreshLiveCapture() else {
             throw XCTSkip("No live hierarchy available for wait discovery restoration")
         }
         guard let exploration = await brains.navigation.exploreScreen(
             target: try resolvedTarget(.label("Wait Discovery Target")),
-            baseline: .currentViewport(brains.stash.visibleExplorationBaseline(from: visibleScreen)),
+            baseline: .currentViewport(brains.vault.visibleExplorationBaseline(from: visibleScreen)),
             exitPosition: .origin,
             maxScrollsPerContainer: 3,
             maxScrollsPerDiscovery: 3
@@ -1793,7 +1793,7 @@ final class TheBrainsScrollTests: XCTestCase {
             window.isHidden = true
         }
         await brains.tripwire.yieldFrames(3)
-        _ = brains.stash.refreshLiveCapture()
+        _ = brains.vault.refreshLiveCapture()
 
         let result = await brains.navigation.executeScrollToVisible(
             target: try resolvedScrollToVisibleTarget(
@@ -1803,7 +1803,7 @@ final class TheBrainsScrollTests: XCTestCase {
 
         XCTAssertTrue(result.success, "Expected scroll_to_visible to discover the target above; got \(result)")
         XCTAssertLessThanOrEqual(scrollView.contentOffset.y, 10)
-        XCTAssertTrue(brains.stash.latestObservation.tree.orderedElements.contains {
+        XCTAssertTrue(brains.vault.latestObservation.tree.orderedElements.contains {
             $0.element.label == "Top Target"
         })
     }
@@ -1812,7 +1812,7 @@ final class TheBrainsScrollTests: XCTestCase {
         let staleScrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         staleScrollView.contentSize = CGSize(width: 320, height: 1_600)
         let visible = makeElement(label: "Visible")
-        brains.stash.installObservationForTesting(.makeForTests(
+        brains.vault.installObservationForTesting(.makeForTests(
             elements: [(visible, HeistId(rawValue: "visible_element"))]
         ))
 
@@ -1883,8 +1883,8 @@ final class TheBrainsScrollTests: XCTestCase {
             )
         }
         await waitForSettledSemanticWaiter()
-        brains.stash.nextVisibleRefreshObservationForTesting = recoveredScreen
-        brains.stash.semanticObservationStream.commitVisibleObservationForTesting(recoveredScreen)
+        brains.vault.nextVisibleRefreshObservationForTesting = recoveredScreen
+        brains.vault.semanticObservationStream.commitVisibleObservationForTesting(recoveredScreen)
 
         await inflation.value
         guard case .inflated(let inflatedTarget)? = resultBox.value else {
@@ -1968,8 +1968,8 @@ final class TheBrainsScrollTests: XCTestCase {
             )
         }
         await waitForSettledSemanticWaiter()
-        brains.stash.nextVisibleRefreshObservationForTesting = recoveredScreen
-        brains.stash.semanticObservationStream.commitVisibleObservationForTesting(recoveredScreen)
+        brains.vault.nextVisibleRefreshObservationForTesting = recoveredScreen
+        brains.vault.semanticObservationStream.commitVisibleObservationForTesting(recoveredScreen)
         await inflation.value
 
         guard case .inflated(let inflatedTarget)? = resultBox.value else {
@@ -1981,7 +1981,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(inflatedTarget.liveTarget.activationPoint.x, recoveredFrame.midX, accuracy: 0.01)
         XCTAssertEqual(inflatedTarget.liveTarget.activationPoint.y, recoveredFrame.midY, accuracy: 0.01)
         XCTAssertTrue(inflatedTarget.liveTarget.object === recoveredObject)
-        XCTAssertFalse(brains.stash.liveScrollView(for: inflatedTarget.treeElement) === staleScrollView)
+        XCTAssertFalse(brains.vault.liveScrollView(for: inflatedTarget.treeElement) === staleScrollView)
     }
 
     func testScrollReturnsReasonInsteadOfRevealingOffViewportTarget() async throws {
@@ -2051,7 +2051,7 @@ final class TheBrainsScrollTests: XCTestCase {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
         let container = makeScrollableContainer(contentSize: scrollView.contentSize, frame: scrollView.frame)
-        brains.stash.installObservationForTesting(InterfaceObservation.makeForTests(
+        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(container, children: [])],
             containerNamesByPath: [TreePath([0]): "main_scroll"],
@@ -2059,7 +2059,7 @@ final class TheBrainsScrollTests: XCTestCase {
             firstResponderHeistId: nil,
             scrollableContainerViewsByPath: [TreePath([0]): .init(view: scrollView)]
         ))
-        let baselineSequence = brains.stash.semanticObservationStream.latestEvent?.sequence
+        let baselineSequence = brains.vault.semanticObservationStream.latestEvent?.sequence
 
         let result = await brains.navigation.executeScroll(
             try resolvedScrollTarget(ScrollTarget())
@@ -2067,7 +2067,7 @@ final class TheBrainsScrollTests: XCTestCase {
 
         XCTAssertTrue(result.success, "Expected default scroll to pick the only visible container: \(String(describing: result.message))")
         XCTAssertGreaterThan(scrollView.contentOffset.y, 0)
-        let committedMovement = try XCTUnwrap(brains.stash.semanticObservationStream.latestEvent)
+        let committedMovement = try XCTUnwrap(brains.vault.semanticObservationStream.latestEvent)
         XCTAssertEqual(committedMovement.scope, .discovery)
         XCTAssertNotEqual(committedMovement.sequence, baselineSequence)
     }
@@ -2077,7 +2077,7 @@ final class TheBrainsScrollTests: XCTestCase {
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
         scrollView.contentOffset.y = 600
         let container = makeScrollableContainer(contentSize: scrollView.contentSize, frame: scrollView.frame)
-        brains.stash.installObservationForTesting(InterfaceObservation.makeForTests(
+        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(container, children: [])],
             containerNamesByPath: [TreePath([0]): "main_scroll"],
@@ -2098,7 +2098,7 @@ final class TheBrainsScrollTests: XCTestCase {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
         let container = makeScrollableContainer(contentSize: scrollView.contentSize, frame: scrollView.frame)
-        brains.stash.installObservationForTesting(InterfaceObservation.makeForTests(
+        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(container, children: [])],
             containerNamesByPath: [TreePath([0]): "main_scroll"],
@@ -2122,7 +2122,7 @@ final class TheBrainsScrollTests: XCTestCase {
         secondScrollView.contentSize = CGSize(width: 320, height: 1_600)
         let firstContainer = makeScrollableContainer(contentSize: firstScrollView.contentSize, frame: firstScrollView.frame)
         let secondContainer = makeScrollableContainer(contentSize: secondScrollView.contentSize, frame: secondScrollView.frame)
-        brains.stash.installObservationForTesting(InterfaceObservation.makeForTests(
+        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [
                 .container(firstContainer, children: []),
@@ -2163,7 +2163,7 @@ final class TheBrainsScrollTests: XCTestCase {
         secondScrollView.contentOffset.y = 500
         let firstContainer = makeScrollableContainer(contentSize: firstScrollView.contentSize, frame: firstScrollView.frame)
         let secondContainer = makeScrollableContainer(contentSize: secondScrollView.contentSize, frame: secondScrollView.frame)
-        brains.stash.installObservationForTesting(InterfaceObservation.makeForTests(
+        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [
                 .container(firstContainer, children: []),
@@ -2207,7 +2207,7 @@ final class TheBrainsScrollTests: XCTestCase {
         let firstPath = TreePath([0])
         let secondPath = TreePath([1])
 
-        brains.stash.installObservationForTesting(InterfaceObservation.makeForTests(
+        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [
                 .container(repeatedContainer, children: []),
@@ -2243,7 +2243,7 @@ final class TheBrainsScrollTests: XCTestCase {
         let firstContainer = makeScrollableContainer()
         let secondContainer = makeScrollableContainer(frame: CGRect(x: 0, y: 420, width: 320, height: 400))
         installScrollableContainers([firstContainer, secondContainer])
-        brains.stash.installObservationForTesting(InterfaceObservation.makeForTests(
+        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [
                 .container(firstContainer, children: []),
@@ -2284,7 +2284,7 @@ final class TheBrainsScrollTests: XCTestCase {
             scrollMembership: nil,
             element: second
         )
-        brains.stash.installObservationForTesting(InterfaceObservation.makeForTests(
+        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [
                 firstEntry.heistId: firstEntry,
                 secondEntry.heistId: secondEntry,
@@ -2364,7 +2364,7 @@ final class TheBrainsScrollTests: XCTestCase {
         }
         await brains.tripwire.yieldFrames(3)
         let liveScreen = try XCTUnwrap(
-            brains.stash.refreshLiveCapture(),
+            brains.vault.refreshLiveCapture(),
             "No live hierarchy available for scroll_to_visible post-reveal regression test"
         )
         guard let scrollContainerPath = liveScreen.liveCapture.hierarchy.scrollablePathIndexedContainers.first(where: {
@@ -2372,7 +2372,7 @@ final class TheBrainsScrollTests: XCTestCase {
         })?.path else {
             throw XCTSkip("No live hierarchy available for scroll_to_visible post-reveal regression test")
         }
-        if brains.stash.resolveTarget(
+        if brains.vault.resolveTarget(
             literalTarget(ElementPredicate.label("Jump Target"), ordinal: 0)
         ).resolved != nil {
             throw XCTSkip("Parser exposed offscreen scroll content before semantic reveal")
@@ -2399,7 +2399,7 @@ final class TheBrainsScrollTests: XCTestCase {
             ),
             liveCapture: liveScreen.liveCapture
         )
-        brains.stash.installObservationForTesting(knownScreen)
+        brains.vault.installObservationForTesting(knownScreen)
         brains.navigation.elementInflation.exploration.discoverTarget = { _ in nil }
 
         let result = await brains.navigation.elementInflation.inflate(
@@ -2423,7 +2423,7 @@ final class TheBrainsScrollTests: XCTestCase {
             scrollMembership: nil,
             element: makeElement(label: "Item")
         )
-        brains.stash.installObservationForTesting(InterfaceObservation.makeForTests(
+        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [treeElement.heistId: treeElement],
             hierarchy: [.element(treeElement.element, traversalIndex: 0)],
             heistIdsByPath: [TreePath([0]): treeElement.heistId],
@@ -2495,7 +2495,7 @@ final class TheBrainsScrollTests: XCTestCase {
             frame: AccessibilityRect(captureFrame)
         )
         let path = TreePath([0])
-        brains.stash.installObservationForTesting(InterfaceObservation.makeForTests(
+        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(container, children: [])],
             containerRefsByPath: [path: .init(object: retainedLiveObject())],
@@ -2522,7 +2522,7 @@ final class TheBrainsScrollTests: XCTestCase {
         let contentSize = AccessibilitySize(width: 320, height: 1_600)
         let container = makeScrollableContainer(contentSize: scrollView.contentSize, frame: scrollView.frame)
         let path = TreePath([0])
-        brains.stash.installObservationForTesting(InterfaceObservation.makeForTests(
+        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(container, children: [])],
             containerNamesByPath: [path: "main_scroll"],
@@ -2550,7 +2550,7 @@ final class TheBrainsScrollTests: XCTestCase {
         oldScrollView.contentSize = CGSize(width: 320, height: 1_600)
         let container = makeScrollableContainer(contentSize: oldScrollView.contentSize, frame: oldScrollView.frame)
         let contentSize = try XCTUnwrap(container.scrollableContentSize)
-        brains.stash.installObservationForTesting(InterfaceObservation.makeForTests(
+        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(container, children: [])],
             containerRefsByPath: [path: .init(object: oldScrollView)],
@@ -2565,7 +2565,7 @@ final class TheBrainsScrollTests: XCTestCase {
 
         let replacementScrollView = UIScrollView(frame: oldScrollView.frame)
         replacementScrollView.contentSize = oldScrollView.contentSize
-        brains.stash.installObservationForTesting(InterfaceObservation.makeForTests(
+        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(container, children: [])],
             containerRefsByPath: [path: .init(object: replacementScrollView)],
@@ -2590,7 +2590,7 @@ final class TheBrainsScrollTests: XCTestCase {
         oldScrollView.contentSize = CGSize(width: 320, height: 1_600)
         let container = makeScrollableContainer(contentSize: oldScrollView.contentSize, frame: oldScrollView.frame)
         let contentSize = try XCTUnwrap(container.scrollableContentSize)
-        brains.stash.installObservationForTesting(InterfaceObservation.makeForTests(
+        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(container, children: [])],
             containerRefsByPath: [path: .init(object: oldScrollView)],
@@ -2605,7 +2605,7 @@ final class TheBrainsScrollTests: XCTestCase {
 
         let replacementScrollView = UIScrollView(frame: oldScrollView.frame)
         replacementScrollView.contentSize = oldScrollView.contentSize
-        brains.stash.installObservationForTesting(InterfaceObservation.makeForTests(
+        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(container, children: [])],
             containerRefsByPath: [path: .init(object: replacementScrollView)],
@@ -2659,7 +2659,7 @@ final class TheBrainsScrollTests: XCTestCase {
         // must be clipped to end at its top edge.
         let tabBarFrame = CGRect(x: 0, y: 700, width: 400, height: 80)
         let tabBarContainer = AccessibilityContainer(type: .tabBar, frame: AccessibilityRect(tabBarFrame))
-        brains.stash.installObservationForTesting(InterfaceObservation.makeForTests(
+        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(tabBarContainer, children: [])],
             firstResponderHeistId: nil,
@@ -2729,7 +2729,7 @@ final class TheBrainsScrollTests: XCTestCase {
         let containerRefs = Dictionary(uniqueKeysWithValues: containers.indices.map { index in
             (TreePath([index]), LiveCapture.ContainerRef(object: retainedLiveObject()))
         })
-        brains.stash.installObservationForTesting(InterfaceObservation.makeForTests(
+        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: containers.map { .container($0, children: []) },
             containerRefsByPath: containerRefs,
@@ -2746,7 +2746,7 @@ final class TheBrainsScrollTests: XCTestCase {
             contentSize: scrollView.contentSize,
             frame: scrollView.frame
         )
-        brains.stash.installObservationForTesting(InterfaceObservation.makeForTests(
+        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             elements: [treeElement.heistId: treeElement],
             hierarchy: [
                 .container(container, children: [

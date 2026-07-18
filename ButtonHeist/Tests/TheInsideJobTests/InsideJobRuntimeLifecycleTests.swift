@@ -145,7 +145,7 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
 
         assertSuspendedPreservingLifecycleObservation(harness.job)
         XCTAssertFalse(harness.job.brains.semanticObservationIsActive)
-        XCTAssertFalse(harness.job.brains.stash.semanticObservationStream.isActive)
+        XCTAssertFalse(harness.job.brains.vault.semanticObservationStream.isActive)
         XCTAssertFalse(harness.job.tripwire.isPulseRunning)
         XCTAssertEqual(harness.stopCallCount(), 1)
 
@@ -207,11 +207,11 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
 
         assertSuspendedPreservingLifecycleObservation(harness.job)
         XCTAssertEqual(
-            harness.job.brains.stash.semanticObservationStream.latestSettleFailureDiagnostic,
+            harness.job.brains.vault.semanticObservationStream.latestSettleFailureDiagnostic,
             diagnostic
         )
         XCTAssertFalse(harness.job.brains.semanticObservationIsActive)
-        XCTAssertFalse(harness.job.brains.stash.semanticObservationStream.isActive)
+        XCTAssertFalse(harness.job.brains.vault.semanticObservationStream.isActive)
         XCTAssertFalse(harness.job.tripwire.isPulseRunning)
 
         await harness.job.stop()
@@ -330,7 +330,7 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
         XCTAssertFalse(job.lifecycleObservationIsInstalled, file: file, line: line)
         XCTAssertTrue(job.lifecycleBoundaryTasks.isEmpty, file: file, line: line)
         XCTAssertFalse(job.brains.semanticObservationIsActive, file: file, line: line)
-        XCTAssertFalse(job.brains.stash.semanticObservationStream.isActive, file: file, line: line)
+        XCTAssertFalse(job.brains.vault.semanticObservationStream.isActive, file: file, line: line)
         XCTAssertFalse(job.tripwire.isPulseRunning, file: file, line: line)
         XCTAssertNil(job.retainedIdleTimerBaseline, file: file, line: line)
     }
@@ -345,11 +345,11 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
             elementsByKey: [:],
             instabilityDescription: "runtime lifecycle diagnostic"
         )
-        _ = await job.brains.stash.semanticObservationStream.settlePostActionObservation(
+        _ = await job.brains.vault.semanticObservationStream.settlePostActionObservation(
             baselineTripwireSignal: job.tripwire.tripwireSignal(),
             settleOutcome: outcome
         )
-        guard let diagnostic = job.brains.stash.semanticObservationStream.latestSettleFailureDiagnostic else {
+        guard let diagnostic = job.brains.vault.semanticObservationStream.latestSettleFailureDiagnostic else {
             XCTFail("Expected settle failure diagnostic")
             return ""
         }

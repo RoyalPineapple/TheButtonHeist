@@ -198,7 +198,7 @@ final class HeistReceiptTests: XCTestCase {
             elements: [(staleHeader, "controls_demo")],
             offViewport: [InterfaceObservation.OffViewportEntry(staleOffscreen, heistId: "stale_row")]
         )
-        job.brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(staleDiscovery)
+        job.brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(staleDiscovery)
 
         let currentHeader = AccessibilityElement.make(
             label: "ButtonHeist Demo",
@@ -206,7 +206,7 @@ final class HeistReceiptTests: XCTestCase {
             respondsToUserInteraction: false
         )
         let currentScreen = InterfaceObservation.makeForTests(elements: [(currentHeader, HeistId(rawValue: "buttonheist_demo"))])
-        job.brains.stash.nextVisibleRefreshObservationForTesting = currentScreen
+        job.brains.vault.nextVisibleRefreshObservationForTesting = currentScreen
 
         let plan = try HeistPlan {
             Warn("bootstrapped")
@@ -214,9 +214,9 @@ final class HeistReceiptTests: XCTestCase {
 
         _ = try await Heist(plan, runtime: .insideJob(job))
 
-        XCTAssertEqual(job.brains.stash.lastScreenName, "ButtonHeist Demo")
-        XCTAssertEqual(job.brains.stash.interfaceElementIDs, ["buttonheist_demo"])
-        XCTAssertNil(job.brains.stash.interfaceElement(heistId: "stale_row"))
+        XCTAssertEqual(job.brains.vault.lastScreenName, "ButtonHeist Demo")
+        XCTAssertEqual(job.brains.vault.interfaceElementIDs, ["buttonheist_demo"])
+        XCTAssertNil(job.brains.vault.interfaceElement(heistId: "stale_row"))
     }
 
     func testSingleStringRootHeistBindsOneRootArgument() async throws {
@@ -634,7 +634,7 @@ private func observedQuantityState(
         identifier: "quantity",
         traits: .staticText
     )
-    job.brains.stash.installObservationForTesting(.makeForTests(elements: [(element, HeistId(rawValue: "quantity"))]))
+    job.brains.vault.installObservationForTesting(.makeForTests(elements: [(element, HeistId(rawValue: "quantity"))]))
     return job.brains.postActionObservation.captureSemanticState()
 }
 

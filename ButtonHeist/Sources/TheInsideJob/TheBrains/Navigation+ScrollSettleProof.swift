@@ -51,8 +51,8 @@ extension Navigation {
         deadline: SemanticObservationDeadline? = nil,
         discoveryCommitPolicy: DiscoveryCommitPolicy = .mergeIntoInterface
     ) async -> ViewportTransition {
-        let previousVisibleIds = stash.viewportElementIDs
-        let notificationWindow = stash.accessibilityNotifications.beginActionWindow()
+        let previousVisibleIds = vault.viewportElementIDs
+        let notificationWindow = vault.accessibilityNotifications.beginActionWindow()
         let primitiveResult = await dispatchViewportMovement(intent)
         switch primitiveResult {
         case .moved:
@@ -91,18 +91,18 @@ extension Navigation {
     ) async -> TheSafecracker.ScrollPrimitiveResult {
         switch intent {
         case .page(let target, let direction, let animated):
-            return target.dispatchOnFreshScrollView(in: stash) { scrollView in
+            return target.dispatchOnFreshScrollView(in: vault) { scrollView in
                 safecracker.scrollByPage(scrollView, direction: direction, animated: animated)
             } ?? .unavailable
         case .edge(let target, let edge):
-            return target.dispatchOnFreshScrollView(in: stash) { scrollView in
+            return target.dispatchOnFreshScrollView(in: vault) { scrollView in
                 safecracker.scrollToEdge(scrollView, edge: edge, animated: false)
             } ?? .unavailable
         case .swipe(let target, let direction):
             guard case .swipeable(let container, _) = target else {
                 return .unavailable
             }
-            let preparation = stash.dispatchOnFreshLiveContainerTarget(
+            let preparation = vault.dispatchOnFreshLiveContainerTarget(
                 container,
             ) { currentContainer -> TheSafecracker.PreparedTouchDispatch? in
                 guard let frame = self.safeSwipeFrame(from: currentContainer.frame) else {
@@ -118,7 +118,7 @@ extension Navigation {
                   let dispatch else { return .unavailable }
             return await safecracker.completePreparedTouch(dispatch) ? .moved : .unavailable
         case .revealPoint(let point, let target, let preferredScreenRect, let minimumScreenRect):
-            return target.dispatchOnFreshScrollView(in: stash) { scrollView in
+            return target.dispatchOnFreshScrollView(in: vault) { scrollView in
                 safecracker.scrollToMakeScreenPointVisible(
                     point,
                     in: scrollView,
@@ -128,11 +128,11 @@ extension Navigation {
                 )
             } ?? .unavailable
         case .revealContentPoint(let point, let target):
-            return target.dispatchOnFreshScrollView(in: stash) { scrollView in
+            return target.dispatchOnFreshScrollView(in: vault) { scrollView in
                 safecracker.revealContentPoint(point, in: scrollView)
             } ?? .unavailable
         case .restoreVisualOrigin(let origin, let target):
-            return target.dispatchOnFreshScrollView(in: stash) { scrollView in
+            return target.dispatchOnFreshScrollView(in: vault) { scrollView in
                 safecracker.restoreVisualOrigin(origin, in: scrollView)
             } ?? .unavailable
         }
@@ -143,7 +143,7 @@ extension Navigation {
         previousVisibleIds: Set<HeistId>
     ) -> ScrollSettleResult {
         guard case .swipe = intent else { return .moved }
-        return stash.viewportElementIDs == previousVisibleIds ? .unchanged : .moved
+        return vault.viewportElementIDs == previousVisibleIds ? .unchanged : .moved
     }
 }
 

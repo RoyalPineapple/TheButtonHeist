@@ -165,7 +165,7 @@ extension TheBrains {
 
     private func clearRotorCursorBeforeNonRotorAction(_ command: ResolvedHeistActionCommand) {
         if case .rotor = command {} else {
-            stash.clearRotorCursor()
+            vault.clearRotorCursor()
         }
     }
 
@@ -203,10 +203,10 @@ extension TheBrains {
             return treeUnavailableResult(method: method)
         }
         let beforeObservationMs = elapsedMilliseconds(since: beforeStart)
-        let notificationWindow = stash.accessibilityNotifications.beginActionWindow()
+        let notificationWindow = vault.accessibilityNotifications.beginActionWindow()
         defer { notificationWindow.cancel() }
 
-        let demand = stash.semanticObservationStream.beginActiveObservationDemand(scope: observationScope)
+        let demand = vault.semanticObservationStream.beginActiveObservationDemand(scope: observationScope)
         defer { demand.cancel() }
 
         let interactionStart = CFAbsoluteTimeGetCurrent()

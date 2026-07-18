@@ -10,11 +10,11 @@ import AccessibilitySnapshotParser
 @MainActor
 final class Navigation {
 
-    let stash: TheStash
+    let vault: TheVault
     let safecracker: TheSafecracker
     let tripwire: TheTripwire
     lazy var elementInflation = ElementInflation(
-        stash: stash,
+        vault: vault,
         safecracker: safecracker,
         tripwire: tripwire,
         exploration: ElementInflation.Exploration(
@@ -22,7 +22,7 @@ final class Navigation {
                 guard let self else { return nil }
                 return await self.exploreScreen(
                     target: target,
-                    baseline: .interfaceMemory(self.stash.actionDiscoveryBaseline()),
+                    baseline: .interfaceMemory(self.vault.actionDiscoveryBaseline()),
                     exitPosition: .current,
                     searchOrder: .backwardFirst,
                 )
@@ -42,11 +42,11 @@ final class Navigation {
     )
 
     init(
-        stash: TheStash,
+        vault: TheVault,
         safecracker: TheSafecracker,
         tripwire: TheTripwire
     ) {
-        self.stash = stash
+        self.vault = vault
         self.safecracker = safecracker
         self.tripwire = tripwire
     }
@@ -55,10 +55,10 @@ final class Navigation {
 
     @MainActor enum ScrollableTarget {
         case uiScrollView(
-            container: TheStash.LiveContainerTarget,
+            container: TheVault.LiveContainerTarget,
             scrollView: UIScrollView
         )
-        case swipeable(container: TheStash.LiveContainerTarget, contentSize: CGSize)
+        case swipeable(container: TheVault.LiveContainerTarget, contentSize: CGSize)
 
         var containerTarget: InterfaceTree.Container {
             switch self {
@@ -69,21 +69,21 @@ final class Navigation {
 
         static func programmatic(
             _ scrollView: UIScrollView,
-            in stash: TheStash
+            in vault: TheVault
         ) -> ScrollableTarget? {
-            guard let target = stash.liveScrollTarget(matching: ObjectIdentifier(scrollView)) else { return nil }
+            guard let target = vault.liveScrollTarget(matching: ObjectIdentifier(scrollView)) else { return nil }
             return .uiScrollView(container: target.container, scrollView: target.scrollView)
         }
 
         func dispatchOnFreshScrollView<Value: Sendable>(
-            in stash: TheStash,
+            in vault: TheVault,
             operation: (UIScrollView) -> Value
         ) -> Value? {
             guard case .uiScrollView(let container, _) = self else { return nil }
-            let dispatch = stash.dispatchOnFreshLiveContainerTarget(
+            let dispatch = vault.dispatchOnFreshLiveContainerTarget(
                 container,
             ) { currentContainer -> Value? in
-                guard let scrollView = stash.liveScrollableContainerView(
+                guard let scrollView = vault.liveScrollableContainerView(
                     forPath: currentContainer.containerTarget.path
                 ) else { return nil }
                 return operation(scrollView)

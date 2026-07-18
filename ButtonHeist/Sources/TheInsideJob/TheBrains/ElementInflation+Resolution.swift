@@ -29,7 +29,7 @@ extension ElementInflation {
         case .retry(let reason):
             let refreshedResolution = resolution.adding(reason.adjustment)
             let pendingRetry: (reason: RetryReason, resolution: ActionSubjectResolution)
-            if stash.refreshLiveCapture() != nil {
+            if vault.refreshLiveCapture() != nil {
                 let refreshed = resolveCurrentLiveElementTarget(
                     treeElement: treeElement,
                     target: target,
@@ -58,7 +58,7 @@ extension ElementInflation {
                 for: target,
                 treeElement: treeElement,
                 method: method,
-                after: stash.semanticObservationStream.latestEvent?.sequence,
+                after: vault.semanticObservationStream.latestEvent?.sequence,
                 deadline: deadline,
                 resolution: pendingRetry.resolution
             ) {
@@ -126,7 +126,7 @@ extension ElementInflation {
     internal func knownSemanticTarget(
         _ target: ResolvedAccessibilityTarget
     ) -> Result<InterfaceTree.Element, ElementInflationFailure> {
-        switch stash.resolveTarget(target) {
+        switch vault.resolveTarget(target) {
         case .resolved(let treeElement):
             return .success(treeElement)
         case .ambiguous(let facts):
@@ -139,7 +139,7 @@ extension ElementInflation {
     internal func visibleTargetResolution(
         _ target: ResolvedAccessibilityTarget
     ) -> Result<InterfaceTree.Element, ElementInflationFailure>? {
-        switch stash.resolveVisibleTarget(target) {
+        switch vault.resolveVisibleTarget(target) {
         case .resolved(let treeElement):
             return .success(treeElement)
         case .ambiguous(let facts):
@@ -156,10 +156,10 @@ extension ElementInflation {
         deadline: SemanticObservationDeadline,
         resolution: ActionSubjectResolution
     ) -> FreshElementTargetResolution {
-        guard let committed = stash.interfaceElement(heistId: treeElement.heistId) else {
+        guard let committed = vault.interfaceElement(heistId: treeElement.heistId) else {
             return .retry(.staleTarget)
         }
-        switch stash.resolveLiveActionTarget(for: committed) {
+        switch vault.resolveLiveActionTarget(for: committed) {
         case .resolved(let liveTarget):
             return .success(InflatedElementTarget(
                 target: target,
@@ -175,7 +175,7 @@ extension ElementInflation {
                 ActionCapabilityDiagnostic.gestureTargetUnavailable(
                     method: method,
                     element: committed,
-                    isVisible: stash.viewportElementIDs.contains(committed.heistId)
+                    isVisible: vault.viewportElementIDs.contains(committed.heistId)
                 )
             ))
         }

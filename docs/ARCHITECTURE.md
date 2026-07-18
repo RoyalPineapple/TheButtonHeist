@@ -50,10 +50,10 @@ encode as single JSON strings but are not interchangeable strings in core logic.
 
 ### Trees and Observations Are the Currency
 
-The committed `TheStash.interfaceTree` is the sole current semantic truth.
-TheStash privately projects that tree into `AccessibilityTargetMatchInput`; the
+The committed `TheVault.interfaceTree` is the sole current semantic truth.
+TheVault privately projects that tree into `AccessibilityTargetMatchInput`; the
 shared `AccessibilityTargetMatchGraph` evaluates every element, container,
-ordinal, and descendant-scoped `AccessibilityTarget`. TheStash maps the result
+ordinal, and descendant-scoped `AccessibilityTarget`. TheVault maps the result
 paths back to `InterfaceTree` values and current live evidence for diagnostics,
 inflation, and dispatch. A delivered `Interface` feeds the same matching graph,
 so client predicates and host resolution cannot drift into separate recursive
@@ -77,7 +77,7 @@ those samples and a clean result produces an `InterfaceObservationProof`.
 
 `SemanticObservationStream` is the sole ordered committer. Its production
 entry points accept only `InterfaceObservationProof`, classify continuity once,
-reduce the proof into `TheStash.interfaceTree`, construct the settled
+reduce the proof into `TheVault.interfaceTree`, construct the settled
 publication from that committed graph, and only then append it to the private
 `SemanticObservationLog`. `SemanticObservationRuntimeState` advances after log
 publication and atomically owns stream lifecycle, generation lineage, settled
@@ -204,7 +204,7 @@ the requested element remains visible for dispatch. The caller selects this
 exit policy before traversal; finalization applies it whether traversal matched,
 depleted its rays, hit a budget, or was interrupted after dispatch.
 `Navigation.InterfaceExplorationResult` is the finished event and progress for that
-traversal; it derives from canonical stash truth and owns no second graph or
+traversal; it derives from canonical vault truth and owns no second graph or
 publication path. There is no compatibility traversal or publication path.
 
 Publication appends each settled capture to the same private
@@ -265,7 +265,7 @@ durable artifact, or final output formatting.
 
 The approved long-lived owners are:
 
-- `TheStash`: committed `InterfaceTree`, latest disposable `LiveCapture`, and
+- `TheVault`: committed `InterfaceTree`, latest disposable `LiveCapture`, and
   non-clean settle diagnostics. Its `SemanticObservationStream` is the sole
   ordered committer and owns the private retained `SemanticObservationLog`.
 - `TheMuscle`: auth, admission, and session state inside the app.
@@ -359,15 +359,15 @@ scoped `screenChanged` sequence covered by the committed batch. A scoped
 through-cursor and invalidates the fulfilled observation before it can be
 served as current.
 
-TheBurglar owns first-responder capture. A parser read converts responder state
+TheVault owns first-responder capture. A parser read converts responder state
 to a capture-local `HeistId`, and `LiveCapture.Snapshot` retains that value with
 the capture. Settled storage never retains a UIKit object as responder identity;
-TheStash alone projects the captured id once to a semantic `AccessibilityTarget`
+TheVault alone projects the captured id once to a semantic `AccessibilityTarget`
 through the shared minimum-predicate selector used by semantic and post-action
 trace context. First-responder actions pin the captured id before inflation and
 fail if either the current responder id or inflated element id differs afterward.
 
-TheStash owns notification-element correlation. While live evidence exists, it
+TheVault owns notification-element correlation. While live evidence exists, it
 correlates a notification object to a capture node, then emits the reference
 from the same canonical tree/graph record used by target resolution. The
 reference is the record's `TreePath` and traversal index, never a UIKit object

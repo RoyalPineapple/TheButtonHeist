@@ -85,11 +85,11 @@ final class ElementInflationProductTests: XCTestCase {
             identifier: heistId.rawValue
         )
         let staleObject = UIButton(frame: CGRect(x: 20, y: 20, width: 160, height: 44))
-        brains.stash.installObservationForTesting(.makeForTests([
+        brains.vault.installObservationForTesting(.makeForTests([
             .init(element, heistId: heistId, object: staleObject),
         ]))
-        let treeElement = try XCTUnwrap(brains.stash.interfaceElement(heistId: heistId))
-        guard case .resolved(let liveTarget) = brains.stash.resolveLiveActionTarget(for: treeElement) else {
+        let treeElement = try XCTUnwrap(brains.vault.interfaceElement(heistId: heistId))
+        guard case .resolved(let liveTarget) = brains.vault.resolveLiveActionTarget(for: treeElement) else {
             return XCTFail("Expected committed refresh fixture to have a live target")
         }
         let completedInflation = ElementInflation.InflatedElementTarget(
@@ -101,7 +101,7 @@ final class ElementInflationProductTests: XCTestCase {
         )
         brains.stopSemanticObservation()
         let replacementObject = UIButton(frame: CGRect(x: 20, y: 20, width: 160, height: 44))
-        brains.stash.nextVisibleRefreshObservationForTesting = .makeForTests([
+        brains.vault.nextVisibleRefreshObservationForTesting = .makeForTests([
             .init(element, heistId: heistId, object: replacementObject),
         ])
         var now: CFAbsoluteTime = 100
@@ -237,7 +237,7 @@ final class ElementInflationProductTests: XCTestCase {
         )
         defer { fixture.cleanup() }
 
-        let screen = try XCTUnwrap(brains.stash.refreshLiveCapture())
+        let screen = try XCTUnwrap(brains.vault.refreshLiveCapture())
         let paths = screen.liveCapture.scrollableContainerViewsByPath.compactMap { path, reference in
             reference.view === fixture.scrollView ? path : nil
         }
@@ -277,8 +277,8 @@ final class ElementInflationProductTests: XCTestCase {
         defer { fixture.cleanup() }
         try seedOffViewportTextInputTarget(fixture)
 
-        let keyboardImpl = ProductTextInputKeyboardImpl(textField: fixture.target) { [stash = brains.stash] in
-            stash.invalidateSettledObservationFromTripwire()
+        let keyboardImpl = ProductTextInputKeyboardImpl(textField: fixture.target) { [vault = brains.vault] in
+            vault.invalidateSettledObservationFromTripwire()
         }
         brains.safecracker.keyboardBridgeProvider = { keyboardImpl.bridge() }
 
@@ -384,7 +384,7 @@ final class ElementInflationProductTests: XCTestCase {
         let decoy = try installScrollDecoyWindow(contentSize: fixture.innerScrollView.contentSize)
         defer { decoy.cleanup() }
         try seedKnownNestedScrollTarget(fixture, decoy: .separate(decoy.scrollView))
-        XCTAssertTrue(brains.stash.scrollableContainerViewsByPath.values.contains { $0 === decoy.scrollView })
+        XCTAssertTrue(brains.vault.scrollableContainerViewsByPath.values.contains { $0 === decoy.scrollView })
         let decoyRevealCount = decoy.scrollView.revealRequestCount
         let decoyOffset = decoy.scrollView.contentOffset
 
@@ -420,7 +420,7 @@ final class ElementInflationProductTests: XCTestCase {
             decoy: .duplicateOuterReferenceAtDecoyPath(decoy.scrollView)
         )
         XCTAssertGreaterThanOrEqual(
-            brains.stash.scrollableContainerViewsByPath.values.filter { $0 === fixture.outerScrollView }.count,
+            brains.vault.scrollableContainerViewsByPath.values.filter { $0 === fixture.outerScrollView }.count,
             2
         )
 
@@ -471,8 +471,8 @@ final class ElementInflationProductTests: XCTestCase {
             ordinal: 0
         ).resolve(in: .empty)
         fixture.second.isHidden = true
-        brains.stash.installObservationForTesting(try observation(for: [fixture.first]))
-        brains.stash.clearInstalledVisibleRefreshObservationForTesting()
+        brains.vault.installObservationForTesting(try observation(for: [fixture.first]))
+        brains.vault.clearInstalledVisibleRefreshObservationForTesting()
         guard case .success(let selected) = brains.navigation.elementInflation.knownSemanticTarget(target) else {
             return XCTFail("Expected the original element to satisfy the committed predicate")
         }
@@ -481,8 +481,8 @@ final class ElementInflationProductTests: XCTestCase {
         fixture.second.isHidden = false
         fixture.first.superview?.insertSubview(fixture.second, belowSubview: fixture.first)
         fixture.window.layoutIfNeeded()
-        brains.stash.installObservationForTesting(try observation(for: [fixture.second, fixture.first]))
-        brains.stash.clearInstalledVisibleRefreshObservationForTesting()
+        brains.vault.installObservationForTesting(try observation(for: [fixture.second, fixture.first]))
+        brains.vault.clearInstalledVisibleRefreshObservationForTesting()
 
         let state = await brains.navigation.elementInflation.stateAfterRefresh(
             target: target,
@@ -512,16 +512,16 @@ final class ElementInflationProductTests: XCTestCase {
             ordinal: 0
         ).resolve(in: .empty)
         fixture.second.isHidden = true
-        brains.stash.installObservationForTesting(try observation(for: [fixture.first]))
-        brains.stash.clearInstalledVisibleRefreshObservationForTesting()
+        brains.vault.installObservationForTesting(try observation(for: [fixture.first]))
+        brains.vault.clearInstalledVisibleRefreshObservationForTesting()
         guard case .success(let selected) = brains.navigation.elementInflation.knownSemanticTarget(target) else {
             return XCTFail("Expected the original element to satisfy the committed predicate")
         }
 
         fixture.first.removeFromSuperview()
         fixture.second.isHidden = false
-        brains.stash.installObservationForTesting(try observation(for: [fixture.second]))
-        brains.stash.clearInstalledVisibleRefreshObservationForTesting()
+        brains.vault.installObservationForTesting(try observation(for: [fixture.second]))
+        brains.vault.clearInstalledVisibleRefreshObservationForTesting()
 
         let state = await brains.navigation.elementInflation.stateAfterRefresh(
             target: target,
@@ -721,7 +721,7 @@ final class ElementInflationProductTests: XCTestCase {
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
-        let observationStream = brains.stash.semanticObservationStream
+        let observationStream = brains.vault.semanticObservationStream
         XCTAssertFalse(brains.semanticObservationIsActive, file: file, line: line)
         XCTAssertFalse(brains.tripwire.isPulseRunning, file: file, line: line)
         XCTAssertFalse(observationStream.isActive, file: file, line: line)
@@ -741,9 +741,9 @@ final class ElementInflationProductTests: XCTestCase {
             "innerReveals=\(fixture.innerScrollView.revealRequestCount)",
             "targetHidden=\(fixture.target.isHidden)",
             "targetAccessible=\(fixture.target.isAccessibilityElement)",
-            "liveIds=\(brains.stash.liveHeistIds().map(\.rawValue).sorted())",
-            "semanticPath=\(brains.stash.interfaceElement(heistId: fixture.knownHeistId)?.scrollContainerPath?.indices ?? [])",
-            brains.stash.liveScrollContainerDiagnostics(),
+            "liveIds=\(brains.vault.liveHeistIds().map(\.rawValue).sorted())",
+            "semanticPath=\(brains.vault.interfaceElement(heistId: fixture.knownHeistId)?.scrollContainerPath?.indices ?? [])",
+            brains.vault.liveScrollContainerDiagnostics(),
         ].joined(separator: "; ")
     }
 
@@ -1036,7 +1036,7 @@ final class ElementInflationProductTests: XCTestCase {
         refreshesFromUIKit: Bool = true
     ) throws {
         let targetBrains = targetBrains ?? brains!
-        let screen = try XCTUnwrap(targetBrains.stash.refreshLiveCapture())
+        let screen = try XCTUnwrap(targetBrains.vault.refreshLiveCapture())
         let identifier = semanticIdentifier ?? fixture.identifier
         let label = semanticLabel ?? fixture.label
         let scrollContainerPath: TreePath
@@ -1069,19 +1069,19 @@ final class ElementInflationProductTests: XCTestCase {
         var elements = screen.tree.elements
         elements[entry.heistId] = entry
 
-        targetBrains.stash.installObservationForTesting(InterfaceObservation.makeForTests(
+        targetBrains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             tree: InterfaceTree(elements: elements, containers: screen.tree.containers),
             liveCapture: screen.liveCapture
         ))
         if refreshesFromUIKit {
-            targetBrains.stash.clearInstalledVisibleRefreshObservationForTesting()
+            targetBrains.vault.clearInstalledVisibleRefreshObservationForTesting()
         }
     }
 
     private func seedOffViewportTextInputTarget(
         _ fixture: TextInputRevealFixture
     ) throws {
-        let screen = try XCTUnwrap(brains.stash.refreshLiveCapture())
+        let screen = try XCTUnwrap(brains.vault.refreshLiveCapture())
         let scrollContainerPath = try XCTUnwrap(
             firstLiveScrollableContainerPath(in: screen),
             "Expected fixture to expose a live scroll container. \(scrollContainerDiagnostics(in: screen))"
@@ -1112,7 +1112,7 @@ final class ElementInflationProductTests: XCTestCase {
             tree: InterfaceTree(elements: elements, containers: screen.tree.containers),
             liveCapture: screen.liveCapture
         )
-        brains.stash.semanticObservationStream.commitDiscoveryObservationForTesting(discoveryObservation)
+        brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(discoveryObservation)
     }
 
     private func seedKnownUnreachableDuplicate(
@@ -1120,7 +1120,7 @@ final class ElementInflationProductTests: XCTestCase {
         identifier: String,
         heistId: HeistId
     ) {
-        let tree = brains.stash.interfaceTree
+        let tree = brains.vault.interfaceTree
         let entry = InterfaceTree.Element(
             heistId: heistId,
             scrollMembership: nil,
@@ -1128,9 +1128,9 @@ final class ElementInflationProductTests: XCTestCase {
         )
         var elements = tree.elements
         elements[heistId] = entry
-        brains.stash.installObservationForTesting(InterfaceObservation.makeForTests(
+        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             tree: InterfaceTree(elements: elements, containers: tree.containers),
-            liveCapture: brains.stash.latestObservation.liveCapture
+            liveCapture: brains.vault.latestObservation.liveCapture
         ))
     }
 
@@ -1138,7 +1138,7 @@ final class ElementInflationProductTests: XCTestCase {
         _ fixture: NestedScrollRevealFixture,
         decoy: NestedScrollDecoy = .absent
     ) throws {
-        let screen = try XCTUnwrap(brains.stash.refreshLiveCapture())
+        let screen = try XCTUnwrap(brains.vault.refreshLiveCapture())
         let outerContainerPath = try XCTUnwrap(
             liveScrollableContainerPath(for: fixture.outerScrollView, in: screen),
             "Expected nested fixture to expose the live outer scroll view. \(scrollContainerDiagnostics(in: screen))"
@@ -1163,7 +1163,7 @@ final class ElementInflationProductTests: XCTestCase {
             type: .none, scrollableContentSize: AccessibilitySize(fixture.innerScrollView.contentSize),
             frame: AccessibilityRect(fixture.innerScrollView.frame)
         )
-        let innerContainerName = capturedInnerContainer?.containerName ?? TheBurglar.containerName(
+        let innerContainerName = capturedInnerContainer?.containerName ?? TheVault.containerName(
             for: innerContainer,
             contentFrame: ContentRect(CGRect(origin: .zero, size: fixture.innerScrollView.frame.size))
         )
@@ -1221,11 +1221,11 @@ final class ElementInflationProductTests: XCTestCase {
             )
         }
 
-        brains.stash.installObservationForTesting(InterfaceObservation.makeForTests(
+        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
             tree: InterfaceTree(elements: elements, containers: containers),
             liveCapture: liveCapture
         ))
-        brains.stash.clearInstalledVisibleRefreshObservationForTesting()
+        brains.vault.clearInstalledVisibleRefreshObservationForTesting()
     }
 
     private func observedContentActivationPoint(

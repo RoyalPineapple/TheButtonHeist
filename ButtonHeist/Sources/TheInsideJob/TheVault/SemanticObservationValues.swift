@@ -343,12 +343,12 @@ internal struct InterfaceObservationProof {
 
     @MainActor internal static func settled(
         _ outcome: SettleSession.Outcome,
-        stash: TheStash,
+        vault: TheVault,
         discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy = .mergeIntoInterface
     ) -> InterfaceObservationProof? {
         validated(
             outcome,
-            stash: stash,
+            vault: vault,
             discoveryCommitPolicy: discoveryCommitPolicy,
             lineageEvidence: nil
         )
@@ -356,12 +356,12 @@ internal struct InterfaceObservationProof {
 
     @MainActor internal static func settledAfterViewportMovement(
         _ outcome: SettleSession.Outcome,
-        stash: TheStash,
+        vault: TheVault,
         discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy = .mergeIntoInterface
     ) -> InterfaceObservationProof? {
         validated(
             outcome,
-            stash: stash,
+            vault: vault,
             discoveryCommitPolicy: discoveryCommitPolicy,
             lineageEvidence: .viewportMovement
         )
@@ -369,13 +369,13 @@ internal struct InterfaceObservationProof {
 
     @MainActor private static func validated(
         _ outcome: SettleSession.Outcome,
-        stash: TheStash,
+        vault: TheVault,
         discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy,
         lineageEvidence: ScreenLineageEvidence?
     ) -> InterfaceObservationProof? {
         guard outcome.outcome.didSettleCleanly,
               let finalObservation = outcome.finalObservation else { return nil }
-        let observation = stash.latestObservation
+        let observation = vault.latestObservation
         guard observation.captureToken == finalObservation.captureToken,
               observation.tree == finalObservation.tree,
               SettleTimeline.fingerprint(of: observation.liveCapture.hierarchy.sortedElements)

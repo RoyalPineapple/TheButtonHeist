@@ -4,22 +4,22 @@ import XCTest
 @testable import TheInsideJob
 @testable import TheScore
 
-/// Tests for `TheBurglar.buildObservation(from:)`. Validates that a `ParseResult`
+/// Tests for `TheVault.buildObservation(from:)`. Validates that a `CaptureResult`
 /// is converted into a `InterfaceObservation` value with the current semantics: heistId
 /// assignment, scroll membership, first-responder detection, and
-/// screen-name derivation.
+/// interface-name derivation.
 @MainActor
-final class TheBurglarApplyTests: XCTestCase {
+final class TheVaultObservationBuildingTests: XCTestCase {
 
-    private var stash: TheStash!
+    private var vault: TheVault!
 
     override func setUp() async throws {
         try await super.setUp()
-        stash = TheStash(tripwire: TheTripwire())
+        vault = TheVault(tripwire: TheTripwire())
     }
 
     override func tearDown() async throws {
-        stash = nil
+        vault = nil
         try await super.tearDown()
     }
 
@@ -28,64 +28,64 @@ final class TheBurglarApplyTests: XCTestCase {
     func testBuildObservationPopulatesElements() {
         let elementA = makeElement(label: "Save", traits: .button)
         let elementB = makeElement(label: "Cancel", traits: .button)
-        let result = TheBurglar.ParseResult(
+        let result = TheVault.CaptureResult(
             hierarchy: [
                 .element(elementA, traversalIndex: 0),
                 .element(elementB, traversalIndex: 1),
             ],
         )
 
-        let screen = TheBurglar.buildObservation(from: result)
+        let observation = TheVault.buildObservation(from: result)
 
-        XCTAssertEqual(screen.tree.elements.count, 2, "InterfaceObservation should have one entry per parsed element")
-        for heistId in screen.tree.elements.keys {
-            XCTAssertNotNil(screen.tree.findElement(heistId: heistId),
+        XCTAssertEqual(observation.tree.elements.count, 2, "InterfaceObservation should have one entry per parsed element")
+        for heistId in observation.tree.elements.keys {
+            XCTAssertNotNil(observation.tree.findElement(heistId: heistId),
                             "Each heistId should map to an entry")
         }
     }
 
     func testBuildObservationPopulatesHeistIdsByPath() {
         let element = makeElement(label: "OK", traits: .button)
-        let result = TheBurglar.ParseResult(
+        let result = TheVault.CaptureResult(
             hierarchy: [.element(element, traversalIndex: 0)],
         )
 
-        let screen = TheBurglar.buildObservation(from: result)
+        let observation = TheVault.buildObservation(from: result)
 
-        XCTAssertEqual(screen.liveCapture.heistId(forPath: TreePath([0])), "ok_button")
+        XCTAssertEqual(observation.liveCapture.heistId(forPath: TreePath([0])), "ok_button")
     }
 
     func testBuildObservationKeepsDistinctEntriesForValueEqualElements() {
         let first = makeElement(label: "Item", traits: .button)
         let second = makeElement(label: "Item", traits: .button)
-        let result = TheBurglar.ParseResult(
+        let result = TheVault.CaptureResult(
             hierarchy: [
                 .element(first, traversalIndex: 0),
                 .element(second, traversalIndex: 1),
             ],
         )
 
-        let screen = TheBurglar.buildObservation(from: result)
-        let interface = TheStash.WireConversion.toInterface(from: screen.tree)
+        let observation = TheVault.buildObservation(from: result)
+        let interface = TheVault.WireConversion.toInterface(from: observation.tree)
 
         // Value-equal elements still get distinct synthesized heistIds because
         // live identity is keyed by tree path, not element value equality.
-        XCTAssertEqual(screen.tree.elements.count, 2)
-        XCTAssertEqual(Set(screen.tree.elements.keys), ["item_button_1", "item_button_2"])
-        XCTAssertEqual(Set(screen.tree.elements.values.map(\.path)), [TreePath([0]), TreePath([1])])
+        XCTAssertEqual(observation.tree.elements.count, 2)
+        XCTAssertEqual(Set(observation.tree.elements.keys), ["item_button_1", "item_button_2"])
+        XCTAssertEqual(Set(observation.tree.elements.values.map(\.path)), [TreePath([0]), TreePath([1])])
         XCTAssertEqual(interface.annotations.elements.map(\.path), [TreePath([0]), TreePath([1])])
     }
 
     func testBuildObservationSetsHierarchy() {
         let element = makeElement(label: "Item")
         let hierarchy: [AccessibilityHierarchy] = [.element(element, traversalIndex: 0)]
-        let result = TheBurglar.ParseResult(
+        let result = TheVault.CaptureResult(
             hierarchy: hierarchy
         )
 
-        let screen = TheBurglar.buildObservation(from: result)
+        let observation = TheVault.buildObservation(from: result)
 
-        XCTAssertEqual(screen.liveCapture.hierarchy.count, 1)
+        XCTAssertEqual(observation.liveCapture.hierarchy.count, 1)
     }
 
     func testBuildObservationKeepsOffscreenFactsOutOfViewportEvidence() {
@@ -95,21 +95,21 @@ final class TheBurglarApplyTests: XCTestCase {
             traits: .button,
             visibility: .offscreen
         )
-        let result = TheBurglar.ParseResult(
+        let result = TheVault.CaptureResult(
             hierarchy: [
                 .element(visible, traversalIndex: 0),
                 .element(offscreen, traversalIndex: 1),
             ]
         )
 
-        let screen = TheBurglar.buildObservation(from: result)
+        let observation = TheVault.buildObservation(from: result)
 
-        XCTAssertEqual(screen.tree.elementIDs, ["visible_button", "offscreen_button"])
-        XCTAssertEqual(screen.tree.viewportElementIDs, ["visible_button"])
-        XCTAssertEqual(screen.liveCapture.heistIds, ["visible_button"])
-        XCTAssertFalse(screen.liveCapture.contains(heistId: "offscreen_button"))
-        XCTAssertEqual(screen.viewportOnly.tree.elementIDs, ["visible_button"])
-        XCTAssertNotNil(screen.tree.findElement(heistId: "offscreen_button"))
+        XCTAssertEqual(observation.tree.elementIDs, ["visible_button", "offscreen_button"])
+        XCTAssertEqual(observation.tree.viewportElementIDs, ["visible_button"])
+        XCTAssertEqual(observation.liveCapture.heistIds, ["visible_button"])
+        XCTAssertFalse(observation.liveCapture.contains(heistId: "offscreen_button"))
+        XCTAssertEqual(observation.viewportOnly.tree.elementIDs, ["visible_button"])
+        XCTAssertNotNil(observation.tree.findElement(heistId: "offscreen_button"))
     }
 
     // MARK: - InterfaceObservation name derivation
@@ -117,54 +117,54 @@ final class TheBurglarApplyTests: XCTestCase {
     func testScreenNameFromFirstHeader() {
         let header = makeElement(label: "Settings", traits: .header)
         let button = makeElement(label: "Save", traits: .button)
-        let result = TheBurglar.ParseResult(
+        let result = TheVault.CaptureResult(
             hierarchy: [
                 .element(header, traversalIndex: 0),
                 .element(button, traversalIndex: 1),
             ]
         )
 
-        let screen = TheBurglar.buildObservation(from: result)
+        let observation = TheVault.buildObservation(from: result)
 
-        XCTAssertEqual(screen.tree.name, "Settings")
+        XCTAssertEqual(observation.tree.name, "Settings")
     }
 
     func testScreenIdIsSlugifiedName() {
         let header = makeElement(label: "My Profile", traits: .header)
-        let result = TheBurglar.ParseResult(
+        let result = TheVault.CaptureResult(
             hierarchy: [.element(header, traversalIndex: 0)]
         )
 
-        let screen = TheBurglar.buildObservation(from: result)
+        let observation = TheVault.buildObservation(from: result)
 
-        XCTAssertEqual(screen.tree.id, TheScore.slugify("My Profile"))
+        XCTAssertEqual(observation.tree.id, TheScore.slugify("My Profile"))
     }
 
     func testScreenNameNilWhenNoHeaders() {
         let button = makeElement(label: "OK", traits: .button)
-        let result = TheBurglar.ParseResult(
+        let result = TheVault.CaptureResult(
             hierarchy: [.element(button, traversalIndex: 0)]
         )
 
-        let screen = TheBurglar.buildObservation(from: result)
+        let observation = TheVault.buildObservation(from: result)
 
-        XCTAssertNil(screen.tree.name)
-        XCTAssertNil(screen.tree.id)
+        XCTAssertNil(observation.tree.name)
+        XCTAssertNil(observation.tree.id)
     }
 
     func testScreenNameIgnoresHeaderWithNilLabel() {
         let headerNoLabel = makeElement(label: nil, traits: .header)
         let button = makeElement(label: "OK", traits: .button)
-        let result = TheBurglar.ParseResult(
+        let result = TheVault.CaptureResult(
             hierarchy: [
                 .element(headerNoLabel, traversalIndex: 0),
                 .element(button, traversalIndex: 1),
             ]
         )
 
-        let screen = TheBurglar.buildObservation(from: result)
+        let observation = TheVault.buildObservation(from: result)
 
-        XCTAssertNil(screen.tree.name)
+        XCTAssertNil(observation.tree.name)
     }
 
     // MARK: - First responder detection
@@ -177,14 +177,14 @@ final class TheBurglarApplyTests: XCTestCase {
         textField.becomeFirstResponder()
 
         let element = makeElement(label: "Email", traits: .none)
-        let result = TheBurglar.ParseResult(
+        let result = TheVault.CaptureResult(
             hierarchy: [.element(element, traversalIndex: 0)],
             objectsByPath: [TreePath([0]): textField],
         )
 
-        let screen = TheBurglar.buildObservation(from: result)
+        let observation = TheVault.buildObservation(from: result)
 
-        XCTAssertNotNil(screen.liveCapture.firstResponderHeistId)
+        XCTAssertNotNil(observation.liveCapture.firstResponderHeistId)
 
         textField.resignFirstResponder()
         window.isHidden = true
@@ -194,14 +194,14 @@ final class TheBurglarApplyTests: XCTestCase {
     func testFirstResponderNilWhenNoneActive() {
         let element = makeElement(label: "Label")
         let label = UILabel()
-        let result = TheBurglar.ParseResult(
+        let result = TheVault.CaptureResult(
             hierarchy: [.element(element, traversalIndex: 0)],
             objectsByPath: [TreePath([0]): label],
         )
 
-        let screen = TheBurglar.buildObservation(from: result)
+        let observation = TheVault.buildObservation(from: result)
 
-        XCTAssertNil(screen.liveCapture.firstResponderHeistId)
+        XCTAssertNil(observation.liveCapture.firstResponderHeistId)
     }
 
     func testBuildObservationUsesSyntheticFirstResponderFacts() {
@@ -209,7 +209,7 @@ final class TheBurglarApplyTests: XCTestCase {
         let second = makeElement(label: "Password")
         let firstPath = TreePath([0])
         let secondPath = TreePath([1])
-        let result = TheBurglar.ParseResult(
+        let result = TheVault.CaptureResult(
             hierarchy: [
                 .element(first, traversalIndex: 0),
                 .element(second, traversalIndex: 1),
@@ -219,15 +219,15 @@ final class TheBurglarApplyTests: XCTestCase {
                 secondPath: NSObject(),
             ]
         )
-        let facts = TheBurglar.InterfaceObservationBuildFacts(
-            focus: TheBurglar.InterfaceObservationBuildFocusFacts(firstResponderPaths: [secondPath])
+        let facts = TheVault.BuildFacts(
+            focus: TheVault.FocusFacts(firstResponderPaths: [secondPath])
         )
 
-        let screen = TheBurglar.buildObservation(from: result, facts: facts)
+        let observation = TheVault.buildObservation(from: result, facts: facts)
 
         XCTAssertEqual(
-            screen.liveCapture.firstResponderHeistId,
-            screen.liveCapture.heistId(forPath: secondPath)
+            observation.liveCapture.firstResponderHeistId,
+            observation.liveCapture.heistId(forPath: secondPath)
         )
     }
 
@@ -235,12 +235,12 @@ final class TheBurglarApplyTests: XCTestCase {
 
     func testHeistIdsAreAssignedDeterministically() {
         let button = makeElement(label: "Submit", traits: .button)
-        let result = TheBurglar.ParseResult(
+        let result = TheVault.CaptureResult(
             hierarchy: [.element(button, traversalIndex: 0)]
         )
 
-        let first = TheBurglar.buildObservation(from: result)
-        let second = TheBurglar.buildObservation(from: result)
+        let first = TheVault.buildObservation(from: result)
+        let second = TheVault.buildObservation(from: result)
 
         XCTAssertEqual(Set(first.tree.elements.keys), Set(second.tree.elements.keys),
                        "Same elements should produce same heistIds")
@@ -255,17 +255,17 @@ final class TheBurglarApplyTests: XCTestCase {
             label: "Option", traits: .button,
             frame: CGRect(x: 0, y: 60, width: 100, height: 44)
         )
-        let result = TheBurglar.ParseResult(
+        let result = TheVault.CaptureResult(
             hierarchy: [
                 .element(buttonA, traversalIndex: 0),
                 .element(buttonB, traversalIndex: 1),
             ]
         )
 
-        let screen = TheBurglar.buildObservation(from: result)
+        let observation = TheVault.buildObservation(from: result)
 
-        XCTAssertEqual(screen.tree.elements.count, 2)
-        XCTAssertEqual(screen.tree.elements.count, 2,
+        XCTAssertEqual(observation.tree.elements.count, 2)
+        XCTAssertEqual(observation.tree.elements.count, 2,
                        "Duplicate labels should produce two distinct entries")
     }
 
@@ -274,17 +274,17 @@ final class TheBurglarApplyTests: XCTestCase {
                                 frame: CGRect(x: 0, y: 0, width: 100, height: 44))
         let second = makeElement(label: "Row", traits: .button,
                                  frame: CGRect(x: 0, y: 50, width: 100, height: 44))
-        let result = TheBurglar.ParseResult(
+        let result = TheVault.CaptureResult(
             hierarchy: [
                 .element(second, traversalIndex: 1),
                 .element(first, traversalIndex: 0),
             ],
         )
 
-        let screen = TheBurglar.buildObservation(from: result)
+        let observation = TheVault.buildObservation(from: result)
 
-        XCTAssertEqual(screen.liveCapture.heistId(forPath: TreePath([1])), "row_button_1")
-        XCTAssertEqual(screen.liveCapture.heistId(forPath: TreePath([0])), "row_button_2")
+        XCTAssertEqual(observation.liveCapture.heistId(forPath: TreePath([1])), "row_button_1")
+        XCTAssertEqual(observation.liveCapture.heistId(forPath: TreePath([0])), "row_button_2")
     }
 
     func testBuildObservationRestoresScreenCoordinateGeometryFromParseRootOffset() throws {
@@ -303,14 +303,14 @@ final class TheBurglarApplyTests: XCTestCase {
             activationPoint: rootLocalActivationPoint
         )
 
-        let result = TheBurglar.ParseResult(
+        let result = TheVault.CaptureResult(
             hierarchy: [.element(parsedElement, traversalIndex: 0)],
             screenCoordinateOffsetsByPath: [TreePath([0]): parseRootOffset]
         )
 
-        let screen = TheBurglar.buildObservation(from: result)
-        let element = try XCTUnwrap(screen.liveCapture.hierarchy.sortedElements.first)
-        let projected = try XCTUnwrap(TheStash.WireConversion.toInterface(from: screen.tree).projectedElements.first)
+        let observation = TheVault.buildObservation(from: result)
+        let element = try XCTUnwrap(observation.liveCapture.hierarchy.sortedElements.first)
+        let projected = try XCTUnwrap(TheVault.WireConversion.toInterface(from: observation.tree).projectedElements.first)
 
         XCTAssertEqual(element.shape.frame, screenFrame)
         XCTAssertEqual(element.bhResolvedActivationPoint, screenActivationPoint)
@@ -348,13 +348,13 @@ final class TheBurglarApplyTests: XCTestCase {
             accessibilityLanguage: nil,
             respondsToUserInteraction: true
         )
-        let result = TheBurglar.ParseResult(
+        let result = TheVault.CaptureResult(
             hierarchy: [.element(pathElement, traversalIndex: 0)],
             screenCoordinateOffsetsByPath: [TreePath([0]): parseRootOffset]
         )
 
-        let screen = TheBurglar.buildObservation(from: result)
-        let translated = try XCTUnwrap(screen.liveCapture.hierarchy.sortedElements.first)
+        let observation = TheVault.buildObservation(from: result)
+        let translated = try XCTUnwrap(observation.liveCapture.hierarchy.sortedElements.first)
 
         guard case .path(let elements) = translated.shape else {
             return XCTFail("Expected translated path")
@@ -382,14 +382,14 @@ final class TheBurglarApplyTests: XCTestCase {
             traits: .button,
             frame: CGRect(x: 24, y: 160, width: 140, height: 44)
         )
-        let result = TheBurglar.ParseResult(
+        let result = TheVault.CaptureResult(
             hierarchy: [.container(container, children: [.element(child, traversalIndex: 0)])],
             scrollViewsByPath: [containerPath: scrollView],
             screenCoordinateOffsetsByPath: [containerPath: parseRootOffset]
         )
 
-        let screen = TheBurglar.buildObservation(from: result)
-        let translated = try XCTUnwrap(screen.liveCapture.hierarchy.first)
+        let observation = TheVault.buildObservation(from: result)
+        let translated = try XCTUnwrap(observation.liveCapture.hierarchy.first)
         guard case .container(let translatedContainer, _) = translated else {
             return XCTFail("Expected translated container")
         }
@@ -400,7 +400,7 @@ final class TheBurglarApplyTests: XCTestCase {
         XCTAssertEqual(translatedContainer.isModalBoundary, true)
         XCTAssertEqual(translatedContainer.customActions, [AccessibilityElement.CustomAction(name: "Archive")])
         XCTAssertEqual(translatedContainer.frame.cgRect, containerFrame.offsetBy(dx: 12, dy: 34))
-        XCTAssertNotNil(screen.liveCapture.scrollView(forContainerPath: containerPath))
+        XCTAssertNotNil(observation.liveCapture.scrollView(forContainerPath: containerPath))
     }
 
     // MARK: - Scroll membership
@@ -416,34 +416,34 @@ final class TheBurglarApplyTests: XCTestCase {
         let childFrame = CGRect(x: 10, y: 150, width: 50, height: 30)
         let child = makeElement(label: "Cell", traits: .button, frame: childFrame)
 
-        let result = TheBurglar.ParseResult(
+        let result = TheVault.CaptureResult(
             hierarchy: [.container(scrollableContainer, children: [.element(child, traversalIndex: 0)])],
             scrollViewsByPath: [TreePath([0]): scrollView]
         )
 
-        let screen = TheBurglar.buildObservation(from: result)
-        guard let heistId = screen.tree.elements.keys.first else {
+        let observation = TheVault.buildObservation(from: result)
+        guard let heistId = observation.tree.elements.keys.first else {
             XCTFail("Expected one heistId")
             return
         }
 
-        XCTAssertEqual(screen.tree.findElement(heistId: heistId)?.scrollMembership?.containerPath, TreePath([0]))
+        XCTAssertEqual(observation.tree.findElement(heistId: heistId)?.scrollMembership?.containerPath, TreePath([0]))
     }
 
     func testLeavesScrollMembershipNilOutsideScrollableContainer() {
         let element = makeElement(label: "Plain",
                                   frame: CGRect(x: 0, y: 0, width: 10, height: 10))
-        let result = TheBurglar.ParseResult(
+        let result = TheVault.CaptureResult(
             hierarchy: [.element(element, traversalIndex: 0)]
         )
 
-        let screen = TheBurglar.buildObservation(from: result)
-        guard let heistId = screen.tree.elements.keys.first else {
+        let observation = TheVault.buildObservation(from: result)
+        guard let heistId = observation.tree.elements.keys.first else {
             XCTFail("Expected one heistId")
             return
         }
 
-        XCTAssertNil(screen.tree.findElement(heistId: heistId)?.scrollMembership)
+        XCTAssertNil(observation.tree.findElement(heistId: heistId)?.scrollMembership)
     }
 
     func testBuildObservationUsesSyntheticScrollFactsForPureProjection() throws {
@@ -470,7 +470,7 @@ final class TheBurglarApplyTests: XCTestCase {
             InterfaceTree.ObservedScrollContentActivationPoint(CGPoint(x: 160, y: 200))
         )
         let inventory = ScrollInventory(totalElementCount: 20, visibleIndices: [7])
-        let result = TheBurglar.ParseResult(
+        let result = TheVault.CaptureResult(
             hierarchy: [
                 .container(scrollableContainer, children: [
                     .container(nestedContainer, children: [
@@ -479,11 +479,11 @@ final class TheBurglarApplyTests: XCTestCase {
                 ]),
             ]
         )
-        let facts = TheBurglar.InterfaceObservationBuildFacts(
-            scroll: TheBurglar.InterfaceObservationBuildScrollFacts(
+        let facts = TheVault.BuildFacts(
+            scroll: TheVault.ScrollFacts(
                 contextContainerPaths: [scrollPath],
                 elementsByPath: [
-                    childPath: TheBurglar.InterfaceObservationBuildElementScrollFacts(
+                    childPath: TheVault.ElementScrollFacts(
                         containerPath: scrollPath,
                         index: 7,
                         observedScrollContentActivationPoint: observedElementPoint
@@ -496,22 +496,22 @@ final class TheBurglarApplyTests: XCTestCase {
             )
         )
 
-        let screen = TheBurglar.buildObservation(from: result, facts: facts)
-        let heistId = try XCTUnwrap(screen.liveCapture.heistId(forPath: childPath))
-        let element = try XCTUnwrap(screen.tree.findElement(heistId: heistId))
+        let observation = TheVault.buildObservation(from: result, facts: facts)
+        let heistId = try XCTUnwrap(observation.liveCapture.heistId(forPath: childPath))
+        let element = try XCTUnwrap(observation.tree.findElement(heistId: heistId))
 
         XCTAssertEqual(
             element.scrollMembership,
             InterfaceTree.ScrollMembership(containerPath: scrollPath, index: 7)
         )
         XCTAssertEqual(element.observedScrollContentActivationPoint, observedElementPoint)
-        XCTAssertEqual(screen.tree.containers[scrollPath]?.scrollInventory, inventory)
+        XCTAssertEqual(observation.tree.containers[scrollPath]?.scrollInventory, inventory)
         XCTAssertEqual(
-            screen.tree.containers[nestedContainerPath]?.scrollMembership,
+            observation.tree.containers[nestedContainerPath]?.scrollMembership,
             InterfaceTree.ScrollMembership(containerPath: scrollPath, index: nil)
         )
         XCTAssertEqual(
-            screen.tree.containers[nestedContainerPath]?.observedScrollContentActivationPoint,
+            observation.tree.containers[nestedContainerPath]?.observedScrollContentActivationPoint,
             observedContainerPoint
         )
     }

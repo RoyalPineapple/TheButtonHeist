@@ -6,32 +6,10 @@ import TheScore
 
 import AccessibilitySnapshotParser
 
-/// The crew member who breaks in and takes what he finds.
-///
-/// TheBurglar reads the live accessibility tree and assigns heistIds. Pure
-/// helpers — he has no mutable state. TheStash invokes
-/// him via `parse()` to obtain a `InterfaceObservation` value, then commits or merges it on
-/// its own schedule.
-///
-/// Intentionally module-internal so TheInsideJob unit tests can validate parse
-/// behavior. Production call sites should always go through TheStash facades.
-@MainActor
-final class TheBurglar {
+extension TheVault {
 
-    private let parser = AccessibilityHierarchyParser()
-    private let tripwire: TheTripwire
-
-    init(tripwire: TheTripwire) {
-        self.tripwire = tripwire
-    }
-
-    // MARK: - Parse Result (internal)
-
-    /// Internal parse intermediate — raw output from the AccessibilitySnapshotParser
-    /// walk before heistId assignment. Tests use it to inject pre-parsed data.
-    /// The hierarchy is the source of element order; callers derive flat
-    /// element lists from it instead of carrying a parallel array.
-    struct ParseResult {
+    /// Capture-local UIKit evidence before identity assignment and durable projection.
+    struct CaptureResult {
         let hierarchy: [AccessibilityHierarchy]
         let objectsByPath: [TreePath: NSObject]
         let containerObjectsByPath: [TreePath: NSObject]
@@ -56,11 +34,11 @@ final class TheBurglar {
     // MARK: - Parse (read-only)
 
     /// Read the live accessibility tree without mutating any state.
-    /// Returns a ParseResult value or nil if no accessible windows exist.
-    func parse() -> ParseResult? {
+    /// Returns capture-local evidence or nil if no accessible windows exist.
+    func capture() -> CaptureResult? {
         let windows = tripwire.getAccessibleWindows()
         guard !windows.isEmpty else {
-            insideJobLogger.debug("TheBurglar.parse(): no accessible windows — returning nil")
+            insideJobLogger.debug("TheVault.capture(): no accessible windows - returning nil")
             return nil
         }
 
@@ -72,9 +50,9 @@ final class TheBurglar {
         defer {
             let parseMs = Int((CFAbsoluteTimeGetCurrent() - parseStart) * 1000)
             if parseMs >= 100 {
-                insideJobLogger.info("TheBurglar.parse(): \(parseMs)ms (\(windows.count) window(s))")
+                insideJobLogger.info("TheVault.capture(): \(parseMs)ms (\(windows.count) window(s))")
             } else {
-                insideJobLogger.debug("TheBurglar.parse(): \(parseMs)ms (\(windows.count) window(s))")
+                insideJobLogger.debug("TheVault.capture(): \(parseMs)ms (\(windows.count) window(s))")
             }
         }
 
@@ -90,14 +68,14 @@ final class TheBurglar {
             let window = entry.window
             let rootView = entry.rootView
             let containsModalBoundary = autoreleasepool { () -> Bool in
-                let captured = parser.parseAccessibilityHierarchy(
+                let captured = hierarchyParser.parseAccessibilityHierarchy(
                     in: rootView,
                     rotorResultLimit: 0,
                     makeElement: { element, traversalIndex, source in
-                        CapturedNode.element(element, traversalIndex: traversalIndex, source: source)
+                        CaptureNode.element(element, traversalIndex: traversalIndex, source: source)
                     },
                     makeContainer: { container, children, source in
-                        CapturedNode.container(container, children: children, source: source)
+                        CaptureNode.container(container, children: children, source: source)
                     }
                 )
 
@@ -146,7 +124,7 @@ final class TheBurglar {
             }
         }
 
-        return ParseResult(
+        return CaptureResult(
             hierarchy: allHierarchy,
             objectsByPath: objectsByPath,
             containerObjectsByPath: containerObjectsByPath,
@@ -175,16 +153,16 @@ final class TheBurglar {
     /// hierarchy parser with a temporary accessibility root. The object may be
     /// a custom rotor result that VoiceOver can focus even though it is not
     /// discoverable by walking the current app hierarchy.
-    func parseObject(_ object: NSObject) -> AccessibilityElement? {
+    func captureObject(_ object: NSObject) -> AccessibilityElement? {
         let root = SingleElementParsingRoot(object: object)
-        let captured = parser.parseAccessibilityHierarchy(
+        let captured = hierarchyParser.parseAccessibilityHierarchy(
             in: root,
             rotorResultLimit: 0,
             makeElement: { element, traversalIndex, source in
-                CapturedNode.element(element, traversalIndex: traversalIndex, source: source)
+                CaptureNode.element(element, traversalIndex: traversalIndex, source: source)
             },
             makeContainer: { container, children, source in
-                CapturedNode.container(container, children: children, source: source)
+                CaptureNode.container(container, children: children, source: source)
             }
         )
         if let match = captured.lazy.compactMap({ $0.firstElement(matchingSource: object) }).first {
@@ -198,7 +176,7 @@ final class TheBurglar {
     /// element/container values at different positions never collide — there is no candidate
     /// reconciliation as there was with the visitor side channel.
     private static func collect(
-        _ node: CapturedNode,
+        _ node: CaptureNode,
         at path: TreePath,
         objectsByPath: inout [TreePath: NSObject],
         containerObjectsByPath: inout [TreePath: NSObject],

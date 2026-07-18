@@ -11,7 +11,7 @@ import AccessibilitySnapshotParser
 
 /// Visible live view from the latest observed capture.
 ///
-/// **Ownership.** Owned by `TheStash` as viewport-tied live state; carried by
+/// **Ownership.** Owned by `TheVault` as viewport-tied live state; carried by
 /// `InterfaceObservation` only as part of an observed capture. `Snapshot` owns
 /// raw parser hierarchy and path identity; `DispatchReferences` owns viewport-local weak
 /// UIKit references. Neither is unioned across exploration pages or treated as
@@ -209,7 +209,7 @@ struct LiveCapture {
     /// Live UIKit references used for action dispatch and scroll lookup.
     ///
     /// These are viewport-local weak refs. They are only accessed through the
-    /// existing main-actor stash/live-lookup path and are intentionally absent
+    /// existing main-actor vault/live-lookup path and are intentionally absent
     /// from settled semantic storage.
     struct DispatchReferences {
         let elementRefs: [HeistId: ElementRef]

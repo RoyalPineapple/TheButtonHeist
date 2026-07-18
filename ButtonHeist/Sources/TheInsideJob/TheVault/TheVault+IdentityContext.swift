@@ -7,11 +7,11 @@ import TheScore
 
 import AccessibilitySnapshotParser
 
-extension TheBurglar {
+extension TheVault {
 
     // MARK: - Hierarchy Identity
 
-    struct HierarchyContainerIdentity {
+    struct ContainerIdentity {
         let path: TreePath
         let container: AccessibilityContainer
         let children: [AccessibilityHierarchy]
@@ -23,21 +23,31 @@ extension TheBurglar {
         }
     }
 
-    struct HierarchyElementIdentity {
+    struct ElementIdentity {
         let path: TreePath
         let element: AccessibilityElement
         let traversalIndex: Int
         let scrollMembership: InterfaceTree.ScrollMembership?
     }
 
+    fileprivate struct IdentityTraversal {
+        let path: TreePath
+        let parentScrollContainerPath: TreePath?
+    }
+
+    fileprivate struct IdentityAccumulator {
+        var containers: [ContainerIdentity] = []
+        var elements: [ElementIdentity] = []
+    }
+
     /// Path-distinct identity facts derived from one hierarchy traversal.
     /// Container geometry and scroll membership are durable value evidence;
     /// live UIKit conversion remains outside this context.
-    struct HierarchyIdentityContext {
+    struct IdentityContext {
         let hierarchy: [AccessibilityHierarchy]
         let scrollableContainerPaths: Set<TreePath>
-        let containers: [HierarchyContainerIdentity]
-        let elements: [HierarchyElementIdentity]
+        let containers: [ContainerIdentity]
+        let elements: [ElementIdentity]
 
         var contentFramesByPath: [TreePath: ContentRect] {
             Dictionary(uniqueKeysWithValues: containers.map { ($0.path, $0.contentFrame) })
@@ -56,31 +66,21 @@ extension TheBurglar {
         }
     }
 
-    private struct HierarchyIdentityTraversalContext {
-        let path: TreePath
-        let parentScrollContainerPath: TreePath?
-    }
-
-    private struct HierarchyIdentityAccumulator {
-        var containers: [HierarchyContainerIdentity] = []
-        var elements: [HierarchyElementIdentity] = []
-    }
-
-    static func buildHierarchyIdentityContext(
+    static func buildIdentityContext(
         hierarchy: [AccessibilityHierarchy],
         scrollableContainerPaths: Set<TreePath> = []
-    ) -> HierarchyIdentityContext {
-        var accumulator = HierarchyIdentityAccumulator()
+    ) -> IdentityContext {
+        var accumulator = IdentityAccumulator()
         for (rootIndex, root) in hierarchy.enumerated() {
             root.foldedPreorder(
-                context: HierarchyIdentityTraversalContext(
+                context: IdentityTraversal(
                     path: TreePath([rootIndex]),
                     parentScrollContainerPath: nil
                 ),
                 into: &accumulator,
                 onElement: { element, traversalIndex, context, accumulator in
                     accumulator.elements.append(
-                        HierarchyElementIdentity(
+                        ElementIdentity(
                             path: context.path,
                             element: element,
                             traversalIndex: traversalIndex,
@@ -100,7 +100,7 @@ extension TheBurglar {
                         ? ContentRect(frame)
                         : ContentRect(CGRect(origin: .zero, size: frame.size))
                     accumulator.containers.append(
-                        HierarchyContainerIdentity(
+                        ContainerIdentity(
                             path: context.path,
                             container: container,
                             children: children,
@@ -112,7 +112,7 @@ extension TheBurglar {
                         ? context.path
                         : context.parentScrollContainerPath
                     return (
-                        HierarchyIdentityTraversalContext(
+                        IdentityTraversal(
                             path: context.path,
                             parentScrollContainerPath: childScrollContainerPath
                         ),
@@ -120,14 +120,14 @@ extension TheBurglar {
                     )
                 },
                 descend: { context, childIndex in
-                    HierarchyIdentityTraversalContext(
+                    IdentityTraversal(
                         path: context.path.appending(childIndex),
                         parentScrollContainerPath: context.parentScrollContainerPath
                     )
                 }
             )
         }
-        return HierarchyIdentityContext(
+        return IdentityContext(
             hierarchy: hierarchy,
             scrollableContainerPaths: scrollableContainerPaths,
             containers: accumulator.containers,

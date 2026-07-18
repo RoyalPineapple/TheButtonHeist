@@ -21,7 +21,7 @@ extension Navigation {
         let explorer = ViewportExplorer(
             navigation: self,
             exploration: SemanticExploration(
-                baseline: baseline ?? .interfaceMemory(stash.explorationBaseline()),
+                baseline: baseline ?? .interfaceMemory(vault.explorationBaseline()),
                 deadline: deadline,
                 maxScrollsPerContainer: maxScrollsPerContainer ?? InterfaceExplorationProgress.maxScrollsPerContainer,
                 maxScrollsPerDiscovery: maxScrollsPerDiscovery ?? InterfaceExplorationProgress.maxScrollsPerDiscovery
@@ -33,7 +33,7 @@ extension Navigation {
                 return .finish
             }
             guard let target else { return .continue }
-            return stash.hasVisibleTerminalResolution(target, in: event.settledObservation.observation.tree)
+            return vault.hasVisibleTerminalResolution(target, in: event.settledObservation.observation.tree)
                 ? .finish
                 : .continue
         }
@@ -62,7 +62,7 @@ extension Navigation {
             )
         }
         let settle = await SettleSession.viewportTransition(
-            stash: stash,
+            vault: vault,
             tripwire: tripwire,
             timeoutMs: timeoutMs
         ).run(
@@ -75,16 +75,16 @@ extension Navigation {
         let proof = requiredAfterMovement
             ? InterfaceObservationProof.settledAfterViewportMovement(
                 settle,
-                stash: stash,
+                vault: vault,
                 discoveryCommitPolicy: discoveryCommitPolicy
             )
             : InterfaceObservationProof.settled(
                 settle,
-                stash: stash,
+                vault: vault,
                 discoveryCommitPolicy: discoveryCommitPolicy
             )
         guard let proof else { return nil }
-        return stash.semanticObservationStream.commitSettledDiscoveryObservation(
+        return vault.semanticObservationStream.commitSettledDiscoveryObservation(
             proof,
             notificationBatch: notificationWindow?.capture()
         )
@@ -98,7 +98,7 @@ extension Navigation {
 extension TheBrains {
 
     func startSemanticObservation() {
-        stash.semanticObservationStream.start { [weak self] in
+        vault.semanticObservationStream.start { [weak self] in
             guard let self else { return nil }
             return await self.executeSemanticDiscovery()
         }

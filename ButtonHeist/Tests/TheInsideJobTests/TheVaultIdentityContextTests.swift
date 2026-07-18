@@ -9,7 +9,7 @@ import TheScore
 /// context stays derived from hierarchy structure and accessibility size, not
 /// live scroll-view coordinate conversion or moving viewport origin.
 @MainActor
-final class TheBurglarContainerFramesTests: XCTestCase {
+final class TheVaultIdentityContextTests: XCTestCase {
 
     private func makeElement(label: String = "Element") -> AccessibilityElement {
         .make(label: label, respondsToUserInteraction: false)
@@ -25,7 +25,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
             .container(container, children: [.element(element, traversalIndex: 0)])
         ]
 
-        let result = TheBurglar.buildHierarchyIdentityContext(
+        let result = TheVault.buildIdentityContext(
             hierarchy: hierarchy,
         )
 
@@ -50,13 +50,13 @@ final class TheBurglarContainerFramesTests: XCTestCase {
             ])
         ]
 
-        let result = TheBurglar.buildHierarchyIdentityContext(
+        let result = TheVault.buildIdentityContext(
             hierarchy: hierarchy,
             scrollableContainerPaths: [scrollContainerPath]
         )
 
         XCTAssertEqual(result.contentFramesByPath[TreePath([0])]?.cgRect, outer.frame.cgRect,
-                       "Top-level scrollable: no enclosing scrollable, frame stays in screen space")
+                       "Top-level scrollable: no enclosing scrollable, frame stays in observation space")
         XCTAssertFalse(result.nestedInScrollViewPaths.contains(TreePath([0])))
 
         let innerContent = result.contentFramesByPath[TreePath([0, 0])]
@@ -79,12 +79,12 @@ final class TheBurglarContainerFramesTests: XCTestCase {
             frame: AccessibilityRect(x: 0, y: 0, width: 320, height: 480)
         )
 
-        // Parse 1: inner is at screen-y 200.
+        // Parse 1: inner is at observation-y 200.
         let innerParse1 = AccessibilityContainer(
             type: .list,
             frame: AccessibilityRect(x: 0, y: 200, width: 320, height: 200)
         )
-        let result1 = TheBurglar.buildHierarchyIdentityContext(
+        let result1 = TheVault.buildIdentityContext(
             hierarchy: [.container(outer, children: [
                 .container(innerParse1, children: [.element(makeElement(), traversalIndex: 0)])
             ])],
@@ -92,13 +92,13 @@ final class TheBurglarContainerFramesTests: XCTestCase {
         )
 
         // Parse 2: the same logical inner container — same data behind it — is
-        // now at screen-y -800. Its identity frame
+        // now at observation-y -800. Its identity frame
         // should still drop origin and keep size.
         let innerParse2 = AccessibilityContainer(
             type: .list,
             frame: AccessibilityRect(x: 0, y: -800, width: 320, height: 200)
         )
-        let result2 = TheBurglar.buildHierarchyIdentityContext(
+        let result2 = TheVault.buildIdentityContext(
             hierarchy: [.container(outer, children: [
                 .container(innerParse2, children: [.element(makeElement(), traversalIndex: 0)])
             ])],
@@ -133,7 +133,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
             scrollableContentSize: AccessibilitySize(width: 320, height: 800),
             frame: AccessibilityRect(x: 0, y: 200, width: 320, height: 200)
         )
-        let result = TheBurglar.buildHierarchyIdentityContext(
+        let result = TheVault.buildIdentityContext(
             hierarchy: [
                 .container(outer, children: [
                     .container(group, children: [
@@ -185,10 +185,10 @@ final class TheBurglarContainerFramesTests: XCTestCase {
             width: CGFloat.greatestFiniteMagnitude,
             height: 1e200
         )
-        let hash = TheBurglar.coarseFrameHash(hugeFrame)
+        let hash = TheVault.coarseFrameHash(hugeFrame)
         XCTAssertFalse(hash.isEmpty)
         // Bucket-divided clamped output remains deterministic across calls.
-        XCTAssertEqual(hash, TheBurglar.coarseFrameHash(hugeFrame))
+        XCTAssertEqual(hash, TheVault.coarseFrameHash(hugeFrame))
 
         let nonFiniteFrame = CGRect(
             x: .nan,
@@ -196,7 +196,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
             width: -.infinity,
             height: .signalingNaN
         )
-        let nonFiniteHash = TheBurglar.coarseFrameHash(nonFiniteFrame)
+        let nonFiniteHash = TheVault.coarseFrameHash(nonFiniteFrame)
         XCTAssertEqual(nonFiniteHash, "0_0_0_0",
                        "non-finite geometry folds to 0 before coarse frame bucketing")
     }
@@ -207,7 +207,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
     func testCoarseFrameHashUnchangedForOrdinaryFrame() {
         let bucket = CoarseFrameComparison.currentBucket
         let frame = CGRect(x: bucket * 2, y: bucket * 12, width: bucket * 40, height: bucket * 5)
-        XCTAssertEqual(TheBurglar.coarseFrameHash(frame), "2_12_40_5")
+        XCTAssertEqual(TheVault.coarseFrameHash(frame), "2_12_40_5")
     }
 
     func testCoarseFrameComparisonUsesDeviceBuckets() {
@@ -230,7 +230,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
         let firstScrollView = UIScrollView(frame: frame)
         let secondScrollView = UIScrollView(frame: frame)
 
-        let screen = TheBurglar.buildObservation(from: TheBurglar.ParseResult(
+        let observation = TheVault.buildObservation(from: TheVault.CaptureResult(
             hierarchy: [
                 .container(firstContainer, children: [.element(firstElement, traversalIndex: 0)]),
                 .container(secondContainer, children: [.element(secondElement, traversalIndex: 1)]),
@@ -240,15 +240,15 @@ final class TheBurglarContainerFramesTests: XCTestCase {
                 TreePath([1]): secondScrollView,
             ]
         ))
-        let interface = TheStash.WireConversion.toInterface(from: screen.tree)
+        let interface = TheVault.WireConversion.toInterface(from: observation.tree)
         let containerNames = interface.annotations.containers.compactMap(\.containerName)
-        let repeatedFramePrefix = "scrollable_\(TheBurglar.coarseFrameHash(frame))-"
+        let repeatedFramePrefix = "scrollable_\(TheVault.coarseFrameHash(frame))-"
 
         XCTAssertEqual(containerNames.count, 2)
         XCTAssertEqual(Set(containerNames).count, 2)
         XCTAssertTrue(containerNames.allSatisfy { $0.rawValue.hasPrefix(repeatedFramePrefix) })
-        XCTAssertTrue(screen.liveCapture.scrollView(forContainerPath: TreePath([0])) === firstScrollView)
-        XCTAssertTrue(screen.liveCapture.scrollView(forContainerPath: TreePath([1])) === secondScrollView)
+        XCTAssertTrue(observation.liveCapture.scrollView(forContainerPath: TreePath([0])) === firstScrollView)
+        XCTAssertTrue(observation.liveCapture.scrollView(forContainerPath: TreePath([1])) === secondScrollView)
     }
 
     func testCaptureLocalContainerHashHandlesNonFiniteParserGeometry() {
@@ -261,7 +261,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
             children: [.element(makeElement(label: "Row"), traversalIndex: 0)]
         )
 
-        let containerName = TheBurglar.captureLocalContainerId(
+        let containerName = TheVault.captureLocalContainerId(
             readableName: "list_0_0_0_50",
             node: node,
             path: TreePath([0])
@@ -270,7 +270,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
         XCTAssertTrue(containerName.rawValue.hasPrefix("list_0_0_0_50-"))
         XCTAssertEqual(
             containerName,
-            TheBurglar.captureLocalContainerId(
+            TheVault.captureLocalContainerId(
                 readableName: "list_0_0_0_50",
                 node: node,
                 path: TreePath([0])
@@ -303,7 +303,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
         let pageScrollView = UIScrollView(frame: frame)
         let listScrollView = UIScrollView(frame: frame)
 
-        let screen = TheBurglar.buildObservation(from: TheBurglar.ParseResult(
+        let observation = TheVault.buildObservation(from: TheVault.CaptureResult(
             hierarchy: [
                 .container(outer, children: [
                     .container(pager, children: [
@@ -322,10 +322,10 @@ final class TheBurglarContainerFramesTests: XCTestCase {
                 TreePath([0, 0, 0, 0]): listScrollView,
             ]
         ))
-        let interface = TheStash.WireConversion.toInterface(from: screen.tree)
+        let interface = TheVault.WireConversion.toInterface(from: observation.tree)
         let containerNames = interface.annotations.containers.compactMap(\.containerName)
-        let repeatedFramePrefix = "scrollable_\(TheBurglar.coarseFrameHash(frame))-"
-        let pagerName = ContainerName(stringLiteral: "scrollable_\(TheBurglar.coarseFrameHash(pagerFrame))")
+        let repeatedFramePrefix = "scrollable_\(TheVault.coarseFrameHash(frame))-"
+        let pagerName = ContainerName(stringLiteral: "scrollable_\(TheVault.coarseFrameHash(pagerFrame))")
         let repeatedFrameIds = containerNames.filter { $0.rawValue.hasPrefix(repeatedFramePrefix) }
 
         XCTAssertEqual(containerNames.count, 4)
@@ -336,7 +336,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
             TreePath([0]),
             TreePath([0, 0, 0]),
             TreePath([0, 0, 0, 0]),
-        ].compactMap { screen.liveCapture.scrollView(forContainerPath: $0) }
+        ].compactMap { observation.liveCapture.scrollView(forContainerPath: $0) }
         XCTAssertEqual(repeatedScrollViews.count, 3)
         XCTAssertEqual(Set(repeatedScrollViews.map(ObjectIdentifier.init)).count, 3)
     }
@@ -346,17 +346,17 @@ final class TheBurglarContainerFramesTests: XCTestCase {
             type: .list,
             frame: AccessibilityRect(x: 0, y: 0, width: 320, height: 400)
         )
-        let screen = TheBurglar.buildObservation(from: TheBurglar.ParseResult(
+        let observation = TheVault.buildObservation(from: TheVault.CaptureResult(
             hierarchy: [
                 .container(container, children: [.element(makeElement(), traversalIndex: 0)]),
             ],
         ))
 
-        let interface = TheStash.WireConversion.toInterface(from: screen.tree)
+        let interface = TheVault.WireConversion.toInterface(from: observation.tree)
 
         XCTAssertEqual(
             interface.annotations.containers.first?.containerName,
-            ContainerName(stringLiteral: "list_\(TheBurglar.coarseFrameHash(container.frame.cgRect))")
+            ContainerName(stringLiteral: "list_\(TheVault.coarseFrameHash(container.frame.cgRect))")
         )
     }
 }

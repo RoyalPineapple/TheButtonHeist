@@ -54,7 +54,7 @@ struct SemanticObservationDeadline: Sendable, Equatable {
 /// refresh/settle → after → result.
 @MainActor
 final class PostActionObservation {
-    let stash: TheStash
+    let vault: TheVault
     let safecracker: TheSafecracker
 
     enum InterfaceProjectionMode {
@@ -88,15 +88,15 @@ final class PostActionObservation {
         )
     }
 
-    init(stash: TheStash, safecracker: TheSafecracker) {
-        self.stash = stash
+    init(vault: TheVault, safecracker: TheSafecracker) {
+        self.vault = vault
         self.safecracker = safecracker
     }
 
     func captureSemanticState(from observation: SettledObservation) -> ObservationBaseline {
         captureSemanticState(
             from: observation.observation,
-            tripwireSignal: stash.tripwire.tripwireSignal(),
+            tripwireSignal: vault.tripwire.tripwireSignal(),
             settledObservationSequence: observation.sequence,
             projectionMode: observation.scope.interfaceProjectionMode
         )
@@ -105,7 +105,7 @@ final class PostActionObservation {
     func captureSemanticState(from evidence: ViewportObservationEvidence) -> ObservationBaseline {
         captureSemanticState(
             from: evidence.viewportObservation,
-            tripwireSignal: stash.tripwire.tripwireSignal(),
+            tripwireSignal: vault.tripwire.tripwireSignal(),
             settledObservationSequence: evidence.settledObservationSequence
         )
     }
@@ -116,7 +116,7 @@ final class PostActionObservation {
             : event.settledObservation.observation
         let current = captureSemanticState(
             from: observation,
-            tripwireSignal: stash.tripwire.tripwireSignal(),
+            tripwireSignal: vault.tripwire.tripwireSignal(),
             settledObservationSequence: event.sequence,
             projectionMode: event.scope.interfaceProjectionMode
         )
@@ -134,7 +134,7 @@ final class PostActionObservation {
         outcome: SettleSession.Outcome?,
         notificationWindow: AccessibilityNotificationActionWindow? = nil
     ) async -> ObservationSettlement {
-        await stash.semanticObservationStream.settlePostActionObservation(
+        await vault.semanticObservationStream.settlePostActionObservation(
             baselineTripwireSignal: before.tripwireSignal,
             commitScope: commitScope,
             settleOutcome: outcome,
@@ -274,7 +274,7 @@ final class PostActionObservation {
     ) -> AccessibilityTrace.Transition? {
         guard let notificationBatch else { return nil }
         return AccessibilityTrace.Transition(
-            accessibilityNotifications: stash.resolveAccessibilityNotificationEvidence(
+            accessibilityNotifications: vault.resolveAccessibilityNotificationEvidence(
                 notificationBatch.events,
                 in: observation
             ),
@@ -307,12 +307,12 @@ final class PostActionObservation {
     private func interfaceSnapshot(
         for observation: InterfaceObservation,
         projection: InterfaceProjectionMode
-    ) -> TheStash.HashedInterface {
+    ) -> TheVault.HashedInterface {
         switch projection {
         case .semantic:
-            return stash.semanticInterfaceWithHash(for: observation)
+            return vault.semanticInterfaceWithHash(for: observation)
         case .discovery:
-            return stash.discoveryInterfaceWithHash(for: observation)
+            return vault.discoveryInterfaceWithHash(for: observation)
         }
     }
 
@@ -412,7 +412,7 @@ final class PostActionObservation {
             : settledObservation.observation
         return captureSemanticState(
             from: observation,
-            tripwireSignal: stash.tripwire.tripwireSignal(),
+            tripwireSignal: vault.tripwire.tripwireSignal(),
             settledObservationSequence: settledObservation.sequence
         )
     }
@@ -430,9 +430,9 @@ final class PostActionObservation {
             )
         }
         return AccessibilityTrace.Context(
-            firstResponder: observation.flatMap { stash.firstResponderTarget(in: $0.tree) },
+            firstResponder: observation.flatMap { vault.firstResponderTarget(in: $0.tree) },
             keyboardVisible: safecracker.isKeyboardVisible(),
-            screenId: screenId ?? stash.lastScreenId,
+            screenId: screenId ?? vault.lastScreenId,
             windowStack: windows
         )
     }
@@ -461,7 +461,7 @@ final class PostActionObservation {
             seenByKey: settleResult.elementsByKey,
             baseline: before.elements,
             final: final.elements
-        ).map { TheStash.WireConversion.convert($0) }
+        ).map { TheVault.WireConversion.convert($0) }
     }
 }
 
