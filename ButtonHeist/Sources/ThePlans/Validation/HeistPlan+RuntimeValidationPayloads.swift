@@ -4,21 +4,17 @@ enum HeistActionPayloadAdmission {
         in environment: HeistExecutionEnvironment
     ) throws -> ResolvedHeistActionCommand {
         let resolved = try command.resolve(in: environment)
-        if case .rotor(selection: .index(let index), target: _, direction: _) = resolved,
-           index < 0 {
-            throw HeistActionPayloadAdmissionError.negativeRotorIndex(index)
+        guard case .rotor(let selection, let target, let direction) = resolved else {
+            return resolved
         }
-        return resolved
-    }
-}
-
-private enum HeistActionPayloadAdmissionError: Error, CustomStringConvertible {
-    case negativeRotorIndex(Int)
-
-    var description: String {
-        switch self {
-        case .negativeRotorIndex(let index):
-            return "rotorIndex must be non-negative, got \(index)"
-        }
+        return .rotor(
+            selection: try RotorSelection.decode(
+                name: selection.rotorName,
+                index: selection.rotorIndex,
+                codingPath: []
+            ),
+            target: target,
+            direction: direction
+        )
     }
 }

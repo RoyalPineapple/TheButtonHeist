@@ -387,7 +387,7 @@ extension SemanticObservationStream {
               ) else {
             recordFailedSettle(
                 SettleFailureDiagnostic.message(for: outcome, layerGateWasClear: layerGateWasClear),
-                tree: outcome.finalObservation?.tree,
+                observation: outcome.finalObservation?.observation,
                 vault: vault
             )
             return nil
@@ -401,25 +401,18 @@ extension SemanticObservationStream {
     ) -> ObservationSettlement.Result {
         guard !outcome.outcome.didSettleCleanly,
               case .timedOut = outcome.outcome,
-              let tree = outcome.finalObservation?.tree else {
+              let observation = outcome.finalObservation?.observation else {
             return .unavailable(notificationBatch: notificationBatch)
         }
-        return .observedUnsettled(tree, notificationBatch: notificationBatch)
+        return .observedUnsettled(observation, notificationBatch: notificationBatch)
     }
 
     private func recordFailedSettle(
         _ diagnostic: String?,
-        tree: InterfaceTree?,
+        observation: InterfaceObservation?,
         vault: TheVault
     ) {
         runtimeState.recordSettleFailure(diagnostic)
-        let observation = tree.map { tree in
-            do {
-                return try InterfaceObservation.build(tree: tree)
-            } catch {
-                preconditionFailure("Failed settle diagnostic observation failed validation: \(error)")
-            }
-        }
         vault.recordFailedSettleDiagnosticEvidence(observation)
     }
 

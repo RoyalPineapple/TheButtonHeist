@@ -106,13 +106,15 @@ final class AccessibilityTraceTests: XCTestCase {
         XCTAssertEqual(capture.hash, AccessibilityTrace.Capture(sequence: 2, interface: interface).hash)
     }
 
-    func testTraceCanLookupCaptureByHash() throws {
+    func testTraceResolvesOnlyExactCaptureReference() throws {
         let first = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Home"))
         let second = AccessibilityTrace.Capture(sequence: 2, interface: makeInterface(label: "Settings"), parentHash: first.hash)
         let trace = AccessibilityTrace(captures: [first, second])
+        let reference = AccessibilityTrace.CaptureRef(capture: second)
+        let wrongSequence = AccessibilityTrace.CaptureRef(sequence: first.sequence, hash: second.hash)
 
-        XCTAssertEqual(trace.capture(hash: second.hash)?.hash, second.hash)
-        XCTAssertEqual(trace.capture(ref: AccessibilityTrace.CaptureRef(capture: second))?.hash, second.hash)
+        XCTAssertEqual(trace.capture(ref: reference), second)
+        XCTAssertNil(trace.capture(ref: wrongSequence))
     }
 
     func testAppendingCreatesSingleLinkedList() throws {

@@ -1833,7 +1833,9 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     func testDiscoveryObservationStateAndTraceUseCanonicalSemanticInterface() throws {
         let viewportObservation = makeDiscoveryObservationProjectionFixture()
-        let discoveryInterface = TheVault.WireConversion.toDiscoveryInterface(from: viewportObservation.tree)
+        let discoveryInterface = TheVault.WireConversion.discoveryProjection(
+            from: viewportObservation.tree
+        ).interface
         let semanticInterface = TheVault.WireConversion.toSemanticInterface(from: viewportObservation.tree)
         let traceCapture = brains.postActionObservation.makeTraceCapture(
             interface: semanticInterface,

@@ -72,10 +72,6 @@ public struct AccessibilityTrace: Codable, Sendable, Equatable {
         return AccessibilityTrace(captures: captures + [capture])
     }
 
-    public func capture(hash: String) -> Capture? {
-        captures.first { $0.hash == hash }
-    }
-
     public func capture(ref: CaptureRef) -> Capture? {
         captures.first { $0.sequence == ref.sequence && $0.hash == ref.hash }
     }

@@ -380,7 +380,7 @@ internal struct InterfaceObservationProof {
 internal struct ObservationSettlement {
     internal enum Result {
         case committed(SettledObservationEvent)
-        case observedUnsettled(InterfaceTree, notificationBatch: AccessibilityNotificationBatch?)
+        case observedUnsettled(InterfaceObservation, notificationBatch: AccessibilityNotificationBatch?)
         case unavailable(notificationBatch: AccessibilityNotificationBatch?)
     }
 

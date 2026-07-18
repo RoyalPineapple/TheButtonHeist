@@ -176,7 +176,7 @@ import Testing
     }, "\(failures)")
 }
 
-@Test func `runtime admission checks typed rotor selection without JSON reconstruction`() {
+@Test func `runtime admission reuses canonical rotor selection admission`() {
     let candidate = HeistPlanAdmissionCandidate(body: [
         .action(ActionStep(command: .rotor(
             selection: .index(-1),

@@ -66,7 +66,7 @@ final class TheVaultObservationBuildingTests: XCTestCase {
         )
 
         let observation = TheVault.buildObservation(from: result)
-        let interface = TheVault.WireConversion.toInterface(from: observation.tree)
+        let interface = TheVault.WireConversion.toSemanticInterface(from: observation.tree)
 
         // Value-equal elements still get distinct synthesized heistIds because
         // live identity is keyed by tree path, not element value equality.
@@ -310,7 +310,7 @@ final class TheVaultObservationBuildingTests: XCTestCase {
 
         let observation = TheVault.buildObservation(from: result)
         let element = try XCTUnwrap(observation.liveCapture.hierarchy.sortedElements.first)
-        let projected = try XCTUnwrap(TheVault.WireConversion.toInterface(from: observation.tree).projectedElements.first)
+        let projected = TheVault.WireConversion.convert(element)
 
         XCTAssertEqual(element.shape.frame, screenFrame)
         XCTAssertEqual(element.bhResolvedActivationPoint, screenActivationPoint)

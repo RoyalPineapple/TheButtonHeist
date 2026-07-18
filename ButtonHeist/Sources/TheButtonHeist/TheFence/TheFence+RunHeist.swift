@@ -105,7 +105,7 @@ extension TheFence {
         switch request {
         case .wait(let step):
             return try HeistPlan(body: [.wait(step)])
-        case .actions(let actions, let expectationPayload, _):
+        case .action(let action, let expectationPayload, _):
             let expectationStep = expectationPayload.expectation.map {
                 WaitStep(
                     predicate: $0,
@@ -113,18 +113,12 @@ extension TheFence {
                 )
             }
 
-            var steps: [HeistStep] = []
-            let commands = actions.values
-            for (index, command) in commands.enumerated() {
-                let expectationPolicy: ActionExpectationPolicy
-                if index == commands.count - 1, let expectationStep {
-                    expectationPolicy = .expect(try ActionExpectation(expectationStep))
-                } else {
-                    expectationPolicy = .default
-                }
-                steps.append(.action(ActionStep(command: command, expectationPolicy: expectationPolicy)))
-            }
-            return try HeistPlan(body: steps)
+            let expectationPolicy: ActionExpectationPolicy = try expectationStep.map {
+                .expect(try ActionExpectation($0))
+            } ?? .default
+            return try HeistPlan(body: [
+                .action(ActionStep(command: action.action, expectationPolicy: expectationPolicy))
+            ])
         }
     }
 
@@ -139,7 +133,7 @@ extension TheFence {
         switch request {
         case .wait(let wait):
             return wait.timeout.seconds + config.postActionExpectationTimeoutBuffer
-        case .actions(_, let expectationPayload, let actionBudget):
+        case .action(_, let expectationPayload, let actionBudget):
             guard expectationPayload.expectation != nil else {
                 return max(
                     actionBudget,

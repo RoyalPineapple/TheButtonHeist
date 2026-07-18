@@ -782,11 +782,10 @@ final class SemanticObservationStreamTests: XCTestCase {
             return XCTFail("A clean settle from a superseded capture must not commit")
         }
         XCTAssertEqual(vault.latestObservation.captureToken, current.captureToken)
-        XCTAssertEqual(vault.latestFailedSettleDiagnosticEvidence?.tree, stale.tree)
-        XCTAssertNil(vault.latestFailedSettleDiagnosticEvidence?.liveCapture.object(for: "same"))
+        XCTAssertEqual(vault.latestFailedSettleDiagnosticEvidence?.captureToken, stale.captureToken)
     }
 
-    func testPostActionAdmissionReturnsOnlyTimedOutTreeAsUnsettledEvidence() async {
+    func testPostActionAdmissionReturnsExactTimedOutObservationAsUnsettledEvidence() async {
         let screen = observation(label: "Unstable", heistId: "unstable")
         vault.recordParsedObservedEvidence(screen)
 
@@ -799,14 +798,14 @@ final class SemanticObservationStreamTests: XCTestCase {
             )
         )
 
-        guard case .observedUnsettled(let tree, _) = result.result else {
-            return XCTFail("A timeout with a final tree should return diagnostic unsettled evidence")
+        guard case .observedUnsettled(let observation, _) = result.result else {
+            return XCTFail("A timeout with a final observation should return diagnostic unsettled evidence")
         }
-        XCTAssertEqual(tree, screen.tree)
-        XCTAssertEqual(vault.latestFailedSettleDiagnosticEvidence?.tree, screen.tree)
+        XCTAssertEqual(observation.captureToken, screen.captureToken)
+        XCTAssertEqual(vault.latestFailedSettleDiagnosticEvidence?.captureToken, screen.captureToken)
     }
 
-    func testPostActionAdmissionNeverReturnsCancelledTreeAsUsableEvidence() async {
+    func testPostActionAdmissionNeverReturnsCancelledObservationAsUsableEvidence() async {
         let screen = observation(label: "Cancelled", heistId: "cancelled")
         vault.recordParsedObservedEvidence(screen)
 
@@ -822,7 +821,7 @@ final class SemanticObservationStreamTests: XCTestCase {
         guard case .unavailable = result.result else {
             return XCTFail("Cancellation must not expose its last tree as usable action evidence")
         }
-        XCTAssertEqual(vault.latestFailedSettleDiagnosticEvidence?.tree, screen.tree)
+        XCTAssertEqual(vault.latestFailedSettleDiagnosticEvidence?.captureToken, screen.captureToken)
     }
 
     private func observation(label: String, heistId: HeistId) -> InterfaceObservation {

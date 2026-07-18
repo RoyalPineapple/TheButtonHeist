@@ -156,15 +156,9 @@ final class PostActionObservation {
                 trace: trace
             )
 
-        case .observedUnsettled(let tree, let notificationBatch):
+        case .observedUnsettled(let viewportObservation, let notificationBatch):
             guard case .timedOut = observation.settle.outcome else {
                 preconditionFailure("unsettled observation requires settle timeout")
-            }
-            let viewportObservation: InterfaceObservation
-            do {
-                viewportObservation = try InterfaceObservation.build(tree: tree)
-            } catch {
-                preconditionFailure("Unsettled semantic observation failed validation: \(error)")
             }
             let finalBaseline = captureSemanticState(
                 from: viewportObservation,

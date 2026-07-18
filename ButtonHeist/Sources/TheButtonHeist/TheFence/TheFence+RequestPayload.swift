@@ -13,24 +13,18 @@ extension TheFence {
 
     typealias RequestHandler = @ButtonHeistActor @Sendable (TheFence) async throws -> FenceResponse
 
-    struct DurableHeistActionCommands: Sendable {
-        private let actions: NonEmptyArray<HeistActionCommand>
+    struct DurableHeistActionCommand: Sendable {
+        let action: HeistActionCommand
 
-        init?(_ actions: NonEmptyArray<HeistActionCommand>) {
-            guard actions.allSatisfy({ $0.durableHeistActionFailure == nil }) else {
-                return nil
-            }
-            self.actions = actions
-        }
-
-        var values: [HeistActionCommand] {
-            actions.elements
+        init?(_ action: HeistActionCommand) {
+            guard action.durableHeistActionFailure == nil else { return nil }
+            self.action = action
         }
     }
 
     enum SingleStepHeistRequest: Sendable {
-        case actions(
-            DurableHeistActionCommands,
+        case action(
+            DurableHeistActionCommand,
             expectation: ExpectationPayload,
             actionTimeout: TimeInterval
         )
@@ -195,10 +189,9 @@ extension TheFence {
         actionTimeout: TimeInterval,
         expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        let actions = NonEmptyArray(action)
-        if let durableActions = DurableHeistActionCommands(actions) {
-            return .singleStepHeist(.actions(
-                durableActions,
+        if let durableAction = DurableHeistActionCommand(action) {
+            return .singleStepHeist(.action(
+                durableAction,
                 expectation: expectationPayload,
                 actionTimeout: actionTimeout
             ))

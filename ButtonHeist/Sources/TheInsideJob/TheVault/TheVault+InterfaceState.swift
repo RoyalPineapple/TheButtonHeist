@@ -141,33 +141,6 @@ extension TheVault {
         return treeElement(heistId: heistId, in: .interface)
     }
 
-    /// Projection of the interface tree plus Button Heist
-    /// annotations.
-    ///
-    /// Thin reader over `WireConversion.toInterface` — exists because callers
-    /// need the committed interface, not an arbitrary tree.
-    func interface(timestamp: Date = Date()) -> Interface {
-        WireConversion.toInterface(from: interfaceTree, timestamp: timestamp)
-    }
-
-    /// Interface projection for command-owned discovery.
-    ///
-    /// Discovery retains off-viewport elements in semantic memory while the
-    /// latest parser hierarchy remains viewport-local. This projection returns
-    /// the live hierarchy plus discovered scroll-container content.
-    func discoveryInterface(timestamp: Date = Date()) -> Interface {
-        WireConversion.toDiscoveryInterface(from: interfaceTree, timestamp: timestamp)
-    }
-
-    /// Semantic projection used for traces and deltas.
-    ///
-    /// Unlike `interface()`, this reads the committed semantic state produced
-    /// by exploration, so off-viewport targetable elements participate in
-    /// post-action deltas.
-    func semanticInterface(timestamp: Date = Date()) -> Interface {
-        WireConversion.toSemanticInterface(from: interfaceTree, timestamp: timestamp)
-    }
-
     func semanticInterface(
         for observation: InterfaceObservation,
         timestamp: Date = Date()

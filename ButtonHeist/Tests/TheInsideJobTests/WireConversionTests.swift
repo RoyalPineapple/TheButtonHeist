@@ -319,7 +319,7 @@ final class WireConverterTests: XCTestCase {
 
     // MARK: - Action Conversion
 
-    func testToInterfaceDoesNotInferElementActionsFromLiveObject() throws {
+    func testSemanticInterfaceDoesNotInferElementActionsFromLiveObject() throws {
         let element = makeElement(
             label: "Plain action",
             respondsToUserInteraction: false
@@ -331,7 +331,7 @@ final class WireConverterTests: XCTestCase {
         )
         let screen = TheVault.buildObservation(from: parse)
 
-        let annotations = WireConversion.toInterface(from: screen.tree).annotations.elements
+        let annotations = WireConversion.toSemanticInterface(from: screen.tree).annotations.elements
 
         XCTAssertEqual(annotations.first?.actions, [])
     }
@@ -389,7 +389,7 @@ final class WireConverterTests: XCTestCase {
         )
         let screen = TheVault.buildObservation(from: parse)
 
-        let tree = WireConversion.toInterface(from: screen.tree).tree
+        let tree = WireConversion.toSemanticInterface(from: screen.tree).tree
 
         guard case .container(let info, _) = tree.first else {
             return XCTFail("Expected container root")
@@ -682,7 +682,7 @@ final class WireConverterTests: XCTestCase {
             firstResponderHeistId: nil,
         )
 
-        let interface = WireConversion.toDiscoveryInterface(from: screen.tree)
+        let interface = WireConversion.discoveryProjection(from: screen.tree).interface
 
         guard case .container(_, let children) = interface.tree.first else {
             return XCTFail("Expected root scroll container")
@@ -743,7 +743,7 @@ final class WireConverterTests: XCTestCase {
             firstResponderHeistId: nil
         )
 
-        let interface = WireConversion.toDiscoveryInterface(from: screen.tree)
+        let interface = WireConversion.discoveryProjection(from: screen.tree).interface
 
         XCTAssertEqual(interface.projectedElements.compactMap(\.label), ["Visible", "Offscreen"])
         XCTAssertEqual(interface.projectedElements.filter { $0.label == "Offscreen" }.count, 1)
@@ -788,7 +788,7 @@ final class WireConverterTests: XCTestCase {
             liveCapture: liveScreen.liveCapture
         )
 
-        let interface = WireConversion.toDiscoveryInterface(from: screen.tree)
+        let interface = WireConversion.discoveryProjection(from: screen.tree).interface
 
         guard case .container(_, let outerChildren) = interface.tree.first else {
             return XCTFail("Expected outer container")
@@ -841,7 +841,7 @@ final class WireConverterTests: XCTestCase {
             )
         )
 
-        let interface = WireConversion.toDiscoveryInterface(from: screen.tree)
+        let interface = WireConversion.discoveryProjection(from: screen.tree).interface
 
         guard case .container(_, let children) = interface.tree.first else {
             return XCTFail("Expected root scroll container")
@@ -906,7 +906,7 @@ final class WireConverterTests: XCTestCase {
             )
         )
 
-        let interface = WireConversion.toDiscoveryInterface(from: screen.tree)
+        let interface = WireConversion.discoveryProjection(from: screen.tree).interface
 
         guard case .container(_, let children) = interface.tree.first else {
             return XCTFail("Expected root scroll container")
@@ -960,7 +960,7 @@ final class WireConverterTests: XCTestCase {
             )
         )
 
-        let interface = WireConversion.toDiscoveryInterface(from: screen.tree)
+        let interface = WireConversion.discoveryProjection(from: screen.tree).interface
 
         guard case .container(_, let children) = interface.tree.first else {
             return XCTFail("Expected root scroll container")

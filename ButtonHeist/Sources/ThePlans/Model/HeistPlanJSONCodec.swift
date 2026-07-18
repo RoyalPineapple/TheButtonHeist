@@ -11,37 +11,17 @@ enum HeistPlanJSONCodec {
         _ data: Data,
         sourceURL: URL = URL(fileURLWithPath: "inline-heist-plan.json")
     ) throws -> HeistPlan {
-        let raw = try decodeAdmissionCandidate(data, sourceURL: sourceURL)
-        return try raw.validatedForRuntimeSafety()
-    }
-
-    static func decodeAdmissionCandidate(
-        _ data: Data,
-        sourceURL: URL
-    ) throws -> HeistPlanAdmissionCandidate {
-        let version = try decodePlanVersion(from: data, sourceURL: sourceURL)
-        try requireSupportedPlanVersion(version, sourceURL: sourceURL)
+        let candidate: HeistPlanAdmissionCandidate
         do {
-            return try JSONDecoder().decode(HeistPlanAdmissionCandidate.self, from: data)
-        } catch {
-            throw HeistPlanJSONCodecError.invalidPlan(
-                source: sourceURL.path,
-                reason: String(describing: error)
-            )
-        }
-    }
-
-    static func decodePlanVersion(from data: Data, sourceURL: URL) throws -> Int {
-        do {
-            return try JSONDecoder().decode(HeistPlanVersionPayload.self, from: data).version
-        } catch HeistPlanVersionPayloadError.expectedJSONObject {
+            candidate = try JSONDecoder().decode(HeistPlanAdmissionCandidate.self, from: data)
+        } catch DecodingError.typeMismatch(_, let context) where context.codingPath.isEmpty {
             throw HeistPlanJSONCodecError.invalidPlan(source: sourceURL.path, reason: "expected JSON object")
-        } catch HeistPlanVersionPayloadError.missingVersion {
+        } catch DecodingError.keyNotFound(let key, _) where key.stringValue == "version" {
             throw HeistPlanJSONCodecError.missingVersion(source: sourceURL.path)
-        } catch HeistPlanVersionPayloadError.invalidVersion(let observed) {
+        } catch DecodingError.typeMismatch(_, let context) where context.codingPath.last?.stringValue == "version" {
             throw HeistPlanJSONCodecError.invalidVersion(
                 source: sourceURL.path,
-                observed: observed
+                observed: context.debugDescription
             )
         } catch {
             throw HeistPlanJSONCodecError.invalidPlan(
@@ -49,13 +29,13 @@ enum HeistPlanJSONCodec {
                 reason: String(describing: error)
             )
         }
-    }
 
-    static func requireSupportedPlanVersion(_ version: Int, sourceURL: URL) throws {
-        guard version == currentHeistPlanVersion else {
+        do {
+            return try candidate.validatedForRuntimeSafety()
+        } catch let error as HeistPlanVersionAdmissionError {
             throw HeistPlanJSONCodecError.unsupportedVersion(
                 source: sourceURL.path,
-                observed: version
+                observed: error.observed
             )
         }
     }
@@ -89,99 +69,4 @@ enum HeistPlanJSONCodecError: Error, Sendable, Equatable, CustomStringConvertibl
         }
     }
 
-}
-
-private struct HeistPlanVersionPayload: Decodable {
-    let version: Int
-
-    private enum CodingKeys: String, CodingKey {
-        case version
-    }
-
-    init(from decoder: Decoder) throws {
-        let container: KeyedDecodingContainer<CodingKeys>
-        do {
-            container = try decoder.container(keyedBy: CodingKeys.self)
-        } catch {
-            throw HeistPlanVersionPayloadError.expectedJSONObject
-        }
-
-        guard container.contains(.version) else {
-            throw HeistPlanVersionPayloadError.missingVersion
-        }
-
-        do {
-            version = try container.decode(Int.self, forKey: .version)
-        } catch {
-            let observed = (try? container.decode(HeistPlanJSONValue.self, forKey: .version))?.description
-                ?? String(describing: error)
-            throw HeistPlanVersionPayloadError.invalidVersion(observed)
-        }
-    }
-}
-
-private enum HeistPlanVersionPayloadError: Error, Sendable, Equatable {
-    case expectedJSONObject
-    case missingVersion
-    case invalidVersion(String)
-}
-
-private enum HeistPlanJSONValue: Decodable, CustomStringConvertible {
-    case null
-    case bool(Bool)
-    case number(String)
-    case string(String)
-    case array([HeistPlanJSONValue])
-    case object([String: HeistPlanJSONValue])
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        if container.decodeNil() {
-            self = .null
-        } else if let value = try? container.decode(Bool.self) {
-            self = .bool(value)
-        } else if let value = try? container.decode(Int.self) {
-            self = .number(String(value))
-        } else if let value = try? container.decode(Double.self) {
-            self = .number(String(value))
-        } else if let value = try? container.decode(String.self) {
-            self = .string(value)
-        } else if let value = try? container.decode([HeistPlanJSONValue].self) {
-            self = .array(value)
-        } else if let value = try? container.decode([String: HeistPlanJSONValue].self) {
-            self = .object(value)
-        } else {
-            throw DecodingError.dataCorruptedError(
-                in: container,
-                debugDescription: "unsupported JSON value"
-            )
-        }
-    }
-
-    var description: String {
-        switch self {
-        case .null:
-            return "null"
-        case .bool(let value):
-            return String(value)
-        case .number(let value):
-            return value
-        case .string(let value):
-            return quoted(value)
-        case .array(let values):
-            return "[" + values.map(\.description).joined(separator: ", ") + "]"
-        case .object(let fields):
-            let body = fields.keys.sorted().map { key in
-                "\(quoted(key)): \(fields[key]?.description ?? "null")"
-            }.joined(separator: ", ")
-            return "{\(body)}"
-        }
-    }
-
-    private func quoted(_ value: String) -> String {
-        let escaped = value
-            .replacingOccurrences(of: #"\"#, with: #"\\"#)
-            .replacingOccurrences(of: #"""#, with: #"\""#)
-        return #""\#(escaped)""#
-    }
 }

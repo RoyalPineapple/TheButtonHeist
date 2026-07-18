@@ -1137,27 +1137,30 @@ final class TheVaultResolutionTests: XCTestCase {
             settleOutcome: outcome
         )
 
-        guard case .observedUnsettled(let observedTree, _) = result.result else {
+        guard case .observedUnsettled(let observedObservation, _) = result.result else {
             return XCTFail("Expected observed unsettled settle evidence")
         }
-        XCTAssertEqual(observedTree.orderedElements.first?.element.label, "Unstable")
+        XCTAssertEqual(observedObservation.tree.orderedElements.first?.element.label, "Unstable")
+        XCTAssertEqual(observedObservation.captureToken, observation.captureToken)
+        XCTAssertTrue(observedObservation.liveCapture.object(for: "unstable") === object)
         XCTAssertEqual(
             bagman.latestFailedSettleDiagnosticEvidence?.tree.orderedElements.first?.element.label,
             "Unstable"
         )
-        XCTAssertNil(bagman.latestFailedSettleDiagnosticEvidence?.liveCapture.object(for: "unstable"))
+        XCTAssertEqual(bagman.latestFailedSettleDiagnosticEvidence?.captureToken, observation.captureToken)
+        XCTAssertTrue(bagman.latestFailedSettleDiagnosticEvidence?.liveCapture.object(for: "unstable") === object)
         XCTAssertTrue(bagman.semanticObservationStream.latestSettledObservationInvalidated)
     }
 
-    func testPublicInterfaceReadsSettledTruthNotFailedSettleDiagnosticEvidence() {
+    func testPublicInterfaceReadsSettledTruthNotFailedSettleDiagnosticEvidence() throws {
         let settled = InterfaceObservation.makeForTests(elements: [(element(label: "Settled"), "settled")])
         bagman.semanticObservationStream.commitVisibleObservationForTesting(settled)
 
         let diagnostic = InterfaceObservation.makeForTests(elements: [(element(label: "Timeout"), "timeout")])
         bagman.recordFailedSettleDiagnosticEvidence(diagnostic)
 
-        XCTAssertEqual(bagman.interface().projectedElements.compactMap(\.label), ["Settled"])
-        XCTAssertEqual(bagman.semanticInterface().projectedElements.compactMap(\.label), ["Settled"])
+        let interface = try bagman.selectInterface(InterfaceQuery())
+        XCTAssertEqual(interface.projectedElements.compactMap(\.label), ["Settled"])
         XCTAssertNil(bagman.resolveVisibleTarget(literalTarget(ElementPredicate.label("Timeout"))).resolvedElement)
     }
 
@@ -1191,8 +1194,8 @@ final class TheVaultResolutionTests: XCTestCase {
         XCTAssertEqual(bagman.latestObservation.captureToken, screenB.captureToken)
         XCTAssertTrue(bagman.latestObservation.liveCapture.object(for: "b") === objectB)
         XCTAssertNil(bagman.latestObservation.liveCapture.object(for: "a"))
-        XCTAssertEqual(bagman.latestFailedSettleDiagnosticEvidence?.tree, screenA.tree)
-        XCTAssertNil(bagman.latestFailedSettleDiagnosticEvidence?.liveCapture.object(for: "a"))
+        XCTAssertEqual(bagman.latestFailedSettleDiagnosticEvidence?.captureToken, screenA.captureToken)
+        XCTAssertTrue(bagman.latestFailedSettleDiagnosticEvidence?.liveCapture.object(for: "a") === objectA)
     }
     func testSettledSemanticObservationWaiterCompletesOnLaterObservation() async {
         let first = InterfaceObservation.makeForTests(elements: [(element(label: "First"), "first")])
@@ -1459,38 +1462,6 @@ final class TheVaultResolutionTests: XCTestCase {
             bagman.interfaceElementIDs,
             ["catalog", "first_known", "first_visible", "second_known", "second_visible"]
         )
-    }
-
-    func testPublicInterfaceProjectionStaysVisibleWhileSemanticProjectionIncludesKnownElements() throws {
-        let visible = element(label: "Visible", traits: .button)
-        let known = element(label: "Known", traits: .button)
-        let container = AccessibilityContainer(
-            type: .none, scrollableContentSize: AccessibilitySize(CGSize(width: 320, height: 800)),
-            frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 400))
-        )
-        let observation = InterfaceObservation.makeForTests(
-            elements: [
-                "visible": InterfaceTree.Element(heistId: "visible", scrollMembership: nil, element: visible),
-                "known": InterfaceTree.Element(heistId: "known", scrollMembership: nil, element: known),
-            ],
-            hierarchy: [.container(container, children: [.element(visible, traversalIndex: 0)])],
-            containerNamesByPath: [TreePath([0]): "main_scroll"],
-            heistIdsByPath: [TreePath([0, 0]): "visible"],
-            firstResponderHeistId: nil,
-        )
-        bagman.semanticObservationStream.commitDiscoveryObservationForTesting(observation)
-
-        let publicInterface = bagman.interface()
-        let semanticInterface = bagman.semanticInterface()
-
-        XCTAssertEqual(publicInterface.projectedElements.map(\.label), ["Visible"])
-        XCTAssertEqual(semanticInterface.projectedElements.compactMap(\.label).sorted(), ["Known", "Visible"])
-        guard case .container(_, let children) = publicInterface.tree.first else {
-            return XCTFail("Expected public interface to preserve visible container hierarchy")
-        }
-        XCTAssertEqual(children.count, 1)
-        XCTAssertEqual(publicInterface.annotations.containers.first?.containerName, "main_scroll")
-        XCTAssertEqual(semanticInterface.annotations.containers.first?.containerName, "main_scroll")
     }
 
     func testKnownScrollMembershipsAreKeyedByHeistIdForEqualElements() {

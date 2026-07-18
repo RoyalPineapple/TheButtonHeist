@@ -239,14 +239,14 @@ final class WireCommandParityTests: XCTestCase {
         for (command, arguments) in cases {
             let request = try fence.parseRequest(command: command, values: arguments)
             guard case .singleStepHeist(let heistRequest) = request.dispatch,
-                  case .actions(let actions, _, _) = heistRequest else {
+                  case .action(let action, _, _) = heistRequest else {
                 return XCTFail("\(command.rawValue) should decode as single-step action command")
             }
-            let singleCommands = actions.values
             let plan = try fence.singleStepHeistPlan(for: heistRequest)
             let heistCommands = plan.body.flatMap(actionCommands(for:))
 
-            XCTAssertEqual(String(reflecting: heistCommands), String(reflecting: singleCommands), command.rawValue)
+            XCTAssertEqual(heistCommands.count, 1, command.rawValue)
+            XCTAssertEqual(heistCommands.first, action.action, command.rawValue)
         }
     }
 

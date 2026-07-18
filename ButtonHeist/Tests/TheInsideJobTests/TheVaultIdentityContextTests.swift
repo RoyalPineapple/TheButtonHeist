@@ -240,7 +240,7 @@ final class TheVaultIdentityContextTests: XCTestCase {
                 TreePath([1]): secondScrollView,
             ]
         ))
-        let interface = TheVault.WireConversion.toInterface(from: observation.tree)
+        let interface = TheVault.WireConversion.toSemanticInterface(from: observation.tree)
         let containerNames = interface.annotations.containers.compactMap(\.containerName)
         let repeatedFramePrefix = "scrollable_\(TheVault.coarseFrameHash(frame))-"
 
@@ -322,7 +322,7 @@ final class TheVaultIdentityContextTests: XCTestCase {
                 TreePath([0, 0, 0, 0]): listScrollView,
             ]
         ))
-        let interface = TheVault.WireConversion.toInterface(from: observation.tree)
+        let interface = TheVault.WireConversion.toSemanticInterface(from: observation.tree)
         let containerNames = interface.annotations.containers.compactMap(\.containerName)
         let repeatedFramePrefix = "scrollable_\(TheVault.coarseFrameHash(frame))-"
         let pagerName = ContainerName(stringLiteral: "scrollable_\(TheVault.coarseFrameHash(pagerFrame))")
@@ -352,7 +352,7 @@ final class TheVaultIdentityContextTests: XCTestCase {
             ],
         ))
 
-        let interface = TheVault.WireConversion.toInterface(from: observation.tree)
+        let interface = TheVault.WireConversion.toSemanticInterface(from: observation.tree)
 
         XCTAssertEqual(
             interface.annotations.containers.first?.containerName,

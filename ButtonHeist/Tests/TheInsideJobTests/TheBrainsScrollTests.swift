@@ -1628,7 +1628,7 @@ final class TheBrainsScrollTests: XCTestCase {
         ) else {
             return XCTFail("Expected word-list exploration to settle")
         }
-        let labels = brains.vault.discoveryInterface().projectedElements.compactMap(\.label)
+        let labels = try brains.vault.selectInterface(InterfaceQuery()).projectedElements.compactMap(\.label)
         XCTAssertEqual(
             exploration.event.generation,
             visibleEvent.generation,

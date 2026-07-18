@@ -1027,8 +1027,12 @@ final class AccessibilityPredicateTests: XCTestCase {
         )
     }
 
-    func testElementUpdatedWithPropertyOnlyMetWhenTargetUpdates() throws {
+    func testElementUpdatedResolvesTargetThroughCaptureReferences() throws {
         let trace = try makeUpdateTrace(label: "counter", property: .value, old: "a", new: "b")
+        let edge = try XCTUnwrap(trace.changeFacts.first?.metadata.captureEdge)
+        XCTAssertEqual(trace.capture(ref: edge.before)?.sequence, edge.before.sequence)
+        XCTAssertEqual(trace.capture(ref: edge.after)?.sequence, edge.after.sequence)
+
         let action = makeResult(success: true, trace: trace, completeness: .incomplete)
         let predicate = AccessibilityPredicate.changed(.elements([
             .updated(.label("counter"), .value()),
