@@ -7,7 +7,7 @@ struct CanonicalRuntimeOwnerRuleTests {
     @Test
     func interfaceGraphCommitsOutsidePublicationOwnerAreRejected() throws {
         let path: RelativeFilePath =
-            "ButtonHeist/Sources/TheInsideJob/TheStash/CompetingCommitter.swift"
+            "ButtonHeist/Sources/TheInsideJob/TheVault/CompetingCommitter.swift"
         let report = try evaluateButtonHeistRules(
             path: path,
             component: .runtime,

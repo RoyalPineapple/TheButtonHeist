@@ -10,23 +10,23 @@ import ThePlans
 final class LiveActionTargetFreshnessTests: XCTestCase {
 
     func testCaptureReplacementReacquiresSameSemanticTargetBeforeDispatch() async throws {
-        let stash = TheStash(tripwire: TheTripwire())
+        let vault = TheVault(tripwire: TheTripwire())
         let oldObject = ActivationTrackingView()
         let liveTarget = try installTarget(
-            in: stash,
+            in: vault,
             heistId: "checkout",
             object: oldObject
         )
         let originalCaptureToken = liveTarget.captureToken
         let replacementObject = ActivationTrackingView()
         let replacement = try installTarget(
-            in: stash,
+            in: vault,
             heistId: "checkout",
             object: replacementObject
         )
         XCTAssertNotEqual(replacement.captureToken, originalCaptureToken)
 
-        switch stash.dispatchOnFreshLiveActionTarget(liveTarget, operation: { target in
+        switch vault.dispatchOnFreshLiveActionTarget(liveTarget, operation: { target in
             (
                 target.object.accessibilityActivate(),
                 ObjectIdentifier(target.object),
@@ -47,21 +47,21 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
     }
 
     func testCaptureReplacementWithoutSameHeistIDReturnsTypedStaleTarget() async throws {
-        let stash = TheStash(tripwire: TheTripwire())
+        let vault = TheVault(tripwire: TheTripwire())
         let oldObject = ActivationTrackingView()
         let liveTarget = try installTarget(
-            in: stash,
+            in: vault,
             heistId: "checkout",
             object: oldObject
         )
         _ = try installTarget(
-            in: stash,
+            in: vault,
             heistId: "replacement",
             object: ActivationTrackingView()
         )
         var invoked = false
 
-        let dispatch = stash.dispatchOnFreshLiveActionTarget(liveTarget) { target in
+        let dispatch = vault.dispatchOnFreshLiveActionTarget(liveTarget) { target in
             invoked = true
             return target.object.accessibilityActivate()
         }
@@ -75,22 +75,22 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
     }
 
     func testFreshDispatchReturnsOnlyReacquiredValueEvidence() async throws {
-        let stash = TheStash(tripwire: TheTripwire())
+        let vault = TheVault(tripwire: TheTripwire())
         let originalFrame = CGRect(x: 20, y: 40, width: 120, height: 44)
         let replacementFrame = CGRect(x: 200, y: 300, width: 80, height: 60)
         let liveTarget = try installTarget(
-            in: stash,
+            in: vault,
             heistId: "checkout",
             object: ActivationTrackingView(),
             frame: originalFrame
         )
         let replacement = try installTarget(
-            in: stash,
+            in: vault,
             heistId: "checkout",
             object: ActivationTrackingView(),
             frame: replacementFrame
         )
-        let preparation = stash.dispatchOnFreshLiveActionTarget(liveTarget) { target in
+        let preparation = vault.dispatchOnFreshLiveActionTarget(liveTarget) { target in
             PreparedGeometryEvidence(
                 point: target.activationPoint,
                 captureToken: target.captureToken
@@ -108,21 +108,21 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
     }
 
     func testContainerCaptureReplacementReacquiresCurrentFrameBeforeDispatch() async throws {
-        let stash = TheStash(tripwire: TheTripwire())
+        let vault = TheVault(tripwire: TheTripwire())
         let original = try installContainer(
-            in: stash,
+            in: vault,
             identifier: "menu",
             object: UIScrollView(),
             frame: CGRect(x: 0, y: 80, width: 320, height: 400)
         )
         let replacementObject = UIScrollView()
         let replacement = try installContainer(
-            in: stash,
+            in: vault,
             identifier: "menu",
             object: replacementObject,
             frame: CGRect(x: 0, y: 140, width: 320, height: 400)
         )
-        let dispatch = stash.dispatchOnFreshLiveContainerTarget(original) { current in
+        let dispatch = vault.dispatchOnFreshLiveContainerTarget(original) { current in
             ContainerDispatchEvidence(
                 objectID: ObjectIdentifier(current.object),
                 frame: current.frame,
@@ -141,22 +141,22 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
     }
 
     func testContainerSemanticReplacementReturnsTypedStalenessWithoutInvocation() async throws {
-        let stash = TheStash(tripwire: TheTripwire())
+        let vault = TheVault(tripwire: TheTripwire())
         let original = try installContainer(
-            in: stash,
+            in: vault,
             identifier: "menu",
             object: UIScrollView(),
             frame: CGRect(x: 0, y: 80, width: 320, height: 400)
         )
         _ = try installContainer(
-            in: stash,
+            in: vault,
             identifier: "checkout",
             object: UIScrollView(),
             frame: CGRect(x: 0, y: 80, width: 320, height: 400)
         )
         var invoked = false
 
-        let dispatch = stash.dispatchOnFreshLiveContainerTarget(original) { _ in
+        let dispatch = vault.dispatchOnFreshLiveContainerTarget(original) { _ in
             invoked = true
             return true
         }
@@ -169,33 +169,33 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
     }
 
     private func installTarget(
-        in stash: TheStash,
+        in vault: TheVault,
         heistId: HeistId,
         object: NSObject,
         frame: CGRect = CGRect(x: 20, y: 40, width: 120, height: 44)
-    ) throws -> TheStash.LiveActionTarget {
+    ) throws -> TheVault.LiveActionTarget {
         let element = AccessibilityElement.make(
             label: "Checkout",
             traits: .button,
             frame: frame
         )
-        stash.installScreenForTesting(.makeForTests(
+        vault.installObservationForTesting(.makeForTests(
             elements: [(element, heistId)],
             objects: [heistId: object]
         ))
-        let treeElement = try XCTUnwrap(stash.latestObservation.tree.findElement(heistId: heistId))
-        guard case .resolved(let target) = stash.resolveLiveActionTarget(for: treeElement) else {
+        let treeElement = try XCTUnwrap(vault.latestObservation.tree.findElement(heistId: heistId))
+        guard case .resolved(let target) = vault.resolveLiveActionTarget(for: treeElement) else {
             throw LiveActionTargetFixtureError.unavailable
         }
         return target
     }
 
     private func installContainer(
-        in stash: TheStash,
+        in vault: TheVault,
         identifier: ContainerName,
         object: NSObject,
         frame: CGRect
-    ) throws -> TheStash.LiveContainerTarget {
+    ) throws -> TheVault.LiveContainerTarget {
         let path = TreePath([0])
         let container = AccessibilityContainer(
             type: .semanticGroup(label: "Menu", value: nil),
@@ -209,7 +209,7 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
             containerName: identifier,
             contentFrame: frame
         )
-        stash.recordParsedObservedEvidence(InterfaceObservation.makeForTests(
+        vault.recordParsedObservedEvidence(InterfaceObservation.makeForTests(
             tree: InterfaceTree(elements: [:], containers: [path: semanticContainer]),
             liveCapture: LiveCapture.makeForTests(
                 hierarchy: [.container(container, children: [])],
@@ -220,7 +220,7 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
                 firstResponderHeistId: nil
             )
         ))
-        guard case .resolved(let target) = stash.resolveLiveContainerTarget(for: semanticContainer) else {
+        guard case .resolved(let target) = vault.resolveLiveContainerTarget(for: semanticContainer) else {
             throw LiveActionTargetFixtureError.unavailable
         }
         return target

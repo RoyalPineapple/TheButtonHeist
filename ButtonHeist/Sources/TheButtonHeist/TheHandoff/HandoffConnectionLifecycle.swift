@@ -1,5 +1,6 @@
 import Foundation
 import ButtonHeistSupport
+import TheScore
 
 private let disconnectedDuringConnectionAttemptMessage =
     "Disconnected during connection attempt. The app may have been busy, suspended, or restarted before the handshake completed."

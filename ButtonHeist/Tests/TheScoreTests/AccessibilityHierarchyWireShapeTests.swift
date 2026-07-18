@@ -399,29 +399,15 @@ final class AccessibilityHierarchyWireShapeTests: XCTestCase {
     private func sampleElement(
         label: String? = "OK"
     ) -> HeistElement {
-        let frameX = 0.0
-        let frameY = 0.0
-        let frameWidth = 100.0
-        let frameHeight = 44.0
-        let activationPoint = defaultActivationPoint(
-            frameX: frameX,
-            frameY: frameY,
-            frameWidth: frameWidth,
-            frameHeight: frameHeight
-        )
-        return HeistElement(
+        makeTestHeistElement(
             description: "Button",
             label: label,
             value: nil,
             identifier: nil,
-            frameX: frameX,
-            frameY: frameY,
-            frameWidth: frameWidth,
-            frameHeight: frameHeight,
-            activationPointEvidence: .defaultCenter(ScreenPoint(
-                x: activationPoint.x,
-                y: activationPoint.y
-            )),
+            frameX: 0,
+            frameY: 0,
+            frameWidth: 100,
+            frameHeight: 44,
             actions: [.activate]
         )
     }

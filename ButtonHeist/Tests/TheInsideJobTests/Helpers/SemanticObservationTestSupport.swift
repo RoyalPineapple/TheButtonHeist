@@ -1,71 +1,72 @@
 #if canImport(UIKit)
 @testable import TheInsideJob
 
-extension InterfaceObservationProof {
-    static func forTesting(_ screen: InterfaceObservation) -> Self {
-        .uncheckedForTesting(screen)
-    }
-
-    static func forTestingAfterViewportMovement(_ screen: InterfaceObservation) -> Self {
-        .uncheckedForTesting(screen, lineageEvidence: .viewportMovement)
-    }
-}
-
 extension SemanticObservationStream {
     @discardableResult
     func commitVisibleObservationForTesting(
-        _ screen: InterfaceObservation,
+        _ observation: InterfaceObservation,
         notificationBatch: AccessibilityNotificationBatch? = nil,
-        notificationIdentityScreen: InterfaceObservation? = nil
-    ) -> SettledSemanticObservationEvent {
+        notificationIdentityObservation: InterfaceObservation? = nil
+    ) -> SettledObservationEvent {
         commitSettledVisibleObservation(
-            .forTesting(screen),
+            .uncheckedForTesting(observation, tripwireSignal: currentTripwireSignal()),
             notificationBatch: notificationBatch,
-            notificationIdentityScreen: notificationIdentityScreen
+            notificationIdentityObservation: notificationIdentityObservation
         )
     }
 
     @discardableResult
     func commitVisibleObservationAfterViewportMovementForTesting(
-        _ screen: InterfaceObservation,
+        _ observation: InterfaceObservation,
         notificationBatch: AccessibilityNotificationBatch? = nil,
-        notificationIdentityScreen: InterfaceObservation? = nil
-    ) -> SettledSemanticObservationEvent {
+        notificationIdentityObservation: InterfaceObservation? = nil
+    ) -> SettledObservationEvent {
         commitSettledVisibleObservation(
-            .forTestingAfterViewportMovement(screen),
+            .uncheckedForTesting(
+                observation,
+                tripwireSignal: currentTripwireSignal(),
+                lineageEvidence: .viewportMovement
+            ),
             notificationBatch: notificationBatch,
-            notificationIdentityScreen: notificationIdentityScreen
+            notificationIdentityObservation: notificationIdentityObservation
         )
     }
 
     @discardableResult
     func commitDiscoveryObservationForTesting(
-        _ screen: InterfaceObservation,
+        _ observation: InterfaceObservation,
         notificationBatch: AccessibilityNotificationBatch? = nil
-    ) -> SettledSemanticObservationEvent {
-        commitSettledDiscoveryObservation(.forTesting(screen), notificationBatch: notificationBatch)
+    ) -> SettledObservationEvent {
+        commitSettledDiscoveryObservation(
+            .uncheckedForTesting(observation, tripwireSignal: currentTripwireSignal()),
+            notificationBatch: notificationBatch
+        )
     }
 
     @discardableResult
     func commitDiscoveryObservationAfterViewportMovementForTesting(
-        _ screen: InterfaceObservation,
+        _ observation: InterfaceObservation,
         notificationBatch: AccessibilityNotificationBatch? = nil
-    ) -> SettledSemanticObservationEvent {
+    ) -> SettledObservationEvent {
         commitSettledDiscoveryObservation(
-            .forTestingAfterViewportMovement(screen),
+            .uncheckedForTesting(
+                observation,
+                tripwireSignal: currentTripwireSignal(),
+                lineageEvidence: .viewportMovement
+            ),
             notificationBatch: notificationBatch
         )
     }
 }
 
-extension TheStash {
-    func installScreenForTesting(_ screen: InterfaceObservation) {
-        nextVisibleRefreshScreenForTesting = screen
-        semanticObservationStream.commitVisibleObservationForTesting(screen)
+extension TheVault {
+    func installObservationForTesting(_ observation: InterfaceObservation) {
+        nextVisibleRefreshObservationForTesting = observation
+        semanticObservationStream.commitVisibleObservationForTesting(observation)
     }
 
-    func clearInstalledVisibleRefreshScreenForTesting() {
-        nextVisibleRefreshScreenForTesting = nil
+    func clearInstalledVisibleRefreshObservationForTesting() {
+        nextVisibleRefreshObservationForTesting = nil
     }
 }
 #endif

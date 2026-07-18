@@ -20,7 +20,7 @@ extension Navigation {
         selection: ResolvedScrollContainerSelection,
         direction: ScrollDirection,
     ) async -> TheSafecracker.ActionDispatchOutcome {
-        stash.refreshLiveCapture()
+        vault.refreshLiveCapture()
         let axis = Self.requiredAxis(for: direction)
         switch resolveContainerScrollTarget(
             selection: selection,
@@ -60,7 +60,7 @@ extension Navigation {
         selection: ResolvedScrollContainerSelection,
         edge: ScrollEdge,
     ) async -> TheSafecracker.ActionDispatchOutcome {
-        stash.refreshLiveCapture()
+        vault.refreshLiveCapture()
         let axis = Self.requiredAxis(for: edge)
         switch resolveContainerScrollTarget(
             selection: selection,
@@ -93,7 +93,7 @@ extension Navigation {
         edge: ScrollEdge,
     ) async -> ViewportTransition {
         guard case .uiScrollView = target else {
-            return .unavailable(previousVisibleIds: stash.viewportElementIDs)
+            return .unavailable(previousVisibleIds: vault.viewportElementIDs)
         }
         return await performViewportTransition(.edge(target, edge: edge))
     }

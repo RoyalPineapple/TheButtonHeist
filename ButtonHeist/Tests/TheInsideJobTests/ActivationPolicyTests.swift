@@ -163,6 +163,42 @@ final class ActivationPolicyTests: XCTestCase {
         )))
     }
 
+    func testNonFiniteActivationPointStopsBeforeMechanicalDispatch() async throws {
+        let initialTarget = makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
+        let refreshedTarget = makeLiveTarget(
+            heistId: "refreshed",
+            activationPoint: CGPoint(x: 30, y: 40)
+        )
+        var dispatchedPoints: [CGPoint] = []
+        let inflatedTarget = try makeInflatedTarget(refreshedTarget)
+
+        let policy = ActivationPolicy(
+            accessibilityActivate: { _ in
+                .success(ActivationDispatchEvidence(
+                    outcome: .refused,
+                    activationPoint: CGPoint(x: CGFloat.infinity, y: 40)
+                ))
+            },
+            refreshAndResolve: { .resolved(inflatedTarget) },
+            prepareActivationPointDispatch: { point in
+                dispatchedPoints.append(point)
+                return TestPreparedDispatch(result: true)
+            },
+            completeActivationPointDispatch: { $0.result },
+            showFingerprint: { _ in },
+            textEntryActivationFailure: { _, _ in nil }
+        )
+        let result = await policy.apply(to: initialTarget)
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(
+            result.message,
+            "activate failed: the refreshed accessibility activation point was not finite"
+        )
+        XCTAssertTrue(dispatchedPoints.isEmpty)
+        XCTAssertNil(result.activationTrace)
+    }
+
     func testTextEntryActivationPointDispatchRequiresFocusConfirmation() async throws {
         let initialTarget = makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
         let refreshedTarget = makeLiveTarget(
@@ -288,7 +324,7 @@ final class ActivationPolicyTests: XCTestCase {
     }
 
     private func makePolicy(
-        accessibilityActivate: @escaping @MainActor (TheStash.LiveActionTarget) -> AccessibilityActionDispatcher.ActivateOutcome,
+        accessibilityActivate: @escaping @MainActor (TheVault.LiveActionTarget) -> AccessibilityActionDispatcher.ActivateOutcome,
         refreshAndResolve: @escaping @MainActor () async -> ActivationRefreshResult,
         prepareActivationPointDispatch: @escaping @MainActor (
             CGPoint
@@ -323,7 +359,7 @@ final class ActivationPolicyTests: XCTestCase {
         traits: UIAccessibilityTraits = [],
         frame: CGRect = CGRect(x: 0, y: 0, width: 44, height: 44),
         activationPoint: CGPoint
-    ) -> TheStash.LiveActionTarget {
+    ) -> TheVault.LiveActionTarget {
         let element = AccessibilityElement.make(
             label: label,
             traits: traits,
@@ -338,19 +374,19 @@ final class ActivationPolicyTests: XCTestCase {
         )
         let object = ActivationObject()
         object.accessibilityFrame = frame
-        let stash = TheStash(tripwire: TheTripwire())
-        stash.installScreenForTesting(.makeForTests(
+        let vault = TheVault(tripwire: TheTripwire())
+        vault.installObservationForTesting(.makeForTests(
             elements: [(element, heistId)],
             objects: [heistId: object]
         ))
-        guard case .resolved(let target) = stash.resolveLiveActionTarget(for: treeElement) else {
+        guard case .resolved(let target) = vault.resolveLiveActionTarget(for: treeElement) else {
             preconditionFailure("Activation policy fixture did not produce a live target")
         }
         return target
     }
 
     private func makeInflatedTarget(
-        _ liveTarget: TheStash.LiveActionTarget,
+        _ liveTarget: TheVault.LiveActionTarget,
         resolution: ActionSubjectResolution = ActionSubjectResolution(origin: .visible)
     ) throws -> ElementInflation.InflatedElementTarget {
         let label = try XCTUnwrap(

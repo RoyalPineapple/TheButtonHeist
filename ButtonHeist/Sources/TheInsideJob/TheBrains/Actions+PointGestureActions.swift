@@ -148,7 +148,7 @@ extension Actions {
         case .failed(let failure):
             return failure.actionDispatchOutcome(commandMethod: .syntheticSwipe)
         }
-        let preparation = stash.dispatchOnFreshLiveActionTarget(
+        let preparation = vault.dispatchOnFreshLiveActionTarget(
             inflatedTarget.liveTarget,
         ) { liveTarget in
             let frame = liveTarget.frame

@@ -1,4 +1,5 @@
 import Network
+import TheScore
 
 extension DeviceDiscovery {
     func makeDevice(from result: NWBrowser.Result) -> DiscoveredDevice? {

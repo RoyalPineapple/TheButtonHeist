@@ -5,14 +5,14 @@
 extension PostActionObservation {
     /// Test-only projection helper. Production callers must supply a settled
     /// observation or explicit screen evidence through the interaction gateway.
-    func captureSemanticState() -> BeforeState {
-        let latestEvent = stash.latestSettledSemanticObservationEvent
+    func captureSemanticState() -> ObservationBaseline {
+        let latestEvent = vault.semanticObservationStream.latestEvent
         return captureSemanticState(
             from: InterfaceObservation.makeForTests(
-                tree: stash.interfaceTree,
-                liveCapture: LiveCapture.makeForTests(snapshot: stash.interfaceTree.viewportCapture)
+                tree: vault.interfaceTree,
+                liveCapture: LiveCapture.makeForTests(snapshot: vault.interfaceTree.viewportCapture)
             ),
-            tripwireSignal: stash.tripwire.tripwireSignal(),
+            tripwireSignal: vault.tripwire.tripwireSignal(),
             settledObservationSequence: latestEvent?.sequence
         )
     }

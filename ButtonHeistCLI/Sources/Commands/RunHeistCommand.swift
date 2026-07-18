@@ -2,6 +2,7 @@ import ArgumentParser
 @_spi(ButtonHeistTooling) import ButtonHeist
 import Foundation
 import ThePlans
+import TheScore
 
 struct RunHeistCommand: ConnectedOneShotCLICommand {
     typealias SwiftHeistCompiler = @Sendable (

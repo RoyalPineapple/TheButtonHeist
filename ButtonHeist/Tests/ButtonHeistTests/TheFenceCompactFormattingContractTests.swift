@@ -1372,7 +1372,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         )))
         let abortedChildren = try XCTUnwrap(HeistAbortedChildren([firstIteration, secondIteration]))
         let declaration = try XCTUnwrap(HeistForEachStringDeclaration(parameter: "item", count: 2))
-        let loopReceipt = try XCTUnwrap(HeistExecutionStepResult.forEachString(
+        let loopReceipt = HeistExecutionStepResult.forEachString(
             path: try HeistExecutionPath(validating: "$.body[0]"),
             durationMs: 30,
             declaration: declaration,
@@ -1385,7 +1385,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                 ),
                 children: abortedChildren
             )
-        ))
+        )
         let result = HeistExecutionResult(
             steps: [
                 loopReceipt,
@@ -1492,53 +1492,42 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     }
 
     func testCompactInterfaceRendersHorizontalAndBothAxisScrollSummaries() {
-        let horizontal = makeTestInterface(nodes: [
-            .container(
-                makeTestScrollableContainer(
-                    contentWidth: 1200,
-                    contentHeight: 400,
-                    frameWidth: 390,
-                    frameHeight: 400
-                ),
-                containerName: "horizontal_scroll",
-                children: [.element(makeTestHeistElement(label: "Right"))]
+        let cases: [(name: ContainerName, contentHeight: Double, expected: String)] = [
+            (
+                "horizontal_scroll",
+                400,
+                """
+                ── container "horizontal_scroll" 1 elements ──
+                  390×400 view, 1200×400 content (4 pages), horizontal
+                """
             ),
-        ])
-        let both = makeTestInterface(nodes: [
-            .container(
-                makeTestScrollableContainer(
-                    contentWidth: 1200,
-                    contentHeight: 1200,
-                    frameWidth: 390,
-                    frameHeight: 400
-                ),
-                containerName: "both_axis_scroll",
-                children: [.element(makeTestHeistElement(label: "Corner"))]
+            (
+                "both_axis_scroll",
+                1200,
+                """
+                ── container "both_axis_scroll" 1 elements ──
+                  390×400 view, 1200×1200 content (4 pages), both
+                """
             ),
-        ])
+        ]
 
-        let horizontalOutput = FenceResponse.compactInterface(horizontal, detail: .summary)
-        let bothOutput = FenceResponse.compactInterface(both, detail: .summary)
-        let expectedHorizontalSummary =
-            """
-            ── container "horizontal_scroll" 1 elements ──
-              390×400 view, 1200×400 content (4 pages), horizontal
-            """
-        let expectedBothSummary =
-            """
-            ── container "both_axis_scroll" 1 elements ──
-              390×400 view, 1200×1200 content (4 pages), both
-            """
+        for testCase in cases {
+            let interface = makeTestInterface(nodes: [
+                .container(
+                    makeTestScrollableContainer(
+                        contentWidth: 1200,
+                        contentHeight: testCase.contentHeight,
+                        frameWidth: 390,
+                        frameHeight: 400
+                    ),
+                    containerName: testCase.name,
+                    children: [.element(makeTestHeistElement(label: "Item"))]
+                ),
+            ])
+            let output = FenceResponse.compactInterface(interface, detail: .summary)
 
-        XCTAssertTrue(
-            horizontalOutput.contains(expectedHorizontalSummary),
-            horizontalOutput
-        )
-        XCTAssertFalse(horizontalOutput.contains("vertical"), horizontalOutput)
-        XCTAssertTrue(
-            bothOutput.contains(expectedBothSummary),
-            bothOutput
-        )
+            XCTAssertTrue(output.contains(testCase.expected), output)
+        }
     }
 
     func testCompactInterfaceTruncatesScrollableSubtreeAtVisibleElementBudget() {

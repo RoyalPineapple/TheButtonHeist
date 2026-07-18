@@ -2,11 +2,37 @@ import Foundation
 
 /// One-second fixed-window rate limiter for a single client message stream.
 /// It owns both the recent-message window and the once-per-window notification state.
-struct MessageRateLimiter: Equatable, Sendable {
+extension ClientAdmission {
+private enum RateLimitState: Equatable, Sendable {
+    case accepting(timestamps: [Date])
+    case limitedUnnotified(timestamps: [Date])
+    case limitedNotified(timestamps: [Date])
+
+    var timestamps: [Date] {
+        switch self {
+        case .accepting(let timestamps),
+             .limitedUnnotified(let timestamps),
+             .limitedNotified(let timestamps):
+            return timestamps
+        }
+    }
+
+    func limited(with timestamps: [Date]) -> Self {
+        switch self {
+        case .limitedNotified:
+            return .limitedNotified(timestamps: timestamps)
+        case .accepting,
+             .limitedUnnotified:
+            return .limitedUnnotified(timestamps: timestamps)
+        }
+    }
+}
+
+struct RateLimiter: Equatable, Sendable {
     static let defaultMaxMessagesPerSecond = 30
 
     let maxMessagesPerSecond: Int
-    private var state: State
+    private var state: RateLimitState
 
     init(maxMessagesPerSecond: Int = Self.defaultMaxMessagesPerSecond) {
         self.maxMessagesPerSecond = maxMessagesPerSecond
@@ -39,28 +65,5 @@ struct MessageRateLimiter: Equatable, Sendable {
         }
     }
 
-    private enum State: Equatable, Sendable {
-        case accepting(timestamps: [Date])
-        case limitedUnnotified(timestamps: [Date])
-        case limitedNotified(timestamps: [Date])
-
-        var timestamps: [Date] {
-            switch self {
-            case .accepting(let timestamps),
-                 .limitedUnnotified(let timestamps),
-                 .limitedNotified(let timestamps):
-                return timestamps
-            }
-        }
-
-        func limited(with timestamps: [Date]) -> Self {
-            switch self {
-            case .limitedNotified:
-                return .limitedNotified(timestamps: timestamps)
-            case .accepting,
-                 .limitedUnnotified:
-                return .limitedUnnotified(timestamps: timestamps)
-            }
-        }
-    }
+}
 }

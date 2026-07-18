@@ -6,36 +6,43 @@ import ThePlans
 import TheScore
 
 extension TheBrains {
-    private struct ForEachLoopOutcome {
-        let totalCount: Int
-        let termination: ForEachLoopTermination
-        let iterationNodes: [HeistExecutionStepResult]
+    private enum ForEachLoopOutcome {
+        case completed(totalCount: Int, iterations: HeistPassingChildren)
+        case childFailed(totalCount: Int, failure: ForEachLoopChildFailure, iterations: HeistAbortedChildren)
+        case postObservationUnavailable(
+            totalCount: Int,
+            iterationIndex: Int,
+            iterations: HeistPassingChildren
+        )
+
+        var totalCount: Int {
+            switch self {
+            case .completed(let totalCount, _),
+                 .childFailed(let totalCount, _, _),
+                 .postObservationUnavailable(let totalCount, _, _):
+                totalCount
+            }
+        }
 
         var iterationCount: Int {
-            iterationNodes.count
+            switch self {
+            case .completed(_, let iterations), .postObservationUnavailable(_, _, let iterations):
+                iterations.values.count
+            case .childFailed(_, _, let iterations):
+                iterations.values.count
+            }
         }
-
-        var failureReason: String? {
-            termination.failureReason
-        }
-    }
-
-    private enum ForEachLoopTermination {
-        case completed
-        case childFailed(ForEachLoopChildFailure)
-        case postObservationUnavailable(iterationIndex: Int)
 
         var failureReason: String? {
             switch self {
             case .completed:
-                return nil
-            case .childFailed(let failure):
-                return failure.reason
-            case .postObservationUnavailable(let iterationIndex):
-                return "iteration \(iterationIndex) post-observation unavailable"
+                nil
+            case .childFailed(_, let failure, _):
+                failure.reason
+            case .postObservationUnavailable(_, let iterationIndex, _):
+                "iteration \(iterationIndex) post-observation unavailable"
             }
         }
-
     }
 
     private struct ForEachLoopContext {
@@ -62,7 +69,7 @@ extension TheBrains {
 
     private enum ForEachLoopNext<Item> {
         case item(Item)
-        case terminated(ForEachLoopTermination)
+        case postObservationUnavailable(iterationIndex: Int)
     }
 
     private enum ForEachLoopItemIdentity {
@@ -115,15 +122,13 @@ extension TheBrains {
                 index: index,
                 path: path,
                 start: start,
-                parameter: step.parameter,
-                matching: step.matching,
-                limit: step.limit
+                step: step
             )
         }
 
         let matchSignature = ForEachMatchSignature(
             matching: resolvedMatching,
-            elements: observation.state.interface.projectedElements
+            elements: observation.baseline.interface.projectedElements
         )
         let matchedCount = matchSignature.count
         if matchedCount > step.limit {
@@ -131,10 +136,8 @@ extension TheBrains {
                 index: index,
                 path: path,
                 start: start,
-                parameter: step.parameter,
-                matching: step.matching,
                 matchedCount: matchedCount,
-                limit: step.limit
+                step: step
             )
         }
 
@@ -158,12 +161,12 @@ extension TheBrains {
                         observedSequence,
                         nil
                     ) else {
-                        return .terminated(.postObservationUnavailable(iterationIndex: iterationIndex - 1))
+                        return .postObservationUnavailable(iterationIndex: iterationIndex - 1)
                     }
                     observedSequence = afterObservation.event.sequence
                     let nextSignature = ForEachMatchSignature(
                         matching: resolvedMatching,
-                        elements: afterObservation.state.interface.projectedElements
+                        elements: afterObservation.baseline.interface.projectedElements
                     )
                     if nextSignature == currentSignature {
                         nextOrdinal += 1
@@ -212,22 +215,22 @@ extension TheBrains {
             Int,
             HeistExecutionPath,
             CFAbsoluteTime,
-            [HeistExecutionStepResult]
+            HeistExecutedChildren
         ) -> HeistExecutionStepResult
     ) async -> ForEachLoopOutcome {
-        var iterationNodes: [HeistExecutionStepResult] = []
+        var iterationNodes = HeistPassingChildren.empty
 
-        while iterationNodes.count < context.totalCount {
-            let iterationIndex = iterationNodes.count
+        while iterationNodes.values.count < context.totalCount {
+            let iterationIndex = iterationNodes.values.count
             let item: Item
             switch await nextItem(iterationIndex) {
             case .item(let nextItem):
                 item = nextItem
-            case .terminated(let termination):
-                return ForEachLoopOutcome(
+            case .postObservationUnavailable(let failedIterationIndex):
+                return .postObservationUnavailable(
                     totalCount: context.totalCount,
-                    termination: termination,
-                    iterationNodes: iterationNodes
+                    iterationIndex: failedIterationIndex,
+                    iterations: iterationNodes
                 )
             }
             let iterationStart = CFAbsoluteTimeGetCurrent()
@@ -240,32 +243,30 @@ extension TheBrains {
                 path: iterationPath.iterationBody()
             )
 
-            iterationNodes.append(iterationReceipt(
+            let iterationNode = iterationReceipt(
                 item,
                 iterationIndex,
                 iterationPath,
                 iterationStart,
                 iterationResults
-            ))
-
-            if let abortedAtChildPath = iterationResults.firstFailedStep?.path {
-                return ForEachLoopOutcome(
+            )
+            switch iterationNodes.appending(iterationNode) {
+            case .passed(let passingIterations):
+                iterationNodes = passingIterations
+            case .aborted(let abortedIterations):
+                return .childFailed(
                     totalCount: context.totalCount,
-                    termination: .childFailed(ForEachLoopChildFailure(
+                    failure: ForEachLoopChildFailure(
                         iterationIndex: iterationIndex,
                         identity: identity(item),
-                        childPath: abortedAtChildPath
-                    )),
-                    iterationNodes: iterationNodes
+                        childPath: abortedIterations.abortedAtPath
+                    ),
+                    iterations: abortedIterations
                 )
             }
         }
 
-        return ForEachLoopOutcome(
-            totalCount: context.totalCount,
-            termination: .completed,
-            iterationNodes: iterationNodes
-        )
+        return .completed(totalCount: context.totalCount, iterations: iterationNodes)
     }
 
     private func forEachElementIterationResult(
@@ -275,44 +276,31 @@ extension TheBrains {
         matchedCount: Int,
         iterationIndex: Int,
         item: ForEachElementItem,
-        children: [HeistExecutionStepResult]
+        children: HeistExecutedChildren
     ) -> HeistExecutionStepResult {
         let durationMs = elapsedMilliseconds(since: start)
-        let evidence = HeistForEachElementEvidence(
+        let failureReason = children.abortedAtPath.map { "child failed at \($0)" }
+        let evidence = HeistForEachElementEvidence.executedIteration(
             matchedCount: matchedCount,
             iterationCount: iterationIndex + 1,
             iterationOrdinal: iterationIndex,
             targetOrdinal: item.ordinal,
             targetSummary: item.target.description,
-            failureReason: children.firstFailedStep.map { "child failed at \($0.path)" }
+            failureReason: failureReason
         )
-        let termination = children.firstFailedStep.map {
-            ForEachLoopTermination.childFailed(.init(
-                iterationIndex: iterationIndex,
-                identity: .element(item.target),
-                childPath: $0.path
-            ))
-        } ?? .completed
-        let admittedEvidence = requireAdmitted(
-            evidence,
-            "for_each_element iteration evidence must preserve the matched target summary"
-        )
-        let completion = forEachCompletion(
-            evidence: admittedEvidence,
-            termination: termination,
+        let completion = forEachIterationCompletion(
+            evidence: evidence,
             children: children,
-            admitPassed: HeistPassedForEachElementEvidence.init,
-            admitFailed: HeistFailedForEachElementEvidence.init,
+            admitPassed: { HeistPassedForEachElementEvidence(admitted: $0) },
+            admitFailed: { HeistFailedForEachElementEvidence(admitted: $0) },
+            failureReason: failureReason,
             failure: forEachIterationFailure
         )
-        return requireAdmitted(
-            HeistExecutionStepResult.forEachElementIteration(
-                path: path,
-                durationMs: durationMs,
-                declaration: HeistForEachElementDeclaration(step),
-                completion: completion
-            ),
-            "for_each_element iteration receipt must match its declaration"
+        return .forEachElementIteration(
+            path: path,
+            durationMs: durationMs,
+            declaration: HeistForEachElementDeclaration(step),
+            completion: completion
         )
     }
 
@@ -323,34 +311,26 @@ extension TheBrains {
         outcome: ForEachLoopOutcome
     ) -> HeistExecutionStepResult {
         let durationMs = elapsedMilliseconds(since: start)
-        let evidence = HeistForEachElementEvidence(
+        let evidence = HeistForEachElementEvidence.executedSummary(
             matchedCount: outcome.totalCount,
             iterationCount: outcome.iterationCount,
             failureReason: outcome.failureReason
         )
-        let admittedEvidence = requireAdmitted(
-            evidence,
-            "for_each_element summary evidence must preserve matched-count and iteration-count invariants"
-        )
         let completion = forEachCompletion(
-            evidence: admittedEvidence,
-            termination: outcome.termination,
-            children: outcome.iterationNodes,
-            admitPassed: HeistPassedForEachElementEvidence.init,
-            admitFailed: HeistFailedForEachElementEvidence.init,
+            evidence: evidence,
+            outcome: outcome,
+            admitPassed: { HeistPassedForEachElementEvidence(admitted: $0) },
+            admitFailed: { HeistFailedForEachElementEvidence(admitted: $0) },
             failure: loopFailure(
                 contract: "for_each_element completes all matched iterations",
                 expected: "\(outcome.totalCount) iteration(s)"
             )
         )
-        return requireAdmitted(
-            HeistExecutionStepResult.forEachElement(
-                path: path,
-                durationMs: durationMs,
-                declaration: HeistForEachElementDeclaration(step),
-                completion: completion
-            ),
-            "for_each_element receipt must match its declaration"
+        return .forEachElement(
+            path: path,
+            durationMs: durationMs,
+            declaration: HeistForEachElementDeclaration(step),
+            completion: completion
         )
     }
 
@@ -403,42 +383,29 @@ extension TheBrains {
         step: ForEachStringStep,
         iterationIndex: Int,
         value: String,
-        children: [HeistExecutionStepResult]
+        children: HeistExecutedChildren
     ) -> HeistExecutionStepResult {
         let durationMs = elapsedMilliseconds(since: start)
-        let evidence = HeistForEachStringEvidence(
+        let failureReason = children.abortedAtPath.map { "child failed at \($0)" }
+        let evidence = HeistForEachStringEvidence.executedIteration(
             iterationCount: iterationIndex + 1,
             iterationOrdinal: iterationIndex,
             value: value,
-            failureReason: children.firstFailedStep.map { "child failed at \($0.path)" }
+            failureReason: failureReason
         )
-        let termination = children.firstFailedStep.map {
-            ForEachLoopTermination.childFailed(.init(
-                iterationIndex: iterationIndex,
-                identity: .string(value),
-                childPath: $0.path
-            ))
-        } ?? .completed
-        let admittedEvidence = requireAdmitted(
-            evidence,
-            "for_each_string iteration evidence must preserve the iteration ordinal"
-        )
-        let completion = forEachCompletion(
-            evidence: admittedEvidence,
-            termination: termination,
+        let completion = forEachIterationCompletion(
+            evidence: evidence,
             children: children,
-            admitPassed: HeistPassedForEachStringEvidence.init,
-            admitFailed: HeistFailedForEachStringEvidence.init,
+            admitPassed: { HeistPassedForEachStringEvidence(admitted: $0) },
+            admitFailed: { HeistFailedForEachStringEvidence(admitted: $0) },
+            failureReason: failureReason,
             failure: forEachIterationFailure
         )
-        return requireAdmitted(
-            HeistExecutionStepResult.forEachStringIteration(
-                path: path,
-                durationMs: durationMs,
-                declaration: HeistForEachStringDeclaration(step),
-                completion: completion
-            ),
-            "for_each_string iteration receipt must match its declaration"
+        return .forEachStringIteration(
+            path: path,
+            durationMs: durationMs,
+            declaration: HeistForEachStringDeclaration(step),
+            completion: completion
         )
     }
 
@@ -449,84 +416,75 @@ extension TheBrains {
         outcome: ForEachLoopOutcome
     ) -> HeistExecutionStepResult {
         let durationMs = elapsedMilliseconds(since: start)
-        let evidence = HeistForEachStringEvidence(
+        let evidence = HeistForEachStringEvidence.executedSummary(
             iterationCount: outcome.iterationCount,
             failureReason: outcome.failureReason
         )
-        let admittedEvidence = requireAdmitted(
-            evidence,
-            "for_each_string summary evidence must preserve the iteration count"
-        )
         let completion = forEachCompletion(
-            evidence: admittedEvidence,
-            termination: outcome.termination,
-            children: outcome.iterationNodes,
-            admitPassed: HeistPassedForEachStringEvidence.init,
-            admitFailed: HeistFailedForEachStringEvidence.init,
+            evidence: evidence,
+            outcome: outcome,
+            admitPassed: { HeistPassedForEachStringEvidence(admitted: $0) },
+            admitFailed: { HeistFailedForEachStringEvidence(admitted: $0) },
             failure: loopFailure(
                 contract: "for_each_string completes all values",
                 expected: "\(outcome.totalCount) value(s)"
             )
         )
-        return requireAdmitted(
-            HeistExecutionStepResult.forEachString(
-                path: path,
-                durationMs: durationMs,
-                declaration: HeistForEachStringDeclaration(step),
-                completion: completion
-            ),
-            "for_each_string receipt must match its declaration"
+        return .forEachString(
+            path: path,
+            durationMs: durationMs,
+            declaration: HeistForEachStringDeclaration(step),
+            completion: completion
         )
+    }
+
+    private func forEachIterationCompletion<Evidence, Passed, Failed>(
+        evidence: Evidence,
+        children: HeistExecutedChildren,
+        admitPassed: (Evidence) -> Passed,
+        admitFailed: (Evidence) -> Failed,
+        failureReason: String?,
+        failure: (_ observed: String, _ childPath: HeistExecutionPath?) -> HeistFailureDetail
+    ) -> HeistExecutionCompletion<Passed, HeistEvidenceAvailability<Failed>, Failed>
+    where Passed: Sendable & Equatable, Failed: Codable & Sendable & Equatable {
+        switch children {
+        case .passed(let children):
+            return .passed(evidence: admitPassed(evidence), children: children)
+        case .aborted(let children):
+            return .childAborted(
+                evidence: admitFailed(evidence),
+                failure: failure(
+                    failureReason ?? "child failed at \(children.abortedAtPath)",
+                    children.abortedAtPath
+                ),
+                children: children
+            )
+        }
     }
 
     private func forEachCompletion<Evidence, Passed, Failed>(
         evidence: Evidence,
-        termination: ForEachLoopTermination,
-        children: [HeistExecutionStepResult],
-        admitPassed: (Evidence) -> Passed?,
-        admitFailed: (Evidence) -> Failed?,
+        outcome: ForEachLoopOutcome,
+        admitPassed: (Evidence) -> Passed,
+        admitFailed: (Evidence) -> Failed,
         failure: (_ observed: String, _ childPath: HeistExecutionPath?) -> HeistFailureDetail
     ) -> HeistExecutionCompletion<Passed, HeistEvidenceAvailability<Failed>, Failed>
     where Passed: Sendable & Equatable, Failed: Codable & Sendable & Equatable {
-        switch termination {
-        case .completed:
-            let admittedEvidence = requireAdmitted(
-                admitPassed(evidence),
-                "completed for_each receipt must admit passing evidence"
-            )
-            let admittedChildren = requirePassingChildren(
-                children,
-                "completed for_each receipt must not contain a failed child"
-            )
-            return .passed(evidence: admittedEvidence, children: admittedChildren)
-        case .childFailed(let childFailure):
-            let admittedEvidence = requireAdmitted(
-                admitFailed(evidence),
-                "child-aborted for_each receipt must admit failed evidence"
-            )
-            let admittedChildren = requireAbortedChildren(
-                children,
-                "child-aborted for_each receipt must preserve the aborted child path"
-            )
+        switch outcome {
+        case .completed(_, let children):
+            return .passed(evidence: admitPassed(evidence), children: children)
+        case .childFailed(_, let childFailure, let children):
             return .childAborted(
-                evidence: admittedEvidence,
+                evidence: admitFailed(evidence),
                 failure: failure(childFailure.reason, childFailure.childPath),
-                children: admittedChildren
+                children: children
             )
-        case .postObservationUnavailable(let iterationIndex):
+        case .postObservationUnavailable(_, let iterationIndex, let children):
             let observed = "iteration \(iterationIndex) post-observation unavailable"
-            let admittedEvidence = requireAdmitted(
-                admitFailed(evidence),
-                "post-observation-unavailable for_each receipt must admit failed evidence"
-            )
-            let admittedChildren = requirePassingChildren(
-                children,
-                "post-observation-unavailable for_each receipt must not contain a failed child"
-            )
             return .failed(
-                evidence: .observed(admittedEvidence),
+                evidence: .observed(admitFailed(evidence)),
                 failure: failure(observed, nil),
-                children: admittedChildren
+                children: children
             )
         }
     }
@@ -561,40 +519,24 @@ extension TheBrains {
         index _: Int,
         path: HeistExecutionPath,
         start: CFAbsoluteTime,
-        parameter: HeistReferenceName,
-        matching: ElementPredicateTemplate,
-        limit: Int
+        step: ForEachElementStep
     ) -> HeistExecutionStepResult {
         let observed = "could not observe settled semantic hierarchy before evaluating for_each_element"
         let durationMs = elapsedMilliseconds(since: start)
-        let admittedEvidence = requireAdmitted(
-            HeistForEachElementEvidence(
-                matchedCount: 0,
-                iterationCount: 0,
-                failureReason: observed
-            ).flatMap(HeistFailedForEachElementEvidence.init),
-            "for_each_element unavailable receipt must admit failed evidence"
-        )
-        let declaration = requireAdmitted(
-            HeistForEachElementDeclaration(
-                parameter: parameter,
-                matching: matching,
-                limit: limit
-            ),
-            "for_each_element unavailable receipt requires a positive declaration limit"
-        )
-        return requireAdmitted(
-            HeistExecutionStepResult.forEachElement(
-                path: path,
-                durationMs: durationMs,
-                declaration: declaration,
-                completion: .failed(evidence: .observed(admittedEvidence), failure: HeistFailureDetail(
-                    category: .runtimeUnavailable,
-                    contract: "settled semantic hierarchy is observable before for_each_element matching",
-                    observed: observed
-                ))
-            ),
-            "for_each_element unavailable receipt must match its declaration"
+        let evidence = HeistFailedForEachElementEvidence(admitted: .executedSummary(
+            matchedCount: 0,
+            iterationCount: 0,
+            failureReason: observed
+        ))
+        return .forEachElement(
+            path: path,
+            durationMs: durationMs,
+            declaration: HeistForEachElementDeclaration(step),
+            completion: .failed(evidence: .observed(evidence), failure: HeistFailureDetail(
+                category: .runtimeUnavailable,
+                contract: "settled semantic hierarchy is observable before for_each_element matching",
+                observed: observed
+            ))
         )
     }
 
@@ -606,27 +548,21 @@ extension TheBrains {
     ) -> HeistExecutionStepResult {
         let observed = "could not resolve for_each_element matcher: \(error)"
         let durationMs = elapsedMilliseconds(since: start)
-        let admittedEvidence = requireAdmitted(
-            HeistForEachElementEvidence(
-                matchedCount: 0,
-                iterationCount: 0,
-                failureReason: observed
-            ).flatMap(HeistFailedForEachElementEvidence.init),
-            "for_each_element resolution failure receipt must admit failed evidence"
-        )
-        return requireAdmitted(
-            HeistExecutionStepResult.forEachElement(
-                path: path,
-                durationMs: durationMs,
-                declaration: HeistForEachElementDeclaration(step),
-                completion: .failed(evidence: .observed(admittedEvidence), failure: HeistFailureDetail(
-                    category: .targetResolution,
-                    contract: "for_each_element matcher resolves before evaluation",
-                    observed: observed,
-                    expected: step.matching.description
-                ))
-            ),
-            "for_each_element resolution failure receipt must match its declaration"
+        let evidence = HeistFailedForEachElementEvidence(admitted: .executedSummary(
+            matchedCount: 0,
+            iterationCount: 0,
+            failureReason: observed
+        ))
+        return .forEachElement(
+            path: path,
+            durationMs: durationMs,
+            declaration: HeistForEachElementDeclaration(step),
+            completion: .failed(evidence: .observed(evidence), failure: HeistFailureDetail(
+                category: .targetResolution,
+                contract: "for_each_element matcher resolves before evaluation",
+                observed: observed,
+                expected: step.matching.description
+            ))
         )
     }
 
@@ -634,42 +570,26 @@ extension TheBrains {
         index _: Int,
         path: HeistExecutionPath,
         start: CFAbsoluteTime,
-        parameter: HeistReferenceName,
-        matching: ElementPredicateTemplate,
         matchedCount: Int,
-        limit: Int
+        step: ForEachElementStep
     ) -> HeistExecutionStepResult {
-        let observed = "matched \(matchedCount) element(s), exceeding for_each_element limit \(limit)"
+        let observed = "matched \(matchedCount) element(s), exceeding for_each_element limit \(step.limit)"
         let durationMs = elapsedMilliseconds(since: start)
-        let admittedEvidence = requireAdmitted(
-            HeistForEachElementEvidence(
-                matchedCount: matchedCount,
-                iterationCount: 0,
-                failureReason: observed
-            ).flatMap(HeistFailedForEachElementEvidence.init),
-            "for_each_element limit failure receipt must admit failed evidence"
-        )
-        let declaration = requireAdmitted(
-            HeistForEachElementDeclaration(
-                parameter: parameter,
-                matching: matching,
-                limit: limit
-            ),
-            "for_each_element limit failure receipt requires a positive declaration limit"
-        )
-        return requireAdmitted(
-            HeistExecutionStepResult.forEachElement(
-                path: path,
-                durationMs: durationMs,
-                declaration: declaration,
-                completion: .failed(evidence: .observed(admittedEvidence), failure: HeistFailureDetail(
-                    category: .loop,
-                    contract: "for_each_element matched count does not exceed limit",
-                    observed: observed,
-                    expected: "at most \(limit) element(s)"
-                ))
-            ),
-            "for_each_element limit failure receipt must match its declaration"
+        let evidence = HeistFailedForEachElementEvidence(admitted: .executedSummary(
+            matchedCount: matchedCount,
+            iterationCount: 0,
+            failureReason: observed
+        ))
+        return .forEachElement(
+            path: path,
+            durationMs: durationMs,
+            declaration: HeistForEachElementDeclaration(step),
+            completion: .failed(evidence: .observed(evidence), failure: HeistFailureDetail(
+                category: .loop,
+                contract: "for_each_element matched count does not exceed limit",
+                observed: observed,
+                expected: "at most \(step.limit) element(s)"
+            ))
         )
     }
 }

@@ -18,8 +18,8 @@ enum ActivationRefreshResult {
 
 struct ActivationPolicy<PreparedDispatch: Sendable> {
     var accessibilityActivate: @MainActor (
-        TheStash.LiveActionTarget
-    ) -> Result<ActivationDispatchEvidence, TheStash.LiveTargetStaleness<HeistId>>
+        TheVault.LiveActionTarget
+    ) -> Result<ActivationDispatchEvidence, TheVault.LiveTargetStaleness<HeistId>>
     var refreshAndResolve: @MainActor () async -> ActivationRefreshResult
     var prepareActivationPointDispatch: @MainActor (CGPoint) -> PreparedDispatch?
     var completeActivationPointDispatch: @MainActor (PreparedDispatch) async -> Bool
@@ -27,7 +27,7 @@ struct ActivationPolicy<PreparedDispatch: Sendable> {
     var textEntryActivationFailure: @MainActor (InterfaceTree.Element, ActivationTrace) async -> TheSafecracker.ActionDispatchOutcome?
 
     @MainActor
-    func apply(to _: TheStash.LiveActionTarget) async -> TheSafecracker.ActionDispatchOutcome {
+    func apply(to _: TheVault.LiveActionTarget) async -> TheSafecracker.ActionDispatchOutcome {
         let refreshedTarget: ElementInflation.InflatedElementTarget
         switch await refreshAndResolve() {
         case .resolved(let target):
@@ -66,6 +66,16 @@ struct ActivationPolicy<PreparedDispatch: Sendable> {
             )
         }
 
+        guard let activationX = try? FiniteCoordinate(validating: Double(activationPoint.x)),
+              let activationY = try? FiniteCoordinate(validating: Double(activationPoint.y)) else {
+            return .failure(
+                .activate,
+                message: "activate failed: the refreshed accessibility activation point was not finite",
+                subjectEvidence: subjectEvidence
+            )
+        }
+        let admittedActivationPoint = ScreenPoint(x: activationX, y: activationY)
+
         let preparedDispatch = prepareActivationPointDispatch(activationPoint)
         let tapActivationSucceeded = if let preparedDispatch {
             await completeActivationPointDispatch(preparedDispatch)
@@ -74,7 +84,7 @@ struct ActivationPolicy<PreparedDispatch: Sendable> {
         }
         let trace = ActivationTrace(.activationPointFallback(
             axActivateReturned: activateOutcome.axActivateReturned,
-            tapActivationPoint: ScreenPoint(x: Double(activationPoint.x), y: Double(activationPoint.y)),
+            tapActivationPoint: admittedActivationPoint,
             tapActivationSucceeded: tapActivationSucceeded
         ))
         if tapActivationSucceeded {

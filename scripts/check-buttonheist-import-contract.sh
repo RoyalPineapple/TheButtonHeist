@@ -37,7 +37,6 @@ EXPORTED_IMPORTS="$(grep -R -nE '^[[:space:]]*@_exported[[:space:]]+import[[:spa
 EXPECTED_EXPORTED_IMPORTS="$(cat <<EOF
 ButtonHeist/Sources/ButtonHeistTesting/ButtonHeistTesting.swift:ThePlans
 ButtonHeist/Sources/TheButtonHeist/Exports.swift:ThePlans
-ButtonHeist/Sources/TheButtonHeist/Exports.swift:TheScore
 ButtonHeist/Sources/TheInsideJob/Heist.swift:TheScore
 EOF
 )"
@@ -137,6 +136,7 @@ NEGATIVE_BUTTONHEIST_PROBE_DIR="$SCRATCH_PATH/buttonheist-negative-import-probes
 mkdir -p \
     "$NEGATIVE_THEPLANS_PROBE_DIR/Sources/ThePlansNegativeTheScoreImportProbe" \
     "$NEGATIVE_BUTTONHEIST_PROBE_DIR/Sources/ButtonHeistNegativeTheInsideJobImportProbe" \
+    "$NEGATIVE_BUTTONHEIST_PROBE_DIR/Sources/ButtonHeistNegativeTheScoreSymbolProbe" \
     "$NEGATIVE_BUTTONHEIST_PROBE_DIR/Sources/ButtonHeistNegativeTestingImportProbe"
 cat > "$NEGATIVE_THEPLANS_PROBE_DIR/Package.swift" <<EOF
 // swift-tools-version: 6.0
@@ -183,6 +183,13 @@ let package = Package(
                 .product(name: "ButtonHeist", package: "ButtonHeist")
             ],
             swiftSettings: [.swiftLanguageMode(.v6)]
+        ),
+        .executableTarget(
+            name: "ButtonHeistNegativeTheScoreSymbolProbe",
+            dependencies: [
+                .product(name: "ButtonHeist", package: "ButtonHeist")
+            ],
+            swiftSettings: [.swiftLanguageMode(.v6)]
         )
     ]
 )
@@ -196,6 +203,12 @@ cat > "$NEGATIVE_BUTTONHEIST_PROBE_DIR/Sources/ButtonHeistNegativeTestingImportP
 import ButtonHeistTesting
 
 print("ButtonHeistTesting must not be importable through ButtonHeist")
+EOF
+cat > "$NEGATIVE_BUTTONHEIST_PROBE_DIR/Sources/ButtonHeistNegativeTheScoreSymbolProbe/main.swift" <<'EOF'
+import ButtonHeist
+
+let value: HeistValue? = nil
+print(value as Any)
 EOF
 cat > "$NEGATIVE_THEPLANS_PROBE_DIR/Sources/ThePlansNegativeTheScoreImportProbe/main.swift" <<'EOF'
 import TheScore
@@ -223,6 +236,11 @@ negative_probe \
     "$NEGATIVE_BUTTONHEIST_PROBE_DIR" \
     "ButtonHeistNegativeTestingImportProbe" \
     "ButtonHeist exposed disallowed import ButtonHeistTesting"
+negative_probe \
+    "negative ButtonHeist -> TheScore symbol probe" \
+    "$NEGATIVE_BUTTONHEIST_PROBE_DIR" \
+    "ButtonHeistNegativeTheScoreSymbolProbe" \
+    "ButtonHeist re-exported TheScore symbols"
 negative_probe \
     "negative ThePlans -> TheScore import probe" \
     "$NEGATIVE_THEPLANS_PROBE_DIR" \

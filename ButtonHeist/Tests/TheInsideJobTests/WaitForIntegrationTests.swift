@@ -1,7 +1,7 @@
 #if canImport(UIKit)
 // Integration tests for performWaitFor — the settle-event polling loop that waits
 // for an element to appear or disappear. Requires the BH Demo test host
-// since wait_for polls the semantic accessibility tree via TheStash.
+// since wait_for polls the semantic accessibility tree via TheVault.
 import ButtonHeistSupport
 import XCTest
 import ThePlans
@@ -126,7 +126,7 @@ final class WaitForIntegrationTests: XCTestCase {
 
     private func mutateVisibleHierarchy(_ body: () -> Void) {
         body()
-        insideJob.brains.stash.invalidateSettledObservationFromTripwire()
+        insideJob.brains.vault.invalidateSettledObservationFromTripwire()
     }
 
     // MARK: - Passive Observation
@@ -153,7 +153,7 @@ final class WaitForIntegrationTests: XCTestCase {
         let scan = insideJob.tripwire.scanLayers()
         XCTAssertTrue(scan.hasRelevantAnimations, "Regression setup must keep an unrelated CALayer animation active")
 
-        insideJob.brains.stash.invalidateSettledObservationFromTripwire()
+        insideJob.brains.vault.invalidateSettledObservationFromTripwire()
         let observation = await insideJob.brains.interactionObservation.observeSemanticState(
             scope: .visible,
             after: nil,
@@ -162,10 +162,10 @@ final class WaitForIntegrationTests: XCTestCase {
 
         let event = try XCTUnwrap(observation?.event)
         XCTAssertTrue(
-            event.observation.screen.tree.orderedElements.contains { $0.element.label == "PassiveObservation-StableAX" },
+            event.settledObservation.observation.tree.orderedElements.contains { $0.element.label == "PassiveObservation-StableAX" },
             "Passive visible observation should publish a stable AX tree even while unrelated layer motion continues"
         )
-        XCTAssertNil(insideJob.brains.stash.latestSemanticObservationFailureDiagnostic())
+        XCTAssertNil(insideJob.brains.vault.semanticObservationStream.latestSettleFailureDiagnostic)
     }
 
     // MARK: - 1. Element already present — returns immediately
@@ -334,9 +334,9 @@ final class WaitForIntegrationTests: XCTestCase {
             elements: [(visibleElement, "wait_for_offscreen_anchor_staticText")],
             offViewport: [.init(offViewportElement, heistId: offViewportHeistId)]
         )
-        insideJob.brains.stash.installScreenForTesting(screen)
+        insideJob.brains.vault.installObservationForTesting(screen)
         XCTAssertTrue(insideJob.brains.semanticObservationIsActive)
-        XCTAssertNotNil(insideJob.brains.stash.interfaceTree.findElement(heistId: offViewportHeistId))
+        XCTAssertNotNil(insideJob.brains.vault.interfaceTree.findElement(heistId: offViewportHeistId))
 
         let response = try await waitFor(
             target: .label("WaitFor-Offscreen-StillHere"),
@@ -418,7 +418,7 @@ final class WaitForIntegrationTests: XCTestCase {
         }
         await fulfillment(of: [readyToPoll], timeout: 5.0)
         delayedLabel = addLabel("WaitForChange-Delayed")
-        insideJob.brains.stash.invalidateSettledObservationFromTripwire()
+        insideJob.brains.vault.invalidateSettledObservationFromTripwire()
         let result = await waitTask.value
 
         XCTAssertTrue(result.outcome.isSuccess)
@@ -431,7 +431,7 @@ final class WaitForIntegrationTests: XCTestCase {
         let didObserveBaseline = await waitForSettledVisibleObservation()
         XCTAssertTrue(didObserveBaseline)
         XCTAssertTrue(
-            insideJob.brains.stash.interfaceTree.orderedElements.contains {
+            insideJob.brains.vault.interfaceTree.orderedElements.contains {
                 $0.element.label == "WaitForChange-Removed"
             },
             "Baseline must contain the element before waiting for absence"
@@ -500,7 +500,7 @@ final class WaitForIntegrationTests: XCTestCase {
     }
 
     func testWaitForChangeVisibleUpdatePreservesKnownOffViewportMemory() async throws {
-        insideJob.brains.stash.stopPassiveSemanticObservation()
+        insideJob.brains.vault.semanticObservationStream.stop()
 
         let visibleBefore = AccessibilityElement.make(
             label: "WaitForChange-KnownMemory-Anchor",
@@ -524,8 +524,8 @@ final class WaitForIntegrationTests: XCTestCase {
             respondsToUserInteraction: false
         )
         let offViewportHeistId: HeistId = "wait_change_known_offviewport_button"
-        XCTAssertEqual(TheStash.IdAssignment.assign([visibleBefore]), [visibleHeistId])
-        XCTAssertEqual(TheStash.IdAssignment.assign([visibleAfter]), [visibleHeistId])
+        XCTAssertEqual(TheVault.IdAssignment.assign([visibleBefore]), [visibleHeistId])
+        XCTAssertEqual(TheVault.IdAssignment.assign([visibleAfter]), [visibleHeistId])
         XCTAssertNil(
             offViewportElement.identifier,
             "The pure-value off-viewport fixture deliberately keeps its synthetic known identity"
@@ -534,12 +534,12 @@ final class WaitForIntegrationTests: XCTestCase {
             elements: [(visibleBefore, visibleHeistId)],
             offViewport: [.init(offViewportElement, heistId: offViewportHeistId)]
         )
-        let stream = insideJob.brains.stash.semanticObservationStream
-        let notificationCursor = insideJob.brains.stash.accessibilityNotifications.cursor()
+        let stream = insideJob.brains.vault.semanticObservationStream
+        let notificationCursor = insideJob.brains.vault.accessibilityNotifications.cursor()
         let notificationBatch = AccessibilityNotificationBatch(
             events: [],
             through: notificationCursor,
-            scopedScreenChangedThrough: insideJob.brains.stash.accessibilityNotifications
+            scopedScreenChangedThrough: insideJob.brains.vault.accessibilityNotifications
                 .latestScopedScreenChangedSequence,
             gap: nil
         )
@@ -548,7 +548,7 @@ final class WaitForIntegrationTests: XCTestCase {
             notificationBatch: notificationBatch
         )
         let baselineCapture = try XCTUnwrap(baselineEvent.settledCapture)
-        XCTAssertNotNil(insideJob.brains.stash.interfaceTree.findElement(heistId: offViewportHeistId))
+        XCTAssertNotNil(insideJob.brains.vault.interfaceTree.findElement(heistId: offViewportHeistId))
 
         let updatedVisible = InterfaceObservation.makeForTests(elements: [(visibleAfter, visibleHeistId)])
         stream.commitVisibleObservationForTesting(
@@ -564,7 +564,7 @@ final class WaitForIntegrationTests: XCTestCase {
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "changed wait did not observe visible update")
         XCTAssertNotNil(
-            insideJob.brains.stash.interfaceTree.findElement(heistId: offViewportHeistId),
+            insideJob.brains.vault.interfaceTree.findElement(heistId: offViewportHeistId),
             "changed wait must refresh visible evidence without deleting explored off-viewport semantic memory"
         )
     }

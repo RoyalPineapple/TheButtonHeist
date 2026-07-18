@@ -33,7 +33,7 @@ final class InteractivityTests: XCTestCase {
 
     func testRespondsToUserInteractionIsInteractive() {
         let element = makeElement(respondsToUserInteraction: true)
-        XCTAssertTrue(TheStash.Interactivity.isInteractive(element: element))
+        XCTAssertTrue(TheVault.Interactivity.isInteractive(element: element))
     }
 
     func testActivationBlockIsInteractiveWithoutTraits() throws {
@@ -47,78 +47,78 @@ final class InteractivityTests: XCTestCase {
         object.accessibilityActivateBlock = { true }
         let element = makeElement(label: "Plain")
 
-        XCTAssertTrue(TheStash.Interactivity.isInteractive(element: element, object: object))
+        XCTAssertTrue(TheVault.Interactivity.isInteractive(element: element, object: object))
     }
 
     func testAccessibilityActivateOverrideIsInteractiveWithoutTraits() {
         let element = makeElement(label: "Plain")
         let object = ActivationOverrideView()
 
-        XCTAssertTrue(TheStash.Interactivity.isInteractive(element: element, object: object))
+        XCTAssertTrue(TheVault.Interactivity.isInteractive(element: element, object: object))
     }
 
     func testPlainObjectWithoutActivationSignalIsNotInteractive() {
         let element = makeElement(label: "Plain")
         let object = UIView()
 
-        XCTAssertFalse(TheStash.Interactivity.isInteractive(element: element, object: object))
+        XCTAssertFalse(TheVault.Interactivity.isInteractive(element: element, object: object))
     }
 
     func testAdjustableTraitIsInteractive() {
         let element = makeElement(traits: .adjustable)
-        XCTAssertTrue(TheStash.Interactivity.isInteractive(element: element))
+        XCTAssertTrue(TheVault.Interactivity.isInteractive(element: element))
     }
 
     func testCustomActionsIsInteractive() {
         let element = makeElement(customActions: ["Delete"])
-        XCTAssertTrue(TheStash.Interactivity.isInteractive(element: element))
+        XCTAssertTrue(TheVault.Interactivity.isInteractive(element: element))
     }
 
     func testButtonTraitIsInteractive() {
         let element = makeElement(traits: .button)
-        XCTAssertTrue(TheStash.Interactivity.isInteractive(element: element))
+        XCTAssertTrue(TheVault.Interactivity.isInteractive(element: element))
     }
 
     func testLinkTraitIsInteractive() {
         let element = makeElement(traits: .link)
-        XCTAssertTrue(TheStash.Interactivity.isInteractive(element: element))
+        XCTAssertTrue(TheVault.Interactivity.isInteractive(element: element))
     }
 
     func testSearchFieldTraitIsInteractive() {
         let element = makeElement(traits: .searchField)
-        XCTAssertTrue(TheStash.Interactivity.isInteractive(element: element))
+        XCTAssertTrue(TheVault.Interactivity.isInteractive(element: element))
     }
 
     func testKeyboardKeyTraitIsInteractive() {
         let element = makeElement(traits: .keyboardKey)
-        XCTAssertTrue(TheStash.Interactivity.isInteractive(element: element))
+        XCTAssertTrue(TheVault.Interactivity.isInteractive(element: element))
     }
 
     func testBackButtonTraitIsInteractive() {
         let element = makeElement(traits: UIAccessibilityTraits.fromNames(["backButton"]))
-        XCTAssertTrue(TheStash.Interactivity.isInteractive(element: element))
+        XCTAssertTrue(TheVault.Interactivity.isInteractive(element: element))
     }
 
     func testSwitchButtonTraitIsInteractive() {
         let element = makeElement(traits: UIAccessibilityTraits.fromNames(["switchButton"]))
-        XCTAssertTrue(TheStash.Interactivity.isInteractive(element: element))
+        XCTAssertTrue(TheVault.Interactivity.isInteractive(element: element))
     }
 
     func testStaticTextNotInteractive() {
         let element = makeElement(label: "Hello", traits: .staticText)
-        XCTAssertFalse(TheStash.Interactivity.isInteractive(element: element))
+        XCTAssertFalse(TheVault.Interactivity.isInteractive(element: element))
     }
 
     func testNoTraitsNoInteraction() {
         let element = makeElement(label: "Plain")
-        XCTAssertFalse(TheStash.Interactivity.isInteractive(element: element))
+        XCTAssertFalse(TheVault.Interactivity.isInteractive(element: element))
     }
 
     // MARK: - checkInteractivity
 
     func testDisabledElementIsBlocked() {
         let element = makeElement(traits: .notEnabled)
-        let result = TheStash.Interactivity.checkInteractivity(element)
+        let result = TheVault.Interactivity.checkInteractivity(element)
         switch result {
         case .blocked(let reason):
             XCTAssertTrue(reason.contains("disabled"))
@@ -129,7 +129,7 @@ final class InteractivityTests: XCTestCase {
 
     func testEnabledButtonIsInteractive() {
         let element = makeElement(traits: .button)
-        let result = TheStash.Interactivity.checkInteractivity(element)
+        let result = TheVault.Interactivity.checkInteractivity(element)
         switch result {
         case .interactive:
             break
@@ -140,7 +140,7 @@ final class InteractivityTests: XCTestCase {
 
     func testStaticOnlyElementStillReturnsInteractive() throws {
         let element = makeElement(traits: .staticText)
-        let result = TheStash.Interactivity.checkInteractivity(element)
+        let result = TheVault.Interactivity.checkInteractivity(element)
         switch result {
         case .interactive(let warning):
             let warningText = try XCTUnwrap(warning, "Static-only element should surface an advisory warning")
@@ -154,7 +154,7 @@ final class InteractivityTests: XCTestCase {
         let element = makeElement(label: "Plain")
         let object = ActivationOverrideView()
 
-        let result = TheStash.Interactivity.checkInteractivity(element, object: object)
+        let result = TheVault.Interactivity.checkInteractivity(element, object: object)
 
         switch result {
         case .interactive(let warning):
@@ -166,7 +166,7 @@ final class InteractivityTests: XCTestCase {
 
     func testInteractiveElementHasNoWarning() {
         let element = makeElement(traits: .button)
-        let result = TheStash.Interactivity.checkInteractivity(element)
+        let result = TheVault.Interactivity.checkInteractivity(element)
         switch result {
         case .interactive(let warning):
             XCTAssertNil(warning, "Fully interactive element should not carry a warning")
@@ -177,7 +177,7 @@ final class InteractivityTests: XCTestCase {
 
     func testNotEnabledTakesPrecedence() {
         let element = makeElement(traits: [.button, .notEnabled])
-        let result = TheStash.Interactivity.checkInteractivity(element)
+        let result = TheVault.Interactivity.checkInteractivity(element)
         switch result {
         case .blocked:
             break

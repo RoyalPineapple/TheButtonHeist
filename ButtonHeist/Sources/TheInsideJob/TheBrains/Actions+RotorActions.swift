@@ -23,12 +23,12 @@ extension Actions {
             requireInteractive: false,
             activationPointPolicy: .liveObjectOnly
         ) { context in
-            let outcome: TheStash.RotorOutcome
+            let outcome: TheVault.RotorOutcome
             let result: TheSafecracker.ActionDispatchOutcome
-            switch self.stash.dispatchOnFreshLiveActionTarget(
+            switch self.vault.dispatchOnFreshLiveActionTarget(
                 context.liveTarget,
                 operation: { liveTarget in
-                let outcome = self.stash.performRotor(
+                let outcome = self.vault.performRotor(
                     selection: selection,
                     direction: direction,
                     on: liveTarget
@@ -57,25 +57,25 @@ extension Actions {
     }
 
     private func exposeRotorResultIfPossible(
-        _ hit: TheStash.RotorHit,
+        _ hit: TheVault.RotorHit,
     ) async {
         guard let treeElement = hit.treeElement else { return }
 
-        if case .objectUnavailable = stash.resolveLiveActionTarget(for: treeElement) {
+        if case .objectUnavailable = vault.resolveLiveActionTarget(for: treeElement) {
             _ = await navigation.elementInflation.revealSemanticTarget(
                 treeElement,
                 deadline: navigation.elementInflation.handoffDeadline(for: treeElement),
             )
         }
 
-        guard case .resolved(let liveTarget) = stash.resolveLiveActionTarget(for: treeElement) else {
+        guard case .resolved(let liveTarget) = vault.resolveLiveActionTarget(for: treeElement) else {
             return
         }
 
         let description = Navigation.ScrollTargetDescription(liveTarget.treeElement).description
         _ = await navigation.elementInflation.scrollActivationPointIntoBounds(
             liveTarget.activationPoint,
-            in: stash.liveScrollView(for: liveTarget.treeElement),
+            in: vault.liveScrollView(for: liveTarget.treeElement),
             method: .rotor,
             noScrollViewFailure: .geometryNotActionable(
                 "rotor result \(description) has no live scrollable ancestor to make activation point actionable"
@@ -86,11 +86,11 @@ extension Actions {
     }
 
     private static func rotorDispatchOutcome(
-        outcome: TheStash.RotorOutcome,
+        outcome: TheVault.RotorOutcome,
         rotor: RotorName?,
         rotorIndex: Int?,
         direction: RotorDirection,
-        liveTarget: TheStash.LiveActionTarget
+        liveTarget: TheVault.LiveActionTarget
     ) -> TheSafecracker.ActionDispatchOutcome {
         let element = liveTarget.treeElement
         let liveObject = liveTarget.object
@@ -188,7 +188,7 @@ extension Actions {
     }
 
     private static func rotorSuccessResult(
-        _ hit: TheStash.RotorHit,
+        _ hit: TheVault.RotorHit,
         direction: RotorDirection
     ) -> TheSafecracker.ActionDispatchOutcome {
         let foundElement = hit.treeElement.map { HeistElement(accessibilityElement: $0.element) }

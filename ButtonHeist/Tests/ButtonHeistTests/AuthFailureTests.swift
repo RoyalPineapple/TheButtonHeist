@@ -1,5 +1,6 @@
 import XCTest
 import Network
+import TheScore
 @_spi(ButtonHeistTooling) @testable import ButtonHeist
 
 /// Thread-safe ordered log for tracking callback invocation order.

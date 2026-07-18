@@ -9,8 +9,8 @@ enum HeistSwiftFileCompilerError: Error, Sendable, Equatable, CustomStringConver
     case executionFailed(String, String)
     case compileTimedOut(String, String)
     case executionTimedOut(String, String)
-    case compileOutputLimitExceeded(String, stream: CompilerProcessOutputStream, diagnostics: String)
-    case executionOutputLimitExceeded(String, stream: CompilerProcessOutputStream, diagnostics: String)
+    case compileOutputLimitExceeded(String, stream: CompilerProcess.OutputStream, diagnostics: String)
+    case executionOutputLimitExceeded(String, stream: CompilerProcess.OutputStream, diagnostics: String)
     case compilerTerminated(String, signal: Int32, diagnostics: String)
     case executionTerminated(String, signal: Int32, diagnostics: String)
     case invalidCompilerOutput(String)
@@ -97,7 +97,7 @@ enum HeistSwiftFileCompilerProcessPhase {
     }
 
     func outputLimitExceeded(
-        stream: CompilerProcessOutputStream,
+        stream: CompilerProcess.OutputStream,
         diagnostics: String
     ) -> HeistSwiftFileCompilerError {
         switch self {

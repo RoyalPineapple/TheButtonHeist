@@ -33,7 +33,7 @@ enum InterfaceSelectionError: Error, Equatable {
     }
 }
 
-extension TheStash {
+extension TheVault {
     func selectInterface(_ query: InterfaceQuery) throws(InterfaceSelectionError) -> Interface {
         let tree = interfaceTree
         let projection = WireConversion.discoveryProjection(from: tree)
@@ -110,7 +110,7 @@ extension TheStash {
 private extension InterfaceTree.Element {
     @MainActor
     var subtreeCandidateSummary: String {
-        let projected = TheStash.WireConversion.convert(element)
+        let projected = TheVault.WireConversion.convert(element)
         return subtreeSummary("element", fields: [
             ("element", projected.description), ("identifier", projected.identifier),
             ("label", projected.label), ("value", projected.value),

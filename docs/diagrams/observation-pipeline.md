@@ -3,17 +3,19 @@
 Button Heist has one committed semantic tree and one private retained temporal
 log. Raw parser samples remain live or diagnostic evidence. Only a clean
 settlement proof can enter the ordered commit path. Presence reads the committed
-tree; temporal predicates and receipts read replayable retained entries.
+tree; temporal predicates and receipts read replayable retained entries. The
+tripwire drives one serialized producer from dirty state to a sealed clean
+publication. Consumers join that refresh or reuse its clean commit.
 
 **Illustrates:** [ARCHITECTURE.md](../ARCHITECTURE.md),
 [API.md](../API.md), [WIRE-PROTOCOL.md](../WIRE-PROTOCOL.md)
 
 **Source of truth:**
-`ButtonHeist/Sources/TheInsideJob/TheStash/TheStash+InterfaceState.swift`,
-`ButtonHeist/Sources/TheInsideJob/TheStash/SemanticObservationValues.swift`,
-`ButtonHeist/Sources/TheInsideJob/TheStash/SemanticObservationLog.swift`,
-`ButtonHeist/Sources/TheInsideJob/TheStash/SemanticObservationPublication.swift`,
-`ButtonHeist/Sources/TheInsideJob/TheStash/SemanticObservationStream.swift`,
+`ButtonHeist/Sources/TheInsideJob/TheVault/TheVault+InterfaceState.swift`,
+`ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationValues.swift`,
+`ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationLog.swift`,
+`ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationPublication.swift`,
+`ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStream.swift`,
 `ButtonHeist/Sources/TheInsideJob/TheBrains/SettleSession.swift`,
 `ButtonHeist/Sources/TheInsideJob/TheBrains/Navigation+ScrollSettleProof.swift`,
 `ButtonHeist/Sources/TheInsideJob/TheBrains/Navigation+Explore.swift`,
@@ -29,6 +31,10 @@ tree; temporal predicates and receipts read replayable retained entries.
 
 ```mermaid
 flowchart TD
+    Tripwire["TheTripwire<br/>serialized refresh trigger"] --> Dirty["dirty observation state<br/>settled reads pause"]
+    Dirty --> Producer["SemanticObservationStream<br/>one visible refresh producer"]
+    Consumers["waits + action before-state"] --> Producer
+    Producer --> Settle
     Parser["Accessibility parser read"] --> Raw["InterfaceObservation<br/>live capture or diagnostic evidence"]
     Raw --> Settle["SettleSession<br/>reduce parser samples"]
     Raw -. "never publishes directly" .-> NoAuthority["not semantic authority"]
@@ -41,11 +47,15 @@ flowchart TD
 
     Proof --> Committer["SemanticObservationStream<br/>sole ordered committer"]
     Committer --> Continuity["classify continuity once"]
-    Continuity --> Graph["canonical graph reducer<br/>reduce TheStash.interfaceTree"]
+    Continuity --> Graph["canonical graph reducer<br/>reduce TheVault.interfaceTree"]
     Graph --> Publication["construct settled publication<br/>from committed graph"]
     Publication --> Log["private SemanticObservationLog<br/>publish retained entry"]
     Log --> Runtime["advance runtime generation<br/>and settled sequence"]
     Runtime --> Cursor["ObservationCursor<br/>generation + sequence order<br/>capture-derived timestamp metadata"]
+    Cursor --> Seal["clean publication<br/>admitting tripwire signal"]
+    Seal --> Consumers
+    Seal --> Armed["re-arm and wait for next trip"]
+    Armed --> Tripwire
     Cursor --> Entries["SemanticObservationLog.read<br/>scope plus cursor replay"]
 
     Current["committed InterfaceTree"] --> Presence["presence and target resolution"]
@@ -62,6 +72,13 @@ publication. Consumers cannot observe an entry for graph state that has not
 already committed, and consuming an entry cannot mutate the graph. Cursor
 `observedAt` is derived from the capture's interface timestamp and is metadata;
 generation and settled sequence provide correctness ordering.
+
+Visible settlement is serialized. A trip invalidates the clean seal before a
+read can be admitted. The first consumer starts the refresh and concurrent
+consumers join it; once graph reduction and log publication complete, all
+consumers receive the same ordered event. Quiet action chains reuse that event.
+After-action settlement always starts a fresh capture through the same producer
+and publishes through the same commit path.
 
 ## Viewport Movement
 
@@ -84,7 +101,7 @@ sequenceDiagram
     participant UIKit as UIKit viewport
     participant Settle as SettleSession
     participant Stream as SemanticObservationStream
-    participant Graph as TheStash graph
+    participant Graph as TheVault graph
     participant Log as Private observation log
     participant Callback as Observation callback
 

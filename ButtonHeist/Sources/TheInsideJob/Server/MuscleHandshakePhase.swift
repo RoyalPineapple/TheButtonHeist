@@ -2,14 +2,15 @@
 #if DEBUG
 import TheScore
 
-struct MuscleHandshakePhase {
-    static func handle(
+extension ClientAdmission {
+enum Handshake {
+    static func admit(
         _ clientId: Int,
         envelope: RequestEnvelope,
-        respond: @escaping TheMuscleAdmission.ResponseHandler,
-        clientRegistry: inout TheMuscleClientRegistry,
-        tokenAdmission: inout TokenAdmission
-    ) -> MuscleAdmissionDecision {
+        respond: @escaping ResponseHandler,
+        clientRegistry: inout Registry,
+        tokenAuthentication: inout TokenAuthentication
+    ) -> Decision {
         guard envelope.buttonHeistVersion == buttonHeistVersion else {
             return .handled([
                 .log(.versionMismatch(
@@ -27,23 +28,23 @@ struct MuscleHandshakePhase {
 
         switch envelope.message {
         case .clientHello:
-            return handleClientHello(
+            return admitHello(
                 clientId,
                 envelope: envelope,
                 respond: respond,
                 clientRegistry: &clientRegistry
             )
         case .authenticate(let payload):
-            return handleAuthenticate(
+            return admitAuthentication(
                 clientId,
                 envelope: envelope,
                 payload: payload,
                 respond: respond,
                 clientRegistry: &clientRegistry,
-                tokenAdmission: &tokenAdmission
+                tokenAuthentication: &tokenAuthentication
             )
         default:
-            return .handled(MuscleAuthenticationRejection.unauthenticatedMessage(
+            return .handled(Rejection.unauthenticatedMessage(
                 clientId,
                 message: "Authentication required before \(envelope.message.wireType.rawValue).",
                 requestId: envelope.requestId,
@@ -52,26 +53,26 @@ struct MuscleHandshakePhase {
         }
     }
 
-    private static func handleClientHello(
+    private static func admitHello(
         _ clientId: Int,
         envelope: RequestEnvelope,
-        respond: @escaping TheMuscleAdmission.ResponseHandler,
-        clientRegistry: inout TheMuscleClientRegistry
-    ) -> MuscleAdmissionDecision {
+        respond: @escaping ResponseHandler,
+        clientRegistry: inout Registry
+    ) -> Decision {
         switch clientRegistry.validateHello(clientId) {
         case .advanced:
             return .handled([
                 .sendResponse(.authRequired, requestId: nil, respond: respond),
             ])
         case .missingClient:
-            return .handled(MuscleAuthenticationRejection.unauthenticatedMessage(
+            return .handled(Rejection.unauthenticatedMessage(
                 clientId,
                 message: "Connection is not registered; reconnect before starting the auth handshake.",
                 requestId: envelope.requestId,
                 respond: respond
             ))
         case .rejected:
-            return .handled(MuscleAuthenticationRejection.unauthenticatedMessage(
+            return .handled(Rejection.unauthenticatedMessage(
                 clientId,
                 message: "clientHello is only valid immediately after connection.",
                 requestId: envelope.requestId,
@@ -80,16 +81,16 @@ struct MuscleHandshakePhase {
         }
     }
 
-    private static func handleAuthenticate(
+    private static func admitAuthentication(
         _ clientId: Int,
         envelope: RequestEnvelope,
         payload: AuthenticatePayload,
-        respond: @escaping TheMuscleAdmission.ResponseHandler,
-        clientRegistry: inout TheMuscleClientRegistry,
-        tokenAdmission: inout TokenAdmission
-    ) -> MuscleAdmissionDecision {
-        guard clientRegistry.phase(for: clientId)?.hasCompletedHello == true else {
-            return .handled(MuscleAuthenticationRejection.unauthenticatedMessage(
+        respond: @escaping ResponseHandler,
+        clientRegistry: inout Registry,
+        tokenAuthentication: inout TokenAuthentication
+    ) -> Decision {
+        guard clientRegistry.state(for: clientId)?.hasCompletedHello == true else {
+            return .handled(Rejection.unauthenticatedMessage(
                 clientId,
                 message: "Authentication requires clientHello first.",
                 requestId: envelope.requestId,
@@ -97,7 +98,7 @@ struct MuscleHandshakePhase {
             ))
         }
 
-        guard let phase = clientRegistry.phase(for: clientId) else {
+        guard let state = clientRegistry.state(for: clientId) else {
             return .handled([
                 .log(.missingRegisteredAddress(clientId: clientId)),
                 .sendResponse(
@@ -109,14 +110,14 @@ struct MuscleHandshakePhase {
             ])
         }
 
-        return MuscleTokenAuthenticationPhase.authenticate(
+        return tokenAuthentication.admit(
             clientId,
-            address: phase.address,
+            address: state.address,
             payload: payload,
-            tokenAdmission: &tokenAdmission,
             respond: respond
         )
     }
+}
 }
 #endif // DEBUG
 #endif // canImport(UIKit)

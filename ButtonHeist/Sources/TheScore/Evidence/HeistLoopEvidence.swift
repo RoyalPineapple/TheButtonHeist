@@ -61,6 +61,41 @@ public struct HeistForEachStringEvidence: Codable, Sendable, Equatable {
         self.shape = shape
     }
 
+    package static func executedSummary(
+        iterationCount: Int,
+        failureReason: String? = nil
+    ) -> Self {
+        Self(
+            admittedIterationCount: iterationCount,
+            shape: .summary(failureReason: failureReason)
+        )
+    }
+
+    package static func executedIteration(
+        iterationCount: Int,
+        iterationOrdinal: Int,
+        value: String,
+        failureReason: String? = nil
+    ) -> Self {
+        Self(
+            admittedIterationCount: iterationCount,
+            shape: .iteration(
+                iterationOrdinal: iterationOrdinal,
+                value: value,
+                failureReason: failureReason
+            )
+        )
+    }
+
+    private init(admittedIterationCount iterationCount: Int, shape: Shape) {
+        precondition(iterationCount >= 0)
+        if case .iteration(let ordinal, _, _) = shape {
+            precondition(ordinal >= 0 && ordinal < iterationCount)
+        }
+        self.iterationCount = iterationCount
+        self.shape = shape
+    }
+
     private enum Shape: Sendable, Equatable {
         case summary(failureReason: String?)
         case iteration(iterationOrdinal: Int, value: String, failureReason: String?)
@@ -198,6 +233,49 @@ public struct HeistForEachElementEvidence: Codable, Sendable, Equatable {
                   iterationOrdinal < iterationCount,
                   targetOrdinal >= 0,
                   targetOrdinal < matchedCount else { return nil }
+        }
+        self.matchedCount = matchedCount
+        self.iterationCount = iterationCount
+        self.shape = shape
+    }
+
+    package static func executedSummary(
+        matchedCount: Int,
+        iterationCount: Int,
+        failureReason: String? = nil
+    ) -> Self {
+        Self(
+            admittedMatchedCount: matchedCount,
+            iterationCount: iterationCount,
+            shape: .summary(failureReason: failureReason)
+        )
+    }
+
+    package static func executedIteration(
+        matchedCount: Int,
+        iterationCount: Int,
+        iterationOrdinal: Int,
+        targetOrdinal: Int,
+        targetSummary: String,
+        failureReason: String? = nil
+    ) -> Self {
+        Self(
+            admittedMatchedCount: matchedCount,
+            iterationCount: iterationCount,
+            shape: .iteration(
+                iterationOrdinal: iterationOrdinal,
+                targetOrdinal: targetOrdinal,
+                targetSummary: targetSummary,
+                failureReason: failureReason
+            )
+        )
+    }
+
+    private init(admittedMatchedCount matchedCount: Int, iterationCount: Int, shape: Shape) {
+        precondition(matchedCount >= 0 && iterationCount >= 0 && iterationCount <= matchedCount)
+        if case .iteration(let iterationOrdinal, let targetOrdinal, _, _) = shape {
+            precondition(iterationOrdinal >= 0 && iterationOrdinal < iterationCount)
+            precondition(targetOrdinal >= 0 && targetOrdinal < matchedCount)
         }
         self.matchedCount = matchedCount
         self.iterationCount = iterationCount
@@ -387,6 +465,91 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         self.iterationCount = iterationCount
         self.lastObservedSummary = lastObservedSummary
         self.storage = storage
+    }
+
+    private init(
+        executedIterationCount iterationCount: Int,
+        lastObservedSummary: String?,
+        storage: Storage
+    ) {
+        precondition(iterationCount >= 0)
+        let ordinal: Int?
+        switch storage {
+        case .matched(let value, _, _), .failed(let value, _, _): ordinal = value
+        case .continued(let value, _, _): ordinal = value
+        case .handledElse: ordinal = nil
+        }
+        precondition(ordinal.map { $0 >= 0 && $0 < iterationCount } ?? true)
+        self.iterationCount = iterationCount
+        self.lastObservedSummary = lastObservedSummary
+        self.storage = storage
+    }
+
+    package static func executedMatched(
+        iterationCount: Int,
+        iterationOrdinal: Int? = nil,
+        expectation: ExpectationResult.Met,
+        actionResult: ActionResult? = nil,
+        lastObservedSummary: String? = nil
+    ) -> HeistRepeatUntilEvidence {
+        HeistRepeatUntilEvidence(
+            executedIterationCount: iterationCount,
+            lastObservedSummary: lastObservedSummary,
+            storage: .matched(
+                iterationOrdinal: iterationOrdinal,
+                expectation: expectation,
+                actionResult: actionResult
+            )
+        )
+    }
+
+    package static func executedContinued(
+        iterationCount: Int,
+        iterationOrdinal: Int,
+        expectation: ExpectationResult.Unmet,
+        actionResult: ActionResult? = nil,
+        lastObservedSummary: String? = nil
+    ) -> HeistRepeatUntilEvidence {
+        HeistRepeatUntilEvidence(
+            executedIterationCount: iterationCount,
+            lastObservedSummary: lastObservedSummary,
+            storage: .continued(
+                iterationOrdinal: iterationOrdinal,
+                expectation: expectation,
+                actionResult: actionResult
+            )
+        )
+    }
+
+    package static func executedHandledElse(
+        iterationCount: Int,
+        expectation: ExpectationResult.Unmet,
+        lastObservedSummary: String?,
+        failureReason: String? = nil
+    ) -> HeistRepeatUntilEvidence {
+        HeistRepeatUntilEvidence(
+            executedIterationCount: iterationCount,
+            lastObservedSummary: lastObservedSummary,
+            storage: .handledElse(expectation: expectation, failureReason: failureReason)
+        )
+    }
+
+    package static func executedFailed(
+        iterationCount: Int,
+        iterationOrdinal: Int? = nil,
+        expectation: ExpectationResult.Unmet,
+        lastObservedSummary: String?,
+        failureReason: String
+    ) -> HeistRepeatUntilEvidence {
+        HeistRepeatUntilEvidence(
+            executedIterationCount: iterationCount,
+            lastObservedSummary: lastObservedSummary,
+            storage: .failed(
+                iterationOrdinal: iterationOrdinal,
+                expectation: expectation,
+                failureReason: failureReason
+            )
+        )
     }
 
     public static func matched(

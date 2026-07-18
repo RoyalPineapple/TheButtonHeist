@@ -27,7 +27,7 @@ internal enum PredicateChangeBaselineSource: Sendable, Equatable {
 private struct PredicateWaitDiscoveryResult<Evidence>
 where Evidence: Sendable & Equatable {
     let evaluation: PredicateWaitEvaluation<Evidence>
-    let event: SettledSemanticObservationEvent?
+    let event: SettledObservationEvent?
 }
 
 @MainActor internal final class PredicateWait {
@@ -40,7 +40,7 @@ where Evidence: Sendable & Equatable {
         let continuesAfterInitialMiss: Bool
         let initialEvidence: Evidence
         let evaluate: @MainActor (
-            HeistSemanticObservation,
+            SettledObservationEvidence,
             Bool,
             Evidence
         ) -> PredicateWaitEvaluation<Evidence>
@@ -51,17 +51,17 @@ where Evidence: Sendable & Equatable {
         ) -> Result
     }
 
-    private let stash: TheStash
+    private let vault: TheVault
     private let navigation: Navigation
     private let postActionObservation: PostActionObservation
     private var heistAnnouncementCursor: AccessibilityNotificationCursor = .origin
 
     internal init(
-        stash: TheStash,
+        vault: TheVault,
         navigation: Navigation,
         postActionObservation: PostActionObservation
     ) {
-        self.stash = stash
+        self.vault = vault
         self.navigation = navigation
         self.postActionObservation = postActionObservation
     }
@@ -195,7 +195,7 @@ where Evidence: Sendable & Equatable {
                 onReadyToPoll?(event.sequence)
             }
 
-            let stream = wait.stash.semanticObservationStream
+            let stream = wait.vault.semanticObservationStream
             var cursor = stream.latestObservationCursor(scope: .visible)
             while true {
                 switch await stream.waitForObservation(
@@ -277,7 +277,7 @@ where Evidence: Sendable & Equatable {
             )
             var matchedEvaluation: PredicateWaitEvaluation<Evidence>?
             var evaluatedSequence: SettledObservationSequence?
-            let event: SettledSemanticObservationEvent?
+            let event: SettledObservationEvent?
             if let waitTarget = projection.target,
                let revealed = await wait.revealTarget(waitTarget, deadline) {
                 evaluatedSequence = revealed.sequence
@@ -324,7 +324,7 @@ where Evidence: Sendable & Equatable {
         }
 
         private func evaluate(
-            _ event: SettledSemanticObservationEvent?,
+            _ event: SettledObservationEvent?,
             isInitialVisible: Bool,
             evidence: Evidence
         ) -> PredicateWaitEvaluation<Evidence> {
@@ -367,7 +367,7 @@ where Evidence: Sendable & Equatable {
         }
 
         func evaluate(
-            _ observation: HeistSemanticObservation,
+            _ observation: SettledObservationEvidence,
             isInitialVisible: Bool,
             evidence: LifecycleEvidence
         ) -> PredicateWaitEvaluation<LifecycleEvidence> {
@@ -415,7 +415,7 @@ where Evidence: Sendable & Equatable {
     }
 
     internal func reduceObservation(
-        _ observation: HeistSemanticObservation,
+        _ observation: SettledObservationEvidence,
         predicate: ResolvedAccessibilityPredicate,
         predicateExpression: AccessibilityPredicate,
         baselineSeed: PredicateObservationBaselineSeed,
@@ -429,7 +429,7 @@ where Evidence: Sendable & Equatable {
         )
         guard predicate.requiresChangeBaseline,
               let baseline = seeded.state.observationBaseline else { return seeded }
-        let window = stash.semanticObservationStream.observationWindow(
+        let window = vault.semanticObservationStream.observationWindow(
             from: baseline,
             through: observation.event
         )
@@ -453,7 +453,7 @@ where Evidence: Sendable & Equatable {
     ) -> AccessibilityNotificationCursor {
         switch strategy {
         case .futureOnly:
-            stash.accessibilityNotifications.cursor()
+            vault.accessibilityNotifications.cursor()
         case .heistScoped:
             heistAnnouncementCursor
         }
@@ -464,7 +464,7 @@ where Evidence: Sendable & Equatable {
         _ predicate: ResolvedAnnouncementPredicate,
         _ timeout: Double
     ) async -> CapturedAnnouncement? {
-        let announcement = await stash.accessibilityNotifications.waitForAnnouncement(
+        let announcement = await vault.accessibilityNotifications.waitForAnnouncement(
             after: cursor,
             matching: predicate,
             timeout: timeout
@@ -477,33 +477,35 @@ where Evidence: Sendable & Equatable {
         return announcement
     }
 
-    internal func latestEvent() -> SettledSemanticObservationEvent? { stash.latestSettledSemanticObservationEvent }
+    internal func latestEvent() -> SettledObservationEvent? { vault.semanticObservationStream.latestEvent }
 
-    internal func latestSettleFailure() -> String? { stash.latestSemanticObservationFailureDiagnostic() }
+    internal func latestSettleFailure() -> String? {
+        vault.semanticObservationStream.latestSettleFailureDiagnostic
+    }
 
     internal func presenceTimeoutMessage(
         _ predicate: ResolvedAccessibilityPredicate,
         _ elapsed: String
     ) -> String? {
-        stash.presenceWaitTimeoutMessage(for: predicate, elapsed: elapsed)
+        vault.presenceWaitTimeoutMessage(for: predicate, elapsed: elapsed)
     }
 
     private func settleVisible(
         _ deadline: SemanticObservationDeadline
-    ) async -> SettledSemanticObservationEvent? {
-        if !stash.latestSettledSemanticObservationInvalidated,
-           let current = stash.latestSettledSemanticObservationEvent {
+    ) async -> SettledObservationEvent? {
+        if !vault.semanticObservationStream.latestSettledObservationInvalidated,
+           let current = vault.semanticObservationStream.latestEvent {
             return current
         }
         guard deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) else { return nil }
-        guard let evidence = await stash.observeVisibleSemanticEvidence(
+        guard let evidence = await vault.semanticObservationStream.visibleEvidence(
             timeout: min(
                 Double(SettleSession.defaultTimeoutMs) / 1_000,
                 deadline.remainingSeconds()
             )
         ),
-        let event = stash.latestSettledSemanticObservationEvent,
-        event.sequence == evidence.settledObservationSequence
+        let event = vault.semanticObservationStream.latestEvent,
+        event.sequence == evidence.event.sequence
         else { return nil }
         return event
     }
@@ -511,9 +513,9 @@ where Evidence: Sendable & Equatable {
     private func revealTarget(
         _ target: ResolvedAccessibilityTarget,
         _ deadline: SemanticObservationDeadline?
-    ) async -> SettledSemanticObservationEvent? {
+    ) async -> SettledObservationEvent? {
         guard target.isElementTarget,
-              stash.resolveTarget(target).resolved != nil
+              vault.resolveTarget(target).resolved != nil
         else { return nil }
         if let deadline,
            !deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) {
@@ -524,7 +526,7 @@ where Evidence: Sendable & Equatable {
             method: .scrollToVisible,
         ) {
         case .inflated:
-            return stash.latestSettledSemanticObservationEvent
+            return vault.semanticObservationStream.latestEvent
         case .failed:
             return nil
         }
@@ -533,14 +535,14 @@ where Evidence: Sendable & Equatable {
     private func discover(
         _ target: ResolvedAccessibilityTarget?,
         _ deadline: SemanticObservationDeadline?,
-        _ observer: @escaping @MainActor (SettledSemanticObservationEvent) -> Bool
-    ) async -> SettledSemanticObservationEvent? {
+        _ observer: @escaping @MainActor (SettledObservationEvent) -> Bool
+    ) async -> SettledObservationEvent? {
         if let deadline,
            !deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) {
             return nil
         }
         let baseline = Navigation.ExplorationBaseline.currentViewport(
-            stash.visibleExplorationBaseline(from: stash.latestObservation)
+            vault.visibleExplorationBaseline(from: vault.latestObservation)
         )
         guard let exploration = await navigation.exploreScreen(
             target: target,

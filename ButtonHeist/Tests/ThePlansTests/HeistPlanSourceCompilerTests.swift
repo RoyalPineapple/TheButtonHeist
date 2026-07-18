@@ -1342,6 +1342,18 @@ import Testing
     #expect(plan == expected)
 }
 
+@Test func `gesture point source rejects nonfinite decimal coordinates`() {
+    let overflowingDecimal = String(repeating: "9", count: 400)
+    let sources = [
+        "Mechanical.Tap(ScreenPoint(x: \(overflowingDecimal), y: 0))",
+        "Mechanical.Tap(.label(\"Row\"), at: UnitPoint(x: 0, y: \(overflowingDecimal)))",
+    ]
+
+    for source in sources {
+        expect(compileError(root(source)), contains: "coordinate must be finite")
+    }
+}
+
 @Test func `canonical control flow and loops round trip through source compiler`() throws {
     try assertCanonicalRoundTrip(try HeistPlan(body: [
         .conditional(try ConditionalStep(

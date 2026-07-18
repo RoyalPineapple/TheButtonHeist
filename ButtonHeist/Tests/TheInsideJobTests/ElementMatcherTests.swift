@@ -144,7 +144,7 @@ final class ElementMatcherTests: XCTestCase {
         ]
 
         for source in sources {
-            let delivered = TheStash.WireConversion.convert(source)
+            let delivered = TheVault.WireConversion.convert(source)
             XCTAssertEqual(delivered.actions, source.projectedActionSet.orderedActions)
             for predicate in predicates {
                 XCTAssertEqual(predicate.matches(source), delivered.matches(predicate))
@@ -171,7 +171,7 @@ final class ElementMatcherTests: XCTestCase {
             .customContent(.init(label: .isEmpty))
         )
         let hostCandidates = sources.indices.filter { predicate.matches(sources[$0]) }
-        let delivered = sources.map { TheStash.WireConversion.convert($0) }
+        let delivered = sources.map { TheVault.WireConversion.convert($0) }
         let deliveredCandidates = delivered.indices.filter { predicate.matches(delivered[$0]) }
 
         for index in sources.indices {

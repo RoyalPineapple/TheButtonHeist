@@ -19,6 +19,7 @@ let package = Package(
             dependencies: [
                 .product(name: "ButtonHeist", package: "ButtonHeist"),
                 .product(name: "ThePlans", package: "ButtonHeist"),
+                .product(name: "TheScore", package: "ButtonHeist"),
                 .product(name: "ArgumentParser", package: "swift-argument-parser")
             ],
             path: "Sources",
@@ -33,6 +34,7 @@ let package = Package(
                 .target(name: "ButtonHeistCLIExe"),
                 .product(name: "ButtonHeist", package: "ButtonHeist"),
                 .product(name: "ThePlans", package: "ButtonHeist"),
+                .product(name: "TheScore", package: "ButtonHeist"),
             ],
             path: "Tests",
             swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]

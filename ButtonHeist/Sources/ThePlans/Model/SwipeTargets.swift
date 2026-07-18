@@ -47,21 +47,17 @@ public struct UnitPoint: Codable, Sendable, Equatable {
     public let x: Double
     public let y: Double
 
-    public init(x: Double, y: Double) {
-        requireFinitePointCoordinates(x: x, y: y, kind: "unit point")
-        self.x = x
-        self.y = y
+    public init(x: FiniteCoordinate, y: FiniteCoordinate) {
+        self.x = x.value
+        self.y = y.value
     }
 
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "unit point")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let x = try container.decode(Double.self, forKey: .x)
-        let y = try container.decode(Double.self, forKey: .y)
-        try rejectNonFinitePointCoordinates(x: x, y: y, kind: "unit point", codingPath: container.codingPath)
         self.init(
-            x: x,
-            y: y
+            x: try container.decode(FiniteCoordinate.self, forKey: .x),
+            y: try container.decode(FiniteCoordinate.self, forKey: .y)
         )
     }
 

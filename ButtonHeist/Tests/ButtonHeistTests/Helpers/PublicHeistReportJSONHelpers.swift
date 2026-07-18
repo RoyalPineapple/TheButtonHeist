@@ -1,5 +1,6 @@
 import ButtonHeistTestSupport
 import XCTest
+import TheScore
 @_spi(ButtonHeistTooling) @testable import ButtonHeist
 
 func publicHeistReportJSON(_ response: FenceResponse) throws -> JSONProbe {

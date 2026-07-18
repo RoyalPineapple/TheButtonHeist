@@ -242,7 +242,7 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
         let capturedFrames = OSAllocatedUnfairLock<[String]>(initialState: [])
         let clientConnected = expectation(description: "client connected")
         let dataReceived = expectation(description: "data received")
-        dataReceived.expectedFulfillmentCount = MessageRateLimiter.defaultMaxMessagesPerSecond + 1
+        dataReceived.expectedFulfillmentCount = ClientAdmission.RateLimiter.defaultMaxMessagesPerSecond + 1
 
         let callbacks = SocketServerCallbacks(
             onClientConnected: { _, _ in
@@ -262,15 +262,21 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
         try await client.connect()
         await fulfillment(of: [clientConnected], timeout: 5.0)
 
-        let payload = (0...MessageRateLimiter.defaultMaxMessagesPerSecond)
+        let payload = (0...ClientAdmission.RateLimiter.defaultMaxMessagesPerSecond)
             .map { "raw-frame-\($0)\n" }
             .joined()
         try await client.send(Data(payload.utf8))
 
         await fulfillment(of: [dataReceived], timeout: 5.0)
-        XCTAssertEqual(capturedFrames.withLock { $0.count }, MessageRateLimiter.defaultMaxMessagesPerSecond + 1)
+        XCTAssertEqual(
+            capturedFrames.withLock { $0.count },
+            ClientAdmission.RateLimiter.defaultMaxMessagesPerSecond + 1
+        )
         XCTAssertEqual(capturedFrames.withLock { $0.first }, "raw-frame-0")
-        XCTAssertEqual(capturedFrames.withLock { $0.last }, "raw-frame-\(MessageRateLimiter.defaultMaxMessagesPerSecond)")
+        XCTAssertEqual(
+            capturedFrames.withLock { $0.last },
+            "raw-frame-\(ClientAdmission.RateLimiter.defaultMaxMessagesPerSecond)"
+        )
     }
 
     func testDisconnectRemovesClient() async throws {

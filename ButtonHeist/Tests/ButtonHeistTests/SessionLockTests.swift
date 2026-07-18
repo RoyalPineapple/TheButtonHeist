@@ -1,5 +1,6 @@
 import XCTest
 import Network
+import TheScore
 @_spi(ButtonHeistTooling) @testable import ButtonHeist
 
 /// Tests for session locking behavior using direct message injection.

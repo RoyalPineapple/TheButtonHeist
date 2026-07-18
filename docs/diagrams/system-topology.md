@@ -24,7 +24,7 @@ flowchart TD
         subgraph debug["#if DEBUG only"]
             LISTENER["NWListener<br/>Bonjour: _buttonheist._tcp"]
             MUSCLE["TheMuscle<br/>admission, auth, sessions"]
-            CREW["Crew<br/>TheBrains · TheStash · TheSafecracker<br/>TheTripwire · TheBurglar · TheGetaway"]
+            CREW["Crew<br/>TheBrains · TheVault · TheSafecracker<br/>TheTripwire · TheGetaway"]
             LISTENER --> MUSCLE
             MUSCLE --> CREW
         end

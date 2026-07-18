@@ -46,10 +46,10 @@ extension ElementInflation {
 
         let treeElement = liveTarget.treeElement
         let description = Navigation.ScrollTargetDescription(treeElement).description
-        let settledSequence = stash.latestSettledSemanticObservationEvent?.sequence
+        let settledSequence = vault.semanticObservationStream.latestEvent?.sequence
         let placement = await scrollActivationPointIntoBounds(
             liveTarget.activationPoint,
-            in: stash.liveScrollView(for: treeElement),
+            in: vault.liveScrollView(for: treeElement),
             method: method,
             noScrollViewFailure: noScrollViewFailure(
                 for: liveTarget,
@@ -125,7 +125,7 @@ extension ElementInflation {
             }
             return .failure(.geometryNotActionable(unsafeProgrammaticScrollMessage))
         }
-        guard let scrollTarget = Navigation.ScrollableTarget.programmatic(scrollView, in: stash) else {
+        guard let scrollTarget = Navigation.ScrollableTarget.programmatic(scrollView, in: vault) else {
             return .failure(.geometryNotActionable(scrollFailedMessage))
         }
         transaction?.record(scrollView)
@@ -159,7 +159,7 @@ extension ElementInflation {
             self.activationPoint = activationPoint
         }
 
-        fileprivate init(_ target: TheStash.LiveActionTarget) {
+        fileprivate init(_ target: TheVault.LiveActionTarget) {
             frame = target.frame
             activationPoint = target.activationPoint
         }
@@ -244,8 +244,8 @@ extension ElementInflation {
                     target: stableTarget
                 )
             }
-            guard stash.refreshLiveCapture() != nil else { continue }
-            guard let currentTreeElement = stash.interfaceElement(
+            guard vault.refreshLiveCapture() != nil else { continue }
+            guard let currentTreeElement = vault.interfaceElement(
                 heistId: inflatedTarget.treeElement.heistId
             ) else {
                 return .failed(.staleRefresh(
@@ -338,8 +338,8 @@ extension ElementInflation {
         deadline: SemanticObservationDeadline,
         resolution: ActionSubjectResolution
     ) -> StableActionTargetResolution {
-        let liveTarget: TheStash.LiveActionTarget
-        switch stash.resolveLiveActionTarget(for: treeElement) {
+        let liveTarget: TheVault.LiveActionTarget
+        switch vault.resolveLiveActionTarget(for: treeElement) {
         case .resolved(let target):
             liveTarget = target
         case .objectUnavailable:

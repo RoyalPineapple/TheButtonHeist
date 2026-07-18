@@ -1,6 +1,7 @@
 import ArgumentParser
 import Foundation
 @_spi(ButtonHeistTooling) import ButtonHeist
+import TheScore
 
 struct ScreenshotCommand: OneShotCLICommand {
     static let configuration = CommandConfiguration(

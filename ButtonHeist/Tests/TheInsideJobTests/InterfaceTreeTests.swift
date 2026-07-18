@@ -180,7 +180,7 @@ final class InterfaceTreeTests: XCTestCase {
         )
 
         let pruned = screen.removingElements(withIds: ["old"])
-        let interface = TheStash.WireConversion.toInterface(from: pruned.tree)
+        let interface = TheVault.WireConversion.toInterface(from: pruned.tree)
 
         XCTAssertEqual(pruned.liveCapture.heistId(forPath: TreePath([0, 0])), "kept")
         XCTAssertNil(pruned.liveCapture.heistId(forPath: TreePath([1, 0])))
@@ -235,8 +235,8 @@ final class InterfaceTreeTests: XCTestCase {
         )
         let before = InterfaceObservation.makeForTests(elements: [(top, "chicken_tikka_button")])
         let after = InterfaceObservation.makeForTests(elements: [(scrolled, "chicken_tikka_button")])
-        let beforeInterfaceHash = AccessibilityTrace.Capture.hash(TheStash.WireConversion.toInterface(from: before.tree))
-        let afterInterfaceHash = AccessibilityTrace.Capture.hash(TheStash.WireConversion.toInterface(from: after.tree))
+        let beforeInterfaceHash = AccessibilityTrace.Capture.hash(TheVault.WireConversion.toInterface(from: before.tree))
+        let afterInterfaceHash = AccessibilityTrace.Capture.hash(TheVault.WireConversion.toInterface(from: after.tree))
 
         XCTAssertEqual(beforeInterfaceHash, afterInterfaceHash)
         XCTAssertEqual(before.tree.interfaceHash, after.tree.interfaceHash)
@@ -709,15 +709,15 @@ final class InterfaceTreeTests: XCTestCase {
     // MARK: - InterfaceObservation Capture Plan
 
     func testCapturePlanUsesLandscapeFrameForRotatedWindow() throws {
-        let window = TheStash.ScreenCaptureWindowGeometry(
+        let window = TheVault.ScreenCaptureWindowGeometry(
             frame: CGRect(x: 0, y: 0, width: 200, height: 100),
             bounds: CGRect(x: 0, y: 0, width: 100, height: 200),
             center: CGPoint(x: 100, y: 50),
             transform: CGAffineTransform(rotationAngle: .pi / 2)
         )
 
-        let captureBounds = try XCTUnwrap(TheStash.screenCaptureBounds(for: [window]))
-        let transform = TheStash.screenCaptureTransform(for: window, relativeTo: captureBounds)
+        let captureBounds = try XCTUnwrap(TheVault.screenCaptureBounds(for: [window]))
+        let transform = TheVault.screenCaptureTransform(for: window, relativeTo: captureBounds)
         let transformedBounds = window.bounds.applyingToCorners(transform)
 
         assertRect(
@@ -731,15 +731,15 @@ final class InterfaceTreeTests: XCTestCase {
     }
 
     func testCapturePlanNormalizesNonZeroWindowOrigin() throws {
-        let window = TheStash.ScreenCaptureWindowGeometry(
+        let window = TheVault.ScreenCaptureWindowGeometry(
             frame: CGRect(x: 20, y: 30, width: 100, height: 200),
             bounds: CGRect(x: 0, y: 0, width: 100, height: 200),
             center: CGPoint(x: 70, y: 130),
             transform: .identity
         )
 
-        let captureBounds = try XCTUnwrap(TheStash.screenCaptureBounds(for: [window]))
-        let transform = TheStash.screenCaptureTransform(for: window, relativeTo: captureBounds)
+        let captureBounds = try XCTUnwrap(TheVault.screenCaptureBounds(for: [window]))
+        let transform = TheVault.screenCaptureTransform(for: window, relativeTo: captureBounds)
         let transformedBounds = window.bounds.applyingToCorners(transform)
 
         assertRect(

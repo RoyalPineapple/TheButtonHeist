@@ -433,7 +433,7 @@ func mechanicalNamespaceBuildsExplicitEscapeHatches() throws {
 }
 
 @Test
-func screenActionsNamespaceBuildsRegularActionContent() throws {
+func screenActionsNamespaceBuildsActions() throws {
     let heist = try HeistPlan {
         ScreenActions.Dismiss()
             .expect(.changed(.screen()))

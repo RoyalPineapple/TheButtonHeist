@@ -13,7 +13,7 @@ import UIKit
 /// 1. **Is the UI settled?** (no pending layout, stable presentation fingerprint)
 /// 2. **Should the accessibility tree be checked again?** (Tripwire triggered)
 ///
-/// The accessibility tree is TheStash's domain; TheTripwire never reads it.
+/// The accessibility tree is TheVault's domain; TheTripwire never reads it.
 @MainActor
 final class TheTripwire {
 

@@ -50,7 +50,7 @@ extension TheBrains {
             return .failure(.accessibilityTreeUnavailable)
         }
 
-        guard let screenCapture = stash.captureScreen() else {
+        guard let screenCapture = vault.captureScreen() else {
             return .failure(.appWindowUnavailable)
         }
 

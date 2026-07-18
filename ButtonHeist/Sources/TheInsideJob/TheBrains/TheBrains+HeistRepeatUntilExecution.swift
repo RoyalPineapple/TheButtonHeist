@@ -57,10 +57,10 @@ extension TheBrains {
         var state = initialState
 
         while case .running(let running) = state {
-            guard running.iterationNodes.isEmpty || CFAbsoluteTimeGetCurrent() < deadline else {
+            guard running.iterationNodes.values.isEmpty || CFAbsoluteTimeGetCurrent() < deadline else {
                 break
             }
-            let iterationIndex = running.iterationNodes.count
+            let iterationIndex = running.iterationNodes.values.count
             let iterationStart = CFAbsoluteTimeGetCurrent()
             let iterationPath = context.path.repeatUntilIteration(at: iterationIndex)
             let iterationResults = await executeHeistSteps(
@@ -77,42 +77,40 @@ extension TheBrains {
                 count: iterationIndex + 1
             )
 
-            if let failedStep = iterationResults.firstFailedStep {
+            switch iterationResults {
+            case .aborted(let children):
                 let event = await repeatUntilFailedIterationEvent(
                     context: context,
                     step: step,
                     frame: frame,
-                    failedStep: failedStep,
-                    iterationResults: iterationResults,
+                    children: children,
                     deadline: deadline,
                     running: running
                 )
                 state = RepeatUntil.LoopState.reduce(state, event: .iterationFailed(event))
-                break
-            }
-
-            let postBody = await repeatUntilPostBodyCheck(
-                context: context,
-                step: step,
-                observation: running.currentObservation,
-                iterationResults: iterationResults,
-                deadline: deadline
-            )
-            let iterationNode = repeatUntilIterationResult(
-                frame: frame,
-                step: step,
-                outcome: postBody.iterationOutcome,
-                observation: postBody.observation,
-                children: iterationResults
-            )
-            state = RepeatUntil.LoopState.reduce(
-                state,
-                event: .iterationPassed(RepeatUntil.PassedIterationEvent(
+            case .passed(let children):
+                let postBody = await repeatUntilPostBodyCheck(
+                    context: context,
+                    step: step,
+                    observation: running.currentObservation,
+                    iterationResults: children,
+                    deadline: deadline
+                )
+                let iteration = repeatUntilPassingIterationResult(
                     frame: frame,
+                    step: step,
                     postBody: postBody,
-                    iterationNode: iterationNode
-                ))
-            )
+                    children: children
+                )
+                state = RepeatUntil.LoopState.reduce(
+                    state,
+                    event: .iterationPassed(RepeatUntil.PassedIterationEvent(
+                        frame: frame,
+                        postBody: postBody,
+                        iteration: iteration
+                    ))
+                )
+            }
             if case .terminal = state {
                 break
             }
@@ -135,51 +133,46 @@ extension TheBrains {
         context: RepeatUntil.Context,
         step: ResolvedRepeatUntilStep,
         frame: RepeatUntil.IterationFrame,
-        failedStep: HeistExecutionStepResult,
-        iterationResults: [HeistExecutionStepResult],
+        children: HeistAbortedChildren,
         deadline: CFAbsoluteTime,
         running: RepeatUntil.RunningState
     ) async -> RepeatUntil.FailedIterationEvent {
-        let postBody: RepeatUntil.PostBodyCheck?
-        if repeatUntilShouldCheckStopPredicate(afterBodyFailure: failedStep, in: iterationResults) {
-            postBody = await repeatUntilPostBodyCheck(
-                context: context,
-                step: step,
-                observation: running.currentObservation,
-                iterationResults: iterationResults,
-                deadline: deadline
-            )
-        } else {
-            postBody = nil
-        }
         let failureExpectation = ExpectationResult.Unmet(
             predicate: step.predicateExpression,
             actual: "iteration body failed before predicate evaluation"
         )
-        let predicateMetIterationNode = repeatUntilIterationResult(
-            frame: frame,
-            step: step,
-            outcome: postBody?.iterationOutcome ?? .continued(failureExpectation),
-            observation: postBody?.observation,
-            children: repeatUntilIterationResultsDroppingRedundantFailure(
-                iterationResults,
-                failedPath: failedStep.path
+        let predicateEvaluation: RepeatUntil.FailedBodyPredicateEvaluation
+        switch repeatUntilBodyFailureDisposition(children) {
+        case .checkPredicate(let predicateChildren):
+            let postBody = await repeatUntilPostBodyCheck(
+                context: context,
+                step: step,
+                observation: running.currentObservation,
+                iterationResults: predicateChildren,
+                deadline: deadline
             )
-        )
-        let failedIterationNode = repeatUntilIterationResult(
+            let predicateMetIteration = repeatUntilPassingIterationResult(
+                frame: frame,
+                step: step,
+                postBody: postBody,
+                children: predicateChildren
+            )
+            predicateEvaluation = .checked(postBody, predicateMetIteration: predicateMetIteration)
+        case .abort:
+            predicateEvaluation = .notChecked
+        }
+        let failedIteration = repeatUntilFailedIterationResult(
             frame: frame,
             step: step,
-            outcome: .failed(expectation: failureExpectation, childPath: failedStep.path),
+            expectation: failureExpectation,
             observation: running.currentObservation,
-            children: iterationResults
+            children: children
         )
         return RepeatUntil.FailedIterationEvent(
             frame: frame,
-            failedStep: failedStep,
-            postBody: postBody,
+            predicateEvaluation: predicateEvaluation,
             failureExpectation: failureExpectation,
-            predicateMetIterationNode: predicateMetIterationNode,
-            failedIterationNode: failedIterationNode
+            failedIteration: failedIteration
         )
     }
 }

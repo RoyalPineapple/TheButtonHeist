@@ -34,7 +34,7 @@ public actor HeistCompiler {
 
         public let packageRoot: URL?
         public let directoryEntry: HeistEntrySymbol
-        let processLimits: CompilerProcessLimits
+        let processLimits: CompilerProcess.Limits
         let temporaryDirectory: URL
 
         public init(
@@ -50,7 +50,7 @@ public actor HeistCompiler {
         init(
             packageRoot: URL? = nil,
             directoryEntry: HeistEntrySymbol = "heist",
-            processLimits: CompilerProcessLimits,
+            processLimits: CompilerProcess.Limits,
             temporaryDirectory: URL = FileManager.default.temporaryDirectory
         ) {
             self.packageRoot = packageRoot

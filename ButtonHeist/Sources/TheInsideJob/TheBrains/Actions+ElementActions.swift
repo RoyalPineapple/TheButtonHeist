@@ -70,13 +70,13 @@ extension Actions {
         guard requireInteractive else { return nil }
         let treeElement = context.treeElement
         let liveTarget = context.liveTarget
-        switch TheStash.Interactivity.checkInteractivity(treeElement.element, object: liveTarget.object) {
+        switch TheVault.Interactivity.checkInteractivity(treeElement.element, object: liveTarget.object) {
         case .blocked(let reason):
             return .failure(method, message: reason)
         case .interactive(let warning):
             if let warning { insideJobLogger.warning("\(warning)") }
         }
-        guard TheStash.Interactivity.isInteractive(element: treeElement.element, object: liveTarget.object) else {
+        guard TheVault.Interactivity.isInteractive(element: treeElement.element, object: liveTarget.object) else {
             return .failure(
                 method,
                 message: ActionCapabilityDiagnostic.unsupportedElementAction(
@@ -97,7 +97,7 @@ extension Actions {
         ) { context in
             await ActivationPolicy(
                 accessibilityActivate: { liveTarget in
-                    self.stash.dispatchOnFreshLiveActionTarget(
+                    self.vault.dispatchOnFreshLiveActionTarget(
                         liveTarget,
                     ) { currentTarget in
                         ActivationDispatchEvidence(
@@ -135,7 +135,7 @@ extension Actions {
                 .activate,
                 message: ActionCapabilityDiagnostic.textEntryFailed(
                     operation: "post-activation keyboard readiness",
-                    stash: stash,
+                    vault: vault,
                     safecracker: safecracker,
                     suggestion: "target an editable text field"
                 ),
@@ -160,7 +160,7 @@ extension Actions {
     private func executeAdjustment(
         _ target: ResolvedAccessibilityTarget,
         method: ActionMethod,
-        action: @MainActor (TheStash.LiveActionTarget) -> Bool
+        action: @MainActor (TheVault.LiveActionTarget) -> Bool
     ) async -> TheSafecracker.ActionDispatchOutcome {
         await performElementAction(
             target: target,
@@ -178,7 +178,7 @@ extension Actions {
                 return nil
             },
             action: { context in
-                switch self.stash.dispatchOnFreshLiveActionTarget(context.liveTarget, operation: action) {
+                switch self.vault.dispatchOnFreshLiveActionTarget(context.liveTarget, operation: action) {
                 case .success:
                     return .success(method: method)
                 case .failure(let staleness):
@@ -209,7 +209,7 @@ extension Actions {
             let treeElement = dispatchContext.treeElement
             let liveTarget = dispatchContext.liveTarget
             let result: TheSafecracker.ActionDispatchOutcome
-            let dispatch = self.stash.dispatchOnFreshLiveActionTarget(
+            let dispatch = self.vault.dispatchOnFreshLiveActionTarget(
                 liveTarget,
             ) { target in
                 self.accessibilityActions.performCustomAction(named: name, on: target)

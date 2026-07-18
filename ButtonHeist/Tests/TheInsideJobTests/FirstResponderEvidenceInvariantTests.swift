@@ -12,17 +12,17 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
     func testParseNormalizesFirstResponderIntoValueSnapshot() throws {
         let firstPath = TreePath([0])
         let secondPath = TreePath([1])
-        let result = TheBurglar.ParseResult(
+        let result = TheVault.CaptureResult(
             hierarchy: [
                 .element(AccessibilityElement.make(label: "Email", traits: .textEntry), traversalIndex: 0),
                 .element(AccessibilityElement.make(label: "Password", traits: .textEntry), traversalIndex: 1),
             ]
         )
-        let facts = TheBurglar.InterfaceObservationBuildFacts(
-            focus: TheBurglar.InterfaceObservationBuildFocusFacts(firstResponderPaths: [secondPath])
+        let facts = TheVault.BuildFacts(
+            focus: TheVault.FocusFacts(firstResponderPaths: [secondPath])
         )
 
-        let parsed = TheBurglar.buildObservation(from: result, facts: facts)
+        let parsed = TheVault.buildObservation(from: result, facts: facts)
         let firstResponderHeistId = try XCTUnwrap(parsed.liveCapture.heistId(forPath: secondPath))
         let valueOnly = try InterfaceObservation.build(tree: parsed.tree)
 
@@ -73,8 +73,8 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
             ],
             firstResponderHeistId: heistId
         )
-        brains.stash.recordParsedObservedEvidence(originalScreen)
-        XCTAssertEqual(brains.stash.firstResponderHeistId, heistId)
+        brains.vault.recordParsedObservedEvidence(originalScreen)
+        XCTAssertEqual(brains.vault.firstResponderHeistId, heistId)
 
         let replacement = UITextField()
         let replacementScreen = InterfaceObservation.makeForTests(
@@ -88,13 +88,13 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
             ],
             firstResponderHeistId: nil
         )
-        brains.stash.recordParsedObservedEvidence(replacementScreen)
+        brains.vault.recordParsedObservedEvidence(replacementScreen)
         original = nil
 
         XCTAssertNil(releasedOriginal)
         XCTAssertNil(originalScreen.liveCapture.object(for: heistId))
-        XCTAssertTrue(brains.stash.currentLiveCapture.object(for: heistId) === replacement)
-        XCTAssertNil(brains.stash.firstResponderHeistId)
+        XCTAssertTrue(brains.vault.currentLiveCapture.object(for: heistId) === replacement)
+        XCTAssertNil(brains.vault.firstResponderHeistId)
     }
 
     func testFirstResponderInflationRejectsCurrentResponderUnderWrongHeistId() async throws {
@@ -109,11 +109,11 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
             traits: .textEntry,
             object: expectedObject
         )
-        brains.stash.installScreenForTesting(.makeForTests(
+        brains.vault.installObservationForTesting(.makeForTests(
             [expectedEntry],
             firstResponderHeistId: expected
         ))
-        brains.stash.nextVisibleRefreshScreenForTesting = .makeForTests(
+        brains.vault.nextVisibleRefreshObservationForTesting = .makeForTests(
             [
                 expectedEntry,
                 InterfaceObservation.TestEntry(
@@ -162,12 +162,12 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
             ],
             firstResponderHeistId: expected
         )
-        brains.stash.installScreenForTesting(screen)
-        let expectedElement = try XCTUnwrap(brains.stash.interfaceElement(heistId: expected))
-        let expectedAuthoredTarget = try XCTUnwrap(brains.stash.minimumUniqueTarget(for: expectedElement))
+        brains.vault.installObservationForTesting(screen)
+        let expectedElement = try XCTUnwrap(brains.vault.interfaceElement(heistId: expected))
+        let expectedAuthoredTarget = try XCTUnwrap(brains.vault.minimumUniqueTarget(for: expectedElement))
         let expectedTarget = try expectedAuthoredTarget.resolve(in: .empty)
-        let replacementElement = try XCTUnwrap(brains.stash.interfaceElement(heistId: replacement))
-        guard case .resolved(let replacementLiveTarget) = brains.stash.resolveLiveActionTarget(
+        let replacementElement = try XCTUnwrap(brains.vault.interfaceElement(heistId: replacement))
+        guard case .resolved(let replacementLiveTarget) = brains.vault.resolveLiveActionTarget(
             for: replacementElement
         ) else {
             return XCTFail("Expected live replacement target")
@@ -221,9 +221,9 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
             tripwireSignal: .empty,
             settledObservationSequence: nil
         )
-        let semantic = brains.stash.semanticObservationStream
+        let semantic = brains.vault.semanticObservationStream
             .commitVisibleObservationForTesting(screen)
-        let authoredTarget = try XCTUnwrap(brains.stash.firstResponderTarget(in: screen.tree))
+        let authoredTarget = try XCTUnwrap(brains.vault.firstResponderTarget(in: screen.tree))
         let resolvedTarget = try authoredTarget.resolve(in: .empty)
 
         XCTAssertEqual(authoredTarget, expectedAuthoredTarget)
@@ -235,19 +235,19 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
     func testAmbiguousLiveResponderEvidenceIsNotGuessed() {
         let firstPath = TreePath([0])
         let secondPath = TreePath([1])
-        let result = TheBurglar.ParseResult(
+        let result = TheVault.CaptureResult(
             hierarchy: [
                 .element(AccessibilityElement.make(label: "Email", traits: .textEntry), traversalIndex: 0),
                 .element(AccessibilityElement.make(label: "Password", traits: .textEntry), traversalIndex: 1),
             ]
         )
-        let facts = TheBurglar.InterfaceObservationBuildFacts(
-            focus: TheBurglar.InterfaceObservationBuildFocusFacts(
+        let facts = TheVault.BuildFacts(
+            focus: TheVault.FocusFacts(
                 firstResponderPaths: [firstPath, secondPath]
             )
         )
 
-        let parsed = TheBurglar.buildObservation(from: result, facts: facts)
+        let parsed = TheVault.buildObservation(from: result, facts: facts)
 
         XCTAssertNil(parsed.tree.viewportCapture.firstResponderHeistId)
         XCTAssertNil(parsed.liveCapture.firstResponderHeistId)
@@ -270,7 +270,7 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
         XCTAssertEqual(ScreenClassifier.snapshot(of: retained.tree).firstResponderHeistId, "email_field")
         XCTAssertNil(removed.tree.viewportCapture.firstResponderHeistId)
         XCTAssertNil(ScreenClassifier.snapshot(of: removed.tree).firstResponderHeistId)
-        XCTAssertNil(brains.stash.firstResponderTarget(in: removed.tree))
+        XCTAssertNil(brains.vault.firstResponderTarget(in: removed.tree))
     }
 
 }

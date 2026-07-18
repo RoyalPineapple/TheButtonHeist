@@ -20,10 +20,10 @@ internal final class ElementInflation {
     internal struct Exploration {
         internal var discoverTarget: @MainActor (
             ResolvedAccessibilityTarget,
-        ) async -> Navigation.ExploredScreen?
+        ) async -> Navigation.InterfaceExplorationResult?
         internal var revealKnownTarget: @MainActor (
             KnownTargetRevealRequest,
-        ) async -> Navigation.ExploredScreen?
+        ) async -> Navigation.InterfaceExplorationResult?
         internal var moveViewport: MoveViewport
     }
 
@@ -48,7 +48,7 @@ internal final class ElementInflation {
         internal var subjectResolution: ActionSubjectResolution { resolution }
     }
 
-    internal let stash: TheStash
+    internal let vault: TheVault
     internal let safecracker: TheSafecracker
     internal let tripwire: TheTripwire
     internal var exploration: Exploration
@@ -56,12 +56,12 @@ internal final class ElementInflation {
 
     internal static let comfortMarginFraction: CGFloat = 1.0 / 6.0
     internal init(
-        stash: TheStash,
+        vault: TheVault,
         safecracker: TheSafecracker,
         tripwire: TheTripwire,
         exploration: Exploration
     ) {
-        self.stash = stash
+        self.vault = vault
         self.safecracker = safecracker
         self.tripwire = tripwire
         self.exploration = exploration
@@ -99,7 +99,7 @@ internal final class ElementInflation {
         initialState: State = .resolving
     ) async -> ElementInflationResult {
         var state = initialState
-        let revealTransaction = RevealTransaction(stash: stash)
+        let revealTransaction = RevealTransaction(vault: vault)
         revealTransaction.captureScrollableHierarchy()
 
         while true {
@@ -173,14 +173,14 @@ internal final class ElementInflation {
         guard !Task.isCancelled else {
             return .failed(.cancelled("element inflation was cancelled before committed target refresh"))
         }
-        guard let treeElement = stash.interfaceElement(heistId: target.heistId) else {
+        guard let treeElement = vault.interfaceElement(heistId: target.heistId) else {
             return .failed(.staleRefresh(
                 "committed target \(target.heistId) disappeared before \(method.rawValue) refresh",
                 failureKind: .targetUnavailable
             ))
         }
         let deadline = handoffDeadline(for: treeElement)
-        let initialState: State = stash.liveContains(heistId: target.heistId)
+        let initialState: State = vault.liveContains(heistId: target.heistId)
             ? .refreshing(
                 target: target.target,
                 treeElement: treeElement,
@@ -216,7 +216,7 @@ internal final class ElementInflation {
     internal func handoffDeadline(
         for treeElement: InterfaceTree.Element
     ) -> SemanticObservationDeadline {
-        let tickCount = Self.handoffTickCount(for: treeElement, in: stash.interfaceTree)
+        let tickCount = Self.handoffTickCount(for: treeElement, in: vault.interfaceTree)
         return SemanticObservationDeadline(
             start: geometryEnvironment.now(),
             timeoutSeconds: Double(tickCount) * SemanticObservationTiming.defaultTimeout

@@ -45,8 +45,8 @@ extension Navigation {
 
     enum ContainerScrollFailure {
         case elementKnownButNotVisible(command: ContainerScrollCommand)
-        case elementAmbiguous(TheStash.TargetAmbiguityFacts, command: ContainerScrollCommand)
-        case elementNotFound(TheStash.TargetNotFoundFacts, command: ContainerScrollCommand)
+        case elementAmbiguous(TheVault.TargetAmbiguityFacts, command: ContainerScrollCommand)
+        case elementNotFound(TheVault.TargetNotFoundFacts, command: ContainerScrollCommand)
         case missingScrollableAncestor(ScrollTargetDescription, command: ContainerScrollCommand)
         case unsafeProgrammaticScroll(ScrollTargetDescription, command: ContainerScrollCommand)
         case axisMismatch(
@@ -128,7 +128,7 @@ extension Navigation {
     ) -> ContainerScrollResolution {
         switch selection {
         case .element(let target):
-            let visibleResolution = stash.resolveVisibleTarget(target)
+            let visibleResolution = vault.resolveVisibleTarget(target)
             let resolved: InterfaceTree.Element
             switch visibleResolution {
             case .resolved(let treeElement):
@@ -137,7 +137,7 @@ extension Navigation {
                 return .failed(liveScrollElementFailure(target, command: command))
             }
             let targetDescription = Self.ScrollTargetDescription(resolved)
-            guard let liveScrollTarget = stash.nearestLiveScrollTarget(for: resolved.path),
+            guard let liveScrollTarget = vault.nearestLiveScrollTarget(for: resolved.path),
                   let contentSize = liveScrollTarget.container.container.scrollableContentSize
             else {
                 return .failed(.missingScrollableAncestor(targetDescription, command: command))
@@ -166,7 +166,7 @@ extension Navigation {
             return .resolved(scrollTarget)
         case .container(let containerName):
             let candidates = scrollCandidates(requiredAxis: axis).filter {
-                stash.liveContainerName(forPath: $0.path) == containerName
+                vault.liveContainerName(forPath: $0.path) == containerName
             }
             guard !candidates.isEmpty else {
                 return .failed(.noNamedVisibleContainer(containerName, axis: axis, command: command))
@@ -190,7 +190,7 @@ extension Navigation {
     func scrollCandidates(
         requiredAxis axis: ScrollAxis?
     ) -> [ScrollPlan] {
-        let indexedContainers = stash.latestObservedLiveHierarchy.pathIndexedContainers
+        let indexedContainers = vault.latestObservedLiveHierarchy.pathIndexedContainers
         let safeSwipeBounds = currentSwipeSafeBounds(in: indexedContainers)
 
         return indexedContainers.compactMap { item -> ScrollPlan? in
@@ -202,7 +202,7 @@ extension Navigation {
                 return nil
             }
 
-            if let view = self.stash.liveScrollableContainerView(forPath: path),
+            if let view = self.vault.liveScrollableContainerView(forPath: path),
                view.window != nil,
                Self.isObscuredByPresentation(view: view) {
                 return nil
@@ -226,13 +226,13 @@ extension Navigation {
         safeSwipeBounds: CGRect? = nil
     ) -> ScrollableTarget? {
         guard let path,
-              let semanticContainer = stash.latestObservation.tree.containers[path]
+              let semanticContainer = vault.latestObservation.tree.containers[path]
         else { return nil }
-        guard case .resolved(let liveContainer) = stash.resolveLiveContainerTarget(for: semanticContainer) else {
+        guard case .resolved(let liveContainer) = vault.resolveLiveContainerTarget(for: semanticContainer) else {
             return nil
         }
-        if let scrollView = stash.liveScrollableContainerView(forPath: semanticContainer.path),
-           stash.liveContainer(forPath: semanticContainer.path) != nil {
+        if let scrollView = vault.liveScrollableContainerView(forPath: semanticContainer.path),
+           vault.liveContainer(forPath: semanticContainer.path) != nil {
             guard !scrollView.bhIsUnsafeForProgrammaticScrolling else { return nil }
             return .uiScrollView(
                 container: liveContainer,
@@ -268,7 +268,7 @@ extension Navigation {
     }
 
     private func currentSwipeSafeBounds() -> CGRect {
-        currentSwipeSafeBounds(in: stash.latestObservedLiveHierarchy.pathIndexedContainers)
+        currentSwipeSafeBounds(in: vault.latestObservedLiveHierarchy.pathIndexedContainers)
     }
 
     private func currentSwipeSafeBounds(in containers: [PathIndexedAccessibilityContainer]) -> CGRect {
@@ -305,7 +305,7 @@ extension Navigation {
         _ target: ResolvedAccessibilityTarget,
         command: ContainerScrollCommand
     ) -> ContainerScrollFailure {
-        switch stash.resolveTarget(target) {
+        switch vault.resolveTarget(target) {
         case .resolved:
             return .elementKnownButNotVisible(command: command)
         case .ambiguous(let facts):

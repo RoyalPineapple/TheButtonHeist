@@ -29,7 +29,7 @@ flowchart TD
         FAILS ~~~ INVOKE
     end
 
-    subgraph commands["Public action content"]
+    subgraph commands["Public action constructors"]
         SEMANTIC["semantic:<br/>Activate · Increment · Decrement · TypeText ·<br/>ClearText · CustomAction · Rotor"]
         SYSTEM["screen and system:<br/>ScreenActions · Edit · SetPasteboard ·<br/>TakeScreenshot · DismissKeyboard"]
         MECH["mechanical:<br/>Mechanical.Tap · Mechanical.LongPress ·<br/>Mechanical.Swipe · Mechanical.Drag"]

@@ -2,6 +2,7 @@ import Testing
 import MCP
 import Foundation
 @_spi(ButtonHeistTooling) import ButtonHeist
+import TheScore
 @testable import ButtonHeistMCP
 
 struct ToolSyncTests {

@@ -36,37 +36,29 @@ extension TheBrains {
         let receipt = await runtime.wait(.standalone(resolvedWait))
         switch receipt.result {
         case .matched(let actionResult, let expectation):
-            let completion = HeistWaitEvidence.MatchedCheck(
-                actionResult: actionResult,
-                expectation: expectation
-            ).flatMap {
-                HeistPassedWaitEvidence(.matched($0, finalSummary: expectation.actual))
-            }.map {
-                HeistWaitCompletion.passed(evidence: $0)
-            }
+            let evidence = HeistWaitEvidence.matched(
+                .init(executed: actionResult, expectation: expectation),
+                finalSummary: expectation.actual
+            )
             return waitReceipt(
                 step: step,
-                completion: completion,
+                completion: .passed(evidence: .init(admitted: evidence)),
                 path: path,
                 start: start
             )
 
         case .unmatched(let actionResult, let expectation):
             guard let elseBody = step.elseBody else {
-                let completion = HeistWaitEvidence.UnmatchedCheck(
-                    actionResult: actionResult,
-                    expectation: expectation.result
-                ).flatMap {
-                    HeistFailedWaitEvidence(.failed($0, finalSummary: expectation.actual))
-                }.map {
-                    HeistWaitCompletion.failed(
-                        evidence: .observed($0),
-                        failure: standaloneWaitFailureDetail(wait: step, receipt: receipt)
-                    )
-                }
+                let evidence = HeistWaitEvidence.failed(
+                    .init(executed: actionResult, expectation: expectation.result),
+                    finalSummary: expectation.actual
+                )
                 return waitReceipt(
                     step: step,
-                    completion: completion,
+                    completion: .failed(
+                        evidence: .observed(.init(admitted: evidence)),
+                        failure: standaloneWaitFailureDetail(wait: step, receipt: receipt)
+                    ),
                     path: path,
                     start: start
                 )
@@ -79,55 +71,43 @@ extension TheBrains {
                 scope: scope,
                 path: path.waitElseBody()
             )
-            let evidence = HeistWaitEvidence.UnmatchedCheck(
-                actionResult: actionResult,
-                expectation: expectation.result
-            ).flatMap {
-                HeistPassedWaitEvidence(.handledElse($0, finalSummary: expectation.actual))
-            }
-            let completion: HeistWaitCompletion?
-            switch HeistExecutedChildren(children) {
+            let evidence = HeistPassedWaitEvidence(admitted: .handledElse(
+                .init(executed: actionResult, expectation: expectation.result),
+                finalSummary: expectation.actual
+            ))
+            let completion: HeistWaitCompletion
+            switch children {
             case .passed(let children):
-                completion = evidence.map {
-                    .passed(evidence: $0, children: children)
-                }
+                completion = .passed(evidence: evidence, children: children)
             case .aborted(let children):
-                completion = evidence.map {
-                    .childAborted(
-                        evidence: $0,
-                        failure: childFailureDetail(category: .wait, childPath: children.abortedAtPath),
-                        children: children
-                    )
-                }
+                completion = .childAborted(
+                    evidence: evidence,
+                    failure: childFailureDetail(category: .wait, childPath: children.abortedAtPath),
+                    children: children
+                )
             }
             return waitReceipt(
                 step: step,
                 completion: completion,
                 path: path,
-                start: start,
-                children: children
+                start: start
             )
         }
     }
 
     private func waitReceipt(
         step: WaitStep,
-        completion: HeistWaitCompletion?,
+        completion: HeistWaitCompletion,
         path: HeistExecutionPath,
-        start: CFAbsoluteTime,
-        children: [HeistExecutionStepResult] = []
+        start: CFAbsoluteTime
     ) -> HeistExecutionStepResult {
         let durationMs = elapsedMilliseconds(since: start)
-        let admittedCompletion = requireAdmitted(
-            completion,
-            "wait receipt completion must match the child execution and admitted evidence"
-        )
         return .wait(
             path: path,
             durationMs: durationMs,
             predicate: step.predicate,
             timeout: step.timeout,
-            completion: admittedCompletion
+            completion: completion
         )
     }
 }

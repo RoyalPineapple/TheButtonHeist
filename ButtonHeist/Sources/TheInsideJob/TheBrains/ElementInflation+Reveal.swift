@@ -42,8 +42,8 @@ extension ElementInflation {
         resolution: ActionSubjectResolution,
         transaction: RevealTransaction
     ) async -> State {
-        if stash.liveContains(heistId: treeElement.heistId),
-           let committed = stash.interfaceElement(heistId: treeElement.heistId) {
+        if vault.liveContains(heistId: treeElement.heistId),
+           let committed = vault.interfaceElement(heistId: treeElement.heistId) {
             return .refreshing(
                 target: target,
                 treeElement: committed,
@@ -52,7 +52,7 @@ extension ElementInflation {
             )
         }
 
-        let settledSequence = stash.latestSettledSemanticObservationEvent?.sequence
+        let settledSequence = vault.semanticObservationStream.latestEvent?.sequence
         let reveal = await revealSemanticTarget(
             treeElement,
             deadline: deadline,
@@ -151,7 +151,7 @@ extension ElementInflation {
 
         while deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) {
             guard !Task.isCancelled else { return .cancelled }
-            guard let event = await stash.observeSettledSemanticObservation(
+            guard let event = await vault.semanticObservationStream.settledEvent(
                 scope: .visible,
                 after: sequence,
                 timeout: deadline.remainingSeconds()
@@ -179,7 +179,7 @@ extension ElementInflation {
 
             guard case .revealPath(let treeElement, let transaction, _) = mode,
                   !didAttemptKnownTargetReveal,
-                  let fresh = stash.interfaceElement(heistId: treeElement.heistId),
+                  let fresh = vault.interfaceElement(heistId: treeElement.heistId),
                   fresh.scrollMembership != nil
             else { continue }
 
@@ -215,8 +215,8 @@ extension ElementInflation {
     ) -> TargetRefreshResolution {
         switch mode {
         case .revealPath(let treeElement, _, _):
-            guard stash.liveContains(heistId: treeElement.heistId),
-                  let committed = stash.interfaceElement(heistId: treeElement.heistId)
+            guard vault.liveContains(heistId: treeElement.heistId),
+                  let committed = vault.interfaceElement(heistId: treeElement.heistId)
             else { return .missing }
             return .treeElement(committed)
 

@@ -66,21 +66,21 @@ private struct SessionReleaseTimer {
 actor TheMuscle {
 
     private static let disconnectGracePeriod: Duration = .milliseconds(100)
-    private static let authDeadlineSeconds: UInt64 = 10
+    private static let authTimeoutSeconds: UInt64 = 10
     private static let maxFailedAttempts = 5
     private static let lockoutDuration: TimeInterval = 30
 
     private let sessionTokenSource: SessionTokenSource
-    private var admission: TheMuscleAdmission
+    private var admission: ClientAdmission.Reducer
     private var session: SessionLease
     private var delivery: ClientDelivery = .unwired
     private var sessionReleaseTimer = SessionReleaseTimer()
 
-    private var delayedDisconnects = MuscleDelayedDisconnects(
+    private var delayedDisconnects = ClientAdmission.DelayedDisconnects(
         gracePeriod: TheMuscle.disconnectGracePeriod
     )
-    private let authenticationDeadlines = MuscleAuthenticationDeadlines(
-        deadline: .seconds(TheMuscle.authDeadlineSeconds)
+    private let authenticationTimeouts = ClientAdmission.Timeout.Deadlines(
+        deadline: .seconds(TheMuscle.authTimeoutSeconds)
     )
 
     // MARK: - Init
@@ -93,7 +93,7 @@ actor TheMuscle {
     ) {
         let tokenSource = SessionTokenSource(explicitToken: explicitToken)
         self.sessionTokenSource = tokenSource
-        self.admission = TheMuscleAdmission(
+        self.admission = ClientAdmission.Reducer(
             tokenSource: tokenSource,
             maxFailedAttempts: TheMuscle.maxFailedAttempts,
             lockoutDuration: TheMuscle.lockoutDuration
@@ -172,7 +172,7 @@ actor TheMuscle {
     /// Register the remote address for a client (called when TCP connection is established).
     func registerClientAddress(_ clientId: Int, address: String) {
         admission.registerClientAddress(clientId, address: address)
-        replaceAuthenticationDeadline(for: clientId)
+        replaceAuthenticationTimeout(for: clientId)
     }
 
     @discardableResult
@@ -197,7 +197,7 @@ actor TheMuscle {
         data: Data,
         respond: @escaping SocketResponseHandler
     ) async -> ClientAdmission {
-        await resolveAdmissionDecision(admission.admitClientMessage(
+        await resolve(admission.admit(
             clientId,
             data: data,
             respond: respond
@@ -205,30 +205,30 @@ actor TheMuscle {
     }
 
     func handleClientDisconnected(_ clientId: Int) async {
-        cancelAuthenticationDeadline(for: clientId)
-        await applyAdmissionEffects(admission.removeClient(clientId))
+        cancelAuthenticationTimeout(for: clientId)
+        await executeAdmissionEffects(admission.removeClient(clientId))
         applySessionEffects(session.removeConnection(clientId, at: Date()))
     }
 
     func tearDown() async {
         admission.removeAllClients()
-        cancelAllAuthenticationDeadlines()
+        cancelAllAuthenticationTimeouts()
         let disconnectGeneration = delayedDisconnects
         await disconnectGeneration.drain()
         if delayedDisconnects === disconnectGeneration {
-            delayedDisconnects = MuscleDelayedDisconnects(gracePeriod: Self.disconnectGracePeriod)
+            delayedDisconnects = ClientAdmission.DelayedDisconnects(gracePeriod: Self.disconnectGracePeriod)
         }
         await releaseSession()
     }
 
     // MARK: - Admission Orchestration
 
-    private func resolveAdmissionDecision(_ decision: MuscleAdmissionDecision) async -> ClientAdmission {
+    private func resolve(_ decision: ClientAdmission.Decision) async -> ClientAdmission {
         switch decision {
         case .admitted(let message):
             return .admitted(message)
         case .handled(let effect):
-            await applyAdmissionEffects(effect)
+            await executeAdmissionEffects(effect)
             return .handled
         case .authenticate(let authentication):
             await completeAuthentication(authentication)
@@ -236,7 +236,7 @@ actor TheMuscle {
         }
     }
 
-    private func completeAuthentication(_ authentication: MuscleAuthentication) async {
+    private func completeAuthentication(_ authentication: ClientAdmission.Authentication.Proof) async {
         switch session.acquire(
             owner: authentication.owner,
             clientId: authentication.clientId,
@@ -245,12 +245,12 @@ actor TheMuscle {
         case .accepted(let sessionEffect):
             applySessionEffects(sessionEffect)
             let effect = admission.completeAuthentication(authentication)
-            cancelAuthenticationDeadline(for: authentication.clientId)
-            await applyAdmissionEffects(effect)
+            cancelAuthenticationTimeout(for: authentication.clientId)
+            await executeAdmissionEffects(effect)
             _ = await delivery.clientAuthenticated(authentication.clientId, respond: authentication.respond)
 
         case .rejected(let diagnostic):
-            await applyAdmissionEffects(admission.rejectForSessionLock(
+            await executeAdmissionEffects(admission.rejectForSessionLock(
                 authentication.clientId,
                 diagnostic: diagnostic,
                 respond: authentication.respond
@@ -258,7 +258,7 @@ actor TheMuscle {
         }
     }
 
-    private func applyAdmissionEffects(_ effects: [MuscleAdmissionEffect]) async {
+    private func executeAdmissionEffects(_ effects: [ClientAdmission.Effect]) async {
         for effect in effects {
             switch effect {
             case .sendResponse(let message, let requestId, let respond):
@@ -268,12 +268,12 @@ actor TheMuscle {
             case .delayedDisconnect(let clientId):
                 scheduleDelayedDisconnect(clientId)
             case .log(let event):
-                logAdmissionEvent(event)
+                recordAdmissionLog(event)
             }
         }
     }
 
-    private func logAdmissionEvent(_ event: MuscleAdmissionLogEvent) {
+    private func recordAdmissionLog(_ event: ClientAdmission.Log) {
         switch event {
         case .clientAuthenticatedWithToken(let clientId):
             muscleLogger.info("Client \(clientId) authenticated with token")
@@ -291,8 +291,8 @@ actor TheMuscle {
             )
         case .unauthenticatedMessage(let clientId, let message):
             muscleLogger.warning("Client \(clientId) rejected before auth: \(message, privacy: .public)")
-        case .authenticationDeadline(let clientId, let deadlineSeconds):
-            muscleLogger.warning("Client \(clientId) did not authenticate within \(deadlineSeconds)s deadline")
+        case .authenticationTimeout(let clientId, let timeoutSeconds):
+            muscleLogger.warning("Client \(clientId) did not authenticate within \(timeoutSeconds)s deadline")
         case .versionMismatch(let clientId, let serverVersion, let clientVersion):
             muscleLogger.warning(
                 "Client \(clientId) buttonHeistVersion mismatch: server=\(serverVersion), client=\(clientVersion)"
@@ -312,7 +312,7 @@ actor TheMuscle {
 
     /// Schedule a delayed disconnect so the recipient can flush the final error payload.
     private func scheduleDelayedDisconnect(_ clientId: Int) {
-        cancelAuthenticationDeadline(for: clientId)
+        cancelAuthenticationTimeout(for: clientId)
         delayedDisconnects.schedule(clientId: clientId) { [weak self] in
             await self?.fireDisconnect(clientId)
         }
@@ -324,25 +324,25 @@ actor TheMuscle {
 
     // MARK: - Authentication Deadline
 
-    private func replaceAuthenticationDeadline(for clientId: Int) {
-        authenticationDeadlines.replace(for: clientId) { [weak self] in
-            await self?.handleAuthenticationDeadline(clientId)
+    private func replaceAuthenticationTimeout(for clientId: Int) {
+        authenticationTimeouts.replace(for: clientId) { [weak self] in
+            await self?.executeAuthenticationTimeout(clientId)
         }
     }
 
-    private func cancelAuthenticationDeadline(for clientId: Int) {
-        authenticationDeadlines.cancel(clientId)
+    private func cancelAuthenticationTimeout(for clientId: Int) {
+        authenticationTimeouts.cancel(clientId)
     }
 
-    private func cancelAllAuthenticationDeadlines() {
-        authenticationDeadlines.cancelAll()
+    private func cancelAllAuthenticationTimeouts() {
+        authenticationTimeouts.cancelAll()
     }
 
-    private func handleAuthenticationDeadline(_ clientId: Int) async {
-        cancelAuthenticationDeadline(for: clientId)
-        await applyAdmissionEffects(admission.authenticationDeadline(
+    private func executeAuthenticationTimeout(_ clientId: Int) async {
+        cancelAuthenticationTimeout(for: clientId)
+        await executeAdmissionEffects(admission.authenticationTimeout(
             clientId,
-            deadlineSeconds: Self.authDeadlineSeconds
+            timeoutSeconds: Self.authTimeoutSeconds
         ))
     }
 
@@ -403,7 +403,7 @@ actor TheMuscle {
     }
 
     private enum ResponseDestination: Sendable {
-        case response(TheMuscleAdmission.ResponseHandler)
+        case response(ClientAdmission.ResponseHandler)
         case client(Int)
     }
 

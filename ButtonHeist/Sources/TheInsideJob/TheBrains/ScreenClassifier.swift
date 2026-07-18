@@ -141,8 +141,22 @@ internal enum ScreenLineageEvidence: Sendable, Equatable {
         }
     }
 
-    static func snapshot(of stash: TheStash) -> Snapshot {
-        snapshot(of: stash.interfaceTree)
+    static func snapshot(of vault: TheVault) -> Snapshot {
+        snapshot(of: vault.interfaceTree)
+    }
+
+    static func classify(
+        from previousTree: InterfaceTree?,
+        to tree: InterfaceTree,
+        notifications: [AccessibilityNotificationKind],
+        lineageEvidence: ScreenLineageEvidence? = nil
+    ) -> ScreenContinuity {
+        classify(
+            before: previousTree.map(snapshot(of:)),
+            after: snapshot(of: tree),
+            notifications: notifications,
+            lineageEvidence: lineageEvidence
+        )
     }
 
     static func classify(

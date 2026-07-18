@@ -1,6 +1,7 @@
 import ButtonHeistTestSupport
 import XCTest
 import Network
+import TheScore
 @_spi(ButtonHeistTooling) @testable import ButtonHeist
 
 /// `@unchecked Sendable` justification: all mutable storage is protected by `lock`.

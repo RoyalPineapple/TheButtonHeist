@@ -256,7 +256,7 @@ final class TheMuscleTests: XCTestCase {
     // MARK: - Auth Flow Tests
 
     func testMessageRateAdmissionReturnsGeneralErrorForFirstOverLimitFrame() throws {
-        var admission = TheMuscleAdmission(
+        var admission = ClientAdmission.Reducer(
             tokenSource: .configured("good-token"),
             maxFailedAttempts: 2,
             lockoutDuration: 30
@@ -264,8 +264,8 @@ final class TheMuscleTests: XCTestCase {
         let data = try JSONEncoder().encode(RequestEnvelope(message: .ping))
         let now = Date()
 
-        for _ in 0..<MessageRateLimiter.defaultMaxMessagesPerSecond {
-            _ = admission.admitClientMessage(
+        for _ in 0..<ClientAdmission.RateLimiter.defaultMaxMessagesPerSecond {
+            _ = admission.admit(
                 1,
                 data: data,
                 respond: { _ in .delivered },
@@ -273,7 +273,7 @@ final class TheMuscleTests: XCTestCase {
             )
         }
 
-        guard case .handled(let effects) = admission.admitClientMessage(
+        guard case .handled(let effects) = admission.admit(
             1,
             data: data,
             respond: { _ in .delivered },
@@ -296,7 +296,7 @@ final class TheMuscleTests: XCTestCase {
     }
 
     func testMessageRateAdmissionNotifiesOnlyOncePerWindow() throws {
-        var admission = TheMuscleAdmission(
+        var admission = ClientAdmission.Reducer(
             tokenSource: .configured("good-token"),
             maxFailedAttempts: 2,
             lockoutDuration: 30
@@ -304,8 +304,8 @@ final class TheMuscleTests: XCTestCase {
         let data = try JSONEncoder().encode(RequestEnvelope(message: .ping))
         let now = Date()
 
-        for _ in 0..<MessageRateLimiter.defaultMaxMessagesPerSecond {
-            _ = admission.admitClientMessage(
+        for _ in 0..<ClientAdmission.RateLimiter.defaultMaxMessagesPerSecond {
+            _ = admission.admit(
                 1,
                 data: data,
                 respond: { _ in .delivered },
@@ -313,7 +313,7 @@ final class TheMuscleTests: XCTestCase {
             )
         }
 
-        guard case .handled(let firstLimit) = admission.admitClientMessage(
+        guard case .handled(let firstLimit) = admission.admit(
             1,
             data: data,
             respond: { _ in .delivered },
@@ -330,7 +330,7 @@ final class TheMuscleTests: XCTestCase {
             return XCTFail("Expected first over-limit notification to send a response")
         }
 
-        guard case .handled(let repeatedLimit) = admission.admitClientMessage(
+        guard case .handled(let repeatedLimit) = admission.admit(
             1,
             data: data,
             respond: { _ in .delivered },
@@ -344,7 +344,7 @@ final class TheMuscleTests: XCTestCase {
         }
         XCTAssertEqual(repeatedLimitClientId, 1)
 
-        guard case .handled(let nextWindow) = admission.admitClientMessage(
+        guard case .handled(let nextWindow) = admission.admit(
             1,
             data: data,
             respond: { _ in .delivered },
@@ -370,7 +370,7 @@ final class TheMuscleTests: XCTestCase {
     }
 
     func testMessageRateAdmissionLimitsAuthenticatedMessagesBeforeDispatch() throws {
-        var admission = TheMuscleAdmission(
+        var admission = ClientAdmission.Reducer(
             tokenSource: .configured("good-token"),
             maxFailedAttempts: 2,
             lockoutDuration: 30
@@ -380,7 +380,7 @@ final class TheMuscleTests: XCTestCase {
 
         admission.registerClientAddress(1, address: "127.0.0.1")
         let helloData = try JSONEncoder().encode(RequestEnvelope(message: .clientHello))
-        guard case .handled = admission.admitClientMessage(
+        guard case .handled = admission.admit(
             1,
             data: helloData,
             respond: respond,
@@ -389,7 +389,7 @@ final class TheMuscleTests: XCTestCase {
             return XCTFail("Expected client hello to be handled")
         }
 
-        guard case .authenticate(let authentication) = admission.admitClientMessage(
+        guard case .authenticate(let authentication) = admission.admit(
             1,
             data: try encodeAuth(token: "good-token"),
             respond: respond,
@@ -401,8 +401,8 @@ final class TheMuscleTests: XCTestCase {
 
         let pingData = try JSONEncoder().encode(RequestEnvelope(message: .ping))
         let nextWindow = now.addingTimeInterval(1.1)
-        for _ in 0..<MessageRateLimiter.defaultMaxMessagesPerSecond {
-            guard case .admitted = admission.admitClientMessage(
+        for _ in 0..<ClientAdmission.RateLimiter.defaultMaxMessagesPerSecond {
+            guard case .admitted = admission.admit(
                 1,
                 data: pingData,
                 respond: respond,
@@ -412,7 +412,7 @@ final class TheMuscleTests: XCTestCase {
             }
         }
 
-        guard case .handled(let effects) = admission.admitClientMessage(
+        guard case .handled(let effects) = admission.admit(
             1,
             data: pingData,
             respond: respond,

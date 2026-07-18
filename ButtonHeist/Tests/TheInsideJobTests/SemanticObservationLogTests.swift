@@ -111,7 +111,7 @@ final class SemanticObservationLogTests: XCTestCase {
         try log.publish(publication(
             sourceScope: .discovery,
             events: [visibleA, discoveryA]
-        ))
+        ), tripwireSignal: .empty)
         let visibleB = event(
             "visible-b",
             sequence: 2,
@@ -176,8 +176,8 @@ final class SemanticObservationLogTests: XCTestCase {
             XCTAssertEqual(
                 error as? ObservationTransitionValidationError,
                 .generationMismatch(
-                    from: ObservationGeneration(rawValue: 0),
-                    to: ObservationGeneration(rawValue: 1)
+                    from: ScreenGeneration(rawValue: 0),
+                    to: ScreenGeneration(rawValue: 1)
                 )
             )
         }
@@ -200,8 +200,8 @@ final class SemanticObservationLogTests: XCTestCase {
             XCTAssertEqual(
                 error as? ObservationTransitionValidationError,
                 .replacementGenerationDidNotAdvance(
-                    from: ObservationGeneration(rawValue: 2),
-                    to: ObservationGeneration(rawValue: 2)
+                    from: ScreenGeneration(rawValue: 2),
+                    to: ScreenGeneration(rawValue: 2)
                 )
             )
         }
@@ -214,7 +214,7 @@ final class SemanticObservationLogTests: XCTestCase {
         try log.publish(publication(
             sourceScope: .discovery,
             events: [initialVisible, initialDiscovery]
-        ))
+        ), tripwireSignal: .empty)
         let nextVisible = event(
             "visible-b",
             sequence: 2,
@@ -235,7 +235,7 @@ final class SemanticObservationLogTests: XCTestCase {
         XCTAssertThrowsError(try log.publish(publication(
             sourceScope: .discovery,
             events: [nextVisible, invalidDiscovery]
-        ))) { error in
+        ), tripwireSignal: .empty)) { error in
             XCTAssertEqual(
                 error as? SemanticObservationLogAppendError,
                 .eventLineageMismatch(
@@ -265,14 +265,14 @@ final class SemanticObservationLogTests: XCTestCase {
 
         XCTAssertTrue(log.latestSettledObservationInvalidated)
         XCTAssertEqual(log.latestSourceEvent, initial)
-        XCTAssertNil(log.cleanEvent(scope: .visible, after: nil))
+        XCTAssertNil(log.cleanObservation(scope: .visible, after: nil))
         XCTAssertEqual(log.retainedEntries(scope: .visible).map(\.event), [initial])
 
         let next = event("B", sequence: 2, generation: 0, previous: initial)
         try publish(next, to: log)
 
         XCTAssertFalse(log.latestSettledObservationInvalidated)
-        XCTAssertEqual(log.cleanEvent(scope: .visible, after: initial.sequence), next)
+        XCTAssertEqual(log.cleanObservation(scope: .visible, after: initial.sequence)?.event, next)
         XCTAssertEqual(log.retainedEntries(scope: .visible).map(\.event), [initial, next])
     }
 
@@ -283,7 +283,11 @@ final class SemanticObservationLogTests: XCTestCase {
         try log.publish(publication(
             sourceScope: .discovery,
             events: [initialVisible, initialDiscovery]
-        ))
+        ), tripwireSignal: .empty)
+        XCTAssertEqual(
+            log.cleanObservation(scope: .visible, after: nil),
+            CleanSettledObservation(event: initialVisible, tripwireSignal: .empty)
+        )
         let replacementVisible = event(
             "visible-b",
             sequence: 2,
@@ -293,8 +297,8 @@ final class SemanticObservationLogTests: XCTestCase {
         )
         try publish(replacementVisible, to: log)
 
-        XCTAssertEqual(log.cleanEvent(scope: .visible, after: nil), replacementVisible)
-        XCTAssertNil(log.cleanEvent(scope: .discovery, after: nil))
+        XCTAssertEqual(log.cleanObservation(scope: .visible, after: nil)?.event, replacementVisible)
+        XCTAssertNil(log.cleanObservation(scope: .discovery, after: nil))
         XCTAssertEqual(log.retainedEntries(scope: .discovery).map(\.event), [initialDiscovery])
     }
 
@@ -307,7 +311,7 @@ final class SemanticObservationLogTests: XCTestCase {
 
         XCTAssertTrue(log.latestSettledObservationInvalidated)
         XCTAssertNil(log.latestSourceEvent)
-        XCTAssertNil(log.cleanEvent(scope: .visible, after: nil))
+        XCTAssertNil(log.cleanObservation(scope: .visible, after: nil))
         XCTAssertEqual(log.retainedEntries(scope: .visible).map(\.event), [initial])
     }
 
@@ -356,15 +360,18 @@ final class SemanticObservationLogTests: XCTestCase {
     }
 
     private func publish(
-        _ event: SettledSemanticObservationEvent,
+        _ event: SettledObservationEvent,
         to log: SemanticObservationLog
     ) throws {
-        try log.publish(publication(sourceScope: event.scope, events: [event]))
+        try log.publish(
+            publication(sourceScope: event.scope, events: [event]),
+            tripwireSignal: .empty
+        )
     }
 
     private func publication(
         sourceScope: SemanticObservationScope,
-        events: [SettledSemanticObservationEvent]
+        events: [SettledObservationEvent]
     ) -> SemanticObservationPublication {
         SemanticObservationPublication(
             sourceScope: sourceScope,
@@ -377,8 +384,8 @@ final class SemanticObservationLogTests: XCTestCase {
         sequence: UInt64,
         generation: UInt64,
         scope: SemanticObservationScope = .visible,
-        previous: SettledSemanticObservationEvent? = nil
-    ) -> SettledSemanticObservationEvent {
+        previous: SettledObservationEvent? = nil
+    ) -> SettledObservationEvent {
         let currentCapture = capture(
             name,
             sequence: sequence,
@@ -388,23 +395,21 @@ final class SemanticObservationLogTests: XCTestCase {
         let trace = AccessibilityTrace(captures: previous?.trace.captures.last.map {
             [$0, currentCapture]
         } ?? [currentCapture])
-        let observation = SettledSemanticObservation(
+        let observation = SettledObservation(
             sequence: SettledObservationSequence(sequence),
             scope: scope,
-            screen: .makeForTests(),
+            observation: .makeForTests(),
             semanticSignal: .empty
         )
-        return SettledSemanticObservationEvent(
-            generation: ObservationGeneration(rawValue: generation),
+        return SettledObservationEvent(
+            generation: ScreenGeneration(rawValue: generation),
             continuity: previous.map { previous in
                 previous.generation.rawValue == generation
                     ? .sameGeneration
                     : .replacement(.inferred(.semanticIdentityDisjoint))
             } ?? .sameGeneration,
-            sequence: SettledObservationSequence(sequence),
-            scope: scope,
-            observation: observation,
-            previous: previous?.observation,
+            settledObservation: observation,
+            previous: previous?.settledObservation,
             previousCursor: previous?.cursor,
             notificationSequence: sequence,
             trace: trace
@@ -427,7 +432,7 @@ final class SemanticObservationLogTests: XCTestCase {
         )
         return SettledCapture(
             cursor: ObservationCursor(
-                generation: ObservationGeneration(rawValue: generation),
+                generation: ScreenGeneration(rawValue: generation),
                 scope: scope,
                 sequence: SettledObservationSequence(sequence),
                 capture: traceCapture,

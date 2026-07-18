@@ -3,7 +3,7 @@
 The `activate` decision tree in VoiceOver order: refresh semantic resolution and live geometry, ask UIKit to perform the element's primary accessibility activation, and only when UIKit declines deliver a tap at the element's own declared activation point. This diagram answers "which mechanism actually pressed the button, and how do I know?"
 
 **Illustrates:** [ACCESSIBILITY-CONTRACT.md](../ACCESSIBILITY-CONTRACT.md), [API.md](../API.md)
-**Source of truth:** `ButtonHeist/Sources/TheInsideJob/TheBrains/ActivationPolicy.swift`, `ButtonHeist/Sources/TheInsideJob/TheBrains/AccessibilityActionDispatcher.swift`, `ButtonHeist/Sources/TheInsideJob/TheStash/Interactivity.swift`, `ButtonHeist/Sources/TheScore/AccessibilityPolicy.swift`
+**Source of truth:** `ButtonHeist/Sources/TheInsideJob/TheBrains/ActivationPolicy.swift`, `ButtonHeist/Sources/TheInsideJob/TheBrains/AccessibilityActionDispatcher.swift`, `ButtonHeist/Sources/TheInsideJob/TheVault/Interactivity.swift`, `ButtonHeist/Sources/TheScore/AccessibilityPolicy.swift`
 
 ```mermaid
 flowchart TD

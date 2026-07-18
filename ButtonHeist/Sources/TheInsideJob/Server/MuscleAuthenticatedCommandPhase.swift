@@ -2,15 +2,16 @@
 #if DEBUG
 import TheScore
 
-struct MuscleAuthenticatedCommandPhase {
+extension ClientAdmission {
+enum AuthenticatedCommand {
     static func admit(
         _ clientId: Int,
         envelope: RequestEnvelope,
-        respond: @escaping TheMuscleAdmission.ResponseHandler
-    ) -> MuscleAdmissionDecision {
+        respond: @escaping ResponseHandler
+    ) -> Decision {
         switch envelope.message {
         case .clientHello, .authenticate:
-            return .handled(MuscleAuthenticationRejection.authenticatedProtocolMessage(
+            return .handled(Rejection.authenticatedProtocolMessage(
                 clientId,
                 envelope: envelope,
                 respond: respond
@@ -19,6 +20,7 @@ struct MuscleAuthenticatedCommandPhase {
             return .admitted(AdmittedClientMessage(clientId: clientId, envelope: envelope))
         }
     }
+}
 }
 #endif // DEBUG
 #endif // canImport(UIKit)

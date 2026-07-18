@@ -3,7 +3,7 @@
 Button Heist in-process versus the out-of-process drivers. Out-of-process automation must serialize a snapshot of the accessibility tree across an IPC boundary and synthesize input at computed coordinates; Button Heist holds the live element in the same process and asks it to activate the way assistive technology does. This diagram answers "why does running inside the app matter?"
 
 **Illustrates:** [WHY-IN-PROCESS.md](../WHY-IN-PROCESS.md), [ARCHITECTURE.md](../ARCHITECTURE.md)
-**Source of truth:** `ButtonHeist/Sources/TheInsideJob/TheStash/LiveCapture.swift`, `ButtonHeist/Sources/TheInsideJob/TheBrains/AccessibilityActionDispatcher.swift`, `ButtonHeist/Sources/TheInsideJob/TheBrains/ActivationPolicy.swift`, `submodules/AccessibilitySnapshotBH/Sources/AccessibilitySnapshot/Parser/Swift/Classes/AccessibilityHierarchyParser.swift`
+**Source of truth:** `ButtonHeist/Sources/TheInsideJob/TheVault/LiveCapture.swift`, `ButtonHeist/Sources/TheInsideJob/TheBrains/AccessibilityActionDispatcher.swift`, `ButtonHeist/Sources/TheInsideJob/TheBrains/ActivationPolicy.swift`, `submodules/AccessibilitySnapshotBH/Sources/AccessibilitySnapshot/Parser/Swift/Classes/AccessibilityHierarchyParser.swift`
 
 ```mermaid
 flowchart TD

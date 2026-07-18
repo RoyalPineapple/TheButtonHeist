@@ -108,7 +108,7 @@ extension TheBrains {
         ) async -> RuntimeActionExecution
         internal let wait: @MainActor (HeistRuntimeWaitRequest) async -> HeistWaitReceipt
         internal let selectPredicateCase: @MainActor ([ResolvedPredicateCaseRuntimeInput], Double) async -> HeistCaseSelectionResult
-        internal let observeSemanticState: @MainActor (SemanticObservationScope, SettledObservationSequence?, Double?) async -> HeistSemanticObservation?
+        internal let observeSemanticState: @MainActor (SemanticObservationScope, SettledObservationSequence?, Double?) async -> SettledObservationEvidence?
 
         internal init(
             execute: @escaping @MainActor (
@@ -117,7 +117,7 @@ extension TheBrains {
             ) async -> RuntimeActionExecution,
             wait: @escaping @MainActor (HeistRuntimeWaitRequest) async -> HeistWaitReceipt,
             selectPredicateCase: @escaping @MainActor ([ResolvedPredicateCaseRuntimeInput], Double) async -> HeistCaseSelectionResult,
-            observeSemanticState: @escaping @MainActor (SemanticObservationScope, SettledObservationSequence?, Double?) async -> HeistSemanticObservation?
+            observeSemanticState: @escaping @MainActor (SemanticObservationScope, SettledObservationSequence?, Double?) async -> SettledObservationEvidence?
         ) {
             self.execute = execute
             self.wait = wait
@@ -173,11 +173,11 @@ extension TheBrains {
         argument: HeistArgument,
         runtime: HeistExecutionRuntime
     ) async -> ActionResult {
-        let notificationScope = stash.accessibilityNotifications.beginHeistScope()
+        let notificationScope = vault.accessibilityNotifications.beginHeistScope()
         interactionObservation.resetAnnouncementWaitCursorForHeist(to: notificationScope.cursor)
         defer { notificationScope.cancel() }
 
-        let demand = stash.beginSemanticObservationDemand(scope: .visible)
+        let demand = vault.semanticObservationStream.beginActiveObservationDemand()
         defer { demand.cancel() }
 
         let heistStart = CFAbsoluteTimeGetCurrent()
@@ -198,8 +198,8 @@ extension TheBrains {
             scope: HeistExecutionScope(plan: plan),
             path: .body
         )
-        var stepResults = execution.steps
-        let abortedAtPath = execution.abortedPath
+        var stepResults = execution.values
+        let abortedAtPath = execution.abortedAtPath
         if let failedPath = abortedAtPath,
            let mode = failureEvidencePolicy.captureMode,
            let failureScreenshotStep = await failureScreenshotStep(
@@ -233,15 +233,14 @@ extension TheBrains {
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope,
         path: HeistExecutionPath = .body
-    ) async -> [HeistExecutionStepResult] {
-        let accumulator = await executeHeistStepAccumulator(
+    ) async -> HeistExecutedChildren {
+        await executeHeistStepAccumulator(
             steps,
             runtime: runtime,
             environment: environment,
             scope: scope,
             path: path
         )
-        return accumulator.steps
     }
 
     private func executeHeistStepAccumulator(
@@ -250,14 +249,14 @@ extension TheBrains {
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope,
         path: HeistExecutionPath
-    ) async -> HeistExecutionAccumulator {
-        var accumulator = HeistExecutionAccumulator()
+    ) async -> HeistExecutedChildren {
+        var children = HeistExecutedChildren.empty
 
         for (index, step) in steps.enumerated() {
             let stepPath = path.step(at: index)
 
-            if accumulator.abortedPath != nil {
-                accumulator.append(.skipped(path: stepPath, durationMs: 0, step: step))
+            if children.abortedAtPath != nil {
+                children.append(.skipped(path: stepPath, durationMs: 0, step: step))
                 continue
             } else {
                 let stepResult = await executeHeistStep(
@@ -268,10 +267,10 @@ extension TheBrains {
                     environment: environment,
                     scope: scope
                 )
-                accumulator.append(stepResult)
+                children.append(stepResult)
             }
         }
-        return accumulator
+        return children
     }
 
     private func executeHeistStep(
@@ -391,7 +390,7 @@ extension TheBrains {
             ),
             path: path.heistBody()
         )
-        switch HeistExecutedChildren(children) {
+        switch children {
         case .passed(let children):
             return .heist(
                 path: path,

@@ -51,6 +51,64 @@ Use these rules as the default review lens:
 - Update architecture docs and diagrams when responsibility, state-machine,
   wire, receipt, or language shape changes.
 
+## Canonical Architecture Vocabulary
+
+Use the same nouns and verbs for recurring architectural shapes across every
+subsystem. Qualify shared shapes with a domain namespace instead of inventing
+domain-specific synonyms: `Observation.Event`, `ClientAdmission.Decision`, and
+`InterfaceExploration.Result` should share the meanings below.
+
+Empty enums are the preferred namespace when a family has no instance state.
+They may contain nested enums, structs, classes, protocols, and static
+operations. Use a protocol with associated types only when generic code must
+preserve a relationship between family members; do not use protocols merely as
+namespaces.
+
+| Noun | Canonical meaning |
+|------|-------------------|
+| `State` | The complete durable state of a reducer or lifecycle at one phase. |
+| `Snapshot` | An immutable sample of state at one instant. |
+| `Event` | An ordered fact that has already occurred. |
+| `Command` | A typed request to perform a domain operation. |
+| `Request` / `Response` | A transport or public-boundary exchange, not internal control flow. |
+| `Decision` | A pure control-flow choice derived from current values. |
+| `Effect` | A side effect requested by a reducer and performed at a boundary. |
+| `Outcome` | The terminal classification of a completed operation. |
+| `Result` | The returned aggregate of outcome, values, and evidence. |
+| `Evidence` | Observed facts supporting a result or assertion. |
+| `Proof` | An admitted value whose type guarantees an invariant. |
+| `Report` | A human- or tooling-oriented summary derived from results. |
+| `Receipt` | A durable contract record of execution. |
+| `Baseline` | The selected earlier snapshot used for comparison. |
+| `Transition` | The typed relationship between ordered snapshots or events. |
+| `Delta` | A derived change projection; never an owner of source truth. |
+| `Cursor` | A position in an ordered log or stream. |
+| `Window` | A bounded portion of history between cursors or snapshots. |
+| `Generation` | An epoch boundary that invalidates cross-generation assumptions. |
+| `Projection` | A purpose-specific read or output shape derived from canonical truth. |
+| `Store` / `Log` / `Stream` | Current owned truth, retained ordered history, and ordered delivery, respectively. |
+
+Use verbs consistently:
+
+- `parse` converts external syntax into typed syntax; `decode` and `encode`
+  implement a wire or storage contract.
+- `capture` samples live boundary state; `observe` receives an event or
+  snapshot; `settle` waits for live state to become stable.
+- `admit` validates relationships and returns a proof-bearing internal value;
+  `resolve` turns a reference or predicate into a canonical entity.
+- `evaluate` computes a predicate or rule without side effects; `reduce`
+  applies an event to state and emits decisions or effects.
+- `record` appends retained history; `publish` records and delivers an event;
+  `commit` updates canonical owned truth.
+- `execute` runs a domain command; `dispatch` crosses a platform, process, or
+  transport boundary.
+- `project` derives a purpose-specific value; `render` turns typed values into
+  presentation.
+
+Avoid `get`, `handle`, `process`, `make`, and `build` when a canonical verb
+states the operation precisely. Reserve `require` and precondition failures for
+unreachable programmer errors, never normal pipeline control flow.
+
 ## Tuist Project Generation
 
 This project uses [Tuist](https://tuist.io) to generate Xcode projects and workspaces. The generated `.xcodeproj` and `.xcworkspace` files are local artifacts and are not checked into git.
@@ -396,7 +454,7 @@ Prefer typed enums (`enum Foo: String`) over raw strings for any value that has 
 
 ## Trait Policy: One Source of Truth
 
-`AccessibilityPolicy` (in `ButtonHeist/Sources/TheScore/AccessibilityPolicy.swift`) is the single source of truth for trait-related rules-of-the-world: which traits are transient (state, not identity), which are interactive, which are static-only, and which drive heistId synthesis. UIKit-bitmask projections live in `AccessibilityPolicy+UIKit.swift` (TheStash) and are derived from the `Set<HeistTrait>` policy — they cannot drift.
+`AccessibilityPolicy` (in `ButtonHeist/Sources/TheScore/AccessibilityPolicy.swift`) is the single source of truth for trait-related rules-of-the-world: which traits are transient (state, not identity), which are interactive, which are static-only, and which drive heistId synthesis. UIKit-bitmask projections live in `AccessibilityPolicy+UIKit.swift` (TheVault) and are derived from the `Set<HeistTrait>` policy — they cannot drift.
 
 - If you're tempted to write `if traits.contains(.button) || traits.contains(.link) || ...`, check whether `AccessibilityPolicy` already encodes the rule you're checking.
 - If you're tempted to define a local `Set<HeistTrait>` of "state traits" or "actionable traits", read from `AccessibilityPolicy` instead.
@@ -479,18 +537,18 @@ Two type families are the currency for referring to UI elements. Use them everyw
 **Interface types** (TheInsideJob):
 - `InterfaceTree` — the durable, targetable accessibility tree. It owns typed element/container facts plus a value-only viewport capture. It never owns UIKit references. `merging(_:)` is pure last-read-wins: the newer entry replaces the older entry on heistId conflict, and the newer viewport capture wins.
 - `InterfaceObservation` — one observed interface value: an `InterfaceTree` paired with the `LiveCapture` for that tree's viewport. The live half contains weak UIKit references and is replaced wholesale on every parse.
-- `TheStash` is the owner. It stores `interfaceTree` as targetable truth, `latestObservation` for current live dispatch evidence, and optional `diagnosticObservation` for a failed settle. Do not add another store, index, or projection around these values.
+- `TheVault` is the owner. It stores `interfaceTree` as targetable truth, `latestObservation` for current live dispatch evidence, and optional `diagnosticObservation` for a failed settle. Do not add another store, index, or projection around these values.
 
 **Target types** (ThePlans wire types):
-- `AccessibilityTarget` — how callers refer to a delivered accessibility node: `.predicate(ElementPredicateTemplate, ordinal:)`, `.container(ContainerPredicateExpr, ordinal:)`, `.within(container:target:)`, or `.ref(HeistReferenceName)`. This is the single target currency passed through actions, predicates, `get_interface` subtree selection, TheFence, TheSafecracker, MCP, and CLI. Only TheStash resolves it against live state.
+- `AccessibilityTarget` — how callers refer to a delivered accessibility node: `.predicate(ElementPredicateTemplate, ordinal:)`, `.container(ContainerPredicateExpr, ordinal:)`, `.within(container:target:)`, or `.ref(HeistReferenceName)`. This is the single target currency passed through actions, predicates, `get_interface` subtree selection, TheFence, TheSafecracker, MCP, and CLI. Only TheVault resolves it against live state.
 - `ElementPredicate` — the ordered check chain over label, identifier, value, hint, traits, actions, custom content, and rotors. Exclusion is one recursive check shape: `.exclude(.traits([...]))`, `.exclude(.actions([...]))`, etc. String fields use case-insensitive equality with typography folding (smart quotes/dashes/ellipsis fold to ASCII; emoji/accents/CJK pass through). Matching is **exact or miss** — on a miss the resolver returns structured suggestions through the diagnostic path; there is no substring fallback. The same semantics are evaluated by `HeistElement.matches` on the client (TheScore) and `AccessibilityElement.matches` on the server (TheInsideJob), via the shared `ElementPredicate.stringEquals` helper.
-- `HeistElement` — the wire representation sent to clients via `get_interface`. Contains heistId, label, value, traits, actions, frame, etc. Built by TheStash from `AccessibilityElement` + heistId assignment. This is a progressive-disclosure view for external consumers.
+- `HeistElement` — the wire representation sent to clients via `get_interface`. Contains heistId, label, value, traits, actions, frame, etc. Built by TheVault from `AccessibilityElement` + heistId assignment. This is a progressive-disclosure view for external consumers.
 
 **Rules:**
 - Pass `AccessibilityElement` and `AccessibilityHierarchy` internally when working with parsed accessibility data.
 - Pass `InterfaceTree` for target resolution, matching, diffing, and committed interface reads.
 - Pass `InterfaceObservation` only when a parse, settle, or exploration step also needs current live evidence.
-- Pass `AccessibilityTarget` when referring to an element or container abstractly (all layers above TheStash).
+- Pass `AccessibilityTarget` when referring to an element or container abstractly (all layers above TheVault).
 - Do not create wrapper structs, snapshot types, or intermediate representations to hold subsets of these types. If you need a subset, pass the original and read what you need.
 - Wire types (`AccessibilityTarget`, `ElementPredicate`, `HeistElement`) cross the Codable boundary. Internal types (`AccessibilityElement`, `AccessibilityHierarchy`, `InterfaceTree`, `InterfaceObservation`, `LiveCapture`) stay inside TheInsideJob.
 
@@ -498,7 +556,7 @@ Two type families are the currency for referring to UI elements. Use them everyw
 
 ## heistId synthesis is wire-format-stable
 
-`synthesizeBaseId(_:)` in `TheStash.IdAssignment` produces deterministic heistIds derived from element content. **Synthesis is wire format.** Modifications are equivalent to changes to the JSON schema — they break fixture references and the agent's predict-the-heistId pattern that benchmarks rely on. Treat any change to the synthesis rule like a wire-protocol bump.
+`synthesizeBaseId(_:)` in `TheVault.IdAssignment` produces deterministic heistIds derived from element content. **Synthesis is wire format.** Modifications are equivalent to changes to the JSON schema — they break fixture references and the agent's predict-the-heistId pattern that benchmarks rely on. Treat any change to the synthesis rule like a wire-protocol bump.
 
 The contract is locked by `SynthesisDeterminismTests` (property test across 200+ random permutations, plus a regression table of known input → known output). If you find yourself wanting to "improve" the heistId format, run the core `TheInsideJobTests` scheme first — that test exists to make the contract auditable. Any change requires updating the regression table in the same PR.
 
@@ -533,7 +591,7 @@ public var onStatus: ((String) -> Void)?
 
 If a callback fires on a non-actor thread (network queue, ObjC runtime), still annotate explicitly: `@Sendable` for non-isolated, or document with the actor specified.
 
-The custom SwiftLint rule `agent_unannotated_callback` flags `var on*: ((...) -> Void)?` patterns (public or internal) that are missing an isolation attribute.
+The Bumper rule `buttonheist.callback_isolation` requires stored callback types to declare `@Sendable` or a global actor, including file-local callback aliases.
 
 ## Value Isolation and Sendability
 

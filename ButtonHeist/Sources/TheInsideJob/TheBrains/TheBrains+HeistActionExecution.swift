@@ -93,23 +93,19 @@ extension TheBrains {
         start: CFAbsoluteTime
     ) -> HeistExecutionStepResult {
         let evidence = HeistActionEvidence.dispatch(dispatchResult: actionResult)
-        let completion: HeistActionCompletion?
+        let execution: HeistActionExecution
         switch actionResult.outcome {
         case .success:
-            completion = HeistPassedActionEvidence(evidence).map {
-                .passed(evidence: $0)
-            }
+            execution = .passed(command: command, evidence: .init(admitted: evidence))
         case .failure:
-            completion = HeistFailedActionEvidence(evidence).map {
-                .failed(
-                    evidence: $0,
-                    failure: actionDispatchFailureDetail(command: command, result: actionResult)
-                )
-            }
+            execution = .failed(
+                command: command,
+                evidence: .init(admitted: evidence),
+                failure: actionDispatchFailureDetail(command: command, result: actionResult)
+            )
         }
         return actionReceipt(
-            command: command,
-            completion: completion,
+            execution: execution,
             path: path,
             start: start
         )
@@ -123,7 +119,7 @@ extension TheBrains {
         path: HeistExecutionPath,
         start: CFAbsoluteTime
     ) -> HeistExecutionStepResult {
-        let completion: HeistActionCompletion?
+        let execution: HeistActionExecution
         switch receipt.result {
         case .matched(let expectationResult, let expectation):
             let evidence = HeistActionEvidence.expectation(
@@ -131,49 +127,36 @@ extension TheBrains {
                 expectationResult: expectationResult,
                 expectation: expectation.result
             )
-            completion = HeistPassedActionEvidence(evidence).map {
-                .passed(evidence: $0)
-            }
+            execution = .passed(command: command, evidence: .init(admitted: evidence))
         case .unmatched(let expectationResult, let expectation):
             let evidence = HeistActionEvidence.expectation(
                 dispatchResult: actionResult,
                 expectationResult: expectationResult,
                 expectation: expectation.result
             )
-            completion = HeistFailedActionEvidence(evidence).map {
-                .failed(
-                    evidence: $0,
-                    failure: actionExpectationFailureDetail(wait: wait, receipt: receipt)
-                )
-            }
+            execution = .failed(
+                command: command,
+                evidence: .init(admitted: evidence),
+                failure: actionExpectationFailureDetail(wait: wait, receipt: receipt)
+            )
         }
         return actionReceipt(
-            command: command,
-            completion: completion,
+            execution: execution,
             path: path,
             start: start
         )
     }
 
     private func actionReceipt(
-        command: HeistActionCommand,
-        completion: HeistActionCompletion?,
+        execution: HeistActionExecution,
         path: HeistExecutionPath,
         start: CFAbsoluteTime
     ) -> HeistExecutionStepResult {
         let durationMs = elapsedMilliseconds(since: start)
-        let admittedCompletion = requireAdmitted(
-            completion,
-            "action receipt evidence must match the receipt command"
-        )
-        return requireAdmitted(
-            HeistExecutionStepResult.action(
-                path: path,
-                durationMs: durationMs,
-                command: command,
-                completion: admittedCompletion
-            ),
-            "action receipt evidence must match the receipt command"
+        return .action(
+            path: path,
+            durationMs: durationMs,
+            execution: execution
         )
     }
 
@@ -190,31 +173,23 @@ extension TheBrains {
 
         let command = HeistActionCommand.takeScreenshot
         let evidence = HeistActionEvidence.dispatch(dispatchResult: result)
-        let completion: HeistActionCompletion?
+        let execution: HeistActionExecution
         switch result.outcome {
         case .success:
-            completion = HeistPassedActionEvidence(evidence).map {
-                .passed(evidence: $0)
-            }
+            execution = .passed(command: command, evidence: .init(admitted: evidence))
         case .failure:
-            completion = HeistFailedActionEvidence(evidence).map {
-                .failed(evidence: $0, failure: failureScreenshotDetail(for: result))
-            }
+            execution = .failed(
+                command: command,
+                evidence: .init(admitted: evidence),
+                failure: failureScreenshotDetail(for: result)
+            )
         }
         let path = failedPath.failureAction(at: 0)
         let durationMs = elapsedMilliseconds(since: start)
-        let admittedCompletion = requireAdmitted(
-            completion,
-            "failure screenshot receipt evidence must match the screenshot command"
-        )
-        return requireAdmitted(
-            HeistExecutionStepResult.action(
-                path: path,
-                durationMs: durationMs,
-                command: command,
-                completion: admittedCompletion
-            ),
-            "failure screenshot receipt evidence must match the screenshot command"
+        return .action(
+            path: path,
+            durationMs: durationMs,
+            execution: execution
         )
     }
 }

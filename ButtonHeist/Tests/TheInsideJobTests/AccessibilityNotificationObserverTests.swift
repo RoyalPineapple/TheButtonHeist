@@ -202,18 +202,18 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
     }
 
     func testStoppingSemanticObservationDoesNotClearNotificationHistory() {
-        let stash = TheStash(tripwire: TheTripwire())
-        let heist = stash.accessibilityNotifications.beginHeistScope()
-        stash.accessibilityNotifications.recordForTesting(
+        let vault = TheVault(tripwire: TheTripwire())
+        let heist = vault.accessibilityNotifications.beginHeistScope()
+        vault.accessibilityNotifications.recordForTesting(
             code: 1001,
             notificationData: .none,
             associatedElement: .none
         )
         heist.cancel()
 
-        stash.semanticObservationStream.stop()
+        vault.semanticObservationStream.stop()
 
-        let batch = stash.accessibilityNotifications.checkpoint(after: .origin)
+        let batch = vault.accessibilityNotifications.checkpoint(after: .origin)
         XCTAssertEqual(batch.events.map(\.kind), [.elementChanged(.layout)])
         XCTAssertNil(batch.gap)
     }
@@ -463,14 +463,14 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
                 heistId: "overview_header"
             )
         ])
-        let staleEvent = brains.stash.semanticObservationStream.commitVisibleObservationForTesting(staleScreen)
+        let staleEvent = brains.vault.semanticObservationStream.commitVisibleObservationForTesting(staleScreen)
 
         // The completion notification lands after the commit, inside an
         // action's attribution window: the settled overview has already been
         // replaced and must not be served to the next read.
-        let actionWindow = brains.stash.accessibilityNotifications.beginActionWindow()
+        let actionWindow = brains.vault.accessibilityNotifications.beginActionWindow()
         defer { actionWindow.cancel() }
-        brains.stash.accessibilityNotifications.recordForTesting(
+        brains.vault.accessibilityNotifications.recordForTesting(
             code: 1000,
             notificationData: .none,
             associatedElement: .none
@@ -481,9 +481,9 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
                 heistId: "destination_header"
             )
         ])
-        brains.stash.nextVisibleRefreshScreenForTesting = freshScreen
+        brains.vault.nextVisibleRefreshObservationForTesting = freshScreen
 
-        let served = await brains.stash.observeSettledSemanticObservation(
+        let served = await brains.vault.semanticObservationStream.settledEvent(
             scope: .visible,
             after: staleEvent.sequence > 0 ? staleEvent.sequence - 1 : nil,
             timeout: 3.0
@@ -512,23 +512,23 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
                 heistId: "overview_header"
             )
         ])
-        let staleEvent = brains.stash.semanticObservationStream.commitVisibleObservationForTesting(staleScreen)
+        let staleEvent = brains.vault.semanticObservationStream.commitVisibleObservationForTesting(staleScreen)
 
-        brains.stash.accessibilityNotifications.recordForTesting(
+        brains.vault.accessibilityNotifications.recordForTesting(
             code: 1000,
             notificationData: .none,
             associatedElement: .none
         )
-        let actionWindow = brains.stash.accessibilityNotifications.beginActionWindow()
+        let actionWindow = brains.vault.accessibilityNotifications.beginActionWindow()
         defer { actionWindow.cancel() }
-        brains.stash.nextVisibleRefreshScreenForTesting = InterfaceObservation.makeForTests([
+        brains.vault.nextVisibleRefreshObservationForTesting = InterfaceObservation.makeForTests([
             InterfaceObservation.TestEntry(
                 AccessibilityElement.make(label: "Destination", traits: .header),
                 heistId: "destination_header"
             )
         ])
 
-        let served = await brains.stash.observeSettledSemanticObservation(
+        let served = await brains.vault.semanticObservationStream.settledEvent(
             scope: .visible,
             after: staleEvent.sequence > 0 ? staleEvent.sequence - 1 : nil,
             timeout: 0.25

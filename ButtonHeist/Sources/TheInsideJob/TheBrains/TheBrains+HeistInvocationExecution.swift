@@ -209,9 +209,9 @@ extension TheBrains {
     private func evaluateInvocationExpectation(
         _ context: InvocationExpectationContext?,
         runtime: HeistExecutionRuntime,
-        childExecution: [HeistExecutionStepResult]
+        childExecution: HeistExecutedChildren
     ) async -> InvocationExpectationOutcome {
-        guard childExecution.firstFailedStep == nil, let context else { return .notEvaluated }
+        guard case .passed = childExecution, let context else { return .notEvaluated }
         let receipt: HeistWaitReceipt
         if let observedSequence = context.baseline.observedSequence {
             receipt = await runtime.wait(.afterObservation(

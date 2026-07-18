@@ -260,7 +260,7 @@ extension TheInsideJob {
         // keeps conditionals, waits, and first actions from inheriting the
         // previous run's settled semantic world when the app is already on
         // another screen.
-        brains.stash.clearInterfaceForHeistBootstrap()
+        brains.vault.clearInterfaceForHeistBootstrap()
         _ = await brains.interactionObservation.observeVisibleState(
             timeout: SemanticObservationTiming.defaultTimeout
         )

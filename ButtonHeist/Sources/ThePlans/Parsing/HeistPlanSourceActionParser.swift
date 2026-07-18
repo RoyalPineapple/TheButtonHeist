@@ -292,31 +292,40 @@ extension HeistPlanSourceParser {
         return .mechanicalDrag(DragTarget(selection: selection))
     }
 
-    mutating func parseXYArguments() throws -> ScreenPoint {
+    mutating func parsePointCoordinates() throws -> (x: FiniteCoordinate, y: FiniteCoordinate) {
         try expectIdentifier("x")
         try expectSymbol(":")
-        let x = try parseNumber()
+        let x = try parseFiniteCoordinate()
         try expectSymbol(",")
         try expectIdentifier("y")
         try expectSymbol(":")
-        let y = try parseNumber()
-        return ScreenPoint(x: x, y: y)
+        return (x, try parseFiniteCoordinate())
+    }
+
+    mutating func parseFiniteCoordinate() throws -> FiniteCoordinate {
+        let coordinateToken = currentToken
+        let value = try parseNumber()
+        do {
+            return try FiniteCoordinate(validating: value)
+        } catch let validationError {
+            throw error(coordinateToken, String(describing: validationError))
+        }
     }
 
     mutating func parseScreenPoint() throws -> ScreenPoint {
         try expectIdentifier("ScreenPoint")
         try expectSymbol("(")
-        let point = try parseXYArguments()
+        let coordinates = try parsePointCoordinates()
         try expectSymbol(")")
-        return point
+        return ScreenPoint(x: coordinates.x, y: coordinates.y)
     }
 
     mutating func parseUnitPoint() throws -> UnitPoint {
         try expectIdentifier("UnitPoint")
         try expectSymbol("(")
-        let point = try parseXYArguments()
+        let coordinates = try parsePointCoordinates()
         try expectSymbol(")")
-        return UnitPoint(x: point.x, y: point.y)
+        return UnitPoint(x: coordinates.x, y: coordinates.y)
     }
 
     mutating func parseGestureDuration() throws -> GestureDuration {
@@ -332,8 +341,8 @@ extension HeistPlanSourceParser {
     mutating func parseActionStep(
         command: HeistActionCommand
     ) throws -> HeistStep {
-        var content: any HeistActionContent = ActionContent(command: command)
-        var repeatedContent: RepeatActionUntilContent?
+        var content = Action(command: command)
+        var repeatedContent: Action.Repeated?
         while consumeSymbol(".") {
             let chainToken = currentToken
             let chain = try parseIdentifier()
@@ -363,7 +372,7 @@ extension HeistPlanSourceParser {
                 let predicate = try parseAccessibilityPredicateExpr()
                 let timeout = try parseTrailingTimeout(defaultValue: defaultWaitTimeout) ?? defaultWaitTimeout
                 try expectSymbol(")")
-                repeatedContent = content.until(predicate, timeout: timeout)
+                repeatedContent = content.repeated(until: predicate, timeout: timeout)
             default:
                 throw error(chainToken, "unsupported action chain '.\(chain)'")
             }

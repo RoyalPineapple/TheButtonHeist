@@ -42,8 +42,25 @@ identifier_name:
   max_length:
     warning: 60
   excluded:
+    - Activate
+    - ClearText
+    - CustomAction
+    - Decrement
+    - Dismiss
+    - DismissKeyboard
+    - Drag
+    - Edit
     - If
+    - Increment
+    - LongPress
+    - MagicTap
+    - Rotor
     - RunHeist
+    - SetPasteboard
+    - Swipe
+    - TakeScreenshot
+    - Tap
+    - TypeText
 
 type_name:
   min_length:

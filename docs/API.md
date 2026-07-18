@@ -61,6 +61,14 @@ module map and the wire boundary are drawn in the
 
 The former `ButtonHeistDSL` product and module have been removed. Swift heist
 authors import `ThePlans` directly; there is no compatibility alias or adapter.
+`ButtonHeist` re-exports that authoring module for client applications, but it
+does not re-export `TheScore`. Code that names wire, receipt, or diagnostic
+types from `TheScore` must depend on and import that product explicitly.
+
+Action spellings such as `Activate(...)` and `Mechanical.Tap(...)` are
+constructor functions that return one `Action` value. `Action` owns the fluent
+`.expect(...)`, `.withoutExpectation(...)`, and `.until(...)` transitions and
+produces `HeistContent`; command and expectation bookkeeping are not exposed.
 
 CI checks public Swift API compatibility against the latest `v*` release tag
 reachable from `origin/main` with:
@@ -204,7 +212,7 @@ Container identifiers are orthogonal data on every delivered parser container,
 not only semantic-group containers. A container identifier target therefore
 matches any parser container type that carries that identifier. The current
 delivered tree is the authority for both element and container matches.
-TheStash resolves actions, predicates, and `get_interface` subtree requests
+TheVault resolves actions, predicates, and `get_interface` subtree requests
 directly against its `InterfaceTree`; subtree projection happens only after that
 resolution. A delivered `Interface` constructs one validated `InterfaceGraph`
 for client matching and formatting. A flattened element list, screen model, or

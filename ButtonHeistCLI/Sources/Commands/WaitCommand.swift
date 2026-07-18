@@ -1,6 +1,7 @@
 import ArgumentParser
 @_spi(ButtonHeistTooling) import ButtonHeist
 import ThePlans
+import TheScore
 
 struct WaitCommand: ConnectedOneShotCLICommand {
     static let configuration = CommandConfiguration(
@@ -10,7 +11,8 @@ struct WaitCommand: ConnectedOneShotCLICommand {
             Waits until an accessibility predicate becomes true. `--exists`/`--missing` \
             poll the current interface for an element matching the supplied element \
             fields; `--change` rides settled UI transitions. Uses settle-event \
-            polling, not busy-waiting. Timeout is capped at 30 seconds.
+            polling, not busy-waiting. Explicit timeouts use the configured \
+            Button Heist wait limit.
 
             Examples:
               buttonheist wait --exists -l "Welcome"
@@ -25,12 +27,17 @@ struct WaitCommand: ConnectedOneShotCLICommand {
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
 
-    @Option(name: .shortAndLong, help: "Maximum wait time in seconds (default: \(Int(CLITimeoutDefaults.wait)), max: 30)")
+    @Option(
+        name: .shortAndLong,
+        help: "Maximum wait time in seconds (default: \(Int(CLITimeoutDefaults.wait)), max: \(WaitTimeout.maximumSeconds))"
+    )
     var timeout: Double = CLITimeoutDefaults.wait
 
     func validate() throws {
-        guard timeout > 0 && timeout <= 30 else {
-            throw ValidationError("timeout must be greater than 0 and at most 30 seconds, got \(timeout)")
+        do {
+            _ = try WaitTimeout(validatingSeconds: timeout)
+        } catch {
+            throw ValidationError(String(describing: error))
         }
     }
 

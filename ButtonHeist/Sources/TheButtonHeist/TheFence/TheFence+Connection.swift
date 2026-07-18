@@ -1,4 +1,5 @@
 import Foundation
+import TheScore
 
 extension TheFence {
 

@@ -8,7 +8,7 @@ import ThePlans
 @MainActor
 final class DiagnosticsTests: XCTestCase {
 
-    private typealias Diagnostics = TheStash.Diagnostics
+    private typealias Diagnostics = TheVault.Diagnostics
 
     // MARK: - formatMatcher
 

@@ -1,5 +1,41 @@
 import CoreGraphics
 
+public struct FiniteCoordinate: Codable, Sendable, Equatable, Hashable,
+    ExpressibleByIntegerLiteral, ExpressibleByFloatLiteral {
+    public enum ValidationError: Error, Sendable, Equatable, CustomStringConvertible {
+        case nonFinite
+
+        public var description: String { "coordinate must be finite" }
+    }
+
+    public let value: Double
+
+    public init(validating value: Double) throws(ValidationError) {
+        guard value.isFinite else { throw .nonFinite }
+        self.value = value
+    }
+
+    public init(integerLiteral value: Int) {
+        self = requireValidLiteralPayload {
+            try Self(validating: Double(value))
+        }
+    }
+
+    public init(floatLiteral value: Double) {
+        self = requireValidLiteralPayload {
+            try Self(validating: value)
+        }
+    }
+
+    public init(from decoder: Decoder) throws {
+        self = try decodeSingleValue(from: decoder, admitting: Self.init(validating:))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        try encodeSingleValue(value, to: encoder)
+    }
+}
+
 public struct ScreenPoint: Codable, Sendable, Equatable, Hashable, CustomStringConvertible {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case x
@@ -9,21 +45,17 @@ public struct ScreenPoint: Codable, Sendable, Equatable, Hashable, CustomStringC
     public let x: Double
     public let y: Double
 
-    public init(x: Double, y: Double) {
-        requireFinitePointCoordinates(x: x, y: y, kind: "screen point")
-        self.x = x
-        self.y = y
+    public init(x: FiniteCoordinate, y: FiniteCoordinate) {
+        self.x = x.value
+        self.y = y.value
     }
 
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "screen point")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let x = try container.decode(Double.self, forKey: .x)
-        let y = try container.decode(Double.self, forKey: .y)
-        try rejectNonFinitePointCoordinates(x: x, y: y, kind: "screen point", codingPath: container.codingPath)
         self.init(
-            x: x,
-            y: y
+            x: try container.decode(FiniteCoordinate.self, forKey: .x),
+            y: try container.decode(FiniteCoordinate.self, forKey: .y)
         )
     }
 
@@ -39,24 +71,6 @@ public struct ScreenPoint: Codable, Sendable, Equatable, Hashable, CustomStringC
 
     public var description: String {
         "point(\(ScoreDescription.decimal(x)),\(ScoreDescription.decimal(y)))"
-    }
-}
-
-func requireFinitePointCoordinates(x: Double, y: Double, kind: String) {
-    precondition(x.isFinite && y.isFinite, "\(kind) coordinates must be finite")
-}
-
-func rejectNonFinitePointCoordinates(
-    x: Double,
-    y: Double,
-    kind: String,
-    codingPath: [CodingKey]
-) throws {
-    guard x.isFinite, y.isFinite else {
-        throw DecodingError.dataCorrupted(.init(
-            codingPath: codingPath,
-            debugDescription: "\(kind) coordinates must be finite"
-        ))
     }
 }
 

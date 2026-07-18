@@ -7,7 +7,7 @@ extension ActionResult {
     @MainActor init(
         outcome: TheSafecracker.ActionDispatchOutcome,
         afterStatePayload: ((PostActionPayloadContext) -> ActionResultPayload?)?,
-        settledObservation: PostActionObservation.SettledObservationResult
+        settledObservation: PostActionObservation.SettlementResult
     ) {
         let resultOutcome = settledObservation.resultOutcome(for: outcome)
         let message = settledObservation.message(explicit: outcome.message)
@@ -47,7 +47,7 @@ extension ActionResult {
     }
 }
 
-extension PostActionObservation.SettledObservationResult {
+extension PostActionObservation.SettlementResult {
     var traceEvidence: AccessibilityTraceEvidence {
         guard let evidence = AccessibilityTraceEvidence(
             trace: accessibilityTrace,
@@ -117,9 +117,9 @@ extension PostActionObservation.SettledObservationResult {
         guard case .success(let payload, let resolvedElementId) = outcome.state else { return nil }
         if let payload { return payload }
         guard let afterStatePayload else { return nil }
-        guard case .committed(_, let finalState, _) = self else { return nil }
+        guard case .committed(_, let finalBaseline, _) = self else { return nil }
         return afterStatePayload(PostActionPayloadContext(
-            afterState: finalState,
+            baseline: finalBaseline,
             resolvedElementId: resolvedElementId
         ))
     }

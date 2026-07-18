@@ -3,7 +3,8 @@
 import Foundation
 import ButtonHeistSupport
 
-final class MuscleDelayedDisconnects: Sendable {
+extension ClientAdmission {
+final class DelayedDisconnects: Sendable {
 
     private let gracePeriod: Duration
     private let tasks = TaskTracker()
@@ -27,6 +28,7 @@ final class MuscleDelayedDisconnects: Sendable {
     func drain() async {
         await tasks.drain()
     }
+}
 }
 
 #endif // DEBUG

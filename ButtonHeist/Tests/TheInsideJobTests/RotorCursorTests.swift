@@ -9,15 +9,15 @@ import XCTest
 
 @MainActor
 final class RotorCursorTests: XCTestCase {
-    private var stash: TheStash!
+    private var vault: TheVault!
 
     override func setUp() async throws {
         try await super.setUp()
-        stash = TheStash(tripwire: TheTripwire())
+        vault = TheVault(tripwire: TheTripwire())
     }
 
     override func tearDown() async throws {
-        stash = nil
+        vault = nil
         try await super.tearDown()
     }
 
@@ -42,7 +42,7 @@ final class RotorCursorTests: XCTestCase {
         )
 
         do {
-            let outcome = stash.performRotor(
+            let outcome = vault.performRotor(
                 selection: .named("Items"),
                 direction: .next,
                 on: try rotorLiveTarget(hostHeistId: hostHeistId)
@@ -51,7 +51,7 @@ final class RotorCursorTests: XCTestCase {
                 return XCTFail("Expected initial rotor result, got \(outcome)")
             }
         }
-        XCTAssertEqual(stash.rotorCursor?.selectionHeistId, resultHeistId)
+        XCTAssertEqual(vault.rotorCursor?.selectionHeistId, resultHeistId)
 
         initialHost = nil
         initialResult = nil
@@ -75,7 +75,7 @@ final class RotorCursorTests: XCTestCase {
         )
 
         XCTAssertNil(releasedInitialResult)
-        let outcome = stash.performRotor(
+        let outcome = vault.performRotor(
             selection: .named("Items"),
             direction: .next,
             on: try rotorLiveTarget(hostHeistId: hostHeistId)
@@ -120,7 +120,7 @@ final class RotorCursorTests: XCTestCase {
             resultObject: nil
         )
 
-        let outcome = stash.performRotor(
+        let outcome = vault.performRotor(
             selection: .named("Items"),
             direction: .next,
             on: try rotorLiveTarget(hostHeistId: hostHeistId)
@@ -131,7 +131,7 @@ final class RotorCursorTests: XCTestCase {
         }
         XCTAssertEqual(unavailableHeistId, resultHeistId.rawValue)
         XCTAssertEqual(searchCount, 0)
-        XCTAssertNil(stash.rotorCursor)
+        XCTAssertNil(vault.rotorCursor)
     }
 
     func testScreenGenerationReplacementInvalidatesContinuation() throws {
@@ -154,14 +154,14 @@ final class RotorCursorTests: XCTestCase {
         )
         try expectSuccessfulStep(hostHeistId: hostHeistId, rotorName: "Items")
 
-        stash.semanticObservationStream.requireScreenReplacement()
+        vault.semanticObservationStream.requireScreenReplacement()
         installRotorScreen(
             hostHeistId: hostHeistId,
             hostObject: host,
             resultHeistId: resultHeistId,
             resultObject: result
         )
-        let outcome = stash.performRotor(
+        let outcome = vault.performRotor(
             selection: .named("Items"),
             direction: .next,
             on: try rotorLiveTarget(hostHeistId: hostHeistId)
@@ -171,7 +171,7 @@ final class RotorCursorTests: XCTestCase {
             return XCTFail("Expected invalidated continuation, got \(outcome)")
         }
         XCTAssertEqual(searchCount, 1)
-        XCTAssertNil(stash.rotorCursor)
+        XCTAssertNil(vault.rotorCursor)
     }
 
     func testContinuationReconstructsTextRangeFromValueReference() throws {
@@ -210,7 +210,7 @@ final class RotorCursorTests: XCTestCase {
 
         XCTAssertEqual(invocation, 2)
         XCTAssertEqual(receivedOffsets, TextRangeReference(startOffset: 1, endOffset: 4))
-        XCTAssertEqual(stash.rotorCursor?.textRange, TextRangeReference(startOffset: 1, endOffset: 4))
+        XCTAssertEqual(vault.rotorCursor?.textRange, TextRangeReference(startOffset: 1, endOffset: 4))
     }
 
     func testResultRangeThatCannotBecomeAValueCursorFailsExplicitly() throws {
@@ -233,7 +233,7 @@ final class RotorCursorTests: XCTestCase {
             resultObject: result
         )
 
-        let outcome = stash.performRotor(
+        let outcome = vault.performRotor(
             selection: .named("Words"),
             direction: .next,
             on: try rotorLiveTarget(hostHeistId: hostHeistId)
@@ -242,7 +242,7 @@ final class RotorCursorTests: XCTestCase {
         guard case .continuationTextRangeUnavailable = outcome else {
             return XCTFail("Expected unreconstructable range failure, got \(outcome)")
         }
-        XCTAssertNil(stash.rotorCursor)
+        XCTAssertNil(vault.rotorCursor)
     }
 
     func testClearingCursorMakesNextStepStartFresh() throws {
@@ -265,7 +265,7 @@ final class RotorCursorTests: XCTestCase {
         )
         try expectSuccessfulStep(hostHeistId: hostHeistId, rotorName: "Items")
 
-        stash.clearRotorCursor()
+        vault.clearRotorCursor()
         try expectSuccessfulStep(hostHeistId: hostHeistId, rotorName: "Items")
 
         XCTAssertEqual(receivedCurrentItems.count, 2)
@@ -293,22 +293,22 @@ final class RotorCursorTests: XCTestCase {
             shape: .frame(AccessibilityRect(x: 20, y: 80, width: 200, height: 44)),
             activationPoint: CGPoint(x: 120, y: 102)
         )
-        stash.installScreenForTesting(.makeForTests([
+        vault.installObservationForTesting(.makeForTests([
             .init(hostElement, heistId: hostHeistId, object: hostObject),
             .init(resultElement, heistId: resultHeistId, object: resultObject),
         ]))
     }
 
-    private func rotorLiveTarget(hostHeistId: HeistId) throws -> TheStash.LiveActionTarget {
-        let treeElement = try XCTUnwrap(stash.interfaceElement(heistId: hostHeistId))
-        guard case .resolved(let liveTarget) = stash.resolveLiveActionTarget(for: treeElement) else {
+    private func rotorLiveTarget(hostHeistId: HeistId) throws -> TheVault.LiveActionTarget {
+        let treeElement = try XCTUnwrap(vault.interfaceElement(heistId: hostHeistId))
+        guard case .resolved(let liveTarget) = vault.resolveLiveActionTarget(for: treeElement) else {
             throw RotorCursorTestError.liveTargetUnavailable
         }
         return liveTarget
     }
 
     private func expectSuccessfulStep(hostHeistId: HeistId, rotorName: RotorName) throws {
-        let outcome = stash.performRotor(
+        let outcome = vault.performRotor(
             selection: .named(rotorName),
             direction: .next,
             on: try rotorLiveTarget(hostHeistId: hostHeistId)

@@ -294,12 +294,12 @@ struct SettleSessionFinalObservation: Equatable, Sendable {
     let captureToken: InterfaceCaptureToken
 
     @MainActor
-    init(screen: InterfaceObservation, fingerprint: Int? = nil) {
-        tree = screen.tree
+    init(observation: InterfaceObservation, fingerprint: Int? = nil) {
+        tree = observation.tree
         self.fingerprint = fingerprint ?? SettleTimeline.fingerprint(
-            of: screen.liveCapture.hierarchy.sortedElements
+            of: observation.liveCapture.hierarchy.sortedElements
         )
-        captureToken = screen.captureToken
+        captureToken = observation.captureToken
     }
 }
 
@@ -439,10 +439,10 @@ struct SettleSessionFinalObservation: Equatable, Sendable {
         )
     }
 
-    /// Live wiring against the real stash/tripwire. The policy selects the
+    /// Live wiring against the real vault/tripwire. The policy selects the
     /// stability proof while this type continues to own the entire loop.
     static func live(
-        stash: TheStash,
+        vault: TheVault,
         tripwire: TheTripwire,
         timeoutMs: Int = SettleSession.defaultTimeoutMs,
         policy: SettlePolicy = .consecutiveCycles(
@@ -456,7 +456,7 @@ struct SettleSessionFinalObservation: Equatable, Sendable {
             { await tripwire.yieldRealFrames(1) }
         }
         return SettleSession(
-            parseProvider: { stash.semanticObservationForSettle() },
+            parseProvider: { vault.semanticObservationForSettle() },
             tripwireSignalProvider: { tripwire.tripwireSignal() },
             observationYield: observationYield,
             policy: policy,
@@ -469,12 +469,12 @@ struct SettleSessionFinalObservation: Equatable, Sendable {
     /// one run-loop turn to lay out the new viewport, then the parser must
     /// return the same semantic fingerprint on consecutive captures.
     static func viewportTransition(
-        stash: TheStash,
+        vault: TheVault,
         tripwire: TheTripwire,
         timeoutMs: Int
     ) -> SettleSession {
         SettleSession(
-            parseProvider: { stash.semanticObservationForSettle() },
+            parseProvider: { vault.semanticObservationForSettle() },
             tripwireSignalProvider: { tripwire.tripwireSignal() },
             observationYield: { await tripwire.yieldRealFrames(1) },
             policy: .consecutiveCycles(required: 1),
@@ -491,11 +491,13 @@ struct SettleSessionFinalObservation: Equatable, Sendable {
         /// whether the AX tree became stable.
         let events: [SettleEvent]
         /// Last semantic observation from the settle loop, paired with the
-        /// token and fingerprint needed to reacquire its live capture from TheStash.
+        /// token and fingerprint needed to reacquire its live capture from TheVault.
         let finalObservation: SettleSessionFinalObservation?
         /// Every `(key, element)` pair observed in any cycle of the loop.
         /// Includes spinner cycles and other intermediate states.
         let elementsByKey: [TimelineKey: AccessibilityElement]
+        /// Full tripwire signal paired with the final observed generation.
+        let tripwireSignal: TheTripwire.TripwireSignal
         /// Compact explanation of the most recent semantic instability when
         /// the loop exits without a clean settle.
         let instabilityDescription: String?
@@ -505,6 +507,7 @@ struct SettleSessionFinalObservation: Equatable, Sendable {
             events: [SettleEvent],
             finalObservation: SettleSessionFinalObservation?,
             elementsByKey: [TimelineKey: AccessibilityElement],
+            tripwireSignal: TheTripwire.TripwireSignal,
             instabilityDescription: String? = nil
         ) {
             precondition(
@@ -515,6 +518,7 @@ struct SettleSessionFinalObservation: Equatable, Sendable {
             self.events = events
             self.finalObservation = finalObservation
             self.elementsByKey = elementsByKey
+            self.tripwireSignal = tripwireSignal
             self.instabilityDescription = instabilityDescription
         }
     }
@@ -562,18 +566,20 @@ struct SettleSessionFinalObservation: Equatable, Sendable {
                 outcome: .settled(timeMs: timeMs),
                 events: state.events,
                 finalObservation: observations.currentGenerationLastObservation.map {
-                    SettleSessionFinalObservation(screen: $0.screen, fingerprint: $0.fingerprint)
+                    SettleSessionFinalObservation(observation: $0.observation, fingerprint: $0.fingerprint)
                 },
-                elementsByKey: observations.elementsByKey
+                elementsByKey: observations.elementsByKey,
+                tripwireSignal: state.progress.tripwireBaseline
             )
         case .timedOut(let timeMs), .yieldFailed(let timeMs):
             return Outcome(
                 outcome: .timedOut(timeMs: timeMs),
                 events: state.events,
                 finalObservation: observations.currentGenerationLastObservation.map {
-                    SettleSessionFinalObservation(screen: $0.screen, fingerprint: $0.fingerprint)
+                    SettleSessionFinalObservation(observation: $0.observation, fingerprint: $0.fingerprint)
                 },
                 elementsByKey: observations.elementsByKey,
+                tripwireSignal: state.progress.tripwireBaseline,
                 instabilityDescription: observations.latestChangeDescription
             )
         case .cancelled(let timeMs):
@@ -581,9 +587,10 @@ struct SettleSessionFinalObservation: Equatable, Sendable {
                 outcome: .cancelled(timeMs: timeMs),
                 events: state.events,
                 finalObservation: observations.currentGenerationLastObservation.map {
-                    SettleSessionFinalObservation(screen: $0.screen, fingerprint: $0.fingerprint)
+                    SettleSessionFinalObservation(observation: $0.observation, fingerprint: $0.fingerprint)
                 },
                 elementsByKey: observations.elementsByKey,
+                tripwireSignal: state.progress.tripwireBaseline,
                 instabilityDescription: observations.latestChangeDescription
             )
         }
@@ -623,8 +630,8 @@ private struct SettleLoopRunner {
             return transition
         }
 
-        func ingest(_ screen: InterfaceObservation) -> SettleSession.Outcome? {
-            let recorded = observations.record(screen)
+        func ingest(_ observation: InterfaceObservation) -> SettleSession.Outcome? {
+            let recorded = observations.record(observation)
             let transition = send(
                 .observation(
                     recorded.sample,
