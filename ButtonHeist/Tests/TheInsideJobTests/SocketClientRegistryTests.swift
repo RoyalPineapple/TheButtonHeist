@@ -3,24 +3,81 @@ import Network
 @testable import TheInsideJob
 
 final class SocketClientRegistryTests: XCTestCase {
-    func testRegistryOwnsClientIdentity() {
+    func testConnectionAdmissionTransfersOwnershipAndRegistersClientAtomically() throws {
         var registry = SocketClientRegistry()
+        let connection = makeConnection()
+        var didTransferOwnership = false
 
-        let clientId = registry.insert(connection: makeConnection())
+        let clientId = try XCTUnwrap(registeredClientId(from: registry.admitConnection(
+            connection,
+            capacity: 1,
+            transferOwnership: {
+                didTransferOwnership = true
+                return true
+            }
+        )))
 
+        XCTAssertTrue(didTransferOwnership)
         XCTAssertEqual(clientId, 1)
         XCTAssertEqual(registry.count, 1)
-        XCTAssertNotNil(registry.client(clientId))
+        XCTAssertTrue(registry.client(clientId)?.connection === connection)
     }
 
-    func testRegistryOwnsSendBufferReservation() {
+    func testConnectionAdmissionDoesNotTransferOwnershipWhenAtCapacity() throws {
         var registry = SocketClientRegistry()
-        let clientId = registry.insert(connection: makeConnection())
+        _ = try XCTUnwrap(registeredClientId(from: registry.admitConnection(
+            makeConnection(),
+            capacity: 1,
+            transferOwnership: { true }
+        )))
+        var didTransferOwnership = false
 
-        guard case .accepted = registry.reserveSend(clientId: clientId, byteCount: 10) else {
+        let admission = registry.admitConnection(
+            makeConnection(),
+            capacity: 1,
+            transferOwnership: {
+                didTransferOwnership = true
+                return true
+            }
+        )
+
+        guard case .atCapacity = admission else {
+            return XCTFail("Expected capacity rejection")
+        }
+        XCTAssertFalse(didTransferOwnership)
+        XCTAssertEqual(registry.count, 1)
+    }
+
+    func testConnectionAdmissionDoesNotRegisterWithoutOwnership() {
+        var registry = SocketClientRegistry()
+
+        let admission = registry.admitConnection(
+            makeConnection(),
+            capacity: 1,
+            transferOwnership: { false }
+        )
+
+        guard case .ownershipUnavailable = admission else {
+            return XCTFail("Expected ownership rejection")
+        }
+        XCTAssertEqual(registry.count, 0)
+    }
+
+    func testRegistryOwnsSendReservationProof() throws {
+        var registry = SocketClientRegistry()
+        let connection = makeConnection()
+        let clientId = try registeredClient(in: &registry, connection: connection)
+
+        guard case .accepted(let reservation) = registry.reserveSend(clientId: clientId, byteCount: 10) else {
             return XCTFail("Expected accepted send reservation")
         }
-        registry.completeSend(clientId: clientId, byteCount: 10)
+
+        XCTAssertEqual(reservation.clientId, clientId)
+        XCTAssertTrue(reservation.connection === connection)
+        XCTAssertEqual(reservation.byteCount, 10)
+        XCTAssertEqual(registry.pendingSendBytes(for: clientId), 10)
+        XCTAssertEqual(registry.completeSend(reservation), .completed)
+        XCTAssertEqual(registry.pendingSendBytes(for: clientId), 0)
 
         guard case .rejected(.payloadTooLarge(let byteCount, let maxBytes), _) =
             registry.reserveSend(clientId: clientId, byteCount: SocketSendBuffer.defaultMaxPendingBytes + 1)
@@ -31,54 +88,72 @@ final class SocketClientRegistryTests: XCTestCase {
         XCTAssertEqual(maxBytes, SocketSendBuffer.defaultMaxPendingBytes)
     }
 
-    func testRegistryExposesTypedClientSendPhases() {
+    func testRegistryAccumulatesConcurrentReservationProofs() throws {
         var registry = SocketClientRegistry()
-        let clientId = registry.insert(connection: makeConnection())
+        let clientId = try registeredClient(in: &registry)
 
-        XCTAssertEqual(registry.phase(for: clientId), .connected(SocketSendBuffer()))
-
-        guard case .accepted = registry.reserveSend(clientId: clientId, byteCount: 10) else {
-            return XCTFail("Expected accepted send reservation")
+        guard case .accepted(let first) = registry.reserveSend(clientId: clientId, byteCount: 10),
+              case .accepted(let second) = registry.reserveSend(clientId: clientId, byteCount: 20)
+        else {
+            return XCTFail("Expected accepted send reservations")
         }
-        XCTAssertEqual(
-            registry.phase(for: clientId),
-            .sending(SocketSendBuffer(pendingBytes: 10))
-        )
 
-        XCTAssertTrue(registry.completeSend(clientId: clientId, byteCount: 10))
-        XCTAssertEqual(registry.phase(for: clientId), .connected(SocketSendBuffer()))
+        XCTAssertEqual(registry.pendingSendBytes(for: clientId), 30)
+        XCTAssertEqual(registry.completeSend(second), .completed)
+        XCTAssertEqual(registry.pendingSendBytes(for: clientId), 10)
+        XCTAssertEqual(registry.completeSend(first), .completed)
+        XCTAssertEqual(registry.pendingSendBytes(for: clientId), 0)
     }
 
-    func testCompleteSendReportsMissingClientAfterDisconnect() {
+    func testCompleteSendReportsDisconnectedClient() throws {
         var registry = SocketClientRegistry()
-        let clientId = registry.insert(connection: makeConnection())
+        let clientId = try registeredClient(in: &registry)
 
-        guard case .accepted = registry.reserveSend(clientId: clientId, byteCount: 10) else {
+        guard case .accepted(let reservation) = registry.reserveSend(clientId: clientId, byteCount: 10) else {
             return XCTFail("Expected accepted send reservation")
         }
         XCTAssertTrue(registry.removeAndCancel(clientId))
 
-        XCTAssertFalse(registry.completeSend(clientId: clientId, byteCount: 10))
-        XCTAssertNil(registry.phase(for: clientId))
+        XCTAssertEqual(registry.completeSend(reservation), .clientDisconnected)
+        XCTAssertNil(registry.pendingSendBytes(for: clientId))
     }
 
-    func testRemoveAndCancelIsTotalForRegisteredAndMissingClients() {
+    func testRemoveAndCancelIsTotalForRegisteredAndMissingClients() throws {
         var registry = SocketClientRegistry()
-        let clientId = registry.insert(connection: makeConnection())
+        let clientId = try registeredClient(in: &registry)
 
         XCTAssertTrue(registry.removeAndCancel(clientId))
         XCTAssertFalse(registry.removeAndCancel(clientId))
         XCTAssertEqual(registry.count, 0)
     }
 
-    func testCancelAllClearsEveryOwnedSocket() {
+    func testCancelAllClearsEveryOwnedSocket() throws {
         var registry = SocketClientRegistry()
-        _ = registry.insert(connection: makeConnection())
-        _ = registry.insert(connection: makeConnection())
+        _ = try registeredClient(in: &registry)
+        _ = try registeredClient(in: &registry)
 
         registry.cancelAll()
 
         XCTAssertEqual(registry.count, 0)
+    }
+
+    private func registeredClient(
+        in registry: inout SocketClientRegistry,
+        connection: NWConnection? = nil
+    ) throws -> Int {
+        let admission = registry.admitConnection(
+            connection ?? makeConnection(),
+            capacity: .max,
+            transferOwnership: { true }
+        )
+        return try XCTUnwrap(registeredClientId(from: admission))
+    }
+
+    private func registeredClientId(
+        from admission: SocketClientRegistry.ConnectionAdmission
+    ) -> Int? {
+        guard case .registered(let clientId) = admission else { return nil }
+        return clientId
     }
 
     private func makeConnection() -> NWConnection {

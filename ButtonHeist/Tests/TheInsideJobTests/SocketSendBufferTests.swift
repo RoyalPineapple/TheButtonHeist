@@ -10,40 +10,41 @@ final class SocketSendBufferTests: XCTestCase {
         )
     }
 
-    func testReserveIncrementsPendingBytesUntilCompleted() {
+    func testCompletionConsumesTheExactAdmittedReservations() throws {
         var buffer = SocketSendBuffer(maxPendingBytes: 10)
 
-        XCTAssertNil(buffer.reserve(byteCount: 4))
-        XCTAssertEqual(buffer.pendingBytes, 4)
+        let first = try XCTUnwrap(admittedReservation(from: &buffer, byteCount: 4))
+        let second = try XCTUnwrap(admittedReservation(from: &buffer, byteCount: 3))
+        XCTAssertEqual(buffer.pendingBytes, 7)
 
-        buffer.complete(byteCount: 3)
-        XCTAssertEqual(buffer.pendingBytes, 1)
+        XCTAssertTrue(buffer.complete(first))
+        XCTAssertEqual(buffer.pendingBytes, 3)
+        XCTAssertTrue(buffer.complete(second))
+        XCTAssertEqual(buffer.pendingBytes, 0)
     }
 
-    func testReserveRejectsSinglePayloadAboveLimitWithoutChangingPendingBytes() {
-        var buffer = SocketSendBuffer(maxPendingBytes: 10, pendingBytes: 2)
+    func testReserveRejectsSinglePayloadAboveLimitWithoutChangingPendingBytes() throws {
+        var buffer = SocketSendBuffer(maxPendingBytes: 10)
+        _ = try XCTUnwrap(admittedReservation(from: &buffer, byteCount: 2))
 
-        let rejection = buffer.reserve(byteCount: 11)
+        guard case .failure(let rejection) = buffer.reserve(byteCount: 11) else {
+            return XCTFail("Expected payload-too-large rejection")
+        }
 
         XCTAssertEqual(rejection, .payloadTooLarge(byteCount: 11, maxBytes: 10))
         XCTAssertEqual(buffer.pendingBytes, 2)
     }
 
-    func testReserveRejectsWhenExistingPendingBytesWouldExceedLimit() {
-        var buffer = SocketSendBuffer(maxPendingBytes: 10, pendingBytes: 8)
+    func testReserveRejectsWhenExistingPendingBytesWouldExceedLimit() throws {
+        var buffer = SocketSendBuffer(maxPendingBytes: 10)
+        _ = try XCTUnwrap(admittedReservation(from: &buffer, byteCount: 8))
 
-        let rejection = buffer.reserve(byteCount: 3)
+        guard case .failure(let rejection) = buffer.reserve(byteCount: 3) else {
+            return XCTFail("Expected buffer-full rejection")
+        }
 
         XCTAssertEqual(rejection, .bufferFull(pendingBytes: 8, byteCount: 3, maxBytes: 10))
         XCTAssertEqual(buffer.pendingBytes, 8)
-    }
-
-    func testCompleteClampsPendingBytesAtZero() {
-        var buffer = SocketSendBuffer(maxPendingBytes: 10, pendingBytes: 2)
-
-        buffer.complete(byteCount: 5)
-
-        XCTAssertEqual(buffer.pendingBytes, 0)
     }
 
     func testRejectionMapsToPublicSendFailure() {
@@ -55,5 +56,15 @@ final class SocketSendBufferTests: XCTestCase {
             SocketSendBuffer.Rejection.bufferFull(pendingBytes: 8, byteCount: 3, maxBytes: 10).sendFailure,
             .sendBufferFull(pendingBytes: 8, byteCount: 3, maxBytes: 10)
         )
+    }
+
+    private func admittedReservation(
+        from buffer: inout SocketSendBuffer,
+        byteCount: Int
+    ) -> SocketSendBuffer.Reservation? {
+        guard case .success(let reservation) = buffer.reserve(byteCount: byteCount) else {
+            return nil
+        }
+        return reservation
     }
 }

@@ -76,11 +76,18 @@ actor SimpleSocketServer {
 
     func insertClientForTesting(connection: NWConnection) -> Int? {
         guard currentListener != nil else { return nil }
-        return clientRegistry.insert(connection: connection)
+        guard case .registered(let clientId) = clientRegistry.admitConnection(
+            connection,
+            capacity: .max,
+            transferOwnership: { true }
+        ) else {
+            return nil
+        }
+        return clientId
     }
 
-    func clientPhaseForTesting(_ clientId: Int) -> SocketClientPhase? {
-        clientRegistry.phase(for: clientId)
+    func clientPendingSendBytesForTesting(_ clientId: Int) -> Int? {
+        clientRegistry.pendingSendBytes(for: clientId)
     }
 
     var clientCountForTesting: Int {

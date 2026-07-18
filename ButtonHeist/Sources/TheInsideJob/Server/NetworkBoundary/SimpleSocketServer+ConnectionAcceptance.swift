@@ -7,7 +7,7 @@ import TheScore
 private let connectionLogger = ButtonHeistLog.logger(.handoff(.server))
 
 extension SimpleSocketServer {
-    private static let maxConnections = 5
+    static let maxConnections = 5
 
     func acceptReadyConnection(
         _ connection: NWConnection,
@@ -17,17 +17,6 @@ extension SimpleSocketServer {
             if !generation.cancelIfOwned(connection) {
                 connection.cancel()
             }
-            return .rejected
-        }
-
-        if clientRegistry.count >= Self.maxConnections {
-            connectionLogger.warning("Max connections (\(Self.maxConnections)) reached, rejecting")
-            rejectStartedConnectionWithServerError(
-                connection,
-                generation: generation,
-                kind: .general,
-                message: "Connection rejected: server already has the maximum number of clients."
-            )
             return .rejected
         }
 
@@ -72,16 +61,36 @@ extension SimpleSocketServer {
             connectionLogger.info("Accepted \(scope.rawValue) connection from \(hostDescription) via [\(interfaceNames)]")
         }
 
-        guard await isCurrentListeningGeneration(generation),
-              generation.transferToClientRegistry(connection)
-        else {
+        guard await isCurrentListeningGeneration(generation) else {
             if !generation.cancelIfOwned(connection) {
                 connection.cancel()
             }
             return .rejected
         }
 
-        let clientId = clientRegistry.insert(connection: connection)
+        let clientId: Int
+        switch clientRegistry.admitConnection(
+            connection,
+            capacity: Self.maxConnections,
+            transferOwnership: { generation.transferToClientRegistry(connection) }
+        ) {
+        case .registered(let registeredClientId):
+            clientId = registeredClientId
+        case .atCapacity:
+            connectionLogger.warning("Max connections (\(Self.maxConnections)) reached, rejecting")
+            rejectStartedConnectionWithServerError(
+                connection,
+                generation: generation,
+                kind: .general,
+                message: "Connection rejected: server already has the maximum number of clients."
+            )
+            return .rejected
+        case .ownershipUnavailable:
+            if !generation.cancelIfOwned(connection) {
+                connection.cancel()
+            }
+            return .rejected
+        }
         let remoteAddress = Self.extractRemoteHost(from: connection).map { "\($0)" }
         connectionLogger.info("Client \(clientId) connected")
         callbacks.onClientConnected?(clientId, remoteAddress)

@@ -17,19 +17,16 @@ extension SimpleSocketServer {
         }
 
         let byteCount = dataToSend.count
-        guard clientRegistry.client(clientId) != nil else {
-            return .failed(.clientNotFound(clientId))
-        }
         guard let generation = currentListener else {
             return .failed(.transportUnavailable)
         }
 
-        let connection: NWConnection
+        let reservation: SocketClientRegistry.SendReservation
         switch clientRegistry.reserveSend(clientId: clientId, byteCount: byteCount) {
         case .missingClient:
             return .failed(.clientNotFound(clientId))
-        case .accepted(let acceptedConnection):
-            connection = acceptedConnection
+        case .accepted(let acceptedReservation):
+            reservation = acceptedReservation
         case .rejected(let rejection, let state):
             switch rejection {
             case .payloadTooLarge:
@@ -42,7 +39,7 @@ extension SimpleSocketServer {
         }
 
         return await withCheckedContinuation { continuation in
-            sendContent(connection, dataToSend, .contentProcessed { [weak self] error in
+            sendContent(reservation.connection, dataToSend, .contentProcessed { [weak self] error in
                 if let error {
                     sendLogger.error("Send error to client \(clientId): \(error)")
                 }
@@ -52,8 +49,7 @@ extension SimpleSocketServer {
                 }
                 let admission = self.spawnTrackedTask(in: generation) { server in
                     let outcome = await server.completedSend(
-                        clientId: clientId,
-                        byteCount: byteCount,
+                        reservation,
                         error: error
                     )
                     continuation.resume(returning: outcome)
@@ -66,21 +62,24 @@ extension SimpleSocketServer {
     }
 
     /// Called when NWConnection finishes processing a send.
-    private func completedSend(clientId: Int, byteCount: Int, error: NWError?) -> ServerSendOutcome {
-        let clientWasStillConnected = clientRegistry.completeSend(clientId: clientId, byteCount: byteCount)
+    private func completedSend(
+        _ reservation: SocketClientRegistry.SendReservation,
+        error: NWError?
+    ) -> ServerSendOutcome {
+        let completion = clientRegistry.completeSend(reservation)
         if let error {
             let failure = ServerSendFailure.transportFailed(
-                clientId: clientId,
+                clientId: reservation.clientId,
                 diagnostic: NetworkTransportFailure(error)
             )
-            if clientWasStillConnected {
-                removeClient(clientId)
+            if completion == .completed {
+                removeClient(reservation.clientId)
             }
             return .failed(failure)
         }
 
-        guard clientWasStillConnected else {
-            return .failed(.clientNotFound(clientId))
+        guard completion == .completed else {
+            return .failed(.clientNotFound(reservation.clientId))
         }
         return .delivered
     }

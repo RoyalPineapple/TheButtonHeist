@@ -125,6 +125,47 @@ final class SocketListenerRuntimeLifecycleTests: XCTestCase {
         await server.stop()
     }
 
+    func testConcurrentReadyConnectionsCannotExceedCapacity() async throws {
+        let server = SimpleSocketServer()
+        let recorder = ListenerGenerationRecorder()
+        await server.setListenerRuntimeStartOverrideForTesting { generation in
+            _ = await recorder.record(generation)
+            return 24_680
+        }
+        await server.setSendContentForTesting { _, _, completion in
+            guard case .contentProcessed(let handler) = completion else { return }
+            handler(nil)
+        }
+        _ = try await server.startPlaintextForTests(addressFamily: .dualStack)
+        let generation = await recorder.entry(at: 0).generation
+        let connections = (0...SimpleSocketServer.maxConnections).map { _ in makeConnection() }
+        connections.forEach { XCTAssertTrue(generation.own($0)) }
+
+        let acceptances = await withTaskGroup(
+            of: ReadyConnectionAcceptance.self,
+            returning: [ReadyConnectionAcceptance].self
+        ) { group in
+            for connection in connections {
+                group.addTask {
+                    await server.acceptReadyConnection(connection, generation: generation)
+                }
+            }
+            return await group.reduce(into: []) { $0.append($1) }
+        }
+
+        let registeredClientIds = acceptances.compactMap { acceptance -> Int? in
+            guard case .registered(let clientId) = acceptance else { return nil }
+            return clientId
+        }
+        XCTAssertEqual(registeredClientIds.count, SimpleSocketServer.maxConnections)
+        XCTAssertEqual(Set(registeredClientIds).count, SimpleSocketServer.maxConnections)
+        XCTAssertEqual(acceptances.filter { $0 == .rejected }.count, 1)
+        let clientCount = await server.clientCountForTesting
+        XCTAssertEqual(clientCount, SimpleSocketServer.maxConnections)
+        XCTAssertEqual(generation.pendingConnectionCountForTesting, 0)
+        await server.stop()
+    }
+
     func testPartialDualListenerStartupFailureCleansPendingCallbacksAndConnections() async {
         let server = SimpleSocketServer()
         let recorder = ListenerGenerationRecorder()
