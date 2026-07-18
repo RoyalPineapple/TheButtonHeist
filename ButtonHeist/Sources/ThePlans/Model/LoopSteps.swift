@@ -105,6 +105,21 @@ public struct RepeatUntilStep: Codable, Sendable, Equatable {
         self.elseBody = elseBody
     }
 
+    init(
+        predicate: AccessibilityPredicate,
+        timeout: WaitTimeout,
+        firstBodyStep: HeistStep,
+        remainingBodySteps: [HeistStep] = [],
+        elseBody: [HeistStep]? = nil
+    ) {
+        var body = [firstBodyStep]
+        body.append(contentsOf: remainingBodySteps)
+        self.predicate = predicate
+        self.timeout = timeout
+        self.body = body
+        self.elseBody = elseBody
+    }
+
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "repeat_until step")
         let container = try decoder.container(keyedBy: CodingKeys.self)

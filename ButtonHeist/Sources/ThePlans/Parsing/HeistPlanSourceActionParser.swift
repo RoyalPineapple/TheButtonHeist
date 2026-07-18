@@ -341,8 +341,8 @@ extension HeistPlanSourceParser {
     mutating func parseActionStep(
         command: HeistActionCommand
     ) throws -> HeistStep {
-        var content = ActionContent(command: command)
-        var repeatedContent: RepeatActionUntilContent?
+        var content = Action(command: command)
+        var repeatedContent: Action.Repeated?
         while consumeSymbol(".") {
             let chainToken = currentToken
             let chain = try parseIdentifier()
@@ -372,7 +372,7 @@ extension HeistPlanSourceParser {
                 let predicate = try parseAccessibilityPredicateExpr()
                 let timeout = try parseTrailingTimeout(defaultValue: defaultWaitTimeout) ?? defaultWaitTimeout
                 try expectSymbol(")")
-                repeatedContent = content.until(predicate, timeout: timeout)
+                repeatedContent = content.repeated(until: predicate, timeout: timeout)
             default:
                 throw error(chainToken, "unsupported action chain '.\(chain)'")
             }

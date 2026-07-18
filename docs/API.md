@@ -66,10 +66,9 @@ does not re-export `TheScore`. Code that names wire, receipt, or diagnostic
 types from `TheScore` must depend on and import that product explicitly.
 
 Action spellings such as `Activate(...)` and `Mechanical.Tap(...)` are
-named authoring values whose storage stays inside `ThePlans`. Their public API
-is the authored initializer plus the fluent `.expect(...)`,
-`.withoutExpectation(...)`, and `.until(...)` transitions and the resulting
-`HeistContent`; command and expectation bookkeeping are not exposed.
+constructor functions that return one `Action` value. `Action` owns the fluent
+`.expect(...)`, `.withoutExpectation(...)`, and `.until(...)` transitions and
+produces `HeistContent`; command and expectation bookkeeping are not exposed.
 
 CI checks public Swift API compatibility against the latest `v*` release tag
 reachable from `origin/main` with:
