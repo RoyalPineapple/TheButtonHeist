@@ -16,23 +16,15 @@ enum TargetResolutionDiagnostics {
         }
     }
 
-    static func message(for resolution: TheVault.ContainerTargetResolution) -> String {
-        switch resolution {
-        case .resolved:
-            return ""
-        case .notFound(let facts):
-            return containerNotFoundMessage(facts)
-        case .ambiguous(let facts):
-            return containerAmbiguousMessage(facts)
-        }
-    }
-
-    static func elementCandidateDescription(_ candidate: TheVault.TargetCandidateFacts) -> String {
+    static func elementCandidateDescription(
+        _ candidate: InterfaceTree.Element,
+        visibleHeistIds: Set<HeistId>
+    ) -> String {
         ElementDiagnosticSummary(
-            label: candidate.label,
-            identifier: candidate.identifier,
-            value: candidate.value,
-            availability: availability(candidate)
+            label: candidate.element.label,
+            identifier: candidate.element.identifier,
+            value: candidate.element.value,
+            availability: availability(candidate, visibleHeistIds: visibleHeistIds)
         ).rendered(using: .targetCandidate)
     }
 
@@ -58,7 +50,20 @@ enum TargetResolutionDiagnostics {
     }
 
     private static func notFoundMessage(_ facts: TheVault.TargetNotFoundFacts) -> String {
-        switch facts.reason {
+        switch facts.matchSet {
+        case .elements(let matches):
+            return elementNotFoundMessage(facts.reason, matches: matches, scope: facts.resolutionScope)
+        case .containers(let matches):
+            return containerNotFoundMessage(facts.reason, matches: matches)
+        }
+    }
+
+    private static func elementNotFoundMessage(
+        _ reason: TheVault.TargetNotFoundReason,
+        matches: TheVault.TargetElementMatches,
+        scope: TheVault.ResolutionScope
+    ) -> String {
+        switch reason {
         case .ordinalOutOfRange(let requested, let matchCount):
             let nextMove: String
             if matchCount == 0 {
@@ -73,49 +78,71 @@ enum TargetResolutionDiagnostics {
                 """
         case .noMatches:
             return TheVault.Diagnostics.matcherNotFound(
-                facts.predicate,
-                treeElements: facts.treeElements,
-                visibleHeistIds: facts.visibleHeistIds,
-                resolutionScope: facts.resolutionScope
+                matches.predicate,
+                treeElements: matches.candidates,
+                visibleHeistIds: matches.visibleHeistIds,
+                resolutionScope: scope
             )
         }
     }
 
     private static func ambiguousMessage(_ facts: TheVault.TargetAmbiguityFacts) -> String {
-        let countLabel = facts.matchedCount > 10 ? "10+" : "\(facts.matchedCount)"
-        let rangeLabel = facts.matchedCount > 10 ? "0, 1, 2, ..." : "0–\(facts.matchedCount - 1)"
-        let query = TheVault.Diagnostics.formatMatcher(facts.predicate)
-        let candidates = facts.candidates.map(elementCandidateDescription)
+        switch facts.matchSet {
+        case .elements(let matches):
+            return elementAmbiguousMessage(matches, scope: facts.resolutionScope)
+        case .containers(let matches):
+            return containerAmbiguousMessage(matches)
+        }
+    }
+
+    private static func elementAmbiguousMessage(
+        _ matches: TheVault.TargetElementMatches,
+        scope: TheVault.ResolutionScope
+    ) -> String {
+        let matchedCount = matches.exactMatches.count
+        let countLabel = matchedCount > 10 ? "10+" : "\(matchedCount)"
+        let rangeLabel = matchedCount > 10 ? "0, 1, 2, ..." : "0–\(matchedCount - 1)"
+        let query = TheVault.Diagnostics.formatMatcher(matches.predicate)
+        let candidates = matches.exactMatches.prefix(10).map {
+            elementCandidateDescription($0, visibleHeistIds: matches.visibleHeistIds)
+        }
         var lines = [
-            "\(countLabel) elements match: \(query) (scope: \(facts.resolutionScope.rawValue)) — use ordinal \(rangeLabel) to select one"
+            "\(countLabel) elements match: \(query) (scope: \(scope.rawValue)) — use ordinal \(rangeLabel) to select one"
         ]
         lines.append(contentsOf: candidates.map { "  \($0)" })
-        if facts.matchedCount > 10 {
+        if matchedCount > 10 {
             lines.append("  ... and more")
         }
         return lines.joined(separator: "\n")
     }
 
-    private static func availability(_ candidate: TheVault.TargetCandidateFacts) -> ElementDiagnosticSummary.Availability {
-        if candidate.isVisible {
+    private static func availability(
+        _ candidate: InterfaceTree.Element,
+        visibleHeistIds: Set<HeistId>
+    ) -> ElementDiagnosticSummary.Availability {
+        if visibleHeistIds.contains(candidate.heistId) {
             return .visible
         }
-        return .offscreen(isReachable: candidate.isReachable)
+        return .offscreen(isReachable: candidate.scrollMembership != nil)
     }
 
-    private static func containerNotFoundMessage(_ facts: TheVault.ContainerNotFoundFacts) -> String {
-        switch facts.reason {
+    private static func containerNotFoundMessage(
+        _ reason: TheVault.TargetNotFoundReason,
+        matches: TheVault.TargetContainerMatches
+    ) -> String {
+        switch reason {
         case .ordinalOutOfRange(let requested, let matchCount):
             return "container target ordinal \(requested) is outside \(matchCount) matching container(s); "
                 + "narrow the container predicate or target an element inside the intended region"
         case .noMatches:
-            return "no semantic container matched \(facts.predicate); target an element inside the intended region or inspect the current interface"
+            return "no semantic container matched \(matches.predicate); "
+                + "target an element inside the intended region or inspect the current interface"
         }
     }
 
-    private static func containerAmbiguousMessage(_ facts: TheVault.ContainerAmbiguityFacts) -> String {
-        let candidates = facts.candidates.map(containerCandidateDescription)
-        return "container target is ambiguous across \(facts.matchedCount) containers; "
+    private static func containerAmbiguousMessage(_ matches: TheVault.TargetContainerMatches) -> String {
+        let candidates = matches.exactMatches.map(containerCandidateDescription)
+        return "container target is ambiguous across \(matches.exactMatches.count) containers; "
             + "narrow by semantic facts or target an element inside the intended region. Candidates: "
             + candidates.joined(separator: "; ")
     }

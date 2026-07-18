@@ -19,8 +19,8 @@ extension TheVault {
 
     }
 
-    enum LiveActionTargetResolution {
-        case resolved(LiveActionTarget)
+    enum LiveTargetResolution<Target> {
+        case resolved(Target)
         case objectUnavailable
         case geometryUnavailable
     }
@@ -50,18 +50,12 @@ extension TheVault {
         var scrollViewID: ObjectIdentifier { ObjectIdentifier(scrollView) }
     }
 
-    enum LiveContainerTargetResolution {
-        case resolved(LiveContainerTarget)
-        case objectUnavailable
-        case geometryUnavailable
-    }
-
     private struct LiveGeometry {
         let frame: CGRect
         let activationPoint: CGPoint
     }
 
-    func resolveLiveActionTarget(for treeElement: InterfaceTree.Element) -> LiveActionTargetResolution {
+    func resolveLiveActionTarget(for treeElement: InterfaceTree.Element) -> LiveTargetResolution<LiveActionTarget> {
         let captureToken = latestObservation.captureToken
         guard let liveElement = visibleLiveElementAliasing(treeElement),
               let object = dispatchObject(for: liveElement) else {
@@ -110,7 +104,9 @@ extension TheVault {
         return liveElement
     }
 
-    func resolveLiveContainerTarget(for containerTarget: InterfaceTree.Container) -> LiveContainerTargetResolution {
+    func resolveLiveContainerTarget(
+        for containerTarget: InterfaceTree.Container
+    ) -> LiveTargetResolution<LiveContainerTarget> {
         let captureToken = latestObservation.captureToken
         guard let currentContainer = latestObservation.tree.containers[containerTarget.path],
               Self.container(currentContainer, matches: containerTarget) else {

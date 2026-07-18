@@ -43,13 +43,7 @@ extension TheVault {
 
         let expected = absent ? "element to disappear" : "element to appear"
         let reason = absent ? "element still present" : "element not found"
-        let diagnostics: String
-        switch target {
-        case .container:
-            diagnostics = resolveContainerTarget(target).diagnostics
-        case .predicate, .within:
-            diagnostics = resolveTarget(target).diagnostics
-        }
+        let diagnostics = resolveTarget(target).diagnostics
         var parts = [
             "timed out after \(elapsed)s waiting for \(expected)",
             "expected: \(waitForTargetDescription(target))",
