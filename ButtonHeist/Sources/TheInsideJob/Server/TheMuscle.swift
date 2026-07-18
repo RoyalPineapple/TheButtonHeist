@@ -70,7 +70,6 @@ actor TheMuscle {
     private static let maxFailedAttempts = 5
     private static let lockoutDuration: TimeInterval = 30
 
-    private let sessionTokenSource: SessionTokenSource
     private var admission: ClientAdmission.Reducer
     private var session: SessionLease
     private var delivery: ClientDelivery = .unwired
@@ -92,7 +91,6 @@ actor TheMuscle {
         sessionReleaseTimeout: TimeInterval
     ) {
         let tokenSource = SessionTokenSource(explicitToken: explicitToken)
-        self.sessionTokenSource = tokenSource
         self.admission = ClientAdmission.Reducer(
             tokenSource: tokenSource,
             maxFailedAttempts: TheMuscle.maxFailedAttempts,
@@ -126,7 +124,7 @@ actor TheMuscle {
 
     // MARK: - Session Accessors
 
-    var sessionToken: SessionAuthToken { sessionTokenSource.token }
+    var sessionToken: SessionAuthToken { admission.sessionToken }
 
     /// Owner that currently holds the session (nil = no active session).
     var sessionOwner: SessionOwner? {
@@ -170,9 +168,8 @@ actor TheMuscle {
     // MARK: - Public API
 
     /// Register the remote address for a client (called when TCP connection is established).
-    func registerClientAddress(_ clientId: Int, address: String) {
-        admission.registerClientAddress(clientId, address: address)
-        replaceAuthenticationTimeout(for: clientId)
+    func registerClientAddress(_ clientId: Int, address: String) async {
+        await executeAdmissionEffects(admission.registerClientAddress(clientId, address: address))
     }
 
     @discardableResult
@@ -205,14 +202,12 @@ actor TheMuscle {
     }
 
     func handleClientDisconnected(_ clientId: Int) async {
-        cancelAuthenticationTimeout(for: clientId)
         await executeAdmissionEffects(admission.removeClient(clientId))
         applySessionEffects(session.removeConnection(clientId, at: Date()))
     }
 
     func tearDown() async {
-        admission.removeAllClients()
-        cancelAllAuthenticationTimeouts()
+        await executeAdmissionEffects(admission.removeAllClients())
         let disconnectGeneration = delayedDisconnects
         await disconnectGeneration.drain()
         if delayedDisconnects === disconnectGeneration {
@@ -245,7 +240,6 @@ actor TheMuscle {
         case .accepted(let sessionEffect):
             applySessionEffects(sessionEffect)
             let effect = admission.completeAuthentication(authentication)
-            cancelAuthenticationTimeout(for: authentication.clientId)
             await executeAdmissionEffects(effect)
             _ = await delivery.clientAuthenticated(authentication.clientId, respond: authentication.respond)
 
@@ -261,11 +255,20 @@ actor TheMuscle {
     private func executeAdmissionEffects(_ effects: [ClientAdmission.Effect]) async {
         for effect in effects {
             switch effect {
+            case .replaceAuthenticationDeadline(let clientId):
+                authenticationTimeouts.replace(for: clientId) { [weak self] in
+                    await self?.executeAuthenticationTimeout(clientId)
+                }
+            case .cancelAuthenticationDeadline(let clientId):
+                authenticationTimeouts.cancel(clientId)
+            case .cancelAllAuthenticationDeadlines:
+                authenticationTimeouts.cancelAll()
             case .sendResponse(let message, let requestId, let respond):
                 await sendResponse(message, requestId: requestId, to: .response(respond))
             case .sendClient(let message, let requestId, let clientId):
                 await sendResponse(message, requestId: requestId, to: .client(clientId))
             case .delayedDisconnect(let clientId):
+                authenticationTimeouts.cancel(clientId)
                 scheduleDelayedDisconnect(clientId)
             case .log(let event):
                 recordAdmissionLog(event)
@@ -312,7 +315,6 @@ actor TheMuscle {
 
     /// Schedule a delayed disconnect so the recipient can flush the final error payload.
     private func scheduleDelayedDisconnect(_ clientId: Int) {
-        cancelAuthenticationTimeout(for: clientId)
         delayedDisconnects.schedule(clientId: clientId) { [weak self] in
             await self?.fireDisconnect(clientId)
         }
@@ -324,22 +326,7 @@ actor TheMuscle {
 
     // MARK: - Authentication Deadline
 
-    private func replaceAuthenticationTimeout(for clientId: Int) {
-        authenticationTimeouts.replace(for: clientId) { [weak self] in
-            await self?.executeAuthenticationTimeout(clientId)
-        }
-    }
-
-    private func cancelAuthenticationTimeout(for clientId: Int) {
-        authenticationTimeouts.cancel(clientId)
-    }
-
-    private func cancelAllAuthenticationTimeouts() {
-        authenticationTimeouts.cancelAll()
-    }
-
     private func executeAuthenticationTimeout(_ clientId: Int) async {
-        cancelAuthenticationTimeout(for: clientId)
         await executeAdmissionEffects(admission.authenticationTimeout(
             clientId,
             timeoutSeconds: Self.authTimeoutSeconds

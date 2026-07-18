@@ -206,6 +206,17 @@ final class TheHandoffStateTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testObservedTransportDisconnectDoesNotCloseTransportAgain() async {
+        let handoff = TheHandoff()
+        let mock = connectPendingMockHandoff(handoff)
+
+        mock.onEvent?(.disconnected(.serverClosed))
+
+        assertDisconnected(handoff.connectionPhase)
+        XCTAssertEqual(mock.disconnectCount, 0)
+    }
+
+    @ButtonHeistActor
     func testPongResetsKeepaliveCounterAndForwardsRequestScopedPong() async {
         let handoff = TheHandoff()
         _ = connectMockHandoff(handoff)

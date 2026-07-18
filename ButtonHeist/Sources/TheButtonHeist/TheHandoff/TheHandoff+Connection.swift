@@ -40,19 +40,12 @@ extension TheHandoff {
         tearDownConnection(cancelAutoReconnect: true, replacementReason: .localDisconnect)
     }
 
-    func closeConnection() {
-        connectionLifecycle.activeConnection?.disconnect()
-    }
-
     /// Tear down an in-flight connection attempt after its owner reaches a setup
     /// terminal state (for example, discovery/direct-connect timeout). This
     /// intentionally does not schedule reconnect: there was no usable session
     /// drop, only a failed setup attempt.
     func abortConnectionAttempt(_ attemptID: UUID, failure: HandoffConnectionError) {
-        guard connectionLifecycle.activeAttemptID == attemptID else { return }
-        let connection = connectionLifecycle.activeConnection
-        guard connectionLifecycle.disconnectAttempt(attemptID, failure: failure) else { return }
-        connection?.disconnect()
+        execute(connectionLifecycle.abort(attemptID, failure: failure))
     }
 
     func disableAutoReconnect() {
@@ -130,8 +123,8 @@ extension TheHandoff {
         if case .failed = connectionPhase {
             return
         }
-        guard connectionLifecycle.markDisconnected(
-            reason: reason,
+        guard connectionLifecycle.observeDisconnect(
+            reason,
             expectedAttemptID: attemptID
         ) else { return }
         if reason.retryable {
@@ -169,14 +162,14 @@ extension TheHandoff {
     }
 
     private func failActiveConnection(_ failure: HandoffConnectionError) {
-        let connection = connectionLifecycle.activeConnection
-        connectionLifecycle.markFailed(failure)
-        connection?.disconnect()
+        execute(connectionLifecycle.fail(failure))
     }
 
     private func sendAdmissionMessage(_ message: ClientMessage) {
         guard let connection = connectionLifecycle.activeConnection else {
-            connectionLifecycle.markFailed(.connectionFailed("Cannot send admission message without an active transport"))
+            execute(connectionLifecycle.fail(.connectionFailed(
+                "Cannot send admission message without an active transport"
+            )))
             return
         }
         let outcome = connection.send(message, requestId: nil)
@@ -189,18 +182,15 @@ extension TheHandoff {
         cancelAutoReconnect: Bool,
         replacementReason: DisconnectReason? = nil
     ) {
-        let hadActiveAttempt = connectionLifecycle.activeAttemptID != nil
         if cancelAutoReconnect {
             _ = connectionLifecycle.cancel(clearTarget: true)
         }
-        if hadActiveAttempt, let replacementReason {
-            let connection = connectionLifecycle.activeConnection
-            connectionLifecycle.markDisconnected(reason: replacementReason)
-            connection?.disconnect()
-        } else {
-            let connection = connectionLifecycle.activeConnection
-            connectionLifecycle.markDisconnected()
-            connection?.disconnect()
+        execute(connectionLifecycle.disconnect(reason: replacementReason))
+    }
+
+    private func execute(_ effect: HandoffConnectionLifecycle.Effect?) {
+        if case .disconnect(let connection)? = effect {
+            connection.disconnect()
         }
     }
 

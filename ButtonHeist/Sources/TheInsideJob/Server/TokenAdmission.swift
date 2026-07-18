@@ -40,6 +40,8 @@ struct TokenAuthentication {
         self.lockoutDuration = lockoutDuration
     }
 
+    var sessionToken: SessionAuthToken { tokenSource.token }
+
     mutating func admit(
         _ token: SessionAuthToken,
         driverId: DriverID?,

@@ -10,6 +10,10 @@ private let disconnectedDuringConnectionAttemptMessage =
 /// a disconnected runtime whose reconnect policy owns the active run.
 @ButtonHeistActor
 final class HandoffConnectionLifecycle {
+    enum Effect {
+        case disconnect(any DeviceConnecting)
+    }
+
     private struct ConnectingRuntime {
         let attempt: HandoffConnectionAttempt
         let connection: any DeviceConnecting
@@ -346,35 +350,37 @@ final class HandoffConnectionLifecycle {
         return true
     }
 
-    func markFailed(_ failure: HandoffConnectionError) {
+    func fail(_ failure: HandoffConnectionError) -> Effect? {
+        let effects = disconnectEffect
         transition(to: .failed(failure, reconnect: runtimePhase.reconnectState))
+        return effects
     }
 
     @discardableResult
-    func markDisconnected(
-        reason: DisconnectReason? = nil,
+    func observeDisconnect(
+        _ reason: DisconnectReason,
         expectedAttemptID: UUID? = nil
     ) -> Bool {
         if let expectedAttemptID, activeAttemptID != expectedAttemptID { return false }
 
         let wasActive = runtimePhase.isActiveConnection
-        let failure: HandoffConnectionError?
-        if wasActive {
-            failure = reason.map(HandoffConnectionError.disconnected)
-        } else if reason != nil {
-            failure = runtimePhase.diagnosticFailure
-        } else {
-            failure = nil
-        }
+        let failure = wasActive ? HandoffConnectionError.disconnected(reason) : runtimePhase.diagnosticFailure
         transition(to: .disconnected(failure: failure, reconnect: runtimePhase.reconnectState))
         return wasActive
     }
 
-    @discardableResult
-    func disconnectAttempt(_ attemptID: UUID, failure: HandoffConnectionError) -> Bool {
-        guard activeAttemptID == attemptID else { return false }
+    func disconnect(reason: DisconnectReason? = nil) -> Effect? {
+        let effects = disconnectEffect
+        let failure = runtimePhase.isActiveConnection ? reason.map(HandoffConnectionError.disconnected) : nil
         transition(to: .disconnected(failure: failure, reconnect: runtimePhase.reconnectState))
-        return true
+        return effects
+    }
+
+    func abort(_ attemptID: UUID, failure: HandoffConnectionError) -> Effect? {
+        guard activeAttemptID == attemptID else { return nil }
+        let effects = disconnectEffect
+        transition(to: .disconnected(failure: failure, reconnect: runtimePhase.reconnectState))
+        return effects
     }
 
     func recordAttemptFailure(_ failure: HandoffConnectionError) {
@@ -410,6 +416,10 @@ final class HandoffConnectionLifecycle {
         guard case .connected(var runtime, let reconnect) = runtimePhase else { return }
         body(&runtime.session)
         transition(to: .connected(runtime, reconnect: reconnect))
+    }
+
+    private var disconnectEffect: Effect? {
+        activeConnection.map(Effect.disconnect)
     }
 
     // MARK: - Connection result waiting
