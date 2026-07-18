@@ -154,10 +154,13 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
-        guard case .heistPlan(let run) = decoded else {
-            throw XCTSkip("Expected heistPlan")
-        }
-        return run.plan
+        return try XCTUnwrap(
+            {
+                guard case .heistPlan(let run) = decoded else { return nil }
+                return run.plan
+            }(),
+            "Expected the encoded client message to decode as heistPlan"
+        )
     }
 }
 

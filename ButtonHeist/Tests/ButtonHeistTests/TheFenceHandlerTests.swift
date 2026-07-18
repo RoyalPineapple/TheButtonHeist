@@ -1791,9 +1791,14 @@ final class TheFenceHandlerTests: XCTestCase {
     /// object fields. This is intentionally not the public MCP authoring shape.
     private static func inlineArguments(for plan: HeistPlan) throws -> TheFence.CommandArgumentEnvelope {
         let data = try JSONEncoder().encode(plan)
-        guard case .object(let fields) = try JSONDecoder().decode(HeistValue.self, from: data) else {
-            throw XCTSkip("plan did not encode to a JSON object")
-        }
+        let value = try JSONDecoder().decode(HeistValue.self, from: data)
+        let fields: [String: HeistValue] = try XCTUnwrap(
+            { () -> [String: HeistValue]? in
+                guard case .object(let fields) = value else { return nil }
+                return fields
+            }(),
+            "Expected the plan to encode as a JSON object"
+        )
         return TheFence.CommandArgumentEnvelope(values: fields)
     }
 
@@ -1805,9 +1810,14 @@ final class TheFenceHandlerTests: XCTestCase {
 
     private static func inlineArguments(for plan: HeistPlanAdmissionCandidate) throws -> TheFence.CommandArgumentEnvelope {
         let data = try JSONEncoder().encode(plan)
-        guard case .object(let fields) = try JSONDecoder().decode(HeistValue.self, from: data) else {
-            throw XCTSkip("plan did not encode to a JSON object")
-        }
+        let value = try JSONDecoder().decode(HeistValue.self, from: data)
+        let fields: [String: HeistValue] = try XCTUnwrap(
+            { () -> [String: HeistValue]? in
+                guard case .object(let fields) = value else { return nil }
+                return fields
+            }(),
+            "Expected the plan admission candidate to encode as a JSON object"
+        )
         return TheFence.CommandArgumentEnvelope(values: fields)
     }
 

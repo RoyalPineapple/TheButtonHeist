@@ -88,7 +88,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
 
         AccessibilityNotificationObserver.shared.subscribe(bus)
         guard AccessibilityNotificationObserver.shared.isInstalled else {
-            throw XCTSkip("_AXAddNotificationCallback is unavailable in this runtime")
+            return XCTFail("Expected _AXAddNotificationCallback to be available in the supported runtime")
         }
         let cursor = AccessibilityNotificationCursor(sequence: bus.latestSequence)
 

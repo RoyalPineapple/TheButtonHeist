@@ -100,6 +100,7 @@ extension ElementInflation {
         case .failure:
             break
         }
+        await exploration.settleForDiscovery()
         let explorationResult = await exploration.discoverTarget(target)
         switch visibleTargetResolution(target) {
         case .success(let visible):
