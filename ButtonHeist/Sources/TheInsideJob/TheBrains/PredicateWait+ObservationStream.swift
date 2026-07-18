@@ -8,7 +8,6 @@ internal enum PredicateObservationBaselineSeed {
     case preserve
     case supplied(SettledCapture)
     case currentObservation
-    case previousObservationIfAvailable
 }
 
 /// Reduces settled observations against one immutable baseline. The semantic
@@ -29,23 +28,30 @@ internal struct PredicateObservationStreamState: Sendable, Equatable {
         baseline
     }
 
+    internal func seedingBaseline(
+        _ seed: PredicateObservationBaselineSeed,
+        from event: SettledObservationEvent,
+        when required: Bool
+    ) -> Self {
+        guard required else { return PredicateObservationStreamState(baseline: nil) }
+        return PredicateObservationStreamState(
+            baseline: baseline ?? seed.baseline(for: event)
+        )
+    }
+
     internal func reducing(
         _ observation: SettledObservationEvidence,
         predicate: ResolvedAccessibilityPredicate,
         predicateExpression: AccessibilityPredicate,
-        baselineSeed: PredicateObservationBaselineSeed = .preserve,
         observationWindow: ObservationWindow? = nil
     ) -> PredicateObservationStreamReduction {
-        let baseline = predicate.requiresChangeBaseline
-            ? baseline ?? baselineSeed.baseline(for: observation.event)
-            : nil
         let evidence = PredicateObservationEvidence(
             observation: observation,
-            baseline: predicate.requiresChangeBaseline ? baseline : nil,
-            window: observationWindow
+            baseline: baseline,
+            window: baseline == nil ? nil : observationWindow
         )
         return PredicateObservationStreamReduction(
-            state: PredicateObservationStreamState(baseline: baseline),
+            state: self,
             reduction: PredicateObservationReduction(
                 evidence: evidence,
                 expectation: PredicateEvaluation.evaluate(
@@ -67,8 +73,6 @@ private extension PredicateObservationBaselineSeed {
             baseline
         case .currentObservation:
             event.settledCapture
-        case .previousObservationIfAvailable:
-            SettledCapture(previousOf: event) ?? event.settledCapture
         }
     }
 }

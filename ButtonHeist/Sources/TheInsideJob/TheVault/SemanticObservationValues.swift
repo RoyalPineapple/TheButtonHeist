@@ -349,7 +349,7 @@ internal struct InterfaceObservationProof {
     }
 
     @MainActor internal static func settled(
-        _ outcome: SettleSession.Outcome,
+        _ outcome: SettleSession.Result,
         discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy = .mergeIntoInterface,
         lineageEvidence: ScreenLineageEvidence? = nil
     ) -> InterfaceObservationProof? {
@@ -372,7 +372,7 @@ internal struct ObservationSettlement {
         case unavailable(notificationBatch: AccessibilityNotificationBatch?)
     }
 
-    internal let settle: SettleSession.Outcome
+    internal let settle: SettleSession.Result
     internal let result: Result
 }
 

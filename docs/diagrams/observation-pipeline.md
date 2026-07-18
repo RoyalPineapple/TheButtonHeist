@@ -43,14 +43,13 @@ flowchart TD
     Checkpoint --> Admission
     Settle --> Clean{"clean settlement?"}
     Clean -->|no| Diagnostic["failed-settle diagnostic<br/>no graph or log mutation"]
-    Clean -->|yes| Outcome["SettleSession.Outcome<br/>exact final InterfaceObservation"]
+    Clean -->|yes| Outcome["SettleSession.Result<br/>exact final InterfaceObservation"]
     Outcome --> Admission{"stream admission<br/>tripwire + exact capture still current?"}
     Admission -->|no| Diagnostic
     Admission -->|yes| Proof["InterfaceObservationProof"]
 
-    Proof --> Committer["SemanticObservationStream<br/>sole ordered committer"]
-    Committer --> Continuity["classify continuity once"]
-    Continuity --> Graph["canonical graph reducer<br/>reduce TheVault.interfaceTree"]
+    Proof --> Committer["SemanticObservationStream<br/>ordered admission + publication"]
+    Committer --> Graph["TheVault.commitInterfaceGraph<br/>classify + admit + commit atomically"]
     Graph --> Publication["construct settled publication<br/>from committed graph"]
     Publication --> Scope["project tree + trace evidence<br/>once per fulfilled scope"]
     Scope --> Log["private SemanticObservationLog<br/>publish retained entry"]
@@ -71,13 +70,15 @@ flowchart TD
     Delta -. "never evaluator input" .-> Output["public output only"]
 ```
 
-The ordering is structural: stream admission precedes graph reduction, and graph
-reduction completes before private log publication. The admitted outcome carries
-the exact parser observation which settled; the stream rejects it if a later
-parse or tripwire signal superseded that capture. Each fulfilled scope projects
-its tree and trace evidence from the same committed observation. Consumers
-cannot observe an entry for graph state that has not already committed, and
-consuming an entry cannot mutate the graph. Cursor
+The ordering is structural: stream admission precedes the Vault's atomic graph
+commit, which computes the candidate tree, classifies continuity, admits the
+replacement observation, and only then mutates canonical state. The commit
+completes before private log publication. The admitted result carries the exact
+parser observation which settled; the stream rejects it if a later parse or
+tripwire signal superseded that capture. Each fulfilled scope projects its tree
+and trace evidence from the same committed observation. Consumers cannot
+observe an entry for graph state that has not already committed, and consuming
+an entry cannot mutate the graph. Cursor
 `observedAt` is derived from the capture's interface timestamp and is metadata;
 generation and settled sequence provide correctness ordering.
 

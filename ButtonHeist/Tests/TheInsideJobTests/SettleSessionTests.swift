@@ -75,20 +75,30 @@ final class SettleSessionTests: XCTestCase {
         state: inout SettleLoopMachine.State
     ) -> MachineStep {
         let eventCount = state.events.count
-        let transition = machine.advance(state, with: event)
+        let transition = machine.reduce(state, event: event)
         state = transition.state
         if state.events.count > eventCount {
             ledger.resetCurrentGeneration()
         }
+        let result: SettleSession.Result? = switch transition.effect {
+        case .continuePolling:
+            nil
+        case .terminal(let outcome):
+            SettleSession.result(
+                outcome: outcome,
+                state: transition.state,
+                observations: ledger
+            )
+        }
         return MachineStep(
             effect: transition.effect,
-            outcome: SettleSession.outcome(for: transition, observations: ledger)
+            result: result
         )
     }
 
     private struct MachineStep {
         let effect: SettleLoopMachine.Effect
-        let outcome: SettleSession.Outcome?
+        let result: SettleSession.Result?
     }
 
     /// Drives the loop with scripted parse results. The first script entry
@@ -306,7 +316,7 @@ final class SettleSessionTests: XCTestCase {
             return XCTFail("Expected settled terminal effect, got \(step.effect)")
         }
         XCTAssertEqual(timeMs, 2)
-        XCTAssertEqual(step.outcome?.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
+        XCTAssertEqual(step.result?.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
     }
 
     func testMachineSettlesQuietWindowAfterFingerprintRemainsStableForWindow() {
@@ -328,7 +338,7 @@ final class SettleSessionTests: XCTestCase {
             return XCTFail("Expected settled terminal effect, got \(step.effect)")
         }
         XCTAssertEqual(timeMs, 30)
-        XCTAssertEqual(step.outcome?.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
+        XCTAssertEqual(step.result?.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
     }
 
     func testMachineFingerprintChangeResetsStability() {
@@ -355,7 +365,7 @@ final class SettleSessionTests: XCTestCase {
             return XCTFail("Expected settled terminal effect after post-change stability, got \(step.effect)")
         }
         XCTAssertEqual(timeMs, 4)
-        XCTAssertEqual(step.outcome?.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
+        XCTAssertEqual(step.result?.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
     }
 
     func testMachineTripwireResetThenNilParseCannotReturnStaleFinalScreen() {
@@ -374,11 +384,48 @@ final class SettleSessionTests: XCTestCase {
 
         XCTAssertContinue(reduceObservation(stale, elapsedMs: 0, machine: machine, ledger: &ledger, state: &state))
         XCTAssertContinue(send(.tripwireSignal(changed), machine: machine, ledger: &ledger, state: &state))
-        let outcome = send(.timeout(elapsedMs: 10), machine: machine, ledger: &ledger, state: &state).outcome
+        let result = SettleSession.result(
+            outcome: .timedOut(timeMs: 10),
+            state: state,
+            observations: ledger
+        )
 
-        XCTAssertEqual(outcome?.outcome, .timedOut(timeMs: 10))
-        XCTAssertNil(outcome?.finalObservation)
-        XCTAssertEqual(outcome?.events, [.tripwireSignalChanged(from: baseline, to: changed)])
+        XCTAssertEqual(result.outcome, .timedOut(timeMs: 10))
+        XCTAssertNil(result.finalObservation)
+        XCTAssertEqual(result.events, [.tripwireSignalChanged(from: baseline, to: changed)])
+        _ = changedObject
+    }
+
+    func testMachineTripwireResetRestartsBothPolicyProofs() {
+        let stable = makeParseResult([
+            makeElement(label: "Stable", traits: .staticText),
+        ])
+        let baseline = Self.tripwireSignal(topmostVC: nil)
+        let changedObject = NSObject()
+        let changed = Self.tripwireSignal(topmostVC: ObjectIdentifier(changedObject))
+
+        for policy in [
+            SettlePolicy.consecutiveCycles(required: 1),
+            .quietWindow(milliseconds: 1),
+        ] {
+            let machine = SettleLoopMachine()
+            var ledger = SettleObservationLedger()
+            var state = SettleLoopMachine.State(
+                policy: policy,
+                tripwireBaseline: baseline
+            )
+
+            XCTAssertContinue(reduceObservation(stable, elapsedMs: 0, machine: machine, ledger: &ledger, state: &state))
+            XCTAssertContinue(send(.tripwireSignal(changed), machine: machine, ledger: &ledger, state: &state))
+            XCTAssertContinue(reduceObservation(stable, elapsedMs: 1, machine: machine, ledger: &ledger, state: &state))
+            let step = reduceObservation(stable, elapsedMs: 2, machine: machine, ledger: &ledger, state: &state)
+
+            guard case .terminal(.settled(let timeMs)) = step.effect else {
+                return XCTFail("Expected post-reset settle for \(policy), got \(step.effect)")
+            }
+            XCTAssertEqual(timeMs, 2)
+            XCTAssertEqual(step.result?.events, [.tripwireSignalChanged(from: baseline, to: changed)])
+        }
         _ = changedObject
     }
 
@@ -403,11 +450,11 @@ final class SettleSessionTests: XCTestCase {
             return XCTFail("Expected notification-only signal to allow settle, got \(step.effect)")
         }
         XCTAssertEqual(timeMs, 1)
-        XCTAssertEqual(step.outcome?.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Stable")
+        XCTAssertEqual(step.result?.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Stable")
         XCTAssertTrue(state.events.isEmpty)
     }
 
-    func testMachineCancellationTerminalEffectProjectsCancelledOutcome() {
+    func testResultProjectsCancelledOutcomeFromCurrentSettleState() {
         let stable = makeParseResult([
             makeElement(label: "Ready", traits: .staticText),
         ])
@@ -419,13 +466,17 @@ final class SettleSessionTests: XCTestCase {
         )
         XCTAssertContinue(reduceObservation(stable, elapsedMs: 0, machine: machine, ledger: &ledger, state: &state))
 
-        let outcome = send(.yieldFailed(.cancellation, elapsedMs: 7), machine: machine, ledger: &ledger, state: &state).outcome
+        let result = SettleSession.result(
+            outcome: .cancelled(timeMs: 7),
+            state: state,
+            observations: ledger
+        )
 
-        XCTAssertEqual(outcome?.outcome, .cancelled(timeMs: 7))
-        XCTAssertEqual(outcome?.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
+        XCTAssertEqual(result.outcome, .cancelled(timeMs: 7))
+        XCTAssertEqual(result.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
     }
 
-    func testMachineTimeoutTerminalEffectProjectsTimedOutOutcome() {
+    func testResultProjectsTimedOutOutcomeFromCurrentSettleState() {
         let stable = makeParseResult([
             makeElement(label: "Ready", traits: .staticText),
         ])
@@ -437,30 +488,14 @@ final class SettleSessionTests: XCTestCase {
         )
         XCTAssertContinue(reduceObservation(stable, elapsedMs: 0, machine: machine, ledger: &ledger, state: &state))
 
-        let outcome = send(.timeout(elapsedMs: 99), machine: machine, ledger: &ledger, state: &state).outcome
-
-        XCTAssertEqual(outcome?.outcome, .timedOut(timeMs: 99))
-        XCTAssertEqual(outcome?.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
-    }
-
-    func testMachineNonCancellationYieldErrorProjectsTimedOutOutcome() {
-        let stable = makeParseResult([
-            makeElement(label: "Ready", traits: .staticText),
-        ])
-        let machine = SettleLoopMachine()
-        var ledger = SettleObservationLedger()
-        var state = SettleLoopMachine.State(
-            policy: .quietWindow(milliseconds: 30),
-            tripwireBaseline: Self.tripwireSignal(topmostVC: nil)
+        let result = SettleSession.result(
+            outcome: .timedOut(timeMs: 99),
+            state: state,
+            observations: ledger
         )
-        XCTAssertContinue(reduceObservation(stable, elapsedMs: 0, machine: machine, ledger: &ledger, state: &state))
 
-        let step = send(.yieldFailed(.error, elapsedMs: 11), machine: machine, ledger: &ledger, state: &state)
-        guard case .terminal(.yieldFailed(let timeMs)) = step.effect else {
-            return XCTFail("Expected yieldFailed terminal effect, got \(step.effect)")
-        }
-        XCTAssertEqual(timeMs, 11)
-        XCTAssertEqual(step.outcome?.outcome, .timedOut(timeMs: 11))
+        XCTAssertEqual(result.outcome, .timedOut(timeMs: 99))
+        XCTAssertEqual(result.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
     }
 
     private func XCTAssertContinue(
@@ -622,6 +657,39 @@ final class SettleSessionTests: XCTestCase {
             start: clock.currentTime(),
             baselineTripwireSignal: Self.tripwireSignal(topmostVC: nil)
         )
+
+        XCTAssertEqual(outcome.outcome, .cancelled(timeMs: 10))
+        XCTAssertEqual(outcome.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
+    }
+
+    func testSemanticQuietSettleReturnsCancelledWhenObservationYieldSwallowsCancellation() async {
+        let stable = makeParseResult([
+            makeElement(label: "Ready", traits: .staticText, frame: CGRect(x: 0, y: 0, width: 100, height: 30)),
+        ])
+        let clock = ManualClock()
+        let yieldStarted = expectation(description: "observation yield started")
+        let session = SettleSession(
+            parseProvider: { stable },
+            tripwireSignalProvider: { Self.tripwireSignal(topmostVC: nil) },
+            observationYield: {
+                yieldStarted.fulfill()
+                _ = await Task.cancellableSleep(for: .seconds(10))
+                clock.advance(milliseconds: 10)
+            },
+            clock: { clock.currentTime() },
+            quietWindowMs: 30,
+            timeoutMs: 100
+        )
+        let task = Task {
+            await session.run(
+                start: clock.currentTime(),
+                baselineTripwireSignal: Self.tripwireSignal(topmostVC: nil)
+            )
+        }
+
+        await fulfillment(of: [yieldStarted], timeout: 1)
+        task.cancel()
+        let outcome = await task.value
 
         XCTAssertEqual(outcome.outcome, .cancelled(timeMs: 10))
         XCTAssertEqual(outcome.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")

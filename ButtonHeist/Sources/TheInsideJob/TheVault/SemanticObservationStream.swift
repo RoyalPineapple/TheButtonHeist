@@ -17,7 +17,7 @@ internal final class SemanticObservationStream {
         SemanticObservationDemandState,
         TheTripwire.TripwireSignal,
         Int
-    ) async -> SettleSession.Outcome
+    ) async -> SettleSession.Result
 
     @MainActor
     final class VisibleRefreshCompletion {

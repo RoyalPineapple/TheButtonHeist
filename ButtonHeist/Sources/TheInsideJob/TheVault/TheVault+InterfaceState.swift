@@ -10,6 +10,11 @@ import TheScore
 
 extension TheVault {
 
+    struct InterfaceGraphCommit {
+        let observation: InterfaceObservation
+        let continuity: ScreenContinuity
+    }
+
     /// Clear cached element data (used on suspend).
     func clearCache() {
         clearInterfaceForLifecycleReset()
@@ -70,30 +75,43 @@ extension TheVault {
         refreshLiveCapture()
     }
 
-    /// The sole reducer from a parsed observation into durable graph truth.
-    func reduceInterfaceGraph(
+    /// The sole commit from a parsed observation into durable graph truth.
+    func commitInterfaceGraph(
         with observation: InterfaceObservation,
         scope: SemanticObservationScope,
-        continuity: ScreenContinuity,
-        discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy
-    ) throws -> InterfaceObservation {
+        discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy,
+        notifications: [AccessibilityNotificationKind],
+        lineage: SemanticObservationRuntimeState.Lineage,
+        lineageEvidence: ScreenLineageEvidence?
+    ) throws -> InterfaceGraphCommit {
+        let previousTree = interfaceTree
+        let candidateTree = switch scope {
+        case .visible:
+            previousTree.updatingViewport(with: observation)
+        case .discovery:
+            discoveryCommitPolicy == .replaceInterface
+                ? observation.tree
+                : previousTree.merging(observation.tree)
+        }
+        let continuity = lineage.admitting(ScreenClassifier.classify(
+            from: previousTree == .empty ? nil : previousTree,
+            to: candidateTree,
+            notifications: notifications,
+            lineageEvidence: lineageEvidence
+        ))
+        let nextTree = continuity.isReplacement ? observation.tree : candidateTree
+        let committedObservation = try observation.replacingTreeWithCurrentCapture(nextTree)
+
         if let queuedVisibleRefresh = nextVisibleRefreshObservationForTesting,
            queuedVisibleRefresh.tree.interfaceHash != observation.tree.interfaceHash {
             nextVisibleRefreshObservationForTesting = nil
         }
-        switch scope {
-        case .visible:
-            interfaceTree = continuity.isReplacement
-                ? observation.tree
-                : interfaceTree.updatingViewport(with: observation)
-        case .discovery:
-            interfaceTree = continuity.isReplacement || discoveryCommitPolicy == .replaceInterface
-                ? observation.tree
-                : interfaceTree.merging(observation.tree)
-        }
-        let committedObservation = try observation.replacingTreeWithCurrentCapture(interfaceTree)
+        interfaceTree = nextTree
         finishCommit(observation: committedObservation)
-        return committedObservation
+        return InterfaceGraphCommit(
+            observation: committedObservation,
+            continuity: continuity
+        )
     }
 
     func recordFailedSettleDiagnosticEvidence(_ observation: InterfaceObservation?) {

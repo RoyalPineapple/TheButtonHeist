@@ -336,7 +336,7 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
     }
 
     private func recordSettleFailureDiagnostic(on job: TheInsideJob) async -> String {
-        let outcome = SettleSession.Outcome(
+        let outcome = SettleSession.Result(
             outcome: .timedOut(timeMs: 17),
             events: [],
             finalObservation: SettleSessionFinalObservation(

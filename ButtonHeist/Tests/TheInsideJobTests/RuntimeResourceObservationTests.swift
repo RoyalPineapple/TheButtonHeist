@@ -133,7 +133,7 @@ final class RuntimeResourceObservationTests: XCTestCase {
     }
 
     private func recordSettleFailureDiagnostic() async -> String {
-        let outcome = SettleSession.Outcome(
+        let outcome = SettleSession.Result(
             outcome: .timedOut(timeMs: 17),
             events: [],
             finalObservation: SettleSessionFinalObservation(

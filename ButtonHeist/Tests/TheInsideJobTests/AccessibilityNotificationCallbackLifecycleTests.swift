@@ -112,6 +112,35 @@ final class AccessibilityNotificationCallbackLifecycleTests: XCTestCase {
         XCTAssertEqual(value, "Original announcement")
     }
 
+    func testOverlappingScopeLeasesRemainScopedUntilLastIdempotentCancellation() {
+        let bus = AccessibilityNotificationBus()
+        var heist: AccessibilityNotificationScopeLease? = bus.beginHeistScope()
+        var action: AccessibilityNotificationScopeLease? = bus.beginActionWindow()
+
+        heist?.cancel()
+        heist?.cancel()
+        heist = nil
+        bus.recordForTesting(code: 1001, notificationData: .none, associatedElement: .none)
+        action?.cancel()
+        action?.cancel()
+        action = nil
+        bus.recordForTesting(code: 1001, notificationData: .none, associatedElement: .none)
+
+        var secondHeist: AccessibilityNotificationScopeLease? = bus.beginHeistScope()
+        var secondAction: AccessibilityNotificationScopeLease? = bus.beginActionWindow()
+        XCTAssertNotNil(secondHeist)
+        secondAction?.cancel()
+        secondAction = nil
+        bus.recordForTesting(code: 1001, notificationData: .none, associatedElement: .none)
+        secondHeist = nil
+        bus.recordForTesting(code: 1001, notificationData: .none, associatedElement: .none)
+
+        XCTAssertEqual(
+            bus.checkpoint(after: .origin, selection: .all).events.map(\.provenance),
+            [.scoped, .ambient, .scoped, .ambient]
+        )
+    }
+
     private func makeObserver(harness: CallbackHarness) -> AccessibilityNotificationObserver {
         AccessibilityNotificationObserver(
             installCallbackForTesting: { callback in

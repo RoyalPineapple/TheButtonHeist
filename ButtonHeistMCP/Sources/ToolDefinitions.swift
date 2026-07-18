@@ -10,11 +10,10 @@ enum ToolDefinitions {
 
     private static func tool(for descriptor: FenceCommandDescriptor) -> Tool {
         let schema = MCPValueBridge.value(from: descriptor.inputJSONSchema)
-        let projection = descriptor.projection
-        if let annotations = projection.mcpAnnotations {
+        if let annotations = descriptor.mcpAnnotations {
             return Tool(
                 name: descriptor.command.rawValue,
-                description: projection.description,
+                description: descriptor.description,
                 inputSchema: schema,
                 annotations: .init(
                     readOnlyHint: annotations.readOnlyHint,
@@ -25,7 +24,7 @@ enum ToolDefinitions {
 
         return Tool(
             name: descriptor.command.rawValue,
-            description: projection.description,
+            description: descriptor.description,
             inputSchema: schema
         )
     }

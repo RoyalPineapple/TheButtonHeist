@@ -320,7 +320,7 @@ struct CompilerProcessTests {
         )
         let configuration = HeistCompiler.Configuration(
             packageRoot: buttonHeistPackageRoot,
-            processLimits: limits(),
+            processLimits: limits(executionTimeout: .seconds(10)),
             temporaryDirectory: temp.url
         )
 

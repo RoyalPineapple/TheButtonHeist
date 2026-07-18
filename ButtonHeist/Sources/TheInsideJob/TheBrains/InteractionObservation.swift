@@ -88,8 +88,8 @@ final class InteractionObservation {
         afterStatePayload: ((PostActionPayloadContext) -> ActionResultPayload?)? = nil,
         before: PostActionObservation.ObservationBaseline,
         postActionCommitScope: SemanticObservationScope = .visible,
-        settleOutcome: SettleSession.Outcome? = nil,
-        notificationWindow: AccessibilityNotificationActionWindow? = nil
+        settleOutcome: SettleSession.Result? = nil,
+        notificationWindow: AccessibilityNotificationScopeLease? = nil
     ) async -> ActionResult {
         let settledObservation = await postActionObservation.settleObservation(
             before: before,

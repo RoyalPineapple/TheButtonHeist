@@ -17,11 +17,6 @@ internal enum AnnouncementWaitCursorStrategy: Sendable, Equatable {
 internal enum PredicateChangeBaselineSource: Sendable, Equatable {
     case establishFromFirstObservation
     case supplied(SettledCapture?)
-
-    internal var capture: SettledCapture? {
-        guard case .supplied(let capture) = self else { return nil }
-        return capture
-    }
 }
 
 private struct PredicateWaitDiscoveryResult<Evidence>
@@ -99,28 +94,45 @@ where Evidence: Sendable & Equatable {
             )
         }
 
-        let projection = PredicateExecutionProjection(
-            wait: self,
-            step: step,
-            start: start,
-            changeBaseline: changeBaseline
-        )
         return await execute(
             start: start,
             timeout: step.timeout.seconds,
             projection: ExecutionProjection(
                 target: step.predicate.waitTarget,
                 continuesAfterInitialMiss: true,
-                initialEvidence: projection.initialEvidence,
+                initialEvidence: LifecycleEvidence(predicate: step.predicateExpression),
                 evaluate: { observation, isInitialVisible, evidence in
-                    projection.evaluate(
+                    let baselineSeed: PredicateObservationBaselineSeed
+                    if evidence.stream.observationBaseline != nil {
+                        baselineSeed = .preserve
+                    } else {
+                        baselineSeed = switch changeBaseline {
+                        case .supplied(let supplied):
+                            supplied.map(PredicateObservationBaselineSeed.supplied) ?? .preserve
+                        case .establishFromFirstObservation:
+                            isInitialVisible ? .preserve : .currentObservation
+                        }
+                    }
+                    let reduced = self.reduceObservation(
                         observation,
-                        isInitialVisible: isInitialVisible,
-                        evidence: evidence
+                        predicate: step.predicate,
+                        predicateExpression: step.predicateExpression,
+                        baselineSeed: baselineSeed,
+                        stream: evidence.stream
+                    )
+                    let recorded = evidence.recording(reduced)
+                    return PredicateWaitEvaluation(
+                        evidence: recorded,
+                        matched: recorded.evaluation.met
                     )
                 },
                 result: { outcome, _, evidence in
-                    projection.result(outcome, evidence: evidence)
+                    self.waitReceipt(
+                        for: step,
+                        evidence: evidence,
+                        start: start,
+                        success: outcome == .matched
+                    )
                 }
             ),
             onReadyToPoll: onReadyToPoll
@@ -271,54 +283,45 @@ where Evidence: Sendable & Equatable {
             deadline: SemanticObservationDeadline?,
             evidence: Evidence
         ) async -> PredicateWaitDiscoveryResult<Evidence> {
-            var latestEvaluation = PredicateWaitEvaluation(
+            var evaluation = PredicateWaitEvaluation(
                 evidence: evidence,
                 matched: false
             )
-            var matchedEvaluation: PredicateWaitEvaluation<Evidence>?
-            var evaluatedSequence: SettledObservationSequence?
+            var lastEvaluatedSequence: SettledObservationSequence?
             let event: SettledObservationEvent?
             if let waitTarget = projection.target,
                let revealed = await wait.revealTarget(waitTarget, deadline) {
-                evaluatedSequence = revealed.sequence
-                let evaluation = evaluate(
+                lastEvaluatedSequence = revealed.sequence
+                evaluation = evaluate(
                     revealed,
                     isInitialVisible: false,
-                    evidence: latestEvaluation.evidence
+                    evidence: evaluation.evidence
                 )
-                latestEvaluation = evaluation
-                if evaluation.matched {
-                    matchedEvaluation = evaluation
-                }
                 event = revealed
             } else {
                 event = await wait.discover(projection.target, deadline) { event in
-                    evaluatedSequence = event.sequence
-                    let evaluation = self.evaluate(
+                    guard !evaluation.matched,
+                          event.sequence != lastEvaluatedSequence else { return evaluation.matched }
+                    lastEvaluatedSequence = event.sequence
+                    evaluation = self.evaluate(
                         event,
                         isInitialVisible: false,
-                        evidence: latestEvaluation.evidence
+                        evidence: evaluation.evidence
                     )
-                    latestEvaluation = evaluation
-                    if evaluation.matched {
-                        matchedEvaluation = evaluation
-                    }
                     return evaluation.matched
                 }
             }
-            if matchedEvaluation == nil, event?.sequence != evaluatedSequence {
-                let evaluation = evaluate(
+            if !evaluation.matched,
+               let event,
+               event.sequence != lastEvaluatedSequence {
+                evaluation = evaluate(
                     event,
                     isInitialVisible: false,
-                    evidence: latestEvaluation.evidence
+                    evidence: evaluation.evidence
                 )
-                latestEvaluation = evaluation
-                if evaluation.matched {
-                    matchedEvaluation = evaluation
-                }
             }
             return PredicateWaitDiscoveryResult(
-                evaluation: matchedEvaluation ?? latestEvaluation,
+                evaluation: evaluation,
                 event: event
             )
         }
@@ -343,77 +346,6 @@ where Evidence: Sendable & Equatable {
         }
     }
 
-    @MainActor
-    private final class PredicateExecutionProjection {
-        private let wait: PredicateWait
-        private let step: ResolvedWaitRuntimeInput
-        private let start: CFAbsoluteTime
-        private let changeBaseline: PredicateChangeBaselineSource
-
-        var initialEvidence: LifecycleEvidence {
-            LifecycleEvidence(predicate: step.predicateExpression)
-        }
-
-        init(
-            wait: PredicateWait,
-            step: ResolvedWaitRuntimeInput,
-            start: CFAbsoluteTime,
-            changeBaseline: PredicateChangeBaselineSource
-        ) {
-            self.wait = wait
-            self.step = step
-            self.start = start
-            self.changeBaseline = changeBaseline
-        }
-
-        func evaluate(
-            _ observation: SettledObservationEvidence,
-            isInitialVisible: Bool,
-            evidence: LifecycleEvidence
-        ) -> PredicateWaitEvaluation<LifecycleEvidence> {
-            let reduced = wait.reduceObservation(
-                observation,
-                predicate: step.predicate,
-                predicateExpression: step.predicateExpression,
-                baselineSeed: baselineSeed(
-                    isInitialVisible: isInitialVisible,
-                    evidence: evidence
-                ),
-                stream: evidence.stream
-            )
-            let recorded = evidence.recording(reduced)
-            return PredicateWaitEvaluation(
-                evidence: recorded,
-                matched: recorded.evaluation.met
-            )
-        }
-
-        func result(
-            _ outcome: PredicateWaitOutcome,
-            evidence: LifecycleEvidence
-        ) -> HeistWaitReceipt {
-            wait.waitReceipt(
-                for: step,
-                evidence: evidence,
-                start: start,
-                success: outcome == .matched
-            )
-        }
-
-        private func baselineSeed(
-            isInitialVisible: Bool,
-            evidence: LifecycleEvidence
-        ) -> PredicateObservationBaselineSeed {
-            guard evidence.stream.observationBaseline == nil else { return .preserve }
-            switch changeBaseline {
-            case .supplied(let supplied):
-                return supplied.map(PredicateObservationBaselineSeed.supplied) ?? .preserve
-            case .establishFromFirstObservation:
-                return isInitialVisible ? .preserve : .currentObservation
-            }
-        }
-    }
-
     internal func reduceObservation(
         _ observation: SettledObservationEvidence,
         predicate: ResolvedAccessibilityPredicate,
@@ -421,23 +353,21 @@ where Evidence: Sendable & Equatable {
         baselineSeed: PredicateObservationBaselineSeed,
         stream: PredicateObservationStreamState
     ) -> PredicateObservationStreamReduction {
-        let seeded = stream.reducing(
+        let seeded = stream.seedingBaseline(
+            baselineSeed,
+            from: observation.event,
+            when: predicate.requiresChangeBaseline
+        )
+        let window = seeded.observationBaseline.flatMap { baseline in
+            vault.semanticObservationStream.observationWindow(
+                from: baseline,
+                through: observation.event
+            )
+        }
+        return seeded.reducing(
             observation,
             predicate: predicate,
             predicateExpression: predicateExpression,
-            baselineSeed: baselineSeed
-        )
-        guard predicate.requiresChangeBaseline,
-              let baseline = seeded.state.observationBaseline else { return seeded }
-        let window = vault.semanticObservationStream.observationWindow(
-            from: baseline,
-            through: observation.event
-        )
-        return stream.reducing(
-            observation,
-            predicate: predicate,
-            predicateExpression: predicateExpression,
-            baselineSeed: .supplied(baseline),
             observationWindow: window
         )
     }

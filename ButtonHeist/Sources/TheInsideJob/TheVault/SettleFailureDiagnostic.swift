@@ -3,7 +3,7 @@
 
 @MainActor enum SettleFailureDiagnostic {
     static func message(
-        for outcome: SettleSession.Outcome,
+        for outcome: SettleSession.Result,
         layerGateWasClear: Bool? = nil
     ) -> String {
         var parts = ["settle \(outcome.outcome.outcomeDescription)"]
