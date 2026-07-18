@@ -6,14 +6,14 @@ import TheScore
 private let logger = ButtonHeistLog.logger(.handoff(.transport))
 
 /// Ordered transport delivery with one reserved terminal-overflow slot.
-final class TransportEventStream: Sendable {
-    struct AsyncIterator: AsyncIteratorProtocol {
+extension ServerTransport {
+    struct EventIterator: AsyncIteratorProtocol {
         private var base: AsyncStream<TransportEvent>.AsyncIterator
-        private let buffer: TransportEventBuffer
+        private let buffer: EventBuffer
 
         fileprivate init(
             base: AsyncStream<TransportEvent>.AsyncIterator,
-            buffer: TransportEventBuffer
+            buffer: EventBuffer
         ) {
             self.base = base
             self.buffer = buffer
@@ -30,27 +30,28 @@ final class TransportEventStream: Sendable {
 
     struct Events: AsyncSequence, Sendable {
         private let base: AsyncStream<TransportEvent>
-        private let buffer: TransportEventBuffer
+        private let buffer: EventBuffer
 
-        fileprivate init(base: AsyncStream<TransportEvent>, buffer: TransportEventBuffer) {
+        fileprivate init(base: AsyncStream<TransportEvent>, buffer: EventBuffer) {
             self.base = base
             self.buffer = buffer
         }
 
-        func makeAsyncIterator() -> AsyncIterator {
-            AsyncIterator(base: base.makeAsyncIterator(), buffer: buffer)
+        func makeAsyncIterator() -> EventIterator {
+            EventIterator(base: base.makeAsyncIterator(), buffer: buffer)
         }
     }
 
+final class EventStream: Sendable {
     nonisolated let events: Events
 
     private let continuation: AsyncStream<TransportEvent>.Continuation
-    private let buffer: TransportEventBuffer
+    private let buffer: EventBuffer
     private let bufferLimit: Int
 
     init(bufferLimit: Int) {
         self.bufferLimit = bufferLimit
-        let buffer = TransportEventBuffer(limit: bufferLimit)
+        let buffer = EventBuffer(limit: bufferLimit)
         let stream = AsyncStream<TransportEvent>.makeStream(
             bufferingPolicy: .bufferingOldest(bufferLimit + 1)
         )
@@ -93,14 +94,11 @@ final class TransportEventStream: Sendable {
     }
 }
 
-private final class TransportEventBuffer: Sendable {
-    private struct State {
-        var bufferedEvents = 0
-        var overflowed = false
-    }
-
+fileprivate final class EventBuffer: Sendable {
     private let limit: Int
-    private let state = OSAllocatedUnfairLock<State>(initialState: State())
+    private let state = OSAllocatedUnfairLock(
+        initialState: (bufferedEvents: 0, overflowed: false)
+    )
 
     init(limit: Int) {
         self.limit = limit
@@ -127,6 +125,7 @@ private final class TransportEventBuffer: Sendable {
             return true
         }
     }
+}
 }
 
 private extension TransportEvent {

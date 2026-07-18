@@ -36,7 +36,7 @@ enum SocketClientPhase: Equatable, Sendable {
 /// Key: `clientId: Int` (this registry allocates it via `nextClientId`).
 /// Lifetime: per socket connection. Invalidation: `removeAndCancel(_:)` on close,
 /// `cancelAll()` on teardown. It owns `NWConnection` + send-buffer state only — auth
-/// phase lives in `TheMuscleClientRegistry` under the same key, deliberately
+/// state lives in `ClientAdmission.Registry` under the same key, deliberately
 /// separate so transport never owns auth semantics. See `docs/ARCHITECTURE.md#state-has-one-owner`.
 struct SocketClientRegistry {
     struct Client {

@@ -4,7 +4,7 @@ import Foundation
 
 import TheScore
 
-struct MuscleAuthenticationRequestDecoder {
+extension ClientAdmission.Authentication {
     static func decode(_ data: Data) -> RequestEnvelope? {
         do {
             return try RequestEnvelope.decoded(from: data)

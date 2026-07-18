@@ -2,11 +2,12 @@
 #if DEBUG
 import TheScore
 
-struct MuscleAuthenticationRejection {
+extension ClientAdmission {
+enum Rejection {
     static func undecodableUnauthenticatedMessage(
         _ clientId: Int,
-        respond: @escaping TheMuscleAdmission.ResponseHandler
-    ) -> [MuscleAdmissionEffect] {
+        respond: @escaping ResponseHandler
+    ) -> [Effect] {
         let error = ServerError(
             kind: .validationError,
             message: """
@@ -23,8 +24,8 @@ struct MuscleAuthenticationRejection {
 
     static func undecodableAuthenticatedMessage(
         _ clientId: Int,
-        respond: @escaping TheMuscleAdmission.ResponseHandler
-    ) -> [MuscleAdmissionEffect] {
+        respond: @escaping ResponseHandler
+    ) -> [Effect] {
         let error = ServerError(kind: .general, message: "Malformed message — could not decode")
         return [
             .log(.undecodableAuthenticatedMessage(clientId: clientId)),
@@ -35,8 +36,8 @@ struct MuscleAuthenticationRejection {
     static func authenticatedProtocolMessage(
         _ clientId: Int,
         envelope: RequestEnvelope,
-        respond: @escaping TheMuscleAdmission.ResponseHandler
-    ) -> [MuscleAdmissionEffect] {
+        respond: @escaping ResponseHandler
+    ) -> [Effect] {
         let message: ServerErrorMessage
         do {
             message = try ServerErrorMessage(
@@ -59,8 +60,8 @@ struct MuscleAuthenticationRejection {
         _ clientId: Int,
         message: String,
         requestId: RequestID?,
-        respond: @escaping TheMuscleAdmission.ResponseHandler
-    ) -> [MuscleAdmissionEffect] {
+        respond: @escaping ResponseHandler
+    ) -> [Effect] {
         let serverMessage: ServerErrorMessage
         do {
             serverMessage = try ServerErrorMessage(validating: message)
@@ -77,6 +78,7 @@ struct MuscleAuthenticationRejection {
             .delayedDisconnect(clientId: clientId),
         ]
     }
+}
 }
 #endif // DEBUG
 #endif // canImport(UIKit)

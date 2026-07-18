@@ -6,7 +6,7 @@ import Testing
 struct MessageRateLimiterTests {
 
     @Test func `accepts through the configured one-second window limit`() {
-        var limiter = MessageRateLimiter(maxMessagesPerSecond: 2)
+        var limiter = ClientAdmission.RateLimiter(maxMessagesPerSecond: 2)
         let now = Date(timeIntervalSince1970: 1_000)
 
         #expect(limiter.recordMessage(at: now) == false)
@@ -15,7 +15,7 @@ struct MessageRateLimiterTests {
     }
 
     @Test func `notifies only once while the same window remains limited`() {
-        var limiter = MessageRateLimiter(maxMessagesPerSecond: 2)
+        var limiter = ClientAdmission.RateLimiter(maxMessagesPerSecond: 2)
         let now = Date(timeIntervalSince1970: 1_000)
 
         #expect(limiter.recordMessage(at: now) == false)
@@ -29,7 +29,7 @@ struct MessageRateLimiterTests {
     }
 
     @Test func `resets notification after the active window rolls forward`() {
-        var limiter = MessageRateLimiter(maxMessagesPerSecond: 2)
+        var limiter = ClientAdmission.RateLimiter(maxMessagesPerSecond: 2)
         let firstWindow = Date(timeIntervalSince1970: 1_000)
 
         #expect(limiter.recordMessage(at: firstWindow) == false)
@@ -46,7 +46,7 @@ struct MessageRateLimiterTests {
     }
 
     @Test func `drops timestamps exactly one second old from the active window`() {
-        var limiter = MessageRateLimiter(maxMessagesPerSecond: 2)
+        var limiter = ClientAdmission.RateLimiter(maxMessagesPerSecond: 2)
         let first = Date(timeIntervalSince1970: 1_000)
 
         #expect(limiter.recordMessage(at: first) == false)

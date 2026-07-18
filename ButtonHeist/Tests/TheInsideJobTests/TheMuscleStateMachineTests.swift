@@ -7,13 +7,13 @@ import ButtonHeistSupport
 
 final class TheMuscleStateMachineTests: XCTestCase {
     func testTokenAdmissionLocksAddressAfterConfiguredFailures() {
-        var admission = TokenAdmission(
+        var admission = ClientAdmission.TokenAuthentication(
             tokenSource: .configured("good-token"),
             maxFailedAttempts: 2,
             lockoutDuration: 30
         )
 
-        guard case .rejected(.invalidToken(let firstError, let firstAttempts)) = admission.decideToken(
+        guard case .rejected(.invalidToken(let firstError, let firstAttempts)) = admission.admit(
             "bad-token",
             driverId: nil,
             address: "127.0.0.1"
@@ -24,7 +24,7 @@ final class TheMuscleStateMachineTests: XCTestCase {
         XCTAssertEqual(firstError.recoveryHint, "Retry with the configured token.")
         XCTAssertEqual(firstAttempts, 1)
 
-        guard case .rejected(.lockoutStarted(let secondError, let secondAttempts)) = admission.decideToken(
+        guard case .rejected(.lockoutStarted(let secondError, let secondAttempts)) = admission.admit(
             "bad-token",
             driverId: nil,
             address: "127.0.0.1"
@@ -34,7 +34,7 @@ final class TheMuscleStateMachineTests: XCTestCase {
         XCTAssertEqual(secondError.recoveryHint, "Retry with the configured token.")
         XCTAssertEqual(secondAttempts, 2)
 
-        guard case .lockedOut(let error) = admission.decideToken(
+        guard case .lockedOut(let error) = admission.admit(
             "good-token",
             driverId: nil,
             address: "127.0.0.1"
@@ -46,25 +46,31 @@ final class TheMuscleStateMachineTests: XCTestCase {
 
     func testClientAuthenticationRejectsAuthenticationBeforeHello() {
         XCTAssertEqual(
-            ClientAuthenticationMachine().advance(.connected(address: "127.0.0.1"), with: .completeAuthentication),
+            ClientAdmission.Authentication.Reducer().reduce(
+                .connected(address: "127.0.0.1"),
+                event: .completeAuthentication
+            ),
             .rejected(.missingHello, state: .connected(address: "127.0.0.1"))
         )
-        var registry = TheMuscleClientRegistry()
+        var registry = ClientAdmission.Registry()
         registry.registerAddress(1, address: "127.0.0.1")
 
         XCTAssertEqual(
             registry.completeAuthentication(1),
             .rejected(.missingHello, state: .connected(address: "127.0.0.1"))
         )
-        XCTAssertEqual(registry.phase(for: 1), .connected(address: "127.0.0.1"))
+        XCTAssertEqual(registry.state(for: 1), .connected(address: "127.0.0.1"))
     }
 
     func testClientAuthenticationAdvancesThroughHelloBeforeAuthenticated() {
         XCTAssertEqual(
-            ClientAuthenticationMachine().advance(.connected(address: "127.0.0.1"), with: .validateHello),
+            ClientAdmission.Authentication.Reducer().reduce(
+                .connected(address: "127.0.0.1"),
+                event: .validateHello
+            ),
             .advanced(.helloValidated(address: "127.0.0.1"), effect: .helloValidated)
         )
-        var registry = TheMuscleClientRegistry()
+        var registry = ClientAdmission.Registry()
         registry.registerAddress(1, address: "127.0.0.1")
 
         XCTAssertEqual(
@@ -75,11 +81,11 @@ final class TheMuscleStateMachineTests: XCTestCase {
             registry.completeAuthentication(1),
             .advanced(.authenticated(address: "127.0.0.1"), effect: .authenticated)
         )
-        XCTAssertEqual(registry.phase(for: 1), .authenticated(address: "127.0.0.1"))
+        XCTAssertEqual(registry.state(for: 1), .authenticated(address: "127.0.0.1"))
     }
 
     func testClientAuthenticationRejectsDuplicateHelloAfterValidation() {
-        var registry = TheMuscleClientRegistry()
+        var registry = ClientAdmission.Registry()
         registry.registerAddress(1, address: "127.0.0.1")
 
         _ = registry.validateHello(1)
@@ -88,21 +94,21 @@ final class TheMuscleStateMachineTests: XCTestCase {
             registry.validateHello(1),
             .rejected(.helloAlreadyValidated, state: .helloValidated(address: "127.0.0.1"))
         )
-        XCTAssertEqual(registry.phase(for: 1), .helloValidated(address: "127.0.0.1"))
+        XCTAssertEqual(registry.state(for: 1), .helloValidated(address: "127.0.0.1"))
     }
 
     func testClientRemovalClearsAuthenticationAndRateLimitStateTogether() {
-        var registry = TheMuscleClientRegistry()
+        var registry = ClientAdmission.Registry()
         let now = Date(timeIntervalSinceReferenceDate: 1_000)
         registry.registerAddress(1, address: "127.0.0.1")
-        for _ in 0..<MessageRateLimiter.defaultMaxMessagesPerSecond {
+        for _ in 0..<ClientAdmission.RateLimiter.defaultMaxMessagesPerSecond {
             XCTAssertEqual(registry.recordMessage(1, at: now), .accepted)
         }
         XCTAssertEqual(registry.recordMessage(1, at: now), .rateLimited(shouldNotify: true))
 
         XCTAssertEqual(registry.remove(1), .connected(address: "127.0.0.1"))
         XCTAssertFalse(registry.contains(1))
-        XCTAssertNil(registry.phase(for: 1))
+        XCTAssertNil(registry.state(for: 1))
 
         registry.registerAddress(1, address: "127.0.0.1")
         XCTAssertEqual(registry.recordMessage(1, at: now), .accepted)

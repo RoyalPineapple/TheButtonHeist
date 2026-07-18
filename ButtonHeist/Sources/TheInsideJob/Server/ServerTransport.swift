@@ -12,46 +12,45 @@ enum TransportEvent: Sendable {
     case backlogOverflow(maxEvents: Int)
 }
 
-enum ServerTransportError: Error, LocalizedError, Equatable, Sendable {
-    case alreadyRunning
-    case stopped
-
-    var errorDescription: String? {
-        switch self {
-        case .alreadyRunning:
-            return "Server transport is already running."
-        case .stopped:
-            return "Server transport stopped before startup completed."
-        }
-    }
-}
-
-private struct ServerTransportStopOperation: Equatable, Sendable {
-    let id: UUID
-    let task: Task<Void, Never>
-
-    static func == (lhs: ServerTransportStopOperation, rhs: ServerTransportStopOperation) -> Bool {
-        lhs.id == rhs.id
-    }
-}
-
-private struct ServerTransportStartOperation: Equatable {
-    let id: UUID
-    let completion: CompletionSignal
-
-    static func == (lhs: ServerTransportStartOperation, rhs: ServerTransportStartOperation) -> Bool {
-        lhs.id == rhs.id
-    }
-}
-
-private enum ServerTransportOperation: Equatable {
-    case none
-    case start(ServerTransportStartOperation)
-    case stop(ServerTransportStopOperation)
-}
-
 /// TLS-gated TCP transport plus one ordered event stream.
 final class ServerTransport {
+    enum Failure: Error, LocalizedError, Equatable, Sendable {
+        case alreadyRunning
+        case stopped
+
+        var errorDescription: String? {
+            switch self {
+            case .alreadyRunning:
+                return "Server transport is already running."
+            case .stopped:
+                return "Server transport stopped before startup completed."
+            }
+        }
+    }
+
+    private struct StopOperation: Equatable, Sendable {
+        let id: UUID
+        let task: Task<Void, Never>
+
+        static func == (lhs: StopOperation, rhs: StopOperation) -> Bool {
+            lhs.id == rhs.id
+        }
+    }
+
+    private struct StartOperation: Equatable {
+        let id: UUID
+        let completion: CompletionSignal
+
+        static func == (lhs: StartOperation, rhs: StartOperation) -> Bool {
+            lhs.id == rhs.id
+        }
+    }
+
+    private enum Operation: Equatable {
+        case none
+        case start(StartOperation)
+        case stop(StopOperation)
+    }
 
     /// Maximum ordered transport events buffered while the consumer is busy.
     ///
@@ -67,7 +66,7 @@ final class ServerTransport {
 
     /// Tracks only in-flight transport operations. Listener state and resources
     /// belong to `SocketListenerRuntime`.
-    @MainActor private var operation = ServerTransportOperation.none
+    @MainActor private var operation = Operation.none
 
     /// Bonjour advertisement lifecycle and TXT record state.
     @MainActor private let advertisement = BonjourAdvertisement()
@@ -75,8 +74,8 @@ final class ServerTransport {
     // MARK: - Event Stream
 
     /// Ordered event stream. Only one consumer should iterate it.
-    nonisolated let events: TransportEventStream.Events
-    private nonisolated let eventStream: TransportEventStream
+    nonisolated let events: Events
+    private nonisolated let eventStream: EventStream
 
     #if DEBUG
     /// Test hooks installed on each `SocketListenerRuntime` before it starts.
@@ -98,7 +97,7 @@ final class ServerTransport {
     nonisolated init(token: SessionAuthToken, allowedScopes: Set<ConnectionScope> = ConnectionScope.all) {
         self.server = SimpleSocketServer(allowedScopes: allowedScopes)
         self.token = token
-        let eventStream = TransportEventStream(bufferLimit: Self.eventStreamBufferLimit)
+        let eventStream = EventStream(bufferLimit: Self.eventStreamBufferLimit)
         self.eventStream = eventStream
         self.events = eventStream.events
     }
@@ -124,13 +123,13 @@ final class ServerTransport {
         case .none:
             break
         case .start:
-            throw ServerTransportError.alreadyRunning
+            throw Failure.alreadyRunning
         case .stop:
-            throw ServerTransportError.stopped
+            throw Failure.stopped
         }
 
         let params = ButtonHeistTLSPreSharedKey.networkParameters(from: token.description)
-        let attempt = ServerTransportStartOperation(
+        let attempt = StartOperation(
             id: UUID(),
             completion: CompletionSignal()
         )
@@ -157,7 +156,7 @@ final class ServerTransport {
         let callbacks = makeCallbacks()
         do {
             guard operation == .start(attempt) else {
-                throw ServerTransportError.stopped
+                throw Failure.stopped
             }
             let actualPort = try await server.startAsync(
                 port: port,
@@ -168,14 +167,14 @@ final class ServerTransport {
             )
             guard operation == .start(attempt) else {
                 await server.stop()
-                throw ServerTransportError.stopped
+                throw Failure.stopped
             }
             return actualPort
         } catch SimpleSocketServer.ServerError.alreadyRunning {
-            throw ServerTransportError.alreadyRunning
+            throw Failure.alreadyRunning
         } catch {
             if case .stop = operation, error is CancellationError {
-                throw ServerTransportError.stopped
+                throw Failure.stopped
             }
             throw error
         }
@@ -191,7 +190,7 @@ final class ServerTransport {
     func stop() async {
         advertisement.stop()
 
-        let stopOperation: ServerTransportStopOperation
+        let stopOperation: StopOperation
         switch operation {
         case .start(let startOperation):
             stopOperation = beginStopping(waitingFor: startOperation.completion)
@@ -215,7 +214,7 @@ final class ServerTransport {
     }
 
     @MainActor
-    private func finishStarting(_ startOperation: ServerTransportStartOperation) {
+    private func finishStarting(_ startOperation: StartOperation) {
         startOperation.completion.finish()
         guard case .start(let currentOperation) = operation,
               currentOperation == startOperation
@@ -227,7 +226,7 @@ final class ServerTransport {
     @discardableResult
     private func beginStopping(
         waitingFor startCompletion: CompletionSignal?
-    ) -> ServerTransportStopOperation {
+    ) -> StopOperation {
         let id = UUID()
         let task = Task { @MainActor [weak self, server] in
             await server.stop()
@@ -236,7 +235,7 @@ final class ServerTransport {
             }
             self?.finishStopping(id: id)
         }
-        let stopOperation = ServerTransportStopOperation(id: id, task: task)
+        let stopOperation = StopOperation(id: id, task: task)
         operation = .stop(stopOperation)
         return stopOperation
     }

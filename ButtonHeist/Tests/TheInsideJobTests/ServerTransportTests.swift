@@ -6,8 +6,8 @@ import TheScore
 final class ServerTransportTests: XCTestCase {
 
     func testTransportEventStreamUsesCheckedSendableConformance() {
-        assertSendable(TransportEventStream.self)
-        assertSendable(TransportEventStream.Events.self)
+        assertSendable(ServerTransport.EventStream.self)
+        assertSendable(ServerTransport.Events.self)
     }
 
     @MainActor
@@ -134,10 +134,10 @@ final class ServerTransportTests: XCTestCase {
         do {
             _ = try await transport.start(port: 0, bindToLoopback: true)
             XCTFail("Expected ServerTransport to reject duplicate start while starting")
-        } catch let error as ServerTransportError {
+        } catch let error as ServerTransport.Failure {
             XCTAssertEqual(error, .alreadyRunning)
         } catch {
-            XCTFail("Expected ServerTransportError.alreadyRunning, got \(error)")
+            XCTFail("Expected ServerTransport.Failure.alreadyRunning, got \(error)")
         }
 
         startGate.release()
@@ -178,10 +178,10 @@ final class ServerTransportTests: XCTestCase {
         do {
             _ = try await startTask.value
             XCTFail("Expected stale start completion to be rejected")
-        } catch let error as ServerTransportError {
+        } catch let error as ServerTransport.Failure {
             XCTAssertEqual(error, .stopped)
         } catch {
-            XCTFail("Expected ServerTransportError.stopped, got \(error)")
+            XCTFail("Expected ServerTransport.Failure.stopped, got \(error)")
         }
         XCTAssertEqual(transport.listeningPort, 0)
     }
@@ -205,10 +205,10 @@ final class ServerTransportTests: XCTestCase {
         do {
             _ = try await startTask.value
             XCTFail("Expected stopped listener startup to fail")
-        } catch let error as ServerTransportError {
+        } catch let error as ServerTransport.Failure {
             XCTAssertEqual(error, .stopped)
         } catch {
-            XCTFail("Expected ServerTransportError.stopped, got \(error)")
+            XCTFail("Expected ServerTransport.Failure.stopped, got \(error)")
         }
 
         await transport.waitForStopped()
@@ -255,7 +255,7 @@ final class ServerTransportTests: XCTestCase {
         do {
             _ = try await staleStart.value
             XCTFail("Expected the stopped start attempt to be rejected")
-        } catch let error as ServerTransportError {
+        } catch let error as ServerTransport.Failure {
             XCTAssertEqual(error, .stopped)
         }
         let restartedPort = try await restart.value
@@ -269,7 +269,7 @@ final class ServerTransportTests: XCTestCase {
     }
 
     func testTransportEventStreamReservesTerminalOverflowCapacity() async {
-        let eventStream = TransportEventStream(bufferLimit: 2)
+        let eventStream = ServerTransport.EventStream(bufferLimit: 2)
         let callbacks = eventStream.makeCallbacks()
         callbacks.onClientConnected?(1, nil)
         callbacks.onClientConnected?(2, nil)

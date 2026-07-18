@@ -1,24 +1,14 @@
 import Foundation
 
-/// Actor-owned client table for `TheMuscle`.
-///
-/// **Ownership.** Auth/admission source of truth, owned by `TheMuscleAdmission`.
-/// Key: `clientId: Int` (allocated by the transport). Tracks each client's
-/// authentication phase and message rate limiter. Lifetime: per connected client, from
-/// connect to disconnect. Invalidation: `remove(_:)` on disconnect, `removeAll()`
-/// on teardown. This is the admission security boundary — it is not the
-/// transport's `SocketClientRegistry` (which owns socket facts under the same
-/// key) and must stay separate per the no-auth-in-transport rule. See
-/// `docs/ARCHITECTURE.md#state-has-one-owner`.
-struct TheMuscleClientRegistry {
+extension ClientAdmission {
     private enum ClientRegistration {
         case unregistered
-        case registered(ClientAuthenticationState)
+        case registered(Authentication.State)
     }
 
     private struct Client {
         var registration: ClientRegistration
-        var rateLimiter: MessageRateLimiter
+        var rateLimiter: RateLimiter
     }
 
     enum MessageAdmission: Equatable, Sendable {
@@ -26,10 +16,12 @@ struct TheMuscleClientRegistry {
         case rateLimited(shouldNotify: Bool)
     }
 
+    /// Auth/admission source of truth owned by `ClientAdmission.Reducer`.
+    struct Registry {
     private var clients: [Int: Client] = [:]
 
     mutating func registerAddress(_ clientId: Int, address: String) {
-        let rateLimiter = clients[clientId]?.rateLimiter ?? MessageRateLimiter()
+        let rateLimiter = clients[clientId]?.rateLimiter ?? RateLimiter()
         clients[clientId] = Client(
             registration: .registered(.connected(address: address)),
             rateLimiter: rateLimiter
@@ -40,7 +32,7 @@ struct TheMuscleClientRegistry {
         clients.removeAll()
     }
 
-    mutating func remove(_ clientId: Int) -> ClientAuthenticationState? {
+    mutating func remove(_ clientId: Int) -> Authentication.State? {
         guard let client = clients.removeValue(forKey: clientId) else { return nil }
         guard case .registered(let state) = client.registration else { return nil }
         return state
@@ -52,7 +44,7 @@ struct TheMuscleClientRegistry {
         return true
     }
 
-    func phase(for clientId: Int) -> ClientAuthenticationState? {
+    func state(for clientId: Int) -> Authentication.State? {
         guard let client = clients[clientId] else { return nil }
         guard case .registered(let state) = client.registration else { return nil }
         return state
@@ -61,7 +53,7 @@ struct TheMuscleClientRegistry {
     mutating func recordMessage(_ clientId: Int, at now: Date) -> MessageAdmission {
         var client = clients[clientId] ?? Client(
             registration: .unregistered,
-            rateLimiter: MessageRateLimiter()
+            rateLimiter: RateLimiter()
         )
         guard client.rateLimiter.recordMessage(at: now) else {
             clients[clientId] = client
@@ -73,36 +65,33 @@ struct TheMuscleClientRegistry {
         return .rateLimited(shouldNotify: shouldNotify)
     }
 
-    mutating func validateHello(_ clientId: Int) -> ClientAuthenticationTransition {
-        send(.validateHello, to: clientId)
+    mutating func validateHello(_ clientId: Int) -> Authentication.Transition {
+        reduce(.validateHello, for: clientId)
     }
 
-    mutating func completeAuthentication(_ clientId: Int) -> ClientAuthenticationTransition {
-        send(.completeAuthentication, to: clientId)
+    mutating func completeAuthentication(_ clientId: Int) -> Authentication.Transition {
+        reduce(.completeAuthentication, for: clientId)
     }
 
-    private mutating func send(
-        _ event: ClientAuthenticationMachine.Event,
-        to clientId: Int
-    ) -> ClientAuthenticationTransition {
+    private mutating func reduce(
+        _ event: Authentication.Event,
+        for clientId: Int
+    ) -> Authentication.Transition {
         guard let client = clients[clientId] else { return .missingClient }
         guard case .registered(let currentState) = client.registration else { return .missingClient }
-        let transition = ClientAuthenticationMachine().advance(currentState, with: event)
+        let transition = Authentication.Reducer().reduce(currentState, event: event)
 
         switch transition {
-        case .advanced(let state, let effect):
+        case .advanced(let state, effect: _):
             var updatedClient = client
             updatedClient.registration = .registered(state)
             clients[clientId] = updatedClient
-            return .advanced(state, effect: effect)
-        case .rejected(let rejection, let state):
-            return .rejected(rejection, state: state)
+        case .rejected:
+            break
+        case .missingClient:
+            preconditionFailure("Authentication reducer cannot lose a registered client.")
         }
+        return transition
     }
 }
-
-enum ClientAuthenticationTransition: Equatable, Sendable {
-    case advanced(ClientAuthenticationState, effect: ClientAuthenticationMachine.Effect)
-    case rejected(ClientAuthenticationMachine.Rejection, state: ClientAuthenticationState)
-    case missingClient
 }
