@@ -4046,7 +4046,7 @@ observation: .settledTrace(
 
         var dispatchedPoint: CGPoint?
         let result = await brains.actions.performPointAction(
-            selection: .coordinate(ScreenPoint(x: Double(rawPoint.x), y: Double(rawPoint.y))),
+            selection: .coordinate(ScreenPoint(x: 222, y: 333)),
             method: .syntheticTap,
             prepare: { $0 },
             complete: { point in

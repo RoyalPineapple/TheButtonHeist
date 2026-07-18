@@ -163,6 +163,42 @@ final class ActivationPolicyTests: XCTestCase {
         )))
     }
 
+    func testNonFiniteActivationPointStopsBeforeMechanicalDispatch() async throws {
+        let initialTarget = makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
+        let refreshedTarget = makeLiveTarget(
+            heistId: "refreshed",
+            activationPoint: CGPoint(x: 30, y: 40)
+        )
+        var dispatchedPoints: [CGPoint] = []
+        let inflatedTarget = try makeInflatedTarget(refreshedTarget)
+
+        let policy = ActivationPolicy(
+            accessibilityActivate: { _ in
+                .success(ActivationDispatchEvidence(
+                    outcome: .refused,
+                    activationPoint: CGPoint(x: CGFloat.infinity, y: 40)
+                ))
+            },
+            refreshAndResolve: { .resolved(inflatedTarget) },
+            prepareActivationPointDispatch: { point in
+                dispatchedPoints.append(point)
+                return TestPreparedDispatch(result: true)
+            },
+            completeActivationPointDispatch: { $0.result },
+            showFingerprint: { _ in },
+            textEntryActivationFailure: { _, _ in nil }
+        )
+        let result = await policy.apply(to: initialTarget)
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(
+            result.message,
+            "activate failed: the refreshed accessibility activation point was not finite"
+        )
+        XCTAssertTrue(dispatchedPoints.isEmpty)
+        XCTAssertNil(result.activationTrace)
+    }
+
     func testTextEntryActivationPointDispatchRequiresFocusConfirmation() async throws {
         let initialTarget = makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
         let refreshedTarget = makeLiveTarget(

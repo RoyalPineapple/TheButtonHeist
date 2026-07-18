@@ -55,6 +55,13 @@ public struct UnitPoint: Codable, Sendable, Equatable {
         finiteY = y
     }
 
+    public init(validatingX x: Double, y: Double) throws(FiniteCoordinate.ValidationError) {
+        try self.init(
+            x: FiniteCoordinate(validating: x),
+            y: FiniteCoordinate(validating: y)
+        )
+    }
+
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "unit point")
         let container = try decoder.container(keyedBy: CodingKeys.self)

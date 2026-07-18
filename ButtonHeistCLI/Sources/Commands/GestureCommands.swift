@@ -6,7 +6,19 @@ private func requiredScreenPoint(x: Double?, y: Double?, label: String) throws -
     guard let x, let y else {
         throw ValidationError("Must specify \(label) x/y coordinates together")
     }
-    return ScreenPoint(x: x, y: y)
+    do {
+        return try ScreenPoint(validatingX: x, y: y)
+    } catch {
+        throw ValidationError("\(label) coordinates must be finite")
+    }
+}
+
+private func admittedUnitPoint(x: Double, y: Double, label: String) throws -> UnitPoint {
+    do {
+        return try UnitPoint(validatingX: x, y: y)
+    } catch {
+        throw ValidationError("\(label) coordinates must be finite")
+    }
 }
 
 // MARK: - Tap
@@ -180,8 +192,8 @@ struct SwipeSubcommand: ConnectedOneShotCLICommand {
             let target = try element.requireTarget()
             selection = .unitElement(
                 target,
-                start: UnitPoint(x: startUnitX, y: startUnitY),
-                end: UnitPoint(x: endUnitX, y: endUnitY)
+                start: try admittedUnitPoint(x: startUnitX, y: startUnitY, label: "start unit point"),
+                end: try admittedUnitPoint(x: endUnitX, y: endUnitY, label: "end unit point")
             )
         } else if let target = try element.parsedTarget() {
             guard let swipeDirection else {
@@ -239,7 +251,7 @@ struct DragSubcommand: ConnectedOneShotCLICommand {
         }
 
         let selection: DragGestureSelection
-        let end = ScreenPoint(x: toX, y: toY)
+        let end = try requiredScreenPoint(x: toX, y: toY, label: "--to-x/--to-y")
         if let target = try element.parsedTarget() {
             guard fromX == nil, fromY == nil else {
                 throw ValidationError("Element drag cannot mix with --from-x/--from-y coordinates")

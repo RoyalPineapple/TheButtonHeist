@@ -67,8 +67,10 @@ extension TheStash {
 
     private static func activationPointEvidence(for element: AccessibilityElement) -> ActivationPointEvidence {
         let point = element.bhResolvedActivationPoint
-        guard point.x.isFinite, point.y.isFinite else { return .unavailable }
-        let screenPoint = ScreenPoint(x: Double(point.x), y: Double(point.y))
+        guard let screenPoint = try? ScreenPoint(
+            validatingX: Double(point.x),
+            y: Double(point.y)
+        ) else { return .unavailable }
         return element.usesDefaultActivationPoint
             ? .defaultCenter(screenPoint)
             : .explicit(screenPoint)

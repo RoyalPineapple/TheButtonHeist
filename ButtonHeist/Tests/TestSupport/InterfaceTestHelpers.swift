@@ -145,7 +145,16 @@ package func makeTestHeistElement(
     rotors: [HeistRotor]? = nil,
     actions: [ElementAction]? = nil
 ) -> HeistElement {
-    HeistElement(
+    let defaultActivationPointEvidence: ActivationPointEvidence
+    if let point = try? ScreenPoint(
+        validatingX: frameX + frameWidth / 2,
+        y: frameY + frameHeight / 2
+    ) {
+        defaultActivationPointEvidence = .defaultCenter(point)
+    } else {
+        defaultActivationPointEvidence = .unavailable
+    }
+    return HeistElement(
         description: description ?? label ?? identifier ?? "Element",
         label: label,
         value: value,
@@ -156,10 +165,7 @@ package func makeTestHeistElement(
         frameY: frameY,
         frameWidth: frameWidth,
         frameHeight: frameHeight,
-        activationPointEvidence: activationPointEvidence ?? .defaultCenter(ScreenPoint(
-            x: frameX + frameWidth / 2,
-            y: frameY + frameHeight / 2
-        )),
+        activationPointEvidence: activationPointEvidence ?? defaultActivationPointEvidence,
         respondsToUserInteraction: respondsToUserInteraction,
         customContent: customContent,
         rotors: rotors,

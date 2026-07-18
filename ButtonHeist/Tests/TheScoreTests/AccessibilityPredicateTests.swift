@@ -1385,7 +1385,7 @@ final class AccessibilityPredicateTests: XCTestCase {
         rotors: [HeistRotor]? = nil,
         actions: [ElementAction] = []
     ) -> HeistElement {
-        HeistElement(
+        makeTestHeistElement(
             description: label ?? "",
             label: label,
             value: value,
@@ -1396,10 +1396,7 @@ final class AccessibilityPredicateTests: XCTestCase {
             frameY: frameY,
             frameWidth: frameWidth,
             frameHeight: frameHeight,
-            activationPointEvidence: activationPointEvidence ?? .defaultCenter(ScreenPoint(
-                x: frameX + frameWidth / 2,
-                y: frameY + frameHeight / 2
-            )),
+            activationPointEvidence: activationPointEvidence,
             customContent: customContent,
             rotors: rotors,
             actions: actions
