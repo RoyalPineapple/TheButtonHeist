@@ -51,6 +51,64 @@ Use these rules as the default review lens:
 - Update architecture docs and diagrams when responsibility, state-machine,
   wire, receipt, or language shape changes.
 
+## Canonical Architecture Vocabulary
+
+Use the same nouns and verbs for recurring architectural shapes across every
+subsystem. Qualify shared shapes with a domain namespace instead of inventing
+domain-specific synonyms: `Observation.Event`, `ClientAdmission.Decision`, and
+`InterfaceExploration.Result` should share the meanings below.
+
+Empty enums are the preferred namespace when a family has no instance state.
+They may contain nested enums, structs, classes, protocols, and static
+operations. Use a protocol with associated types only when generic code must
+preserve a relationship between family members; do not use protocols merely as
+namespaces.
+
+| Noun | Canonical meaning |
+|------|-------------------|
+| `State` | The complete durable state of a reducer or lifecycle at one phase. |
+| `Snapshot` | An immutable sample of state at one instant. |
+| `Event` | An ordered fact that has already occurred. |
+| `Command` | A typed request to perform a domain operation. |
+| `Request` / `Response` | A transport or public-boundary exchange, not internal control flow. |
+| `Decision` | A pure control-flow choice derived from current values. |
+| `Effect` | A side effect requested by a reducer and performed at a boundary. |
+| `Outcome` | The terminal classification of a completed operation. |
+| `Result` | The returned aggregate of outcome, values, and evidence. |
+| `Evidence` | Observed facts supporting a result or assertion. |
+| `Proof` | An admitted value whose type guarantees an invariant. |
+| `Report` | A human- or tooling-oriented summary derived from results. |
+| `Receipt` | A durable contract record of execution. |
+| `Baseline` | The selected earlier snapshot used for comparison. |
+| `Transition` | The typed relationship between ordered snapshots or events. |
+| `Delta` | A derived change projection; never an owner of source truth. |
+| `Cursor` | A position in an ordered log or stream. |
+| `Window` | A bounded portion of history between cursors or snapshots. |
+| `Generation` | An epoch boundary that invalidates cross-generation assumptions. |
+| `Projection` | A purpose-specific read or output shape derived from canonical truth. |
+| `Store` / `Log` / `Stream` | Current owned truth, retained ordered history, and ordered delivery, respectively. |
+
+Use verbs consistently:
+
+- `parse` converts external syntax into typed syntax; `decode` and `encode`
+  implement a wire or storage contract.
+- `capture` samples live boundary state; `observe` receives an event or
+  snapshot; `settle` waits for live state to become stable.
+- `admit` validates relationships and returns a proof-bearing internal value;
+  `resolve` turns a reference or predicate into a canonical entity.
+- `evaluate` computes a predicate or rule without side effects; `reduce`
+  applies an event to state and emits decisions or effects.
+- `record` appends retained history; `publish` records and delivers an event;
+  `commit` updates canonical owned truth.
+- `execute` runs a domain command; `dispatch` crosses a platform, process, or
+  transport boundary.
+- `project` derives a purpose-specific value; `render` turns typed values into
+  presentation.
+
+Avoid `get`, `handle`, `process`, `make`, and `build` when a canonical verb
+states the operation precisely. Reserve `require` and precondition failures for
+unreachable programmer errors, never normal pipeline control flow.
+
 ## Tuist Project Generation
 
 This project uses [Tuist](https://tuist.io) to generate Xcode projects and workspaces. The generated `.xcodeproj` and `.xcworkspace` files are local artifacts and are not checked into git.
