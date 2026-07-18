@@ -235,9 +235,10 @@ final class TheBrainsScrollTests: XCTestCase {
         window.layoutIfNeeded()
         await brains.tripwire.yieldFrames(3)
 
-        guard brains.vault.refreshLiveCapture() != nil else {
-            throw XCTSkip("No live hierarchy available for UIPageViewController regression test")
-        }
+        XCTAssertNotNil(
+            brains.vault.refreshLiveCapture(),
+            "Expected a live hierarchy for the UIPageViewController regression test"
+        )
 
         var seenUnsafeTargets = Set<ObjectIdentifier>()
         let unsafeTargets = brains.vault.scrollableContainerViewsByPath.values.filter {
@@ -1592,15 +1593,17 @@ final class TheBrainsScrollTests: XCTestCase {
         }
         await brains.tripwire.yieldFrames(3)
 
-        guard let visibleScreen = brains.vault.refreshLiveCapture() else {
-            throw XCTSkip("No live hierarchy available for interface discovery contamination regression test")
-        }
-        guard let scrollContainerPath = visibleScreen.tree.orderedContainers.compactMap({ container -> TreePath? in
-            guard container.container.isScrollable else { return nil }
-            return container.path
-        }).first else {
-            throw XCTSkip("Parser did not expose the test scroll view as a scroll container")
-        }
+        let visibleScreen = try XCTUnwrap(
+            brains.vault.refreshLiveCapture(),
+            "Expected a live hierarchy for the interface discovery contamination regression test"
+        )
+        let scrollContainerPath = try XCTUnwrap(
+            visibleScreen.tree.orderedContainers.compactMap { container -> TreePath? in
+                guard container.container.isScrollable else { return nil }
+                return container.path
+            }.first,
+            "Expected the parser to expose the fixture scroll view as a scroll container"
+        )
         let visibleEvent = brains.vault.semanticObservationStream.commitVisibleObservationForTesting(visibleScreen)
 
         let staleRootRow = makeElement(label: "Auto-Settle Fixtures", traits: .button)
@@ -1674,9 +1677,10 @@ final class TheBrainsScrollTests: XCTestCase {
         }
         await brains.tripwire.yieldFrames(3)
         let initialVisualOrigin = Navigation.visualOrigin(in: scrollView)
-        guard let visibleScreen = brains.vault.refreshLiveCapture() else {
-            throw XCTSkip("No live hierarchy available for blank-page discovery")
-        }
+        let visibleScreen = try XCTUnwrap(
+            brains.vault.refreshLiveCapture(),
+            "Expected a live hierarchy for blank-page discovery"
+        )
 
         guard let exploration = await brains.navigation.exploreScreen(
             target: try resolvedTarget(.label("Beyond Blank Page")),
@@ -1733,9 +1737,10 @@ final class TheBrainsScrollTests: XCTestCase {
         await brains.tripwire.yieldFrames(3)
         let initialVisualOrigin = Navigation.visualOrigin(in: scrollView)
 
-        guard let visibleScreen = brains.vault.refreshLiveCapture() else {
-            throw XCTSkip("No live hierarchy available for wait discovery restoration")
-        }
+        let visibleScreen = try XCTUnwrap(
+            brains.vault.refreshLiveCapture(),
+            "Expected a live hierarchy for wait discovery restoration"
+        )
         guard let exploration = await brains.navigation.exploreScreen(
             target: try resolvedTarget(.label("Wait Discovery Target")),
             baseline: .currentViewport(brains.vault.visibleExplorationBaseline(from: visibleScreen)),
@@ -2363,19 +2368,26 @@ final class TheBrainsScrollTests: XCTestCase {
             window.isHidden = true
         }
         await brains.tripwire.yieldFrames(3)
-        let liveScreen = try XCTUnwrap(
-            brains.vault.refreshLiveCapture(),
-            "No live hierarchy available for scroll_to_visible post-reveal regression test"
+        let scrollContainerPath = TreePath([0])
+        let liveScreen = InterfaceObservation.makeForTests(
+            elements: [:],
+            hierarchy: [
+                .container(
+                    makeScrollableContainer(contentSize: scrollView.contentSize, frame: scrollView.frame),
+                    children: []
+                ),
+            ],
+            containerRefsByPath: [scrollContainerPath: .init(object: scrollView)],
+            firstResponderHeistId: nil,
+            scrollableContainerViewsByPath: [scrollContainerPath: .init(view: scrollView)]
         )
-        guard let scrollContainerPath = liveScreen.liveCapture.hierarchy.scrollablePathIndexedContainers.first(where: {
-            liveScreen.liveCapture.scrollView(forContainerPath: $0.path) != nil
-        })?.path else {
-            throw XCTSkip("No live hierarchy available for scroll_to_visible post-reveal regression test")
-        }
-        if brains.vault.resolveTarget(
+        brains.vault.installObservationForTesting(liveScreen)
+        let prematureResolution = brains.vault.resolveTarget(
             literalTarget(ElementPredicate.label("Jump Target"), ordinal: 0)
-        ).resolved != nil {
-            throw XCTSkip("Parser exposed offscreen scroll content before semantic reveal")
+        ).resolved
+        XCTAssertNil(prematureResolution, "Parser exposed offscreen scroll content before semantic reveal")
+        guard prematureResolution == nil else {
+            return
         }
 
         let interfaceElement = makeElement(

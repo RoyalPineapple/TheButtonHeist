@@ -18,6 +18,7 @@ internal final class ElementInflation {
     ) async -> Navigation.ViewportTransition
 
     internal struct Exploration {
+        internal var settleForDiscovery: @MainActor () async -> Void
         internal var discoverTarget: @MainActor (
             ResolvedAccessibilityTarget,
         ) async -> Navigation.InterfaceExplorationResult?

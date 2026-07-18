@@ -4,12 +4,11 @@ import XCTest
 
 @MainActor
 func requireForegroundWindowScene() throws -> UIWindowScene {
-    guard let scene = UIApplication.shared.connectedScenes
-        .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene
-    else {
-        throw XCTSkip("No foreground-active UIWindowScene available in test host")
-    }
-    return scene
+    try XCTUnwrap(
+        UIApplication.shared.connectedScenes
+            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene,
+        "Expected a foreground-active UIWindowScene in the hosted test app"
+    )
 }
 
 func XCTAssertDiagnostic(

@@ -10,6 +10,13 @@ private final class ActivationOverrideView: UIView {
     }
 }
 
+private final class ActivationBlockView: UIView {
+    override var accessibilityActivateBlock: (() -> Bool)? {
+        get { { true } }
+        set { }
+    }
+}
+
 @MainActor
 final class InteractivityTests: XCTestCase {
 
@@ -36,15 +43,8 @@ final class InteractivityTests: XCTestCase {
         XCTAssertTrue(TheVault.Interactivity.isInteractive(element: element))
     }
 
-    func testActivationBlockIsInteractiveWithoutTraits() throws {
-        guard #available(iOS 17.0, tvOS 17.0, *) else {
-            throw XCTSkip("accessibilityActivateBlock requires iOS 17")
-        }
-        let object = UIView()
-        guard object.responds(to: #selector(NSObject.accessibilityActivateBlock)) else {
-            throw XCTSkip("accessibilityActivateBlock is not available on this UIKit runtime")
-        }
-        object.accessibilityActivateBlock = { true }
+    func testActivationBlockIsInteractiveWithoutTraits() {
+        let object = ActivationBlockView()
         let element = makeElement(label: "Plain")
 
         XCTAssertTrue(TheVault.Interactivity.isInteractive(element: element, object: object))

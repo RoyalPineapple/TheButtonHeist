@@ -2038,12 +2038,16 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     func testExploreScreenStopsEarlyWhenTargetAlreadyResolved() async throws {
-        guard let screen = brains.vault.refreshLiveCapture(),
-              let label = screen.tree.viewportElementIDs
-                  .compactMap({ screen.tree.findElement(heistId: $0)?.element.label })
-                  .first(where: { !$0.isEmpty }) else {
-            throw XCTSkip("No live labeled element available for target short-circuit test")
-        }
+        let screen = try XCTUnwrap(
+            brains.vault.refreshLiveCapture(),
+            "Expected a live hierarchy in the hosted test app"
+        )
+        let label = try XCTUnwrap(
+            screen.tree.viewportElementIDs
+                .compactMap { screen.tree.findElement(heistId: $0)?.element.label }
+                .first(where: { !$0.isEmpty }),
+            "Expected a labeled viewport element in the hosted test app"
+        )
 
         guard let exploration = await brains.navigation.exploreScreen(
             target: try AccessibilityTarget.label(label).resolve(in: .empty)
@@ -2174,22 +2178,24 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
     }
 
-    func testExploreScreenExploresSwipeableContainer() async throws {
-        guard brains.vault.refreshLiveCapture() != nil else {
-            throw XCTSkip("No live hierarchy available for swipeable explore test")
-        }
-        guard let container = brains.vault.latestObservedLiveHierarchy.scrollablePathIndexedContainers.first(where: {
-            brains.vault.liveScrollableContainerView(forPath: $0.path) == nil
-        }) else {
-            throw XCTSkip("No semantic-only scrollable container in host UI")
-        }
+    func testSemanticOnlyScrollableContainerIsQueuedForSwipeExploration() {
+        let path = TreePath([0])
+        let container = semanticContainer(
+            makeScrollableContainer(
+                frame: CGRect(x: 0, y: 0, width: 320, height: 400),
+                contentSize: CGSize(width: 320, height: 1_200)
+            ),
+            path: path
+        )
+        var exploration = Navigation.SemanticExploration(baseline: .interfaceMemory(.empty))
 
-        guard let exploration = await brains.navigation.exploreScreen() else {
-            return XCTFail("Expected swipeable-container exploration to settle")
-        }
-        let progress = exploration.progress
+        exploration.recordCommittedObservation(
+            continuity: .sameGeneration,
+            scrollableContainers: [container]
+        )
 
-        XCTAssertTrue(progress.exploredScrollPaths.contains(container.path))
+        XCTAssertNil(brains.vault.liveScrollableContainerView(forPath: path))
+        XCTAssertTrue(exploration.progress.pendingScrollPaths.contains(path))
     }
 
     // MARK: - Helpers

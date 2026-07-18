@@ -50,13 +50,10 @@ extension TheVault {
     }
 
     private static func hasActivationBlock(_ object: NSObject) -> Bool {
-        if #available(iOS 17.0, tvOS 17.0, *) {
-            guard object.responds(to: #selector(NSObject.accessibilityActivateBlock)) else {
-                return false
-            }
-            return object.accessibilityActivateBlock != nil
+        guard object.responds(to: #selector(NSObject.accessibilityActivateBlock)) else {
+            return false
         }
-        return false
+        return object.accessibilityActivateBlock != nil
     }
 
     private static func overridesAccessibilityActivate(_ object: NSObject) -> Bool {

@@ -190,6 +190,28 @@ final class ElementInflationProductTests: XCTestCase {
         XCTAssertEqual(failure.targetResolutionFailure, .containerTarget)
     }
 
+    func testMissingTargetSettlesBeforeViewportDiscovery() async throws {
+        enum Event: Equatable {
+            case settled
+            case discovered
+        }
+
+        var events: [Event] = []
+        brains.navigation.elementInflation.exploration.settleForDiscovery = {
+            events.append(.settled)
+        }
+        brains.navigation.elementInflation.exploration.discoverTarget = { _ in
+            events.append(.discovered)
+            return nil
+        }
+
+        _ = await brains.navigation.elementInflation.findTargetInTree(
+            try AccessibilityTarget.label("Offscreen Target").resolve(in: .empty)
+        )
+
+        XCTAssertEqual(events, [.settled, .discovered])
+    }
+
     private func geometrySample(x: CGFloat) -> ElementInflation.LiveGeometrySample {
         ElementInflation.LiveGeometrySample(
             frame: CGRect(x: x, y: 40, width: 100, height: 44),
