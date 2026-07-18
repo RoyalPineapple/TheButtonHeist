@@ -301,7 +301,7 @@ pipelines are explicit:
 | Compiler process terminal outcome | `CompilerProcess.Runner` in `CompilerProcess.swift` | `HeistSwiftFileCompiler.swift`; diagnostic rendering lives in `HeistSwiftFileCompilerError.swift` |
 | Receipt construction and relationship validity | `HeistExecutionStepResult+Construction.swift` | Runtime step executors and receipt decoding |
 | Receipt private storage codec | `HeistExecutionStepNode.swift` and `HeistExecutionStepNode+Codable.swift` | External receipt JSON projection only |
-| Receipt report facts | `HeistExecutionStepResult+ReportFacts.swift` | Report, compact, JUnit, doctor, and metric adapters |
+| Receipt report projection | `HeistExecutionResult+Report.swift` and `HeistExecutionStepResult+Report.swift` | Report, compact, JUnit, doctor, and metric adapters |
 | Semantic observation scheduling | `SemanticObservationStream.swift` | Passive settle cycles and observation demand |
 | Semantic observation publication | `SemanticObservationStream+Publication.swift` | The sole `InterfaceTree` reducer and observation-log publisher |
 | Semantic observation waiter delivery | `SemanticObservationStream+Waiters.swift` | Cursor, window, replay, and timeout projections |
@@ -311,10 +311,11 @@ pipelines are explicit:
 
 ### Report and Action Evidence Have One Owner
 
-`HeistExecutionStepReportFacts` is the canonical typed projection of report
-facts from `HeistExecutionResult`. Formatters, diagnostics, and repair tooling
-consume that projection; they do not rebuild report facts from plan siblings or
-parallel result fields.
+`HeistExecutionResult` is the one admitted receipt execution tree.
+`HeistExecutionReport.project(_:)` purely reduces that tree into shared summary
+and metric projections. Formatters, diagnostics, and repair tooling traverse
+the receipt directly and read step report values from its typed evidence; no
+parallel report graph or optional fact bag is assembled.
 
 `HeistExecutionStepResult` owns a typed execution path, duration, and one private
 `HeistExecutionStepNode` used only for storage and wire projection. Package

@@ -29,13 +29,12 @@ import TheScore
         ])
     }
 
-    @Test func `metric projection derives samples and ceilings from typed report facts`() throws {
+    @Test func `metric projection reduces admitted execution evidence`() throws {
         let result = try metricProjectionFixture()
-        let rollup = result.evidenceRollup
-        let projection = HeistExecutionMetricProjection(rollup: rollup)
+        let report = HeistExecutionReport.project(result)
+        let projection = report.metrics
 
-        #expect(projection == rollup.metrics)
-        #expect(HeistExecutionMetricProjection(result: result) == rollup.metrics)
+        #expect(HeistExecutionMetricProjection(result: result) == report.metrics)
         #expect(values(in: projection, named: .heistDurationMs) == [1234])
         #expect(values(in: projection, named: .actionPipelineTargetResolutionMs) == [1])
         #expect(values(in: projection, named: .actionPipelineTotalMs) == [15])

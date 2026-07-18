@@ -81,44 +81,16 @@ public enum HeistFailureDiagnostics {
 }
 
 public extension HeistExecutionResult {
-    package var failureScreenshotStep: HeistExecutionStepResult? {
-        evidenceRollup.failureScreenshotStep
-    }
-
     package var failureScreenshotPayload: ScreenPayload? {
-        evidenceRollup.failureScreenshotPayload
+        failureScreenshotStep?.screenshotPayload
     }
 
     package var settledInterfaceAtFailure: Interface? {
-        evidenceRollup.settledInterfaceAtFailure
+        firstFailedStep?.settledInterfaceAtStep
     }
 
     /// Failure evidence for diagnostic rendering, not current semantic interface state.
     package var failureDiagnosticInterface: Interface? {
-        evidenceRollup.failureDiagnosticInterface
-    }
-
-    var failureScreenshotSummary: String? {
-        evidenceRollup.failureScreenshotSummary
-    }
-
-    func failureInterfaceDump(
-        elementLimit: Int = HeistFailureDiagnostics.defaultElementLimit
-    ) -> String? {
-        evidenceRollup.failureInterfaceDump(elementLimit: elementLimit)
-    }
-}
-
-package extension HeistExecutionEvidenceRollup {
-    var failureScreenshotPayload: ScreenPayload? {
-        failureScreenshotStep?.screenshotPayload
-    }
-
-    var settledInterfaceAtFailure: Interface? {
-        firstFailedStep?.settledInterfaceAtStep
-    }
-
-    var failureDiagnosticInterface: Interface? {
         failureScreenshotPayload?.interface ?? settledInterfaceAtFailure
     }
 
@@ -144,7 +116,7 @@ package extension HeistExecutionEvidenceRollup {
 
 public extension HeistExecutionStepResult {
     package var settledInterfaceAtStep: Interface? {
-        reportFacts.results.traceEvidenceResult?.accessibilityTrace?.captures.last?.interface
+        reportActionResult?.accessibilityTrace?.captures.last?.interface
     }
 
     package var screenshotPayload: ScreenPayload? {
