@@ -43,7 +43,7 @@ public enum AccessibilityPolicy {
     /// An element gaining or losing one of these between parses keeps the
     /// same heistId — these traits do not contribute to element identity.
     /// Consumed by:
-    /// - TheBurglar duplicate-id disambiguation
+    /// - `TheVault.IdAssignment` duplicate-id disambiguation
     /// - `AccessibilityTrace.ChangeFact.between` (functional-move pairing)
     /// - `MinimumPredicateSelector` (matcher suggestion — adds state only
     ///   when semantic predicates remain ambiguous)
@@ -60,7 +60,7 @@ public enum AccessibilityPolicy {
 
     /// Traits that signal "user can interact with this element".
     ///
-    /// Consumed by `TheStash.Interactivity.isInteractive` to gate whether
+    /// Consumed by `TheVault.Interactivity.isInteractive` to gate whether
     /// `activate` should attempt synthetic events for an element with no
     /// explicit accessibility action.
     public static let interactiveTraits: Set<HeistTrait> = [
@@ -115,7 +115,7 @@ public enum AccessibilityPolicy {
     /// Traits that are purely descriptive — elements bearing *only* these
     /// traits, no custom actions, and no `respondsToUserInteraction` are
     /// expected to be non-interactive. Used by
-    /// `TheStash.Interactivity.checkInteractivity` to surface an advisory
+    /// `TheVault.Interactivity.checkInteractivity` to surface an advisory
     /// warning when an `activate` is dispatched against such an element.
     public static let staticOnlyTraits: Set<HeistTrait> = [
         .staticText,
@@ -128,7 +128,7 @@ public enum AccessibilityPolicy {
     /// Trait priority for `heistId` synthesis — the first trait an element
     /// carries from this list becomes its heistId suffix.
     ///
-    /// Consumed by `TheStash.IdAssignment.synthesizeBaseId`. The ordering
+    /// Consumed by `TheVault.IdAssignment.synthesizeBaseId`. The ordering
     /// is locked by `SynthesisDeterminismTests` — changes to this list are
     /// wire-format breaks and require a coordinated release.
     ///

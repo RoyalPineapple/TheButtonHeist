@@ -454,7 +454,7 @@ Prefer typed enums (`enum Foo: String`) over raw strings for any value that has 
 
 ## Trait Policy: One Source of Truth
 
-`AccessibilityPolicy` (in `ButtonHeist/Sources/TheScore/AccessibilityPolicy.swift`) is the single source of truth for trait-related rules-of-the-world: which traits are transient (state, not identity), which are interactive, which are static-only, and which drive heistId synthesis. UIKit-bitmask projections live in `AccessibilityPolicy+UIKit.swift` (TheStash) and are derived from the `Set<HeistTrait>` policy — they cannot drift.
+`AccessibilityPolicy` (in `ButtonHeist/Sources/TheScore/AccessibilityPolicy.swift`) is the single source of truth for trait-related rules-of-the-world: which traits are transient (state, not identity), which are interactive, which are static-only, and which drive heistId synthesis. UIKit-bitmask projections live in `AccessibilityPolicy+UIKit.swift` (TheVault) and are derived from the `Set<HeistTrait>` policy — they cannot drift.
 
 - If you're tempted to write `if traits.contains(.button) || traits.contains(.link) || ...`, check whether `AccessibilityPolicy` already encodes the rule you're checking.
 - If you're tempted to define a local `Set<HeistTrait>` of "state traits" or "actionable traits", read from `AccessibilityPolicy` instead.
@@ -537,18 +537,18 @@ Two type families are the currency for referring to UI elements. Use them everyw
 **Interface types** (TheInsideJob):
 - `InterfaceTree` — the durable, targetable accessibility tree. It owns typed element/container facts plus a value-only viewport capture. It never owns UIKit references. `merging(_:)` is pure last-read-wins: the newer entry replaces the older entry on heistId conflict, and the newer viewport capture wins.
 - `InterfaceObservation` — one observed interface value: an `InterfaceTree` paired with the `LiveCapture` for that tree's viewport. The live half contains weak UIKit references and is replaced wholesale on every parse.
-- `TheStash` is the owner. It stores `interfaceTree` as targetable truth, `latestObservation` for current live dispatch evidence, and optional `diagnosticObservation` for a failed settle. Do not add another store, index, or projection around these values.
+- `TheVault` is the owner. It stores `interfaceTree` as targetable truth, `latestObservation` for current live dispatch evidence, and optional `diagnosticObservation` for a failed settle. Do not add another store, index, or projection around these values.
 
 **Target types** (ThePlans wire types):
-- `AccessibilityTarget` — how callers refer to a delivered accessibility node: `.predicate(ElementPredicateTemplate, ordinal:)`, `.container(ContainerPredicateExpr, ordinal:)`, `.within(container:target:)`, or `.ref(HeistReferenceName)`. This is the single target currency passed through actions, predicates, `get_interface` subtree selection, TheFence, TheSafecracker, MCP, and CLI. Only TheStash resolves it against live state.
+- `AccessibilityTarget` — how callers refer to a delivered accessibility node: `.predicate(ElementPredicateTemplate, ordinal:)`, `.container(ContainerPredicateExpr, ordinal:)`, `.within(container:target:)`, or `.ref(HeistReferenceName)`. This is the single target currency passed through actions, predicates, `get_interface` subtree selection, TheFence, TheSafecracker, MCP, and CLI. Only TheVault resolves it against live state.
 - `ElementPredicate` — the ordered check chain over label, identifier, value, hint, traits, actions, custom content, and rotors. Exclusion is one recursive check shape: `.exclude(.traits([...]))`, `.exclude(.actions([...]))`, etc. String fields use case-insensitive equality with typography folding (smart quotes/dashes/ellipsis fold to ASCII; emoji/accents/CJK pass through). Matching is **exact or miss** — on a miss the resolver returns structured suggestions through the diagnostic path; there is no substring fallback. The same semantics are evaluated by `HeistElement.matches` on the client (TheScore) and `AccessibilityElement.matches` on the server (TheInsideJob), via the shared `ElementPredicate.stringEquals` helper.
-- `HeistElement` — the wire representation sent to clients via `get_interface`. Contains heistId, label, value, traits, actions, frame, etc. Built by TheStash from `AccessibilityElement` + heistId assignment. This is a progressive-disclosure view for external consumers.
+- `HeistElement` — the wire representation sent to clients via `get_interface`. Contains heistId, label, value, traits, actions, frame, etc. Built by TheVault from `AccessibilityElement` + heistId assignment. This is a progressive-disclosure view for external consumers.
 
 **Rules:**
 - Pass `AccessibilityElement` and `AccessibilityHierarchy` internally when working with parsed accessibility data.
 - Pass `InterfaceTree` for target resolution, matching, diffing, and committed interface reads.
 - Pass `InterfaceObservation` only when a parse, settle, or exploration step also needs current live evidence.
-- Pass `AccessibilityTarget` when referring to an element or container abstractly (all layers above TheStash).
+- Pass `AccessibilityTarget` when referring to an element or container abstractly (all layers above TheVault).
 - Do not create wrapper structs, snapshot types, or intermediate representations to hold subsets of these types. If you need a subset, pass the original and read what you need.
 - Wire types (`AccessibilityTarget`, `ElementPredicate`, `HeistElement`) cross the Codable boundary. Internal types (`AccessibilityElement`, `AccessibilityHierarchy`, `InterfaceTree`, `InterfaceObservation`, `LiveCapture`) stay inside TheInsideJob.
 
@@ -556,7 +556,7 @@ Two type families are the currency for referring to UI elements. Use them everyw
 
 ## heistId synthesis is wire-format-stable
 
-`synthesizeBaseId(_:)` in `TheStash.IdAssignment` produces deterministic heistIds derived from element content. **Synthesis is wire format.** Modifications are equivalent to changes to the JSON schema — they break fixture references and the agent's predict-the-heistId pattern that benchmarks rely on. Treat any change to the synthesis rule like a wire-protocol bump.
+`synthesizeBaseId(_:)` in `TheVault.IdAssignment` produces deterministic heistIds derived from element content. **Synthesis is wire format.** Modifications are equivalent to changes to the JSON schema — they break fixture references and the agent's predict-the-heistId pattern that benchmarks rely on. Treat any change to the synthesis rule like a wire-protocol bump.
 
 The contract is locked by `SynthesisDeterminismTests` (property test across 200+ random permutations, plus a regression table of known input → known output). If you find yourself wanting to "improve" the heistId format, run the core `TheInsideJobTests` scheme first — that test exists to make the contract auditable. Any change requires updating the regression table in the same PR.
 

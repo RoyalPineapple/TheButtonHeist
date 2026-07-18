@@ -62,7 +62,7 @@ FOCUSES = {
     },
     "contract-targets": {
         "MacFrameworkTests": ("ThePlansTests",),
-        "TheInsideJobTests": ("TheInsideJobTests/TheStashResolutionTests",),
+        "TheInsideJobTests": ("TheInsideJobTests/TheVaultResolutionTests",),
     },
 }
 

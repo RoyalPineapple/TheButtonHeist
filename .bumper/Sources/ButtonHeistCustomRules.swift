@@ -56,7 +56,7 @@ private let demoAccessibilityIdentifierResearchFixtures: Set<RelativeFilePath> =
 ]
 
 private let semanticObservationPublicationPath: RelativeFilePath =
-    "ButtonHeist/Sources/TheInsideJob/TheStash/SemanticObservationStream+Publication.swift"
+    "ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStream+Publication.swift"
 
 private let anyBoundaryRule = Rules.files(
     "buttonheist.any_boundary",

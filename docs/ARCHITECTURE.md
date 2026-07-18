@@ -289,7 +289,7 @@ pipelines are explicit:
 | UI request admission and cancellation | `InteractionRequestExecutor` in `TheBrains.swift` | `TheGetaway+Transport.swift`, `Heist.swift` |
 | Drainable callback work | `TaskTracker.swift` | Lifecycle, listener-generation, and delayed-disconnect owners |
 | Discovery callback delivery | `DeviceDiscoveryEventStream.swift` | `DeviceDiscovery.swift` |
-| Compiler process terminal outcome | `CompilerProcessOwner.swift` | `HeistSwiftFileCompiler.swift`; diagnostic rendering lives in `HeistSwiftFileCompilerError.swift` |
+| Compiler process terminal outcome | `CompilerProcess.Runner` in `CompilerProcess.swift` | `HeistSwiftFileCompiler.swift`; diagnostic rendering lives in `HeistSwiftFileCompilerError.swift` |
 | Receipt construction and relationship validity | `HeistExecutionStepResult+Construction.swift` | Runtime step executors and receipt decoding |
 | Receipt private storage codec | `HeistExecutionStepNode.swift` and `HeistExecutionStepNode+Codable.swift` | External receipt JSON projection only |
 | Receipt report facts | `HeistExecutionStepResult+ReportFacts.swift` | Report, compact, JUnit, doctor, and metric adapters |

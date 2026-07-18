@@ -212,7 +212,7 @@ Container identifiers are orthogonal data on every delivered parser container,
 not only semantic-group containers. A container identifier target therefore
 matches any parser container type that carries that identifier. The current
 delivered tree is the authority for both element and container matches.
-TheStash resolves actions, predicates, and `get_interface` subtree requests
+TheVault resolves actions, predicates, and `get_interface` subtree requests
 directly against its `InterfaceTree`; subtree projection happens only after that
 resolution. A delivered `Interface` constructs one validated `InterfaceGraph`
 for client matching and formatting. A flattened element list, screen model, or
