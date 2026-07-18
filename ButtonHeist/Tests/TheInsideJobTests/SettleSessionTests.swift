@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 import XCTest
 @testable import AccessibilitySnapshotParser
+import ButtonHeistSupport
 @testable import TheInsideJob
 @testable import TheScore
 
@@ -636,32 +637,6 @@ final class SettleSessionTests: XCTestCase {
         XCTAssertNotNil(outcome.instabilityDescription)
     }
 
-    func testSemanticQuietSettleReturnsCancelledWhenObservationYieldCancels() async {
-        let stable = makeParseResult([
-            makeElement(label: "Ready", traits: .staticText, frame: CGRect(x: 0, y: 0, width: 100, height: 30)),
-        ])
-        let clock = ManualClock()
-        let session = SettleSession(
-            parseProvider: { stable },
-            tripwireSignalProvider: { Self.tripwireSignal(topmostVC: nil) },
-            observationYield: {
-                clock.advance(milliseconds: 10)
-                throw CancellationError()
-            },
-            clock: { clock.currentTime() },
-            quietWindowMs: 30,
-            timeoutMs: 100
-        )
-
-        let outcome = await session.run(
-            start: clock.currentTime(),
-            baselineTripwireSignal: Self.tripwireSignal(topmostVC: nil)
-        )
-
-        XCTAssertEqual(outcome.outcome, .cancelled(timeMs: 10))
-        XCTAssertEqual(outcome.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
-    }
-
     func testSemanticQuietSettleReturnsCancelledWhenObservationYieldSwallowsCancellation() async {
         let stable = makeParseResult([
             makeElement(label: "Ready", traits: .staticText, frame: CGRect(x: 0, y: 0, width: 100, height: 30)),
@@ -1008,8 +983,7 @@ final class SettleSessionTests: XCTestCase {
             // Real (small) sleeps so wall clock advances; a no-op sleeper
             // would let the loop reach a finite-script end before the
             // timeout fires.
-            // swiftlint:disable:next agent_test_task_sleep
-            sleeper: { try await Task.sleep(nanoseconds: $0) },
+            sleeper: { _ = await Task.cancellableSleep(nanoseconds: $0) },
             cyclesRequired: 3,
             cycleIntervalMs: 5,
             timeoutMs: 50
@@ -1046,8 +1020,7 @@ final class SettleSessionTests: XCTestCase {
                 ])
             },
             tripwireSignalProvider: { Self.tripwireSignal(topmostVC: nil) },
-            // swiftlint:disable:next agent_test_task_sleep
-            sleeper: { try await Task.sleep(nanoseconds: $0) },
+            sleeper: { _ = await Task.cancellableSleep(nanoseconds: $0) },
             cyclesRequired: 3,
             cycleIntervalMs: 5,
             timeoutMs: 50
@@ -1255,19 +1228,28 @@ final class SettleSessionTests: XCTestCase {
 
     func testCancellationPropagatesAsCancelledOutcome() async {
         let stable = makeParseResult([makeElement(label: "A")])
+        let sleepStarted = expectation(description: "sleep started")
         let session = SettleSession(
             parseProvider: { stable },
             tripwireSignalProvider: { Self.tripwireSignal(topmostVC: nil) },
-            sleeper: { _ in throw CancellationError() },
+            sleeper: { _ in
+                sleepStarted.fulfill()
+                _ = await Task.cancellableSleep(for: .seconds(10))
+            },
             cyclesRequired: 3,
             cycleIntervalMs: 1,
             timeoutMs: 200
         )
+        let task = Task {
+            await session.run(
+                start: CFAbsoluteTimeGetCurrent(),
+                baselineTripwireSignal: Self.tripwireSignal(topmostVC: nil)
+            )
+        }
 
-        let outcome = await session.run(
-            start: CFAbsoluteTimeGetCurrent(),
-            baselineTripwireSignal: Self.tripwireSignal(topmostVC: nil)
-        )
+        await fulfillment(of: [sleepStarted], timeout: 1)
+        task.cancel()
+        let outcome = await task.value
 
         if case .cancelled = outcome.outcome {
             // Expected.
@@ -1276,30 +1258,6 @@ final class SettleSessionTests: XCTestCase {
         }
         XCTAssertFalse(outcome.outcome.didSettleCleanly,
                        ".cancelled must NOT count as settled cleanly")
-    }
-
-    func testNonCancellationSleeperErrorMapsToTimedOut() async {
-        struct DummyError: Error {}
-        let stable = makeParseResult([makeElement(label: "A")])
-        let session = SettleSession(
-            parseProvider: { stable },
-            tripwireSignalProvider: { Self.tripwireSignal(topmostVC: nil) },
-            sleeper: { _ in throw DummyError() },
-            cyclesRequired: 3,
-            cycleIntervalMs: 1,
-            timeoutMs: 200
-        )
-
-        let outcome = await session.run(
-            start: CFAbsoluteTimeGetCurrent(),
-            baselineTripwireSignal: Self.tripwireSignal(topmostVC: nil)
-        )
-
-        if case .timedOut = outcome.outcome {
-            // Expected.
-        } else {
-            XCTFail("Expected .timedOut for non-cancellation throw, got \(outcome.outcome)")
-        }
     }
 
     // MARK: - updatesFrequently Masking

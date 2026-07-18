@@ -4,6 +4,7 @@ import Foundation
 import UIKit
 
 import AccessibilitySnapshotParser
+import ButtonHeistSupport
 
 // MARK: - Settle Event/Outcome
 
@@ -282,8 +283,8 @@ final class SettleSessionFinalObservation {
 
     typealias ParseProvider = @MainActor () -> InterfaceObservation?
     typealias TripwireSignalProvider = @MainActor () -> TheTripwire.TripwireSignal
-    typealias Sleeper = @Sendable (UInt64) async throws -> Void
-    typealias ObservationYield = @MainActor () async throws -> Void
+    typealias Sleeper = @Sendable (UInt64) async -> Void
+    typealias ObservationYield = @MainActor () async -> Void
     typealias Clock = @MainActor () -> CFAbsoluteTime
 
     let parseProvider: ParseProvider
@@ -312,7 +313,7 @@ final class SettleSessionFinalObservation {
     init(
         parseProvider: @escaping ParseProvider,
         tripwireSignalProvider: @escaping TripwireSignalProvider,
-        sleeper: @escaping Sleeper = { try await Task.sleep(nanoseconds: $0) },
+        sleeper: @escaping Sleeper = { _ = await Task.cancellableSleep(nanoseconds: $0) },
         cyclesRequired: Int = SettleSession.defaultCyclesRequired,
         cycleIntervalMs: Int = SettleSession.defaultCycleIntervalMs,
         timeoutMs: Int = SettleSession.defaultTimeoutMs
@@ -321,7 +322,7 @@ final class SettleSessionFinalObservation {
             parseProvider: parseProvider,
             tripwireSignalProvider: tripwireSignalProvider,
             observationYield: {
-                try await sleeper(UInt64(cycleIntervalMs) * 1_000_000)
+                await sleeper(UInt64(cycleIntervalMs) * 1_000_000)
             },
             policy: .consecutiveCycles(required: cyclesRequired),
             clock: { CFAbsoluteTimeGetCurrent() },
@@ -359,7 +360,9 @@ final class SettleSessionFinalObservation {
     ) -> SettleSession {
         let observationYield: ObservationYield = switch policy {
         case .consecutiveCycles:
-            { try await Task.sleep(nanoseconds: UInt64(SettleSession.defaultCycleIntervalMs) * 1_000_000) }
+            { _ = await Task.cancellableSleep(
+                nanoseconds: UInt64(SettleSession.defaultCycleIntervalMs) * 1_000_000
+            ) }
         case .quietWindow:
             { await tripwire.yieldRealFrames(1) }
         }
@@ -479,13 +482,10 @@ final class SettleSessionFinalObservation {
 }
 
 private struct SettleLoopRunner {
-    typealias ObservationYield = @MainActor () async throws -> Void
-    typealias Clock = @MainActor () -> CFAbsoluteTime
-
     let parseProvider: SettleSession.ParseProvider
     let tripwireSignalProvider: SettleSession.TripwireSignalProvider
-    let observationYield: ObservationYield
-    let clock: Clock
+    let observationYield: SettleSession.ObservationYield
+    let clock: SettleSession.Clock
     let timeoutMs: Int
     let initial: SettleLoopMachine.State
 
@@ -533,17 +533,7 @@ private struct SettleLoopRunner {
         }
 
         while deadline.hasTimeRemaining(at: clock()) {
-            do {
-                try await observationYield()
-            } catch is CancellationError {
-                return result(
-                    .cancelled(timeMs: deadline.elapsedMilliseconds(at: clock()))
-                )
-            } catch {
-                return result(
-                    .timedOut(timeMs: deadline.elapsedMilliseconds(at: clock()))
-                )
-            }
+            await observationYield()
             if Task.isCancelled {
                 return result(
                     .cancelled(timeMs: deadline.elapsedMilliseconds(at: clock()))
