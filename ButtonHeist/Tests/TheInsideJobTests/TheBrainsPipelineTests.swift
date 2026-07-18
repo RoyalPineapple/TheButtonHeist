@@ -1786,6 +1786,32 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
     }
 
+    func testVisibleSettledEvidenceKeepsKnownElementsInCanonicalBaseline() {
+        let observation = InterfaceObservation.makeForTests(
+            elements: [
+                (AccessibilityElement.make(label: "Visible", traits: .button), "button_visible"),
+            ],
+            offViewport: [
+                .init(
+                    AccessibilityElement.make(label: "Below fold", traits: .button),
+                    heistId: "button_below_fold"
+                ),
+            ]
+        )
+        let event = brains.vault.semanticObservationStream.commitVisibleObservationForTesting(observation)
+
+        let evidence = brains.postActionObservation.semanticObservation(from: event)
+
+        XCTAssertEqual(
+            Set(evidence.baseline.observation.tree.orderedElements.map(\.heistId)),
+            ["button_visible", "button_below_fold"]
+        )
+        XCTAssertEqual(
+            Set(evidence.baseline.interface.projectedElements.compactMap(\.label)),
+            ["Visible", "Below fold"]
+        )
+    }
+
     func testBeforeStateDerivesNeededSemanticProjectionsFromCanonicalInputs() {
         let screen = makeScreen(elements: [("Save", .button, "save")])
         brains.vault.installObservationForTesting(screen)

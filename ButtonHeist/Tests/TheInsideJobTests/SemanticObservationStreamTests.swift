@@ -422,13 +422,11 @@ final class SemanticObservationStreamTests: XCTestCase {
                 generation: .initial,
                 previousEvents: [:]
             ),
-            evidenceByScope: [
-                .visible: SemanticObservationPublication.Evidence(
-                    interface: interface,
-                    accessibilityNotifications: [],
-                    firstResponder: nil
-                ),
-            ]
+            evidence: SemanticObservationPublication.Evidence(
+                interface: interface,
+                accessibilityNotifications: [],
+                firstResponder: nil
+            )
         )
         var state = SemanticObservationRuntimeState()
         state.requireReplacement()

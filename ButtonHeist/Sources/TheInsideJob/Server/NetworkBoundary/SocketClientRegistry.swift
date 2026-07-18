@@ -34,7 +34,7 @@ struct SocketClientRegistry {
 
     enum SendAdmission {
         case accepted(SendReservation)
-        case rejected(SocketSendBuffer.Rejection, client: Client)
+        case rejected(SocketSendBuffer.Rejection)
         case missingClient
     }
 
@@ -94,7 +94,7 @@ struct SocketClientRegistry {
                 bufferReservation: bufferReservation
             ))
         case .failure(let rejection):
-            return .rejected(rejection, client: client)
+            return .rejected(rejection)
         }
     }
 

@@ -119,18 +119,6 @@ struct SettleRecordedObservation {
         return hasher.finalize()
     }
 
-    static func fingerprint(
-        of elements: [AccessibilityElement],
-        bucket: CGFloat = CoarseFrameComparison.currentBucket
-    ) -> Int {
-        var hasher = Hasher()
-        hasher.combine(elements.count)
-        for element in elements {
-            combine(element, into: &hasher, bucket: bucket)
-        }
-        return hasher.finalize()
-    }
-
     private static func combine(
         _ element: AccessibilityElement,
         into hasher: inout Hasher,

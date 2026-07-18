@@ -34,7 +34,6 @@ import TheScore
         let report = HeistExecutionReport.project(result)
         let projection = report.metrics
 
-        #expect(HeistExecutionMetricProjection(result: result) == report.metrics)
         #expect(values(in: projection, named: .heistDurationMs) == [1234])
         #expect(values(in: projection, named: .actionPipelineTargetResolutionMs) == [1])
         #expect(values(in: projection, named: .actionPipelineTotalMs) == [15])

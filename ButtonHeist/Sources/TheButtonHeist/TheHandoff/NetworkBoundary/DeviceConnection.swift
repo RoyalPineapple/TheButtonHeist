@@ -27,11 +27,6 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
         case cancel(DisconnectReason)
     }
 
-    private enum Effect {
-        case cancel(NWConnection)
-        case disconnected(DisconnectReason)
-    }
-
     private let device: DiscoveredDevice
 
     var onEvent: (@ButtonHeistActor (ConnectionEvent) -> Void)?
@@ -178,25 +173,16 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
     }
 
     func transitionToDisconnected(_ event: DisconnectEvent) {
-        var effects: [Effect] = []
+        let connection = runtimePhase.connection
+        setRuntimePhase(.disconnected)
         switch event {
         case .local:
-            if let connection = runtimePhase.connection { effects.append(.cancel(connection)) }
+            connection?.cancel()
         case .observed(let reason):
-            effects.append(.disconnected(reason))
+            onEvent?(.disconnected(reason))
         case .cancel(let reason):
-            if let connection = runtimePhase.connection { effects.append(.cancel(connection)) }
-            effects.append(.disconnected(reason))
-        }
-
-        setRuntimePhase(.disconnected)
-        for effect in effects {
-            switch effect {
-            case .cancel(let connection):
-                connection.cancel()
-            case .disconnected(let reason):
-                onEvent?(.disconnected(reason))
-            }
+            connection?.cancel()
+            onEvent?(.disconnected(reason))
         }
     }
 

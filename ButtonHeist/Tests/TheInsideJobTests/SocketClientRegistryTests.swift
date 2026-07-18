@@ -79,7 +79,7 @@ final class SocketClientRegistryTests: XCTestCase {
         XCTAssertEqual(registry.completeSend(reservation), .completed)
         XCTAssertEqual(registry.pendingSendBytes(for: clientId), 0)
 
-        guard case .rejected(.payloadTooLarge(let byteCount, let maxBytes), _) =
+        guard case .rejected(.payloadTooLarge(let byteCount, let maxBytes)) =
             registry.reserveSend(clientId: clientId, byteCount: SocketSendBuffer.defaultMaxPendingBytes + 1)
         else {
             return XCTFail("Expected payloadTooLarge rejection")

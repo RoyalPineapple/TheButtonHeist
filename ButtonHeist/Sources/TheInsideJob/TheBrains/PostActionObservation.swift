@@ -111,11 +111,8 @@ final class PostActionObservation {
     }
 
     func semanticObservation(from event: SettledObservationEvent) -> SettledObservationEvidence {
-        let observation = event.scope == .visible
-            ? event.settledObservation.observation.viewportOnly
-            : event.settledObservation.observation
         let current = captureSemanticState(
-            from: observation,
+            from: event.settledObservation.observation,
             tripwireSignal: vault.tripwire.tripwireSignal(),
             settledObservationSequence: event.sequence,
             projectionMode: event.scope.interfaceProjectionMode
@@ -407,11 +404,8 @@ final class PostActionObservation {
 
     private func captureFinalBaseline(after visibleEvent: SettledObservationEvent) -> ObservationBaseline {
         let settledObservation = visibleEvent.settledObservation
-        let observation = visibleEvent.scope == .visible
-            ? settledObservation.observation.viewportOnly
-            : settledObservation.observation
         return captureSemanticState(
-            from: observation,
+            from: settledObservation.observation,
             tripwireSignal: vault.tripwire.tripwireSignal(),
             settledObservationSequence: settledObservation.sequence
         )

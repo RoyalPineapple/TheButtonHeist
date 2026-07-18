@@ -245,32 +245,29 @@ public enum HeistArtifactCodec {
             maxBytes: planMemberSizeLimit
         )
 
-        let candidate = try decodeArtifactCandidate(
-            manifestMember: manifestMember,
-            planMember: planMember,
-            packageURL: packageURL
-        )
-        try validateArtifactEnvelope(manifest: candidate.manifest, packageURL: packageURL)
-        guard candidate.manifest.planVersion == candidate.plan.version else {
+        let manifestPayload = try readManifestPayload(from: manifestMember.data, packageURL: packageURL)
+        let planCandidate = try decodePlanCandidate(planMember.data, at: planMember.url)
+        try validateArtifactEnvelope(manifest: manifestPayload, packageURL: packageURL)
+        guard manifestPayload.planVersion == planCandidate.version else {
             throw HeistArtifactCodecError.versionMismatch(
                 path: packageURL.path,
-                manifestPlanVersion: candidate.manifest.planVersion,
-                planVersion: candidate.plan.version
+                manifestPlanVersion: manifestPayload.planVersion,
+                planVersion: planCandidate.version
             )
         }
-        let plan = try admitPlan(candidate.plan, at: planMember.url)
+        let plan = try admitPlan(planCandidate, at: planMember.url)
         let entry = try validateArtifactEntry(
-            manifestEntry: candidate.manifest.entry,
+            manifestEntry: manifestPayload.entry,
             plan: plan,
             packageURL: packageURL
         )
         let manifest = HeistArtifactManifest(
-            format: candidate.manifest.format,
+            format: manifestPayload.format,
             entry: entry,
-            formatVersion: candidate.manifest.formatVersion,
-            planVersion: candidate.manifest.planVersion,
-            producer: candidate.manifest.producer,
-            createdAt: candidate.manifest.createdAt
+            formatVersion: manifestPayload.formatVersion,
+            planVersion: manifestPayload.planVersion,
+            producer: manifestPayload.producer,
+            createdAt: manifestPayload.createdAt
         )
         return HeistArtifact(manifest: manifest, plan: plan)
     }
@@ -470,17 +467,6 @@ public enum HeistArtifactCodec {
         }
     }
 
-    private static func decodeArtifactCandidate(
-        manifestMember: ArtifactMemberData,
-        planMember: ArtifactMemberData,
-        packageURL: URL
-    ) throws -> HeistArtifactAdmissionCandidate {
-        HeistArtifactAdmissionCandidate(
-            manifest: try readManifestPayload(from: manifestMember.data, packageURL: packageURL),
-            plan: try decodePlanCandidate(planMember.data, at: planMember.url)
-        )
-    }
-
     private static func decodePlanCandidate(_ data: Data, at url: URL) throws -> HeistPlanAdmissionCandidate {
         do {
             return try JSONDecoder().decode(HeistPlanAdmissionCandidate.self, from: data)
@@ -569,11 +555,6 @@ public enum HeistArtifactCodec {
 private struct ArtifactMemberData {
     let url: URL
     let data: Data
-}
-
-private struct HeistArtifactAdmissionCandidate {
-    let manifest: HeistArtifactManifestPayload
-    let plan: HeistPlanAdmissionCandidate
 }
 
 private struct HeistArtifactManifestPayload: Decodable {

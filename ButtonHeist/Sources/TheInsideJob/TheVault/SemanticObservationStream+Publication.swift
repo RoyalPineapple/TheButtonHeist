@@ -337,8 +337,7 @@ extension SemanticObservationStream {
                 generation: runtimeState.lineage.generation,
                 previousEvents: observationLog.latestEventsByScope
             ),
-            evidenceByScope: publicationEvidence(
-                sourceScope: scope,
+            evidence: publicationEvidence(
                 observation: settledObservation,
                 notificationBatch: notificationBatch,
                 notificationIdentityObservation: notificationIdentityObservation,
@@ -370,23 +369,20 @@ extension SemanticObservationStream {
     }
 
     private func publicationEvidence(
-        sourceScope: SemanticObservationScope,
         observation: InterfaceObservation,
         notificationBatch: AccessibilityNotificationBatch,
         notificationIdentityObservation: InterfaceObservation?,
         vault: TheVault
-    ) -> [SemanticObservationScope: SemanticObservationPublication.Evidence] {
-        Dictionary(uniqueKeysWithValues: sourceScope.fulfilledScopes.map { fulfilledScope in
-            return (fulfilledScope, SemanticObservationPublication.Evidence(
-                interface: vault.semanticInterfaceWithHash(for: observation).interface,
-                accessibilityNotifications: vault.resolveAccessibilityNotificationEvidence(
-                    notificationBatch.events,
-                    identityObservation: notificationIdentityObservation ?? observation,
-                    referenceObservation: observation
-                ),
-                firstResponder: vault.firstResponderTarget(in: observation.tree)
-            ))
-        })
+    ) -> SemanticObservationPublication.Evidence {
+        SemanticObservationPublication.Evidence(
+            interface: vault.semanticInterfaceWithHash(for: observation).interface,
+            accessibilityNotifications: vault.resolveAccessibilityNotificationEvidence(
+                notificationBatch.events,
+                identityObservation: notificationIdentityObservation ?? observation,
+                referenceObservation: observation
+            ),
+            firstResponder: vault.firstResponderTarget(in: observation.tree)
+        )
     }
 
     func admitSettledProof(

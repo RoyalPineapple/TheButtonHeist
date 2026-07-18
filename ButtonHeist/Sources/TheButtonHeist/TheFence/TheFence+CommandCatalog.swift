@@ -174,11 +174,6 @@ typealias FenceActionAdmission = @ButtonHeistActor @Sendable (
     TheFence,
     TheFence.CommandArgumentEnvelope
 ) throws -> HeistActionCommand
-typealias FenceWaitAdmission = @ButtonHeistActor @Sendable (
-    TheFence,
-    TheFence.CommandArgumentEnvelope
-) throws -> WaitStep
-
 extension TheFence {
     public enum Command: CaseIterable, Hashable, RawRepresentable, Sendable {
         case ping
@@ -343,24 +338,6 @@ extension TheFence {
             )
         }
 
-        static func wait(
-            name: String,
-            parameters: [FenceParameterSpec],
-            projection: FenceCommandProjection,
-            admission: @escaping FenceWaitAdmission
-        ) -> Self {
-            Self(
-                name: name,
-                family: .assertion,
-                connectionRequirement: .activeSession,
-                parameters: parameters,
-                timeout: .wait,
-                projection: projection,
-                admission: { fence, _, arguments in
-                    .singleStepHeist(.wait(try admission(fence, arguments)))
-                }
-            )
-        }
     }
 }
 
@@ -457,23 +434,27 @@ extension TheFence.Command {
                 .init { fence in try await fence.handleGetAnnouncements(timeout: timeout) }
             }
         case .wait:
-            return .wait(
+            return .init(
                 name: "wait",
+                family: .assertion,
+                connectionRequirement: .activeSession,
                 parameters: FenceParameterBlocks.wait,
+                timeout: .wait,
                 projection: .cliOnly(
                     "Assert that an accessibility predicate is satisfied within timeout "
                         + "by evaluating settled accessibility state.",
                     mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true)
-                )
-            ) { _, arguments in
-                let expectation = try TheFence.ExpectationPayload(arguments: arguments)
-                return WaitStep(
-                    predicate: try TheFence.ExpectationPayload.parseRequiredPredicate(
-                        arguments.value(for: .predicate)
-                    ),
-                    timeout: expectation.timeout ?? defaultWaitTimeout
-                )
-            }
+                ),
+                admission: { _, _, arguments in
+                    let expectation = try TheFence.ExpectationPayload(arguments: arguments)
+                    return .singleStepHeist(.wait(WaitStep(
+                        predicate: try TheFence.ExpectationPayload.parseRequiredPredicate(
+                            arguments.value(for: .predicate)
+                        ),
+                        timeout: expectation.timeout ?? defaultWaitTimeout
+                    )))
+                }
+            )
         case .oneFingerTap:
             return .singleStepAction(
                 name: "one_finger_tap",

@@ -27,11 +27,11 @@ extension SimpleSocketServer {
             return .failed(.clientNotFound(clientId))
         case .accepted(let acceptedReservation):
             reservation = acceptedReservation
-        case .rejected(let rejection, let state):
+        case .rejected(let rejection):
             switch rejection {
             case .payloadTooLarge:
                 sendLogger.warning("Client \(clientId) send payload exceeds cap (\(byteCount) bytes), failing the originating request")
-                sendOversizedResponseError(clientId: clientId, originalData: data, byteCount: byteCount, state: state)
+                await sendOversizedResponseError(clientId: clientId, originalData: data, byteCount: byteCount)
             case .bufferFull(let pendingBytes, _, _):
                 sendLogger.warning("Client \(clientId) send buffer full (\(pendingBytes) bytes pending), dropping \(byteCount) bytes")
             }
@@ -88,9 +88,8 @@ extension SimpleSocketServer {
     private func sendOversizedResponseError(
         clientId: Int,
         originalData: Data,
-        byteCount: Int,
-        state: SocketClientRegistry.Client
-    ) {
+        byteCount: Int
+    ) async {
         let envelope: ResponseEnvelope
         do {
             envelope = try JSONDecoder().decode(ResponseEnvelope.self, from: originalData)
@@ -107,33 +106,24 @@ extension SimpleSocketServer {
             sendLogger.error("Failed to admit oversized-response error for client \(clientId): \(error)")
             return
         }
-        sendErrorEnvelope(
+        await sendErrorEnvelope(
             clientId: clientId,
             envelope: ResponseEnvelope(
                 requestId: envelope.requestId,
                 message: .error(TheScore.ServerError(kind: .general, message: message))
-            ),
-            state: state
+            )
         )
     }
 
-    func sendErrorEnvelope(clientId: Int, envelope: ResponseEnvelope, state: SocketClientRegistry.Client) {
+    func sendErrorEnvelope(clientId: Int, envelope: ResponseEnvelope) async {
         let response: Data
         do {
             response = try envelope.encoded()
         } catch {
-            sendLogger.error("Failed to encode oversized-response error for client \(clientId): \(error.localizedDescription)")
+            sendLogger.error("Failed to encode server error for client \(clientId): \(error.localizedDescription)")
             return
         }
-        var errorData = response
-        if !errorData.hasSuffix(Data([WireFrameLimits.newlineDelimiterByte])) {
-            errorData.append(WireFrameLimits.newlineDelimiterByte)
-        }
-        sendContent(state.connection, errorData, .contentProcessed { error in
-            if let error {
-                sendLogger.error("Send error to client \(clientId): \(error)")
-            }
-        })
+        _ = await send(response, to: clientId)
     }
 }
 

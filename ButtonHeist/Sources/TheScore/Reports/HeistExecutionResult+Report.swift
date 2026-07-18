@@ -85,10 +85,6 @@ package struct HeistExecutionMetricProjection: Codable, Sendable, Equatable {
     package let samples: [HeistExecutionMetricSample]
     package let ceilings: [HeistExecutionCeilingMetric]
 
-    package init(result: HeistExecutionResult) {
-        self = HeistExecutionReport.project(result).metrics
-    }
-
     fileprivate init(
         samples: [HeistExecutionMetricSample],
         ceilings: [HeistExecutionCeilingMetric]
@@ -388,7 +384,7 @@ public extension HeistExecutionResult {
     /// Receipt nodes surfaced by linear output adapters in execution order.
     /// Skipped nodes remain visible because they are first-class receipt facts.
     var outputReceiptNodes: [HeistExecutionStepResult] {
-        steps.mapInReceiptOrder { $0 }
+        steps.compactMapInReceiptOrder { Optional($0) }
     }
 
     /// Warnings emitted by executed `Warn(...)` steps, in execution order.
@@ -411,12 +407,6 @@ package extension HeistExecutionResult {
 }
 
 private extension Sequence where Element == HeistExecutionStepResult {
-    func mapInReceiptOrder<Value>(_ transform: (Element) -> Value) -> [Value] {
-        var values: [Value] = []
-        walk(enter: { values.append(transform($0)) }, leave: { _ in })
-        return values
-    }
-
     func compactMapInReceiptOrder<Value>(_ transform: (Element) -> Value?) -> [Value] {
         var values: [Value] = []
         walk(enter: {

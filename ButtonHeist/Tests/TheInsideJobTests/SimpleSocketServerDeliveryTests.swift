@@ -54,6 +54,43 @@ final class SimpleSocketServerDeliveryTests: XCTestCase {
         await server.stop()
     }
 
+    func testRejectedClientErrorUsesReservedSendBeforeDisconnecting() async throws {
+        let server = SimpleSocketServer()
+        let sendGate = SendCompletionGate()
+        let disconnections = AsyncStream.makeStream(of: Int.self)
+        await server.setCallbacksForTesting(SocketServerCallbacks(
+            onClientDisconnected: { disconnections.continuation.yield($0) }
+        ))
+        await server.setSendContentForTesting { _, _, completion in
+            if case .contentProcessed(let handler) = completion {
+                Task { await sendGate.capture(handler) }
+            }
+        }
+        try await startForDeliveryTesting(server)
+        let clientId = try await insertClientForDeliveryTesting(into: server)
+        var disconnectIterator = disconnections.stream.makeAsyncIterator()
+
+        await server.rejectClientWithServerError(
+            clientId,
+            kind: .validationError,
+            message: "Invalid request"
+        )
+        await sendGate.waitUntilCaptured()
+
+        let pendingSendBytes = await server.clientPendingSendBytesForTesting(clientId)
+        let clientCount = await server.clientCountForTesting
+        XCTAssertGreaterThan(try XCTUnwrap(pendingSendBytes), 0)
+        XCTAssertEqual(clientCount, 1)
+
+        await sendGate.complete(nil)
+
+        let disconnectedClientId = await disconnectIterator.next()
+        let completedPendingSendBytes = await server.clientPendingSendBytesForTesting(clientId)
+        XCTAssertEqual(disconnectedClientId, clientId)
+        XCTAssertNil(completedPendingSendBytes)
+        await server.stop()
+    }
+
     func testResponseHandlerWaitsForContentProcessedCompletion() async throws {
         let server = SimpleSocketServer()
         let gate = SendCompletionGate()

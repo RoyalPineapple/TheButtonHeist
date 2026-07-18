@@ -54,16 +54,13 @@ internal struct SemanticObservationPublication {
         observation: InterfaceObservation,
         semanticSignal: TheTripwire.SemanticSignal,
         context: Context,
-        evidenceByScope: [SemanticObservationScope: Evidence]
+        evidence: Evidence
     ) -> SemanticObservationPublication {
         let eventGeneration = context.continuity.isReplacement
             ? context.generation.advanced()
             : context.generation
         var events: EventsByScope = [:]
         for fulfilledScope in sourceScope.fulfilledScopes {
-            guard let evidence = evidenceByScope[fulfilledScope] else {
-                preconditionFailure("Semantic observation publication has no evidence for fulfilled scope")
-            }
             let previousEvent = context.previousEvents[fulfilledScope]
             let settledObservation = SettledObservation(
                 sequence: sequence,

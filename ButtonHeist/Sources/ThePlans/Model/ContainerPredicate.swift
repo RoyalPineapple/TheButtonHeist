@@ -318,7 +318,7 @@ public struct ContainerPredicate: Codable, Sendable, Equatable, Hashable {
     }
 
     package func resolve(in environment: HeistExecutionEnvironment) throws -> ResolvedContainerPredicate {
-        ResolvedContainerPredicate(core: try core.map { try $0.resolve(in: environment) })
+        try ResolvedContainerPredicate(validating: core.map { try $0.resolve(in: environment) })
     }
 
     public init(from decoder: Decoder) throws {
@@ -341,7 +341,10 @@ extension ContainerPredicate: CustomStringConvertible {
 public struct ResolvedContainerPredicate: Codable, Sendable, Equatable, Hashable {
     package let core: ContainerPredicateCore<String>
 
-    package init(core: ContainerPredicateCore<String>) {
+    package init(validating core: ContainerPredicateCore<String>) throws {
+        if let reason = core.invalidEmptyPayloadDescription {
+            throw InvalidResolvedContainerPredicateError(reason: reason)
+        }
         self.core = core
     }
 
@@ -353,14 +356,27 @@ public struct ResolvedContainerPredicate: Codable, Sendable, Equatable, Hashable
     }
 
     public init(from decoder: Decoder) throws {
-        core = try ContainerPredicateCore(from: decoder)
-        if let description = invalidEmptyPayloadDescription {
-            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: description))
+        let core = try ContainerPredicateCore<String>(from: decoder)
+        do {
+            try self.init(validating: core)
+        } catch let error as InvalidResolvedContainerPredicateError {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath,
+                debugDescription: error.reason
+            ))
         }
     }
 
     public func encode(to encoder: Encoder) throws {
         try core.encode(to: encoder)
+    }
+}
+
+private struct InvalidResolvedContainerPredicateError: Error, Sendable, Equatable, CustomStringConvertible {
+    let reason: String
+
+    var description: String {
+        "resolved container predicate is invalid: \(reason)"
     }
 }
 
