@@ -513,7 +513,7 @@ where Evidence: Sendable & Equatable {
         _ deadline: SemanticObservationDeadline?
     ) async -> SettledObservationEvent? {
         guard target.isElementTarget,
-              vault.resolveTarget(target).resolved != nil
+              case .resolved(.element) = vault.resolveTarget(target)
         else { return nil }
         if let deadline,
            !deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) {

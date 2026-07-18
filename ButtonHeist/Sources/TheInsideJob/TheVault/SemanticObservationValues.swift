@@ -224,10 +224,15 @@ internal struct SettledObservation: Sendable, Equatable {
     internal let scope: SemanticObservationScope
     internal let semanticSignal: TheTripwire.SemanticSignal
     private let tree: InterfaceTree
+    private let captureToken: InterfaceCaptureToken
 
     internal var observation: InterfaceObservation {
         do {
-            return try InterfaceObservation.build(tree: tree)
+            return try InterfaceObservation.build(
+                tree: tree,
+                dispatchReferences: .empty,
+                captureToken: captureToken
+            )
         } catch {
             preconditionFailure("Settled semantic observation failed validation: \(error)")
         }
@@ -243,6 +248,7 @@ internal struct SettledObservation: Sendable, Equatable {
         self.scope = scope
         self.semanticSignal = semanticSignal
         self.tree = observation.tree
+        self.captureToken = observation.captureToken
     }
 }
 

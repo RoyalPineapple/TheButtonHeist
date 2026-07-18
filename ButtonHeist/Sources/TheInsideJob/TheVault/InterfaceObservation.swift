@@ -43,7 +43,7 @@ struct InterfaceObservation {
         )
     }
 
-    private static func build(
+    static func build(
         tree: InterfaceTree,
         dispatchReferences: LiveCapture.DispatchReferences,
         captureToken: InterfaceCaptureToken

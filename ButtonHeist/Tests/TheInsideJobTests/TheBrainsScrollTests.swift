@@ -2384,9 +2384,9 @@ final class TheBrainsScrollTests: XCTestCase {
         brains.vault.installObservationForTesting(liveScreen)
         let prematureResolution = brains.vault.resolveTarget(
             literalTarget(ElementPredicate.label("Jump Target"), ordinal: 0)
-        ).resolved
-        XCTAssertNil(prematureResolution, "Parser exposed offscreen scroll content before semantic reveal")
-        guard prematureResolution == nil else {
+        )
+        guard case .notFound = prematureResolution else {
+            XCTFail("Parser exposed offscreen scroll content before semantic reveal: \(prematureResolution)")
             return
         }
 

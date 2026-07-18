@@ -91,7 +91,9 @@ final class TheVaultCustomRotorTests: XCTestCase {
         }
         vault.installObservationForTesting(observation)
 
-        let resolvedHost = vault.resolveTarget(literalTarget(ElementPredicate.identifier("rotor_host"))).resolved
+        let resolvedHost = vault.resolveTarget(
+            literalTarget(ElementPredicate.identifier("rotor_host"))
+        ).resolvedElement
         guard let resolvedHost else {
             XCTFail("Expected rotor host to resolve")
             return
@@ -151,7 +153,9 @@ final class TheVaultCustomRotorTests: XCTestCase {
         }
         vault.installObservationForTesting(observation)
 
-        let resolvedHost = vault.resolveTarget(literalTarget(ElementPredicate.identifier("system_rotor_host"))).resolved
+        let resolvedHost = vault.resolveTarget(
+            literalTarget(ElementPredicate.identifier("system_rotor_host"))
+        ).resolvedElement
         guard let resolvedHost else {
             XCTFail("Expected rotor host to resolve")
             return

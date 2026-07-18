@@ -14,7 +14,7 @@ public struct AccessibilityTrace: Codable, Sendable, Equatable {
         case captures
     }
 
-    public init(captures: [Capture]) {
+    package init(captures: [Capture]) {
         precondition(
             Self.hasCanonicalLineage(captures),
             "Accessibility trace source must provide canonical capture lineage"

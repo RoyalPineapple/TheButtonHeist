@@ -299,15 +299,18 @@ final class SemanticObservationStreamTests: XCTestCase {
         )
 
         XCTAssertEqual(discoveryEvent.settledObservation.observation.tree.elementIDs, ["visible", "off_viewport"])
+        XCTAssertEqual(discoveryEvent.settledObservation.observation.captureToken, observation.captureToken)
         XCTAssertEqual(
             discoveryEvent.trace.captures.last?.interface.projectedElements.compactMap(\.label),
             ["Visible", "Off Viewport"]
         )
         XCTAssertEqual(visibleEvent.settledObservation.observation.tree.elementIDs, ["visible"])
+        XCTAssertEqual(visibleEvent.settledObservation.observation.captureToken, observation.captureToken)
         XCTAssertEqual(
             visibleEvent.trace.captures.last?.interface.projectedElements.compactMap(\.label),
             ["Visible"]
         )
+        XCTAssertEqual(vault.latestObservation.captureToken, observation.captureToken)
     }
 
     func testDiscoverySettlementRejectsTripwireChangeBeforeCommit() {

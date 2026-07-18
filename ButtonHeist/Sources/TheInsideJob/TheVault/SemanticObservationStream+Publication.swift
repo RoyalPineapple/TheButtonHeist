@@ -122,13 +122,19 @@ extension SemanticObservationStream {
         if continuity.isReplacement {
             observationLog.beginScreenReplacement()
         }
-        _ = vault.reduceInterfaceGraph(
-            with: proof.observation,
-            scope: scope,
-            continuity: continuity,
-            discoveryCommitPolicy: proof.discoveryCommitPolicy
-        )
+        let committedObservation: InterfaceObservation
+        do {
+            committedObservation = try vault.reduceInterfaceGraph(
+                with: proof.observation,
+                scope: scope,
+                continuity: continuity,
+                discoveryCommitPolicy: proof.discoveryCommitPolicy
+            )
+        } catch {
+            preconditionFailure("Committed interface observation failed validation: \(error)")
+        }
         return publishCurrentSettledObservation(
+            committedObservation,
             scope: scope,
             vault: vault,
             tripwireSignal: proof.tripwireSignal,
@@ -312,6 +318,7 @@ extension SemanticObservationStream {
     }
 
     private func publishCurrentSettledObservation(
+        _ settledObservation: InterfaceObservation,
         scope: SemanticObservationScope = .visible,
         vault: TheVault,
         tripwireSignal: TheTripwire.TripwireSignal,
@@ -319,12 +326,6 @@ extension SemanticObservationStream {
         continuity: ScreenContinuity,
         notificationIdentityObservation: InterfaceObservation? = nil
     ) -> SettledObservationEvent {
-        let settledObservation: InterfaceObservation
-        do {
-            settledObservation = try InterfaceObservation.build(tree: vault.interfaceTree)
-        } catch {
-            preconditionFailure("Published semantic observation failed validation: \(error)")
-        }
         let publication = SemanticObservationPublication.make(
             sourceScope: scope,
             sequence: runtimeState.sequence + 1,

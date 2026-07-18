@@ -81,7 +81,7 @@ extension TheVault {
         scope: SemanticObservationScope,
         continuity: ScreenContinuity,
         discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy
-    ) -> InterfaceTree {
+    ) throws -> InterfaceObservation {
         if let queuedVisibleRefresh = nextVisibleRefreshObservationForTesting,
            queuedVisibleRefresh.tree.interfaceHash != observation.tree.interfaceHash {
             nextVisibleRefreshObservationForTesting = nil
@@ -96,8 +96,9 @@ extension TheVault {
                 ? observation.tree
                 : interfaceTree.merging(observation.tree)
         }
-        finishCommit(observation: observation)
-        return interfaceTree
+        let committedObservation = try observation.replacingTreeWithCurrentCapture(interfaceTree)
+        finishCommit(observation: committedObservation)
+        return committedObservation
     }
 
     func recordFailedSettleDiagnosticEvidence(_ observation: InterfaceObservation?) {

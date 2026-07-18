@@ -73,10 +73,13 @@ reinterpret parser fields.
 `LiveCapture` from one parser read. Raw parser samples remain live evidence or
 failed-settle diagnostic evidence; they never append temporal history and do
 not become targetable semantic truth by themselves. `SettleSession` reduces
-those samples and a clean result produces an `InterfaceObservationProof`.
+those samples and carries its exact final observation in a clean outcome. The
+semantic stream alone admits that outcome into `InterfaceObservationProof`, and
+only while both its tripwire signal and capture identity remain current.
 
 `SemanticObservationStream` is the sole ordered committer. Its production
-entry points accept only `InterfaceObservationProof`, classify continuity once,
+entry points admit clean settle outcomes or accept their resulting
+`InterfaceObservationProof`, classify continuity once,
 reduce the proof into `TheVault.interfaceTree`, construct the settled
 publication from that committed graph, and only then append it to the private
 `SemanticObservationLog`. `SemanticObservationRuntimeState` advances after log
@@ -178,9 +181,10 @@ including semantic content The Button Heist can discover in scrollable container
 geometry. Refresh, exploration, selection, and stale-state decisions live inside
 TheInsideJob; clients and adapters send typed observation intent.
 
-Visible observation reduces parser reads through `SettleSession`; only a clean
-settle can construct the proof consumed by the visible commit path. Discovery
-uses the same proof and commit boundary. `Navigation.performViewportTransition`
+Visible observation reduces parser reads through `SettleSession`; only the
+semantic stream can admit a clean outcome into the proof consumed by the
+visible commit path. Discovery uses the same admission and commit boundary.
+`Navigation.performViewportTransition`
 is the sole product-driven viewport movement operation: page scroll, discovery,
 inflation placement, and restoration all provide movement intent to it. After a
 successful movement dispatch, its minimal movement-specific settle parses the

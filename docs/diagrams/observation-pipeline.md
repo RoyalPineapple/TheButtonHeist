@@ -40,16 +40,20 @@ flowchart TD
     Raw -. "never publishes directly" .-> NoAuthority["not semantic authority"]
     Signals["UIKit accessibility notifications"] --> Bus["AccessibilityNotificationBus<br/>retained ingress evidence"]
     Bus --> Checkpoint["non-destructive notification checkpoint"]
-    Checkpoint --> Proof
+    Checkpoint --> Admission
     Settle --> Clean{"clean settlement?"}
     Clean -->|no| Diagnostic["failed-settle diagnostic<br/>no graph or log mutation"]
-    Clean -->|yes| Proof["InterfaceObservationProof"]
+    Clean -->|yes| Outcome["SettleSession.Outcome<br/>exact final InterfaceObservation"]
+    Outcome --> Admission{"stream admission<br/>tripwire + exact capture still current?"}
+    Admission -->|no| Diagnostic
+    Admission -->|yes| Proof["InterfaceObservationProof"]
 
     Proof --> Committer["SemanticObservationStream<br/>sole ordered committer"]
     Committer --> Continuity["classify continuity once"]
     Continuity --> Graph["canonical graph reducer<br/>reduce TheVault.interfaceTree"]
     Graph --> Publication["construct settled publication<br/>from committed graph"]
-    Publication --> Log["private SemanticObservationLog<br/>publish retained entry"]
+    Publication --> Scope["project tree + trace evidence<br/>once per fulfilled scope"]
+    Scope --> Log["private SemanticObservationLog<br/>publish retained entry"]
     Log --> Runtime["advance runtime generation<br/>and settled sequence"]
     Runtime --> Cursor["ObservationCursor<br/>generation + sequence order<br/>capture-derived timestamp metadata"]
     Cursor --> Seal["clean publication<br/>admitting tripwire signal"]
@@ -67,9 +71,13 @@ flowchart TD
     Delta -. "never evaluator input" .-> Output["public output only"]
 ```
 
-The ordering is structural: graph reduction completes before private log
-publication. Consumers cannot observe an entry for graph state that has not
-already committed, and consuming an entry cannot mutate the graph. Cursor
+The ordering is structural: stream admission precedes graph reduction, and graph
+reduction completes before private log publication. The admitted outcome carries
+the exact parser observation which settled; the stream rejects it if a later
+parse or tripwire signal superseded that capture. Each fulfilled scope projects
+its tree and trace evidence from the same committed observation. Consumers
+cannot observe an entry for graph state that has not already committed, and
+consuming an entry cannot mutate the graph. Cursor
 `observedAt` is derived from the capture's interface timestamp and is metadata;
 generation and settled sequence provide correctness ordering.
 
@@ -109,8 +117,9 @@ sequenceDiagram
     Transition->>UIKit: dispatch movement
     UIKit-->>Transition: moved
     Transition->>Settle: minimal settle: parse + one run-loop turn + repeat parse
-    Settle-->>Transition: InterfaceObservationProof
-    Transition->>Stream: commit proof
+    Settle-->>Transition: clean outcome with exact final observation
+    Transition->>Stream: admit and commit outcome
+    Stream->>Stream: verify tripwire and capture identity<br/>construct InterfaceObservationProof
     Stream->>Graph: reduce graph
     Graph-->>Stream: committed tree
     Stream->>Log: publish retained entry
