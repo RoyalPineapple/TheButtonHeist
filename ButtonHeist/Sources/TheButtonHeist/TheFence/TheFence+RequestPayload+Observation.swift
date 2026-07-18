@@ -28,24 +28,22 @@ extension TheFence {
             ),
             query: InterfaceQuery(
                 subtree: try decodeInterfaceSubtreeTarget(arguments),
-                maxScrollsPerContainer: try interfaceDiscoveryLimit(arguments, .maxScrollsPerContainer),
-                maxScrollsPerDiscovery: try interfaceDiscoveryLimit(arguments, .maxScrollsPerDiscovery)
+                maxScrollsPerContainer: try interfaceDiscoveryLimit(
+                    arguments,
+                    FenceParameters.maxScrollsPerContainer
+                ),
+                maxScrollsPerDiscovery: try interfaceDiscoveryLimit(
+                    arguments,
+                    FenceParameters.maxScrollsPerDiscovery
+                )
             )
         )
     }
 
     private func interfaceDiscoveryLimit(
         _ arguments: CommandArgumentEnvelope,
-        _ key: FenceParameterKey
+        _ parameter: FenceParameter<Int>
     ) throws -> InterfaceDiscoveryLimit? {
-        let parameter: FenceParameter<Int>
-        if key == .maxScrollsPerContainer {
-            parameter = FenceParameters.maxScrollsPerContainer
-        } else if key == .maxScrollsPerDiscovery {
-            parameter = FenceParameters.maxScrollsPerDiscovery
-        } else {
-            preconditionFailure("Unsupported interface discovery limit parameter \(key.rawValue)")
-        }
         guard let value = try arguments.value(parameter) else { return nil }
         return try InterfaceDiscoveryLimit(validating: value)
     }

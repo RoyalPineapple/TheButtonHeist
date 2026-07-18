@@ -53,7 +53,10 @@ final class ElementActionRequestContractTests: XCTestCase {
                 command.rawValue
             )
             XCTAssertEqual(target.objectProperties.map(\.key), AccessibilityTarget.inlineFieldNames, command.rawValue)
-            XCTAssertFalse(command.descriptor.parameters.contains { $0.key == "checks" }, command.rawValue)
+            XCTAssertFalse(
+                command.descriptor.parameters.contains { $0.key == FenceParameterKey.checks.rawValue },
+                command.rawValue
+            )
         }
     }
 

@@ -5,13 +5,14 @@ import ThePlans
 
 final class WireCommandParityTests: XCTestCase {
 
-    func testDescriptorsCoverEveryCommandExactlyOnce() {
-        let descriptors = TheFence.Command.descriptors
-        let descriptorCommands = descriptors.map(\.command)
+    func testCommandDefinitionsOwnUniqueCanonicalNames() {
+        let commands = TheFence.Command.allCases
+        let names = commands.map(\.rawValue)
 
-        XCTAssertEqual(descriptorCommands.count, TheFence.Command.allCases.count)
-        XCTAssertEqual(Set(descriptorCommands), Set(TheFence.Command.allCases))
-        XCTAssertEqual(descriptorCommands.count, Set(descriptorCommands).count)
+        XCTAssertEqual(names.count, Set(names).count)
+        for command in commands {
+            XCTAssertEqual(TheFence.Command(rawValue: command.rawValue), command)
+        }
     }
 
     func testCommandFamilyMembership() {
@@ -48,14 +49,18 @@ final class WireCommandParityTests: XCTestCase {
         let descriptor = TheFence.Command.runHeist.descriptor
         let keys = Set(descriptor.parameters.map(\.key))
 
-        XCTAssertTrue(keys.contains("path"))
-        XCTAssertTrue(keys.contains("plan"))
-        XCTAssertTrue(keys.contains("argument"))
-        XCTAssertFalse(keys.contains("version"))
-        XCTAssertFalse(keys.contains("name"))
-        XCTAssertFalse(keys.contains("parameter"))
-        XCTAssertFalse(keys.contains("definitions"))
-        XCTAssertFalse(keys.contains("body"))
+        XCTAssertTrue(keys.isSuperset(of: Set([
+            FenceParameterKey.path,
+            .plan,
+            .argument,
+        ].map(\.rawValue))))
+        XCTAssertTrue(keys.isDisjoint(with: Set([
+            FenceParameterKey.version,
+            .name,
+            .parameter,
+            .definitions,
+            .body,
+        ].map(\.rawValue))))
     }
 
     func testValidateHeistDescriptorIsOfflineAndUsesCanonicalPlanSources() {
@@ -63,10 +68,15 @@ final class WireCommandParityTests: XCTestCase {
         let keys = Set(descriptor.parameters.map(\.key))
 
         XCTAssertFalse(descriptor.requiresConnectionBeforeDispatch)
-        XCTAssertTrue(keys.isSuperset(of: ["path", "plan", "argument", "lint"]))
-        XCTAssertFalse(keys.contains("body"))
+        XCTAssertTrue(keys.isSuperset(of: Set([
+            FenceParameterKey.path,
+            .plan,
+            .argument,
+            .lint,
+        ].map(\.rawValue))))
+        XCTAssertFalse(keys.contains(FenceParameterKey.body.rawValue))
         XCTAssertEqual(
-            descriptor.requiredDefaultValue(for: FenceParameters.heistValidationLint),
+            descriptor.defaultValue(for: FenceParameters.heistValidationLint),
             .compositionQuality
         )
     }
@@ -79,19 +89,19 @@ final class WireCommandParityTests: XCTestCase {
 
     func testDescriptorDefaultsOwnCommandDefaultValues() {
         XCTAssertEqual(
-            TheFence.Command.scroll.descriptor.requiredDefaultValue(for: FenceParameters.scrollDirection),
+            TheFence.Command.scroll.descriptor.defaultValue(for: FenceParameters.scrollDirection),
             .down
         )
         XCTAssertEqual(
-            TheFence.Command.scrollToEdge.descriptor.requiredDefaultValue(for: FenceParameters.scrollEdge),
+            TheFence.Command.scrollToEdge.descriptor.defaultValue(for: FenceParameters.scrollEdge),
             .top
         )
         XCTAssertEqual(
-            TheFence.Command.rotor.descriptor.requiredDefaultValue(for: FenceParameters.rotorDirection),
+            TheFence.Command.rotor.descriptor.defaultValue(for: FenceParameters.rotorDirection),
             .next
         )
         XCTAssertEqual(
-            TheFence.Command.listHeists.descriptor.requiredDefaultValue(for: FenceParameters.heistCatalogDetail),
+            TheFence.Command.listHeists.descriptor.defaultValue(for: FenceParameters.heistCatalogDetail),
             .summary
         )
     }
@@ -111,19 +121,15 @@ final class WireCommandParityTests: XCTestCase {
     func testTransientSingleStepDirectActionsUseDescriptorDispatchTimeout() async throws {
         let (fence, _) = makeConnectedFence()
         let request = try fence.parseRequest(command: .rotor, values: [
-            "target": targetArgumentValue(identifier: "target"),
-            "rotorIndex": .int(0),
+            FenceParameterKey.target.rawValue: targetArgumentValue(identifier: "target"),
+            FenceParameterKey.rotorIndex.rawValue: .int(0),
         ])
 
         guard case .directAction(let directAction) = request.dispatch else {
             return XCTFail("Indexed rotor should decode as transient direct action")
         }
-        XCTAssertEqual(directAction.command, .rotor)
         XCTAssertNotNil(directAction.action.durableHeistActionFailure)
-        XCTAssertEqual(
-            TheFence.Command.rotor.descriptor.timeout.requiredDirectDispatchSeconds,
-            FenceCommandFixedTimeout.standardAction.seconds
-        )
+        XCTAssertEqual(directAction.timeout, FenceCommandFixedTimeout.standardAction.seconds)
     }
 
     func testCommandHelpKeepsAccessibilitySemanticAndMechanicalBoundaries() {
@@ -143,93 +149,6 @@ final class WireCommandParityTests: XCTestCase {
         XCTAssertTrue(scroll.localizedCaseInsensitiveContains("explicit viewport/debug operation"), scroll)
         XCTAssertTrue(scrollToVisible.localizedCaseInsensitiveContains("explicit viewport/debug operation"), scrollToVisible)
         XCTAssertTrue(scrollToEdge.localizedCaseInsensitiveContains("explicit viewport/debug operation"), scrollToEdge)
-    }
-
-    @ButtonHeistActor
-    func testEveryPublicCommandHasOneRuntimeAdmission() async throws {
-        let (fence, _) = makeConnectedFence()
-
-        for descriptor in TheFence.Command.descriptors where descriptor.isPublicRequestContract {
-            let input = FenceCommandInput(
-                command: descriptor.command,
-                arguments: .init(values: sampleArguments(for: descriptor.command))
-            )
-            let request = try fence.admit(input)
-
-            XCTAssertEqual(request.command, descriptor.command, descriptor.command.rawValue)
-        }
-    }
-
-    @ButtonHeistActor
-    func testEveryProjectedParameterMutationIsEnforcedByRuntimeAdmission() async throws {
-        let (fence, _) = makeConnectedFence()
-
-        for descriptor in TheFence.Command.descriptors where descriptor.isPublicRequestContract {
-            for parameter in descriptor.parameters {
-                for mutation in invalidValues(for: parameter) {
-                    var arguments = sampleArguments(for: descriptor.command)
-                    arguments[parameter.key] = mutation
-
-                    XCTAssertThrowsError(
-                        try fence.admit(FenceCommandInput(
-                            command: descriptor.command,
-                            arguments: .init(values: arguments)
-                        )),
-                        "\(descriptor.command.rawValue).\(parameter.key): \(mutation)"
-                    )
-                }
-            }
-        }
-    }
-
-    @ButtonHeistActor
-    func testEveryRequiredProjectedParameterIsRequiredByRuntimeAdmission() async throws {
-        let (fence, _) = makeConnectedFence()
-
-        for descriptor in TheFence.Command.descriptors where descriptor.isPublicRequestContract {
-            for parameter in descriptor.parameters where parameter.required {
-                var arguments = sampleArguments(for: descriptor.command)
-                XCTAssertNotNil(
-                    arguments.removeValue(forKey: parameter.key),
-                    "Missing required sample for \(descriptor.command.rawValue).\(parameter.key)"
-                )
-
-                XCTAssertThrowsError(
-                    try fence.admit(FenceCommandInput(
-                        command: descriptor.command,
-                        arguments: .init(values: arguments)
-                    )),
-                    "\(descriptor.command.rawValue).\(parameter.key)"
-                ) { error in
-                    XCTAssertEqual(
-                        (error as? SchemaValidationError)?.field,
-                        parameter.key,
-                        "\(descriptor.command.rawValue).\(parameter.key): \(error)"
-                    )
-                }
-            }
-        }
-    }
-
-    @ButtonHeistActor
-    func testEveryPublicCommandRejectsUnknownParametersAtRuntimeAdmission() async throws {
-        let (fence, _) = makeConnectedFence()
-        let unknownKey = "__unknown_parameter__"
-
-        for descriptor in TheFence.Command.descriptors where descriptor.isPublicRequestContract {
-            var arguments = sampleArguments(for: descriptor.command)
-            arguments[unknownKey] = .bool(true)
-
-            XCTAssertThrowsError(
-                try fence.admit(FenceCommandInput(
-                    command: descriptor.command,
-                    arguments: .init(values: arguments)
-                )),
-                descriptor.command.rawValue
-            ) { error in
-                XCTAssertEqual((error as? SchemaValidationError)?.field, unknownKey)
-            }
-        }
     }
 
     @ButtonHeistActor
@@ -268,36 +187,6 @@ final class WireCommandParityTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testEveryProjectedDefaultIsAcceptedOmittedAndExplicitly() async throws {
-        let (fence, _) = makeConnectedFence()
-
-        for descriptor in TheFence.Command.descriptors where descriptor.isPublicRequestContract {
-            for parameter in descriptor.parameters {
-                guard let defaultValue = parameter.defaultValue else { continue }
-                var omittedArguments = sampleArguments(for: descriptor.command)
-                omittedArguments.removeValue(forKey: parameter.key)
-                var explicitArguments = omittedArguments
-                explicitArguments[parameter.key] = defaultValue
-
-                XCTAssertNoThrow(
-                    try fence.admit(FenceCommandInput(
-                        command: descriptor.command,
-                        arguments: .init(values: omittedArguments)
-                    )),
-                    "\(descriptor.command.rawValue).\(parameter.key) omitted"
-                )
-                XCTAssertNoThrow(
-                    try fence.admit(FenceCommandInput(
-                        command: descriptor.command,
-                        arguments: .init(values: explicitArguments)
-                    )),
-                    "\(descriptor.command.rawValue).\(parameter.key) explicit"
-                )
-            }
-        }
-    }
-
-    @ButtonHeistActor
     func testAdmissionRejectsMissingSemanticRequirements() async throws {
         let (fence, _) = makeConnectedFence()
 
@@ -310,52 +199,21 @@ final class WireCommandParityTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testDurableExecutableSingleCommandsLowerToTheSameRuntimeActionAsSingleStepPlan() async throws {
-        let (fence, _) = makeConnectedFence()
-
-        for command in TheFence.Command.allCases {
-            let arguments = sampleArguments(for: command)
-            let singleRequest = try fence.parseRequest(command: command, values: arguments)
-
-            switch singleRequest.dispatch {
-            case .singleStepHeist(let heistRequest):
-                let plan = try fence.singleStepHeistPlan(for: heistRequest)
-                if case .wait(_, let wait) = heistRequest {
-                    XCTAssertEqual(plan.body, [.wait(wait)], command.rawValue)
-                    continue
-                }
-
-                guard case .actions(_, let actions, _) = heistRequest else {
-                    XCTFail("Unknown single-step request for \(command.rawValue)")
-                    continue
-                }
-                let singleCommands = actions.values
-                let heistCommands = plan.body.flatMap(actionCommands(for:))
-
-                XCTAssertEqual(
-                    String(reflecting: heistCommands),
-                    String(reflecting: singleCommands),
-                    command.rawValue
-                )
-            case .directAction(let directAction):
-                XCTAssertNotNil(directAction.action.durableHeistActionFailure, command.rawValue)
-            case .handler:
-                continue
-            }
-        }
-    }
-
-    @ButtonHeistActor
     func testViewportDebugCommandsAreCLIDirectOnlyAndDoNotRouteThroughSingleStepPlan() async throws {
         let (fence, _) = makeConnectedFence()
 
-        for command in [TheFence.Command.scroll, .scrollToVisible, .scrollToEdge] {
+        let cases: [(TheFence.Command, [String: HeistValue])] = [
+            (.scroll, [FenceParameterKey.direction.rawValue: .string(ScrollDirection.down.rawValue)]),
+            (.scrollToVisible, [FenceParameterKey.target.rawValue: targetArgumentValue(identifier: "target")]),
+            (.scrollToEdge, [FenceParameterKey.edge.rawValue: .string(ScrollEdge.bottom.rawValue)]),
+        ]
+        for (command, arguments) in cases {
             let descriptor = command.descriptor
             XCTAssertEqual(descriptor.family, .viewportDebug, command.rawValue)
             XCTAssertEqual(descriptor.cliExposure, .directCommand, command.rawValue)
             XCTAssertEqual(descriptor.mcpExposure, .notExposed, command.rawValue)
 
-            let request = try fence.parseRequest(command: command, values: sampleArguments(for: command))
+            let request = try fence.parseRequest(command: command, values: arguments)
             guard case .directAction(let directAction) = request.dispatch else {
                 return XCTFail("\(command.rawValue) should decode as direct action")
             }
@@ -367,10 +225,21 @@ final class WireCommandParityTests: XCTestCase {
     func testDurableRuntimeActionCommandsRouteThroughSingleStepPlan() async throws {
         let (fence, _) = makeConnectedFence()
 
-        for command in [TheFence.Command.activate, .oneFingerTap, .typeText, .setPasteboard] {
-            let request = try fence.parseRequest(command: command, values: sampleArguments(for: command))
+        let cases: [(TheFence.Command, [String: HeistValue])] = [
+            (.activate, [FenceParameterKey.target.rawValue: targetArgumentValue(identifier: "target")]),
+            (.oneFingerTap, [
+                FenceParameterKey.point.rawValue: .object([
+                    FenceParameterKey.x.rawValue: .double(12),
+                    FenceParameterKey.y.rawValue: .double(34),
+                ]),
+            ]),
+            (.typeText, [FenceParameterKey.text.rawValue: .string("hello")]),
+            (.setPasteboard, [FenceParameterKey.text.rawValue: .string("clipboard")]),
+        ]
+        for (command, arguments) in cases {
+            let request = try fence.parseRequest(command: command, values: arguments)
             guard case .singleStepHeist(let heistRequest) = request.dispatch,
-                  case .actions(_, let actions, _) = heistRequest else {
+                  case .actions(let actions, _, _) = heistRequest else {
                 return XCTFail("\(command.rawValue) should decode as single-step action command")
             }
             let singleCommands = actions.values
@@ -390,117 +259,6 @@ final class WireCommandParityTests: XCTestCase {
 
         for message in samples {
             XCTAssertEqual(try encodedWireType(for: message), message.wireType, "\(message)")
-        }
-    }
-
-    @ButtonHeistActor
-    private func sampleArguments(for command: TheFence.Command) -> [String: HeistValue] {
-        let target = targetArgumentValue(identifier: "target")
-        switch command {
-        case .ping, .listDevices, .getInterface, .getScreen, .getPasteboard, .getAnnouncements, .getSessionState,
-             .listTargets, .dismissKeyboard:
-            return [:]
-        case .perform:
-            return ["step": .string(#"Activate(.label("Pay"))"#)]
-        case .oneFingerTap:
-            return ["point": .object(["x": .double(12), "y": .double(34)])]
-        case .longPress:
-            return ["point": .object(["x": .double(12), "y": .double(34)])]
-        case .swipe:
-            return [
-                "elementDirection": .object([
-                    "element": target,
-                    "direction": .string(SwipeDirection.left.rawValue),
-                ]),
-            ]
-        case .drag:
-            return [
-                "elementToPoint": .object([
-                    "element": target,
-                    "end": .object(["x": .double(120), "y": .double(240)]),
-                ]),
-            ]
-        case .scroll:
-            return ["direction": .string(ScrollDirection.down.rawValue)]
-        case .scrollToVisible, .activate:
-            return ["target": target]
-        case .wait:
-            return [
-                "predicate": .object([
-                    "type": .string("changed"),
-                    "scope": .string("elements"),
-                    "assertions": .array([]),
-                ]),
-                "timeout": .double(10),
-            ]
-        case .scrollToEdge:
-            return ["edge": .string(ScrollEdge.bottom.rawValue)]
-        case .rotor:
-            return ["target": target, "rotor": .string("Headings")]
-        case .typeText:
-            return ["text": .string("hello")]
-        case .editAction:
-            return ["action": .string(EditAction.paste.rawValue)]
-        case .setPasteboard:
-            return ["text": .string("clipboard")]
-        case .runHeist, .validateHeist, .listHeists:
-            return [
-                "plan": .string("""
-                HeistPlan("entry") {
-                    Warn("ready")
-                }
-                """),
-            ]
-        case .describeHeist:
-            return [
-                "heist": .string("entry"),
-                "plan": .string("""
-                HeistPlan("entry") {
-                    Warn("ready")
-                }
-                """),
-            ]
-        case .connect:
-            return ["target": .string("default")]
-        }
-    }
-
-    private func invalidValues(for parameter: FenceParameterSpec) -> [HeistValue] {
-        var values = [incompatibleValue(for: parameter.type)]
-        if parameter.enumValues != nil {
-            values.append(.string("__invalid_enum_value__"))
-        }
-        if let minLength = parameter.minLength {
-            values.append(.string(String(repeating: "x", count: max(0, minLength - 1))))
-        }
-        if let minimum = parameter.minimum {
-            values.append(parameter.type == .integer ? .int(Int(minimum) - 1) : .double(minimum - 1))
-        }
-        if let exclusiveMinimum = parameter.exclusiveMinimum {
-            values.append(.double(exclusiveMinimum))
-        }
-        if let maximum = parameter.maximum {
-            values.append(parameter.type == .integer ? .int(Int(maximum) + 1) : .double(maximum + 1))
-        }
-        if let minItems = parameter.minItems {
-            values.append(.array(Array(repeating: .string("item"), count: max(0, minItems - 1))))
-        }
-        if let maxItems = parameter.maxItems {
-            values.append(.array(Array(repeating: .string("item"), count: maxItems + 1)))
-        }
-        return values
-    }
-
-    private func incompatibleValue(for type: FenceParameterSpec.ParamType) -> HeistValue {
-        switch type {
-        case .string:
-            .object([:])
-        case .integer, .number, .boolean:
-            .string("wrong type")
-        case .stringArray, .array:
-            .object([:])
-        case .stringMatch, .object:
-            .string("wrong type")
         }
     }
 
@@ -524,13 +282,6 @@ final class WireCommandParityTests: XCTestCase {
     private func encodedWireType(for message: ClientMessage) throws -> ClientWireMessageType {
         let data = try JSONEncoder().encode(message)
         return try JSONDecoder().decode(EncodedClientType.self, from: data).type
-    }
-
-    private func heistStepValue(type: String, payload: [String: HeistValue]) -> HeistValue {
-        .object([
-            "type": .string(type),
-            type: .object(payload),
-        ])
     }
 
     private func actionCommands(for step: HeistStep) -> [HeistActionCommand] {

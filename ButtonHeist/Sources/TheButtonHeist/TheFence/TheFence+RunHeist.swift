@@ -56,11 +56,11 @@ extension TheFence {
 
     // MARK: - Heist Execution and Session State
 
-    func handleRunHeist(_ request: RunHeistRequest) async throws -> FenceResponse {
+    func handleRunHeist(_ request: RunHeistRequest, timeout: TimeInterval) async throws -> FenceResponse {
         try await runHeistPlan(
             request.plan,
             argument: request.argument,
-            timeout: Command.runHeist.descriptor.timeout.requiredFixedSeconds
+            timeout: timeout
         )
     }
 
@@ -103,9 +103,9 @@ extension TheFence {
     /// durable heist dispatch.
     func singleStepHeistPlan(for request: SingleStepHeistRequest) throws -> HeistPlan {
         switch request {
-        case .wait(_, let step):
+        case .wait(let step):
             return try HeistPlan(body: [.wait(step)])
-        case .actions(_, let actions, let expectationPayload):
+        case .actions(let actions, let expectationPayload, _):
             let expectationStep = expectationPayload.expectation.map {
                 WaitStep(
                     predicate: $0,
@@ -136,12 +136,10 @@ extension TheFence {
     }
 
     private func singleStepTimeout(for request: SingleStepHeistRequest) -> TimeInterval {
-        let actionBudget: TimeInterval
         switch request {
-        case .wait(_, let wait):
+        case .wait(let wait):
             return wait.timeout.seconds + config.postActionExpectationTimeoutBuffer
-        case .actions(let command, _, let expectationPayload):
-            actionBudget = command.descriptor.timeout.requiredSingleStepBaseSeconds
+        case .actions(_, let expectationPayload, let actionBudget):
             guard expectationPayload.expectation != nil else {
                 return max(
                     actionBudget,
@@ -167,7 +165,10 @@ extension TheFence {
     }
 
     private func performActionTimeout(for action: HeistActionCommand) -> TimeInterval {
-        performActionCommand(for: action).descriptor.timeout.requiredSingleStepBaseSeconds
+        guard let timeout = performActionCommand(for: action).descriptor.timeout.singleStepBaseSeconds else {
+            preconditionFailure("Perform action command must carry single-step action timeout policy")
+        }
+        return timeout
     }
 
     private func performActionCommand(for action: HeistActionCommand) -> Command {
@@ -214,8 +215,8 @@ extension TheFence {
     func currentSessionState() -> SessionStatePayload {
         return SessionStatePayload(
             state: sessionConnectionState,
-            actionTimeoutSeconds: Command.activate.descriptor.timeout.requiredSingleStepBaseSeconds,
-            longActionTimeoutSeconds: Command.typeText.descriptor.timeout.requiredSingleStepBaseSeconds
+            actionTimeoutSeconds: FenceCommandFixedTimeout.standardAction.seconds,
+            longActionTimeoutSeconds: FenceCommandFixedTimeout.longAction.seconds
         )
     }
 }
