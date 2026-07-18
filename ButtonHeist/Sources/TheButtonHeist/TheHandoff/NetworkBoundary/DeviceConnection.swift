@@ -21,6 +21,12 @@ enum DeviceConnectionEvent: Sendable {
 /// Connection client using Network framework.
 @ButtonHeistActor
 final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting {
+    enum DisconnectEvent {
+        case local
+        case observed(DisconnectReason)
+        case cancel(DisconnectReason)
+    }
+
     private let device: DiscoveredDevice
 
     var onEvent: (@ButtonHeistActor (ConnectionEvent) -> Void)?
@@ -74,31 +80,20 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
         case connecting(RuntimeSession)
         case connected(RuntimeSession)
 
-        var sessionID: UUID? {
+        var session: RuntimeSession? {
             switch self {
             case .disconnected:
                 return nil
             case .connecting(let session), .connected(let session):
-                return session.id
+                return session
             }
         }
 
-        var connection: NWConnection? {
-            switch self {
-            case .disconnected:
-                return nil
-            case .connecting(let session), .connected(let session):
-                return session.connection
-            }
-        }
+        var sessionID: UUID? { session?.id }
+        var connection: NWConnection? { session?.connection }
 
         func cancelOwnedSidecars() {
-            switch self {
-            case .disconnected:
-                return
-            case .connecting(let session), .connected(let session):
-                session.cancelOwnedSidecars()
-            }
+            session?.cancelOwnedSidecars()
         }
     }
 
@@ -111,11 +106,11 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
 
     func connect() {
         deviceConnectionLogger.info("Connecting to \(self.device.name)...")
+        transitionToDisconnected(.local)
 
         guard let token else {
-            setRuntimePhase(.disconnected)
             deviceConnectionLogger.error("No TLS token available — refusing connection")
-            onEvent?(.disconnected(.missingToken))
+            transitionToDisconnected(.observed(.missingToken))
             return
         }
 
@@ -166,15 +161,7 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
     }
 
     func disconnect() {
-        let connectionToCancel: NWConnection?
-        switch runtimePhase {
-        case .connecting(let session), .connected(let session):
-            connectionToCancel = session.connection
-        case .disconnected:
-            connectionToCancel = nil
-        }
-        connectionToCancel?.cancel()
-        setRuntimePhase(.disconnected)
+        transitionToDisconnected(.local)
     }
 
     private func setRuntimePhase(_ nextPhase: RuntimePhase) {
@@ -183,6 +170,20 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
             previousPhase.cancelOwnedSidecars()
         }
         runtimePhase = nextPhase
+    }
+
+    func transitionToDisconnected(_ event: DisconnectEvent) {
+        let connection = runtimePhase.connection
+        setRuntimePhase(.disconnected)
+        switch event {
+        case .local:
+            connection?.cancel()
+        case .observed(let reason):
+            onEvent?(.disconnected(reason))
+        case .cancel(let reason):
+            connection?.cancel()
+            onEvent?(.disconnected(reason))
+        }
     }
 
     func isCurrentSession(
@@ -230,15 +231,6 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
         setRuntimePhase(.connected(session))
     }
 
-    func disconnectConnectedSession(_ session: RuntimeSession) {
-        guard case .connected(let current) = runtimePhase,
-              current.id == session.id,
-              current.connection === session.connection else {
-            return
-        }
-        setRuntimePhase(.disconnected)
-    }
-
     var currentSessionID: UUID? {
         runtimePhase.sessionID
     }
@@ -263,8 +255,7 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
             startReceiving()
         case .failed(let error):
             deviceConnectionLogger.error("Connection failed: \(error)")
-            setRuntimePhase(.disconnected)
-            onEvent?(.disconnected(.networkError(NetworkTransportFailure(error))))
+            transitionToDisconnected(.observed(.networkError(NetworkTransportFailure(error))))
         case .cancelled:
             deviceConnectionLogger.info("Connection cancelled")
             // Client-initiated teardown paths (disconnect(), .failed, buffer overflow,
@@ -272,16 +263,8 @@ final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting 
             // the cancel callback reaches the actor, so wasActive is false and we stay
             // silent. A true wasActive means NWConnection cancelled while we still
             // believed we were live — treat that as an unsolicited server-side close.
-            let wasActive = switch runtimePhase {
-            case .connecting, .connected:
-                true
-            case .disconnected:
-                false
-            }
-            setRuntimePhase(.disconnected)
-            if wasActive {
-                onEvent?(.disconnected(.serverClosed))
-            }
+            guard runtimePhase.sessionID != nil else { return }
+            transitionToDisconnected(.observed(.serverClosed))
         default:
             break
         }

@@ -17,24 +17,21 @@ extension SimpleSocketServer {
         }
 
         let byteCount = dataToSend.count
-        guard clientRegistry.client(clientId) != nil else {
-            return .failed(.clientNotFound(clientId))
-        }
         guard let generation = currentListener else {
             return .failed(.transportUnavailable)
         }
 
-        let connection: NWConnection
+        let reservation: SocketClientRegistry.SendReservation
         switch clientRegistry.reserveSend(clientId: clientId, byteCount: byteCount) {
         case .missingClient:
             return .failed(.clientNotFound(clientId))
-        case .accepted(let acceptedConnection):
-            connection = acceptedConnection
-        case .rejected(let rejection, let state):
+        case .accepted(let acceptedReservation):
+            reservation = acceptedReservation
+        case .rejected(let rejection):
             switch rejection {
             case .payloadTooLarge:
                 sendLogger.warning("Client \(clientId) send payload exceeds cap (\(byteCount) bytes), failing the originating request")
-                sendOversizedResponseError(clientId: clientId, originalData: data, byteCount: byteCount, state: state)
+                await sendOversizedResponseError(clientId: clientId, originalData: data, byteCount: byteCount)
             case .bufferFull(let pendingBytes, _, _):
                 sendLogger.warning("Client \(clientId) send buffer full (\(pendingBytes) bytes pending), dropping \(byteCount) bytes")
             }
@@ -42,7 +39,7 @@ extension SimpleSocketServer {
         }
 
         return await withCheckedContinuation { continuation in
-            sendContent(connection, dataToSend, .contentProcessed { [weak self] error in
+            sendContent(reservation.connection, dataToSend, .contentProcessed { [weak self] error in
                 if let error {
                     sendLogger.error("Send error to client \(clientId): \(error)")
                 }
@@ -52,8 +49,7 @@ extension SimpleSocketServer {
                 }
                 let admission = self.spawnTrackedTask(in: generation) { server in
                     let outcome = await server.completedSend(
-                        clientId: clientId,
-                        byteCount: byteCount,
+                        reservation,
                         error: error
                     )
                     continuation.resume(returning: outcome)
@@ -66,21 +62,24 @@ extension SimpleSocketServer {
     }
 
     /// Called when NWConnection finishes processing a send.
-    private func completedSend(clientId: Int, byteCount: Int, error: NWError?) -> ServerSendOutcome {
-        let clientWasStillConnected = clientRegistry.completeSend(clientId: clientId, byteCount: byteCount)
+    private func completedSend(
+        _ reservation: SocketClientRegistry.SendReservation,
+        error: NWError?
+    ) -> ServerSendOutcome {
+        let completion = clientRegistry.completeSend(reservation)
         if let error {
             let failure = ServerSendFailure.transportFailed(
-                clientId: clientId,
+                clientId: reservation.clientId,
                 diagnostic: NetworkTransportFailure(error)
             )
-            if clientWasStillConnected {
-                removeClient(clientId)
+            if completion == .completed {
+                removeClient(reservation.clientId)
             }
             return .failed(failure)
         }
 
-        guard clientWasStillConnected else {
-            return .failed(.clientNotFound(clientId))
+        guard completion == .completed else {
+            return .failed(.clientNotFound(reservation.clientId))
         }
         return .delivered
     }
@@ -89,9 +88,8 @@ extension SimpleSocketServer {
     private func sendOversizedResponseError(
         clientId: Int,
         originalData: Data,
-        byteCount: Int,
-        state: SocketClientRegistry.Client
-    ) {
+        byteCount: Int
+    ) async {
         let envelope: ResponseEnvelope
         do {
             envelope = try JSONDecoder().decode(ResponseEnvelope.self, from: originalData)
@@ -108,33 +106,24 @@ extension SimpleSocketServer {
             sendLogger.error("Failed to admit oversized-response error for client \(clientId): \(error)")
             return
         }
-        sendErrorEnvelope(
+        await sendErrorEnvelope(
             clientId: clientId,
             envelope: ResponseEnvelope(
                 requestId: envelope.requestId,
                 message: .error(TheScore.ServerError(kind: .general, message: message))
-            ),
-            state: state
+            )
         )
     }
 
-    func sendErrorEnvelope(clientId: Int, envelope: ResponseEnvelope, state: SocketClientRegistry.Client) {
+    func sendErrorEnvelope(clientId: Int, envelope: ResponseEnvelope) async {
         let response: Data
         do {
             response = try envelope.encoded()
         } catch {
-            sendLogger.error("Failed to encode oversized-response error for client \(clientId): \(error.localizedDescription)")
+            sendLogger.error("Failed to encode server error for client \(clientId): \(error.localizedDescription)")
             return
         }
-        var errorData = response
-        if !errorData.hasSuffix(Data([WireFrameLimits.newlineDelimiterByte])) {
-            errorData.append(WireFrameLimits.newlineDelimiterByte)
-        }
-        sendContent(state.connection, errorData, .contentProcessed { error in
-            if let error {
-                sendLogger.error("Send error to client \(clientId): \(error)")
-            }
-        })
+        _ = await send(response, to: clientId)
     }
 }
 

@@ -105,9 +105,10 @@ The ownership rules for the remaining evidence boundaries are explicit:
 - `SettleLoopMachine` is the one settled AX reducer and `SettleLoopRunner` is
   its one runner. `SettlePolicy` selects sampling cadence and stability proof;
   it does not introduce another AX pipeline.
-- `HeistExecutionStepReportFacts` is the one canonical typed report-fact
-  projection from `HeistExecutionResult`. Output adapters consume it rather
-  than re-deriving report facts.
+- `HeistExecutionResult` is the one admitted receipt execution tree.
+  `HeistExecutionReport.project(_:)` purely reduces its shared summary and
+  metrics, while output adapters traverse the receipt and read typed step
+  evidence directly instead of assembling a parallel report graph.
 - `ActionDispatchOutcome` is the one app-side dispatch result.
   `PostActionObservation` adds semantic evidence and constructs `ActionResult`,
   whose success and failure cases permit only their valid evidence.

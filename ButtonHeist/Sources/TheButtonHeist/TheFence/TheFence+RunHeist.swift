@@ -41,12 +41,11 @@ struct HeistRunProjection {
         // trace — a partial action trace would be misleading. Wait steps then
         // contribute their settled-state trace when available; `combinedTrace`
         // returns nil unless at least two distinct captures survive.
-        let actions = result.evidenceRollup.actions
-        let actionResults = actions.dispatchedResults
+        let actionResults = result.dispatchedActionResults
         guard !actionResults.isEmpty,
               actionResults.allSatisfy({ $0.traceEvidence?.isComplete == true })
         else { return nil }
-        let traceResults = actions.traceResultsInExecutionOrder
+        let traceResults = result.traceResultsInExecutionOrder
         guard traceResults.allSatisfy({ $0.traceEvidence?.isComplete == true }) else { return nil }
         let traces = traceResults.compactMap(\.accessibilityTrace)
         return AccessibilityTrace.combinedTrace(from: traces)
@@ -57,11 +56,11 @@ extension TheFence {
 
     // MARK: - Heist Execution and Session State
 
-    func handleRunHeist(_ request: RunHeistRequest) async throws -> FenceResponse {
+    func handleRunHeist(_ request: RunHeistRequest, timeout: TimeInterval) async throws -> FenceResponse {
         try await runHeistPlan(
             request.plan,
             argument: request.argument,
-            timeout: Command.runHeist.descriptor.timeout.requiredFixedSeconds
+            timeout: timeout
         )
     }
 
@@ -104,9 +103,9 @@ extension TheFence {
     /// durable heist dispatch.
     func singleStepHeistPlan(for request: SingleStepHeistRequest) throws -> HeistPlan {
         switch request {
-        case .wait(_, let step):
+        case .wait(let step):
             return try HeistPlan(body: [.wait(step)])
-        case .actions(_, let actions, let expectationPayload):
+        case .action(let action, let expectationPayload, _):
             let expectationStep = expectationPayload.expectation.map {
                 WaitStep(
                     predicate: $0,
@@ -114,18 +113,12 @@ extension TheFence {
                 )
             }
 
-            var steps: [HeistStep] = []
-            let commands = actions.values
-            for (index, command) in commands.enumerated() {
-                let expectationPolicy: ActionExpectationPolicy
-                if index == commands.count - 1, let expectationStep {
-                    expectationPolicy = .expect(try ActionExpectation(expectationStep))
-                } else {
-                    expectationPolicy = .default
-                }
-                steps.append(.action(ActionStep(command: command, expectationPolicy: expectationPolicy)))
-            }
-            return try HeistPlan(body: steps)
+            let expectationPolicy: ActionExpectationPolicy = try expectationStep.map {
+                .expect(try ActionExpectation($0))
+            } ?? .default
+            return try HeistPlan(body: [
+                .action(ActionStep(command: action.action, expectationPolicy: expectationPolicy))
+            ])
         }
     }
 
@@ -137,12 +130,10 @@ extension TheFence {
     }
 
     private func singleStepTimeout(for request: SingleStepHeistRequest) -> TimeInterval {
-        let actionBudget: TimeInterval
         switch request {
-        case .wait(_, let wait):
+        case .wait(let wait):
             return wait.timeout.seconds + config.postActionExpectationTimeoutBuffer
-        case .actions(let command, _, let expectationPayload):
-            actionBudget = command.descriptor.timeout.requiredSingleStepBaseSeconds
+        case .action(_, let expectationPayload, let actionBudget):
             guard expectationPayload.expectation != nil else {
                 return max(
                     actionBudget,
@@ -168,7 +159,10 @@ extension TheFence {
     }
 
     private func performActionTimeout(for action: HeistActionCommand) -> TimeInterval {
-        performActionCommand(for: action).descriptor.timeout.requiredSingleStepBaseSeconds
+        guard let timeout = performActionCommand(for: action).descriptor.timeout.singleStepBaseSeconds else {
+            preconditionFailure("Perform action command must carry single-step action timeout policy")
+        }
+        return timeout
     }
 
     private func performActionCommand(for action: HeistActionCommand) -> Command {
@@ -215,8 +209,8 @@ extension TheFence {
     func currentSessionState() -> SessionStatePayload {
         return SessionStatePayload(
             state: sessionConnectionState,
-            actionTimeoutSeconds: Command.activate.descriptor.timeout.requiredSingleStepBaseSeconds,
-            longActionTimeoutSeconds: Command.typeText.descriptor.timeout.requiredSingleStepBaseSeconds
+            actionTimeoutSeconds: FenceCommandFixedTimeout.standardAction.seconds,
+            longActionTimeoutSeconds: FenceCommandFixedTimeout.longAction.seconds
         )
     }
 }

@@ -128,8 +128,10 @@ extension ElementInflation {
         _ target: ResolvedAccessibilityTarget
     ) -> Result<InterfaceTree.Element, ElementInflationFailure> {
         switch vault.resolveTarget(target) {
-        case .resolved(let treeElement):
+        case .resolved(.element(let treeElement)):
             return .success(treeElement)
+        case .resolved(.container):
+            return .failure(.targetResolution(.containerTarget))
         case .ambiguous(let facts):
             return .failure(.ambiguous(TargetResolutionDiagnostics.message(for: .ambiguous(facts))))
         case .notFound(let facts):
@@ -141,8 +143,10 @@ extension ElementInflation {
         _ target: ResolvedAccessibilityTarget
     ) -> Result<InterfaceTree.Element, ElementInflationFailure>? {
         switch vault.resolveVisibleTarget(target) {
-        case .resolved(let treeElement):
+        case .resolved(.element(let treeElement)):
             return .success(treeElement)
+        case .resolved(.container):
+            return .failure(.targetResolution(.containerTarget))
         case .ambiguous(let facts):
             return .failure(.ambiguous(TargetResolutionDiagnostics.message(for: .ambiguous(facts))))
         case .notFound:

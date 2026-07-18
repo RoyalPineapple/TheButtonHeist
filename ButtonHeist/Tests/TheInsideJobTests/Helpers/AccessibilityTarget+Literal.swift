@@ -8,6 +8,15 @@ func literalTarget(
     .predicate(predicate, ordinal: ordinal)
 }
 
+extension TheVault.TargetResolution {
+    var resolvedElement: InterfaceTree.Element? {
+        guard case .resolved(.element(let element)) = self else {
+            return nil
+        }
+        return element
+    }
+}
+
 func resolvedWait(
     _ authored: WaitStep,
     in environment: HeistExecutionEnvironment = .empty

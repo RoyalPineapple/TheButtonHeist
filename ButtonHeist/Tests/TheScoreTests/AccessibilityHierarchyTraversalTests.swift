@@ -78,6 +78,74 @@ import ThePlans
         )
     }
 
+    @Test func `forest and subtree traversal agree on preorder paths`() {
+        let nested = makeTestAccessibilityContainer(type: .landmark)
+        let root = makeTestAccessibilityContainer(type: .list)
+        let tree: [AccessibilityHierarchy] = [
+            .container(root, children: [
+                testElement(label: "First", traversalIndex: 0),
+                .container(nested, children: [
+                    testElement(label: "Nested", traversalIndex: 1),
+                ]),
+            ]),
+            testElement(label: "Second root", traversalIndex: 2),
+        ]
+
+        let forestPaths = tree.compactMapSubtrees { _, path in path }
+        let subtreePaths = tree.enumerated().flatMap { index, hierarchy in
+            hierarchy.compactMapSubtrees(path: TreePath([index])) { _, path in path }
+        }
+
+        #expect(forestPaths == subtreePaths)
+        #expect(forestPaths == [
+            TreePath([0]),
+            TreePath([0, 0]),
+            TreePath([0, 1]),
+            TreePath([0, 1, 0]),
+            TreePath([1]),
+        ])
+    }
+
+    @Test func `fold and compaction preserve canonical child order`() {
+        let nested = makeTestAccessibilityContainer(type: .landmark)
+        let root = makeTestAccessibilityContainer(type: .list)
+        let hierarchy = AccessibilityHierarchy.container(root, children: [
+            testElement(label: "First", traversalIndex: 0),
+            testElement(label: "Drop", traversalIndex: 1),
+            .container(nested, children: [
+                testElement(label: "Nested", traversalIndex: 2),
+            ]),
+        ])
+
+        let foldedLabels = hierarchy.folded(
+            onElement: { element, _ -> [String] in [element.label ?? ""] },
+            onContainer: { _, children -> [String] in Array(children.joined()) }
+        )
+        var retainedPaths: [String: TreePath] = [:]
+        let compacted = hierarchy.compactingElements(
+            context: TreePath.root,
+            into: &retainedPaths,
+            onElement: { element, traversalIndex, path, retainedPaths in
+                guard element.label != "Drop" else { return nil }
+                retainedPaths[element.label ?? ""] = path
+                return .element(element, traversalIndex: traversalIndex)
+            },
+            onContainer: { _, path, _ in path },
+            childContext: { path, _, newIndex in path.appending(newIndex) }
+        )
+        let compactedLabels = compacted?.compactMapSubtrees { hierarchy, _ -> String? in
+            guard case .element(let element, _) = hierarchy else { return nil }
+            return element.label
+        }
+
+        #expect(foldedLabels == ["First", "Drop", "Nested"])
+        #expect(compactedLabels == ["First", "Nested"])
+        #expect(retainedPaths == [
+            "First": TreePath([0]),
+            "Nested": TreePath([1, 0]),
+        ])
+    }
+
     @Test func `context traversal preserves order context and early exit`() {
         let nested = makeTestAccessibilityContainer(type: .landmark)
         let root = makeTestAccessibilityContainer(type: .list)

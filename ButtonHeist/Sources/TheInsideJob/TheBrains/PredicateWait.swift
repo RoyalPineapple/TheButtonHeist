@@ -493,21 +493,19 @@ where Evidence: Sendable & Equatable {
     private func settleVisible(
         _ deadline: SemanticObservationDeadline
     ) async -> SettledObservationEvent? {
-        if !vault.semanticObservationStream.latestSettledObservationInvalidated,
-           let current = vault.semanticObservationStream.latestEvent {
-            return current
+        if let current = vault.semanticObservationStream.cleanObservation(
+            scope: .visible,
+            after: nil
+        ) {
+            return current.event
         }
         guard deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) else { return nil }
-        guard let evidence = await vault.semanticObservationStream.visibleEvidence(
+        return await vault.semanticObservationStream.visibleEvidence(
             timeout: min(
                 Double(SettleSession.defaultTimeoutMs) / 1_000,
                 deadline.remainingSeconds()
             )
-        ),
-        let event = vault.semanticObservationStream.latestEvent,
-        event.sequence == evidence.event.sequence
-        else { return nil }
-        return event
+        )?.event
     }
 
     private func revealTarget(
@@ -515,7 +513,7 @@ where Evidence: Sendable & Equatable {
         _ deadline: SemanticObservationDeadline?
     ) async -> SettledObservationEvent? {
         guard target.isElementTarget,
-              vault.resolveTarget(target).resolved != nil
+              case .resolved(.element) = vault.resolveTarget(target)
         else { return nil }
         if let deadline,
            !deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) {

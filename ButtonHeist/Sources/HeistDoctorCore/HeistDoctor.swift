@@ -96,7 +96,7 @@ public enum HeistDoctorError: Error, Sendable, Equatable, CustomStringConvertibl
 
 private extension HeistExecutionResult {
     func actionStep(at path: HeistExecutionPath) throws -> HeistExecutionStepResult {
-        guard let step = evidenceRollup.outputReceiptNodes.first(where: { $0.path == path && $0.kind == .action }) else {
+        guard let step = outputReceiptNodes.first(where: { $0.path == path && $0.kind == .action }) else {
             throw HeistDoctorError.stepNotFound(path: path)
         }
         return step

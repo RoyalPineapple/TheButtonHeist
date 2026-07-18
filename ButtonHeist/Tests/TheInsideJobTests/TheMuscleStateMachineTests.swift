@@ -97,6 +97,49 @@ final class TheMuscleStateMachineTests: XCTestCase {
         XCTAssertEqual(registry.state(for: 1), .helloValidated(address: "127.0.0.1"))
     }
 
+    func testAdmissionLifecycleOwnsCredentialAndAuthenticationDeadlineEffects() throws {
+        var admission = ClientAdmission.Reducer(
+            tokenSource: .configured("good-token"),
+            maxFailedAttempts: 2,
+            lockoutDuration: 30
+        )
+        let respond: SocketResponseHandler = { _ in .delivered }
+
+        XCTAssertEqual(admission.sessionToken, "good-token")
+        guard case .replaceAuthenticationDeadline(let registeredClientId)? =
+            admission.registerClientAddress(1, address: "127.0.0.1").first
+        else {
+            return XCTFail("Expected registration to replace the authentication deadline")
+        }
+        XCTAssertEqual(registeredClientId, 1)
+
+        let hello = try JSONEncoder().encode(RequestEnvelope(message: .clientHello))
+        guard case .handled = admission.admit(1, data: hello, respond: respond) else {
+            return XCTFail("Expected client hello to be handled")
+        }
+        let authentication = try JSONEncoder().encode(RequestEnvelope(message: .authenticate(
+            AuthenticatePayload(token: "good-token", driverId: "driver")
+        )))
+        guard case .authenticate(let proof) = admission.admit(1, data: authentication, respond: respond) else {
+            return XCTFail("Expected valid credentials to produce authentication proof")
+        }
+        guard case .cancelAuthenticationDeadline(let authenticatedClientId)? =
+            admission.completeAuthentication(proof).first
+        else {
+            return XCTFail("Expected authentication to cancel its deadline")
+        }
+        XCTAssertEqual(authenticatedClientId, 1)
+
+        guard case .cancelAuthenticationDeadline(let removedClientId)? = admission.removeClient(1).first else {
+            return XCTFail("Expected client removal to cancel its deadline")
+        }
+        XCTAssertEqual(removedClientId, 1)
+
+        guard case .cancelAllAuthenticationDeadlines? = admission.removeAllClients().first else {
+            return XCTFail("Expected teardown to cancel all authentication deadlines")
+        }
+    }
+
     func testClientRemovalClearsAuthenticationAndRateLimitStateTogether() {
         var registry = ClientAdmission.Registry()
         let now = Date(timeIntervalSinceReferenceDate: 1_000)

@@ -28,11 +28,10 @@ final class HeistPlanTests: XCTestCase {
         """
 
         XCTAssertThrowsError(try JSONDecoder().decode(HeistPlan.self, from: Data(json.utf8))) { error in
-            guard case DecodingError.dataCorrupted(let context) = error else {
-                return XCTFail("Expected dataCorrupted, got \(error)")
+            guard let versionError = error as? HeistPlanVersionAdmissionError else {
+                return XCTFail("Expected HeistPlanVersionAdmissionError, got \(error)")
             }
-            XCTAssertTrue(context.debugDescription.contains("Unsupported heist plan version"))
-            XCTAssertTrue(context.debugDescription.contains("supports version \(HeistPlan.currentVersion)"))
+            XCTAssertEqual(versionError.observed, 3)
         }
     }
 

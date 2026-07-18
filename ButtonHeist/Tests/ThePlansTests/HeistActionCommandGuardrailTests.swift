@@ -170,9 +170,26 @@ import Testing
     let failures = runtimeSafetyFailures(for: candidate)
 
     #expect(failures.contains {
-        $0.contract == "string loop value must lower through the heist action payload contract"
+        $0.contract == "string loop value must resolve to an admissible action command"
             && $0.observed.contains("$.body[0].for_each_string.values[1] resolved to")
             && $0.observed.contains("text to append must be non-empty")
+    }, "\(failures)")
+}
+
+@Test func `runtime admission reuses canonical rotor selection admission`() {
+    let candidate = HeistPlanAdmissionCandidate(body: [
+        .action(ActionStep(command: .rotor(
+            selection: .index(-1),
+            target: .label("Heading"),
+            direction: .next
+        ))),
+    ])
+
+    let failures = runtimeSafetyFailures(for: candidate)
+
+    #expect(failures.contains {
+        $0.contract == "resolved action command must be admissible"
+            && $0.observed.contains("rotorIndex must be non-negative, got -1")
     }, "\(failures)")
 }
 

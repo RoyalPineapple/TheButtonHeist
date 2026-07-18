@@ -67,7 +67,7 @@ extension AccessibilityElement {
         }
         let recordedObservation = SettleRecordedObservation(
             observation: observation,
-            fingerprint: SettleTimeline.fingerprint(of: elements, bucket: bucket),
+            fingerprint: SettleTimeline.fingerprint(of: observation, bucket: bucket),
             elementsByKey: elementsByKey,
             instabilityDescription: latestChangeDescription
         )
@@ -93,28 +93,64 @@ struct SettleRecordedObservation {
 
 @MainActor enum SettleTimeline {
     static func fingerprint(
-        of elements: [AccessibilityElement],
+        of observation: InterfaceObservation,
         bucket: CGFloat = CoarseFrameComparison.currentBucket
     ) -> Int {
         var hasher = Hasher()
-        hasher.combine(elements.count)
-        for element in elements {
-            hasher.combine(element.label)
-            hasher.combine(element.identifier)
-            hasher.combine(element.traits.rawValue)
-            let masked = element.traits.contains(.updatesFrequently)
-            if case .frame(let rect) = element.shape, !masked {
-                let frameKey = CoarseFrameComparison.key(for: rect.cgRect, bucket: bucket)
-                hasher.combine(frameKey.minX)
-                hasher.combine(frameKey.minY)
-                hasher.combine(frameKey.width)
-                hasher.combine(frameKey.height)
-            }
-            if !masked {
-                hasher.combine(element.value)
-            }
+        let hierarchy = observation.liveCapture.hierarchy
+        let indexedElements = hierarchy.pathIndexedElements
+        hasher.combine(indexedElements.count)
+        for indexed in indexedElements {
+            hasher.combine(indexed.path)
+            hasher.combine(indexed.traversalIndex)
+            combine(indexed.element, into: &hasher, bucket: bucket)
         }
+        let indexedContainers = hierarchy.pathIndexedContainers
+        hasher.combine(indexedContainers.count)
+        for indexed in indexedContainers {
+            hasher.combine(indexed.path)
+            hasher.combine(indexed.container)
+        }
+        for (path, heistId) in observation.liveCapture.snapshot.heistIdsByPath.sorted(by: { $0.key < $1.key }) {
+            hasher.combine(path)
+            hasher.combine(heistId)
+        }
+        hasher.combine(observation.liveCapture.firstResponderHeistId)
         return hasher.finalize()
+    }
+
+    private static func combine(
+        _ element: AccessibilityElement,
+        into hasher: inout Hasher,
+        bucket: CGFloat
+    ) {
+        hasher.combine(element.description)
+        hasher.combine(element.label)
+        hasher.combine(element.identifier)
+        hasher.combine(element.traits)
+        hasher.combine(element.hint)
+        hasher.combine(element.userInputLabels)
+        hasher.combine(element.usesDefaultActivationPoint)
+        hasher.combine(element.customActions)
+        hasher.combine(element.customContent)
+        hasher.combine(element.customRotors)
+        hasher.combine(element.accessibilityLanguage)
+        hasher.combine(element.respondsToUserInteraction)
+        hasher.combine(element.visibility)
+
+        guard !element.traits.contains(.updatesFrequently) else { return }
+        hasher.combine(element.value)
+        switch element.shape {
+        case .frame(let rect):
+            hasher.combine(CoarseFrameComparison.key(for: rect.cgRect, bucket: bucket))
+        case .path:
+            hasher.combine(element.shape)
+        }
+        guard !element.usesDefaultActivationPoint else { return }
+        hasher.combine(CoarseFrameComparison.key(
+            for: CGRect(x: element.activationPoint.x, y: element.activationPoint.y, width: 0, height: 0),
+            bucket: bucket
+        ))
     }
 
     static func transientElements(

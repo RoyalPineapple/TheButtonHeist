@@ -318,7 +318,7 @@ public struct ContainerPredicate: Codable, Sendable, Equatable, Hashable {
     }
 
     package func resolve(in environment: HeistExecutionEnvironment) throws -> ResolvedContainerPredicate {
-        ResolvedContainerPredicate(core: try core.map { try $0.resolve(in: environment) })
+        try ResolvedContainerPredicate(validating: core.map { try $0.resolve(in: environment) })
     }
 
     public init(from decoder: Decoder) throws {
@@ -341,21 +341,26 @@ extension ContainerPredicate: CustomStringConvertible {
 public struct ResolvedContainerPredicate: Codable, Sendable, Equatable, Hashable {
     package let core: ContainerPredicateCore<String>
 
-    package init(core: ContainerPredicateCore<String>) {
+    package init(validating core: ContainerPredicateCore<String>) throws {
+        if let reason = core.invalidEmptyPayloadDescription {
+            throw InvalidResolvedPredicateError(reason: reason)
+        }
         self.core = core
     }
 
-    public var hasPredicates: Bool { core.invalidEmptyPayloadDescription == nil }
-    public var invalidEmptyPayloadDescription: String? { core.invalidEmptyPayloadDescription }
-
     public func matches(_ facts: ContainerPredicateFacts) -> Bool {
-        invalidEmptyPayloadDescription == nil && core.checks.allSatisfy { $0.matches(facts) }
+        core.checks.allSatisfy { $0.matches(facts) }
     }
 
     public init(from decoder: Decoder) throws {
-        core = try ContainerPredicateCore(from: decoder)
-        if let description = invalidEmptyPayloadDescription {
-            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: description))
+        let core = try ContainerPredicateCore<String>(from: decoder)
+        do {
+            try self.init(validating: core)
+        } catch let error as InvalidResolvedPredicateError {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath,
+                debugDescription: error.reason
+            ))
         }
     }
 

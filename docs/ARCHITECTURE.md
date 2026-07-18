@@ -73,10 +73,13 @@ reinterpret parser fields.
 `LiveCapture` from one parser read. Raw parser samples remain live evidence or
 failed-settle diagnostic evidence; they never append temporal history and do
 not become targetable semantic truth by themselves. `SettleSession` reduces
-those samples and a clean result produces an `InterfaceObservationProof`.
+those samples and carries its exact final observation in a clean outcome. The
+semantic stream alone admits that outcome into `InterfaceObservationProof`, and
+only while both its tripwire signal and capture identity remain current.
 
 `SemanticObservationStream` is the sole ordered committer. Its production
-entry points accept only `InterfaceObservationProof`, classify continuity once,
+entry points admit clean settle outcomes or accept their resulting
+`InterfaceObservationProof`, classify continuity once,
 reduce the proof into `TheVault.interfaceTree`, construct the settled
 publication from that committed graph, and only then append it to the private
 `SemanticObservationLog`. `SemanticObservationRuntimeState` advances after log
@@ -178,9 +181,10 @@ including semantic content The Button Heist can discover in scrollable container
 geometry. Refresh, exploration, selection, and stale-state decisions live inside
 TheInsideJob; clients and adapters send typed observation intent.
 
-Visible observation reduces parser reads through `SettleSession`; only a clean
-settle can construct the proof consumed by the visible commit path. Discovery
-uses the same proof and commit boundary. `Navigation.performViewportTransition`
+Visible observation reduces parser reads through `SettleSession`; only the
+semantic stream can admit a clean outcome into the proof consumed by the
+visible commit path. Discovery uses the same admission and commit boundary.
+`Navigation.performViewportTransition`
 is the sole product-driven viewport movement operation: page scroll, discovery,
 inflation placement, and restoration all provide movement intent to it. After a
 successful movement dispatch, its minimal movement-specific settle parses the
@@ -301,7 +305,7 @@ pipelines are explicit:
 | Compiler process terminal outcome | `CompilerProcess.Runner` in `CompilerProcess.swift` | `HeistSwiftFileCompiler.swift`; diagnostic rendering lives in `HeistSwiftFileCompilerError.swift` |
 | Receipt construction and relationship validity | `HeistExecutionStepResult+Construction.swift` | Runtime step executors and receipt decoding |
 | Receipt private storage codec | `HeistExecutionStepNode.swift` and `HeistExecutionStepNode+Codable.swift` | External receipt JSON projection only |
-| Receipt report facts | `HeistExecutionStepResult+ReportFacts.swift` | Report, compact, JUnit, doctor, and metric adapters |
+| Receipt report projection | `HeistExecutionResult+Report.swift` and `HeistExecutionStepResult+Report.swift` | Report, compact, JUnit, doctor, and metric adapters |
 | Semantic observation scheduling | `SemanticObservationStream.swift` | Passive settle cycles and observation demand |
 | Semantic observation publication | `SemanticObservationStream+Publication.swift` | The sole `InterfaceTree` reducer and observation-log publisher |
 | Semantic observation waiter delivery | `SemanticObservationStream+Waiters.swift` | Cursor, window, replay, and timeout projections |
@@ -311,10 +315,11 @@ pipelines are explicit:
 
 ### Report and Action Evidence Have One Owner
 
-`HeistExecutionStepReportFacts` is the canonical typed projection of report
-facts from `HeistExecutionResult`. Formatters, diagnostics, and repair tooling
-consume that projection; they do not rebuild report facts from plan siblings or
-parallel result fields.
+`HeistExecutionResult` is the one admitted receipt execution tree.
+`HeistExecutionReport.project(_:)` purely reduces that tree into shared summary
+and metric projections. Formatters, diagnostics, and repair tooling traverse
+the receipt directly and read step report values from its typed evidence; no
+parallel report graph or optional fact bag is assembled.
 
 `HeistExecutionStepResult` owns a typed execution path, duration, and one private
 `HeistExecutionStepNode` used only for storage and wire projection. Package

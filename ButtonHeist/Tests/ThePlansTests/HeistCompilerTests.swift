@@ -124,6 +124,19 @@ struct HeistCompilerTests {
     }
 
     @Test
+    func `compiler plan JSON maps typed version admission failure`() {
+        let data = Data(#"{"version":3,"body":[{"type":"warn","warn":{"message":"future"}}]}"#.utf8)
+        let sourceURL = URL(fileURLWithPath: "/tmp/future-plan.swift")
+
+        #expect(throws: HeistPlanJSONCodecError.unsupportedVersion(
+            source: sourceURL.path,
+            observed: 3
+        )) {
+            _ = try HeistPlanJSONCodec.decodeValidatedPlan(data, sourceURL: sourceURL)
+        }
+    }
+
+    @Test
     func `compileFile returns a runtime validated HeistPlan`() async throws {
         let temp = try CompilerTemporaryDirectory()
         let source = try temp.writeSwiftSource(

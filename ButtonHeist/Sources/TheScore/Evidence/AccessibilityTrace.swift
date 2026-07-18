@@ -14,8 +14,12 @@ public struct AccessibilityTrace: Codable, Sendable, Equatable {
         case captures
     }
 
-    public init(captures: [Capture]) {
-        self.captures = Self.normalized(captures)
+    package init(captures: [Capture]) {
+        precondition(
+            Self.hasCanonicalLineage(captures),
+            "Accessibility trace source must provide canonical capture lineage"
+        )
+        self.captures = captures
     }
 
     public init(capture: Capture) {
@@ -33,27 +37,23 @@ public struct AccessibilityTrace: Codable, Sendable, Equatable {
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "AccessibilityTrace")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.init(captures: try container.decode([Capture].self, forKey: .captures))
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(captures, forKey: .captures)
-    }
-
-    private static func normalized(_ captures: [Capture]) -> [Capture] {
-        var previousCapture: Capture?
-        return captures.enumerated().map { index, capture in
-            let linked = Capture(
-                sequence: index + 1,
-                interface: capture.interface,
-                parentHash: previousCapture?.hash,
-                context: capture.context,
-                transition: capture.transition,
-                hash: capture.hash
+        let captures = try container.decode([Capture].self, forKey: .captures)
+        guard Self.hasCanonicalLineage(captures) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .captures,
+                in: container,
+                debugDescription: "Accessibility trace captures must have contiguous sequence and exact parent lineage"
             )
-            previousCapture = linked
-            return linked
+        }
+        self.captures = captures
+    }
+
+    private static func hasCanonicalLineage(_ captures: [Capture]) -> Bool {
+        captures.enumerated().allSatisfy { index, capture in
+            guard index > 0 else { return true }
+            let previous = captures[index - 1]
+            return capture.sequence == previous.sequence + 1
+                && capture.parentHash == previous.hash
         }
     }
 
@@ -63,7 +63,7 @@ public struct AccessibilityTrace: Codable, Sendable, Equatable {
         transition: Transition = .empty
     ) -> AccessibilityTrace {
         let capture = Capture(
-            sequence: captures.count + 1,
+            sequence: (captures.last?.sequence ?? 0) + 1,
             interface: interface,
             parentHash: captures.last?.hash,
             context: context,
@@ -72,23 +72,7 @@ public struct AccessibilityTrace: Codable, Sendable, Equatable {
         return AccessibilityTrace(captures: captures + [capture])
     }
 
-    public func capture(hash: String) -> Capture? {
-        captures.first { $0.hash == hash }
-    }
-
-    /// Lookup by a capture ref emitted from this normalized trace. Capture
-    /// refs created before `AccessibilityTrace(captures:)` renumbers a chain
-    /// may have stale sequences; use `capture(hash:)` for those.
     public func capture(ref: CaptureRef) -> Capture? {
         captures.first { $0.sequence == ref.sequence && $0.hash == ref.hash }
     }
-
-    public var isLinearChain: Bool {
-        for index in captures.indices {
-            let expectedParent = index == captures.startIndex ? nil : captures[captures.index(before: index)].hash
-            guard captures[index].parentHash == expectedParent else { return false }
-        }
-        return true
-    }
-
 }

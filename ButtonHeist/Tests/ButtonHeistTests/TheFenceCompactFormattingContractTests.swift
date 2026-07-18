@@ -416,11 +416,9 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let toast = makeTestHeistElement(label: "Saved", identifier: "saved_toast", traits: [.staticText])
         let empty = makeTestInterface(elements: [])
         let visible = makeTestInterface(elements: [toast])
-        let trace = AccessibilityTrace(captures: [
-            AccessibilityTrace.Capture(sequence: 1, interface: empty),
-            AccessibilityTrace.Capture(sequence: 2, interface: visible),
-            AccessibilityTrace.Capture(sequence: 3, interface: empty),
-        ])
+        let trace = AccessibilityTrace(first: empty)
+            .appending(visible)
+            .appending(empty)
         let response = FenceResponse.action(
             command: .activate,
             result: ActionResult.success(
@@ -455,19 +453,15 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             notificationData: .none,
             associatedElement: .none
         )
-        let trace = AccessibilityTrace(captures: [
-            AccessibilityTrace.Capture(sequence: 1, interface: interface),
-            AccessibilityTrace.Capture(
-                sequence: 2,
-                interface: interface,
+        let trace = AccessibilityTrace(first: interface)
+            .appending(
+                interface,
                 transition: AccessibilityTrace.Transition(accessibilityNotifications: [first])
-            ),
-            AccessibilityTrace.Capture(
-                sequence: 3,
-                interface: interface,
+            )
+            .appending(
+                interface,
                 transition: AccessibilityTrace.Transition(accessibilityNotifications: [first, second])
-            ),
-        ])
+            )
         let response = FenceResponse.action(
             command: .activate,
             result: ActionResult.success(

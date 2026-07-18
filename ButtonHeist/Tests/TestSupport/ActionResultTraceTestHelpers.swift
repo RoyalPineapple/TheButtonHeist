@@ -402,62 +402,40 @@ package extension AccessibilityTrace {
 private enum TestActionResultTrace {
     static func noChange(elementCount: Int) -> AccessibilityTrace {
         let interface = interface(elements: placeholders(count: elementCount))
-        return AccessibilityTrace(captures: [
-            capture(sequence: 1, interface: interface),
-            capture(sequence: 2, interface: interface),
-        ])
+        return AccessibilityTrace(first: interface).appending(interface)
     }
 
     static func elementsChanged(elementCount: Int, edits: ElementEdits) -> AccessibilityTrace {
         let before = interface(elements: beforeElements(for: edits, elementCount: elementCount))
         let after = interface(elements: afterElements(for: edits, elementCount: elementCount))
         if edits.isEmpty {
-            return AccessibilityTrace(captures: [
-                capture(sequence: 1, interface: before, context: .empty),
-                capture(sequence: 2, interface: before, context: AccessibilityTrace.Context(keyboardVisible: true)),
-            ])
+            return AccessibilityTrace(first: before).appending(
+                before,
+                context: AccessibilityTrace.Context(keyboardVisible: true)
+            )
         }
-        return AccessibilityTrace(captures: [
-            capture(sequence: 1, interface: before),
-            capture(sequence: 2, interface: after),
-        ])
+        return AccessibilityTrace(first: before).appending(after)
     }
 
     static func screenChanged(replacementInterface: Interface) -> AccessibilityTrace {
-        AccessibilityTrace(captures: [
-            capture(
+        AccessibilityTrace(
+            capture: AccessibilityTrace.Capture(
                 sequence: 1,
                 interface: interface(elements: []),
                 context: AccessibilityTrace.Context(screenId: "before")
-            ),
-            capture(
-                sequence: 2,
-                interface: replacementInterface,
-                context: AccessibilityTrace.Context(screenId: "after"),
-                transition: AccessibilityTrace.Transition(accessibilityNotifications: [
-                    AccessibilityNotificationEvidence(
-                        sequence: 1,
-                        kind: .screenChanged,
-                        timestamp: Date(timeIntervalSince1970: 1),
-                        notificationData: .none,
-                        associatedElement: .none
-                    ),
-                ])
-            ),
-        ])
-    }
-
-    private static func capture(
-        sequence: Int,
-        interface: Interface,
-        context: AccessibilityTrace.Context = .empty,
-        transition: AccessibilityTrace.Transition = .empty
-    ) -> AccessibilityTrace.Capture {
-        AccessibilityTrace.Capture(
-            sequence: sequence,
-            interface: interface,
-            context: context,
-            transition: transition
+            )
+        ).appending(
+            replacementInterface,
+            context: AccessibilityTrace.Context(screenId: "after"),
+            transition: AccessibilityTrace.Transition(accessibilityNotifications: [
+                AccessibilityNotificationEvidence(
+                    sequence: 1,
+                    kind: .screenChanged,
+                    timestamp: Date(timeIntervalSince1970: 1),
+                    notificationData: .none,
+                    associatedElement: .none
+                ),
+            ])
         )
     }
 

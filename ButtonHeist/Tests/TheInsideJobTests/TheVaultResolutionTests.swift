@@ -420,7 +420,7 @@ final class TheVaultResolutionTests: XCTestCase {
         }, ["Toast"])
     }
 
-    func testVisibleObservationTraceIncludesCommittedDiscoveryElements() throws {
+    func testVisibleObservationTraceCarriesCanonicalCommittedGraph() throws {
         let visible = element(label: "Custom Rotors", traits: .button)
         let discovered = element(label: "ButtonHeist Demo", traits: .button)
         let discovery = InterfaceObservation.makeForTests(
@@ -461,9 +461,9 @@ final class TheVaultResolutionTests: XCTestCase {
         XCTAssertEqual(bagman.interfaceTree.orderedElements.first?.element.label, "Settled")
         XCTAssertEqual(bagman.latestFailedSettleDiagnosticEvidence?.tree.orderedElements.first?.element.label, "Timeout")
         XCTAssertTrue(bagman.semanticObservationStream.latestSettledObservationInvalidated)
-        XCTAssertNil(bagman.resolveVisibleTarget(literalTarget(ElementPredicate.label("Timeout"))).resolved)
+        XCTAssertNil(bagman.resolveVisibleTarget(literalTarget(ElementPredicate.label("Timeout"))).resolvedElement)
         XCTAssertEqual(
-            bagman.resolveVisibleTarget(literalTarget(ElementPredicate.label("Settled"))).resolved?.element.label,
+            bagman.resolveVisibleTarget(literalTarget(ElementPredicate.label("Settled"))).resolvedElement?.element.label,
             "Settled"
         )
     }
@@ -477,8 +477,8 @@ final class TheVaultResolutionTests: XCTestCase {
 
         XCTAssertEqual(bagman.interfaceTree.orderedElements.first?.element.label, "Settled")
         XCTAssertEqual(bagman.latestObservation.tree.orderedElements.first?.element.label, "Observed")
-        XCTAssertNil(bagman.resolveTarget(literalTarget(ElementPredicate.label("Observed"))).resolved)
-        XCTAssertNil(bagman.resolveVisibleTarget(literalTarget(ElementPredicate.label("Observed"))).resolved)
+        XCTAssertNil(bagman.resolveTarget(literalTarget(ElementPredicate.label("Observed"))).resolvedElement)
+        XCTAssertNil(bagman.resolveVisibleTarget(literalTarget(ElementPredicate.label("Observed"))).resolvedElement)
         XCTAssertEqual(bagman.viewportElementIDs, ["observed"])
     }
 
@@ -873,7 +873,7 @@ final class TheVaultResolutionTests: XCTestCase {
         )
     }
 
-    func testCleanSettleProofRequiresCurrentCaptureTokenAndFingerprint() {
+    func testCleanSettleProofCarriesTheExactSettledObservation() throws {
         let stableElement = element(label: "Stable")
         let settled = InterfaceObservation.makeForTests(elements: [(stableElement, "stable")])
         let finalObservation = SettleSessionFinalObservation(observation: settled)
@@ -886,28 +886,15 @@ final class TheVaultResolutionTests: XCTestCase {
         )
         bagman.recordParsedObservedEvidence(settled)
 
-        XCTAssertNotNil(InterfaceObservationProof.settled(outcome, vault: bagman))
-
         let replacement = InterfaceObservation.makeForTests(elements: [(stableElement, "stable")])
         XCTAssertEqual(replacement.tree, settled.tree)
         XCTAssertEqual(replacement.liveCapture.snapshot, settled.liveCapture.snapshot)
         XCTAssertNotEqual(replacement.captureToken, settled.captureToken)
         bagman.recordParsedObservedEvidence(replacement)
-        XCTAssertNil(InterfaceObservationProof.settled(outcome, vault: bagman))
 
-        bagman.recordParsedObservedEvidence(settled)
-        let wrongFingerprint = finalObservation.fingerprint == 0 ? 1 : 0
-        let mismatchedOutcome = SettleSession.Outcome(
-            outcome: .settled(timeMs: 1),
-            events: [],
-            finalObservation: SettleSessionFinalObservation(
-                observation: settled,
-                fingerprint: wrongFingerprint
-            ),
-            elementsByKey: [:],
-            tripwireSignal: bagman.tripwire.tripwireSignal()
-        )
-        XCTAssertNil(InterfaceObservationProof.settled(mismatchedOutcome, vault: bagman))
+        let proof = try XCTUnwrap(InterfaceObservationProof.settled(outcome))
+        XCTAssertEqual(proof.observation.captureToken, settled.captureToken)
+        XCTAssertNotEqual(proof.observation.captureToken, replacement.captureToken)
     }
 
     func testViewportMovementLineageRequiresDedicatedProofConstructor() throws {
@@ -921,9 +908,12 @@ final class TheVaultResolutionTests: XCTestCase {
             tripwireSignal: bagman.tripwire.tripwireSignal()
         )
 
-        let ordinary = try XCTUnwrap(InterfaceObservationProof.settled(outcome, vault: bagman))
+        let ordinary = try XCTUnwrap(InterfaceObservationProof.settled(outcome))
         let afterMovement = try XCTUnwrap(
-            InterfaceObservationProof.settledAfterViewportMovement(outcome, vault: bagman)
+            InterfaceObservationProof.settled(
+                outcome,
+                lineageEvidence: .viewportMovement
+            )
         )
 
         XCTAssertNil(ordinary.lineageEvidence)
@@ -1147,28 +1137,31 @@ final class TheVaultResolutionTests: XCTestCase {
             settleOutcome: outcome
         )
 
-        guard case .observedUnsettled(let observedTree, _) = result.result else {
+        guard case .observedUnsettled(let observedObservation, _) = result.result else {
             return XCTFail("Expected observed unsettled settle evidence")
         }
-        XCTAssertEqual(observedTree.orderedElements.first?.element.label, "Unstable")
+        XCTAssertEqual(observedObservation.tree.orderedElements.first?.element.label, "Unstable")
+        XCTAssertEqual(observedObservation.captureToken, observation.captureToken)
+        XCTAssertTrue(observedObservation.liveCapture.object(for: "unstable") === object)
         XCTAssertEqual(
             bagman.latestFailedSettleDiagnosticEvidence?.tree.orderedElements.first?.element.label,
             "Unstable"
         )
-        XCTAssertNil(bagman.latestFailedSettleDiagnosticEvidence?.liveCapture.object(for: "unstable"))
+        XCTAssertEqual(bagman.latestFailedSettleDiagnosticEvidence?.captureToken, observation.captureToken)
+        XCTAssertTrue(bagman.latestFailedSettleDiagnosticEvidence?.liveCapture.object(for: "unstable") === object)
         XCTAssertTrue(bagman.semanticObservationStream.latestSettledObservationInvalidated)
     }
 
-    func testPublicInterfaceReadsSettledTruthNotFailedSettleDiagnosticEvidence() {
+    func testPublicInterfaceReadsSettledTruthNotFailedSettleDiagnosticEvidence() throws {
         let settled = InterfaceObservation.makeForTests(elements: [(element(label: "Settled"), "settled")])
         bagman.semanticObservationStream.commitVisibleObservationForTesting(settled)
 
         let diagnostic = InterfaceObservation.makeForTests(elements: [(element(label: "Timeout"), "timeout")])
         bagman.recordFailedSettleDiagnosticEvidence(diagnostic)
 
-        XCTAssertEqual(bagman.interface().projectedElements.compactMap(\.label), ["Settled"])
-        XCTAssertEqual(bagman.semanticInterface().projectedElements.compactMap(\.label), ["Settled"])
-        XCTAssertNil(bagman.resolveVisibleTarget(literalTarget(ElementPredicate.label("Timeout"))).resolved)
+        let interface = try bagman.selectInterface(InterfaceQuery())
+        XCTAssertEqual(interface.projectedElements.compactMap(\.label), ["Settled"])
+        XCTAssertNil(bagman.resolveVisibleTarget(literalTarget(ElementPredicate.label("Timeout"))).resolvedElement)
     }
 
     func testRejectedSettleDiagnosticDoesNotReplaceNewerParsedObservation() async {
@@ -1201,8 +1194,8 @@ final class TheVaultResolutionTests: XCTestCase {
         XCTAssertEqual(bagman.latestObservation.captureToken, screenB.captureToken)
         XCTAssertTrue(bagman.latestObservation.liveCapture.object(for: "b") === objectB)
         XCTAssertNil(bagman.latestObservation.liveCapture.object(for: "a"))
-        XCTAssertEqual(bagman.latestFailedSettleDiagnosticEvidence?.tree, screenA.tree)
-        XCTAssertNil(bagman.latestFailedSettleDiagnosticEvidence?.liveCapture.object(for: "a"))
+        XCTAssertEqual(bagman.latestFailedSettleDiagnosticEvidence?.captureToken, screenA.captureToken)
+        XCTAssertTrue(bagman.latestFailedSettleDiagnosticEvidence?.liveCapture.object(for: "a") === objectA)
     }
     func testSettledSemanticObservationWaiterCompletesOnLaterObservation() async {
         let first = InterfaceObservation.makeForTests(elements: [(element(label: "First"), "first")])
@@ -1273,9 +1266,9 @@ final class TheVaultResolutionTests: XCTestCase {
         let diagnostic = InterfaceObservation.makeForTests(elements: [(element(label: "Timeout Action"), "timeout_action")])
         bagman.recordFailedSettleDiagnosticEvidence(diagnostic)
 
-        XCTAssertNotNil(bagman.resolveTarget(literalTarget(ElementPredicate.label("Settled Action"))).resolved)
+        XCTAssertNotNil(bagman.resolveTarget(literalTarget(ElementPredicate.label("Settled Action"))).resolvedElement)
         XCTAssertNil(
-            bagman.resolveTarget(literalTarget(ElementPredicate.label("Timeout Action"), ordinal: 0)).resolved
+            bagman.resolveTarget(literalTarget(ElementPredicate.label("Timeout Action"), ordinal: 0)).resolvedElement
         )
         XCTAssertEqual(bagman.interfaceTree.orderedElements.first?.element.label, "Settled Action")
         XCTAssertEqual(
@@ -1316,7 +1309,7 @@ final class TheVaultResolutionTests: XCTestCase {
         XCTAssertEqual(observation?.settledObservation.observation.tree.orderedElements.first?.element.label, "Discovery")
     }
 
-    func testVisibleWaiterCarriesCommittedGraphFromDiscoveryObservation() async {
+    func testVisibleWaiterReceivesCanonicalGraphFromDiscoveryObservation() async {
         let sharedHeader = element(label: "Catalog", traits: .header)
         let first = InterfaceObservation.makeForTests(elements: [
             (sharedHeader, "catalog"),
@@ -1360,7 +1353,7 @@ final class TheVaultResolutionTests: XCTestCase {
         XCTAssertEqual(observation?.sequence, 2)
         XCTAssertEqual(
             observation?.settledObservation.observation.tree.orderedElements.compactMap(\.element.label),
-            ["Catalog", "Visible Discovery"]
+            ["Catalog", "Visible Discovery", "First", "Known Discovery"]
         )
         XCTAssertEqual(
             observation?.trace.captures.last?.interface.projectedElements.compactMap(\.label),
@@ -1374,7 +1367,7 @@ final class TheVaultResolutionTests: XCTestCase {
         XCTAssertEqual(bagman.semanticObservationStream.observationWaiterCount, 0)
     }
 
-    func testCleanVisibleEventAfterDiscoveryCarriesCommittedGraph() async {
+    func testCleanVisibleEventAfterDiscoveryCarriesCanonicalGraph() async {
         let sharedHeader = element(label: "Catalog", traits: .header)
         let first = InterfaceObservation.makeForTests(elements: [
             (sharedHeader, "catalog"),
@@ -1410,7 +1403,7 @@ final class TheVaultResolutionTests: XCTestCase {
         XCTAssertEqual(observation?.sequence, 2)
         XCTAssertEqual(
             observation?.settledObservation.observation.tree.orderedElements.compactMap(\.element.label),
-            ["Catalog", "Visible Discovery"]
+            ["Catalog", "Visible Discovery", "First", "Known Discovery"]
         )
         XCTAssertEqual(
             observation?.trace.captures.last?.interface.projectedElements.compactMap(\.label),
@@ -1469,38 +1462,6 @@ final class TheVaultResolutionTests: XCTestCase {
             bagman.interfaceElementIDs,
             ["catalog", "first_known", "first_visible", "second_known", "second_visible"]
         )
-    }
-
-    func testPublicInterfaceProjectionStaysVisibleWhileSemanticProjectionIncludesKnownElements() throws {
-        let visible = element(label: "Visible", traits: .button)
-        let known = element(label: "Known", traits: .button)
-        let container = AccessibilityContainer(
-            type: .none, scrollableContentSize: AccessibilitySize(CGSize(width: 320, height: 800)),
-            frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 400))
-        )
-        let observation = InterfaceObservation.makeForTests(
-            elements: [
-                "visible": InterfaceTree.Element(heistId: "visible", scrollMembership: nil, element: visible),
-                "known": InterfaceTree.Element(heistId: "known", scrollMembership: nil, element: known),
-            ],
-            hierarchy: [.container(container, children: [.element(visible, traversalIndex: 0)])],
-            containerNamesByPath: [TreePath([0]): "main_scroll"],
-            heistIdsByPath: [TreePath([0, 0]): "visible"],
-            firstResponderHeistId: nil,
-        )
-        bagman.semanticObservationStream.commitDiscoveryObservationForTesting(observation)
-
-        let publicInterface = bagman.interface()
-        let semanticInterface = bagman.semanticInterface()
-
-        XCTAssertEqual(publicInterface.projectedElements.map(\.label), ["Visible"])
-        XCTAssertEqual(semanticInterface.projectedElements.compactMap(\.label).sorted(), ["Known", "Visible"])
-        guard case .container(_, let children) = publicInterface.tree.first else {
-            return XCTFail("Expected public interface to preserve visible container hierarchy")
-        }
-        XCTAssertEqual(children.count, 1)
-        XCTAssertEqual(publicInterface.annotations.containers.first?.containerName, "main_scroll")
-        XCTAssertEqual(semanticInterface.annotations.containers.first?.containerName, "main_scroll")
     }
 
     func testKnownScrollMembershipsAreKeyedByHeistIdForEqualElements() {
@@ -1714,15 +1675,15 @@ final class TheVaultResolutionTests: XCTestCase {
             liveCapture: LiveCapture.makeForTests()
         ))
 
-        let result = bagman.resolveContainerTarget(try resolvedTarget(
+        let result = bagman.resolveTarget(try resolvedTarget(
             .container(.identifier("actions"))
         ))
         switch result {
-        case .resolved(let resolved):
+        case .resolved(.container(let resolved)):
             XCTAssertEqual(resolved.path, path)
             XCTAssertEqual(resolved.containerName, "semantic_actions__actions")
             XCTAssertEqual(resolved.contentFrame?.origin.y, 900)
-        case .notFound, .ambiguous:
+        case .resolved(.element), .notFound, .ambiguous:
             XCTFail("Expected semantic container resolution, got \(result.diagnostics)")
         }
     }
@@ -1761,7 +1722,7 @@ final class TheVaultResolutionTests: XCTestCase {
             .type(.semanticGroup),
             .semantic(.label("Actions"))
         )
-        let ambiguous = bagman.resolveContainerTarget(try resolvedTarget(
+        let ambiguous = bagman.resolveTarget(try resolvedTarget(
             .container(predicate)
         ))
         guard case .ambiguous(let facts) = ambiguous else {
@@ -1770,15 +1731,16 @@ final class TheVaultResolutionTests: XCTestCase {
         }
         XCTAssertEqual(facts.matchedCount, 2)
         XCTAssertEqual(facts.resolutionScope, .interface)
+        let ambiguousMatches = try XCTUnwrap(facts.containerMatches)
         XCTAssertEqual(
-            facts.candidates.map { $0.container.containerPredicateFacts.identifier },
+            ambiguousMatches.exactMatches.map { $0.container.containerPredicateFacts.identifier },
             ["primary", "secondary"]
         )
-        XCTAssertEqual(facts.candidates.map(\.containerName), ["actions_primary", "actions_secondary"])
+        XCTAssertEqual(ambiguousMatches.exactMatches.map(\.containerName), ["actions_primary", "actions_secondary"])
         XCTAssertTrue(ambiguous.diagnostics.contains("container target is ambiguous across 2 containers"))
         XCTAssertFalse(ambiguous.diagnostics.contains("containerName"))
 
-        let outOfRange = bagman.resolveContainerTarget(try resolvedTarget(
+        let outOfRange = bagman.resolveTarget(try resolvedTarget(
             .container(predicate, ordinal: 3)
         ))
         guard case .notFound(let notFoundFacts) = outOfRange else {
@@ -1787,7 +1749,7 @@ final class TheVaultResolutionTests: XCTestCase {
         }
         XCTAssertEqual(notFoundFacts.reason, .ordinalOutOfRange(requested: 3, matchCount: 2))
         XCTAssertEqual(notFoundFacts.resolutionScope, .interface)
-        XCTAssertEqual(notFoundFacts.exactMatches.map(\.path), [primaryPath, secondaryPath])
+        XCTAssertEqual(notFoundFacts.containerMatches?.exactMatches.map(\.path), [primaryPath, secondaryPath])
         XCTAssertTrue(outOfRange.diagnostics.contains("container target ordinal 3"))
         XCTAssertTrue(outOfRange.diagnostics.contains("target an element inside the intended region"))
     }
@@ -1844,7 +1806,7 @@ final class TheVaultResolutionTests: XCTestCase {
         XCTAssertEqual(matcher.checks, [.identifier(.exact("quantity_stepper"))])
         XCTAssertNil(ordinal)
 
-        guard let resolved = bagman.resolveTarget(try resolvedTarget(executableTarget)).resolved else {
+        guard let resolved = bagman.resolveTarget(try resolvedTarget(executableTarget)).resolvedElement else {
             XCTFail("Expected semantic replay selector to resolve against current observation")
             return
         }
@@ -1897,11 +1859,11 @@ final class TheVaultResolutionTests: XCTestCase {
         ))
 
         let target = literalTarget(ElementPredicate.identifier("rotor_host"))
-        let settled = try XCTUnwrap(bagman.resolveTarget(target).resolved)
+        let settled = try XCTUnwrap(bagman.resolveTarget(target).resolvedElement)
         XCTAssertEqual(settled.element.shape.frame, staleFrame)
         XCTAssertEqual(settled.element.bhResolvedActivationPoint, stalePoint)
 
-        let visible = try XCTUnwrap(bagman.resolveVisibleTarget(target).resolved)
+        let visible = try XCTUnwrap(bagman.resolveVisibleTarget(target).resolvedElement)
         XCTAssertEqual(visible.element.shape.frame, staleFrame)
         XCTAssertEqual(visible.element.bhResolvedActivationPoint, stalePoint)
 
@@ -1929,7 +1891,7 @@ final class TheVaultResolutionTests: XCTestCase {
         let target = try resolvedTarget(
             AccessibilityTarget.element(.label("Shared Control"), traits: [.adjustable])
         )
-        let semanticTarget = try XCTUnwrap(bagman.resolveVisibleTarget(target).resolved)
+        let semanticTarget = try XCTUnwrap(bagman.resolveVisibleTarget(target).resolvedElement)
 
         let rawObject = NSObject()
         let rawFrame = CGRect(x: 80, y: 160, width: 180, height: 52)
@@ -1944,7 +1906,7 @@ final class TheVaultResolutionTests: XCTestCase {
         ))
 
         XCTAssertNil(bagman.interfaceElement(heistId: rawId))
-        XCTAssertEqual(bagman.resolveVisibleTarget(target).resolved?.heistId, committedId)
+        XCTAssertEqual(bagman.resolveVisibleTarget(target).resolvedElement?.heistId, committedId)
         XCTAssertNil(bagman.liveInterfaceElement(heistId: committedId))
         guard case .objectUnavailable = bagman.resolveLiveActionTarget(for: semanticTarget) else {
             return XCTFail("Expected different-HeistId raw evidence to remain non-dispatchable")
@@ -2035,10 +1997,10 @@ final class TheVaultResolutionTests: XCTestCase {
         )
         bagman.recordParsedObservedEvidence(liveScreen)
 
-        let resolved = bagman.resolveContainerTarget(try resolvedTarget(
+        let resolved = bagman.resolveTarget(try resolvedTarget(
             .container(.identifier("actions"))
         ))
-        guard case .resolved(let semanticTarget) = resolved else {
+        guard case .resolved(.container(let semanticTarget)) = resolved else {
             return XCTFail("Expected semantic container, got \(resolved.diagnostics)")
         }
         guard case .resolved(let liveTarget) = bagman.resolveLiveContainerTarget(for: semanticTarget) else {
@@ -2074,7 +2036,7 @@ final class TheVaultResolutionTests: XCTestCase {
         XCTAssertEqual(
             bagman.resolveTarget(try resolvedTarget(
                 AccessibilityTarget.element(.label("Controls Demo"), traits: [.button])
-            )).resolved?.heistId,
+            )).resolvedElement?.heistId,
             "controls_demo"
         )
     }
@@ -2146,7 +2108,7 @@ final class TheVaultResolutionTests: XCTestCase {
         register(element, heistId: "button_save", index: 0)
 
         let result = bagman.resolveTarget(literalTarget(ElementPredicate.label("Save")))
-        guard let resolved = result.resolved else {
+        guard let resolved = result.resolvedElement else {
             XCTFail("Expected .resolved, got \(result)")
             return
         }
@@ -2160,7 +2122,7 @@ final class TheVaultResolutionTests: XCTestCase {
         register(cancel, heistId: "button_cancel", index: 1)
 
         let result = bagman.resolveTarget(literalTarget(ElementPredicate.label("Cancel")))
-        guard let resolved = result.resolved else {
+        guard let resolved = result.resolvedElement else {
             XCTFail("Expected .resolved, got \(result)")
             return
         }
@@ -2226,7 +2188,7 @@ final class TheVaultResolutionTests: XCTestCase {
             )
         ))
 
-        XCTAssertEqual(result.resolved?.heistId, "checkout_pay")
+        XCTAssertEqual(result.resolvedElement?.heistId, "checkout_pay")
     }
 
     func testScopedTargetResolutionUsesInterfaceTreeScrollMembership() throws {
@@ -2265,7 +2227,7 @@ final class TheVaultResolutionTests: XCTestCase {
         )
         let resolvedTarget = try resolvedTarget(target)
 
-        XCTAssertEqual(bagman.resolveTarget(resolvedTarget).resolved?.heistId, "review_sale")
+        XCTAssertEqual(bagman.resolveTarget(resolvedTarget).resolvedElement?.heistId, "review_sale")
     }
 
     func testMatcherAmbiguousReturnsCandidates() {
@@ -2279,7 +2241,8 @@ final class TheVaultResolutionTests: XCTestCase {
             XCTFail("Expected .ambiguous, got \(result)")
             return
         }
-        let candidates = result.candidates
+        let matches = try? XCTUnwrap(facts.elementMatches)
+        let candidates = matches?.candidateDescriptions ?? []
         let diagnostics = result.diagnostics
         XCTAssertEqual(facts.matchedCount, 2)
         XCTAssertEqual(candidates.count, 2)
@@ -2297,9 +2260,10 @@ final class TheVaultResolutionTests: XCTestCase {
             XCTFail("Expected .ambiguous, got \(result)")
             return
         }
-        let candidates = result.candidates
-        XCTAssertEqual(facts.candidates[0].identifier, "save1")
-        XCTAssertEqual(facts.candidates[1].identifier, "save2")
+        let matches = try? XCTUnwrap(facts.elementMatches)
+        let candidates = matches?.candidateDescriptions ?? []
+        XCTAssertEqual(matches?.exactMatches[0].element.identifier, "save1")
+        XCTAssertEqual(matches?.exactMatches[1].element.identifier, "save2")
         XCTAssertTrue(candidates[0].contains("id=save1"))
         XCTAssertTrue(candidates[1].contains("id=save2"))
         // Candidates are described by their predicate fields (label/identifier/value),
@@ -2363,21 +2327,25 @@ final class TheVaultResolutionTests: XCTestCase {
         XCTAssertTrue(diagnostics.contains("unreachable"))
     }
 
-    // MARK: - TargetResolution Convenience Properties
+    // MARK: - TargetResolution Algebra
 
-    func testResolvedPropertyReturnsNilForNotFound() {
+    func testMissingTargetIsNotFound() {
         let result = bagman.resolveTarget(literalTarget(ElementPredicate.label("nope")))
-        XCTAssertNil(result.resolved)
+        guard case .notFound = result else {
+            return XCTFail("Expected .notFound, got \(result)")
+        }
     }
 
-    func testResolvedPropertyReturnsNilForAmbiguous() {
+    func testDuplicateTargetsAreAmbiguous() {
         let save1 = element(label: "Save")
         let save2 = element(label: "Save")
         register(save1, heistId: "button_save_1", index: 0)
         register(save2, heistId: "button_save_2", index: 1)
 
         let result = bagman.resolveTarget(literalTarget(ElementPredicate.label("Save")))
-        XCTAssertNil(result.resolved)
+        guard case .ambiguous = result else {
+            return XCTFail("Expected .ambiguous, got \(result)")
+        }
     }
 
     func testDiagnosticsEmptyForResolved() {
@@ -2423,13 +2391,13 @@ final class TheVaultResolutionTests: XCTestCase {
         register(save3, heistId: "button_save_3", index: 2)
 
         let result0 = bagman.resolveTarget(literalTarget(ElementPredicate.label("Save"), ordinal: 0))
-        XCTAssertEqual(result0.resolved?.element.value, "draft")
+        XCTAssertEqual(result0.resolvedElement?.element.value, "draft")
 
         let result1 = bagman.resolveTarget(literalTarget(ElementPredicate.label("Save"), ordinal: 1))
-        XCTAssertEqual(result1.resolved?.element.value, "final")
+        XCTAssertEqual(result1.resolvedElement?.element.value, "final")
 
         let result2 = bagman.resolveTarget(literalTarget(ElementPredicate.label("Save"), ordinal: 2))
-        XCTAssertEqual(result2.resolved?.element.value, "archive")
+        XCTAssertEqual(result2.resolvedElement?.element.value, "archive")
     }
 
     func testOrdinalOutOfBoundsReturnsNotFound() {
@@ -2483,7 +2451,7 @@ final class TheVaultResolutionTests: XCTestCase {
             return
         }
         XCTAssertEqual(facts.matchedCount, 12)
-        XCTAssertEqual(facts.candidates.count, 10)
+        XCTAssertEqual(facts.elementMatches?.exactMatches.count, 12)
         XCTAssertTrue(result.diagnostics.contains("10+ elements match"))
         XCTAssertTrue(result.diagnostics.contains("... and more"))
     }
@@ -2493,8 +2461,8 @@ final class TheVaultResolutionTests: XCTestCase {
         register(element, heistId: "button_save", index: 0)
 
         let result = bagman.resolveTarget(literalTarget(ElementPredicate.label("Save"), ordinal: 0))
-        XCTAssertNotNil(result.resolved)
-        XCTAssertEqual(result.resolved?.element.label, "Save")
+        XCTAssertNotNil(result.resolvedElement)
+        XCTAssertEqual(result.resolvedElement?.element.label, "Save")
     }
 
     func testOrdinalZeroOnNoMatchReturnsNotFound() {
@@ -2510,17 +2478,6 @@ final class TheVaultResolutionTests: XCTestCase {
         XCTAssertTrue(diagnostics.contains("Next:"))
     }
 
-    // MARK: - Select + Mark Presented Tracking
-
-    func testSelectElementsReturnsSortedByTraversalOrder() {
-        let element = element(label: "Save", traits: .button)
-        register(element, heistId: "button_save", index: 0)
-
-        let result = bagman.selectElements()
-        XCTAssertEqual(result.count, 1)
-        XCTAssertEqual(result[0].heistId, "button_save")
-    }
-
     // MARK: - Known Semantic State
 
     /// Matcher-based resolution reads the committed semantic state. Viewport
@@ -2534,7 +2491,7 @@ final class TheVaultResolutionTests: XCTestCase {
         let result = bagman.resolveTarget(try resolvedTarget(
             AccessibilityTarget.element(.label("Long List"), traits: [.button])
         ))
-        guard case .resolved(let target) = result else {
+        guard case .resolved(.element(let target)) = result else {
             XCTFail("Expected interface-tree match, got \(result)")
             return
         }
@@ -2576,7 +2533,7 @@ final class TheVaultResolutionTests: XCTestCase {
             XCTFail("Expected visible ambiguity, got \(result)")
             return
         }
-        XCTAssertEqual(facts.candidates.count, 2)
+        XCTAssertEqual(facts.elementMatches?.exactMatches.count, 2)
         XCTAssertEqual(facts.resolutionScope, .viewport)
         let diagnostics = result.diagnostics
         XCTAssertTrue(diagnostics.contains("2 elements match"))
@@ -2606,7 +2563,7 @@ final class TheVaultResolutionTests: XCTestCase {
         registerOffScreen(offScreen, heistId: "below_fold_button")
 
         let knownResult = bagman.resolveTarget(literalTarget(ElementPredicate.label("Below Fold")))
-        XCTAssertEqual(knownResult.resolved?.heistId, "below_fold_button")
+        XCTAssertEqual(knownResult.resolvedElement?.heistId, "below_fold_button")
 
         let visibleResult = bagman.resolveVisibleTarget(literalTarget(ElementPredicate.label("Below Fold")))
         guard case .notFound(let facts) = visibleResult else {
@@ -2618,19 +2575,6 @@ final class TheVaultResolutionTests: XCTestCase {
         XCTAssertEqual(facts.resolutionScope, .viewport)
         XCTAssertTrue(diagnostics.contains("No match for"))
         XCTAssertTrue(diagnostics.contains("scope: viewport"), "Should identify failed resolution scope: \(diagnostics)")
-    }
-
-    func testResolveFirstViewportMatchIgnoresOffViewportEntry() {
-        let visible = element(label: "Visible", traits: .button)
-        let offScreen = element(label: "Below Fold", traits: .button)
-        register(visible, heistId: "button_visible", index: 0)
-        registerOffScreen(offScreen, heistId: "below_fold_button")
-
-        XCTAssertNil(bagman.resolveFirstVisibleMatch(literalTarget(ElementPredicate.label("Below Fold"))))
-        XCTAssertEqual(
-            bagman.resolveFirstVisibleMatch(literalTarget(ElementPredicate.label("Visible")))?.heistId,
-            "button_visible"
-        )
     }
 
     func testOffViewportEntryWithStaleObjectIsNotDispatchableUntilInViewport() {
@@ -2658,7 +2602,7 @@ final class TheVaultResolutionTests: XCTestCase {
             firstResponderHeistId: nil,
         ))
 
-        guard let resolved = bagman.resolveTarget(literalTarget(ElementPredicate.label("Below Fold"))).resolved else {
+        guard let resolved = bagman.resolveTarget(literalTarget(ElementPredicate.label("Below Fold"))).resolvedElement else {
             XCTFail("Off-viewport entry should still resolve")
             return
         }
@@ -2679,7 +2623,7 @@ final class TheVaultResolutionTests: XCTestCase {
             firstResponderHeistId: nil,
         ))
 
-        let refreshed = bagman.resolveTarget(literalTarget(ElementPredicate.label("Below Fold"))).resolved
+        let refreshed = bagman.resolveTarget(literalTarget(ElementPredicate.label("Below Fold"))).resolvedElement
         XCTAssertNotNil(bagman.treeElement(heistId: "below_fold_button", in: .viewport))
         guard let refreshed,
               case .resolved(let liveTarget) = bagman.resolveLiveActionTarget(for: refreshed) else {
@@ -2715,7 +2659,7 @@ final class TheVaultResolutionTests: XCTestCase {
             firstResponderHeistId: nil,
         ))
 
-        guard let resolved = bagman.resolveTarget(literalTarget(ElementPredicate.label("Visible"))).resolved else {
+        guard let resolved = bagman.resolveTarget(literalTarget(ElementPredicate.label("Visible"))).resolvedElement else {
             XCTFail("Expected visible target to resolve")
             return
         }
@@ -2729,14 +2673,14 @@ final class TheVaultResolutionTests: XCTestCase {
         let offScreen = element(label: "Below Fold", traits: .button)
         registerOffScreen(offScreen, heistId: "below_fold_button")
 
-        XCTAssertNotNil(bagman.resolveTarget(literalTarget(ElementPredicate.label("Below Fold"))).resolved)
+        XCTAssertNotNil(bagman.resolveTarget(literalTarget(ElementPredicate.label("Below Fold"))).resolvedElement)
     }
 
     func testResolveTargetFindsLivePredicateInViewport() {
         let element = element(label: "Visible", traits: .button)
         register(element, heistId: "visible_button", index: 0)
 
-        XCTAssertNotNil(bagman.resolveTarget(literalTarget(ElementPredicate.label("Visible"))).resolved)
+        XCTAssertNotNil(bagman.resolveTarget(literalTarget(ElementPredicate.label("Visible"))).resolvedElement)
     }
 
     func testResolveTargetHonorsExplicitOrdinal() {
@@ -2745,7 +2689,7 @@ final class TheVaultResolutionTests: XCTestCase {
         register(save1, heistId: "button_save_1", index: 0)
         register(save2, heistId: "button_save_2", index: 1)
 
-        XCTAssertNotNil(bagman.resolveTarget(literalTarget(ElementPredicate.label("Save"), ordinal: 1)).resolved)
+        XCTAssertNotNil(bagman.resolveTarget(literalTarget(ElementPredicate.label("Save"), ordinal: 1)).resolvedElement)
         guard case .notFound = bagman.resolveTarget(literalTarget(ElementPredicate.label("Save"), ordinal: 2)) else {
             XCTFail("Expected out-of-range ordinal to fail closed")
             return
@@ -2758,7 +2702,7 @@ final class TheVaultResolutionTests: XCTestCase {
 
         // Element resolves immediately — no markPresented gate
         let result = bagman.resolveTarget(literalTarget(ElementPredicate.label("Combobox")))
-        XCTAssertNotNil(result.resolved)
+        XCTAssertNotNil(result.resolvedElement)
     }
 
     // MARK: - Direct InterfaceTree Resolution
@@ -2815,20 +2759,20 @@ final class TheVaultResolutionTests: XCTestCase {
 
             switch testCase.expected {
             case .resolved(let expectedId):
-                let resolved = try XCTUnwrap(resolution.resolved, testCase.name)
+                let resolved = try XCTUnwrap(resolution.resolvedElement, testCase.name)
                 XCTAssertEqual(resolved.heistId, expectedId, testCase.name)
             case .ambiguous(let expectedIds):
                 guard case .ambiguous(let facts) = resolution else {
                     return XCTFail("Expected ambiguous for \(testCase.name), got \(resolution)")
                 }
                 XCTAssertEqual(facts.matchedCount, expectedIds.count, testCase.name)
-                XCTAssertEqual(facts.exactMatches.map(\.heistId), expectedIds, testCase.name)
+                XCTAssertEqual(facts.elementMatches?.exactMatches.map(\.heistId), expectedIds, testCase.name)
             case .notFound:
                 guard case .notFound(let facts) = resolution else {
                     return XCTFail("Expected notFound for \(testCase.name), got \(resolution)")
                 }
                 XCTAssertEqual(facts.reason, .noMatches, testCase.name)
-                XCTAssertTrue(facts.exactMatches.isEmpty, testCase.name)
+                XCTAssertTrue(facts.elementMatches?.exactMatches.isEmpty == true, testCase.name)
             case .ordinalOutOfRange(let requested, let expectedMatches):
                 guard case .notFound(let facts) = resolution else {
                     return XCTFail("Expected notFound for \(testCase.name), got \(resolution)")
@@ -2838,7 +2782,7 @@ final class TheVaultResolutionTests: XCTestCase {
                     .ordinalOutOfRange(requested: requested, matchCount: expectedMatches.count),
                     testCase.name
                 )
-                XCTAssertEqual(facts.exactMatches.map(\.heistId), expectedMatches, testCase.name)
+                XCTAssertEqual(facts.elementMatches?.exactMatches.map(\.heistId), expectedMatches, testCase.name)
             }
         }
     }
@@ -2869,7 +2813,7 @@ final class TheVaultResolutionTests: XCTestCase {
         register(save, heistId: "button_save_draft", index: 0)
 
         let result = bagman.resolveTarget(try resolvedTarget(.label(.contains("Save"))))
-        guard let resolved = result.resolved else {
+        guard let resolved = result.resolvedElement else {
             XCTFail("Explicit contains predicate should resolve, got \(result)")
             return
         }
@@ -2881,9 +2825,9 @@ final class TheVaultResolutionTests: XCTestCase {
         let save = element(label: "Save", traits: .button)
         register(save, heistId: "button_save", index: 0)
 
-        XCTAssertNotNil(bagman.resolveTarget(literalTarget(ElementPredicate.label("Save"))).resolved)
-        XCTAssertNotNil(bagman.resolveTarget(literalTarget(ElementPredicate.label("save"))).resolved)
-        XCTAssertNotNil(bagman.resolveTarget(literalTarget(ElementPredicate.label("SAVE"))).resolved)
+        XCTAssertNotNil(bagman.resolveTarget(literalTarget(ElementPredicate.label("Save"))).resolvedElement)
+        XCTAssertNotNil(bagman.resolveTarget(literalTarget(ElementPredicate.label("save"))).resolvedElement)
+        XCTAssertNotNil(bagman.resolveTarget(literalTarget(ElementPredicate.label("SAVE"))).resolvedElement)
     }
 
     /// Typography folding still works under exact-or-miss: a label with a smart
@@ -2892,7 +2836,7 @@ final class TheVaultResolutionTests: XCTestCase {
         let dontSkip = element(label: "Don\u{2019}t skip", traits: .button)
         register(dontSkip, heistId: "button_dont_skip", index: 0)
 
-        XCTAssertNotNil(bagman.resolveTarget(literalTarget(ElementPredicate.label("Don't skip"))).resolved)
+        XCTAssertNotNil(bagman.resolveTarget(literalTarget(ElementPredicate.label("Don't skip"))).resolvedElement)
     }
 
     /// When two labels share a partial substring, exact must win outright
@@ -2904,7 +2848,7 @@ final class TheVaultResolutionTests: XCTestCase {
         register(saveDraft, heistId: "button_save_draft", index: 1)
 
         let result = bagman.resolveTarget(literalTarget(ElementPredicate.label("Save")))
-        guard let resolved = result.resolved else {
+        guard let resolved = result.resolvedElement else {
             XCTFail("Exact match should resolve uniquely, got \(result)")
             return
         }
@@ -2924,7 +2868,7 @@ final class TheVaultResolutionTests: XCTestCase {
             return
         }
         // Exact label still resolves to present.
-        XCTAssertNotNil(bagman.resolveTarget(literalTarget(ElementPredicate.label("Save Draft"))).resolved)
+        XCTAssertNotNil(bagman.resolveTarget(literalTarget(ElementPredicate.label("Save Draft"))).resolvedElement)
     }
 
     /// Server-side and client-side matchers must agree on the same input.
@@ -2976,6 +2920,49 @@ final class TheVaultResolutionTests: XCTestCase {
         XCTAssertTrue(asciiMatcher.matches(smart))
         XCTAssertTrue(heist.matches(asciiMatcher),
                       "Client-side must fold typography just like server-side")
+    }
+}
+
+private extension TheVault.TargetAmbiguityFacts {
+    var elementMatches: TheVault.TargetElementMatches? {
+        guard case .elements(let matches) = matchSet else {
+            return nil
+        }
+        return matches
+    }
+
+    var containerMatches: TheVault.TargetContainerMatches? {
+        guard case .containers(let matches) = matchSet else {
+            return nil
+        }
+        return matches
+    }
+}
+
+private extension TheVault.TargetNotFoundFacts {
+    var elementMatches: TheVault.TargetElementMatches? {
+        guard case .elements(let matches) = matchSet else {
+            return nil
+        }
+        return matches
+    }
+
+    var containerMatches: TheVault.TargetContainerMatches? {
+        guard case .containers(let matches) = matchSet else {
+            return nil
+        }
+        return matches
+    }
+}
+
+private extension TheVault.TargetElementMatches {
+    var candidateDescriptions: [String] {
+        exactMatches.map {
+            TargetResolutionDiagnostics.elementCandidateDescription(
+                $0,
+                visibleHeistIds: visibleHeistIds
+            )
+        }
     }
 }
 

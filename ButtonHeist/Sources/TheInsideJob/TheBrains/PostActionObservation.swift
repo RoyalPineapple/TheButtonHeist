@@ -57,11 +57,6 @@ final class PostActionObservation {
     let vault: TheVault
     let safecracker: TheSafecracker
 
-    enum InterfaceProjectionMode {
-        case semantic
-        case discovery
-    }
-
     /// State captured before an action for delta computation.
     struct ObservationBaseline {
         let observation: InterfaceObservation
@@ -97,8 +92,7 @@ final class PostActionObservation {
         captureSemanticState(
             from: observation.observation,
             tripwireSignal: vault.tripwire.tripwireSignal(),
-            settledObservationSequence: observation.sequence,
-            projectionMode: observation.scope.interfaceProjectionMode
+            settledObservationSequence: observation.sequence
         )
     }
 
@@ -111,14 +105,10 @@ final class PostActionObservation {
     }
 
     func semanticObservation(from event: SettledObservationEvent) -> SettledObservationEvidence {
-        let observation = event.scope == .visible
-            ? event.settledObservation.observation.viewportOnly
-            : event.settledObservation.observation
         let current = captureSemanticState(
-            from: observation,
+            from: event.settledObservation.observation,
             tripwireSignal: vault.tripwire.tripwireSignal(),
-            settledObservationSequence: event.sequence,
-            projectionMode: event.scope.interfaceProjectionMode
+            settledObservationSequence: event.sequence
         )
         return SettledObservationEvidence(
             event: event,
@@ -166,15 +156,9 @@ final class PostActionObservation {
                 trace: trace
             )
 
-        case .observedUnsettled(let tree, let notificationBatch):
+        case .observedUnsettled(let viewportObservation, let notificationBatch):
             guard case .timedOut = observation.settle.outcome else {
                 preconditionFailure("unsettled observation requires settle timeout")
-            }
-            let viewportObservation: InterfaceObservation
-            do {
-                viewportObservation = try InterfaceObservation.build(tree: tree)
-            } catch {
-                preconditionFailure("Unsettled semantic observation failed validation: \(error)")
             }
             let finalBaseline = captureSemanticState(
                 from: viewportObservation,
@@ -285,13 +269,12 @@ final class PostActionObservation {
     func captureSemanticState(
         from observation: InterfaceObservation,
         tripwireSignal: TheTripwire.TripwireSignal,
-        settledObservationSequence: SettledObservationSequence?,
-        projectionMode: InterfaceProjectionMode = .semantic
+        settledObservationSequence: SettledObservationSequence?
     ) -> ObservationBaseline {
-        let interfaceSnapshot = interfaceSnapshot(for: observation, projection: projectionMode)
+        let interface = vault.semanticInterface(for: observation)
         let capture = makeTraceCapture(
-            interface: interfaceSnapshot.interface,
-            sequence: 0,
+            interface: interface,
+            sequence: 1,
             observation: observation,
             tripwireSignal: tripwireSignal,
             screenId: observation.tree.id
@@ -302,18 +285,6 @@ final class PostActionObservation {
             tripwireSignal: tripwireSignal,
             settledObservationSequence: settledObservationSequence
         )
-    }
-
-    private func interfaceSnapshot(
-        for observation: InterfaceObservation,
-        projection: InterfaceProjectionMode
-    ) -> TheVault.HashedInterface {
-        switch projection {
-        case .semantic:
-            return vault.semanticInterfaceWithHash(for: observation)
-        case .discovery:
-            return vault.discoveryInterfaceWithHash(for: observation)
-        }
     }
 
     static func shouldRecordAccessibilityTrace(
@@ -358,7 +329,7 @@ final class PostActionObservation {
         transition: AccessibilityTrace.Transition = .empty
     ) -> AccessibilityTrace {
         let capture = AccessibilityTrace.Capture(
-            sequence: parentCapture == nil ? 1 : 2,
+            sequence: (parentCapture?.sequence ?? 0) + 1,
             interface: afterCapture.interface,
             parentHash: parentCapture?.hash,
             context: afterCapture.context,
@@ -407,11 +378,8 @@ final class PostActionObservation {
 
     private func captureFinalBaseline(after visibleEvent: SettledObservationEvent) -> ObservationBaseline {
         let settledObservation = visibleEvent.settledObservation
-        let observation = visibleEvent.scope == .visible
-            ? settledObservation.observation.viewportOnly
-            : settledObservation.observation
         return captureSemanticState(
-            from: observation,
+            from: settledObservation.observation,
             tripwireSignal: vault.tripwire.tripwireSignal(),
             settledObservationSequence: settledObservation.sequence
         )
@@ -462,17 +430,6 @@ final class PostActionObservation {
             baseline: before.elements,
             final: final.elements
         ).map { TheVault.WireConversion.convert($0) }
-    }
-}
-
-private extension SemanticObservationScope {
-    var interfaceProjectionMode: PostActionObservation.InterfaceProjectionMode {
-        switch self {
-        case .visible:
-            return .semantic
-        case .discovery:
-            return .discovery
-        }
     }
 }
 

@@ -386,13 +386,15 @@ final class SemanticObservationLogTests: XCTestCase {
         scope: SemanticObservationScope = .visible,
         previous: SettledObservationEvent? = nil
     ) -> SettledObservationEvent {
+        let previousCapture = previous?.trace.captures.last
         let currentCapture = capture(
             name,
             sequence: sequence,
             generation: generation,
-            scope: scope
+            scope: scope,
+            parentHash: previousCapture?.hash
         ).capture
-        let trace = AccessibilityTrace(captures: previous?.trace.captures.last.map {
+        let trace = AccessibilityTrace(captures: previousCapture.map {
             [$0, currentCapture]
         } ?? [currentCapture])
         let observation = SettledObservation(
@@ -420,7 +422,8 @@ final class SemanticObservationLogTests: XCTestCase {
         _ name: String,
         sequence: UInt64,
         generation: UInt64,
-        scope: SemanticObservationScope = .visible
+        scope: SemanticObservationScope = .visible,
+        parentHash: String? = nil
     ) -> SettledCapture {
         let traceCapture = AccessibilityTrace.Capture(
             sequence: Int(sequence),
@@ -428,7 +431,8 @@ final class SemanticObservationLogTests: XCTestCase {
                 timestamp: Date(timeIntervalSince1970: TimeInterval(sequence)),
                 tree: []
             ),
-            hash: name
+            parentHash: parentHash,
+            context: AccessibilityTrace.Context(screenId: name)
         )
         return SettledCapture(
             cursor: ObservationCursor(

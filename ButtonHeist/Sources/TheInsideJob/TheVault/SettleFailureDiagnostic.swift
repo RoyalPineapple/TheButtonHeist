@@ -1,7 +1,7 @@
 #if canImport(UIKit)
 #if DEBUG
 
-enum SettleFailureDiagnostic {
+@MainActor enum SettleFailureDiagnostic {
     static func message(
         for outcome: SettleSession.Outcome,
         layerGateWasClear: Bool? = nil

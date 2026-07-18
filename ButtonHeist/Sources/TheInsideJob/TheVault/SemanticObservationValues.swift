@@ -224,10 +224,15 @@ internal struct SettledObservation: Sendable, Equatable {
     internal let scope: SemanticObservationScope
     internal let semanticSignal: TheTripwire.SemanticSignal
     private let tree: InterfaceTree
+    private let captureToken: InterfaceCaptureToken
 
     internal var observation: InterfaceObservation {
         do {
-            return try InterfaceObservation.build(tree: tree)
+            return try InterfaceObservation.build(
+                tree: tree,
+                dispatchReferences: .empty,
+                captureToken: captureToken
+            )
         } catch {
             preconditionFailure("Settled semantic observation failed validation: \(error)")
         }
@@ -243,6 +248,7 @@ internal struct SettledObservation: Sendable, Equatable {
         self.scope = scope
         self.semanticSignal = semanticSignal
         self.tree = observation.tree
+        self.captureToken = observation.captureToken
     }
 }
 
@@ -344,45 +350,13 @@ internal struct InterfaceObservationProof {
 
     @MainActor internal static func settled(
         _ outcome: SettleSession.Outcome,
-        vault: TheVault,
-        discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy = .mergeIntoInterface
-    ) -> InterfaceObservationProof? {
-        validated(
-            outcome,
-            vault: vault,
-            discoveryCommitPolicy: discoveryCommitPolicy,
-            lineageEvidence: nil
-        )
-    }
-
-    @MainActor internal static func settledAfterViewportMovement(
-        _ outcome: SettleSession.Outcome,
-        vault: TheVault,
-        discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy = .mergeIntoInterface
-    ) -> InterfaceObservationProof? {
-        validated(
-            outcome,
-            vault: vault,
-            discoveryCommitPolicy: discoveryCommitPolicy,
-            lineageEvidence: .viewportMovement
-        )
-    }
-
-    @MainActor private static func validated(
-        _ outcome: SettleSession.Outcome,
-        vault: TheVault,
-        discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy,
-        lineageEvidence: ScreenLineageEvidence?
+        discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy = .mergeIntoInterface,
+        lineageEvidence: ScreenLineageEvidence? = nil
     ) -> InterfaceObservationProof? {
         guard outcome.outcome.didSettleCleanly,
               let finalObservation = outcome.finalObservation else { return nil }
-        let observation = vault.latestObservation
-        guard observation.captureToken == finalObservation.captureToken,
-              observation.tree == finalObservation.tree,
-              SettleTimeline.fingerprint(of: observation.liveCapture.hierarchy.sortedElements)
-                == finalObservation.fingerprint else { return nil }
         return InterfaceObservationProof(
-            observation: observation,
+            observation: finalObservation.observation,
             tripwireSignal: outcome.tripwireSignal,
             discoveryCommitPolicy: discoveryCommitPolicy,
             lineageEvidence: lineageEvidence
@@ -394,25 +368,12 @@ internal struct InterfaceObservationProof {
 internal struct ObservationSettlement {
     internal enum Result {
         case committed(SettledObservationEvent)
-        case observedUnsettled(InterfaceTree, notificationBatch: AccessibilityNotificationBatch?)
+        case observedUnsettled(InterfaceObservation, notificationBatch: AccessibilityNotificationBatch?)
         case unavailable(notificationBatch: AccessibilityNotificationBatch?)
     }
 
     internal let settle: SettleSession.Outcome
     internal let result: Result
-}
-
-// MARK: - Semantic Observation Projection
-
-internal extension InterfaceObservation {
-    func semanticObservationProjection(for scope: SemanticObservationScope) -> InterfaceObservation {
-        switch scope {
-        case .visible:
-            return viewportOnly
-        case .discovery:
-            return self
-        }
-    }
 }
 
 #endif // DEBUG

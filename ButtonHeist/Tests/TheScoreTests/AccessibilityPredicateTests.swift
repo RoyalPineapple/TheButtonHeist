@@ -1027,8 +1027,12 @@ final class AccessibilityPredicateTests: XCTestCase {
         )
     }
 
-    func testElementUpdatedWithPropertyOnlyMetWhenTargetUpdates() throws {
+    func testElementUpdatedResolvesTargetThroughCaptureReferences() throws {
         let trace = try makeUpdateTrace(label: "counter", property: .value, old: "a", new: "b")
+        let edge = try XCTUnwrap(trace.changeFacts.first?.metadata.captureEdge)
+        XCTAssertEqual(trace.capture(ref: edge.before)?.sequence, edge.before.sequence)
+        XCTAssertEqual(trace.capture(ref: edge.after)?.sequence, edge.after.sequence)
+
         let action = makeResult(success: true, trace: trace, completeness: .incomplete)
         let predicate = AccessibilityPredicate.changed(.elements([
             .updated(.label("counter"), .value()),
@@ -1553,19 +1557,17 @@ final class AccessibilityPredicateTests: XCTestCase {
     }
 
     private func screenTrace(before: Interface, after: Interface) -> AccessibilityTrace {
-        AccessibilityTrace(captures: [
-            AccessibilityTrace.Capture(
+        AccessibilityTrace(
+            capture: AccessibilityTrace.Capture(
                 sequence: 1,
                 interface: before,
                 context: AccessibilityTrace.Context(screenId: "before")
-            ),
-            AccessibilityTrace.Capture(
-                sequence: 2,
-                interface: after,
-                context: AccessibilityTrace.Context(screenId: "after"),
-                transition: screenChangedTransition()
-            ),
-        ])
+            )
+        ).appending(
+            after,
+            context: AccessibilityTrace.Context(screenId: "after"),
+            transition: screenChangedTransition()
+        )
     }
 
     private func screenChangedTransition() -> AccessibilityTrace.Transition {

@@ -154,7 +154,7 @@ final class SemanticObservationStreamTests: XCTestCase {
         XCTAssertEqual(transition.previousCursor, entries[0].cursor)
     }
 
-    func testVisiblePublicationPreservesAndProjectsKnownOffViewportTruth() throws {
+    func testVisiblePublicationRetainsKnownGraphInStateAndTraceEvidence() throws {
         let visibleBefore = AccessibilityElement.make(
             label: "Anchor",
             value: "Before",
@@ -184,6 +184,10 @@ final class SemanticObservationStreamTests: XCTestCase {
             currentEvent.trace.captures.last?.interface.projectedElements.contains {
                 $0.label == "Known Offscreen"
             } == true
+        )
+        XCTAssertEqual(
+            currentEvent.settledObservation.observation.tree.orderedElements.compactMap(\.element.label),
+            currentEvent.trace.captures.last?.interface.projectedElements.compactMap(\.label)
         )
     }
 
@@ -285,6 +289,56 @@ final class SemanticObservationStreamTests: XCTestCase {
         )
     }
 
+    func testDiscoveryPublicationCarriesCanonicalGraphAndEvidenceAcrossFulfilledScopes() throws {
+        let visible = AccessibilityElement.make(label: "Visible", traits: .header)
+        let offViewport = AccessibilityElement.make(label: "Off Viewport", traits: .button)
+        let observation = InterfaceObservation.makeForTests(
+            [.init(visible, heistId: "visible")],
+            offViewport: [.init(offViewport, heistId: "off_viewport")]
+        )
+
+        let discoveryEvent = vault.semanticObservationStream.commitDiscoveryObservationForTesting(observation)
+        let visibleEvent = try XCTUnwrap(
+            vault.semanticObservationStream.retainedObservationEntries(scope: .visible).last?.event
+        )
+
+        XCTAssertEqual(discoveryEvent.settledObservation.observation.tree.elementIDs, ["visible", "off_viewport"])
+        XCTAssertEqual(discoveryEvent.settledObservation.observation.captureToken, observation.captureToken)
+        XCTAssertEqual(
+            discoveryEvent.trace.captures.last?.interface.projectedElements.compactMap(\.label),
+            ["Visible", "Off Viewport"]
+        )
+        XCTAssertEqual(visibleEvent.settledObservation.observation.tree.elementIDs, ["visible", "off_viewport"])
+        XCTAssertEqual(visibleEvent.settledObservation.observation.captureToken, observation.captureToken)
+        XCTAssertEqual(
+            visibleEvent.trace.captures.last?.interface.projectedElements.compactMap(\.label),
+            ["Visible", "Off Viewport"]
+        )
+        XCTAssertEqual(vault.latestObservation.captureToken, observation.captureToken)
+    }
+
+    func testDiscoverySettlementRejectsTripwireChangeBeforeCommit() {
+        let observation = observation(label: "Candidate", heistId: "candidate")
+        vault.recordParsedObservedEvidence(observation)
+        let settledSignal = tripwireSignal(sequence: 1)
+        let currentSignal = tripwireSignal(sequence: 2)
+        vault.semanticObservationStream.readTripwireSignal = { currentSignal }
+        let outcome = settleOutcome(
+            .settled(timeMs: 1),
+            observation: observation,
+            tripwireSignal: settledSignal
+        )
+
+        let event = vault.semanticObservationStream.commitSettledDiscoveryObservation(
+            outcome,
+            discoveryCommitPolicy: .mergeIntoInterface,
+            afterViewportMovement: true
+        )
+
+        XCTAssertNil(event)
+        XCTAssertNil(vault.interfaceTree.findElement(heistId: "candidate"))
+    }
+
     func testDiscoveryAfterVisibleReplacementUsesGlobalGenerationAndScopedPredecessor() throws {
         let initialDiscovery = vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             observation(label: "First Screen", heistId: "first_screen")
@@ -368,13 +422,11 @@ final class SemanticObservationStreamTests: XCTestCase {
                 generation: .initial,
                 previousEvents: [:]
             ),
-            evidenceByScope: [
-                .visible: SemanticObservationPublication.Evidence(
-                    interface: interface,
-                    accessibilityNotifications: [],
-                    firstResponder: nil
-                ),
-            ]
+            evidence: SemanticObservationPublication.Evidence(
+                interface: interface,
+                accessibilityNotifications: [],
+                firstResponder: nil
+            )
         )
         var state = SemanticObservationRuntimeState()
         state.requireReplacement()
@@ -626,8 +678,12 @@ final class SemanticObservationStreamTests: XCTestCase {
             observation(label: "Retained Discovery", heistId: "retained_discovery")
         )
         let discoveryCompleted = expectation(description: "Empty discovery cycle completed")
+        var didRecordCompletion = false
         vault.semanticObservationStream.start {
-            discoveryCompleted.fulfill()
+            if !didRecordCompletion {
+                didRecordCompletion = true
+                discoveryCompleted.fulfill()
+            }
             return nil
         }
 
@@ -726,11 +782,10 @@ final class SemanticObservationStreamTests: XCTestCase {
             return XCTFail("A clean settle from a superseded capture must not commit")
         }
         XCTAssertEqual(vault.latestObservation.captureToken, current.captureToken)
-        XCTAssertEqual(vault.latestFailedSettleDiagnosticEvidence?.tree, stale.tree)
-        XCTAssertNil(vault.latestFailedSettleDiagnosticEvidence?.liveCapture.object(for: "same"))
+        XCTAssertEqual(vault.latestFailedSettleDiagnosticEvidence?.captureToken, stale.captureToken)
     }
 
-    func testPostActionAdmissionReturnsOnlyTimedOutTreeAsUnsettledEvidence() async {
+    func testPostActionAdmissionReturnsExactTimedOutObservationAsUnsettledEvidence() async {
         let screen = observation(label: "Unstable", heistId: "unstable")
         vault.recordParsedObservedEvidence(screen)
 
@@ -743,14 +798,14 @@ final class SemanticObservationStreamTests: XCTestCase {
             )
         )
 
-        guard case .observedUnsettled(let tree, _) = result.result else {
-            return XCTFail("A timeout with a final tree should return diagnostic unsettled evidence")
+        guard case .observedUnsettled(let observation, _) = result.result else {
+            return XCTFail("A timeout with a final observation should return diagnostic unsettled evidence")
         }
-        XCTAssertEqual(tree, screen.tree)
-        XCTAssertEqual(vault.latestFailedSettleDiagnosticEvidence?.tree, screen.tree)
+        XCTAssertEqual(observation.captureToken, screen.captureToken)
+        XCTAssertEqual(vault.latestFailedSettleDiagnosticEvidence?.captureToken, screen.captureToken)
     }
 
-    func testPostActionAdmissionNeverReturnsCancelledTreeAsUsableEvidence() async {
+    func testPostActionAdmissionNeverReturnsCancelledObservationAsUsableEvidence() async {
         let screen = observation(label: "Cancelled", heistId: "cancelled")
         vault.recordParsedObservedEvidence(screen)
 
@@ -766,7 +821,7 @@ final class SemanticObservationStreamTests: XCTestCase {
         guard case .unavailable = result.result else {
             return XCTFail("Cancellation must not expose its last tree as usable action evidence")
         }
-        XCTAssertEqual(vault.latestFailedSettleDiagnosticEvidence?.tree, screen.tree)
+        XCTAssertEqual(vault.latestFailedSettleDiagnosticEvidence?.captureToken, screen.captureToken)
     }
 
     private func observation(label: String, heistId: HeistId) -> InterfaceObservation {

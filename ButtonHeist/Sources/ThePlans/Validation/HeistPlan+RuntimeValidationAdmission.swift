@@ -39,14 +39,6 @@ public struct HeistPlanAdmissionCandidate: Codable, Sendable, Equatable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let decodedVersion = try container.decode(Int.self, forKey: .version)
-        guard decodedVersion == HeistPlan.currentVersion else {
-            throw DecodingError.dataCorruptedError(
-                forKey: .version,
-                in: container,
-                debugDescription: "Unsupported heist plan version \(decodedVersion). " +
-                    "This Button Heist build supports version \(HeistPlan.currentVersion)."
-            )
-        }
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist plan")
         version = decodedVersion
         name = try container.decodeIfPresent(HeistPlanName.self, forKey: .name)
@@ -390,11 +382,22 @@ extension HeistPlanRuntimeSafetyValidator {
 
 private extension HeistPlan {
     init(admitting candidate: HeistPlanAdmissionCandidate) throws {
+        guard candidate.version == Self.currentVersion else {
+            throw HeistPlanVersionAdmissionError(observed: candidate.version)
+        }
         version = candidate.version
         name = candidate.name
         parameter = candidate.parameter
         definitions = try candidate.definitions.map { try HeistPlan(admitting: $0) }
         body = try candidate.body.map { try $0.admittedStep() }
+    }
+}
+
+package struct HeistPlanVersionAdmissionError: Error, Sendable, Equatable, CustomStringConvertible {
+    package let observed: Int
+
+    package var description: String {
+        "unsupported heist plan version \(observed); this build supports version \(HeistPlan.currentVersion)"
     }
 }
 

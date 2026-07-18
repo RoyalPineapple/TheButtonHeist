@@ -97,7 +97,6 @@ extension TheHandoff {
 
             let device = target.device
             onStatus?("Reconnecting to \(device.name)...")
-            closeConnection()
             let attemptID = openConnection(to: device)
             do {
                 try await waitForConnectionResult(timeout: reconnectAttemptTimeout)

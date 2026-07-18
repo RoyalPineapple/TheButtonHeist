@@ -302,13 +302,13 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
             failNonDurableAction(at: path, observed: failure)
         }
         do {
-            try command.assertResolvedPayloadAdmissible(in: environment)
+            _ = try HeistActionPayloadAdmission.resolve(command, in: environment)
         } catch {
             fail(
                 path: path,
-                contract: "resolved command payload must satisfy the heist action payload contract",
+                contract: "resolved action command must be admissible",
                 observed: summarize(error),
-                correction: "Use values and refs that lower to a valid \(command.wireType.rawValue) command payload."
+                correction: "Use values and refs that resolve to a valid \(command.wireType.rawValue) action."
             )
         }
     }
@@ -424,13 +424,13 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
     ) {
         for check in context.bindingSamples {
             do {
-                try action.command.assertResolvedPayloadAdmissible(in: check.environment)
+                _ = try HeistActionPayloadAdmission.resolve(action.command, in: check.environment)
             } catch {
                 fail(
                     path: context.path,
-                    contract: "string loop value must lower through the heist action payload contract",
+                    contract: "string loop value must resolve to an admissible action command",
                     observed: "\(check.sourcePath.description) resolved to \(summarize(error))",
-                    correction: "Use loop string values that keep every referenced command payload valid."
+                    correction: "Use loop string values that keep every referenced action admissible."
                 )
             }
         }

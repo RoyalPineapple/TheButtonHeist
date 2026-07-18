@@ -1,78 +1,14 @@
 import ThePlans
 
 extension TheFence.Command {
-    func makeHeistRuntimeDescriptor() -> FenceCommandDescriptor {
-        switch self {
-        case .perform:
-            return makeDescriptor(
-                family: .heistRuntime,
-                parameters: [
-                    FenceParameters.performStep.spec,
-                ],
-                timeout: .performStep,
-                projection: .mcpOnly(Self.performDescription)
-            )
-        case .runHeist:
-            return makeDescriptor(
-                family: .heistRuntime,
-                parameters: [Self.rootArgumentParameter] + Self.planSourceParameters,
-                timeout: .fixed(.longAction),
-                projection: .cliAndMCP(Self.runHeistDescription)
-            )
-        case .validateHeist:
-            return makeDescriptor(
-                family: .heistRuntime,
-                requiresConnectionBeforeDispatch: false,
-                parameters: [
-                    Self.rootArgumentParameter,
-                    FenceParameters.heistValidationLint.spec,
-                ] + Self.planSourceParameters,
-                projection: .cliAndMCP(
-                    Self.validateHeistDescription,
-                    mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
-                )
-            )
-        case .listHeists:
-            return makeDescriptor(
-                family: .heistRuntime,
-                requiresConnectionBeforeDispatch: false,
-                parameters: [
-                    FenceParameters.heistCatalogDetail.spec,
-                ] + Self.planSourceParameters,
-                projection: .cliAndMCP(
-                    "List the root entry and reusable heists in a plan. Use `detail: \"detailed\"` " +
-                        "when composing against available capabilities.",
-                    mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
-                )
-            )
-        case .describeHeist:
-            return makeDescriptor(
-                family: .heistRuntime,
-                requiresConnectionBeforeDispatch: false,
-                parameters: [
-                    FenceParameters.heistName.spec,
-                ] + Self.planSourceParameters,
-                projection: .cliAndMCP(
-                    "Describe one root entry or reusable heist from a plan so an agent can call it safely.",
-                    mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
-                )
-            )
-        case .ping, .listDevices, .getInterface, .getScreen, .getPasteboard, .getAnnouncements,
-             .getSessionState, .connect, .listTargets, .wait, .oneFingerTap, .longPress, .swipe, .drag,
-             .scroll, .scrollToVisible, .scrollToEdge, .activate, .rotor, .typeText, .editAction,
-             .setPasteboard, .dismissKeyboard:
-            preconditionFailure("\(rawValue) is not a heist runtime command")
-        }
-    }
-
-    private static var planSourceParameters: [FenceParameterSpec] {
+    static var planSourceParameters: [FenceParameterSpec] {
         [
             FenceParameters.planPath.spec,
             FenceParameters.inlinePlan.spec,
         ]
     }
 
-    private static let performDescription = """
+    static let performDescription = """
         Run one durable ButtonHeist DSL instruction from `step`: one action or one `WaitFor(...)` statement.
 
         Examples:
@@ -100,7 +36,7 @@ extension TheFence.Command {
         `WaitFor(...).else { ... }`, `ForEach`, `Warn`, or `Fail`.
         """
 
-    private static let runHeistDescription = """
+    static let runHeistDescription = """
         Run a durable heist from a ButtonHeist source plan in `plan`, or from a generated `.heist` package at `path`.
 
         Author plans as ButtonHeist source, not raw JSON IR:
@@ -119,7 +55,7 @@ extension TheFence.Command {
         ButtonHeist DSL, not arbitrary Swift.
         """
 
-    private static let validateHeistDescription = """
+    static let validateHeistDescription = """
         Validate a durable Button Heist plan without connecting to an app.
         Returns runtime-admission diagnostics, optional authoring lint, and
         canonical source. Provide exactly one of `plan` or `path`. This cannot
@@ -127,7 +63,7 @@ extension TheFence.Command {
         `admissible` is true.
         """
 
-    private static var rootArgumentParameter: FenceParameterSpec {
+    static var rootArgumentParameter: FenceParameterSpec {
         objectParam(
             .argument,
             properties: [

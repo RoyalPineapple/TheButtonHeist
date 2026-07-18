@@ -526,7 +526,7 @@ final class TheBrainsActionTests: XCTestCase {
         installScreen(elements: [(element, heistId)], objects: [heistId: liveObject])
 
         let target = try AccessibilityTarget.label("Moving").resolve(in: .empty)
-        let resolved = brains.vault.resolveTarget(target).resolved
+        let resolved = brains.vault.resolveTarget(target).resolvedElement
         let liveTarget: TheVault.LiveActionTarget?
         if let resolved,
            case .resolved(let target) = brains.vault.resolveLiveActionTarget(for: resolved) {
@@ -1188,11 +1188,16 @@ final class TheBrainsActionTests: XCTestCase {
                 let before = states[incrementCount]
                 incrementCount += 1
                 let after = states[incrementCount]
+                let actionTrace = AccessibilityTrace(capture: before.capture).appending(
+                    after.capture.interface,
+                    context: after.capture.context,
+                    transition: after.capture.transition
+                )
                 return ActionResult.success(
                     method: .increment,
                         observation: .settledTrace(
                             makeTestTraceEvidence(
-                                AccessibilityTrace(captures: [before.capture, after.capture]),
+                                actionTrace,
                                 completeness: .incomplete
                             ),
                             .settled(duration: 0)
@@ -3375,7 +3380,7 @@ observation: .settledTrace(
         installScreen(elements: [(element, heistId)], objects: [heistId: liveObject])
 
         let target = try AccessibilityTarget.label("Geometry Missing").resolve(in: .empty)
-        let resolved = brains.vault.resolveTarget(target).resolved
+        let resolved = brains.vault.resolveTarget(target).resolvedElement
         let liveTarget: TheVault.LiveActionTarget?
         if let resolved,
            case .resolved(let target) = brains.vault.resolveLiveActionTarget(for: resolved) {
@@ -3427,7 +3432,7 @@ observation: .settledTrace(
         }
 
         let target = try AccessibilityTarget.identifier("refreshed_slider").resolve(in: .empty)
-        guard let committedTarget = brains.vault.resolveTarget(target).resolved else {
+        guard let committedTarget = brains.vault.resolveTarget(target).resolvedElement else {
             XCTFail("Expected committed semantic target to resolve")
             return
         }
@@ -4995,7 +5000,11 @@ private final class ScriptedHeistObservationSource {
             semanticSignal: .empty
         )
         let trace = if let previousCapture {
-            AccessibilityTrace(captures: [previousCapture, state.capture])
+            AccessibilityTrace(capture: previousCapture).appending(
+                state.capture.interface,
+                context: state.capture.context,
+                transition: state.capture.transition
+            )
         } else {
             AccessibilityTrace(capture: state.capture)
         }

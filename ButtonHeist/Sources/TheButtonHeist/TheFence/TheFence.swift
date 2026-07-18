@@ -130,10 +130,10 @@ public final class TheFence {
 
     func dispatch(_ request: FenceOperationRequest) async throws -> FenceResponse {
         switch request.dispatch {
-        case .singleStepHeist(let request):
-            return try await executeSingleStepHeist(request)
-        case .directAction(let request):
-            return try await handleDirectActionRequest(request)
+        case .singleStepHeist(let dispatch):
+            return try await executeSingleStepHeist(dispatch)
+        case .directAction(let dispatch):
+            return try await handleDirectActionRequest(dispatch, command: request.command)
         case .handler(let handler):
             return try await handler(self)
         }

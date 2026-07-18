@@ -1628,7 +1628,7 @@ final class TheBrainsScrollTests: XCTestCase {
         ) else {
             return XCTFail("Expected word-list exploration to settle")
         }
-        let labels = brains.vault.discoveryInterface().projectedElements.compactMap(\.label)
+        let labels = try brains.vault.selectInterface(InterfaceQuery()).projectedElements.compactMap(\.label)
         XCTAssertEqual(
             exploration.event.generation,
             visibleEvent.generation,
@@ -2384,9 +2384,9 @@ final class TheBrainsScrollTests: XCTestCase {
         brains.vault.installObservationForTesting(liveScreen)
         let prematureResolution = brains.vault.resolveTarget(
             literalTarget(ElementPredicate.label("Jump Target"), ordinal: 0)
-        ).resolved
-        XCTAssertNil(prematureResolution, "Parser exposed offscreen scroll content before semantic reveal")
-        guard prematureResolution == nil else {
+        )
+        guard case .notFound = prematureResolution else {
+            XCTFail("Parser exposed offscreen scroll content before semantic reveal: \(prematureResolution)")
             return
         }
 

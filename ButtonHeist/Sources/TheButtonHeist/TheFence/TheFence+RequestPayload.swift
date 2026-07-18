@@ -1,9 +1,8 @@
+import Foundation
 import ThePlans
-
 import TheScore
 
 extension TheFence {
-
     struct MissingAccessibilityTarget: Error {
         let command: Command
     }
@@ -14,37 +13,33 @@ extension TheFence {
 
     typealias RequestHandler = @ButtonHeistActor @Sendable (TheFence) async throws -> FenceResponse
 
-    struct DurableHeistActionCommands: Sendable {
-        private let actions: NonEmptyArray<HeistActionCommand>
+    struct DurableHeistActionCommand: Sendable {
+        let action: HeistActionCommand
 
-        init?(_ actions: NonEmptyArray<HeistActionCommand>) {
-            guard actions.allSatisfy({ $0.durableHeistActionFailure == nil }) else {
-                return nil
-            }
-            self.actions = actions
-        }
-
-        var first: HeistActionCommand {
-            actions.first
-        }
-
-        var count: Int {
-            actions.count
-        }
-
-        var values: [HeistActionCommand] {
-            actions.elements
+        init?(_ action: HeistActionCommand) {
+            guard action.durableHeistActionFailure == nil else { return nil }
+            self.action = action
         }
     }
 
     enum SingleStepHeistRequest: Sendable {
-        case actions(command: Command, DurableHeistActionCommands, expectation: ExpectationPayload)
-        case wait(command: Command, WaitStep)
+        case action(
+            DurableHeistActionCommand,
+            expectation: ExpectationPayload,
+            actionTimeout: TimeInterval
+        )
+        case wait(WaitStep)
     }
 
     struct DirectActionRequest: Sendable {
-        let command: Command
         let action: HeistActionCommand
+        let timeout: TimeInterval
+
+        init?(_ action: HeistActionCommand, timeout: TimeInterval) {
+            guard action.durableHeistActionFailure != nil else { return nil }
+            self.action = action
+            self.timeout = timeout
+        }
     }
 
     enum DecodedRequestDispatch: Sendable {
@@ -57,331 +52,164 @@ extension TheFence {
         }
     }
 
-    private enum RequestDecoder {
-        @ButtonHeistActor
-        static func decode(
-            fence: TheFence,
-            input: FenceCommandInput
-        ) throws -> FenceOperationRequest {
-            let command = input.command
-            let arguments = input.arguments
-            try Self.validateBoundaryShape(command: command, arguments: arguments)
-            let expectationPayload = try ExpectationPayload(arguments: arguments)
-            let dispatch: DecodedRequestDispatch
-            switch command {
-            case .ping:
-                dispatch = DecodedRequestDispatch { fence in try await fence.handlePing() }
-            case .listDevices:
-                dispatch = DecodedRequestDispatch { fence in try await fence.handleListDevices() }
-            case .getInterface:
-                let request = try fence.makeGetInterfaceRequest(arguments)
-                dispatch = DecodedRequestDispatch { fence in try await fence.handleGetInterface(request) }
-            case .getScreen:
-                let request = try fence.makeScreenRequest(arguments)
-                dispatch = DecodedRequestDispatch { fence in try await fence.handleGetScreen(request) }
-            case .getPasteboard:
-                dispatch = DecodedRequestDispatch { fence in try await fence.handleGetPasteboard() }
-            case .getAnnouncements:
-                dispatch = DecodedRequestDispatch { fence in try await fence.handleGetAnnouncements() }
-            case .wait:
-                dispatch = try Self.admitWait(arguments, expectation: expectationPayload)
-            case .oneFingerTap:
-                dispatch = try TheFence.appInteractionDispatch(
-                    .oneFingerTap, .mechanicalTap(try fence.decodeTapTarget(arguments)),
-                    expectationPayload: expectationPayload
-                )
-            case .longPress:
-                dispatch = try TheFence.appInteractionDispatch(
-                    .longPress, .mechanicalLongPress(try fence.decodeLongPressTarget(arguments)),
-                    expectationPayload: expectationPayload
-                )
-            case .swipe:
-                dispatch = try TheFence.appInteractionDispatch(
-                    .swipe, .mechanicalSwipe(try fence.decodeSwipeTarget(arguments)),
-                    expectationPayload: expectationPayload
-                )
-            case .drag:
-                dispatch = try TheFence.appInteractionDispatch(
-                    .drag, .mechanicalDrag(try fence.decodeDragTarget(arguments)),
-                    expectationPayload: expectationPayload
-                )
-            case .scroll:
-                dispatch = try Self.admitScroll(arguments, expectation: expectationPayload)
-            case .scrollToVisible:
-                dispatch = try TheFence.appInteractionDispatch(
-                    .scrollToVisible, .viewportScrollToVisible(try arguments.requiredAccessibilityTarget(command: .scrollToVisible)),
-                    expectationPayload: expectationPayload
-                )
-            case .scrollToEdge:
-                dispatch = try Self.admitScrollToEdge(arguments, expectation: expectationPayload)
-            case .activate:
-                dispatch = try Self.admitActivate(arguments, expectation: expectationPayload)
-            case .rotor:
-                dispatch = try Self.admitRotor(arguments, expectation: expectationPayload)
-            case .typeText:
-                dispatch = try Self.admitTypeText(arguments, expectation: expectationPayload)
-            case .editAction:
-                dispatch = try Self.admitEditAction(arguments, expectation: expectationPayload)
-            case .setPasteboard:
-                dispatch = try Self.admitSetPasteboard(arguments, expectation: expectationPayload)
-            case .dismissKeyboard:
-                dispatch = try TheFence.appInteractionDispatch(
-                    .dismissKeyboard, .dismissKeyboard,
-                    expectationPayload: expectationPayload
-                )
-            case .perform:
-                let request = try fence.decodePerformRequest(arguments)
-                dispatch = DecodedRequestDispatch { fence in try await fence.handlePerform(request) }
-            case .runHeist:
-                let request = try fence.decodeRunHeistRequest(arguments)
-                dispatch = DecodedRequestDispatch { fence in try await fence.handleRunHeist(request) }
-            case .validateHeist:
-                let request = try fence.decodeValidateHeistRequest(arguments)
-                dispatch = DecodedRequestDispatch { fence in try fence.handleValidateHeist(request) }
-            case .listHeists:
-                let request = try fence.decodeListHeistsRequest(arguments)
-                dispatch = DecodedRequestDispatch { fence in fence.handleListHeists(request) }
-            case .describeHeist:
-                let request = try fence.decodeDescribeHeistRequest(arguments)
-                dispatch = DecodedRequestDispatch { fence in fence.handleDescribeHeist(request) }
-            case .getSessionState:
-                dispatch = DecodedRequestDispatch { fence in .sessionState(payload: fence.currentSessionState()) }
-            case .connect:
-                let request = try fence.decodeConnectRequest(arguments)
-                dispatch = DecodedRequestDispatch { fence in try await fence.handleConnect(request) }
-            case .listTargets:
-                dispatch = DecodedRequestDispatch { fence in fence.handleListTargets() }
-            }
-
-            return FenceOperationRequest(command: command, dispatch: dispatch)
+    private static func validateBoundaryShape(
+        command: Command,
+        arguments: CommandArgumentEnvelope
+    ) throws {
+        let descriptor = command.descriptor
+        guard descriptor.isPublicRequestContract else {
+            throw SchemaValidationError(
+                field: "command",
+                observed: "string \"\(command.rawValue)\"",
+                expected: "public command for The Button Heist"
+            )
         }
-
-        private static func validateBoundaryShape(
-            command: Command,
-            arguments: CommandArgumentEnvelope
-        ) throws {
-            guard command.descriptor.isPublicRequestContract else {
+        let allowedKeys = descriptor.topLevelParameterKeys
+        if let unexpectedKey = arguments.keys.sorted().first(where: { !allowedKeys.contains($0) }) {
+            throw SchemaValidationError(
+                field: arguments.field(forUnknownKey: unexpectedKey),
+                observed: arguments.observedDescription(forUnknownKey: unexpectedKey) ?? "missing",
+                expected: "valid \(command.rawValue) parameter"
+            )
+        }
+        for parameter in descriptor.parameters {
+            guard let value = arguments.values[parameter.key] else {
+                guard parameter.required else { continue }
                 throw SchemaValidationError(
-                    field: "command",
-                    observed: "string \"\(command.rawValue)\"",
-                    expected: "public command for The Button Heist"
+                    field: arguments.field(forUnknownKey: parameter.key),
+                    observed: "missing",
+                    expected: parameter.expectedTypeDescription
                 )
             }
-            let allowedKeys = command.descriptor.topLevelParameterKeys
-            if let unexpectedKey = arguments.keys.sorted().first(where: { !allowedKeys.contains($0) }) {
-                throw SchemaValidationError(
-                    field: arguments.field(forUnknownKey: unexpectedKey),
-                    observed: arguments.observedDescription(forUnknownKey: unexpectedKey) ?? "missing",
-                    expected: "valid \(command.rawValue) parameter"
-                )
-            }
-            for parameter in command.descriptor.parameters {
-                guard let value = arguments.values[parameter.key] else {
-                    guard parameter.required else { continue }
-                    throw SchemaValidationError(
-                        field: arguments.field(forUnknownKey: parameter.key),
-                        observed: "missing",
-                        expected: parameter.expectedTypeDescription
-                    )
-                }
-                try parameter.validatePayload(
-                    value,
-                    field: arguments.field(forUnknownKey: parameter.key)
-                )
-            }
+            try parameter.validatePayload(
+                value,
+                field: arguments.field(forUnknownKey: parameter.key)
+            )
         }
+    }
 
-        @ButtonHeistActor
-        private static func admitWait(
-            _ arguments: CommandArgumentEnvelope,
-            expectation: ExpectationPayload
-        ) throws -> DecodedRequestDispatch {
-            let predicate = try ExpectationPayload.parseRequiredPredicate(arguments.value(for: .predicate))
-            return TheFence.waitDispatch(.wait, WaitStep(
-                predicate: predicate,
-                timeout: expectation.timeout ?? defaultWaitTimeout
-            ))
-        }
-
-        @ButtonHeistActor
-        private static func admitScroll(
-            _ arguments: CommandArgumentEnvelope,
-            expectation: ExpectationPayload
-        ) throws -> DecodedRequestDispatch {
-            let direction = try arguments.value(
+    func decodeScrollTarget(_ arguments: CommandArgumentEnvelope) throws -> ScrollTarget {
+        ScrollTarget(
+            selection: try arguments.scrollContainerSelection(),
+            direction: try arguments.value(
                 FenceParameters.scrollDirection,
                 defaultFrom: Command.scroll.descriptor
             )
-            return try TheFence.appInteractionDispatch(
-                .scroll,
-                .viewportScroll(ScrollTarget(
-                    selection: try arguments.scrollContainerSelection(),
-                    direction: direction
-                )),
-                expectationPayload: expectation
-            )
-        }
+        )
+    }
 
-        @ButtonHeistActor
-        private static func admitScrollToEdge(
-            _ arguments: CommandArgumentEnvelope,
-            expectation: ExpectationPayload
-        ) throws -> DecodedRequestDispatch {
-            let edge = try arguments.value(
+    func decodeScrollToEdgeTarget(_ arguments: CommandArgumentEnvelope) throws -> ScrollToEdgeTarget {
+        ScrollToEdgeTarget(
+            selection: try arguments.scrollContainerSelection(),
+            edge: try arguments.value(
                 FenceParameters.scrollEdge,
                 defaultFrom: Command.scrollToEdge.descriptor
             )
-            return try TheFence.appInteractionDispatch(
-                .scrollToEdge,
-                .viewportScrollToEdge(ScrollToEdgeTarget(
-                    selection: try arguments.scrollContainerSelection(),
-                    edge: edge
-                )),
-                expectationPayload: expectation
-            )
-        }
-
-        @ButtonHeistActor
-        private static func admitActivate(
-            _ arguments: CommandArgumentEnvelope,
-            expectation: ExpectationPayload
-        ) throws -> DecodedRequestDispatch {
-            let target = try arguments.requiredAccessibilityTarget(command: .activate)
-            let actionName = try arguments.value(FenceParameters.actionName)
-            return try TheFence.appInteractionDispatch(
-                .activate,
-                try TheFence.accessibilityActionCommand(target: target, actionName: actionName),
-                expectationPayload: expectation
-            )
-        }
-
-        @ButtonHeistActor
-        private static func admitRotor(
-            _ arguments: CommandArgumentEnvelope,
-            expectation: ExpectationPayload
-        ) throws -> DecodedRequestDispatch {
-            let rotor = try arguments.value(FenceParameters.rotorName)
-            let rotorIndex = try arguments.value(FenceParameters.rotorIndex)
-            if rotor != nil, rotorIndex != nil {
-                throw SchemaValidationError(
-                    field: "rotor/rotorIndex",
-                    observed: arguments.observedDescription,
-                    expected: "either rotor or rotorIndex"
-                )
-            }
-            let selection: RotorSelection = if let rotor {
-                .named(try RotorName(validating: rotor))
-            } else if let rotorIndex {
-                .index(rotorIndex)
-            } else {
-                .automatic
-            }
-            return try TheFence.appInteractionDispatch(
-                .rotor,
-                .rotor(
-                    selection: selection,
-                    target: try arguments.requiredAccessibilityTarget(command: .rotor),
-                    direction: try arguments.value(
-                        FenceParameters.rotorDirection,
-                        defaultFrom: Command.rotor.descriptor
-                    )
-                ),
-                expectationPayload: expectation
-            )
-        }
-
-        @ButtonHeistActor
-        private static func admitTypeText(
-            _ arguments: CommandArgumentEnvelope,
-            expectation: ExpectationPayload
-        ) throws -> DecodedRequestDispatch {
-            let mode = try arguments.value(
-                FenceParameters.textInputMode,
-                defaultFrom: Command.typeText.descriptor
-            )
-            let text = try arguments.requiredValue(FenceParameters.text)
-            let input: TextInputText
-            do {
-                input = try TextInputText(validating: text, mode: mode)
-            } catch TextInputTextError.emptyAppend {
-                throw SchemaValidationError(
-                    field: FenceParameters.text.key.rawValue,
-                    observed: "string \"\(text)\"",
-                    expected: "non-empty string"
-                )
-            }
-            return try TheFence.appInteractionDispatch(
-                .typeText,
-                .typeText(
-                    text: input,
-                    target: try arguments.decodedAccessibilityTarget().map {
-                        try $0.validatedElementTarget(command: .typeText)
-                    }
-                ),
-                expectationPayload: expectation
-            )
-        }
-
-        @ButtonHeistActor
-        private static func admitEditAction(
-            _ arguments: CommandArgumentEnvelope,
-            expectation: ExpectationPayload
-        ) throws -> DecodedRequestDispatch {
-            try TheFence.appInteractionDispatch(
-                .editAction,
-                .editAction(EditActionTarget(
-                    action: try arguments.requiredValue(FenceParameters.editAction)
-                )),
-                expectationPayload: expectation
-            )
-        }
-
-        @ButtonHeistActor
-        private static func admitSetPasteboard(
-            _ arguments: CommandArgumentEnvelope,
-            expectation: ExpectationPayload
-        ) throws -> DecodedRequestDispatch {
-            try TheFence.appInteractionDispatch(
-                .setPasteboard,
-                .setPasteboard(SetPasteboardTarget(
-                    text: try PasteboardText(validating: arguments.requiredValue(FenceParameters.pasteboardText))
-                )),
-                expectationPayload: expectation
-            )
-        }
+        )
     }
 
-    private static func waitDispatch(_ command: Command, _ step: WaitStep) -> DecodedRequestDispatch {
-        .singleStepHeist(.wait(command: command, step))
+    func decodeAccessibilityAction(_ arguments: CommandArgumentEnvelope) throws -> HeistActionCommand {
+        try Self.accessibilityActionCommand(
+            target: arguments.requiredAccessibilityTarget(command: .activate),
+            actionName: arguments.value(FenceParameters.actionName)
+        )
     }
 
-    private static func appInteractionDispatch(
+    func decodeRotorAction(_ arguments: CommandArgumentEnvelope) throws -> HeistActionCommand {
+        let rotor = try arguments.value(FenceParameters.rotorName)
+        let rotorIndex = try arguments.value(FenceParameters.rotorIndex)
+        if rotor != nil, rotorIndex != nil {
+            throw SchemaValidationError(
+                field: "rotor/rotorIndex",
+                observed: arguments.observedDescription,
+                expected: "either rotor or rotorIndex"
+            )
+        }
+        let selection: RotorSelection = if let rotor {
+            .named(try RotorName(validating: rotor))
+        } else if let rotorIndex {
+            .index(rotorIndex)
+        } else {
+            .automatic
+        }
+        return .rotor(
+            selection: selection,
+            target: try arguments.requiredAccessibilityTarget(command: .rotor),
+            direction: try arguments.value(
+                FenceParameters.rotorDirection,
+                defaultFrom: Command.rotor.descriptor
+            )
+        )
+    }
+
+    func decodeTypeTextAction(_ arguments: CommandArgumentEnvelope) throws -> HeistActionCommand {
+        let mode = try arguments.value(
+            FenceParameters.textInputMode,
+            defaultFrom: Command.typeText.descriptor
+        )
+        let text = try arguments.requiredValue(FenceParameters.text)
+        let input: TextInputText
+        do {
+            input = try TextInputText(validating: text, mode: mode)
+        } catch TextInputTextError.emptyAppend {
+            throw SchemaValidationError(
+                field: arguments.field(.text),
+                observed: "string \"\(text)\"",
+                expected: "non-empty string"
+            )
+        }
+        return .typeText(
+            text: input,
+            target: try arguments.decodedAccessibilityTarget().map {
+                try $0.validatedElementTarget(command: .typeText)
+            }
+        )
+    }
+
+    static func directActionDispatch(
         _ command: Command,
-        _ firstCommand: HeistActionCommand,
-        _ additionalCommands: HeistActionCommand...,
+        _ action: HeistActionCommand,
+        timeout: TimeInterval,
         expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        let actions = NonEmptyArray(firstCommand, rest: additionalCommands)
-        if let durableActions = DurableHeistActionCommands(actions) {
-            return .singleStepHeist(.actions(command: command, durableActions, expectation: expectationPayload))
-        }
-
-        guard actions.count == 1 else {
-            throw FenceError.invalidRequest(
-                "command \"\(command.rawValue)\" direct dispatch requires exactly one action command"
-            )
-        }
         guard expectationPayload.expectation == nil else {
             throw FenceError.invalidRequest(
                 "command \"\(command.rawValue)\" direct dispatch does not support expect"
             )
         }
-        return .directAction(DirectActionRequest(command: command, action: actions.first))
+        guard let request = DirectActionRequest(action, timeout: timeout) else {
+            preconditionFailure("\(command.rawValue) definition classified a durable action as direct dispatch")
+        }
+        return .directAction(request)
+    }
+
+    static func appInteractionDispatch(
+        _ command: Command,
+        _ action: HeistActionCommand,
+        actionTimeout: TimeInterval,
+        expectationPayload: ExpectationPayload
+    ) throws -> DecodedRequestDispatch {
+        if let durableAction = DurableHeistActionCommand(action) {
+            return .singleStepHeist(.action(
+                durableAction,
+                expectation: expectationPayload,
+                actionTimeout: actionTimeout
+            ))
+        }
+        return try directActionDispatch(
+            command,
+            action,
+            timeout: actionTimeout,
+            expectationPayload: expectationPayload
+        )
     }
 
     /// Admit a routed public command input into TheFence's typed runtime.
     @_spi(ButtonHeistTooling) public func admit(_ input: FenceCommandInput) throws -> FenceOperationRequest {
-        try RequestDecoder.decode(fence: self, input: input)
+        try Self.validateBoundaryShape(command: input.command, arguments: input.arguments)
+        return FenceOperationRequest(
+            command: input.command,
+            dispatch: try input.command.definition.admission(self, input.command, input.arguments)
+        )
     }
-
 }

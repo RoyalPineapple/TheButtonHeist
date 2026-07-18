@@ -16,9 +16,9 @@ struct HeistReportFailureProjection: Sendable {
 }
 
 struct HeistReportSummaryProjection: Sendable {
-    private let summary: HeistExecutionEvidenceSummary
+    private let summary: HeistExecutionReport.Summary
 
-    init(summary: HeistExecutionEvidenceSummary) {
+    init(summary: HeistExecutionReport.Summary) {
         self.summary = summary
     }
 
@@ -63,16 +63,16 @@ struct HeistReportProjection: Sendable {
         profile: ProjectionProfile
     ) {
         let profile = profile.heistReport
-        let rollup = result.evidenceRollup
-        let reportSummary = rollup.summary
+        let report = HeistExecutionReport.project(result)
+        let reportSummary = report.summary
         status = reportSummary.abortedAtPath == nil ? .ok : .partial
-        nodes = rollup.rootNodes.map { HeistReportNodeProjection(node: $0, profile: profile) }
-        outputNodes = rollup.nodes.map { HeistReportNodeProjection(node: $0, profile: profile) }
+        nodes = result.steps.map { HeistReportNodeProjection(step: $0, profile: profile) }
+        outputNodes = result.outputReceiptNodes.map { HeistReportNodeProjection(step: $0, profile: profile) }
         summary = HeistReportSummaryProjection(summary: reportSummary)
-        metrics = HeistExecutionMetricProjection(rollup: rollup)
+        metrics = report.metrics
         failedStepPath = reportSummary.abortedAtPath?.description
-        failureScreenshotSummary = rollup.failureScreenshotSummary
-        failureInterfaceDump = rollup.failureInterfaceDump(
+        failureScreenshotSummary = result.failureScreenshotSummary
+        failureInterfaceDump = result.failureInterfaceDump(
             elementLimit: profile.limits.failureInterfaceElements
         )
         self.netDelta = accessibilityTrace.flatMap {
@@ -82,46 +82,42 @@ struct HeistReportProjection: Sendable {
 }
 
 struct HeistReportNodeProjection: Sendable {
-    private let node: HeistExecutionEvidenceNode
+    private let step: HeistExecutionStepResult
     private let profile: ProjectionProfile
     let children: [HeistReportNodeProjection]
 
-    init(node: HeistExecutionEvidenceNode, profile: ProjectionProfile) {
-        self.node = node
+    init(step: HeistExecutionStepResult, profile: ProjectionProfile) {
+        self.step = step
         self.profile = profile
-        children = node.children.map { HeistReportNodeProjection(node: $0, profile: profile) }
+        children = step.children.map { HeistReportNodeProjection(step: $0, profile: profile) }
     }
 
-    private var step: HeistExecutionStepResult { node.step }
-    private var report: HeistExecutionStepReportFacts { node.reportFacts }
-    private var results: HeistExecutionStepReportResults { report.results }
-
-    var path: String { report.path.description }
-    var kind: HeistExecutionStepKind { report.kind }
-    var capability: String? { report.capabilityPath?.description }
-    var invocationDisplayName: String? { report.invocationDisplayName }
-    var command: HeistActionCommandType? { report.command }
-    var target: AccessibilityTarget? { report.target }
-    var status: HeistExecutionStepStatus { report.status }
-    var message: String? { report.message }
+    var path: String { step.path.description }
+    var kind: HeistExecutionStepKind { step.kind }
+    var capability: String? { step.reportCapabilityPath?.description }
+    var invocationDisplayName: String? { step.reportInvocationDisplayName }
+    var command: HeistActionCommandType? { step.reportCommand }
+    var target: AccessibilityTarget? { step.reportTarget }
+    var status: HeistExecutionStepStatus { step.status }
+    var message: String? { step.reportMessage }
     var durationMs: Int { step.durationMs }
-    var evidence: HeistReportEvidenceProjection? { HeistReportEvidenceProjection(node: node, profile: profile) }
-    var warning: HeistExecutionWarning? { report.warning }
-    var failureMessage: String? { report.failureMessage }
+    var evidence: HeistReportEvidenceProjection? { HeistReportEvidenceProjection(step: step, profile: profile) }
+    var warning: HeistExecutionWarning? { step.reportWarning }
+    var failureMessage: String? { step.reportFailureMessage }
     var failure: HeistReportFailureProjection? {
         step.failure.map {
             HeistReportFailureProjection(
                 detail: $0,
-                message: report.failureMessage ?? $0.observed,
-                actionErrorKind: results.actionErrorKind
+                message: step.reportFailureMessage ?? $0.observed,
+                actionErrorKind: step.reportActionErrorKind
             )
         }
     }
-    var failureCategory: HeistFailureCategory? { report.failureCategory }
+    var failureCategory: HeistFailureCategory? { step.failure?.category }
     var abortedAtChildPath: String? { step.abortedAtChildPath?.description }
-    var expectation: ExpectationProjection? { results.expectation.map { ExpectationProjection(result: $0) } }
-    var actionErrorKind: ErrorKind? { results.actionErrorKind }
-    var activationTrace: ActivationTrace? { results.actionResult?.activationTrace }
+    var expectation: ExpectationProjection? { step.reportExpectation.map { ExpectationProjection(result: $0) } }
+    var actionErrorKind: ErrorKind? { step.reportActionErrorKind }
+    var activationTrace: ActivationTrace? { step.reportActionResult?.activationTrace }
     var traceDelta: DeltaProjection? {
         evidence?.traceDelta
     }

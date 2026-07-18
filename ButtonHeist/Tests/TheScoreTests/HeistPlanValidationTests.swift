@@ -374,7 +374,7 @@ func runtimeSafetyRejectsStringRefThatLowersToInvalidCommandPayload() throws {
 
     let failures = runtimeSafetyFailures(for: raw)
 
-    #expect(failures.contains { $0.contract.contains("heist action payload contract") })
+    #expect(failures.contains { $0.contract.contains("admissible action command") })
     #expect(failures.contains { $0.observed.contains("text to append must be non-empty") })
 }
 
@@ -1002,7 +1002,7 @@ func runtimeSafetyValidatesInvokedBodiesWithBoundArguments() throws {
 
     let failures = runtimeSafetyFailures(for: raw)
 
-    #expect(failures.contains { $0.contract.contains("heist action payload contract") })
+    #expect(failures.contains { $0.contract.contains("action command must be admissible") })
     #expect(failures.contains { $0.observed.contains("text to append must be non-empty") })
 }
 

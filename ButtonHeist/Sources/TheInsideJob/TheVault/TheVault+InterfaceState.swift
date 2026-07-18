@@ -10,11 +10,6 @@ import TheScore
 
 extension TheVault {
 
-    struct HashedInterface {
-        let interface: Interface
-        let hash: String
-    }
-
     /// Clear cached element data (used on suspend).
     func clearCache() {
         clearInterfaceForLifecycleReset()
@@ -81,7 +76,7 @@ extension TheVault {
         scope: SemanticObservationScope,
         continuity: ScreenContinuity,
         discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy
-    ) -> InterfaceTree {
+    ) throws -> InterfaceObservation {
         if let queuedVisibleRefresh = nextVisibleRefreshObservationForTesting,
            queuedVisibleRefresh.tree.interfaceHash != observation.tree.interfaceHash {
             nextVisibleRefreshObservationForTesting = nil
@@ -96,8 +91,9 @@ extension TheVault {
                 ? observation.tree
                 : interfaceTree.merging(observation.tree)
         }
-        finishCommit(observation: observation)
-        return interfaceTree
+        let committedObservation = try observation.replacingTreeWithCurrentCapture(interfaceTree)
+        finishCommit(observation: committedObservation)
+        return committedObservation
     }
 
     func recordFailedSettleDiagnosticEvidence(_ observation: InterfaceObservation?) {
@@ -145,53 +141,11 @@ extension TheVault {
         return treeElement(heistId: heistId, in: .interface)
     }
 
-    /// Projection of the interface tree plus Button Heist
-    /// annotations.
-    ///
-    /// Thin reader over `WireConversion.toInterface` — exists because callers
-    /// need the committed interface, not an arbitrary tree.
-    func interface(timestamp: Date = Date()) -> Interface {
-        WireConversion.toInterface(from: interfaceTree, timestamp: timestamp)
-    }
-
-    /// Interface projection for command-owned discovery.
-    ///
-    /// Discovery retains off-viewport elements in semantic memory while the
-    /// latest parser hierarchy remains viewport-local. This projection returns
-    /// the live hierarchy plus discovered scroll-container content.
-    func discoveryInterface(timestamp: Date = Date()) -> Interface {
-        WireConversion.toDiscoveryInterface(from: interfaceTree, timestamp: timestamp)
-    }
-
-    /// Semantic projection used for traces and deltas.
-    ///
-    /// Unlike `interface()`, this reads the committed semantic state produced
-    /// by exploration, so off-viewport targetable elements participate in
-    /// post-action deltas.
-    func semanticInterface(timestamp: Date = Date()) -> Interface {
-        WireConversion.toSemanticInterface(from: interfaceTree, timestamp: timestamp)
-    }
-
-    /// Single-build semantic variant for state capture and delta projection.
-    func semanticInterfaceWithHash(timestamp: Date = Date()) -> HashedInterface {
-        let interface = semanticInterface(timestamp: timestamp)
-        return HashedInterface(interface: interface, hash: AccessibilityTrace.Capture.hash(interface))
-    }
-
-    func semanticInterfaceWithHash(
+    func semanticInterface(
         for observation: InterfaceObservation,
         timestamp: Date = Date()
-    ) -> HashedInterface {
-        let interface = WireConversion.toSemanticInterface(from: observation.tree, timestamp: timestamp)
-        return HashedInterface(interface: interface, hash: AccessibilityTrace.Capture.hash(interface))
-    }
-
-    func discoveryInterfaceWithHash(
-        for observation: InterfaceObservation,
-        timestamp: Date = Date()
-    ) -> HashedInterface {
-        let interface = WireConversion.toDiscoveryInterface(from: observation.tree, timestamp: timestamp)
-        return HashedInterface(interface: interface, hash: AccessibilityTrace.Capture.hash(interface))
+    ) -> Interface {
+        WireConversion.toSemanticInterface(from: observation.tree, timestamp: timestamp)
     }
 
     private func clearInterfaceForLifecycleReset() {

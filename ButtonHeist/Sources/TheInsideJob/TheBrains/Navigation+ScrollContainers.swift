@@ -131,9 +131,9 @@ extension Navigation {
             let visibleResolution = vault.resolveVisibleTarget(target)
             let resolved: InterfaceTree.Element
             switch visibleResolution {
-            case .resolved(let treeElement):
+            case .resolved(.element(let treeElement)):
                 resolved = treeElement
-            case .notFound, .ambiguous:
+            case .resolved(.container), .notFound, .ambiguous:
                 return .failed(liveScrollElementFailure(target, command: command))
             }
             let targetDescription = Self.ScrollTargetDescription(resolved)

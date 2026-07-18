@@ -11,8 +11,7 @@ enum HeistReportEvidenceProjection: Sendable {
     case invocation(HeistInvocationEvidenceProjection)
     case warning(HeistExecutionWarning)
 
-    init?(node: HeistExecutionEvidenceNode, profile: ProjectionProfile) {
-        let step = node.step
+    init?(step: HeistExecutionStepResult, profile: ProjectionProfile) {
         switch step.kind {
         case .action:
             guard let command = step.actionCommand,

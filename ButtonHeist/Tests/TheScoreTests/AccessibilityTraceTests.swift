@@ -106,14 +106,15 @@ final class AccessibilityTraceTests: XCTestCase {
         XCTAssertEqual(capture.hash, AccessibilityTrace.Capture(sequence: 2, interface: interface).hash)
     }
 
-    func testTraceCanLookupCaptureByHash() throws {
+    func testTraceResolvesOnlyExactCaptureReference() throws {
         let first = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Home"))
         let second = AccessibilityTrace.Capture(sequence: 2, interface: makeInterface(label: "Settings"), parentHash: first.hash)
         let trace = AccessibilityTrace(captures: [first, second])
+        let reference = AccessibilityTrace.CaptureRef(capture: second)
+        let wrongSequence = AccessibilityTrace.CaptureRef(sequence: first.sequence, hash: second.hash)
 
-        XCTAssertEqual(trace.capture(hash: second.hash)?.hash, second.hash)
-        XCTAssertEqual(trace.capture(ref: AccessibilityTrace.CaptureRef(capture: second))?.hash, second.hash)
-        XCTAssertTrue(trace.isLinearChain)
+        XCTAssertEqual(trace.capture(ref: reference), second)
+        XCTAssertNil(trace.capture(ref: wrongSequence))
     }
 
     func testAppendingCreatesSingleLinkedList() throws {
@@ -125,7 +126,6 @@ final class AccessibilityTraceTests: XCTestCase {
         XCTAssertEqual(trace.captures.map(\.sequence), [1, 2])
         XCTAssertNil(trace.captures[0].parentHash)
         XCTAssertEqual(trace.captures[1].parentHash, trace.captures[0].hash)
-        XCTAssertTrue(trace.isLinearChain)
     }
 
     func testAppendingCarriesTransitionOnCaptureEdge() throws {
@@ -502,22 +502,94 @@ final class AccessibilityTraceTests: XCTestCase {
         XCTAssertTrue(screenDepartures.updated.isEmpty)
     }
 
-    func testTraceConstructionNormalizesToSingleLinkedList() throws {
-        let first = AccessibilityTrace.Capture(
-            sequence: 99,
-            interface: makeInterface(label: "Home"),
-            parentHash: "sha256:bad",
-            context: AccessibilityTrace.Context(keyboardVisible: true)
+    func testTraceCanonicalRoundTripPreservesIdentity() throws {
+        let trace = AccessibilityTrace(first: makeInterface(label: "Home"))
+            .appending(
+                makeInterface(label: "Settings"),
+                context: AccessibilityTrace.Context(keyboardVisible: true)
+            )
+
+        let decoded = try JSONDecoder().decode(
+            AccessibilityTrace.self,
+            from: JSONEncoder().encode(trace)
         )
-        let second = AccessibilityTrace.Capture(sequence: 42, interface: makeInterface(label: "Settings"), parentHash: "sha256:fork")
+
+        XCTAssertEqual(decoded, trace)
+        XCTAssertEqual(decoded.captures.map(\.sequence), [1, 2])
+        XCTAssertEqual(decoded.captures[1].parentHash, decoded.captures[0].hash)
+    }
+
+    func testTraceAdmitsBoundedWindowWithoutRenumberingSourceIdentity() throws {
+        let first = AccessibilityTrace.Capture(
+            sequence: 41,
+            interface: makeInterface(label: "Home"),
+            parentHash: "sha256:outside-window"
+        )
+        let second = AccessibilityTrace.Capture(
+            sequence: 42,
+            interface: makeInterface(label: "Settings"),
+            parentHash: first.hash
+        )
 
         let trace = AccessibilityTrace(captures: [first, second])
 
-        XCTAssertEqual(trace.captures.map(\.sequence), [1, 2])
-        XCTAssertNil(trace.captures[0].parentHash)
-        XCTAssertEqual(trace.captures[1].parentHash, trace.captures[0].hash)
-        XCTAssertEqual(trace.captures[0].context.keyboardVisible, true)
-        XCTAssertTrue(trace.isLinearChain)
+        XCTAssertEqual(trace.captures.map(\.sequence), [41, 42])
+        XCTAssertEqual(trace.captures.first?.parentHash, "sha256:outside-window")
+    }
+
+    func testTraceDecodeRejectsTamperedCaptureHash() throws {
+        let trace = AccessibilityTrace(first: makeInterface(label: "Home"))
+            .appending(makeInterface(label: "Settings"))
+        let data = try mutatedTestJSONData(trace) { object in
+            var captures = try XCTUnwrap(object["captures"] as? [[String: Any]])
+            captures[1]["hash"] = "sha256:tampered"
+            object["captures"] = captures
+        }
+
+        XCTAssertThrowsError(try JSONDecoder().decode(AccessibilityTrace.self, from: data)) { error in
+            XCTAssertTrue("\(error)".contains("hash does not match"), "Unexpected error: \(error)")
+        }
+    }
+
+    func testTraceDecodeRejectsNonPositiveSequence() throws {
+        let trace = AccessibilityTrace(first: makeInterface(label: "Home"))
+        let data = try mutatedTestJSONData(trace) { object in
+            var captures = try XCTUnwrap(object["captures"] as? [[String: Any]])
+            captures[0]["sequence"] = 0
+            object["captures"] = captures
+        }
+
+        XCTAssertThrowsError(try JSONDecoder().decode(AccessibilityTrace.self, from: data)) { error in
+            XCTAssertTrue("\(error)".contains("sequence must be positive"), "Unexpected error: \(error)")
+        }
+    }
+
+    func testTraceDecodeRejectsTamperedSequence() throws {
+        let trace = AccessibilityTrace(first: makeInterface(label: "Home"))
+            .appending(makeInterface(label: "Settings"))
+        let data = try mutatedTestJSONData(trace) { object in
+            var captures = try XCTUnwrap(object["captures"] as? [[String: Any]])
+            captures[1]["sequence"] = 3
+            object["captures"] = captures
+        }
+
+        XCTAssertThrowsError(try JSONDecoder().decode(AccessibilityTrace.self, from: data)) { error in
+            XCTAssertTrue("\(error)".contains("contiguous sequence"), "Unexpected error: \(error)")
+        }
+    }
+
+    func testTraceDecodeRejectsTamperedParentLineage() throws {
+        let trace = AccessibilityTrace(first: makeInterface(label: "Home"))
+            .appending(makeInterface(label: "Settings"))
+        let data = try mutatedTestJSONData(trace) { object in
+            var captures = try XCTUnwrap(object["captures"] as? [[String: Any]])
+            captures[1]["parentHash"] = "sha256:unrelated"
+            object["captures"] = captures
+        }
+
+        XCTAssertThrowsError(try JSONDecoder().decode(AccessibilityTrace.self, from: data)) { error in
+            XCTAssertTrue("\(error)".contains("exact parent lineage"), "Unexpected error: \(error)")
+        }
     }
 
     private func makeInterface(

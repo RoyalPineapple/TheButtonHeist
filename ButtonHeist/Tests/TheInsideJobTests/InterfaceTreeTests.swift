@@ -180,7 +180,7 @@ final class InterfaceTreeTests: XCTestCase {
         )
 
         let pruned = screen.removingElements(withIds: ["old"])
-        let interface = TheVault.WireConversion.toInterface(from: pruned.tree)
+        let interface = TheVault.WireConversion.toSemanticInterface(from: pruned.tree)
 
         XCTAssertEqual(pruned.liveCapture.heistId(forPath: TreePath([0, 0])), "kept")
         XCTAssertNil(pruned.liveCapture.heistId(forPath: TreePath([1, 0])))
@@ -235,8 +235,12 @@ final class InterfaceTreeTests: XCTestCase {
         )
         let before = InterfaceObservation.makeForTests(elements: [(top, "chicken_tikka_button")])
         let after = InterfaceObservation.makeForTests(elements: [(scrolled, "chicken_tikka_button")])
-        let beforeInterfaceHash = AccessibilityTrace.Capture.hash(TheVault.WireConversion.toInterface(from: before.tree))
-        let afterInterfaceHash = AccessibilityTrace.Capture.hash(TheVault.WireConversion.toInterface(from: after.tree))
+        let beforeInterfaceHash = AccessibilityTrace.Capture.hash(
+            TheVault.WireConversion.toSemanticInterface(from: before.tree)
+        )
+        let afterInterfaceHash = AccessibilityTrace.Capture.hash(
+            TheVault.WireConversion.toSemanticInterface(from: after.tree)
+        )
 
         XCTAssertEqual(beforeInterfaceHash, afterInterfaceHash)
         XCTAssertEqual(before.tree.interfaceHash, after.tree.interfaceHash)

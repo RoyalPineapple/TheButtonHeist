@@ -86,6 +86,15 @@ import ThePlans
     }
 }
 
+@Test func `container predicates reject references that resolve empty`() throws {
+    let identifier: HeistReferenceName = "identifier"
+    let target = AccessibilityTarget.container(.identifier(identifier))
+
+    #expect(throws: (any Error).self) {
+        try target.resolve(in: HeistExecutionEnvironment(strings: [identifier: ""]))
+    }
+}
+
 @Test func `resolution returns distinct target predicate property and action currencies`() throws {
     let source: ResolvedAccessibilityTarget = try AccessibilityTarget
         .predicate(.label("Submit"), ordinal: 1)

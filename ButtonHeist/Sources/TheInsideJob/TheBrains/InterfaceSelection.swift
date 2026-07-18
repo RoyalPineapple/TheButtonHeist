@@ -45,9 +45,7 @@ extension TheVault {
             throw .invalidSubtree(String(describing: error))
         }
 
-        let path = target.isElementTarget
-            ? try selectedPath(for: resolveTarget(target, in: tree), projection: projection)
-            : try selectedPath(for: resolveContainerTarget(target, in: tree), projection: projection)
+        let path = try selectedPath(for: resolveTarget(target, in: tree), projection: projection)
         return projection.interface.selectingSubtree(at: path)
     }
 
@@ -56,35 +54,13 @@ extension TheVault {
         projection: WireConversion.DiscoveryProjection
     ) throws(InterfaceSelectionError) -> TreePath {
         switch resolution {
-        case .resolved(let element):
+        case .resolved(.element(let element)):
             let identity = element.heistId.traceElementIdentity
             guard let path = projection.interface.graph.traceIdentityByPath.first(where: { $0.value == identity })?.key else {
                 throw .subtreeNotFound
             }
             return path
-        case .notFound(let facts):
-            guard case .ordinalOutOfRange(let ordinal, let count) = facts.reason else {
-                throw .subtreeNotFound
-            }
-            throw .subtreeOrdinalOutOfRange(
-                ordinal: ordinal,
-                candidateCount: count,
-                candidates: facts.exactMatches.map(\.subtreeCandidateSummary)
-            )
-        case .ambiguous(let facts):
-            throw .ambiguousSubtree(
-                candidateCount: facts.matchedCount,
-                candidates: facts.exactMatches.map(\.subtreeCandidateSummary)
-            )
-        }
-    }
-
-    private func selectedPath(
-        for resolution: ContainerTargetResolution,
-        projection: WireConversion.DiscoveryProjection
-    ) throws(InterfaceSelectionError) -> TreePath {
-        switch resolution {
-        case .resolved(let container):
+        case .resolved(.container(let container)):
             guard let path = projection.containerPathBySourcePath[container.path] else {
                 throw .subtreeNotFound
             }
@@ -96,13 +72,23 @@ extension TheVault {
             throw .subtreeOrdinalOutOfRange(
                 ordinal: ordinal,
                 candidateCount: count,
-                candidates: facts.exactMatches.map(\.subtreeCandidateSummary)
+                candidates: facts.matchSet.subtreeCandidateSummaries
             )
         case .ambiguous(let facts):
             throw .ambiguousSubtree(
                 candidateCount: facts.matchedCount,
-                candidates: facts.candidates.map(\.subtreeCandidateSummary)
+                candidates: facts.matchSet.subtreeCandidateSummaries
             )
+        }
+    }
+}
+
+private extension TheVault.TargetMatchSet {
+    @MainActor
+    var subtreeCandidateSummaries: [String] {
+        switch self {
+        case .elements(let matches): matches.exactMatches.map(\.subtreeCandidateSummary)
+        case .containers(let matches): matches.exactMatches.map(\.subtreeCandidateSummary)
         }
     }
 }

@@ -8,42 +8,42 @@ extension TheFence {
 
     // MARK: - Handler: Interface
 
-    func handlePing() async throws -> FenceResponse {
-        let payload = try await sendAndAwaitPong(timeout: Command.ping.descriptor.timeout.requiredFixedSeconds)
+    func handlePing(timeout: TimeInterval) async throws -> FenceResponse {
+        let payload = try await sendAndAwaitPong(timeout: timeout)
         return .pong(payload)
     }
 
-    func handleGetInterface(_ request: GetInterfaceRequest) async throws -> FenceResponse {
+    func handleGetInterface(_ request: GetInterfaceRequest, timeout: TimeInterval) async throws -> FenceResponse {
         let interface = try await sendAndAwaitInterface(
             .requestInterface(request.query),
-            timeout: Command.getInterface.descriptor.timeout.requiredFixedSeconds
+            timeout: timeout
         )
         return .interface(interface, detail: request.detail)
     }
 
-    func handleGetPasteboard() async throws -> FenceResponse {
+    func handleGetPasteboard(timeout: TimeInterval) async throws -> FenceResponse {
         let result = try await sendAndAwaitAction(
             .getPasteboard,
-            timeout: Command.getPasteboard.descriptor.timeout.requiredFixedSeconds
+            timeout: timeout
         )
         return .action(command: .getPasteboard, result: result)
     }
 
-    func handleGetAnnouncements() async throws -> FenceResponse {
+    func handleGetAnnouncements(timeout: TimeInterval) async throws -> FenceResponse {
         let payload = try await sendAndAwaitAnnouncements(
-            timeout: Command.getAnnouncements.descriptor.timeout.requiredFixedSeconds
+            timeout: timeout
         )
         return .announcements(payload.announcements)
     }
 
     // MARK: - Handler: Executable Commands
 
-    func handleDirectActionRequest(_ request: DirectActionRequest) async throws -> FenceResponse {
+    func handleDirectActionRequest(_ request: DirectActionRequest, command: Command) async throws -> FenceResponse {
         let result = try await sendAndAwaitAction(
             .runtimeAction(request.action),
-            timeout: request.command.descriptor.timeout.requiredDirectDispatchSeconds
+            timeout: request.timeout
         )
-        return .action(command: request.command, result: result)
+        return .action(command: command, result: result)
     }
 
 }

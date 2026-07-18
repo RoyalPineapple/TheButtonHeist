@@ -204,7 +204,7 @@ private extension ResolvedAccessibilityPredicate {
     ) -> Interface? {
         guard let edge = metadata.captureEdge else { return nil }
         let ref = side == .before ? edge.before : edge.after
-        return (trace.capture(ref: ref) ?? trace.capture(hash: ref.hash))?.interface
+        return trace.capture(ref: ref)?.interface
     }
 }
 

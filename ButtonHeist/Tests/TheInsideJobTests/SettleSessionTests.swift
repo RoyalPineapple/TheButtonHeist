@@ -41,6 +41,10 @@ final class SettleSessionTests: XCTestCase {
         )
     }
 
+    private func settleFingerprint(_ elements: [AccessibilityElement]) -> Int {
+        SettleTimeline.fingerprint(of: makeParseResult(elements), bucket: 13)
+    }
+
     private func recordedObservation(
         _ observation: InterfaceObservation,
         ledger: inout SettleObservationLedger
@@ -752,41 +756,61 @@ final class SettleSessionTests: XCTestCase {
             traits: .button,
             frame: CGRect(x: 651, y: 423, width: 94, height: 72)
         )
+        let hintChanged = AccessibilityElementBuilder(
+            label: "$ 9 Cash",
+            hint: "Double tap to pay",
+            traits: .button,
+            shape: first.shape
+        ).build()
+        let actionsChanged = AccessibilityElementBuilder(
+            label: "$ 9 Cash",
+            traits: .button,
+            shape: first.shape,
+            customActions: [.init(name: "Apply discount")]
+        ).build()
 
         XCTAssertEqual(
-            SettleTimeline.fingerprint(of: [first], bucket: 13),
-            SettleTimeline.fingerprint(of: [jittered], bucket: 13),
+            settleFingerprint([first]),
+            settleFingerprint([jittered]),
             "iPad scroll-view content-offset jitter should not reset settle"
         )
         XCTAssertNotEqual(
-            SettleTimeline.fingerprint(of: [first], bucket: 13),
-            SettleTimeline.fingerprint(of: [moved], bucket: 13),
+            settleFingerprint([first]),
+            settleFingerprint([moved]),
             "movement across coarse frame buckets should reset settle"
         )
         XCTAssertNotEqual(
-            SettleTimeline.fingerprint(of: [first], bucket: 13),
-            SettleTimeline.fingerprint(of: [valueChanged], bucket: 13)
+            settleFingerprint([first]),
+            settleFingerprint([valueChanged])
         )
         XCTAssertNotEqual(
-            SettleTimeline.fingerprint(of: [first], bucket: 13),
-            SettleTimeline.fingerprint(of: [labelChanged], bucket: 13)
+            settleFingerprint([first]),
+            settleFingerprint([labelChanged])
         )
         XCTAssertNotEqual(
-            SettleTimeline.fingerprint(of: [first], bucket: 13),
-            SettleTimeline.fingerprint(of: [identifierChanged], bucket: 13)
+            settleFingerprint([first]),
+            settleFingerprint([identifierChanged])
         )
         XCTAssertNotEqual(
-            SettleTimeline.fingerprint(of: [first], bucket: 13),
-            SettleTimeline.fingerprint(of: [traitsChanged], bucket: 13)
+            settleFingerprint([first]),
+            settleFingerprint([traitsChanged])
         )
         XCTAssertNotEqual(
-            SettleTimeline.fingerprint(of: [first], bucket: 13),
-            SettleTimeline.fingerprint(of: [first, second], bucket: 13),
+            settleFingerprint([first]),
+            settleFingerprint([hintChanged])
+        )
+        XCTAssertNotEqual(
+            settleFingerprint([first]),
+            settleFingerprint([actionsChanged])
+        )
+        XCTAssertNotEqual(
+            settleFingerprint([first]),
+            settleFingerprint([first, second]),
             "element count is semantic settle state"
         )
         XCTAssertNotEqual(
-            SettleTimeline.fingerprint(of: [first, second], bucket: 13),
-            SettleTimeline.fingerprint(of: [second, first], bucket: 13),
+            settleFingerprint([first, second]),
+            settleFingerprint([second, first]),
             "settle fingerprint intentionally preserves traversal order"
         )
     }

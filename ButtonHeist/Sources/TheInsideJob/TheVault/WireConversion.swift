@@ -77,44 +77,6 @@ extension TheVault {
 
     // MARK: - Interface Conversion
 
-    /// Convert the interface tree into the canonical wire capture. The parser
-    /// hierarchy remains the tree; Button Heist metadata is attached as
-    /// annotations keyed by capture-local tree path.
-    static func toInterface(
-        from tree: InterfaceTree,
-        timestamp: Date = Date()
-    ) -> Interface {
-        Interface(
-            timestamp: timestamp,
-            projecting: tree.viewportCapture.hierarchy,
-            elementMetadata: { path, element, _ in
-                InterfaceElementProjectionMetadata(
-                    actions: element.projectedActionSet.orderedActions,
-                    traceIdentity: tree.viewportCapture.heistIdsByPath[path]?.traceElementIdentity
-                )
-            },
-            containerMetadata: { path, _ in
-                InterfaceContainerProjectionMetadata(
-                    containerName: tree.containers[path]?.containerName,
-                    scrollInventory: tree.containers[path]?.scrollInventory
-                )
-            }
-        )
-    }
-
-    /// Convert a InterfaceObservation into the public discovery interface.
-    ///
-    /// The latest parser hierarchy is still the tree authority. Known elements
-    /// and containers absent from that capture are grafted under their owning
-    /// semantic scroll container so public `get_interface` does not discard
-    /// the command's exploration work.
-    static func toDiscoveryInterface(
-        from tree: InterfaceTree,
-        timestamp: Date = Date()
-    ) -> Interface {
-        discoveryProjection(from: tree, timestamp: timestamp).interface
-    }
-
     static func discoveryProjection(
         from tree: InterfaceTree,
         timestamp: Date = Date()

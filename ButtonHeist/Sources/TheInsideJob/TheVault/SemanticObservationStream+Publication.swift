@@ -68,6 +68,28 @@ extension SemanticObservationStream {
     }
 
     @discardableResult
+    internal func commitSettledDiscoveryObservation(
+        _ outcome: SettleSession.Outcome,
+        discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy,
+        afterViewportMovement: Bool,
+        notificationBatch: AccessibilityNotificationBatch? = nil
+    ) -> SettledObservationEvent? {
+        guard let vault else {
+            preconditionFailure("SemanticObservationStream cannot admit after TheVault is released")
+        }
+        guard let proof = admitSettledProof(
+            outcome,
+            vault: vault,
+            discoveryCommitPolicy: discoveryCommitPolicy,
+            lineageEvidence: afterViewportMovement ? .viewportMovement : nil
+        ) else { return nil }
+        return commitSettledDiscoveryObservation(
+            proof,
+            notificationBatch: notificationBatch
+        )
+    }
+
+    @discardableResult
     private func publishCommittedObservation(
         _ proof: InterfaceObservationProof,
         scope: SemanticObservationScope,
@@ -100,13 +122,19 @@ extension SemanticObservationStream {
         if continuity.isReplacement {
             observationLog.beginScreenReplacement()
         }
-        _ = vault.reduceInterfaceGraph(
-            with: proof.observation,
-            scope: scope,
-            continuity: continuity,
-            discoveryCommitPolicy: proof.discoveryCommitPolicy
-        )
+        let committedObservation: InterfaceObservation
+        do {
+            committedObservation = try vault.reduceInterfaceGraph(
+                with: proof.observation,
+                scope: scope,
+                continuity: continuity,
+                discoveryCommitPolicy: proof.discoveryCommitPolicy
+            )
+        } catch {
+            preconditionFailure("Committed interface observation failed validation: \(error)")
+        }
         return publishCurrentSettledObservation(
+            committedObservation,
             scope: scope,
             vault: vault,
             tripwireSignal: proof.tripwireSignal,
@@ -290,6 +318,7 @@ extension SemanticObservationStream {
     }
 
     private func publishCurrentSettledObservation(
+        _ settledObservation: InterfaceObservation,
         scope: SemanticObservationScope = .visible,
         vault: TheVault,
         tripwireSignal: TheTripwire.TripwireSignal,
@@ -297,12 +326,6 @@ extension SemanticObservationStream {
         continuity: ScreenContinuity,
         notificationIdentityObservation: InterfaceObservation? = nil
     ) -> SettledObservationEvent {
-        let settledObservation: InterfaceObservation
-        do {
-            settledObservation = try InterfaceObservation.build(tree: vault.interfaceTree)
-        } catch {
-            preconditionFailure("Published semantic observation failed validation: \(error)")
-        }
         let publication = SemanticObservationPublication.make(
             sourceScope: scope,
             sequence: runtimeState.sequence + 1,
@@ -314,12 +337,14 @@ extension SemanticObservationStream {
                 generation: runtimeState.lineage.generation,
                 previousEvents: observationLog.latestEventsByScope
             ),
-            evidenceByScope: publicationEvidence(
-                sourceScope: scope,
-                observation: settledObservation,
-                notificationBatch: notificationBatch,
-                notificationIdentityObservation: notificationIdentityObservation,
-                vault: vault
+            evidence: SemanticObservationPublication.Evidence(
+                interface: vault.semanticInterface(for: settledObservation),
+                accessibilityNotifications: vault.resolveAccessibilityNotificationEvidence(
+                    notificationBatch.events,
+                    identityObservation: notificationIdentityObservation ?? settledObservation,
+                    referenceObservation: settledObservation
+                ),
+                firstResponder: vault.firstResponderTarget(in: settledObservation.tree)
             )
         )
         for fallbackReason in scope.fulfilledScopes.compactMap({ fulfilledScope in
@@ -346,37 +371,23 @@ extension SemanticObservationStream {
         return publication.sourceEvent
     }
 
-    private func publicationEvidence(
-        sourceScope: SemanticObservationScope,
-        observation: InterfaceObservation,
-        notificationBatch: AccessibilityNotificationBatch,
-        notificationIdentityObservation: InterfaceObservation?,
-        vault: TheVault
-    ) -> [SemanticObservationScope: SemanticObservationPublication.Evidence] {
-        Dictionary(uniqueKeysWithValues: sourceScope.fulfilledScopes.map { fulfilledScope in
-            let referenceObservation = observation
-            return (fulfilledScope, SemanticObservationPublication.Evidence(
-                interface: vault.semanticInterfaceWithHash(for: referenceObservation).interface,
-                accessibilityNotifications: vault.resolveAccessibilityNotificationEvidence(
-                    notificationBatch.events,
-                    identityObservation: notificationIdentityObservation ?? referenceObservation,
-                    referenceObservation: referenceObservation
-                ),
-                firstResponder: vault.firstResponderTarget(in: referenceObservation.tree)
-            ))
-        })
-    }
-
     func admitSettledProof(
         _ outcome: SettleSession.Outcome,
         vault: TheVault,
-        layerGateWasClear: Bool? = nil
+        layerGateWasClear: Bool? = nil,
+        discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy = .mergeIntoInterface,
+        lineageEvidence: ScreenLineageEvidence? = nil
     ) -> InterfaceObservationProof? {
         guard outcome.tripwireSignal == currentTripwireSignal(),
-              let proof = InterfaceObservationProof.settled(outcome, vault: vault) else {
+              outcome.finalObservation?.observation.captureToken == vault.latestObservation.captureToken,
+              let proof = InterfaceObservationProof.settled(
+                  outcome,
+                  discoveryCommitPolicy: discoveryCommitPolicy,
+                  lineageEvidence: lineageEvidence
+              ) else {
             recordFailedSettle(
                 SettleFailureDiagnostic.message(for: outcome, layerGateWasClear: layerGateWasClear),
-                tree: outcome.finalObservation?.tree,
+                observation: outcome.finalObservation?.observation,
                 vault: vault
             )
             return nil
@@ -390,25 +401,18 @@ extension SemanticObservationStream {
     ) -> ObservationSettlement.Result {
         guard !outcome.outcome.didSettleCleanly,
               case .timedOut = outcome.outcome,
-              let tree = outcome.finalObservation?.tree else {
+              let observation = outcome.finalObservation?.observation else {
             return .unavailable(notificationBatch: notificationBatch)
         }
-        return .observedUnsettled(tree, notificationBatch: notificationBatch)
+        return .observedUnsettled(observation, notificationBatch: notificationBatch)
     }
 
     private func recordFailedSettle(
         _ diagnostic: String?,
-        tree: InterfaceTree?,
+        observation: InterfaceObservation?,
         vault: TheVault
     ) {
         runtimeState.recordSettleFailure(diagnostic)
-        let observation = tree.map { tree in
-            do {
-                return try InterfaceObservation.build(tree: tree)
-            } catch {
-                preconditionFailure("Failed settle diagnostic observation failed validation: \(error)")
-            }
-        }
         vault.recordFailedSettleDiagnosticEvidence(observation)
     }
 

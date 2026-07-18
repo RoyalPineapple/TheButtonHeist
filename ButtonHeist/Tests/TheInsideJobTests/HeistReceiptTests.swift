@@ -556,8 +556,13 @@ private final class ReceiptWaitScript {
         guard !states.isEmpty else { return nil }
         let state = states.removeFirst()
         nextSequence += 1
-        let trace = previousCapture.map { AccessibilityTrace(captures: [$0, state.capture]) }
-            ?? AccessibilityTrace(capture: state.capture)
+        let trace = previousCapture.map {
+            AccessibilityTrace(capture: $0).appending(
+                state.capture.interface,
+                context: state.capture.context,
+                transition: state.capture.transition
+            )
+        } ?? AccessibilityTrace(capture: state.capture)
         let settledObservation = SettledObservation(
             sequence: nextSequence,
             scope: scope,
@@ -571,7 +576,7 @@ private final class ReceiptWaitScript {
             trace: trace
         )
         previousObservation = settledObservation
-        previousCapture = state.capture
+        previousCapture = trace.captures.last
         return SettledObservationEvidence(
             event: event,
             baseline: state,

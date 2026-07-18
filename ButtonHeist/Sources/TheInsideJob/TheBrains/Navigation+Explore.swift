@@ -72,20 +72,10 @@ extension Navigation {
         guard requiredAfterMovement || (!Task.isCancelled && hasTimeRemaining(before: deadline)) else {
             return nil
         }
-        let proof = requiredAfterMovement
-            ? InterfaceObservationProof.settledAfterViewportMovement(
-                settle,
-                vault: vault,
-                discoveryCommitPolicy: discoveryCommitPolicy
-            )
-            : InterfaceObservationProof.settled(
-                settle,
-                vault: vault,
-                discoveryCommitPolicy: discoveryCommitPolicy
-            )
-        guard let proof else { return nil }
         return vault.semanticObservationStream.commitSettledDiscoveryObservation(
-            proof,
+            settle,
+            discoveryCommitPolicy: discoveryCommitPolicy,
+            afterViewportMovement: requiredAfterMovement,
             notificationBatch: notificationWindow?.capture()
         )
     }

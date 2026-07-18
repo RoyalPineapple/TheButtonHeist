@@ -23,20 +23,83 @@ extension TheVault {
         case viewport
     }
 
-    struct TargetCandidateFacts {
-        let label: String?
-        let identifier: String?
-        let value: String?
-        let isVisible: Bool
-        let isReachable: Bool
+    enum TargetMatch: Equatable {
+        case element(InterfaceTree.Element)
+        case container(InterfaceTree.Container)
+    }
 
-        init(treeElement: InterfaceTree.Element, visibleHeistIds: Set<HeistId>) {
-            let element = treeElement.element
-            label = element.label
-            identifier = element.identifier
-            value = element.value
-            isVisible = visibleHeistIds.contains(treeElement.heistId)
-            isReachable = treeElement.scrollMembership != nil
+    struct TargetElementMatches: Equatable {
+        let predicate: ElementPredicate
+        let ordinal: Int?
+        let candidates: [InterfaceTree.Element]
+        let exactMatches: [InterfaceTree.Element]
+        let visibleHeistIds: Set<HeistId>
+    }
+
+    struct TargetContainerMatches: Equatable {
+        let predicate: ResolvedContainerPredicate
+        let ordinal: Int?
+        let exactMatches: [InterfaceTree.Container]
+    }
+
+    enum TargetMatchSet: Equatable {
+        case elements(TargetElementMatches)
+        case containers(TargetContainerMatches)
+
+        var count: Int {
+            switch self {
+            case .elements(let matches): matches.exactMatches.count
+            case .containers(let matches): matches.exactMatches.count
+            }
+        }
+
+        var ordinal: Int? {
+            switch self {
+            case .elements(let matches): matches.ordinal
+            case .containers(let matches): matches.ordinal
+            }
+        }
+
+        func match(at index: Int) -> TargetMatch? {
+            switch self {
+            case .elements(let matches):
+                guard matches.exactMatches.indices.contains(index) else { return nil }
+                return .element(matches.exactMatches[index])
+            case .containers(let matches):
+                guard matches.exactMatches.indices.contains(index) else { return nil }
+                return .container(matches.exactMatches[index])
+            }
+        }
+
+        func resolve(in resolutionScope: ResolutionScope) -> TargetResolution {
+            if let ordinal {
+                guard let match = match(at: ordinal) else {
+                    return .notFound(TargetNotFoundFacts(
+                        reason: .ordinalOutOfRange(requested: ordinal, matchCount: count),
+                        resolutionScope: resolutionScope,
+                        matchSet: self
+                    ))
+                }
+                return .resolved(match)
+            }
+            switch count {
+            case 0:
+                return .notFound(TargetNotFoundFacts(
+                    reason: .noMatches,
+                    resolutionScope: resolutionScope,
+                    matchSet: self
+                ))
+            case 1:
+                guard let match = match(at: 0) else {
+                    preconditionFailure("one target match must resolve at index zero")
+                }
+                return .resolved(match)
+            default:
+                return .ambiguous(TargetAmbiguityFacts(
+                    resolutionScope: resolutionScope,
+                    matchSet: self
+                ))
+            }
         }
     }
 
@@ -45,82 +108,46 @@ extension TheVault {
         case noMatches
     }
 
-    struct TargetNotFoundFacts {
-        let predicate: ElementPredicate
-        let ordinal: Int?
+    struct TargetNotFoundFacts: Equatable {
         let reason: TargetNotFoundReason
         let resolutionScope: ResolutionScope
-        let treeElements: [InterfaceTree.Element]
-        let visibleHeistIds: Set<HeistId>
-        let exactMatches: [InterfaceTree.Element]
+        let matchSet: TargetMatchSet
+
+        fileprivate init(
+            reason: TargetNotFoundReason,
+            resolutionScope: ResolutionScope,
+            matchSet: TargetMatchSet
+        ) {
+            self.reason = reason
+            self.resolutionScope = resolutionScope
+            self.matchSet = matchSet
+        }
     }
 
-    struct TargetAmbiguityFacts {
-        let predicate: ElementPredicate
-        let candidates: [TargetCandidateFacts]
-        let matchedCount: Int
+    struct TargetAmbiguityFacts: Equatable {
         let resolutionScope: ResolutionScope
-        let exactMatches: [InterfaceTree.Element]
+        let matchSet: TargetMatchSet
+
+        var matchedCount: Int { matchSet.count }
+
+        fileprivate init(resolutionScope: ResolutionScope, matchSet: TargetMatchSet) {
+            self.resolutionScope = resolutionScope
+            self.matchSet = matchSet
+        }
     }
 
-    struct ContainerNotFoundFacts {
-        let predicate: ResolvedContainerPredicate
-        let ordinal: Int?
-        let reason: TargetNotFoundReason
-        let resolutionScope: ResolutionScope
-        let exactMatches: [InterfaceTree.Container]
-    }
-
-    struct ContainerAmbiguityFacts {
-        let predicate: ResolvedContainerPredicate
-        let candidates: [InterfaceTree.Container]
-        let matchedCount: Int
-        let resolutionScope: ResolutionScope
-    }
-
-    /// Three-case result from `resolveTarget`. Resolution returns facts;
-    /// diagnostic wording is projected separately.
-    enum TargetResolution {
-        case resolved(InterfaceTree.Element)
+    /// Cardinality classification for either an element or container match set.
+    enum TargetResolution: Equatable {
+        case resolved(TargetMatch)
         case notFound(TargetNotFoundFacts)
         case ambiguous(TargetAmbiguityFacts)
 
-        var resolved: InterfaceTree.Element? {
-            if case .resolved(let resolved) = self { return resolved }
-            return nil
-        }
-
         var diagnostics: String {
             TargetResolutionDiagnostics.message(for: self)
         }
-
-        var candidates: [String] {
-            guard case .ambiguous(let facts) = self else { return [] }
-            return facts.candidates.map(TargetResolutionDiagnostics.elementCandidateDescription)
-        }
     }
 
-    enum ContainerTargetResolution {
-        case resolved(InterfaceTree.Container)
-        case notFound(ContainerNotFoundFacts)
-        case ambiguous(ContainerAmbiguityFacts)
-
-        var diagnostics: String {
-            TargetResolutionDiagnostics.message(for: self)
-        }
-
-        var candidates: [String] {
-            guard case .ambiguous(let facts) = self else { return [] }
-            return facts.candidates.map(TargetResolutionDiagnostics.containerCandidateDescription)
-        }
-    }
-
-    /// Resolve a target to a unique element. Returns `.resolved` on success,
-    /// `.notFound` or `.ambiguous` with diagnostics on failure.
-    ///
-    /// Resolution reads the interface tree. If an element is absent,
-    /// resolution fails with a near-miss suggestion. Live coordinate
-    /// revalidation happens later in action execution.
+    /// Resolve a target against the complete committed interface.
     func resolveTarget(_ target: ResolvedAccessibilityTarget) -> TargetResolution {
         resolveTarget(target, in: interfaceTree, resolutionScope: .interface)
     }
@@ -139,80 +166,15 @@ extension TheVault {
         resolveTarget(target, in: interfaceTree.viewportOnly, resolutionScope: .viewport)
     }
 
-    func resolveContainerTarget(_ target: ResolvedAccessibilityTarget) -> ContainerTargetResolution {
-        resolveContainerTarget(target, in: interfaceTree, resolutionScope: .interface)
-    }
-
-    func resolveContainerTarget(
-        _ target: ResolvedAccessibilityTarget,
-        in tree: InterfaceTree
-    ) -> ContainerTargetResolution {
-        resolveContainerTarget(target, in: tree, resolutionScope: .provided)
-    }
-
     func hasVisibleTerminalResolution(
         _ target: ResolvedAccessibilityTarget,
         in tree: InterfaceTree
     ) -> Bool {
-        let viewport = tree.viewportOnly
-        if target.isElementTarget {
-            switch resolveTarget(target, in: viewport) {
-            case .resolved, .ambiguous:
-                return true
-            case .notFound:
-                return false
-            }
-        }
-        switch resolveContainerTarget(target, in: viewport) {
+        switch resolveTarget(target, in: tree.viewportOnly, resolutionScope: .viewport) {
         case .resolved, .ambiguous:
             return true
         case .notFound:
             return false
-        }
-    }
-
-    private func resolveContainerTarget(
-        _ target: ResolvedAccessibilityTarget,
-        in tree: InterfaceTree,
-        resolutionScope: ResolutionScope
-    ) -> ContainerTargetResolution {
-        guard case .container(let predicate, let ordinal) = target.terminalSelection else {
-            preconditionFailure("container resolution requires a resolved container target")
-        }
-        let matches = AccessibilityTargetMatchGraph(targetMatchInput(for: tree))
-            .matches(for: target)
-            .containerPaths
-            .compactMap { tree.containers[$0] }
-        if let ordinal {
-            guard matches.indices.contains(ordinal) else {
-                return .notFound(ContainerNotFoundFacts(
-                    predicate: predicate,
-                    ordinal: ordinal,
-                    reason: .ordinalOutOfRange(requested: ordinal, matchCount: matches.count),
-                    resolutionScope: resolutionScope,
-                    exactMatches: matches
-                ))
-            }
-            return .resolved(matches[ordinal])
-        }
-        switch matches.count {
-        case 1:
-            return .resolved(matches[0])
-        case 0:
-            return .notFound(ContainerNotFoundFacts(
-                predicate: predicate,
-                ordinal: nil,
-                reason: .noMatches,
-                resolutionScope: resolutionScope,
-                exactMatches: []
-            ))
-        default:
-            return .ambiguous(ContainerAmbiguityFacts(
-                predicate: predicate,
-                candidates: matches,
-                matchedCount: matches.count,
-                resolutionScope: resolutionScope
-            ))
         }
     }
 
@@ -229,7 +191,7 @@ extension TheVault {
     /// Looks up an element by heistId in the selected scope.
     ///
     /// `.interface` reads the full interface tree, including any exploration union.
-    /// `.visible` reads the latest observed parser output and only returns ids
+    /// `.viewport` reads the latest observed parser output and only returns ids
     /// backed by the latest live hierarchy parse.
     func treeElement(heistId: HeistId, in scope: InterfaceElementScope) -> InterfaceTree.Element? {
         switch scope {
@@ -238,24 +200,6 @@ extension TheVault {
         case .interface:
             return interfaceElement(heistId: heistId)
         }
-    }
-
-    /// Resolve a target using first-match semantics against the committed viewport.
-    func resolveFirstVisibleMatch(_ target: ResolvedAccessibilityTarget) -> InterfaceTree.Element? {
-        resolveVisibleTarget(target.firstMatchTarget).resolved
-    }
-
-    /// All elements in the supplied tree, or in the current interface tree when omitted.
-    ///
-    /// Live elements appear first in hierarchy (depth-first) traversal order;
-    /// any interface heistIds not present in the viewport
-    /// hierarchy (post-exploration union) appear after, sorted by heistId so
-    /// the snapshot order is stable across runs.
-    func selectElements(in tree: InterfaceTree? = nil) -> [InterfaceTree.Element] {
-        if let tree {
-            return tree.orderedElements
-        }
-        return orderedInterfaceElements
     }
 }
 
@@ -297,65 +241,27 @@ private extension TheVault {
         in tree: InterfaceTree,
         resolutionScope: ResolutionScope
     ) -> TargetResolution {
-        guard case .element(let predicate, let ordinal) = target.terminalSelection else {
-            preconditionFailure("element resolution requires a resolved element target")
-        }
-        let matchGraph = AccessibilityTargetMatchGraph(targetMatchInput(for: tree))
-        let candidates = matchGraph.elementCandidates(in: target).elements
-        let matches = matchGraph.matches(for: target).elements.elements
-        if let ordinal {
-            guard matches.indices.contains(ordinal) else {
-                return .notFound(TargetNotFoundFacts(
-                    predicate: predicate,
-                    ordinal: ordinal,
-                    reason: .ordinalOutOfRange(requested: ordinal, matchCount: matches.count),
-                    resolutionScope: resolutionScope,
-                    treeElements: candidates,
-                    visibleHeistIds: tree.viewportElementIDs,
-                    exactMatches: matches
-                ))
-            }
-            return .resolved(matches[ordinal])
-        }
-        switch matches.count {
-        case 0:
-            return .notFound(TargetNotFoundFacts(
+        let graph = AccessibilityTargetMatchGraph(targetMatchInput(for: tree))
+        let graphMatches = graph.matches(for: target)
+        let matchSet: TargetMatchSet
+        switch target.terminalSelection {
+        case .element(let predicate, let ordinal):
+            matchSet = .elements(TargetElementMatches(
                 predicate: predicate,
-                ordinal: nil,
-                reason: .noMatches,
-                resolutionScope: resolutionScope,
-                treeElements: candidates,
-                visibleHeistIds: tree.viewportElementIDs,
-                exactMatches: []
+                ordinal: ordinal,
+                candidates: graph.elementCandidates(in: target).elements,
+                exactMatches: graphMatches.elements.elements,
+                visibleHeistIds: tree.viewportElementIDs
             ))
-        case 1:
-            return .resolved(matches[0])
-        default:
-            return .ambiguous(TargetAmbiguityFacts(
+        case .container(let predicate, let ordinal):
+            matchSet = .containers(TargetContainerMatches(
                 predicate: predicate,
-                candidates: matches.prefix(10).map {
-                    TargetCandidateFacts(treeElement: $0, visibleHeistIds: tree.viewportElementIDs)
-                },
-                matchedCount: matches.count,
-                resolutionScope: resolutionScope,
-                exactMatches: matches
+                ordinal: ordinal,
+                exactMatches: graphMatches.containerPaths.compactMap { tree.containers[$0] }
             ))
         }
+        return matchSet.resolve(in: resolutionScope)
     }
-}
-
-private extension ResolvedAccessibilityTarget {
-    var firstMatchTarget: ResolvedAccessibilityTarget {
-        switch self {
-        case .predicate(let predicate, _):
-            return .predicate(predicate, ordinal: 0)
-        case .within(let container, let target):
-            return .within(container: container, target: target.firstMatchTarget)
-        case .container:
-            return self
-        }
-    }
-
 }
 
 #endif // DEBUG

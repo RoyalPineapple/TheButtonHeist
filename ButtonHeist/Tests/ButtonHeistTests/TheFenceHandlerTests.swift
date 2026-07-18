@@ -2578,7 +2578,11 @@ final class TheFenceHandlerTests: XCTestCase {
     // MARK: - Pasteboard Validation
 
     func testSetPasteboardCatalogDeclaresNonEmptyText() throws {
-        let parameter = try XCTUnwrap(TheFence.Command.setPasteboard.descriptor.parameters.first { $0.key == "text" })
+        let parameter = try XCTUnwrap(
+            TheFence.Command.setPasteboard.descriptor.parameters.first {
+                $0.key == FenceParameterKey.text.rawValue
+            }
+        )
 
         XCTAssertEqual(parameter.minLength, 1)
         guard case .object(let schema) = parameter.schema.heistValue else {

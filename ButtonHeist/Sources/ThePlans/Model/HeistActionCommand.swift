@@ -91,48 +91,6 @@ public struct HeistActionCommand: Codable, Sendable, Equatable {
         try core.resolve(in: environment)
     }
 
-    func assertResolvedPayloadAdmissible(in environment: HeistExecutionEnvironment) throws {
-        let resolved = try resolve(in: environment)
-        switch resolved {
-        case .activate(let target), .increment(let target), .decrement(let target),
-             .viewportScrollToVisible(let target):
-            try HeistRuntimePayloadContractValidator.validate(target)
-        case .customAction(_, let target):
-            try HeistRuntimePayloadContractValidator.validate(target)
-        case .rotor(let selection, let target, _):
-            _ = try RotorSelection.decode(
-                name: selection.rotorName,
-                index: selection.rotorIndex,
-                codingPath: []
-            )
-            try HeistRuntimePayloadContractValidator.validate(target)
-        case .typeText(let payload):
-            if let target = payload.target { try HeistRuntimePayloadContractValidator.validate(target) }
-        case .editAction(let target):
-            try HeistRuntimePayloadContractValidator.validate(target)
-        case .setPasteboard:
-            break
-        case .mechanicalTap, .mechanicalLongPress, .mechanicalSwipe, .mechanicalDrag,
-             .viewportScroll, .viewportScrollToEdge:
-            break
-        case .dismiss, .magicTap, .takeScreenshot, .dismissKeyboard:
-            break
-        }
-
-        switch core {
-        case .mechanicalTap(let target): try HeistRuntimePayloadContractValidator.validate(target)
-        case .mechanicalLongPress(let target): try HeistRuntimePayloadContractValidator.validate(target)
-        case .mechanicalSwipe(let target): try HeistRuntimePayloadContractValidator.validate(target)
-        case .mechanicalDrag(let target): try HeistRuntimePayloadContractValidator.validate(target)
-        case .viewportScroll(let target): try HeistRuntimePayloadContractValidator.validate(target)
-        case .viewportScrollToEdge(let target): try HeistRuntimePayloadContractValidator.validate(target)
-        case .activate, .increment, .decrement, .customAction, .rotor, .dismiss, .magicTap,
-             .typeText, .viewportScrollToVisible, .editAction, .setPasteboard,
-             .takeScreenshot, .dismissKeyboard:
-            break
-        }
-    }
-
     private enum CodingKeys: String, CodingKey, CaseIterable { case type, payload }
 
     public init(from decoder: Decoder) throws {
