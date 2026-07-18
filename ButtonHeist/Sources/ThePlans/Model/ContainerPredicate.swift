@@ -343,23 +343,20 @@ public struct ResolvedContainerPredicate: Codable, Sendable, Equatable, Hashable
 
     package init(validating core: ContainerPredicateCore<String>) throws {
         if let reason = core.invalidEmptyPayloadDescription {
-            throw InvalidResolvedContainerPredicateError(reason: reason)
+            throw InvalidResolvedPredicateError(reason: reason)
         }
         self.core = core
     }
 
-    public var hasPredicates: Bool { core.invalidEmptyPayloadDescription == nil }
-    public var invalidEmptyPayloadDescription: String? { core.invalidEmptyPayloadDescription }
-
     public func matches(_ facts: ContainerPredicateFacts) -> Bool {
-        invalidEmptyPayloadDescription == nil && core.checks.allSatisfy { $0.matches(facts) }
+        core.checks.allSatisfy { $0.matches(facts) }
     }
 
     public init(from decoder: Decoder) throws {
         let core = try ContainerPredicateCore<String>(from: decoder)
         do {
             try self.init(validating: core)
-        } catch let error as InvalidResolvedContainerPredicateError {
+        } catch let error as InvalidResolvedPredicateError {
             throw DecodingError.dataCorrupted(.init(
                 codingPath: decoder.codingPath,
                 debugDescription: error.reason
@@ -369,14 +366,6 @@ public struct ResolvedContainerPredicate: Codable, Sendable, Equatable, Hashable
 
     public func encode(to encoder: Encoder) throws {
         try core.encode(to: encoder)
-    }
-}
-
-private struct InvalidResolvedContainerPredicateError: Error, Sendable, Equatable, CustomStringConvertible {
-    let reason: String
-
-    var description: String {
-        "resolved container predicate is invalid: \(reason)"
     }
 }
 

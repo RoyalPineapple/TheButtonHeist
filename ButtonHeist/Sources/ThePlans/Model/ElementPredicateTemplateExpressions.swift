@@ -57,7 +57,7 @@ public struct ElementPredicateTemplate: Codable, Sendable, Equatable, Hashable {
             throw HeistExpressionError.invalidStringMatch(mode: mode.rawValue)
         }
         if let description = resolved.invalidEmptyPayloadDescription {
-            throw InvalidResolvedElementPredicateError(reason: description)
+            throw InvalidResolvedPredicateError(reason: description)
         }
         return resolved
     }
@@ -133,13 +133,5 @@ extension ElementPredicateTemplate: CustomStringConvertible {
             "predicate",
             core.checks.map { $0.map(\.description).description }
         )
-    }
-}
-
-private struct InvalidResolvedElementPredicateError: Error, Sendable, Equatable, CustomStringConvertible {
-    let reason: String
-
-    var description: String {
-        "resolved element predicate is invalid: \(reason)"
     }
 }

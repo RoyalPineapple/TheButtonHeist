@@ -57,11 +57,6 @@ final class PostActionObservation {
     let vault: TheVault
     let safecracker: TheSafecracker
 
-    enum InterfaceProjectionMode {
-        case semantic
-        case discovery
-    }
-
     /// State captured before an action for delta computation.
     struct ObservationBaseline {
         let observation: InterfaceObservation
@@ -97,8 +92,7 @@ final class PostActionObservation {
         captureSemanticState(
             from: observation.observation,
             tripwireSignal: vault.tripwire.tripwireSignal(),
-            settledObservationSequence: observation.sequence,
-            projectionMode: observation.scope.interfaceProjectionMode
+            settledObservationSequence: observation.sequence
         )
     }
 
@@ -114,8 +108,7 @@ final class PostActionObservation {
         let current = captureSemanticState(
             from: event.settledObservation.observation,
             tripwireSignal: vault.tripwire.tripwireSignal(),
-            settledObservationSequence: event.sequence,
-            projectionMode: event.scope.interfaceProjectionMode
+            settledObservationSequence: event.sequence
         )
         return SettledObservationEvidence(
             event: event,
@@ -282,12 +275,11 @@ final class PostActionObservation {
     func captureSemanticState(
         from observation: InterfaceObservation,
         tripwireSignal: TheTripwire.TripwireSignal,
-        settledObservationSequence: SettledObservationSequence?,
-        projectionMode: InterfaceProjectionMode = .semantic
+        settledObservationSequence: SettledObservationSequence?
     ) -> ObservationBaseline {
-        let interfaceSnapshot = interfaceSnapshot(for: observation, projection: projectionMode)
+        let interface = vault.semanticInterface(for: observation)
         let capture = makeTraceCapture(
-            interface: interfaceSnapshot.interface,
+            interface: interface,
             sequence: 1,
             observation: observation,
             tripwireSignal: tripwireSignal,
@@ -299,18 +291,6 @@ final class PostActionObservation {
             tripwireSignal: tripwireSignal,
             settledObservationSequence: settledObservationSequence
         )
-    }
-
-    private func interfaceSnapshot(
-        for observation: InterfaceObservation,
-        projection: InterfaceProjectionMode
-    ) -> TheVault.HashedInterface {
-        switch projection {
-        case .semantic:
-            return vault.semanticInterfaceWithHash(for: observation)
-        case .discovery:
-            return vault.discoveryInterfaceWithHash(for: observation)
-        }
     }
 
     static func shouldRecordAccessibilityTrace(
@@ -456,17 +436,6 @@ final class PostActionObservation {
             baseline: before.elements,
             final: final.elements
         ).map { TheVault.WireConversion.convert($0) }
-    }
-}
-
-private extension SemanticObservationScope {
-    var interfaceProjectionMode: PostActionObservation.InterfaceProjectionMode {
-        switch self {
-        case .visible:
-            return .semantic
-        case .discovery:
-            return .discovery
-        }
     }
 }
 

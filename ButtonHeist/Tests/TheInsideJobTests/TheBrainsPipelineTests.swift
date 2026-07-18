@@ -1831,9 +1831,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(state.screenId, screen.tree.id)
     }
 
-    func testDiscoveryObservationStateUsesDiscoveryInterfaceWhileTraceStaysSemantic() throws {
-        let fixture = makeDiscoveryObservationProjectionFixture()
-        let viewportObservation = fixture.viewportObservation
+    func testDiscoveryObservationStateAndTraceUseCanonicalSemanticInterface() throws {
+        let viewportObservation = makeDiscoveryObservationProjectionFixture()
         let discoveryInterface = TheVault.WireConversion.toDiscoveryInterface(from: viewportObservation.tree)
         let semanticInterface = TheVault.WireConversion.toSemanticInterface(from: viewportObservation.tree)
         let traceCapture = brains.postActionObservation.makeTraceCapture(
@@ -1859,20 +1858,10 @@ final class TheBrainsPipelineTests: XCTestCase {
         let observation = brains.postActionObservation.semanticObservation(from: event)
 
         XCTAssertNotEqual(discoveryInterface.tree, semanticInterface.tree)
-        XCTAssertEqual(observation.baseline.interface.tree, discoveryInterface.tree)
-        XCTAssertEqual(observation.baseline.interface.annotations, discoveryInterface.annotations)
+        XCTAssertEqual(observation.baseline.interface.tree, semanticInterface.tree)
+        XCTAssertEqual(observation.baseline.interface.annotations, semanticInterface.annotations)
         XCTAssertEqual(observation.accessibilityTrace.captures.last?.interface.tree, semanticInterface.tree)
         XCTAssertEqual(observation.accessibilityTrace.captures.last?.interface.annotations, semanticInterface.annotations)
-        XCTAssertNotNil(observation.baseline.interface.annotations.elementByPath[fixture.visiblePath])
-        XCTAssertEqual(
-            observation.baseline.interface.annotations.containerByPath[TreePath([0, 1])]?.containerName,
-            "offscreen_group"
-        )
-        XCTAssertEqual(
-            observation.accessibilityTrace.captures.last?.interface.annotations.containerByPath[TreePath([0, 0])]?
-                .containerName,
-            "offscreen_group"
-        )
         let predicate = AccessibilityPredicate.exists(.container(.identifier("OffscreenGroup")))
         let resolved = try resolvedPredicate(predicate)
         XCTAssertEqual(
@@ -1881,10 +1870,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
     }
 
-    private func makeDiscoveryObservationProjectionFixture() -> (
-        viewportObservation: InterfaceObservation,
-        visiblePath: TreePath
-    ) {
+    private func makeDiscoveryObservationProjectionFixture() -> InterfaceObservation {
         let rootPath = TreePath([0])
         let visiblePath = TreePath([0, 0])
         let offscreenContainerPath = TreePath([0, 2])
@@ -1958,7 +1944,7 @@ final class TheBrainsPipelineTests: XCTestCase {
                 firstResponderHeistId: nil
             )
         )
-        return (viewportObservation, visiblePath)
+        return viewportObservation
     }
 
     func testShouldRecordAccessibilityTraceIgnoresViewportOnlyMovement() {
@@ -2087,7 +2073,7 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     func testExplorationTerminalResolutionSupportsContainerTargets() throws {
-        let observation = makeDiscoveryObservationProjectionFixture().viewportObservation
+        let observation = makeDiscoveryObservationProjectionFixture()
         let visibleRoot = try AccessibilityTarget.container(.identifier("RootViewController")).resolve(in: .empty)
         let offscreenGroup = try AccessibilityTarget.container(.identifier("OffscreenGroup")).resolve(in: .empty)
         let missing = try AccessibilityTarget.container(.identifier("Missing")).resolve(in: .empty)

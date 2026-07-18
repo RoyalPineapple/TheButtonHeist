@@ -337,11 +337,14 @@ extension SemanticObservationStream {
                 generation: runtimeState.lineage.generation,
                 previousEvents: observationLog.latestEventsByScope
             ),
-            evidence: publicationEvidence(
-                observation: settledObservation,
-                notificationBatch: notificationBatch,
-                notificationIdentityObservation: notificationIdentityObservation,
-                vault: vault
+            evidence: SemanticObservationPublication.Evidence(
+                interface: vault.semanticInterface(for: settledObservation),
+                accessibilityNotifications: vault.resolveAccessibilityNotificationEvidence(
+                    notificationBatch.events,
+                    identityObservation: notificationIdentityObservation ?? settledObservation,
+                    referenceObservation: settledObservation
+                ),
+                firstResponder: vault.firstResponderTarget(in: settledObservation.tree)
             )
         )
         for fallbackReason in scope.fulfilledScopes.compactMap({ fulfilledScope in
@@ -366,23 +369,6 @@ extension SemanticObservationStream {
             notificationBatch: notificationBatch
         )
         return publication.sourceEvent
-    }
-
-    private func publicationEvidence(
-        observation: InterfaceObservation,
-        notificationBatch: AccessibilityNotificationBatch,
-        notificationIdentityObservation: InterfaceObservation?,
-        vault: TheVault
-    ) -> SemanticObservationPublication.Evidence {
-        SemanticObservationPublication.Evidence(
-            interface: vault.semanticInterfaceWithHash(for: observation).interface,
-            accessibilityNotifications: vault.resolveAccessibilityNotificationEvidence(
-                notificationBatch.events,
-                identityObservation: notificationIdentityObservation ?? observation,
-                referenceObservation: observation
-            ),
-            firstResponder: vault.firstResponderTarget(in: observation.tree)
-        )
     }
 
     func admitSettledProof(

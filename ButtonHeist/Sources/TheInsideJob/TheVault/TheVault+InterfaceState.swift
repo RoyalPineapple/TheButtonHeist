@@ -10,11 +10,6 @@ import TheScore
 
 extension TheVault {
 
-    struct HashedInterface {
-        let interface: Interface
-        let hash: String
-    }
-
     /// Clear cached element data (used on suspend).
     func clearCache() {
         clearInterfaceForLifecycleReset()
@@ -173,26 +168,11 @@ extension TheVault {
         WireConversion.toSemanticInterface(from: interfaceTree, timestamp: timestamp)
     }
 
-    /// Single-build semantic variant for state capture and delta projection.
-    func semanticInterfaceWithHash(timestamp: Date = Date()) -> HashedInterface {
-        let interface = semanticInterface(timestamp: timestamp)
-        return HashedInterface(interface: interface, hash: AccessibilityTrace.Capture.hash(interface))
-    }
-
-    func semanticInterfaceWithHash(
+    func semanticInterface(
         for observation: InterfaceObservation,
         timestamp: Date = Date()
-    ) -> HashedInterface {
-        let interface = WireConversion.toSemanticInterface(from: observation.tree, timestamp: timestamp)
-        return HashedInterface(interface: interface, hash: AccessibilityTrace.Capture.hash(interface))
-    }
-
-    func discoveryInterfaceWithHash(
-        for observation: InterfaceObservation,
-        timestamp: Date = Date()
-    ) -> HashedInterface {
-        let interface = WireConversion.toDiscoveryInterface(from: observation.tree, timestamp: timestamp)
-        return HashedInterface(interface: interface, hash: AccessibilityTrace.Capture.hash(interface))
+    ) -> Interface {
+        WireConversion.toSemanticInterface(from: observation.tree, timestamp: timestamp)
     }
 
     private func clearInterfaceForLifecycleReset() {

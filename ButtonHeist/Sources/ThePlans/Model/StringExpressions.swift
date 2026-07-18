@@ -21,6 +21,14 @@ extension Expr: Sendable where Value: Sendable {}
 extension Expr: Equatable where Value: Equatable {}
 extension Expr: Hashable where Value: Hashable {}
 
+package struct InvalidResolvedPredicateError: Error, Sendable, Equatable, CustomStringConvertible {
+    package let reason: String
+
+    package var description: String {
+        "resolved predicate is invalid: \(reason)"
+    }
+}
+
 extension Expr: Codable where Value: Codable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case ref
