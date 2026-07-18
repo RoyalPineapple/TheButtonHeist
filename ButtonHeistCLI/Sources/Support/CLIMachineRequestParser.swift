@@ -1,5 +1,6 @@
 @_spi(ButtonHeistTooling) import ButtonHeist
 import Foundation
+import TheScore
 
 struct CLIParsedRequest {
     let input: FenceCommandInput

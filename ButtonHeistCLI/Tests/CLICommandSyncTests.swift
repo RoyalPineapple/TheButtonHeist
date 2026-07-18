@@ -2,6 +2,7 @@ import XCTest
 @_spi(ButtonHeistTooling) import ButtonHeist
 import Foundation
 import ThePlans
+import TheScore
 @testable import ButtonHeistCLIExe
 
 final class CLICommandSyncTests: XCTestCase {

@@ -3,6 +3,7 @@ import AccessibilitySnapshotModel
 import Foundation
 import MCP
 import Testing
+import TheScore
 @testable import ButtonHeistMCP
 
 struct RenderResponseTests {

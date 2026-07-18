@@ -1,6 +1,7 @@
 import Foundation
 import CryptoKit
 @_spi(ButtonHeistTooling) import ButtonHeist
+import TheScore
 
 enum PublicCommandContractFixture {
     enum Mode: Equatable {

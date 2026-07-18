@@ -1,6 +1,7 @@
 import ArgumentParser
 @_spi(ButtonHeistTooling) import ButtonHeist
 import Foundation
+import TheScore
 
 @main
 struct ButtonHeistApp: AsyncParsableCommand {

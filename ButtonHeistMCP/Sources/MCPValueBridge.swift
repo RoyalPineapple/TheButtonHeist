@@ -1,6 +1,7 @@
 import Foundation
 import MCP
 @_spi(ButtonHeistInternals) @_spi(ButtonHeistTooling) import ButtonHeist
+import TheScore
 
 enum MCPValueBridge {
     static func commandEnvelope(from arguments: [String: Value]?) throws -> TheFence.CommandArgumentEnvelope {
