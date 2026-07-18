@@ -5,36 +5,6 @@ import ThePlans
 import TheScore
 
 extension TheBrains {
-    internal func requireAdmitted<Value>(
-        _ value: Value?,
-        _ message: @autoclosure () -> String
-    ) -> Value {
-        guard let value else {
-            preconditionFailure(message())
-        }
-        return value
-    }
-
-    internal func requirePassingChildren(
-        _ children: [HeistExecutionStepResult],
-        _ context: @autoclosure () -> String
-    ) -> HeistPassingChildren {
-        guard case .passed(let admittedChildren) = HeistExecutedChildren(children) else {
-            preconditionFailure(context())
-        }
-        return admittedChildren
-    }
-
-    internal func requireAbortedChildren(
-        _ children: [HeistExecutionStepResult],
-        _ context: @autoclosure () -> String
-    ) -> HeistAbortedChildren {
-        guard case .aborted(let admittedChildren) = HeistExecutedChildren(children) else {
-            preconditionFailure(context())
-        }
-        return admittedChildren
-    }
-
     internal func actionResolutionFailureResult(
         _ failure: HeistActionResolutionFailure,
         path: HeistExecutionPath,
@@ -46,12 +16,13 @@ extension TheBrains {
             observed: "could not resolve heist action command: \(failure.errorDescription)",
             expected: failure.command.reportTarget.map(String.init(describing:))
         )
-        let completion = HeistFailedActionEvidence(.commandResolutionFailure).map {
-            HeistActionCompletion.failed(evidence: $0, failure: detail)
-        }
-        return actionFailureReceipt(
+        let execution = HeistActionExecution.failed(
             command: failure.command,
-            completion: completion,
+            evidence: .init(admitted: .commandResolutionFailure),
+            failure: detail
+        )
+        return actionFailureReceipt(
+            execution: execution,
             path: path,
             start: start
         )
@@ -75,20 +46,18 @@ extension TheBrains {
             expectationResult: expectationResult,
             expectation: expectation.result
         )
-        let completion = HeistFailedActionEvidence(evidence).map {
-            HeistActionCompletion.failed(
-                evidence: $0,
-                failure: HeistFailureDetail(
-                    category: .expectation,
-                    contract: "action expectation predicate resolves before evaluation",
-                    observed: observed,
-                    expected: failure.wait.predicate.description
-                )
-            )
-        }
-        return actionFailureReceipt(
+        let execution = HeistActionExecution.failed(
             command: command,
-            completion: completion,
+            evidence: .init(admitted: evidence),
+            failure: HeistFailureDetail(
+                category: .expectation,
+                contract: "action expectation predicate resolves before evaluation",
+                observed: observed,
+                expected: failure.wait.predicate.description
+            )
+        )
+        return actionFailureReceipt(
+            execution: execution,
             path: path,
             start: start
         )
@@ -175,24 +144,15 @@ extension TheBrains {
     }
 
     private func actionFailureReceipt(
-        command: HeistActionCommand,
-        completion: HeistActionCompletion?,
+        execution: HeistActionExecution,
         path: HeistExecutionPath,
         start: CFAbsoluteTime
     ) -> HeistExecutionStepResult {
         let durationMs = elapsedMilliseconds(since: start)
-        let admittedCompletion = requireAdmitted(
-            completion,
-            "action receipt evidence must match the receipt command"
-        )
-        return requireAdmitted(
-            HeistExecutionStepResult.action(
-                path: path,
-                durationMs: durationMs,
-                command: command,
-                completion: admittedCompletion
-            ),
-            "action failure receipt evidence must match the receipt command"
+        return .action(
+            path: path,
+            durationMs: durationMs,
+            execution: execution
         )
     }
 

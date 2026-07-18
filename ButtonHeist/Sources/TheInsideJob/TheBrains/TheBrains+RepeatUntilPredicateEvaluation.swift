@@ -116,18 +116,6 @@ extension TheBrains.RepeatUntil {
         case unmet(UnmetCheck)
         case noProgress(observation: Observation?, expectation: ExpectationResult.Unmet, receipt: HeistWaitReceipt)
 
-        internal var iterationOutcome: IterationOutcome {
-            switch self {
-            case .deadlineElapsed(let expectation),
-                 .noProgress(_, let expectation, _):
-                return .continued(expectation)
-            case .met(let check):
-                return .predicateMet(check.expectation)
-            case .unmet(let check):
-                return .continued(check.expectation)
-            }
-        }
-
         internal var observation: Observation? {
             switch self {
             case .deadlineElapsed:
@@ -144,41 +132,56 @@ extension TheBrains.RepeatUntil {
 }
 
 extension TheBrains {
-    internal func repeatUntilShouldCheckStopPredicate(
-        afterBodyFailure failedStep: HeistExecutionStepResult,
-        in iterationResults: [HeistExecutionStepResult]
-    ) -> Bool {
-        guard iterationResults.contains(where: { $0.path == failedStep.path }) else { return false }
+    internal enum RepeatUntilBodyFailureDisposition {
+        case checkPredicate(HeistPassingChildren)
+        case abort
+    }
+
+    internal func repeatUntilBodyFailureDisposition(
+        _ children: HeistAbortedChildren
+    ) -> RepeatUntilBodyFailureDisposition {
+        guard let failedStep = children.values.first(where: { $0.path == children.abortedAtPath }) else {
+            return .abort
+        }
         guard failedStep.kind == .action,
               failedStep.failure?.category == .action,
               failedStep.actionEvidence?.dispatchResult?.outcome.isSuccess == false else {
-            return false
+            return .abort
         }
+        let shouldCheck: Bool
         switch failedStep.actionEvidence?.dispatchResult?.outcome.errorKind {
         case nil, .some(.actionFailed):
-            return true
+            shouldCheck = true
         case .some(.accessibilityTreeUnavailable),
              .some(.elementNotFound),
              .some(.timeout),
              .some(.validationError),
              .some(.authFailure),
              .some(.general):
-            return false
+            shouldCheck = false
         }
+        guard shouldCheck else { return .abort }
+
+        var retained = HeistExecutedChildren.empty
+        for child in children.values where child.path != children.abortedAtPath {
+            retained.append(child)
+        }
+        guard case .passed(let passingChildren) = retained else { return .abort }
+        return .checkPredicate(passingChildren)
     }
 
     internal func repeatUntilPostBodyCheck(
         context: RepeatUntil.Context,
         step: ResolvedRepeatUntilStep,
         observation: RepeatUntil.Observation?,
-        iterationResults: [HeistExecutionStepResult],
+        iterationResults: HeistPassingChildren,
         deadline: CFAbsoluteTime
     ) async -> RepeatUntil.PostBodyCheck {
         if let observation,
            let actionTraceCheck = repeatUntilActionTracePostBodyCheck(
             step: step,
             observation: observation,
-            iterationResults: iterationResults
+            iterationResults: iterationResults.values
         ) {
             return actionTraceCheck
         }

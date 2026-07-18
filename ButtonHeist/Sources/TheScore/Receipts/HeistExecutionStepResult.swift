@@ -196,27 +196,35 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         let durationMs = try container.decode(Int.self, forKey: .durationMs)
         switch try container.decode(HeistExecutionStepNode.self, forKey: .node) {
         case .action(let command, let completion):
-            self = try Self.decoded(Self.action(path: path, durationMs: durationMs, command: command, completion: completion), from: decoder)
+            self = try Self.decoded(Self.decodedAction(
+                path: path, durationMs: durationMs, command: command, completion: completion
+            ), from: decoder)
         case .wait(let predicate, let timeout, let completion):
             self = .wait(path: path, durationMs: durationMs, predicate: predicate, timeout: timeout, completion: completion)
         case .conditional(let completion):
             self = .conditional(path: path, durationMs: durationMs, completion: completion)
         case .forEachElement(let declaration, let completion):
-            self = try Self.decoded(Self.forEachElement(path: path, durationMs: durationMs, declaration: declaration, completion: completion), from: decoder)
+            self = try Self.decoded(Self.decodedForEachElement(
+                path: path, durationMs: durationMs, declaration: declaration, completion: completion
+            ), from: decoder)
         case .forEachElementIteration(let declaration, let completion):
-            self = try Self.decoded(Self.forEachElementIteration(
+            self = try Self.decoded(Self.decodedForEachElementIteration(
                 path: path, durationMs: durationMs, declaration: declaration, completion: completion
             ), from: decoder)
         case .forEachString(let declaration, let completion):
-            self = try Self.decoded(Self.forEachString(path: path, durationMs: durationMs, declaration: declaration, completion: completion), from: decoder)
+            self = try Self.decoded(Self.decodedForEachString(
+                path: path, durationMs: durationMs, declaration: declaration, completion: completion
+            ), from: decoder)
         case .forEachStringIteration(let declaration, let completion):
-            self = try Self.decoded(Self.forEachStringIteration(
+            self = try Self.decoded(Self.decodedForEachStringIteration(
                 path: path, durationMs: durationMs, declaration: declaration, completion: completion
             ), from: decoder)
         case .repeatUntil(let declaration, let completion):
-            self = try Self.decoded(Self.repeatUntil(path: path, durationMs: durationMs, declaration: declaration, completion: completion), from: decoder)
+            self = try Self.decoded(Self.decodedRepeatUntil(
+                path: path, durationMs: durationMs, declaration: declaration, completion: completion
+            ), from: decoder)
         case .repeatUntilIteration(let declaration, let completion):
-            self = try Self.decoded(Self.repeatUntilIteration(
+            self = try Self.decoded(Self.decodedRepeatUntilIteration(
                 path: path, durationMs: durationMs, declaration: declaration, completion: completion
             ), from: decoder)
         case .warning(let message, let completion):

@@ -85,10 +85,10 @@ extension TheBrains {
     private func caseNode(
         _ dispatch: PredicateCaseDispatch,
         selection: HeistCaseSelectionResult,
-        children: [HeistExecutionStepResult]
+        children: HeistExecutedChildren
     ) -> HeistExecutionStepResult {
         let evidence = HeistCaseSelectionEvidence(selection: selection)
-        switch HeistExecutedChildren(children) {
+        switch children {
         case .passed(let children):
             return .conditional(
                 path: dispatch.path,

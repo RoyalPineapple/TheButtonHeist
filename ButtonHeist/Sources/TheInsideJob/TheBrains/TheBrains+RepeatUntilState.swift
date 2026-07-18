@@ -32,31 +32,25 @@ extension TheBrains.RepeatUntil {
         }
     }
 
-    internal enum IterationOutcome {
-        case predicateMet(ExpectationResult.Met)
-        case continued(ExpectationResult.Unmet)
-        case failed(expectation: ExpectationResult.Unmet, childPath: HeistExecutionPath)
-    }
-
     internal struct RunningState {
         internal let currentObservation: Observation?
-        internal let iterationNodes: [HeistExecutionStepResult]
+        internal let iterationNodes: HeistPassingChildren
 
         internal init(
             currentObservation: Observation?,
-            iterationNodes: [HeistExecutionStepResult] = []
+            iterationNodes: HeistPassingChildren = .empty
         ) {
             self.currentObservation = currentObservation
             self.iterationNodes = iterationNodes
         }
 
         internal func appendingIteration(
-            _ node: HeistExecutionStepResult,
+            _ iteration: HeistPassingChildren,
             nextCheck: UnmetCheck
         ) -> RunningState {
             RunningState(
                 currentObservation: nextCheck.observation,
-                iterationNodes: iterationNodes + [node]
+                iterationNodes: iterationNodes.appending(iteration)
             )
         }
     }
@@ -71,7 +65,7 @@ extension TheBrains.RepeatUntil {
                 return .terminal(.timedOut(
                     observation: running.currentObservation,
                     expectation: expectation,
-                    iterationCount: running.iterationNodes.count,
+                    iterationCount: running.iterationNodes.values.count,
                     iterationNodes: running.iterationNodes
                 ))
             case (.running(let running), .iterationPassed(let event)):
@@ -97,23 +91,23 @@ extension TheBrains.RepeatUntil {
                 return .terminal(.predicateMet(
                     check: check,
                     iterationCount: event.frame.count,
-                    iterationNodes: running.iterationNodes + [event.iterationNode]
+                    iterationNodes: running.iterationNodes.appending(event.iteration)
                 ))
             case .unmet(let check):
-                return .running(running.appendingIteration(event.iterationNode, nextCheck: check))
+                return .running(running.appendingIteration(event.iteration, nextCheck: check))
             case .deadlineElapsed(let expectation):
                 return .terminal(.timedOut(
                     observation: running.currentObservation,
                     expectation: expectation,
                     iterationCount: event.frame.count,
-                    iterationNodes: running.iterationNodes + [event.iterationNode]
+                    iterationNodes: running.iterationNodes.appending(event.iteration)
                 ))
             case .noProgress(let observation, let expectation, _):
                 return .terminal(.timedOut(
                     observation: observation,
                     expectation: expectation,
                     iterationCount: event.frame.count,
-                    iterationNodes: running.iterationNodes + [event.iterationNode]
+                    iterationNodes: running.iterationNodes.appending(event.iteration)
                 ))
             }
         }
@@ -122,48 +116,45 @@ extension TheBrains.RepeatUntil {
             running: RunningState,
             event: FailedIterationEvent
         ) -> LoopState {
-            if let postBody = event.postBody,
-               case .met(let check) = postBody {
+            if case .checked(.met(let check), let predicateMetIteration) = event.predicateEvaluation {
                 return .terminal(.predicateMet(
                     check: check,
                     iterationCount: event.frame.count,
-                    iterationNodes: running.iterationNodes + [event.predicateMetIterationNode]
+                    iterationNodes: running.iterationNodes.appending(predicateMetIteration)
                 ))
             }
             return .terminal(.bodyFailed(
                 observation: running.currentObservation,
                 expectation: event.failureExpectation,
                 iterationIndex: event.frame.index,
-                childPath: event.failedStep.path,
-                iterationNodes: running.iterationNodes + [event.failedIterationNode]
+                children: running.iterationNodes.appending(event.failedIteration)
             ))
         }
 
         private static func reduceElseCompleted(
             state: LoopState,
             terminal: Terminal,
-            children: [HeistExecutionStepResult]
+            children: HeistExecutedChildren
         ) -> LoopState {
             guard case .timedOut(let observation, let expectation, let iterationCount, let iterationNodes) = terminal else {
                 return state
             }
-            if let abortedAtChildPath = children.firstFailedStep?.path {
+            switch children {
+            case .aborted(let elseChildren):
                 return .terminal(.timeoutElseFailed(
                     observation: observation,
                     expectation: expectation,
                     iterationCount: iterationCount,
-                    iterationNodes: iterationNodes,
-                    elseChildren: children,
-                    childPath: abortedAtChildPath
+                    children: iterationNodes.appending(elseChildren)
+                ))
+            case .passed(let elseChildren):
+                return .terminal(.timeoutHandledByElse(
+                    observation: observation,
+                    expectation: expectation,
+                    iterationCount: iterationCount,
+                    children: iterationNodes.appending(elseChildren)
                 ))
             }
-            return .terminal(.timeoutHandledByElse(
-                observation: observation,
-                expectation: expectation,
-                iterationCount: iterationCount,
-                iterationNodes: iterationNodes,
-                elseChildren: children
-            ))
         }
     }
 
@@ -171,62 +162,36 @@ extension TheBrains.RepeatUntil {
         case deadlineElapsed(ExpectationResult.Unmet)
         case iterationPassed(PassedIterationEvent)
         case iterationFailed(FailedIterationEvent)
-        case elseCompleted([HeistExecutionStepResult])
+        case elseCompleted(HeistExecutedChildren)
     }
 
     internal enum Terminal {
-        case predicateMet(check: MetCheck, iterationCount: Int, iterationNodes: [HeistExecutionStepResult])
+        case predicateMet(check: MetCheck, iterationCount: Int, iterationNodes: HeistPassingChildren)
         case timedOut(
             observation: Observation?,
             expectation: ExpectationResult.Unmet,
             iterationCount: Int,
-            iterationNodes: [HeistExecutionStepResult]
+            iterationNodes: HeistPassingChildren
         )
         case bodyFailed(
             observation: Observation?,
             expectation: ExpectationResult.Unmet,
             iterationIndex: Int,
-            childPath: HeistExecutionPath,
-            iterationNodes: [HeistExecutionStepResult]
+            children: HeistAbortedChildren
         )
         case timeoutHandledByElse(
             observation: Observation?,
             expectation: ExpectationResult.Unmet,
             iterationCount: Int,
-            iterationNodes: [HeistExecutionStepResult],
-            elseChildren: [HeistExecutionStepResult]
+            children: HeistPassingChildren
         )
         case timeoutElseFailed(
             observation: Observation?,
             expectation: ExpectationResult.Unmet,
             iterationCount: Int,
-            iterationNodes: [HeistExecutionStepResult],
-            elseChildren: [HeistExecutionStepResult],
-            childPath: HeistExecutionPath
+            children: HeistAbortedChildren
         )
 
-        internal var iterationNodes: [HeistExecutionStepResult] {
-            switch self {
-            case .predicateMet(_, _, let iterationNodes),
-                 .timedOut(_, _, _, let iterationNodes),
-                 .bodyFailed(_, _, _, _, let iterationNodes),
-                 .timeoutHandledByElse(_, _, _, let iterationNodes, _),
-                 .timeoutElseFailed(_, _, _, let iterationNodes, _, _):
-                return iterationNodes
-            }
-        }
-
-        internal var children: [HeistExecutionStepResult] {
-            switch self {
-            case .timeoutHandledByElse(_, _, _, let iterationNodes, let elseChildren),
-                 .timeoutElseFailed(_, _, _, let iterationNodes, let elseChildren, _):
-                return iterationNodes + elseChildren
-            case .predicateMet,
-                 .timedOut,
-                 .bodyFailed:
-                return iterationNodes
-            }
-        }
     }
 
     internal struct IterationFrame {
@@ -246,42 +211,41 @@ extension TheBrains.RepeatUntil {
     internal struct PassedIterationEvent {
         internal let frame: IterationFrame
         internal let postBody: PostBodyCheck
-        internal let iterationNode: HeistExecutionStepResult
+        internal let iteration: HeistPassingChildren
 
         internal init(
             frame: IterationFrame,
             postBody: PostBodyCheck,
-            iterationNode: HeistExecutionStepResult
+            iteration: HeistPassingChildren
         ) {
             self.frame = frame
             self.postBody = postBody
-            self.iterationNode = iterationNode
+            self.iteration = iteration
         }
     }
 
     internal struct FailedIterationEvent {
         internal let frame: IterationFrame
-        internal let failedStep: HeistExecutionStepResult
-        internal let postBody: PostBodyCheck?
+        internal let predicateEvaluation: FailedBodyPredicateEvaluation
         internal let failureExpectation: ExpectationResult.Unmet
-        internal let predicateMetIterationNode: HeistExecutionStepResult
-        internal let failedIterationNode: HeistExecutionStepResult
+        internal let failedIteration: HeistAbortedChildren
 
         internal init(
             frame: IterationFrame,
-            failedStep: HeistExecutionStepResult,
-            postBody: PostBodyCheck?,
+            predicateEvaluation: FailedBodyPredicateEvaluation,
             failureExpectation: ExpectationResult.Unmet,
-            predicateMetIterationNode: HeistExecutionStepResult,
-            failedIterationNode: HeistExecutionStepResult
+            failedIteration: HeistAbortedChildren
         ) {
             self.frame = frame
-            self.failedStep = failedStep
-            self.postBody = postBody
+            self.predicateEvaluation = predicateEvaluation
             self.failureExpectation = failureExpectation
-            self.predicateMetIterationNode = predicateMetIterationNode
-            self.failedIterationNode = failedIterationNode
+            self.failedIteration = failedIteration
         }
+    }
+
+    internal enum FailedBodyPredicateEvaluation {
+        case notChecked
+        case checked(PostBodyCheck, predicateMetIteration: HeistPassingChildren)
     }
 }
 

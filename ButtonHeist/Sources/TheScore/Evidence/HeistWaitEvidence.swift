@@ -24,6 +24,12 @@ public struct HeistWaitEvidence: Codable, Sendable, Equatable {
             self.actionResult = actionResult
             self.expectation = expectation
         }
+
+        package init(executed actionResult: ActionResult, expectation: ExpectationResult.Met) {
+            precondition(actionResult.outcome.isSuccess)
+            self.actionResult = actionResult
+            self.expectation = expectation
+        }
     }
 
     public struct UnmatchedCheck: Sendable, Equatable {
@@ -35,6 +41,12 @@ public struct HeistWaitEvidence: Codable, Sendable, Equatable {
             expectation: ExpectationResult
         ) {
             guard !actionResult.outcome.isSuccess || !expectation.met else { return nil }
+            self.actionResult = actionResult
+            self.expectation = expectation
+        }
+
+        package init(executed actionResult: ActionResult, expectation: ExpectationResult) {
+            precondition(!actionResult.outcome.isSuccess || !expectation.met)
             self.actionResult = actionResult
             self.expectation = expectation
         }

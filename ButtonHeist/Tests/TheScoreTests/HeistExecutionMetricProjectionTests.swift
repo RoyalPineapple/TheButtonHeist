@@ -170,12 +170,12 @@ import TheScore
         let completion = HeistRepeatUntilCompletion.passed(
             evidence: try #require(HeistPassedRepeatUntilEvidence(evidence))
         )
-        return try #require(HeistExecutionStepResult.repeatUntil(
+        return HeistExecutionStepResult.repeatUntil(
             path: try HeistExecutionPath(validating: "$.body[2]"),
             durationMs: 60,
             declaration: HeistRepeatUntilDeclaration(predicate: predicate, timeout: 0.05),
             completion: completion
-        ))
+        )
     }
 
     private func caseSelectionStep() throws -> HeistExecutionStepResult {

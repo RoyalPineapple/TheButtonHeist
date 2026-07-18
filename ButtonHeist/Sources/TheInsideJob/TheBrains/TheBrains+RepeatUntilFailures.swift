@@ -24,13 +24,6 @@ extension TheBrains.RepeatUntil.Terminal {
 }
 
 extension TheBrains {
-    internal func repeatUntilIterationResultsDroppingRedundantFailure(
-        _ iterationResults: [HeistExecutionStepResult],
-        failedPath: HeistExecutionPath
-    ) -> [HeistExecutionStepResult] {
-        iterationResults.filter { $0.path != failedPath }
-    }
-
     internal func repeatUntilInternalStateFailure(
         context: RepeatUntil.Context,
         step: ResolvedRepeatUntilStep,
@@ -41,19 +34,16 @@ extension TheBrains {
             predicate: step.predicateExpression,
             timeout: step.timeout
         )
-        return requireAdmitted(
-            HeistExecutionStepResult.repeatUntil(
-                path: context.path,
-                durationMs: durationMs,
-                declaration: declaration,
-                completion: .failed(evidence: .unavailable, failure: HeistFailureDetail(
-                    category: .loop,
-                    contract: "repeat_until execution reaches a terminal state",
-                    observed: observed,
-                    expected: "terminal repeat_until state"
-                ))
-            ),
-            "repeat_until internal failure receipt must match its declaration"
+        return .repeatUntil(
+            path: context.path,
+            durationMs: durationMs,
+            declaration: declaration,
+            completion: .failed(evidence: .unavailable, failure: HeistFailureDetail(
+                category: .loop,
+                contract: "repeat_until execution reaches a terminal state",
+                observed: observed,
+                expected: "terminal repeat_until state"
+            ))
         )
     }
 
@@ -65,19 +55,16 @@ extension TheBrains {
     ) -> HeistExecutionStepResult {
         let durationMs = elapsedMilliseconds(since: start)
         let declaration = HeistRepeatUntilDeclaration(step)
-        return requireAdmitted(
-            HeistExecutionStepResult.repeatUntil(
-                path: path,
-                durationMs: durationMs,
-                declaration: declaration,
-                completion: .failed(evidence: .unavailable, failure: HeistFailureDetail(
-                    category: .validation,
-                    contract: "repeat_until predicate resolves before evaluation",
-                    observed: "could not resolve heist repeat_until predicate: \(error)",
-                    expected: step.predicate.description
-                ))
-            ),
-            "repeat_until resolution failure receipt must match its declaration"
+        return .repeatUntil(
+            path: path,
+            durationMs: durationMs,
+            declaration: declaration,
+            completion: .failed(evidence: .unavailable, failure: HeistFailureDetail(
+                category: .validation,
+                contract: "repeat_until predicate resolves before evaluation",
+                observed: "could not resolve heist repeat_until predicate: \(error)",
+                expected: step.predicate.description
+            ))
         )
     }
 }

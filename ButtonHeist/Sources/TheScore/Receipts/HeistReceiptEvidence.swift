@@ -12,6 +12,40 @@ package struct HeistPassingChildren: Codable, Sendable, Equatable {
 
     fileprivate init(admitted values: [HeistExecutionStepResult]) { self.values = values }
 
+    package func appending(_ result: HeistExecutionStepResult) -> HeistExecutedChildren {
+        let values = values + [result]
+        guard let failed = result.firstFailedStepInReceiptOrder else {
+            return .passed(.init(admitted: values))
+        }
+        return .aborted(.init(admitted: values, abortedAtPath: failed.path))
+    }
+
+    package func appending(_ children: HeistPassingChildren) -> HeistPassingChildren {
+        .init(admitted: values + children.values)
+    }
+
+    package func appending(_ children: HeistAbortedChildren) -> HeistAbortedChildren {
+        .init(
+            admitted: values + children.values,
+            abortedAtPath: children.abortedAtPath
+        )
+    }
+
+    package func wrappedInRepeatUntilIteration(
+        path: HeistExecutionPath,
+        durationMs: Int,
+        declaration: HeistRepeatUntilDeclaration,
+        evidence: HeistPassedRepeatUntilIterationEvidence
+    ) -> HeistPassingChildren {
+        let result = HeistExecutionStepResult.repeatUntilIteration(
+            path: path,
+            durationMs: durationMs,
+            declaration: declaration,
+            completion: .passed(evidence: evidence, children: self)
+        )
+        return .init(admitted: [result])
+    }
+
     package init(from decoder: Decoder) throws {
         let values = try [HeistExecutionStepResult](from: decoder)
         guard let admitted = Self(values) else {
@@ -73,6 +107,30 @@ package struct HeistAbortedChildren: Codable, Sendable, Equatable {
         self.abortedAtPath = abortedAtPath
     }
 
+    package func appending(_ result: HeistExecutionStepResult) -> HeistAbortedChildren {
+        .init(admitted: values + [result], abortedAtPath: abortedAtPath)
+    }
+
+    package func wrappedInRepeatUntilIteration(
+        path: HeistExecutionPath,
+        durationMs: Int,
+        declaration: HeistRepeatUntilDeclaration,
+        evidence: HeistFailedRepeatUntilEvidence,
+        failure: HeistFailureDetail
+    ) -> HeistAbortedChildren {
+        let result = HeistExecutionStepResult.repeatUntilIteration(
+            path: path,
+            durationMs: durationMs,
+            declaration: declaration,
+            completion: .childAborted(
+                evidence: evidence,
+                failure: failure,
+                children: self
+            )
+        )
+        return .init(admitted: [result], abortedAtPath: abortedAtPath)
+    }
+
     package init(from decoder: Decoder) throws {
         let values = try [HeistExecutionStepResult](from: decoder)
         guard let admitted = Self(values) else {
@@ -91,11 +149,26 @@ package enum HeistExecutedChildren: Sendable, Equatable {
     case passed(HeistPassingChildren)
     case aborted(HeistAbortedChildren)
 
-    package init(_ values: [HeistExecutionStepResult]) {
-        if let failed = values.firstFailedStepInReceiptOrder {
-            self = .aborted(.init(admitted: values, abortedAtPath: failed.path))
-        } else {
-            self = .passed(.init(admitted: values))
+    package static let empty = Self.passed(.empty)
+
+    package var values: [HeistExecutionStepResult] {
+        switch self {
+        case .passed(let children): children.values
+        case .aborted(let children): children.values
+        }
+    }
+
+    package var abortedAtPath: HeistExecutionPath? {
+        guard case .aborted(let children) = self else { return nil }
+        return children.abortedAtPath
+    }
+
+    package mutating func append(_ result: HeistExecutionStepResult) {
+        switch self {
+        case .passed(let children):
+            self = children.appending(result)
+        case .aborted(let children):
+            self = .aborted(children.appending(result))
         }
     }
 }
@@ -136,6 +209,10 @@ where Rule: HeistReceiptEvidenceRule {
 
     package init?(_ value: Rule.Evidence) {
         guard Rule.admits(value) else { return nil }
+        self.value = value
+    }
+
+    package init(admitted value: Rule.Evidence) {
         self.value = value
     }
 

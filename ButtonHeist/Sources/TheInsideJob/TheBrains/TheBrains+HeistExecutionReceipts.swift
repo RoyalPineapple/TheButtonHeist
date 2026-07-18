@@ -113,15 +113,12 @@ extension TheBrains {
                 expectation: expectationResult
             )
         )
-        guard let evidence = HeistFailedInvocationEvidence(evidence) else {
-            preconditionFailure("failed invocation expectation resolution must prove failure")
-        }
         return .invocation(
             path: context.path,
             durationMs: elapsedMilliseconds(since: context.start),
             invocationPath: context.invoke.path,
             argument: context.invoke.argument,
-            completion: .failed(evidence: .observed(evidence), failure: HeistFailureDetail(
+            completion: .failed(evidence: .observed(.init(admitted: evidence)), failure: HeistFailureDetail(
                 category: .expectation,
                 contract: "heist invocation expectation predicate resolves before evaluation",
                 observed: observed,
@@ -132,7 +129,7 @@ extension TheBrains {
 
     internal func completedInvocationResult(
         context: InvocationExecutionContext,
-        childExecution: [HeistExecutionStepResult],
+        childExecution: HeistExecutedChildren,
         expectationContext: InvocationExpectationContext?,
         expectationOutcome: InvocationExpectationOutcome
     ) -> HeistExecutionStepResult {
@@ -142,19 +139,16 @@ extension TheBrains {
         let invocationExpectation = expectationEvidence.map {
             HeistInvocationEvidence.InvocationExpectationEvidence.wait($0)
         }
-        switch HeistExecutedChildren(childExecution) {
+        switch childExecution {
         case .aborted(let children):
             let evidence = HeistInvocationEvidence.childFailed(path: children.abortedAtPath)
-            guard let evidence = HeistFailedInvocationEvidence(evidence) else {
-                preconditionFailure("child-aborted invocation must prove failure")
-            }
             return .invocation(
                 path: context.path,
                 durationMs: elapsedMilliseconds(since: context.start),
                 invocationPath: context.invoke.path,
                 argument: context.invoke.argument,
                 completion: .childAborted(
-                    evidence: .observed(evidence),
+                    evidence: .observed(.init(admitted: evidence)),
                     failure: childFailureDetail(
                         category: .invocation,
                         childPath: children.abortedAtPath
@@ -166,26 +160,24 @@ extension TheBrains {
             let evidence = HeistInvocationEvidence.completed(expectation: invocationExpectation)
             switch expectationOutcome {
             case .failed(_, let detail):
-                guard let evidence = HeistFailedInvocationEvidence(evidence) else {
-                    preconditionFailure("failed invocation expectation must prove failure")
-                }
                 return .invocation(
                     path: context.path,
                     durationMs: elapsedMilliseconds(since: context.start),
                     invocationPath: context.invoke.path,
                     argument: context.invoke.argument,
-                    completion: .failed(evidence: .observed(evidence), failure: detail, children: children)
+                    completion: .failed(
+                        evidence: .observed(.init(admitted: evidence)),
+                        failure: detail,
+                        children: children
+                    )
                 )
             case .notEvaluated, .matched:
-                guard let evidence = HeistPassedInvocationEvidence(evidence) else {
-                    preconditionFailure("completed invocation must carry passing evidence")
-                }
                 return .invocation(
                     path: context.path,
                     durationMs: elapsedMilliseconds(since: context.start),
                     invocationPath: context.invoke.path,
                     argument: context.invoke.argument,
-                    completion: .passed(evidence: evidence, children: children)
+                    completion: .passed(evidence: .init(admitted: evidence), children: children)
                 )
             }
         }
@@ -196,28 +188,20 @@ extension TheBrains {
         context: InvocationExpectationContext?
     ) -> HeistWaitEvidence {
         let finalSummary = receipt.observationSummary ?? receipt.result.expectation.actual
-        if let expectation = ExpectationResult.Met(receipt.result.expectation),
-           let check = HeistWaitEvidence.MatchedCheck(
-               actionResult: receipt.result.actionResult,
-               expectation: expectation
-           ) {
+        switch receipt.result {
+        case .matched(let actionResult, let expectation):
             return .matched(
-                check,
+                .init(executed: actionResult, expectation: expectation),
+                baselineSummary: context?.baseline.observationSummary,
+                finalSummary: finalSummary
+            )
+        case .unmatched(let actionResult, let expectation):
+            return .failed(
+                .init(executed: actionResult, expectation: expectation.result),
                 baselineSummary: context?.baseline.observationSummary,
                 finalSummary: finalSummary
             )
         }
-        guard let check = HeistWaitEvidence.UnmatchedCheck(
-            actionResult: receipt.result.actionResult,
-            expectation: receipt.result.expectation
-        ) else {
-            preconditionFailure("Failed invocation expectation evidence requires a failed action result or unmet expectation")
-        }
-        return .failed(
-            check,
-            baselineSummary: context?.baseline.observationSummary,
-            finalSummary: finalSummary
-        )
     }
 
     internal func heistExecutionMessage(
