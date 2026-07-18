@@ -291,7 +291,7 @@ final class PostActionObservation {
         let interfaceSnapshot = interfaceSnapshot(for: observation, projection: projectionMode)
         let capture = makeTraceCapture(
             interface: interfaceSnapshot.interface,
-            sequence: 0,
+            sequence: 1,
             observation: observation,
             tripwireSignal: tripwireSignal,
             screenId: observation.tree.id
@@ -358,7 +358,7 @@ final class PostActionObservation {
         transition: AccessibilityTrace.Transition = .empty
     ) -> AccessibilityTrace {
         let capture = AccessibilityTrace.Capture(
-            sequence: parentCapture == nil ? 1 : 2,
+            sequence: (parentCapture?.sequence ?? 0) + 1,
             interface: afterCapture.interface,
             parentHash: parentCapture?.hash,
             context: afterCapture.context,

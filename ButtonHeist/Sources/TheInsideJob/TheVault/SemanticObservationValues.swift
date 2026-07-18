@@ -344,45 +344,25 @@ internal struct InterfaceObservationProof {
 
     @MainActor internal static func settled(
         _ outcome: SettleSession.Outcome,
-        vault: TheVault,
-        discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy = .mergeIntoInterface
+        discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy = .mergeIntoInterface,
+        lineageEvidence: ScreenLineageEvidence? = nil
     ) -> InterfaceObservationProof? {
         validated(
             outcome,
-            vault: vault,
             discoveryCommitPolicy: discoveryCommitPolicy,
-            lineageEvidence: nil
-        )
-    }
-
-    @MainActor internal static func settledAfterViewportMovement(
-        _ outcome: SettleSession.Outcome,
-        vault: TheVault,
-        discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy = .mergeIntoInterface
-    ) -> InterfaceObservationProof? {
-        validated(
-            outcome,
-            vault: vault,
-            discoveryCommitPolicy: discoveryCommitPolicy,
-            lineageEvidence: .viewportMovement
+            lineageEvidence: lineageEvidence
         )
     }
 
     @MainActor private static func validated(
         _ outcome: SettleSession.Outcome,
-        vault: TheVault,
         discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy,
         lineageEvidence: ScreenLineageEvidence?
     ) -> InterfaceObservationProof? {
         guard outcome.outcome.didSettleCleanly,
               let finalObservation = outcome.finalObservation else { return nil }
-        let observation = vault.latestObservation
-        guard observation.captureToken == finalObservation.captureToken,
-              observation.tree == finalObservation.tree,
-              SettleTimeline.fingerprint(of: observation.liveCapture.hierarchy.sortedElements)
-                == finalObservation.fingerprint else { return nil }
         return InterfaceObservationProof(
-            observation: observation,
+            observation: finalObservation.observation,
             tripwireSignal: outcome.tripwireSignal,
             discoveryCommitPolicy: discoveryCommitPolicy,
             lineageEvidence: lineageEvidence

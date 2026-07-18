@@ -517,6 +517,24 @@ final class AccessibilityTraceTests: XCTestCase {
         XCTAssertEqual(decoded.captures[1].parentHash, decoded.captures[0].hash)
     }
 
+    func testTraceAdmitsBoundedWindowWithoutRenumberingSourceIdentity() throws {
+        let first = AccessibilityTrace.Capture(
+            sequence: 41,
+            interface: makeInterface(label: "Home"),
+            parentHash: "sha256:outside-window"
+        )
+        let second = AccessibilityTrace.Capture(
+            sequence: 42,
+            interface: makeInterface(label: "Settings"),
+            parentHash: first.hash
+        )
+
+        let trace = AccessibilityTrace(captures: [first, second])
+
+        XCTAssertEqual(trace.captures.map(\.sequence), [41, 42])
+        XCTAssertEqual(trace.captures.first?.parentHash, "sha256:outside-window")
+    }
+
     func testTraceDecodeRejectsTamperedCaptureHash() throws {
         let trace = AccessibilityTrace(first: makeInterface(label: "Home"))
             .appending(makeInterface(label: "Settings"))

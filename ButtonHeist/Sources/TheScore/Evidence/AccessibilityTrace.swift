@@ -50,8 +50,10 @@ public struct AccessibilityTrace: Codable, Sendable, Equatable {
 
     private static func hasCanonicalLineage(_ captures: [Capture]) -> Bool {
         captures.enumerated().allSatisfy { index, capture in
-            capture.sequence == index + 1
-                && capture.parentHash == (index == 0 ? nil : captures[index - 1].hash)
+            guard index > 0 else { return true }
+            let previous = captures[index - 1]
+            return capture.sequence == previous.sequence + 1
+                && capture.parentHash == previous.hash
         }
     }
 
@@ -61,7 +63,7 @@ public struct AccessibilityTrace: Codable, Sendable, Equatable {
         transition: Transition = .empty
     ) -> AccessibilityTrace {
         let capture = Capture(
-            sequence: captures.count + 1,
+            sequence: (captures.last?.sequence ?? 0) + 1,
             interface: interface,
             parentHash: captures.last?.hash,
             context: context,

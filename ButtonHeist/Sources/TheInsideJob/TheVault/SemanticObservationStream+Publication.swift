@@ -68,6 +68,28 @@ extension SemanticObservationStream {
     }
 
     @discardableResult
+    internal func commitSettledDiscoveryObservation(
+        _ outcome: SettleSession.Outcome,
+        discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy,
+        afterViewportMovement: Bool,
+        notificationBatch: AccessibilityNotificationBatch? = nil
+    ) -> SettledObservationEvent? {
+        guard let vault else {
+            preconditionFailure("SemanticObservationStream cannot admit after TheVault is released")
+        }
+        guard let proof = admitSettledProof(
+            outcome,
+            vault: vault,
+            discoveryCommitPolicy: discoveryCommitPolicy,
+            lineageEvidence: afterViewportMovement ? .viewportMovement : nil
+        ) else { return nil }
+        return commitSettledDiscoveryObservation(
+            proof,
+            notificationBatch: notificationBatch
+        )
+    }
+
+    @discardableResult
     private func publishCommittedObservation(
         _ proof: InterfaceObservationProof,
         scope: SemanticObservationScope,
@@ -354,7 +376,7 @@ extension SemanticObservationStream {
         vault: TheVault
     ) -> [SemanticObservationScope: SemanticObservationPublication.Evidence] {
         Dictionary(uniqueKeysWithValues: sourceScope.fulfilledScopes.map { fulfilledScope in
-            let referenceObservation = observation
+            let referenceObservation = observation.semanticObservationProjection(for: fulfilledScope)
             return (fulfilledScope, SemanticObservationPublication.Evidence(
                 interface: vault.semanticInterfaceWithHash(for: referenceObservation).interface,
                 accessibilityNotifications: vault.resolveAccessibilityNotificationEvidence(
@@ -370,10 +392,17 @@ extension SemanticObservationStream {
     func admitSettledProof(
         _ outcome: SettleSession.Outcome,
         vault: TheVault,
-        layerGateWasClear: Bool? = nil
+        layerGateWasClear: Bool? = nil,
+        discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy = .mergeIntoInterface,
+        lineageEvidence: ScreenLineageEvidence? = nil
     ) -> InterfaceObservationProof? {
         guard outcome.tripwireSignal == currentTripwireSignal(),
-              let proof = InterfaceObservationProof.settled(outcome, vault: vault) else {
+              outcome.finalObservation?.observation.captureToken == vault.latestObservation.captureToken,
+              let proof = InterfaceObservationProof.settled(
+                  outcome,
+                  discoveryCommitPolicy: discoveryCommitPolicy,
+                  lineageEvidence: lineageEvidence
+              ) else {
             recordFailedSettle(
                 SettleFailureDiagnostic.message(for: outcome, layerGateWasClear: layerGateWasClear),
                 tree: outcome.finalObservation?.tree,

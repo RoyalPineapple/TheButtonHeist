@@ -74,7 +74,7 @@ internal struct SemanticObservationPublication {
             let previousCapture = previousEvent?.trace.captures.last
             let currentCapture = makeCapture(
                 settledObservation: settledObservation,
-                sequence: previousCapture == nil ? 1 : 2,
+                sequence: (previousCapture?.sequence ?? 0) + 1,
                 parentHash: previousCapture?.hash,
                 generation: eventGeneration,
                 notificationBatch: notificationBatch,

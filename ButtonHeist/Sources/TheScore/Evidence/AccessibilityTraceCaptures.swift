@@ -23,7 +23,7 @@ private enum AccessibilityTraceTransitionCodingKeys: String, CodingKey, CaseIter
 
 public extension AccessibilityTrace {
     struct Capture: Codable, Sendable, Equatable {
-        /// 1-based position in this trace's linear capture chain.
+        /// 1-based position in the source observation stream's capture chain.
         public let sequence: Int
         public let hash: String
         /// Hash of the previous capture in the same linear trace, or nil for

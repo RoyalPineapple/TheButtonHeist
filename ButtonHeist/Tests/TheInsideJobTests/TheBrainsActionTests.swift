@@ -1188,11 +1188,16 @@ final class TheBrainsActionTests: XCTestCase {
                 let before = states[incrementCount]
                 incrementCount += 1
                 let after = states[incrementCount]
+                let actionTrace = AccessibilityTrace(capture: before.capture).appending(
+                    after.capture.interface,
+                    context: after.capture.context,
+                    transition: after.capture.transition
+                )
                 return ActionResult.success(
                     method: .increment,
                         observation: .settledTrace(
                             makeTestTraceEvidence(
-                                AccessibilityTrace(captures: [before.capture, after.capture]),
+                                actionTrace,
                                 completeness: .incomplete
                             ),
                             .settled(duration: 0)
@@ -4995,7 +5000,11 @@ private final class ScriptedHeistObservationSource {
             semanticSignal: .empty
         )
         let trace = if let previousCapture {
-            AccessibilityTrace(captures: [previousCapture, state.capture])
+            AccessibilityTrace(capture: previousCapture).appending(
+                state.capture.interface,
+                context: state.capture.context,
+                transition: state.capture.transition
+            )
         } else {
             AccessibilityTrace(capture: state.capture)
         }

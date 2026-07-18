@@ -288,18 +288,14 @@ struct SettleLoopTransition: Equatable, Sendable {
     let effect: SettleLoopMachine.Effect
 }
 
-struct SettleSessionFinalObservation: Equatable, Sendable {
-    let tree: InterfaceTree
-    let fingerprint: Int
-    let captureToken: InterfaceCaptureToken
+@MainActor
+final class SettleSessionFinalObservation {
+    let observation: InterfaceObservation
 
-    @MainActor
-    init(observation: InterfaceObservation, fingerprint: Int? = nil) {
-        tree = observation.tree
-        self.fingerprint = fingerprint ?? SettleTimeline.fingerprint(
-            of: observation.liveCapture.hierarchy.sortedElements
-        )
-        captureToken = observation.captureToken
+    var tree: InterfaceTree { observation.tree }
+
+    init(observation: InterfaceObservation) {
+        self.observation = observation
     }
 }
 
@@ -490,8 +486,7 @@ struct SettleSessionFinalObservation: Equatable, Sendable {
         /// the settle baseline was reset, but the final `outcome` still owns
         /// whether the AX tree became stable.
         let events: [SettleEvent]
-        /// Last semantic observation from the settle loop, paired with the
-        /// token and fingerprint needed to reacquire its live capture from TheVault.
+        /// Exact final semantic observation admitted by the settle loop.
         let finalObservation: SettleSessionFinalObservation?
         /// Every `(key, element)` pair observed in any cycle of the loop.
         /// Includes spinner cycles and other intermediate states.
@@ -566,7 +561,7 @@ struct SettleSessionFinalObservation: Equatable, Sendable {
                 outcome: .settled(timeMs: timeMs),
                 events: state.events,
                 finalObservation: observations.currentGenerationLastObservation.map {
-                    SettleSessionFinalObservation(observation: $0.observation, fingerprint: $0.fingerprint)
+                    SettleSessionFinalObservation(observation: $0.observation)
                 },
                 elementsByKey: observations.elementsByKey,
                 tripwireSignal: state.progress.tripwireBaseline
@@ -576,7 +571,7 @@ struct SettleSessionFinalObservation: Equatable, Sendable {
                 outcome: .timedOut(timeMs: timeMs),
                 events: state.events,
                 finalObservation: observations.currentGenerationLastObservation.map {
-                    SettleSessionFinalObservation(observation: $0.observation, fingerprint: $0.fingerprint)
+                    SettleSessionFinalObservation(observation: $0.observation)
                 },
                 elementsByKey: observations.elementsByKey,
                 tripwireSignal: state.progress.tripwireBaseline,
@@ -587,7 +582,7 @@ struct SettleSessionFinalObservation: Equatable, Sendable {
                 outcome: .cancelled(timeMs: timeMs),
                 events: state.events,
                 finalObservation: observations.currentGenerationLastObservation.map {
-                    SettleSessionFinalObservation(observation: $0.observation, fingerprint: $0.fingerprint)
+                    SettleSessionFinalObservation(observation: $0.observation)
                 },
                 elementsByKey: observations.elementsByKey,
                 tripwireSignal: state.progress.tripwireBaseline,

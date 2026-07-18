@@ -118,8 +118,8 @@ import ThePlans
         ])
 
         let foldedLabels = hierarchy.folded(
-            onElement: { element, _ in [element.label ?? ""] },
-            onContainer: { _, children in children.flatMap { $0 } }
+            onElement: { element, _ -> [String] in [element.label ?? ""] },
+            onContainer: { _, children -> [String] in Array(children.joined()) }
         )
         var retainedPaths: [String: TreePath] = [:]
         let compacted = hierarchy.compactingElements(

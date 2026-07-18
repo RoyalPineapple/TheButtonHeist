@@ -154,7 +154,7 @@ final class SemanticObservationStreamTests: XCTestCase {
         XCTAssertEqual(transition.previousCursor, entries[0].cursor)
     }
 
-    func testVisiblePublicationPreservesAndProjectsKnownOffViewportTruth() throws {
+    func testVisiblePublicationRetainsKnownGraphButProjectsScopedTraceEvidence() throws {
         let visibleBefore = AccessibilityElement.make(
             label: "Anchor",
             value: "Before",
@@ -180,7 +180,7 @@ final class SemanticObservationStreamTests: XCTestCase {
 
         XCTAssertEqual(currentEvent.generation, baselineEvent.generation)
         XCTAssertNotNil(vault.interfaceTree.findElement(heistId: offViewportId))
-        XCTAssertTrue(
+        XCTAssertFalse(
             currentEvent.trace.captures.last?.interface.projectedElements.contains {
                 $0.label == "Known Offscreen"
             } == true
@@ -283,6 +283,53 @@ final class SemanticObservationStreamTests: XCTestCase {
             vault.semanticObservationStream.latestObservationCursor(scope: .discovery),
             discoveryEntries.last?.cursor
         )
+    }
+
+    func testDiscoveryPublicationProjectsVisibleTreeAndEvidenceFromTheSameScope() throws {
+        let visible = AccessibilityElement.make(label: "Visible", traits: .header)
+        let offViewport = AccessibilityElement.make(label: "Off Viewport", traits: .button)
+        let observation = InterfaceObservation.makeForTests(
+            [.init(visible, heistId: "visible")],
+            offViewport: [.init(offViewport, heistId: "off_viewport")]
+        )
+
+        let discoveryEvent = vault.semanticObservationStream.commitDiscoveryObservationForTesting(observation)
+        let visibleEvent = try XCTUnwrap(
+            vault.semanticObservationStream.retainedObservationEntries(scope: .visible).last?.event
+        )
+
+        XCTAssertEqual(discoveryEvent.settledObservation.observation.tree.elementIDs, ["visible", "off_viewport"])
+        XCTAssertEqual(
+            discoveryEvent.trace.captures.last?.interface.projectedElements.compactMap(\.label),
+            ["Visible", "Off Viewport"]
+        )
+        XCTAssertEqual(visibleEvent.settledObservation.observation.tree.elementIDs, ["visible"])
+        XCTAssertEqual(
+            visibleEvent.trace.captures.last?.interface.projectedElements.compactMap(\.label),
+            ["Visible"]
+        )
+    }
+
+    func testDiscoverySettlementRejectsTripwireChangeBeforeCommit() {
+        let observation = observation(label: "Candidate", heistId: "candidate")
+        vault.recordParsedObservedEvidence(observation)
+        let settledSignal = tripwireSignal(sequence: 1)
+        let currentSignal = tripwireSignal(sequence: 2)
+        vault.semanticObservationStream.readTripwireSignal = { currentSignal }
+        let outcome = settleOutcome(
+            .settled(timeMs: 1),
+            observation: observation,
+            tripwireSignal: settledSignal
+        )
+
+        let event = vault.semanticObservationStream.commitSettledDiscoveryObservation(
+            outcome,
+            discoveryCommitPolicy: .mergeIntoInterface,
+            afterViewportMovement: true
+        )
+
+        XCTAssertNil(event)
+        XCTAssertNil(vault.interfaceTree.findElement(heistId: "candidate"))
     }
 
     func testDiscoveryAfterVisibleReplacementUsesGlobalGenerationAndScopedPredecessor() throws {

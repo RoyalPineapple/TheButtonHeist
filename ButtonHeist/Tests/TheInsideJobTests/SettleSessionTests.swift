@@ -752,6 +752,18 @@ final class SettleSessionTests: XCTestCase {
             traits: .button,
             frame: CGRect(x: 651, y: 423, width: 94, height: 72)
         )
+        let hintChanged = AccessibilityElementBuilder(
+            label: "$ 9 Cash",
+            hint: "Double tap to pay",
+            traits: .button,
+            shape: first.shape
+        ).build()
+        let actionsChanged = AccessibilityElementBuilder(
+            label: "$ 9 Cash",
+            traits: .button,
+            shape: first.shape,
+            customActions: [.init(name: "Apply discount")]
+        ).build()
 
         XCTAssertEqual(
             SettleTimeline.fingerprint(of: [first], bucket: 13),
@@ -778,6 +790,14 @@ final class SettleSessionTests: XCTestCase {
         XCTAssertNotEqual(
             SettleTimeline.fingerprint(of: [first], bucket: 13),
             SettleTimeline.fingerprint(of: [traitsChanged], bucket: 13)
+        )
+        XCTAssertNotEqual(
+            SettleTimeline.fingerprint(of: [first], bucket: 13),
+            SettleTimeline.fingerprint(of: [hintChanged], bucket: 13)
+        )
+        XCTAssertNotEqual(
+            SettleTimeline.fingerprint(of: [first], bucket: 13),
+            SettleTimeline.fingerprint(of: [actionsChanged], bucket: 13)
         )
         XCTAssertNotEqual(
             SettleTimeline.fingerprint(of: [first], bucket: 13),

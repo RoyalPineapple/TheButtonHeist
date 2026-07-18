@@ -420,7 +420,7 @@ final class TheVaultResolutionTests: XCTestCase {
         }, ["Toast"])
     }
 
-    func testVisibleObservationTraceIncludesCommittedDiscoveryElements() throws {
+    func testVisibleObservationTraceProjectsOnlyVisibleCommittedElements() throws {
         let visible = element(label: "Custom Rotors", traits: .button)
         let discovered = element(label: "ButtonHeist Demo", traits: .button)
         let discovery = InterfaceObservation.makeForTests(
@@ -446,7 +446,7 @@ final class TheVaultResolutionTests: XCTestCase {
             .interface
             .projectedElements
             .compactMap(\.label)
-        XCTAssertEqual(labels, ["Custom Rotors", "ButtonHeist Demo"])
+        XCTAssertEqual(labels, ["Custom Rotors"])
     }
 
     func testDiagnosticEvidenceInvalidatesLatestSettledObservationWithoutReplacingIt() {
@@ -873,7 +873,7 @@ final class TheVaultResolutionTests: XCTestCase {
         )
     }
 
-    func testCleanSettleProofRequiresCurrentCaptureTokenAndFingerprint() {
+    func testCleanSettleProofCarriesTheExactSettledObservation() throws {
         let stableElement = element(label: "Stable")
         let settled = InterfaceObservation.makeForTests(elements: [(stableElement, "stable")])
         let finalObservation = SettleSessionFinalObservation(observation: settled)
@@ -886,28 +886,15 @@ final class TheVaultResolutionTests: XCTestCase {
         )
         bagman.recordParsedObservedEvidence(settled)
 
-        XCTAssertNotNil(InterfaceObservationProof.settled(outcome, vault: bagman))
-
         let replacement = InterfaceObservation.makeForTests(elements: [(stableElement, "stable")])
         XCTAssertEqual(replacement.tree, settled.tree)
         XCTAssertEqual(replacement.liveCapture.snapshot, settled.liveCapture.snapshot)
         XCTAssertNotEqual(replacement.captureToken, settled.captureToken)
         bagman.recordParsedObservedEvidence(replacement)
-        XCTAssertNil(InterfaceObservationProof.settled(outcome, vault: bagman))
 
-        bagman.recordParsedObservedEvidence(settled)
-        let wrongFingerprint = finalObservation.fingerprint == 0 ? 1 : 0
-        let mismatchedOutcome = SettleSession.Outcome(
-            outcome: .settled(timeMs: 1),
-            events: [],
-            finalObservation: SettleSessionFinalObservation(
-                observation: settled,
-                fingerprint: wrongFingerprint
-            ),
-            elementsByKey: [:],
-            tripwireSignal: bagman.tripwire.tripwireSignal()
-        )
-        XCTAssertNil(InterfaceObservationProof.settled(mismatchedOutcome, vault: bagman))
+        let proof = try XCTUnwrap(InterfaceObservationProof.settled(outcome))
+        XCTAssertEqual(proof.observation.captureToken, settled.captureToken)
+        XCTAssertNotEqual(proof.observation.captureToken, replacement.captureToken)
     }
 
     func testViewportMovementLineageRequiresDedicatedProofConstructor() throws {
@@ -921,9 +908,12 @@ final class TheVaultResolutionTests: XCTestCase {
             tripwireSignal: bagman.tripwire.tripwireSignal()
         )
 
-        let ordinary = try XCTUnwrap(InterfaceObservationProof.settled(outcome, vault: bagman))
+        let ordinary = try XCTUnwrap(InterfaceObservationProof.settled(outcome))
         let afterMovement = try XCTUnwrap(
-            InterfaceObservationProof.settledAfterViewportMovement(outcome, vault: bagman)
+            InterfaceObservationProof.settled(
+                outcome,
+                lineageEvidence: .viewportMovement
+            )
         )
 
         XCTAssertNil(ordinary.lineageEvidence)
@@ -1316,7 +1306,7 @@ final class TheVaultResolutionTests: XCTestCase {
         XCTAssertEqual(observation?.settledObservation.observation.tree.orderedElements.first?.element.label, "Discovery")
     }
 
-    func testVisibleWaiterCarriesCommittedGraphFromDiscoveryObservation() async {
+    func testVisibleWaiterProjectsVisibleEvidenceFromDiscoveryObservation() async {
         let sharedHeader = element(label: "Catalog", traits: .header)
         let first = InterfaceObservation.makeForTests(elements: [
             (sharedHeader, "catalog"),
@@ -1364,7 +1354,7 @@ final class TheVaultResolutionTests: XCTestCase {
         )
         XCTAssertEqual(
             observation?.trace.captures.last?.interface.projectedElements.compactMap(\.label),
-            ["Catalog", "Visible Discovery", "First", "Known Discovery"]
+            ["Catalog", "Visible Discovery"]
         )
         XCTAssertEqual(bagman.semanticObservationStream.latestObservation?.scope, .discovery)
         XCTAssertEqual(
@@ -1374,7 +1364,7 @@ final class TheVaultResolutionTests: XCTestCase {
         XCTAssertEqual(bagman.semanticObservationStream.observationWaiterCount, 0)
     }
 
-    func testCleanVisibleEventAfterDiscoveryCarriesCommittedGraph() async {
+    func testCleanVisibleEventAfterDiscoveryProjectsVisibleEvidence() async {
         let sharedHeader = element(label: "Catalog", traits: .header)
         let first = InterfaceObservation.makeForTests(elements: [
             (sharedHeader, "catalog"),
@@ -1414,7 +1404,7 @@ final class TheVaultResolutionTests: XCTestCase {
         )
         XCTAssertEqual(
             observation?.trace.captures.last?.interface.projectedElements.compactMap(\.label),
-            ["Catalog", "Visible Discovery", "First", "Known Discovery"]
+            ["Catalog", "Visible Discovery"]
         )
     }
 
