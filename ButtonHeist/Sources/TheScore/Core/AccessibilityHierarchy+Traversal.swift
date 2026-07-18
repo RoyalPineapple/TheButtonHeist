@@ -28,9 +28,63 @@ package struct PathIndexedAccessibilityContainer {
     }
 }
 
-private enum AccessibilityHierarchyFoldFrame<Context> {
-    case visit(AccessibilityHierarchy, Context)
-    case combine(AccessibilityContainer, Context, childCount: Int)
+private enum AccessibilityHierarchyTraversal {
+    enum ContainerDecision<Position> {
+        case stop
+        case descend(from: Position)
+    }
+
+    private enum Frame<Position> {
+        case node(AccessibilityHierarchy, Position)
+        case child(AccessibilityHierarchy, contentsPosition: Position, index: Int)
+        case leave(AccessibilityContainer, childCount: Int, position: Position)
+    }
+
+    @discardableResult
+    static func walk<Position>(
+        roots: [AccessibilityHierarchy],
+        rootPosition: (Int) -> Position,
+        onElement: (AccessibilityElement, Int, Position) -> Bool,
+        onContainerEnter: (
+            AccessibilityContainer,
+            [AccessibilityHierarchy],
+            Position
+        ) -> ContainerDecision<Position>,
+        onContainerLeave: (
+            AccessibilityContainer,
+            Int,
+            Position
+        ) -> Void,
+        descend: (Position, Int) -> Position
+    ) -> Bool {
+        var frames: [Frame<Position>] = []
+        frames.reserveCapacity(roots.count)
+        for index in roots.indices.reversed() {
+            frames.append(.node(roots[index], rootPosition(index)))
+        }
+
+        while let frame = frames.popLast() {
+            switch frame {
+            case .node(.element(let element, let traversalIndex), let position):
+                guard onElement(element, traversalIndex, position) else { return false }
+            case .node(.container(let container, let children), let position):
+                switch onContainerEnter(container, children, position) {
+                case .stop:
+                    return false
+                case .descend(let contentsPosition):
+                    frames.append(.leave(container, childCount: children.count, position: position))
+                    for index in children.indices.reversed() {
+                        frames.append(.child(children[index], contentsPosition: contentsPosition, index: index))
+                    }
+                }
+            case .child(let hierarchy, let contentsPosition, let index):
+                frames.append(.node(hierarchy, descend(contentsPosition, index)))
+            case .leave(let container, let childCount, let position):
+                onContainerLeave(container, childCount, position)
+            }
+        }
+        return true
+    }
 }
 
 package extension AccessibilityContainer {
@@ -41,7 +95,7 @@ package extension AccessibilityContainer {
     }
 }
 
-// MARK: - Canonical Fold
+// MARK: - Derived Traversals
 
 package extension AccessibilityHierarchy {
     func folded<Context, Accumulator, Result>(
@@ -61,19 +115,18 @@ package extension AccessibilityHierarchy {
         ) -> Result,
         descend: (Context, Int) -> Context
     ) -> Result {
-        var frames: [AccessibilityHierarchyFoldFrame<Context>] = [.visit(self, context)]
         var results: [Result] = []
-
-        while let frame = frames.popLast() {
-            switch frame {
-            case .visit(.element(let element, let traversalIndex), let context):
+        AccessibilityHierarchyTraversal.walk(
+            roots: [self],
+            rootPosition: { _ in context },
+            onElement: { element, traversalIndex, context in
                 results.append(onElement(element, traversalIndex, context, &accumulator))
-            case .visit(.container(let container, let children), let context):
-                frames.append(.combine(container, context, childCount: children.count))
-                for index in children.indices.reversed() {
-                    frames.append(.visit(children[index], descend(context, index)))
-                }
-            case .combine(let container, let context, let childCount):
+                return true
+            },
+            onContainerEnter: { _, _, context in
+                .descend(from: context)
+            },
+            onContainerLeave: { container, childCount, context in
                 let childResults: [Result]
                 if childCount == 0 {
                     childResults = []
@@ -82,8 +135,9 @@ package extension AccessibilityHierarchy {
                     results.removeLast(childCount)
                 }
                 results.append(onContainer(container, childResults, context, &accumulator))
-            }
-        }
+            },
+            descend: descend
+        )
 
         precondition(results.count == 1, "accessibility hierarchy fold must produce one root result")
         return results.removeLast()
@@ -141,25 +195,20 @@ package extension AccessibilityHierarchy {
         ) -> (contentsContext: Context, shouldContinue: Bool),
         descend: (Context, Int) -> Context
     ) -> Bool {
-        var pending: [(hierarchy: AccessibilityHierarchy, context: Context)] = [(self, context)]
-        while let next = pending.popLast() {
-            switch next.hierarchy {
-            case let .element(element, traversalIndex):
-                guard onElement(element, traversalIndex, next.context, &accumulator) else {
-                    return false
-                }
-            case let .container(container, children):
-                let step = onContainer(container, children, next.context, &accumulator)
-                guard step.shouldContinue else { return false }
-                for index in children.indices.reversed() {
-                    pending.append((
-                        children[index],
-                        descend(step.contentsContext, index)
-                    ))
-                }
-            }
-        }
-        return true
+        AccessibilityHierarchyTraversal.walk(
+            roots: [self],
+            rootPosition: { _ in context },
+            onElement: { element, traversalIndex, context in
+                onElement(element, traversalIndex, context, &accumulator)
+            },
+            onContainerEnter: { container, children, context in
+                let step = onContainer(container, children, context, &accumulator)
+                guard step.shouldContinue else { return .stop }
+                return .descend(from: step.contentsContext)
+            },
+            onContainerLeave: { _, _, _ in },
+            descend: descend
+        )
     }
 
     func compactingElements<Context, Accumulator>(
@@ -178,60 +227,75 @@ package extension AccessibilityHierarchy {
         ) -> Context,
         childContext: (Context, Int, Int) -> Context
     ) -> AccessibilityHierarchy? {
-        switch self {
-        case let .element(element, traversalIndex):
-            return onElement(
-                element,
-                traversalIndex,
-                context,
-                &accumulator
-            )
-        case let .container(container, children):
-            let contentsContext = onContainer(container, context, &accumulator)
-            let transformedChildren = children.enumerated().reduce(
-                into: [AccessibilityHierarchy]()
-            ) { result, indexedChild in
-                let (oldIndex, child) = indexedChild
-                let context = childContext(contentsContext, oldIndex, result.count)
-                guard let transformed = child.compactingElements(
-                    context: context,
-                    into: &accumulator,
-                    onElement: onElement,
-                    onContainer: onContainer,
-                    childContext: childContext
-                ) else { return }
-                result.append(transformed)
+        var result: AccessibilityHierarchy?
+        var transformedChildren: [[AccessibilityHierarchy]] = []
+        func record(_ transformed: AccessibilityHierarchy) {
+            if transformedChildren.isEmpty {
+                result = transformed
+            } else {
+                transformedChildren[transformedChildren.count - 1].append(transformed)
             }
-            return .container(container, children: transformedChildren)
         }
-    }
-
-    fileprivate func appendCompactMapSubtrees<Result>(
-        path: TreePath,
-        into result: inout [Result],
-        transform: (AccessibilityHierarchy, TreePath) -> Result?
-    ) {
-        foldedPreorder(
-            context: path,
-            into: &result,
-            onElement: { element, traversalIndex, path, result in
-                if let transformed = transform(
-                    .element(element, traversalIndex: traversalIndex),
-                    path
-                ) {
-                    result.append(transformed)
-                }
+        AccessibilityHierarchyTraversal.walk(
+            roots: [self],
+            rootPosition: { _ in context },
+            onElement: { element, traversalIndex, context in
+                guard let transformed = onElement(
+                    element,
+                    traversalIndex,
+                    context,
+                    &accumulator
+                ) else { return true }
+                record(transformed)
                 return true
             },
-            onContainer: { container, children, path, result in
-                if let transformed = transform(.container(container, children: children), path) {
-                    result.append(transformed)
-                }
-                return (path, true)
+            onContainerEnter: { container, _, context in
+                transformedChildren.append([])
+                return .descend(from: onContainer(container, context, &accumulator))
             },
-            descend: { path, index in path.appending(index) }
+            onContainerLeave: { container, _, _ in
+                record(.container(
+                    container,
+                    children: transformedChildren.removeLast()
+                ))
+            },
+            descend: { context, oldIndex in
+                let newIndex = transformedChildren.last?.count ?? 0
+                return childContext(context, oldIndex, newIndex)
+            }
         )
+        return result
     }
+}
+
+private func compactMapAccessibilityHierarchySubtrees<Result>(
+    roots: [AccessibilityHierarchy],
+    rootPath: (Int) -> TreePath,
+    transform: (AccessibilityHierarchy, TreePath) -> Result?
+) -> [Result] {
+    var result: [Result] = []
+    AccessibilityHierarchyTraversal.walk(
+        roots: roots,
+        rootPosition: rootPath,
+        onElement: { element, traversalIndex, path in
+            if let transformed = transform(
+                .element(element, traversalIndex: traversalIndex),
+                path
+            ) {
+                result.append(transformed)
+            }
+            return true
+        },
+        onContainerEnter: { container, children, path in
+            if let transformed = transform(.container(container, children: children), path) {
+                result.append(transformed)
+            }
+            return .descend(from: path)
+        },
+        onContainerLeave: { _, _, _ in },
+        descend: { path, index in path.appending(index) }
+    )
+    return result
 }
 
 public extension AccessibilityHierarchy {
@@ -250,9 +314,11 @@ public extension AccessibilityHierarchy {
         path: TreePath = .root,
         _ transform: (AccessibilityHierarchy, TreePath) -> Result?
     ) -> [Result] {
-        var result: [Result] = []
-        appendCompactMapSubtrees(path: path, into: &result, transform: transform)
-        return result
+        compactMapAccessibilityHierarchySubtrees(
+            roots: [self],
+            rootPath: { _ in path },
+            transform: transform
+        )
     }
 }
 
@@ -295,15 +361,11 @@ public extension Array where Element == AccessibilityHierarchy {
     func compactMapSubtrees<Result>(
         _ transform: (AccessibilityHierarchy, TreePath) -> Result?
     ) -> [Result] {
-        var result: [Result] = []
-        for (index, root) in enumerated() {
-            root.appendCompactMapSubtrees(
-                path: TreePath([index]),
-                into: &result,
-                transform: transform
-            )
-        }
-        return result
+        compactMapAccessibilityHierarchySubtrees(
+            roots: self,
+            rootPath: { TreePath([$0]) },
+            transform: transform
+        )
     }
 }
 
