@@ -353,18 +353,6 @@ internal struct InterfaceObservationProof {
         discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy = .mergeIntoInterface,
         lineageEvidence: ScreenLineageEvidence? = nil
     ) -> InterfaceObservationProof? {
-        validated(
-            outcome,
-            discoveryCommitPolicy: discoveryCommitPolicy,
-            lineageEvidence: lineageEvidence
-        )
-    }
-
-    @MainActor private static func validated(
-        _ outcome: SettleSession.Outcome,
-        discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy,
-        lineageEvidence: ScreenLineageEvidence?
-    ) -> InterfaceObservationProof? {
         guard outcome.outcome.didSettleCleanly,
               let finalObservation = outcome.finalObservation else { return nil }
         return InterfaceObservationProof(
