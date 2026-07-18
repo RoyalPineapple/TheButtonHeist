@@ -1,12 +1,13 @@
 #if canImport(UIKit)
 import UIKit
+import XCTest
 @testable import AccessibilitySnapshotParser
 @testable import TheInsideJob
 @testable import TheScore
 
 @MainActor
-enum SettleSessionTestSupport {
-    static func makeElement(
+final class SettleSessionTests: XCTestCase {
+    func makeElement(
         label: String? = nil,
         value: String? = nil,
         identifier: String? = nil,
@@ -22,7 +23,7 @@ enum SettleSessionTestSupport {
         )
     }
 
-    static func makeParseResult(_ elements: [AccessibilityElement]) -> InterfaceObservation {
+    func makeParseResult(_ elements: [AccessibilityElement]) -> InterfaceObservation {
         return InterfaceObservation.makeForTests(
             elements.enumerated().map { index, element in
                 InterfaceObservation.TestEntry(
@@ -33,11 +34,11 @@ enum SettleSessionTestSupport {
         )
     }
 
-    static func settleFingerprint(_ elements: [AccessibilityElement]) -> Int {
+    func settleFingerprint(_ elements: [AccessibilityElement]) -> Int {
         SettleTimeline.fingerprint(of: makeParseResult(elements), bucket: 13)
     }
 
-    static func makeSession(
+    func makeSession(
         script: [InterfaceObservation?],
         cyclesRequired: Int = 3,
         cycleIntervalMs: Int = 1,
@@ -51,7 +52,7 @@ enum SettleSessionTestSupport {
         return SettleSession(
             parseProvider: { scriptBox.next() },
             tripwireSignalProvider: {
-                tripwireSignal(
+                self.tripwireSignal(
                     topmostVC: topVCBox.next(),
                     accessibilityNotificationSequence: notificationBox.next()
                 )
@@ -63,7 +64,7 @@ enum SettleSessionTestSupport {
         )
     }
 
-    static func tripwireSignal(
+    func tripwireSignal(
         topmostVC: ObjectIdentifier?,
         accessibilityNotificationSequence: UInt64 = 0
     ) -> TheTripwire.TripwireSignal {
@@ -111,7 +112,7 @@ enum SettleSessionTestSupport {
         }
     }
 
-    static func makeQuietSession(
+    func makeQuietSession(
         script: [InterfaceObservation?],
         clock: ManualClock,
         frameMs: Int = 10,
@@ -127,7 +128,7 @@ enum SettleSessionTestSupport {
         return SettleSession(
             parseProvider: { scriptBox.next() },
             tripwireSignalProvider: {
-                tripwireSignal(
+                self.tripwireSignal(
                     topmostVC: topVCBox.next(),
                     accessibilityNotificationSequence: notificationBox.next()
                 )

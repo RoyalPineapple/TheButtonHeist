@@ -6,16 +6,15 @@ import ButtonHeistSupport
 @testable import TheScore
 
 @MainActor
-final class SettleSessionTimeoutChangeBaselineTests: XCTestCase {
-    private typealias Support = SettleSessionTestSupport
+extension SettleSessionTests {
 
     func testSemanticQuietSettleTripwireChangeResetsBaseline() async {
-        let stable = Support.makeParseResult([
-            Support.makeElement(label: "Ready", traits: .staticText, frame: CGRect(x: 0, y: 0, width: 100, height: 30)),
+        let stable = makeParseResult([
+            makeElement(label: "Ready", traits: .staticText, frame: CGRect(x: 0, y: 0, width: 100, height: 30)),
         ])
-        let clock = Support.ManualClock()
+        let clock = ManualClock()
         let changedVC = ObjectIdentifier(UIViewController())
-        let session = Support.makeQuietSession(
+        let session = makeQuietSession(
             script: [stable],
             clock: clock,
             quietWindowMs: 30,
@@ -24,33 +23,33 @@ final class SettleSessionTimeoutChangeBaselineTests: XCTestCase {
 
         let outcome = await session.run(
             start: clock.currentTime(),
-            baselineTripwireSignal: Support.tripwireSignal(topmostVC: nil)
+            baselineTripwireSignal: tripwireSignal(topmostVC: nil)
         )
 
         XCTAssertEqual(outcome.outcome, .settled(timeMs: 50))
         XCTAssertEqual(outcome.events, [
             .tripwireSignalChanged(
-                from: Support.tripwireSignal(topmostVC: nil),
-                to: Support.tripwireSignal(topmostVC: changedVC)
+                from: tripwireSignal(topmostVC: nil),
+                to: tripwireSignal(topmostVC: changedVC)
             ),
         ])
     }
 
     func testSemanticQuietSettleTimesOutWhenFingerprintNeverStabilizes() async {
-        let clock = Support.ManualClock()
-        let counter = Support.Counter()
+        let clock = ManualClock()
+        let counter = Counter()
         let session = SettleSession(
             parseProvider: {
                 let index = counter.next()
-                return Support.makeParseResult([
-                    Support.makeElement(
+                return self.makeParseResult([
+                    self.makeElement(
                         label: "Tick \(index)",
                         traits: .staticText,
                         frame: CGRect(x: 0, y: 0, width: 100, height: 30)
                     ),
                 ])
             },
-            tripwireSignalProvider: { Support.tripwireSignal(topmostVC: nil) },
+            tripwireSignalProvider: { self.tripwireSignal(topmostVC: nil) },
             observationYield: {
                 clock.advance(milliseconds: 10)
             },
@@ -61,7 +60,7 @@ final class SettleSessionTimeoutChangeBaselineTests: XCTestCase {
 
         let outcome = await session.run(
             start: clock.currentTime(),
-            baselineTripwireSignal: Support.tripwireSignal(topmostVC: nil)
+            baselineTripwireSignal: tripwireSignal(topmostVC: nil)
         )
 
         XCTAssertEqual(outcome.outcome, .timedOut(timeMs: 50))
@@ -70,29 +69,29 @@ final class SettleSessionTimeoutChangeBaselineTests: XCTestCase {
     }
 
     func testFrameJitterInsideCoarseBucketSettlesAndKeepsFinalFrame() async {
-        let first = Support.makeElement(
+        let first = makeElement(
             label: "$ 9 Cash",
             traits: .button,
             frame: CGRect(x: 561, y: 423, width: 90, height: 72)
         )
-        let jittered = Support.makeElement(
+        let jittered = makeElement(
             label: "$ 9 Cash",
             traits: .button,
             frame: CGRect(x: 561, y: 428, width: 90, height: 72)
         )
-        let session = Support.makeSession(
+        let session = makeSession(
             script: [
-                Support.makeParseResult([first]),
-                Support.makeParseResult([jittered]),
-                Support.makeParseResult([first]),
-                Support.makeParseResult([jittered]),
+                makeParseResult([first]),
+                makeParseResult([jittered]),
+                makeParseResult([first]),
+                makeParseResult([jittered]),
             ],
             cyclesRequired: 3
         )
 
         let outcome = await session.run(
             start: CFAbsoluteTimeGetCurrent(),
-            baselineTripwireSignal: Support.tripwireSignal(topmostVC: nil)
+            baselineTripwireSignal: tripwireSignal(topmostVC: nil)
         )
 
         guard case .settled = outcome.outcome else {
@@ -103,12 +102,12 @@ final class SettleSessionTimeoutChangeBaselineTests: XCTestCase {
     }
 
     func testFrameJitterInsideCoarseBucketDoesNotProduceChangeDescription() {
-        let first = Support.makeElement(
+        let first = makeElement(
             label: "$ 9 Cash",
             traits: .button,
             frame: CGRect(x: 561, y: 423, width: 90, height: 72)
         )
-        let jittered = Support.makeElement(
+        let jittered = makeElement(
             label: "$ 9 Cash",
             traits: .button,
             frame: CGRect(x: 561, y: 428, width: 90, height: 72)
@@ -119,31 +118,31 @@ final class SettleSessionTimeoutChangeBaselineTests: XCTestCase {
 
     func testChangeDescriptionNamesChangedFieldsAndIsBounded() {
         let before = [
-            Support.makeElement(
+            makeElement(
                 label: "Old",
                 value: "offline",
                 identifier: "old_id",
                 traits: .button,
                 frame: CGRect(x: 561, y: 423, width: 90, height: 72)
             ),
-            Support.makeElement(label: "Second", traits: .staticText),
-            Support.makeElement(label: "Third", traits: .staticText),
-            Support.makeElement(label: "Fourth", traits: .staticText),
-            Support.makeElement(label: "Fifth", traits: .staticText),
+            makeElement(label: "Second", traits: .staticText),
+            makeElement(label: "Third", traits: .staticText),
+            makeElement(label: "Fourth", traits: .staticText),
+            makeElement(label: "Fifth", traits: .staticText),
         ]
         let after = [
-            Support.makeElement(
+            makeElement(
                 label: "New",
                 value: "online",
                 identifier: "new_id",
                 traits: .staticText,
                 frame: CGRect(x: 561, y: 467, width: 90, height: 72)
             ),
-            Support.makeElement(label: "Second changed", traits: .staticText),
-            Support.makeElement(label: "Third changed", traits: .staticText),
-            Support.makeElement(label: "Fourth changed", traits: .staticText),
-            Support.makeElement(label: "Fifth changed", traits: .staticText),
-            Support.makeElement(label: "Sixth", traits: .staticText),
+            makeElement(label: "Second changed", traits: .staticText),
+            makeElement(label: "Third changed", traits: .staticText),
+            makeElement(label: "Fourth changed", traits: .staticText),
+            makeElement(label: "Fifth changed", traits: .staticText),
+            makeElement(label: "Sixth", traits: .staticText),
         ]
 
         let diagnostic = SettleTimeline.changeDescription(from: before, to: after, bucket: 13)
@@ -164,16 +163,15 @@ final class SettleSessionTimeoutChangeBaselineTests: XCTestCase {
         // Each parse returns a unique element so the fingerprint never
         // matches the previous — stableCycles never reaches 3 and the
         // loop exits via the wall-clock deadline.
-        let counter = Support.Counter()
+        let counter = Counter()
         let session = SettleSession(
-            parseProvider: { [weak self] in
-                guard let self else { return nil }
+            parseProvider: {
                 let value = counter.next()
-                return Support.makeParseResult([
-                    Support.makeElement(label: "label-\(value)", traits: .staticText)
+                return self.makeParseResult([
+                    self.makeElement(label: "label-\(value)", traits: .staticText)
                 ])
             },
-            tripwireSignalProvider: { Support.tripwireSignal(topmostVC: nil) },
+            tripwireSignalProvider: { self.tripwireSignal(topmostVC: nil) },
             // Real (small) sleeps so wall clock advances; a no-op sleeper
             // would let the loop reach a finite-script end before the
             // timeout fires.
@@ -185,7 +183,7 @@ final class SettleSessionTimeoutChangeBaselineTests: XCTestCase {
 
         let outcome = await session.run(
             start: CFAbsoluteTimeGetCurrent(),
-            baselineTripwireSignal: Support.tripwireSignal(topmostVC: nil)
+            baselineTripwireSignal: tripwireSignal(topmostVC: nil)
         )
 
         if case .timedOut = outcome.outcome {
@@ -199,21 +197,20 @@ final class SettleSessionTimeoutChangeBaselineTests: XCTestCase {
     }
 
     func testTimeoutReportsUnstableFrameBucketChanges() async {
-        let counter = Support.Counter()
+        let counter = Counter()
         let session = SettleSession(
-            parseProvider: { [weak self] in
-                guard let self else { return nil }
+            parseProvider: {
                 let value = counter.next()
                 let y: CGFloat = value.isMultiple(of: 2) ? 423 : 467
-                return Support.makeParseResult([
-                    Support.makeElement(
+                return self.makeParseResult([
+                    self.makeElement(
                         label: "$ 9 Cash",
                         traits: .button,
                         frame: CGRect(x: 561, y: y, width: 90, height: 72)
                     ),
                 ])
             },
-            tripwireSignalProvider: { Support.tripwireSignal(topmostVC: nil) },
+            tripwireSignalProvider: { self.tripwireSignal(topmostVC: nil) },
             sleeper: { _ = await Task.cancellableSleep(nanoseconds: $0) },
             cyclesRequired: 3,
             cycleIntervalMs: 5,
@@ -222,7 +219,7 @@ final class SettleSessionTimeoutChangeBaselineTests: XCTestCase {
 
         let outcome = await session.run(
             start: CFAbsoluteTimeGetCurrent(),
-            baselineTripwireSignal: Support.tripwireSignal(topmostVC: nil)
+            baselineTripwireSignal: tripwireSignal(topmostVC: nil)
         )
 
         guard case .timedOut = outcome.outcome else {
@@ -239,13 +236,13 @@ final class SettleSessionTimeoutChangeBaselineTests: XCTestCase {
     }
 
     func testTripwireTriggerResetsBaselineAndSettlesCleanly() async {
-        let stable = Support.makeParseResult([Support.makeElement(label: "A", traits: .staticText)])
+        let stable = makeParseResult([makeElement(label: "A", traits: .staticText)])
         let placeholder = ObjectIdentifier(NSObject())
         // Baseline is passed in explicitly as `nil`; every call to the
         // provider during the loop returns the post-transition VC, so
         // the very first post-sleep comparison detects the change.
         let topVCSeq: [ObjectIdentifier?] = [placeholder]
-        let session = Support.makeSession(
+        let session = makeSession(
             script: [stable, stable, stable],
             cyclesRequired: 3,
             cycleIntervalMs: 1,
@@ -255,7 +252,7 @@ final class SettleSessionTimeoutChangeBaselineTests: XCTestCase {
 
         let outcome = await session.run(
             start: CFAbsoluteTimeGetCurrent(),
-            baselineTripwireSignal: Support.tripwireSignal(topmostVC: nil)
+            baselineTripwireSignal: tripwireSignal(topmostVC: nil)
         )
 
         if case .settled = outcome.outcome {
@@ -270,17 +267,17 @@ final class SettleSessionTimeoutChangeBaselineTests: XCTestCase {
     }
 
     func testTripwireTriggerWaitsForStablePostTransitionTree() async {
-        let before = Support.makeElement(label: "Display", traits: .header)
-        let after = Support.makeElement(label: "Controls Demo", traits: .header)
+        let before = makeElement(label: "Display", traits: .header)
+        let after = makeElement(label: "Controls Demo", traits: .header)
         let liveObject = NSObject()
         let livePostTransition = ObjectIdentifier(liveObject)
-        let session = Support.makeSession(
+        let session = makeSession(
             script: [
-                Support.makeParseResult([before]),
-                Support.makeParseResult([before]),
-                Support.makeParseResult([after]),
-                Support.makeParseResult([after]),
-                Support.makeParseResult([after])
+                makeParseResult([before]),
+                makeParseResult([before]),
+                makeParseResult([after]),
+                makeParseResult([after]),
+                makeParseResult([after])
             ],
             cyclesRequired: 2,
             cycleIntervalMs: 1,
@@ -290,7 +287,7 @@ final class SettleSessionTimeoutChangeBaselineTests: XCTestCase {
 
         let outcome = await session.run(
             start: CFAbsoluteTimeGetCurrent(),
-            baselineTripwireSignal: Support.tripwireSignal(topmostVC: nil)
+            baselineTripwireSignal: tripwireSignal(topmostVC: nil)
         )
         _ = liveObject // keep alive
 
@@ -306,21 +303,21 @@ final class SettleSessionTimeoutChangeBaselineTests: XCTestCase {
     }
 
     func testLateTripwireTriggerResetsPreviouslyStableCycles() async {
-        let before = Support.makeElement(label: "Before", traits: .header)
-        let loading = Support.makeElement(label: "Loading", traits: .staticText)
-        let after = Support.makeElement(label: "After", traits: .header)
+        let before = makeElement(label: "Before", traits: .header)
+        let loading = makeElement(label: "Loading", traits: .staticText)
+        let after = makeElement(label: "After", traits: .header)
         let baselineObject = NSObject()
         let liveObject = NSObject()
         let baseline = ObjectIdentifier(baselineObject)
         let livePostTransition = ObjectIdentifier(liveObject)
-        let session = Support.makeSession(
+        let session = makeSession(
             script: [
-                Support.makeParseResult([before]),
-                Support.makeParseResult([before]),
-                Support.makeParseResult([loading]),
-                Support.makeParseResult([after]),
-                Support.makeParseResult([after]),
-                Support.makeParseResult([after])
+                makeParseResult([before]),
+                makeParseResult([before]),
+                makeParseResult([loading]),
+                makeParseResult([after]),
+                makeParseResult([after]),
+                makeParseResult([after])
             ],
             cyclesRequired: 2,
             cycleIntervalMs: 1,
@@ -330,7 +327,7 @@ final class SettleSessionTimeoutChangeBaselineTests: XCTestCase {
 
         let outcome = await session.run(
             start: CFAbsoluteTimeGetCurrent(),
-            baselineTripwireSignal: Support.tripwireSignal(topmostVC: baseline)
+            baselineTripwireSignal: tripwireSignal(topmostVC: baseline)
         )
         _ = baselineObject // keep alive
         _ = liveObject // keep alive
@@ -352,7 +349,7 @@ final class SettleSessionTimeoutChangeBaselineTests: XCTestCase {
     /// was. With the same VC value passed as baseline AND returned by
     /// every provider call, no screen-change should ever trigger.
     func testExplicitBaselineMatchesProviderSequenceNoScreenChange() async {
-        let stable = Support.makeParseResult([Support.makeElement(label: "A", traits: .staticText)])
+        let stable = makeParseResult([makeElement(label: "A", traits: .staticText)])
         // Retain the underlying object so the ObjectIdentifier stays valid
         // for the entire loop — otherwise the temp NSObject can be
         // deallocated and a later allocation can collide on its slot.
@@ -361,7 +358,7 @@ final class SettleSessionTimeoutChangeBaselineTests: XCTestCase {
         // Every provider call answers with the same VC as the baseline —
         // proves the loop is comparing against the parameter, not its own
         // first sampled value.
-        let session = Support.makeSession(
+        let session = makeSession(
             script: [stable, stable, stable, stable],
             cyclesRequired: 3,
             cycleIntervalMs: 1,
@@ -371,7 +368,7 @@ final class SettleSessionTimeoutChangeBaselineTests: XCTestCase {
 
         let outcome = await session.run(
             start: CFAbsoluteTimeGetCurrent(),
-            baselineTripwireSignal: Support.tripwireSignal(topmostVC: baseline)
+            baselineTripwireSignal: tripwireSignal(topmostVC: baseline)
         )
         _ = baselineObject // keep alive
 
@@ -386,12 +383,12 @@ final class SettleSessionTimeoutChangeBaselineTests: XCTestCase {
     /// from the first cycle, so the very first post-sleep comparison
     /// triggers a screen change. No script-position offset needed.
     func testExplicitBaselineDifferingFromProviderTriggersTripwire() async {
-        let stable = Support.makeParseResult([Support.makeElement(label: "A", traits: .staticText)])
+        let stable = makeParseResult([makeElement(label: "A", traits: .staticText)])
         let baselineObject = NSObject()
         let liveObject = NSObject()
         let baseline = ObjectIdentifier(baselineObject)
         let livePostTransition = ObjectIdentifier(liveObject)
-        let session = Support.makeSession(
+        let session = makeSession(
             script: [stable, stable, stable],
             cyclesRequired: 3,
             cycleIntervalMs: 1,
@@ -401,7 +398,7 @@ final class SettleSessionTimeoutChangeBaselineTests: XCTestCase {
 
         let outcome = await session.run(
             start: CFAbsoluteTimeGetCurrent(),
-            baselineTripwireSignal: Support.tripwireSignal(topmostVC: baseline)
+            baselineTripwireSignal: tripwireSignal(topmostVC: baseline)
         )
         _ = baselineObject // keep alive
         _ = liveObject // keep alive

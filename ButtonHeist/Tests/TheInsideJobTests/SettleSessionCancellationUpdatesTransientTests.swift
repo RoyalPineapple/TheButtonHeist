@@ -6,18 +6,17 @@ import ButtonHeistSupport
 @testable import TheScore
 
 @MainActor
-final class SettleSessionCancellationUpdatesTransientTests: XCTestCase {
-    private typealias Support = SettleSessionTestSupport
+extension SettleSessionTests {
 
     func testSemanticQuietSettleReturnsCancelledWhenObservationYieldSwallowsCancellation() async {
-        let stable = Support.makeParseResult([
-            Support.makeElement(label: "Ready", traits: .staticText, frame: CGRect(x: 0, y: 0, width: 100, height: 30)),
+        let stable = makeParseResult([
+            makeElement(label: "Ready", traits: .staticText, frame: CGRect(x: 0, y: 0, width: 100, height: 30)),
         ])
-        let clock = Support.ManualClock()
+        let clock = ManualClock()
         let yieldStarted = expectation(description: "observation yield started")
         let session = SettleSession(
             parseProvider: { stable },
-            tripwireSignalProvider: { Support.tripwireSignal(topmostVC: nil) },
+            tripwireSignalProvider: { self.tripwireSignal(topmostVC: nil) },
             observationYield: {
                 yieldStarted.fulfill()
                 _ = await Task.cancellableSleep(for: .seconds(10))
@@ -30,7 +29,7 @@ final class SettleSessionCancellationUpdatesTransientTests: XCTestCase {
         let task = Task {
             await session.run(
                 start: clock.currentTime(),
-                baselineTripwireSignal: Support.tripwireSignal(topmostVC: nil)
+                baselineTripwireSignal: tripwireSignal(topmostVC: nil)
             )
         }
 
@@ -43,11 +42,11 @@ final class SettleSessionCancellationUpdatesTransientTests: XCTestCase {
     }
 
     func testCancellationPropagatesAsCancelledOutcome() async {
-        let stable = Support.makeParseResult([Support.makeElement(label: "A")])
+        let stable = makeParseResult([makeElement(label: "A")])
         let sleepStarted = expectation(description: "sleep started")
         let session = SettleSession(
             parseProvider: { stable },
-            tripwireSignalProvider: { Support.tripwireSignal(topmostVC: nil) },
+            tripwireSignalProvider: { self.tripwireSignal(topmostVC: nil) },
             sleeper: { _ in
                 sleepStarted.fulfill()
                 _ = await Task.cancellableSleep(for: .seconds(10))
@@ -59,7 +58,7 @@ final class SettleSessionCancellationUpdatesTransientTests: XCTestCase {
         let task = Task {
             await session.run(
                 start: CFAbsoluteTimeGetCurrent(),
-                baselineTripwireSignal: Support.tripwireSignal(topmostVC: nil)
+                baselineTripwireSignal: tripwireSignal(topmostVC: nil)
             )
         }
 
@@ -77,26 +76,26 @@ final class SettleSessionCancellationUpdatesTransientTests: XCTestCase {
     }
 
     func testUpdatesFrequentlySpinnerDoesNotBlockSettle() async {
-        let staticElement = Support.makeElement(label: "Hello", traits: .staticText)
-        let spinnerA = Support.makeElement(label: "loader", value: "A", traits: .updatesFrequently)
-        let spinnerB = Support.makeElement(label: "loader", value: "B", traits: .updatesFrequently)
-        let spinnerC = Support.makeElement(label: "loader", value: "C", traits: .updatesFrequently)
+        let staticElement = makeElement(label: "Hello", traits: .staticText)
+        let spinnerA = makeElement(label: "loader", value: "A", traits: .updatesFrequently)
+        let spinnerB = makeElement(label: "loader", value: "B", traits: .updatesFrequently)
+        let spinnerC = makeElement(label: "loader", value: "C", traits: .updatesFrequently)
 
         // Spinner value cycles each parse but updatesFrequently masks
         // it, so the fingerprint stays stable and the loop settles.
-        let session = Support.makeSession(
+        let session = makeSession(
             script: [
-                Support.makeParseResult([staticElement, spinnerA]),
-                Support.makeParseResult([staticElement, spinnerB]),
-                Support.makeParseResult([staticElement, spinnerC]),
-                Support.makeParseResult([staticElement, spinnerA])
+                makeParseResult([staticElement, spinnerA]),
+                makeParseResult([staticElement, spinnerB]),
+                makeParseResult([staticElement, spinnerC]),
+                makeParseResult([staticElement, spinnerA])
             ],
             cyclesRequired: 3
         )
 
         let outcome = await session.run(
             start: CFAbsoluteTimeGetCurrent(),
-            baselineTripwireSignal: Support.tripwireSignal(topmostVC: nil)
+            baselineTripwireSignal: tripwireSignal(topmostVC: nil)
         )
 
         if case .settled = outcome.outcome {
@@ -111,22 +110,22 @@ final class SettleSessionCancellationUpdatesTransientTests: XCTestCase {
         // Analog clock case: a hand element keeps the same label/identifier
         // but its frame translates every cycle. With masking, the fingerprint
         // stays stable.
-        let staticElement = Support.makeElement(label: "Static", traits: .staticText)
+        let staticElement = makeElement(label: "Static", traits: .staticText)
         let hands = (0..<10).map { i in
-            Support.makeElement(
+            makeElement(
                 label: "hand",
                 traits: .updatesFrequently,
                 frame: CGRect(x: i * 10, y: i * 10, width: 5, height: 50)
             )
         }
-        let session = Support.makeSession(
-            script: hands.map { hand in Support.makeParseResult([staticElement, hand]) },
+        let session = makeSession(
+            script: hands.map { hand in makeParseResult([staticElement, hand]) },
             cyclesRequired: 3
         )
 
         let outcome = await session.run(
             start: CFAbsoluteTimeGetCurrent(),
-            baselineTripwireSignal: Support.tripwireSignal(topmostVC: nil)
+            baselineTripwireSignal: tripwireSignal(topmostVC: nil)
         )
 
         if case .settled = outcome.outcome {
@@ -137,9 +136,9 @@ final class SettleSessionCancellationUpdatesTransientTests: XCTestCase {
     }
 
     func testTransientElementsExcludesBaselineAndFinal() {
-        let baseline = Support.makeElement(label: "Baseline", traits: .staticText)
-        let final = Support.makeElement(label: "Final", traits: .staticText)
-        let transient = Support.makeElement(label: "Loading", traits: .staticText)
+        let baseline = makeElement(label: "Baseline", traits: .staticText)
+        let final = makeElement(label: "Final", traits: .staticText)
+        let transient = makeElement(label: "Loading", traits: .staticText)
 
         let seenByKey: [TimelineKey: AccessibilityElement] = [
             baseline.timelineKey: baseline,
@@ -158,13 +157,13 @@ final class SettleSessionCancellationUpdatesTransientTests: XCTestCase {
     }
 
     func testTransientSpinnerCapturedOnCleanSameScreenSettle() async {
-        let content = Support.makeElement(label: "Content", traits: .staticText)
-        let spinner = Support.makeElement(label: "Loading", traits: .staticText)
-        let stable = Support.makeParseResult([content])
-        let session = Support.makeSession(
+        let content = makeElement(label: "Content", traits: .staticText)
+        let spinner = makeElement(label: "Loading", traits: .staticText)
+        let stable = makeParseResult([content])
+        let session = makeSession(
             script: [
                 stable,
-                Support.makeParseResult([content, spinner]),
+                makeParseResult([content, spinner]),
                 stable,
                 stable
             ],
@@ -173,7 +172,7 @@ final class SettleSessionCancellationUpdatesTransientTests: XCTestCase {
 
         let outcome = await session.run(
             start: CFAbsoluteTimeGetCurrent(),
-            baselineTripwireSignal: Support.tripwireSignal(topmostVC: nil)
+            baselineTripwireSignal: tripwireSignal(topmostVC: nil)
         )
 
         if case .settled = outcome.outcome {
@@ -191,9 +190,9 @@ final class SettleSessionCancellationUpdatesTransientTests: XCTestCase {
     }
 
     func testTransientElementsOrderedByReadingOrder() {
-        let lowerLeft = Support.makeElement(label: "B", frame: CGRect(x: 0, y: 100, width: 10, height: 10))
-        let upperLeft = Support.makeElement(label: "A", frame: CGRect(x: 0, y: 0, width: 10, height: 10))
-        let upperRight = Support.makeElement(label: "C", frame: CGRect(x: 50, y: 0, width: 10, height: 10))
+        let lowerLeft = makeElement(label: "B", frame: CGRect(x: 0, y: 100, width: 10, height: 10))
+        let upperLeft = makeElement(label: "A", frame: CGRect(x: 0, y: 0, width: 10, height: 10))
+        let upperRight = makeElement(label: "C", frame: CGRect(x: 50, y: 0, width: 10, height: 10))
 
         let seenByKey: [TimelineKey: AccessibilityElement] = [
             lowerLeft.timelineKey: lowerLeft,
@@ -214,7 +213,7 @@ final class SettleSessionCancellationUpdatesTransientTests: XCTestCase {
     func testTransientElementsReturnsEmptyWhenSeenIsEmpty() {
         let result = SettleSession.transientElements(
             seenByKey: [:],
-            baseline: [Support.makeElement(label: "X")],
+            baseline: [makeElement(label: "X")],
             final: []
         )
         XCTAssertTrue(result.isEmpty)

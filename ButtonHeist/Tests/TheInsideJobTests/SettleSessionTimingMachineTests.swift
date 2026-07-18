@@ -6,8 +6,7 @@ import ButtonHeistSupport
 @testable import TheScore
 
 @MainActor
-final class SettleSessionTimingMachineTests: XCTestCase {
-    private typealias Support = SettleSessionTestSupport
+extension SettleSessionTests {
 
     private func recordedObservation(
         _ observation: InterfaceObservation,
@@ -98,16 +97,16 @@ final class SettleSessionTimingMachineTests: XCTestCase {
     }
 
     func testViewportTransitionSettleUsesOneRunLoopTurnWhenTheRepeatIsStable() async {
-        let stable = Support.makeParseResult([
-            Support.makeElement(label: "Stable", traits: .staticText),
+        let stable = makeParseResult([
+            makeElement(label: "Stable", traits: .staticText),
         ])
-        let parseCount = Support.Counter()
+        let parseCount = Counter()
         let session = SettleSession(
             parseProvider: {
                 _ = parseCount.next()
                 return stable
             },
-            tripwireSignalProvider: { Support.tripwireSignal(topmostVC: nil) },
+            tripwireSignalProvider: { self.tripwireSignal(topmostVC: nil) },
             sleeper: { _ in },
             cyclesRequired: 1,
             cycleIntervalMs: 0,
@@ -116,7 +115,7 @@ final class SettleSessionTimingMachineTests: XCTestCase {
 
         let outcome = await session.run(
             start: CFAbsoluteTimeGetCurrent(),
-            baselineTripwireSignal: Support.tripwireSignal(topmostVC: nil)
+            baselineTripwireSignal: tripwireSignal(topmostVC: nil)
         )
 
         XCTAssertTrue(outcome.outcome.didSettleCleanly)
@@ -124,20 +123,20 @@ final class SettleSessionTimingMachineTests: XCTestCase {
     }
 
     func testViewportTransitionSettleUsesASecondRunLoopTurnAfterOneLayoutChange() async {
-        let loading = Support.makeParseResult([
-            Support.makeElement(label: "Loading", traits: .staticText),
+        let loading = makeParseResult([
+            makeElement(label: "Loading", traits: .staticText),
         ])
-        let ready = Support.makeParseResult([
-            Support.makeElement(label: "Ready", traits: .staticText),
+        let ready = makeParseResult([
+            makeElement(label: "Ready", traits: .staticText),
         ])
-        let script = Support.ScriptBox(script: [loading, ready, ready])
-        let parseCount = Support.Counter()
+        let script = ScriptBox(script: [loading, ready, ready])
+        let parseCount = Counter()
         let session = SettleSession(
             parseProvider: {
                 _ = parseCount.next()
                 return script.next()
             },
-            tripwireSignalProvider: { Support.tripwireSignal(topmostVC: nil) },
+            tripwireSignalProvider: { self.tripwireSignal(topmostVC: nil) },
             sleeper: { _ in },
             cyclesRequired: 1,
             cycleIntervalMs: 0,
@@ -146,7 +145,7 @@ final class SettleSessionTimingMachineTests: XCTestCase {
 
         let outcome = await session.run(
             start: CFAbsoluteTimeGetCurrent(),
-            baselineTripwireSignal: Support.tripwireSignal(topmostVC: nil)
+            baselineTripwireSignal: tripwireSignal(topmostVC: nil)
         )
 
         XCTAssertTrue(outcome.outcome.didSettleCleanly)
@@ -158,14 +157,14 @@ final class SettleSessionTimingMachineTests: XCTestCase {
     }
 
     func testMachineSettlesFixedCadenceAfterRequiredConsecutiveCycles() {
-        let stable = Support.makeParseResult([
-            Support.makeElement(label: "Ready", traits: .staticText),
+        let stable = makeParseResult([
+            makeElement(label: "Ready", traits: .staticText),
         ])
         let machine = SettleLoopMachine()
         var ledger = SettleObservationLedger()
         var state = SettleLoopMachine.State(
             policy: .consecutiveCycles(required: 2),
-            tripwireBaseline: Support.tripwireSignal(topmostVC: nil)
+            tripwireBaseline: tripwireSignal(topmostVC: nil)
         )
 
         XCTAssertContinue(reduceObservation(stable, elapsedMs: 0, machine: machine, ledger: &ledger, state: &state))
@@ -180,14 +179,14 @@ final class SettleSessionTimingMachineTests: XCTestCase {
     }
 
     func testMachineSettlesQuietWindowAfterFingerprintRemainsStableForWindow() {
-        let stable = Support.makeParseResult([
-            Support.makeElement(label: "Ready", traits: .staticText),
+        let stable = makeParseResult([
+            makeElement(label: "Ready", traits: .staticText),
         ])
         let machine = SettleLoopMachine()
         var ledger = SettleObservationLedger()
         var state = SettleLoopMachine.State(
             policy: .quietWindow(milliseconds: 30),
-            tripwireBaseline: Support.tripwireSignal(topmostVC: nil)
+            tripwireBaseline: tripwireSignal(topmostVC: nil)
         )
 
         XCTAssertContinue(reduceObservation(stable, elapsedMs: 0, machine: machine, ledger: &ledger, state: &state))
@@ -202,17 +201,17 @@ final class SettleSessionTimingMachineTests: XCTestCase {
     }
 
     func testMachineFingerprintChangeResetsStability() {
-        let loading = Support.makeParseResult([
-            Support.makeElement(label: "Loading", traits: .staticText),
+        let loading = makeParseResult([
+            makeElement(label: "Loading", traits: .staticText),
         ])
-        let ready = Support.makeParseResult([
-            Support.makeElement(label: "Ready", traits: .staticText),
+        let ready = makeParseResult([
+            makeElement(label: "Ready", traits: .staticText),
         ])
         let machine = SettleLoopMachine()
         var ledger = SettleObservationLedger()
         var state = SettleLoopMachine.State(
             policy: .consecutiveCycles(required: 2),
-            tripwireBaseline: Support.tripwireSignal(topmostVC: nil)
+            tripwireBaseline: tripwireSignal(topmostVC: nil)
         )
 
         XCTAssertContinue(reduceObservation(loading, elapsedMs: 0, machine: machine, ledger: &ledger, state: &state))
@@ -229,12 +228,12 @@ final class SettleSessionTimingMachineTests: XCTestCase {
     }
 
     func testMachineTripwireResetThenNilParseCannotReturnStaleFinalScreen() {
-        let stale = Support.makeParseResult([
-            Support.makeElement(label: "Stale", traits: .staticText),
+        let stale = makeParseResult([
+            makeElement(label: "Stale", traits: .staticText),
         ])
-        let baseline = Support.tripwireSignal(topmostVC: nil)
+        let baseline = tripwireSignal(topmostVC: nil)
         let changedObject = NSObject()
-        let changed = Support.tripwireSignal(topmostVC: ObjectIdentifier(changedObject))
+        let changed = tripwireSignal(topmostVC: ObjectIdentifier(changedObject))
         let machine = SettleLoopMachine()
         var ledger = SettleObservationLedger()
         var state = SettleLoopMachine.State(
@@ -257,12 +256,12 @@ final class SettleSessionTimingMachineTests: XCTestCase {
     }
 
     func testMachineTripwireResetRestartsBothPolicyProofs() {
-        let stable = Support.makeParseResult([
-            Support.makeElement(label: "Stable", traits: .staticText),
+        let stable = makeParseResult([
+            makeElement(label: "Stable", traits: .staticText),
         ])
-        let baseline = Support.tripwireSignal(topmostVC: nil)
+        let baseline = tripwireSignal(topmostVC: nil)
         let changedObject = NSObject()
-        let changed = Support.tripwireSignal(topmostVC: ObjectIdentifier(changedObject))
+        let changed = tripwireSignal(topmostVC: ObjectIdentifier(changedObject))
 
         for policy in [
             SettlePolicy.consecutiveCycles(required: 1),
@@ -290,11 +289,11 @@ final class SettleSessionTimingMachineTests: XCTestCase {
     }
 
     func testMachineNotificationOnlyTripwireChangeDoesNotResetSettleBaseline() {
-        let stable = Support.makeParseResult([
-            Support.makeElement(label: "Stable", traits: .staticText),
+        let stable = makeParseResult([
+            makeElement(label: "Stable", traits: .staticText),
         ])
-        let baseline = Support.tripwireSignal(topmostVC: nil, accessibilityNotificationSequence: 1)
-        let changed = Support.tripwireSignal(topmostVC: nil, accessibilityNotificationSequence: 2)
+        let baseline = tripwireSignal(topmostVC: nil, accessibilityNotificationSequence: 1)
+        let changed = tripwireSignal(topmostVC: nil, accessibilityNotificationSequence: 2)
         let machine = SettleLoopMachine()
         var ledger = SettleObservationLedger()
         var state = SettleLoopMachine.State(
@@ -315,14 +314,14 @@ final class SettleSessionTimingMachineTests: XCTestCase {
     }
 
     func testResultProjectsCancelledOutcomeFromCurrentSettleState() {
-        let stable = Support.makeParseResult([
-            Support.makeElement(label: "Ready", traits: .staticText),
+        let stable = makeParseResult([
+            makeElement(label: "Ready", traits: .staticText),
         ])
         let machine = SettleLoopMachine()
         var ledger = SettleObservationLedger()
         var state = SettleLoopMachine.State(
             policy: .consecutiveCycles(required: 2),
-            tripwireBaseline: Support.tripwireSignal(topmostVC: nil)
+            tripwireBaseline: tripwireSignal(topmostVC: nil)
         )
         XCTAssertContinue(reduceObservation(stable, elapsedMs: 0, machine: machine, ledger: &ledger, state: &state))
 
@@ -337,14 +336,14 @@ final class SettleSessionTimingMachineTests: XCTestCase {
     }
 
     func testResultProjectsTimedOutOutcomeFromCurrentSettleState() {
-        let stable = Support.makeParseResult([
-            Support.makeElement(label: "Ready", traits: .staticText),
+        let stable = makeParseResult([
+            makeElement(label: "Ready", traits: .staticText),
         ])
         let machine = SettleLoopMachine()
         var ledger = SettleObservationLedger()
         var state = SettleLoopMachine.State(
             policy: .quietWindow(milliseconds: 30),
-            tripwireBaseline: Support.tripwireSignal(topmostVC: nil)
+            tripwireBaseline: tripwireSignal(topmostVC: nil)
         )
         XCTAssertContinue(reduceObservation(stable, elapsedMs: 0, machine: machine, ledger: &ledger, state: &state))
 
