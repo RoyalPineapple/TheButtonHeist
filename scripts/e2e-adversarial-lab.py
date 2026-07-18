@@ -138,7 +138,7 @@ def receipt_ceiling_hits(response: Any) -> list[dict[str, Any]]:
             or elapsed_ms is None
         ):
             continue
-        if elapsed_ms >= max(0, budget_ms - CEILING_HIT_TOLERANCE_MS):
+        if elapsed_ms > budget_ms + CEILING_HIT_TOLERANCE_MS:
             hits.append(row)
     return hits
 

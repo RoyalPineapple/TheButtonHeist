@@ -51,6 +51,11 @@ extension Navigation {
         deadline: SemanticObservationDeadline? = nil,
         discoveryCommitPolicy: DiscoveryCommitPolicy = .mergeIntoInterface
     ) async -> ViewportTransition {
+        guard !Task.isCancelled,
+              deadline.map({
+                  $0.remainingSeconds() >= Double(SettleSession.viewportTransitionTimeoutMs) / 1_000
+              }) ?? true
+        else { return .unavailable() }
         let previousVisibleIds = vault.viewportElementIDs
         let notificationWindow = vault.accessibilityNotifications.beginActionWindow()
         let primitiveResult = await dispatchViewportMovement(intent)

@@ -639,7 +639,9 @@ expectations do not establish a standalone baseline in either route: they keep
 the supplied pre-action `SettledCapture`.
 
 Every settle, reveal, discovery, and waiter phase inherits one authored
-operation deadline. After each reveal or discovery, the wait records its route
+operation deadline. Already-settled truth remains immediately evaluable, but a
+new stability route starts only when the remaining budget contains the settle
+reducer's declared quiet-window floor. After each reveal or discovery, the wait records its route
 cost and reserves the longest observed duration so terminal verification starts
 before that deadline. Terminal verification performs one final visible check
 followed, if still unmatched and time remains, by one final reveal or canonical

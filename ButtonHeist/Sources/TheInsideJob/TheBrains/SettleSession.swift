@@ -267,6 +267,10 @@ final class SettleSessionFinalObservation {
     /// is why agents driving the same AX surface feel "in sync" at this rate.
     static let defaultCycleIntervalMs: Int = 100
 
+    static let minimumStableDurationSeconds = Double(
+        defaultCyclesRequired * defaultCycleIntervalMs
+    ) / 1_000
+
     /// Hard ceiling on how long the settle loop will wait for the AX tree
     /// to quiesce before giving up with `.timedOut`. 5 s is the longest
     /// any well-behaved iOS transition (push, modal, alert, tab switch)

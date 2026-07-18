@@ -52,10 +52,10 @@ extension Navigation {
             return nil
         }
         let timeoutMs: Int
-        switch (deadline, requiredAfterMovement) {
-        case (_, true), (nil, false):
+        switch deadline {
+        case nil:
             timeoutMs = SettleSession.viewportTransitionTimeoutMs
-        case (.some(let deadline), false):
+        case .some(let deadline):
             timeoutMs = min(
                 SettleSession.viewportTransitionTimeoutMs,
                 max(1, Int((deadline.remainingSeconds() * 1_000).rounded(.up)))

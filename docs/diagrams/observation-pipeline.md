@@ -207,7 +207,9 @@ temporal baseline is established only after initial positioning; every later
 evaluation uses the full accumulated window from that immutable baseline.
 Action expectations keep the supplied pre-action baseline. The terminal visible
 check, reveal, discovery, and waiter phases inherit one authored operation
-deadline. After each reveal or discovery, the wait records its route cost and
+deadline. Already-settled truth remains immediately evaluable; new settlement
+or discovery starts only when the remaining budget contains the settle reducer's
+declared quiet-window floor. After each reveal or discovery, the wait records its route cost and
 reserves the longest observed duration so terminal verification starts before
 that deadline. Terminal work receives no fresh 250 ms budget and no discovery
 continues after the operation deadline. Every stage returns immediately when
