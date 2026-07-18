@@ -128,7 +128,6 @@ public enum HeistRepairRefusalReason: String, Codable, Sendable, Equatable {
     case oldTargetDidNotResolveExactlyOnce
     case containerTargetUnsupported
     case targetReferenceUnsupported
-    case scopedTargetUnsupported
     case unresolvedTargetExpression
     case oldTargetStillResolvesAndSupportsRequestedAction
     case noCandidateMetScoreThreshold

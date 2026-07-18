@@ -154,7 +154,6 @@ enum RepairTargetResolution {
 enum UnsupportedRepairTargetKind: String, Sendable, Equatable {
     case container
     case reference
-    case scoped
     case unresolvedExpression
 }
 
