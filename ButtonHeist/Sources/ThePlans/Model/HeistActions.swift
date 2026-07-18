@@ -1,13 +1,42 @@
 public protocol HeistActionContent: HeistContent {
-    var command: HeistActionCommand { get }
-    var expectationPolicy: ActionExpectationPolicy { get }
-    var expectationValidationDiagnostics: [HeistBuildDiagnostic] { get }
+    associatedtype ExpectedContent: HeistActionContent
+    associatedtype WaivedContent: HeistActionContent
+    associatedtype RepeatedContent: HeistContent
+
+    func expect(_ predicate: AccessibilityPredicate, timeout: WaitTimeout?) -> ExpectedContent
+    func withoutExpectation(_ waiver: ActionExpectationWaiver) -> WaivedContent
+    func until(_ predicate: AccessibilityPredicate, timeout: WaitTimeout) -> RepeatedContent
 }
 
 public let defaultActionExpectationTimeout: WaitTimeout = 1
 
 public extension HeistActionContent {
-    var expectationValidationDiagnostics: [HeistBuildDiagnostic] { [] }
+    func expect(_ predicate: AccessibilityPredicate) -> ExpectedContent {
+        expect(predicate, timeout: nil)
+    }
+
+    func until(_ predicate: AccessibilityPredicate) -> RepeatedContent {
+        until(predicate, timeout: defaultWaitTimeout)
+    }
+}
+
+struct ActionContent: HeistActionContent {
+    let command: HeistActionCommand
+    let expectationPolicy: ActionExpectationPolicy
+    let explicitExpectationTimeout: WaitTimeout?
+    let expectationValidationDiagnostics: [HeistBuildDiagnostic]
+
+    init(
+        command: HeistActionCommand,
+        expectationPolicy: ActionExpectationPolicy = .default,
+        explicitExpectationTimeout: WaitTimeout? = nil,
+        expectationValidationDiagnostics: [HeistBuildDiagnostic] = []
+    ) {
+        self.command = command
+        self.expectationPolicy = expectationPolicy
+        self.explicitExpectationTimeout = explicitExpectationTimeout
+        self.expectationValidationDiagnostics = expectationValidationDiagnostics
+    }
 
     var heistBuildDiagnostics: [HeistBuildDiagnostic] {
         expectationValidationDiagnostics
@@ -20,13 +49,12 @@ public extension HeistActionContent {
 
     func expect(
         _ predicate: AccessibilityPredicate,
-        timeout: WaitTimeout? = nil
+        timeout: WaitTimeout?
     ) -> ActionContent {
-        let priorExplicitTimeout = (self as? ActionContent)?.explicitExpectationTimeout
         let existingExpectation = expectationPolicy.expectedStep
         let timeoutResult = composeExpectationTimeout(
             existing: existingExpectation,
-            existingExplicit: priorExplicitTimeout,
+            existingExplicit: explicitExpectationTimeout,
             nextExplicit: timeout
         )
         let predicateResult = existingExpectation.map {
@@ -47,7 +75,7 @@ public extension HeistActionContent {
     }
 
     func withoutExpectation(_ waiver: ActionExpectationWaiver) -> ActionContent {
-        return ActionContent(
+        ActionContent(
             command: command,
             expectationPolicy: .waived(waiver),
             explicitExpectationTimeout: nil,
@@ -57,7 +85,7 @@ public extension HeistActionContent {
 
     func until(
         _ predicate: AccessibilityPredicate,
-        timeout: WaitTimeout = defaultWaitTimeout
+        timeout: WaitTimeout
     ) -> RepeatActionUntilContent {
         RepeatActionUntilContent(
             command: command,
@@ -67,51 +95,24 @@ public extension HeistActionContent {
             timeout: timeout
         )
     }
-
 }
 
-public struct ActionContent: HeistActionContent {
-    public let command: HeistActionCommand
-    public let expectationPolicy: ActionExpectationPolicy
-    public let expectationValidationDiagnostics: [HeistBuildDiagnostic]
-    let explicitExpectationTimeout: WaitTimeout?
+struct RepeatActionUntilContent: HeistContent {
+    let command: HeistActionCommand
+    let expectationPolicy: ActionExpectationPolicy
+    let expectationValidationDiagnostics: [HeistBuildDiagnostic]
+    let predicate: AccessibilityPredicate
+    let timeout: WaitTimeout
 
-    init(
-        command: HeistActionCommand,
-        expectationPolicy: ActionExpectationPolicy = .default,
-        explicitExpectationTimeout: WaitTimeout? = nil,
-        expectationValidationDiagnostics: [HeistBuildDiagnostic] = []
-    ) {
-        self.command = command
-        self.expectationPolicy = expectationPolicy
-        self.explicitExpectationTimeout = explicitExpectationTimeout
-        self.expectationValidationDiagnostics = expectationValidationDiagnostics
-    }
-}
-
-public struct RepeatActionUntilContent: HeistContent {
-    public let command: HeistActionCommand
-    public let expectationPolicy: ActionExpectationPolicy
-    public let expectationValidationDiagnostics: [HeistBuildDiagnostic]
-    public let predicate: AccessibilityPredicate
-    public let timeout: WaitTimeout
-
-    public var heistSteps: [HeistStep] {
+    var heistSteps: [HeistStep] {
         guard heistBuildDiagnostics.isEmpty else { return [] }
-        let progressPolicy: ActionExpectationPolicy
-        switch expectationPolicy {
-        case .default:
-            progressPolicy = .default
-        case .expect, .waived:
-            progressPolicy = expectationPolicy
-        }
         do {
             return [
                 .repeatUntil(try RepeatUntilStep(
                     predicate: predicate,
                     timeout: timeout,
                     body: [
-                        .action(ActionStep(command: command, expectationPolicy: progressPolicy)),
+                        .action(ActionStep(command: command, expectationPolicy: expectationPolicy)),
                     ]
                 )),
             ]
@@ -120,57 +121,67 @@ public struct RepeatActionUntilContent: HeistContent {
         }
     }
 
-    public var heistBuildDiagnostics: [HeistBuildDiagnostic] { expectationValidationDiagnostics }
+    var heistBuildDiagnostics: [HeistBuildDiagnostic] { expectationValidationDiagnostics }
 }
 
-public struct Activate: HeistActionContent {
-    public let command: HeistActionCommand
-    public let expectationPolicy: ActionExpectationPolicy
+protocol ActionContentProviding {
+    var actionContent: ActionContent { get }
+}
+
+extension ActionContentProviding {
+    public var heistSteps: [HeistStep] { actionContent.heistSteps }
+
+    public func expect(
+        _ predicate: AccessibilityPredicate,
+        timeout: WaitTimeout?
+    ) -> some HeistActionContent {
+        actionContent.expect(predicate, timeout: timeout)
+    }
+
+    public func withoutExpectation(_ waiver: ActionExpectationWaiver) -> some HeistActionContent {
+        actionContent.withoutExpectation(waiver)
+    }
+
+    public func until(
+        _ predicate: AccessibilityPredicate,
+        timeout: WaitTimeout
+    ) -> some HeistContent {
+        actionContent.until(predicate, timeout: timeout)
+    }
+}
+
+public struct Activate: HeistActionContent, ActionContentProviding {
+    let actionContent: ActionContent
 
     public init(_ target: AccessibilityTarget) {
-        self.init(command: .activate(target))
-    }
-
-    init(command: HeistActionCommand, expectationPolicy: ActionExpectationPolicy = .default) {
-        self.command = command
-        self.expectationPolicy = expectationPolicy
+        actionContent = ActionContent(command: .activate(target))
     }
 }
 
-public struct Increment: HeistActionContent {
-    public let command: HeistActionCommand
-    public let expectationPolicy: ActionExpectationPolicy
+public struct Increment: HeistActionContent, ActionContentProviding {
+    let actionContent: ActionContent
 
     public init(_ target: AccessibilityTarget) {
-        self.init(command: .increment(target))
-    }
-
-    init(command: HeistActionCommand, expectationPolicy: ActionExpectationPolicy = .default) {
-        self.command = command
-        self.expectationPolicy = expectationPolicy
+        actionContent = ActionContent(command: .increment(target))
     }
 }
 
-public struct Decrement: HeistActionContent {
-    public let command: HeistActionCommand
-    public let expectationPolicy: ActionExpectationPolicy
+public struct Decrement: HeistActionContent, ActionContentProviding {
+    let actionContent: ActionContent
 
     public init(_ target: AccessibilityTarget) {
-        self.init(command: .decrement(target))
-    }
-
-    init(command: HeistActionCommand, expectationPolicy: ActionExpectationPolicy = .default) {
-        self.command = command
-        self.expectationPolicy = expectationPolicy
+        actionContent = ActionContent(command: .decrement(target))
     }
 }
 
-public struct TypeText: HeistActionContent {
-    public let command: HeistActionCommand
-    public let expectationPolicy: ActionExpectationPolicy
+public struct TypeText: HeistActionContent, ActionContentProviding {
+    let actionContent: ActionContent
 
-    public init(_ text: TextInputText, into target: AccessibilityTarget? = nil) {
-        self.init(command: .typeText(
+    public init(
+        _ text: TextInputText,
+        into target: AccessibilityTarget? = nil
+    ) {
+        actionContent = ActionContent(command: .typeText(
             text: text,
             target: target
         ))
@@ -182,255 +193,178 @@ public struct TypeText: HeistActionContent {
         into target: AccessibilityTarget? = nil,
         mode: TextInputText.Mode = .append
     ) {
-        self.init(command: .typeText(
+        actionContent = ActionContent(command: .typeText(
             reference: reference,
             target: target,
             mode: mode
         ))
     }
-
-    init(command: HeistActionCommand, expectationPolicy: ActionExpectationPolicy = .default) {
-        self.command = command
-        self.expectationPolicy = expectationPolicy
-    }
 }
 
-public struct ClearText: HeistActionContent {
-    public let command: HeistActionCommand
-    public let expectationPolicy: ActionExpectationPolicy
+public struct ClearText: HeistActionContent, ActionContentProviding {
+    let actionContent: ActionContent
 
     public init(_ target: AccessibilityTarget) {
-        self.init(command: .typeText(
+        actionContent = ActionContent(command: .typeText(
             text: .replacing(""),
             target: target
         ))
     }
-
-    init(command: HeistActionCommand, expectationPolicy: ActionExpectationPolicy = .default) {
-        self.command = command
-        self.expectationPolicy = expectationPolicy
-    }
 }
 
-public struct CustomAction: HeistActionContent {
-    public let command: HeistActionCommand
-    public let expectationPolicy: ActionExpectationPolicy
+public struct CustomAction: HeistActionContent, ActionContentProviding {
+    let actionContent: ActionContent
 
     public init(_ name: CustomActionName, on target: AccessibilityTarget) {
-        self.init(command: .customAction(name: name, target: target))
-    }
-
-    init(command: HeistActionCommand, expectationPolicy: ActionExpectationPolicy = .default) {
-        self.command = command
-        self.expectationPolicy = expectationPolicy
+        actionContent = ActionContent(command: .customAction(name: name, target: target))
     }
 }
 
-public struct Rotor: HeistActionContent {
-    public let command: HeistActionCommand
-    public let expectationPolicy: ActionExpectationPolicy
+public struct Rotor: HeistActionContent, ActionContentProviding {
+    let actionContent: ActionContent
 
     public init(_ name: RotorName, on target: AccessibilityTarget, direction: RotorDirection = .next) {
-        self.init(command: .rotor(selection: .named(name), target: target, direction: direction))
-    }
-
-    init(command: HeistActionCommand, expectationPolicy: ActionExpectationPolicy = .default) {
-        self.command = command
-        self.expectationPolicy = expectationPolicy
+        actionContent = ActionContent(command: .rotor(selection: .named(name), target: target, direction: direction))
     }
 }
 
-public struct SetPasteboard: HeistActionContent {
-    public let command: HeistActionCommand
-    public let expectationPolicy: ActionExpectationPolicy
+public struct SetPasteboard: HeistActionContent, ActionContentProviding {
+    let actionContent: ActionContent
 
     public init(_ text: PasteboardText) {
-        self.init(command: .setPasteboard(SetPasteboardTarget(text: text)))
-    }
-
-    init(command: HeistActionCommand, expectationPolicy: ActionExpectationPolicy = .default) {
-        self.command = command
-        self.expectationPolicy = expectationPolicy
+        actionContent = ActionContent(command: .setPasteboard(SetPasteboardTarget(text: text)))
     }
 }
 
-public struct TakeScreenshot: HeistActionContent {
-    public let command: HeistActionCommand
-    public let expectationPolicy: ActionExpectationPolicy
+public struct TakeScreenshot: HeistActionContent, ActionContentProviding {
+    let actionContent: ActionContent
 
     public init() {
-        self.init(command: .takeScreenshot)
-    }
-
-    init(command: HeistActionCommand, expectationPolicy: ActionExpectationPolicy = .default) {
-        self.command = command
-        self.expectationPolicy = expectationPolicy
+        actionContent = ActionContent(command: .takeScreenshot)
     }
 }
 
-public struct Edit: HeistActionContent {
-    public let command: HeistActionCommand
-    public let expectationPolicy: ActionExpectationPolicy
+public struct Edit: HeistActionContent, ActionContentProviding {
+    let actionContent: ActionContent
 
     public init(_ action: EditAction) {
-        self.init(command: .editAction(EditActionTarget(action: action)))
-    }
-
-    init(command: HeistActionCommand, expectationPolicy: ActionExpectationPolicy = .default) {
-        self.command = command
-        self.expectationPolicy = expectationPolicy
+        actionContent = ActionContent(command: .editAction(EditActionTarget(action: action)))
     }
 }
 
-public struct DismissKeyboard: HeistActionContent {
-    public let command: HeistActionCommand
-    public let expectationPolicy: ActionExpectationPolicy
+public struct DismissKeyboard: HeistActionContent, ActionContentProviding {
+    let actionContent: ActionContent
 
     public init() {
-        self.init(command: .dismissKeyboard)
-    }
-
-    init(command: HeistActionCommand, expectationPolicy: ActionExpectationPolicy = .default) {
-        self.command = command
-        self.expectationPolicy = expectationPolicy
+        actionContent = ActionContent(command: .dismissKeyboard)
     }
 }
 
 public enum ScreenActions {
-    public struct Dismiss: HeistActionContent {
-        public let command: HeistActionCommand
-        public let expectationPolicy: ActionExpectationPolicy
+    public struct Dismiss: HeistActionContent, ActionContentProviding {
+        let actionContent: ActionContent
 
         public init() {
-            self.init(command: .dismiss)
-        }
-
-        init(command: HeistActionCommand, expectationPolicy: ActionExpectationPolicy = .default) {
-            self.command = command
-            self.expectationPolicy = expectationPolicy
+            actionContent = ActionContent(command: .dismiss)
         }
     }
 
-    public struct MagicTap: HeistActionContent {
-        public let command: HeistActionCommand
-        public let expectationPolicy: ActionExpectationPolicy
+    public struct MagicTap: HeistActionContent, ActionContentProviding {
+        let actionContent: ActionContent
 
         public init() {
-            self.init(command: .magicTap)
-        }
-
-        init(command: HeistActionCommand, expectationPolicy: ActionExpectationPolicy = .default) {
-            self.command = command
-            self.expectationPolicy = expectationPolicy
+            actionContent = ActionContent(command: .magicTap)
         }
     }
 }
 
 public enum Mechanical {
-    public struct Tap: HeistActionContent {
-        public let command: HeistActionCommand
-        public let expectationPolicy: ActionExpectationPolicy
+    public struct Tap: HeistActionContent, ActionContentProviding {
+        let actionContent: ActionContent
 
         @_disfavoredOverload
         public init(_ target: AccessibilityTarget) {
-            self.init(command: .mechanicalTap(TapTarget(selection: .element(target))))
+            actionContent = ActionContent(command: .mechanicalTap(TapTarget(selection: .element(target))))
         }
 
         public init(_ point: ScreenPoint) {
-            self.init(command: .mechanicalTap(TapTarget(selection: .coordinate(point))))
+            actionContent = ActionContent(command: .mechanicalTap(TapTarget(selection: .coordinate(point))))
         }
 
         public init(_ target: AccessibilityTarget, at point: UnitPoint) {
-            self.init(command: .mechanicalTap(TapTarget(selection: .elementUnitPoint(target, point))))
-        }
-
-        init(command: HeistActionCommand, expectationPolicy: ActionExpectationPolicy = .default) {
-            self.command = command
-            self.expectationPolicy = expectationPolicy
+            actionContent = ActionContent(command: .mechanicalTap(TapTarget(selection: .elementUnitPoint(target, point))))
         }
     }
 
-    public struct LongPress: HeistActionContent {
-        public let command: HeistActionCommand
-        public let expectationPolicy: ActionExpectationPolicy
+    public struct LongPress: HeistActionContent, ActionContentProviding {
+        let actionContent: ActionContent
 
         public init(_ target: AccessibilityTarget, duration: GestureDuration = .longPressDefault) {
-            self.init(command: .mechanicalLongPress(LongPressTarget(selection: .element(target), duration: duration)))
+            actionContent = ActionContent(
+                command: .mechanicalLongPress(LongPressTarget(selection: .element(target), duration: duration))
+            )
         }
 
         public init(_ point: ScreenPoint, duration: GestureDuration = .longPressDefault) {
-            self.init(
-                command: .mechanicalLongPress(
-                    LongPressTarget(
-                        selection: .coordinate(point),
-                        duration: duration
-                    )
-                )
+            actionContent = ActionContent(
+                command: .mechanicalLongPress(LongPressTarget(selection: .coordinate(point), duration: duration))
             )
         }
 
-        public init(_ target: AccessibilityTarget, at point: UnitPoint, duration: GestureDuration = .longPressDefault) {
-            self.init(
-                command: .mechanicalLongPress(
-                    LongPressTarget(
-                        selection: .elementUnitPoint(target, point),
-                        duration: duration
-                    )
-                )
-            )
-        }
-
-        init(command: HeistActionCommand, expectationPolicy: ActionExpectationPolicy = .default) {
-            self.command = command
-            self.expectationPolicy = expectationPolicy
+        public init(
+            _ target: AccessibilityTarget,
+            at point: UnitPoint,
+            duration: GestureDuration = .longPressDefault
+        ) {
+            actionContent = ActionContent(command: .mechanicalLongPress(
+                LongPressTarget(selection: .elementUnitPoint(target, point), duration: duration)
+            ))
         }
     }
 
-    public struct Swipe: HeistActionContent {
-        public let command: HeistActionCommand
-        public let expectationPolicy: ActionExpectationPolicy
+    public struct Swipe: HeistActionContent, ActionContentProviding {
+        let actionContent: ActionContent
 
         public init(_ target: AccessibilityTarget, _ direction: SwipeDirection) {
-            self.init(command: .mechanicalSwipe(SwipeTarget(selection: .elementDirection(target, direction))))
+            actionContent = ActionContent(
+                command: .mechanicalSwipe(SwipeTarget(selection: .elementDirection(target, direction)))
+            )
         }
 
         public init(_ target: AccessibilityTarget, from start: UnitPoint, to end: UnitPoint) {
-            self.init(command: .mechanicalSwipe(SwipeTarget(selection: .unitElement(target, start: start, end: end))))
+            actionContent = ActionContent(
+                command: .mechanicalSwipe(SwipeTarget(selection: .unitElement(target, start: start, end: end)))
+            )
         }
 
         public init(from start: ScreenPoint, to end: ScreenPoint) {
-            self.init(command: .mechanicalSwipe(SwipeTarget(selection: .pointToPoint(start: start, end: end))))
+            actionContent = ActionContent(
+                command: .mechanicalSwipe(SwipeTarget(selection: .pointToPoint(start: start, end: end)))
+            )
         }
 
         public init(from start: ScreenPoint, _ direction: SwipeDirection) {
-            self.init(command: .mechanicalSwipe(SwipeTarget(selection: .pointDirection(start: start, direction: direction))))
-        }
-
-        init(command: HeistActionCommand, expectationPolicy: ActionExpectationPolicy = .default) {
-            self.command = command
-            self.expectationPolicy = expectationPolicy
+            actionContent = ActionContent(
+                command: .mechanicalSwipe(SwipeTarget(selection: .pointDirection(start: start, direction: direction)))
+            )
         }
     }
 
-    public struct Drag: HeistActionContent {
-        public let command: HeistActionCommand
-        public let expectationPolicy: ActionExpectationPolicy
+    public struct Drag: HeistActionContent, ActionContentProviding {
+        let actionContent: ActionContent
 
         public init(_ target: AccessibilityTarget, to end: ScreenPoint) {
-            self.init(command: .mechanicalDrag(DragTarget(start: .element(target), end: end)))
+            actionContent = ActionContent(command: .mechanicalDrag(DragTarget(start: .element(target), end: end)))
         }
 
         public init(_ target: AccessibilityTarget, from start: UnitPoint, to end: ScreenPoint) {
-            self.init(command: .mechanicalDrag(DragTarget(start: .elementUnitPoint(target, start), end: end)))
+            actionContent = ActionContent(
+                command: .mechanicalDrag(DragTarget(start: .elementUnitPoint(target, start), end: end))
+            )
         }
 
         public init(from start: ScreenPoint, to end: ScreenPoint) {
-            self.init(command: .mechanicalDrag(DragTarget(start: .coordinate(start), end: end)))
-        }
-
-        init(command: HeistActionCommand, expectationPolicy: ActionExpectationPolicy = .default) {
-            self.command = command
-            self.expectationPolicy = expectationPolicy
+            actionContent = ActionContent(command: .mechanicalDrag(DragTarget(start: .coordinate(start), end: end)))
         }
     }
 }

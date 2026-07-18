@@ -61,6 +61,15 @@ module map and the wire boundary are drawn in the
 
 The former `ButtonHeistDSL` product and module have been removed. Swift heist
 authors import `ThePlans` directly; there is no compatibility alias or adapter.
+`ButtonHeist` re-exports that authoring module for client applications, but it
+does not re-export `TheScore`. Code that names wire, receipt, or diagnostic
+types from `TheScore` must depend on and import that product explicitly.
+
+Action spellings such as `Activate(...)` and `Mechanical.Tap(...)` are
+named authoring values whose storage stays inside `ThePlans`. Their public API
+is the authored initializer plus the fluent `.expect(...)`,
+`.withoutExpectation(...)`, and `.until(...)` transitions and the resulting
+`HeistContent`; command and expectation bookkeeping are not exposed.
 
 CI checks public Swift API compatibility against the latest `v*` release tag
 reachable from `origin/main` with:

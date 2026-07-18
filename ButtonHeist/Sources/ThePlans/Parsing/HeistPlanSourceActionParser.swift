@@ -332,7 +332,7 @@ extension HeistPlanSourceParser {
     mutating func parseActionStep(
         command: HeistActionCommand
     ) throws -> HeistStep {
-        var content: any HeistActionContent = ActionContent(command: command)
+        var content = ActionContent(command: command)
         var repeatedContent: RepeatActionUntilContent?
         while consumeSymbol(".") {
             let chainToken = currentToken
