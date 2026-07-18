@@ -44,15 +44,12 @@ public struct UnitPoint: Codable, Sendable, Equatable {
         Set(CodingKeys.allCases.map(\.stringValue))
     }
 
-    private let finiteX: FiniteCoordinate
-    private let finiteY: FiniteCoordinate
-
-    public var x: Double { finiteX.value }
-    public var y: Double { finiteY.value }
+    public let x: Double
+    public let y: Double
 
     public init(x: FiniteCoordinate, y: FiniteCoordinate) {
-        finiteX = x
-        finiteY = y
+        self.x = x.value
+        self.y = y.value
     }
 
     public init(from decoder: Decoder) throws {
