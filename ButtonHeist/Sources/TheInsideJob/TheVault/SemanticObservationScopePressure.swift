@@ -1,13 +1,13 @@
 #if canImport(UIKit)
 #if DEBUG
 
-/// Subscription and active-demand scope pressure for semantic observation.
+/// Subscription scope and active cadence demand for semantic observation.
 struct SemanticObservationScopePressure {
     private var nextSubscriptionID: UInt64 = 0
     private var subscriptions: [UInt64: SemanticObservationScope] = [:]
 
     private var nextActiveDemandID: UInt64 = 0
-    private var activeObservationDemands: [UInt64: SemanticObservationScope] = [:]
+    private var activeObservationDemands: Set<UInt64> = []
 
     var activeDemandCount: Int {
         activeObservationDemands.count
@@ -32,22 +32,19 @@ struct SemanticObservationScopePressure {
         subscriptions[id] = nil
     }
 
-    mutating func addActiveDemand(scope: SemanticObservationScope) -> UInt64 {
+    mutating func addActiveDemand() -> UInt64 {
         let id = nextActiveDemandID
         nextActiveDemandID += 1
-        activeObservationDemands[id] = scope
+        activeObservationDemands.insert(id)
         return id
     }
 
     mutating func removeActiveDemand(_ id: UInt64) {
-        activeObservationDemands[id] = nil
+        activeObservationDemands.remove(id)
     }
 
     func subscribedObservationScope() -> SemanticObservationScope {
-        max(
-            subscriptions.values.max() ?? .visible,
-            activeObservationDemands.values.max() ?? .visible
-        )
+        subscriptions.values.max() ?? .visible
     }
 }
 

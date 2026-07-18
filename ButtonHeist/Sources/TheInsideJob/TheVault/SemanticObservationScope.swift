@@ -62,13 +62,11 @@ final class SemanticObservationSubscription {
 @MainActor
 final class SemanticObservationDemand {
     let id: UInt64
-    let scope: SemanticObservationScope
     private weak var stream: SemanticObservationStream?
     private var isCancelled = false
 
-    init(id: UInt64, scope: SemanticObservationScope, stream: SemanticObservationStream) {
+    init(id: UInt64, stream: SemanticObservationStream) {
         self.id = id
-        self.scope = scope
         self.stream = stream
     }
 

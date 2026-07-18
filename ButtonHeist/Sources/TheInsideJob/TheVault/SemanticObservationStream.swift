@@ -151,9 +151,9 @@ internal final class SemanticObservationStream {
         scopePressure.removeSubscription(id)
     }
 
-    internal func beginActiveObservationDemand(scope: SemanticObservationScope) -> SemanticObservationDemand {
-        let id = scopePressure.addActiveDemand(scope: scope)
-        return SemanticObservationDemand(id: id, scope: scope, stream: self)
+    internal func beginActiveObservationDemand() -> SemanticObservationDemand {
+        let id = scopePressure.addActiveDemand()
+        return SemanticObservationDemand(id: id, stream: self)
     }
 
     internal func removeActiveObservationDemand(_ id: UInt64) {
@@ -202,11 +202,6 @@ internal final class SemanticObservationStream {
     }
 
     private func observeVisibleSemanticState() async -> Bool {
-        if hasActiveObservationDemand {
-            _ = await Task.cancellableSleep(for: .milliseconds(10))
-            return !Task.isCancelled
-        }
-
         if cleanObservation(scope: .visible, after: nil) != nil {
             _ = await Task.cancellableSleep(for: .milliseconds(100))
             observationLog.invalidateIfSignalChanged(to: currentTripwireSignal())

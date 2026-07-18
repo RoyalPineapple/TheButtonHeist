@@ -155,13 +155,13 @@ final class TheVaultResolutionTests: XCTestCase {
         _ = visible
     }
 
-    func testActiveObservationDemandCoalescesWithSubscribersAndDropsWhenCancelled() {
+    func testActiveObservationDemandChangesCadenceWithoutWideningScope() {
         XCTAssertFalse(bagman.semanticObservationStream.hasActiveObservationDemand)
         XCTAssertEqual(bagman.semanticObservationStream.activeObservationDemandCount, 0)
         XCTAssertEqual(bagman.semanticObservationStream.activeObservationDemandState, .idle)
         XCTAssertEqual(bagman.semanticObservationStream.subscribedObservationScope(), .visible)
 
-        let demand = bagman.semanticObservationStream.beginActiveObservationDemand(scope: .visible)
+        let demand = bagman.semanticObservationStream.beginActiveObservationDemand()
         XCTAssertTrue(bagman.semanticObservationStream.hasActiveObservationDemand)
         XCTAssertEqual(bagman.semanticObservationStream.activeObservationDemandCount, 1)
         XCTAssertEqual(bagman.semanticObservationStream.activeObservationDemandState, .active)
@@ -176,26 +176,6 @@ final class TheVaultResolutionTests: XCTestCase {
         XCTAssertEqual(bagman.semanticObservationStream.subscribedObservationScope(), .visible)
 
         demand.cancel()
-
-        XCTAssertFalse(bagman.semanticObservationStream.hasActiveObservationDemand)
-        XCTAssertEqual(bagman.semanticObservationStream.activeObservationDemandCount, 0)
-        XCTAssertEqual(bagman.semanticObservationStream.activeObservationDemandState, .idle)
-        XCTAssertEqual(bagman.semanticObservationStream.subscribedObservationScope(), .visible)
-    }
-
-    func testActiveObservationDemandCancelRemovesScopePressureOnEarlyExit() {
-        func beginDemandAndReturnEarly() {
-            let demand = bagman.semanticObservationStream.beginActiveObservationDemand(scope: .discovery)
-            defer { demand.cancel() }
-
-            XCTAssertTrue(bagman.semanticObservationStream.hasActiveObservationDemand)
-            XCTAssertEqual(bagman.semanticObservationStream.activeObservationDemandCount, 1)
-            XCTAssertEqual(bagman.semanticObservationStream.activeObservationDemandState, .active)
-            XCTAssertEqual(bagman.semanticObservationStream.subscribedObservationScope(), .discovery)
-            return
-        }
-
-        beginDemandAndReturnEarly()
 
         XCTAssertFalse(bagman.semanticObservationStream.hasActiveObservationDemand)
         XCTAssertEqual(bagman.semanticObservationStream.activeObservationDemandCount, 0)

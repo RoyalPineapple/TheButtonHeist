@@ -177,7 +177,7 @@ extension TheBrains {
         interactionObservation.resetAnnouncementWaitCursorForHeist(to: notificationScope.cursor)
         defer { notificationScope.cancel() }
 
-        let demand = vault.semanticObservationStream.beginActiveObservationDemand(scope: .visible)
+        let demand = vault.semanticObservationStream.beginActiveObservationDemand()
         defer { demand.cancel() }
 
         let heistStart = CFAbsoluteTimeGetCurrent()
