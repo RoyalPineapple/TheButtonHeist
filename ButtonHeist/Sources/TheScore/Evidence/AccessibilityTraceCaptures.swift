@@ -5,7 +5,7 @@ import ThePlans
 
 import AccessibilitySnapshotModel
 
-private enum AccessibilityTraceCaptureCodingKeys: String, CodingKey {
+private enum AccessibilityTraceCaptureCodingKeys: String, CodingKey, CaseIterable {
     case sequence
     case hash
     case parentHash
@@ -41,25 +41,50 @@ public extension AccessibilityTrace {
             interface: Interface,
             parentHash: String? = nil,
             context: Context = .empty,
-            transition: Transition = .empty,
-            hash: String? = nil
+            transition: Transition = .empty
         ) {
+            precondition(sequence > 0, "Accessibility trace capture sequence must be positive")
             self.sequence = sequence
             self.parentHash = parentHash
             self.interface = interface
             self.context = context
             self.transition = transition
-            self.hash = hash ?? Self.hash(interface: interface, context: context)
+            self.hash = Self.hash(interface: interface, context: context)
         }
 
         public init(from decoder: Decoder) throws {
+            try decoder.rejectUnknownKeys(
+                allowed: AccessibilityTraceCaptureCodingKeys.self,
+                typeName: "accessibility trace capture"
+            )
             let container = try decoder.container(keyedBy: AccessibilityTraceCaptureCodingKeys.self)
-            sequence = try container.decode(Int.self, forKey: .sequence)
-            hash = try container.decode(String.self, forKey: .hash)
-            parentHash = try container.decodeIfPresent(String.self, forKey: .parentHash)
-            interface = try container.decode(Interface.self, forKey: .interface)
-            context = try container.decode(Context.self, forKey: .context)
-            transition = try container.decodeIfPresent(Transition.self, forKey: .transition) ?? .empty
+            let sequence = try container.decode(Int.self, forKey: .sequence)
+            guard sequence > 0 else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .sequence,
+                    in: container,
+                    debugDescription: "Accessibility trace capture sequence must be positive"
+                )
+            }
+            let encodedHash = try container.decode(String.self, forKey: .hash)
+            let parentHash = try container.decodeIfPresent(String.self, forKey: .parentHash)
+            let interface = try container.decode(Interface.self, forKey: .interface)
+            let context = try container.decode(Context.self, forKey: .context)
+            let expectedHash = Self.hash(interface: interface, context: context)
+            guard encodedHash == expectedHash else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .hash,
+                    in: container,
+                    debugDescription: "Accessibility trace capture hash does not match its interface and context"
+                )
+            }
+            self.init(
+                sequence: sequence,
+                interface: interface,
+                parentHash: parentHash,
+                context: context,
+                transition: try container.decodeIfPresent(Transition.self, forKey: .transition) ?? .empty
+            )
         }
 
         public func encode(to encoder: Encoder) throws {

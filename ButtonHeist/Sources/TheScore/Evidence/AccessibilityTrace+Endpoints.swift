@@ -6,19 +6,22 @@ public extension AccessibilityTrace {
     /// Build one combined trace from per-step action traces.
     ///
     /// Adjacent duplicate captures are collapsed so a batch `[A->B, B->C]`
-    /// becomes `[A, B, C]`. Parent links are normalized by
-    /// `AccessibilityTrace(captures:)`; capture hashes still describe the
-    /// captured interface/context content.
+    /// becomes a new canonical `[A, B, C]` trace whose identities are assigned
+    /// by this source constructor.
     static func combinedTrace(from traces: [AccessibilityTrace]) -> AccessibilityTrace? {
-        var captures: [AccessibilityTrace.Capture] = []
+        var captures: [Capture] = []
         for trace in traces {
-            for capture in trace.captures {
-                guard captures.last?.hash != capture.hash else { continue }
-                captures.append(capture)
+            for source in trace.captures where captures.last?.hash != source.hash {
+                captures.append(Capture(
+                    sequence: captures.count + 1,
+                    interface: source.interface,
+                    parentHash: captures.last?.hash,
+                    context: source.context,
+                    transition: source.transition
+                ))
             }
         }
-        guard captures.count >= 2 else { return nil }
-        return AccessibilityTrace(captures: captures)
+        return captures.count >= 2 ? AccessibilityTrace(captures: captures) : nil
     }
 
     var endpointScreenName: String? {
