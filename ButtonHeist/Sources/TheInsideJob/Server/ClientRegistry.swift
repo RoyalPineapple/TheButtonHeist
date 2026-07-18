@@ -20,7 +20,7 @@ extension ClientAdmission {
     struct Registry {
     private var clients: [Int: Client] = [:]
 
-    mutating func registerAddress(_ clientId: Int, address: String) {
+    mutating func registerAddress(_ clientId: Int, address: ClientNetworkAddress) {
         let rateLimiter = clients[clientId]?.rateLimiter ?? RateLimiter()
         clients[clientId] = Client(
             registration: .registered(.connected(address: address)),

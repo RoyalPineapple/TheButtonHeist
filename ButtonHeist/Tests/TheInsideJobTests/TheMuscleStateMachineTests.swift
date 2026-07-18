@@ -6,11 +6,14 @@ import ButtonHeistSupport
 @testable import TheInsideJob
 
 final class TheMuscleStateMachineTests: XCTestCase {
-    func testTokenAdmissionLocksAddressAfterConfiguredFailures() {
+    func testAuthenticationPolicyRejectsInvalidConfiguration() {
+        XCTAssertNil(InsideJobAuthenticationPolicy(maximumFailedAttempts: 0))
+    }
+
+    func testTokenAdmissionLocksAddressAfterConfiguredFailures() throws {
         var admission = ClientAdmission.TokenAuthentication(
             tokenSource: .configured("good-token"),
-            maxFailedAttempts: 2,
-            lockoutDuration: 30
+            policy: try XCTUnwrap(.init(maximumFailedAttempts: 2, lockoutDuration: 30))
         )
 
         guard case .rejected(.invalidToken(let firstError, let firstAttempts)) = admission.admit(
@@ -100,8 +103,7 @@ final class TheMuscleStateMachineTests: XCTestCase {
     func testAdmissionLifecycleOwnsCredentialAndAuthenticationDeadlineEffects() throws {
         var admission = ClientAdmission.Reducer(
             tokenSource: .configured("good-token"),
-            maxFailedAttempts: 2,
-            lockoutDuration: 30
+            authenticationPolicy: try XCTUnwrap(.init(maximumFailedAttempts: 2, lockoutDuration: 30))
         )
         let respond: SocketResponseHandler = { _ in .delivered }
 

@@ -67,9 +67,6 @@ actor TheMuscle {
 
     private static let disconnectGracePeriod: Duration = .milliseconds(100)
     private static let authTimeoutSeconds: UInt64 = 10
-    private static let maxFailedAttempts = 5
-    private static let lockoutDuration: TimeInterval = 30
-
     private var admission: ClientAdmission.Reducer
     private var session: SessionLease
     private var delivery: ClientDelivery = .unwired
@@ -88,13 +85,13 @@ actor TheMuscle {
     @MainActor
     init(
         explicitToken: SessionAuthToken?,
-        sessionReleaseTimeout: TimeInterval
+        sessionReleaseTimeout: TimeInterval,
+        authenticationPolicy: InsideJobAuthenticationPolicy = .default
     ) {
         let tokenSource = SessionTokenSource(explicitToken: explicitToken)
         self.admission = ClientAdmission.Reducer(
             tokenSource: tokenSource,
-            maxFailedAttempts: TheMuscle.maxFailedAttempts,
-            lockoutDuration: TheMuscle.lockoutDuration
+            authenticationPolicy: authenticationPolicy
         )
         self.session = SessionLease(
             releaseTimeout: sessionReleaseTimeout
@@ -168,7 +165,7 @@ actor TheMuscle {
     // MARK: - Public API
 
     /// Register the remote address for a client (called when TCP connection is established).
-    func registerClientAddress(_ clientId: Int, address: String) async {
+    func registerClientAddress(_ clientId: Int, address: ClientNetworkAddress) async {
         await executeAdmissionEffects(admission.registerClientAddress(clientId, address: address))
     }
 

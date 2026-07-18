@@ -15,73 +15,60 @@ enum TokenAuthenticationRejection: Equatable, Sendable {
     case lockoutStarted(error: ServerError, attempts: Int)
 }
 
-private enum TokenFailureState: Equatable, Sendable {
-    case clean
-    case failing(attempts: Int)
-    case lockedOut(until: Date, attempts: Int)
+private struct TokenFailureState: Equatable, Sendable {
+    let attempts: Int
+    let lastFailureAt: Date
+    let lockedOutUntil: Date?
 }
 
 private enum TokenFailureEffect: Equatable, Sendable {
-    case proceed
     case invalidToken(attempts: Int)
     case lockoutStarted(attempts: Int)
-    case lockedOut
 }
 
 struct TokenAuthentication {
     private let tokenSource: SessionTokenSource
-    private let maxFailedAttempts: Int
-    private let lockoutDuration: TimeInterval
-    private var addressAuthStates: [String: TokenFailureState] = [:]
+    private let policy: InsideJobAuthenticationPolicy
+    private var addressAuthStates: [ClientNetworkAddress: TokenFailureState] = [:]
 
-    init(tokenSource: SessionTokenSource, maxFailedAttempts: Int, lockoutDuration: TimeInterval) {
+    init(tokenSource: SessionTokenSource, policy: InsideJobAuthenticationPolicy) {
         self.tokenSource = tokenSource
-        self.maxFailedAttempts = maxFailedAttempts
-        self.lockoutDuration = lockoutDuration
+        self.policy = policy
     }
 
     var sessionToken: SessionAuthToken { tokenSource.token }
-
     mutating func admit(
         _ token: SessionAuthToken,
         driverId: DriverID?,
-        address: String,
+        address: ClientNetworkAddress,
         now: Date = Date()
     ) -> TokenAuthenticationDecision {
-        switch checkLockout(for: address, now: now) {
-        case .proceed:
-            break
-        case .lockedOut:
+        pruneExpiredStates(at: now)
+        if addressAuthStates[address]?.lockedOutUntil != nil {
             return .lockedOut(lockoutError())
-        case .invalidToken, .lockoutStarted:
-            preconditionFailure("Lockout check emitted a token rejection.")
         }
 
-        guard constantTimeEqual(token, tokenSource.token) else {
-            let error = ServerError(
-                kind: .authFailure,
-                message: tokenSource.invalidTokenMessage,
-                recoveryHint: tokenSource.configuredTokenRecoveryHint
-            )
-            switch rejectToken(for: address, now: now) {
-            case .invalidToken(let attempts):
-                return .rejected(.invalidToken(error: error, attempts: attempts))
-            case .lockoutStarted(let attempts):
-                return .rejected(.lockoutStarted(error: error, attempts: attempts))
-            case .lockedOut:
-                return .lockedOut(lockoutError())
-            case .proceed:
-                preconditionFailure("Token rejection emitted an acceptance effect.")
-            }
+        guard !constantTimeEqual(token, tokenSource.token) else {
+            addressAuthStates.removeValue(forKey: address)
+            return .accepted(owner: tokenSource.owner(driverId: driverId))
         }
 
-        acceptToken(for: address)
-        return .accepted(owner: tokenSource.owner(driverId: driverId))
+        let error = ServerError(
+            kind: .authFailure,
+            message: tokenSource.invalidTokenMessage,
+            recoveryHint: tokenSource.configuredTokenRecoveryHint
+        )
+        switch rejectToken(for: address, now: now) {
+        case .invalidToken(let attempts):
+            return .rejected(.invalidToken(error: error, attempts: attempts))
+        case .lockoutStarted(let attempts):
+            return .rejected(.lockoutStarted(error: error, attempts: attempts))
+        }
     }
 
     mutating func admit(
         _ clientId: Int,
-        address: String,
+        address: ClientNetworkAddress,
         payload: AuthenticatePayload,
         respond: @escaping ClientAdmission.ResponseHandler
     ) -> ClientAdmission.Decision {
@@ -119,66 +106,51 @@ struct TokenAuthentication {
         }
     }
 
-    private mutating func checkLockout(for address: String, now: Date) -> TokenFailureEffect {
-        switch addressAuthState(for: address) {
-        case .clean, .failing:
-            return .proceed
-        case .lockedOut(let expiry, _) where now < expiry:
-            return .lockedOut
-        case .lockedOut:
-            storeAddressAuthState(.clean, for: address)
-            return .proceed
-        }
-    }
-
-    private mutating func rejectToken(for address: String, now: Date) -> TokenFailureEffect {
-        switch addressAuthState(for: address) {
-        case .clean:
-            return recordFailedAttempt(previousAttempts: 0, for: address, now: now)
-        case .failing(let attempts):
-            return recordFailedAttempt(previousAttempts: attempts, for: address, now: now)
-        case .lockedOut(let expiry, _) where now < expiry:
-            return .lockedOut
-        case .lockedOut:
-            return recordFailedAttempt(previousAttempts: 0, for: address, now: now)
-        }
-    }
-
-    private mutating func acceptToken(for address: String) {
-        storeAddressAuthState(.clean, for: address)
-    }
-
-    private mutating func recordFailedAttempt(
-        previousAttempts: Int,
-        for address: String,
+    private mutating func rejectToken(
+        for address: ClientNetworkAddress,
         now: Date
     ) -> TokenFailureEffect {
-        let attempts = previousAttempts + 1
-        guard attempts >= maxFailedAttempts else {
-            storeAddressAuthState(.failing(attempts: attempts), for: address)
-            return .invalidToken(attempts: attempts)
-        }
-        storeAddressAuthState(
-            .lockedOut(until: now.addingTimeInterval(lockoutDuration), attempts: attempts),
-            for: address
+        let attempts = (addressAuthStates[address]?.attempts ?? 0) + 1
+        let startsLockout = attempts >= policy.maximumFailedAttempts
+        let state = TokenFailureState(
+            attempts: attempts,
+            lastFailureAt: now,
+            lockedOutUntil: startsLockout ? now.addingTimeInterval(policy.lockoutDuration) : nil
         )
-        return .lockoutStarted(attempts: attempts)
+        guard retain(state, for: address) else { return .invalidToken(attempts: attempts) }
+        return startsLockout ? .lockoutStarted(attempts: attempts) : .invalidToken(attempts: attempts)
     }
 
-    private func addressAuthState(for address: String) -> TokenFailureState {
-        addressAuthStates[address] ?? .clean
-    }
-
-    private mutating func storeAddressAuthState(
+    private mutating func retain(
         _ state: TokenFailureState,
-        for address: String
-    ) {
-        switch state {
-        case .clean:
-            addressAuthStates.removeValue(forKey: address)
-        case .failing, .lockedOut:
-            addressAuthStates[address] = state
+        for address: ClientNetworkAddress
+    ) -> Bool {
+        if addressAuthStates[address] == nil,
+           addressAuthStates.count >= policy.maximumTrackedFailedAddresses,
+           !evictOldestFailingAddress() {
+            return false
         }
+        addressAuthStates[address] = state
+        return true
+    }
+
+    private mutating func pruneExpiredStates(at now: Date) {
+        addressAuthStates = addressAuthStates.filter { _, state in
+            if let lockedOutUntil = state.lockedOutUntil { return now < lockedOutUntil }
+            return now < state.lastFailureAt.addingTimeInterval(policy.failedAddressRetentionDuration)
+        }
+    }
+
+    private mutating func evictOldestFailingAddress() -> Bool {
+        let oldest = addressAuthStates.compactMap { address, state -> (ClientNetworkAddress, Date)? in
+            guard state.lockedOutUntil == nil else { return nil }
+            return (address, state.lastFailureAt)
+        }.min { lhs, rhs in
+            lhs.1 == rhs.1 ? lhs.0.description < rhs.0.description : lhs.1 < rhs.1
+        }
+        guard let oldest else { return false }
+        addressAuthStates.removeValue(forKey: oldest.0)
+        return true
     }
 
     private func lockoutError() -> ServerError {

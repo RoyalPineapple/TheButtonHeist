@@ -37,9 +37,9 @@ enum ClientAdmission: Sendable {
             clientVersion: ButtonHeistVersion
         )
         case missingRegisteredAddress(clientId: Int)
-        case lockedOut(clientId: Int, address: String)
+        case lockedOut(clientId: Int, address: ClientNetworkAddress)
         case invalidToken(clientId: Int, attempts: Int)
-        case lockoutStarted(address: String, attempts: Int)
+        case lockoutStarted(address: ClientNetworkAddress, attempts: Int)
     }
 
     enum Decision {
@@ -60,18 +60,20 @@ extension ClientAdmission {
         private var clientRegistry = Registry()
         private var tokenAuthentication: TokenAuthentication
 
-        init(tokenSource: SessionTokenSource, maxFailedAttempts: Int, lockoutDuration: TimeInterval) {
+        init(tokenSource: SessionTokenSource, authenticationPolicy: InsideJobAuthenticationPolicy) {
             self.tokenAuthentication = TokenAuthentication(
                 tokenSource: tokenSource,
-                maxFailedAttempts: maxFailedAttempts,
-                lockoutDuration: lockoutDuration
+                policy: authenticationPolicy
             )
         }
 
         var sessionToken: SessionAuthToken { tokenAuthentication.sessionToken }
 
         @discardableResult
-        mutating func registerClientAddress(_ clientId: Int, address: String) -> [Effect] {
+        mutating func registerClientAddress(
+            _ clientId: Int,
+            address: ClientNetworkAddress
+        ) -> [Effect] {
             clientRegistry.registerAddress(clientId, address: address)
             return [.replaceAuthenticationDeadline(clientId: clientId)]
         }

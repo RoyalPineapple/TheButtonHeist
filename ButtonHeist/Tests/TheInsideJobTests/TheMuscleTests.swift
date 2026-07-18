@@ -128,7 +128,7 @@ final class TheMuscleTests: XCTestCase {
         clientId: Int,
         token: SessionAuthToken,
         driverId: DriverID? = nil,
-        address: String = "127.0.0.1",
+        address: ClientNetworkAddress = "127.0.0.1",
         respond: @escaping SocketResponseHandler
     ) async throws {
         await muscle.registerClientAddress(clientId, address: address)
@@ -258,8 +258,7 @@ final class TheMuscleTests: XCTestCase {
     func testMessageRateAdmissionReturnsGeneralErrorForFirstOverLimitFrame() throws {
         var admission = ClientAdmission.Reducer(
             tokenSource: .configured("good-token"),
-            maxFailedAttempts: 2,
-            lockoutDuration: 30
+            authenticationPolicy: try XCTUnwrap(.init(maximumFailedAttempts: 2, lockoutDuration: 30))
         )
         let data = try JSONEncoder().encode(RequestEnvelope(message: .ping))
         let now = Date()
@@ -298,8 +297,7 @@ final class TheMuscleTests: XCTestCase {
     func testMessageRateAdmissionNotifiesOnlyOncePerWindow() throws {
         var admission = ClientAdmission.Reducer(
             tokenSource: .configured("good-token"),
-            maxFailedAttempts: 2,
-            lockoutDuration: 30
+            authenticationPolicy: try XCTUnwrap(.init(maximumFailedAttempts: 2, lockoutDuration: 30))
         )
         let data = try JSONEncoder().encode(RequestEnvelope(message: .ping))
         let now = Date()
@@ -372,8 +370,7 @@ final class TheMuscleTests: XCTestCase {
     func testMessageRateAdmissionLimitsAuthenticatedMessagesBeforeDispatch() throws {
         var admission = ClientAdmission.Reducer(
             tokenSource: .configured("good-token"),
-            maxFailedAttempts: 2,
-            lockoutDuration: 30
+            authenticationPolicy: try XCTUnwrap(.init(maximumFailedAttempts: 2, lockoutDuration: 30))
         )
         let respond: SocketResponseHandler = { _ in .delivered }
         let now = Date()
