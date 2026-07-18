@@ -146,11 +146,9 @@ package func makeTestHeistElement(
     actions: [ElementAction]? = nil
 ) -> HeistElement {
     let defaultActivationPointEvidence: ActivationPointEvidence
-    if let point = try? ScreenPoint(
-        validatingX: frameX + frameWidth / 2,
-        y: frameY + frameHeight / 2
-    ) {
-        defaultActivationPointEvidence = .defaultCenter(point)
+    if let x = try? FiniteCoordinate(validating: frameX + frameWidth / 2),
+       let y = try? FiniteCoordinate(validating: frameY + frameHeight / 2) {
+        defaultActivationPointEvidence = .defaultCenter(ScreenPoint(x: x, y: y))
     } else {
         defaultActivationPointEvidence = .unavailable
     }

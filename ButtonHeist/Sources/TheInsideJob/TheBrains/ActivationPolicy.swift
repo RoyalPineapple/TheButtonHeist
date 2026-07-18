@@ -66,16 +66,15 @@ struct ActivationPolicy<PreparedDispatch: Sendable> {
             )
         }
 
-        guard let admittedActivationPoint = try? ScreenPoint(
-            validatingX: Double(activationPoint.x),
-            y: Double(activationPoint.y)
-        ) else {
+        guard let activationX = try? FiniteCoordinate(validating: Double(activationPoint.x)),
+              let activationY = try? FiniteCoordinate(validating: Double(activationPoint.y)) else {
             return .failure(
                 .activate,
                 message: "activate failed: the refreshed accessibility activation point was not finite",
                 subjectEvidence: subjectEvidence
             )
         }
+        let admittedActivationPoint = ScreenPoint(x: activationX, y: activationY)
 
         let preparedDispatch = prepareActivationPointDispatch(activationPoint)
         let tapActivationSucceeded = if let preparedDispatch {

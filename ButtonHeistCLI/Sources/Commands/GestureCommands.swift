@@ -7,7 +7,10 @@ private func requiredScreenPoint(x: Double?, y: Double?, label: String) throws -
         throw ValidationError("Must specify \(label) x/y coordinates together")
     }
     do {
-        return try ScreenPoint(validatingX: x, y: y)
+        return try ScreenPoint(
+            x: FiniteCoordinate(validating: x),
+            y: FiniteCoordinate(validating: y)
+        )
     } catch {
         throw ValidationError("\(label) coordinates must be finite")
     }
@@ -15,7 +18,10 @@ private func requiredScreenPoint(x: Double?, y: Double?, label: String) throws -
 
 private func admittedUnitPoint(x: Double, y: Double, label: String) throws -> UnitPoint {
     do {
-        return try UnitPoint(validatingX: x, y: y)
+        return try UnitPoint(
+            x: FiniteCoordinate(validating: x),
+            y: FiniteCoordinate(validating: y)
+        )
     } catch {
         throw ValidationError("\(label) coordinates must be finite")
     }

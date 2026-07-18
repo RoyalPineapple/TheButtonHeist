@@ -248,10 +248,9 @@ private func accessibilityActivationPointEvidence(
 ) -> ActivationPointEvidence {
     if element.usesDefaultActivationPoint {
         let point = CGPoint(x: projectedFrame.midX, y: projectedFrame.midY)
-        guard let screenPoint = try? ScreenPoint(
-            validatingX: Double(point.x),
-            y: Double(point.y)
-        ) else { return .unavailable }
+        guard let x = try? FiniteCoordinate(validating: Double(point.x)),
+              let y = try? FiniteCoordinate(validating: Double(point.y)) else { return .unavailable }
+        let screenPoint = ScreenPoint(x: x, y: y)
         return .defaultCenter(screenPoint)
     }
     let sourceActivationPoint = CGPoint(
@@ -262,10 +261,9 @@ private func accessibilityActivationPointEvidence(
         x: sourceActivationPoint.x + projectedFrame.origin.x - sourceFrame.origin.x,
         y: sourceActivationPoint.y + projectedFrame.origin.y - sourceFrame.origin.y
     )
-    guard let screenPoint = try? ScreenPoint(
-        validatingX: Double(projectedActivationPoint.x),
-        y: Double(projectedActivationPoint.y)
-    ) else { return .unavailable }
+    guard let x = try? FiniteCoordinate(validating: Double(projectedActivationPoint.x)),
+          let y = try? FiniteCoordinate(validating: Double(projectedActivationPoint.y)) else { return .unavailable }
+    let screenPoint = ScreenPoint(x: x, y: y)
     return .explicit(screenPoint)
 }
 
