@@ -29,7 +29,7 @@ extension Array where Element == SettleEvent {
 }
 
 /// Result of running the multi-cycle AX-tree settle loop.
-enum SettleOutcome: Equatable {
+enum SettleOutcome: Equatable, Sendable {
 
     /// The AX tree reached `cyclesRequired` consecutive stable cycles.
     case settled(timeMs: Int)
@@ -53,7 +53,7 @@ enum SettleOutcome: Equatable {
     /// True when the response represents a UI state we believe in —
     /// the loop reached multi-cycle stability. A Tripwire signal may have
     /// reset the baseline during the loop, but that event is tracked
-    /// separately in `SettleSession.Outcome.events`; it is not itself
+    /// separately in `SettleSession.Result.events`; it is not itself
     /// stability proof.
     var didSettleCleanly: Bool {
         switch self {
@@ -76,11 +76,6 @@ enum SettleOutcome: Equatable {
 
 // MARK: - Settle Loop Machine
 
-enum SettleLoopYieldFailure: Equatable, Sendable {
-    case cancellation
-    case error
-}
-
 /// The settle loop has one reducer and one runner. This policy only selects
 /// the stability proof and sampling cadence used by that runner.
 enum SettlePolicy: Equatable, Sendable {
@@ -92,194 +87,111 @@ struct SettleObservationSample: Equatable, Sendable {
     let fingerprint: Int
 }
 
+private enum SettleLoopStability: Equatable, Sendable {
+    case consecutiveCycles(required: Int, completed: Int)
+    case quietWindow(milliseconds: Int, startedAtMs: Int?)
+
+    init(policy: SettlePolicy) {
+        switch policy {
+        case .consecutiveCycles(let required):
+            self = .consecutiveCycles(required: required, completed: 0)
+        case .quietWindow(let milliseconds):
+            self = .quietWindow(milliseconds: milliseconds, startedAtMs: nil)
+        }
+    }
+
+    mutating func observe(repeatedFingerprint: Bool, elapsedMs: Int) -> Bool {
+        switch self {
+        case .consecutiveCycles(let required, let completed):
+            let completed = repeatedFingerprint ? completed + 1 : 0
+            self = .consecutiveCycles(required: required, completed: completed)
+            return completed >= required
+
+        case .quietWindow(let milliseconds, var startedAtMs):
+            if !repeatedFingerprint {
+                startedAtMs = elapsedMs
+            }
+            self = .quietWindow(milliseconds: milliseconds, startedAtMs: startedAtMs)
+            return startedAtMs.map { elapsedMs - $0 >= milliseconds } ?? false
+        }
+    }
+
+    mutating func reset() {
+        switch self {
+        case .consecutiveCycles(let required, _):
+            self = .consecutiveCycles(required: required, completed: 0)
+        case .quietWindow(let milliseconds, _):
+            self = .quietWindow(milliseconds: milliseconds, startedAtMs: nil)
+        }
+    }
+}
+
 struct SettleLoopMachine: Equatable {
-    enum State: Equatable, Sendable {
-        case consecutiveCycles(ConsecutiveCycleState)
-        case quietWindow(QuietWindowState)
+    struct State: Equatable, Sendable {
+        fileprivate var tripwireBaseline: TheTripwire.TripwireSignal
+        private(set) var events: [SettleEvent]
+        private var stability: SettleLoopStability
+        private var previousFingerprint: Int?
 
         init(policy: SettlePolicy, tripwireBaseline: TheTripwire.TripwireSignal) {
-            switch policy {
-            case .consecutiveCycles(let required):
-                self = .consecutiveCycles(ConsecutiveCycleState(
-                    required: required,
-                    progress: SettleLoopProgress(tripwireBaseline: tripwireBaseline)
-                ))
-            case .quietWindow(let milliseconds):
-                self = .quietWindow(QuietWindowState(
-                    milliseconds: milliseconds,
-                    progress: SettleLoopProgress(tripwireBaseline: tripwireBaseline)
-                ))
-            }
+            self.tripwireBaseline = tripwireBaseline
+            self.events = []
+            self.stability = SettleLoopStability(policy: policy)
+            self.previousFingerprint = nil
         }
 
-        var events: [SettleEvent] {
-            progress.events
+        fileprivate mutating func observe(
+            _ observation: SettleObservationSample,
+            elapsedMs: Int
+        ) -> Bool {
+            let repeatedFingerprint = previousFingerprint == observation.fingerprint
+            previousFingerprint = observation.fingerprint
+            return stability.observe(
+                repeatedFingerprint: repeatedFingerprint,
+                elapsedMs: elapsedMs
+            )
         }
 
-        fileprivate var progress: SettleLoopProgress {
-            switch self {
-            case .consecutiveCycles(let state):
-                return state.progress
-            case .quietWindow(let state):
-                return state.progress
-            }
+        fileprivate mutating func observe(_ signal: TheTripwire.TripwireSignal) {
+            let previous = tripwireBaseline
+            guard signal != previous else { return }
+
+            tripwireBaseline = signal
+            guard signal.requiresSettleBaselineReset(from: previous) else { return }
+
+            events.append(.tripwireSignalChanged(from: previous, to: signal))
+            resetStability()
+        }
+
+        private mutating func resetStability() {
+            previousFingerprint = nil
+            stability.reset()
         }
     }
 
     enum Event: Equatable, Sendable {
         case observation(SettleObservationSample, elapsedMs: Int)
         case tripwireSignal(TheTripwire.TripwireSignal)
-        case yieldFailed(SettleLoopYieldFailure, elapsedMs: Int)
-        case timeout(elapsedMs: Int)
     }
 
     enum Effect: Equatable, Sendable {
         case continuePolling
-        case terminal(Terminal)
+        case terminal(SettleOutcome)
     }
 
-    enum Terminal: Equatable, Sendable {
-        case settled(timeMs: Int)
-        case timedOut(timeMs: Int)
-        case cancelled(timeMs: Int)
-        case yieldFailed(timeMs: Int)
-    }
-
-    struct ConsecutiveCycleState: Equatable, Sendable {
-        let required: Int
-        fileprivate var progress: SettleLoopProgress
-        var previousFingerprint: Int?
-        var stableCycles: Int
-
-        fileprivate init(required: Int, progress: SettleLoopProgress) {
-            self.required = required
-            self.progress = progress
-            self.previousFingerprint = nil
-            self.stableCycles = 0
-        }
-    }
-
-    struct QuietWindowState: Equatable, Sendable {
-        let milliseconds: Int
-        fileprivate var progress: SettleLoopProgress
-        var previousFingerprint: Int?
-        var quietStartedAtMs: Int?
-
-        fileprivate init(milliseconds: Int, progress: SettleLoopProgress) {
-            self.milliseconds = milliseconds
-            self.progress = progress
-            self.previousFingerprint = nil
-            self.quietStartedAtMs = nil
-        }
-    }
-
-    func advance(_ state: State, with event: Event) -> SettleLoopTransition {
+    func reduce(_ state: State, event: Event) -> SettleLoopTransition {
+        var state = state
+        let effect: Effect
         switch event {
         case .observation(let observation, let elapsedMs):
-            return record(observation, elapsedMs: elapsedMs, state: state)
+            effect = state.observe(observation, elapsedMs: elapsedMs)
+                ? .terminal(.settled(timeMs: elapsedMs))
+                : .continuePolling
         case .tripwireSignal(let signal):
-            return recordTripwireSignal(signal, state: state)
-        case .yieldFailed(.cancellation, let elapsedMs):
-            return change(to: state, effect: .terminal(.cancelled(timeMs: elapsedMs)))
-        case .yieldFailed(.error, let elapsedMs):
-            return change(to: state, effect: .terminal(.yieldFailed(timeMs: elapsedMs)))
-        case .timeout(let elapsedMs):
-            return change(to: state, effect: .terminal(.timedOut(timeMs: elapsedMs)))
+            state.observe(signal)
+            effect = .continuePolling
         }
-    }
-
-    private func record(
-        _ observation: SettleObservationSample,
-        elapsedMs: Int,
-        state: State
-    ) -> SettleLoopTransition {
-        switch state {
-        case .consecutiveCycles(var cycleState):
-            if cycleState.previousFingerprint == observation.fingerprint {
-                cycleState.stableCycles += 1
-            } else {
-                cycleState.previousFingerprint = observation.fingerprint
-                cycleState.stableCycles = 0
-            }
-
-            let nextState = State.consecutiveCycles(cycleState)
-            guard cycleState.stableCycles >= cycleState.required else {
-                return change(to: nextState, effect: .continuePolling)
-            }
-            return change(
-                to: nextState,
-                effect: .terminal(.settled(timeMs: elapsedMs))
-            )
-
-        case .quietWindow(var quietState):
-            if quietState.previousFingerprint != observation.fingerprint {
-                quietState.previousFingerprint = observation.fingerprint
-                quietState.quietStartedAtMs = elapsedMs
-            }
-
-            let nextState = State.quietWindow(quietState)
-            guard let quietStartedAtMs = quietState.quietStartedAtMs,
-                  elapsedMs - quietStartedAtMs >= quietState.milliseconds else {
-                return change(to: nextState, effect: .continuePolling)
-            }
-            return change(
-                to: nextState,
-                effect: .terminal(.settled(timeMs: elapsedMs))
-            )
-        }
-    }
-
-    private func recordTripwireSignal(
-        _ signal: TheTripwire.TripwireSignal,
-        state: State
-    ) -> SettleLoopTransition {
-        let previous = state.progress.tripwireBaseline
-        guard signal != previous else {
-            return change(to: state, effect: .continuePolling)
-        }
-
-        switch state {
-        case .consecutiveCycles(var cycleState):
-            cycleState.progress.tripwireBaseline = signal
-            guard signal.requiresSettleBaselineReset(from: previous) else {
-                return change(to: .consecutiveCycles(cycleState), effect: .continuePolling)
-            }
-            cycleState.progress.recordTripwireBaselineReset(from: previous, to: signal)
-            cycleState.previousFingerprint = nil
-            cycleState.stableCycles = 0
-            return change(to: .consecutiveCycles(cycleState), effect: .continuePolling)
-
-        case .quietWindow(var quietState):
-            quietState.progress.tripwireBaseline = signal
-            guard signal.requiresSettleBaselineReset(from: previous) else {
-                return change(to: .quietWindow(quietState), effect: .continuePolling)
-            }
-            quietState.progress.recordTripwireBaselineReset(from: previous, to: signal)
-            quietState.previousFingerprint = nil
-            quietState.quietStartedAtMs = nil
-            return change(to: .quietWindow(quietState), effect: .continuePolling)
-        }
-    }
-
-    private func change(to state: State, effect: Effect) -> SettleLoopTransition {
-        SettleLoopTransition(state: state, effect: effect)
-    }
-}
-
-private struct SettleLoopProgress: Equatable, Sendable {
-    var tripwireBaseline: TheTripwire.TripwireSignal
-    var events: [SettleEvent]
-
-    init(tripwireBaseline: TheTripwire.TripwireSignal) {
-        self.tripwireBaseline = tripwireBaseline
-        self.events = []
-    }
-
-    mutating func recordTripwireBaselineReset(
-        from previous: TheTripwire.TripwireSignal,
-        to signal: TheTripwire.TripwireSignal
-    ) {
-        events.append(.tripwireSignalChanged(from: previous, to: signal))
+        return SettleLoopTransition(state: state, effect: effect)
     }
 }
 
@@ -480,7 +392,7 @@ final class SettleSessionFinalObservation {
     }
 
     /// Result of the loop, exposed so the caller can compute transients.
-    struct Outcome: Sendable {
+    struct Result: Sendable {
         let outcome: SettleOutcome
         /// Lightweight signals observed during the loop. These explain why
         /// the settle baseline was reset, but the final `outcome` still owns
@@ -524,7 +436,7 @@ final class SettleSessionFinalObservation {
     /// returning. The returned events record any Tripwire signals observed along
     /// the way so callers can suppress transition transients without treating
     /// the signal itself as a screen-change classification.
-    func run(start: CFAbsoluteTime, baselineTripwireSignal: TheTripwire.TripwireSignal) async -> Outcome {
+    func run(start: CFAbsoluteTime, baselineTripwireSignal: TheTripwire.TripwireSignal) async -> Result {
         return await SettleLoopRunner(
             parseProvider: parseProvider,
             tripwireSignalProvider: tripwireSignalProvider,
@@ -538,57 +450,23 @@ final class SettleSessionFinalObservation {
         ).run(start: start)
     }
 
-    static func outcome(
-        for transition: SettleLoopTransition,
-        observations: SettleObservationLedger
-    ) -> Outcome? {
-        switch transition.effect {
-        case .continuePolling:
-            return nil
-        case .terminal(let terminal):
-            return outcome(for: terminal, state: transition.state, observations: observations)
-        }
-    }
-
-    private static func outcome(
-        for terminal: SettleLoopMachine.Terminal,
+    static func result(
+        outcome: SettleOutcome,
         state: SettleLoopMachine.State,
         observations: SettleObservationLedger
-    ) -> Outcome {
-        switch terminal {
-        case .settled(let timeMs):
-            return Outcome(
-                outcome: .settled(timeMs: timeMs),
-                events: state.events,
-                finalObservation: observations.currentGenerationLastObservation.map {
-                    SettleSessionFinalObservation(observation: $0.observation)
-                },
-                elementsByKey: observations.elementsByKey,
-                tripwireSignal: state.progress.tripwireBaseline
-            )
-        case .timedOut(let timeMs), .yieldFailed(let timeMs):
-            return Outcome(
-                outcome: .timedOut(timeMs: timeMs),
-                events: state.events,
-                finalObservation: observations.currentGenerationLastObservation.map {
-                    SettleSessionFinalObservation(observation: $0.observation)
-                },
-                elementsByKey: observations.elementsByKey,
-                tripwireSignal: state.progress.tripwireBaseline,
-                instabilityDescription: observations.latestChangeDescription
-            )
-        case .cancelled(let timeMs):
-            return Outcome(
-                outcome: .cancelled(timeMs: timeMs),
-                events: state.events,
-                finalObservation: observations.currentGenerationLastObservation.map {
-                    SettleSessionFinalObservation(observation: $0.observation)
-                },
-                elementsByKey: observations.elementsByKey,
-                tripwireSignal: state.progress.tripwireBaseline,
-                instabilityDescription: observations.latestChangeDescription
-            )
-        }
+    ) -> Result {
+        Result(
+            outcome: outcome,
+            events: state.events,
+            finalObservation: observations.currentGenerationLastObservation.map {
+                SettleSessionFinalObservation(observation: $0.observation)
+            },
+            elementsByKey: observations.elementsByKey,
+            tripwireSignal: state.tripwireBaseline,
+            instabilityDescription: outcome.didSettleCleanly
+                ? nil
+                : observations.latestChangeDescription
+        )
     }
 
     static func transientElements(
@@ -612,20 +490,19 @@ private struct SettleLoopRunner {
     let initial: SettleLoopMachine.State
 
     @MainActor
-    func run(start: CFAbsoluteTime) async -> SettleSession.Outcome {
+    func run(start: CFAbsoluteTime) async -> SettleSession.Result {
         let deadline = SemanticObservationDeadline(start: start, timeoutMs: timeoutMs)
         var observations = SettleObservationLedger()
         let machine = SettleLoopMachine()
         var state = initial
-        var terminalObservationOutcome: SettleSession.Outcome?
 
         func send(_ event: SettleLoopMachine.Event) -> SettleLoopTransition {
-            let transition = machine.advance(state, with: event)
+            let transition = machine.reduce(state, event: event)
             state = transition.state
             return transition
         }
 
-        func ingest(_ observation: InterfaceObservation) -> SettleSession.Outcome? {
+        func ingest(_ observation: InterfaceObservation) -> SettleSession.Result? {
             let recorded = observations.record(observation)
             let transition = send(
                 .observation(
@@ -633,11 +510,20 @@ private struct SettleLoopRunner {
                     elapsedMs: deadline.elapsedMilliseconds(at: clock())
                 )
             )
-            terminalObservationOutcome = SettleSession.outcome(
-                for: transition,
+            guard case .terminal(let outcome) = transition.effect else { return nil }
+            return SettleSession.result(
+                outcome: outcome,
+                state: transition.state,
                 observations: observations
             )
-            return terminalObservationOutcome
+        }
+
+        func result(_ outcome: SettleOutcome) -> SettleSession.Result {
+            return SettleSession.result(
+                outcome: outcome,
+                state: state,
+                observations: observations
+            )
         }
 
         if let initial = parseProvider() {
@@ -650,22 +536,22 @@ private struct SettleLoopRunner {
             do {
                 try await observationYield()
             } catch is CancellationError {
-                let transition = send(
-                    .yieldFailed(.cancellation, elapsedMs: deadline.elapsedMilliseconds(at: clock()))
+                return result(
+                    .cancelled(timeMs: deadline.elapsedMilliseconds(at: clock()))
                 )
-                return SettleSession.outcome(for: transition, observations: observations)!
             } catch {
-                let transition = send(
-                    .yieldFailed(.error, elapsedMs: deadline.elapsedMilliseconds(at: clock()))
+                return result(
+                    .timedOut(timeMs: deadline.elapsedMilliseconds(at: clock()))
                 )
-                return SettleSession.outcome(for: transition, observations: observations)!
+            }
+            if Task.isCancelled {
+                return result(
+                    .cancelled(timeMs: deadline.elapsedMilliseconds(at: clock()))
+                )
             }
 
             let eventCount = state.events.count
-            let tripwireTransition = send(.tripwireSignal(tripwireSignalProvider()))
-            if let outcome = SettleSession.outcome(for: tripwireTransition, observations: observations) {
-                return outcome
-            }
+            _ = send(.tripwireSignal(tripwireSignalProvider()))
             if state.events.count > eventCount {
                 observations.resetCurrentGeneration()
                 continue
@@ -677,8 +563,7 @@ private struct SettleLoopRunner {
             }
         }
 
-        let transition = send(.timeout(elapsedMs: deadline.elapsedMilliseconds(at: clock())))
-        return SettleSession.outcome(for: transition, observations: observations)!
+        return result(.timedOut(timeMs: deadline.elapsedMilliseconds(at: clock())))
     }
 }
 

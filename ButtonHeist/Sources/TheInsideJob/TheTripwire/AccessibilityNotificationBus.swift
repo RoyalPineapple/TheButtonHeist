@@ -81,8 +81,7 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
 
     private let lock = NSLock()
     private var ingressLog = IngressLog(retentionLimit: 64)
-    private var activeHeistScopes = 0
-    private var activeActionWindows = 0
+    private var activeScopeLeases = 0
     private var announcementWaiters = WaiterStore<UInt64, AnnouncementWaiter>()
 
     var latestSequence: UInt64 {
@@ -174,16 +173,6 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
         return waiters.map { ($0, announcement) }
     }
 
-    var hasActiveNotificationScope: Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return activeHeistScopes > 0 || activeActionWindows > 0
-    }
-
-    private var hasActiveNotificationScopeLocked: Bool {
-        activeHeistScopes > 0 || activeActionWindows > 0
-    }
-
     private func reserveAnnouncementWaiterIdentifier() -> UInt64 {
         lock.lock()
         defer { lock.unlock() }
@@ -206,27 +195,24 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
     ///
     /// While this scope is active, action windows may claim attribution. Scope
     /// lifetime only tags provenance; retained history belongs to the ingress log.
-    func beginHeistScope() -> AccessibilityNotificationHeistScope {
-        lock.lock()
-        defer { lock.unlock() }
-
-        activeHeistScopes += 1
-        return AccessibilityNotificationHeistScope(
-            bus: self,
-            cursor: AccessibilityNotificationCursor(sequence: ingressLog.latestSequence)
-        )
+    func beginHeistScope() -> AccessibilityNotificationScopeLease {
+        beginScopeLease()
     }
 
     /// Opens the inner attribution window for one dispatched action.
     ///
     /// Events with sequence numbers greater than this cursor can be attached to
     /// the action receipt without stealing earlier heist-level context.
-    func beginActionWindow() -> AccessibilityNotificationActionWindow {
+    func beginActionWindow() -> AccessibilityNotificationScopeLease {
+        beginScopeLease()
+    }
+
+    private func beginScopeLease() -> AccessibilityNotificationScopeLease {
         lock.lock()
         defer { lock.unlock() }
 
-        activeActionWindows += 1
-        return AccessibilityNotificationActionWindow(
+        activeScopeLeases += 1
+        return AccessibilityNotificationScopeLease(
             bus: self,
             cursor: AccessibilityNotificationCursor(sequence: ingressLog.latestSequence)
         )
@@ -377,25 +363,16 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
         return ingressLog.checkpoint(after: cursor, selection: selection)
     }
 
-    fileprivate func cancelActionWindow() {
+    fileprivate func endScopeLease() {
         lock.lock()
         defer { lock.unlock() }
 
-        if activeActionWindows > 0 {
-            activeActionWindows -= 1
-        }
-    }
-
-    fileprivate func endHeistScope() {
-        lock.lock()
-        defer { lock.unlock() }
-
-        guard activeHeistScopes > 0 else { return }
-        activeHeistScopes -= 1
+        precondition(activeScopeLeases > 0, "Cannot end an inactive notification scope lease")
+        activeScopeLeases -= 1
     }
 
     private var provenanceLocked: AccessibilityNotificationProvenance {
-        hasActiveNotificationScopeLocked ? .scoped : .ambient
+        activeScopeLeases > 0 ? .scoped : .ambient
     }
 }
 
@@ -431,39 +408,10 @@ enum AccessibilityNotificationProvenance: Sendable, Equatable {
     case ambient
 }
 
-/// Lifetime token for a heist-level notification stream.
+/// Lifetime token for scoped notification attribution.
 /// `@unchecked Sendable` justification: mutable `bus` access is protected by `lock`;
 /// cancellation may cross task boundaries while closing scoped observation.
-final class AccessibilityNotificationHeistScope: @unchecked Sendable {
-    let cursor: AccessibilityNotificationCursor
-
-    private let lock = NSLock()
-    private weak var bus: AccessibilityNotificationBus?
-
-    fileprivate init(bus: AccessibilityNotificationBus, cursor: AccessibilityNotificationCursor) {
-        self.bus = bus
-        self.cursor = cursor
-    }
-
-    deinit {
-        cancel()
-    }
-
-    func cancel() {
-        let bus: AccessibilityNotificationBus?
-        lock.lock()
-        bus = self.bus
-        self.bus = nil
-        lock.unlock()
-
-        bus?.endHeistScope()
-    }
-}
-
-/// Lifetime token for a single action's notification attribution window.
-/// `@unchecked Sendable` justification: mutable `bus` access is protected by `lock`;
-/// cancellation may cross task boundaries while closing the action window.
-final class AccessibilityNotificationActionWindow: @unchecked Sendable {
+final class AccessibilityNotificationScopeLease: @unchecked Sendable {
     let cursor: AccessibilityNotificationCursor
 
     private let lock = NSLock()
@@ -492,7 +440,7 @@ final class AccessibilityNotificationActionWindow: @unchecked Sendable {
         self.bus = nil
         lock.unlock()
 
-        bus?.cancelActionWindow()
+        bus?.endScopeLease()
     }
 }
 

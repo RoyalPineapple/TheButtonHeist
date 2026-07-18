@@ -76,7 +76,7 @@ extension PostActionObservation.SettlementResult {
         settle.outcome.timeMs
     }
 
-    private var settle: SettleSession.Outcome {
+    private var settle: SettleSession.Result {
         switch self {
         case .committed(let settle, _, _),
              .diagnostic(let settle, _),

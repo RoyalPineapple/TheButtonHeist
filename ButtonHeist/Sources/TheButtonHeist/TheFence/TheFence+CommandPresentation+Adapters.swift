@@ -45,13 +45,13 @@ private extension TheFence.Command {
 
     static func descriptorHelpLines() -> [String] {
         let descriptors = Self.descriptors
-            .filter { descriptor in descriptor.projection.cliExposure != .notExposed }
+            .filter { descriptor in descriptor.cliExposure != .notExposed }
             .sorted { $0.command.rawValue < $1.command.rawValue }
         let width = descriptors.map(\.command.rawValue.count).max() ?? 0
 
         return descriptors.map { descriptor in
             let family = "[\(descriptor.family.rawValue)]"
-            return "  \(padded(descriptor.command.rawValue, to: width))  \(family)  \(oneLineDescription(descriptor.projection.description))"
+            return "  \(padded(descriptor.command.rawValue, to: width))  \(family)  \(oneLineDescription(descriptor.description))"
         }
     }
 

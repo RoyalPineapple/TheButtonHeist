@@ -58,16 +58,14 @@ import TheScore
     public let family: FenceCommandFamily
     public let requiresConnectionBeforeDispatch: Bool
     public let parameters: [FenceParameterSpec]
-    public let projection: FenceCommandProjection
     public let timeout: FenceCommandTimeoutSemantics
-
-    public var cliExposure: CLIExposure { projection.cliExposure }
-    public var mcpExposure: MCPExposure { projection.mcpExposure }
-    public var mcpAnnotations: MCPToolAnnotationSpec? { projection.mcpAnnotations }
-    public var description: String { projection.description }
+    public let cliExposure: CLIExposure
+    public let mcpExposure: MCPExposure
+    public let mcpAnnotations: MCPToolAnnotationSpec?
+    public let description: String
 
     public var isPublicRequestContract: Bool {
-        projection.isPublicRequestContract
+        cliExposure != .notExposed || mcpExposure != .notExposed
     }
 
     public var topLevelParameterKeys: Set<String> {
@@ -112,15 +110,11 @@ import TheScore
     }
 }
 
-@_spi(ButtonHeistTooling) public struct FenceCommandProjection: Sendable, Equatable {
-    public let cliExposure: CLIExposure
-    public let mcpExposure: MCPExposure
-    public let mcpAnnotations: MCPToolAnnotationSpec?
-    public let description: String
-
-    public var isPublicRequestContract: Bool {
-        cliExposure != .notExposed || mcpExposure != .notExposed
-    }
+struct FenceCommandProjection: Sendable, Equatable {
+    let cliExposure: CLIExposure
+    let mcpExposure: MCPExposure
+    let mcpAnnotations: MCPToolAnnotationSpec?
+    let description: String
 
     init(
         cliExposure: CLIExposure = .directCommand,
@@ -237,8 +231,11 @@ extension TheFence {
                 family: family,
                 requiresConnectionBeforeDispatch: connectionRequirement == .activeSession,
                 parameters: parameters,
-                projection: projection,
-                timeout: timeout
+                timeout: timeout,
+                cliExposure: projection.cliExposure,
+                mcpExposure: projection.mcpExposure,
+                mcpAnnotations: projection.mcpAnnotations,
+                description: projection.description
             )
         }
 
@@ -351,7 +348,7 @@ extension TheFence {
     }
 
     static var cliDirectCommandDescriptors: [FenceCommandDescriptor] {
-        descriptors.filter { $0.projection.cliExposure == .directCommand }
+        descriptors.filter { $0.cliExposure == .directCommand }
     }
 }
 

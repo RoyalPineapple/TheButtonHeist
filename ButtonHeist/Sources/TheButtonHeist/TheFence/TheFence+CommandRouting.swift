@@ -68,7 +68,7 @@ import TheScore
         routeCanonicalStep(
             arguments,
             context: context,
-            isExecutable: { $0.descriptor.projection.cliExposure == .directCommand }
+            isExecutable: { $0.descriptor.cliExposure == .directCommand }
         )
     }
 }

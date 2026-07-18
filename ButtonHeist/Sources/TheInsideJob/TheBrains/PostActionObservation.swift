@@ -74,10 +74,10 @@ final class PostActionObservation {
     }
 
     enum SettlementResult {
-        case committed(settle: SettleSession.Outcome, finalBaseline: ObservationBaseline, trace: AccessibilityTrace)
-        case diagnostic(settle: SettleSession.Outcome, trace: AccessibilityTrace)
+        case committed(settle: SettleSession.Result, finalBaseline: ObservationBaseline, trace: AccessibilityTrace)
+        case diagnostic(settle: SettleSession.Result, trace: AccessibilityTrace)
         case unavailable(
-            settle: SettleSession.Outcome,
+            settle: SettleSession.Result,
             trace: AccessibilityTrace,
             failureMessage: String
         )
@@ -121,8 +121,8 @@ final class PostActionObservation {
     func settleObservation(
         before: ObservationBaseline,
         commitScope: SemanticObservationScope = .visible,
-        outcome: SettleSession.Outcome?,
-        notificationWindow: AccessibilityNotificationActionWindow? = nil
+        outcome: SettleSession.Result?,
+        notificationWindow: AccessibilityNotificationScopeLease? = nil
     ) async -> ObservationSettlement {
         await vault.semanticObservationStream.settlePostActionObservation(
             baselineTripwireSignal: before.tripwireSignal,
@@ -213,7 +213,7 @@ final class PostActionObservation {
     private func observedTrace(
         before: ObservationBaseline,
         finalBaseline: ObservationBaseline,
-        settle: SettleSession.Outcome,
+        settle: SettleSession.Result,
         continuity: ScreenContinuity,
         transitionEvidence: AccessibilityTrace.Transition?
     ) -> AccessibilityTrace {
@@ -235,7 +235,7 @@ final class PostActionObservation {
     private func diagnosticObservedTrace(
         before: ObservationBaseline,
         finalBaseline: ObservationBaseline,
-        settle: SettleSession.Outcome,
+        settle: SettleSession.Result,
         transitionEvidence: AccessibilityTrace.Transition?
     ) -> AccessibilityTrace {
         let continuity = ScreenClassifier.classify(
@@ -416,7 +416,7 @@ final class PostActionObservation {
     }
 
     static func transientElements(
-        settleResult: SettleSession.Outcome,
+        settleResult: SettleSession.Result,
         before: ObservationBaseline,
         final: ObservationBaseline,
         classification: ScreenContinuity

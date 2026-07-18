@@ -899,8 +899,8 @@ final class SemanticObservationStreamTests: XCTestCase {
         _ outcome: SettleOutcome,
         observation: InterfaceObservation,
         tripwireSignal: TheTripwire.TripwireSignal
-    ) -> SettleSession.Outcome {
-        SettleSession.Outcome(
+    ) -> SettleSession.Result {
+        SettleSession.Result(
             outcome: outcome,
             events: [],
             finalObservation: SettleSessionFinalObservation(observation: observation),

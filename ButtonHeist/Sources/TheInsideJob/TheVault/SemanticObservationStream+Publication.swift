@@ -69,7 +69,7 @@ extension SemanticObservationStream {
 
     @discardableResult
     internal func commitSettledDiscoveryObservation(
-        _ outcome: SettleSession.Outcome,
+        _ outcome: SettleSession.Result,
         discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy,
         afterViewportMovement: Bool,
         notificationBatch: AccessibilityNotificationBatch? = nil
@@ -103,43 +103,29 @@ extension SemanticObservationStream {
             ?? vault.accessibilityNotifications.checkpoint(
                 after: runtimeState.notificationCursor
             )
-        let previousTree = vault.interfaceTree
-        let candidateTree = switch scope {
-        case .visible:
-            previousTree.updatingViewport(with: proof.observation)
-        case .discovery:
-            proof.discoveryCommitPolicy == .replaceInterface
-                ? proof.observation.tree
-                : previousTree.merging(proof.observation.tree)
-        }
-        let classifiedContinuity = ScreenClassifier.classify(
-            from: previousTree == .empty ? nil : previousTree,
-            to: candidateTree,
-            notifications: resolvedNotificationBatch.events.map(\.kind),
-            lineageEvidence: proof.lineageEvidence
-        )
-        let continuity = runtimeState.lineage.admitting(classifiedContinuity)
-        if continuity.isReplacement {
-            observationLog.beginScreenReplacement()
-        }
-        let committedObservation: InterfaceObservation
+        let commit: TheVault.InterfaceGraphCommit
         do {
-            committedObservation = try vault.reduceInterfaceGraph(
+            commit = try vault.commitInterfaceGraph(
                 with: proof.observation,
                 scope: scope,
-                continuity: continuity,
-                discoveryCommitPolicy: proof.discoveryCommitPolicy
+                discoveryCommitPolicy: proof.discoveryCommitPolicy,
+                notifications: resolvedNotificationBatch.events.map(\.kind),
+                lineage: runtimeState.lineage,
+                lineageEvidence: proof.lineageEvidence
             )
         } catch {
             preconditionFailure("Committed interface observation failed validation: \(error)")
         }
+        if commit.continuity.isReplacement {
+            observationLog.beginScreenReplacement()
+        }
         return publishCurrentSettledObservation(
-            committedObservation,
+            commit.observation,
             scope: scope,
             vault: vault,
             tripwireSignal: proof.tripwireSignal,
             notificationBatch: resolvedNotificationBatch,
-            continuity: continuity,
+            continuity: commit.continuity,
             notificationIdentityObservation: notificationIdentityObservation
         )
     }
@@ -147,8 +133,8 @@ extension SemanticObservationStream {
     internal func settlePostActionObservation(
         baselineTripwireSignal: TheTripwire.TripwireSignal,
         commitScope: SemanticObservationScope = .visible,
-        settleOutcome providedOutcome: SettleSession.Outcome? = nil,
-        notificationWindow: AccessibilityNotificationActionWindow? = nil
+        settleOutcome providedOutcome: SettleSession.Result? = nil,
+        notificationWindow: AccessibilityNotificationScopeLease? = nil
     ) async -> ObservationSettlement {
         if let session = visibleRefreshSession {
             _ = await finishVisibleRefresh(session)
@@ -181,8 +167,8 @@ extension SemanticObservationStream {
         baselineTripwireSignal: TheTripwire.TripwireSignal,
         timeoutMs: Int,
         commitScope: SemanticObservationScope,
-        providedOutcome: SettleSession.Outcome?,
-        notificationWindow: AccessibilityNotificationActionWindow?,
+        providedOutcome: SettleSession.Result?,
+        notificationWindow: AccessibilityNotificationScopeLease?,
         invalidatingCurrentPublication: Bool
     ) async -> ObservationSettlement {
         if invalidatingCurrentPublication {
@@ -218,14 +204,14 @@ extension SemanticObservationStream {
         baselineTripwireSignal: TheTripwire.TripwireSignal,
         timeoutMs: Int,
         commitScope: SemanticObservationScope,
-        providedOutcome: SettleSession.Outcome?,
-        notificationWindow: AccessibilityNotificationActionWindow?
+        providedOutcome: SettleSession.Result?,
+        notificationWindow: AccessibilityNotificationScopeLease?
     ) async -> ObservationSettlement {
         guard let vault else {
             let notificationBatch = notificationWindow?.capture()
             notificationWindow?.cancel()
             return ObservationSettlement(
-                settle: SettleSession.Outcome(
+                settle: SettleSession.Result(
                     outcome: .cancelled(timeMs: 0),
                     events: [],
                     finalObservation: nil,
@@ -235,7 +221,7 @@ extension SemanticObservationStream {
                 result: .unavailable(notificationBatch: notificationBatch)
             )
         }
-        let outcome: SettleSession.Outcome
+        let outcome: SettleSession.Result
         if let providedOutcome {
             outcome = providedOutcome
         } else {
@@ -372,7 +358,7 @@ extension SemanticObservationStream {
     }
 
     func admitSettledProof(
-        _ outcome: SettleSession.Outcome,
+        _ outcome: SettleSession.Result,
         vault: TheVault,
         layerGateWasClear: Bool? = nil,
         discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy = .mergeIntoInterface,
@@ -396,7 +382,7 @@ extension SemanticObservationStream {
     }
 
     private func postActionFailureResult(
-        _ outcome: SettleSession.Outcome,
+        _ outcome: SettleSession.Result,
         notificationBatch: AccessibilityNotificationBatch?
     ) -> ObservationSettlement.Result {
         guard !outcome.outcome.didSettleCleanly,

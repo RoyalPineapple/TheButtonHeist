@@ -44,7 +44,7 @@ extension Navigation {
     func settledExplorationPage(
         deadline: SemanticObservationDeadline?,
         discoveryCommitPolicy: DiscoveryCommitPolicy,
-        notificationWindow: AccessibilityNotificationActionWindow? = nil,
+        notificationWindow: AccessibilityNotificationScopeLease? = nil,
         requiredAfterMovement: Bool = false
     ) async -> SettledObservationEvent? {
         defer { notificationWindow?.cancel() }

@@ -165,24 +165,3 @@ private func expectSemanticDiagnostic(
     #expect(diagnostic.message.contains(expectedMessage))
     #expect(diagnostic.hint != nil)
 }
-
-private func compileDiagnostic(_ source: String) -> HeistBuildDiagnostic {
-    do {
-        _ = try HeistPlanSourceCompiler().compile(source)
-        Issue.record("Expected source to fail: \(source)")
-        return HeistBuildDiagnostic(
-            externalBoundaryRawCode: "test.missing_diagnostic",
-            phase: .sourceCompilation,
-            message: "Expected source to fail"
-        )
-    } catch let error as HeistPlanSourceCompilerError {
-        return error.diagnostic
-    } catch {
-        Issue.record("Expected HeistPlanSourceCompilerError, got \(error)")
-        return HeistBuildDiagnostic(
-            externalBoundaryRawCode: "test.unexpected_error",
-            phase: .sourceCompilation,
-            message: String(describing: error)
-        )
-    }
-}

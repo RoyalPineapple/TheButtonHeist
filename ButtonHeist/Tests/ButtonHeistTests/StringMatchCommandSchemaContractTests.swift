@@ -266,32 +266,8 @@ private func assertError(
     )
 }
 
-private func accessibilityTargetValue(_ fields: [String: HeistValue]) -> HeistValue {
-    .object(fields)
-}
-
-private func stringMatchValue(mode: String, value: String) -> HeistValue {
-    .object([
-        "mode": .string(mode),
-        "value": .string(value),
-    ])
-}
-
 private func stringMatchIsEmptyValue() -> HeistValue {
     .object([
         "mode": .string("isEmpty"),
     ])
-}
-
-private func predicateCheckValue(
-    kind: String,
-    match: HeistValue? = nil,
-    values: [HeistValue]? = nil,
-    check: HeistValue? = nil
-) -> HeistValue {
-    var object: [String: HeistValue] = ["kind": .string(kind)]
-    if let match { object["match"] = match }
-    if let values { object["values"] = .array(values) }
-    if let check { object["check"] = check }
-    return .object(object)
 }
