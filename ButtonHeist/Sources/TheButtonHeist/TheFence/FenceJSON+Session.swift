@@ -2,8 +2,8 @@ import Foundation
 
 import TheScore
 
-struct PublicSessionStateResponse: FencePublicJSONResponse {
-    let status = PublicStatus.ok
+struct PublicSessionStateResponse: Encodable {
+    let status = PublicResponseStatus.ok
     let connected: Bool
     let phase: String
     let actionTimeoutSeconds: TimeInterval
@@ -43,19 +43,19 @@ struct PublicSessionFailure: Encodable {
     }
 }
 
-struct PublicOKResponse: FencePublicJSONResponse {
-    let status = PublicStatus.ok
+struct PublicOKResponse: Encodable {
+    let status = PublicResponseStatus.ok
     let message: String
 }
 
-struct PublicStatusResponse: FencePublicJSONResponse {
-    let status = PublicStatus.ok
+struct PublicStatusResponse: Encodable {
+    let status = PublicResponseStatus.ok
     let connected: Bool
     let device: String?
 }
 
-struct PublicPongResponse: FencePublicJSONResponse {
-    let status = PublicStatus.ok
+struct PublicPongResponse: Encodable {
+    let status = PublicResponseStatus.ok
     let buttonHeistVersion: String
     let appName: String
     let bundleIdentifier: String
@@ -75,8 +75,8 @@ struct PublicPongResponse: FencePublicJSONResponse {
     }
 }
 
-struct PublicDevicesResponse: FencePublicJSONResponse {
-    let status = PublicStatus.ok
+struct PublicDevicesResponse: Encodable {
+    let status = PublicResponseStatus.ok
     let devices: [PublicDiscoveredDevice]
 
     init(devices: [DiscoveredDevice]) {
@@ -102,8 +102,8 @@ struct PublicDiscoveredDevice: Encodable {
     }
 }
 
-struct PublicTargetsResponse: FencePublicJSONResponse {
-    let status = PublicStatus.ok
+struct PublicTargetsResponse: Encodable {
+    let status = PublicResponseStatus.ok
     let targets: [String: PublicTargetConfig]
     let `default`: String?
 

@@ -2,8 +2,8 @@ import Foundation
 
 import TheScore
 
-struct PublicInterfaceResponse: FencePublicJSONResponse {
-    let status = PublicStatus.ok
+struct PublicInterfaceResponse: Encodable {
+    let status = PublicResponseStatus.ok
     let detail: String
     let interface: PublicInterface
 

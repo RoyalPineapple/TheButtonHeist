@@ -2,8 +2,8 @@ import Foundation
 
 import TheScore
 
-struct PublicScreenshotResponse: FencePublicJSONResponse {
-    let status = PublicStatus.ok
+struct PublicScreenshotResponse: Encodable {
+    let status = PublicResponseStatus.ok
     let width: Double
     let height: Double
     let pngData: String?

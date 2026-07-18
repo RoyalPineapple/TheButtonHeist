@@ -3,8 +3,8 @@ import ThePlans
 
 import TheScore
 
-struct PublicHeistCatalogResponse: FencePublicJSONResponse {
-    let status = PublicStatus.ok
+struct PublicHeistCatalogResponse: Encodable {
+    let status = PublicResponseStatus.ok
     private let heists: [PublicHeistCatalogEntry]
 
     init(catalog: HeistDiscoveryCatalog) {
@@ -12,8 +12,8 @@ struct PublicHeistCatalogResponse: FencePublicJSONResponse {
     }
 }
 
-struct PublicHeistDescriptionResponse: FencePublicJSONResponse {
-    let status = PublicStatus.ok
+struct PublicHeistDescriptionResponse: Encodable {
+    let status = PublicResponseStatus.ok
     private let heist: PublicHeistDescription
 
     init(heist: HeistDescription) {
@@ -21,8 +21,8 @@ struct PublicHeistDescriptionResponse: FencePublicJSONResponse {
     }
 }
 
-struct PublicHeistValidationResponse: FencePublicJSONResponse {
-    let status = PublicStatus.ok
+struct PublicHeistValidationResponse: Encodable {
+    let status = PublicResponseStatus.ok
     let admissible: Bool
     let plan: PublicHeistPlanValidation
     let invocation: PublicHeistInvocationValidation
