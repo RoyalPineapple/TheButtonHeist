@@ -39,18 +39,17 @@ package struct AccessibilityHierarchyGraph: Equatable, Sendable {
         let records: [(
             node: AccessibilityNodeRecord,
             element: AccessibilityElementNodeRecord?
-        )] = tree.pathIndexedSubtrees.map { subtree in
-            let node = subtree.hierarchy
+        )] = tree.compactMapSubtrees { node, path in
             switch node {
             case .element(let element, let traversalIndex):
                 return (
                     node: AccessibilityNodeRecord(
-                        path: subtree.path,
+                        path: path,
                         node: node,
                         traversalIndex: traversalIndex
                     ),
                     element: AccessibilityElementNodeRecord(
-                        path: subtree.path,
+                        path: path,
                         element: element,
                         traversalIndex: traversalIndex
                     )
@@ -58,7 +57,7 @@ package struct AccessibilityHierarchyGraph: Equatable, Sendable {
             case .container:
                 return (
                     node: AccessibilityNodeRecord(
-                        path: subtree.path,
+                        path: path,
                         node: node,
                         traversalIndex: nil
                     ),
