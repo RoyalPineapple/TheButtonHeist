@@ -333,14 +333,6 @@ extension SemanticObservationStream {
                 firstResponder: vault.firstResponderTarget(in: settledObservation.tree)
             )
         )
-        for fallbackReason in scope.fulfilledScopes.compactMap({ fulfilledScope in
-            publication.events[fulfilledScope]?.trace.captures.last?.transition.fallbackReason
-        }) {
-            AccessibilityObservationFallbackLog.record(
-                fallbackReason,
-                source: .settledObservation
-            )
-        }
         do {
             try observationLog.publish(
                 publication,
@@ -349,11 +341,19 @@ extension SemanticObservationStream {
         } catch {
             preconditionFailure("Semantic observation log rejected publication: \(error)")
         }
-        completeObservationWaiters()
         runtimeState.commit(
             publication,
             notificationBatch: notificationBatch
         )
+        for fallbackReason in scope.fulfilledScopes.compactMap({ fulfilledScope in
+            publication.events[fulfilledScope]?.trace.captures.last?.transition.fallbackReason
+        }) {
+            AccessibilityObservationFallbackLog.record(
+                fallbackReason,
+                source: .settledObservation
+            )
+        }
+        completeObservationWaiters()
         return publication.sourceEvent
     }
 

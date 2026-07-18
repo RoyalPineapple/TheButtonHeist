@@ -77,16 +77,17 @@ those samples and carries its exact final observation in a clean outcome. The
 semantic stream alone admits that outcome into `InterfaceObservationProof`, and
 only while both its tripwire signal and capture identity remain current.
 
-`SemanticObservationStream` is the sole ordered committer. Its production
-entry points admit clean settle outcomes or accept their resulting
-`InterfaceObservationProof`, classify continuity once,
-reduce the proof into `TheVault.interfaceTree`, construct the settled
-publication from that committed graph, and only then append it to the private
-`SemanticObservationLog`. `SemanticObservationRuntimeState` advances after log
-publication and atomically owns stream lifecycle, generation lineage, settled
-sequence, and notification cursors. There is no parser-to-log path and no
-subscriber-driven graph mutation. The stream's graph reducer is the only graph
-mutation path; no compatibility reducer or publication route exists.
+`SemanticObservationStream` is the sole ordered publication coordinator. Its
+production entry points admit clean settle outcomes or accept their resulting
+`InterfaceObservationProof`, ask TheVault to classify continuity and commit
+`TheVault.interfaceTree`, construct the settled publication from that committed
+graph, append it to the private `SemanticObservationLog`, advance
+`SemanticObservationRuntimeState`, and then wake stream waiters. The sequence is
+synchronous and non-suspending on `@MainActor`, so consumers see a
+non-interleaving order, not an atomic transaction across Vault, log, runtime,
+and delivery owners. There is no parser-to-log path and no subscriber-driven
+graph mutation. TheVault's graph commit is the only graph mutation path; no
+compatibility reducer or publication route exists.
 
 The stream is also the one visible-observation producer. `TheTripwire` is its
 serialized refresh trigger: a changed signal invalidates the current cursor and
@@ -96,7 +97,7 @@ seal, waits and action before-state acquisition reuse the committed event until
 the next trip, explicit invalidation, or screen replacement. After-action
 observation always requests a fresh cycle from the same producer.
 
-`SemanticObservationLog` is the retained temporal owner. Each
+`SemanticObservationLog` is the retained ordered-history owner. Each
 `ObservationEntry` pairs a settled capture with an initial, same-generation, or
 screen-boundary transition. `ObservationCursor` records generation, scope,
 settled sequence, capture hash, notification sequence, and `observedAt`.
@@ -234,9 +235,11 @@ reveal. Appearance assertions, unresolved targets, containers, and predicates
 with multiple targets use canonical discovery with `.origin`. Every temporal
 evaluation asks the log for the accumulated baseline-through-current
 `ObservationWindow`. Action expectations retain their supplied pre-action
-baseline rather than establishing or replacing it inside the wait. At the wait
-deadline, a final visible check receives the bare 250 ms settle budget and a
-final full reveal or discovery runs within the normal traversal caps.
+baseline rather than establishing or replacing it inside the wait. Terminal
+verification is scheduled before the authored operation deadline by reserving
+the longest observed reveal or discovery route cost. Its visible settle and
+final reveal or discovery inherit that same deadline; no phase receives a fresh
+budget and no discovery continues after it expires.
 
 Detail level is separate: `detail: "summary"` keeps responses compact, while
 `detail: "full"` adds geometry and heavier accessibility fields.
@@ -279,8 +282,8 @@ The approved long-lived owners are:
 
 - `TheVault`: committed `InterfaceTree`, latest disposable `LiveCapture`, and
   non-clean settle diagnostics. Its `SemanticObservationStream` is the sole
-  visible-observation producer and ordered committer, and owns the private
-  retained `SemanticObservationLog`.
+  visible-observation producer and waiter-delivery owner, and owns the private
+  retained ordered-history `SemanticObservationLog`.
 - `TheMuscle`: auth, admission, and session state inside the app.
 - `TheHandoff`: external connection phase and discovery state outside the app.
 - `PendingRequestRegistry`: typed `RequestID` to continuation correlation,
@@ -307,7 +310,7 @@ pipelines are explicit:
 | Receipt private storage codec | `HeistExecutionStepNode.swift` and `HeistExecutionStepNode+Codable.swift` | External receipt JSON projection only |
 | Receipt report projection | `HeistExecutionResult+Report.swift` and `HeistExecutionStepResult+Report.swift` | Report, compact, JUnit, doctor, and metric adapters |
 | Semantic observation scheduling | `SemanticObservationStream.swift` | Passive settle cycles and observation demand |
-| Semantic observation publication | `SemanticObservationStream+Publication.swift` | The sole `InterfaceTree` reducer and observation-log publisher |
+| Semantic observation publication | `SemanticObservationStream+Publication.swift` | Ordered publication coordination across Vault graph commit, log append, runtime advance, and waiter delivery |
 | Semantic observation waiter delivery | `SemanticObservationStream+Waiters.swift` | Cursor, window, replay, and timeout projections |
 | Testing request construction | `ButtonHeistTesting.swift` | Synchronous helpers and joined sessions live in their named extension files |
 | Fence action JSON | `FenceJSON+Action.swift` and `FenceJSON+HeistExecution.swift`, one result family each | Fence response formatting |
@@ -428,7 +431,7 @@ in-app server.
 
 ## Execution and Predicate Pipeline
 
-The Button Heist has one current-tree projection and one retained temporal log.
+The Button Heist has one current-tree projection and one retained ordered history.
 Actions, `get_interface` subtree queries, waits, expectations, and repeat-loop
 stop conditions use one `AccessibilityTarget` language. Authored conditions use
 the concrete `AccessibilityPredicate` root and `ChangeDeclaration` assertion
@@ -635,10 +638,15 @@ reparsing; an unmatched retained entry permits one bounded rediscovery. Action
 expectations do not establish a standalone baseline in either route: they keep
 the supplied pre-action `SettledCapture`.
 
-At the deadline, the wait performs one final bounded visible check followed, if
-still unmatched, by one final reveal or canonical discovery check. Every
-matching stage exits early. These reveal and discovery routes are the only wait
-routes; there is no compatibility orchestration path.
+Every settle, reveal, discovery, and waiter phase inherits one authored
+operation deadline. After each reveal or discovery, the wait records its route
+cost and reserves the longest observed duration so terminal verification starts
+before that deadline. Terminal verification performs one final visible check
+followed, if still unmatched and time remains, by one final reveal or canonical
+discovery under the same deadline. It receives no fresh 250 ms budget and does
+not continue discovery after the operation deadline. Every matching stage exits
+early. These reveal and discovery routes are the only wait routes; there is no
+compatibility orchestration path.
 
 `.exists(target)` and `.missing(target)` resolve any element, container, or
 descendant-scoped `AccessibilityTarget` against current state.
