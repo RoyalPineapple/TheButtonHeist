@@ -222,29 +222,29 @@ actor TheMuscle {
         case .handled(let effect):
             await executeAdmissionEffects(effect)
             return .handled
-        case .authenticate(let authentication):
-            await completeAuthentication(authentication)
+        case .sessionAdmission(let sessionAdmission):
+            await admitSession(sessionAdmission)
             return .handled
         }
     }
 
-    private func completeAuthentication(_ authentication: ClientAdmission.Authentication.Proof) async {
+    private func admitSession(_ sessionAdmission: ClientAdmission.SessionAdmission) async {
         switch session.acquire(
-            owner: authentication.owner,
-            clientId: authentication.clientId,
+            owner: sessionAdmission.owner,
+            clientId: sessionAdmission.clientId,
             at: Date()
         ) {
         case .accepted(let sessionEffect):
             applySessionEffects(sessionEffect)
-            let effect = admission.completeAuthentication(authentication)
+            let effect = admission.completeAuthentication(sessionAdmission)
             await executeAdmissionEffects(effect)
-            _ = await delivery.clientAuthenticated(authentication.clientId, respond: authentication.respond)
+            _ = await delivery.clientAuthenticated(sessionAdmission.clientId, respond: sessionAdmission.respond)
 
         case .rejected(let diagnostic):
             await executeAdmissionEffects(admission.rejectForSessionLock(
-                authentication.clientId,
+                sessionAdmission.clientId,
                 diagnostic: diagnostic,
-                respond: authentication.respond
+                respond: sessionAdmission.respond
             ))
         }
     }

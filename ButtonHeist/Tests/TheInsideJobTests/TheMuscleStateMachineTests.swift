@@ -136,7 +136,7 @@ final class TheMuscleStateMachineTests: XCTestCase {
         XCTAssertEqual(
             ClientAdmission.Authentication.Reducer().reduce(
                 .connected(address: "127.0.0.1"),
-                event: .completeAuthentication
+                event: .authenticationCompletionRequested
             ),
             .rejected(.missingHello, state: .connected(address: "127.0.0.1"))
         )
@@ -154,20 +154,20 @@ final class TheMuscleStateMachineTests: XCTestCase {
         XCTAssertEqual(
             ClientAdmission.Authentication.Reducer().reduce(
                 .connected(address: "127.0.0.1"),
-                event: .validateHello
+                event: .helloValidationRequested
             ),
-            .advanced(.helloValidated(address: "127.0.0.1"), effect: .helloValidated)
+            .advanced(.helloValidated(address: "127.0.0.1"), outcome: .helloValidated)
         )
         var registry = ClientAdmission.Registry()
         registry.registerAddress(1, address: "127.0.0.1")
 
         XCTAssertEqual(
             registry.validateHello(1),
-            .advanced(.helloValidated(address: "127.0.0.1"), effect: .helloValidated)
+            .advanced(.helloValidated(address: "127.0.0.1"), outcome: .helloValidated)
         )
         XCTAssertEqual(
             registry.completeAuthentication(1),
-            .advanced(.authenticated(address: "127.0.0.1"), effect: .authenticated)
+            .advanced(.authenticated(address: "127.0.0.1"), outcome: .authenticated)
         )
         XCTAssertEqual(registry.state(for: 1), .authenticated(address: "127.0.0.1"))
     }
@@ -207,11 +207,15 @@ final class TheMuscleStateMachineTests: XCTestCase {
         let authentication = try JSONEncoder().encode(RequestEnvelope(message: .authenticate(
             AuthenticatePayload(token: "good-token", driverId: "driver")
         )))
-        guard case .authenticate(let proof) = admission.admit(1, data: authentication, respond: respond) else {
-            return XCTFail("Expected valid credentials to produce authentication proof")
+        guard case .sessionAdmission(let sessionAdmission) = admission.admit(
+            1,
+            data: authentication,
+            respond: respond
+        ) else {
+            return XCTFail("Expected valid credentials to request session admission")
         }
         guard case .cancelAuthenticationDeadline(let authenticatedClientId)? =
-            admission.completeAuthentication(proof).first
+            admission.completeAuthentication(sessionAdmission).first
         else {
             return XCTFail("Expected authentication to cancel its deadline")
         }
@@ -232,16 +236,16 @@ final class TheMuscleStateMachineTests: XCTestCase {
         let now = Date(timeIntervalSinceReferenceDate: 1_000)
         registry.registerAddress(1, address: "127.0.0.1")
         for _ in 0..<ClientAdmission.RateLimiter.defaultMaxMessagesPerSecond {
-            XCTAssertEqual(registry.recordMessage(1, at: now), .accepted)
+            XCTAssertEqual(registry.admitMessage(1, at: now), .accept)
         }
-        XCTAssertEqual(registry.recordMessage(1, at: now), .rateLimited(shouldNotify: true))
+        XCTAssertEqual(registry.admitMessage(1, at: now), .drop(shouldNotify: true))
 
         XCTAssertEqual(registry.remove(1), .connected(address: "127.0.0.1"))
         XCTAssertFalse(registry.contains(1))
         XCTAssertNil(registry.state(for: 1))
 
         registry.registerAddress(1, address: "127.0.0.1")
-        XCTAssertEqual(registry.recordMessage(1, at: now), .accepted)
+        XCTAssertEqual(registry.admitMessage(1, at: now), .accept)
     }
 
     func testSessionLeaseDrainingRejectionUsesOneStructuredDiagnostic() {

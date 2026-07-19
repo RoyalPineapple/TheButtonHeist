@@ -45,7 +45,7 @@ enum ClientAdmission: Sendable {
     enum Decision {
         case admitted(AdmittedClientMessage)
         case handled([Effect])
-        case authenticate(Authentication.Proof)
+        case sessionAdmission(SessionAdmission)
     }
 
     enum Authentication {}
@@ -118,38 +118,38 @@ extension ClientAdmission {
             )
         }
 
-        mutating func completeAuthentication(_ authentication: Authentication.Proof) -> [Effect] {
-            let cancelDeadline = Effect.cancelAuthenticationDeadline(clientId: authentication.clientId)
-            switch clientRegistry.completeAuthentication(authentication.clientId) {
-            case .advanced(_, effect: .authenticated):
+        mutating func completeAuthentication(_ sessionAdmission: SessionAdmission) -> [Effect] {
+            let cancelDeadline = Effect.cancelAuthenticationDeadline(clientId: sessionAdmission.clientId)
+            switch clientRegistry.completeAuthentication(sessionAdmission.clientId) {
+            case .advanced(_, outcome: .authenticated):
                 break
-            case .advanced(_, effect: .helloValidated):
+            case .advanced(_, outcome: .helloValidated):
                 preconditionFailure("Authentication completion cannot emit hello validation.")
             case .missingClient:
                 return [
                     cancelDeadline,
-                    .log(.missingRegisteredAddress(clientId: authentication.clientId)),
+                    .log(.missingRegisteredAddress(clientId: sessionAdmission.clientId)),
                     .sendResponse(
                         .error(ServerError(kind: .authFailure, message: "Connection rejected.")),
                         requestId: nil,
-                        respond: authentication.respond
+                        respond: sessionAdmission.respond
                     ),
-                    .delayedDisconnect(clientId: authentication.clientId),
+                    .delayedDisconnect(clientId: sessionAdmission.clientId),
                 ]
             case .rejected:
                 return [cancelDeadline] + Rejection.unauthenticatedMessage(
-                    authentication.clientId,
+                    sessionAdmission.clientId,
                     message: "Authentication requires clientHello first.",
                     requestId: nil,
-                    respond: authentication.respond
+                    respond: sessionAdmission.respond
                 )
             }
 
-            switch authentication.source {
+            switch sessionAdmission.source {
             case .token:
                 return [
                     cancelDeadline,
-                    .log(.clientAuthenticatedWithToken(clientId: authentication.clientId)),
+                    .log(.clientAuthenticatedWithToken(clientId: sessionAdmission.clientId)),
                 ]
             }
         }
@@ -185,12 +185,12 @@ extension ClientAdmission {
             respond: @escaping ResponseHandler,
             at now: Date
         ) -> [Effect]? {
-            switch clientRegistry.recordMessage(clientId, at: now) {
-            case .accepted:
+            switch clientRegistry.admitMessage(clientId, at: now) {
+            case .accept:
                 return nil
-            case .rateLimited(shouldNotify: false):
+            case .drop(shouldNotify: false):
                 return [.log(.rateLimited(clientId: clientId))]
-            case .rateLimited(shouldNotify: true):
+            case .drop(shouldNotify: true):
                 let message: ServerErrorMessage
                 do {
                     message = try ServerErrorMessage(

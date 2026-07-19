@@ -86,7 +86,7 @@ struct TokenAuthentication {
                 ])
             }
         case .accepted(let owner):
-            return .authenticate(ClientAdmission.Authentication.Proof(
+            return .sessionAdmission(ClientAdmission.SessionAdmission(
                 clientId: clientId,
                 address: address,
                 owner: owner,

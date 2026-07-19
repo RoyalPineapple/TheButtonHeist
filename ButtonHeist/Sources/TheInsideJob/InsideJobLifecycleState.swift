@@ -149,9 +149,9 @@ extension TheInsideJob {
     }
 }
 
-struct InsideJobLifecycleMachine: @MainActor SimpleStateMachine {
+struct InsideJobLifecycleReducer: @MainActor StateReducer {
     typealias State = TheInsideJob.ServerPhase
-    typealias Change = StateChange<State, Effect, Rejection>
+    typealias Transition = StateTransition<State, Effect, Rejection>
 
     enum Event: Equatable {
         case lifecycleSuspensionNotification
@@ -261,7 +261,7 @@ struct InsideJobLifecycleMachine: @MainActor SimpleStateMachine {
     }
 
     @MainActor
-    func advance(_ state: State, with event: Event) -> Change {
+    func reduce(_ state: State, event: Event) -> Transition {
         switch event {
         case .lifecycleSuspensionNotification:
             return .changed(to: state, effects: [.scheduleSuspend])
@@ -294,7 +294,7 @@ struct InsideJobLifecycleMachine: @MainActor SimpleStateMachine {
         }
     }
 
-    private func foreground(_ state: State, replacingExisting: Bool) -> Change {
+    private func foreground(_ state: State, replacingExisting: Bool) -> Transition {
         switch state {
         case .suspended:
             return .changed(to: state, effects: [.scheduleResume(afterCancelling: nil)])
@@ -308,7 +308,7 @@ struct InsideJobLifecycleMachine: @MainActor SimpleStateMachine {
     private func startRequested(
         _ state: State,
         request: TheInsideJob.InsideJobTransportStartRequest
-    ) -> Change {
+    ) -> Transition {
         guard case .stopped = state else {
             return .rejected(.alreadyActive, stayingIn: state)
         }
@@ -319,21 +319,24 @@ struct InsideJobLifecycleMachine: @MainActor SimpleStateMachine {
         _ state: State,
         id: UUID,
         resources: TheInsideJob.InsideJobRuntimeResources
-    ) -> Change {
+    ) -> Transition {
         guard case .starting(let request) = state, request.id == id else {
             return .rejected(.staleStartAttempt, stayingIn: state)
         }
         return .changed(to: .running(resources), effects: [.activateRuntime(resources)])
     }
 
-    private func startFailed(_ state: State, id: UUID) -> Change {
+    private func startFailed(_ state: State, id: UUID) -> Transition {
         guard case .starting(let request) = state, request.id == id else {
             return .rejected(.staleStartAttempt, stayingIn: state)
         }
         return .changed(to: .stopped, effects: [.cleanupTransport(request.transport)])
     }
 
-    private func stopRequested(_ state: State, attempt stopAttempt: TheInsideJob.InsideJobStopAttempt) -> Change {
+    private func stopRequested(
+        _ state: State,
+        attempt stopAttempt: TheInsideJob.InsideJobStopAttempt
+    ) -> Transition {
         switch state {
         case .stopped:
             return .rejected(.alreadyStopped, stayingIn: state)
@@ -374,7 +377,7 @@ struct InsideJobLifecycleMachine: @MainActor SimpleStateMachine {
     private func stopRunning(
         _ resources: TheInsideJob.InsideJobRuntimeResources,
         attempt stopAttempt: TheInsideJob.InsideJobStopAttempt
-    ) -> Change {
+    ) -> Transition {
         .changed(
             to: .stopping(stopAttempt),
             effects: [
@@ -385,14 +388,17 @@ struct InsideJobLifecycleMachine: @MainActor SimpleStateMachine {
         )
     }
 
-    private func stopFinished(_ state: State, id: UUID) -> Change {
+    private func stopFinished(_ state: State, id: UUID) -> Transition {
         guard case .stopping(let attempt) = state, attempt.id == id else {
             return .rejected(.staleStopAttempt, stayingIn: state)
         }
         return .changed(to: .stopped)
     }
 
-    private func suspendRequested(_ state: State, suspension: TheInsideJob.InsideJobSuspension?) -> Change {
+    private func suspendRequested(
+        _ state: State,
+        suspension: TheInsideJob.InsideJobSuspension?
+    ) -> Transition {
         switch (state, suspension) {
         case (.running(let resources), .some(let suspension)):
             return .changed(
@@ -415,7 +421,7 @@ struct InsideJobLifecycleMachine: @MainActor SimpleStateMachine {
         }
     }
 
-    private func suspendFinished(_ state: State, id: UUID) -> Change {
+    private func suspendFinished(_ state: State, id: UUID) -> Transition {
         guard case .suspending(let suspension) = state, suspension.id == id else {
             return .rejected(.staleSuspendAttempt, stayingIn: state)
         }
@@ -428,7 +434,10 @@ struct InsideJobLifecycleMachine: @MainActor SimpleStateMachine {
         )
     }
 
-    private func resumeRequested(_ state: State, attempt: TheInsideJob.InsideJobResumeAttempt) -> Change {
+    private func resumeRequested(
+        _ state: State,
+        attempt: TheInsideJob.InsideJobResumeAttempt
+    ) -> Transition {
         switch state {
         case .suspended:
             return .changed(to: .resuming(attempt))
@@ -442,7 +451,7 @@ struct InsideJobLifecycleMachine: @MainActor SimpleStateMachine {
     private func resumeTransportRequested(
         _ state: State,
         request: TheInsideJob.InsideJobTransportStartRequest
-    ) -> Change {
+    ) -> Transition {
         guard case .resuming(let attempt) = state, attempt.id == request.id else {
             return .rejected(.staleResumeAttempt, stayingIn: state)
         }
@@ -453,14 +462,14 @@ struct InsideJobLifecycleMachine: @MainActor SimpleStateMachine {
         _ state: State,
         id: UUID,
         resources: TheInsideJob.InsideJobRuntimeResources
-    ) -> Change {
+    ) -> Transition {
         guard case .resuming(let attempt) = state, attempt.id == id else {
             return .rejected(.staleResumeAttempt, stayingIn: state)
         }
         return .changed(to: .running(resources), effects: [.activateRuntime(resources)])
     }
 
-    private func resumeFailed(_ state: State, id: UUID) -> Change {
+    private func resumeFailed(_ state: State, id: UUID) -> Transition {
         guard case .resuming(let attempt) = state, attempt.id == id else {
             return .rejected(.staleResumeAttempt, stayingIn: state)
         }

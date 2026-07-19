@@ -87,13 +87,13 @@ extension TheInsideJob {
         getaway.identity.tlsActive = false
     }
 
-    func performLifecycleEffects(_ effects: [InsideJobLifecycleMachine.Effect]) async {
+    func performLifecycleEffects(_ effects: [InsideJobLifecycleReducer.Effect]) async {
         for effect in effects {
             await performLifecycleEffect(effect)
         }
     }
 
-    func performLifecycleSchedulingEffects(_ effects: [InsideJobLifecycleMachine.Effect]) {
+    func performLifecycleSchedulingEffects(_ effects: [InsideJobLifecycleReducer.Effect]) {
         for effect in effects {
             switch effect {
             case .scheduleSuspend:
@@ -124,7 +124,7 @@ extension TheInsideJob {
         }
     }
 
-    func performLifecycleEffect(_ effect: InsideJobLifecycleMachine.Effect) async {
+    func performLifecycleEffect(_ effect: InsideJobLifecycleReducer.Effect) async {
         switch effect {
         case .scheduleSuspend:
             spawnLifecycleTask { [weak self] in

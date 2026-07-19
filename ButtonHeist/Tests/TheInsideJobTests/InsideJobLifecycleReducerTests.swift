@@ -4,25 +4,25 @@ import XCTest
 @testable import TheInsideJob
 
 @MainActor
-final class InsideJobLifecycleStateMachineTests: XCTestCase {
-    private let machine = InsideJobLifecycleMachine()
+final class InsideJobLifecycleReducerTests: XCTestCase {
+    private let reducer = InsideJobLifecycleReducer()
 
     func testLifecycleNotificationsProduceOnlySchedulingEffects() {
         let fixture = Fixture()
         let state = TheInsideJob.ServerPhase.running(fixture.resources)
 
         XCTAssertEqual(
-            machine.advance(state, with: .lifecycleSuspensionNotification),
+            reducer.reduce(state, event: .lifecycleSuspensionNotification),
             .changed(to: state, effects: [.scheduleSuspend])
         )
         XCTAssertEqual(
-            machine.advance(state, with: .terminationNotification),
+            reducer.reduce(state, event: .terminationNotification),
             .changed(to: state, effects: [.scheduleStop])
         )
         XCTAssertEqual(
-            machine.advance(
+            reducer.reduce(
                 .suspended(fixture.suspendedRuntime),
-                with: .foregroundNotification(replacingExisting: false)
+                event: .foregroundNotification(replacingExisting: false)
             ),
             .changed(
                 to: .suspended(fixture.suspendedRuntime),
@@ -30,9 +30,9 @@ final class InsideJobLifecycleStateMachineTests: XCTestCase {
             )
         )
         XCTAssertEqual(
-            machine.advance(
+            reducer.reduce(
                 .resuming(fixture.resumeAttempt),
-                with: .foregroundNotification(replacingExisting: true)
+                event: .foregroundNotification(replacingExisting: true)
             ),
             .changed(
                 to: .resuming(fixture.resumeAttempt),
@@ -50,9 +50,9 @@ final class InsideJobLifecycleStateMachineTests: XCTestCase {
         ]
         for noOpState in noOpStates {
             XCTAssertEqual(
-                machine.advance(
+                reducer.reduce(
                     noOpState,
-                    with: .foregroundNotification(replacingExisting: false)
+                    event: .foregroundNotification(replacingExisting: false)
                 ),
                 .changed(to: noOpState)
             )
@@ -63,16 +63,16 @@ final class InsideJobLifecycleStateMachineTests: XCTestCase {
         let fixture = Fixture()
 
         XCTAssertEqual(
-            machine.advance(
+            reducer.reduce(
                 .stopped,
-                with: .startRequested(fixture.startRequest)
+                event: .startRequested(fixture.startRequest)
             ),
             .changed(to: .starting(fixture.startRequest))
         )
         XCTAssertEqual(
-            machine.advance(
+            reducer.reduce(
                 .starting(fixture.startRequest),
-                with: .startSucceeded(fixture.id, fixture.resources)
+                event: .startSucceeded(fixture.id, fixture.resources)
             ),
             .changed(
                 to: .running(fixture.resources),
@@ -80,30 +80,30 @@ final class InsideJobLifecycleStateMachineTests: XCTestCase {
             )
         )
         XCTAssertEqual(
-            machine.advance(
+            reducer.reduce(
                 .starting(fixture.startRequest),
-                with: .startFailed(fixture.id)
+                event: .startFailed(fixture.id)
             ),
             .changed(to: .stopped, effects: [.cleanupTransport(fixture.transport)])
         )
         XCTAssertEqual(
-            machine.advance(
+            reducer.reduce(
                 .running(fixture.resources),
-                with: .startRequested(fixture.startRequest)
+                event: .startRequested(fixture.startRequest)
             ),
             .rejected(.alreadyActive, stayingIn: .running(fixture.resources))
         )
         XCTAssertEqual(
-            machine.advance(
+            reducer.reduce(
                 .starting(fixture.startRequest),
-                with: .startSucceeded(fixture.otherID, fixture.resources)
+                event: .startSucceeded(fixture.otherID, fixture.resources)
             ),
             .rejected(.staleStartAttempt, stayingIn: .starting(fixture.startRequest))
         )
         XCTAssertEqual(
-            machine.advance(
+            reducer.reduce(
                 .starting(fixture.startRequest),
-                with: .startFailed(fixture.otherID)
+                event: .startFailed(fixture.otherID)
             ),
             .rejected(.staleStartAttempt, stayingIn: .starting(fixture.startRequest))
         )
@@ -114,9 +114,9 @@ final class InsideJobLifecycleStateMachineTests: XCTestCase {
         let stopping = TheInsideJob.ServerPhase.stopping(fixture.stopAttempt)
 
         XCTAssertEqual(
-            machine.advance(
+            reducer.reduce(
                 .starting(fixture.startRequest),
-                with: .stopRequested(fixture.stopAttempt)
+                event: .stopRequested(fixture.stopAttempt)
             ),
             .changed(
                 to: stopping,
@@ -124,9 +124,9 @@ final class InsideJobLifecycleStateMachineTests: XCTestCase {
             )
         )
         XCTAssertEqual(
-            machine.advance(
+            reducer.reduce(
                 .running(fixture.resources),
-                with: .stopRequested(fixture.stopAttempt)
+                event: .stopRequested(fixture.stopAttempt)
             ),
             .changed(
                 to: stopping,
@@ -138,9 +138,9 @@ final class InsideJobLifecycleStateMachineTests: XCTestCase {
             )
         )
         XCTAssertEqual(
-            machine.advance(
+            reducer.reduce(
                 .suspending(fixture.suspension),
-                with: .stopRequested(fixture.stopAttempt)
+                event: .stopRequested(fixture.stopAttempt)
             ),
             .changed(
                 to: stopping,
@@ -152,9 +152,9 @@ final class InsideJobLifecycleStateMachineTests: XCTestCase {
             )
         )
         XCTAssertEqual(
-            machine.advance(
+            reducer.reduce(
                 .suspended(fixture.suspendedRuntime),
-                with: .stopRequested(fixture.stopAttempt)
+                event: .stopRequested(fixture.stopAttempt)
             ),
             .changed(
                 to: stopping,
@@ -165,9 +165,9 @@ final class InsideJobLifecycleStateMachineTests: XCTestCase {
             )
         )
         XCTAssertEqual(
-            machine.advance(
+            reducer.reduce(
                 .resuming(fixture.resumeAttempt),
-                with: .stopRequested(fixture.stopAttempt)
+                event: .stopRequested(fixture.stopAttempt)
             ),
             .changed(
                 to: stopping,
@@ -179,7 +179,7 @@ final class InsideJobLifecycleStateMachineTests: XCTestCase {
             )
         )
         XCTAssertEqual(
-            machine.advance(stopping, with: .stopFinished(fixture.stopAttempt.id)),
+            reducer.reduce(stopping, event: .stopFinished(fixture.stopAttempt.id)),
             .changed(to: .stopped)
         )
     }
@@ -189,21 +189,21 @@ final class InsideJobLifecycleStateMachineTests: XCTestCase {
         let stopping = TheInsideJob.ServerPhase.stopping(fixture.stopAttempt)
 
         XCTAssertEqual(
-            machine.advance(.stopped, with: .stopRequested(fixture.stopAttempt)),
+            reducer.reduce(.stopped, event: .stopRequested(fixture.stopAttempt)),
             .rejected(.alreadyStopped, stayingIn: .stopped)
         )
         XCTAssertEqual(
-            machine.advance(stopping, with: .stopRequested(fixture.stopAttempt)),
+            reducer.reduce(stopping, event: .stopRequested(fixture.stopAttempt)),
             .rejected(.alreadyStopping, stayingIn: stopping)
         )
         XCTAssertEqual(
-            machine.advance(stopping, with: .stopFinished(fixture.otherID)),
+            reducer.reduce(stopping, event: .stopFinished(fixture.otherID)),
             .rejected(.staleStopAttempt, stayingIn: stopping)
         )
         XCTAssertEqual(
-            machine.advance(
+            reducer.reduce(
                 .running(fixture.resources),
-                with: .stopFinished(fixture.stopAttempt.id)
+                event: .stopFinished(fixture.stopAttempt.id)
             ),
             .rejected(.staleStopAttempt, stayingIn: .running(fixture.resources))
         )
@@ -213,9 +213,9 @@ final class InsideJobLifecycleStateMachineTests: XCTestCase {
         let fixture = Fixture()
 
         XCTAssertEqual(
-            machine.advance(
+            reducer.reduce(
                 .running(fixture.resources),
-                with: .suspendRequested(fixture.suspension)
+                event: .suspendRequested(fixture.suspension)
             ),
             .changed(
                 to: .suspending(fixture.suspension),
@@ -227,9 +227,9 @@ final class InsideJobLifecycleStateMachineTests: XCTestCase {
             )
         )
         XCTAssertEqual(
-            machine.advance(
+            reducer.reduce(
                 .resuming(fixture.resumeAttempt),
-                with: .suspendRequested(nil)
+                event: .suspendRequested(nil)
             ),
             .changed(
                 to: .resuming(fixture.resumeAttempt),
@@ -237,27 +237,27 @@ final class InsideJobLifecycleStateMachineTests: XCTestCase {
             )
         )
         XCTAssertEqual(
-            machine.advance(
+            reducer.reduce(
                 .suspending(fixture.suspension),
-                with: .suspendFinished(fixture.suspension.id)
+                event: .suspendFinished(fixture.suspension.id)
             ),
             .changed(to: .suspended(fixture.suspendedRuntime))
         )
         XCTAssertEqual(
-            machine.advance(
+            reducer.reduce(
                 .running(fixture.resources),
-                with: .suspendRequested(nil)
+                event: .suspendRequested(nil)
             ),
             .rejected(.notRunning, stayingIn: .running(fixture.resources))
         )
         XCTAssertEqual(
-            machine.advance(.stopped, with: .suspendRequested(fixture.suspension)),
+            reducer.reduce(.stopped, event: .suspendRequested(fixture.suspension)),
             .rejected(.notRunning, stayingIn: .stopped)
         )
         XCTAssertEqual(
-            machine.advance(
+            reducer.reduce(
                 .suspending(fixture.suspension),
-                with: .suspendFinished(fixture.otherID)
+                event: .suspendFinished(fixture.otherID)
             ),
             .rejected(.staleSuspendAttempt, stayingIn: .suspending(fixture.suspension))
         )
@@ -267,23 +267,23 @@ final class InsideJobLifecycleStateMachineTests: XCTestCase {
         let fixture = Fixture()
 
         XCTAssertEqual(
-            machine.advance(
+            reducer.reduce(
                 .suspended(fixture.suspendedRuntime),
-                with: .resumeRequested(fixture.resumeAttempt)
+                event: .resumeRequested(fixture.resumeAttempt)
             ),
             .changed(to: .resuming(fixture.resumeAttempt))
         )
         XCTAssertEqual(
-            machine.advance(
+            reducer.reduce(
                 .resuming(fixture.resumeAttempt),
-                with: .resumeTransportRequested(fixture.resumeRequest)
+                event: .resumeTransportRequested(fixture.resumeRequest)
             ),
             .changed(to: .resuming(fixture.resumeAttempt))
         )
         XCTAssertEqual(
-            machine.advance(
+            reducer.reduce(
                 .resuming(fixture.resumeAttempt),
-                with: .resumeSucceeded(fixture.id, fixture.resources)
+                event: .resumeSucceeded(fixture.id, fixture.resources)
             ),
             .changed(
                 to: .running(fixture.resources),
@@ -291,21 +291,21 @@ final class InsideJobLifecycleStateMachineTests: XCTestCase {
             )
         )
         XCTAssertEqual(
-            machine.advance(
+            reducer.reduce(
                 .resuming(fixture.resumeAttempt),
-                with: .resumeFailed(fixture.id)
+                event: .resumeFailed(fixture.id)
             ),
             .changed(to: .suspended(fixture.suspendedRuntime))
         )
         XCTAssertEqual(
-            machine.advance(
+            reducer.reduce(
                 .resuming(fixture.resumeAttempt),
-                with: .resumeRequested(fixture.resumeAttempt)
+                event: .resumeRequested(fixture.resumeAttempt)
             ),
             .rejected(.alreadyActive, stayingIn: .resuming(fixture.resumeAttempt))
         )
         XCTAssertEqual(
-            machine.advance(.stopped, with: .resumeRequested(fixture.resumeAttempt)),
+            reducer.reduce(.stopped, event: .resumeRequested(fixture.resumeAttempt)),
             .rejected(.notSuspended, stayingIn: .stopped)
         )
 
@@ -316,23 +316,23 @@ final class InsideJobLifecycleStateMachineTests: XCTestCase {
             idleTimerBaseline: false
         )
         XCTAssertEqual(
-            machine.advance(
+            reducer.reduce(
                 .resuming(fixture.resumeAttempt),
-                with: .resumeTransportRequested(staleRequest)
+                event: .resumeTransportRequested(staleRequest)
             ),
             .rejected(.staleResumeAttempt, stayingIn: .resuming(fixture.resumeAttempt))
         )
         XCTAssertEqual(
-            machine.advance(
+            reducer.reduce(
                 .resuming(fixture.resumeAttempt),
-                with: .resumeSucceeded(fixture.otherID, fixture.resources)
+                event: .resumeSucceeded(fixture.otherID, fixture.resources)
             ),
             .rejected(.staleResumeAttempt, stayingIn: .resuming(fixture.resumeAttempt))
         )
         XCTAssertEqual(
-            machine.advance(
+            reducer.reduce(
                 .resuming(fixture.resumeAttempt),
-                with: .resumeFailed(fixture.otherID)
+                event: .resumeFailed(fixture.otherID)
             ),
             .rejected(.staleResumeAttempt, stayingIn: .resuming(fixture.resumeAttempt))
         )

@@ -386,15 +386,15 @@ final class TheMuscleTests: XCTestCase {
             return XCTFail("Expected client hello to be handled")
         }
 
-        guard case .authenticate(let authentication) = admission.admit(
+        guard case .sessionAdmission(let sessionAdmission) = admission.admit(
             1,
             data: try encodeAuth(token: "good-token"),
             respond: respond,
             at: now
         ) else {
-            return XCTFail("Expected valid token to request authentication completion")
+            return XCTFail("Expected valid token to request session admission")
         }
-        _ = admission.completeAuthentication(authentication)
+        _ = admission.completeAuthentication(sessionAdmission)
 
         let pingData = try JSONEncoder().encode(RequestEnvelope(message: .ping))
         let nextWindow = now.addingTimeInterval(1.1)
