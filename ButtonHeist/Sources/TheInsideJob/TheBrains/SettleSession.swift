@@ -280,8 +280,8 @@ final class SettleSessionFinalObservation {
     /// last-seen snapshot than blocking the action pipeline further.
     static let defaultTimeoutMs: Int = 5_000
 
-    /// Programmatic viewport movement should normally prove itself after one
-    /// run-loop turn. This ceiling allows brief layout churn without turning
+    /// Programmatic viewport movement should normally prove itself after two
+    /// run-loop turns. This ceiling allows brief layout churn without turning
     /// page-by-page discovery into action settlement.
     static let viewportTransitionTimeoutMs: Int = 250
 
@@ -381,8 +381,8 @@ final class SettleSessionFinalObservation {
     }
 
     /// Minimal proof for a programmatic viewport transition. UIKit receives
-    /// one run-loop turn to lay out the new viewport, then the parser must
-    /// return the same semantic fingerprint on consecutive captures.
+    /// two run-loop turns to lay out the new viewport, and the parser must
+    /// return the same semantic fingerprint across both repeat captures.
     static func viewportTransition(
         vault: TheVault,
         tripwire: TheTripwire,
@@ -392,7 +392,7 @@ final class SettleSessionFinalObservation {
             parseProvider: { vault.semanticObservationForSettle() },
             tripwireSignalProvider: { tripwire.tripwireSignal() },
             observationYield: { await tripwire.yieldRealFrames(1) },
-            policy: .consecutiveCycles(required: 1),
+            policy: .consecutiveCycles(required: 2),
             clock: { CFAbsoluteTimeGetCurrent() },
             timeoutMs: timeoutMs
         )

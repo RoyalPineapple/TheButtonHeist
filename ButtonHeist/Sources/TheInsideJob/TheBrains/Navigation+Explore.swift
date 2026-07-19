@@ -48,9 +48,8 @@ extension Navigation {
         requiredAfterMovement: Bool = false
     ) async -> SettledObservationEvent? {
         defer { notificationWindow?.cancel() }
-        guard requiredAfterMovement || (!Task.isCancelled && hasTimeRemaining(before: deadline)) else {
-            return nil
-        }
+        guard !Task.isCancelled,
+              requiredAfterMovement || hasTimeRemaining(before: deadline) else { return nil }
         let timeoutMs: Int
         switch deadline {
         case nil:
@@ -61,23 +60,29 @@ extension Navigation {
                 max(1, Int((deadline.remainingSeconds() * 1_000).rounded(.up)))
             )
         }
-        let settle = await SettleSession.viewportTransition(
-            vault: vault,
-            tripwire: tripwire,
-            timeoutMs: timeoutMs
-        ).run(
-            start: CFAbsoluteTimeGetCurrent(),
-            baselineTripwireSignal: tripwire.tripwireSignal()
-        )
-        guard requiredAfterMovement || (!Task.isCancelled && hasTimeRemaining(before: deadline)) else {
-            return nil
-        }
-        return vault.semanticObservationStream.commitSettledDiscoveryObservation(
-            settle,
-            discoveryCommitPolicy: discoveryCommitPolicy,
-            afterViewportMovement: requiredAfterMovement,
-            notificationBatch: notificationWindow?.capture()
-        )
+        let transitionDeadline = SemanticObservationDeadline(start: CFAbsoluteTimeGetCurrent(), timeoutMs: timeoutMs)
+        repeat {
+            let settleTimeoutMs = max(1, Int((transitionDeadline.remainingSeconds() * 1_000).rounded(.up)))
+            let settle = await SettleSession.viewportTransition(
+                vault: vault,
+                tripwire: tripwire,
+                timeoutMs: settleTimeoutMs
+            ).run(
+                start: CFAbsoluteTimeGetCurrent(),
+                baselineTripwireSignal: tripwire.tripwireSignal()
+            )
+            guard !Task.isCancelled else { return nil }
+            if let event = vault.semanticObservationStream.commitSettledDiscoveryObservation(
+                settle,
+                discoveryCommitPolicy: discoveryCommitPolicy,
+                afterViewportMovement: requiredAfterMovement,
+                notificationBatch: notificationWindow?.capture()
+            ) {
+                return event
+            }
+        } while transitionDeadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent())
+            && (requiredAfterMovement || hasTimeRemaining(before: deadline))
+        return nil
     }
 
     private func hasTimeRemaining(before deadline: SemanticObservationDeadline?) -> Bool {

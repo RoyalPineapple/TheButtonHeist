@@ -96,7 +96,7 @@ extension SettleSessionTests {
         XCTAssertEqual(expiredDeadline.remainingSeconds(at: 30), 0)
     }
 
-    func testViewportTransitionSettleUsesOneRunLoopTurnWhenTheRepeatIsStable() async {
+    func testViewportTransitionSettleUsesTwoRunLoopTurnsWhenTheRepeatsAreStable() async {
         let stable = makeParseResult([
             makeElement(label: "Stable", traits: .staticText),
         ])
@@ -108,37 +108,7 @@ extension SettleSessionTests {
             },
             tripwireSignalProvider: { self.tripwireSignal(topmostVC: nil) },
             sleeper: { _ in },
-            cyclesRequired: 1,
-            cycleIntervalMs: 0,
-            timeoutMs: SettleSession.viewportTransitionTimeoutMs
-        )
-
-        let outcome = await session.run(
-            start: CFAbsoluteTimeGetCurrent(),
-            baselineTripwireSignal: tripwireSignal(topmostVC: nil)
-        )
-
-        XCTAssertTrue(outcome.outcome.didSettleCleanly)
-        XCTAssertEqual(parseCount.next(), 2)
-    }
-
-    func testViewportTransitionSettleUsesASecondRunLoopTurnAfterOneLayoutChange() async {
-        let loading = makeParseResult([
-            makeElement(label: "Loading", traits: .staticText),
-        ])
-        let ready = makeParseResult([
-            makeElement(label: "Ready", traits: .staticText),
-        ])
-        let script = ScriptBox(script: [loading, ready, ready])
-        let parseCount = Counter()
-        let session = SettleSession(
-            parseProvider: {
-                _ = parseCount.next()
-                return script.next()
-            },
-            tripwireSignalProvider: { self.tripwireSignal(topmostVC: nil) },
-            sleeper: { _ in },
-            cyclesRequired: 1,
+            cyclesRequired: 2,
             cycleIntervalMs: 0,
             timeoutMs: SettleSession.viewportTransitionTimeoutMs
         )
@@ -150,6 +120,36 @@ extension SettleSessionTests {
 
         XCTAssertTrue(outcome.outcome.didSettleCleanly)
         XCTAssertEqual(parseCount.next(), 3)
+    }
+
+    func testViewportTransitionSettleRejectsOneStaleRepeatAfterMovement() async {
+        let loading = makeParseResult([
+            makeElement(label: "Loading", traits: .staticText),
+        ])
+        let ready = makeParseResult([
+            makeElement(label: "Ready", traits: .staticText),
+        ])
+        let script = ScriptBox(script: [loading, loading, ready, ready, ready])
+        let parseCount = Counter()
+        let session = SettleSession(
+            parseProvider: {
+                _ = parseCount.next()
+                return script.next()
+            },
+            tripwireSignalProvider: { self.tripwireSignal(topmostVC: nil) },
+            sleeper: { _ in },
+            cyclesRequired: 2,
+            cycleIntervalMs: 0,
+            timeoutMs: SettleSession.viewportTransitionTimeoutMs
+        )
+
+        let outcome = await session.run(
+            start: CFAbsoluteTimeGetCurrent(),
+            baselineTripwireSignal: tripwireSignal(topmostVC: nil)
+        )
+
+        XCTAssertTrue(outcome.outcome.didSettleCleanly)
+        XCTAssertEqual(parseCount.next(), 5)
         XCTAssertEqual(
             outcome.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label,
             "Ready"
