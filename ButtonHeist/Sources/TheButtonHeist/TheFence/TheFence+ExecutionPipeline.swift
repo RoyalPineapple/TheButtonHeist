@@ -17,7 +17,7 @@ extension TheFence {
 
     private func ensureConnectedIfNeeded(for command: Command) async throws {
         guard !handoff.connectionLifecycle.isConnected,
-              command.contract.connectionRequirement == .activeSession else { return }
+              command.descriptor.requiresConnectionBeforeDispatch else { return }
         try await start()
     }
 }

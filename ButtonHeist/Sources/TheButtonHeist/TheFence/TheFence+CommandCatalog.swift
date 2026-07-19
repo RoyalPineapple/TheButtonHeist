@@ -160,11 +160,6 @@ extension TheFence {
         case listTargets = "list_targets"
     }
 
-    enum CommandConnectionRequirement: Equatable, Sendable {
-        case activeSession
-        case none
-    }
-
 }
 
 extension TheFence.Command {
@@ -172,14 +167,10 @@ extension TheFence.Command {
         let descriptor: FenceCommandDescriptor
         let admission: FenceCommandAdmission
 
-        var connectionRequirement: TheFence.CommandConnectionRequirement {
-            descriptor.requiresConnectionBeforeDispatch ? .activeSession : .none
-        }
-
         init(
             command: TheFence.Command,
             family: FenceCommandFamily,
-            connectionRequirement: TheFence.CommandConnectionRequirement,
+            requiresConnectionBeforeDispatch: Bool,
             parameters: FenceCommandParameters,
             timeout: FenceCommandTimeoutSemantics,
             description: String,
@@ -191,7 +182,7 @@ extension TheFence.Command {
             descriptor = FenceCommandDescriptor(
                 command: command,
                 family: family,
-                requiresConnectionBeforeDispatch: connectionRequirement == .activeSession,
+                requiresConnectionBeforeDispatch: requiresConnectionBeforeDispatch,
                 parameters: parameters,
                 timeout: timeout,
                 cliExposure: cliExposure,
@@ -221,7 +212,7 @@ extension TheFence.Command {
 extension TheFence.Command {
     private func handler(
         family: FenceCommandFamily,
-        connectionRequirement: TheFence.CommandConnectionRequirement = .activeSession,
+        requiresConnectionBeforeDispatch: Bool = true,
         parameters: FenceCommandParameters = [],
         timeout: FenceCommandTimeoutSemantics = .none,
         description: String,
@@ -233,7 +224,7 @@ extension TheFence.Command {
         Contract(
             command: self,
             family: family,
-            connectionRequirement: connectionRequirement,
+            requiresConnectionBeforeDispatch: requiresConnectionBeforeDispatch,
             parameters: parameters,
             timeout: timeout,
             description: description,
@@ -246,7 +237,7 @@ extension TheFence.Command {
 
     private func fixedHandler(
         family: FenceCommandFamily,
-        connectionRequirement: TheFence.CommandConnectionRequirement = .activeSession,
+        requiresConnectionBeforeDispatch: Bool = true,
         parameters: FenceCommandParameters = [],
         timeout: FenceCommandFixedTimeout,
         description: String,
@@ -257,7 +248,7 @@ extension TheFence.Command {
     ) -> Contract {
         handler(
             family: family,
-            connectionRequirement: connectionRequirement,
+            requiresConnectionBeforeDispatch: requiresConnectionBeforeDispatch,
             parameters: parameters,
             timeout: .fixed(timeout),
             description: description,
@@ -278,7 +269,7 @@ extension TheFence.Command {
         Contract(
             command: self,
             family: family,
-            connectionRequirement: .activeSession,
+            requiresConnectionBeforeDispatch: true,
             parameters: parameters,
             timeout: .singleStepAction(base: baseTimeout),
             description: description,
@@ -306,7 +297,7 @@ extension TheFence.Command {
         Contract(
             command: self,
             family: family,
-            connectionRequirement: .activeSession,
+            requiresConnectionBeforeDispatch: true,
             parameters: parameters,
             timeout: .fixed(timeout),
             description: description,
@@ -330,7 +321,7 @@ extension TheFence.Command {
         case .ping:
             return fixedHandler(
                 family: .session,
-                connectionRequirement: .none,
+                requiresConnectionBeforeDispatch: false,
                 timeout: .health,
                 description: "Check connection health without reading accessibility state.",
                 mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
@@ -340,7 +331,7 @@ extension TheFence.Command {
         case .listDevices:
             return handler(
                 family: .session,
-                connectionRequirement: .none,
+                requiresConnectionBeforeDispatch: false,
                 description: "List discovered iOS devices and configured connection targets.",
                 mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
             ) { _, _ in
@@ -615,7 +606,7 @@ extension TheFence.Command {
         case .validateHeist:
             return handler(
                 family: .heistRuntime,
-                connectionRequirement: .none,
+                requiresConnectionBeforeDispatch: false,
                 parameters: FenceCommandParameters([
                     Self.rootArgumentParameter,
                     FenceParameters.heistValidationLint.spec,
@@ -630,7 +621,7 @@ extension TheFence.Command {
         case .listHeists:
             return handler(
                 family: .heistRuntime,
-                connectionRequirement: .none,
+                requiresConnectionBeforeDispatch: false,
                 parameters: FenceCommandParameters([
                     FenceParameters.heistCatalogDetail.spec,
                 ] + Self.planSourceParameters),
@@ -645,7 +636,7 @@ extension TheFence.Command {
         case .describeHeist:
             return handler(
                 family: .heistRuntime,
-                connectionRequirement: .none,
+                requiresConnectionBeforeDispatch: false,
                 parameters: FenceCommandParameters([FenceParameters.heistName.spec] + Self.planSourceParameters),
                 description: "Describe one root entry or reusable heist from a plan so an agent can call it safely.",
                 mcpExposure: .directTool,
@@ -657,7 +648,7 @@ extension TheFence.Command {
         case .getSessionState:
             return handler(
                 family: .session,
-                connectionRequirement: .none,
+                requiresConnectionBeforeDispatch: false,
                 description: "Inspect connection, device, and last-action session state.",
                 mcpExposure: .directTool,
                 mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
@@ -667,7 +658,7 @@ extension TheFence.Command {
         case .connect:
             return handler(
                 family: .session,
-                connectionRequirement: .none,
+                requiresConnectionBeforeDispatch: false,
                 parameters: [
                     FenceParameters.connectionTarget.spec,
                     FenceParameters.device.spec,
@@ -682,7 +673,7 @@ extension TheFence.Command {
         case .listTargets:
             return handler(
                 family: .session,
-                connectionRequirement: .none,
+                requiresConnectionBeforeDispatch: false,
                 description: "List configured connection targets and the default target.",
                 mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
             ) { _, _ in

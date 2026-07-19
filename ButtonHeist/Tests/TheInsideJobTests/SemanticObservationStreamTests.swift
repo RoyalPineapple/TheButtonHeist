@@ -368,7 +368,7 @@ final class SemanticObservationStreamTests: XCTestCase {
     }
 
     func testLifecycleOwnsRunningObservationAndCancellation() {
-        var state = SemanticObservationLifecycle()
+        var state = SemanticObservationLifecycle.stopped
         let task = Task<Void, Never> { await Task.yield() }
         let initialDiscovery: SemanticObservationLifecycle.DiscoveryObservation = { nil }
         state.start(task: task, discovery: initialDiscovery)

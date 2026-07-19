@@ -50,7 +50,7 @@ internal final class SemanticObservationStream {
 
     // MARK: - Subscriber-Facing Settled Observation History
 
-    var lifecycle = SemanticObservationLifecycle()
+    var lifecycle = SemanticObservationLifecycle.stopped
     internal var latestEvent: SettledObservationEvent? {
         observationStore.latestSourceEvent
     }

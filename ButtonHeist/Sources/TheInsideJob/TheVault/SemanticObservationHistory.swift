@@ -3,15 +3,11 @@
 import TheScore
 
 internal enum SemanticObservationHistoryAppendError: Error, Sendable, Equatable {
-    case initialEntryAlreadyExists(scope: SemanticObservationScope)
-    case missingInitialEntry(scope: SemanticObservationScope)
-    case discontinuousLineage(expected: ObservationCursor, actual: ObservationCursor)
     case eventLineageMismatch(
         scope: SemanticObservationScope,
         expected: ObservationCursor?,
         actual: ObservationCursor?
     )
-    case scopeKeyMismatch(key: SemanticObservationScope, event: SemanticObservationScope)
 }
 
 internal enum ObservationHistoryReadError: Error, Sendable, Equatable {
@@ -37,29 +33,24 @@ internal struct SemanticObservationHistory {
         self.retentionLimit = retentionLimit
     }
 
-    mutating func append(_ entry: ObservationEntry) throws {
-        let scope = entry.cursor.scope
-        switch (latestByScope[scope], entry.transition) {
-        case (.none, .initial):
-            break
-        case (.some, .initial):
-            throw SemanticObservationHistoryAppendError.initialEntryAlreadyExists(scope: scope)
-        case (.none, .sameGeneration), (.none, .screenBoundary):
-            throw SemanticObservationHistoryAppendError.missingInitialEntry(scope: scope)
-        case (.some(let latest), .sameGeneration(let transition)):
-            guard transition.previousCursor == latest.cursor else {
-                throw SemanticObservationHistoryAppendError.discontinuousLineage(
-                    expected: latest.cursor,
-                    actual: transition.previousCursor
-                )
+    mutating func append(_ event: SettledObservationEvent) throws {
+        let scope = event.scope
+        let latest = latestByScope[scope]
+        guard event.previousCursor == latest?.cursor else {
+            throw SemanticObservationHistoryAppendError.eventLineageMismatch(
+                scope: scope,
+                expected: latest?.cursor,
+                actual: event.previousCursor
+            )
+        }
+        let entry = if let latest {
+            if latest.cursor.generation == event.generation {
+                try ObservationEntry.sameGeneration(event, after: latest.cursor)
+            } else {
+                try ObservationEntry.screenBoundary(event, replacing: latest.cursor)
             }
-        case (.some(let latest), .screenBoundary(let transition)):
-            guard transition.previousCursor == latest.cursor else {
-                throw SemanticObservationHistoryAppendError.discontinuousLineage(
-                    expected: latest.cursor,
-                    actual: transition.previousCursor
-                )
-            }
+        } else {
+            ObservationEntry.initial(event)
         }
 
         entries.append(entry)

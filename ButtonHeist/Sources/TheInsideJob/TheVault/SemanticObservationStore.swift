@@ -92,17 +92,8 @@ internal struct SemanticObservationStore {
     ) throws {
         precondition(events[sourceScope] != nil, "Semantic observation scope did not fulfill itself")
         var candidate = history
-        for (scope, event) in events.sorted(by: { $0.key < $1.key }) {
-            guard scope == event.scope else {
-                throw SemanticObservationHistoryAppendError.scopeKeyMismatch(
-                    key: scope,
-                    event: event.scope
-                )
-            }
-            try candidate.append(Self.entry(
-                for: event,
-                after: candidate.latestByScope[scope]
-            ))
+        for event in events.values.sorted(by: { $0.scope < $1.scope }) {
+            try candidate.append(event)
         }
         history = candidate
         availability = .observing(sourceScope: sourceScope, tripwireSignal: tripwireSignal)
@@ -298,9 +289,6 @@ internal struct SemanticObservationStore {
         }
 
         var next = self
-        if continuity.isReplacement {
-            next.beginScreenReplacement()
-        }
         try next.record(events, sourceScope: scope, tripwireSignal: proof.tripwireSignal)
         next.interfaceTree = nextTree
         next.sequence = sourceEvent.sequence
@@ -413,25 +401,6 @@ internal struct SemanticObservationStore {
         )
     }
 
-    private static func entry(
-        for event: SettledObservationEvent,
-        after latest: ObservationEntry?
-    ) throws -> ObservationEntry {
-        if event.previousCursor != latest?.cursor {
-            throw SemanticObservationHistoryAppendError.eventLineageMismatch(
-                scope: event.scope,
-                expected: latest?.cursor,
-                actual: event.previousCursor
-            )
-        }
-        guard let latest else {
-            return .initial(event)
-        }
-        if latest.cursor.generation == event.generation {
-            return try .sameGeneration(event, after: latest.cursor)
-        }
-        return try .screenBoundary(event, replacing: latest.cursor)
-    }
 }
 
 #endif // DEBUG

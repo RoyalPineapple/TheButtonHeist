@@ -24,7 +24,7 @@ final class SemanticObservationStoreTests: XCTestCase {
         var history = SemanticObservationHistory(retentionLimit: 2)
         let entry = initialEntry("A", sequence: 1, generation: 0)
 
-        try history.append(entry)
+        try history.append(entry.event)
 
         XCTAssertEqual(history.read(after: nil, scope: .visible), .entry(entry))
     }
@@ -34,9 +34,9 @@ final class SemanticObservationStoreTests: XCTestCase {
         let entryA = initialEntry("A", sequence: 1, generation: 0)
         let entryB = try sameGenerationEntry("B", sequence: 2, after: entryA)
         let entryC = try sameGenerationEntry("C", sequence: 3, after: entryB)
-        try history.append(entryA)
-        try history.append(entryB)
-        try history.append(entryC)
+        try history.append(entryA.event)
+        try history.append(entryB.event)
+        try history.append(entryC.event)
 
         let replayedB = history.read(after: entryA.cursor, scope: .visible)
         let replayedC = history.read(after: entryB.cursor, scope: .visible)
@@ -50,9 +50,9 @@ final class SemanticObservationStoreTests: XCTestCase {
         let entryA = initialEntry("A", sequence: 1, generation: 0)
         let entryB = try sameGenerationEntry("B", sequence: 2, after: entryA)
         let entryC = try sameGenerationEntry("C", sequence: 3, after: entryB)
-        try history.append(entryA)
-        try history.append(entryB)
-        try history.append(entryC)
+        try history.append(entryA.event)
+        try history.append(entryB.event)
+        try history.append(entryC.event)
 
         XCTAssertEqual(history.read(after: entryA.cursor, scope: .visible), .entry(entryB))
         XCTAssertEqual(history.read(after: entryA.cursor, scope: .visible), .entry(entryB))
@@ -63,7 +63,7 @@ final class SemanticObservationStoreTests: XCTestCase {
     func testReadAfterLatestRetainedEntryReturnsPending() throws {
         var history = SemanticObservationHistory(retentionLimit: 2)
         let entryA = initialEntry("A", sequence: 1, generation: 0)
-        try history.append(entryA)
+        try history.append(entryA.event)
 
         XCTAssertEqual(history.read(after: entryA.cursor, scope: .visible), .pending)
     }
@@ -71,7 +71,7 @@ final class SemanticObservationStoreTests: XCTestCase {
     func testReadRejectsCrossScopeCursor() throws {
         var history = SemanticObservationHistory(retentionLimit: 2)
         let entryA = initialEntry("A", sequence: 1, generation: 0)
-        try history.append(entryA)
+        try history.append(entryA.event)
 
         XCTAssertEqual(
             history.read(after: entryA.cursor, scope: .discovery),
@@ -85,14 +85,14 @@ final class SemanticObservationStoreTests: XCTestCase {
         let entryB = try sameGenerationEntry("B", sequence: 2, after: entryA)
         let entryC = try sameGenerationEntry("C", sequence: 3, after: entryB)
         let entryD = try sameGenerationEntry("D", sequence: 4, after: entryC)
-        try history.append(entryA)
-        try history.append(entryB)
-        try history.append(entryC)
+        try history.append(entryA.event)
+        try history.append(entryB.event)
+        try history.append(entryC.event)
 
         XCTAssertEqual(history.read(after: entryA.cursor, scope: .visible), .entry(entryB))
         XCTAssertEqual(history.read(after: entryB.cursor, scope: .visible), .entry(entryC))
 
-        try history.append(entryD)
+        try history.append(entryD.event)
         XCTAssertEqual(
             history.read(after: entryA.cursor, scope: .visible),
             .failure(.historyEvicted(ObservationGap(
@@ -111,10 +111,10 @@ final class SemanticObservationStoreTests: XCTestCase {
         let visibleB = try sameGenerationEntry("visible-b", sequence: 2, after: visibleA)
         let visibleC = try sameGenerationEntry("visible-c", sequence: 3, after: visibleB)
 
-        try history.append(visibleA)
-        try history.append(discoveryA)
-        try history.append(visibleB)
-        try history.append(visibleC)
+        try history.append(visibleA.event)
+        try history.append(discoveryA.event)
+        try history.append(visibleB.event)
+        try history.append(visibleC.event)
 
         XCTAssertEqual(history.entries.filter { $0.cursor.scope == .visible }, [visibleB, visibleC])
         XCTAssertEqual(history.entries.filter { $0.cursor.scope == .discovery }, [discoveryA])
@@ -125,9 +125,9 @@ final class SemanticObservationStoreTests: XCTestCase {
         let entryA = initialEntry("A", sequence: 1, generation: 0)
         let entryB = try screenBoundaryEntry("B", sequence: 2, generation: 1, after: entryA)
         let entryC = try sameGenerationEntry("C", sequence: 3, after: entryB)
-        try history.append(entryA)
-        try history.append(entryB)
-        try history.append(entryC)
+        try history.append(entryA.event)
+        try history.append(entryB.event)
+        try history.append(entryC.event)
 
         let retained = history.entries
         let window = try ObservationWindow(
