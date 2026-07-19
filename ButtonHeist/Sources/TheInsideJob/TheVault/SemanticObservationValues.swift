@@ -252,7 +252,7 @@ internal struct SettledObservation: Sendable, Equatable {
     }
 }
 
-/// One published settled observation with its generation and evidence lineage.
+/// One committed settled observation with its generation and evidence lineage.
 internal struct SettledObservationEvent: Sendable, Equatable {
     internal let generation: ScreenGeneration
     internal let continuity: ScreenContinuity

@@ -89,7 +89,7 @@ compose the next heist.
 |----------|------|----------------|
 | `AccessibilityTarget` | One node-target language for actions, waits, expectations, CLI/MCP, and subtree queries | Live UIKit identity, geometry authority, alternate query projections |
 | `AccessibilityPredicate` and `ChangeDeclaration` | Concrete conditions for waits, expectations, and control-flow cases | Target resolution, viewport movement, command execution |
-| `SemanticObservationLog` | Retained settled entries, cursor lineage, and replayable observation sequences | Predicate-owned history, destructive reads, report formatting |
+| `SemanticObservationStore` | Current semantic tree, retained entries, lineage, cursors, and clean-read state committed together | Predicate-owned history, destructive reads, report formatting |
 | `ObservationWindow` | One baseline-to-current temporal view with explicit completeness | Independent capture or notification ownership |
 | `AccessibilityTrace` | Durable receipt evidence and derived ordered `ChangeFact` values | A second runtime observation pipeline |
 | `InteractionObservation` | Before/body/after evidence coordination around one `ActionDispatchOutcome` | Command payload design and parallel result shapes |

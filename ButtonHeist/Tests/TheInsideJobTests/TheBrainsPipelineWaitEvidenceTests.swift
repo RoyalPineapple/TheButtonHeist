@@ -341,7 +341,7 @@ extension TheBrainsPipelineTests {
         )
         let baseline = try XCTUnwrap(baselineEvent.settledCapture)
         var currentEvent = baselineEvent
-        for _ in 0...SemanticObservationLog.defaultRetentionLimit {
+        for _ in 0...SemanticObservationStore.defaultRetentionLimit {
             currentEvent = brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
                 volumeScreen(value: "50%")
             )
@@ -381,7 +381,7 @@ extension TheBrainsPipelineTests {
             volumeScreen(value: "50%")
         )
         let baseline = try XCTUnwrap(baselineEvent.settledCapture)
-        for _ in 0...SemanticObservationLog.defaultRetentionLimit {
+        for _ in 0...SemanticObservationStore.defaultRetentionLimit {
             _ = brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
                 volumeScreen(value: "50%")
             )

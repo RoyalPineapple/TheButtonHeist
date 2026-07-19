@@ -10,7 +10,7 @@ internal enum SemanticObservationWaitResult: Sendable, Equatable {
     case cycleCompleted
     case deadlineReached
     case cancelled
-    case unavailable(ObservationLogReadError)
+    case unavailable(ObservationHistoryReadError)
 }
 
 internal struct SemanticObservationWaiter: Sendable {
@@ -28,7 +28,7 @@ extension SemanticObservationStream {
         deadline: SemanticObservationDeadline?,
         completingAfterCurrentCycle: Bool = false
     ) async -> SemanticObservationWaitResult {
-        switch observationLog.read(after: cursor, scope: scope) {
+        switch observationStore.read(after: cursor, scope: scope) {
         case .entry(let entry):
             return .observation(entry)
         case .failure(let error):
@@ -71,20 +71,20 @@ extension SemanticObservationStream {
     internal func latestObservationCursor(
         scope: SemanticObservationScope
     ) -> ObservationCursor? {
-        observationLog.latestCursor(scope: scope)
+        observationStore.latestCursor(scope: scope)
     }
 
     internal func retainedObservationEntries(
         scope: SemanticObservationScope
     ) -> [ObservationEntry] {
-        observationLog.retainedEntries(scope: scope)
+        observationStore.retainedEntries(scope: scope)
     }
 
     internal func settledCapture(
         scope: SemanticObservationScope,
         at sequence: SettledObservationSequence
     ) -> SettledCapture? {
-        observationLog.settledCapture(scope: scope, at: sequence)
+        observationStore.settledCapture(scope: scope, at: sequence)
     }
 
     internal func settledEvent(
@@ -112,7 +112,7 @@ extension SemanticObservationStream {
                 timeoutSeconds: $0
             )
         }
-        var cursor = observationLog.latestCursor(scope: scope)
+        var cursor = observationStore.latestCursor(scope: scope)
         while true {
             switch await waitForObservation(
                 after: cursor,
@@ -137,7 +137,7 @@ extension SemanticObservationStream {
         from baseline: SettledCapture,
         through currentEvent: SettledObservationEvent
     ) -> ObservationWindow? {
-        observationLog.observationWindow(from: baseline, through: currentEvent)
+        observationStore.observationWindow(from: baseline, through: currentEvent)
     }
 
     static func timeoutMilliseconds(from timeout: Double?) -> Int {
@@ -200,7 +200,7 @@ extension SemanticObservationStream {
         for waiter: SemanticObservationWaiter,
         completedScope: SemanticObservationScope?
     ) -> SemanticObservationWaitResult? {
-        switch observationLog.read(after: waiter.cursor, scope: waiter.scope) {
+        switch observationStore.read(after: waiter.cursor, scope: waiter.scope) {
         case .entry(let entry):
             return .observation(entry)
         case .failure(let error):

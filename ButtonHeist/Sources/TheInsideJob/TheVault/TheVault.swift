@@ -30,7 +30,9 @@ final class TheVault {
 
     // MARK: - Interface State
 
-    var interfaceTree: InterfaceTree = .empty
+    var interfaceTree: InterfaceTree {
+        semanticObservationStream.observationStore.interfaceTree
+    }
     var latestObservation: InterfaceObservation = .empty
     var latestFailedSettleDiagnosticEvidence: InterfaceObservation?
 

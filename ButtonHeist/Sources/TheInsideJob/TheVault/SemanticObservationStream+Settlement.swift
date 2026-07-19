@@ -37,8 +37,8 @@ extension SemanticObservationStream {
         after sequence: SettledObservationSequence?
     ) -> CleanSettledObservation? {
         invalidateSettledObservationIfScreenChangedSinceCommit()
-        observationLog.invalidateIfSignalChanged(to: currentTripwireSignal())
-        return observationLog.cleanObservation(scope: scope, after: sequence)
+        observationStore.invalidateIfSignalChanged(to: currentTripwireSignal())
+        return observationStore.cleanObservation(scope: scope, after: sequence)
     }
 
     @discardableResult
@@ -101,33 +101,37 @@ extension SemanticObservationStream {
         }
         let resolvedNotificationBatch = notificationBatch
             ?? vault.accessibilityNotifications.checkpoint(
-                after: runtimeState.notificationCursor
+                after: observationStore.notificationCursor
             )
-        let commit: TheVault.InterfaceGraphCommit
+        let commit: SemanticObservationStore.Commit
         do {
-            commit = try vault.commitInterfaceGraph(
-                with: proof.observation,
+            commit = try observationStore.commitObservation(
+                proof,
                 scope: scope,
-                discoveryCommitPolicy: proof.discoveryCommitPolicy,
-                notifications: resolvedNotificationBatch.events.map(\.kind),
-                lineage: runtimeState.lineage,
-                lineageEvidence: proof.lineageEvidence
-            )
+                notificationBatch: resolvedNotificationBatch
+            ) { committedObservation in
+                SemanticObservationStore.Evidence(
+                    interface: vault.semanticInterface(for: committedObservation),
+                    accessibilityNotifications: vault.resolveAccessibilityNotificationEvidence(
+                        resolvedNotificationBatch.events,
+                        identityObservation: notificationIdentityObservation ?? committedObservation,
+                        referenceObservation: committedObservation
+                    ),
+                    firstResponder: vault.firstResponderTarget(in: committedObservation.tree)
+                )
+            }
         } catch {
             preconditionFailure("Committed interface observation failed validation: \(error)")
         }
-        if commit.continuity.isReplacement {
-            observationLog.beginScreenReplacement()
+        vault.recordCommittedObservation(commit.observation, sourceObservation: proof.observation)
+        for fallbackReason in commit.fallbackReasons {
+            AccessibilityObservationFallbackLog.record(
+                fallbackReason,
+                source: .settledObservation
+            )
         }
-        return publishCurrentSettledObservation(
-            commit.observation,
-            scope: scope,
-            vault: vault,
-            tripwireSignal: proof.tripwireSignal,
-            notificationBatch: resolvedNotificationBatch,
-            continuity: commit.continuity,
-            notificationIdentityObservation: notificationIdentityObservation
-        )
+        completeObservationWaiters()
+        return commit.sourceEvent
     }
 
     internal func settlePostActionObservation(
@@ -145,7 +149,7 @@ extension SemanticObservationStream {
             commitScope: commitScope,
             providedOutcome: providedOutcome,
             notificationWindow: notificationWindow,
-            invalidatingCurrentPublication: true
+            invalidatingCurrentObservation: true
         )
     }
 
@@ -159,7 +163,7 @@ extension SemanticObservationStream {
             commitScope: .visible,
             providedOutcome: nil,
             notificationWindow: nil,
-            invalidatingCurrentPublication: false
+            invalidatingCurrentObservation: false
         )
     }
 
@@ -169,12 +173,12 @@ extension SemanticObservationStream {
         commitScope: SemanticObservationScope,
         providedOutcome: SettleSession.Result?,
         notificationWindow: AccessibilityNotificationScopeLease?,
-        invalidatingCurrentPublication: Bool
+        invalidatingCurrentObservation: Bool
     ) async -> ObservationSettlement {
-        if invalidatingCurrentPublication {
-            observationLog.invalidateCurrentPublication()
+        if invalidatingCurrentObservation {
+            observationStore.invalidateCurrentObservation()
         } else {
-            observationLog.invalidateIfSignalChanged(to: baselineTripwireSignal)
+            observationStore.invalidateIfSignalChanged(to: baselineTripwireSignal)
         }
         let task = Task { @MainActor in
             VisibleRefreshCompletion(await self.produceVisibleSettlement(
@@ -246,7 +250,7 @@ extension SemanticObservationStream {
         if let proof = admitSettledProof(outcome, vault: vault) {
             let notificationBatch = terminalActionNotificationBatch
                 ?? vault.accessibilityNotifications.checkpoint(
-                    after: runtimeState.notificationCursor
+                    after: observationStore.notificationCursor
                 )
             let event: SettledObservationEvent
             switch commitScope {
@@ -274,12 +278,15 @@ extension SemanticObservationStream {
     }
 
     internal func requireScreenReplacement() {
-        observationLog.beginScreenReplacement()
-        runtimeState.requireReplacement()
+        observationStore.requireReplacement()
+    }
+
+    internal func clearCurrentInterface() {
+        observationStore.clearCurrentInterface()
     }
 
     internal func invalidateLatestSettledObservation() {
-        observationLog.invalidateCurrentPublication()
+        observationStore.invalidateCurrentObservation()
     }
 
     /// A scoped `screenChanged` notification recorded after the latest settled
@@ -298,63 +305,9 @@ extension SemanticObservationStream {
               !latestSettledObservationInvalidated,
               latestEvent != nil,
               vault.accessibilityNotifications.latestScopedScreenChangedSequence
-              > runtimeState.scopedScreenChangedSequence
+              > observationStore.scopedScreenChangedSequence
         else { return }
-        observationLog.invalidateCurrentPublication()
-    }
-
-    private func publishCurrentSettledObservation(
-        _ settledObservation: InterfaceObservation,
-        scope: SemanticObservationScope = .visible,
-        vault: TheVault,
-        tripwireSignal: TheTripwire.TripwireSignal,
-        notificationBatch: AccessibilityNotificationBatch,
-        continuity: ScreenContinuity,
-        notificationIdentityObservation: InterfaceObservation? = nil
-    ) -> SettledObservationEvent {
-        let publication = SemanticObservationPublication.make(
-            sourceScope: scope,
-            sequence: runtimeState.sequence + 1,
-            notificationBatch: notificationBatch,
-            observation: settledObservation,
-            semanticSignal: tripwireSignal.semanticValue,
-            context: SemanticObservationPublication.Context(
-                continuity: continuity,
-                generation: runtimeState.lineage.generation,
-                previousEvents: observationLog.latestEventsByScope
-            ),
-            evidence: SemanticObservationPublication.Evidence(
-                interface: vault.semanticInterface(for: settledObservation),
-                accessibilityNotifications: vault.resolveAccessibilityNotificationEvidence(
-                    notificationBatch.events,
-                    identityObservation: notificationIdentityObservation ?? settledObservation,
-                    referenceObservation: settledObservation
-                ),
-                firstResponder: vault.firstResponderTarget(in: settledObservation.tree)
-            )
-        )
-        do {
-            try observationLog.publish(
-                publication,
-                tripwireSignal: tripwireSignal
-            )
-        } catch {
-            preconditionFailure("Semantic observation log rejected publication: \(error)")
-        }
-        runtimeState.commit(
-            publication,
-            notificationBatch: notificationBatch
-        )
-        for fallbackReason in scope.fulfilledScopes.compactMap({ fulfilledScope in
-            publication.events[fulfilledScope]?.trace.captures.last?.transition.fallbackReason
-        }) {
-            AccessibilityObservationFallbackLog.record(
-                fallbackReason,
-                source: .settledObservation
-            )
-        }
-        completeObservationWaiters()
-        return publication.sourceEvent
+        observationStore.invalidateCurrentObservation()
     }
 
     func admitSettledProof(
@@ -398,7 +351,7 @@ extension SemanticObservationStream {
         observation: InterfaceObservation?,
         vault: TheVault
     ) {
-        runtimeState.recordSettleFailure(diagnostic)
+        observationStore.recordSettleFailure(diagnostic)
         vault.recordFailedSettleDiagnosticEvidence(observation)
     }
 

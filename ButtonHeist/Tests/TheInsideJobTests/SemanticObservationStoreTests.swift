@@ -7,143 +7,129 @@ import XCTest
 @testable import TheScore
 
 @MainActor
-final class SemanticObservationLogTests: XCTestCase {
+final class SemanticObservationStoreTests: XCTestCase {
     func testObservationCursorUsesCaptureTimestamp() {
         let settled = capture("capture", sequence: 42, generation: 3)
 
         XCTAssertEqual(settled.cursor.observedAt, Date(timeIntervalSince1970: 42))
     }
 
-    func testCursorlessReadReturnsPendingBeforeAnyPublication() {
-        let log = SemanticObservationLog()
+    func testCursorlessReadReturnsPendingBeforeAnyCommit() {
+        let history = SemanticObservationHistory(retentionLimit: 2)
 
-        XCTAssertEqual(log.read(after: nil, scope: .visible), .pending)
+        XCTAssertEqual(history.read(after: nil, scope: .visible), .pending)
     }
 
     func testCursorlessReadReturnsFirstRetainedEntry() throws {
-        let log = SemanticObservationLog()
+        var history = SemanticObservationHistory(retentionLimit: 2)
         let entry = initialEntry("A", sequence: 1, generation: 0)
 
-        try publish(entry.event, to: log)
+        try history.append(entry)
 
-        XCTAssertEqual(log.read(after: nil, scope: .visible), .entry(entry))
+        XCTAssertEqual(history.read(after: nil, scope: .visible), .entry(entry))
     }
 
     func testReadAfterExplicitCursorReplaysRetainedEntriesInOrder() throws {
-        let log = SemanticObservationLog()
+        var history = SemanticObservationHistory(retentionLimit: 3)
         let entryA = initialEntry("A", sequence: 1, generation: 0)
         let entryB = try sameGenerationEntry("B", sequence: 2, after: entryA)
         let entryC = try sameGenerationEntry("C", sequence: 3, after: entryB)
-        try publish(entryA.event, to: log)
-        try publish(entryB.event, to: log)
-        try publish(entryC.event, to: log)
+        try history.append(entryA)
+        try history.append(entryB)
+        try history.append(entryC)
 
-        let replayedB = log.read(after: entryA.cursor, scope: .visible)
-        let replayedC = log.read(after: entryB.cursor, scope: .visible)
+        let replayedB = history.read(after: entryA.cursor, scope: .visible)
+        let replayedC = history.read(after: entryB.cursor, scope: .visible)
 
         XCTAssertEqual(replayedB, .entry(entryB))
         XCTAssertEqual(replayedC, .entry(entryC))
     }
 
     func testReadAfterExplicitCursorDoesNotShareProgressAcrossCallers() throws {
-        let log = SemanticObservationLog()
+        var history = SemanticObservationHistory(retentionLimit: 3)
         let entryA = initialEntry("A", sequence: 1, generation: 0)
         let entryB = try sameGenerationEntry("B", sequence: 2, after: entryA)
         let entryC = try sameGenerationEntry("C", sequence: 3, after: entryB)
-        try publish(entryA.event, to: log)
-        try publish(entryB.event, to: log)
-        try publish(entryC.event, to: log)
+        try history.append(entryA)
+        try history.append(entryB)
+        try history.append(entryC)
 
-        XCTAssertEqual(log.read(after: entryA.cursor, scope: .visible), .entry(entryB))
-        XCTAssertEqual(log.read(after: entryA.cursor, scope: .visible), .entry(entryB))
-        XCTAssertEqual(log.read(after: entryB.cursor, scope: .visible), .entry(entryC))
-        XCTAssertEqual(log.read(after: entryB.cursor, scope: .visible), .entry(entryC))
+        XCTAssertEqual(history.read(after: entryA.cursor, scope: .visible), .entry(entryB))
+        XCTAssertEqual(history.read(after: entryA.cursor, scope: .visible), .entry(entryB))
+        XCTAssertEqual(history.read(after: entryB.cursor, scope: .visible), .entry(entryC))
+        XCTAssertEqual(history.read(after: entryB.cursor, scope: .visible), .entry(entryC))
     }
 
     func testReadAfterLatestRetainedEntryReturnsPending() throws {
-        let log = SemanticObservationLog()
+        var history = SemanticObservationHistory(retentionLimit: 2)
         let entryA = initialEntry("A", sequence: 1, generation: 0)
-        try publish(entryA.event, to: log)
+        try history.append(entryA)
 
-        XCTAssertEqual(log.read(after: entryA.cursor, scope: .visible), .pending)
+        XCTAssertEqual(history.read(after: entryA.cursor, scope: .visible), .pending)
     }
 
     func testReadRejectsCrossScopeCursor() throws {
-        let log = SemanticObservationLog()
+        var history = SemanticObservationHistory(retentionLimit: 2)
         let entryA = initialEntry("A", sequence: 1, generation: 0)
-        try publish(entryA.event, to: log)
+        try history.append(entryA)
 
         XCTAssertEqual(
-            log.read(after: entryA.cursor, scope: .discovery),
+            history.read(after: entryA.cursor, scope: .discovery),
             .failure(.scopeMismatch(cursor: .visible, requested: .discovery))
         )
     }
 
     func testEvictionReportsTypedIncompleteHistoryOnlyAfterAnEntryIsLost() throws {
-        let log = SemanticObservationLog(retentionLimit: 2)
+        var history = SemanticObservationHistory(retentionLimit: 2)
         let entryA = initialEntry("A", sequence: 1, generation: 0)
         let entryB = try sameGenerationEntry("B", sequence: 2, after: entryA)
         let entryC = try sameGenerationEntry("C", sequence: 3, after: entryB)
         let entryD = try sameGenerationEntry("D", sequence: 4, after: entryC)
-        try publish(entryA.event, to: log)
-        try publish(entryB.event, to: log)
-        try publish(entryC.event, to: log)
+        try history.append(entryA)
+        try history.append(entryB)
+        try history.append(entryC)
 
-        XCTAssertEqual(log.read(after: entryA.cursor, scope: .visible), .entry(entryB))
-        XCTAssertEqual(log.read(after: entryB.cursor, scope: .visible), .entry(entryC))
+        XCTAssertEqual(history.read(after: entryA.cursor, scope: .visible), .entry(entryB))
+        XCTAssertEqual(history.read(after: entryB.cursor, scope: .visible), .entry(entryC))
 
-        try publish(entryD.event, to: log)
+        try history.append(entryD)
         XCTAssertEqual(
-            log.read(after: entryA.cursor, scope: .visible),
+            history.read(after: entryA.cursor, scope: .visible),
             .failure(.historyEvicted(ObservationGap(
                 reason: .historyEvicted,
                 baseline: entryA.cursor,
                 current: entryD.cursor
             )))
         )
-        XCTAssertEqual(log.retainedEntries(scope: .visible), [entryC, entryD])
+        XCTAssertEqual(history.entries, [entryC, entryD])
     }
 
     func testRetentionLimitAppliesIndependentlyToEachScope() throws {
-        let log = SemanticObservationLog(retentionLimit: 2)
-        let visibleA = event("visible-a", sequence: 1, generation: 0, scope: .visible)
-        let discoveryA = event("discovery-a", sequence: 1, generation: 0, scope: .discovery)
-        try log.publish(publication(
-            sourceScope: .discovery,
-            events: [visibleA, discoveryA]
-        ), tripwireSignal: .empty)
-        let visibleB = event(
-            "visible-b",
-            sequence: 2,
-            generation: 0,
-            scope: .visible,
-            previous: visibleA
-        )
-        let visibleC = event(
-            "visible-c",
-            sequence: 3,
-            generation: 0,
-            scope: .visible,
-            previous: visibleB
-        )
+        var history = SemanticObservationHistory(retentionLimit: 2)
+        let visibleA = initialEntry("visible-a", sequence: 1, generation: 0)
+        let discoveryA = initialEntry("discovery-a", sequence: 1, generation: 0, scope: .discovery)
+        let visibleB = try sameGenerationEntry("visible-b", sequence: 2, after: visibleA)
+        let visibleC = try sameGenerationEntry("visible-c", sequence: 3, after: visibleB)
 
-        try publish(visibleB, to: log)
-        try publish(visibleC, to: log)
+        try history.append(visibleA)
+        try history.append(discoveryA)
+        try history.append(visibleB)
+        try history.append(visibleC)
 
-        XCTAssertEqual(log.retainedEntries(scope: .visible).map(\.event), [visibleB, visibleC])
-        XCTAssertEqual(log.retainedEntries(scope: .discovery).map(\.event), [discoveryA])
+        XCTAssertEqual(history.entries.filter { $0.cursor.scope == .visible }, [visibleB, visibleC])
+        XCTAssertEqual(history.entries.filter { $0.cursor.scope == .discovery }, [discoveryA])
     }
 
     func testScreenBoundaryAndDestinationHistoryRemainRetained() throws {
-        let log = SemanticObservationLog()
+        var history = SemanticObservationHistory(retentionLimit: 3)
         let entryA = initialEntry("A", sequence: 1, generation: 0)
         let entryB = try screenBoundaryEntry("B", sequence: 2, generation: 1, after: entryA)
         let entryC = try sameGenerationEntry("C", sequence: 3, after: entryB)
-        try publish(entryA.event, to: log)
-        try publish(entryB.event, to: log)
-        try publish(entryC.event, to: log)
+        try history.append(entryA)
+        try history.append(entryB)
+        try history.append(entryC)
 
-        let retained = log.retainedEntries(scope: .visible)
+        let retained = history.entries
         let window = try ObservationWindow(
             baseline: entryA.settledCapture,
             retainedEntries: [entryB, entryC]
@@ -207,112 +193,50 @@ final class SemanticObservationLogTests: XCTestCase {
         }
     }
 
-    func testPublicationRejectsAllScopeEntriesAtomically() throws {
-        let log = SemanticObservationLog()
-        let initialVisible = event("visible-a", sequence: 1, generation: 0, scope: .visible)
-        let initialDiscovery = event("discovery-a", sequence: 1, generation: 0, scope: .discovery)
-        try log.publish(publication(
-            sourceScope: .discovery,
-            events: [initialVisible, initialDiscovery]
-        ), tripwireSignal: .empty)
-        let nextVisible = event(
-            "visible-b",
-            sequence: 2,
-            generation: 0,
-            scope: .visible,
-            previous: initialVisible
-        )
-        let invalidDiscovery = event(
-            "discovery-b",
-            sequence: 2,
-            generation: 0,
-            scope: .discovery,
-            previous: initialVisible
-        )
-        let initialDiscoveryCursor = try XCTUnwrap(initialDiscovery.cursor)
-        let initialVisibleCursor = try XCTUnwrap(initialVisible.cursor)
-
-        XCTAssertThrowsError(try log.publish(publication(
-            sourceScope: .discovery,
-            events: [nextVisible, invalidDiscovery]
-        ), tripwireSignal: .empty)) { error in
-            XCTAssertEqual(
-                error as? SemanticObservationLogAppendError,
-                .eventLineageMismatch(
-                    scope: .discovery,
-                    expected: initialDiscoveryCursor,
-                    actual: initialVisibleCursor
-                )
-            )
-        }
-        XCTAssertEqual(
-            log.retainedEntries(scope: .visible).map(\.event),
-            [initialVisible]
-        )
-        XCTAssertEqual(
-            log.retainedEntries(scope: .discovery).map(\.event),
-            [initialDiscovery]
-        )
-        XCTAssertEqual(log.latestSourceEvent, initialDiscovery)
-    }
-
     func testInvalidationPreservesLatestEventAndHistoryButBlocksCleanRead() throws {
-        let log = SemanticObservationLog()
-        let initial = event("A", sequence: 1, generation: 0)
-        try publish(initial, to: log)
+        var store = SemanticObservationStore()
+        let initial = try commit(scope: .visible, in: &store)
 
-        log.invalidateCurrentPublication()
+        store.invalidateCurrentObservation()
 
-        XCTAssertTrue(log.latestSettledObservationInvalidated)
-        XCTAssertEqual(log.latestSourceEvent, initial)
-        XCTAssertNil(log.cleanObservation(scope: .visible, after: nil))
-        XCTAssertEqual(log.retainedEntries(scope: .visible).map(\.event), [initial])
+        XCTAssertTrue(store.latestSettledObservationInvalidated)
+        XCTAssertEqual(store.latestSourceEvent, initial)
+        XCTAssertNil(store.cleanObservation(scope: .visible, after: nil))
+        XCTAssertEqual(store.retainedEntries(scope: .visible).map(\.event), [initial])
 
-        let next = event("B", sequence: 2, generation: 0, previous: initial)
-        try publish(next, to: log)
+        let next = try commit(scope: .visible, in: &store)
 
-        XCTAssertFalse(log.latestSettledObservationInvalidated)
-        XCTAssertEqual(log.cleanObservation(scope: .visible, after: initial.sequence)?.event, next)
-        XCTAssertEqual(log.retainedEntries(scope: .visible).map(\.event), [initial, next])
+        XCTAssertFalse(store.latestSettledObservationInvalidated)
+        XCTAssertEqual(store.cleanObservation(scope: .visible, after: initial.sequence)?.event, next)
+        XCTAssertEqual(store.retainedEntries(scope: .visible).map(\.event), [initial, next])
     }
 
     func testCleanReadRejectsScopeRetainedFromAnOlderGeneration() throws {
-        let log = SemanticObservationLog()
-        let initialVisible = event("visible-a", sequence: 1, generation: 0, scope: .visible)
-        let initialDiscovery = event("discovery-a", sequence: 1, generation: 0, scope: .discovery)
-        try log.publish(publication(
-            sourceScope: .discovery,
-            events: [initialVisible, initialDiscovery]
-        ), tripwireSignal: .empty)
+        var store = SemanticObservationStore()
+        let initialDiscovery = try commit(scope: .discovery, in: &store)
+        let initialVisible = try XCTUnwrap(store.retainedEntries(scope: .visible).last?.event)
         XCTAssertEqual(
-            log.cleanObservation(scope: .visible, after: nil),
+            store.cleanObservation(scope: .visible, after: nil),
             CleanSettledObservation(event: initialVisible, tripwireSignal: .empty)
         )
-        let replacementVisible = event(
-            "visible-b",
-            sequence: 2,
-            generation: 1,
-            scope: .visible,
-            previous: initialVisible
-        )
-        try publish(replacementVisible, to: log)
+        store.requireReplacement()
+        let replacementVisible = try commit(scope: .visible, in: &store)
 
-        XCTAssertEqual(log.cleanObservation(scope: .visible, after: nil)?.event, replacementVisible)
-        XCTAssertNil(log.cleanObservation(scope: .discovery, after: nil))
-        XCTAssertEqual(log.retainedEntries(scope: .discovery).map(\.event), [initialDiscovery])
+        XCTAssertEqual(store.cleanObservation(scope: .visible, after: nil)?.event, replacementVisible)
+        XCTAssertNil(store.cleanObservation(scope: .discovery, after: nil))
+        XCTAssertEqual(store.retainedEntries(scope: .discovery).map(\.event), [initialDiscovery])
     }
 
-    func testBeginningScreenReplacementWithdrawsPublicationWithoutClearingHistory() throws {
-        let log = SemanticObservationLog()
-        let initial = event("A", sequence: 1, generation: 0)
-        try publish(initial, to: log)
+    func testBeginningScreenReplacementWithdrawsCurrentObservationWithoutClearingHistory() throws {
+        var store = SemanticObservationStore()
+        let initial = try commit(scope: .visible, in: &store)
 
-        log.beginScreenReplacement()
+        store.beginScreenReplacement()
 
-        XCTAssertTrue(log.latestSettledObservationInvalidated)
-        XCTAssertNil(log.latestSourceEvent)
-        XCTAssertNil(log.cleanObservation(scope: .visible, after: nil))
-        XCTAssertEqual(log.retainedEntries(scope: .visible).map(\.event), [initial])
+        XCTAssertTrue(store.latestSettledObservationInvalidated)
+        XCTAssertNil(store.latestSourceEvent)
+        XCTAssertNil(store.cleanObservation(scope: .visible, after: nil))
+        XCTAssertEqual(store.retainedEntries(scope: .visible).map(\.event), [initial])
     }
 
     private func initialEntry(
@@ -359,24 +283,26 @@ final class SemanticObservationLogTests: XCTestCase {
         )
     }
 
-    private func publish(
-        _ event: SettledObservationEvent,
-        to log: SemanticObservationLog
-    ) throws {
-        try log.publish(
-            publication(sourceScope: event.scope, events: [event]),
-            tripwireSignal: .empty
-        )
-    }
-
-    private func publication(
-        sourceScope: SemanticObservationScope,
-        events: [SettledObservationEvent]
-    ) -> SemanticObservationPublication {
-        SemanticObservationPublication(
-            sourceScope: sourceScope,
-            events: Dictionary(uniqueKeysWithValues: events.map { ($0.scope, $0) })
-        )
+    private func commit(
+        scope: SemanticObservationScope,
+        in store: inout SemanticObservationStore
+    ) throws -> SettledObservationEvent {
+        let observation = InterfaceObservation.makeForTests()
+        return try store.commitObservation(
+            .uncheckedForTesting(observation, tripwireSignal: .empty),
+            scope: scope,
+            notificationBatch: AccessibilityNotificationBatch(
+                events: [],
+                through: .origin,
+                scopedScreenChangedThrough: 0,
+                gap: nil
+            ),
+            evidence: { _ in SemanticObservationStore.Evidence(
+                interface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: []),
+                accessibilityNotifications: [],
+                firstResponder: nil
+            ) }
+        ).sourceEvent
     }
 
     private func event(

@@ -10,11 +10,6 @@ import TheScore
 
 extension TheVault {
 
-    struct InterfaceGraphCommit {
-        let observation: InterfaceObservation
-        let continuity: ScreenContinuity
-    }
-
     /// Clear cached element data (used on suspend).
     func clearCache() {
         clearInterfaceForLifecycleReset()
@@ -75,43 +70,16 @@ extension TheVault {
         refreshLiveCapture()
     }
 
-    /// The sole commit from a parsed observation into durable graph truth.
-    func commitInterfaceGraph(
-        with observation: InterfaceObservation,
-        scope: SemanticObservationScope,
-        discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy,
-        notifications: [AccessibilityNotificationKind],
-        lineage: SemanticObservationRuntimeState.Lineage,
-        lineageEvidence: ScreenLineageEvidence?
-    ) throws -> InterfaceGraphCommit {
-        let previousTree = interfaceTree
-        let candidateTree = switch scope {
-        case .visible:
-            previousTree.updatingViewport(with: observation)
-        case .discovery:
-            discoveryCommitPolicy == .replaceInterface
-                ? observation.tree
-                : previousTree.merging(observation.tree)
-        }
-        let continuity = lineage.admitting(ScreenClassifier.classify(
-            from: previousTree == .empty ? nil : previousTree,
-            to: candidateTree,
-            notifications: notifications,
-            lineageEvidence: lineageEvidence
-        ))
-        let nextTree = continuity.isReplacement ? observation.tree : candidateTree
-        let committedObservation = try observation.replacingTreeWithCurrentCapture(nextTree)
-
+    func recordCommittedObservation(
+        _ observation: InterfaceObservation,
+        sourceObservation: InterfaceObservation
+    ) {
         if let queuedVisibleRefresh = nextVisibleRefreshObservationForTesting,
-           queuedVisibleRefresh.tree.interfaceHash != observation.tree.interfaceHash {
+           queuedVisibleRefresh.tree.interfaceHash != sourceObservation.tree.interfaceHash {
             nextVisibleRefreshObservationForTesting = nil
         }
-        interfaceTree = nextTree
-        finishCommit(observation: committedObservation)
-        return InterfaceGraphCommit(
-            observation: committedObservation,
-            continuity: continuity
-        )
+        recordParsedObservedEvidence(from: observation)
+        latestFailedSettleDiagnosticEvidence = nil
     }
 
     func recordFailedSettleDiagnosticEvidence(_ observation: InterfaceObservation?) {
@@ -169,9 +137,8 @@ extension TheVault {
     private func clearInterfaceForLifecycleReset() {
         latestObservation = .empty
         latestFailedSettleDiagnosticEvidence = nil
-        interfaceTree = .empty
         nextVisibleRefreshObservationForTesting = nil
-        semanticObservationStream.requireScreenReplacement()
+        semanticObservationStream.clearCurrentInterface()
     }
 
     private func recordParsedObservedEvidence(from observation: InterfaceObservation) {
@@ -182,10 +149,6 @@ extension TheVault {
         capture().map(Self.buildObservation(from:))
     }
 
-    private func finishCommit(observation: InterfaceObservation) {
-        recordParsedObservedEvidence(from: observation)
-        latestFailedSettleDiagnosticEvidence = nil
-    }
 }
 
 #endif // DEBUG

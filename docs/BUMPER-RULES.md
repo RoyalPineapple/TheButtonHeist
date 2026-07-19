@@ -57,7 +57,7 @@ express across files in the runtime target.
 
 | Rule ID | Invariant | Repair | Proof and deletion condition |
 | --- | --- | --- | --- |
-| `buttonheist.semantic_observation_commit_ownership` | `SemanticObservationStream+Publication.swift` is the only caller that reduces settled observations into the committed interface graph. | Publish proof-bearing observations through the semantic stream. | Proof: standard `boundaryOnly` with an invalid competing committer fixture and repository evaluation of the publication owner. Delete when graph reduction becomes inaccessible outside the publication owner. |
+| `buttonheist.semantic_observation_commit_ownership` | `SemanticObservationStream+Settlement.swift` is the only caller of `SemanticObservationStore.commitObservation`, so graph, history, lineage, and cursors cannot be advanced by competing runtime paths. | Commit proof-bearing observations through the semantic stream. | Proof: standard `boundaryOnly` with an invalid competing committer fixture and repository evaluation of the settlement owner. Delete when Store commit becomes inaccessible outside the stream owner. |
 
 ## Rule Lifecycle
 

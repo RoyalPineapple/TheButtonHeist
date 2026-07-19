@@ -77,34 +77,33 @@ those samples and carries its exact final observation in a clean outcome. The
 semantic stream alone admits that outcome into `InterfaceObservationProof`, and
 only while both its tripwire signal and capture identity remain current.
 
-`SemanticObservationStream` is the sole ordered publication coordinator. Its
-production entry points admit clean settle outcomes or accept their resulting
-`InterfaceObservationProof`, ask TheVault to classify continuity and commit
-`TheVault.interfaceTree`, construct the settled publication from that committed
-graph, append it to the private `SemanticObservationLog`, advance
-`SemanticObservationRuntimeState`, and then wake stream waiters. The sequence is
-synchronous and non-suspending on `@MainActor`, so consumers see a
-non-interleaving order, not an atomic transaction across Vault, log, runtime,
-and delivery owners. There is no parser-to-log path and no subscriber-driven
-graph mutation. TheVault's graph commit is the only graph mutation path; no
-compatibility reducer or publication route exists.
+`SemanticObservationStore` is the sole semantic state owner. It holds the
+current `InterfaceTree`, retained entries, generation and sequence lineage,
+notification cursor, and clean-read seal. `SemanticObservationStream` admits a
+clean `InterfaceObservationProof` and asks the Store to commit it. The Store
+classifies continuity, derives every fulfilled-scope event, validates history
+in a copied value, and installs graph, history, lineage, cursors, and seal with
+one assignment. The stream updates disposable live UIKit evidence and wakes
+waiters only after that commit returns. There is no parser-to-history path,
+subscriber-driven graph mutation, compatibility reducer, or second runtime
+state projection.
 
 The stream is also the one visible-observation producer. `TheTripwire` is its
 serialized refresh trigger: a changed signal invalidates the current cursor and
 clean admission, settled-read admission pauses, and one capture/settle/commit cycle
-runs. Concurrent consumers join that cycle. Once publication installs a clean
+runs. Concurrent consumers join that cycle. Once a Store commit installs a clean
 seal, waits and action before-state acquisition reuse the committed event until
 the next trip, explicit invalidation, or screen replacement. After-action
 observation always requests a fresh cycle from the same producer.
 
-`SemanticObservationLog` is the retained ordered-history owner. Each
+The Store's private `SemanticObservationHistory` retains ordered entries. Each
 `ObservationEntry` pairs a settled capture with an initial, same-generation, or
 screen-boundary transition. `ObservationCursor` records generation, scope,
 settled sequence, capture hash, notification sequence, and `observedAt`.
 `observedAt` is derived automatically from the capture's interface timestamp;
 it is descriptive metadata, not an ordering input. Generation and settled
-sequence provide correctness ordering. Consumers read the log through
-`SemanticObservationLog.read(after:scope:)`, and
+sequence provide correctness ordering. Consumers read through
+`SemanticObservationStore.read(after:scope:)`, and
 `SemanticObservationStream` owns the single waiter path for future entries. An
 `ObservationWindow` is built from one immutable baseline cursor through the
 current retained entry. No predicate, action, or adapter owns another history.
@@ -192,13 +191,13 @@ successful movement dispatch, its minimal movement-specific settle parses the
 new viewport, yields one run-loop turn, and parses again. Matching semantic
 fingerprints prove the viewport in one turn; layout churn may consume another
 turn, bounded by the 250 ms transition ceiling. Page, edge, swipe, known
-content-point reveal, and restore intents all reduce their proof into the
-canonical graph and publish one settled event. When a target is already present
+content-point reveal, and restore intents all commit their proof into the
+canonical Store and produce one settled event. When a target is already present
 in `InterfaceTree`, inflation uses its parser-derived scroll membership and
 two-dimensional content point to jump directly to it; blank intervening pages
 are irrelevant. `ViewportExplorer` is the fallback for unknown targets or
 missing reveal evidence. It dispatches exactly one viewport movement,
-waits for settle, parse, graph reduction, publication, and callback, and only
+waits for settle, parse, Store commit, and callback, and only
 then may request another movement.
 
 Each scrollable container is searched as two independent directional rays from
@@ -218,11 +217,11 @@ exit policy before traversal; finalization applies it whether traversal matched,
 depleted its rays, hit a budget, or was interrupted after dispatch.
 `Navigation.InterfaceExplorationResult` is the finished event and progress for that
 traversal; it derives from canonical vault truth and owns no second graph or
-publication path. There is no compatibility traversal or publication path.
+commit path. There is no compatibility traversal or commit path.
 
-Publication appends each settled capture to the same private
-`SemanticObservationLog` used by waits and action expectations. Consumers read
-that history only through log reads selected by scope and cursor, with
+Each Store commit appends its settled captures to the same private history used
+by waits and action expectations. Consumers read that history only through
+Store reads selected by scope and cursor, with
 `SemanticObservationStream` owning waiter registration and wakeup; they do not
 subscribe to parser samples, build private capture arrays, or claim
 notification events. Retained-history eviction is explicit incomplete evidence,
@@ -280,10 +279,11 @@ durable artifact, or final output formatting.
 
 The approved long-lived owners are:
 
-- `TheVault`: committed `InterfaceTree`, latest disposable `LiveCapture`, and
-  non-clean settle diagnostics. Its `SemanticObservationStream` is the sole
-  visible-observation producer and waiter-delivery owner, and owns the private
-  retained ordered-history `SemanticObservationLog`.
+- `TheVault`: latest disposable `LiveCapture` and live UIKit boundary evidence.
+  Its `SemanticObservationStore` owns the committed `InterfaceTree`, retained
+  history, lineage, cursors, clean-read state, and settle diagnostics. Its
+  `SemanticObservationStream` is the sole visible-observation producer and
+  waiter-delivery owner.
 - `TheMuscle`: auth, admission, and session state inside the app.
 - `TheHandoff`: external connection phase and discovery state outside the app.
 - `PendingRequestRegistry`: typed `RequestID` to continuation correlation,
@@ -310,7 +310,8 @@ pipelines are explicit:
 | Receipt private storage codec | `HeistExecutionStepNode.swift` and `HeistExecutionStepNode+Codable.swift` | External receipt JSON projection only |
 | Receipt report projection | `HeistExecutionResult+Report.swift` and `HeistExecutionStepResult+Report.swift` | Report, compact, JUnit, doctor, and metric adapters |
 | Semantic observation scheduling | `SemanticObservationStream.swift` | Passive settle cycles and observation demand |
-| Semantic observation publication | `SemanticObservationStream+Publication.swift` | Ordered publication coordination across Vault graph commit, log append, runtime advance, and waiter delivery |
+| Semantic observation state | `SemanticObservationStore.swift` | One commit of graph, retained history, lineage, cursors, and clean-read state |
+| Semantic observation settlement | `SemanticObservationStream+Settlement.swift` | Proof admission, Store commit, disposable live-evidence refresh, and waiter delivery |
 | Semantic observation waiter delivery | `SemanticObservationStream+Waiters.swift` | Cursor, window, replay, and timeout projections |
 | Testing request construction | `ButtonHeistTesting.swift` | Synchronous helpers and joined sessions live in their named extension files |
 | Fence action JSON | `FenceJSON+Action.swift` and `FenceJSON+HeistExecution.swift`, one result family each | Fence response formatting |
@@ -491,7 +492,7 @@ flowchart TD
     Lifecycle --> PredicateKind{"Predicate kind"}
     PredicateKind -->|exists / missing| Current["Current InterfaceTree"]
     PredicateKind -->|changed / noChange| Observe["Read next settled ObservationEntry<br/>through the stream waiter"]
-    Observe --> Log["SemanticObservationLog<br/>retained, non-destructive"]
+    Observe --> Log["SemanticObservationStore<br/>retained, non-destructive history"]
     Log --> Window["ObservationWindow<br/>baseline through current"]
     Current --> HostAdapter["Private InterfaceTree adapter"]
     HostAdapter --> MatchInput["AccessibilityTargetMatchInput"]
@@ -568,7 +569,7 @@ authoritative. Snapshot fallback compares a candidate with the previous capture
 in the same scope while that scope is current. When the scope trails the global
 generation, it compares the candidate with the latest global source: the same
 screen catches up without another increment, while a different screen advances
-again. This keeps visible and discovery publication from either hiding a real
+again. This keeps visible and discovery commits from either hiding a real
 boundary or counting the same boundary twice. Each retained event still links
 only to the previous event in its own scope.
 
