@@ -50,7 +50,9 @@ struct RenderResponseTests {
         let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
         let response = FenceResponse.heistExecution(
             plan: plan,
-            result: try Self.passedExecutionResult(command: command, trace: trace)
+            report: HeistReport.project(
+                result: try Self.passedExecutionResult(command: command, trace: trace)
+            )
         )
 
         let result = ButtonHeistMCPServer.renderResponse(response)
@@ -181,9 +183,9 @@ struct RenderResponseTests {
         #expect(details["hint"]?.stringValue == expected.details.hint)
     }
 
-    @Test("invalid heist validation renders structured content without MCP error")
+    @Test("invalid heist validation sets MCP error and preserves structured report")
     @ButtonHeistActor
-    func invalidHeistValidationIsNotMCPError() async throws {
+    func invalidHeistValidationIsMCPErrorWithStructuredReport() async throws {
         let configuration = try EnvironmentConfig.resolve(autoReconnect: false)
         let fence = TheFence(configuration: configuration.fenceConfiguration)
         let request = try fence.admit(FenceCommandInput(
@@ -197,7 +199,7 @@ struct RenderResponseTests {
         let result = ButtonHeistMCPServer.renderResponse(response)
         let root = try #require(result.structuredContent?.objectValue)
 
-        #expect(result.isError == false)
+        #expect(result.isError == true)
         #expect(root["status"]?.stringValue == "ok")
         #expect(root["admissible"] == Value.bool(false))
         #expect(root["canonicalPlan"] == nil)
@@ -267,7 +269,7 @@ struct RenderResponseTests {
     private static func passedExecutionResult(
         command: HeistActionCommand,
         trace: AccessibilityTrace
-    ) throws -> HeistExecutionResult {
+    ) throws -> HeistResult {
         let encoder = JSONEncoder()
         let traceEvidence = try #require(AccessibilityTraceEvidence(
             trace: trace,
@@ -275,7 +277,7 @@ struct RenderResponseTests {
         ))
         let evidence = HeistActionEvidence.dispatch(
             dispatchResult: .success(
-                method: .activate,
+                payload: .activate,
                 observation: .trace(traceEvidence)
             )
         )
@@ -294,7 +296,7 @@ struct RenderResponseTests {
             "steps": [step],
             "durationMs": 3,
         ])
-        return try JSONDecoder().decode(HeistExecutionResult.self, from: data)
+        return try JSONDecoder().decode(HeistResult.self, from: data)
     }
 
     private static func jsonObject<Value: Encodable>(
