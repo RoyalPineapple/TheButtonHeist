@@ -26,7 +26,7 @@ final class HandoffConnectionLifecycle {
     }
 
     private struct ReconnectRun {
-        let context: HandoffReconnectRunContext
+        let attempt: HandoffReconnectAttempt
         let task: Task<Void, Never>
     }
 
@@ -52,7 +52,7 @@ final class HandoffConnectionLifecycle {
             switch self {
             case .disconnected(_, let reconnect):
                 if case .running(let run) = reconnect {
-                    return .reconnecting(run.context)
+                    return .reconnecting(run.attempt)
                 }
                 return .disconnected
             case .connecting(let runtime, _, _):
@@ -239,9 +239,9 @@ final class HandoffConnectionLifecycle {
         return wasRunning
     }
 
-    func cancel(clearTarget _: Bool) -> Bool {
+    func cancelReconnectAttempt() -> Bool {
         guard let run = runtimePhase.activeReconnectRun else { return false }
-        transition(to: runtimePhase.replacingReconnectState(.armed(run.context.target.resolutionTarget)))
+        transition(to: runtimePhase.replacingReconnectState(.armed(run.attempt.target.resolutionTarget)))
         return true
     }
 
@@ -253,43 +253,43 @@ final class HandoffConnectionLifecycle {
     @discardableResult
     func run(
         target: HandoffReconnectTarget,
-        operation: @escaping @ButtonHeistActor (HandoffReconnectRunContext) async -> Void
-    ) -> HandoffReconnectRunContext? {
+        operation: @escaping @ButtonHeistActor (HandoffReconnectAttempt) async -> Void
+    ) -> HandoffReconnectAttempt? {
         guard case .armed(let resolutionTarget) = runtimePhase.reconnectState,
               resolutionTarget == target.resolutionTarget,
               !runtimePhase.isActiveConnection
         else { return nil }
 
-        let context = HandoffReconnectRunContext(id: UUID(), target: target)
-        let task = Task<Void, Never> { @ButtonHeistActor [weak self, context] in
-            guard let self, self.isCurrentRun(context) else { return }
-            await operation(context)
+        let attempt = HandoffReconnectAttempt(id: UUID(), target: target)
+        let task = Task<Void, Never> { @ButtonHeistActor [weak self, attempt] in
+            guard let self, self.isCurrentReconnectAttempt(attempt) else { return }
+            await operation(attempt)
         }
-        let run = ReconnectRun(context: context, task: task)
+        let run = ReconnectRun(attempt: attempt, task: task)
         transition(to: .disconnected(
             failure: runtimePhase.diagnosticFailure,
             reconnect: .running(run)
         ))
-        return context
+        return attempt
     }
 
-    func isCurrentRun(_ context: HandoffReconnectRunContext) -> Bool {
+    func isCurrentReconnectAttempt(_ attempt: HandoffReconnectAttempt) -> Bool {
         guard !Task.isCancelled, let activeRun = runtimePhase.activeReconnectRun else { return false }
-        return activeRun.context == context
+        return activeRun.attempt == attempt
     }
 
-    func finishSuccess(_ context: HandoffReconnectRunContext) -> Bool {
-        guard isCurrentRun(context) else { return false }
-        let next = runtimePhase.replacingReconnectState(.armed(context.target.resolutionTarget))
+    func finishSuccess(_ attempt: HandoffReconnectAttempt) -> Bool {
+        guard isCurrentReconnectAttempt(attempt) else { return false }
+        let next = runtimePhase.replacingReconnectState(.armed(attempt.target.resolutionTarget))
         transition(to: next, cancelDepartedReconnectRun: false)
         return true
     }
 
     func finishFailure(
-        _ context: HandoffReconnectRunContext,
+        _ attempt: HandoffReconnectAttempt,
         failure: HandoffConnectionError
     ) -> Bool {
-        guard isCurrentRun(context) else { return false }
+        guard isCurrentReconnectAttempt(attempt) else { return false }
         transition(
             to: .failed(
                 failure,
@@ -300,11 +300,11 @@ final class HandoffConnectionLifecycle {
         return true
     }
 
-    func markReconnecting(target: HandoffReconnectTarget, runID: UUID) {
+    func markReconnecting(target: HandoffReconnectTarget, attemptID: UUID) {
         guard !runtimePhase.isActiveConnection,
               let run = runtimePhase.activeReconnectRun,
-              run.context.id == runID,
-              run.context.target == target
+              run.attempt.id == attemptID,
+              run.attempt.target == target
         else { return }
         transition(to: .disconnected(
             failure: runtimePhase.diagnosticFailure,
@@ -535,7 +535,7 @@ final class HandoffConnectionLifecycle {
 
         if cancelDepartedReconnectRun,
            let previousRun = previousPhase.activeReconnectRun,
-           nextPhase.activeReconnectRun?.context.id != previousRun.context.id {
+           nextPhase.activeReconnectRun?.attempt.id != previousRun.attempt.id {
             effects.append(.cancelTask(previousRun.task))
         }
 

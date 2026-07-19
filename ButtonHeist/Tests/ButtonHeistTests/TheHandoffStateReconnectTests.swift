@@ -162,7 +162,7 @@ extension TheHandoffStateTests {
     }
 
     @ButtonHeistActor
-    func testConnectionLifecycleRejectsDuplicateReconnectRun() async {
+    func testConnectionLifecycleRejectsDuplicateRunAndRetainsTargetAfterCancellation() async {
         let lifecycle = HandoffConnectionLifecycle()
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
 
@@ -173,6 +173,8 @@ extension TheHandoffStateTests {
 
         XCTAssertNotNil(lifecycle.run(target: target, operation: { _ in }))
         XCTAssertNil(lifecycle.run(target: target, operation: { _ in }))
+        XCTAssertTrue(lifecycle.cancelReconnectAttempt())
+        XCTAssertEqual(lifecycle.targetForDisconnectedDevice(device), target)
     }
 
     @ButtonHeistActor
@@ -253,7 +255,7 @@ extension TheHandoffStateTests {
     }
 
     @ButtonHeistActor
-    func testReconnectPhaseNotifiesWhenRunIdentityChanges() async {
+    func testReconnectPhaseNotifiesWhenAttemptIdentityChanges() async {
         let lifecycle = HandoffConnectionLifecycle()
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
         let target = HandoffReconnectTarget(
@@ -272,12 +274,12 @@ extension TheHandoffStateTests {
             return XCTFail("Expected second reconnect run")
         }
 
-        let reconnectRuns = phases.compactMap { phase -> HandoffReconnectRunContext? in
-            guard case .reconnecting(let run) = phase else { return nil }
-            return run
+        let reconnectAttempts = phases.compactMap { phase -> HandoffReconnectAttempt? in
+            guard case .reconnecting(let attempt) = phase else { return nil }
+            return attempt
         }
-        XCTAssertEqual(reconnectRuns.map(\.id), [firstRun.id, secondRun.id])
-        XCTAssertEqual(reconnectRuns.map(\.target), [target, target])
+        XCTAssertEqual(reconnectAttempts.map(\.id), [firstRun.id, secondRun.id])
+        XCTAssertEqual(reconnectAttempts.map(\.target), [target, target])
     }
 
     @ButtonHeistActor
@@ -444,6 +446,7 @@ extension TheHandoffStateTests {
     func testRuntimePhaseDropsConnectionHandleWhenDisconnecting() async {
         let handoff = TheHandoff()
         let mock = connectPendingMockHandoff(handoff)
+        handoff.setupAutoReconnect(filter: nil)
 
         XCTAssertNotNil(handoff.connectionLifecycle.activeConnection)
 
@@ -452,6 +455,7 @@ extension TheHandoffStateTests {
         XCTAssertNil(handoff.connectionLifecycle.activeConnection)
         XCTAssertEqual(mock.disconnectCount, 1)
         assertDisconnected(handoff.connectionPhase)
+        XCTAssertNil(handoff.connectionLifecycle.targetForDisconnectedDevice(.init(host: "127.0.0.1", port: 1234)))
         XCTAssertEqual(handoff.send(.ping, requestId: nil), .failed(.notConnected))
     }
 
