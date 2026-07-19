@@ -81,10 +81,11 @@ func `public spatial gesture authoring uses direct concrete verbs`() throws {
         dismissKeyboard()
     }
 
-    #expect(plan.body.compactMap { step in
+    let methods: [HeistActionCommandType] = plan.body.compactMap { step in
         guard case .action(let action) = step else { return nil }
         return action.command.wireType
-    } == [.oneFingerTap, .longPress, .swipe, .drag, .dismissKeyboard])
+    }
+    #expect(methods == [.oneFingerTap, .longPress, .swipe, .drag, .dismissKeyboard])
 }
 
 @Test

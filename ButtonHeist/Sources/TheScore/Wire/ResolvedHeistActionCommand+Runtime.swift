@@ -10,15 +10,15 @@ package extension ResolvedHeistActionCommand {
         case .rotor: return .rotor
         case .dismiss: return .dismiss
         case .magicTap: return .magicTap
-        case .mechanicalTap: return .oneFingerTap
-        case .mechanicalLongPress: return .longPress
-        case .mechanicalSwipe: return .swipe
-        case .mechanicalDrag: return .drag
+        case .oneFingerTap: return .oneFingerTap
+        case .longPress: return .longPress
+        case .swipe: return .swipe
+        case .drag: return .drag
         case .typeText: return .typeText
         case .editAction: return .editAction
-        case .viewportScroll: return .scroll
-        case .viewportScrollToVisible: return .scrollToVisible
-        case .viewportScrollToEdge: return .scrollToEdge
+        case .scroll: return .scroll
+        case .scrollToVisible: return .scrollToVisible
+        case .scrollToEdge: return .scrollToEdge
         case .dismissKeyboard: return .dismissKeyboard
         case .setPasteboard: return .setPasteboard
         case .takeScreenshot: return .takeScreenshot

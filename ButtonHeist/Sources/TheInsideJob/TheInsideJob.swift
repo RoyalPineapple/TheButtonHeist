@@ -244,7 +244,7 @@ public final class TheInsideJob {
         self.runtimeConfiguration = runtimeConfiguration
         self.transportFactory = transportFactory
         self.muscle = TheMuscle(
-            explicitToken: runtimeConfiguration.token.value,
+            sessionToken: runtimeConfiguration.token.value,
             sessionReleaseTimeout: runtimeConfiguration.sessionReleaseTimeout.value,
             authenticationPolicy: runtimeConfiguration.authenticationPolicy
         )

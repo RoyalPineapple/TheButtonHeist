@@ -1,16 +1,10 @@
 import Foundation
 
 extension ClientAdmission {
-    enum SessionAdmissionSource: Sendable {
-        case token
-    }
-
     struct SessionAdmission: Sendable {
         let clientId: Int
-        let address: ClientNetworkAddress
         let owner: SessionOwner
         let respond: ResponseHandler
-        let source: SessionAdmissionSource
     }
 }
 

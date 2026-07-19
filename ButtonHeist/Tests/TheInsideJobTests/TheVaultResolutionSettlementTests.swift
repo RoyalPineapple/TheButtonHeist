@@ -206,7 +206,7 @@ extension TheVaultResolutionTests {
             notificationData: .none,
             associatedElement: .none
         )
-        let outcome = SettleSession.Result(
+        let settleResult = SettleSession.Result(
             outcome: .timedOut(timeMs: 1),
             events: [],
             finalObservation: SettleSessionFinalObservation(observation: observation),
@@ -216,7 +216,7 @@ extension TheVaultResolutionTests {
 
         _ = await bagman.semanticObservationStream.settleActionObservation(
             baselineTripwireSignal: bagman.tripwire.tripwireSignal(),
-            settleOutcome: outcome,
+            settleResult: settleResult,
             notificationWindow: action
         )
         firstHeist.cancel()
@@ -281,7 +281,7 @@ extension TheVaultResolutionTests {
             notificationData: CapturedAccessibilityNotificationPayload("Done" as NSString),
             associatedElement: .none
         )
-        let outcome = SettleSession.Result(
+        let settleResult = SettleSession.Result(
             outcome: .settled(timeMs: 1),
             events: [],
             finalObservation: SettleSessionFinalObservation(observation: observation),
@@ -291,7 +291,7 @@ extension TheVaultResolutionTests {
 
         let result = await bagman.semanticObservationStream.settleActionObservation(
             baselineTripwireSignal: bagman.tripwire.tripwireSignal(),
-            settleOutcome: outcome
+            settleResult: settleResult
         )
 
         guard case .committed(let event) = result.commitOutcome else {
@@ -311,7 +311,7 @@ extension TheVaultResolutionTests {
         let stableElement = element(label: "Stable")
         let settled = InterfaceObservation.makeForTests(elements: [(stableElement, "stable")])
         let finalObservation = SettleSessionFinalObservation(observation: settled)
-        let outcome = SettleSession.Result(
+        let settleResult = SettleSession.Result(
             outcome: .settled(timeMs: 1),
             events: [],
             finalObservation: finalObservation,
@@ -326,7 +326,7 @@ extension TheVaultResolutionTests {
         XCTAssertNotEqual(replacement.captureID, settled.captureID)
         bagman.observeInterface(replacement)
 
-        let committableObservation = try XCTUnwrap(CommittableInterfaceObservation.admit(outcome))
+        let committableObservation = try XCTUnwrap(CommittableInterfaceObservation.admit(settleResult))
         XCTAssertEqual(committableObservation.observation.captureID, settled.captureID)
         XCTAssertNotEqual(committableObservation.observation.captureID, replacement.captureID)
     }
@@ -334,7 +334,7 @@ extension TheVaultResolutionTests {
     func testViewportMovementLineageRequiresDedicatedAdmissionConstructor() throws {
         let observation = InterfaceObservation.makeForTests(elements: [(element(label: "Stable"), "stable")])
         bagman.observeInterface(observation)
-        let outcome = SettleSession.Result(
+        let settleResult = SettleSession.Result(
             outcome: .settled(timeMs: 1),
             events: [],
             finalObservation: SettleSessionFinalObservation(observation: observation),
@@ -342,10 +342,10 @@ extension TheVaultResolutionTests {
             tripwireSignal: bagman.tripwire.tripwireSignal()
         )
 
-        let ordinary = try XCTUnwrap(CommittableInterfaceObservation.admit(outcome))
+        let ordinary = try XCTUnwrap(CommittableInterfaceObservation.admit(settleResult))
         let afterMovement = try XCTUnwrap(
             CommittableInterfaceObservation.admit(
-                outcome,
+                settleResult,
                 lineageEvidence: .viewportMovement
             )
         )
@@ -368,7 +368,7 @@ extension TheVaultResolutionTests {
         )
         let result = await bagman.semanticObservationStream.settleActionObservation(
             baselineTripwireSignal: bagman.tripwire.tripwireSignal(),
-            settleOutcome: SettleSession.Result(
+            settleResult: SettleSession.Result(
                 outcome: .settled(timeMs: 1),
                 events: [],
                 finalObservation: SettleSessionFinalObservation(observation: observation),
@@ -411,7 +411,7 @@ extension TheVaultResolutionTests {
         )
         let result = await bagman.semanticObservationStream.settleActionObservation(
             baselineTripwireSignal: bagman.tripwire.tripwireSignal(),
-            settleOutcome: SettleSession.Result(
+            settleResult: SettleSession.Result(
                 outcome: .settled(timeMs: 1),
                 events: [],
                 finalObservation: SettleSessionFinalObservation(observation: after),
@@ -451,7 +451,7 @@ extension TheVaultResolutionTests {
         )
         let result = await bagman.semanticObservationStream.settleActionObservation(
             baselineTripwireSignal: bagman.tripwire.tripwireSignal(),
-            settleOutcome: SettleSession.Result(
+            settleResult: SettleSession.Result(
                 outcome: .settled(timeMs: 1),
                 events: [],
                 finalObservation: SettleSessionFinalObservation(observation: observation),
@@ -529,7 +529,7 @@ extension TheVaultResolutionTests {
             associatedElement: .none
         )
         let observation = InterfaceObservation.makeForTests(elements: [(element(label: "Unstable"), "unstable")])
-        let outcome = SettleSession.Result(
+        let settleResult = SettleSession.Result(
             outcome: .timedOut(timeMs: 1),
             events: [],
             finalObservation: SettleSessionFinalObservation(observation: observation),
@@ -539,7 +539,7 @@ extension TheVaultResolutionTests {
 
         _ = await bagman.semanticObservationStream.settleActionObservation(
             baselineTripwireSignal: bagman.tripwire.tripwireSignal(),
-            settleOutcome: outcome,
+            settleResult: settleResult,
             notificationWindow: action
         )
 
@@ -558,7 +558,7 @@ extension TheVaultResolutionTests {
         let observation = InterfaceObservation.makeForTests([
             .init(element(label: "Unstable"), heistId: "unstable", object: object),
         ])
-        let outcome = SettleSession.Result(
+        let settleResult = SettleSession.Result(
             outcome: .timedOut(timeMs: 1),
             events: [],
             finalObservation: SettleSessionFinalObservation(observation: observation),
@@ -568,7 +568,7 @@ extension TheVaultResolutionTests {
 
         let result = await bagman.semanticObservationStream.settleActionObservation(
             baselineTripwireSignal: bagman.tripwire.tripwireSignal(),
-            settleOutcome: outcome
+            settleResult: settleResult
         )
 
         guard case .observedUnsettled(let observedObservation, _) = result.commitOutcome else {
@@ -607,7 +607,7 @@ extension TheVaultResolutionTests {
         let screenB = InterfaceObservation.makeForTests([
             .init(element(label: "B"), heistId: "b", object: objectB),
         ])
-        let rejectedOutcome = SettleSession.Result(
+        let rejectedResult = SettleSession.Result(
             outcome: .settled(timeMs: 1),
             events: [],
             finalObservation: SettleSessionFinalObservation(observation: screenA),
@@ -619,7 +619,7 @@ extension TheVaultResolutionTests {
 
         let result = await bagman.semanticObservationStream.settleActionObservation(
             baselineTripwireSignal: bagman.tripwire.tripwireSignal(),
-            settleOutcome: rejectedOutcome
+            settleResult: rejectedResult
         )
 
         guard case .unavailable = result.commitOutcome else {

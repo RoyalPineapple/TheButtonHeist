@@ -1,6 +1,6 @@
 # Offline heist validation
 
-Status: Proposed
+Status: Implemented
 
 ## Summary
 
@@ -19,7 +19,7 @@ author source
 → repair diagnostics
 → validate_heist
 → run_heist
-→ inspect receipt
+→ inspect result
 ```
 
 `validate_heist` proves that a plan and its optional root invocation can enter
@@ -56,7 +56,7 @@ an expectation will pass.
 - dispatch actions, waits, or heists;
 - settle the interface;
 - predict action support or expectation outcomes;
-- create a receipt;
+- create a result;
 - compile trusted local Swift source;
 - accept raw `HeistPlan` JSON intermediate representation;
 - write or update `.heist` artifacts;
@@ -171,7 +171,7 @@ The one-shot CLI uses validation semantics suitable for CI:
 
 This policy is CLI-specific. `FenceResponse.isFailure` remains false for an
 ordinary validation report so MCP can consume and repair diagnostics. The CLI
-adapter inspects `HeistValidationReport` after rendering output and returns
+adapter inspects `HeistValidation.Report` after rendering output and returns
 `ExitCode.failure` when `report.commandPassed` is false, where:
 
 ```text
@@ -259,7 +259,7 @@ Rejection has two public forms:
 | Empty inline source or unsupported path extension | `false` | Validation report with `plan.valid: false` |
 | Inline syntax, semantic admission, or runtime-safety rejection | `false` | Validation report with build diagnostics |
 | Artifact read, format, or version rejection | `false` | Validation report with build diagnostics |
-| Decoded argument kind does not bind to the admitted root parameter | `false` | Validation report with `invocation.state: invalid` |
+| Decoded argument kind does not bind to the admitted root parameter | `false` | Validation report with `invocation.status: invalid` |
 
 `argumentProvided` is true whenever the caller includes the `argument` field,
 including an explicit `{"type":"none"}` argument. It is false only when the
@@ -326,7 +326,8 @@ errors:
 
 ### 3. Plan loading and semantic admission
 
-Load the selected source through the same `HeistPlanning` path used by
+Load the selected source through the same `HeistPlanSourceAdmission` and
+`HeistPlanLoading` path used by
 `run_heist`, `list_heists`, and `describe_heist`:
 
 ```text
@@ -363,7 +364,7 @@ Do not reproduce these checks in `TheFence` or the MCP package.
 
 After plan admission, decode `argument` through the existing
 `decodeRootHeistArgument` representation and call the same
-`HeistPlanning.validateRootArgument` operation used by `run_heist`.
+`HeistArgumentAdmission.validateRootArgument` operation used by `run_heist`.
 
 This phase is skipped only when plan admission did not produce a `HeistPlan`.
 It performs no target resolution. An accessibility-target argument is checked
@@ -397,7 +398,7 @@ the canonical renderer.
 
 ### 7. Response projection
 
-Assemble one immutable `HeistValidationReport` value. Public JSON, compact
+Assemble one immutable `HeistValidation.Report` value. Public JSON, compact
 text, and MCP `structuredContent` MUST project from that value. Do not assemble
 three similar response shapes independently.
 
@@ -455,13 +456,13 @@ dispatch.
     "topLevelStepCount": 1
   },
   "invocation": {
-    "state": "valid",
+    "status": "valid",
     "argumentProvided": false,
     "diagnostics": []
   },
   "lint": {
     "mode": "composition_quality",
-    "state": "passed",
+    "status": "passed",
     "findings": []
   },
   "buildDiagnostics": [],
@@ -469,14 +470,14 @@ dispatch.
 }
 ```
 
-The public response types are:
+The public status spellings are:
 
 ```text
-ValidationState = valid | invalid | not_evaluated
-LintState = passed | findings | not_evaluated
+invocation.status = valid | invalid | not_evaluated
+lint.status = passed | findings | not_evaluated
 ```
 
-`lint.state` is `findings` when one or more findings exist, regardless of
+`lint.status` is `findings` when one or more findings exist, regardless of
 severity. `lint.passed` is not a separate wire field; callers derive pass/fail
 from whether any returned finding has severity `error`. This avoids storing two
 representations of the same fact.
@@ -540,13 +541,13 @@ Response shape:
     "valid": false
   },
   "invocation": {
-    "state": "not_evaluated",
+    "status": "not_evaluated",
     "argumentProvided": false,
     "diagnostics": []
   },
   "lint": {
     "mode": "composition_quality",
-    "state": "not_evaluated",
+    "status": "not_evaluated",
     "findings": []
   },
   "buildDiagnostics": [
@@ -581,7 +582,7 @@ plan but is not admissible as the corresponding `run_heist` request:
     "topLevelStepCount": 1
   },
   "invocation": {
-    "state": "invalid",
+    "status": "invalid",
     "argumentProvided": false,
     "diagnostics": [
       {
@@ -595,7 +596,7 @@ plan but is not admissible as the corresponding `run_heist` request:
   },
   "lint": {
     "mode": "composition_quality",
-    "state": "passed",
+    "status": "passed",
     "findings": []
   },
   "buildDiagnostics": [],
@@ -624,13 +625,13 @@ have plan-build errors.
     "topLevelStepCount": 1
   },
   "invocation": {
-    "state": "valid",
+    "status": "valid",
     "argumentProvided": false,
     "diagnostics": []
   },
   "lint": {
     "mode": "strict_test",
-    "state": "findings",
+    "status": "findings",
     "findings": [
       {
         "severity": "error",
@@ -754,45 +755,33 @@ the existing `HeistPlanLintMode`; do not compare raw strings after decoding.
 
 ### Typed report
 
-Use named values for each result phase:
+Use one package-only validity algebra for every result phase and compose those
+values into the public report:
 
 ```swift
-struct HeistValidationReport: Sendable, Equatable {
-    let plan: HeistPlanValidation
-    let invocation: HeistInvocationValidation
-    let lint: HeistLintReport
-    let canonicalPlan: String?
-
-    var admissible: Bool {
-        plan.isValid && invocation.state == .valid
+public enum HeistValidation {
+    package enum Result<Value: Sendable & Equatable>: Sendable, Equatable {
+        case valid(Value)
+        case invalid([HeistBuildDiagnostic])
+        case notEvaluated
     }
 
-    var commandPassed: Bool {
-        admissible && !lint.findings.contains { $0.severity == .error }
+    public struct Report: Sendable, Equatable {
+        package let plan: Result<PlanSummary>
+        package let invocation: Result<InvocationSummary>
+        package let argumentProvided: Bool
+        package let lint: Lint
+        package let canonicalPlan: String?
     }
-}
-
-enum HeistPlanValidation: Sendable, Equatable {
-    case valid(HeistPlanSummary)
-    case invalid([HeistBuildDiagnostic])
-}
-
-struct HeistInvocationValidation: Sendable, Equatable {
-    let state: HeistValidationState
-    let argumentProvided: Bool
-    let diagnostics: [HeistBuildDiagnostic]
-}
-
-struct HeistLintReport: Sendable, Equatable {
-    let mode: HeistValidationLintMode
-    let state: HeistLintState
-    let findings: [HeistPlanLintFinding]
 }
 ```
 
-The exact access control may follow existing module boundaries. The important
-contract is that invalid and not-evaluated states are explicit cases, not
-coordinated optionals and booleans.
+`Result<Value>` is the sole validity state machine for plan and invocation.
+`HeistValidation.Lint` owns lint's distinct mode/findings algebra. Invalid and
+not-evaluated states are explicit cases, not coordinated optionals, booleans,
+or phase-specific result types. The package-only algebra does not cross the
+public boundary; `PublicHeistValidationResponse` renders the documented JSON
+contract from `HeistValidation.Report`.
 
 ### Ownership
 
@@ -809,10 +798,10 @@ coordinated optionals and booleans.
 
 ### Fence response
 
-Add:
+The Fence response carries the report directly:
 
 ```swift
-case heistValidation(HeistValidationReport)
+case heistValidation(HeistValidation.Report)
 ```
 
 Add `.heistValidation` to `FenceCommandResponseProjection` and every exhaustive
@@ -848,7 +837,7 @@ The implementation should remain within the existing owners:
 | `TheFence+CommandCatalog.swift` | Add the typed command and response-projection cases |
 | `TheFence+CommandCatalog+RunHeist.swift` | Define the CLI-and-MCP descriptor, parameters, annotations, and description |
 | `FenceParameter.swift` and `FenceParameter+Factories.swift` | Add the typed lint parameter key and enum-backed parameter |
-| `TheFence+HeistPlanning.swift` | Decode the request and orchestrate the shared plan and argument admission paths |
+| `TheFence+HeistAdmission.swift` | Decode the request and orchestrate the shared plan and argument admission paths |
 | `TheFence+RequestPayload.swift` | Route the admitted command to its offline handler |
 | New heist-validation model/projection file | Own the request result state machine, summary, and compact projection |
 | `FenceResponseModels.swift` | Add the typed response case and failure semantics |
@@ -892,12 +881,12 @@ validation, but have different terminal effects:
 ```text
                          ┌→ validate_heist → lint → canonical report
 source → plan admission ─┤
-                         └→ run_heist → connect → wire dispatch → receipt
+                         └→ run_heist → connect → wire dispatch → result
 ```
 
 The common prefix MUST remain one implementation pipeline. If validation rules
-change, both commands pick them up through `HeistPlanning` and `HeistPlan`
-admission.
+change, both commands pick them up through `HeistPlanSourceAdmission`,
+`HeistPlanLoading`, and `HeistArgumentAdmission`.
 
 `run_heist` MUST always repeat admission. A client may change the source or
 artifact between calls, and a validation report carries no authority.

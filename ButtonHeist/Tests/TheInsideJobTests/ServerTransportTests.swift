@@ -309,7 +309,7 @@ final class ServerTransportTests: XCTestCase {
         )
         advertisement.updateTXTRecord(["second": "two"])
 
-        let txt = advertisement.currentTXTRecord
+        let txt = advertisement.txtRecord
         XCTAssertEqual(txt["first"].flatMap { String(data: $0, encoding: .utf8) }, "one")
         XCTAssertEqual(txt["second"].flatMap { String(data: $0, encoding: .utf8) }, "two")
         XCTAssertEqual(txt[TXTRecordKey.simUDID.rawValue].flatMap { String(data: $0, encoding: .utf8) }, "sim")
@@ -324,7 +324,7 @@ final class ServerTransportTests: XCTestCase {
         advertisement.stop()
 
         XCTAssertFalse(advertisement.isAdvertising)
-        XCTAssertTrue(advertisement.currentTXTRecord.isEmpty)
+        XCTAssertTrue(advertisement.txtRecord.isEmpty)
     }
 
     @MainActor

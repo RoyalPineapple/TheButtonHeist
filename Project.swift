@@ -190,7 +190,7 @@ let project = Project(
             ])
         ),
 
-        // MARK: - Receipt Diagnosis (macOS tooling core)
+        // MARK: - Result Diagnosis (macOS tooling core)
         .target(
             name: "HeistDoctorCore",
             destinations: .macOS,

@@ -28,7 +28,7 @@ extension TheVault {
         case continuationTextRangeUnavailable
         case noResult(RotorName)
         case resultTargetUnavailable(RotorName)
-        case resultTargetNotParsed(RotorName)
+        case resultTargetUnresolved(RotorName)
     }
 
     func performRotor(
@@ -114,9 +114,9 @@ extension TheVault {
         guard let resultObject else {
             return .resultTargetUnavailable(rotorName)
         }
-        let parsed = parseRotorResultObject(resultObject)
-        guard let parsed else {
-            return .resultTargetNotParsed(rotorName)
+        let resolved = resolveRotorResultObject(resultObject)
+        guard let resolved else {
+            return .resultTargetUnresolved(rotorName)
         }
         let cursorTextRange: TextRangeReference?
         if let targetRange = result.targetRange {
@@ -132,17 +132,17 @@ extension TheVault {
             hostHeistId: hostHeistId,
             rotorName: rotorName,
             generation: currentRotorGeneration,
-            selectionHeistId: parsed.heistId,
+            selectionHeistId: resolved.heistId,
             textRange: cursorTextRange
         )
-        return .succeeded(RotorHit(rotor: rotorName, treeElement: parsed, textRange: textRange))
+        return .succeeded(RotorHit(rotor: rotorName, treeElement: resolved, textRange: textRange))
     }
 }
 
 private extension TheVault {
 
     var currentRotorGeneration: ScreenGeneration {
-        semanticObservationStream.latestEvent?.generation ?? .initial
+        semanticObservationStream.latestCommittedEvent?.generation ?? .initial
     }
 
     /// Return the known `InterfaceTree.Element` corresponding to a UIKit accessibility
@@ -156,21 +156,21 @@ private extension TheVault {
         return cached
     }
 
-    /// Parse the live hierarchy and return the `InterfaceTree.Element` corresponding to
+    /// Capture the live hierarchy and resolve the `InterfaceTree.Element` corresponding to
     /// a UIKit accessibility object. Used by live custom rotor steps so the
     /// returned rotor target flows through the same parser as `get_interface`.
-    func parseLiveObject(_ object: NSObject) -> InterfaceTree.Element? {
-        guard let screen = parse() else { return nil }
-        guard let heistId = screen.liveCapture.heistId(matching: object) else { return nil }
-        return screen.tree.findElement(heistId: heistId)
+    func resolveLiveObject(_ object: NSObject) -> InterfaceTree.Element? {
+        guard let observation = refreshLiveCapture() else { return nil }
+        guard let heistId = observation.liveCapture.heistId(matching: object) else { return nil }
+        return observation.tree.findElement(heistId: heistId)
     }
 
-    func parseRotorResultObject(_ object: NSObject) -> InterfaceTree.Element? {
+    func resolveRotorResultObject(_ object: NSObject) -> InterfaceTree.Element? {
         if let known = knownObject(object) {
             return known
         }
 
-        return parseLiveObject(object)
+        return resolveLiveObject(object)
     }
 
     func textRange(from reference: TextRangeReference, in input: UITextInput) -> UITextRange? {

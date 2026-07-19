@@ -117,7 +117,7 @@ final class WaitForIntegrationTests: XCTestCase {
 
     @discardableResult
     private func waitForSettledVisibleObservation() async -> Bool {
-        await insideJob.brains.interactionObservation.observeSemanticState(
+        await insideJob.brains.interactionCoordinator.settledEvidence(
             scope: .visible,
             after: nil,
             timeout: 1.0
@@ -154,7 +154,7 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertTrue(scan.hasRelevantAnimations, "Regression setup must keep an unrelated CALayer animation active")
 
         insideJob.brains.vault.invalidateSettledObservationFromTripwire()
-        let observation = await insideJob.brains.interactionObservation.observeSemanticState(
+        let observation = await insideJob.brains.interactionCoordinator.settledEvidence(
             scope: .visible,
             after: nil,
             timeout: 2.0
@@ -183,7 +183,7 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertTrue(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .wait)
         XCTAssertTrue(result.message?.hasPrefix("matched") == true)
-        XCTAssertNil(result.outcome.errorKind)
+        XCTAssertNil(result.outcome.failureKind)
     }
 
     func testWaitForAppearTimeoutNamesExpectedMatcherAndInterfaceCount() async throws {
@@ -199,7 +199,7 @@ final class WaitForIntegrationTests: XCTestCase {
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .wait)
-        XCTAssertEqual(result.outcome.errorKind, .timeout)
+        XCTAssertEqual(result.outcome.failureKind, .timeout)
         XCTAssertTrue(message.contains("waiting for element to appear"), "Unexpected message: \(message)")
         XCTAssertTrue(message.contains("expected: label=\"WaitFor-Missing-Target\""), "Unexpected message: \(message)")
         XCTAssertTrue(message.contains("interface:"), "Unexpected message: \(message)")
@@ -233,7 +233,7 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertEqual(unwrapped.method, .wait)
         let message = try XCTUnwrap(unwrapped.message)
         XCTAssertTrue(message.contains("matched after"), "Unexpected message: \(message)")
-        XCTAssertNil(unwrapped.outcome.errorKind)
+        XCTAssertNil(unwrapped.outcome.failureKind)
     }
 
     // MARK: - 3. wait_for absent: true on a present element — should timeout
@@ -251,7 +251,7 @@ final class WaitForIntegrationTests: XCTestCase {
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .wait)
-        XCTAssertEqual(result.outcome.errorKind, .timeout)
+        XCTAssertEqual(result.outcome.failureKind, .timeout)
         XCTAssertTrue(result.message?.contains("element still present") == true)
     }
 
@@ -278,7 +278,7 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertTrue(unwrapped.outcome.isSuccess)
         XCTAssertEqual(unwrapped.method, .wait)
         XCTAssertTrue(unwrapped.message?.contains("absent confirmed") == true)
-        XCTAssertNil(unwrapped.outcome.errorKind)
+        XCTAssertNil(unwrapped.outcome.failureKind)
     }
 
     // MARK: - 5. wait_for respects timeout value
@@ -295,7 +295,7 @@ final class WaitForIntegrationTests: XCTestCase {
         let elapsed = CFAbsoluteTimeGetCurrent() - start
 
         XCTAssertFalse(result.outcome.isSuccess)
-        XCTAssertEqual(result.outcome.errorKind, .timeout)
+        XCTAssertEqual(result.outcome.failureKind, .timeout)
         XCTAssertTrue(result.message?.contains("element not found") == true)
         // Should complete around 2s — allow generous margin for settle loop overhead
         XCTAssertGreaterThanOrEqual(elapsed, 1.5, "Should wait at least close to the timeout")
@@ -347,7 +347,7 @@ final class WaitForIntegrationTests: XCTestCase {
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .wait)
-        XCTAssertEqual(result.outcome.errorKind, .timeout)
+        XCTAssertEqual(result.outcome.failureKind, .timeout)
         XCTAssertTrue(result.message?.contains("timed out") == true, result.message ?? "missing wait message")
     }
 
@@ -364,7 +364,7 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertTrue(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .wait)
         XCTAssertTrue(result.message?.contains("absent confirmed after") == true)
-        XCTAssertNil(result.outcome.errorKind)
+        XCTAssertNil(result.outcome.failureKind)
     }
 
     // MARK: - Changed wait trace truth
@@ -380,7 +380,7 @@ final class WaitForIntegrationTests: XCTestCase {
 
         XCTAssertTrue(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .wait)
-        XCTAssertNil(result.outcome.errorKind)
+        XCTAssertNil(result.outcome.failureKind)
         XCTAssertTrue(
             result.message?.contains("matched") == true
         )
@@ -394,7 +394,7 @@ final class WaitForIntegrationTests: XCTestCase {
 
         XCTAssertTrue(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .wait)
-        XCTAssertNil(result.outcome.errorKind)
+        XCTAssertNil(result.outcome.failureKind)
         XCTAssertTrue(
             result.message?.contains("absent confirmed") == true
         )
@@ -472,7 +472,7 @@ final class WaitForIntegrationTests: XCTestCase {
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .wait)
-        XCTAssertEqual(result.outcome.errorKind, .timeout)
+        XCTAssertEqual(result.outcome.failureKind, .timeout)
         XCTAssertLessThanOrEqual(elapsed, 0.225)
         XCTAssertTrue(result.message?.contains("expected: changed(elements(*))") == true)
     }
@@ -493,7 +493,7 @@ final class WaitForIntegrationTests: XCTestCase {
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .wait)
-        XCTAssertEqual(result.outcome.errorKind, .timeout)
+        XCTAssertEqual(result.outcome.failureKind, .timeout)
         XCTAssertLessThan(elapsed, 0.1)
         XCTAssertTrue(
             message.contains("expected: label=\"WaitForChange-MinimumTimeoutMissing\""),
@@ -558,14 +558,17 @@ final class WaitForIntegrationTests: XCTestCase {
             updatedVisible,
             notificationBatch: notificationBatch
         )
-        let receipt = await insideJob.brains.interactionObservation.waitForPredicate(
+        let result = await insideJob.brains.interactionCoordinator.waitForPredicate(
             try resolvedWait(WaitStep(predicate: .changed(.elements()), timeout: 5.0)),
             initialTrace: AccessibilityTrace(capture: baselineCapture.capture),
             changeBaseline: .supplied(baselineCapture)
         )
-        let result = receipt.result.actionResult
+        let actionResult = result.outcome.actionResult
 
-        XCTAssertTrue(result.outcome.isSuccess, result.message ?? "changed wait did not observe visible update")
+        XCTAssertTrue(
+            actionResult.outcome.isSuccess,
+            actionResult.message ?? "changed wait did not observe visible update"
+        )
         XCTAssertNotNil(
             insideJob.brains.vault.interfaceTree.findElement(heistId: offViewportHeistId),
             "changed wait must refresh visible evidence without deleting explored off-viewport semantic memory"
@@ -583,7 +586,7 @@ final class WaitForIntegrationTests: XCTestCase {
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .wait)
-        XCTAssertEqual(result.outcome.errorKind, .timeout)
+        XCTAssertEqual(result.outcome.failureKind, .timeout)
         XCTAssertTrue(
             result.message?.contains("expected: label=\"WaitForChange-StillPresent\"") == true
         )
@@ -602,7 +605,7 @@ final class WaitForIntegrationTests: XCTestCase {
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .wait)
-        XCTAssertEqual(result.outcome.errorKind, .timeout)
+        XCTAssertEqual(result.outcome.failureKind, .timeout)
         XCTAssertTrue(message.contains("expected: changed(screen(*))"), "Unexpected message: \(message)")
         XCTAssertTrue(message.contains("last observed:"), "Unexpected message: \(message)")
     }
@@ -619,7 +622,7 @@ final class WaitForIntegrationTests: XCTestCase {
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .wait)
-        XCTAssertEqual(result.outcome.errorKind, .timeout)
+        XCTAssertEqual(result.outcome.failureKind, .timeout)
         XCTAssertTrue(message.contains("expected: changed(elements(*))"), "Unexpected message: \(message)")
     }
 
@@ -638,7 +641,7 @@ final class WaitForIntegrationTests: XCTestCase {
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .wait)
-        XCTAssertEqual(result.outcome.errorKind, .timeout)
+        XCTAssertEqual(result.outcome.failureKind, .timeout)
     }
 
 }

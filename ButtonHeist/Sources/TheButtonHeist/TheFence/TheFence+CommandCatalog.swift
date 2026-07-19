@@ -114,16 +114,16 @@ typealias FenceCommandAdmission = @ButtonHeistActor @Sendable (
     TheFence,
     TheFence.Command,
     TheFence.CommandArgumentEnvelope
-) throws -> TheFence.DecodedRequestDispatch
-typealias FenceFixedHandlerAdmission = @ButtonHeistActor @Sendable (
+) throws -> TheFence.CommandExecution
+typealias FenceFixedResponseAdmission = @ButtonHeistActor @Sendable (
     TheFence,
     TheFence.CommandArgumentEnvelope,
     TimeInterval
-) throws -> TheFence.DecodedRequestDispatch
-typealias FenceHandlerAdmission = @ButtonHeistActor @Sendable (
+) throws -> TheFence.CommandExecution
+typealias FenceResponseAdmission = @ButtonHeistActor @Sendable (
     TheFence,
     TheFence.CommandArgumentEnvelope
-) throws -> TheFence.DecodedRequestDispatch
+) throws -> TheFence.CommandExecution
 typealias FenceActionAdmission = @ButtonHeistActor @Sendable (
     TheFence,
     TheFence.CommandArgumentEnvelope
@@ -210,7 +210,7 @@ extension TheFence.Command {
 }
 
 extension TheFence.Command {
-    private func handler(
+    private func responseContract(
         family: FenceCommandFamily,
         requiresConnectionBeforeDispatch: Bool = true,
         parameters: FenceCommandParameters = [],
@@ -219,7 +219,7 @@ extension TheFence.Command {
         cliExposure: CLIExposure = .directCommand,
         mcpExposure: MCPExposure = .notExposed,
         mcpAnnotations: MCPToolAnnotationSpec? = nil,
-        admission: @escaping FenceHandlerAdmission
+        admission: @escaping FenceResponseAdmission
     ) -> Contract {
         Contract(
             command: self,
@@ -235,7 +235,7 @@ extension TheFence.Command {
         )
     }
 
-    private func fixedHandler(
+    private func fixedResponseContract(
         family: FenceCommandFamily,
         requiresConnectionBeforeDispatch: Bool = true,
         parameters: FenceCommandParameters = [],
@@ -244,9 +244,9 @@ extension TheFence.Command {
         cliExposure: CLIExposure = .directCommand,
         mcpExposure: MCPExposure = .notExposed,
         mcpAnnotations: MCPToolAnnotationSpec? = nil,
-        admission: @escaping FenceFixedHandlerAdmission
+        admission: @escaping FenceFixedResponseAdmission
     ) -> Contract {
-        handler(
+        responseContract(
             family: family,
             requiresConnectionBeforeDispatch: requiresConnectionBeforeDispatch,
             parameters: parameters,
@@ -259,7 +259,7 @@ extension TheFence.Command {
         )
     }
 
-    private func singleStepAction(
+    private func singleStepActionContract(
         family: FenceCommandFamily,
         parameters: FenceCommandParameters,
         baseTimeout: FenceCommandFixedTimeout,
@@ -277,7 +277,7 @@ extension TheFence.Command {
             mcpExposure: .notExposed,
             mcpAnnotations: nil,
             admission: { fence, command, arguments in
-                try TheFence.appInteractionDispatch(
+                try TheFence.appInteractionExecution(
                     command,
                     try admission(fence, arguments),
                     actionTimeout: baseTimeout.seconds,
@@ -287,7 +287,7 @@ extension TheFence.Command {
         )
     }
 
-    private func directAction(
+    private func directActionContract(
         family: FenceCommandFamily,
         parameters: FenceCommandParameters,
         timeout: FenceCommandFixedTimeout,
@@ -305,7 +305,7 @@ extension TheFence.Command {
             mcpExposure: .notExposed,
             mcpAnnotations: nil,
             admission: { fence, command, arguments in
-                try TheFence.directActionDispatch(
+                try TheFence.directActionExecution(
                     command,
                     try admission(fence, arguments),
                     timeout: timeout.seconds,
@@ -319,7 +319,7 @@ extension TheFence.Command {
     var contract: Contract {
         switch self {
         case .ping:
-            return fixedHandler(
+            return fixedResponseContract(
                 family: .session,
                 requiresConnectionBeforeDispatch: false,
                 timeout: .health,
@@ -329,7 +329,7 @@ extension TheFence.Command {
                 .init { fence in try await fence.handlePing(timeout: timeout) }
             }
         case .listDevices:
-            return handler(
+            return responseContract(
                 family: .session,
                 requiresConnectionBeforeDispatch: false,
                 description: "List discovered iOS devices and configured connection targets.",
@@ -338,7 +338,7 @@ extension TheFence.Command {
                 .init { fence in try await fence.handleListDevices() }
             }
         case .getInterface:
-            return fixedHandler(
+            return fixedResponseContract(
                 family: .observation,
                 parameters: [
                     FenceParameterBlocks.interfaceSubtree,
@@ -355,7 +355,7 @@ extension TheFence.Command {
                 return .init { fence in try await fence.handleGetInterface(request, timeout: timeout) }
             }
         case .getScreen:
-            return fixedHandler(
+            return fixedResponseContract(
                 family: .observation,
                 parameters: [
                     FenceParameters.output.spec,
@@ -371,7 +371,7 @@ extension TheFence.Command {
                 return .init { fence in try await fence.handleGetScreen(request, timeout: timeout) }
             }
         case .getAnnouncements:
-            return fixedHandler(
+            return fixedResponseContract(
                 family: .observation,
                 timeout: .health,
                 description: "Read recent spoken accessibility text captured from announcement, elementChanged, valueChanged, or screenChanged notifications.",
@@ -381,7 +381,7 @@ extension TheFence.Command {
                 .init { fence in try await fence.handleGetAnnouncements(timeout: timeout) }
             }
         case .wait:
-            return handler(
+            return responseContract(
                 family: .assertion,
                 parameters: FenceCommandParameters(FenceParameterBlocks.wait),
                 timeout: .wait,
@@ -398,59 +398,59 @@ extension TheFence.Command {
                 )))
             }
         case .oneFingerTap:
-            return singleStepAction(
+            return singleStepActionContract(
                 family: .spatialAction,
                 parameters: FenceCommandParameters(
                     FenceParameterBlocks.gesturePointSelection + FenceParameterBlocks.expectation
                 ),
                 baseTimeout: .standardAction,
-                description: "Explicit mechanical/spatial tap. Element targets dispatch at their activation point "
+                description: "Explicit spatial oneFingerTap action. Element targets dispatch at their activation point "
                     + "unless unitPoint supplies an element-frame override; point supplies a raw screen coordinate. "
-                    + "ordinary accessible controls should use the semantic command path."
+                    + "Use activate for ordinary accessible controls."
             ) { fence, arguments in
-                .mechanicalTap(try fence.decodeTapTarget(arguments))
+                .oneFingerTap(try fence.decodeTapTarget(arguments))
             }
         case .longPress:
-            return singleStepAction(
+            return singleStepActionContract(
                 family: .spatialAction,
                 parameters: FenceCommandParameters(
                     FenceParameterBlocks.gesturePointSelection
                         + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation
                 ),
                 baseTimeout: .standardAction,
-                description: "Explicit mechanical/spatial long press. Element targets dispatch at their activation point "
+                description: "Explicit spatial longPress action. Element targets dispatch at their activation point "
                     + "unless unitPoint supplies an element-frame override; point supplies a raw screen coordinate."
             ) { fence, arguments in
-                .mechanicalLongPress(try fence.decodeLongPressTarget(arguments))
+                .longPress(try fence.decodeLongPressTarget(arguments))
             }
         case .swipe:
-            return singleStepAction(
+            return singleStepActionContract(
                 family: .spatialAction,
                 parameters: FenceCommandParameters(
                     FenceParameterBlocks.swipeIntents
                         + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation
                 ),
                 baseTimeout: .standardAction,
-                description: "Explicit mechanical/spatial swipe using exactly one typed intent: "
+                description: "Explicit spatial swipe action using exactly one typed intent: "
                     + "elementDirection, elementUnitPoints, pointToPoint, or pointDirection."
             ) { fence, arguments in
-                .mechanicalSwipe(try fence.decodeSwipeTarget(arguments))
+                .swipe(try fence.decodeSwipeTarget(arguments))
             }
         case .drag:
-            return singleStepAction(
+            return singleStepActionContract(
                 family: .spatialAction,
                 parameters: FenceCommandParameters(
                     FenceParameterBlocks.dragIntents
                         + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation
                 ),
                 baseTimeout: .standardAction,
-                description: "Explicit mechanical/spatial drag using exactly one typed intent: "
+                description: "Explicit spatial drag action using exactly one typed intent: "
                     + "elementToPoint (activation point or unit start override) or pointToPoint."
             ) { fence, arguments in
-                .mechanicalDrag(try fence.decodeDragTarget(arguments))
+                .drag(try fence.decodeDragTarget(arguments))
             }
         case .scroll:
-            return directAction(
+            return directActionContract(
                 family: .viewportDebug,
                 parameters: FenceCommandParameters(
                     FenceParameterBlocks.target + [
@@ -463,20 +463,20 @@ extension TheFence.Command {
                     + "within a semantic target's owning scroll ancestor, or for direct debug requests, "
                     + "within a current containerName."
             ) { fence, arguments in
-                .viewportScroll(try fence.decodeScrollTarget(arguments))
+                .scroll(try fence.decodeScrollTarget(arguments))
             }
         case .scrollToVisible:
-            return directAction(
+            return directActionContract(
                 family: .viewportDebug,
                 parameters: FenceCommandParameters(FenceParameterBlocks.target + FenceParameterBlocks.expectation),
                 timeout: .standardAction,
                 description: "Explicit viewport/debug operation: move the viewport until a "
                     + "semantic target is visible and report its fresh geometry."
             ) { _, arguments in
-                .viewportScrollToVisible(try arguments.requiredAccessibilityTarget(command: .scrollToVisible))
+                .scrollToVisible(try arguments.requiredAccessibilityTarget(command: .scrollToVisible))
             }
         case .scrollToEdge:
-            return directAction(
+            return directActionContract(
                 family: .viewportDebug,
                 parameters: FenceCommandParameters(
                     FenceParameterBlocks.target + [
@@ -489,10 +489,10 @@ extension TheFence.Command {
                     + "a semantic target's owning scroll ancestor, or for direct debug requests, "
                     + "a current containerName, to a requested edge."
             ) { fence, arguments in
-                .viewportScrollToEdge(try fence.decodeScrollToEdgeTarget(arguments))
+                .scrollToEdge(try fence.decodeScrollToEdgeTarget(arguments))
             }
         case .activate:
-            return singleStepAction(
+            return singleStepActionContract(
                 family: .semanticAction,
                 parameters: FenceCommandParameters(
                     FenceParameterBlocks.target
@@ -505,7 +505,7 @@ extension TheFence.Command {
                 try fence.decodeAccessibilityAction(arguments)
             }
         case .rotor:
-            return singleStepAction(
+            return singleStepActionContract(
                 family: .semanticAction,
                 parameters: FenceCommandParameters(
                     FenceParameterBlocks.target + [
@@ -522,7 +522,7 @@ extension TheFence.Command {
                 try fence.decodeRotorAction(arguments)
             }
         case .typeText:
-            return singleStepAction(
+            return singleStepActionContract(
                 family: .semanticAction,
                 parameters: FenceCommandParameters(
                     FenceParameterBlocks.target + [
@@ -536,7 +536,7 @@ extension TheFence.Command {
                 try fence.decodeTypeTextAction(arguments)
             }
         case .editAction:
-            return singleStepAction(
+            return singleStepActionContract(
                 family: .semanticAction,
                 parameters: FenceCommandParameters(
                     [FenceParameters.editAction.spec] + FenceParameterBlocks.expectation
@@ -549,7 +549,7 @@ extension TheFence.Command {
                 ))
             }
         case .setPasteboard:
-            return singleStepAction(
+            return singleStepActionContract(
                 family: .semanticAction,
                 parameters: FenceCommandParameters(
                     [FenceParameters.pasteboardText.spec] + FenceParameterBlocks.expectation
@@ -562,7 +562,7 @@ extension TheFence.Command {
                 ))
             }
         case .getPasteboard:
-            return fixedHandler(
+            return fixedResponseContract(
                 family: .observation,
                 timeout: .health,
                 description: "Read text from the general pasteboard.",
@@ -572,7 +572,7 @@ extension TheFence.Command {
                 .init { fence in try await fence.handleGetPasteboard(timeout: timeout) }
             }
         case .dismissKeyboard:
-            return singleStepAction(
+            return singleStepActionContract(
                 family: .semanticAction,
                 parameters: FenceCommandParameters(FenceParameterBlocks.expectation),
                 baseTimeout: .standardAction,
@@ -581,7 +581,7 @@ extension TheFence.Command {
                 .dismissKeyboard
             }
         case .perform:
-            return handler(
+            return responseContract(
                 family: .heistRuntime,
                 parameters: [FenceParameters.performStep.spec],
                 timeout: .performStep,
@@ -593,7 +593,7 @@ extension TheFence.Command {
                 return .init { fence in try await fence.handlePerform(request) }
             }
         case .runHeist:
-            return fixedHandler(
+            return fixedResponseContract(
                 family: .heistRuntime,
                 parameters: FenceCommandParameters([Self.rootArgumentParameter] + Self.planSourceParameters),
                 timeout: .longAction,
@@ -604,7 +604,7 @@ extension TheFence.Command {
                 return .init { fence in try await fence.handleRunHeist(request, timeout: timeout) }
             }
         case .validateHeist:
-            return handler(
+            return responseContract(
                 family: .heistRuntime,
                 requiresConnectionBeforeDispatch: false,
                 parameters: FenceCommandParameters([
@@ -619,7 +619,7 @@ extension TheFence.Command {
                 return .init { fence in try fence.handleValidateHeist(request) }
             }
         case .listHeists:
-            return handler(
+            return responseContract(
                 family: .heistRuntime,
                 requiresConnectionBeforeDispatch: false,
                 parameters: FenceCommandParameters([
@@ -634,7 +634,7 @@ extension TheFence.Command {
                 return .init { fence in fence.handleListHeists(request) }
             }
         case .describeHeist:
-            return handler(
+            return responseContract(
                 family: .heistRuntime,
                 requiresConnectionBeforeDispatch: false,
                 parameters: FenceCommandParameters([FenceParameters.heistName.spec] + Self.planSourceParameters),
@@ -646,7 +646,7 @@ extension TheFence.Command {
                 return .init { fence in fence.handleDescribeHeist(request) }
             }
         case .getSessionState:
-            return handler(
+            return responseContract(
                 family: .session,
                 requiresConnectionBeforeDispatch: false,
                 description: "Inspect connection, device, and last-action session state.",
@@ -656,7 +656,7 @@ extension TheFence.Command {
                 .init { fence in .sessionState(payload: fence.currentSessionState()) }
             }
         case .connect:
-            return handler(
+            return responseContract(
                 family: .session,
                 requiresConnectionBeforeDispatch: false,
                 parameters: [
@@ -671,7 +671,7 @@ extension TheFence.Command {
                 return .init { fence in try await fence.handleConnect(request) }
             }
         case .listTargets:
-            return handler(
+            return responseContract(
                 family: .session,
                 requiresConnectionBeforeDispatch: false,
                 description: "List configured connection targets and the default target.",

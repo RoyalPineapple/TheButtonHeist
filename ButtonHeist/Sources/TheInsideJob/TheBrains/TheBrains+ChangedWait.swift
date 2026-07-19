@@ -15,12 +15,12 @@ extension TheBrains {
         onReadyToPoll: PredicateWait.ReadyToPoll? = nil
     ) async -> ActionResult {
         guard semanticObservationIsActive else {
-            return runtimeInactiveResult(method: .wait)
+            return runtimeInactiveResult(payload: .wait)
         }
         guard beginChangedWait() else {
             return .failure(
-                method: .wait,
-                errorKind: .actionFailed,
+                payload: .wait,
+                failureKind: .actionFailed,
                 message: "wait already in progress"
             )
         }
@@ -38,16 +38,16 @@ extension TheBrains {
             )
         } catch {
             return .failure(
-                method: .wait,
-                errorKind: .validationError,
+                payload: .wait,
+                failureKind: .validationError,
                 message: "could not resolve changed wait predicate: \(error)"
             )
         }
-        let receipt = await interactionObservation.waitForPredicate(
+        let result = await interactionCoordinator.waitForPredicate(
             step,
             onReadyToPoll: onReadyToPoll
         )
-        return receipt.result.actionResult
+        return result.outcome.actionResult
     }
 }
 

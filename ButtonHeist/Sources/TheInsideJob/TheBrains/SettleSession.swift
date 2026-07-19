@@ -55,7 +55,7 @@ enum SettleOutcome: Equatable, Sendable {
     /// the loop reached multi-cycle stability. A Tripwire signal may have
     /// reset the baseline during the loop, but that event is tracked
     /// separately in `SettleSession.Result.events`; it is not itself
-    /// stability proof.
+    /// stability criterion.
     var didSettleCleanly: Bool {
         switch self {
         case .settled: return true
@@ -78,7 +78,7 @@ enum SettleOutcome: Equatable, Sendable {
 // MARK: - Settle Loop Machine
 
 /// The settle loop has one reducer and one runner. This policy only selects
-/// the stability proof and sampling cadence used by that runner.
+/// the stability criterion and sampling cadence used by that runner.
 enum SettlePolicy: Equatable, Sendable {
     case consecutiveCycles(required: Int)
     case quietWindow(milliseconds: Int)
@@ -354,7 +354,7 @@ final class SettleSessionFinalObservation {
     }
 
     /// Live wiring against the real vault/tripwire. The policy selects the
-    /// stability proof while this type continues to own the entire loop.
+    /// stability criterion while this type continues to own the entire loop.
     static func live(
         vault: TheVault,
         tripwire: TheTripwire,
@@ -372,7 +372,7 @@ final class SettleSessionFinalObservation {
             { await tripwire.yieldRealFrames(1) }
         }
         return SettleSession(
-            parseProvider: { vault.semanticObservationForSettle() },
+            parseProvider: { vault.refreshLiveCapture() },
             tripwireSignalProvider: { tripwire.tripwireSignal() },
             observationYield: observationYield,
             policy: policy,
@@ -381,7 +381,7 @@ final class SettleSessionFinalObservation {
         )
     }
 
-    /// Minimal proof for a programmatic viewport transition. UIKit receives
+    /// Minimal stability criterion for a programmatic viewport transition. UIKit receives
     /// two run-loop turns to lay out the new viewport, and the parser must
     /// return the same semantic fingerprint across both repeat captures.
     static func viewportTransition(
@@ -390,7 +390,7 @@ final class SettleSessionFinalObservation {
         timeoutMs: Int
     ) -> SettleSession {
         SettleSession(
-            parseProvider: { vault.semanticObservationForSettle() },
+            parseProvider: { vault.refreshLiveCapture() },
             tripwireSignalProvider: { tripwire.tripwireSignal() },
             observationYield: { await tripwire.yieldRealFrames(1) },
             policy: .consecutiveCycles(required: 2),

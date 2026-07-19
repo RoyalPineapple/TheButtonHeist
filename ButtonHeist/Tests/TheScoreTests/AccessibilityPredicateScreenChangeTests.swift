@@ -65,7 +65,7 @@ extension AccessibilityPredicateTests {
             transition: screenChangedTransition()
         )
         let result = ActionResult.success(
-            method: .activate,
+            payload: .activate,
                 observation: .trace(traceEvidence(
                     AccessibilityTrace(captures: [first, last]),
                     completeness: .incomplete
@@ -94,7 +94,7 @@ extension AccessibilityPredicateTests {
 
     func testScreenChangedRequiresTraceEndpointEdge() throws {
         let result = ActionResult.success(
-            method: .activate,
+            payload: .activate,
                 observation: .trace(traceEvidence(
                     AccessibilityTrace(interface: Interface(
                         timestamp: Date(timeIntervalSince1970: 0),

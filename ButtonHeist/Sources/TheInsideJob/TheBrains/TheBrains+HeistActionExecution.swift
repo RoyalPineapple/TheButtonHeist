@@ -44,7 +44,7 @@ extension TheBrains {
         let execution = await runtime.execute(resolvedCommand, baselineScope)
         let actionResult = execution.result
         guard actionResult.outcome.isSuccess, let expectation else {
-            return actionReceipt(
+            return actionStepResult(
                 command: step.command,
                 actionResult: actionResult,
                 path: path,
@@ -71,22 +71,22 @@ extension TheBrains {
         let settledTrace = actionResult.settled == true
             ? actionResult.accessibilityTrace
             : nil
-        let receipt = await runtime.wait(.actionEndpoint(
+        let result = await runtime.wait(.actionEndpoint(
             resolvedWait,
             trace: settledTrace,
             baseline: execution.expectationBaseline
         ))
-        return actionExpectationReceipt(
+        return actionExpectationStepResult(
             command: step.command,
             actionResult: actionResult,
             wait: expectation,
-            receipt: receipt,
+            result: result,
             path: path,
             start: start
         )
     }
 
-    private func actionReceipt(
+    private func actionStepResult(
         command: HeistActionCommand,
         actionResult: ActionResult,
         path: HeistExecutionPath,
@@ -104,23 +104,23 @@ extension TheBrains {
                 failure: actionDispatchFailureDetail(command: command, result: actionResult)
             )
         }
-        return actionReceipt(
+        return actionStepResult(
             execution: execution,
             path: path,
             start: start
         )
     }
 
-    private func actionExpectationReceipt(
+    private func actionExpectationStepResult(
         command: HeistActionCommand,
         actionResult: ActionResult,
         wait: WaitStep,
-        receipt: HeistWaitReceipt,
+        result: HeistWaitResult,
         path: HeistExecutionPath,
         start: CFAbsoluteTime
     ) -> HeistExecutionStepResult {
         let execution: HeistActionExecution
-        switch receipt.result {
+        switch result.outcome {
         case .matched(let expectationResult, let expectation):
             let evidence = HeistActionEvidence.expectation(
                 dispatchResult: actionResult,
@@ -137,17 +137,17 @@ extension TheBrains {
             execution = .failed(
                 command: command,
                 evidence: .init(admitted: evidence),
-                failure: actionExpectationFailureDetail(wait: wait, receipt: receipt)
+                failure: actionExpectationFailureDetail(wait: wait, result: result)
             )
         }
-        return actionReceipt(
+        return actionStepResult(
             execution: execution,
             path: path,
             start: start
         )
     }
 
-    private func actionReceipt(
+    private func actionStepResult(
         execution: HeistActionExecution,
         path: HeistExecutionPath,
         start: CFAbsoluteTime

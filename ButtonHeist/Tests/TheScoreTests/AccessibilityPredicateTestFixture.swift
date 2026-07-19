@@ -65,13 +65,13 @@ extension AccessibilityPredicateTests {
     ) -> ActionResult {
         if success {
             return ActionResult.success(
-                method: .oneFingerTap,
+                payload: .oneFingerTap,
                 message: message,
                 observation: observation
             )
         }
         return ActionResult.failure(
-            method: .oneFingerTap,
+            payload: .oneFingerTap,
             failureKind: .actionFailed,
             message: message,
             observation: observation

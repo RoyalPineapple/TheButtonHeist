@@ -36,7 +36,7 @@ extension TheVault {
     /// Read the live accessibility tree without mutating any state.
     /// Returns capture-local evidence or nil if no accessible windows exist.
     func capture() -> CaptureResult? {
-        let windows = tripwire.getAccessibleWindows()
+        let windows = tripwire.captureAccessibleWindows()
         guard !windows.isEmpty else {
             insideJobLogger.debug("TheVault.capture(): no accessible windows - returning nil")
             return nil

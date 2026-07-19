@@ -81,18 +81,18 @@ final class InteractionCoordinator {
         return actionEvidenceProjector.projectSettledEvidence(from: event)
     }
 
-    func observeAction(
+    func settleAfterAction(
         dispatchResult: TheSafecracker.ActionDispatchResult,
-        afterStatePayload: ((ActionPayloadEvidence) -> ActionResultPayload?)? = nil,
+        afterStateValue: ((ActionPayloadEvidence) -> String?)? = nil,
         before: ActionEvidenceProjector.Baseline,
         postActionCommitScope: SemanticObservationScope = .visible,
-        settleOutcome: SettleSession.Result? = nil,
+        settleResult: SettleSession.Result? = nil,
         notificationWindow: AccessibilityNotificationScopeLease? = nil
     ) async -> ActionResult {
         let observationSettlement = await vault.semanticObservationStream.settleActionObservation(
             baselineTripwireSignal: before.tripwireSignal,
             commitScope: postActionCommitScope,
-            settleOutcome: settleOutcome,
+            settleResult: settleResult,
             notificationWindow: notificationWindow
         )
         let finalEvidenceStart = CFAbsoluteTimeGetCurrent()
@@ -102,15 +102,15 @@ final class InteractionCoordinator {
         )
         let finalSemanticEvidenceMs = elapsedMilliseconds(since: finalEvidenceStart)
 
-        let receiptStart = CFAbsoluteTimeGetCurrent()
+        let resultAssemblyStart = CFAbsoluteTimeGetCurrent()
         let result = ActionResult(
             dispatchResult: dispatchResult,
-            afterStatePayload: afterStatePayload,
+            afterStateValue: afterStateValue,
             settledObservation: actionEvidence
         )
         return result.withTiming(ActionPerformanceTiming(
             finalSemanticEvidenceMs: finalSemanticEvidenceMs,
-            receiptGenerationMs: elapsedMilliseconds(since: receiptStart)
+            resultAssemblyMs: elapsedMilliseconds(since: resultAssemblyStart)
         ))
     }
 
@@ -126,7 +126,7 @@ final class InteractionCoordinator {
         announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly,
         onReadyToPoll: PredicateWait.ReadyToPoll? = nil,
         startedAt: CFAbsoluteTime? = nil
-    ) async -> HeistWaitReceipt {
+    ) async -> HeistWaitResult {
         let baselineSource: PredicateChangeBaselineSource
         switch (changeBaseline, baselineSequence) {
         case (.establishFromFirstObservation, .some(let sequence)):

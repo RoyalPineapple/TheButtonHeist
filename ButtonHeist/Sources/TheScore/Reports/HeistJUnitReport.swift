@@ -3,7 +3,7 @@ import Foundation
 
 // MARK: - Heist JUnit Report
 
-/// JUnit-compatible summary derived from a `HeistExecutionReceipt`.
+/// JUnit-compatible summary derived from a `HeistResult`.
 ///
 /// The XML steps are an adapter traversal of the structured heist execution tree,
 /// not the product model for heist results.
@@ -12,8 +12,8 @@ public struct HeistJUnitReport: Sendable, Equatable {
     public let heistName: String
     /// Bundle identifier of the app the heist targets.
     public let app: String
-    /// Total number of receipt nodes surfaced in the JUnit adapter.
-    public var receiptNodeCount: Int { steps.count }
+    /// Total number of result nodes surfaced in the JUnit adapter.
+    public var resultNodeCount: Int { steps.count }
     /// Total wall-clock time for the entire heist, in seconds.
     public let totalTimeSeconds: Double
     /// Step outcomes in execution order for the JUnit adapter.
@@ -32,8 +32,8 @@ public struct HeistJUnitReport: Sendable, Equatable {
 
     // MARK: - Derived Properties
 
-    public var passedReceiptNodeCount: Int { steps.count(where: { $0.passed }) }
-    public var failedReceiptNodeCount: Int { steps.count(where: { $0.failed }) }
+    public var passedResultNodeCount: Int { steps.count(where: { $0.passed }) }
+    public var failedResultNodeCount: Int { steps.count(where: { $0.failed }) }
     public var allPassed: Bool { !steps.contains(where: \.failed) }
 }
 
@@ -82,7 +82,7 @@ extension HeistJUnitReport {
             var name = "[\(index)] \(command)"
             if case .predicate(let template, _)? = target,
                let predicate = try? template.resolve(in: .empty) {
-                if let summary = predicate.core.checks.compactMap(ScoreDescription.predicateCheckField).first {
+                if let summary = predicate.core.checks.compactMap(CanonicalValueDescription.predicateCheckField).first {
                     name += " \(summary)"
                 }
             }
@@ -184,13 +184,13 @@ extension HeistJUnitReport {
     // MARK: - Private Helpers
 
     private func failureBody(failedStep: StepResult) -> String {
-        var body = "Completed \(passedReceiptNodeCount)/\(receiptNodeCount) receipt node(s) before failure.\n"
+        var body = "Completed \(passedResultNodeCount)/\(resultNodeCount) result node(s) before failure.\n"
         body += "step: [\(failedStep.index)] \(failedStep.command)\n"
         if let target = failedStep.target {
             var parts: [String] = []
             if case .predicate(let template, _) = target,
                let predicate = try? template.resolve(in: .empty) {
-                parts = predicate.core.checks.compactMap(ScoreDescription.predicateCheckField)
+                parts = predicate.core.checks.compactMap(CanonicalValueDescription.predicateCheckField)
             }
             if !parts.isEmpty {
                 body += "target: \(parts.joined(separator: ", "))\n"

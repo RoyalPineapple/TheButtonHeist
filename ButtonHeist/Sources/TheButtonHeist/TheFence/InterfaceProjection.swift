@@ -3,13 +3,13 @@ import Foundation
 import AccessibilitySnapshotModel
 import TheScore
 
-enum ProjectionRenderingState: String, Sendable {
+enum ProjectionCompleteness: String, Sendable {
     case full
     case truncated
 }
 
 struct InterfaceRenderingProjection: Sendable {
-    let state: ProjectionRenderingState
+    let completeness: ProjectionCompleteness
     let reason: ProjectionOmissionReason?
     let observedElementCount: Int
     let renderedElementCount: Int
@@ -408,7 +408,7 @@ private struct InterfaceProjectionAccumulator {
         let omittedElementCount = max(0, observedElementCount - renderedElementCount)
         guard truncatedScrollContainerCount > 0 || omittedElementCount > 0 || nodeLimitHit else {
             return InterfaceRenderingProjection(
-                state: .full,
+                completeness: .full,
                 reason: nil,
                 observedElementCount: observedElementCount,
                 renderedElementCount: renderedElementCount,
@@ -419,7 +419,7 @@ private struct InterfaceProjectionAccumulator {
         }
 
         return InterfaceRenderingProjection(
-            state: .truncated,
+            completeness: .truncated,
             reason: nodeLimitHit ? .totalNodeBudget : .scrollSubtreeElementBudget,
             observedElementCount: observedElementCount,
             renderedElementCount: renderedElementCount,

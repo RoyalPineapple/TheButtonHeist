@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Generate a small doctor-ready receipt pair and run heist-doctor.
+# Generate a small doctor-ready result pair and run heist-doctor.
 
 set -euo pipefail
 
@@ -13,14 +13,14 @@ usage() {
 Usage: scripts/heist-doctor-demo.sh [options]
 
 Options:
-  --work-dir DIR  Directory for generated fixture package and receipts.
+  --work-dir DIR  Directory for generated fixture package and results.
   --format FORMAT Doctor output format: human or json. Defaults to human.
   --keep-work     Leave the generated fixture package in place.
   -h, --help      Show this help.
 
-The demo generates a last-passing Checkout receipt and a new-failing receipt
-where Checkout has become Go to Checkout. Receipts are written through the same
-HeistReceiptRecorder path used by tests and CI, then paired by fingerprint and
+The demo generates a last-passing Checkout result and a new-failing result
+where Checkout has become Go to Checkout. Results are written through the same
+HeistResultRecorder path used by tests and CI, then paired by fingerprint and
 fed into heist-doctor.
 EOF
 }
@@ -60,10 +60,10 @@ while [[ $# -gt 0 ]]; do
 done
 
 PACKAGE_DIR="$WORK_DIR/fixture-generator"
-RECEIPTS_DIR="$WORK_DIR/receipts"
+RESULTS_DIR="$WORK_DIR/results"
 
 rm -rf "$WORK_DIR"
-mkdir -p "$PACKAGE_DIR/Sources/DoctorDemoFixture" "$RECEIPTS_DIR"
+mkdir -p "$PACKAGE_DIR/Sources/DoctorDemoFixture" "$RESULTS_DIR"
 
 cleanup() {
     if [[ "$KEEP_WORK" == false ]]; then
@@ -109,60 +109,60 @@ import TheScore
 struct DoctorDemoFixture {
     static func main() throws {
         guard CommandLine.arguments.count == 2 else {
-            throw FixtureError.message("usage: DoctorDemoFixture RECEIPTS_DIR")
+            throw FixtureError.message("usage: DoctorDemoFixture RESULTS_DIR")
         }
 
-        let receiptsDirectory = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)
-        try FileManager.default.createDirectory(at: receiptsDirectory, withIntermediateDirectories: true)
+        let resultsDirectory = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)
+        try FileManager.default.createDirectory(at: resultsDirectory, withIntermediateDirectories: true)
 
         let target = AccessibilityTarget.predicate(.label("Checkout"))
         let plan = try HeistPlan(
             name: "doctorDemoCheckout",
             body: [.action(ActionStep(command: .activate(target)))]
         )
-        let configuration = HeistReceiptRecordingConfiguration(
-            rootDirectory: receiptsDirectory,
-            mode: .failingAndPassing
+        let configuration = HeistResultRecordingConfiguration(
+            rootDirectory: resultsDirectory,
+            mode: .all
         )
 
-        let lastPass = try receipt(
+        let lastPass = try result(
             outcome: .passed,
             target: target,
             before: menuInterface(primaryAction: "Checkout"),
             after: confirmationInterface()
         )
-        let newFail = try receipt(
+        let newFail = try result(
             outcome: .failed,
             target: target,
             before: menuInterface(primaryAction: "Go to Checkout"),
             after: nil
         )
 
-        guard let passRecording = try HeistReceiptRecorder.write(
+        guard let passRecording = try HeistResultRecorder.write(
             lastPass,
             plan: plan,
             configuration: configuration
         ) else {
-            throw FixtureError.message("failed to record passing receipt")
+            throw FixtureError.message("failed to record passing result")
         }
-        guard let failRecording = try HeistReceiptRecorder.write(
+        guard let failRecording = try HeistResultRecorder.write(
             newFail,
             plan: plan,
             configuration: configuration
         ) else {
-            throw FixtureError.message("failed to record failing receipt")
+            throw FixtureError.message("failed to record failing result")
         }
 
         print("last-pass=\(passRecording.url.path)")
         print("new-fail=\(failRecording.url.path)")
     }
 
-    private static func receipt(
+    private static func result(
         outcome: ActionNodeFixture.Outcome,
         target: AccessibilityTarget,
         before: Interface,
         after: Interface?
-    ) throws -> HeistExecutionResult {
+    ) throws -> HeistResult {
         let trace = after
             .map { AccessibilityTrace(first: before).appending($0) }
             ?? AccessibilityTrace(first: before)
@@ -203,7 +203,7 @@ struct DoctorDemoFixture {
                 : nil
         )
 
-        let fixture = ReceiptFixture(
+        let fixture = ResultFixture(
             steps: [StepFixture(
                 path: "$.body[0]",
                 durationMs: 1,
@@ -211,7 +211,7 @@ struct DoctorDemoFixture {
             )],
             durationMs: 1
         )
-        return try HeistReceiptCodec.decode(JSONEncoder().encode(fixture))
+        return try HeistResultCodec.decode(JSONEncoder().encode(fixture))
     }
 
     private static func menuInterface(primaryAction: String) throws -> Interface {
@@ -333,7 +333,7 @@ struct DoctorDemoFixture {
     }
 }
 
-private struct ReceiptFixture: Encodable {
+private struct ResultFixture: Encodable {
     let steps: [StepFixture]
     let durationMs: Int
 }
@@ -379,14 +379,14 @@ private enum FixtureError: Error, CustomStringConvertible {
 }
 SWIFT
 
-echo "Generating doctor demo receipts..."
-swift run --package-path "$PACKAGE_DIR" DoctorDemoFixture "$RECEIPTS_DIR"
+echo "Generating doctor demo results..."
+swift run --package-path "$PACKAGE_DIR" DoctorDemoFixture "$RESULTS_DIR"
 
 echo
-"$REPO_ROOT/scripts/heist-doctor-from-receipts.sh" \
-    --last-pass-dir "$RECEIPTS_DIR" \
-    --new-fail-dir "$RECEIPTS_DIR" \
+"$REPO_ROOT/scripts/heist-doctor-from-results.sh" \
+    --last-pass-dir "$RESULTS_DIR" \
+    --new-fail-dir "$RESULTS_DIR" \
     --format "$FORMAT"
 
 echo
-echo "Receipt artifacts: $RECEIPTS_DIR"
+echo "Result artifacts: $RESULTS_DIR"

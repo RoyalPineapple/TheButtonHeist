@@ -17,9 +17,9 @@ extension TheBrainsActionTests {
         )
 
         XCTAssertFalse(result.success)
-        XCTAssertEqual(result.method, .syntheticTap)
+        XCTAssertEqual(result.method, .oneFingerTap)
         XCTAssertDiagnostic(result.message, contains: [
-            "syntheticTap failed",
+            "oneFingerTap failed",
             "point must be inside screen bounds",
             "observed (-10000, -10000)",
         ])
@@ -38,7 +38,7 @@ extension TheBrainsActionTests {
         var dispatchedPoint: CGPoint?
         let result = await brains.actions.performPointAction(
             selection: .element(try AccessibilityTarget.label("Below Fold").resolve(in: .empty)),
-            method: .syntheticTap,
+            payload: .oneFingerTap,
             prepare: { $0 },
             complete: { point in
                 dispatchedPoint = point
@@ -68,7 +68,7 @@ extension TheBrainsActionTests {
         var dispatchedPoint: CGPoint?
         let result = await brains.actions.performPointAction(
             selection: .element(try AccessibilityTarget.label("Live").resolve(in: .empty)),
-            method: .syntheticTap,
+            payload: .oneFingerTap,
             prepare: { $0 },
             complete: { point in
                 dispatchedPoint = point
@@ -100,7 +100,7 @@ extension TheBrainsActionTests {
                 try AccessibilityTarget.label("Live").resolve(in: .empty),
                 UnitPoint(x: 0.25, y: 0.75)
             ),
-            method: .syntheticTap,
+            payload: .oneFingerTap,
             prepare: { $0 },
             complete: { point in
                 dispatchedPoint = point
@@ -119,7 +119,7 @@ extension TheBrainsActionTests {
         var dispatchedPoint: CGPoint?
         let result = await brains.actions.performPointAction(
             selection: .coordinate(ScreenPoint(x: 222, y: 333)),
-            method: .syntheticTap,
+            payload: .oneFingerTap,
             prepare: { $0 },
             complete: { point in
                 dispatchedPoint = point

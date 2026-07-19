@@ -8,18 +8,18 @@ import TheScore
 extension TheFenceCompactFormattingContractTests {
 
     func testCompactActionRenderingUsesParsedCommandNames() {
-        let cases: [(command: TheFence.Command, method: ActionMethod, expected: String)] = [
-            (.typeText, .typeText, "type_text: ok"),
+        let cases: [(command: TheFence.Command, payload: ActionResult.Payload, expected: String)] = [
+            (.typeText, .typeText(nil), "type_text: ok"),
             (.wait, .wait, "wait: ok"),
             (.activate, .customAction, "activate: ok"),
-            (.dismissKeyboard, .resignFirstResponder, "dismiss_keyboard: ok"),
-            (.oneFingerTap, .syntheticTap, "one_finger_tap: ok"),
+            (.dismissKeyboard, .dismissKeyboard, "dismiss_keyboard: ok"),
+            (.oneFingerTap, .oneFingerTap, "one_finger_tap: ok"),
         ]
 
         for testCase in cases {
             let output = FenceResponse.action(
                 command: testCase.command,
-                result: HeistReceiptFixture.actionResult(method: testCase.method)
+                result: HeistResultFixture.actionResult(payload: testCase.payload)
             ).compactFormatted()
 
             XCTAssertEqual(output, testCase.expected)
@@ -29,7 +29,7 @@ extension TheFenceCompactFormattingContractTests {
     func testCompactActionRenderingDoesNotInferCommandFromActionMethod() {
         let output = FenceResponse.action(
             command: .drag,
-            result: HeistReceiptFixture.actionResult(method: .syntheticTap)
+            result: HeistResultFixture.actionResult(payload: .oneFingerTap)
         ).compactFormatted()
 
         XCTAssertEqual(output, "drag: ok")
@@ -38,8 +38,8 @@ extension TheFenceCompactFormattingContractTests {
     func testScreenActionHandlerMessageRendersInCompactHumanAndJSON() throws {
         let response = FenceResponse.action(
             command: .perform,
-            result: HeistReceiptFixture.actionResult(
-                method: .dismiss,
+            result: HeistResultFixture.actionResult(
+                payload: .dismiss,
                 message: "Handler: UINavigationController"
             )
         )
@@ -51,11 +51,11 @@ extension TheFenceCompactFormattingContractTests {
         XCTAssertEqual(try json.string("message"), "Handler: UINavigationController")
     }
 
-    func testExplicitOneFingerTapKeepsMechanicalResultIdentity() {
-        let result = HeistReceiptFixture.actionResult(method: .syntheticTap)
+    func testExplicitOneFingerTapKeepsCanonicalResultIdentity() {
+        let result = HeistResultFixture.actionResult(payload: .oneFingerTap)
         let output = FenceResponse.action(command: .oneFingerTap, result: result).compactFormatted()
 
-        XCTAssertEqual(result.method, .syntheticTap)
+        XCTAssertEqual(result.method, .oneFingerTap)
         XCTAssertEqual(output, "one_finger_tap: ok")
     }
 
@@ -67,11 +67,11 @@ extension TheFenceCompactFormattingContractTests {
         )
         let response = FenceResponse.action(
             command: .activate,
-            result: HeistReceiptFixture.actionResult(
+            result: HeistResultFixture.actionResult(
                 succeeded: false,
-                method: .activate,
+                payload: .activate,
                 message: "button disabled",
-                errorKind: .elementNotFound
+                failureKind: .elementNotFound
             ),
             expectation: expectation
         )
@@ -93,11 +93,11 @@ extension TheFenceCompactFormattingContractTests {
     func testActionFailureProjectionFeedsJSONAndCompactRendering() throws {
         let response = FenceResponse.action(
             command: .wait,
-            result: HeistReceiptFixture.actionResult(
+            result: HeistResultFixture.actionResult(
                 succeeded: false,
-                method: .wait,
+                payload: .wait,
                 message: "timed out after 2s",
-                errorKind: .timeout
+                failureKind: .timeout
             )
         )
 
@@ -115,11 +115,11 @@ extension TheFenceCompactFormattingContractTests {
     func testActionFailureCodeAndClassAgreeAcrossPublicFormats() throws {
         let response = FenceResponse.action(
             command: .activate,
-            result: HeistReceiptFixture.actionResult(
+            result: HeistResultFixture.actionResult(
                 succeeded: false,
-                method: .activate,
+                payload: .activate,
                 message: "Could not access accessibility tree: no traversable app windows",
-                errorKind: .accessibilityTreeUnavailable
+                failureKind: .accessibilityTreeUnavailable
             )
         )
 
@@ -140,7 +140,7 @@ extension TheFenceCompactFormattingContractTests {
             before: makeTestInterface(elementCount: 1),
             after: makeTestInterface(elementCount: 2)
         )
-        let result = HeistReceiptFixture.actionResult(
+        let result = HeistResultFixture.actionResult(
             traceEvidence: makeTestTraceEvidence(trace, completeness: .incomplete)
         )
         let response = FenceResponse.action(
@@ -182,7 +182,7 @@ extension TheFenceCompactFormattingContractTests {
     func testScreenExpectationFailureHintDoesNotTrustElementsChangedActualText() throws {
         let response = FenceResponse.action(
             command: .activate,
-            result: HeistReceiptFixture.actionResult(),
+            result: HeistResultFixture.actionResult(),
             expectation: ExpectationResult(
                 met: false,
                 predicate: .changed(.screen()),
@@ -201,12 +201,11 @@ extension TheFenceCompactFormattingContractTests {
         let unchanged = makeTestInterface(elementCount: 1)
         let trace = makeTestTrace(before: unchanged, after: unchanged)
         let result = ActionResult.success(
-            method: .activate,
-                observation: .settledTrace(
-                    makeTestTraceEvidence(trace, completeness: .complete),
-                    .settled(duration: 1)
-                )
-
+            payload: .activate,
+            observation: .settledTrace(
+                makeTestTraceEvidence(trace, completeness: .complete),
+                .settled(duration: 1)
+            )
         )
         let response = FenceResponse.action(
             command: .activate,
@@ -257,8 +256,8 @@ extension TheFenceCompactFormattingContractTests {
         )
         let response = FenceResponse.action(
             command: .activate,
-            result: HeistReceiptFixture.actionResult(
-                method: .activate,
+            result: HeistResultFixture.actionResult(
+                payload: .activate,
                 traceEvidence: makeTestTraceEvidence(trace, completeness: .incomplete)
             ),
             expectation: ExpectationResult(
@@ -288,12 +287,12 @@ extension TheFenceCompactFormattingContractTests {
             actual: "noChange"
         )
         let customActionResult = ActionResult.success(
-            method: .customAction,
+            payload: .customAction,
             observation: observation
         )
         let failedActivateResult = ActionResult.failure(
-            method: .activate,
-            errorKind: .actionFailed,
+            payload: .activate,
+            failureKind: .actionFailed,
             observation: observation
         )
 
@@ -312,7 +311,7 @@ extension TheFenceCompactFormattingContractTests {
     func testActivateNoChangeWithoutExpectationRemainsSuccessful() throws {
         let response = FenceResponse.action(
             command: .activate,
-            result: HeistReceiptFixture.actionResult()
+            result: HeistResultFixture.actionResult()
         )
 
         let json = try publicJSONProbe(response)
@@ -327,8 +326,8 @@ extension TheFenceCompactFormattingContractTests {
     func testActivateNoChangeCarriesActivationTraceWithoutFailingAction() throws {
         let response = FenceResponse.action(
             command: .activate,
-            result: HeistReceiptFixture.actionResult(
-                method: .activate,
+            result: HeistResultFixture.actionResult(
+                payload: .activate,
                 traceEvidence: makeTestTraceEvidence(
                     makeTestTrace(
                         before: makeTestInterface(elementCount: 3),
@@ -374,7 +373,7 @@ extension TheFenceCompactFormattingContractTests {
         )
         let response = FenceResponse.action(
             command: .activate,
-            result: HeistReceiptFixture.actionResult(
+            result: HeistResultFixture.actionResult(
                 traceEvidence: makeTestTraceEvidence(trace, completeness: .incomplete)
             )
         )
@@ -406,7 +405,7 @@ extension TheFenceCompactFormattingContractTests {
         let response = FenceResponse.action(
             command: .activate,
             result: ActionResult.success(
-                method: .activate,
+                payload: .activate,
                 observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
             )
         )
@@ -449,7 +448,7 @@ extension TheFenceCompactFormattingContractTests {
         let response = FenceResponse.action(
             command: .activate,
             result: ActionResult.success(
-                method: .activate,
+                payload: .activate,
                 observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
             )
         )
@@ -483,7 +482,7 @@ extension TheFenceCompactFormattingContractTests {
         let response = FenceResponse.action(
             command: .activate,
             result: ActionResult.success(
-                method: .activate,
+                payload: .activate,
                 observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
             )
         )
@@ -533,7 +532,7 @@ extension TheFenceCompactFormattingContractTests {
         let response = FenceResponse.action(
             command: .activate,
             result: ActionResult.success(
-                method: .activate,
+                payload: .activate,
                 observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
             )
         )
@@ -562,19 +561,19 @@ extension TheFenceCompactFormattingContractTests {
         )
         let command = HeistActionCommand.activate(.predicate(ElementPredicateTemplate(label: "Load More")))
         let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
-        let result = HeistExecutionResult(
+        let result = HeistResult(
             steps: [
-                HeistReceiptFixture.action(
+                HeistResultFixture.action(
                     command: command,
                     result: ActionResult.success(
-                        method: .activate,
+                        payload: .activate,
                         observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
                     )
                 ),
             ],
             durationMs: 8
         )
-        let response = FenceResponse.heistExecution(plan: plan, result: result)
+        let response = FenceResponse.heistExecution(plan: plan, report: HeistReport.project(result: result))
 
         let compact = response.compactFormatted()
         let report = try publicHeistReportJSON(response)
@@ -587,7 +586,7 @@ extension TheFenceCompactFormattingContractTests {
             report.object("summary"),
             executedTopLevelStepCount: 1,
             executedNodeCount: 1,
-            outputReceiptNodeCount: 1,
+            outputNodeCount: 1,
             durationMs: 8,
             abortedAtPath: nil
         )
@@ -644,18 +643,18 @@ extension TheFenceCompactFormattingContractTests {
         let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
         let response = FenceResponse.heistExecution(
             plan: plan,
-            result: HeistExecutionResult(
+            report: HeistReport.project(result: HeistResult(
                 steps: [
-                    HeistReceiptFixture.action(
+                    HeistResultFixture.action(
                         command: command,
                         result: ActionResult.success(
-                            method: .activate,
+                            payload: .activate,
                             observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
                         )
                     ),
                 ],
                 durationMs: 8
-            )
+            ))
         )
 
         let json = try publicJSONProbe(response)
@@ -723,18 +722,18 @@ extension TheFenceCompactFormattingContractTests {
         let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
         let response = FenceResponse.heistExecution(
             plan: plan,
-            result: HeistExecutionResult(
+            report: HeistReport.project(result: HeistResult(
                 steps: [
-                    HeistReceiptFixture.action(
+                    HeistResultFixture.action(
                         command: command,
                         result: ActionResult.success(
-                            method: .activate,
+                            payload: .activate,
                             observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
                         )
                     ),
                 ],
                 durationMs: 8
-            )
+            ))
         )
 
         let json = try publicJSONProbe(response)
@@ -794,13 +793,13 @@ extension TheFenceCompactFormattingContractTests {
         )
         let command = HeistActionCommand.activate(.predicate(ElementPredicateTemplate(label: "Load More")))
         let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
-        let result = HeistExecutionResult(
+        let result = HeistResult(
             steps: [
-                HeistReceiptFixture.action(
+                HeistResultFixture.action(
                     command: command,
                     result: ActionResult.failure(
-                        method: .activate,
-                        errorKind: .actionFailed,
+                        payload: .activate,
+                        failureKind: .actionFailed,
                         message: "target stopped responding",
                         observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
                     ),
@@ -814,7 +813,7 @@ extension TheFenceCompactFormattingContractTests {
             durationMs: 8
         )
 
-        let compact = FenceResponse.heistExecution(plan: plan, result: result).compactFormatted()
+        let compact = FenceResponse.heistExecution(plan: plan, report: HeistReport.project(result: result)).compactFormatted()
 
         XCTAssertTrue(compact.contains("-> error: target stopped responding"), compact)
         XCTAssertTrue(compact.contains("evidence: elements changed"), compact)
@@ -831,12 +830,12 @@ extension TheFenceCompactFormattingContractTests {
         let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
         let response = FenceResponse.heistExecution(
             plan: plan,
-            result: HeistExecutionResult(
+            report: HeistReport.project(result: HeistResult(
                 steps: [
-                    HeistReceiptFixture.action(
+                    HeistResultFixture.action(
                         command: command,
                         result: ActionResult.activationFailure(
-                            errorKind: .actionFailed,
+                            failureKind: .actionFailed,
                             message: "text entry failed: observed focus=none keyboardVisible=false activeTextInput=false",
                             observation: .none,
                             activationTrace: activationTrace
@@ -849,7 +848,7 @@ extension TheFenceCompactFormattingContractTests {
                     ),
                 ],
                 durationMs: 8
-            )
+            ))
         )
 
         let compact = response.compactFormatted()

@@ -10,7 +10,7 @@ import AccessibilitySnapshotParser
 
 // MARK: - Interface Observation
 
-struct InterfaceCaptureToken: Equatable, Hashable, Sendable {
+struct InterfaceCaptureID: Equatable, Hashable, Sendable {
     fileprivate let id = UUID()
 }
 
@@ -21,7 +21,7 @@ struct InterfaceObservation {
 
     let tree: InterfaceTree
     let liveCapture: LiveCapture
-    let captureToken: InterfaceCaptureToken
+    let captureID: InterfaceCaptureID
 
     static var empty: InterfaceObservation {
         do {
@@ -39,14 +39,14 @@ struct InterfaceObservation {
         try build(
             tree: tree,
             dispatchReferences: dispatchReferences,
-            captureToken: InterfaceCaptureToken()
+            captureID: InterfaceCaptureID()
         )
     }
 
     static func build(
         tree: InterfaceTree,
         dispatchReferences: LiveCapture.DispatchReferences,
-        captureToken: InterfaceCaptureToken
+        captureID: InterfaceCaptureID
     ) throws -> InterfaceObservation {
         InterfaceObservation(
             validatedTree: tree,
@@ -54,18 +54,18 @@ struct InterfaceObservation {
                 validating: tree,
                 dispatchReferences: dispatchReferences
             ),
-            captureToken: captureToken
+            captureID: captureID
         )
     }
 
     private init(
         validatedTree: InterfaceTree,
         liveCapture: LiveCapture,
-        captureToken: InterfaceCaptureToken
+        captureID: InterfaceCaptureID
     ) {
         tree = validatedTree
         self.liveCapture = liveCapture
-        self.captureToken = captureToken
+        self.captureID = captureID
     }
 
     var viewportOnly: InterfaceObservation {
@@ -76,7 +76,7 @@ struct InterfaceObservation {
         try Self.build(
             tree: tree,
             dispatchReferences: liveCapture.dispatchReferences,
-            captureToken: captureToken
+            captureID: captureID
         )
     }
 

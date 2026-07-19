@@ -366,12 +366,12 @@ final class TheFenceHandlerTests: XCTestCase {
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
-        guard case .heistExecution(_, let result, _) = response else {
+        guard case .heistExecution(_, let report) = response else {
             return XCTFail("Expected .heistExecution response, got \(response)", file: file, line: line)
         }
-        XCTAssertEqual(result.steps.map(\.kind), [stepKind], file: file, line: line)
+        XCTAssertEqual(report.nodes.map(\.kind), [stepKind], file: file, line: line)
         if stepKind == .action {
-            XCTAssertEqual(result.steps.first?.reportCommandName, reportCommandName ?? command.rawValue, file: file, line: line)
+            XCTAssertEqual(report.nodes.first?.command?.rawValue, reportCommandName ?? command.rawValue, file: file, line: line)
         }
     }
 

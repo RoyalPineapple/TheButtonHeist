@@ -292,7 +292,7 @@ Lint is separate quality guidance for authored or composed plans:
 | Mode | Purpose |
 |------|---------|
 | `compositionQuality` | Warns when composed plans look like fragile transcripts. |
-| `strictTest` | Fails missing expectations, mechanical commands, viewport/debug/session action steps, and empty branches. |
+| `strictTest` | Fails missing expectations, spatial gesture actions, viewport/debug/session action steps, and empty branches. |
 
 Lint returns structured findings with severity, step path, message, and a fix
 suggestion. It does not replace runtime validation.
@@ -309,7 +309,7 @@ The durable heist AST is small on purpose. It does not support:
 - generic variables or expression evaluation beyond typed string and target refs
 - geometry, runtime IDs, capture-local IDs, or container names as durable selectors
 - unknown JSON keys
-- mechanical commands in strict semantic tests unless explicitly waived
+- spatial gesture actions in strict semantic tests unless explicitly waived
 
 ## Live composition
 

@@ -118,23 +118,23 @@ extension TheBrains {
             ResolvedHeistActionCommand,
             SemanticObservationScope?
         ) async -> RuntimeActionExecution
-        internal let wait: @MainActor (HeistRuntimeWaitRequest) async -> HeistWaitReceipt
+        internal let wait: @MainActor (HeistRuntimeWaitRequest) async -> HeistWaitResult
         internal let selectPredicateCase: @MainActor ([ResolvedPredicateCaseRuntimeInput], Double) async -> HeistCaseSelectionResult
-        internal let observeSemanticState: @MainActor (SemanticObservationScope, SettledObservationSequence?, Double?) async -> SettledObservationEvidence?
+        internal let settledEvidence: @MainActor (SemanticObservationScope, SettledObservationSequence?, Double?) async -> SettledObservationEvidence?
 
         internal init(
             execute: @escaping @MainActor (
                 ResolvedHeistActionCommand,
                 SemanticObservationScope?
             ) async -> RuntimeActionExecution,
-            wait: @escaping @MainActor (HeistRuntimeWaitRequest) async -> HeistWaitReceipt,
+            wait: @escaping @MainActor (HeistRuntimeWaitRequest) async -> HeistWaitResult,
             selectPredicateCase: @escaping @MainActor ([ResolvedPredicateCaseRuntimeInput], Double) async -> HeistCaseSelectionResult,
-            observeSemanticState: @escaping @MainActor (SemanticObservationScope, SettledObservationSequence?, Double?) async -> SettledObservationEvidence?
+            settledEvidence: @escaping @MainActor (SemanticObservationScope, SettledObservationSequence?, Double?) async -> SettledObservationEvidence?
         ) {
             self.execute = execute
             self.wait = wait
             self.selectPredicateCase = selectPredicateCase
-            self.observeSemanticState = observeSemanticState
+            self.settledEvidence = settledEvidence
         }
 
         @MainActor
@@ -147,7 +147,7 @@ extension TheBrains {
                     )
                 },
                 wait: { request in
-                    return await brains.interactionObservation.waitForPredicate(
+                    return await brains.interactionCoordinator.waitForPredicate(
                         request.step,
                         initialTrace: request.initialTrace,
                         baselineSequence: request.afterSequence,
@@ -157,10 +157,10 @@ extension TheBrains {
                     )
                 },
                 selectPredicateCase: { cases, timeout in
-                    await brains.interactionObservation.waitForPredicateCases(cases, timeout: timeout)
+                    await brains.interactionCoordinator.waitForPredicateCases(cases, timeout: timeout)
                 },
-                observeSemanticState: { scope, sequence, timeout in
-                    await brains.interactionObservation.observeSemanticState(scope: scope, after: sequence, timeout: timeout)
+                settledEvidence: { scope, sequence, timeout in
+                    await brains.interactionCoordinator.settledEvidence(scope: scope, after: sequence, timeout: timeout)
                 }
             )
         }
@@ -168,7 +168,7 @@ extension TheBrains {
 
     internal func executeHeistPlan(_ plan: HeistPlan, argument: HeistArgument = .none) async -> ActionResult {
         guard semanticObservationIsActive else {
-            return runtimeInactiveResult(method: .heistPlan)
+            return runtimeInactiveResult(payload: .heist(nil))
         }
         return await executeHeistPlan(plan, argument: argument, runtime: .live(self))
     }
@@ -187,7 +187,7 @@ extension TheBrains {
         runtime: HeistExecutionRuntime
     ) async -> ActionResult {
         let notificationScope = vault.accessibilityNotifications.beginHeistScope()
-        interactionObservation.resetAnnouncementWaitCursorForHeist(to: notificationScope.cursor)
+        interactionCoordinator.resetAnnouncementWaitCursorForHeist(to: notificationScope.cursor)
         defer { notificationScope.cancel() }
 
         let demand = vault.semanticObservationStream.beginActiveObservationDemand()
@@ -199,8 +199,8 @@ extension TheBrains {
             environment = try HeistExecutionEnvironment.empty.binding(argument: argument, to: plan.parameter)
         } catch {
             return .failure(
-                method: .heistPlan,
-                errorKind: .validationError,
+                payload: .heist(nil),
+                failureKind: .validationError,
                 message: "Could not bind root heist argument: \(error)"
             )
         }
@@ -223,7 +223,7 @@ extension TheBrains {
             stepResults.append(failureScreenshotStep)
         }
         let durationMs = Int((CFAbsoluteTimeGetCurrent() - heistStart) * 1000)
-        let heistResult = HeistExecutionResult(steps: stepResults, durationMs: durationMs)
+        let result = HeistResult(steps: stepResults, durationMs: durationMs)
 
         let message = heistExecutionMessage(
             completedCount: stepResults.count,
@@ -231,11 +231,11 @@ extension TheBrains {
         )
 
         if abortedAtPath == nil {
-            return .success(payload: .heistExecution(heistResult), message: message)
+            return .success(payload: .heist(result), message: message)
         }
         return .failure(
-            payload: .heistExecution(heistResult),
-            errorKind: .actionFailed,
+            payload: .heist(result),
+            failureKind: .actionFailed,
             message: message
         )
     }

@@ -393,7 +393,7 @@ package extension ElementDiagnosticSummary {
                     .replacingOccurrences(of: "\n", with: " ")
                 return "\"\(escaped)\""
             case .json:
-                return ScoreDescription.quoted(value)
+                return CanonicalValueDescription.quoted(value)
             case .plainQuoted:
                 return "\"\(value)\""
             }

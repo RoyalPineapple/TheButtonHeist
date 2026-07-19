@@ -211,12 +211,12 @@ actor SocketListenerRuntime: Equatable {
                 if requestedPort == 0 {
                     requestedPort = actualPort
                 } else if actualPort != requestedPort {
-                    throw SimpleSocketServer.ServerError.failedToBindPort
+                    throw SimpleSocketServer.StartupError.failedToBindPort
                 }
             }
 
             guard requestedPort != 0 else {
-                throw SimpleSocketServer.ServerError.failedToBindPort
+                throw SimpleSocketServer.StartupError.failedToBindPort
             }
             try finishStarting(port: requestedPort)
             return requestedPort
@@ -319,7 +319,7 @@ actor SocketListenerRuntime: Equatable {
                         listenerLogger.info("Listening on port \(port)")
                         continuation.resume(returning: port)
                     } else {
-                        continuation.resume(throwing: SimpleSocketServer.ServerError.failedToBindPort)
+                        continuation.resume(throwing: SimpleSocketServer.StartupError.failedToBindPort)
                     }
                 case .failed(let error):
                     let shouldResume = resumed.withLock { flag -> Bool in

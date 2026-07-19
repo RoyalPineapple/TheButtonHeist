@@ -111,7 +111,7 @@ extension TheVault {
     }
 
     private static func formatCheck(_ check: ElementPredicateCheckCore<String>) -> String? {
-        ScoreDescription.predicateCheckField(check)
+        CanonicalValueDescription.predicateCheckField(check)
     }
 
     private static func checkName(_ check: ElementPredicateCheckCore<String>) -> String {

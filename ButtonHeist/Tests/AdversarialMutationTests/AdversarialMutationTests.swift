@@ -18,15 +18,15 @@ final class AdversarialMutationTests: XCTestCase {
             Activate(.label("Reveal with notification"))
                 .expect(destination, timeout: 3)
         }
-        let notificationReceipt = try actionEvidence(for: notificationCommand, in: notification.result)
-        let notificationDispatch = try XCTUnwrap(notificationReceipt.dispatchResult)
-        let notificationObservation = try XCTUnwrap(notificationReceipt.expectationResult)
+        let notificationEvidence = try actionEvidence(for: notificationCommand, in: notification.result)
+        let notificationDispatch = try XCTUnwrap(notificationEvidence.dispatchResult)
+        let notificationObservation = try XCTUnwrap(notificationEvidence.expectationResult)
         XCTAssertEqual(notificationDispatch.outcome, .success)
         XCTAssertEqual(notificationObservation.outcome, .success)
         XCTAssertEqual(notificationObservation.method, .wait)
-        XCTAssertEqual(notificationReceipt.checkedExpectation?.predicate, destination)
-        XCTAssertEqual(notificationReceipt.checkedExpectation?.met, true)
-        XCTAssertTrue(notificationReceipt.receiptNotificationKinds.contains(.screenChanged))
+        XCTAssertEqual(notificationEvidence.checkedExpectation?.predicate, destination)
+        XCTAssertEqual(notificationEvidence.checkedExpectation?.met, true)
+        XCTAssertTrue(notificationEvidence.notificationKinds.contains(.screenChanged))
 
         let silentCommand = HeistActionCommand.activate(.label("Reveal silently"))
         try await AdversarialLabRoute.open(.asyncReveal)
@@ -34,15 +34,15 @@ final class AdversarialMutationTests: XCTestCase {
             Activate(.label("Reveal silently"))
                 .expect(destination, timeout: 3)
         }
-        let silentReceipt = try actionEvidence(for: silentCommand, in: silent.result)
-        let silentDispatch = try XCTUnwrap(silentReceipt.dispatchResult)
-        let silentObservation = try XCTUnwrap(silentReceipt.expectationResult)
+        let silentEvidence = try actionEvidence(for: silentCommand, in: silent.result)
+        let silentDispatch = try XCTUnwrap(silentEvidence.dispatchResult)
+        let silentObservation = try XCTUnwrap(silentEvidence.expectationResult)
         XCTAssertEqual(silentDispatch.outcome, .success)
         XCTAssertEqual(silentObservation.outcome, .success)
         XCTAssertEqual(silentObservation.method, .wait)
-        XCTAssertEqual(silentReceipt.checkedExpectation?.predicate, destination)
-        XCTAssertEqual(silentReceipt.checkedExpectation?.met, true)
-        XCTAssertFalse(silentReceipt.receiptNotificationKinds.contains(.screenChanged))
+        XCTAssertEqual(silentEvidence.checkedExpectation?.predicate, destination)
+        XCTAssertEqual(silentEvidence.checkedExpectation?.met, true)
+        XCTAssertFalse(silentEvidence.notificationKinds.contains(.screenChanged))
     }
 
     func testStaleLiveObjectReResolvesCurrentTarget() async throws {
@@ -58,11 +58,11 @@ final class AdversarialMutationTests: XCTestCase {
         }
 
         XCTAssertNil(heist.result.firstFailedStep)
-        let receipt = try actionEvidence(
+        let evidence = try actionEvidence(
             for: .activate(.label("Submit Order")),
             in: heist.result
         )
-        let dispatch = try XCTUnwrap(receipt.dispatchResult)
+        let dispatch = try XCTUnwrap(evidence.dispatchResult)
         let subject = try XCTUnwrap(dispatch.subjectEvidence)
         XCTAssertEqual(dispatch.outcome, .success)
         XCTAssertEqual(dispatch.method, .activate)
@@ -71,20 +71,20 @@ final class AdversarialMutationTests: XCTestCase {
         XCTAssertEqual(subject.element.value, beforeValue)
 
         let finalElements = try XCTUnwrap(
-            receipt.expectationResult?.accessibilityTrace?.captures.last?.interface.projectedElements
+            evidence.expectationResult?.accessibilityTrace?.captures.last?.interface.projectedElements
         )
         XCTAssertEqual(finalElements.first { $0.label == "Submit Order" }?.value, finalValue)
     }
 
     private func actionEvidence(
         for command: HeistActionCommand,
-        in result: HeistExecutionResult,
+        in result: HeistResult,
         file: StaticString = #filePath,
         line: UInt = #line
     ) throws -> HeistActionEvidence {
         try XCTUnwrap(
-            result.outputReceiptNodes.last { $0.actionCommand == command }?.actionEvidence,
-            "Missing action receipt for \(command.wireType.rawValue)",
+            result.outputNodes.last { $0.actionCommand == command }?.actionEvidence,
+            "Missing action evidence for \(command.wireType.rawValue)",
             file: file,
             line: line
         )
@@ -93,7 +93,7 @@ final class AdversarialMutationTests: XCTestCase {
 }
 
 private extension HeistActionEvidence {
-    var receiptNotificationKinds: [AccessibilityNotificationKind] {
+    var notificationKinds: [AccessibilityNotificationKind] {
         [dispatchResult, expectationResult]
             .compactMap { $0?.accessibilityTrace }
             .flatMap(\.captures)

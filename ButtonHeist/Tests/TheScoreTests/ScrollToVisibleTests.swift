@@ -35,13 +35,13 @@ final class ScrollToVisibleTests: XCTestCase {
         let target = ScrollToVisibleTarget(
             target: .predicate(ElementPredicateTemplate(label: "Settings", traits: [.header]))
         )
-        let message = ClientMessage.runtimeAction(.viewportScrollToVisible(target.target))
+        let message = ClientMessage.runtimeAction(.scrollToVisible(target.target))
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
         guard case .runtimeAction(let action) = decoded else {
             return XCTFail("Expected runtimeAction with scrollToVisible action")
         }
-        XCTAssertEqual(action, .viewportScrollToVisible(target.target))
+        XCTAssertEqual(action, .scrollToVisible(target.target))
     }
 
     func testScrollToVisibleTargetRejectsUnknownPayloadKey() throws {

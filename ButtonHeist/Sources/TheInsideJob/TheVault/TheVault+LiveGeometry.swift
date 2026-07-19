@@ -13,7 +13,7 @@ extension TheVault {
         let object: NSObject
         let frame: CGRect
         let activationPoint: CGPoint
-        let captureToken: InterfaceCaptureToken
+        let captureID: InterfaceCaptureID
 
         var element: AccessibilityElement { treeElement.element }
 
@@ -36,7 +36,7 @@ extension TheVault {
         let object: NSObject
         let frame: CGRect
         let activationPoint: CGPoint
-        let captureToken: InterfaceCaptureToken
+        let captureID: InterfaceCaptureID
 
         var container: AccessibilityContainer { containerTarget.container }
 
@@ -56,7 +56,7 @@ extension TheVault {
     }
 
     func resolveLiveActionTarget(for treeElement: InterfaceTree.Element) -> LiveTargetResolution<LiveActionTarget> {
-        let captureToken = latestObservation.captureToken
+        let captureID = latestObservation.captureID
         guard let liveElement = visibleLiveElementAliasing(treeElement),
               let object = dispatchObject(for: liveElement) else {
             return .objectUnavailable
@@ -69,7 +69,7 @@ extension TheVault {
             object: object,
             frame: geometry.frame,
             activationPoint: geometry.activationPoint,
-            captureToken: captureToken
+            captureID: captureID
         ))
     }
 
@@ -107,7 +107,7 @@ extension TheVault {
     func resolveLiveContainerTarget(
         for containerTarget: InterfaceTree.Container
     ) -> LiveTargetResolution<LiveContainerTarget> {
-        let captureToken = latestObservation.captureToken
+        let captureID = latestObservation.captureID
         guard let currentContainer = latestObservation.tree.containers[containerTarget.path],
               Self.container(currentContainer, matches: containerTarget) else {
             return .objectUnavailable
@@ -124,7 +124,7 @@ extension TheVault {
             object: object,
             frame: geometry.frame,
             activationPoint: geometry.activationPoint,
-            captureToken: captureToken
+            captureID: captureID
         ))
     }
 

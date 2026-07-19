@@ -26,18 +26,21 @@ import Testing
     }
 
     @Test func `screen capture failures own exhaustive public error classification`() {
-        #expect(TheBrains.ScreenCaptureFailure.inactiveRuntime.errorKind == .accessibilityTreeUnavailable)
-        #expect(TheBrains.ScreenCaptureFailure.accessibilityTreeUnavailable.errorKind == .accessibilityTreeUnavailable)
-        #expect(TheBrains.ScreenCaptureFailure.appWindowUnavailable.errorKind == .actionFailed)
-        #expect(TheBrains.ScreenCaptureFailure.accessibilitySnapshotRenderingFailed.errorKind == .actionFailed)
-        #expect(TheBrains.ScreenCaptureFailure.pngEncodingFailed.errorKind == .actionFailed)
+        #expect(TheBrains.ScreenCaptureFailure.inactiveRuntime.actionFailureKind == .accessibilityTreeUnavailable)
+        #expect(
+            TheBrains.ScreenCaptureFailure.accessibilityTreeUnavailable.actionFailureKind
+                == .accessibilityTreeUnavailable
+        )
+        #expect(TheBrains.ScreenCaptureFailure.appWindowUnavailable.actionFailureKind == .actionFailed)
+        #expect(TheBrains.ScreenCaptureFailure.accessibilitySnapshotRenderingFailed.actionFailureKind == .actionFailed)
+        #expect(TheBrains.ScreenCaptureFailure.pngEncodingFailed.actionFailureKind == .actionFailed)
     }
 
     @Test func `interface query failures own exhaustive public error classification`() {
-        #expect(TheBrains.InterfaceQueryFailure.rootViewUnavailable.errorKind == .accessibilityTreeUnavailable)
-        #expect(TheBrains.InterfaceQueryFailure.inactiveRuntime.errorKind == .accessibilityTreeUnavailable)
+        #expect(TheBrains.InterfaceQueryFailure.rootViewUnavailable.actionFailureKind == .accessibilityTreeUnavailable)
+        #expect(TheBrains.InterfaceQueryFailure.inactiveRuntime.actionFailureKind == .accessibilityTreeUnavailable)
         #expect(
-            TheBrains.InterfaceQueryFailure.selection(.subtreeNotFound).errorKind
+            TheBrains.InterfaceQueryFailure.selection(.subtreeNotFound).actionFailureKind
                 == .validationError
         )
     }

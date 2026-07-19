@@ -85,7 +85,7 @@ extension TheFenceHandlerTests {
     @ButtonHeistActor
     func testDirectWaitReturnsHeistExecutionBeforeFormatting() async throws {
         let (fence, mockConn) = makeConnectedFence()
-        let scriptedResult = HeistReceiptFixture.result(steps: [HeistReceiptFixture.wait()])
+        let scriptedResult = HeistResultFixture.result(steps: [HeistResultFixture.wait()])
         mockConn.responseScript = { _ in scriptedHeistResponse(scriptedResult) }
 
         let response = try await fence.execute(command: .wait, values: [

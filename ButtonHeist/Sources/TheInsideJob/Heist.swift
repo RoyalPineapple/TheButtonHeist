@@ -4,17 +4,17 @@ import Foundation
 import ThePlans
 
 // Package contract: app-hosted tests import TheInsideJob and assert against
-// execution receipt types from TheScore. This intentional re-export is
+// execution result types from TheScore. This intentional re-export is
 // allowlisted by scripts/check-buttonheist-import-contract.sh.
 @_exported import TheScore
 
-/// Completed in-process heist execution receipt for app and UI tests.
+/// Completed in-process heist result for app and UI tests.
 ///
 /// Constructing a `Heist` builds or accepts a runtime-validated `HeistPlan`,
 /// runs it directly against `TheInsideJob` in the app process, and then exposes
-/// the execution result for assertions and reporting.
+/// the result for assertions and reporting.
 public struct Heist: Sendable {
-    public let result: HeistExecutionResult
+    public let result: HeistResult
 
     @MainActor
     public init(
@@ -113,12 +113,12 @@ public struct Heist: Sendable {
         _ plan: HeistPlan,
         argument: HeistArgument,
         runtime: InAppHeistRuntime
-    ) async throws -> HeistExecutionResult {
+    ) async throws -> HeistResult {
         let actionResult = await runtime.execute(plan, argument)
-        guard case .heistExecution(let result) = actionResult.payload else {
+        guard case .heist(let result?) = actionResult.payload else {
             throw RuntimeError(actionResult: actionResult)
         }
-        HeistReceiptRecorder.recordIfEnabled(result, plan: plan)
+        HeistResultRecorder.recordIfEnabled(result, plan: plan)
         guard !result.isFailure else {
             throw Failure(result)
         }
@@ -132,9 +132,9 @@ public extension Heist {
         public let failedStepKind: HeistExecutionStepKind
         public let message: String
         public let diagnostic: String?
-        public let result: HeistExecutionResult
+        public let result: HeistResult
 
-        public init(_ result: HeistExecutionResult) {
+        public init(_ result: HeistResult) {
             let failedStep = result.firstFailedStep
             self.failedStepPath = failedStep?.path ?? "$"
             self.failedStepKind = failedStep?.kind ?? .fail
@@ -233,8 +233,8 @@ extension TheInsideJob {
 
     private func inAppHeistSubmissionFailure(_ message: String) -> ActionResult {
         .failure(
-            method: .heistPlan,
-            errorKind: .actionFailed,
+            payload: .heist(nil),
+            failureKind: .actionFailed,
             message: message
         )
     }
@@ -260,8 +260,8 @@ extension TheInsideJob {
         // keeps conditionals, waits, and first actions from inheriting the
         // previous run's settled semantic world when the app is already on
         // another screen.
-        brains.vault.clearInterfaceForHeistBootstrap()
-        _ = await brains.interactionObservation.observeVisibleState(
+        brains.vault.resetInterfaceForHeistBootstrap()
+        _ = await brains.interactionCoordinator.admittedVisibleBaseline(
             timeout: SemanticObservationTiming.defaultTimeout
         )
         let result = await brains.executeHeistPlan(plan, argument: argument)

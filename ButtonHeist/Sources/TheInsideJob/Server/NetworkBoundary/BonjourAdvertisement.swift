@@ -8,16 +8,11 @@ private let logger = ButtonHeistLog.logger(.handoff(.transport))
 /// Bonjour `NetService` advertisement and TXT record state.
 final class BonjourAdvertisement: NSObject {
     @MainActor private var netService: NetService?
-    @MainActor private var currentTXT: [String: Data] = [:]
+    @MainActor private(set) var txtRecord: [String: Data] = [:]
 
     @MainActor
     var isAdvertising: Bool {
         netService != nil
-    }
-
-    @MainActor
-    var currentTXTRecord: [String: Data] {
-        currentTXT
     }
 
     @MainActor
@@ -60,7 +55,7 @@ final class BonjourAdvertisement: NSObject {
         }
         txtDict[TXTRecordKey.transport.rawValue] = Data("tls-psk".utf8)
 
-        currentTXT = txtDict
+        txtRecord = txtDict
         service.setTXTRecord(NetService.data(fromTXTRecord: txtDict))
 
         netService = service
@@ -78,17 +73,17 @@ final class BonjourAdvertisement: NSObject {
 
         for (key, value) in entries {
             if let data = value.data(using: .utf8) {
-                currentTXT[key] = data
+                txtRecord[key] = data
             }
         }
-        service.setTXTRecord(NetService.data(fromTXTRecord: currentTXT))
+        service.setTXTRecord(NetService.data(fromTXTRecord: txtRecord))
     }
 
     @MainActor
     func stop() {
         netService?.stop()
         netService = nil
-        currentTXT.removeAll()
+        txtRecord.removeAll()
     }
 }
 

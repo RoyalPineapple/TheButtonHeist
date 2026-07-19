@@ -40,18 +40,18 @@ final class TheMuscleTests: XCTestCase {
     private var sink: CallbackSink!
 
     private func makeMuscle(
-        explicitToken: SessionAuthToken?,
+        sessionToken: SessionAuthToken,
         sessionReleaseTimeout: TimeInterval = StartupConfiguration.defaultSessionTimeout
     ) -> TheMuscle {
         TheMuscle(
-            explicitToken: explicitToken,
+            sessionToken: sessionToken,
             sessionReleaseTimeout: sessionReleaseTimeout
         )
     }
 
     override func setUp() async throws {
         try await super.setUp()
-        muscle = makeMuscle(explicitToken: "test-token")
+        muscle = makeMuscle(sessionToken: "test-token")
         sink = CallbackSink()
         await installCallbacks()
     }
@@ -217,9 +217,9 @@ final class TheMuscleTests: XCTestCase {
     }
 
     func testServerHelloResponseEnvelopeKeepsStableWireShape() async throws {
-        let result = await muscle.sendServerHello(clientId: 7)
+        let outcome = await muscle.sendServerHello(clientId: 7)
 
-        XCTAssertEqual(result, .delivered)
+        XCTAssertEqual(outcome, .delivered)
         let sent = try XCTUnwrap(sentMessages.first)
         XCTAssertEqual(sent.clientId, 7)
         let envelope = try JSONDecoder().decode(ResponseEnvelope.self, from: sent.data)
@@ -257,7 +257,7 @@ final class TheMuscleTests: XCTestCase {
 
     func testMessageRateAdmissionReturnsGeneralErrorForFirstOverLimitFrame() throws {
         var admission = ClientAdmission.Reducer(
-            tokenSource: .configured("good-token"),
+            sessionToken: "good-token",
             authenticationPolicy: try XCTUnwrap(.init(maximumFailedAttempts: 2, lockoutDuration: 30))
         )
         let data = try JSONEncoder().encode(RequestEnvelope(message: .ping))
@@ -296,7 +296,7 @@ final class TheMuscleTests: XCTestCase {
 
     func testMessageRateAdmissionNotifiesOnlyOncePerWindow() throws {
         var admission = ClientAdmission.Reducer(
-            tokenSource: .configured("good-token"),
+            sessionToken: "good-token",
             authenticationPolicy: try XCTUnwrap(.init(maximumFailedAttempts: 2, lockoutDuration: 30))
         )
         let data = try JSONEncoder().encode(RequestEnvelope(message: .ping))
@@ -369,7 +369,7 @@ final class TheMuscleTests: XCTestCase {
 
     func testMessageRateAdmissionLimitsAuthenticatedMessagesBeforeDispatch() throws {
         var admission = ClientAdmission.Reducer(
-            tokenSource: .configured("good-token"),
+            sessionToken: "good-token",
             authenticationPolicy: try XCTUnwrap(.init(maximumFailedAttempts: 2, lockoutDuration: 30))
         )
         let respond: SocketResponseHandler = { _ in .delivered }
@@ -463,42 +463,9 @@ final class TheMuscleTests: XCTestCase {
         }.first
         XCTAssertEqual(
             authFailure?.message,
-            "Invalid token. Retry with the configured token."
+            "Invalid token. Retry with the session token."
         )
-        XCTAssertEqual(authFailure?.recoveryHint, "Retry with the configured token.")
-    }
-
-    func testGeneratedTokenAuthenticatesWhenProvided() async throws {
-        await muscle.tearDown()
-        muscle = makeMuscle(explicitToken: nil)
-        sink = CallbackSink()
-        await installCallbacks()
-        let generatedToken = await muscle.sessionToken
-
-        try await authenticate(clientId: 1, token: generatedToken, respond: respondSink())
-
-        let connections = await muscle.activeSessionConnections
-        XCTAssertTrue(connections.contains(1))
-    }
-
-    func testGeneratedTokenInvalidTokenSuggestsConfiguredToken() async throws {
-        await muscle.tearDown()
-        muscle = makeMuscle(explicitToken: nil)
-        sink = CallbackSink()
-        await installCallbacks()
-        let (respond, responses) = collectResponses()
-
-        try await authenticate(clientId: 1, token: "wrong-token", respond: respond)
-
-        let authFailure = responses().compactMap { data -> ServerError? in
-            guard case .error(let error) = decodeServerMessage(data), error.kind == .authFailure else { return nil }
-            return error
-        }.first
-        XCTAssertEqual(
-            authFailure?.message,
-            "Invalid token. Retry with the configured token."
-        )
-        XCTAssertEqual(authFailure?.recoveryHint, "Retry with the configured token.")
+        XCTAssertEqual(authFailure?.recoveryHint, "Retry with the session token.")
     }
 
     func testNonAuthMessageReturnsAuthFailure() async throws {
@@ -659,7 +626,7 @@ final class TheMuscleTests: XCTestCase {
 
     func testDisconnectingNonSessionClientDoesNotStartReleaseTimer() async throws {
         await muscle.tearDown()
-        muscle = makeMuscle(explicitToken: "test-token", sessionReleaseTimeout: 0)
+        muscle = makeMuscle(sessionToken: "test-token", sessionReleaseTimeout: 0)
         sink = CallbackSink()
         await installCallbacks()
 
@@ -677,7 +644,7 @@ final class TheMuscleTests: XCTestCase {
 
     func testLastSessionConnectionStartsReleaseTimer() async throws {
         await muscle.tearDown()
-        muscle = makeMuscle(explicitToken: "test-token", sessionReleaseTimeout: 0)
+        muscle = makeMuscle(sessionToken: "test-token", sessionReleaseTimeout: 0)
         sink = CallbackSink()
         await installCallbacks()
 
@@ -697,44 +664,6 @@ final class TheMuscleTests: XCTestCase {
 
         let payload = try XCTUnwrap(sessionLockedPayloads(from: responses()).first)
         XCTAssertFalse(payload.message.contains("test-token"))
-    }
-
-    // MARK: - Token Lifecycle Tests
-
-    func testTokenSurvivesSessionRelease() async throws {
-        let originalToken = await muscle.sessionToken
-
-        // Authenticate, disconnect, tearDown to force session release
-        try await authenticate(clientId: 1, token: "test-token", respond: respondSink())
-        await muscle.handleClientDisconnected(1)
-
-        // Token should remain the same after session release path
-        let tokenAfter = await muscle.sessionToken
-        XCTAssertEqual(tokenAfter, originalToken, "Token should not change when session is released")
-    }
-
-    func testTokenStableAcrossMultipleCycles() async throws {
-        let originalToken = await muscle.sessionToken
-
-        for i in 1...5 {
-            try await authenticate(clientId: i, token: originalToken, respond: respondSink())
-            await muscle.handleClientDisconnected(i)
-        }
-
-        let tokenAfter = await muscle.sessionToken
-        XCTAssertEqual(tokenAfter, originalToken, "Token should remain stable across connect/disconnect cycles")
-    }
-
-    func testExplicitTokenUsed() async {
-        let muscle = makeMuscle(explicitToken: "my-explicit-token")
-        let token = await muscle.sessionToken
-        XCTAssertEqual(token, "my-explicit-token")
-    }
-
-    func testAutoGeneratedTokenIsUUID() async {
-        let muscle = makeMuscle(explicitToken: nil)
-        let token = await muscle.sessionToken
-        XCTAssertNotNil(UUID(uuidString: token.description), "Auto-generated token should be a valid UUID")
     }
 
     func testTearDownClearsState() async throws {

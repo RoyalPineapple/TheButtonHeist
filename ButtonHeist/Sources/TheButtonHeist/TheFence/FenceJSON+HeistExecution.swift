@@ -8,40 +8,66 @@ struct PublicHeistExecutionResponse: Encodable {
     let status: PublicResponseStatus
     let report: PublicHeistReport
 
-    init(projection: HeistReportProjection) {
-        self.status = projection.status
-        self.report = PublicHeistReport(projection: projection)
+    init(
+        report: HeistReport,
+        profile: ProjectionProfile
+    ) {
+        status = report.failure == nil ? .ok : .partial
+        self.report = PublicHeistReport(
+            report: report,
+            profile: profile
+        )
     }
 }
+
 struct PublicHeistReport: Encodable {
     let summary: PublicHeistReportSummary
-    let metrics: HeistExecutionMetricProjection
+    let metrics: HeistReport.Metrics
     let nodes: [PublicHeistReportNode]
     let netDelta: PublicDelta?
 
-    init(projection: HeistReportProjection) {
-        self.summary = PublicHeistReportSummary(projection: projection.summary)
-        self.metrics = projection.metrics
-        self.nodes = projection.nodes.map { PublicHeistReportNode(projection: $0) }
-        self.netDelta = projection.netDelta.map { PublicDelta(projection: $0, screenPolicy: .screenSummary) }
+    init(
+        report: HeistReport,
+        profile: ProjectionProfile
+    ) {
+        let profile = profile.heistReport
+        summary = PublicHeistReportSummary(summary: report.summary)
+        metrics = report.metrics
+        nodes = report.nodes.map { PublicHeistReportNode(node: $0, profile: profile) }
+        switch report.accessibilityChange {
+        case .changed(let trace):
+            netDelta = DeltaProjection(
+                trace: trace,
+                isComplete: true,
+                profile: profile,
+                includeScreenInterface: true
+            ).map {
+                PublicDelta(
+                    projection: $0,
+                    screenPolicy: .screenSummary
+                )
+            }
+        case .notApplicable, .incomplete, .unchanged:
+            netDelta = nil
+        }
     }
 }
 
 struct PublicHeistReportSummary: Encodable {
     let executedTopLevelStepCount: Int
     let executedNodeCount: Int
-    let outputReceiptNodeCount: Int
+    let outputNodeCount: Int
     let abortedAtPath: String?
     let durationMs: Int
     let expectations: PublicHeistExpectations?
 
-    init(projection: HeistReportSummaryProjection) {
-        self.executedTopLevelStepCount = projection.executedTopLevelStepCount
-        self.executedNodeCount = projection.executedNodeCount
-        self.outputReceiptNodeCount = projection.outputReceiptNodeCount
-        self.abortedAtPath = projection.abortedAtPath
-        self.durationMs = projection.durationMs
-        self.expectations = projection.expectations.map { PublicHeistExpectations(projection: $0) }
+    init(summary: HeistReport.Summary) {
+        executedTopLevelStepCount = summary.executedTopLevelStepCount
+        executedNodeCount = summary.executedNodeCount
+        outputNodeCount = summary.outputNodeCount
+        abortedAtPath = summary.abortedAtPath?.description
+        durationMs = summary.durationMs
+        expectations = summary.expectations.map(PublicHeistExpectations.init)
     }
 }
 
@@ -61,18 +87,20 @@ struct PublicHeistReportNode: Encodable {
     let expectation: PublicExpectationResult?
     let children: [PublicHeistReportNode]
 
-    init(projection: HeistReportNodeProjection) {
-        self.path = projection.path
-        self.kind = projection.kind.rawValue
-        self.capability = projection.capability
-        self.status = projection.status.rawValue
-        self.message = projection.message
-        self.durationMs = projection.durationMs
-        self.evidence = projection.evidence.map { PublicHeistReportEvidence(projection: $0) }
-        self.failure = projection.failure.map(PublicHeistFailureDetail.init)
-        self.abortedAtChildPath = projection.abortedAtChildPath
-        self.expectation = projection.expectation.map { PublicExpectationResult(projection: $0) }
-        self.children = projection.children.map { PublicHeistReportNode(projection: $0) }
+    init(node: HeistReport.Node, profile: ProjectionProfile) {
+        path = node.path.description
+        kind = node.kind.rawValue
+        capability = node.capability?.description
+        status = node.status.rawValue
+        message = node.message
+        durationMs = node.durationMs
+        evidence = node.evidence.map { PublicHeistReportEvidence(evidence: $0, profile: profile) }
+        failure = node.failure.map(PublicHeistFailureDetail.init)
+        abortedAtChildPath = node.abortedAtChildPath?.description
+        expectation = node.expectation.map {
+            PublicExpectationResult(projection: ExpectationProjection(result: $0))
+        }
+        children = node.children.map { PublicHeistReportNode(node: $0, profile: profile) }
     }
 }
 
@@ -87,24 +115,32 @@ struct PublicHeistFailureDetail: Encodable {
     let retryable: Bool
     let hint: String?
 
-    init(projection: HeistReportFailureProjection) {
-        category = projection.detail.category
-        contract = projection.detail.contract
-        observed = projection.detail.observed
-        expected = projection.detail.expected
-        code = projection.diagnosticFailure.code
-        kind = projection.diagnosticFailure.kind.rawValue
-        phase = projection.diagnosticFailure.phase.rawValue
-        retryable = projection.diagnosticFailure.retryable
-        hint = projection.diagnosticFailure.hint
+    init(failure: HeistReport.Failure) {
+        let diagnostic = failure.actionKind.map {
+            DiagnosticFailureMapper.map(failureKind: $0, message: failure.diagnosticMessage)
+        } ?? DiagnosticFailureMapper.map(
+            reportFailure: failure.detail,
+            message: failure.diagnosticMessage
+        )
+        category = failure.detail.category
+        contract = failure.detail.contract
+        observed = failure.detail.observed
+        expected = failure.detail.expected
+        code = diagnostic.code
+        kind = diagnostic.kind.rawValue
+        phase = diagnostic.phase.rawValue
+        retryable = diagnostic.retryable
+        hint = diagnostic.hint
     }
 }
 
 struct PublicHeistReportEvidence: Encodable {
-    private let projection: HeistReportEvidenceProjection
+    private let evidence: HeistReport.Evidence
+    private let profile: ProjectionProfile
 
-    init(projection: HeistReportEvidenceProjection) {
-        self.projection = projection
+    init(evidence: HeistReport.Evidence, profile: ProjectionProfile) {
+        self.evidence = evidence
+        self.profile = profile
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -120,21 +156,39 @@ struct PublicHeistReportEvidence: Encodable {
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        switch projection {
-        case .action(let projection):
-            try container.encode(PublicHeistActionEvidence(projection: projection), forKey: .action)
-        case .wait(let projection):
-            try container.encode(PublicHeistWaitEvidence(projection: projection), forKey: .wait)
-        case .caseSelection(let projection):
-            try container.encode(PublicHeistCaseSelectionEvidence(projection: projection), forKey: .caseSelection)
-        case .forEachString(let projection):
-            try container.encode(PublicHeistForEachStringEvidence(projection: projection), forKey: .forEachString)
-        case .forEachElement(let projection):
-            try container.encode(PublicHeistForEachElementEvidence(projection: projection), forKey: .forEachElement)
-        case .repeatUntil(let projection):
-            try container.encode(PublicHeistRepeatUntilEvidence(projection: projection), forKey: .repeatUntil)
-        case .invocation(let projection):
-            try container.encode(PublicHeistInvocationEvidence(projection: projection), forKey: .invocation)
+        switch evidence {
+        case .action(let command, let evidence):
+            try container.encode(
+                PublicHeistActionEvidence(command: command, evidence: evidence, profile: profile),
+                forKey: .action
+            )
+        case .wait(let evidence):
+            try container.encode(PublicHeistWaitEvidence(evidence: evidence, profile: profile), forKey: .wait)
+        case .caseSelection(let evidence):
+            try container.encode(
+                PublicHeistCaseSelectionEvidence(evidence: evidence, profile: profile),
+                forKey: .caseSelection
+            )
+        case .forEachString(let declaration, let evidence):
+            try container.encode(
+                PublicHeistForEachStringEvidence(declaration: declaration, evidence: evidence),
+                forKey: .forEachString
+            )
+        case .forEachElement(let declaration, let evidence):
+            try container.encode(
+                PublicHeistForEachElementEvidence(declaration: declaration, evidence: evidence),
+                forKey: .forEachElement
+            )
+        case .repeatUntil(let declaration, let evidence):
+            try container.encode(
+                PublicHeistRepeatUntilEvidence(declaration: declaration, evidence: evidence, profile: profile),
+                forKey: .repeatUntil
+            )
+        case .invocation(let invocation, let evidence):
+            try container.encode(
+                PublicHeistInvocationEvidence(invocation: invocation, evidence: evidence, profile: profile),
+                forKey: .invocation
+            )
         case .warning(let evidence):
             try container.encode(evidence, forKey: .warning)
         }
@@ -142,10 +196,14 @@ struct PublicHeistReportEvidence: Encodable {
 }
 
 struct PublicHeistActionEvidence: Encodable {
-    private let projection: HeistActionEvidenceProjection
+    private let command: HeistActionCommand
+    private let evidence: HeistActionEvidence
+    private let profile: ProjectionProfile
 
-    init(projection: HeistActionEvidenceProjection) {
-        self.projection = projection
+    init(command: HeistActionCommand, evidence: HeistActionEvidence, profile: ProjectionProfile) {
+        self.command = command
+        self.evidence = evidence
+        self.profile = profile
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -158,30 +216,57 @@ struct PublicHeistActionEvidence: Encodable {
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encodeIfPresent(projection.command?.rawValue, forKey: .commandName)
-        try container.encodeIfPresent(projection.target, forKey: .target)
-        switch projection {
+        try container.encode(command.wireType.rawValue, forKey: .commandName)
+        try container.encodeIfPresent(command.reportTarget, forKey: .target)
+        switch evidence {
         case .commandResolutionFailure:
             break
-        case .dispatch(_, let result):
+        case .dispatch(let result):
             try container.encode(
-                PublicActionResultOutput(projection: result, context: .heistReportEvidence),
+                PublicActionResultOutput(
+                    projection: actionProjection(command: command, result: result),
+                    context: .heistReportEvidence
+                ),
                 forKey: .result
             )
-        case .expectation(_, let dispatchResult, let expectationResult, let expectation):
+        case .expectation(let dispatchResult, let expectationResult, let expectation):
             try container.encode(
-                PublicActionResultOutput(projection: dispatchResult, context: .heistReportEvidence),
+                PublicActionResultOutput(
+                    projection: actionProjection(command: command, result: dispatchResult),
+                    context: .heistReportEvidence
+                ),
                 forKey: .result
             )
             try container.encode(
-                PublicActionResultOutput(projection: expectationResult, context: .heistReportEvidence),
+                PublicActionResultOutput(
+                    projection: resultProjection(expectationResult),
+                    context: .heistReportEvidence
+                ),
                 forKey: .expectationResult
             )
             try container.encode(
-                PublicExpectationResult(projection: expectation),
+                PublicExpectationResult(projection: ExpectationProjection(result: expectation)),
                 forKey: .expectation
             )
         }
+    }
+
+    private func actionProjection(command: HeistActionCommand, result: ActionResult) -> ActionProjection {
+        ActionProjection(
+            actionMethod: .heist(command),
+            result: result,
+            profile: profile,
+            includeOmissions: true
+        )
+    }
+
+    private func resultProjection(_ result: ActionResult) -> ActionProjection {
+        ActionProjection(
+            actionMethod: .result(result.method),
+            result: result,
+            profile: profile,
+            includeOmissions: true
+        )
     }
 }
 
@@ -192,12 +277,22 @@ struct PublicHeistWaitEvidence: Encodable {
     let baselineSummary: String?
     let finalSummary: String?
 
-    init(projection: HeistWaitEvidenceProjection) {
-        self.outcome = projection.evidence.outcome
-        self.result = PublicActionResultOutput(projection: projection.result, context: .heistReportEvidence)
-        self.expectation = PublicExpectationResult(projection: projection.expectation)
-        self.baselineSummary = projection.evidence.baselineSummary
-        self.finalSummary = projection.evidence.finalSummary
+    init(evidence: HeistWaitEvidence, profile: ProjectionProfile) {
+        self.outcome = evidence.outcome
+        self.result = PublicActionResultOutput(
+            projection: ActionProjection(
+                actionMethod: .result(evidence.actionResult.method),
+                result: evidence.actionResult,
+                profile: profile,
+                includeOmissions: true
+            ),
+            context: .heistReportEvidence
+        )
+        self.expectation = PublicExpectationResult(
+            projection: ExpectationProjection(result: evidence.expectation)
+        )
+        self.baselineSummary = evidence.baselineSummary
+        self.finalSummary = evidence.finalSummary
     }
 }
 
@@ -210,17 +305,19 @@ struct PublicHeistCaseSelectionEvidence: Encodable {
     let cases: [HeistCaseMatchResult]?
     let omittedCaseCount: Int?
 
-    init(projection: HeistCaseSelectionEvidenceProjection) {
-        let selection = projection.evidence.selection
+    init(evidence: HeistCaseSelectionEvidence, profile: ProjectionProfile) {
+        let selection = evidence.selection
+        let visibleCases = Array(selection.cases.prefix(profile.limits.caseResults))
         self.outcome = selection.outcome
         self.elapsedMs = selection.elapsedMs
         self.timeout = selection.timeout
         self.lastObservedSummary = selection.lastObservedSummary
         self.caseCount = selection.cases.count
-        self.cases = projection.visibleCases.isEmpty
+        self.cases = visibleCases.isEmpty
             ? nil
-            : projection.visibleCases
-        self.omittedCaseCount = projection.omittedCaseCount
+            : visibleCases
+        let omitted = selection.cases.count - visibleCases.count
+        self.omittedCaseCount = omitted > 0 ? omitted : nil
     }
 }
 
@@ -235,18 +332,32 @@ struct PublicHeistRepeatUntilEvidence: Encodable {
     let lastObservedSummary: String?
     let failureReason: String?
 
-    init(projection: HeistRepeatUntilEvidenceProjection) {
-        self.outcome = projection.evidence.outcome
-        self.predicate = projection.declaration.predicate
-        self.timeout = projection.declaration.timeout.seconds
-        self.iterationCount = projection.evidence.iterationCount
-        self.iterationOrdinal = projection.evidence.iterationOrdinal
-        self.expectation = PublicExpectationResult(projection: projection.expectation)
-        self.result = projection.result.map {
-            PublicActionResultOutput(projection: $0, context: .heistReportEvidence)
+    init(
+        declaration: HeistRepeatUntilDeclaration,
+        evidence: HeistRepeatUntilEvidence,
+        profile: ProjectionProfile
+    ) {
+        self.outcome = evidence.outcome
+        self.predicate = declaration.predicate
+        self.timeout = declaration.timeout.seconds
+        self.iterationCount = evidence.iterationCount
+        self.iterationOrdinal = evidence.iterationOrdinal
+        self.expectation = PublicExpectationResult(
+            projection: ExpectationProjection(result: evidence.expectation)
+        )
+        self.result = evidence.actionResult.map {
+            PublicActionResultOutput(
+                projection: ActionProjection(
+                    actionMethod: .result($0.method),
+                    result: $0,
+                    profile: profile,
+                    includeOmissions: true
+                ),
+                context: .heistReportEvidence
+            )
         }
-        self.lastObservedSummary = projection.evidence.lastObservedSummary
-        self.failureReason = projection.evidence.failureReason
+        self.lastObservedSummary = evidence.lastObservedSummary
+        self.failureReason = evidence.failureReason
     }
 }
 
@@ -258,13 +369,13 @@ struct PublicHeistForEachStringEvidence: Encodable {
     let value: String?
     let failureReason: String?
 
-    init(projection: HeistForEachStringEvidenceProjection) {
-        parameter = projection.declaration.parameter
-        count = projection.declaration.count
-        iterationCount = projection.evidence.iterationCount
-        iterationOrdinal = projection.evidence.iterationOrdinal
-        value = projection.evidence.value
-        failureReason = projection.evidence.failureReason
+    init(declaration: HeistForEachStringDeclaration, evidence: HeistForEachStringEvidence) {
+        parameter = declaration.parameter
+        count = declaration.count
+        iterationCount = evidence.iterationCount
+        iterationOrdinal = evidence.iterationOrdinal
+        value = evidence.value
+        failureReason = evidence.failureReason
     }
 }
 
@@ -279,16 +390,16 @@ struct PublicHeistForEachElementEvidence: Encodable {
     let targetSummary: String?
     let failureReason: String?
 
-    init(projection: HeistForEachElementEvidenceProjection) {
-        parameter = projection.declaration.parameter
-        matching = projection.declaration.matching
-        limit = projection.declaration.limit
-        matchedCount = projection.evidence.matchedCount
-        iterationCount = projection.evidence.iterationCount
-        iterationOrdinal = projection.evidence.iterationOrdinal
-        targetOrdinal = projection.evidence.targetOrdinal
-        targetSummary = projection.evidence.targetSummary
-        failureReason = projection.evidence.failureReason
+    init(declaration: HeistForEachElementDeclaration, evidence: HeistForEachElementEvidence) {
+        parameter = declaration.parameter
+        matching = declaration.matching
+        limit = declaration.limit
+        matchedCount = evidence.matchedCount
+        iterationCount = evidence.iterationCount
+        iterationOrdinal = evidence.iterationOrdinal
+        targetOrdinal = evidence.targetOrdinal
+        targetSummary = evidence.targetSummary
+        failureReason = evidence.failureReason
     }
 }
 
@@ -301,19 +412,31 @@ struct PublicHeistInvocationEvidence: Encodable {
     let expectation: PublicExpectationResult?
     let expectationEvidence: PublicHeistWaitEvidence?
 
-    init(projection: HeistInvocationEvidenceProjection) {
-        self.capability = projection.invocation.path.description
-        self.name = projection.invocation.path.description
-        self.argument = projection.argumentSummary
-        self.childFailedPath = projection.evidence.childFailedPath?.description
-        self.expectationResult = projection.expectation.map {
-            PublicActionResultOutput(projection: $0.result, context: .heistReportEvidence)
+    init(
+        invocation: HeistInvocationStep,
+        evidence: HeistInvocationEvidence,
+        profile: ProjectionProfile
+    ) {
+        self.capability = invocation.path.description
+        self.name = invocation.path.description
+        self.argument = invocation.argument == .none ? nil : invocation.runHeistSummary
+        self.childFailedPath = evidence.childFailedPath?.description
+        self.expectationResult = evidence.expectationActionResult.map {
+            PublicActionResultOutput(
+                projection: ActionProjection(
+                    actionMethod: .result($0.method),
+                    result: $0,
+                    profile: profile,
+                    includeOmissions: true
+                ),
+                context: .heistReportEvidence
+            )
         }
-        self.expectation = projection.expectation.map {
-            PublicExpectationResult(projection: $0.expectation)
+        self.expectation = evidence.expectation.map {
+            PublicExpectationResult(projection: ExpectationProjection(result: $0))
         }
-        self.expectationEvidence = projection.expectation.flatMap(\.waitEvidence).map {
-            PublicHeistWaitEvidence(projection: $0)
+        self.expectationEvidence = evidence.waitEvidence.map {
+            PublicHeistWaitEvidence(evidence: $0, profile: profile)
         }
     }
 }
@@ -426,9 +549,9 @@ struct PublicHeistExpectations: Encodable {
     let met: Int
     let allMet: Bool
 
-    init(projection: HeistExpectationsProjection) {
-        self.checked = projection.checked
-        self.met = projection.met
-        self.allMet = projection.allMet
+    init(_ expectations: HeistReport.Expectations) {
+        checked = expectations.checked
+        met = expectations.met
+        allMet = expectations.allMet
     }
 }

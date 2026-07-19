@@ -12,7 +12,7 @@ enum RepairActionRequirement: Sendable, Equatable {
 
     init(command: HeistActionCommand) {
         switch command.core {
-        case .activate, .mechanicalTap, .mechanicalLongPress:
+        case .activate, .oneFingerTap, .longPress:
             self = .activate
         case .increment:
             self = .increment
@@ -24,8 +24,8 @@ enum RepairActionRequirement: Sendable, Equatable {
             self = .rotor
         case .typeText:
             self = .textInput
-        case .dismiss, .magicTap, .mechanicalSwipe, .mechanicalDrag,
-             .viewportScroll, .viewportScrollToVisible, .viewportScrollToEdge,
+        case .dismiss, .magicTap, .swipe, .drag,
+             .scroll, .scrollToVisible, .scrollToEdge,
              .editAction, .setPasteboard, .takeScreenshot, .dismissKeyboard:
             self = .unknown
         }

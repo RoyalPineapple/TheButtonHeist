@@ -27,7 +27,7 @@ final class TripwireIntegrationTests: XCTestCase {
     }
 
     func testWaitForAllClearTimesOutDuringAnimation() async {
-        let windows = tripwire.getTraversableWindows()
+        let windows = tripwire.captureTraversableWindows()
         guard let window = windows.first?.window else {
             XCTFail("No window available")
             return
@@ -51,7 +51,7 @@ final class TripwireIntegrationTests: XCTestCase {
     }
 
     func testWaitForAllClearIgnoresOpacityOnlyAnimation() async {
-        let windows = tripwire.getTraversableWindows()
+        let windows = tripwire.captureTraversableWindows()
         guard let window = windows.first?.window else {
             XCTFail("No window available")
             return
@@ -76,7 +76,7 @@ final class TripwireIntegrationTests: XCTestCase {
     }
 
     func testWaitForAllClearSettlesAfterShortAnimation() async {
-        let windows = tripwire.getTraversableWindows()
+        let windows = tripwire.captureTraversableWindows()
         guard let window = windows.first?.window else {
             XCTFail("No window available")
             return
@@ -99,7 +99,7 @@ final class TripwireIntegrationTests: XCTestCase {
     }
 
     func testWaitForAllClearGatesPendingLayout() async {
-        let windows = tripwire.getTraversableWindows()
+        let windows = tripwire.captureTraversableWindows()
         guard let window = windows.first?.window else {
             XCTFail("No window available")
             return
@@ -121,7 +121,7 @@ final class TripwireIntegrationTests: XCTestCase {
     }
 
     func testWaitForSettleTimesOutDuringAnimation() async {
-        let windows = tripwire.getTraversableWindows()
+        let windows = tripwire.captureTraversableWindows()
         guard let window = windows.first?.window else {
             XCTFail("No window available")
             return
@@ -162,7 +162,7 @@ final class TripwireIntegrationTests: XCTestCase {
 
     func testCancelledSettleWaiterIsRemoved() async throws {
         let tripwire = self.tripwire!
-        let windows = tripwire.getTraversableWindows()
+        let windows = tripwire.captureTraversableWindows()
         guard let window = windows.first?.window else {
             XCTFail("No window available")
             return
@@ -231,7 +231,7 @@ final class TripwireIntegrationTests: XCTestCase {
     // MARK: - Fingerprint divergence during animation
 
     func testFingerprintDivergesDuringAnimation() {
-        let windows = tripwire.getTraversableWindows()
+        let windows = tripwire.captureTraversableWindows()
         guard let window = windows.first?.window else {
             XCTFail("No window available")
             return

@@ -11,7 +11,7 @@ final class AutoSettleFieldsTests: XCTestCase {
 
     func testActionResultRoundTripsWithSettleFields() throws {
         let result = ActionResult.success(
-            method: .activate,
+            payload: .activate,
                 observation: .settledTrace(
                     makeTestTraceEvidence(
                         .noChangeForTests(elementCount: 0),
@@ -29,7 +29,7 @@ final class AutoSettleFieldsTests: XCTestCase {
 
     func testFailedActionResultRoundTripsWithSettleFields() throws {
         let result = ActionResult.failure(
-            method: .wait,
+            payload: .wait,
             failureKind: .timeout,
             message: "timed out",
                 observation: .settledTrace(
@@ -51,7 +51,7 @@ final class AutoSettleFieldsTests: XCTestCase {
 
     func testSettleDurationHasOneCanonicalStoredValue() throws {
         let result = ActionResult.success(
-            method: .activate,
+            payload: .activate,
                 observation: .settledTrace(
                     makeTestTraceEvidence(
                         .noChangeForTests(elementCount: 0),
@@ -106,7 +106,7 @@ final class AutoSettleFieldsTests: XCTestCase {
         let trace = AccessibilityTrace(captures: [first, second])
 
         let result = ActionResult.success(
-            method: .activate,
+            payload: .activate,
                 observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
 
         )
@@ -142,7 +142,7 @@ final class AutoSettleFieldsTests: XCTestCase {
             )
         )
         let result = ActionResult.success(
-            method: .activate,
+            payload: .activate,
                 observation: .trace(makeTestTraceEvidence(
                     AccessibilityTrace(captures: [first, second]),
                     completeness: .incomplete

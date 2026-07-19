@@ -22,13 +22,13 @@ extension TheFence.Command {
         `ScreenActions.MagicTap()`
         `SetPasteboard("hello")`
         `Edit(.paste)`
-        `DismissKeyboard()`
-        `Mechanical.Tap(.label("Map"))`
-        `Mechanical.Tap(ScreenPoint(x: 888, y: 372))`
-        `Mechanical.Tap(.label("Map"), at: UnitPoint(x: 0.5, y: 0.25))`
-        `Mechanical.LongPress(.label("Message"), at: UnitPoint(x: 0.5, y: 0.5))`
-        `Mechanical.Swipe(.label("Carousel"), .left)`
-        `Mechanical.Drag(.label("Slider"), to: ScreenPoint(x: 200, y: 40))`
+        `dismissKeyboard()`
+        `oneFingerTap(.label("Map"))`
+        `oneFingerTap(ScreenPoint(x: 888, y: 372))`
+        `oneFingerTap(.label("Map"), at: UnitPoint(x: 0.5, y: 0.25))`
+        `longPress(.label("Message"), at: UnitPoint(x: 0.5, y: 0.5))`
+        `swipe(.label("Carousel"), .left)`
+        `drag(.label("Slider"), to: ScreenPoint(x: 200, y: 40))`
         `WaitFor(.label("Checkout"), timeout: 5)`
 
         Use `perform` when one line is enough. Use `run_heist` when the job needs

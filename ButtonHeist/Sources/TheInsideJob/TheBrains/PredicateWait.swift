@@ -68,7 +68,7 @@ where Evidence: Sendable & Equatable {
         announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly,
         onReadyToPoll: ReadyToPoll? = nil,
         startedAt: CFAbsoluteTime? = nil
-    ) async -> HeistWaitReceipt {
+    ) async -> HeistWaitResult {
         let start = startedAt ?? CFAbsoluteTimeGetCurrent()
         if case .announcement(let announcement) = step.predicate.core {
             return await waitForAnnouncementPredicate(
@@ -85,7 +85,7 @@ where Evidence: Sendable & Equatable {
             for: step,
             initialTrace: initialTrace
         ), traceEvaluation.met {
-            return waitReceipt(
+            return waitResult(
                 for: step,
                 trace: initialTrace,
                 observationSummary: nil,
@@ -128,11 +128,16 @@ where Evidence: Sendable & Equatable {
                     )
                 },
                 result: { outcome, _, evidence in
-                    self.waitReceipt(
+                    self.waitResult(
                         for: step,
-                        evidence: evidence,
+                        trace: evidence.lastTrace,
+                        observationSummary: evidence.lastObservationSummary,
+                        expectation: evidence.evaluation,
                         start: start,
-                        success: outcome == .matched
+                        success: outcome == .matched,
+                        baseline: evidence.changeBaseline,
+                        window: evidence.observationWindow,
+                        observedSequence: evidence.observedSequence
                     )
                 }
             ),

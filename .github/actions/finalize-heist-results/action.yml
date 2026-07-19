@@ -1,0 +1,30 @@
+name: Finalize Button Heist results
+description: Write the canonical result manifest and upload the artifact bundle.
+inputs:
+  result-directory:
+    description: Directory containing recorded heist result JSON and diagnostics.
+    required: true
+  job-label:
+    description: Stable job label written to the result manifest.
+    required: true
+  artifact-name:
+    description: GitHub Actions artifact name.
+    required: true
+  retention-days:
+    description: Artifact retention period.
+    required: false
+    default: "14"
+runs:
+  using: composite
+  steps:
+    - name: Write result manifest
+      shell: bash
+      run: scripts/write-ci-heist-result-manifest.sh "${{ inputs.result-directory }}" "${{ inputs.job-label }}"
+    - name: Upload result artifact
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ inputs.result-directory }}
+        if-no-files-found: error
+        retention-days: ${{ inputs.retention-days }}

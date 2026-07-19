@@ -175,7 +175,7 @@ extension TheFence.PendingResponseExpectation where Response == ActionResult {
     static var action: Self {
         Self(responseName: "action") { message in
             guard case .actionResult(let result) = message,
-                  result.heistExecutionPayload == nil
+                  result.heistResult == nil
             else { return nil }
             return result
         }
@@ -218,13 +218,13 @@ extension TheFence.PendingResponseExpectation where Response == AnnouncementList
     }
 }
 
-extension TheFence.PendingResponseExpectation where Response == HeistExecutionResult {
+extension TheFence.PendingResponseExpectation where Response == HeistResult {
     static var heistExecution: Self {
         Self(responseName: "heist execution") { message in
-            guard case .actionResult(let result) = message,
-                  let execution = result.heistExecutionPayload
+            guard case .actionResult(let actionResult) = message,
+                  let result = actionResult.heistResult
             else { return nil }
-            return execution
+            return result
         }
     }
 }
@@ -236,7 +236,7 @@ private extension ServerMessage {
             return "pong"
         case .interface:
             return "interface"
-        case .actionResult(let result) where result.heistExecutionPayload != nil:
+        case .actionResult(let result) where result.heistResult != nil:
             return "heist execution"
         case .actionResult:
             return "action"
@@ -257,8 +257,8 @@ private extension ServerMessage {
 }
 
 private extension ActionResult {
-    var heistExecutionPayload: HeistExecutionResult? {
-        guard case .heistExecution(let execution) = payload else { return nil }
-        return execution
+    var heistResult: HeistResult? {
+        guard case .heist(let result?) = payload else { return nil }
+        return result
     }
 }

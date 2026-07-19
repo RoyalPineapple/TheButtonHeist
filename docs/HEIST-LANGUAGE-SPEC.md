@@ -195,9 +195,9 @@ The following forms are not durable selector or context identity:
 - raw coordinate identity
 
 Ordinal is a disambiguator over the current match set for a semantic selector.
-It is not durable identity by itself. Coordinate gestures may be explicit
-mechanical actions, but coordinates do not identify semantic elements and MUST
-NOT be taught as durable selector examples.
+It is not durable identity by itself. `oneFingerTap`, `longPress`, `swipe`, and
+`drag` may use explicit coordinates, but coordinates do not identify semantic
+elements and MUST NOT be taught as durable selector examples.
 
 Once code-level selector validation exists, durable plan admission MUST reject
 plans that depend on non-durable selector identity. Until then, these forms are
@@ -343,7 +343,7 @@ RepeatUntil(.exists(.label("Inbox empty")), timeout: 10) {
 `RepeatUntil` has no default timeout: the timeout is the totality guarantee for
 a predicate only the run can decide, so authors MUST write one. A timeout of
 `0` checks the predicate once and runs no bodies before the else path. Without
-an `.else` body, an elapsed timeout fails the step with the receipt.
+an `.else` body, an elapsed timeout fails the step with the result.
 
 Use definitions and composition inside a durable plan:
 

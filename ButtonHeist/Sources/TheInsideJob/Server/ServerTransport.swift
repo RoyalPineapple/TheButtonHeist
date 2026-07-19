@@ -170,7 +170,7 @@ final class ServerTransport {
                 throw Failure.stopped
             }
             return actualPort
-        } catch SimpleSocketServer.ServerError.alreadyRunning {
+        } catch SimpleSocketServer.StartupError.alreadyRunning {
             throw Failure.alreadyRunning
         } catch {
             if case .stop = operation, error is CancellationError {
@@ -273,19 +273,9 @@ final class ServerTransport {
         advertisement.updateTXTRecord(entries)
     }
 
-    /// Stop Bonjour advertisement without stopping the TCP server.
-    @MainActor
-    func stopAdvertising() {
-        advertisement.stop()
-    }
-
     @MainActor
     var isAdvertisingForTesting: Bool {
         advertisement.isAdvertising
     }
 
-    @MainActor
-    var currentTXTRecordForTesting: [String: Data] {
-        advertisement.currentTXTRecord
-    }
 }

@@ -55,12 +55,11 @@ extension FenceResponse {
                 options: options,
                 profile: profile
             )
-        case .heistExecution(_, let result, let accessibilityTrace):
-            return compactHeistFormatted(HeistReportProjection(
-                result: result,
-                accessibilityTrace: accessibilityTrace,
+        case .heistExecution(_, let report):
+            return compactHeistFormatted(
+                report,
                 profile: profile
-            ))
+            )
         case .heistValidation(let report):
             return compactHeistValidation(report)
         case .heistCatalog(let catalog):

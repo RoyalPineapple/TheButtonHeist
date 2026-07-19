@@ -7,7 +7,7 @@ import TheScore
 /// TheBrains takes a command and works it through to a result by coordinating
 /// TheVault (the screen value), TheSafecracker (gestures), and TheTripwire
 /// (timing). Command dispatch, scroll/explore, action handlers, and
-/// post-action observation are internal components with separate owners.
+/// action evidence are internal components with separate owners.
 @MainActor
 final class TheBrains {
 
@@ -20,8 +20,8 @@ final class TheBrains {
     let tripwire: TheTripwire
     let navigation: Navigation
     let actions: Actions
-    let postActionObservation: PostActionObservation
-    let interactionObservation: InteractionObservation
+    let actionEvidenceProjector: ActionEvidenceProjector
+    let interactionCoordinator: InteractionCoordinator
     let failureEvidencePolicy: FailureEvidencePolicy
     private let requestExecutor: InteractionRequestExecutor
     private var changedWaitInProgress = false
@@ -55,7 +55,7 @@ final class TheBrains {
             }
         }
 
-        var errorKind: ErrorKind {
+        var actionFailureKind: ActionFailure.Kind {
             switch self {
             case .rootViewUnavailable, .inactiveRuntime:
                 return .accessibilityTreeUnavailable
@@ -90,38 +90,32 @@ final class TheBrains {
             tripwire: tripwire,
             navigation: navigation
         )
-        let postActionObservation = PostActionObservation(vault: vault, safecracker: safecracker)
-        self.postActionObservation = postActionObservation
-        self.interactionObservation = InteractionObservation(
+        let actionEvidenceProjector = ActionEvidenceProjector(vault: vault, safecracker: safecracker)
+        self.actionEvidenceProjector = actionEvidenceProjector
+        self.interactionCoordinator = InteractionCoordinator(
             vault: vault,
             navigation: navigation,
-            postActionObservation: postActionObservation
+            actionEvidenceProjector: actionEvidenceProjector
         )
     }
 
-    func treeUnavailableResult(method: ActionMethod) -> ActionResult {
+    func treeUnavailableResult(payload: ActionResult.Payload) -> ActionResult {
         let message = vault.semanticObservationStream.latestSettleFailureDiagnostic
             .map { "Could not observe accessibility tree; \($0)" }
             ?? TheBrains.treeUnavailableMessage
         return .failure(
-            method: method,
-            errorKind: .accessibilityTreeUnavailable,
+            payload: payload,
+            failureKind: .accessibilityTreeUnavailable,
             message: message
         )
     }
 
-    func runtimeInactiveResult(method: ActionMethod) -> ActionResult {
+    func runtimeInactiveResult(payload: ActionResult.Payload) -> ActionResult {
         .failure(
-            method: method,
-            errorKind: .actionFailed,
+            payload: payload,
+            failureKind: .actionFailed,
             message: TheBrains.runtimeInactiveMessage
         )
-    }
-
-    // MARK: - Clear
-
-    func clearCache() {
-        vault.clearCache()
     }
 
     func stopSemanticObservation() {
@@ -132,11 +126,11 @@ final class TheBrains {
         guard semanticObservationIsActive else {
             return .failure(.inactiveRuntime)
         }
-        guard let visibleEvidence = await vault.semanticObservationStream.visibleEvidence(timeout: 2.0),
+        guard let admittedVisibleObservation = await vault.semanticObservationStream.admittedVisibleObservation(timeout: 2.0),
               let exploration = await navigation.exploreScreen(
                 baseline: .currentViewport(
                     vault.visibleExplorationBaseline(
-                        from: visibleEvidence.event.settledObservation.observation
+                        from: admittedVisibleObservation.event.settledObservation.observation
                     )
                 ),
                 maxScrollsPerContainer: query.maxScrollsPerContainer?.value,

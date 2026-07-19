@@ -126,7 +126,7 @@ extension TheTripwire {
 
     /// All visible windows in foreground-active scenes, sorted by window level
     /// (front to back).
-    func getTraversableWindows() -> [WindowTraversalRoot] {
+    func captureTraversableWindows() -> [WindowTraversalRoot] {
         Self.orderedVisibleWindows()
             .map { WindowTraversalRoot(window: $0, rootView: $0) }
     }
@@ -195,10 +195,10 @@ extension TheTripwire {
     ///    VC is parsed from the deepest presented VC's view, matching what
     ///    `UIPresentationController` exposes to UIKit's AX for that window.
     ///
-    /// For screenshots, use `getTraversableWindows()` — visual compositing should
+    /// For screenshots, use `captureTraversableWindows()` — visual compositing should
     /// include all windows so the dimmed background remains visible.
-    func getAccessibleWindows() -> [WindowTraversalRoot] {
-        Self.filterToAccessibleWindows(getTraversableWindows())
+    func captureAccessibleWindows() -> [WindowTraversalRoot] {
+        Self.filterToAccessibleWindows(captureTraversableWindows())
     }
 
     /// Whether a window is a system-managed decoration (keyboard, text-effects)
@@ -209,7 +209,7 @@ extension TheTripwire {
     }
 
     /// Pure filter applying the VoiceOver-equivalent precedence chain to a
-    /// window list. Extracted from `getAccessibleWindows()` so callers can
+    /// window list. Extracted from `captureAccessibleWindows()` so callers can
     /// supply a controlled list and the precedence logic can be exercised
     /// without depending on the host app's window state.
     ///
@@ -249,7 +249,7 @@ extension TheTripwire {
     /// text-effects) so a keyboard appearance doesn't falsely register as a
     /// view-controller change.
     func topmostViewController() -> UIViewController? {
-        Self.topmostViewController(in: getTraversableWindows())
+        Self.topmostViewController(in: captureTraversableWindows())
     }
 
     /// Pure topmost-VC resolution against an explicit window list. Extracted
@@ -283,12 +283,6 @@ extension TheTripwire {
         return vc
     }
 
-    /// Did Tripwire trigger? This prompts parsing only; parsed accessibility
-    /// signatures classify the result as no-change, element-change, or
-    /// screen-change.
-    func didTripwireTrigger(before: TripwireSignal, after: TripwireSignal) -> Bool {
-        before != after
-    }
 }
 
 #endif // DEBUG

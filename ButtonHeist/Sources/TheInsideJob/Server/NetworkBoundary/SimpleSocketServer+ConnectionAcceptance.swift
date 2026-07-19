@@ -101,7 +101,7 @@ extension SimpleSocketServer {
     private func rejectStartedConnectionWithServerError(
         _ connection: NWConnection,
         generation: SocketListenerGeneration,
-        kind: ErrorKind,
+        kind: TheScore.ServerError.Kind,
         message: ServerErrorMessage
     ) {
         let response: Data

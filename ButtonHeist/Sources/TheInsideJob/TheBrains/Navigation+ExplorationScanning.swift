@@ -497,7 +497,7 @@ extension Navigation {
         let explorer = ViewportExplorer(
             navigation: self,
             exploration: SemanticExploration(
-                baseline: .interfaceMemory(vault.actionDiscoveryBaseline()),
+                baseline: .interfaceMemory(vault.interfaceMemoryBaseline()),
                 deadline: deadline
             ),
             searchOrder: .backwardFirst,

@@ -51,11 +51,11 @@ extension TheBrains {
 
     internal struct InvocationExpectationContext {
         internal let input: ResolvedWaitRuntimeInput
-        internal let baseline: HeistWaitReceipt
+        internal let baseline: HeistWaitResult
 
         internal init(
             input: ResolvedWaitRuntimeInput,
-            baseline: HeistWaitReceipt
+            baseline: HeistWaitResult
         ) {
             self.input = input
             self.baseline = baseline
@@ -70,17 +70,17 @@ extension TheBrains {
 
     internal enum InvocationExpectationOutcome {
         case notEvaluated
-        case matched(HeistWaitReceipt)
-        case failed(receipt: HeistWaitReceipt, detail: HeistFailureDetail)
+        case matched(HeistWaitResult)
+        case failed(result: HeistWaitResult, detail: HeistFailureDetail)
 
-        internal var receipt: HeistWaitReceipt? {
+        internal var result: HeistWaitResult? {
             switch self {
             case .notEvaluated:
                 return nil
-            case .matched(let receipt):
-                return receipt
-            case .failed(receipt: let receipt, detail: _):
-                return receipt
+            case .matched(let result):
+                return result
+            case .failed(result: let result, detail: _):
+                return result
             }
         }
     }
@@ -212,47 +212,47 @@ extension TheBrains {
         childExecution: HeistExecutedChildren
     ) async -> InvocationExpectationOutcome {
         guard case .passed = childExecution, let context else { return .notEvaluated }
-        let receipt: HeistWaitReceipt
+        let result: HeistWaitResult
         if let observedSequence = context.baseline.observedSequence {
-            receipt = await runtime.wait(.afterObservation(
+            result = await runtime.wait(.afterObservation(
                 context.input,
-                baselineTrace: context.baseline.result.actionResult.accessibilityTrace,
+                baselineTrace: context.baseline.outcome.actionResult.accessibilityTrace,
                 sequence: observedSequence
             ))
         } else {
-            receipt = await runtime.wait(.baselineTraceOnly(
+            result = await runtime.wait(.baselineTraceOnly(
                 context.input,
-                trace: context.baseline.result.actionResult.accessibilityTrace
+                trace: context.baseline.outcome.actionResult.accessibilityTrace
             ))
         }
         guard let failure = invocationExpectationFailure(
             predicateExpression: context.input.predicateExpression,
-            receipt: receipt
+            result: result
         ) else {
-            return .matched(receipt)
+            return .matched(result)
         }
-        return .failed(receipt: receipt, detail: failure)
+        return .failed(result: result, detail: failure)
     }
 
     private func invocationExpectationFailure(
         predicateExpression: AccessibilityPredicate,
-        receipt: HeistWaitReceipt
+        result: HeistWaitResult
     ) -> HeistFailureDetail? {
-        guard !receipt.result.actionResult.outcome.isSuccess || !receipt.result.expectation.met else { return nil }
+        guard !result.outcome.actionResult.outcome.isSuccess || !result.outcome.expectation.met else { return nil }
         return HeistFailureDetail(
             category: .expectation,
             contract: "heist invocation expectation is met",
-            observed: invocationExpectationObserved(receipt),
+            observed: invocationExpectationObserved(result),
             expected: predicateExpression.description
         )
     }
 
-    private func invocationExpectationObserved(_ receipt: HeistWaitReceipt) -> String {
+    private func invocationExpectationObserved(_ result: HeistWaitResult) -> String {
         [
-            receipt.result.expectation.actual,
-            receipt.result.actionResult.message,
-            receipt.result.actionResult.outcome.errorKind.map { "errorKind=\($0.rawValue)" },
-            receipt.result.actionResult.settled.map { "settled=\($0)" },
+            result.outcome.expectation.actual,
+            result.outcome.actionResult.message,
+            result.outcome.actionResult.outcome.failureKind.map { "failureKind=\($0.rawValue)" },
+            result.outcome.actionResult.settled.map { "settled=\($0)" },
         ].compactMap { $0 }.joined(separator: "; ")
     }
 }

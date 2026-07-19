@@ -10,7 +10,7 @@ enum DiscoveryMutation: Equatable {
 /// the span of a discovery scan. Key: Bonjour service name, plus device identity
 /// for the visible-selection index. Invalidation: `recordLost` evicts a service
 /// name; a newer advertisement supersedes an older one for the same identity.
-/// It cannot be derived from a receipt — the network emits raw add/remove
+/// It cannot be derived from a result: the network emits raw add/remove
 /// events and this is the dedup state that turns them into a stable device list.
 /// See `docs/ARCHITECTURE.md#state-has-one-owner`.
 struct DiscoveryRegistry {

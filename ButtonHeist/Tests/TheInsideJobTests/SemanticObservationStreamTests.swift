@@ -323,14 +323,12 @@ final class SemanticObservationStreamTests: XCTestCase {
         let settledSignal = tripwireSignal(sequence: 1)
         let currentSignal = tripwireSignal(sequence: 2)
         vault.semanticObservationStream.readTripwireSignal = { currentSignal }
-        let outcome = settleOutcome(
-            .settled(timeMs: 1),
-            observation: observation,
-            tripwireSignal: settledSignal
-        )
-
         let event = vault.semanticObservationStream.commitSettledDiscoveryObservation(
-            outcome,
+            settleResult(
+                .settled(timeMs: 1),
+                observation: observation,
+                tripwireSignal: settledSignal
+            ),
             discoveryCommitPolicy: .mergeIntoInterface,
             afterViewportMovement: true
         )
@@ -793,7 +791,7 @@ final class SemanticObservationStreamTests: XCTestCase {
 
         let result = await vault.semanticObservationStream.settleActionObservation(
             baselineTripwireSignal: vault.tripwire.tripwireSignal(),
-            settleOutcome: settleOutcome(
+            settleResult: settleResult(
                 .settled(timeMs: 1),
                 observation: stale,
                 tripwireSignal: vault.semanticObservationStream.currentTripwireSignal()
@@ -813,7 +811,7 @@ final class SemanticObservationStreamTests: XCTestCase {
 
         let result = await vault.semanticObservationStream.settleActionObservation(
             baselineTripwireSignal: vault.tripwire.tripwireSignal(),
-            settleOutcome: settleOutcome(
+            settleResult: settleResult(
                 .timedOut(timeMs: 1),
                 observation: screen,
                 tripwireSignal: vault.semanticObservationStream.currentTripwireSignal()
@@ -833,7 +831,7 @@ final class SemanticObservationStreamTests: XCTestCase {
 
         let result = await vault.semanticObservationStream.settleActionObservation(
             baselineTripwireSignal: vault.tripwire.tripwireSignal(),
-            settleOutcome: settleOutcome(
+            settleResult: settleResult(
                 .cancelled(timeMs: 1),
                 observation: screen,
                 tripwireSignal: vault.semanticObservationStream.currentTripwireSignal()
@@ -917,7 +915,7 @@ final class SemanticObservationStreamTests: XCTestCase {
         )
     }
 
-    private func settleOutcome(
+    private func settleResult(
         _ outcome: SettleOutcome,
         observation: InterfaceObservation,
         tripwireSignal: TheTripwire.TripwireSignal
@@ -951,7 +949,7 @@ final class SemanticObservationStreamTests: XCTestCase {
             await beforeSettle()
             let observation = self.observation(label: "Stable", heistId: "stable")
             vault.observeInterface(observation)
-            return self.settleOutcome(
+            return self.settleResult(
                 .settled(timeMs: count),
                 observation: observation,
                 tripwireSignal: baseline

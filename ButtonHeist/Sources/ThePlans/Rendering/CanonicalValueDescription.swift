@@ -20,11 +20,6 @@ package enum CanonicalValueDescription {
         nonEmpty(value).map { "\(name)=\(quoted($0))" }
     }
 
-    package static func stringMatchField(_ name: String, _ value: StringMatchCore<String>?) -> String? {
-        guard let value, value.hasPredicateLiteral else { return nil }
-        return "\(name)=\(stringMatch(value))"
-    }
-
     package static func stringMatchFields(_ name: String, _ values: [StringMatchCore<String>]) -> String? {
         let fields = values.compactMap { value -> String? in
             guard value.hasPredicateLiteral else { return nil }
@@ -85,11 +80,6 @@ package enum CanonicalValueDescription {
     package static func listField<T>(_ name: String, _ values: [T]?) -> String? {
         guard let values, !values.isEmpty else { return nil }
         return "\(name)=\(list(values))"
-    }
-
-    package static func quotedListField(_ name: String, _ values: [String]?) -> String? {
-        guard let values, !values.isEmpty else { return nil }
-        return "\(name)=\(quotedList(values))"
     }
 
     package static func list<T>(_ values: [T]) -> String {

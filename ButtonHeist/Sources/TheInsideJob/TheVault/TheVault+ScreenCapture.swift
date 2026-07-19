@@ -13,7 +13,7 @@ extension TheVault {
 
     /// Capture the screen by compositing all traversable windows.
     func captureScreen() -> ScreenCapture? {
-        let windows = tripwire.getTraversableWindows()
+        let windows = tripwire.captureTraversableWindows()
         guard let plan = Self.makeScreenCapturePlan(for: windows) else { return nil }
 
         let renderer = UIGraphicsImageRenderer(size: plan.bounds.size)

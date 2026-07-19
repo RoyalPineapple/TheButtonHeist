@@ -255,7 +255,7 @@ extension SettleSessionTests {
         _ = changedObject
     }
 
-    func testMachineTripwireResetRestartsBothPolicyProofs() {
+    func testMachineTripwireResetRestartsBothPolicyCriteria() {
         let stable = makeParseResult([
             makeElement(label: "Stable", traits: .staticText),
         ])

@@ -12,9 +12,9 @@ extension TheGetaway {
     /// the same caller deliver in FIFO order. The previous sync shape used
     /// fire-and-forget Tasks under the hood, which made no FIFO guarantee.
     @discardableResult
-    func broadcastToAll(_ message: ServerMessage) async -> DeliveryResult {
+    func broadcastToAll(_ message: ServerMessage) async -> ResponseDeliveryOutcome {
         guard !message.isScreenshot else {
-            let failure = DeliveryFailure.sessionContractViolation("screenshots must be requested explicitly")
+            let failure = ResponseDeliveryFailure.sessionContractViolation("screenshots must be requested explicitly")
             logDeliveryFailure(failure)
             return .refused(failure)
         }
@@ -27,11 +27,11 @@ extension TheGetaway {
             return .failed(.responseEncodingFailed(failure))
         }
         guard transport != nil else {
-            let result = DeliveryResult.transportUnavailable(clientId: nil)
-            insideJobLogger.error("\(result.description)")
-            return result
+            let outcome = ResponseDeliveryOutcome.transportUnavailable(clientId: nil)
+            insideJobLogger.error("\(outcome.description)")
+            return outcome
         }
-        var firstFailure: DeliveryResult?
+        var firstFailure: ResponseDeliveryOutcome?
         for clientId in await muscle.activeSessionConnections.sorted() {
             switch await sendEncodedData(data, toClient: clientId) {
             case .delivered:
@@ -42,10 +42,10 @@ extension TheGetaway {
                     firstFailure = .failed(failure)
                 }
             case .transportUnavailable(let clientId):
-                let result = DeliveryResult.transportUnavailable(clientId: clientId)
-                insideJobLogger.error("\(result.description)")
+                let outcome = ResponseDeliveryOutcome.transportUnavailable(clientId: clientId)
+                insideJobLogger.error("\(outcome.description)")
                 if firstFailure == nil {
-                    firstFailure = result
+                    firstFailure = outcome
                 }
             }
         }

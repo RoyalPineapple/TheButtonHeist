@@ -36,7 +36,7 @@ extension ElementInflationProductTests {
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .activate)
-        XCTAssertEqual(result.outcome.errorKind, .elementNotFound)
+        XCTAssertEqual(result.outcome.failureKind, .elementNotFound)
         XCTAssertEqual(fixture.first.activationCount, 0)
         XCTAssertEqual(fixture.second.activationCount, 0)
         XCTAssertDiagnostic(result.message, contains: [
@@ -144,7 +144,7 @@ extension ElementInflationProductTests {
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .activate)
-        XCTAssertEqual(result.outcome.errorKind, .elementNotFound)
+        XCTAssertEqual(result.outcome.failureKind, .elementNotFound)
         XCTAssertEqual(fixture.target.activationCount, 0)
         XCTAssertFalse(fixture.scrollView.didReceiveRevealRequest)
         XCTAssertDiagnostic(result.message, contains: [

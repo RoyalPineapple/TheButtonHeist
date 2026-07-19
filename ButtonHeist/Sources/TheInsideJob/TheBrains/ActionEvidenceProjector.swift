@@ -16,7 +16,6 @@ struct SettledObservationEvidence {
 
 enum SemanticObservationTiming {
     static let defaultTimeout: Double = 1
-    static let visibleTickIntervalSeconds: Double = 0.1
 }
 
 struct SemanticObservationDeadline: Sendable, Equatable {
@@ -56,7 +55,7 @@ struct SemanticObservationDeadline: Sendable, Equatable {
     }
 }
 
-/// Projects traces, captures, change facts, and action receipts from supplied semantic
+/// Projects traces, captures, change facts, and action results from supplied semantic
 /// states. The action contract is: admitted state → before → action →
 /// refresh/settle → after → result.
 @MainActor

@@ -24,7 +24,7 @@ public extension ServerError {
     }
 }
 
-extension ErrorKind {
+extension ActionFailure.Kind {
     var failureDetails: FailureDetails {
         switch self {
         case .accessibilityTreeUnavailable:
@@ -40,8 +40,17 @@ extension ErrorKind {
             return FailureDetails(code: .requestValidationError)
         case .actionFailed:
             return FailureDetails(code: .requestActionFailed)
+        }
+    }
+}
+
+extension ServerError.Kind {
+    var failureDetails: FailureDetails {
+        switch self {
         case .authFailure:
             return FailureDetails(code: .authFailed)
+        case .validationError:
+            return FailureDetails(code: .requestValidationError)
         case .general:
             return FailureDetails(code: .serverGeneral)
         }

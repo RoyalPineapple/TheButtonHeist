@@ -592,7 +592,7 @@ extension TheVaultResolutionTests {
         bagman.semanticObservationStream.commitVisibleObservationForTesting(settled)
         let sequence = bagman.semanticObservationStream.latestCommittedObservation?.sequence
 
-        let outcome = SettleSession.Result(
+        let settleResult = SettleSession.Result(
             outcome: .cancelled(timeMs: 1),
             events: [],
             finalObservation: nil,
@@ -601,7 +601,7 @@ extension TheVaultResolutionTests {
         )
         let result = await bagman.semanticObservationStream.settleActionObservation(
             baselineTripwireSignal: bagman.tripwire.tripwireSignal(),
-            settleOutcome: outcome
+            settleResult: settleResult
         )
 
         XCTAssertEqual(result.settleResult.outcome, .cancelled(timeMs: 1))

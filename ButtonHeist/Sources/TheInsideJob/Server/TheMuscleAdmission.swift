@@ -60,14 +60,12 @@ extension ClientAdmission {
         private var clientRegistry = Registry()
         private var tokenAuthentication: TokenAuthentication
 
-        init(tokenSource: SessionTokenSource, authenticationPolicy: InsideJobAuthenticationPolicy) {
+        init(sessionToken: SessionAuthToken, authenticationPolicy: InsideJobAuthenticationPolicy) {
             self.tokenAuthentication = TokenAuthentication(
-                tokenSource: tokenSource,
+                sessionToken: sessionToken,
                 policy: authenticationPolicy
             )
         }
-
-        var sessionToken: SessionAuthToken { tokenAuthentication.sessionToken }
 
         @discardableResult
         mutating func registerClientAddress(
@@ -145,13 +143,10 @@ extension ClientAdmission {
                 )
             }
 
-            switch sessionAdmission.source {
-            case .token:
-                return [
-                    cancelDeadline,
-                    .log(.clientAuthenticatedWithToken(clientId: sessionAdmission.clientId)),
-                ]
-            }
+            return [
+                cancelDeadline,
+                .log(.clientAuthenticatedWithToken(clientId: sessionAdmission.clientId)),
+            ]
         }
 
         func rejectForSessionLock(

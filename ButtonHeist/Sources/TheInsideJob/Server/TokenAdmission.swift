@@ -22,16 +22,15 @@ private struct TokenFailureState: Equatable, Sendable {
 }
 
 struct TokenAuthentication {
-    private let tokenSource: SessionTokenSource
+    private let sessionToken: SessionAuthToken
     private let policy: InsideJobAuthenticationPolicy
     private var addressAuthStates: [ClientNetworkAddress: TokenFailureState] = [:]
 
-    init(tokenSource: SessionTokenSource, policy: InsideJobAuthenticationPolicy) {
-        self.tokenSource = tokenSource
+    init(sessionToken: SessionAuthToken, policy: InsideJobAuthenticationPolicy) {
+        self.sessionToken = sessionToken
         self.policy = policy
     }
 
-    var sessionToken: SessionAuthToken { tokenSource.token }
     mutating func admit(
         _ token: SessionAuthToken,
         driverId: DriverID?,
@@ -43,15 +42,15 @@ struct TokenAuthentication {
             return .lockedOut(lockoutError())
         }
 
-        guard !constantTimeEqual(token, tokenSource.token) else {
+        guard !constantTimeEqual(token, sessionToken) else {
             addressAuthStates.removeValue(forKey: address)
-            return .accepted(owner: tokenSource.owner(driverId: driverId))
+            return .accepted(owner: driverId.map(SessionOwner.driver) ?? .token(sessionToken))
         }
 
         let error = ServerError(
             kind: .authFailure,
-            message: tokenSource.invalidTokenMessage,
-            recoveryHint: tokenSource.configuredTokenRecoveryHint
+            message: "Invalid token. Retry with the session token.",
+            recoveryHint: "Retry with the session token."
         )
         return .rejected(rejectToken(for: address, now: now, error: error))
     }
@@ -88,10 +87,8 @@ struct TokenAuthentication {
         case .accepted(let owner):
             return .sessionAdmission(ClientAdmission.SessionAdmission(
                 clientId: clientId,
-                address: address,
                 owner: owner,
-                respond: respond,
-                source: .token
+                respond: respond
             ))
         }
     }

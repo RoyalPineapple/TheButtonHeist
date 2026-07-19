@@ -132,7 +132,7 @@ extension ElementInflationProductTests {
         XCTAssertEqual(fixture.target.text, "leave at desk")
         XCTAssertTrue(fixture.target.isFirstResponder)
         XCTAssertTrue(fixture.scrollView.didReceiveRevealRequest)
-        guard case .value(let value) = result.payload else {
+        guard case .typeText(let value?) = result.payload else {
             return XCTFail("Expected final text value payload, got \(String(describing: result.payload))")
         }
         XCTAssertEqual(value, "leave at desk")

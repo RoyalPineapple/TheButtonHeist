@@ -32,7 +32,7 @@ final class GesturePayloadDecodingTests: XCTestCase {
             ]
         )
 
-        guard case .mechanicalSwipe(let target) = message,
+        guard case .swipe(let target) = message,
               case .elementDirection(let target, let direction) = target.selection else {
             return XCTFail("Expected elementDirection swipe payload, got \(message)")
         }
@@ -53,7 +53,7 @@ final class GesturePayloadDecodingTests: XCTestCase {
             ]
         )
 
-        guard case .mechanicalSwipe(let target) = message,
+        guard case .swipe(let target) = message,
               case .unitElement(let target, let start, let end) = target.selection else {
             return XCTFail("Expected elementUnitPoints swipe payload, got \(message)")
         }
@@ -74,7 +74,7 @@ final class GesturePayloadDecodingTests: XCTestCase {
             ]
         )
 
-        guard case .mechanicalSwipe(let target) = message,
+        guard case .swipe(let target) = message,
               case .pointToPoint(let start, let end) = target.selection else {
             return XCTFail("Expected pointToPoint swipe payload, got \(message)")
         }
@@ -94,7 +94,7 @@ final class GesturePayloadDecodingTests: XCTestCase {
             ]
         )
 
-        guard case .mechanicalSwipe(let target) = message,
+        guard case .swipe(let target) = message,
               case .pointDirection(let start, let direction) = target.selection else {
             return XCTFail("Expected pointDirection swipe payload, got \(message)")
         }
@@ -141,7 +141,7 @@ final class GesturePayloadDecodingTests: XCTestCase {
             ]
         )
 
-        guard case .mechanicalDrag(let target) = message,
+        guard case .drag(let target) = message,
               case .elementToPoint(let target, let start, let end) = target.selection else {
             return XCTFail("Expected elementToPoint drag payload, got \(message)")
         }
@@ -162,7 +162,7 @@ final class GesturePayloadDecodingTests: XCTestCase {
             ]
         )
 
-        guard case .mechanicalDrag(let target) = message,
+        guard case .drag(let target) = message,
               case .pointToPoint(let start, let end) = target.selection else {
             return XCTFail("Expected pointToPoint drag payload, got \(message)")
         }

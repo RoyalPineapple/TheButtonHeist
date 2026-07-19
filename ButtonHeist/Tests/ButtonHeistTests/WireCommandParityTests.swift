@@ -125,14 +125,14 @@ final class WireCommandParityTests: XCTestCase {
             FenceParameterKey.rotorIndex.rawValue: .int(0),
         ])
 
-        guard case .directAction(let directAction) = request.dispatch else {
+        guard case .directAction(let directAction) = request.execution else {
             return XCTFail("Indexed rotor should decode as transient direct action")
         }
         XCTAssertNotNil(directAction.action.durableHeistActionFailure)
         XCTAssertEqual(directAction.timeout, FenceCommandFixedTimeout.standardAction.seconds)
     }
 
-    func testCommandHelpKeepsAccessibilitySemanticAndMechanicalBoundaries() {
+    func testCommandHelpKeepsAccessibilitySemanticAndSpatialBoundaries() {
         let activate = TheFence.Command.activate.descriptor.description
         let tap = TheFence.Command.oneFingerTap.descriptor.description
         let scroll = TheFence.Command.scroll.descriptor.description
@@ -143,8 +143,8 @@ final class WireCommandParityTests: XCTestCase {
         XCTAssertTrue(activate.localizedCaseInsensitiveContains("semantic UI element"), activate)
         XCTAssertFalse(activate.localizedCaseInsensitiveContains("tap"), activate)
 
-        XCTAssertTrue(tap.localizedCaseInsensitiveContains("explicit mechanical/spatial tap"), tap)
-        XCTAssertTrue(tap.localizedCaseInsensitiveContains("ordinary accessible controls should use the semantic command path"), tap)
+        XCTAssertTrue(tap.localizedCaseInsensitiveContains("explicit spatial oneFingerTap action"), tap)
+        XCTAssertTrue(tap.localizedCaseInsensitiveContains("use activate for ordinary accessible controls"), tap)
 
         XCTAssertTrue(scroll.localizedCaseInsensitiveContains("explicit viewport/debug operation"), scroll)
         XCTAssertTrue(scrollToVisible.localizedCaseInsensitiveContains("explicit viewport/debug operation"), scrollToVisible)
@@ -214,7 +214,7 @@ final class WireCommandParityTests: XCTestCase {
             XCTAssertEqual(descriptor.mcpExposure, .notExposed, command.rawValue)
 
             let request = try fence.parseRequest(command: command, values: arguments)
-            guard case .directAction(let directAction) = request.dispatch else {
+            guard case .directAction(let directAction) = request.execution else {
                 return XCTFail("\(command.rawValue) should decode as direct action")
             }
             XCTAssertNotNil(directAction.action.durableHeistActionFailure, command.rawValue)
@@ -238,7 +238,7 @@ final class WireCommandParityTests: XCTestCase {
         ]
         for (command, arguments) in cases {
             let request = try fence.parseRequest(command: command, values: arguments)
-            guard case .singleStepHeist(let heistRequest) = request.dispatch,
+            guard case .singleStepHeist(let heistRequest) = request.execution,
                   case .action(let action, _, _) = heistRequest else {
                 return XCTFail("\(command.rawValue) should decode as single-step action command")
             }
@@ -272,7 +272,7 @@ final class WireCommandParityTests: XCTestCase {
             .getPasteboard,
             .getAnnouncements,
             .requestScreen(),
-            .runtimeAction(.viewportScroll(ScrollTarget(direction: .down))),
+            .runtimeAction(.scroll(ScrollTarget(direction: .down))),
             .heistPlan(HeistPlanRun(plan: try HeistPlan(body: [
                 .action(ActionStep(command: .activate(.identifier("target")))),
             ]))),

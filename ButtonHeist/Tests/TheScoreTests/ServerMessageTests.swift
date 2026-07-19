@@ -209,8 +209,8 @@ final class ServerMessageTests: XCTestCase {
         if case .actionResult(let decodedResult) = decoded {
             XCTAssertTrue(decodedResult.outcome.isSuccess)
             XCTAssertEqual(decodedResult.method, .typeText)
-            guard case .value(let string) = decodedResult.payload else {
-                XCTFail("Expected .value payload")
+            guard case .typeText(let string?) = decodedResult.payload else {
+                XCTFail("Expected .typeText payload")
                 return
             }
             XCTAssertEqual(string, "Hello World")
@@ -221,7 +221,7 @@ final class ServerMessageTests: XCTestCase {
     }
 
     func testActionResultWithoutValue() throws {
-        let result = ActionResult.success(method: .oneFingerTap)
+        let result = ActionResult.success(payload: .oneFingerTap)
         let message = ServerMessage.actionResult(result)
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
@@ -229,22 +229,20 @@ final class ServerMessageTests: XCTestCase {
         if case .actionResult(let decodedResult) = decoded {
             XCTAssertTrue(decodedResult.outcome.isSuccess)
             XCTAssertEqual(decodedResult.method, .oneFingerTap)
-            XCTAssertNil(decodedResult.payload)
+            XCTAssertEqual(decodedResult.payload, .oneFingerTap)
         } else {
             XCTFail("Expected actionResult, got \(decoded)")
         }
     }
 
-    func testActionResultPayloadValueWireShape() throws {
+    func testActionResultValuePayloadWireShape() throws {
         let result = ActionResult.success(payload: .typeText("Hi"))
         let data = try JSONEncoder().encode(result)
         let json = try JSONProbe(data: data)
-        let payload = try json.object("payload")
-        XCTAssertEqual(try payload.string("kind"), "value")
-        XCTAssertEqual(try payload.string("data"), "Hi")
+        XCTAssertEqual(try json.string("payload"), "Hi")
     }
 
-    func testActionResultPayloadScreenshotWireShape() throws {
+    func testActionResultScreenshotPayloadWireShape() throws {
         let screen = ScreenPayload(
             pngData: "png",
             width: 390,
@@ -257,30 +255,26 @@ final class ServerMessageTests: XCTestCase {
         let data = try JSONEncoder().encode(result)
         let json = try JSONProbe(data: data)
         let payload = try json.object("payload")
-        XCTAssertEqual(try payload.string("kind"), "screenshot")
-        let inner = try payload.object("data")
-        XCTAssertEqual(try inner.string("pngData"), "png")
-        XCTAssertEqual(try inner.double("width"), 390)
-        XCTAssertEqual(try inner.double("height"), 844)
-        _ = try inner.object("interface")
+        XCTAssertEqual(try payload.string("pngData"), "png")
+        XCTAssertEqual(try payload.double("width"), 390)
+        XCTAssertEqual(try payload.double("height"), 844)
+        _ = try payload.object("interface")
 
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
         XCTAssertEqual(decoded.payload, .screenshot(screen))
     }
 
-    func testActionResultPayloadHeistExecutionWireShape() throws {
-        let heist = HeistExecutionReceipt(steps: [], durationMs: 42)
-        let result = ActionResult.success(payload: .heistExecution(heist))
+    func testActionResultHeistPayloadWireShape() throws {
+        let result = HeistResult(steps: [], durationMs: 42)
+        let actionResult = ActionResult.success(payload: .heist(result))
 
-        let data = try JSONEncoder().encode(result)
+        let data = try JSONEncoder().encode(actionResult)
         let json = try JSONProbe(data: data)
         let payload = try json.object("payload")
-        XCTAssertEqual(try payload.string("kind"), "heistExecution")
-        let inner = try payload.object("data")
-        XCTAssertEqual(try inner.int("durationMs"), 42)
+        XCTAssertEqual(try payload.int("durationMs"), 42)
 
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
-        XCTAssertEqual(decoded.payload, .heistExecution(heist))
+        XCTAssertEqual(decoded.payload, .heist(result))
     }
 
     func testActionResultSubjectEvidenceWireShape() throws {
@@ -310,7 +304,7 @@ final class ServerMessageTests: XCTestCase {
             settledObservationSequence: 12
         )
         let result = ActionResult.success(
-            method: .activate,
+            payload: .activate,
                 observation: .none,
                 subjectEvidence: evidence
 
@@ -439,7 +433,7 @@ final class ServerMessageTests: XCTestCase {
         }
     }
 
-    func testActionResultPayloadRotorWireShape() throws {
+    func testActionResultRotorPayloadWireShape() throws {
         let rotor = RotorResult(
             rotor: "Errors",
             direction: .next,
@@ -453,14 +447,12 @@ final class ServerMessageTests: XCTestCase {
         let data = try JSONEncoder().encode(result)
         let json = try JSONProbe(data: data)
         let payload = try json.object("payload")
-        XCTAssertEqual(try payload.string("kind"), "rotor")
-        let inner = try payload.object("data")
-        XCTAssertEqual(try inner.string("rotor"), "Errors")
-        XCTAssertEqual(try inner.string("direction"), "next")
-        let foundElement = try inner.object("foundElement")
+        XCTAssertEqual(try payload.string("rotor"), "Errors")
+        XCTAssertEqual(try payload.string("direction"), "next")
+        let foundElement = try payload.object("foundElement")
         XCTAssertEqual(try foundElement.string("label"), "Email")
         XCTAssertNoThrow(try foundElement.assertMissing("heistId"), "heistId must never appear on the wire")
-        let textRange = try inner.object("textRange")
+        let textRange = try payload.object("textRange")
         XCTAssertEqual(try textRange.string("text"), "@maria")
         XCTAssertEqual(try textRange.int("startOffset"), 10)
         XCTAssertEqual(try textRange.int("endOffset"), 16)
@@ -494,7 +486,7 @@ final class ServerMessageTests: XCTestCase {
         )
         let trace = AccessibilityTrace(first: interface).appending(interface)
         let result = ActionResult.success(
-            method: .activate,
+            payload: .activate,
                 observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
 
         )
@@ -509,7 +501,7 @@ final class ServerMessageTests: XCTestCase {
 
     func testActionResultHasNoTraceProjectionWithoutTrace() throws {
         let result = ActionResult.success(
-            method: .activate,
+            payload: .activate,
         )
 
         let data = try JSONEncoder().encode(result)
@@ -527,7 +519,7 @@ final class ServerMessageTests: XCTestCase {
         )
 
         let result = ActionResult.success(
-            method: .activate,
+            payload: .activate,
                 observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
 
         )
@@ -544,7 +536,7 @@ final class ServerMessageTests: XCTestCase {
             context: AccessibilityTrace.Context(screenId: "trace_screen")
         )
         let result = ActionResult.success(
-            method: .activate,
+            payload: .activate,
                 observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
 
         )
@@ -563,7 +555,7 @@ final class ServerMessageTests: XCTestCase {
         let before = interfaceWithHeader("Before")
         let trace = AccessibilityTrace(first: before).appending(interfaceWithoutHeader(timestamp: 1))
         let result = ActionResult.success(
-            method: .activate,
+            payload: .activate,
                 observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
 
         )
@@ -580,7 +572,7 @@ final class ServerMessageTests: XCTestCase {
             context: AccessibilityTrace.Context(screenId: "trace_screen")
         )
         let data = try JSONEncoder().encode(ActionResult.success(
-            method: .activate,
+            payload: .activate,
             observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
         ))
 
@@ -605,7 +597,7 @@ final class ServerMessageTests: XCTestCase {
           "payload": {
             "outcome": { "kind": "success" },
             "method": "typeText",
-            "payload": { "kind": "value", "data": "Hello" },
+            "payload": "Hello",
             "evidence": { "observation": { "kind": "none" } }
           }
         }
@@ -613,8 +605,8 @@ final class ServerMessageTests: XCTestCase {
         let data = Data(json.utf8)
         let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
         guard case .actionResult(let result) = decoded,
-              case .value(let string) = result.payload else {
-            XCTFail("Expected actionResult with .value payload, got \(decoded)")
+              case .typeText(let string?) = result.payload else {
+            XCTFail("Expected actionResult with .typeText payload, got \(decoded)")
             return
         }
         XCTAssertEqual(result.method, .typeText)
@@ -631,7 +623,7 @@ final class ServerMessageTests: XCTestCase {
         if case .actionResult(let result) = decoded {
             XCTAssertTrue(result.outcome.isSuccess)
             XCTAssertEqual(result.method, .oneFingerTap)
-            XCTAssertNil(result.payload)
+            XCTAssertEqual(result.payload, .oneFingerTap)
             XCTAssertNil(result.message)
         } else {
             XCTFail("Expected actionResult, got \(decoded)")
@@ -650,7 +642,7 @@ final class ServerMessageTests: XCTestCase {
 
     func testActionResultWithFailureKind() throws {
         let result = ActionResult.failure(
-            method: .oneFingerTap,
+            payload: .oneFingerTap,
             failureKind: .elementNotFound,
             message: "Element not found",
         )
@@ -669,7 +661,7 @@ final class ServerMessageTests: XCTestCase {
 
     func testActionFailureKindAllCasesRoundTrip() throws {
         for kind in ActionFailure.Kind.allCases {
-            let result = ActionResult.failure(method: .oneFingerTap, failureKind: kind)
+            let result = ActionResult.failure(payload: .oneFingerTap, failureKind: kind)
             let data = try JSONEncoder().encode(result)
             let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
             XCTAssertEqual(decoded.outcome.failureKind, kind, "Round-trip failed for \(kind)")
@@ -683,89 +675,6 @@ final class ServerMessageTests: XCTestCase {
 
         XCTAssertThrowsError(try JSONDecoder().decode(ServerMessage.self, from: Data(json.utf8))) { error in
             XCTAssertTrue("\(error)".contains("failed ActionResult outcome requires failureKind"), "\(error)")
-        }
-    }
-
-    func testActionResultRejectsTakeScreenshotPayloadMismatch() throws {
-        let json = """
-        {"outcome":{"kind":"success"},"method":"takeScreenshot","payload":{"kind":"value","data":"not a screenshot"}}
-        """
-
-        XCTAssertThrowsError(try JSONDecoder().decode(ActionResult.self, from: Data(json.utf8))) { error in
-            XCTAssertTrue("\(error)".contains("takeScreenshot ActionResult payload must be screenshot"), "\(error)")
-        }
-    }
-
-    func testActionResultRejectsHeistPlanPayloadMismatch() throws {
-        let json = """
-        {"outcome":{"kind":"success"},"method":"heistPlan","payload":{"kind":"value","data":"not a heist result"}}
-        """
-
-        XCTAssertThrowsError(try JSONDecoder().decode(ActionResult.self, from: Data(json.utf8))) { error in
-            XCTAssertTrue("\(error)".contains("heistPlan ActionResult payload must be heistExecution"), "\(error)")
-        }
-    }
-
-    func testActionResultRejectsHeistExecutionPayloadForActivate() throws {
-        let json = """
-        {"outcome":{"kind":"success"},"method":"activate","payload":{"kind":"heistExecution","data":{"steps":[],"durationMs":42}}}
-        """
-
-        XCTAssertThrowsError(try JSONDecoder().decode(ActionResult.self, from: Data(json.utf8))) { error in
-            XCTAssertTrue(
-                "\(error)".contains("heistExecution ActionResult payload is only valid for heistPlan"),
-                "\(error)"
-            )
-        }
-    }
-
-    func testActionResultRejectsValuePayloadForNonValueCarryingMethod() throws {
-        let json = """
-        {"outcome":{"kind":"success"},"method":"activate","payload":{"kind":"value","data":"Hello"}}
-        """
-
-        XCTAssertThrowsError(try JSONDecoder().decode(ActionResult.self, from: Data(json.utf8))) { error in
-            XCTAssertTrue("\(error)".contains("value ActionResult payload is only valid"), "\(error)")
-        }
-    }
-
-    func testActionResultRejectsScreenshotPayloadForNonScreenshotMethod() throws {
-        let json = """
-        {
-          "outcome": { "kind": "success" },
-          "method": "activate",
-          "payload": {
-            "kind": "screenshot",
-            "data": {
-              "pngData": "abc",
-              "width": 1,
-              "height": 1,
-              "timestamp": 0,
-              "interface": {
-                "timestamp": 0,
-                "tree": [],
-                "annotations": { "elements": [], "containers": [] }
-              }
-            }
-          }
-        }
-        """
-
-        XCTAssertThrowsError(try JSONDecoder().decode(ActionResult.self, from: Data(json.utf8))) { error in
-            XCTAssertTrue(
-                "\(error)".contains("screenshot ActionResult payload is only valid for takeScreenshot"),
-                "\(error)"
-            )
-        }
-    }
-
-    func testActionResultRejectsRotorPayloadForNonRotorMethod() throws {
-        let json = """
-        {"outcome":{"kind":"success"},"method":"activate","payload":{"kind":"rotor","data":{"rotor":"Errors","direction":"next"}}}
-        """
-
-        XCTAssertThrowsError(try JSONDecoder().decode(ActionResult.self, from: Data(json.utf8))) { error in
-            XCTAssertTrue("\(error)".contains("rotor ActionResult payload is only valid for rotor"), "\(error)")
         }
     }
 

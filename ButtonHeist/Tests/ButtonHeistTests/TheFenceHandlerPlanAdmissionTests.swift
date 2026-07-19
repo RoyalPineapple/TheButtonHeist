@@ -22,10 +22,16 @@ extension TheFenceHandlerTests {
         }
         XCTAssertTrue(report.admissible)
         XCTAssertTrue(report.commandPassed)
-        XCTAssertEqual(report.invocation.state, .valid)
+        XCTAssertEqual(report.invocation, .evaluated(.valid(.init(argumentProvided: false))))
         XCTAssertEqual(report.lint.mode, .compositionQuality)
         XCTAssertNotNil(report.canonicalPlan)
         XCTAssertFalse(fence.handoff.connectionLifecycle.isConnected)
+
+        let json = try publicJSONProbe(response).object()
+        XCTAssertTrue(try json.bool("admissible"))
+        XCTAssertTrue(try json.object("plan").bool("valid"))
+        XCTAssertEqual(try json.object("invocation").string("status"), "valid")
+        XCTAssertEqual(try json.object("lint").string("status"), "passed")
     }
 
     @ButtonHeistActor
@@ -43,9 +49,13 @@ extension TheFenceHandlerTests {
         XCTAssertFalse(report.admissible)
         XCTAssertFalse(report.commandPassed)
         XCTAssertFalse(report.plan.diagnostics.isEmpty)
-        XCTAssertEqual(report.invocation.state, .notEvaluated)
-        XCTAssertEqual(report.lint.state, .notEvaluated)
+        XCTAssertEqual(report.invocation, .notEvaluated)
+        XCTAssertEqual(report.lint, .notEvaluated(mode: .compositionQuality))
         XCTAssertNil(report.canonicalPlan)
+
+        let json = try publicJSONProbe(response).object()
+        XCTAssertEqual(try json.object("invocation").string("status"), "not_evaluated")
+        XCTAssertEqual(try json.array("buildDiagnostics").count, report.plan.diagnostics.count)
     }
 
     @ButtonHeistActor
@@ -59,10 +69,14 @@ extension TheFenceHandlerTests {
             return XCTFail("Expected heistValidation response, got \(response)")
         }
         XCTAssertTrue(report.plan.isValid)
-        XCTAssertEqual(report.invocation.state, .invalid)
-        XCTAssertFalse(report.invocation.argumentProvided)
+        XCTAssertFalse(report.argumentProvided)
         XCTAssertFalse(report.invocation.diagnostics.isEmpty)
         XCTAssertFalse(report.admissible)
+
+        let invocation = try publicJSONProbe(response).object().object("invocation")
+        XCTAssertEqual(try invocation.string("status"), "invalid")
+        XCTAssertFalse(try invocation.bool("argumentProvided"))
+        XCTAssertEqual(try invocation.array("diagnostics").count, report.invocation.diagnostics.count)
     }
 
     @ButtonHeistActor
@@ -78,9 +92,9 @@ extension TheFenceHandlerTests {
         }
         XCTAssertTrue(report.admissible)
         XCTAssertFalse(report.commandPassed)
-        XCTAssertEqual(report.lint.state, .findings)
         XCTAssertTrue(report.lint.hasErrors)
         XCTAssertEqual(report.lint.findings.map(\.message), ["Semantic action has no expectation"])
+        XCTAssertEqual(report.lint, .findings(mode: .strictTest, values: report.lint.findings))
     }
 
     @ButtonHeistActor
@@ -187,15 +201,15 @@ extension TheFenceHandlerTests {
             "step": .string(#"Activate(.label("Pay"))"#),
         ])
 
-        guard case .heistExecution(let plan, let result, _) = response else {
+        guard case .heistExecution(let plan, let report) = response else {
             return XCTFail("Expected heistExecution response, got \(response)")
         }
         XCTAssertEqual(plan.body, [
             .action(ActionStep(command: .activate(.predicate(.label("Pay"))))),
         ])
         XCTAssertEqual(mockConn.sent.sentHeistPlan, plan)
-        XCTAssertEqual(result.steps.map(\.kind), [.action])
-        XCTAssertFalse(result.isFailure)
+        XCTAssertEqual(report.nodes.map(\.kind), [.action])
+        XCTAssertNil(report.failure)
 
         let json = try publicJSONProbe(response).object()
         try json.assertMissing("method")

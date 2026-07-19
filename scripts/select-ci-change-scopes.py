@@ -66,7 +66,7 @@ IOS_OR_FRAMEWORK_TEST_PREFIXES = (
 )
 IOS_AUTOMATION_PATHS = {
     "scripts/check-e2e-adversarial-lab-timing.py",
-    "scripts/collect-ios-heist-receipts.sh",
+    "scripts/collect-ios-heist-results.sh",
     "scripts/e2e-adversarial-lab.py",
     "scripts/e2e-demo-smoke.sh",
     "scripts/e2e-lifecycle-gate.py",

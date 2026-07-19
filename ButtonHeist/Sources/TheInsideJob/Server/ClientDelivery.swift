@@ -27,10 +27,6 @@ enum ClientDelivery: Sendable {
         self = .wired(callbacks)
     }
 
-    mutating func clearForTesting() {
-        self = .unwired
-    }
-
     func send(_ data: Data, toClient clientId: Int) async -> ServerSendOutcome {
         guard case .wired(let callbacks) = self else {
             return .failed(.transportUnavailable)

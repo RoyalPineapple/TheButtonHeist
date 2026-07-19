@@ -16,7 +16,7 @@ sequenceDiagram
     Test->>BHT: await runHeist(name) { steps }
     BHT->>BHT: build HeistPlan from DSL content
     BHT->>Brains: execute plan
-    Brains-->>BHT: HeistExecutionResult
+    Brains-->>BHT: HeistResult
     BHT-->>Test: Heist (throws Heist.Failure on failure)
     Note over Test: control returns — test continues
 ```
@@ -88,4 +88,4 @@ Notes:
 - `runHeistSync` exists so the test method itself can stay synchronous: it polls the explicit `HeistSyncState` in run-loop slices until the task publishes a result or the configurable deadline expires. Completion and timeout are terminal states, and either transition releases the owned task.
 - Every XCTest-facing synchronous failure preserves the public caller location and routes through `recordHeistXCTestIssue`, the single `XCTFail` emission path.
 - Bare `joinHeist` never returns — it is for interactive sessions only. Under CI, test watchdogs will kill a parked test; use `withJoinedHeistSession` when the join must end.
-- Receipts can be recorded per run via `HeistTestReceiptRecording` (`.environment`, `.failures`, `.always`).
+- Results can be recorded per run via `HeistTestResultRecording` (`.environment`, `.failures`, `.always`).

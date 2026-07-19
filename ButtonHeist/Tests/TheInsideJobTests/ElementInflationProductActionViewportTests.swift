@@ -22,8 +22,8 @@ extension ElementInflationProductTests {
             label: "Heist Parity Heist",
             heist: true
         )
-        let heistPayload = try XCTUnwrap(heist.result.heistExecutionPayload)
-        let step = try XCTUnwrap(heistPayload.steps.first)
+        let result = try XCTUnwrap(heist.result.resultPayload)
+        let step = try XCTUnwrap(result.steps.first)
         guard let actionEvidence = step.actionEvidence else {
             return XCTFail("Expected heist action evidence")
         }
@@ -40,7 +40,7 @@ extension ElementInflationProductTests {
         XCTAssertEqual(stepResult.method, .activate)
         XCTAssertEqual(stepResult.outcome.isSuccess, single.result.outcome.isSuccess)
         XCTAssertEqual(stepResult.method, single.result.method)
-        XCTAssertEqual(stepResult.outcome.errorKind, single.result.outcome.errorKind)
+        XCTAssertEqual(stepResult.outcome.failureKind, single.result.outcome.failureKind)
     }
 
     func testExplicitViewportScrollCommandReportsViewportState() async throws {
@@ -51,7 +51,7 @@ extension ElementInflationProductTests {
         defer { fixture.cleanup() }
 
         let result = await brains.executeRuntimeAction(
-            try HeistActionCommand.viewportScroll(ScrollTarget(
+            try HeistActionCommand.scroll(ScrollTarget(
                 target: .identifier("visible_anchor_explicit_scroll_revealed"),
                 direction: .down
             )).resolve(in: .empty)
@@ -104,11 +104,11 @@ extension ElementInflationProductTests {
     }
 
     private func heistFailureDescription(_ result: ActionResult) -> String {
-        guard let payload = result.heistExecutionPayload else {
+        guard let payload = result.resultPayload else {
             return result.message ?? "heist activate failed"
         }
         guard let failedStep = payload.firstFailedStep else {
-            return result.message ?? "heist activate failed without a failed receipt step"
+            return result.message ?? "heist activate failed without a failed result step"
         }
         let actionMessage = failedStep.reportActionResult?.message
         return [
@@ -125,9 +125,9 @@ extension ElementInflationProductTests {
 }
 
 private extension ActionResult {
-    var heistExecutionPayload: HeistExecutionResult? {
-        guard case .heistExecution(let payload) = payload else { return nil }
-        return payload
+    var resultPayload: HeistResult? {
+        guard case .heist(let result) = payload else { return nil }
+        return result
     }
 }
 

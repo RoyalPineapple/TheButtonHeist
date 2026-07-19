@@ -125,7 +125,7 @@ extension AccessibilityPredicateTests {
         let newElement = element(label: "No receipt", traits: [.button])
         let replacementInterface = makeTestInterface(elements: [newElement], timestamp: Date())
         let result = ActionResult.success(
-            method: .wait,
+            payload: .wait,
                 observation: .trace(traceEvidence(
                     .screenChangedForTests(replacementInterface: replacementInterface),
                     completeness: .incomplete
@@ -140,7 +140,7 @@ extension AccessibilityPredicateTests {
         let otherElement = element(label: "New sale", traits: [.button])
         let replacementInterface = makeTestInterface(elements: [otherElement], timestamp: Date())
         let result = ActionResult.success(
-            method: .wait,
+            payload: .wait,
                 observation: .trace(traceEvidence(
                     .screenChangedForTests(replacementInterface: replacementInterface),
                     completeness: .incomplete
@@ -164,7 +164,7 @@ extension AccessibilityPredicateTests {
         let newElement = element(label: "Done", traits: [.button])
         let replacementInterface = makeTestInterface(elements: [newElement], timestamp: Date())
         let result = ActionResult.success(
-            method: .wait,
+            payload: .wait,
                 observation: .trace(traceEvidence(
                     .screenChangedForTests(replacementInterface: replacementInterface),
                     completeness: .incomplete
@@ -179,7 +179,7 @@ extension AccessibilityPredicateTests {
         let sameElement = element(label: "Header", traits: [.header])
         let replacementInterface = makeTestInterface(elements: [sameElement], timestamp: Date())
         let result = ActionResult.success(
-            method: .wait,
+            payload: .wait,
                 observation: .trace(traceEvidence(
                     .screenChangedForTests(replacementInterface: replacementInterface),
                     completeness: .incomplete

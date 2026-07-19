@@ -12,7 +12,7 @@ extension Actions {
 
     func executeEditAction(
         _ target: EditActionTarget,
-    ) async -> TheSafecracker.ActionDispatchOutcome {
+    ) async -> TheSafecracker.ActionDispatchResult {
         let inflatedTarget: ElementInflation.InflatedElementTarget
         switch await navigation.elementInflation.inflateFirstResponder(
             method: .editAction,
@@ -27,7 +27,7 @@ extension Actions {
                 )
             )
         case .failed(let failure):
-            return failure.actionDispatchOutcome(commandMethod: .editAction)
+            return failure.actionDispatchResult(payload: .editAction)
         case .inflated(let target):
             inflatedTarget = target
         }
@@ -41,7 +41,7 @@ extension Actions {
         case .success(let dispatched):
             success = dispatched
         case .failure(let staleness):
-            return staleLiveTargetFailure(staleness, method: .editAction)
+            return staleLiveTargetFailure(staleness, payload: .editAction)
         }
         let message = success ? nil : ActionCapabilityDiagnostic.editActionFailed(
             target.action,
@@ -50,7 +50,7 @@ extension Actions {
         )
         return success
             ? .success(
-                method: .editAction,
+                payload: .editAction,
                 subjectEvidence: inflatedTarget.subjectEvidence(source: .textInputTarget),
                 resolvedElementId: inflatedTarget.treeElement.heistId
             )
@@ -59,16 +59,16 @@ extension Actions {
 
     func executeSetPasteboard(
         _ target: SetPasteboardTarget,
-    ) async -> TheSafecracker.ActionDispatchOutcome {
+    ) async -> TheSafecracker.ActionDispatchResult {
         UIPasteboard.general.string = target.text.rawText
         return .success(payload: .setPasteboard(target.text.rawText))
     }
 
-    func executeGetPasteboard() -> TheSafecracker.ActionDispatchOutcome {
+    func executeGetPasteboard() -> TheSafecracker.ActionDispatchResult {
         let text = UIPasteboard.general.string
         guard let text else {
             return .success(
-                method: .getPasteboard,
+                payload: .getPasteboard(nil),
                 message: "Pasteboard is empty or contains non-text data"
             )
         }
@@ -76,45 +76,45 @@ extension Actions {
     }
 
     func executeResignFirstResponder(
-    ) async -> TheSafecracker.ActionDispatchOutcome {
+    ) async -> TheSafecracker.ActionDispatchResult {
         let inflatedTarget: ElementInflation.InflatedElementTarget
         switch await navigation.elementInflation.inflateFirstResponder(
-            method: .resignFirstResponder,
+            method: .dismissKeyboard,
         ) {
         case .unavailable:
             return .failure(
-                .resignFirstResponder,
+                .dismissKeyboard,
                 message: ActionCapabilityDiagnostic.resignFirstResponderFailed(
                     vault: vault,
                     safecracker: safecracker
                 )
             )
         case .failed(let failure):
-            return failure.actionDispatchOutcome(commandMethod: .resignFirstResponder)
+            return failure.actionDispatchResult(payload: .dismissKeyboard)
         case .inflated(let target):
             inflatedTarget = target
         }
         let dispatch = vault.dispatchOnFreshLiveActionTarget(
             inflatedTarget.liveTarget,
         ) { liveTarget in
-            safecracker.resignFirstResponder(liveTarget.object)
+            safecracker.dismissKeyboard(liveTarget.object)
         }
         let success: Bool
         switch dispatch {
         case .success(let dispatched):
             success = dispatched
         case .failure(let staleness):
-            return staleLiveTargetFailure(staleness, method: .resignFirstResponder)
+            return staleLiveTargetFailure(staleness, payload: .dismissKeyboard)
         }
         if success {
             return .success(
-                method: .resignFirstResponder,
+                payload: .dismissKeyboard,
                 subjectEvidence: inflatedTarget.subjectEvidence(source: .textInputTarget),
                 resolvedElementId: inflatedTarget.treeElement.heistId
             )
         }
         return .failure(
-            .resignFirstResponder,
+            .dismissKeyboard,
             message: ActionCapabilityDiagnostic.resignFirstResponderFailed(
                 vault: vault,
                 safecracker: safecracker
@@ -127,7 +127,7 @@ extension Actions {
     func executeTypeText(
         text: TextInputText,
         target: ResolvedAccessibilityTarget?,
-    ) async -> TheSafecracker.ActionDispatchOutcome {
+    ) async -> TheSafecracker.ActionDispatchResult {
         let focusResult = await focusTextInput(target)
         switch focusResult {
         case .alreadyFocused:
@@ -142,23 +142,29 @@ extension Actions {
     private func executeTypeText(
         text: TextInputText,
         using focusedInput: FocusedTextInput?
-    ) async -> TheSafecracker.ActionDispatchOutcome {
+    ) async -> TheSafecracker.ActionDispatchResult {
         if text.mode == .replace {
             let clearResult = await safecracker.clearText(existingValue: focusedInput?.currentValue)
             if let diagnostic = clearResult.diagnostic {
-                return .failure(.typeText, message: typeTextInjectionFailureMessage(for: diagnostic, operation: "clearing"))
+                return .failure(
+                    .typeText(nil),
+                    message: typeTextInjectionFailureMessage(for: diagnostic, operation: "clearing")
+                )
             }
         }
 
         if !text.rawText.isEmpty {
             let typingResult = await safecracker.typeText(text.rawText)
             if let diagnostic = typingResult.diagnostic {
-                return .failure(.typeText, message: typeTextInjectionFailureMessage(for: diagnostic, operation: "typing"))
+                return .failure(
+                    .typeText(nil),
+                    message: typeTextInjectionFailureMessage(for: diagnostic, operation: "typing")
+                )
             }
         }
 
         return .success(
-            method: .typeText,
+            payload: .typeText(nil),
             subjectEvidence: focusedInput?.subjectEvidence,
             resolvedElementId: focusedInput?.resolvedElementId
         )
@@ -166,11 +172,11 @@ extension Actions {
 
     func typeTextPayload(
         resolvedElementId: HeistId,
-        in baseline: PostActionObservation.ObservationBaseline
-    ) -> ActionResultPayload? {
+        in baseline: ActionEvidenceProjector.Baseline
+    ) -> String? {
         guard let element = baseline.observation.tree.findElement(heistId: resolvedElementId),
               let value = element.element.value else { return nil }
-        return .typeText(value)
+        return value
     }
 
     private func typeTextInjectionFailureMessage(
@@ -189,7 +195,7 @@ extension Actions {
     private enum TextInputFocusResult {
         case alreadyFocused
         case focused(FocusedTextInput)
-        case failed(TheSafecracker.ActionDispatchOutcome)
+        case failed(TheSafecracker.ActionDispatchResult)
     }
 
     private struct FocusedTextInput {
@@ -202,9 +208,9 @@ extension Actions {
         _ target: ResolvedAccessibilityTarget?,
     ) async -> TextInputFocusResult {
         guard let target else {
-            guard safecracker.hasActiveTextInput() else {
+            guard safecracker.hasActiveTextInput else {
                 return .failed(.failure(
-                    .typeText,
+                    .typeText(nil),
                     message: ActionCapabilityDiagnostic.textEntryFailed(
                         operation: "initial focus check",
                         vault: vault,
@@ -224,7 +230,7 @@ extension Actions {
         case .inflated(let target):
             inflatedTarget = target
         case .failed(let failure):
-            return .failed(failure.actionDispatchOutcome(commandMethod: .typeText))
+            return .failed(failure.actionDispatchResult(payload: .typeText(nil)))
         }
 
         if let focused = await focusedFirstResponder(
@@ -248,7 +254,7 @@ extension Actions {
         case .inflated(let target):
             refreshedTarget = target
         case .failed(let failure):
-            return .failed(failure.actionDispatchOutcome(commandMethod: .typeText))
+            return .failed(failure.actionDispatchResult(payload: .typeText(nil)))
         }
 
         let activateOutcome: AccessibilityActionDispatcher.ActivateOutcome
@@ -266,7 +272,7 @@ extension Actions {
             activateOutcome = dispatch.outcome
             activationPoint = dispatch.activationPoint
         case .failure(let staleness):
-            return .failed(staleLiveTargetFailure(staleness, method: .typeText))
+            return .failed(staleLiveTargetFailure(staleness, payload: .typeText(nil)))
         }
         if activateOutcome == .success {
             safecracker.showFingerprint(at: activationPoint)
@@ -291,14 +297,14 @@ extension Actions {
             point = preparation.0
             preparedDispatch = preparation.1
         case .failure(let staleness):
-            return .failed(staleLiveTargetFailure(staleness, method: .typeText))
+            return .failed(staleLiveTargetFailure(staleness, payload: .typeText(nil)))
         }
         guard let preparedDispatch,
               await safecracker.completePreparedTouch(preparedDispatch) else {
             return .failed(.failure(
-                .typeText,
+                .typeText(nil),
                 message: ActionCapabilityDiagnostic.gestureDispatchFailed(
-                    method: .syntheticTap,
+                    method: .oneFingerTap,
                     point: point,
                     receiver: safecracker.tapReceiverDiagnostic(at: point)
                 )
@@ -310,7 +316,7 @@ extension Actions {
             waitForInput: true
         ) else {
             return .failed(.failure(
-                .typeText,
+                .typeText(nil),
                 message: ActionCapabilityDiagnostic.textEntryFailed(
                     operation: "post-activation keyboard readiness",
                     vault: vault,
@@ -326,7 +332,7 @@ extension Actions {
         candidate: ElementInflation.InflatedElementTarget,
         waitForInput: Bool
     ) async -> FocusedTextInput? {
-        if !safecracker.hasActiveTextInput() {
+        if !safecracker.hasActiveTextInput {
             guard waitForInput,
                   await safecracker.waitForActiveTextInput() else { return nil }
         }

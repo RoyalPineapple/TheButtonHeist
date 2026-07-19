@@ -18,14 +18,14 @@ final class TheVaultCaptureTests: XCTestCase {
         try await super.tearDown()
     }
 
-    func testParseReturnsNilWhenNoAccessibleWindows() throws {
+    func testCaptureReturnsNilWhenNoAccessibleWindows() throws {
         let result = withNoTraversableWindows {
-            vault.parse()
+            vault.refreshLiveCapture()
         }
         XCTAssertNil(result)
     }
 
-    func testParseDoesNotMutateSearchBarHiding() throws {
+    func testCaptureDoesNotMutateSearchBarHiding() throws {
         let windowScene = try requireForegroundWindowScene()
 
         let contentVC = UIViewController()
@@ -45,14 +45,14 @@ final class TheVaultCaptureTests: XCTestCase {
         }
 
         XCTAssertTrue(contentVC.navigationItem.hidesSearchBarWhenScrolling)
-        XCTAssertNotNil(vault.parse())
+        XCTAssertNotNil(vault.refreshLiveCapture())
         XCTAssertTrue(
             contentVC.navigationItem.hidesSearchBarWhenScrolling,
-            "parse() should not change hidesSearchBarWhenScrolling"
+            "refreshLiveCapture() should not change hidesSearchBarWhenScrolling"
         )
     }
 
-    func testParseWrapsEachWindowWithSemanticGroupInMultiWindowMode() throws {
+    func testCaptureWrapsEachWindowWithSemanticGroupInMultiWindowMode() throws {
         let windowScene = try requireForegroundWindowScene()
 
         let levelA = UIWindow.Level(rawValue: 1999)
@@ -67,11 +67,11 @@ final class TheVaultCaptureTests: XCTestCase {
                 windowB.isHidden = true
             }
 
-            return vault.parse()
+            return vault.refreshLiveCapture()
         }
 
         guard let result else {
-            XCTFail("Expected parse result for multi-window scene")
+            XCTFail("Expected capture for multi-window scene")
             return
         }
 
@@ -80,7 +80,7 @@ final class TheVaultCaptureTests: XCTestCase {
         XCTAssertTrue(values.contains("windowLevel: \(levelB.rawValue)"))
     }
 
-    func testParseIncludesBaseWindowWhenElevatedNonModalWindowIsPresent() throws {
+    func testCaptureIncludesBaseWindowWhenElevatedNonModalWindowIsPresent() throws {
         let windowScene = try requireForegroundWindowScene()
 
         let result = withNoTraversableWindows {
@@ -103,11 +103,11 @@ final class TheVaultCaptureTests: XCTestCase {
                 overlay.isHidden = true
             }
 
-            return vault.parse()
+            return vault.refreshLiveCapture()
         }
 
         guard let result else {
-            XCTFail("Expected parse result with base and elevated non-modal windows")
+            XCTFail("Expected capture with base and elevated non-modal windows")
             return
         }
 
@@ -122,7 +122,7 @@ final class TheVaultCaptureTests: XCTestCase {
         )
     }
 
-    func testParseIncludesAllAppWindowsWhenNoModalBoundaryAppears() throws {
+    func testCaptureIncludesAllAppWindowsWhenNoModalBoundaryAppears() throws {
         let windowScene = try requireForegroundWindowScene()
 
         let result = withNoTraversableWindows {
@@ -136,11 +136,11 @@ final class TheVaultCaptureTests: XCTestCase {
                 lower.isHidden = true
             }
 
-            return vault.parse()
+            return vault.refreshLiveCapture()
         }
 
         guard let result else {
-            XCTFail("Expected parse result for all app windows")
+            XCTFail("Expected capture for all app windows")
             return
         }
 
@@ -150,7 +150,7 @@ final class TheVaultCaptureTests: XCTestCase {
         XCTAssertTrue(values.contains("windowLevel: \((UIWindow.Level.normal - 1).rawValue)"))
     }
 
-    func testParseStopsBelowModalBoundaryAboveAppWindow() throws {
+    func testCaptureStopsBelowModalBoundaryAboveAppWindow() throws {
         let windowScene = try requireForegroundWindowScene()
 
         let result = withNoTraversableWindows {
@@ -164,11 +164,11 @@ final class TheVaultCaptureTests: XCTestCase {
                 keyWindow.isHidden = true
             }
 
-            return vault.parse()
+            return vault.refreshLiveCapture()
         }
 
         guard let result else {
-            XCTFail("Expected parse result for modal overlay")
+            XCTFail("Expected capture for modal overlay")
             return
         }
 
@@ -177,7 +177,7 @@ final class TheVaultCaptureTests: XCTestCase {
         XCTAssertFalse(values.contains("windowLevel: \(UIWindow.Level.normal.rawValue)"))
     }
 
-    func testParseKeepsWindowsAboveLowerModalBoundary() throws {
+    func testCaptureKeepsWindowsAboveLowerModalBoundary() throws {
         let windowScene = try requireForegroundWindowScene()
 
         let result = withNoTraversableWindows {
@@ -190,11 +190,11 @@ final class TheVaultCaptureTests: XCTestCase {
                 lowerModal.isHidden = true
             }
 
-            return vault.parse()
+            return vault.refreshLiveCapture()
         }
 
         guard let result else {
-            XCTFail("Expected parse result for upper window and lower modal")
+            XCTFail("Expected capture for upper window and lower modal")
             return
         }
 
@@ -205,7 +205,7 @@ final class TheVaultCaptureTests: XCTestCase {
         XCTAssertTrue(values.contains("windowLevel: \(UIWindow.Level.normal.rawValue)"))
     }
 
-    func testParseStopsAtFrontmostModalBoundary() throws {
+    func testCaptureStopsAtFrontmostModalBoundary() throws {
         let windowScene = try requireForegroundWindowScene()
 
         let result = withNoTraversableWindows {
@@ -221,11 +221,11 @@ final class TheVaultCaptureTests: XCTestCase {
                 keyWindow.isHidden = true
             }
 
-            return vault.parse()
+            return vault.refreshLiveCapture()
         }
 
         guard let result else {
-            XCTFail("Expected parse result for stacked modal windows")
+            XCTFail("Expected capture for stacked modal windows")
             return
         }
 
@@ -235,7 +235,7 @@ final class TheVaultCaptureTests: XCTestCase {
         XCTAssertFalse(values.contains("windowLevel: \(UIWindow.Level.normal.rawValue)"))
     }
 
-    func testParseKeepsOverlaysAboveModalBoundaryAndDropsLowerWindows() throws {
+    func testCaptureKeepsOverlaysAboveModalBoundaryAndDropsLowerWindows() throws {
         let windowScene = try requireForegroundWindowScene()
         let modalLevel = UIWindow.Level(rawValue: 100)
 
@@ -253,11 +253,11 @@ final class TheVaultCaptureTests: XCTestCase {
                 keyWindow.isHidden = true
             }
 
-            return vault.parse()
+            return vault.refreshLiveCapture()
         }
 
         guard let result else {
-            XCTFail("Expected parse result for overlay and modal windows")
+            XCTFail("Expected capture for overlay and modal windows")
             return
         }
 
@@ -268,7 +268,7 @@ final class TheVaultCaptureTests: XCTestCase {
         XCTAssertFalse(values.contains("windowLevel: \(UIWindow.Level.normal.rawValue)"))
     }
 
-    func testParseTreatsDeepModalSubviewAsWindowBoundary() throws {
+    func testCaptureTreatsDeepModalSubviewAsWindowBoundary() throws {
         let windowScene = try requireForegroundWindowScene()
 
         let result = withNoTraversableWindows {
@@ -283,11 +283,11 @@ final class TheVaultCaptureTests: XCTestCase {
                 lower.isHidden = true
             }
 
-            return vault.parse()
+            return vault.refreshLiveCapture()
         }
 
         guard let result else {
-            XCTFail("Expected parse result for deep modal boundary")
+            XCTFail("Expected capture for deep modal boundary")
             return
         }
 
@@ -297,7 +297,7 @@ final class TheVaultCaptureTests: XCTestCase {
         XCTAssertFalse(values.contains("windowLevel: \((UIWindow.Level.normal - 1).rawValue)"))
     }
 
-    func testParseIncludesPopoverContentSiblingAfterDismissRegion() throws {
+    func testCaptureIncludesPopoverContentSiblingAfterDismissRegion() throws {
         let windowScene = try requireForegroundWindowScene()
 
         let viewController = UIViewController()
@@ -329,8 +329,8 @@ final class TheVaultCaptureTests: XCTestCase {
             window.isHidden = true
         }
 
-        guard let result = vault.parse() else {
-            XCTFail("Expected parse result for popover-style modal window")
+        guard let result = vault.refreshLiveCapture() else {
+            XCTFail("Expected capture for popover-style modal window")
             return
         }
 
@@ -405,7 +405,7 @@ final class TheVaultCaptureTests: XCTestCase {
     private func withNoTraversableWindows<T>(
         _ operation: () -> T
     ) -> T {
-        let windows = vault.tripwire.getTraversableWindows().map(\.window)
+        let windows = vault.tripwire.captureTraversableWindows().map(\.window)
         let originalHiddenStates = windows.map(\.isHidden)
         for window in windows {
             window.isHidden = true

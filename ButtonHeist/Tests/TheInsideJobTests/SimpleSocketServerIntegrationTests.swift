@@ -168,7 +168,7 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
         do {
             _ = try await server.startPlaintextForTests(port: 0, bindToLoopback: true)
             XCTFail("Expected alreadyRunning error on double start")
-        } catch let error as SimpleSocketServer.ServerError {
+        } catch let error as SimpleSocketServer.StartupError {
             XCTAssertEqual(error, .alreadyRunning)
         }
     }
@@ -328,7 +328,7 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
         guard case .error(let error) = envelope.message else {
             return XCTFail("Expected server error before scope rejection teardown, got \(envelope.message)")
         }
-        XCTAssertEqual(error.kind, ErrorKind.general)
+        XCTAssertEqual(error.kind, ServerError.Kind.general)
         XCTAssertEqual(error.message, "Connection rejected: simulator connections are not allowed by this server.")
         await fulfillment(of: [clientConnected], timeout: 0.2)
     }

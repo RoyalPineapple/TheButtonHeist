@@ -19,19 +19,6 @@ import AccessibilitySnapshotParser
             + "try target an element with trait adjustable before calling \(method.rawValue)."
     }
 
-    static func elementDeallocated(
-        boundary: String,
-        element: InterfaceTree.Element,
-        isInflated: Bool
-    ) -> String {
-        let observed = elementObservation(
-            element,
-            includeLiveState: true,
-            missingLiveObjectState: isInflated ? "deallocated" : "notInflated"
-        )
-        return "\(boundary) failed: observed \(observed); live target became stale during element inflation."
-    }
-
     static func unsupportedElementAction(
         _ method: ActionMethod,
         element: InterfaceTree.Element
@@ -152,8 +139,8 @@ import AccessibilitySnapshotParser
         safecracker: TheSafecracker
     ) -> String {
         let focus = formatFirstResponder(vault: vault)
-        let keyboardVisible = safecracker.isKeyboardVisible()
-        let activeTextInput = safecracker.hasActiveTextInput()
+        let keyboardVisible = safecracker.isKeyboardVisible
+        let activeTextInput = safecracker.hasActiveTextInput
         return "focus=\(focus) keyboardVisible=\(keyboardVisible) activeTextInput=\(activeTextInput)"
     }
 

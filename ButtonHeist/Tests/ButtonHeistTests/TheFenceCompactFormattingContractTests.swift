@@ -15,7 +15,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         do {
             try json.assertMissing("executedTopLevelStepCount")
             try json.assertMissing("executedNodeCount")
-            try json.assertMissing("outputReceiptNodeCount")
+            try json.assertMissing("outputNodeCount")
             try json.assertMissing("durationMs")
             try json.assertMissing("abortedAtPath")
             try json.assertMissing("expectations")

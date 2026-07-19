@@ -47,7 +47,7 @@ module map and the wire boundary are drawn in the
 | Surface | Public status | Entry points | Contract source | Compatibility policy |
 |---------|---------------|--------------|-----------------|----------------------|
 | SwiftPM products and modules | Public integration surface | `ButtonHeistTesting`, `TheInsideJob`, `ButtonHeist`, `TheScore`, `ThePlans`, `heist-plan` | `Package.swift`, this document, [Swift Heist Authoring](SWIFT-HEIST-AUTHORING.md), and [Wire Protocol](WIRE-PROTOCOL.md) | Released as one product version. `ThePlans` is the single Swift heist authoring and plan module. Use matching package, CLI, MCP, and embedded app builds. |
-| SwiftPM experimental tools | Public experimental, SwiftPM-only | `heist-doctor` | [Heist Doctor](HEIST-DOCTOR.md) | Suggestion-only receipt analysis. Not installed by Homebrew and not a major-version stability contract. |
+| SwiftPM experimental tools | Public experimental, SwiftPM-only | `heist-doctor` | [Heist Doctor](HEIST-DOCTOR.md) | Suggestion-only result analysis. Not installed by Homebrew and not a major-version stability contract. |
 | Homebrew release | Public install surface | `buttonheist`, `buttonheist-mcp`, `heist-plan`, installed `ThePlans` compiler artifacts | `Formula/buttonheist.rb` and `scripts/release-contract.sh` | Formula and release archives use SemVer `MAJOR.MINOR.PATCH`. Experimental `heist-doctor` is intentionally excluded. |
 | CLI commands | Public command surface | `buttonheist <command>` | `TheFence.Command` descriptors and `buttonheist --help` | Command names, CLI exposure, and parameters are descriptor-owned. |
 | JSON-lines input | Public CLI session surface | `buttonheist json_lines` | `TheFence.Command` descriptors and command help | Each line is a JSON object using CLI-exposed Fence commands. MCP-only tools are excluded. Raw plan IR fields are not the public `run_heist` input shape. |
@@ -62,10 +62,10 @@ module map and the wire boundary are drawn in the
 The former `ButtonHeistDSL` product and module have been removed. Swift heist
 authors import `ThePlans` directly; there is no compatibility alias or adapter.
 `ButtonHeist` re-exports that authoring module for client applications, but it
-does not re-export `TheScore`. Code that names wire, receipt, or diagnostic
+does not re-export `TheScore`. Code that names wire, result, or diagnostic
 types from `TheScore` must depend on and import that product explicitly.
 
-Action spellings such as `Activate(...)` and `Mechanical.Tap(...)` are
+Action spellings such as `Activate(...)` and `oneFingerTap(...)` are
 constructor functions that return one `Action` value. `Action` owns the fluent
 `.expect(...)`, `.withoutExpectation(...)`, and `.until(...)` transitions and
 produces `HeistContent`; command and expectation bookkeeping are not exposed.
@@ -261,7 +261,7 @@ Temporal evaluation builds one `ObservationWindow` from an immutable baseline
 cursor through the current retained entry. Presence predicates bypass temporal
 history and resolve against the current tree. Change predicates derive their
 ordered `ChangeFact.elementsChanged` and `ChangeFact.screenChanged` values from
-the window's capture lineage. `AccessibilityTrace` is the durable receipt form
+the window's capture lineage. `AccessibilityTrace` is the durable result form
 of that evidence, not a second observation pipeline.
 
 A screen boundary emits three ordered facts: all old-tree nodes disappear, the
@@ -277,7 +277,7 @@ absence does not by itself prove replacement or stability.
 An incomplete window cannot prove `noChange`. A complete window may span
 multiple entries and retains fast intermediate changes until evaluation.
 A settled action's causal trace may satisfy its attached temporal expectation
-immediately. A timed-out diagnostic action trace is receipt evidence only and
+immediately. A timed-out diagnostic action trace is result evidence only and
 cannot bypass the settled observation window.
 
 Responses may include compact public deltas named `noChange`,
@@ -288,7 +288,7 @@ evidence, but it cannot preserve the ordered history it folded, so predicates
 never consume it. The full model
 is drawn in the [observation pipeline diagram](diagrams/observation-pipeline.md).
 
-## Interface Rendering Receipt
+## Interface Rendering Metadata
 
 Public interface JSON responses include `rendering` so machine clients can
 distinguish complete captures from bounded projections. The state vocabulary is:
@@ -357,7 +357,7 @@ unprefixed name wins when it is valid.
 TheFence is the shared orchestration layer for CLI, JSON-lines stdin, MCP, and
 heist execution. It owns command parsing, schema validation, connection
 coordination through TheHandoff, typed responses, heist planning, expectations,
-receipts, and replay integration.
+results, and replay integration.
 
 Raw command key/value envelopes exist only at routing and Fence admission.
 Admission produces a `FenceOperationRequest`; execution and transport lowering
@@ -499,11 +499,15 @@ fixtures, scripts, and replay; internal capture identity is not a public target.
 
 ### ActionResult
 
-`ActionResult` owns a typed `outcome`, the action method used, optional message
-and command payload, and outcome-bound evidence. The app-side dispatch path
-first produces one `ActionDispatchOutcome`; post-action observation adds
+`ActionResult` owns a typed `outcome`, one `ActionResult.Payload`, optional
+message, and outcome-bound evidence. Each payload case determines its action
+method and carries only the command-specific value legal for that method;
+custom `Codable` projects that value directly to the public `method` plus
+an optional `payload` value. There is no separate semantic or wire payload
+wrapper. The app-side dispatch path
+first produces one `ActionDispatchResult`; post-action observation adds
 semantic evidence without inventing a parallel result shape. Failures carry
-their typed action error inside `outcome.errorKind`. Fence receipt projections
+their typed action failure inside `outcome.failureKind`. Fence result projections
 add an expectation result when requested and derive a public delta from the
 same trace evidence.
 

@@ -82,7 +82,7 @@ extension WireTypeRoundTripTests {
             observed: "No element matching label \"Save\"",
             expected: "predicate(label=\"Save\")"
         )
-        let step = HeistReceiptFixture.action(
+        let step = HeistResultFixture.action(
             command: command,
             result: .activationFailure(
                 failureKind: .elementNotFound,
@@ -93,10 +93,10 @@ extension WireTypeRoundTripTests {
             durationMs: 0,
             failure: failure
         )
-        let result = HeistReceiptFixture.result(steps: [step])
+        let result = HeistResultFixture.result(steps: [step])
 
         let data = try encoder.encode(result)
-        let decoded = try decoder.decode(HeistExecutionReceipt.self, from: data)
+        let decoded = try decoder.decode(HeistResult.self, from: data)
 
         XCTAssertEqual(decoded, result)
         XCTAssertEqual(decoded.abortedAtPath?.description, "$.body[0]")
@@ -117,7 +117,7 @@ extension WireTypeRoundTripTests {
 
     func testInvocationExpectationDerivesSummaryFromWaitEvidence() throws {
         let predicate = AccessibilityPredicate.exists(.label("Done"))
-        let actionResult = ActionResult.success(method: .wait)
+        let actionResult = ActionResult.success(payload: .wait)
         let expectation = ExpectationResult.Met(predicate: predicate)
         let check = try XCTUnwrap(HeistWaitEvidence.MatchedCheck(
             actionResult: actionResult,

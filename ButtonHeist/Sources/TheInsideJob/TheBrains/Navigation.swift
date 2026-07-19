@@ -28,7 +28,7 @@ final class Navigation {
                 guard let self else { return nil }
                 return await self.exploreScreen(
                     target: target,
-                    baseline: .interfaceMemory(self.vault.actionDiscoveryBaseline()),
+                    baseline: .interfaceMemory(self.vault.interfaceMemoryBaseline()),
                     exitPosition: .current,
                     searchOrder: .backwardFirst,
                 )

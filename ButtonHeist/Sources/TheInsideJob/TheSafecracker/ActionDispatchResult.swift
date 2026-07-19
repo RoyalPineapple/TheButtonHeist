@@ -5,14 +5,15 @@ import TheScore
 extension TheSafecracker {
 
     enum ActionDispatchOutcome: Sendable {
-        case success(payload: ActionResultPayload?, resolvedElementId: HeistId?)
+        case success(resolvedElementId: HeistId?)
         case failure(FailureKind)
     }
 
     /// Result of a high-level action dispatch before post-action observation.
     /// Post-action observation adds semantic evidence to produce the wire `ActionResult`.
     struct ActionDispatchResult: Sendable {
-        let method: ActionMethod
+        let payload: ActionResult.Payload
+        var method: ActionMethod { payload.method }
         let message: String?
         let subjectEvidence: ActionSubjectEvidence?
         let activationTrace: ActivationTrace?
@@ -24,13 +25,8 @@ extension TheSafecracker {
             return false
         }
 
-        var payload: ActionResultPayload? {
-            guard case .success(let payload, _) = outcome else { return nil }
-            return payload
-        }
-
         var resolvedElementId: HeistId? {
-            guard case .success(_, let resolvedElementId) = outcome else { return nil }
+            guard case .success(let resolvedElementId) = outcome else { return nil }
             return resolvedElementId
         }
 
@@ -40,14 +36,14 @@ extension TheSafecracker {
         }
 
         private init(
-            method: ActionMethod,
+            payload: ActionResult.Payload,
             message: String?,
             subjectEvidence: ActionSubjectEvidence?,
             activationTrace: ActivationTrace?,
             timing: ActionPerformanceTiming?,
             outcome: ActionDispatchOutcome
         ) {
-            self.method = method
+            self.payload = payload
             self.message = message
             self.subjectEvidence = subjectEvidence
             self.activationTrace = activationTrace
@@ -56,48 +52,31 @@ extension TheSafecracker {
         }
 
         static func success(
-            method: ActionMethod,
+            payload: ActionResult.Payload,
             message: String? = nil,
             subjectEvidence: ActionSubjectEvidence? = nil,
             resolvedElementId: HeistId? = nil,
             activationTrace: ActivationTrace? = nil
         ) -> ActionDispatchResult {
             ActionDispatchResult(
-                method: method,
+                payload: payload,
                 message: message,
                 subjectEvidence: subjectEvidence,
                 activationTrace: activationTrace,
                 timing: nil,
-                outcome: .success(payload: nil, resolvedElementId: resolvedElementId)
-            )
-        }
-
-        static func success(
-            payload: ActionResultPayload,
-            message: String? = nil,
-            subjectEvidence: ActionSubjectEvidence? = nil,
-            resolvedElementId: HeistId? = nil,
-            activationTrace: ActivationTrace? = nil
-        ) -> ActionDispatchResult {
-            ActionDispatchResult(
-                method: payload.method,
-                message: message,
-                subjectEvidence: subjectEvidence,
-                activationTrace: activationTrace,
-                timing: nil,
-                outcome: .success(payload: payload, resolvedElementId: resolvedElementId)
+                outcome: .success(resolvedElementId: resolvedElementId)
             )
         }
 
         static func failure(
-            _ method: ActionMethod,
+            _ payload: ActionResult.Payload,
             message: String,
             subjectEvidence: ActionSubjectEvidence? = nil,
             activationTrace: ActivationTrace? = nil,
             failureKind: FailureKind = .actionFailed
         ) -> ActionDispatchResult {
             ActionDispatchResult(
-                method: method,
+                payload: payload,
                 message: message,
                 subjectEvidence: subjectEvidence,
                 activationTrace: activationTrace,
@@ -109,7 +88,7 @@ extension TheSafecracker {
         func withSubjectEvidence(_ evidence: ActionSubjectEvidence?) -> ActionDispatchResult {
             guard let evidence else { return self }
             return ActionDispatchResult(
-                method: method,
+                payload: payload,
                 message: message,
                 subjectEvidence: evidence,
                 activationTrace: activationTrace,
@@ -119,21 +98,21 @@ extension TheSafecracker {
         }
 
         func withResolvedElementId(_ heistId: HeistId) -> ActionDispatchResult {
-            guard case .success(let payload, _) = outcome else { return self }
+            guard case .success = outcome else { return self }
             return ActionDispatchResult(
-                method: method,
+                payload: payload,
                 message: message,
                 subjectEvidence: subjectEvidence,
                 activationTrace: activationTrace,
                 timing: timing,
-                outcome: .success(payload: payload, resolvedElementId: heistId)
+                outcome: .success(resolvedElementId: heistId)
             )
         }
 
         func withActivationTrace(_ trace: ActivationTrace?) -> ActionDispatchResult {
             guard let trace else { return self }
             return ActionDispatchResult(
-                method: method,
+                payload: payload,
                 message: message,
                 subjectEvidence: subjectEvidence,
                 activationTrace: trace,
@@ -145,7 +124,7 @@ extension TheSafecracker {
         func withTiming(_ timing: ActionPerformanceTiming?) -> ActionDispatchResult {
             guard let timing else { return self }
             return ActionDispatchResult(
-                method: method,
+                payload: payload,
                 message: message,
                 subjectEvidence: subjectEvidence,
                 activationTrace: activationTrace,

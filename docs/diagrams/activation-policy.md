@@ -13,7 +13,7 @@ flowchart TD
     CHECK -- "otherwise" --> PROCEED["interactive"]
     WARN --> REFRESH
     PROCEED --> REFRESH["refreshAndResolve<br/>semantic refresh + fresh live geometry"]
-    REFRESH -- "failure" --> FAIL1["ActionDispatchOutcome failure<br/>ActivationTrace: axActivateReturned nil,<br/>tapActivationDispatched false"]
+    REFRESH -- "failure" --> FAIL1["ActionDispatchResult failure<br/>ActivationTrace: axActivateReturned nil,<br/>tapActivationDispatched false"]
     REFRESH -- "resolved" --> AXACT["accessibilityActivate()<br/>on the live element"]
     AXACT -- ".success" --> OK1["success, method .activate<br/>ActivationTrace: axActivateReturned true,<br/>tapActivationDispatched false"]
     AXACT -- ".refused or .objectDeallocated" --> TAP["activationPointDispatch at the element's<br/>declared activationPoint — not a computed frame point"]
@@ -23,6 +23,6 @@ flowchart TD
 
 Notes:
 
-- The order is deliberate: `accessibilityActivate()` is what VoiceOver invokes, so it is attempted first against fresh live geometry. The activation-point tap is the same `activate` command delivered mechanically, not a different command.
+- The order is deliberate: `accessibilityActivate()` is what VoiceOver invokes, so it is attempted first against fresh live geometry. The activation-point tap is the same `activate` command delivered through touch injection, not a different command.
 - The no-activatability-indication path **warns and proceeds** (current behavior — warn, not refuse): `Interactivity.checkInteractivity` attaches the warning to `.interactive` and the caller decides whether to log it. The trait sets consulted (`interactiveTraits`, `staticOnlyTraits`, `activationAffordanceEvidenceTraits`) live in `AccessibilityPolicy`.
-- The receipt records which path ran in `ActivationTrace`: `axActivateReturned` (`true` / `false` / `nil` when the live object deallocated), `tapActivationDispatched`, `tapActivationPoint`, and `tapActivationSucceeded`.
+- The result records which path ran in `ActivationTrace`: `axActivateReturned` (`true` / `false` / `nil` when the live object deallocated), `tapActivationDispatched`, `tapActivationPoint`, and `tapActivationSucceeded`.

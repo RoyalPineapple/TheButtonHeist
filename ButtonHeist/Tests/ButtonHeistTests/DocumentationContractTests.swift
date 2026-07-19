@@ -171,7 +171,7 @@ final class DocumentationContractTests: XCTestCase {
             in: api
         )) + jsonDocuments(in: onlyJSONBlock(
             startingAt: "The strict predicate wire grammar is:",
-            endingAt: "Raw heist receipt steps contain only",
+            endingAt: "Raw heist result steps contain only",
             in: wireProtocol
         ))
 
@@ -180,20 +180,13 @@ final class DocumentationContractTests: XCTestCase {
             _ = try TheFence.ExpectationPayload.parseRequiredPredicate(value)
         }
 
-        let receipt = try onlyJSONBlock(
-            startingAt: "Raw heist receipt steps contain only",
+        let result = try onlyJSONBlock(
+            startingAt: "Raw heist result steps contain only",
             endingAt: "## Action Results",
             in: wireProtocol
         )
-        _ = try JSONDecoder().decode(HeistExecutionStepResult.self, from: Data(receipt.utf8))
+        _ = try JSONDecoder().decode(HeistExecutionStepResult.self, from: Data(result.utf8))
 
-        let actionBlocks = try jsonCodeBlocks(in: markdownSection(
-            startingAt: "## Action Results",
-            endingAt: "## Traces, Facts, and Public Deltas",
-            in: wireProtocol
-        ))
-        let payload = try XCTUnwrap(actionBlocks[safe: 1])
-        _ = try JSONDecoder().decode(ResultPayload.self, from: Data(payload.utf8))
     }
 
     private func wireExampleData(_ document: String) -> Data {

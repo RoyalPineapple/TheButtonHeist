@@ -16,7 +16,7 @@ final class ActivationPolicyTests: XCTestCase {
 
     func testElementInflationFailureMapsNoRevealPathToCommandMethod() {
         let result = ElementInflation.ElementInflationFailure.noRevealPath("target has no reveal path")
-            .actionDispatchOutcome(commandMethod: .activate)
+            .actionDispatchResult(payload: .activate)
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .activate)
@@ -25,7 +25,7 @@ final class ActivationPolicyTests: XCTestCase {
 
     func testElementInflationFailurePreservesElementNotFoundMethod() {
         let result = ElementInflation.ElementInflationFailure.notFound("no such element")
-            .actionDispatchOutcome(commandMethod: .activate)
+            .actionDispatchResult(payload: .activate)
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .activate)
@@ -45,7 +45,7 @@ final class ActivationPolicyTests: XCTestCase {
             "element inflation failed [cancelled]: stale live target refresh was cancelled "
                 + "after the live target no longer matched"
         )
-        let result = failure.actionDispatchOutcome(commandMethod: .activate)
+        let result = failure.actionDispatchResult(payload: .activate)
         XCTAssertEqual(result.method, .activate)
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.failureKind, .actionFailed)
@@ -333,7 +333,7 @@ final class ActivationPolicyTests: XCTestCase {
         textEntryActivationFailure: @escaping @MainActor (
             InterfaceTree.Element,
             ActivationTrace
-        ) async -> TheSafecracker.ActionDispatchOutcome? = { _, _ in nil }
+        ) async -> TheSafecracker.ActionDispatchResult? = { _, _ in nil }
     ) -> ActivationPolicy<TestPreparedDispatch> {
         ActivationPolicy(
             accessibilityActivate: { target in

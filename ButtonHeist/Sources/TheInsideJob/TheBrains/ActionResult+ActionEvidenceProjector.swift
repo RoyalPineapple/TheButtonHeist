@@ -6,17 +6,15 @@ import TheScore
 extension ActionResult {
     @MainActor init(
         dispatchResult: TheSafecracker.ActionDispatchResult,
-        afterStatePayload: ((ActionPayloadEvidence) -> ActionResultPayload?)?,
+        afterStateValue: ((ActionPayloadEvidence) -> String?)?,
         settledObservation: ActionEvidenceProjector.Result
     ) {
         let resultOutcome = settledObservation.resultOutcome(for: dispatchResult)
         let message = settledObservation.message(explicit: dispatchResult.message)
         let payload = settledObservation.payload(
             for: dispatchResult,
-            afterStatePayload: afterStatePayload
+            afterStateValue: afterStateValue
         )
-        let methodAndPayload = payload.map(ActionResult.MethodAndPayload.payload)
-            ?? .methodOnly(dispatchResult.method)
         let duration: ActionSettlementDuration
         do {
             duration = try ActionSettlementDuration(
@@ -24,7 +22,7 @@ extension ActionResult {
             )
         } catch {
             self = ActionResult.failure(
-                method: dispatchResult.method,
+                payload: dispatchResult.payload,
                 failureKind: .actionFailed,
                 message: String(describing: error),
                 observation: .trace(settledObservation.traceEvidence),
@@ -41,7 +39,7 @@ extension ActionResult {
         )
         self = ActionResult(
             outcome: resultOutcome,
-            methodAndPayload: methodAndPayload,
+            payload: payload,
             message: message,
             observation: observation,
             subjectEvidence: dispatchResult.subjectEvidence,
@@ -115,16 +113,18 @@ extension ActionEvidenceProjector.Result {
 
     func payload(
         for dispatchResult: TheSafecracker.ActionDispatchResult,
-        afterStatePayload: ((ActionPayloadEvidence) -> ActionResultPayload?)?
-    ) -> ActionResultPayload? {
-        guard case .success(let payload, let resolvedElementId) = dispatchResult.outcome else { return nil }
-        if let payload { return payload }
-        guard let afterStatePayload else { return nil }
-        guard case .committed(_, let finalBaseline, _) = self else { return nil }
-        return afterStatePayload(ActionPayloadEvidence(
+        afterStateValue: ((ActionPayloadEvidence) -> String?)?
+    ) -> ActionResult.Payload {
+        guard case .success(let resolvedElementId) = dispatchResult.outcome,
+              case .typeText = dispatchResult.payload,
+              let afterStateValue,
+              case .committed(_, let finalBaseline, _) = self else {
+            return dispatchResult.payload
+        }
+        return .typeText(afterStateValue(ActionPayloadEvidence(
             committedBaseline: finalBaseline,
             resolvedElementId: resolvedElementId
-        ))
+        )))
     }
 }
 

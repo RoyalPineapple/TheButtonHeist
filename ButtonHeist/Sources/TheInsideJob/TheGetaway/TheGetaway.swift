@@ -109,29 +109,29 @@ final class TheGetaway {
     }
 
     func executeDirectRuntimeAction(_ command: HeistActionCommand) async -> ActionResult {
-        let method = actionMethod(for: command)
+        let payload = actionPayload(for: command)
         guard command.durableHeistActionFailure != nil else {
             return .failure(
-                method: method,
-                errorKind: .validationError,
+                payload: payload,
+                failureKind: .validationError,
                 message: "Direct runtimeAction accepts only transient non-durable commands; durable commands must run as heistPlan"
             )
         }
         guard brains.semanticObservationIsActive else {
-            return brains.runtimeInactiveResult(method: method)
+            return brains.runtimeInactiveResult(payload: payload)
         }
         do {
             return await brains.executeRuntimeAction(try command.resolve(in: .empty))
         } catch {
             return .failure(
-                method: method,
-                errorKind: .validationError,
+                payload: payload,
+                failureKind: .validationError,
                 message: "Could not resolve direct runtime action: \(error)"
             )
         }
     }
 
-    private func actionMethod(for command: HeistActionCommand) -> ActionMethod {
+    private func actionPayload(for command: HeistActionCommand) -> ActionResult.Payload {
         switch command.core {
         case .activate:
             return .activate
@@ -142,22 +142,22 @@ final class TheGetaway {
         case .customAction:
             return .customAction
         case .rotor:
-            return .rotor
+            return .rotor(nil)
         case .typeText:
-            return .typeText
-        case .mechanicalTap:
-            return .syntheticTap
-        case .mechanicalLongPress:
-            return .syntheticLongPress
-        case .mechanicalSwipe:
-            return .syntheticSwipe
-        case .mechanicalDrag:
-            return .syntheticDrag
-        case .viewportScroll:
+            return .typeText(nil)
+        case .oneFingerTap:
+            return .oneFingerTap
+        case .longPress:
+            return .longPress
+        case .swipe:
+            return .swipe
+        case .drag:
+            return .drag
+        case .scroll:
             return .scroll
-        case .viewportScrollToVisible:
+        case .scrollToVisible:
             return .scrollToVisible
-        case .viewportScrollToEdge:
+        case .scrollToEdge:
             return .scrollToEdge
         case .dismiss:
             return .dismiss
@@ -166,11 +166,11 @@ final class TheGetaway {
         case .editAction:
             return .editAction
         case .setPasteboard:
-            return .setPasteboard
+            return .setPasteboard(nil)
         case .takeScreenshot:
-            return .takeScreenshot
+            return .screenshot(nil)
         case .dismissKeyboard:
-            return .resignFirstResponder
+            return .dismissKeyboard
         }
     }
 
@@ -208,7 +208,7 @@ final class TheGetaway {
                 return
             }
             await sendMessage(
-                .error(ServerError(kind: error.errorKind, message: message)),
+                .error(ServerError(kind: .general, message: message)),
                 requestId: requestId,
                 respond: respond
             )
@@ -237,7 +237,7 @@ final class TheGetaway {
                 return
             }
             await sendMessage(
-                .error(ServerError(kind: failure.errorKind, message: message)),
+                .error(ServerError(kind: .general, message: message)),
                 requestId: requestId,
                 respond: respond
             )

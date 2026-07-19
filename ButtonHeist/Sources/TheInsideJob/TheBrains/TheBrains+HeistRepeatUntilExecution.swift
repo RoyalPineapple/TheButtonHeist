@@ -29,7 +29,7 @@ extension TheBrains {
             return repeatUntilResolutionFailure(step, path: path, start: start, error: error)
         }
 
-        let initialObservation = await runtime.observeSemanticState(
+        let initialObservation = await runtime.settledEvidence(
             .visible,
             nil,
             0

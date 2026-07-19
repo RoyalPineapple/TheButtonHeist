@@ -75,7 +75,7 @@ the real element and calls the real methods.
 **Settled evidence instead of delivered events.** Because it lives inside the
 app, The Button Heist can wait for the interface to genuinely settle — quiet
 accessibility-tree fingerprints, not sleeps — then re-parse and assert what the
-action changed. The unit of proof shifts from "the event was delivered" to
+action changed. The unit of evidence shifts from "the event was delivered" to
 "the interface contract was fulfilled." [Scope and limits](SCOPE-AND-LIMITS.md)
 defines "settled" precisely.
 
@@ -104,14 +104,14 @@ different layers of it.
 files, `assertVisible`, bounded `repeat`, `runFlow` subflows. It is
 out-of-process, so it inherits the snapshot-and-synthesized-touch shape above.
 The differentiation is settled evidence, real `accessibilityActivate()`,
-per-step expectations, and change predicates in the receipt.
+per-step expectations, and change predicates in the result.
 
 **Vision and computer-use agents** operate screenshot-to-coordinates: read
 pixels, infer intent, tap a point. That works on anything visible and proves
 nothing about the accessibility contract. The Button Heist gives an agent
 structured text state instead of pixels, real accessibility actions instead of
-computed coordinates, and a receipt of what changed instead of a screenshot to
-re-read. The two compose: pixels remain the right proof when the subject is
+computed coordinates, and a result of what changed instead of a screenshot to
+re-read. The two compose: pixels remain the right evidence when the subject is
 visual.
 
 **Coordinate MCP wrappers** (for example, tools built on idb) hand agents the

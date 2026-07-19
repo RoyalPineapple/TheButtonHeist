@@ -18,7 +18,7 @@ sys.modules[SPEC.name] = lab
 SPEC.loader.exec_module(lab)
 
 
-RECEIPT = {
+RESULT = {
     "report": {
         "metrics": {
             "ceilings": [
@@ -44,7 +44,7 @@ RECEIPT = {
 }
 
 
-assert lab.receipt_ceiling_hits(RECEIPT) == [
+assert lab.result_ceiling_hits(RESULT) == [
     {
         "path": "$.body[2]",
         "kind": "conditional",
@@ -69,7 +69,7 @@ observations = [
         subprocess.CompletedProcess(
             args=["buttonheist"],
             returncode=1,
-            stdout=json.dumps(RECEIPT),
+            stdout=json.dumps(RESULT),
             stderr="Expected Diagnostic was emitted",
         ),
     ),

@@ -304,17 +304,6 @@ internal struct SettledObservationEvent: Sendable, Equatable {
         self.trace = trace
     }
 
-    internal func replacingGeneration(_ generation: ScreenGeneration) -> SettledObservationEvent {
-        SettledObservationEvent(
-            generation: generation,
-            continuity: continuity,
-            settledObservation: settledObservation,
-            previous: previous,
-            previousCursor: previousCursor,
-            notificationSequence: notificationSequence,
-            trace: trace
-        )
-    }
 }
 
 /// A semantic observation admitted for commit.
@@ -349,15 +338,15 @@ internal struct CommittableInterfaceObservation {
     }
 
     @MainActor internal static func admit(
-        _ outcome: SettleSession.Result,
+        _ settleResult: SettleSession.Result,
         discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy = .mergeIntoInterface,
         lineageEvidence: ScreenLineageEvidence? = nil
     ) -> CommittableInterfaceObservation? {
-        guard outcome.outcome.didSettleCleanly,
-              let finalObservation = outcome.finalObservation else { return nil }
+        guard settleResult.outcome.didSettleCleanly,
+              let finalObservation = settleResult.finalObservation else { return nil }
         return CommittableInterfaceObservation(
             observation: finalObservation.observation,
-            tripwireSignal: outcome.tripwireSignal,
+            tripwireSignal: settleResult.tripwireSignal,
             discoveryCommitPolicy: discoveryCommitPolicy,
             lineageEvidence: lineageEvidence
         )

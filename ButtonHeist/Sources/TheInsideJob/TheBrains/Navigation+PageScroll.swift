@@ -9,7 +9,7 @@ extension Navigation {
 
     func executeScroll(
         _ target: ResolvedScrollTarget,
-    ) async -> TheSafecracker.ActionDispatchOutcome {
+    ) async -> TheSafecracker.ActionDispatchResult {
         await executeScroll(
             selection: target.selection,
             direction: target.direction,
@@ -19,7 +19,7 @@ extension Navigation {
     func executeScroll(
         selection: ResolvedScrollContainerSelection,
         direction: ScrollDirection,
-    ) async -> TheSafecracker.ActionDispatchOutcome {
+    ) async -> TheSafecracker.ActionDispatchResult {
         vault.refreshLiveCapture()
         let axis = Self.requiredAxis(for: direction)
         switch resolveContainerScrollTarget(
@@ -36,20 +36,24 @@ extension Navigation {
             )
             switch transition.outcome {
             case .moved:
-                return .success(method: .scroll)
+                return .success(payload: .scroll)
             case .unchanged:
                 return .failure(.scroll, message: "scroll failed: observed target already at edge; try the opposite direction")
             case .unavailable:
                 return .failure(.scroll, message: "scroll failed: selected container cannot be scrolled")
             }
         case .failed(let failure):
-            return .failure(failure.command.method, message: failure.message, failureKind: .targetUnavailable)
+            return .failure(
+                failure.command.payload,
+                message: failure.message,
+                failureKind: .targetUnavailable
+            )
         }
     }
 
     func executeScrollToEdge(
         _ target: ResolvedScrollToEdgeTarget,
-    ) async -> TheSafecracker.ActionDispatchOutcome {
+    ) async -> TheSafecracker.ActionDispatchResult {
         await executeScrollToEdge(
             selection: target.selection,
             edge: target.edge,
@@ -59,7 +63,7 @@ extension Navigation {
     func executeScrollToEdge(
         selection: ResolvedScrollContainerSelection,
         edge: ScrollEdge,
-    ) async -> TheSafecracker.ActionDispatchOutcome {
+    ) async -> TheSafecracker.ActionDispatchResult {
         vault.refreshLiveCapture()
         let axis = Self.requiredAxis(for: edge)
         switch resolveContainerScrollTarget(
@@ -74,9 +78,9 @@ extension Navigation {
             )
             switch transition.outcome {
             case .moved:
-                return .success(method: .scrollToEdge)
+                return .success(payload: .scrollToEdge)
             case .unchanged:
-                return .success(method: .scrollToEdge)
+                return .success(payload: .scrollToEdge)
             case .unavailable:
                 return .failure(
                     .scrollToEdge,
@@ -84,7 +88,11 @@ extension Navigation {
                 )
             }
         case .failed(let failure):
-            return .failure(failure.command.method, message: failure.message, failureKind: .targetUnavailable)
+            return .failure(
+                failure.command.payload,
+                message: failure.message,
+                failureKind: .targetUnavailable
+            )
         }
     }
 

@@ -56,7 +56,7 @@ func failedEvidence(
         changeFacts: changeFacts,
         method: method(for: command),
         expectation: expectation,
-        outcome: .failed(errorKind: .elementNotFound, message: nil)
+        outcome: .failed(failureKind: .elementNotFound, message: nil)
     )
 }
 

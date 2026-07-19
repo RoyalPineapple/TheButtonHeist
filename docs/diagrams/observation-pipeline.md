@@ -5,7 +5,7 @@ graph, retained ordered history, sequence and screen lineage, notification
 cursor, and admitted-read state. `SemanticObservationStream` owns settlement
 scheduling and delivery, but no second semantic state. Raw parser samples
 remain live or diagnostic evidence. Only an admitted settled observation can enter the
-Store. Presence reads its current tree; temporal predicates and receipts read
+Store. Presence reads its current tree; temporal predicates and results read
 its replayable retained entries. The tripwire drives one serialized producer
 from invalidated state to an admitted commit. Consumers join that refresh or
 reuse its admitted result.
@@ -67,7 +67,7 @@ flowchart TD
     Current["committed InterfaceTree"] --> Presence["presence and target resolution"]
     Atomic --> Current
     Entries --> Window["ObservationWindow<br/>immutable baseline through current"]
-    Window --> Temporal["temporal predicate and receipt facts"]
+    Window --> Temporal["temporal predicate and result facts"]
     Window --> Trace["AccessibilityTrace"]
     Trace --> Delta["one-way public delta fold"]
     Delta -. "never evaluator input" .-> Output["public output only"]

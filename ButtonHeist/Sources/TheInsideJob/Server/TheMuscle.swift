@@ -84,13 +84,12 @@ actor TheMuscle {
     /// Caller must be on `@MainActor` because runtime assembly is MainActor-isolated.
     @MainActor
     init(
-        explicitToken: SessionAuthToken?,
+        sessionToken: SessionAuthToken,
         sessionReleaseTimeout: TimeInterval,
         authenticationPolicy: InsideJobAuthenticationPolicy = .default
     ) {
-        let tokenSource = SessionTokenSource(explicitToken: explicitToken)
         self.admission = ClientAdmission.Reducer(
-            tokenSource: tokenSource,
+            sessionToken: sessionToken,
             authenticationPolicy: authenticationPolicy
         )
         self.session = SessionLease(
@@ -99,14 +98,6 @@ actor TheMuscle {
     }
 
     // MARK: - Test Seams
-
-    /// Test seam: how many delayed-disconnect Tasks are currently tracked.
-    var pendingLockoutTaskCount: Int { delayedDisconnects.taskCountForTesting }
-
-    /// Test seam: drop transport wiring to simulate a targeted-send race.
-    func clearSendToClientForTest() {
-        delivery.clearForTesting()
-    }
 
     /// Test seam: wait for the currently scheduled session release timer.
     func awaitSessionReleaseTimerForTesting() async {
@@ -118,10 +109,6 @@ actor TheMuscle {
     var hasSessionReleaseTimerForTesting: Bool {
         sessionReleaseTimer.task != nil
     }
-
-    // MARK: - Session Accessors
-
-    var sessionToken: SessionAuthToken { admission.sessionToken }
 
     /// Owner that currently holds the session (nil = no active session).
     var sessionOwner: SessionOwner? {
@@ -170,7 +157,7 @@ actor TheMuscle {
     }
 
     @discardableResult
-    func sendServerHello(clientId: Int) async -> ResponseDeliveryResult {
+    func sendServerHello(clientId: Int) async -> ResponseDeliveryOutcome {
         await sendResponse(.serverHello, to: .client(clientId))
     }
 
@@ -396,31 +383,31 @@ actor TheMuscle {
         _ message: ServerMessage,
         requestId: RequestID? = nil,
         to destination: ResponseDestination
-    ) async -> ResponseDeliveryResult {
-        let result: ResponseDeliveryResult
+    ) async -> ResponseDeliveryOutcome {
+        let outcome: ResponseDeliveryOutcome
         switch destination {
         case .response(let respond):
-            result = await ResponseEnvelopeDelivery.sendMessage(message, requestId: requestId, respond: respond)
+            outcome = await ResponseEnvelopeDelivery.sendMessage(message, requestId: requestId, respond: respond)
 
         case .client(let clientId):
-            result = await sendResponseToClient(message, requestId: requestId, clientId: clientId)
+            outcome = await sendResponseToClient(message, requestId: requestId, clientId: clientId)
         }
-        logResponseDeliveryResult(result)
-        return result
+        logResponseDeliveryOutcome(outcome)
+        return outcome
     }
 
     private func sendResponseToClient(
         _ message: ServerMessage,
         requestId: RequestID?,
         clientId: Int
-    ) async -> ResponseDeliveryResult {
+    ) async -> ResponseDeliveryOutcome {
         switch encodeEnvelope(message, requestId: requestId) {
         case .success(let data):
             switch await delivery.send(data, toClient: clientId) {
             case .delivered:
                 return .delivered
             case .failed(let failure):
-                return ResponseDeliveryResult(sendFailure: failure)
+                return ResponseDeliveryOutcome(sendFailure: failure)
             }
 
         case .failure(let failure):
@@ -428,14 +415,14 @@ actor TheMuscle {
         }
     }
 
-    private func logResponseDeliveryResult(_ result: ResponseDeliveryResult) {
-        switch result {
+    private func logResponseDeliveryOutcome(_ outcome: ResponseDeliveryOutcome) {
+        switch outcome {
         case .delivered:
             break
         case .refused(let failure), .failed(let failure):
             muscleLogger.error("\(failure.description)")
         case .transportUnavailable:
-            muscleLogger.error("\(result.description)")
+            muscleLogger.error("\(outcome.description)")
         }
     }
 }

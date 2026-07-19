@@ -1,7 +1,7 @@
 import ThePlans
 
 extension FenceResponse {
-    func compactHeistValidation(_ report: HeistValidationReport) -> String {
+    func compactHeistValidation(_ report: HeistValidation.Report) -> String {
         var lines = [validationSummary(report)]
         lines.append(contentsOf: report.plan.diagnostics.map(Self.compactBuildDiagnostic))
         lines.append(contentsOf: report.invocation.diagnostics.map(Self.compactBuildDiagnostic))
@@ -12,7 +12,7 @@ extension FenceResponse {
         return lines.joined(separator: "\n")
     }
 
-    func formatHeistValidationHuman(_ report: HeistValidationReport) -> String {
+    func formatHeistValidationHuman(_ report: HeistValidation.Report) -> String {
         var lines = [validationSummary(report).capitalizedFirst]
         lines.append(contentsOf: report.plan.diagnostics.map(Self.humanBuildDiagnostic))
         lines.append(contentsOf: report.invocation.diagnostics.map(Self.humanBuildDiagnostic))
@@ -23,19 +23,23 @@ extension FenceResponse {
         return lines.joined(separator: "\n")
     }
 
-    private func validationSummary(_ report: HeistValidationReport) -> String {
+    private func validationSummary(_ report: HeistValidation.Report) -> String {
         if !report.plan.isValid {
             return "heist validation: not admissible; plan invalid"
         }
-        guard report.invocation.state == .valid else {
+        guard report.invocation.isValid else {
             return "heist validation: not admissible; plan valid; invocation invalid"
         }
-        let errors = report.lint.findings.filter { $0.severity == .error }.count
-        let warnings = report.lint.findings.filter { $0.severity == .warning }.count
-        guard !report.lint.findings.isEmpty else {
-            return "heist validation: admissible; lint \(report.lint.mode.rawValue): \(report.lint.state.rawValue)"
+        switch report.lint {
+        case .notEvaluated(let mode):
+            return "heist validation: admissible; lint \(mode.rawValue): not_evaluated"
+        case .passed(let mode):
+            return "heist validation: admissible; lint \(mode.rawValue): passed"
+        case .findings(let mode, let findings):
+            let errors = findings.filter { $0.severity == .error }.count
+            let warnings = findings.filter { $0.severity == .warning }.count
+            return "heist validation: admissible; lint \(mode.rawValue): \(errors) error(s), \(warnings) warning(s)"
         }
-        return "heist validation: admissible; lint \(report.lint.mode.rawValue): \(errors) error(s), \(warnings) warning(s)"
     }
 
     private static func compactBuildDiagnostic(_ diagnostic: HeistBuildDiagnostic) -> String {

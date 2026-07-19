@@ -94,7 +94,7 @@ extension Navigation {
 
     private func dispatchViewportMovement(
         _ intent: ViewportMovementIntent,
-    ) async -> TheSafecracker.ScrollPrimitiveResult {
+    ) async -> TheSafecracker.ScrollPrimitiveOutcome {
         switch intent {
         case .page(let target, let direction, let animated):
             return target.dispatchOnFreshScrollView(in: vault) { scrollView in

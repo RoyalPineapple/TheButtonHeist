@@ -126,14 +126,14 @@ final class RuntimeResourceObservationTests: XCTestCase {
         let result = await job.brains.executeRuntimeAction(.activate(literalTarget(ElementPredicate.label("Save"))))
 
         XCTAssertFalse(result.outcome.isSuccess)
-        XCTAssertEqual(result.outcome.errorKind, .actionFailed)
+        XCTAssertEqual(result.outcome.failureKind, .actionFailed)
         XCTAssertEqual(result.message, TheBrains.runtimeInactiveMessage)
         XCTAssertFalse(job.brains.semanticObservationIsActive)
         XCTAssertFalse(job.brains.vault.semanticObservationStream.isActive)
     }
 
     private func recordSettleFailureDiagnostic() async -> String {
-        let outcome = SettleSession.Result(
+        let settleResult = SettleSession.Result(
             outcome: .timedOut(timeMs: 17),
             events: [],
             finalObservation: SettleSessionFinalObservation(
@@ -143,9 +143,9 @@ final class RuntimeResourceObservationTests: XCTestCase {
             tripwireSignal: job.brains.vault.semanticObservationStream.currentTripwireSignal(),
             instabilityDescription: "runtime resource diagnostic"
         )
-        _ = await job.brains.vault.semanticObservationStream.settlePostActionObservation(
+        _ = await job.brains.vault.semanticObservationStream.settleActionObservation(
             baselineTripwireSignal: job.tripwire.tripwireSignal(),
-            settleOutcome: outcome
+            settleResult: settleResult
         )
         guard let diagnostic = job.brains.vault.semanticObservationStream.latestSettleFailureDiagnostic else {
             XCTFail("Expected settle failure diagnostic")

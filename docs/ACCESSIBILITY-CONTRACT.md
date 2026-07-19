@@ -24,7 +24,7 @@ read settled accessibility interface
 -> append to the retained observation and notification logs
 -> evaluate one cursor-backed observation window
 -> assert evidence
--> fold public receipt summary
+-> fold public result summary
 ```
 
 For example:
@@ -43,7 +43,7 @@ event was delivered. It is whether the interface contract was fulfilled.
 
 Semantic intent enters the runtime. The Button Heist owns target resolution, reveal,
 element inflation, action execution, settling, and evidence. The result is
-settled semantic evidence, not a mechanical playback log.
+settled semantic evidence, not a touch playback log.
 
 ```mermaid
 flowchart LR
@@ -53,7 +53,7 @@ flowchart LR
     After["Retained settled observations<br/>through current cursor"]
     Window["ObservationWindow<br/>baseline through current"]
     Evidence["Predicate evidence<br/>current tree or window transitions"]
-    Receipt["Receipt<br/>trace plus folded public delta"]
+    Result["Result<br/>trace plus folded public delta"]
     Next["Next step"]
 
     Contract --> Before
@@ -62,24 +62,24 @@ flowchart LR
     Before --> Window
     After --> Window
     Window --> Evidence
-    Evidence --> Receipt
-    Receipt --> Next
+    Evidence --> Result
+    Result --> Next
     Next --> Before
 ```
 
 What "settled" means — the tripwire, the fingerprint cycles, and the hard
 timeout — is drawn in the [settle loop diagram](diagrams/settle-loop.md). The
 activation decision tree, including the warn-but-proceed path and the
-`ActivationTrace` receipt fields, is drawn in the
+`ActivationTrace` result fields, is drawn in the
 [activation policy diagram](diagrams/activation-policy.md).
 
-## Receipts
+## Results
 
-A receipt is plain evidence about what happened. It names the step, the status,
+A result is plain evidence about what happened. It names the step, the status,
 the observed trace, and the facts that satisfied or broke the contract. Public
 formatters may squash those ordered facts into a compact delta.
 
-Receipts are not live handles, replay objects, or private runtime state. They
+Results are not live handles, replay objects, or private runtime state. They
 are reportable facts that callers can assert against, print, store, or use to
 compose the next heist.
 
@@ -89,10 +89,12 @@ compose the next heist.
 |----------|------|----------------|
 | `AccessibilityTarget` | One node-target language for actions, waits, expectations, CLI/MCP, and subtree queries | Live UIKit identity, geometry authority, alternate query projections |
 | `AccessibilityPredicate` and `ChangeDeclaration` | Concrete conditions for waits, expectations, and control-flow cases | Target resolution, viewport movement, command execution |
-| `SemanticObservationStore` | Current semantic tree, retained entries, lineage, cursors, and clean-read state committed together | Predicate-owned history, destructive reads, report formatting |
+| `SemanticObservationStore` | Current semantic tree, retained entries, lineage, cursors, and admitted-read state committed together | Predicate-owned history, destructive reads, report formatting |
 | `ObservationWindow` | One baseline-to-current temporal view with explicit completeness | Independent capture or notification ownership |
-| `AccessibilityTrace` | Durable receipt evidence and derived ordered `ChangeFact` values | A second runtime observation pipeline |
-| `InteractionObservation` | Before/body/after evidence coordination around one `ActionDispatchOutcome` | Command payload design and parallel result shapes |
+| `AccessibilityTrace` | Durable result evidence and derived ordered `ChangeFact` values | A second runtime observation pipeline |
+| `InteractionCoordinator` | Before/body/after evidence coordination around one `ActionDispatchResult` | Command payload design and parallel result shapes |
+| `ActionResult.Payload` | One semantic action payload whose cases determine method and legal command data | A wire-only payload model or method/payload repair path |
+| `HeistReport` | One interpretation of `HeistResult`: nodes, summary, metrics, failures, warnings, and diagnostics | Execution ownership or formatter-specific traversal |
 | `ElementInflation` | Semantic target to inflated live target | Public viewport instructions, predicate evaluation, durable selector choice |
 | `HeistPlan` | Durable semantic program AST | Arbitrary Swift source, native loop preservation, runtime state |
 | `EvidenceMinimumMatcher` | Offline matcher suggestions from settled result evidence | Runtime execution, storage, or hidden test generation |
@@ -103,20 +105,22 @@ do not decide what a semantic action means or whether a predicate is true.
 The ownership rules for the remaining evidence boundaries are explicit:
 
 - `SettleLoopMachine` is the one settled AX reducer and `SettleLoopRunner` is
-  its one runner. `SettlePolicy` selects sampling cadence and stability proof;
+  its one runner. `SettlePolicy` selects sampling cadence and the stability criterion;
   it does not introduce another AX pipeline.
-- `HeistExecutionResult` is the one admitted receipt execution tree.
-  `HeistExecutionReport.project(_:)` purely reduces its shared summary and
-  metrics, while output adapters traverse the receipt and read typed step
-  evidence directly instead of assembling a parallel report graph.
-- `ActionDispatchOutcome` is the one app-side dispatch result.
-  `PostActionObservation` adds semantic evidence and constructs `ActionResult`,
+- `HeistResult` is the one admitted heist execution tree.
+  `HeistReport.project(result:)` interprets it once; JSON, compact, human,
+  JUnit, doctor, and metric adapters render the resulting report instead of
+  independently traversing execution truth.
+- `ActionDispatchResult` is the one app-side dispatch result.
+  `ActionEvidenceProjector` adds semantic evidence and constructs `ActionResult`,
   whose success and failure cases permit only their valid evidence.
+  `ActionResult.Payload` is the only semantic payload, and custom `Codable`
+  projects its method and optional command data directly to the wire.
 - `AccessibilityNotificationBus` retains one bounded ingress log. Cursors and
   checkpoints select evidence without clearing or stealing it from another
   consumer.
 - UIKit/ObjC `@unchecked Sendable` is confined to the TheInsideJob platform
-  boundary, where each declaration documents its synchronization proof. Typed
+  boundary, where each declaration documents its synchronization guarantee. Typed
   core and wire values remain checked `Sendable` values.
 
 ## Pipeline
@@ -144,9 +148,9 @@ Raw generated JSON plan IR is internal/runtime tooling data. It is not a public
 user-authored execution route.
 
 No public route asks callers to manage ordinary viewport mechanics for semantic
-commands. Viewport and mechanical commands are explicit when viewport state or
-the physical gesture itself is the intent. Viewport/debug commands are directly
-executable for inspection, but they are not durable heist primitives.
+commands. Viewport and spatial gesture commands are explicit when viewport state
+or the physical gesture itself is the intent. Viewport/debug commands are
+directly executable for inspection, but they are not durable heist primitives.
 
 ## Conformance cases
 
@@ -167,7 +171,7 @@ The product contract is healthy when these cases hold:
   bearing containers of every parser type.
 - `exists` and `missing` are current-tree checks in every valid predicate
   context; lifecycle and update checks require ordered facts.
-- A complete fact-free observation window is the only proof of `noChange`.
+- A complete fact-free observation window is the only evidence that admits `noChange`.
 - Screen, layout, value, and announcement notifications prevent `noChange`; a
   screen notification begins a new observation generation.
 - Unknown JSON keys fail at the contract boundary.

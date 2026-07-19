@@ -34,7 +34,7 @@ final class TheTripwireHostedBehaviorTests: XCTestCase {
     }
 
     func testLayerScanCoversEveryTraversableWindow() {
-        let windows = tripwire.getTraversableWindows()
+        let windows = tripwire.captureTraversableWindows()
         let scan = tripwire.scanLayers()
 
         XCTAssertFalse(windows.isEmpty, "Test host should have a traversable window")
@@ -44,7 +44,7 @@ final class TheTripwireHostedBehaviorTests: XCTestCase {
     }
 
     func testTraversableWindowsAreVisibleSizedAndFrontToBack() {
-        let windows = tripwire.getTraversableWindows().map(\.window)
+        let windows = tripwire.captureTraversableWindows().map(\.window)
 
         XCTAssertFalse(windows.isEmpty, "Test host should have a traversable window")
         XCTAssertTrue(windows.allSatisfy { !$0.isHidden && $0.bounds.size != .zero })
@@ -65,7 +65,7 @@ final class TheTripwireHostedBehaviorTests: XCTestCase {
         defer { fingerprintWindow.isHidden = true }
 
         XCTAssertFalse(TheTripwire.orderedVisibleWindows().contains(fingerprintWindow))
-        XCTAssertFalse(tripwire.getTraversableWindows().contains { $0.window === fingerprintWindow })
+        XCTAssertFalse(tripwire.captureTraversableWindows().contains { $0.window === fingerprintWindow })
         XCTAssertTrue(TheTripwire.orderedVisibleWindows(includeFingerprints: true).contains(fingerprintWindow))
     }
 
@@ -89,7 +89,7 @@ final class TheTripwireHostedBehaviorTests: XCTestCase {
     }
 
     func testLayerScanReportsPendingLayout() throws {
-        let window = try XCTUnwrap(tripwire.getTraversableWindows().first?.window)
+        let window = try XCTUnwrap(tripwire.captureTraversableWindows().first?.window)
         let view = UIView(frame: CGRect(x: 0, y: 0, width: 50, height: 50))
         window.addSubview(view)
         defer { view.removeFromSuperview() }
@@ -99,7 +99,7 @@ final class TheTripwireHostedBehaviorTests: XCTestCase {
     }
 
     func testLayerScanReportsRelevantAnimation() throws {
-        let window = try XCTUnwrap(tripwire.getTraversableWindows().first?.window)
+        let window = try XCTUnwrap(tripwire.captureTraversableWindows().first?.window)
         let layer = CALayer()
         window.layer.addSublayer(layer)
         defer {
@@ -117,7 +117,7 @@ final class TheTripwireHostedBehaviorTests: XCTestCase {
     }
 
     func testLayerScanIgnoresNeedsDisplay() throws {
-        let window = try XCTUnwrap(tripwire.getTraversableWindows().first?.window)
+        let window = try XCTUnwrap(tripwire.captureTraversableWindows().first?.window)
         let layer = CALayer()
         layer.frame = CGRect(x: 0, y: 0, width: 50, height: 50)
         window.layer.addSublayer(layer)

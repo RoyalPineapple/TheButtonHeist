@@ -150,7 +150,7 @@ extension TheFenceHandlerTests {
             "action": .string("increment"),
         ])
 
-        XCTAssertNotNil(response.leafAction, "Expected single-step action response, got \(response)")
+        XCTAssertTrue(response.containsAction, "Expected single-step action response, got \(response)")
         let commands = mockConn.sent.sentHeistActionCommands
         XCTAssertEqual(commands.count, 1)
         XCTAssertEqual(commands.first?.wireType, .increment)
@@ -212,7 +212,7 @@ extension TheFenceHandlerTests {
             "target": targetValue(identifier: "search_field"),
         ])
 
-        XCTAssertNotNil(response.leafAction, "Expected single-step action response, got \(response)")
+        XCTAssertTrue(response.containsAction, "Expected single-step action response, got \(response)")
         guard let message = mockConn.sent.sentPlanMessages.last,
               case .typeText(let payload) = message else {
             return XCTFail("Expected typeText message, got \(String(describing: mockConn.sent.sentPlanMessages.last))")
@@ -232,7 +232,7 @@ extension TheFenceHandlerTests {
             "mode": .string("replace"),
         ])
 
-        XCTAssertNotNil(response.leafAction, "Expected single-step action response, got \(response)")
+        XCTAssertTrue(response.containsAction, "Expected single-step action response, got \(response)")
         guard let message = mockConn.sent.sentPlanMessages.last,
               case .typeText(let payload) = message else {
             return XCTFail("Expected typeText message, got \(String(describing: mockConn.sent.sentPlanMessages.last))")
@@ -529,10 +529,10 @@ extension TheFenceHandlerTests {
     func testDirectTapReturnsHeistExecutionBeforeFormatting() async throws {
         let (fence, mockConn) = makeConnectedFence()
         let point = ScreenPoint(x: 12, y: 34)
-        let scriptedResult = HeistReceiptFixture.result(steps: [
-            HeistReceiptFixture.action(
-                command: .mechanicalTap(TapTarget(selection: .coordinate(point))),
-                result: HeistReceiptFixture.actionResult(method: .syntheticTap)
+        let scriptedResult = HeistResultFixture.result(steps: [
+            HeistResultFixture.action(
+                command: .oneFingerTap(TapTarget(selection: .coordinate(point))),
+                result: HeistResultFixture.actionResult(payload: .oneFingerTap)
             ),
         ])
         mockConn.responseScript = { _ in scriptedHeistResponse(scriptedResult) }
@@ -669,7 +669,7 @@ extension TheFenceHandlerTests {
             ]),
         ])
         guard let message = mockConn.sent.sentPlanMessages.last,
-              case .mechanicalSwipe(let target) = message,
+              case .swipe(let target) = message,
               case .elementDirection(let target, let direction) = target.selection else {
             XCTFail("Expected element direction swipe to lower to element direction swipe")
             return
@@ -688,7 +688,7 @@ extension TheFenceHandlerTests {
                 ]),
             ])
         guard let message = mockConn.sent.sentPlanMessages.last,
-              case .mechanicalDrag(let target) = message,
+              case .drag(let target) = message,
               case .pointToPoint(let start, let end) = target.selection else {
             XCTFail("Expected drag message")
             return

@@ -8,8 +8,8 @@ final class HeistJUnitReportTests: XCTestCase {
 
     func testAllPassedReport() {
         let report = makeReport(outcomes: [.passed, .passed, .passed])
-        XCTAssertEqual(report.passedReceiptNodeCount, 3)
-        XCTAssertEqual(report.failedReceiptNodeCount, 0)
+        XCTAssertEqual(report.passedResultNodeCount, 3)
+        XCTAssertEqual(report.failedResultNodeCount, 0)
         XCTAssertTrue(report.allPassed)
     }
 
@@ -19,16 +19,16 @@ final class HeistJUnitReportTests: XCTestCase {
             .failed(message: "element not found", failureKind: .action(.elementNotFound)),
             .skipped,
         ])
-        XCTAssertEqual(report.passedReceiptNodeCount, 1)
-        XCTAssertEqual(report.failedReceiptNodeCount, 1)
+        XCTAssertEqual(report.passedResultNodeCount, 1)
+        XCTAssertEqual(report.failedResultNodeCount, 1)
         XCTAssertFalse(report.allPassed)
     }
 
     func testSkippedNodesAreNotFailures() {
         let report = makeReport(outcomes: [.passed, .skipped])
 
-        XCTAssertEqual(report.passedReceiptNodeCount, 1)
-        XCTAssertEqual(report.failedReceiptNodeCount, 0)
+        XCTAssertEqual(report.passedResultNodeCount, 1)
+        XCTAssertEqual(report.failedResultNodeCount, 0)
         XCTAssertTrue(report.allPassed)
     }
 
@@ -39,8 +39,8 @@ final class HeistJUnitReportTests: XCTestCase {
             totalTimeSeconds: 0,
             steps: []
         )
-        XCTAssertEqual(report.passedReceiptNodeCount, 0)
-        XCTAssertEqual(report.failedReceiptNodeCount, 0)
+        XCTAssertEqual(report.passedResultNodeCount, 0)
+        XCTAssertEqual(report.failedResultNodeCount, 0)
         XCTAssertTrue(report.allPassed)
     }
 
@@ -146,7 +146,7 @@ final class HeistJUnitReportTests: XCTestCase {
         assertContains(xml, "failures=\"1\"")
         assertContains(xml, "<failure message=\"element not found\"")
         assertContains(xml, "type=\"elementNotFound\"")
-        assertContains(xml, "Completed 1/2 receipt node(s) before failure.")
+        assertContains(xml, "Completed 1/2 result node(s) before failure.")
         assertContains(xml, "step: [1] activate")
     }
 
@@ -266,7 +266,7 @@ final class HeistJUnitReportTests: XCTestCase {
         )
         let xml = report.junitXML()
 
-        assertContains(xml, "Completed 0/1 receipt node(s) before failure.")
+        assertContains(xml, "Completed 0/1 result node(s) before failure.")
         assertContains(xml, "step: [0] swipe")
         assertContains(xml, "label=&quot;List&quot;")
         assertContains(xml, "identifier=&quot;main-list&quot;")

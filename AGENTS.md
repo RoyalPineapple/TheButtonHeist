@@ -36,7 +36,7 @@ Use these rules as the default review lens:
 - Treat pipelines as math over snapshots, graphs, and streams. Prefer pure
   transformations over hidden side effects and implicit mutable coordination.
 - Treat UIKit objects as live boundary evidence, never durable identity. Durable
-  identity is semantic accessibility state, paths, captures, receipts, and typed
+  identity is semantic accessibility state, paths, captures, results, and typed
   target descriptions.
 - Use one canonical spelling for each concept. Do not add aliases, fallback
   spellings, or compatibility paths unless they represent genuinely different
@@ -45,11 +45,11 @@ Use these rules as the default review lens:
   cross-file result shapes need named Swift types.
 - Use `Any` only at unavoidable Foundation, Objective-C, or private-SPI
   boundaries. Normalize immediately into typed Button Heist values.
-- Treat public JSON, receipts, compact output, CLI output, MCP schemas, and
+- Treat public JSON, results, compact output, CLI output, MCP schemas, and
   `.heist` artifacts as contracts. Do not change them accidentally or hide
   drift behind adapters.
 - Update architecture docs and diagrams when responsibility, state-machine,
-  wire, receipt, or language shape changes.
+  wire, result, or language shape changes.
 
 ## Canonical Architecture Vocabulary
 
@@ -105,6 +105,12 @@ Use verbs consistently:
 - `project` derives a purpose-specific value; `render` turns typed values into
   presentation.
 
+Execution truth, interpretation, and presentation are separate currencies.
+Results own execution outcome and evidence; one canonical projector derives a
+report; JSON, compact text, human text, and JUnit render that report. Do not add
+a parallel result wrapper, report graph, recording status, or wire-only semantic
+model when custom `Codable` can project the canonical type directly.
+
 Avoid `get`, `handle`, `process`, `make`, and `build` when a canonical verb
 states the operation precisely. Reserve `require` and precondition failures for
 unreachable programmer errors, never normal pipeline control flow.
@@ -141,7 +147,7 @@ Calling `tuist generate` directly still works for quick iteration, but prefer th
 
 ## Canonical Test Runner
 
-Use `scripts/test-runner.py` as the canonical way to run repository test suites locally and in CI. The runner is the sole owner of suite names, schemes, destinations, selection behavior, result bundles, receipt directories, and split build/test execution.
+Use `scripts/test-runner.py` as the canonical way to run repository test suites locally and in CI. The runner is the sole owner of suite names, schemes, destinations, selection behavior, result bundles, heist result directories, and split build/test execution.
 
 - Do not use `swift test` for normal verification. SwiftPM does not model the hosted iOS test setup correctly and can produce misleading failures in this mixed macOS/iOS repo.
 - Do not call `tuist test` or test-driving `xcodebuild` commands directly. Use them only when debugging the runner, Tuist, or Xcode behavior.

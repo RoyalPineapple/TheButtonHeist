@@ -36,12 +36,12 @@ extension TheFence {
         return .announcements(payload.announcements)
     }
 
-    // MARK: - Handler: Executable Commands
+    // MARK: - Direct Action Execution
 
-    func handleDirectActionRequest(_ request: DirectActionRequest, command: Command) async throws -> FenceResponse {
+    func executeDirectAction(_ execution: DirectActionExecution, command: Command) async throws -> FenceResponse {
         let result = try await sendAndAwaitAction(
-            .runtimeAction(request.action),
-            timeout: request.timeout
+            .runtimeAction(execution.action),
+            timeout: execution.timeout
         )
         return .action(command: command, result: result)
     }

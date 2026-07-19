@@ -48,7 +48,7 @@ final class JSONLinesSession {
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.isEmpty { continue }
 
-            let envelope = await processLine(trimmed)
+            let envelope = await executeRequestLine(trimmed)
             outputResponse(envelope)
         }
 
@@ -74,7 +74,7 @@ final class JSONLinesSession {
         return monitor
     }
 
-    private func processLine(_ line: String) async -> CLIRunner.ResponseEnvelope {
+    private func executeRequestLine(_ line: String) async -> CLIRunner.ResponseEnvelope {
         let parsedRequest: CLIParsedRequest
         do {
             parsedRequest = try CLIMachineRequestParser.parsedRequest(from: line)

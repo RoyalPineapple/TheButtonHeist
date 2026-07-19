@@ -96,7 +96,7 @@ extension FenceResponse {
         }
         return "activate uses accessibilityActivate() and trusts a true return; " +
             "it does not send activation-point tap dispatch after semantic activation succeeds. " +
-            "If Mechanical.Tap changes the UI, the touch path works but the accessibility activation path is inert or mismatched."
+            "If oneFingerTap changes the UI, the touch path works but the accessibility activation path is inert or mismatched."
     }
 
     private static func isActivateNoChangeExpectation(

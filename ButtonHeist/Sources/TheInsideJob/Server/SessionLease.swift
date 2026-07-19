@@ -3,6 +3,11 @@ import Foundation
 import ButtonHeistSupport
 import TheScore
 
+enum SessionOwner: Equatable, Sendable {
+    case driver(DriverID)
+    case token(SessionAuthToken)
+}
+
 /// Explicit session lease state machine for ButtonHeist driver ownership.
 struct SessionLease {
     enum Phase: Equatable, Sendable {

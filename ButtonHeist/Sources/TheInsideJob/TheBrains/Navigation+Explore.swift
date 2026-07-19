@@ -21,7 +21,7 @@ extension Navigation {
         let explorer = ViewportExplorer(
             navigation: self,
             exploration: SemanticExploration(
-                baseline: baseline ?? .interfaceMemory(vault.explorationBaseline()),
+                baseline: baseline ?? .interfaceMemory(vault.interfaceMemoryBaseline()),
                 deadline: deadline,
                 maxScrollsPerContainer: maxScrollsPerContainer ?? InterfaceExplorationProgress.maxScrollsPerContainer,
                 maxScrollsPerDiscovery: maxScrollsPerDiscovery ?? InterfaceExplorationProgress.maxScrollsPerDiscovery

@@ -4,10 +4,10 @@ import ThePlans
 
 final class ActionResultEvidenceContractTests: XCTestCase {
 
-    func testPackageConstructionUsesOneMethodAndPayloadCurrency() {
+    func testPackageConstructionDerivesMethodFromSemanticPayload() {
         let result = ActionResult(
             outcome: .success,
-            methodAndPayload: .payload(.typeText("typed")),
+            payload: .typeText("typed"),
             message: nil,
             observation: .none,
             subjectEvidence: nil,
@@ -15,7 +15,38 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         )
 
         XCTAssertEqual(result.method, .typeText)
-        XCTAssertEqual(result.payload, .value("typed"))
+        XCTAssertEqual(result.payload, .typeText("typed"))
+    }
+
+    func testEverySemanticPayloadOwnsItsActionMethod() {
+        let cases: [(ActionResult.Payload, ActionMethod)] = [
+            (.activate, .activate),
+            (.increment, .increment),
+            (.decrement, .decrement),
+            (.dismiss, .dismiss),
+            (.magicTap, .magicTap),
+            (.oneFingerTap, .oneFingerTap),
+            (.longPress, .longPress),
+            (.swipe, .swipe),
+            (.drag, .drag),
+            (.typeText("text"), .typeText),
+            (.customAction, .customAction),
+            (.editAction, .editAction),
+            (.dismissKeyboard, .dismissKeyboard),
+            (.setPasteboard("text"), .setPasteboard),
+            (.getPasteboard("text"), .getPasteboard),
+            (.screenshot(nil), .takeScreenshot),
+            (.rotor(nil), .rotor),
+            (.heist(nil), .heistPlan),
+            (.scroll, .scroll),
+            (.scrollToVisible, .scrollToVisible),
+            (.scrollToEdge, .scrollToEdge),
+            (.wait, .wait),
+        ]
+
+        for (payload, method) in cases {
+            XCTAssertEqual(ActionResult.success(payload: payload).method, method)
+        }
     }
 
     func testEveryOutcomeRoundTripsWithEveryObservationCase() throws {
@@ -33,11 +64,11 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         for observation in observations {
             let results = [
                 ActionResult.success(
-                    method: .wait,
+                    payload: .wait,
                     observation: observation
                 ),
                 ActionResult.failure(
-                    method: .wait,
+                    payload: .wait,
                     failureKind: .timeout,
                     observation: observation
                 ),
@@ -53,7 +84,7 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         let trace = traceWithAnnouncement("Checkout")
         let traceEvidence = traceEvidence(trace, completeness: .incomplete)
         let result = ActionResult.success(
-            method: .activate,
+            payload: .activate,
             message: "done",
             observation: .settledTrace(traceEvidence, .settled(duration: 125)),
             subjectEvidence: try weakActivationSubjectEvidence(),
@@ -91,7 +122,7 @@ final class ActionResultEvidenceContractTests: XCTestCase {
 
     func testFailureEvidenceRoundTripsWithExplicitAbsence() throws {
         let result = ActionResult.failure(
-            method: .wait,
+            payload: .wait,
             failureKind: .timeout,
             message: "timed out",
         )
@@ -109,7 +140,7 @@ final class ActionResultEvidenceContractTests: XCTestCase {
 
     func testStandaloneAnnouncementIsTheOnlyAnnouncementFact() throws {
         let result = ActionResult.success(
-            method: .wait,
+            payload: .wait,
             observation: .announcement("Ready")
         )
 
@@ -129,7 +160,7 @@ final class ActionResultEvidenceContractTests: XCTestCase {
     func testTraceOwnsCapturedAnnouncement() {
         let trace = traceWithAnnouncement("Checkout")
         let result = ActionResult.success(
-            method: .activate,
+            payload: .activate,
             observation: .trace(traceEvidence(trace, completeness: .incomplete))
         )
 

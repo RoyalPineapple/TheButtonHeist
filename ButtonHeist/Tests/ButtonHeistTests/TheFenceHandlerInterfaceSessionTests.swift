@@ -39,7 +39,7 @@ extension TheFenceHandlerTests {
                         session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
                     ))
                 }
-                return .actionResult(ActionResult.success(method: .activate))
+                return .actionResult(ActionResult.success(payload: .activate))
             }
             return probe
         }
@@ -228,7 +228,7 @@ extension TheFenceHandlerTests {
             case .requestInterface:
                 return .interface(interfaceFixture)
             default:
-                return .actionResult(ActionResult.success(method: .activate))
+                return .actionResult(ActionResult.success(payload: .activate))
             }
         }
 
@@ -280,7 +280,7 @@ extension TheFenceHandlerTests {
                     }
                 ))
             default:
-                return .actionResult(ActionResult.success(method: .activate))
+                return .actionResult(ActionResult.success(payload: .activate))
             }
         }
 

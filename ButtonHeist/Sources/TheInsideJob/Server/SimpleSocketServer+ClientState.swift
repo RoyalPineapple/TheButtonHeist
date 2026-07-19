@@ -12,7 +12,11 @@ extension SimpleSocketServer {
         callbacks.onClientDisconnected?(clientId)
     }
 
-    func rejectClientWithServerError(_ clientId: Int, kind: ErrorKind, message: ServerErrorMessage) {
+    func rejectClientWithServerError(
+        _ clientId: Int,
+        kind: TheScore.ServerError.Kind,
+        message: ServerErrorMessage
+    ) {
         guard clientRegistry.client(clientId) != nil else { return }
         guard let generation = currentListener else {
             removeClient(clientId)

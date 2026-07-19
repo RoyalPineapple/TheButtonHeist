@@ -270,7 +270,7 @@ extension TheFenceCompactFormattingContractTests {
         let tree = try interface.array("tree")
         let scrollContainer = try tree[1].object("container")
 
-        XCTAssertEqual(try rendering.string("state"), "full")
+        XCTAssertEqual(try rendering.string("completeness"), "full")
         try rendering.assertMissing("reasonCode")
         XCTAssertEqual(try rendering.int("observedElementCount"), 4)
         XCTAssertEqual(try rendering.int("renderedElementCount"), 4)
@@ -465,7 +465,7 @@ extension TheFenceCompactFormattingContractTests {
         let rendering = try json.object("rendering")
         let tree = try json.array("tree")
 
-        XCTAssertEqual(try rendering.string("state"), "truncated")
+        XCTAssertEqual(try rendering.string("completeness"), "truncated")
         XCTAssertEqual(try rendering.string("reasonCode"), "total-node-budget")
         XCTAssertEqual(try rendering.int("observedElementCount"), 4)
         XCTAssertEqual(try rendering.int("renderedElementCount"), 2)

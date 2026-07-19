@@ -6,7 +6,7 @@ import TheScore
 
 public enum HeistRepairEvidenceOutcome: Codable, Sendable, Equatable {
     case passed
-    case failed(errorKind: ErrorKind?, message: String?)
+    case failed(failureKind: ActionFailure.Kind?, message: String?)
 }
 
 public struct HeistRepairEvidence: Codable, Sendable, Equatable {

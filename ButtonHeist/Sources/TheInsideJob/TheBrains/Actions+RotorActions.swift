@@ -13,18 +13,17 @@ extension Actions {
         selection: RotorSelection,
         target: ResolvedAccessibilityTarget,
         direction: RotorDirection,
-    ) async -> TheSafecracker.ActionDispatchOutcome {
+    ) async -> TheSafecracker.ActionDispatchResult {
         let rotor = selection.rotorName
         let rotorIndex = selection.rotorIndex
-        let method: ActionMethod = .rotor
         return await performElementAction(
             target: target,
-            method: method,
+            payload: .rotor(nil),
             requireInteractive: false,
             activationPointPolicy: .liveObjectOnly
         ) { context in
             let outcome: TheVault.RotorOutcome
-            let result: TheSafecracker.ActionDispatchOutcome
+            let result: TheSafecracker.ActionDispatchResult
             switch self.vault.dispatchOnFreshLiveActionTarget(
                 context.liveTarget,
                 operation: { liveTarget in
@@ -47,7 +46,7 @@ extension Actions {
                 outcome = dispatch.0
                 result = dispatch.1
             case .failure(let staleness):
-                return self.staleLiveTargetFailure(staleness, method: .rotor)
+                return self.staleLiveTargetFailure(staleness, payload: .rotor(nil))
             }
             if case .succeeded(let hit) = outcome {
                 await self.exposeRotorResultIfPossible(hit)
@@ -91,7 +90,7 @@ extension Actions {
         rotorIndex: Int?,
         direction: RotorDirection,
         liveTarget: TheVault.LiveActionTarget
-    ) -> TheSafecracker.ActionDispatchOutcome {
+    ) -> TheSafecracker.ActionDispatchResult {
         let element = liveTarget.treeElement
         let liveObject = liveTarget.object
         switch outcome {
@@ -174,7 +173,7 @@ extension Actions {
                 liveObject: liveObject,
                 suggestion: "retry the rotor from a semantic target that can be made actionable"
             )
-        case .resultTargetNotParsed(let rotorName):
+        case .resultTargetUnresolved(let rotorName):
             return rotorFailure(
                 observed: "rotor=\(rotorStringProfile.renderString(rotorName.description)) returned a target outside the parsed hierarchy",
                 rotor: rotor,
@@ -190,7 +189,7 @@ extension Actions {
     private static func rotorSuccessResult(
         _ hit: TheVault.RotorHit,
         direction: RotorDirection
-    ) -> TheSafecracker.ActionDispatchOutcome {
+    ) -> TheSafecracker.ActionDispatchResult {
         let foundElement = hit.treeElement.map { HeistElement(accessibilityElement: $0.element) }
         var message = "Rotor '\(hit.rotor)' found"
         if let describedElement = foundElement?.label ?? foundElement?.description {
@@ -219,9 +218,9 @@ extension Actions {
         liveObject: NSObject,
         suggestion: String,
         failureKind: TheSafecracker.FailureKind = .actionFailed
-    ) -> TheSafecracker.ActionDispatchOutcome {
+    ) -> TheSafecracker.ActionDispatchResult {
         .failure(
-            .rotor,
+            .rotor(nil),
             message: rotorDiagnostic(
                 observed: observed,
                 rotor: rotor,

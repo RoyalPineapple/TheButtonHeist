@@ -19,7 +19,7 @@ Architecture diagrams for Button Heist, one file per concern. Every diagram is M
 
 ## The language
 
-- [heist-lifecycle.md](heist-lifecycle.md) — author → `HeistPlan` IR → `.heist` artifact → replay → receipt
+- [heist-lifecycle.md](heist-lifecycle.md) — author → `HeistPlan` IR → `.heist` artifact → replay → result
 - [dsl-grammar.md](dsl-grammar.md) — step types, action commands, passables, one target language, and concrete predicates
 - [totality.md](totality.md) — why every heist halts: structural bounds and watchdog timeouts
 

@@ -24,7 +24,7 @@ class AdversarialNightlyWorkflowTests(unittest.TestCase):
         self.assertIn("--failure-repeat-count", WORKFLOW)
         self.assertNotIn("--scenario", WORKFLOW)
         self.assertNotIn("--filter", WORKFLOW)
-        self.assertIn("BUTTONHEIST_RECEIPTS_MODE: failures", WORKFLOW)
+        self.assertIn("BUTTONHEIST_RESULTS_MODE: failures", WORKFLOW)
         self.assertEqual(WORKFLOW.count("if: failure()"), 2)
         self.assertNotIn("git submodule update", WORKFLOW)
 

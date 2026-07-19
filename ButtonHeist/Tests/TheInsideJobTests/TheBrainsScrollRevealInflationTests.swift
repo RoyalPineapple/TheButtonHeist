@@ -243,7 +243,7 @@ extension TheBrainsScrollTests {
         ])
         brains.vault.nextVisibleRefreshObservationForTesting = discoveredScreen
         brains.navigation.elementInflation.exploration.discoverTarget = { _ in
-            self.brains.vault.recordParsedObservedEvidence(discoveredScreen)
+            self.brains.vault.observeInterface(discoveredScreen)
             let event = self.brains.vault.semanticObservationStream
                 .commitDiscoveryObservationForTesting(discoveredScreen)
             return Navigation.InterfaceExplorationResult(
@@ -860,11 +860,11 @@ extension TheBrainsScrollTests {
 
         let result = await brains.actions.performElementAction(
             target: try resolvedTarget(.label("Offscreen")),
-            method: .activate,
+            payload: .activate,
             requireInteractive: false
         ) { _ in
             didDispatch = true
-            return TheSafecracker.ActionDispatchOutcome.success(method: .activate)
+            return TheSafecracker.ActionDispatchResult.success(payload: .activate)
         }
 
         XCTAssertFalse(didDispatch)
@@ -894,11 +894,11 @@ extension TheBrainsScrollTests {
 
         let result = await brains.actions.performElementAction(
             target: target,
-            method: .activate,
+            payload: .activate,
             requireInteractive: false
         ) { context in
             .success(
-                method: .activate,
+                payload: .activate,
                 subjectEvidence: ActionSubjectEvidence(
                     source: .resolvedSemanticTarget,
                     target: target,
@@ -944,7 +944,7 @@ extension TheBrainsScrollTests {
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .activate)
-        XCTAssertEqual(result.outcome.errorKind, .elementNotFound)
+        XCTAssertEqual(result.outcome.failureKind, .elementNotFound)
         XCTAssertEqual(staleScrollView.contentOffset, .zero)
         XCTAssertFalse(
             result.message?.contains("after semantic reveal") ?? false,

@@ -55,13 +55,13 @@ package enum TextInputScreen {
         TypeText(name, into: nameField)
             .expect(.exists(.value(name)), timeout: 2)
 
-        DismissKeyboard()
+        dismissKeyboard()
             .withoutExpectation("Ends the first field edit before focusing the email field")
 
         TypeText("dogfood@example.com", into: emailField)
             .expect(.exists(.value("dogfood@example.com")), timeout: 4)
 
-        DismissKeyboard()
+        dismissKeyboard()
             .withoutExpectation("Keyboard dismissal only prepares navigation")
     }
 

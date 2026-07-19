@@ -83,7 +83,7 @@ final class AdversarialNavigationTests: XCTestCase {
 
         XCTAssertNil(heist.result.firstFailedStep)
         let actionResult = try XCTUnwrap(
-            heist.result.outputReceiptNodes.lazy
+            heist.result.outputNodes.lazy
                 .compactMap { $0.actionEvidence?.dispatchResult }
                 .first { $0.subjectEvidence?.element.label == "Verified by The Vibe Check" }
         )
@@ -104,7 +104,7 @@ final class AdversarialNavigationTests: XCTestCase {
         XCTAssertEqual(try counterValue(named: "Nested target activations", in: actionResult), 1)
     }
 
-    // MARK: - Receipt Evidence
+    // MARK: - Result Evidence
 
     private func counterValue(
         named label: String,

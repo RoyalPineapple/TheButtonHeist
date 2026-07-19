@@ -116,10 +116,10 @@ an action resolves a semantic target, element inflation pins that exact
 to a newly matching element.
 
 The window materializes `AccessibilityTrace` evidence and its ordered
-`ChangeFact` values for temporal predicates and receipts. Presence predicates
+`ChangeFact` values for temporal predicates and results. Presence predicates
 do not need a temporal window; they read the current tree through the same
 target resolver actions and `get_interface` use. A timed-out action may return
-a receipt-local diagnostic trace, but that trace is not committed, targetable,
+a result-local diagnostic trace, but that trace is not committed, targetable,
 or an observation baseline. A public response may expose a compact `delta`, but
 that value is a one-way, lossy fold of ordered facts and is never fed back into
 predicate evaluation.
@@ -261,11 +261,11 @@ The pipeline is:
 5. Refresh by the pinned `HeistId`; never rerun the semantic selector to choose
    a replacement element.
 6. Acquire and stabilize fresh live geometry under the same deadline.
-7. Execute the accessibility operation or explicit mechanical gesture.
+7. Execute the accessibility operation or explicit spatial gesture.
 8. Return settled semantic evidence through `InteractionCoordinator`.
 
 Predicate evaluation uses semantic observations, not live UIKit geometry. Live
-geometry is used for inflation and explicit mechanical or viewport commands; it
+geometry is used for inflation and explicit spatial gesture or viewport commands; it
 is not durable identity. If inflation cannot be proven, the command fails with
 diagnostics instead of acting on stale or guessed state. See the
 [element inflation diagram](diagrams/element-inflation.md) for the resolution
@@ -288,7 +288,7 @@ The approved long-lived owners are:
 - `TheHandoff`: external connection phase and discovery state outside the app.
 - `PendingRequestRegistry`: typed `RequestID` to continuation correlation,
   removed on resolve, timeout, or cancellation.
-- `HeistExecutionResult`: immutable heist execution evidence. Report facts are
+- `HeistResult`: immutable heist execution evidence. Report facts are
   derived from it, not stored beside it.
 - Artifact stores: `.heist` package files and screenshot bytes on disk.
 
@@ -305,10 +305,13 @@ pipelines are explicit:
 | UI request admission and cancellation | `InteractionRequestExecutor` in `TheBrains.swift` | `TheGetaway+Transport.swift`, `Heist.swift` |
 | Drainable callback work | `TaskTracker.swift` | Lifecycle, listener-generation, and delayed-disconnect owners |
 | Discovery callback delivery | `DeviceDiscoveryEventStream.swift` | `DeviceDiscovery.swift` |
-| Compiler process terminal outcome | `CompilerProcess.Runner` in `CompilerProcess.swift` | `HeistSwiftFileCompiler.swift`; diagnostic rendering lives in `HeistSwiftFileCompilerError.swift` |
-| Receipt construction and relationship validity | `HeistExecutionStepResult+Construction.swift` | Runtime step executors and receipt decoding |
-| Receipt private storage codec | `HeistExecutionStepNode.swift` and `HeistExecutionStepNode+Codable.swift` | External receipt JSON projection only |
-| Receipt report projection | `HeistExecutionResult+Report.swift` and `HeistExecutionStepResult+Report.swift` | Report, compact, JUnit, doctor, and metric adapters |
+| Compiler process terminal outcome | `HeistCompilerProcess.Runner` in `HeistCompilerProcess.swift` | `HeistSwiftFileCompilation.swift`; diagnostic rendering lives in `HeistSwiftFileCompilationError.swift` |
+| Result construction and relationship validity | `HeistExecutionStepResult+Construction.swift` | Runtime step executors and result decoding |
+| Result private storage codec | `HeistExecutionStepNode.swift` and `HeistExecutionStepNode+Codable.swift` | External result JSON projection only |
+| Action semantic and wire payload | `ActionResult.Payload` with `ActionResult` custom `Codable` | Runtime construction and wire encoding/decoding |
+| Result interpretation | `HeistReport.project(result:)` in `HeistResult+Report.swift` | JSON, compact, human, JUnit, doctor, and metric renderers |
+| Result recording decision | `HeistResult.Outcome` and `HeistResultRecordingMode` | `HeistResultRecorder` filesystem boundary |
+| Offline validation algebra | `HeistValidation.Result<Value>` composed by `HeistValidation.Report` | Public JSON and text projections |
 | Semantic observation scheduling | `SemanticObservationStream.swift` | Passive settle cycles and observation demand |
 | Semantic observation state | `SemanticObservationStore.swift` | One commit of graph, retained history, lineage, cursors, and admitted-read state |
 | Semantic observation settlement | `SemanticObservationStream+Settlement.swift` | Observation admission, Store commit, disposable live-evidence refresh, and waiter delivery |
@@ -319,21 +322,29 @@ pipelines are explicit:
 
 ### Report and Action Evidence Have One Owner
 
-`HeistExecutionResult` is the one admitted receipt execution tree.
-`HeistExecutionReport.project(_:)` purely reduces that tree into shared summary
-and metric projections. Formatters, diagnostics, and repair tooling traverse
-the receipt directly and read step report values from its typed evidence; no
-parallel report graph or optional fact bag is assembled.
+`HeistResult` is execution truth: one admitted semantic step tree, duration, and
+an `Outcome` derived from that tree. `HeistReport.project(result:)` walks the
+tree once and owns its semantic nodes, summary, metrics, failure and warning
+facts, and diagnostics. JSON, compact text, human text, JUnit, doctor, and
+metric boundaries render that report instead of interpreting `HeistResult`
+independently. There is no competing execution report or Fence-owned report
+projection.
+
+The report also owns accessibility-change classification. Its
+`AccessibilityChange` is explicitly `notApplicable`, `incomplete`, `unchanged`,
+or `changed(trace)`: missing trace evidence is never asked to mean several of
+those states. Fence renderers derive `netDelta` only from `changed(trace)` and
+cannot independently reclassify execution evidence.
 
 `HeistExecutionStepResult` owns a typed execution path, duration, and one private
 `HeistExecutionStepNode` used only for storage and wire projection. Package
 callers cannot construct or pass that node. They use the result's per-kind
 factories, which are the sole owners of action method, loop progress, iteration,
 and repeat predicate relationships. A failed relationship produces no result;
-it never creates a provisional receipt that is admitted or repaired later.
+it never creates a provisional result that is admitted or repaired later.
 Decoding immediately routes the private decoded node through the same factories
 and rejects incompatible external fields. There is no `Result` repair path or
-synthetic fallback receipt. Status and abort paths derive from the private node,
+synthetic fallback result. Status and abort paths derive from the private node,
 and the wire decoder accepts only fields legal for its `type` and `outcome`.
 
 `ActionDispatchResult` is the one aggregate of app-side action dispatch. Its
@@ -343,17 +354,33 @@ combines that result with the evidence projected by `ActionEvidenceProjector`
 to construct `ActionResult`; it does not translate through a second
 interaction-result model.
 
-`ActionResult.success` and `ActionResult.failure` accept either a method-only
-action or an `ActionResultPayload` that binds its payload to the only legal
-method, plus observation, subject, and timing values. Activation trace evidence
-enters only through the fixed-method activation factories. Decoding reconstructs
-the same method-and-payload currency and rejects mismatched wire pairs.
+`ActionResult.Payload` is the sole semantic action payload. Each case determines
+its `ActionMethod` and carries only the command-specific value legal for that
+method. `ActionResult` custom `Codable` projects the same value directly to the
+wire's `method` and optional `payload`, then reconstructs it while
+rejecting mismatched method/payload pairs. There is no wire-payload model or
+semantic payload wrapper. `ActionResult.success` and `ActionResult.failure`
+accept that payload plus observation, subject, and timing values. Activation
+trace evidence enters only through the fixed-method activation factories.
 `ActionResultSuccessEvidence` and
 `ActionResultFailureEvidence` are output projections backed by one common body,
 not public assembly inputs. Each result supplies exactly one observation case:
 `none`, `announcement`, `trace`, or `settledTrace`; only `settledTrace` carries
 the typed settlement duration. Successful activation and text-entry warnings
 derive from the method and subject evidence instead of entering as caller data.
+
+`HeistResult.Outcome` is also the only passed/failed truth used by recording.
+`HeistResultRecordingMode` decides whether to write by matching that outcome,
+and the recorder derives artifact naming from the same value. A
+`HeistResultRecording` describes the written artifact; it does not store a
+second status.
+
+Offline validation follows the same shape. Package-only
+`HeistValidation.Result<Value>` represents `valid(Value)`,
+`invalid([HeistBuildDiagnostic])`, or `notEvaluated` for each phase.
+`HeistValidation.Report` composes plan, invocation, lint, and canonical-source
+facts once. Public JSON and text are projections of that report, not public
+copies of the internal validation algebra.
 
 `AccessibilityNotificationBus` owns one retained ingress log. Each action opens
 one cursor-bounded attribution window. A successful action settlement checkpoints
@@ -452,7 +479,7 @@ Plan identity follows the same boundary rule. `HeistPlanName` and
 `HeistReferenceName` are distinct roles backed by one exact identifier grammar.
 Source, JSON, and CLI text is admitted once into those roles,
 `HeistDefinitionPath`, or
-`HeistInvocationPath`; parser, traversal, catalog, runtime, and receipt layers
+`HeistInvocationPath`; parser, traversal, catalog, runtime, and result layers
 do not split dotted strings or rebuild paths. Definition and invocation paths
 remain semantically distinct wrappers over one canonical path-value parser and
 single-value wire representation.
@@ -475,7 +502,7 @@ flowchart TD
     StepKind -->|WaitFor| WaitForPath["PredicateWait.wait<br/>timeout default 30s"]
 
     StepKind -->|Action + expect| PreAction["Record pre-action ObservationCursor"]
-    PreAction --> Invoke["Invoke action<br/>ActionDispatchOutcome"]
+    PreAction --> Invoke["Invoke action<br/>ActionDispatchResult"]
     Invoke --> ExpectPath["PredicateWait.wait<br/>timeout default 1s"]
 
     StepKind -->|Action.until / RepeatUntil| LoopBaseline["Read baseline observation<br/>without evaluating stop predicate"]
@@ -612,14 +639,15 @@ unconstructible.
    `ClientMessage.heistPlan`.
 3. TheGetaway routes the plan to TheBrains' heist runtime.
 4. TheBrains captures before-state, resolves and pins the target `HeistId`,
-   performs the action into one `ActionDispatchOutcome`, waits for stable UI,
+   performs the action into one `ActionDispatchResult`, waits for stable UI,
    and parses after-state.
 5. The settled entry is appended to the retained observation log; the action
    checkpoint reads scoped notification evidence without consuming it.
 6. Presence predicates evaluate the current tree. Temporal predicates evaluate
    the applicable observation window and its ordered facts.
-7. The response includes the heist execution receipt, accessibility trace,
-   optional expectation result, and a public delta folded from the facts.
+7. The response includes the heist execution result. `HeistReport` classifies
+   its accumulated accessibility evidence once, and public renderers project
+   any resulting delta from that classification.
 
 ### Wait
 

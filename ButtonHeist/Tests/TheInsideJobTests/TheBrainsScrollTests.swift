@@ -100,7 +100,7 @@ final class TheBrainsScrollTests: XCTestCase {
     // MARK: - Programmatic Scroll Safety
 
     func testTargetUnavailableScrollFailureMapsToElementNotFoundErrorKind() {
-        let result = TheSafecracker.ActionDispatchOutcome.failure(
+        let result = TheSafecracker.ActionDispatchResult.failure(
             .scrollToVisible,
             message: "element inflation failed [notFound]: missing",
             failureKind: .targetUnavailable
@@ -109,7 +109,7 @@ final class TheBrainsScrollTests: XCTestCase {
         guard let failureKind = result.failureKind else {
             return XCTFail("Expected scroll_to_visible failure kind")
         }
-        XCTAssertEqual(TheBrains.actionErrorKind(for: failureKind), .elementNotFound)
+        XCTAssertEqual(TheBrains.actionFailureKind(for: failureKind), .elementNotFound)
     }
 
     func testExploreScreenReturnsNilWhenInitialSettlementIsCancelled() async {
@@ -197,12 +197,12 @@ final class TheBrainsScrollTests: XCTestCase {
         }
         XCTAssertEqual(failure.failedStep, .timedOut)
         XCTAssertEqual(failure.failureKind, .timeout)
-        let dispatchOutcome = failure.actionDispatchOutcome(commandMethod: .activate)
+        let dispatchOutcome = failure.actionDispatchResult(payload: .activate)
         guard let failureKind = dispatchOutcome.failureKind else {
             return XCTFail("Expected timed-out dispatch failure kind")
         }
         XCTAssertEqual(failureKind, .timeout)
-        XCTAssertEqual(TheBrains.actionErrorKind(for: failureKind), .timeout)
+        XCTAssertEqual(TheBrains.actionFailureKind(for: failureKind), .timeout)
     }
 
     func testExploreScreenSkipsUIPageViewControllerQueuingScrollView() async throws {

@@ -17,27 +17,27 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
             heistId: "checkout",
             object: oldObject
         )
-        let originalCaptureToken = liveTarget.captureToken
+        let originalCaptureToken = liveTarget.captureID
         let replacementObject = ActivationTrackingView()
         let replacement = try installTarget(
             in: vault,
             heistId: "checkout",
             object: replacementObject
         )
-        XCTAssertNotEqual(replacement.captureToken, originalCaptureToken)
+        XCTAssertNotEqual(replacement.captureID, originalCaptureToken)
 
         switch vault.dispatchOnFreshLiveActionTarget(liveTarget, operation: { target in
             (
                 target.object.accessibilityActivate(),
                 ObjectIdentifier(target.object),
-                target.captureToken,
+                target.captureID,
                 target.treeElement.heistId
             )
         }) {
         case .success(let evidence):
             XCTAssertTrue(evidence.0)
             XCTAssertEqual(evidence.1, ObjectIdentifier(replacementObject))
-            XCTAssertEqual(evidence.2, replacement.captureToken)
+            XCTAssertEqual(evidence.2, replacement.captureID)
             XCTAssertEqual(evidence.3, liveTarget.treeElement.heistId)
         case .failure(let staleness):
             XCTFail("Expected current-target reacquisition, got \(staleness)")
@@ -93,7 +93,7 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
         let preparation = vault.dispatchOnFreshLiveActionTarget(liveTarget) { target in
             PreparedGeometryEvidence(
                 point: target.activationPoint,
-                captureToken: target.captureToken
+                captureID: target.captureID
             )
         }
 
@@ -101,7 +101,7 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
         case .success(let evidence):
             XCTAssertEqual(evidence.point, CGPoint(x: replacementFrame.midX, y: replacementFrame.midY))
             XCTAssertNotEqual(evidence.point, CGPoint(x: originalFrame.midX, y: originalFrame.midY))
-            XCTAssertEqual(evidence.captureToken, replacement.captureToken)
+            XCTAssertEqual(evidence.captureID, replacement.captureID)
         case .failure(let staleness):
             XCTFail("Expected current-geometry preparation, got \(staleness)")
         }
@@ -126,7 +126,7 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
             ContainerDispatchEvidence(
                 objectID: ObjectIdentifier(current.object),
                 frame: current.frame,
-                captureToken: current.captureToken
+                captureID: current.captureID
             )
         }
 
@@ -134,7 +134,7 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
         case .success(let evidence):
             XCTAssertEqual(evidence.objectID, ObjectIdentifier(replacementObject))
             XCTAssertEqual(evidence.frame, replacement.frame)
-            XCTAssertEqual(evidence.captureToken, replacement.captureToken)
+            XCTAssertEqual(evidence.captureID, replacement.captureID)
         case .failure(let staleness):
             XCTFail("Expected current-container reacquisition, got \(staleness)")
         }
@@ -209,7 +209,7 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
             containerName: identifier,
             contentFrame: frame
         )
-        vault.recordParsedObservedEvidence(InterfaceObservation.makeForTests(
+        vault.observeInterface(InterfaceObservation.makeForTests(
             tree: InterfaceTree(elements: [:], containers: [path: semanticContainer]),
             liveCapture: LiveCapture.makeForTests(
                 hierarchy: [.container(container, children: [])],
@@ -229,13 +229,13 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
 
 private struct PreparedGeometryEvidence: Sendable {
     let point: CGPoint
-    let captureToken: InterfaceCaptureToken
+    let captureID: InterfaceCaptureID
 }
 
 private struct ContainerDispatchEvidence: Sendable {
     let objectID: ObjectIdentifier
     let frame: CGRect
-    let captureToken: InterfaceCaptureToken
+    let captureID: InterfaceCaptureID
 }
 
 private enum LiveActionTargetFixtureError: Error {

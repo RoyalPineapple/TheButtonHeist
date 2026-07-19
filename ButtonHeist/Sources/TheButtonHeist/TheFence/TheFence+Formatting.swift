@@ -54,12 +54,8 @@ extension FenceResponse {
                 payload: payload,
                 options: options
             )
-        case .heistExecution(_, let result, let accessibilityTrace):
-            return humanHeistFormatted(HeistReportProjection(
-                result: result,
-                accessibilityTrace: accessibilityTrace,
-                profile: .summary
-            ))
+        case .heistExecution(_, let report):
+            return humanHeistFormatted(report)
         case .heistValidation(let report):
             return formatHeistValidationHuman(report)
         case .heistCatalog(let catalog):
@@ -101,12 +97,12 @@ extension FenceResponse {
         }
     }
 
-    private func humanHeistFormatted(_ projection: HeistReportProjection) -> String {
-        var text = "Heist: \(projection.summary.executedTopLevelStepCount) top-level step(s) executed in \(projection.summary.durationMs)ms"
-        if let abortedAtPath = projection.summary.abortedAtPath {
+    private func humanHeistFormatted(_ report: HeistReport) -> String {
+        var text = "Heist: \(report.summary.executedTopLevelStepCount) top-level step(s) executed in \(report.summary.durationMs)ms"
+        if let abortedAtPath = report.summary.abortedAtPath {
             text += " (stopped at \(abortedAtPath))"
         }
-        if let expectations = projection.summary.expectations {
+        if let expectations = report.summary.expectations {
             text += " [expectations: \(expectations.met)/\(expectations.checked) met]"
         }
         return text

@@ -24,8 +24,8 @@ APP=""
 CLI_CONFIGURATION="debug"
 HEIST_PATH=""
 SKIP_HEIST_PLAYBACK=false
-RECEIPTS_DIR=""
-RECEIPTS_MODE=""
+RESULTS_DIR=""
+RESULTS_MODE=""
 
 usage() {
     cat <<'EOF'
@@ -45,8 +45,8 @@ Options:
   --cli-configuration C  SwiftPM CLI configuration: debug or release. Defaults to debug.
   --heist PATH           Heist fixture to replay. Defaults to tests/fixtures/bh-demo-smoke.heist.
   --skip-heist-playback  Skip replaying the heist fixture.
-  --receipts-dir DIR     Enable heist execution receipt artifacts in DIR.
-  --receipts-mode MODE   Receipt mode: failures, failing-and-passing, all, or off.
+  --results-dir DIR      Enable heist execution result artifacts in DIR.
+  --results-mode MODE    Result mode: failures, all, or off.
   -h, --help             Show this help.
 
 This harness is intentionally CLI-only: it does not require an MCP server or a
@@ -256,14 +256,14 @@ while [[ $# -gt 0 ]]; do
             SKIP_HEIST_PLAYBACK=true
             shift
             ;;
-        --receipts-dir)
-            RECEIPTS_DIR="${2:-}"
-            [[ -n "$RECEIPTS_DIR" ]] || fail "--receipts-dir requires a value"
+        --results-dir)
+            RESULTS_DIR="${2:-}"
+            [[ -n "$RESULTS_DIR" ]] || fail "--results-dir requires a value"
             shift 2
             ;;
-        --receipts-mode)
-            RECEIPTS_MODE="${2:-}"
-            [[ -n "$RECEIPTS_MODE" ]] || fail "--receipts-mode requires a value"
+        --results-mode)
+            RESULTS_MODE="${2:-}"
+            [[ -n "$RESULTS_MODE" ]] || fail "--results-mode requires a value"
             shift 2
             ;;
         -h|--help)
@@ -305,11 +305,11 @@ case "$CLI_CONFIGURATION" in
     debug|release) ;;
     *) fail "--cli-configuration must be debug or release" ;;
 esac
-if [[ -n "$RECEIPTS_DIR" ]]; then
-    export BUTTONHEIST_RECEIPTS_DIR="$RECEIPTS_DIR"
+if [[ -n "$RESULTS_DIR" ]]; then
+    export BUTTONHEIST_RESULTS_DIR="$RESULTS_DIR"
 fi
-if [[ -n "$RECEIPTS_MODE" ]]; then
-    export BUTTONHEIST_RECEIPTS_MODE="$RECEIPTS_MODE"
+if [[ -n "$RESULTS_MODE" ]]; then
+    export BUTTONHEIST_RESULTS_MODE="$RESULTS_MODE"
 fi
 
 DEVICE_ENDPOINT="127.0.0.1:$PORT"
@@ -386,10 +386,10 @@ printf '    simulator: %s\n' "$SIM_NAME"
 printf '    endpoint: %s\n' "$DEVICE_ENDPOINT"
 printf '    token/id: %s\n' "$TOKEN"
 printf '    cli config: %s\n' "$CLI_CONFIGURATION"
-if [[ -n "${BUTTONHEIST_RECEIPTS_DIR:-}" ]]; then
-    printf '    receipts: %s (%s)\n' \
-        "$BUTTONHEIST_RECEIPTS_DIR" \
-        "${BUTTONHEIST_RECEIPTS_MODE:-failures}"
+if [[ -n "${BUTTONHEIST_RESULTS_DIR:-}" ]]; then
+    printf '    results: %s (%s)\n' \
+        "$BUTTONHEIST_RESULTS_DIR" \
+        "${BUTTONHEIST_RESULTS_MODE:-failures}"
 fi
 if [[ "$SKIP_HEIST_PLAYBACK" == false ]]; then
     printf '    heist: %s\n' "$HEIST_PATH"

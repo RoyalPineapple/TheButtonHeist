@@ -35,7 +35,7 @@ extension InterfaceObservation {
             return try InterfaceObservation.build(
                 tree: filteredTree,
                 dispatchReferences: dispatchReferences,
-                captureToken: captureToken
+                captureID: captureID
             )
         } catch {
             preconditionFailure("Post-action observation filtering failed validation: \(error)")
