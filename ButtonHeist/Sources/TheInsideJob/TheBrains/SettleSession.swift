@@ -175,30 +175,30 @@ struct SettleLoopMachine: Equatable {
         case tripwireSignal(TheTripwire.TripwireSignal)
     }
 
-    enum Effect: Equatable, Sendable {
+    enum Decision: Equatable, Sendable {
         case continuePolling
         case terminal(SettleOutcome)
     }
 
     func reduce(_ state: State, event: Event) -> SettleLoopTransition {
         var state = state
-        let effect: Effect
+        let decision: Decision
         switch event {
         case .observation(let observation, let elapsedMs):
-            effect = state.observe(observation, elapsedMs: elapsedMs)
+            decision = state.observe(observation, elapsedMs: elapsedMs)
                 ? .terminal(.settled(timeMs: elapsedMs))
                 : .continuePolling
         case .tripwireSignal(let signal):
             state.observe(signal)
-            effect = .continuePolling
+            decision = .continuePolling
         }
-        return SettleLoopTransition(state: state, effect: effect)
+        return SettleLoopTransition(state: state, decision: decision)
     }
 }
 
 struct SettleLoopTransition: Equatable, Sendable {
     let state: SettleLoopMachine.State
-    let effect: SettleLoopMachine.Effect
+    let decision: SettleLoopMachine.Decision
 }
 
 @MainActor
@@ -501,7 +501,7 @@ private struct SettleLoopRunner {
         let machine = SettleLoopMachine()
         var state = initial
 
-        func send(_ event: SettleLoopMachine.Event) -> SettleLoopTransition {
+        func reduce(_ event: SettleLoopMachine.Event) -> SettleLoopTransition {
             let transition = machine.reduce(state, event: event)
             state = transition.state
             return transition
@@ -509,13 +509,13 @@ private struct SettleLoopRunner {
 
         func ingest(_ observation: InterfaceObservation) -> SettleSession.Result? {
             let recorded = observations.record(observation)
-            let transition = send(
+            let transition = reduce(
                 .observation(
                     recorded.sample,
                     elapsedMs: deadline.elapsedMilliseconds(at: clock())
                 )
             )
-            guard case .terminal(let outcome) = transition.effect else { return nil }
+            guard case .terminal(let outcome) = transition.decision else { return nil }
             return SettleSession.result(
                 outcome: outcome,
                 state: transition.state,
@@ -546,7 +546,7 @@ private struct SettleLoopRunner {
             }
 
             let eventCount = state.events.count
-            _ = send(.tripwireSignal(tripwireSignalProvider()))
+            _ = reduce(.tripwireSignal(tripwireSignalProvider()))
             if state.events.count > eventCount {
                 observations.resetCurrentGeneration()
                 continue

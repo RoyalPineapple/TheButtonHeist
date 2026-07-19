@@ -14,8 +14,8 @@ struct RepairScreen {
         let siblingText: [String]
         let headerText: [String]
 
-        var repairContext: HeistRepairElementContext {
-            HeistRepairElementContext(
+        var repairEvidence: HeistRepairElementEvidence {
+            HeistRepairElementEvidence(
                 element: element,
                 siblingText: siblingText,
                 headerText: headerText

@@ -11,7 +11,7 @@ enum SessionTokenSource: Sendable {
     case configured(SessionAuthToken)
 
     init(explicitToken: SessionAuthToken?) {
-        self = .configured(explicitToken ?? GeneratedSessionToken.make())
+        self = .configured(explicitToken ?? SessionTokenGenerator.generate())
     }
 
     var token: SessionAuthToken {

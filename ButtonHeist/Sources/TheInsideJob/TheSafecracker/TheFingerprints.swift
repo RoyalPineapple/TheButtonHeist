@@ -231,7 +231,7 @@ final class TheFingerprints {
 
     func beginTracking(at points: [CGPoint]) {
         guard isEnabled, !points.isEmpty else { return }
-        guard let context = ensureFingerprintRootView() else { return }
+        guard let context = attachFingerprintOverlayIfNeeded() else { return }
 
         removeActiveFingerprints()
         let fingerprints = points.map(makeFingerprint(at:))
@@ -263,7 +263,7 @@ final class TheFingerprints {
             removeActiveFingerprints()
             return
         }
-        guard ensureFingerprintRootView() != nil else { return }
+        guard attachFingerprintOverlayIfNeeded() != nil else { return }
 
         guard case var .tracking(session) = lifecycle else {
             beginTracking(at: points)
@@ -350,7 +350,7 @@ final class TheFingerprints {
         overlayModel.remove(ids: ids)
     }
 
-    private func ensureFingerprintRootView() -> OverlayContext? {
+    private func attachFingerprintOverlayIfNeeded() -> OverlayContext? {
         guard let windowScene = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
             .first(where: { $0.activationState == .foregroundActive })

@@ -1,8 +1,8 @@
 import Foundation
 import TheScore
 
-enum GeneratedSessionToken {
-    static func make() -> SessionAuthToken {
+enum SessionTokenGenerator {
+    static func generate() -> SessionAuthToken {
         // A full-width random secret would be stronger PSK input. This debug
         // tool intentionally prefers UUID v4 because console access is already
         // the authority boundary, and the UUID shape is easier to recognize,

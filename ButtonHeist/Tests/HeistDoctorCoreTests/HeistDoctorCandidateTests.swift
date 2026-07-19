@@ -24,13 +24,13 @@ private let repairSuggestionFixture = HeistRepairSuggestion(
     stepPath: "$.body[0]",
     failureKind: .missingTarget,
     oldTarget: .predicate(ElementPredicateTemplate(label: "Delete")),
-    oldResolvedElement: HeistRepairElementContext(
+    oldResolvedElement: HeistRepairElementEvidence(
         element: reportElement(label: "Delete"),
         siblingText: ["Milk"],
         headerText: []
     ),
     newTarget: .predicate(ElementPredicateTemplate(label: "Remove")),
-    newResolvedElement: HeistRepairElementContext(
+    newResolvedElement: HeistRepairElementEvidence(
         element: reportElement(label: "Remove"),
         siblingText: ["Milk"],
         headerText: []
@@ -56,8 +56,8 @@ private let repairJSONDiagnosisFixture = HeistRepairDiagnosis.suggested(
 )
 
 @Suite struct HeistDoctorCandidateTests {
-    @Test("JSON diagnosis stores canonical elements inside Doctor context")
-    func jsonDiagnosisStoresCanonicalElementsInsideDoctorContext() throws {
+    @Test("JSON diagnosis stores canonical elements inside Doctor evidence")
+    func jsonDiagnosisStoresCanonicalElementsInsideDoctorEvidence() throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
 
@@ -67,10 +67,10 @@ private let repairJSONDiagnosisFixture = HeistRepairDiagnosis.suggested(
         let suggested = try probe.object("suggested").object("_0")
         let suggestions = try suggested.array("suggestions")
         let suggestion = try #require(suggestions.first)
-        let context = try suggestion.object("newResolvedElement")
-        let element = try context.object("element")
+        let evidence = try suggestion.object("newResolvedElement")
+        let element = try evidence.object("element")
 
-        #expect(try context.array("siblingText").count == 1)
+        #expect(try evidence.array("siblingText").count == 1)
         #expect(try element.string("description") == "Remove")
         #expect(try element.string("label") == "Remove")
         #expect(try element.double("frameWidth") == 100)

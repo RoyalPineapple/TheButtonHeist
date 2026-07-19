@@ -63,7 +63,7 @@ internal enum ScreenLineageEvidence: Sendable, Equatable {
         let primaryHeader: PrimaryHeader?
         let backButton: Marker?
         let selectedTabs: Set<Marker>
-        let rootShape: [RootShapeToken]
+        let rootShape: [RootShapeComponent]
     }
 
     struct PrimaryHeader: Equatable {
@@ -77,11 +77,11 @@ internal enum ScreenLineageEvidence: Sendable, Equatable {
         let identifier: String?
     }
 
-    struct RootShapeToken: Equatable, Hashable {
+    struct RootShapeComponent: Equatable, Hashable {
         let kind: RootShapeKind
         let depth: Int
         let stableIdentifier: String?
-        let state: RootShapeState
+        let attributes: RootShapeAttributes
     }
 
     enum RootShapeKind: Equatable, Hashable {
@@ -100,7 +100,7 @@ internal enum ScreenLineageEvidence: Sendable, Equatable {
         case adjustable
     }
 
-    struct RootShapeState: Equatable, Hashable {
+    struct RootShapeAttributes: Equatable, Hashable {
         let isSelected: Bool
         let isModal: Bool
         let isScrollable: Bool
@@ -224,7 +224,7 @@ internal enum ScreenLineageEvidence: Sendable, Equatable {
             primaryHeader: primaryHeader(in: hierarchy, elements: elements),
             backButton: elements.first(where: isBackButton).map(marker(for:)),
             selectedTabs: selectedTabMarkers(in: hierarchy),
-            rootShape: rootShapeTokens(in: hierarchy)
+            rootShape: rootShapeComponents(in: hierarchy)
         )
     }
 
@@ -368,21 +368,21 @@ internal enum ScreenLineageEvidence: Sendable, Equatable {
         ))
     }
 
-    private static func rootShapeTokens(in hierarchy: [AccessibilityHierarchy]) -> [RootShapeToken] {
-        var tokens: [RootShapeToken] = []
+    private static func rootShapeComponents(in hierarchy: [AccessibilityHierarchy]) -> [RootShapeComponent] {
+        var components: [RootShapeComponent] = []
         let hasMultipleRootNodes = hierarchy.count > 1
         for node in hierarchy {
             node.foldedPreorder(
                 context: 0,
-                into: &tokens,
-                onElement: { element, _, depth, tokens in
+                into: &components,
+                onElement: { element, _, depth, components in
                     guard let role = structuralRole(of: element) else { return true }
-                    tokens.append(
-                        RootShapeToken(
+                    components.append(
+                        RootShapeComponent(
                             kind: .element(role),
                             depth: depth,
                             stableIdentifier: stableIdentifier(element.identifier),
-                            state: RootShapeState(
+                            attributes: RootShapeAttributes(
                                 isSelected: element.traits.contains(.selected),
                                 isModal: false,
                                 isScrollable: false
@@ -391,7 +391,7 @@ internal enum ScreenLineageEvidence: Sendable, Equatable {
                     )
                     return true
                 },
-                onContainer: { container, _, depth, tokens in
+                onContainer: { container, _, depth, components in
                     if isTransparentTopLevelWrapper(
                         container,
                         depth: depth,
@@ -400,12 +400,12 @@ internal enum ScreenLineageEvidence: Sendable, Equatable {
                         return (depth, true)
                     }
                     let facts = container.containerPredicateFacts
-                    tokens.append(
-                        RootShapeToken(
+                    components.append(
+                        RootShapeComponent(
                             kind: .container(facts.role.kind),
                             depth: depth,
                             stableIdentifier: stableIdentifier(facts.identifier),
-                            state: RootShapeState(
+                            attributes: RootShapeAttributes(
                                 isSelected: false,
                                 isModal: facts.isModalBoundary,
                                 isScrollable: facts.isScrollable
@@ -417,7 +417,7 @@ internal enum ScreenLineageEvidence: Sendable, Equatable {
                 descend: { depth, _ in depth }
             )
         }
-        return tokens
+        return components
     }
 
     private static func structuralRole(of element: AccessibilityElement) -> ElementRootShapeRole? {
@@ -446,16 +446,16 @@ internal enum ScreenLineageEvidence: Sendable, Equatable {
         return stableIdentifier(container.containerPredicateFacts.identifier) == nil
     }
 
-    private static func isRootShapeReplacement(before: [RootShapeToken], after: [RootShapeToken]) -> Bool {
+    private static func isRootShapeReplacement(before: [RootShapeComponent], after: [RootShapeComponent]) -> Bool {
         guard !before.isEmpty || !after.isEmpty else { return false }
-        var afterCounts = after.reduce(into: [RootShapeToken: Int]()) { counts, token in
-            counts[token, default: 0] += 1
+        var afterCounts = after.reduce(into: [RootShapeComponent: Int]()) { counts, component in
+            counts[component, default: 0] += 1
         }
         var matchedCount = 0
-        for token in before {
-            guard let count = afterCounts[token], count > 0 else { continue }
+        for component in before {
+            guard let count = afterCounts[component], count > 0 else { continue }
             matchedCount += 1
-            afterCounts[token] = count - 1
+            afterCounts[component] = count - 1
         }
         let maxCount = max(before.count, after.count)
         let persistRatio = Double(matchedCount) / Double(maxCount)

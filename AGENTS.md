@@ -76,7 +76,6 @@ namespaces.
 | `Outcome` | The terminal classification of a completed operation. |
 | `Result` | The returned aggregate of outcome, values, and evidence. |
 | `Evidence` | Observed facts supporting a result or assertion. |
-| `Proof` | An admitted value whose type guarantees an invariant. |
 | `Report` | A human- or tooling-oriented summary derived from results. |
 | `Receipt` | A durable contract record of execution. |
 | `Baseline` | The selected earlier snapshot used for comparison. |
@@ -94,7 +93,8 @@ Use verbs consistently:
   implement a wire or storage contract.
 - `capture` samples live boundary state; `observe` receives an event or
   snapshot; `settle` waits for live state to become stable.
-- `admit` validates relationships and returns a proof-bearing internal value;
+- `admit` validates relationships and returns an internal value named for its
+  admitted domain state;
   `resolve` turns a reference or predicate into a canonical entity.
 - `evaluate` computes a predicate or rule without side effects; `reduce`
   applies an event to state and emits decisions or effects.
@@ -507,7 +507,7 @@ Swift has first-class support for a functional style — value types, enums with
 - **`lazy` sequences for substantial multi-step pipelines.** When chaining `filter`/`map`/`compactMap` over large element collections, use `lazy` when it avoids intermediate allocations without obscuring the resulting type or control flow.
 - **Enums with associated data as result types.** Instead of returning a tuple of optionals or a struct with fields that are only valid in certain states, return an enum where each case carries exactly its data. `Result<T, E>` is the simplest case; domain-specific enums (like `ResolutionResult`) are better when there are more than two outcomes.
 - **One algebraic owner for recursive traversal.** When walking a recursive enum like `AccessibilityHierarchy`, define one canonical fold or traversal operation. Callers provide transformations; they do not switch and recurse independently. Match the algebra to the natural traversal direction and use an internal accumulator when that avoids closure towers or repeated collection concatenation.
-- **Struct tokens over parameter sprawl.** When a function needs to capture a snapshot of state (for before/after comparison, deferred processing, etc.), bundle it into a struct. The struct is the proof that state was captured; its type prevents mixing up arguments. Canonical example: `captureBeforeState()` returns a `BeforeState` struct consumed by `actionResultWithDelta(before:)`, replacing four loose parameters.
+- **Struct tokens over parameter sprawl.** When a function needs to capture a snapshot of state (for before/after comparison, deferred processing, etc.), bundle it into a struct. The snapshot type prevents mixing up arguments. Canonical example: `captureBeforeState()` returns a `BeforeState` struct consumed by `actionResultWithDelta(before:)`, replacing four loose parameters.
 - **Computed properties over synchronized state.** If a value can be derived from other state, make it a computed property. A cache is acceptable when profiling justifies it — but key the cache on source data (fingerprints, hashes), not imperative "dirty" flags.
 
 **Design principles:**

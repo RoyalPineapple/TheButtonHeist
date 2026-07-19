@@ -46,12 +46,12 @@ final class TheGetaway {
         self.muscle = muscle
         self.brains = brains
         self.identity = identity
-        self.pongPayload = Self.makePongPayload(identity: identity)
+        self.pongPayload = Self.capturePongPayload(identity: identity)
     }
 
-    // MARK: - Message Dispatch
+    // MARK: - Message Execution
 
-    func handleClientMessage(_ admitted: AdmittedClientMessage, respond: @escaping SocketResponseHandler) async {
+    func executeClientMessage(_ admitted: AdmittedClientMessage, respond: @escaping SocketResponseHandler) async {
         let clientId = admitted.clientId
         let envelope = admitted.envelope
         let requestId = envelope.requestId
@@ -77,7 +77,7 @@ final class TheGetaway {
             await muscle.noteClientActivity(clientId)
             await sendMessage(.pong(pongPayload.withServerTimestamp()), requestId: requestId, respond: respond)
         case .status:
-            await sendMessage(.status(await makeStatusPayload()), requestId: requestId, respond: respond)
+            await sendMessage(.status(await captureStatus()), requestId: requestId, respond: respond)
 
         // Observation
         case .getPasteboard:
@@ -86,23 +86,21 @@ final class TheGetaway {
         case .getAnnouncements:
             await sendMessage(.announcements(brains.capturedAnnouncements()), requestId: requestId, respond: respond)
         case .requestScreen(let payload):
-            await handleScreen(
+            await sendScreen(
                 mode: payload.mode,
                 requestId: requestId,
                 respond: respond
             )
         case .runtimeAction(let command):
             let actionResult = await executeDirectRuntimeAction(command)
-            await recordAndRespond(
-                command: message,
+            await sendActionResult(
                 actionResult: actionResult,
                 requestId: requestId,
                 respond: respond
             )
         case .heistPlan(let run):
             let actionResult = await brains.executeHeistPlan(run.plan, argument: run.argument)
-            await recordAndRespond(
-                command: message,
+            await sendActionResult(
                 actionResult: actionResult,
                 requestId: requestId,
                 respond: respond
@@ -176,8 +174,7 @@ final class TheGetaway {
         }
     }
 
-    private func recordAndRespond(
-        command: ClientMessage,
+    private func sendActionResult(
         actionResult: ActionResult,
         requestId: RequestID?,
         respond: @escaping SocketResponseHandler
@@ -220,7 +217,7 @@ final class TheGetaway {
 
     // MARK: - InterfaceObservation Capture
 
-    func handleScreen(
+    func sendScreen(
         mode: ScreenCaptureMode = .raw,
         requestId: RequestID? = nil,
         respond: @escaping SocketResponseHandler
