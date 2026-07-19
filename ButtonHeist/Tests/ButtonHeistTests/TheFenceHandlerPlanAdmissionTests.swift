@@ -22,6 +22,7 @@ extension TheFenceHandlerTests {
         }
         XCTAssertTrue(report.admissible)
         XCTAssertTrue(report.commandPassed)
+        XCTAssertFalse(response.isFailure)
         XCTAssertEqual(report.invocation, .evaluated(.valid(.init(argumentProvided: false))))
         XCTAssertEqual(report.lint.mode, .compositionQuality)
         XCTAssertNotNil(report.canonicalPlan)
@@ -35,7 +36,7 @@ extension TheFenceHandlerTests {
     }
 
     @ButtonHeistActor
-    func testValidateHeistReturnsInvalidPlanAsNormalValidationResponse() async throws {
+    func testValidateHeistClassifiesInvalidPlanAsFailure() async throws {
         let fence = TheFence(configuration: .init())
 
         let response = try await fence.execute(command: .validateHeist, values: [
@@ -45,7 +46,7 @@ extension TheFenceHandlerTests {
         guard case .heistValidation(let report) = response else {
             return XCTFail("Expected heistValidation response, got \(response)")
         }
-        XCTAssertFalse(response.isFailure)
+        XCTAssertTrue(response.isFailure)
         XCTAssertFalse(report.admissible)
         XCTAssertFalse(report.commandPassed)
         XCTAssertFalse(report.plan.diagnostics.isEmpty)
@@ -72,6 +73,7 @@ extension TheFenceHandlerTests {
         XCTAssertFalse(report.argumentProvided)
         XCTAssertFalse(report.invocation.diagnostics.isEmpty)
         XCTAssertFalse(report.admissible)
+        XCTAssertTrue(response.isFailure)
 
         let invocation = try publicJSONProbe(response).object().object("invocation")
         XCTAssertEqual(try invocation.string("status"), "invalid")
@@ -92,6 +94,7 @@ extension TheFenceHandlerTests {
         }
         XCTAssertTrue(report.admissible)
         XCTAssertFalse(report.commandPassed)
+        XCTAssertTrue(response.isFailure)
         XCTAssertTrue(report.lint.hasErrors)
         XCTAssertEqual(report.lint.findings.map(\.message), ["Semantic action has no expectation"])
         XCTAssertEqual(report.lint, .findings(mode: .strictTest, values: report.lint.findings))

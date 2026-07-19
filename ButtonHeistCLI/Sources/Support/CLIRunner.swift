@@ -84,9 +84,6 @@ enum CLIRunner {
         var isFailure: Bool {
             switch self {
             case .response(let formatted):
-                if case .heistValidation(let report) = formatted.envelope.response {
-                    return !report.commandPassed
-                }
                 return formatted.envelope.response.isFailure
             case .binary:
                 return false

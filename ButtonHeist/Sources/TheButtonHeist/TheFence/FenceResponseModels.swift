@@ -283,7 +283,7 @@ public enum FenceResponse {
     public var isFailure: Bool {
         switch self {
         case .ok, .status, .pong, .devices, .interface, .announcements, .screenshot, .screenshotData,
-             .heistValidation, .heistCatalog, .heistDescription,
+             .heistCatalog, .heistDescription,
              .sessionState, .targets:
             return false
         case .error:
@@ -294,6 +294,8 @@ public enum FenceResponse {
             return false
         case .heistExecution(_, let report):
             return report.failure != nil
+        case .heistValidation(let report):
+            return !report.commandPassed
         }
     }
 

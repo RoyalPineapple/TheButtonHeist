@@ -1,26 +1,22 @@
 import TheScore
 
-// The JUnit report is an external linear format derived from the heist execution
-// tree. The execution tree stays the product model; these XML entries are
-// output-only and never drive runtime failure logic.
+// JUnit is an external linear projection of the canonical semantic report.
+// Its XML entries are output-only and never drive runtime failure logic.
 
 extension TheFence {
 
     // MARK: - JUnit Report
 
-    /// Build the external JUnit report for a finished run_heist execution. The
-    /// execution tree stays the product model; this report is an output-only
-    /// projection consumed by `run_heist --junit`.
+    /// Project a finished heist report into the JUnit format consumed by
+    /// `run_heist --junit`.
     public func junitReport(
-        for result: HeistResult,
-        heistName: String,
-        totalTimeSeconds: Double
+        for report: HeistReport,
+        heistName: String
     ) -> HeistJUnitReport {
-        let report = HeistReport.project(result: result)
         return HeistJUnitReport(
             heistName: heistName,
             app: handoff.connectionLifecycle.serverInfo?.bundleIdentifier.description ?? "unknown",
-            totalTimeSeconds: totalTimeSeconds,
+            totalTimeSeconds: Double(report.summary.durationMs) / 1000,
             steps: junitSteps(report: report)
         )
     }

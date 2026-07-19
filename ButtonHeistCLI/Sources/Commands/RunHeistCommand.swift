@@ -99,15 +99,18 @@ struct RunHeistCommand: ConnectedOneShotCLICommand {
         heistPath: String?,
         format: OutputFormat
     ) throws -> CLIRunner.CommandResult {
-        if case .heistExecution(_, let result, _) = response {
+        if case .heistExecution(_, let report) = response {
             let name = heistPath
                 .map { URL(fileURLWithPath: $0).deletingPathExtension().lastPathComponent } ?? "heist"
-            let report = fence.junitReport(
-                for: result,
-                heistName: name,
-                totalTimeSeconds: Double(result.durationMs) / 1000
+            let junitReport = fence.junitReport(
+                for: report,
+                heistName: name
             )
-            try report.junitXML().write(to: URL(fileURLWithPath: junitPath), atomically: true, encoding: String.Encoding.utf8)
+            try junitReport.junitXML().write(
+                to: URL(fileURLWithPath: junitPath),
+                atomically: true,
+                encoding: String.Encoding.utf8
+            )
             logStatus("JUnit report written to \(junitPath)")
         } else {
             logStatus("Warning: --junit requested but run_heist did not produce a report")
