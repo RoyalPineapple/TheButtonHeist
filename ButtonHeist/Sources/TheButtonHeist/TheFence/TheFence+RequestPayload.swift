@@ -209,7 +209,7 @@ extension TheFence {
         try Self.validateBoundaryShape(command: input.command, arguments: input.arguments)
         return FenceOperationRequest(
             command: input.command,
-            dispatch: try input.command.definition.admission(self, input.command, input.arguments)
+            dispatch: try input.command.contract.admission(self, input.command, input.arguments)
         )
     }
 }

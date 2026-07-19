@@ -1,5 +1,36 @@
 import TheScore
 
+@_spi(ButtonHeistTooling) public struct FenceCommandParameters: Collection, Sendable, Equatable {
+    public typealias Index = Int
+
+    let elements: [FenceParameterSpec]
+
+    init(_ elements: [FenceParameterSpec]) {
+        precondition(
+            Set(elements.map(\.key)).count == elements.count,
+            "Command parameter keys must be unique"
+        )
+        self.elements = elements
+    }
+
+    public var startIndex: Int { elements.startIndex }
+    public var endIndex: Int { elements.endIndex }
+
+    public func index(after index: Int) -> Int {
+        elements.index(after: index)
+    }
+
+    public subscript(position: Int) -> FenceParameterSpec {
+        elements[position]
+    }
+}
+
+extension FenceCommandParameters: ExpressibleByArrayLiteral {
+    public init(arrayLiteral elements: FenceParameterSpec...) {
+        self.init(elements)
+    }
+}
+
 @_spi(ButtonHeistTooling) public struct FenceParameter<Value: Sendable>: Sendable {
     public let key: FenceParameterKey
     public let defaultValue: Value?

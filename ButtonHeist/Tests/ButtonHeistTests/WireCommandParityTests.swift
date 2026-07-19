@@ -5,14 +5,14 @@ import ThePlans
 
 final class WireCommandParityTests: XCTestCase {
 
-    func testCommandDefinitionsOwnUniqueCanonicalNames() {
-        let commands = TheFence.Command.allCases
-        let names = commands.map(\.rawValue)
-
-        XCTAssertEqual(names.count, Set(names).count)
-        for command in commands {
-            XCTAssertEqual(TheFence.Command(rawValue: command.rawValue), command)
-        }
+    func testCommandRawValuesPreserveCanonicalWireSpellings() {
+        XCTAssertEqual(TheFence.Command.allCases.map(\.rawValue), [
+            "ping", "list_devices", "get_interface", "get_screen", "get_announcements", "wait",
+            "one_finger_tap", "long_press", "swipe", "drag", "scroll", "scroll_to_visible",
+            "scroll_to_edge", "activate", "rotor", "type_text", "edit_action", "set_pasteboard",
+            "get_pasteboard", "dismiss_keyboard", "perform", "run_heist", "validate_heist",
+            "list_heists", "describe_heist", "get_session_state", "connect", "list_targets",
+        ])
     }
 
     func testCommandFamilyMembership() {
