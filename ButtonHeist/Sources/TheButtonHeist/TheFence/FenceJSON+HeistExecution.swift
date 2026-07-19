@@ -239,7 +239,12 @@ struct PublicHeistActionEvidence: Encodable {
             )
             try container.encode(
                 PublicActionResultOutput(
-                    projection: resultProjection(expectationResult),
+                    projection: ActionProjection(
+                        actionMethod: .result(expectationResult.method),
+                        result: expectationResult,
+                        profile: profile,
+                        includeOmissions: true
+                    ),
                     context: .heistReportEvidence
                 ),
                 forKey: .expectationResult
@@ -260,14 +265,6 @@ struct PublicHeistActionEvidence: Encodable {
         )
     }
 
-    private func resultProjection(_ result: ActionResult) -> ActionProjection {
-        ActionProjection(
-            actionMethod: .result(result.method),
-            result: result,
-            profile: profile,
-            includeOmissions: true
-        )
-    }
 }
 
 struct PublicHeistWaitEvidence: Encodable {
@@ -404,8 +401,7 @@ struct PublicHeistForEachElementEvidence: Encodable {
 }
 
 struct PublicHeistInvocationEvidence: Encodable {
-    let capability: String?
-    let name: String?
+    let capability: String
     let argument: String?
     let childFailedPath: String?
     let expectationResult: PublicActionResultOutput?
@@ -418,7 +414,6 @@ struct PublicHeistInvocationEvidence: Encodable {
         profile: ProjectionProfile
     ) {
         self.capability = invocation.path.description
-        self.name = invocation.path.description
         self.argument = invocation.argument == .none ? nil : invocation.runHeistSummary
         self.childFailedPath = evidence.childFailedPath?.description
         self.expectationResult = evidence.expectationActionResult.map {
