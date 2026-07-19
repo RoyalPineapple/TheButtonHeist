@@ -1,18 +1,15 @@
 import ThePlans
 import Foundation
 
-/// Typed error classification used by action-result outcomes and the
-/// server-broadcast `ServerError` payload.
-public enum ErrorKind: String, Codable, Sendable, CaseIterable {
-    case accessibilityTreeUnavailable
-    case elementNotFound
-    case timeout
-    case validationError
-    case actionFailed
-    /// Authentication failed (rejected token or rate-limited).
-    case authFailure
-    /// General server error not tied to a specific action.
-    case general
+/// Failure classification for action dispatch and observation.
+public enum ActionFailure {
+    public enum Kind: String, Codable, Sendable, CaseIterable {
+        case accessibilityTreeUnavailable
+        case elementNotFound
+        case timeout
+        case validationError
+        case actionFailed
+    }
 }
 
 struct ReportAdmissionError: Error, Sendable, CustomStringConvertible {
@@ -75,12 +72,19 @@ extension ServerErrorRecoveryHint: ExpressibleByStringLiteral {
 }
 
 public struct ServerError: Codable, Sendable, Equatable {
-    public let kind: ErrorKind
+    public enum Kind: String, Codable, Sendable, CaseIterable {
+        /// Authentication failed (rejected token or rate-limited).
+        case authFailure
+        /// General server error not tied to a specific action.
+        case general
+    }
+
+    public let kind: Kind
     public let message: ServerErrorMessage
     public let recoveryHint: ServerErrorRecoveryHint?
 
     public init(
-        kind: ErrorKind,
+        kind: Kind,
         message: ServerErrorMessage,
         recoveryHint: ServerErrorRecoveryHint? = nil
     ) {
@@ -99,7 +103,7 @@ public struct ServerError: Codable, Sendable, Equatable {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "server error")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
-            kind: try container.decode(ErrorKind.self, forKey: .kind),
+            kind: try container.decode(Kind.self, forKey: .kind),
             message: try container.decode(ServerErrorMessage.self, forKey: .message),
             recoveryHint: try container.decodeIfPresent(ServerErrorRecoveryHint.self, forKey: .recoveryHint)
         )
@@ -108,14 +112,14 @@ public struct ServerError: Codable, Sendable, Equatable {
 
 /// Wire payload carried by an `ActionResult`.
 ///
-/// `ResultPayload` is intentionally the decoded/encoded representation. Source
-/// construction should use `ActionResultPayload` so the method is bound to the
-/// payload before an `ActionResult` is built.
-public enum ResultPayload: Codable, Sendable, Equatable {
+/// `ActionResultWirePayload` is intentionally the decoded/encoded
+/// representation. Source construction should use `ActionResultPayload` so the
+/// method is bound to the payload before an `ActionResult` is built.
+public enum ActionResultWirePayload: Codable, Sendable, Equatable {
     case value(String)
     case rotor(RotorResult)
     case screenshot(ScreenPayload)
-    case heistExecution(HeistExecutionResult)
+    case heistExecution(HeistExecutionReceipt)
 
     private enum Kind: String, Codable {
         case value
@@ -141,7 +145,7 @@ public enum ResultPayload: Codable, Sendable, Equatable {
         case .screenshot:
             self = .screenshot(try container.decode(ScreenPayload.self, forKey: .data))
         case .heistExecution:
-            self = .heistExecution(try container.decode(HeistExecutionResult.self, forKey: .data))
+            self = .heistExecution(try container.decode(HeistExecutionReceipt.self, forKey: .data))
         }
     }
 
@@ -157,9 +161,9 @@ public enum ResultPayload: Codable, Sendable, Equatable {
         case .screenshot(let screen):
             try container.encode(Kind.screenshot, forKey: .kind)
             try container.encode(screen, forKey: .data)
-        case .heistExecution(let result):
+        case .heistExecution(let receipt):
             try container.encode(Kind.heistExecution, forKey: .kind)
-            try container.encode(result, forKey: .data)
+            try container.encode(receipt, forKey: .data)
         }
     }
 }
@@ -171,42 +175,42 @@ public enum ResultPayload: Codable, Sendable, Equatable {
 /// rotor/heist payloads carry their only valid `ActionMethod`.
 public struct ActionResultPayload: Sendable, Equatable {
     package let method: ActionMethod
-    package let resultPayload: ResultPayload
+    package let wirePayload: ActionResultWirePayload
 
-    private init(method: ActionMethod, resultPayload: ResultPayload) {
+    private init(method: ActionMethod, wirePayload: ActionResultWirePayload) {
         self.method = method
-        self.resultPayload = resultPayload
+        self.wirePayload = wirePayload
     }
 
     public static func typeText(_ value: String) -> ActionResultPayload {
-        ActionResultPayload(method: .typeText, resultPayload: .value(value))
+        ActionResultPayload(method: .typeText, wirePayload: .value(value))
     }
 
     public static func setPasteboard(_ value: String) -> ActionResultPayload {
-        ActionResultPayload(method: .setPasteboard, resultPayload: .value(value))
+        ActionResultPayload(method: .setPasteboard, wirePayload: .value(value))
     }
 
     public static func getPasteboard(_ value: String) -> ActionResultPayload {
-        ActionResultPayload(method: .getPasteboard, resultPayload: .value(value))
+        ActionResultPayload(method: .getPasteboard, wirePayload: .value(value))
     }
 
     public static func screenshot(_ screen: ScreenPayload) -> ActionResultPayload {
-        ActionResultPayload(method: .takeScreenshot, resultPayload: .screenshot(screen))
+        ActionResultPayload(method: .takeScreenshot, wirePayload: .screenshot(screen))
     }
 
     public static func rotor(_ rotor: RotorResult) -> ActionResultPayload {
-        ActionResultPayload(method: .rotor, resultPayload: .rotor(rotor))
+        ActionResultPayload(method: .rotor, wirePayload: .rotor(rotor))
     }
 
-    public static func heistExecution(_ result: HeistExecutionResult) -> ActionResultPayload {
-        ActionResultPayload(method: .heistPlan, resultPayload: .heistExecution(result))
+    public static func heistExecution(_ receipt: HeistExecutionReceipt) -> ActionResultPayload {
+        ActionResultPayload(method: .heistPlan, wirePayload: .heistExecution(receipt))
     }
 }
 
 /// The delivered outcome of an action command.
 public enum ActionResultOutcome: Codable, Sendable, Equatable {
     case success
-    case failure(ErrorKind)
+    case failure(ActionFailure.Kind)
 
     private enum Kind: String, Codable {
         case success
@@ -215,7 +219,7 @@ public enum ActionResultOutcome: Codable, Sendable, Equatable {
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case kind
-        case errorKind
+        case failureKind
     }
 
     public var isSuccess: Bool {
@@ -223,7 +227,7 @@ public enum ActionResultOutcome: Codable, Sendable, Equatable {
         return false
     }
 
-    public var errorKind: ErrorKind? {
+    public var failureKind: ActionFailure.Kind? {
         if case .failure(let kind) = self { return kind }
         return nil
     }
@@ -240,14 +244,17 @@ public enum ActionResultOutcome: Codable, Sendable, Equatable {
             )
             self = .success
         case .failure:
-            guard let errorKind = try container.decodeIfPresent(ErrorKind.self, forKey: .errorKind) else {
+            guard let failureKind = try container.decodeIfPresent(
+                ActionFailure.Kind.self,
+                forKey: .failureKind
+            ) else {
                 throw DecodingError.dataCorruptedError(
-                    forKey: .errorKind,
+                    forKey: .failureKind,
                     in: container,
-                    debugDescription: "failed ActionResult outcome requires errorKind"
+                    debugDescription: "failed ActionResult outcome requires failureKind"
                 )
             }
-            self = .failure(errorKind)
+            self = .failure(failureKind)
         }
     }
 
@@ -256,9 +263,9 @@ public enum ActionResultOutcome: Codable, Sendable, Equatable {
         switch self {
         case .success:
             try container.encode(Kind.success, forKey: .kind)
-        case .failure(let errorKind):
+        case .failure(let failureKind):
             try container.encode(Kind.failure, forKey: .kind)
-            try container.encode(errorKind, forKey: .errorKind)
+            try container.encode(failureKind, forKey: .failureKind)
         }
     }
 }

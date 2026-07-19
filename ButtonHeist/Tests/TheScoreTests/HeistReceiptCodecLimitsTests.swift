@@ -102,7 +102,7 @@ import Testing
         )
     }
 
-    private func sampleReceipt(message: String) -> HeistExecutionResult {
+    private func sampleReceipt(message: String) -> HeistExecutionReceipt {
         HeistReceiptFixture.result(
             steps: [HeistReceiptFixture.explicitFailure(message: message)],
             durationMs: 1

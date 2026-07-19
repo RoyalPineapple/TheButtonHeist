@@ -29,7 +29,7 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
         }
 
         XCTAssertEqual(commands.count, 6)
-        let expectedTypes: [HeistActionCommandType] = [.activate, .rotor, .dismiss, .magicTap, .editAction, .resignFirstResponder]
+        let expectedTypes: [HeistActionCommandType] = [.activate, .rotor, .dismiss, .magicTap, .editAction, .dismissKeyboard]
         XCTAssertEqual(commands.map(\.wireType), expectedTypes)
     }
 
@@ -127,14 +127,14 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
     func testActionResultEncodesCanonicalOutcomeObject() throws {
         let result = ActionResult.failure(
             method: .activate,
-            errorKind: .elementNotFound,
+            failureKind: .elementNotFound,
             message: "Element not found",
         )
         let data = try JSONEncoder().encode(result)
         let encoded = try JSONDecoder().decode(EncodedActionResultProbe.self, from: data)
 
         XCTAssertEqual(encoded.outcome.kind, "failure")
-        XCTAssertEqual(encoded.outcome.errorKind, .elementNotFound)
+        XCTAssertEqual(encoded.outcome.failureKind, .elementNotFound)
         XCTAssertNil(encoded.success)
         XCTAssertNil(encoded.errorKind)
     }
@@ -167,10 +167,10 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
 private struct EncodedActionResultProbe: Decodable {
     let outcome: EncodedActionResultOutcomeProbe
     let success: Bool?
-    let errorKind: ErrorKind?
+    let errorKind: String?
 }
 
 private struct EncodedActionResultOutcomeProbe: Decodable {
     let kind: String
-    let errorKind: ErrorKind?
+    let failureKind: ActionFailure.Kind?
 }

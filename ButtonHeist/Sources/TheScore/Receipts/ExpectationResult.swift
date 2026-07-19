@@ -76,8 +76,8 @@ public struct AccessibilityTraceEvidence: Codable, Sendable, Equatable {
     }
 }
 
-/// The outcome of checking an `AccessibilityPredicate` against an observed
-/// interface or transition delta.
+/// The result of checking an `AccessibilityPredicate`, including the predicate
+/// and observed evidence.
 public enum ExpectationResult: Codable, Sendable, Equatable {
     public struct Met: Sendable, Equatable {
         public let predicate: AccessibilityPredicate?

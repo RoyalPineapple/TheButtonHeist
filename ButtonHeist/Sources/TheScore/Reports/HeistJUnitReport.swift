@@ -3,7 +3,7 @@ import Foundation
 
 // MARK: - Heist JUnit Report
 
-/// JUnit-compatible summary derived from a `HeistExecutionResult`.
+/// JUnit-compatible summary derived from a `HeistExecutionReceipt`.
 ///
 /// The XML steps are an adapter traversal of the structured heist execution tree,
 /// not the product model for heist results.
@@ -97,12 +97,12 @@ extension HeistJUnitReport {
     /// Classification of why a step failed.
     ///
     /// Command-level failures collapse to `commandError`; action-level failures
-    /// wrap `ErrorKind` directly so there's no mirrored case list to keep in sync.
+    /// wrap `ActionFailure.Kind` directly so there's no mirrored case list to keep in sync.
     public enum ReportErrorKind: Sendable, Equatable {
         /// Command-level error (invalid command, missing connection, etc.).
         case commandError
         /// An action-level error reported by the server.
-        case action(ErrorKind)
+        case action(ActionFailure.Kind)
 
         /// String name for JUnit XML `type` attribute.
         public var typeName: String {
@@ -121,7 +121,7 @@ extension HeistJUnitReport {
     public enum Outcome: Sendable, Equatable {
         case passed
         case skipped
-        case failed(message: String, errorKind: ReportErrorKind?)
+        case failed(message: String, failureKind: ReportErrorKind?)
 
         public var failureMessage: String? {
             if case .failed(let message, _) = self { return message }

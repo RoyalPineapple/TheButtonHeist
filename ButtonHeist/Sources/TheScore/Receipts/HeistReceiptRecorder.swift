@@ -85,14 +85,14 @@ public struct HeistReceiptRecording: Sendable, Equatable {
 public enum HeistReceiptRecorder {
     @discardableResult
     public static func recordIfEnabled(
-        _ result: HeistExecutionResult,
+        _ receipt: HeistExecutionReceipt,
         plan: HeistPlan
     ) -> HeistReceiptRecording? {
         guard let configuration = HeistReceiptRecordingConfiguration.environment else {
             return nil
         }
         do {
-            return try write(result, plan: plan, configuration: configuration)
+            return try write(receipt, plan: plan, configuration: configuration)
         } catch {
             heistReceiptLogger.warning("Failed to record heist receipt: \(error.localizedDescription)")
             return nil
@@ -101,11 +101,11 @@ public enum HeistReceiptRecorder {
 
     @discardableResult
     public static func write(
-        _ result: HeistExecutionResult,
+        _ receipt: HeistExecutionReceipt,
         plan: HeistPlan,
         configuration: HeistReceiptRecordingConfiguration
     ) throws -> HeistReceiptRecording? {
-        let status: HeistReceiptRecordingStatus = result.isFailure ? .failed : .passed
+        let status: HeistReceiptRecordingStatus = receipt.isFailure ? .failed : .passed
         guard configuration.mode.shouldRecord(status) else {
             return nil
         }
@@ -116,7 +116,7 @@ public enum HeistReceiptRecorder {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
         let url = directory.appendingPathComponent(fileName(status: status), isDirectory: false)
-        try HeistReceiptCodec.write(result, to: url)
+        try HeistReceiptCodec.write(receipt, to: url)
         return HeistReceiptRecording(
             url: url,
             status: status,

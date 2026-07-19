@@ -49,9 +49,9 @@ package extension HeistExecutionStepResult {
         warningEvidence
     }
 
-    var reportActionErrorKind: ErrorKind? {
+    var reportActionFailureKind: ActionFailure.Kind? {
         guard reportActionResult?.outcome.isSuccess == false else { return nil }
-        return reportActionResult?.outcome.errorKind
+        return reportActionResult?.outcome.failureKind
     }
 }
 

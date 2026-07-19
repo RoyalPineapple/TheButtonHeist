@@ -76,9 +76,9 @@ import TheScore
         #expect(try JSONDecoder().decode(HeistExecutionMetricProjection.self, from: encoded) == projection)
     }
 
-    private func metricProjectionFixture() throws -> HeistExecutionResult {
+    private func metricProjectionFixture() throws -> HeistExecutionReceipt {
         let predicate = AccessibilityPredicate.exists(.label("Done"))
-        return HeistExecutionResult(
+        return HeistExecutionReceipt(
             steps: [
                 actionStep(predicate: predicate),
                 try waitStep(predicate: predicate),

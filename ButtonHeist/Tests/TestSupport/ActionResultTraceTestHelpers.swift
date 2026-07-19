@@ -20,7 +20,7 @@ package enum HeistReceiptFixture {
         succeeded: Bool = true,
         method: ActionMethod = .activate,
         message: String? = nil,
-        errorKind: ErrorKind? = nil,
+        failureKind: ActionFailure.Kind? = nil,
         payload: ActionResultPayload? = nil,
         traceEvidence: AccessibilityTraceEvidence? = nil,
         subjectEvidence: ActionSubjectEvidence? = nil,
@@ -67,7 +67,7 @@ package enum HeistReceiptFixture {
                 preconditionFailure("activation trace fixture requires method-only activate result")
             }
             return .activationFailure(
-                errorKind: errorKind,
+                failureKind: failureKind,
                 message: message,
                 observation: observation,
                 subjectEvidence: subjectEvidence,
@@ -78,7 +78,7 @@ package enum HeistReceiptFixture {
         if let payload {
             return .failure(
                 payload: payload,
-                errorKind: errorKind,
+                failureKind: failureKind,
                 message: message,
                 observation: observation,
                 subjectEvidence: subjectEvidence,
@@ -87,7 +87,7 @@ package enum HeistReceiptFixture {
         }
         return .failure(
             method: method,
-            errorKind: errorKind,
+            failureKind: failureKind,
             message: message,
             observation: observation,
             subjectEvidence: subjectEvidence,
@@ -350,8 +350,8 @@ package enum HeistReceiptFixture {
     package static func result(
         steps: [HeistExecutionStepResult],
         durationMs: Int = 1
-    ) -> HeistExecutionResult {
-        HeistExecutionResult(
+    ) -> HeistExecutionReceipt {
+        HeistExecutionReceipt(
             steps: steps,
             durationMs: durationMs
         )

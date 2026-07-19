@@ -137,7 +137,7 @@ import ThePlans
             command: .dismiss,
             result: .failure(
                 method: .dismiss,
-                errorKind: .actionFailed,
+                failureKind: .actionFailed,
                 message: "blocked",
             )
         )

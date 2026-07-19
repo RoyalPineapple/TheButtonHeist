@@ -103,7 +103,7 @@ extension AccessibilityPredicateTests {
         )).met)
 
         let explicitlyIncomplete = ActionResult.success(
-            method: .syntheticTap,
+            method: .oneFingerTap,
                 observation: .settledTrace(
                     traceEvidence(factFreeTrace, completeness: .incomplete),
                     .settled(duration: 0)

@@ -2,7 +2,7 @@ import ThePlans
 /// Identifies the command behavior represented by an `ActionResult`.
 ///
 /// Activation-point dispatch that completes an `activate` command still reports
-/// `.activate`; `.syntheticTap` is reserved for explicit mechanical
+/// `.activate`; `.oneFingerTap` is reserved for explicit mechanical
 /// `one_finger_tap` requests.
 public enum ActionMethod: String, Codable, Sendable {
     case activate
@@ -10,14 +10,14 @@ public enum ActionMethod: String, Codable, Sendable {
     case decrement
     case dismiss
     case magicTap
-    case syntheticTap
-    case syntheticLongPress
-    case syntheticSwipe
-    case syntheticDrag
+    case oneFingerTap
+    case longPress
+    case swipe
+    case drag
     case typeText
     case customAction
     case editAction
-    case resignFirstResponder
+    case dismissKeyboard
     case setPasteboard
     case getPasteboard
     case takeScreenshot

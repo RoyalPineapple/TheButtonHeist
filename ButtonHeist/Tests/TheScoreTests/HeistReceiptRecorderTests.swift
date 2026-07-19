@@ -105,14 +105,14 @@ import Testing
         )
     }
 
-    private func failedResult() -> HeistExecutionResult {
+    private func failedResult() -> HeistExecutionReceipt {
         HeistReceiptFixture.result(
             steps: [HeistReceiptFixture.explicitFailure(path: "$.body[0]", message: "boom", durationMs: 3)],
             durationMs: 3
         )
     }
 
-    private func passedResult() -> HeistExecutionResult {
+    private func passedResult() -> HeistExecutionReceipt {
         HeistReceiptFixture.result(
             steps: [HeistReceiptFixture.warning(path: "$.body[0]", message: "record receipt", durationMs: 2)],
             durationMs: 2

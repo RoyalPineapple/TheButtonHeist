@@ -1,20 +1,20 @@
 import Foundation
 
 /// Durable receipt for executing a heist plan.
-public struct HeistExecutionResult: Codable, Sendable, Equatable {
+public struct HeistExecutionReceipt: Codable, Sendable, Equatable {
     public let steps: [HeistExecutionStepResult]
     public let durationMs: Int
 
     public var outcome: HeistExecutionOutcome {
         if let failed = steps.firstFailedStepInReceiptOrder {
-            return .failed(.init(steps: steps, abortedAtPath: failed.path))
+            return .failed(abortedAtPath: failed.path)
         }
-        return .passed(.init(steps: steps))
+        return .passed
     }
 
     public var abortedAtPath: HeistExecutionPath? {
-        guard case .failed(let outcome) = outcome else { return nil }
-        return outcome.abortedAtPath
+        guard case .failed(let abortedAtPath) = outcome else { return nil }
+        return abortedAtPath
     }
 
     package init(steps: [HeistExecutionStepResult], durationMs: Int) {
@@ -28,7 +28,7 @@ public struct HeistExecutionResult: Codable, Sendable, Equatable {
     }
 
     public init(from decoder: Decoder) throws {
-        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist execution result")
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist execution receipt")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         steps = try container.decode([HeistExecutionStepResult].self, forKey: .steps)
         durationMs = try container.decode(Int.self, forKey: .durationMs)
@@ -42,22 +42,6 @@ public struct HeistExecutionResult: Codable, Sendable, Equatable {
 }
 
 public enum HeistExecutionOutcome: Sendable, Equatable {
-    case passed(HeistExecutionPassedOutcome)
-    case failed(HeistExecutionFailedOutcome)
-}
-
-public struct HeistExecutionPassedOutcome: Sendable, Equatable {
-    public let steps: [HeistExecutionStepResult]
-
-    fileprivate init(steps: [HeistExecutionStepResult]) { self.steps = steps }
-}
-
-public struct HeistExecutionFailedOutcome: Sendable, Equatable {
-    public let steps: [HeistExecutionStepResult]
-    public let abortedAtPath: HeistExecutionPath
-
-    fileprivate init(steps: [HeistExecutionStepResult], abortedAtPath: HeistExecutionPath) {
-        self.steps = steps
-        self.abortedAtPath = abortedAtPath
-    }
+    case passed
+    case failed(abortedAtPath: HeistExecutionPath)
 }

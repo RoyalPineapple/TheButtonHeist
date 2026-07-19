@@ -4,10 +4,10 @@ import Foundation
 extension ActionResultPayload {
     fileprivate static func decoded(
         method: ActionMethod,
-        resultPayload: ResultPayload,
+        wirePayload: ActionResultWirePayload,
         codingPath: [CodingKey]
     ) throws -> ActionResultPayload {
-        switch (method, resultPayload) {
+        switch (method, wirePayload) {
         case (.typeText, .value(let value)):
             return .typeText(value)
         case (.setPasteboard, .value(let value)):
@@ -23,14 +23,14 @@ extension ActionResultPayload {
         case (.activate, _),
              (.increment, _),
              (.decrement, _),
-             (.syntheticTap, _),
-             (.syntheticLongPress, _),
-             (.syntheticSwipe, _),
-             (.syntheticDrag, _),
+             (.oneFingerTap, _),
+             (.longPress, _),
+             (.swipe, _),
+             (.drag, _),
              (.typeText, _),
              (.customAction, _),
              (.editAction, _),
-             (.resignFirstResponder, _),
+             (.dismissKeyboard, _),
              (.setPasteboard, _),
              (.getPasteboard, _),
              (.takeScreenshot, _),
@@ -44,12 +44,12 @@ extension ActionResultPayload {
              (.wait, _):
             throw DecodingError.dataCorrupted(.init(
                 codingPath: codingPath,
-                debugDescription: payloadValidationMessage(method: method, payload: resultPayload)
+                debugDescription: payloadValidationMessage(method: method, payload: wirePayload)
             ))
         }
     }
 
-    private static func payloadValidationMessage(method: ActionMethod, payload: ResultPayload) -> String {
+    private static func payloadValidationMessage(method: ActionMethod, payload: ActionResultWirePayload) -> String {
         switch (method, payload) {
         case (.takeScreenshot, _):
             return "takeScreenshot ActionResult payload must be screenshot"
@@ -158,7 +158,7 @@ public struct ActionSettlementEvidence: Codable, Sendable, Equatable {
     }
 }
 
-/// The outcome of executing an action command, including post-action diagnostics.
+/// The result of executing an action command, including post-action diagnostics.
 public struct ActionResult: Codable, Sendable, Equatable {
     package enum MethodAndPayload: Sendable, Equatable {
         case methodOnly(ActionMethod)
@@ -166,7 +166,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
 
         init(
             decodedMethod method: ActionMethod,
-            decodedPayload payload: ResultPayload?,
+            decodedPayload payload: ActionResultWirePayload?,
             codingPath: [CodingKey]
         ) throws {
             guard let payload else {
@@ -175,7 +175,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
             }
             self = .payload(try ActionResultPayload.decoded(
                 method: method,
-                resultPayload: payload,
+                wirePayload: payload,
                 codingPath: codingPath
             ))
         }
@@ -189,9 +189,9 @@ public struct ActionResult: Codable, Sendable, Equatable {
             }
         }
 
-        var resultPayload: ResultPayload? {
+        var wirePayload: ActionResultWirePayload? {
             guard case .payload(let payload) = self else { return nil }
-            return payload.resultPayload
+            return payload.wirePayload
         }
     }
 
@@ -210,7 +210,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
         evidence.accessibilityTrace?.capturedAnnouncements.first
     }
     /// Command-specific payload. At most one variant per result.
-    public var payload: ResultPayload? { methodAndPayload.resultPayload }
+    public var payload: ActionResultWirePayload? { methodAndPayload.wirePayload }
     /// Source-of-truth accessibility capture receipt for this action.
     public var accessibilityTrace: AccessibilityTrace? { evidence.accessibilityTrace }
     /// Source-of-truth trace and observation-completeness proof for this action.
@@ -276,32 +276,32 @@ public struct ActionResult: Codable, Sendable, Equatable {
 
     public static func failure(
         method: ActionMethod,
-        errorKind: ErrorKind,
+        failureKind: ActionFailure.Kind,
         message: String? = nil,
         observation: ActionResultObservationEvidence = .none,
         subjectEvidence: ActionSubjectEvidence? = nil,
         timing: ActionPerformanceTiming? = nil
     ) -> ActionResult {
         construct(
-            .methodOnly(method), .failure(errorKind), message, observation, subjectEvidence, timing: timing
+            .methodOnly(method), .failure(failureKind), message, observation, subjectEvidence, timing: timing
         )
     }
 
     public static func failure(
         payload: ActionResultPayload,
-        errorKind: ErrorKind,
+        failureKind: ActionFailure.Kind,
         message: String? = nil,
         observation: ActionResultObservationEvidence = .none,
         subjectEvidence: ActionSubjectEvidence? = nil,
         timing: ActionPerformanceTiming? = nil
     ) -> ActionResult {
         construct(
-            .payload(payload), .failure(errorKind), message, observation, subjectEvidence, timing: timing
+            .payload(payload), .failure(failureKind), message, observation, subjectEvidence, timing: timing
         )
     }
 
     public static func activationFailure(
-        errorKind: ErrorKind,
+        failureKind: ActionFailure.Kind,
         message: String? = nil,
         observation: ActionResultObservationEvidence = .none,
         subjectEvidence: ActionSubjectEvidence? = nil,
@@ -310,7 +310,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
     ) -> ActionResult {
         construct(
             .methodOnly(.activate),
-            .failure(errorKind),
+            .failure(failureKind),
             message,
             observation,
             subjectEvidence,
@@ -340,8 +340,8 @@ public struct ActionResult: Codable, Sendable, Equatable {
                 body: body,
                 warning: warning(method: methodAndPayload.method, subjectEvidence: subjectEvidence)
             ))
-        case .failure(let errorKind):
-            ActionResultEvidence.failure(errorKind, ActionResultFailureEvidence(body: body))
+        case .failure(let failureKind):
+            ActionResultEvidence.failure(failureKind, ActionResultFailureEvidence(body: body))
         }
         return ActionResult(methodAndPayload: methodAndPayload, message: message, evidence: evidence)
     }
@@ -389,7 +389,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let outcome = try container.decode(ActionResultOutcome.self, forKey: .outcome)
         let method = try container.decode(ActionMethod.self, forKey: .method)
-        let payload = try container.decodeIfPresent(ResultPayload.self, forKey: .payload)
+        let payload = try container.decodeIfPresent(ActionResultWirePayload.self, forKey: .payload)
         let methodAndPayload = try MethodAndPayload(
             decodedMethod: method,
             decodedPayload: payload,
@@ -402,9 +402,9 @@ public struct ActionResult: Codable, Sendable, Equatable {
             evidence = .success(
                 try container.decode(ActionResultSuccessEvidence.self, forKey: .evidence)
             )
-        case .failure(let errorKind):
+        case .failure(let failureKind):
             evidence = .failure(
-                errorKind,
+                failureKind,
                 try container.decode(ActionResultFailureEvidence.self, forKey: .evidence)
             )
         }

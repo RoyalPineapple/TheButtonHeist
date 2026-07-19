@@ -10,7 +10,7 @@ import TheScore
         let met = ExpectationResult.Met(predicate: predicate)
         let unmet = ExpectationResult.Unmet(predicate: predicate, actual: "not found")
         let success = ActionResult.success(method: .wait)
-        let timeout = ActionResult.failure(method: .wait, errorKind: .timeout)
+        let timeout = ActionResult.failure(method: .wait, failureKind: .timeout)
 
         let matchedCheck = try #require(HeistWaitEvidence.MatchedCheck(actionResult: success, expectation: met))
         let matched = HeistWaitEvidence.matched(matchedCheck)

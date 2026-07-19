@@ -112,14 +112,14 @@ public struct ActionResultFailureEvidence: Codable, Sendable, Equatable {
 /// Outcome-bound evidence attached to one action result. Failure has no warning-bearing state.
 public enum ActionResultEvidence: Sendable, Equatable {
     case success(ActionResultSuccessEvidence)
-    case failure(ErrorKind, ActionResultFailureEvidence)
+    case failure(ActionFailure.Kind, ActionResultFailureEvidence)
 
     public var outcome: ActionResultOutcome {
         switch self {
         case .success:
             return .success
-        case .failure(let errorKind, _):
-            return .failure(errorKind)
+        case .failure(let failureKind, _):
+            return .failure(failureKind)
         }
     }
 
@@ -158,8 +158,8 @@ public enum ActionResultEvidence: Sendable, Equatable {
         switch self {
         case .success(let evidence):
             return .success(ActionResultSuccessEvidence(body: body, warning: evidence.warning))
-        case .failure(let errorKind, _):
-            return .failure(errorKind, ActionResultFailureEvidence(body: body))
+        case .failure(let failureKind, _):
+            return .failure(failureKind, ActionResultFailureEvidence(body: body))
         }
     }
 }

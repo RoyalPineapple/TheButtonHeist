@@ -98,15 +98,15 @@ final class TheSafecrackerTests: XCTestCase {
     // MARK: - Keyboard Visibility
 
     func testKeyboardNotVisibleByDefault() {
-        XCTAssertFalse(safecracker.isKeyboardVisible())
+        XCTAssertFalse(safecracker.isKeyboardVisible)
     }
 
     func testKeyboardVisibilityDoesNotInferFromFocusedTextInput() {
         let keyboardImpl = KeyboardInjectionKeyboardImpl()
         safecracker.keyboardBridgeProvider = { keyboardImpl.bridge() }
 
-        XCTAssertTrue(safecracker.hasActiveTextInput())
-        XCTAssertFalse(safecracker.isKeyboardVisible())
+        XCTAssertTrue(safecracker.hasActiveTextInput)
+        XCTAssertFalse(safecracker.isKeyboardVisible)
     }
 
     func testKeyboardVisibleAfterFrameNotification() {
@@ -124,7 +124,7 @@ final class TheSafecrackerTests: XCTestCase {
             userInfo: [UIResponder.keyboardFrameEndUserInfoKey: keyboardFrame]
         )
 
-        XCTAssertTrue(safecracker.isKeyboardVisible())
+        XCTAssertTrue(safecracker.isKeyboardVisible)
     }
 
     func testKeyboardNotVisibleWhenFrameOffScreen() {
@@ -142,7 +142,7 @@ final class TheSafecrackerTests: XCTestCase {
             userInfo: [UIResponder.keyboardFrameEndUserInfoKey: offScreenFrame]
         )
 
-        XCTAssertFalse(safecracker.isKeyboardVisible())
+        XCTAssertFalse(safecracker.isKeyboardVisible)
     }
 
     func testKeyboardNotVisibleAfterObservationStopped() {
@@ -159,14 +159,14 @@ final class TheSafecrackerTests: XCTestCase {
             object: nil,
             userInfo: [UIResponder.keyboardFrameEndUserInfoKey: keyboardFrame]
         )
-        XCTAssertTrue(safecracker.isKeyboardVisible())
+        XCTAssertTrue(safecracker.isKeyboardVisible)
 
         safecracker.stopKeyboardObservation()
 
         // After stopping observation, the flag retains its last value
         // but new notifications should not update it.
         let newSafecracker = TheSafecracker()
-        XCTAssertFalse(newSafecracker.isKeyboardVisible())
+        XCTAssertFalse(newSafecracker.isKeyboardVisible)
     }
 
     func testKeyboardVisibilityTogglesWithNotifications() {
@@ -189,14 +189,14 @@ final class TheSafecrackerTests: XCTestCase {
             object: nil,
             userInfo: [UIResponder.keyboardFrameEndUserInfoKey: visibleFrame]
         )
-        XCTAssertTrue(safecracker.isKeyboardVisible())
+        XCTAssertTrue(safecracker.isKeyboardVisible)
 
         NotificationCenter.default.post(
             name: UIResponder.keyboardDidChangeFrameNotification,
             object: nil,
             userInfo: [UIResponder.keyboardFrameEndUserInfoKey: hiddenFrame]
         )
-        XCTAssertFalse(safecracker.isKeyboardVisible())
+        XCTAssertFalse(safecracker.isKeyboardVisible)
     }
 
     // MARK: - Text Injection

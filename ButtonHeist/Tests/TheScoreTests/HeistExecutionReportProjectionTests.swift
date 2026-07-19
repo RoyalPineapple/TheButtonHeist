@@ -52,7 +52,7 @@ import TheScore
             name: "Checkout",
             completion: .passed(children: children)
         )
-        let result = HeistExecutionResult(steps: [root], durationMs: 5)
+        let result = HeistExecutionReceipt(steps: [root], durationMs: 5)
 
         let report = HeistExecutionReport.project(result)
 

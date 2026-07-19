@@ -78,18 +78,21 @@ import TheScore
         }
     }
 
-    @Test func `execution result derives failure and has no parallel outcome fields`() throws {
+    @Test func `execution receipt derives terminal outcome without duplicating steps`() throws {
         let result = HeistReceiptFixture.result(
             steps: [HeistReceiptFixture.explicitFailure(message: "stop")],
             durationMs: 3
         )
+        let passed = HeistReceiptFixture.result(steps: [])
         let object = try jsonObject(result)
 
         #expect(result.isFailure)
+        #expect(result.outcome == .failed(abortedAtPath: "$.body[0]"))
+        #expect(passed.outcome == .passed)
         #expect(result.abortedAtPath == "$.body[0]")
         #expect(Set(object.keys) == ["steps", "durationMs"])
         #expect(try JSONDecoder().decode(
-            HeistExecutionResult.self,
+            HeistExecutionReceipt.self,
             from: JSONSerialization.data(withJSONObject: object)
         ) == result)
     }

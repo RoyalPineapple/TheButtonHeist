@@ -38,7 +38,7 @@ final class ActionResultEvidenceContractTests: XCTestCase {
                 ),
                 ActionResult.failure(
                     method: .wait,
-                    errorKind: .timeout,
+                    failureKind: .timeout,
                     observation: observation
                 ),
             ]
@@ -92,7 +92,7 @@ final class ActionResultEvidenceContractTests: XCTestCase {
     func testFailureEvidenceRoundTripsWithExplicitAbsence() throws {
         let result = ActionResult.failure(
             method: .wait,
-            errorKind: .timeout,
+            failureKind: .timeout,
             message: "timed out",
         )
 
@@ -152,7 +152,7 @@ final class ActionResultEvidenceContractTests: XCTestCase {
     func testFailureEvidenceRejectsSuccessOnlyWarning() {
         assertActionResultRejects("""
         {
-          "outcome": {"kind": "failure", "errorKind": "actionFailed"},
+          "outcome": {"kind": "failure", "failureKind": "actionFailed"},
           "method": "activate",
           "evidence": {
             "observation": {"kind": "none"},

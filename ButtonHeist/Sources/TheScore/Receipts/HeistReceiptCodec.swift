@@ -27,19 +27,19 @@ package struct HeistReceiptCodecLimits: Sendable, Equatable {
 }
 
 public enum HeistReceiptCodec {
-    public static func write(_ receipt: HeistExecutionResult, to url: URL) throws {
+    public static func write(_ receipt: HeistExecutionReceipt, to url: URL) throws {
         let data = try encode(receipt, format: format(for: url))
         try data.write(to: url, options: .atomic)
     }
 
-    public static func decode(contentsOf url: URL) throws -> HeistExecutionResult {
+    public static func decode(contentsOf url: URL) throws -> HeistExecutionReceipt {
         try decode(contentsOf: url, limits: .default)
     }
 
     package static func decode(
         contentsOf url: URL,
         limits: HeistReceiptCodecLimits
-    ) throws -> HeistExecutionResult {
+    ) throws -> HeistExecutionReceipt {
         let format = format(for: url)
         let data: Data
         switch format {
@@ -59,7 +59,7 @@ public enum HeistReceiptCodec {
         return try decode(data, format: format, limits: limits)
     }
 
-    public static func decode(_ data: Data, format: HeistReceiptFormat = .json) throws -> HeistExecutionResult {
+    public static func decode(_ data: Data, format: HeistReceiptFormat = .json) throws -> HeistExecutionReceipt {
         try decode(data, format: format, limits: .default)
     }
 
@@ -67,7 +67,7 @@ public enum HeistReceiptCodec {
         _ data: Data,
         format: HeistReceiptFormat = .json,
         limits: HeistReceiptCodecLimits
-    ) throws -> HeistExecutionResult {
+    ) throws -> HeistExecutionReceipt {
         let jsonData: Data
         switch format {
         case .json:
@@ -87,10 +87,10 @@ public enum HeistReceiptCodec {
             }
             jsonData = try GzipCodec.decompress(data, maxBytes: limits.maxGzipDecompressedBytes)
         }
-        return try JSONDecoder().decode(HeistExecutionResult.self, from: jsonData)
+        return try JSONDecoder().decode(HeistExecutionReceipt.self, from: jsonData)
     }
 
-    public static func encode(_ receipt: HeistExecutionResult, format: HeistReceiptFormat = .json) throws -> Data {
+    public static func encode(_ receipt: HeistExecutionReceipt, format: HeistReceiptFormat = .json) throws -> Data {
         let jsonData = try JSONEncoder.heistReceipt.encode(receipt)
         switch format {
         case .json:

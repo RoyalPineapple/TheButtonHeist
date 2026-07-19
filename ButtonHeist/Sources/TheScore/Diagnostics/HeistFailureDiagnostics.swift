@@ -80,7 +80,7 @@ public enum HeistFailureDiagnostics {
     }
 }
 
-public extension HeistExecutionResult {
+public extension HeistExecutionReceipt {
     package var failureScreenshotPayload: ScreenPayload? {
         failureScreenshotStep?.screenshotPayload
     }

@@ -10,7 +10,7 @@ import TheScore
             dispatchResult: .success(method: .dismiss)
         )
         let failedAction = HeistActionEvidence.dispatch(
-            dispatchResult: .failure(method: .dismiss, errorKind: .actionFailed)
+            dispatchResult: .failure(method: .dismiss, failureKind: .actionFailed)
         )
 
         #expect(HeistPassedActionEvidence(passedAction) != nil)

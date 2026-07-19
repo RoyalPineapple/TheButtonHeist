@@ -18,13 +18,13 @@ package enum HeistExecutionReport {
         package let finalScreenId: String?
     }
 
-    package static func project(_ result: HeistExecutionResult) -> Projection {
-        var reducer = Reducer(durationMs: result.durationMs)
-        result.steps.walk(enter: { reducer.reduce($0) }, leave: { _ in })
-        let reportRootSteps = result.steps.dropLast(result.failureScreenshotStep == nil ? 0 : 1)
+    package static func project(_ receipt: HeistExecutionReceipt) -> Projection {
+        var reducer = Reducer(durationMs: receipt.durationMs)
+        receipt.steps.walk(enter: { reducer.reduce($0) }, leave: { _ in })
+        let reportRootSteps = receipt.steps.dropLast(receipt.failureScreenshotStep == nil ? 0 : 1)
         return reducer.projection(
             executedTopLevelStepCount: reportRootSteps.count { $0.status != .skipped },
-            abortedAtPath: result.abortedAtPath
+            abortedAtPath: receipt.abortedAtPath
         )
     }
 
@@ -319,7 +319,7 @@ public extension Array where Element == HeistExecutionStepResult {
     }
 }
 
-public extension HeistExecutionResult {
+public extension HeistExecutionReceipt {
     /// Top-level heist body steps that actually began execution/evaluation.
     var executedTopLevelStepCount: Int {
         HeistExecutionReport.project(self).summary.executedTopLevelStepCount
@@ -393,11 +393,11 @@ public extension HeistExecutionResult {
     }
 }
 
-package extension HeistExecutionResult {
+package extension HeistExecutionReceipt {
     var failureScreenshotStep: HeistExecutionStepResult? {
-        guard case .failed(let outcome) = outcome,
-              let candidate = outcome.steps.last,
-              candidate.path != outcome.abortedAtPath,
+        guard case .failed(let abortedAtPath) = outcome,
+              let candidate = steps.last,
+              candidate.path != abortedAtPath,
               case .action(let command, _) = candidate.node,
               let evidence = candidate.actionEvidence,
               case .dispatch(let result) = evidence

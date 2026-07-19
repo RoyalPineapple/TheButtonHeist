@@ -19,7 +19,7 @@ package extension ResolvedHeistActionCommand {
         case .viewportScroll: return .scroll
         case .viewportScrollToVisible: return .scrollToVisible
         case .viewportScrollToEdge: return .scrollToEdge
-        case .dismissKeyboard: return .resignFirstResponder
+        case .dismissKeyboard: return .dismissKeyboard
         case .setPasteboard: return .setPasteboard
         case .takeScreenshot: return .takeScreenshot
         }
