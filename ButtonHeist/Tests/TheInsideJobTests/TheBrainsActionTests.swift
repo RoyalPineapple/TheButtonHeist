@@ -271,8 +271,8 @@ final class TheBrainsActionTests: XCTestCase {
 
     private func assertSameInteraction(
         _ name: String,
-        single singleResult: TheSafecracker.ActionDispatchOutcome,
-        heist heistResult: TheSafecracker.ActionDispatchOutcome,
+        single singleResult: TheSafecracker.ActionDispatchResult,
+        heist heistResult: TheSafecracker.ActionDispatchResult,
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
@@ -294,20 +294,20 @@ final class TheBrainsActionTests: XCTestCase {
         if isPreDispatchMatcherFailure(single),
            isPreDispatchMatcherFailure(heist) {
             XCTAssertTrue(
-                [.actionFailed, .elementNotFound].contains(single.outcome.errorKind),
+                [.actionFailed, .elementNotFound].contains(single.outcome.failureKind),
                 name,
                 file: file,
                 line: line
             )
             XCTAssertTrue(
-                [.actionFailed, .elementNotFound].contains(heist.outcome.errorKind),
+                [.actionFailed, .elementNotFound].contains(heist.outcome.failureKind),
                 name,
                 file: file,
                 line: line
             )
             return
         }
-        XCTAssertEqual(heist.outcome.errorKind, single.outcome.errorKind, name, file: file, line: line)
+        XCTAssertEqual(heist.outcome.failureKind, single.outcome.failureKind, name, file: file, line: line)
         assertSameActionMessage(
             name,
             single: single.message,
@@ -336,7 +336,7 @@ final class TheBrainsActionTests: XCTestCase {
 
     private func isPreDispatchMatcherFailure(_ result: ActionResult) -> Bool {
         guard result.outcome.isSuccess == false,
-              [.actionFailed, .elementNotFound].contains(result.outcome.errorKind),
+              [.actionFailed, .elementNotFound].contains(result.outcome.failureKind),
               let message = result.message
         else { return false }
         return message.contains("No match for:")
@@ -349,8 +349,9 @@ final class TheBrainsActionTests: XCTestCase {
 
     func heistStepResult(for step: HeistStep, label: String) async throws -> ActionResult {
         let result = await brains.executeHeistPlan(try HeistPlan(body: [step]))
-        guard case .heistExecution(let heist) = result.payload,
-              let stepResult = heist.steps.first,
+        guard case .heist(let payload) = result.payload,
+              let heistResult = payload,
+              let stepResult = heistResult.steps.first,
               let actionResult = stepResult.reportActionResult else {
             XCTFail("Expected heist execution step result for \(label)")
             return result
@@ -362,7 +363,7 @@ final class TheBrainsActionTests: XCTestCase {
         labels: [String],
         screenId: String? = nil,
         screenChanged: Bool = false
-    ) -> PostActionObservation.ObservationBaseline {
+    ) -> ActionEvidenceProjector.Baseline {
         observedState(elements: labels.enumerated().map { index, label in
             (makeElement(label: label), HeistId(rawValue: "element_\(index)"))
         }, screenId: screenId, screenChanged: screenChanged)
@@ -386,9 +387,9 @@ final class TheBrainsActionTests: XCTestCase {
         elements: [(AccessibilityElement, HeistId)],
         screenId: String? = nil,
         screenChanged: Bool = false
-    ) -> PostActionObservation.ObservationBaseline {
+    ) -> ActionEvidenceProjector.Baseline {
         brains.vault.installObservationForTesting(.makeForTests(elements: elements))
-        let state = brains.postActionObservation.captureSemanticState()
+        let state = brains.actionEvidenceProjector.projectBaseline()
         guard let screenId else { return state }
 
         let context = AccessibilityTrace.Context(
@@ -414,7 +415,7 @@ final class TheBrainsActionTests: XCTestCase {
                 ])
                 : state.capture.transition
         )
-        return PostActionObservation.ObservationBaseline(
+        return ActionEvidenceProjector.Baseline(
             observation: state.observation,
             capture: capture,
             tripwireSignal: state.tripwireSignal,
@@ -423,7 +424,7 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func heistRuntime(
-        observations: [PostActionObservation.ObservationBaseline],
+        observations: [ActionEvidenceProjector.Baseline],
         executionBaseline: SettledCapture? = nil,
         execute: (@MainActor (ResolvedHeistActionCommand) async -> ActionResult)? = nil,
         wait: (@MainActor (TheBrains.HeistRuntimeWaitRequest) async -> ActionResult)? = nil,
@@ -452,7 +453,7 @@ final class TheBrainsActionTests: XCTestCase {
                     result = await execute(command)
                 } else {
                     result = ActionResult.success(
-                        method: command.testActionResultMethod,
+                        payload: command.resultPayload,
                         message: command.runtimeType.rawValue,
                     )
                 }
@@ -462,7 +463,7 @@ final class TheBrainsActionTests: XCTestCase {
                 )
             },
             wait: { request in
-                await self.heistRuntimeWaitReceipt(
+                await self.heistRuntimeWaitResult(
                     for: request,
                     wait: wait,
                     observationSource: observationSource
@@ -473,21 +474,21 @@ final class TheBrainsActionTests: XCTestCase {
                     in: caseBrains.vault,
                     timeout: timeout
                 )
-                return await caseBrains.interactionObservation.waitForPredicateCases(
+                return await caseBrains.interactionCoordinator.waitForPredicateCases(
                     cases,
                     timeout: timeout
                 )
             },
-            observeSemanticState: { scope, _, timeout in
+            settledEvidence: { scope, _, timeout in
                 observationSource.next(scope: scope, timeout: timeout)
             }
         )
     }
 
-    func repeatUntilReceiptRuntime(
-        observations: [PostActionObservation.ObservationBaseline],
+    func repeatUntilWaitRuntime(
+        observations: [ActionEvidenceProjector.Baseline],
         execute: (@MainActor (ResolvedHeistActionCommand) async -> ActionResult)? = nil,
-        wait: @escaping @MainActor (TheBrains.HeistRuntimeWaitRequest) async -> HeistWaitReceipt
+        wait: @escaping @MainActor (TheBrains.HeistRuntimeWaitRequest) async -> HeistWaitResult
     ) -> TheBrains.HeistExecutionRuntime {
         let observationSource = ScriptedHeistObservationSource(
             observations: observations,
@@ -504,7 +505,7 @@ final class TheBrainsActionTests: XCTestCase {
                     result = await execute(command)
                 } else {
                     result = ActionResult.success(
-                        method: command.testActionResultMethod,
+                        payload: command.resultPayload,
                         message: command.runtimeType.rawValue,
                     )
                 }
@@ -514,23 +515,23 @@ final class TheBrainsActionTests: XCTestCase {
             selectPredicateCase: { _, _ in
                 .selectingFirstMatch(cases: [], ifNone: .noMatch, elapsedMs: 0)
             },
-            observeSemanticState: { scope, _, timeout in
+            settledEvidence: { scope, _, timeout in
                 observationSource.next(scope: scope, timeout: timeout)
             }
         )
     }
 
-    private func heistRuntimeWaitReceipt(
+    private func heistRuntimeWaitResult(
         for request: TheBrains.HeistRuntimeWaitRequest,
         wait: (@MainActor (TheBrains.HeistRuntimeWaitRequest) async -> ActionResult)?,
         observationSource: ScriptedHeistObservationSource
-    ) async -> HeistWaitReceipt {
+    ) async -> HeistWaitResult {
         let waitStep = request.step
         let initialTrace = request.initialTrace
         let afterSequence = request.afterSequence
         let observationScope = SemanticObservationScope.visible
         if let wait {
-            return heistWaitReceipt(for: waitStep, result: await wait(request))
+            return heistWaitResult(for: waitStep, result: await wait(request))
         }
         if waitStep.predicate.requiresChangeBaseline,
            let initialTrace,
@@ -547,7 +548,7 @@ final class TheBrainsActionTests: XCTestCase {
                     message: expectation.actual,
                     traceEvidence: makeTestTraceEvidence(initialTrace, completeness: .incomplete)
                 )
-                return heistWaitReceipt(for: waitStep, result: result, expectation: expectation)
+                return heistWaitResult(for: waitStep, result: result, expectation: expectation)
             }
         }
         guard let observation = observationSource.next(
@@ -560,19 +561,19 @@ final class TheBrainsActionTests: XCTestCase {
                 actual: "no settled semantic observation available"
             )
             let result = ActionResult.failure(
-                method: .wait,
-                errorKind: .timeout,
+                payload: .wait,
+                failureKind: .timeout,
                 message: expectation.actual,
             )
-            return heistWaitReceipt(for: waitStep, result: result, expectation: expectation)
+            return heistWaitResult(for: waitStep, result: result, expectation: expectation)
         }
-        return heistWaitReceipt(for: waitStep, observation: observation)
+        return heistWaitResult(for: waitStep, observation: observation)
     }
 
-    private func heistWaitReceipt(
+    private func heistWaitResult(
         for step: ResolvedWaitRuntimeInput,
         observation: SettledObservationEvidence
-    ) -> HeistWaitReceipt {
+    ) -> HeistWaitResult {
         let expectation = PredicateEvaluation.evaluate(
             step.predicate,
             expression: step.predicateExpression,
@@ -606,10 +607,10 @@ final class TheBrainsActionTests: XCTestCase {
         }
     }
 
-    private func heistWaitReceipt(
+    private func heistWaitResult(
         for step: ResolvedWaitRuntimeInput,
         result: ActionResult
-    ) -> HeistWaitReceipt {
+    ) -> HeistWaitResult {
         let expectation: ExpectationResult
         if result.outcome.isSuccess {
             expectation = step.predicate.validate(against: result).expectation(for: step.predicateExpression)
@@ -620,14 +621,14 @@ final class TheBrainsActionTests: XCTestCase {
                 actual: result.message ?? "failed"
             )
         }
-        return heistWaitReceipt(for: step, result: result, expectation: expectation)
+        return heistWaitResult(for: step, result: result, expectation: expectation)
     }
 
-    private func heistWaitReceipt(
+    private func heistWaitResult(
         for _: ResolvedWaitRuntimeInput,
         result: ActionResult,
         expectation: ExpectationResult
-    ) -> HeistWaitReceipt {
+    ) -> HeistWaitResult {
         if result.outcome.isSuccess, case .met(let expectation) = expectation {
             return .matched(
                 message: result.message,
@@ -639,7 +640,7 @@ final class TheBrainsActionTests: XCTestCase {
             predicate: expectation.predicate,
             actual: result.message ?? expectation.actual
         )
-        if result.outcome.errorKind == .timeout || result.outcome.isSuccess {
+        if result.outcome.failureKind == .timeout || result.outcome.isSuccess {
             return .timedOut(
                 message: result.message,
                 traceEvidence: result.traceEvidence,
@@ -647,7 +648,7 @@ final class TheBrainsActionTests: XCTestCase {
             )
         }
         return .failed(
-                errorKind: result.outcome.errorKind ?? .general,
+                failureKind: result.outcome.failureKind ?? .actionFailed,
                 message: result.message,
                 traceEvidence: result.traceEvidence,
                 expectation: unmet
@@ -681,7 +682,7 @@ final class TheBrainsActionTests: XCTestCase {
     func withNoTraversableWindows<T>(
         _ operation: () async -> T
     ) async -> T {
-        let windows = brains.tripwire.getTraversableWindows().map(\.window)
+        let windows = brains.tripwire.captureTraversableWindows().map(\.window)
         let originalHiddenStates = windows.map(\.isHidden)
         for window in windows {
             window.isHidden = true
@@ -696,34 +697,34 @@ final class TheBrainsActionTests: XCTestCase {
 }
 
 extension ResolvedHeistActionCommand {
-    var testActionResultMethod: ActionMethod {
+    var resultPayload: ActionResult.Payload {
         switch self {
         case .activate: .activate
         case .increment: .increment
         case .decrement: .decrement
         case .customAction: .customAction
-        case .rotor: .rotor
+        case .rotor: .rotor(nil)
         case .dismiss: .dismiss
         case .magicTap: .magicTap
-        case .mechanicalTap: .syntheticTap
-        case .mechanicalLongPress: .syntheticLongPress
-        case .mechanicalSwipe: .syntheticSwipe
-        case .mechanicalDrag: .syntheticDrag
-        case .typeText: .typeText
+        case .oneFingerTap: .oneFingerTap
+        case .longPress: .longPress
+        case .swipe: .swipe
+        case .drag: .drag
+        case .typeText: .typeText(nil)
         case .editAction: .editAction
-        case .viewportScroll: .scroll
-        case .viewportScrollToVisible: .scrollToVisible
-        case .viewportScrollToEdge: .scrollToEdge
-        case .dismissKeyboard: .resignFirstResponder
-        case .setPasteboard: .setPasteboard
-        case .takeScreenshot: .takeScreenshot
+        case .scroll: .scroll
+        case .scrollToVisible: .scrollToVisible
+        case .scrollToEdge: .scrollToEdge
+        case .dismissKeyboard: .dismissKeyboard
+        case .setPasteboard: .setPasteboard(nil)
+        case .takeScreenshot: .screenshot(nil)
         }
     }
 }
 
 @MainActor
 private final class ScriptedHeistObservationSource {
-    private var remainingObservations: [PostActionObservation.ObservationBaseline]
+    private var remainingObservations: [ActionEvidenceProjector.Baseline]
     private var remainingUnavailableObservations: Int
     private var previousObservation: SettledObservation?
     private var previousCapture: AccessibilityTrace.Capture?
@@ -734,7 +735,7 @@ private final class ScriptedHeistObservationSource {
     private let line: UInt
 
     init(
-        observations: [PostActionObservation.ObservationBaseline],
+        observations: [ActionEvidenceProjector.Baseline],
         unavailableObservationCount: Int,
         observedScopes: (@MainActor (SemanticObservationScope) -> Void)?,
         observedTimeouts: (@MainActor (Double?) -> Void)?,
@@ -787,7 +788,7 @@ private final class ScriptedHeistObservationSource {
     }
 
     private func observation(
-        from state: PostActionObservation.ObservationBaseline,
+        from state: ActionEvidenceProjector.Baseline,
         scope: SemanticObservationScope,
         sequence: SettledObservationSequence
     ) -> SettledObservationEvidence {
@@ -822,8 +823,8 @@ private final class ScriptedHeistObservationSource {
 }
 
 private extension ActionResult {
-    var heistExecutionPayload: HeistExecutionResult? {
-        guard case .heistExecution(let result) = payload else { return nil }
+    var resultPayload: HeistResult? {
+        guard case .heist(let result) = payload else { return nil }
         return result
     }
 }
@@ -836,14 +837,14 @@ private func makeWaitActionResult(
     let observation = traceEvidence.map(ActionResultObservationEvidence.trace) ?? .none
     if met {
         return ActionResult.success(
-            method: .wait,
+            payload: .wait,
             message: message,
             observation: observation
         )
     }
     return ActionResult.failure(
-        method: .wait,
-        errorKind: .timeout,
+        payload: .wait,
+        failureKind: .timeout,
         message: message,
         observation: observation
     )

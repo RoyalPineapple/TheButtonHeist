@@ -1,19 +1,19 @@
-public struct ScoreUnknownCodingKey: CodingKey {
-    public var stringValue: String
-    public var intValue: Int?
+private struct UnknownCodingKey: CodingKey {
+    var stringValue: String
+    var intValue: Int?
 
-    public init(stringValue: String) {
+    init(stringValue: String) {
         self.stringValue = stringValue
         intValue = nil
     }
 
-    public init?(intValue: Int) {
+    init?(intValue: Int) {
         stringValue = "\(intValue)"
         self.intValue = intValue
     }
 }
 
-public extension Decoder {
+package extension Decoder {
     func rejectUnknownKeys<K>(
         allowed keyType: K.Type,
         additional allowedFieldNames: Set<String> = [],
@@ -27,7 +27,7 @@ public extension Decoder {
         allowed knownKeys: Set<String>,
         typeName: String
     ) throws {
-        let dynamicContainer = try container(keyedBy: ScoreUnknownCodingKey.self)
+        let dynamicContainer = try container(keyedBy: UnknownCodingKey.self)
         guard let unknownKey = dynamicContainer.allKeys.first(where: { !knownKeys.contains($0.stringValue) }) else {
             return
         }
@@ -38,7 +38,7 @@ public extension Decoder {
     }
 }
 
-public extension KeyedDecodingContainer where Key: CaseIterable & Hashable {
+package extension KeyedDecodingContainer where Key: CaseIterable & Hashable {
     func rejectIncompatibleFields(
         allowing allowedKeys: Set<Key>,
         typeName: String

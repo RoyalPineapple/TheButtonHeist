@@ -117,7 +117,7 @@ extension TheBrains {
                 error: error
             )
         }
-        guard let observation = await runtime.observeSemanticState(.discovery, nil, nil) else {
+        guard let observation = await runtime.settledEvidence(.discovery, nil, nil) else {
             return forEachUnavailableResult(
                 index: index,
                 path: path,
@@ -156,7 +156,7 @@ extension TheBrains {
             ),
             nextItem: { iterationIndex in
                 if iterationIndex > 0 {
-                    guard let afterObservation = await runtime.observeSemanticState(
+                    guard let afterObservation = await runtime.settledEvidence(
                         .discovery,
                         observedSequence,
                         nil
@@ -184,7 +184,7 @@ extension TheBrains {
                 environment.binding(target: item.target, to: step.parameter)
             },
             identity: { .element($0.target) },
-            iterationReceipt: { item, iterationIndex, iterationPath, iterationStart, children in
+            iterationResult: { item, iterationIndex, iterationPath, iterationStart, children in
                 self.forEachElementIterationResult(
                     path: iterationPath,
                     start: iterationStart,
@@ -210,7 +210,7 @@ extension TheBrains {
         nextItem: (Int) async -> ForEachLoopNext<Item>,
         bind: (HeistExecutionEnvironment, Item) -> HeistExecutionEnvironment,
         identity: (Item) -> ForEachLoopItemIdentity,
-        iterationReceipt: (
+        iterationResult: (
             Item,
             Int,
             HeistExecutionPath,
@@ -243,7 +243,7 @@ extension TheBrains {
                 path: iterationPath.iterationBody()
             )
 
-            let iterationNode = iterationReceipt(
+            let iterationNode = iterationResult(
                 item,
                 iterationIndex,
                 iterationPath,
@@ -358,7 +358,7 @@ extension TheBrains {
                 environment.binding(string: value, to: step.parameter)
             },
             identity: { .string($0) },
-            iterationReceipt: { value, iterationIndex, iterationPath, iterationStart, children in
+            iterationResult: { value, iterationIndex, iterationPath, iterationStart, children in
                 self.forEachStringIterationResult(
                     path: iterationPath,
                     start: iterationStart,

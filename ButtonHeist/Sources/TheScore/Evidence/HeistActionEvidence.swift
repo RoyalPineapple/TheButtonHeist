@@ -128,17 +128,17 @@ extension HeistActionCommand {
         case .dismiss: .dismiss
         case .magicTap: .magicTap
         case .typeText: .typeText
-        case .mechanicalTap: .syntheticTap
-        case .mechanicalLongPress: .syntheticLongPress
-        case .mechanicalSwipe: .syntheticSwipe
-        case .mechanicalDrag: .syntheticDrag
-        case .viewportScroll: .scroll
-        case .viewportScrollToVisible: .scrollToVisible
-        case .viewportScrollToEdge: .scrollToEdge
+        case .oneFingerTap: .oneFingerTap
+        case .longPress: .longPress
+        case .swipe: .swipe
+        case .drag: .drag
+        case .scroll: .scroll
+        case .scrollToVisible: .scrollToVisible
+        case .scrollToEdge: .scrollToEdge
         case .editAction: .editAction
         case .setPasteboard: .setPasteboard
         case .takeScreenshot: .takeScreenshot
-        case .dismissKeyboard: .resignFirstResponder
+        case .dismissKeyboard: .dismissKeyboard
         }
     }
 }

@@ -23,7 +23,7 @@ public struct TapTarget: Codable, Sendable, Equatable {
 
 extension TapTarget: CustomStringConvertible {
     public var description: String {
-        ScoreDescription.call("tap", [
+        CanonicalValueDescription.call("tap", [
             selection.description,
         ])
     }
@@ -66,7 +66,7 @@ public struct LongPressTarget: Codable, Sendable, Equatable {
 
 extension LongPressTarget: CustomStringConvertible {
     public var description: String {
-        ScoreDescription.call("longPress", [
+        CanonicalValueDescription.call("longPress", [
             selection.description,
             "duration=\(duration)",
         ])

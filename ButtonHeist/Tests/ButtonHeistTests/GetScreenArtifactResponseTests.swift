@@ -94,7 +94,7 @@ final class GetScreenArtifactResponseTests: XCTestCase {
             case .requestInterface:
                 return .interface(Interface(timestamp: Date(), tree: []))
             default:
-                return .actionResult(ActionResult.success(method: .activate))
+                return .actionResult(ActionResult.success(payload: .activate))
             }
         }
 
@@ -248,7 +248,7 @@ final class GetScreenArtifactResponseTests: XCTestCase {
             case .requestInterface:
                 return .interface(Interface(timestamp: Date(), tree: []))
             default:
-                return .actionResult(ActionResult.success(method: .activate))
+                return .actionResult(ActionResult.success(payload: .activate))
             }
         }
         return fence

@@ -48,17 +48,17 @@ where Evidence: Sendable & Equatable {
 
     private let vault: TheVault
     private let navigation: Navigation
-    private let postActionObservation: PostActionObservation
+    private let actionEvidenceProjector: ActionEvidenceProjector
     private var heistAnnouncementCursor: AccessibilityNotificationCursor = .origin
 
     internal init(
         vault: TheVault,
         navigation: Navigation,
-        postActionObservation: PostActionObservation
+        actionEvidenceProjector: ActionEvidenceProjector
     ) {
         self.vault = vault
         self.navigation = navigation
-        self.postActionObservation = postActionObservation
+        self.actionEvidenceProjector = actionEvidenceProjector
     }
 
     internal func wait(
@@ -68,7 +68,7 @@ where Evidence: Sendable & Equatable {
         announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly,
         onReadyToPoll: ReadyToPoll? = nil,
         startedAt: CFAbsoluteTime? = nil
-    ) async -> HeistWaitReceipt {
+    ) async -> HeistWaitResult {
         let start = startedAt ?? CFAbsoluteTimeGetCurrent()
         if case .announcement(let announcement) = step.predicate.core {
             return await waitForAnnouncementPredicate(
@@ -85,7 +85,7 @@ where Evidence: Sendable & Equatable {
             for: step,
             initialTrace: initialTrace
         ), traceEvaluation.met {
-            return waitReceipt(
+            return waitResult(
                 for: step,
                 trace: initialTrace,
                 observationSummary: nil,
@@ -128,11 +128,16 @@ where Evidence: Sendable & Equatable {
                     )
                 },
                 result: { outcome, _, evidence in
-                    self.waitReceipt(
+                    self.waitResult(
                         for: step,
-                        evidence: evidence,
+                        trace: evidence.lastTrace,
+                        observationSummary: evidence.lastObservationSummary,
+                        expectation: evidence.evaluation,
                         start: start,
-                        success: outcome == .matched
+                        success: outcome == .matched,
+                        baseline: evidence.changeBaseline,
+                        window: evidence.observationWindow,
+                        observedSequence: evidence.observedSequence
                     )
                 }
             ),
@@ -210,7 +215,7 @@ where Evidence: Sendable & Equatable {
             }
 
             let stream = wait.vault.semanticObservationStream
-            var cursor = stream.latestObservationCursor(scope: .visible)
+            var cursor = stream.latestCommittedObservationCursor(scope: .visible)
             while true {
                 switch await stream.waitForObservation(
                     after: cursor,
@@ -244,7 +249,7 @@ where Evidence: Sendable & Equatable {
                     if Task.isCancelled {
                         return finish(.cancelled, evidence: evaluation.evidence)
                     }
-                    cursor = stream.latestObservationCursor(scope: .visible) ?? cursor
+                    cursor = stream.latestCommittedObservationCursor(scope: .visible) ?? cursor
                 case .deadlineReached, .unavailable:
                     return await terminalVerification(evidence: evaluation.evidence)
                 case .cycleCompleted:
@@ -340,7 +345,7 @@ where Evidence: Sendable & Equatable {
                 return PredicateWaitEvaluation(evidence: evidence, matched: false)
             }
             return projection.evaluate(
-                wait.postActionObservation.semanticObservation(from: event),
+                wait.actionEvidenceProjector.projectSettledEvidence(from: event),
                 isInitialVisible,
                 evidence
             )
@@ -416,7 +421,7 @@ where Evidence: Sendable & Equatable {
         return announcement
     }
 
-    internal func latestEvent() -> SettledObservationEvent? { vault.semanticObservationStream.latestEvent }
+    internal func latestCommittedEvent() -> SettledObservationEvent? { vault.semanticObservationStream.latestCommittedEvent }
 
     internal func latestSettleFailure() -> String? {
         vault.semanticObservationStream.latestSettleFailureDiagnostic
@@ -432,14 +437,14 @@ where Evidence: Sendable & Equatable {
     private func settleVisible(
         _ deadline: SemanticObservationDeadline
     ) async -> SettledObservationEvent? {
-        if let current = vault.semanticObservationStream.cleanObservation(
+        if let current = vault.semanticObservationStream.admittedObservation(
             scope: .visible,
             after: nil
         ) {
             return current.event
         }
         guard hasStableObservationBudget(deadline) else { return nil }
-        return await vault.semanticObservationStream.visibleEvidence(
+        return await vault.semanticObservationStream.admittedVisibleObservation(
             timeout: min(
                 Double(SettleSession.defaultTimeoutMs) / 1_000,
                 deadline.remainingSeconds()
@@ -469,7 +474,7 @@ where Evidence: Sendable & Equatable {
             operationDeadline: deadline
         ) {
         case .inflated:
-            return vault.semanticObservationStream.latestEvent
+            return vault.semanticObservationStream.latestCommittedEvent
         case .failed:
             return nil
         }
@@ -492,7 +497,7 @@ where Evidence: Sendable & Equatable {
             exitPosition: .origin,
             deadline: deadline,
             onObservation: { event in
-                observer(event) ? .finish : .continue
+                observer(event) ? .goalSatisfied : .continue
             },
         ) else { return nil }
         return exploration.event

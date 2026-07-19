@@ -74,7 +74,7 @@ extension TheTripwire {
     /// Walk every layer once, collecting fingerprint + animations + layout.
     func scanLayers() -> LayerScan {
         var scan = LayerScan()
-        let windows = getTraversableWindows()
+        let windows = captureTraversableWindows()
         scan.windowCount = windows.count
         for entry in windows {
             let window = entry.window

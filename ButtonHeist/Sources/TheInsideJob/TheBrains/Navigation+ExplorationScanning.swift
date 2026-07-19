@@ -9,9 +9,9 @@ import ThePlans
 
 extension Navigation {
 
-    private enum TraversalResult: Equatable {
-        case finished
-        case completed
+    private enum TraversalOutcome: Equatable {
+        case goalSatisfied
+        case exhausted
         case interrupted
     }
 
@@ -22,7 +22,7 @@ extension Navigation {
         var continuity: ScreenContinuity { event.continuity }
     }
 
-    private enum OriginRestoreResult {
+    private enum OriginRestoreOutcome {
         case observed(ObservedViewport)
         case unchanged
         case unavailable
@@ -74,27 +74,27 @@ extension Navigation {
             onObservation: (SettledObservationEvent) -> ViewportExplorationDecision
         ) async -> InterfaceExplorationResult? {
             let startTime = CACurrentMediaTime()
-            let result: TraversalResult
+            let outcome: TraversalOutcome
 
             if let initial = await observe(onObservation: onObservation) {
-                if initial.decision == .finish {
+                if initial.decision == .goalSatisfied {
                     exploration.progress.clearPendingContainers()
-                    result = .finished
+                    outcome = .goalSatisfied
                 } else {
-                    result = await scanPendingContainers(
+                    outcome = await scanPendingContainers(
                         onObservation: onObservation
                     )
                 }
             } else {
-                result = .interrupted
+                outcome = .interrupted
             }
 
             let didFinalize = await finalize(
                 exitPosition: exitPosition,
-                notifyObservation: result != .finished,
+                notifyObservation: outcome != .goalSatisfied,
                 onObservation: onObservation
             )
-            guard didFinalize, result != .interrupted, let latestEvent else { return nil }
+            guard didFinalize, outcome != .interrupted, let latestEvent else { return nil }
             return exploration.finish(
                 startTime: startTime,
                 event: latestEvent,
@@ -104,25 +104,25 @@ extension Navigation {
 
         private func scanPendingContainers(
             onObservation: (SettledObservationEvent) -> ViewportExplorationDecision
-        ) async -> TraversalResult {
+        ) async -> TraversalOutcome {
             while !exploration.progress.pendingScrollPaths.isEmpty {
                 guard !Task.isCancelled, exploration.hasTimeRemaining else { return .interrupted }
                 guard exploration.progress.scrollCount < exploration.progress.maxScrollsPerDiscovery else {
                     exploration.progress.markDiscoveryLimitHit()
-                    return .completed
+                    return .exhausted
                 }
 
                 let batch = sortedPendingContainers()
                 guard !batch.isEmpty else {
                     exploration.progress.clearPendingContainers()
-                    return .completed
+                    return .exhausted
                 }
 
                 containerBatch: for container in batch {
                     guard !Task.isCancelled, exploration.hasTimeRemaining else { return .interrupted }
                     guard exploration.progress.scrollCount < exploration.progress.maxScrollsPerDiscovery else {
                         exploration.progress.markDiscoveryLimitHit()
-                        return .completed
+                        return .exhausted
                     }
                     guard let containerExploration = prepareContainerExploration(for: container) else {
                         exploration.markExplored(container)
@@ -130,26 +130,26 @@ extension Navigation {
                     }
                     recordOrigin(of: containerExploration)
 
-                    let result = await scanContainer(
+                    let outcome = await scanContainer(
                         containerExploration,
                         onObservation: onObservation
                     )
-                    switch result {
-                    case .finished:
+                    switch outcome {
+                    case .goalSatisfied:
                         markExplored(containerExploration)
-                        return .finished
-                    case .completed:
+                        return .goalSatisfied
+                    case .exhausted:
                         markExplored(containerExploration)
                     case .screenReplaced:
                         break containerBatch
-                    case .omitted(let reason):
+                    case .limitHit(let reason):
                         exploration.progress.markOmitted(containerExploration.path, reason: reason)
                     case .interrupted:
                         return .interrupted
                     }
                 }
             }
-            return .completed
+            return .exhausted
         }
 
         private func sortedPendingContainers() -> [InterfaceTree.Container] {
@@ -208,29 +208,19 @@ extension Navigation {
         private func scanContainer(
             _ container: ActiveContainerExploration,
             onObservation: (SettledObservationEvent) -> ViewportExplorationDecision
-        ) async -> ScrollContainerScanResult {
+        ) async -> ScrollScanOutcome {
             for (index, direction) in searchOrder.directions.enumerated() {
-                switch await runScrollScan(
+                let outcome = await runScrollScan(
                     container,
                     direction: direction,
                     onObservation: onObservation
-                ) {
-                case .finished:
-                    return .finished
-                case .screenReplaced:
-                    return .screenReplaced
-                case .limitHit(let reason):
-                    return .omitted(reason)
-                case .interrupted:
-                    return .interrupted
-                case .exhausted:
-                    break
-                }
+                )
+                guard outcome == .exhausted else { return outcome }
 
-                guard index == 0 else { return .completed }
+                guard index == 0 else { return .exhausted }
                 switch await restoreOrigin(of: container, onObservation: onObservation) {
                 case .observed(let observation):
-                    if observation.decision == .finish { return .finished }
+                    if observation.decision == .goalSatisfied { return .goalSatisfied }
                     if observation.continuity.isReplacement { return .screenReplaced }
                 case .unchanged:
                     break
@@ -238,7 +228,7 @@ extension Navigation {
                     return .interrupted
                 }
             }
-            return .completed
+            return .exhausted
         }
 
         private func runScrollScan(
@@ -262,7 +252,7 @@ extension Navigation {
                     deadline: exploration.deadline,
                     discoveryCommitPolicy: exploration.discoveryCommitPolicy
                 )
-                switch transition.result {
+                switch transition.outcome {
                 case .unchanged, .unavailable:
                     return .exhausted
                 case .moved:
@@ -270,7 +260,7 @@ extension Navigation {
                 }
                 guard let event = transition.event else { return .interrupted }
                 let observation = record(event, notifyObservation: true, onObservation: onObservation)
-                if observation.decision == .finish { return .finished }
+                if observation.decision == .goalSatisfied { return .goalSatisfied }
                 if observation.continuity.isReplacement { return .screenReplaced }
                 if let nestedOutcome = await scanNewlyVisibleNestedContainers(
                     inside: container,
@@ -302,23 +292,21 @@ extension Navigation {
                     continue
                 }
                 recordOrigin(of: nested)
-                let result = await scanContainer(
+                let outcome = await scanContainer(
                     nested,
                     onObservation: onObservation
                 )
-                switch result {
-                case .finished:
+                switch outcome {
+                case .goalSatisfied:
                     markExplored(nested)
-                    return .finished
-                case .completed:
+                    return outcome
+                case .exhausted:
                     markExplored(nested)
-                case .screenReplaced:
-                    return .screenReplaced
-                case .omitted(let reason):
+                case .screenReplaced, .interrupted:
+                    return outcome
+                case .limitHit(let reason):
                     exploration.progress.markOmitted(nested.path, reason: reason)
-                    if reason == .discoveryScrollLimit { return .limitHit(reason) }
-                case .interrupted:
-                    return .interrupted
+                    if reason == .discoveryScrollLimit { return outcome }
                 }
             }
             return nil
@@ -397,7 +385,7 @@ extension Navigation {
         private func restoreOrigin(
             of container: ActiveContainerExploration,
             onObservation: (SettledObservationEvent) -> ViewportExplorationDecision
-        ) async -> OriginRestoreResult {
+        ) async -> OriginRestoreOutcome {
             await restoreOrigin(
                 container.savedVisualOrigin,
                 scrollViewID: container.scrollViewID,
@@ -410,7 +398,7 @@ extension Navigation {
             scrollViewID: ObjectIdentifier,
             notifyObservation: Bool = true,
             onObservation: (SettledObservationEvent) -> ViewportExplorationDecision
-        ) async -> OriginRestoreResult {
+        ) async -> OriginRestoreOutcome {
             guard let target = currentProgrammaticScrollTarget(for: scrollViewID),
                   case .uiScrollView = target else {
                 return .unavailable
@@ -420,7 +408,7 @@ extension Navigation {
                 deadline: exploration.deadline,
                 discoveryCommitPolicy: exploration.discoveryCommitPolicy
             )
-            switch transition.result {
+            switch transition.outcome {
             case .unavailable:
                 return .unavailable
             case .unchanged:
@@ -509,7 +497,7 @@ extension Navigation {
         let explorer = ViewportExplorer(
             navigation: self,
             exploration: SemanticExploration(
-                baseline: .interfaceMemory(vault.actionDiscoveryBaseline()),
+                baseline: .interfaceMemory(vault.interfaceMemoryBaseline()),
                 deadline: deadline
             ),
             searchOrder: .backwardFirst,
@@ -517,7 +505,7 @@ extension Navigation {
         )
         let explored = await explorer.exploreViewports(exitPosition: .current) { event in
             didFindTarget = event.settledObservation.observation.liveCapture.contains(heistId: heistId)
-            return didFindTarget ? .finish : .continue
+            return didFindTarget ? .goalSatisfied : .continue
         }
         return didFindTarget ? explored : nil
     }

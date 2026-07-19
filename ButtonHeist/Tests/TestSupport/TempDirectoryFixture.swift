@@ -43,20 +43,20 @@ public func withTemporaryDirectory<Result: Sendable>(
     }
 }
 
-/// Runs `body` with a per-test receipt directory.
+/// Runs `body` with a per-test result directory.
 @discardableResult
-public func withReceiptDirectory<Result>(
-    prefix: String = "buttonheist-receipts",
+public func withResultDirectory<Result>(
+    prefix: String = "buttonheist-results",
     rootDirectory: URL = FileManager.default.temporaryDirectory,
     _ body: (URL) throws -> Result
 ) throws -> Result {
     try withTemporaryDirectory(prefix: prefix, rootDirectory: rootDirectory, body)
 }
 
-/// Runs async `body` with a per-test receipt directory.
+/// Runs async `body` with a per-test result directory.
 @discardableResult
-public func withReceiptDirectory<Result: Sendable>(
-    prefix: String = "buttonheist-receipts",
+public func withResultDirectory<Result: Sendable>(
+    prefix: String = "buttonheist-results",
     rootDirectory: URL = FileManager.default.temporaryDirectory,
     isolation: isolated (any Actor)? = #isolation,
     _ body: (URL) async throws -> Result
@@ -69,7 +69,7 @@ public func withReceiptDirectory<Result: Sendable>(
     )
 }
 
-public func receiptArtifactURLs(
+public func resultArtifactURLs(
     in directory: URL,
     matchingSuffix suffix: String = ".json.gz"
 ) throws -> [URL] {
@@ -77,7 +77,7 @@ public func receiptArtifactURLs(
         at: directory,
         includingPropertiesForKeys: [.isRegularFileKey]
     ) else {
-        throw ReceiptDirectoryFixtureError.unreadableDirectory(directory.path)
+        throw ResultDirectoryFixtureError.unreadableDirectory(directory.path)
     }
 
     var urls: [URL] = []
@@ -90,13 +90,13 @@ public func receiptArtifactURLs(
     return urls.sorted { $0.path < $1.path }
 }
 
-public func assertSingleReceiptArtifactURL(
+public func assertSingleResultArtifactURL(
     in directory: URL,
     matchingSuffix suffix: String = ".json.gz"
 ) throws -> URL {
-    let urls = try receiptArtifactURLs(in: directory, matchingSuffix: suffix)
+    let urls = try resultArtifactURLs(in: directory, matchingSuffix: suffix)
     guard urls.count == 1 else {
-        throw ReceiptDirectoryFixtureError.unexpectedReceiptCount(
+        throw ResultDirectoryFixtureError.unexpectedResultCount(
             expected: 1,
             actualPaths: urls.map(\.path)
         )
@@ -104,16 +104,16 @@ public func assertSingleReceiptArtifactURL(
     return urls[0]
 }
 
-public enum ReceiptDirectoryFixtureError: Error, Equatable, CustomStringConvertible, Sendable {
+public enum ResultDirectoryFixtureError: Error, Equatable, CustomStringConvertible, Sendable {
     case unreadableDirectory(String)
-    case unexpectedReceiptCount(expected: Int, actualPaths: [String])
+    case unexpectedResultCount(expected: Int, actualPaths: [String])
 
     public var description: String {
         switch self {
         case .unreadableDirectory(let path):
-            return "Could not enumerate receipt directory at \(path)"
-        case .unexpectedReceiptCount(let expected, let actualPaths):
-            return "Expected \(expected) receipt artifact(s), found \(actualPaths.count): \(actualPaths.joined(separator: ", "))"
+            return "Could not enumerate result directory at \(path)"
+        case .unexpectedResultCount(let expected, let actualPaths):
+            return "Expected \(expected) result artifact(s), found \(actualPaths.count): \(actualPaths.joined(separator: ", "))"
         }
     }
 }

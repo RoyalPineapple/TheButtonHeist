@@ -13,7 +13,7 @@ struct ActivationDispatchEvidence: Sendable {
 
 enum ActivationRefreshResult {
     case resolved(ElementInflation.InflatedElementTarget)
-    case failure(TheSafecracker.ActionDispatchOutcome)
+    case failure(TheSafecracker.ActionDispatchResult)
 }
 
 struct ActivationPolicy<PreparedDispatch: Sendable> {
@@ -24,10 +24,10 @@ struct ActivationPolicy<PreparedDispatch: Sendable> {
     var prepareActivationPointDispatch: @MainActor (CGPoint) -> PreparedDispatch?
     var completeActivationPointDispatch: @MainActor (PreparedDispatch) async -> Bool
     var showFingerprint: @MainActor (CGPoint) -> Void
-    var textEntryActivationFailure: @MainActor (InterfaceTree.Element, ActivationTrace) async -> TheSafecracker.ActionDispatchOutcome?
+    var textEntryActivationFailure: @MainActor (InterfaceTree.Element, ActivationTrace) async -> TheSafecracker.ActionDispatchResult?
 
     @MainActor
-    func apply(to _: TheVault.LiveActionTarget) async -> TheSafecracker.ActionDispatchOutcome {
+    func apply(to _: TheVault.LiveActionTarget) async -> TheSafecracker.ActionDispatchResult {
         let refreshedTarget: ElementInflation.InflatedElementTarget
         switch await refreshAndResolve() {
         case .resolved(let target):
@@ -60,7 +60,7 @@ struct ActivationPolicy<PreparedDispatch: Sendable> {
                 return failure.withSubjectEvidence(subjectEvidence)
             }
             return .success(
-                method: .activate,
+                payload: .activate,
                 subjectEvidence: subjectEvidence,
                 activationTrace: trace
             )
@@ -92,7 +92,7 @@ struct ActivationPolicy<PreparedDispatch: Sendable> {
                 return failure.withSubjectEvidence(subjectEvidence)
             }
             return .success(
-                method: .activate,
+                payload: .activate,
                 subjectEvidence: subjectEvidence,
                 activationTrace: trace
             )

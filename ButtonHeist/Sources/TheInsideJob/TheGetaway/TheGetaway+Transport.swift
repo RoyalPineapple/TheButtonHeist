@@ -38,8 +38,8 @@ extension TheGetaway {
         let disconnect: @Sendable (Int) async -> Void = { clientId in
             await server.removeClient(clientId)
         }
-        let onAuthenticated: @MainActor @Sendable (Int, @escaping SocketResponseHandler) async -> Void = { [weak self] clientId, respond in
-            await self?.handleClientConnected(clientId, respond: respond)
+        let onAuthenticated: @MainActor @Sendable (Int, @escaping SocketResponseHandler) async -> Void = { [weak self] _, respond in
+            await self?.sendServerInfo(respond: respond)
         }
         await muscle.installCallbacks(
             sendToClient: sendToClient,
@@ -51,15 +51,15 @@ extension TheGetaway {
         eventConsumerTask = Task { @MainActor [weak self, events = transport.events, onBacklogOverflow] in
             for await event in events {
                 guard let self else { return }
-                await self.handleTransportEvent(event, onBacklogOverflow: onBacklogOverflow)
+                await self.observeTransportEvent(event, onBacklogOverflow: onBacklogOverflow)
             }
         }
     }
 
-    /// Routes one transport event on the main actor. Client frames are handed
+    /// Observes one transport event on the main actor. Client frames are handed
     /// to per-client admission streams so unrelated lifecycle and client
     /// traffic can continue while a request is suspended.
-    func handleTransportEvent(
+    func observeTransportEvent(
         _ event: TransportEvent,
         onBacklogOverflow: @MainActor @Sendable (Int) async -> Void
     ) async {
@@ -78,7 +78,7 @@ extension TheGetaway {
         case .clientDisconnected(let clientId):
             insideJobLogger.info("Client \(clientId) disconnected")
             stopClientRequestPipeline(clientId: clientId)
-            await handleClientDeliveryTerminated(clientId: clientId)
+            await observeClientDisconnection(clientId: clientId)
 
         case .dataReceived(let clientId, let data, let respond):
             await enqueueClientRequest(clientId: clientId, data: data, respond: respond)
@@ -108,11 +108,7 @@ extension TheGetaway {
         await tearDown()
     }
 
-    private func handleClientConnected(_ clientId: Int, respond: @escaping SocketResponseHandler) async {
-        await sendServerInfo(respond: respond)
-    }
-
-    private func handleClientDeliveryTerminated(clientId: Int) async {
+    private func observeClientDisconnection(clientId: Int) async {
         await muscle.handleClientDisconnected(clientId)
     }
 
@@ -120,7 +116,7 @@ extension TheGetaway {
         brains.cancelTransportRequests(clientId: clientId)
         clientRequestPipelines.removeValue(forKey: clientId)?.stop()
         clientRequestPipelines[clientId] = ClientRequestPipeline { [weak self] request in
-            await self?.processClientRequest(request)
+            await self?.executeClientRequest(request)
         }
     }
 
@@ -153,7 +149,7 @@ extension TheGetaway {
         }
     }
 
-    private func processClientRequest(_ request: ClientTransportRequest) async {
+    private func executeClientRequest(_ request: ClientTransportRequest) async {
         let admission = await muscle.admitClientMessage(
             request.clientId,
             data: request.data,
@@ -165,11 +161,11 @@ extension TheGetaway {
         case .admitted(let message):
             switch message.envelope.message.executionLane {
             case .control:
-                await handleClientMessage(message, respond: request.respond)
+                await executeClientMessage(message, respond: request.respond)
             case .userInterface:
                 let submission = brains.submitTransportRequest(clientId: request.clientId) { [weak self] in
                     guard !Task.isCancelled else { return }
-                    await self?.handleClientMessage(message, respond: request.respond)
+                    await self?.executeClientMessage(message, respond: request.respond)
                 }
                 if case .rejected(let rejection) = submission {
                     insideJobLogger.error(

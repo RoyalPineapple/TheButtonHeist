@@ -129,7 +129,7 @@ public struct ElementPredicateTemplate: Codable, Sendable, Equatable, Hashable {
 
 extension ElementPredicateTemplate: CustomStringConvertible {
     public var description: String {
-        ScoreDescription.call(
+        CanonicalValueDescription.call(
             "predicate",
             core.checks.map { $0.map(\.description).description }
         )

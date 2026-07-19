@@ -14,9 +14,9 @@ public struct CustomActionTarget: Codable, Sendable, Equatable, CustomStringConv
     }
 
     public var description: String {
-        ScoreDescription.call("customAction", [
+        CanonicalValueDescription.call("customAction", [
             target.description,
-            ScoreDescription.stringField("action", actionName.rawValue),
+            CanonicalValueDescription.stringField("action", actionName.rawValue),
         ].compactMap { $0 })
     }
 }
@@ -124,9 +124,9 @@ extension RotorSelection: CustomStringConvertible {
         case .automatic:
             return "automatic"
         case .named(let name):
-            return ScoreDescription.stringField("name", name.rawValue) ?? "name=\"\""
+            return CanonicalValueDescription.stringField("name", name.rawValue) ?? "name=\"\""
         case .index(let index):
-            return ScoreDescription.valueField("index", index) ?? "index=\(index)"
+            return CanonicalValueDescription.valueField("index", index) ?? "index=\(index)"
         }
     }
 }
@@ -152,10 +152,10 @@ public struct RotorTarget: Sendable, Equatable {
 
 extension RotorTarget: CustomStringConvertible {
     public var description: String {
-        ScoreDescription.call("rotor", [
+        CanonicalValueDescription.call("rotor", [
             target.description,
             selection == .automatic ? nil : selection.description,
-            ScoreDescription.valueField("direction", direction),
+            CanonicalValueDescription.valueField("direction", direction),
         ].compactMap { $0 })
     }
 }

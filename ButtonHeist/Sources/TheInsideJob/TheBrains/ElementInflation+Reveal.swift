@@ -52,7 +52,7 @@ extension ElementInflation {
             )
         }
 
-        let settledSequence = vault.semanticObservationStream.latestEvent?.sequence
+        let settledSequence = vault.semanticObservationStream.latestCommittedEvent?.sequence
         let reveal = await revealSemanticTarget(
             treeElement,
             deadline: deadline,

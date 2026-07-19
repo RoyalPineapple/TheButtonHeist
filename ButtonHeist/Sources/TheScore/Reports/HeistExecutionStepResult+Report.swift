@@ -32,26 +32,8 @@ package extension HeistExecutionStepResult {
         }
     }
 
-    var reportCapabilityPath: HeistInvocationPath? {
-        guard case .invocation(let path, _, _) = node else { return nil }
-        return path
-    }
-
     var reportInvocationDisplayName: String? {
         invocation?.runHeistSummary
-    }
-
-    var reportCommand: HeistActionCommandType? {
-        actionCommand?.wireType
-    }
-
-    var reportWarning: HeistExecutionWarning? {
-        warningEvidence
-    }
-
-    var reportActionErrorKind: ErrorKind? {
-        guard reportActionResult?.outcome.isSuccess == false else { return nil }
-        return reportActionResult?.outcome.errorKind
     }
 }
 
@@ -64,7 +46,7 @@ public extension HeistExecutionStepResult {
 
     /// Wire command name for an action-kind step.
     var reportCommandName: String? {
-        reportCommand?.rawValue
+        actionCommand?.wireType.rawValue
     }
 
     /// Durable matcher target for an action-kind step, if any.
@@ -73,7 +55,7 @@ public extension HeistExecutionStepResult {
     }
 
     /// Message to surface for this step. Failure evidence wins over compact
-    /// success summaries because failed receipts are the detail-oriented case.
+    /// success summaries because failed results are the detail-oriented case.
     var reportMessage: String? {
         failure?.observed ?? reportSuccessMessage
     }

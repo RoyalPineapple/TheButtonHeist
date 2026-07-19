@@ -2,9 +2,9 @@ import ThePlans
 
 extension TheFence {
     func handleValidateHeist(_ request: ValidateHeistRequest) throws -> FenceResponse {
-        switch HeistPlanning.loadValidatedPlanResult(from: request.source) {
+        switch HeistPlanLoading.loadValidated(from: request.source) {
         case .failure(let diagnostics):
-            return .heistValidation(HeistValidationReport.rejectedPlan(
+            return .heistValidation(HeistValidation.Report.rejectedPlan(
                 diagnostics: diagnostics,
                 argumentProvided: request.argumentProvided,
                 lintMode: request.lintMode
@@ -17,16 +17,17 @@ extension TheFence {
     private func validationReport(
         for plan: HeistPlan,
         request: ValidateHeistRequest
-    ) throws -> HeistValidationReport {
+    ) throws -> HeistValidation.Report {
         let invocation = invocationValidation(
             argument: request.argument,
             argumentProvided: request.argumentProvided,
             plan: plan
         )
         let lint = lintReport(for: plan, mode: request.lintMode)
-        return HeistValidationReport(
-            plan: .valid(HeistPlanSummary(plan)),
+        return HeistValidation.Report.evaluatedPlan(
+            HeistValidation.PlanSummary(plan),
             invocation: invocation,
+            argumentProvided: request.argumentProvided,
             lint: lint,
             canonicalPlan: try plan.canonicalSwiftDSL()
         )
@@ -36,31 +37,23 @@ extension TheFence {
         argument: HeistArgument,
         argumentProvided: Bool,
         plan: HeistPlan
-    ) -> HeistInvocationValidation {
-        switch HeistPlanning.validateRootArgumentResult(argument, for: plan) {
+    ) -> HeistValidation.Result<HeistValidation.InvocationSummary> {
+        switch HeistArgumentAdmission.validateRootArgument(argument, for: plan) {
         case .success:
-            return HeistInvocationValidation(state: .valid, argumentProvided: argumentProvided)
+            return .valid(HeistValidation.InvocationSummary(argumentProvided: argumentProvided))
         case .failure(let diagnostics):
-            return HeistInvocationValidation(
-                state: .invalid,
-                argumentProvided: argumentProvided,
-                diagnostics: diagnostics
-            )
+            return .invalid(diagnostics)
         }
     }
 
     private func lintReport(
         for plan: HeistPlan,
         mode: HeistValidationLintMode
-    ) -> HeistLintReport {
+    ) -> HeistValidation.Lint {
         guard let planLintMode = mode.planLintMode else {
-            return HeistLintReport(mode: mode, state: .notEvaluated)
+            return .notEvaluated(mode: mode)
         }
         let findings = plan.lint(planLintMode)
-        return HeistLintReport(
-            mode: mode,
-            state: findings.isEmpty ? .passed : .findings,
-            findings: findings
-        )
+        return findings.isEmpty ? .passed(mode: mode) : .findings(mode: mode, values: findings)
     }
 }

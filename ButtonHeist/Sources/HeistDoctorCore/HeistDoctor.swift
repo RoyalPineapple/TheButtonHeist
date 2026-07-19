@@ -7,8 +7,8 @@ public enum HeistDoctor {
     }
 
     public static func diagnosis(
-        lastPass: HeistExecutionResult,
-        newFail: HeistExecutionResult,
+        lastPass: HeistResult,
+        newFail: HeistResult,
         stepPath requestedStepPath: HeistExecutionPath? = nil
     ) throws -> HeistRepairDiagnosis {
         let currentStep = try selectedCurrentFailure(in: newFail, stepPath: requestedStepPath)
@@ -21,18 +21,18 @@ public enum HeistDoctor {
     }
 
     private static func selectedCurrentFailure(
-        in receipt: HeistExecutionResult,
+        in result: HeistResult,
         stepPath: HeistExecutionPath?
     ) throws -> HeistExecutionStepResult {
         if let stepPath {
-            let step = try receipt.actionStep(at: stepPath)
+            let step = try result.actionStep(at: stepPath)
             guard step.status == .failed else {
                 throw HeistDoctorError.stepStatus(path: stepPath, expected: .failed, actual: step.status)
             }
             return step
         }
 
-        guard let failed = receipt.firstFailedStep else {
+        guard let failed = result.firstFailedStep else {
             throw HeistDoctorError.noFailedStep
         }
         guard failed.kind == .action else {
@@ -42,10 +42,10 @@ public enum HeistDoctor {
     }
 
     private static func selectedLastSuccess(
-        in receipt: HeistExecutionResult,
+        in result: HeistResult,
         matching stepPath: HeistExecutionPath
     ) throws -> HeistExecutionStepResult {
-        let step = try receipt.actionStep(at: stepPath)
+        let step = try result.actionStep(at: stepPath)
         guard step.status == .passed else {
             throw HeistDoctorError.stepStatus(path: stepPath, expected: .passed, actual: step.status)
         }
@@ -71,7 +71,7 @@ public enum HeistDoctorError: Error, Sendable, Equatable, CustomStringConvertibl
     public var description: String {
         switch self {
         case .noFailedStep:
-            return "new failing receipt does not contain a failed step"
+            return "new failing result does not contain a failed step"
         case .stepNotFound(let path):
             return "no action step found at \(path)"
         case .nonActionStep(let path, let kind):
@@ -94,9 +94,9 @@ public enum HeistDoctorError: Error, Sendable, Equatable, CustomStringConvertibl
     }
 }
 
-private extension HeistExecutionResult {
+private extension HeistResult {
     func actionStep(at path: HeistExecutionPath) throws -> HeistExecutionStepResult {
-        guard let step = outputReceiptNodes.first(where: { $0.path == path && $0.kind == .action }) else {
+        guard let step = outputNodes.first(where: { $0.path == path && $0.kind == .action }) else {
             throw HeistDoctorError.stepNotFound(path: path)
         }
         return step

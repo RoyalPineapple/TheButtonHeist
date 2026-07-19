@@ -5,7 +5,7 @@ public enum HeistActionCommandType: String, Codable, Sendable, CaseIterable, Equ
     case dismiss, magicTap
     case oneFingerTap, longPress, swipe, drag
     case typeText, editAction, setPasteboard, takeScreenshot
-    case scroll, scrollToVisible, scrollToEdge, resignFirstResponder
+    case scroll, scrollToVisible, scrollToEdge, dismissKeyboard
 
     public var description: String { rawValue }
 }
@@ -19,13 +19,13 @@ package enum HeistActionCommandCore: Sendable, Equatable {
     case dismiss
     case magicTap
     case typeText(TypeTextTarget)
-    case mechanicalTap(TapTarget)
-    case mechanicalLongPress(LongPressTarget)
-    case mechanicalSwipe(SwipeTarget)
-    case mechanicalDrag(DragTarget)
-    case viewportScroll(ScrollTarget)
-    case viewportScrollToVisible(AccessibilityTarget)
-    case viewportScrollToEdge(ScrollToEdgeTarget)
+    case oneFingerTap(TapTarget)
+    case longPress(LongPressTarget)
+    case swipe(SwipeTarget)
+    case drag(DragTarget)
+    case scroll(ScrollTarget)
+    case scrollToVisible(AccessibilityTarget)
+    case scrollToEdge(ScrollToEdgeTarget)
     case editAction(EditActionTarget)
     case setPasteboard(SetPasteboardTarget)
     case takeScreenshot
@@ -67,18 +67,18 @@ public struct HeistActionCommand: Codable, Sendable, Equatable {
     ) -> Self {
         Self(core: .typeText(TypeTextTarget(reference: reference, mode: mode, target: target)))
     }
-    public static func mechanicalTap(_ target: TapTarget) -> Self { Self(core: .mechanicalTap(target)) }
-    public static func mechanicalLongPress(_ target: LongPressTarget) -> Self {
-        Self(core: .mechanicalLongPress(target))
+    public static func oneFingerTap(_ target: TapTarget) -> Self { Self(core: .oneFingerTap(target)) }
+    public static func longPress(_ target: LongPressTarget) -> Self {
+        Self(core: .longPress(target))
     }
-    public static func mechanicalSwipe(_ target: SwipeTarget) -> Self { Self(core: .mechanicalSwipe(target)) }
-    public static func mechanicalDrag(_ target: DragTarget) -> Self { Self(core: .mechanicalDrag(target)) }
-    public static func viewportScroll(_ target: ScrollTarget) -> Self { Self(core: .viewportScroll(target)) }
-    public static func viewportScrollToVisible(_ target: AccessibilityTarget) -> Self {
-        Self(core: .viewportScrollToVisible(target))
+    public static func swipe(_ target: SwipeTarget) -> Self { Self(core: .swipe(target)) }
+    public static func drag(_ target: DragTarget) -> Self { Self(core: .drag(target)) }
+    public static func scroll(_ target: ScrollTarget) -> Self { Self(core: .scroll(target)) }
+    public static func scrollToVisible(_ target: AccessibilityTarget) -> Self {
+        Self(core: .scrollToVisible(target))
     }
-    public static func viewportScrollToEdge(_ target: ScrollToEdgeTarget) -> Self {
-        Self(core: .viewportScrollToEdge(target))
+    public static func scrollToEdge(_ target: ScrollToEdgeTarget) -> Self {
+        Self(core: .scrollToEdge(target))
     }
     public static func editAction(_ target: EditActionTarget) -> Self { Self(core: .editAction(target)) }
     public static func setPasteboard(_ target: SetPasteboardTarget) -> Self { Self(core: .setPasteboard(target)) }
@@ -135,19 +135,19 @@ public struct HeistActionCommand: Codable, Sendable, Equatable {
             core = .magicTap
         case .typeText:
             core = .typeText(try TypeTextTarget(from: payload()))
-        case .oneFingerTap: core = .mechanicalTap(try TapTarget(from: payload()))
-        case .longPress: core = .mechanicalLongPress(try LongPressTarget(from: payload()))
-        case .swipe: core = .mechanicalSwipe(try SwipeTarget(from: payload()))
-        case .drag: core = .mechanicalDrag(try DragTarget(from: payload()))
-        case .scroll: core = .viewportScroll(try ScrollTarget(from: payload()))
-        case .scrollToVisible: core = .viewportScrollToVisible(try TargetPayload(from: payload()).target)
-        case .scrollToEdge: core = .viewportScrollToEdge(try ScrollToEdgeTarget(from: payload()))
+        case .oneFingerTap: core = .oneFingerTap(try TapTarget(from: payload()))
+        case .longPress: core = .longPress(try LongPressTarget(from: payload()))
+        case .swipe: core = .swipe(try SwipeTarget(from: payload()))
+        case .drag: core = .drag(try DragTarget(from: payload()))
+        case .scroll: core = .scroll(try ScrollTarget(from: payload()))
+        case .scrollToVisible: core = .scrollToVisible(try TargetPayload(from: payload()).target)
+        case .scrollToEdge: core = .scrollToEdge(try ScrollToEdgeTarget(from: payload()))
         case .editAction: core = .editAction(try EditActionTarget(from: payload()))
         case .setPasteboard: core = .setPasteboard(try SetPasteboardTarget(from: payload()))
         case .takeScreenshot:
             try Self.rejectPayload(payloadDecoder, for: type)
             core = .takeScreenshot
-        case .resignFirstResponder:
+        case .dismissKeyboard:
             try Self.rejectPayload(payloadDecoder, for: type)
             core = .dismissKeyboard
         }
@@ -158,7 +158,7 @@ public struct HeistActionCommand: Codable, Sendable, Equatable {
         try container.encode(wireType, forKey: .type)
         switch core {
         case .activate(let target), .increment(let target), .decrement(let target),
-             .viewportScrollToVisible(let target):
+             .scrollToVisible(let target):
             try TargetPayload(target: target).encode(to: container.superEncoder(forKey: .payload))
         case .customAction(let name, let target):
             try CustomActionPayload(actionName: name, target: target)
@@ -168,12 +168,12 @@ public struct HeistActionCommand: Codable, Sendable, Equatable {
                 .encode(to: container.superEncoder(forKey: .payload))
         case .typeText(let target):
             try target.encode(to: container.superEncoder(forKey: .payload))
-        case .mechanicalTap(let target): try target.encode(to: container.superEncoder(forKey: .payload))
-        case .mechanicalLongPress(let target): try target.encode(to: container.superEncoder(forKey: .payload))
-        case .mechanicalSwipe(let target): try target.encode(to: container.superEncoder(forKey: .payload))
-        case .mechanicalDrag(let target): try target.encode(to: container.superEncoder(forKey: .payload))
-        case .viewportScroll(let target): try target.encode(to: container.superEncoder(forKey: .payload))
-        case .viewportScrollToEdge(let target): try target.encode(to: container.superEncoder(forKey: .payload))
+        case .oneFingerTap(let target): try target.encode(to: container.superEncoder(forKey: .payload))
+        case .longPress(let target): try target.encode(to: container.superEncoder(forKey: .payload))
+        case .swipe(let target): try target.encode(to: container.superEncoder(forKey: .payload))
+        case .drag(let target): try target.encode(to: container.superEncoder(forKey: .payload))
+        case .scroll(let target): try target.encode(to: container.superEncoder(forKey: .payload))
+        case .scrollToEdge(let target): try target.encode(to: container.superEncoder(forKey: .payload))
         case .editAction(let target): try target.encode(to: container.superEncoder(forKey: .payload))
         case .setPasteboard(let target): try target.encode(to: container.superEncoder(forKey: .payload))
         case .dismiss, .magicTap, .takeScreenshot, .dismissKeyboard:
@@ -201,17 +201,17 @@ package extension HeistActionCommandCore {
         case .dismiss: return .dismiss
         case .magicTap: return .magicTap
         case .typeText: return .typeText
-        case .mechanicalTap: return .oneFingerTap
-        case .mechanicalLongPress: return .longPress
-        case .mechanicalSwipe: return .swipe
-        case .mechanicalDrag: return .drag
-        case .viewportScroll: return .scroll
-        case .viewportScrollToVisible: return .scrollToVisible
-        case .viewportScrollToEdge: return .scrollToEdge
+        case .oneFingerTap: return .oneFingerTap
+        case .longPress: return .longPress
+        case .swipe: return .swipe
+        case .drag: return .drag
+        case .scroll: return .scroll
+        case .scrollToVisible: return .scrollToVisible
+        case .scrollToEdge: return .scrollToEdge
         case .editAction: return .editAction
         case .setPasteboard: return .setPasteboard
         case .takeScreenshot: return .takeScreenshot
-        case .dismissKeyboard: return .resignFirstResponder
+        case .dismissKeyboard: return .dismissKeyboard
         }
     }
 
@@ -235,20 +235,20 @@ package extension HeistActionCommandCore {
                 text: try payload.source.resolve(in: environment),
                 target: try payload.target?.resolve(in: environment)
             ))
-        case .mechanicalTap(let target):
-            return .mechanicalTap(try target.resolve(in: environment))
-        case .mechanicalLongPress(let target):
-            return .mechanicalLongPress(try target.resolve(in: environment))
-        case .mechanicalSwipe(let target):
-            return .mechanicalSwipe(try target.resolve(in: environment))
-        case .mechanicalDrag(let target):
-            return .mechanicalDrag(try target.resolve(in: environment))
-        case .viewportScroll(let target):
-            return .viewportScroll(try target.resolve(in: environment))
-        case .viewportScrollToVisible(let target):
-            return .viewportScrollToVisible(try target.resolve(in: environment))
-        case .viewportScrollToEdge(let target):
-            return .viewportScrollToEdge(try target.resolve(in: environment))
+        case .oneFingerTap(let target):
+            return .oneFingerTap(try target.resolve(in: environment))
+        case .longPress(let target):
+            return .longPress(try target.resolve(in: environment))
+        case .swipe(let target):
+            return .swipe(try target.resolve(in: environment))
+        case .drag(let target):
+            return .drag(try target.resolve(in: environment))
+        case .scroll(let target):
+            return .scroll(try target.resolve(in: environment))
+        case .scrollToVisible(let target):
+            return .scrollToVisible(try target.resolve(in: environment))
+        case .scrollToEdge(let target):
+            return .scrollToEdge(try target.resolve(in: environment))
         case .editAction(let target): return .editAction(target)
         case .setPasteboard(let target): return .setPasteboard(target)
         case .takeScreenshot: return .takeScreenshot
@@ -266,13 +266,13 @@ package enum ResolvedHeistActionCommand: Sendable, Equatable {
     case dismiss
     case magicTap
     case typeText(ResolvedTypeTextTarget)
-    case mechanicalTap(ResolvedTapTarget)
-    case mechanicalLongPress(ResolvedLongPressTarget)
-    case mechanicalSwipe(ResolvedSwipeTarget)
-    case mechanicalDrag(ResolvedDragTarget)
-    case viewportScroll(ResolvedScrollTarget)
-    case viewportScrollToVisible(ResolvedAccessibilityTarget)
-    case viewportScrollToEdge(ResolvedScrollToEdgeTarget)
+    case oneFingerTap(ResolvedTapTarget)
+    case longPress(ResolvedLongPressTarget)
+    case swipe(ResolvedSwipeTarget)
+    case drag(ResolvedDragTarget)
+    case scroll(ResolvedScrollTarget)
+    case scrollToVisible(ResolvedAccessibilityTarget)
+    case scrollToEdge(ResolvedScrollToEdgeTarget)
     case editAction(EditActionTarget)
     case setPasteboard(SetPasteboardTarget)
     case takeScreenshot

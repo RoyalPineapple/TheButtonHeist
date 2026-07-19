@@ -21,7 +21,7 @@ extension TheBrains {
             evidence: .init(admitted: .commandResolutionFailure),
             failure: detail
         )
-        return actionFailureReceipt(
+        return actionFailureResult(
             execution: execution,
             path: path,
             start: start
@@ -37,8 +37,8 @@ extension TheBrains {
     ) -> HeistExecutionStepResult {
         let observed = "could not resolve heist expectation: \(failure.errorDescription)"
         let expectationResult = ActionResult.failure(
-            method: .wait,
-            errorKind: .actionFailed
+            payload: .wait,
+            failureKind: .actionFailed
         )
         let expectation = ExpectationResult.Unmet(predicate: nil, actual: observed)
         let evidence = HeistActionEvidence.expectation(
@@ -56,7 +56,7 @@ extension TheBrains {
                 expected: failure.wait.predicate.description
             )
         )
-        return actionFailureReceipt(
+        return actionFailureResult(
             execution: execution,
             path: path,
             start: start
@@ -91,7 +91,7 @@ extension TheBrains {
         result: ActionResult
     ) -> HeistFailureDetail {
         HeistFailureDetail(
-            category: result.outcome.errorKind == .elementNotFound ? .targetResolution : .action,
+            category: result.outcome.failureKind == .elementNotFound ? .targetResolution : .action,
             contract: "action dispatch succeeds",
             observed: actionObserved(result, command: command),
             expected: command.reportTarget.map(String.init(describing:))
@@ -100,24 +100,24 @@ extension TheBrains {
 
     internal func actionExpectationFailureDetail(
         wait: WaitStep,
-        receipt: HeistWaitReceipt
+        result: HeistWaitResult
     ) -> HeistFailureDetail {
         HeistFailureDetail(
             category: .expectation,
             contract: "post-action expectation is met",
-            observed: expectationObserved(receipt),
+            observed: expectationObserved(result),
             expected: wait.predicate.description
         )
     }
 
     internal func standaloneWaitFailureDetail(
         wait: WaitStep,
-        receipt: HeistWaitReceipt
+        result: HeistWaitResult
     ) -> HeistFailureDetail {
         HeistFailureDetail(
             category: .wait,
             contract: "wait predicate is met before timeout",
-            observed: expectationObserved(receipt),
+            observed: expectationObserved(result),
             expected: wait.predicate.description
         )
     }
@@ -143,7 +143,7 @@ extension TheBrains {
         )
     }
 
-    private func actionFailureReceipt(
+    private func actionFailureResult(
         execution: HeistActionExecution,
         path: HeistExecutionPath,
         start: CFAbsoluteTime
@@ -159,7 +159,7 @@ extension TheBrains {
     private func actionObserved(_ result: ActionResult, command: HeistActionCommand) -> String {
         [
             result.message,
-            result.outcome.errorKind.map { "errorKind=\($0.rawValue)" },
+            result.outcome.failureKind.map { "failureKind=\($0.rawValue)" },
             result.settled.map { "settled=\($0)" },
             failureInterfaceSuggestion(for: command, result: result),
         ].compactMap { $0 }.joined(separator: "; ")
@@ -169,7 +169,7 @@ extension TheBrains {
         for command: HeistActionCommand,
         result: ActionResult
     ) -> String? {
-        guard result.outcome.errorKind == .elementNotFound,
+        guard result.outcome.failureKind == .elementNotFound,
               let target = command.reportTarget,
               let elements = result.accessibilityTrace?.captures.last?.interface.projectedElements else {
             return nil
@@ -189,12 +189,12 @@ extension TheBrains {
         }
     }
 
-    private func expectationObserved(_ receipt: HeistWaitReceipt) -> String {
+    private func expectationObserved(_ result: HeistWaitResult) -> String {
         [
-            receipt.result.expectation.actual,
-            receipt.result.actionResult.message,
-            receipt.result.actionResult.outcome.errorKind.map { "errorKind=\($0.rawValue)" },
-            receipt.result.actionResult.settled.map { "settled=\($0)" },
+            result.outcome.expectation.actual,
+            result.outcome.actionResult.message,
+            result.outcome.actionResult.outcome.failureKind.map { "failureKind=\($0.rawValue)" },
+            result.outcome.actionResult.settled.map { "settled=\($0)" },
         ].compactMap { $0 }.joined(separator: "; ")
     }
 }

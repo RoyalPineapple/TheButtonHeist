@@ -180,19 +180,19 @@ extension AccessibilityTarget: CustomStringConvertible {
     public var description: String {
         switch self {
         case .predicate(let predicate, let ordinal):
-            return ScoreDescription.call("target", [
+            return CanonicalValueDescription.call("target", [
                 predicate.description,
-                ScoreDescription.valueField("ordinal", ordinal),
+                CanonicalValueDescription.valueField("ordinal", ordinal),
             ].compactMap { $0 })
         case .container(let predicate, let ordinal):
-            return ScoreDescription.call("container", [
+            return CanonicalValueDescription.call("container", [
                 predicate.description,
-                ScoreDescription.valueField("ordinal", ordinal),
+                CanonicalValueDescription.valueField("ordinal", ordinal),
             ].compactMap { $0 })
         case .ref(let reference):
-            return ScoreDescription.call("ref", [reference.description])
+            return CanonicalValueDescription.call("ref", [reference.description])
         case .within(let container, let target):
-            return ScoreDescription.call("within", [container.description, target.description])
+            return CanonicalValueDescription.call("within", [container.description, target.description])
         }
     }
 }
@@ -298,17 +298,17 @@ extension ResolvedAccessibilityTarget: CustomStringConvertible {
     public var description: String {
         switch self {
         case .predicate(let predicate, let ordinal):
-            return ScoreDescription.call("target", [
+            return CanonicalValueDescription.call("target", [
                 predicate.description,
-                ScoreDescription.valueField("ordinal", ordinal),
+                CanonicalValueDescription.valueField("ordinal", ordinal),
             ].compactMap { $0 })
         case .container(let predicate, let ordinal):
-            return ScoreDescription.call("container", [
+            return CanonicalValueDescription.call("container", [
                 predicate.description,
-                ScoreDescription.valueField("ordinal", ordinal),
+                CanonicalValueDescription.valueField("ordinal", ordinal),
             ].compactMap { $0 })
         case .within(let container, let target):
-            return ScoreDescription.call("within", [container.description, target.description])
+            return CanonicalValueDescription.call("within", [container.description, target.description])
         }
     }
 }

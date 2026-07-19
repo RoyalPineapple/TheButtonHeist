@@ -27,7 +27,7 @@ extension HeistDoctor {
             outcome = .passed
         case .failed:
             outcome = .failed(
-                errorKind: actionEvidence.reportedResult?.outcome.errorKind,
+                failureKind: actionEvidence.reportedResult?.outcome.failureKind,
                 message: repairMessage(step: step, evidence: actionEvidence)
             )
         case .skipped:

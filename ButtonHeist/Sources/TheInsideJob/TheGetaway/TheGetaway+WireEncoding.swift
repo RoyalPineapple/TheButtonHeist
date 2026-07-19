@@ -4,16 +4,11 @@ import Foundation
 
 import TheScore
 
-enum ResponseDeliveryResult: Sendable, Equatable, CustomStringConvertible {
+enum ResponseDeliveryOutcome: Sendable, Equatable, CustomStringConvertible {
     case delivered
     case refused(ResponseDeliveryFailure)
     case transportUnavailable(clientId: Int?)
     case failed(ResponseDeliveryFailure)
-
-    var didDeliver: Bool {
-        if case .delivered = self { return true }
-        return false
-    }
 
     var description: String {
         switch self {
@@ -93,7 +88,7 @@ enum ResponseEnvelopeDelivery {
         _ message: ServerMessage,
         requestId: RequestID? = nil,
         respond: @escaping SocketResponseHandler
-    ) async -> ResponseDeliveryResult {
+    ) async -> ResponseDeliveryOutcome {
         switch encodeEnvelope(
             message,
             requestId: requestId
@@ -104,7 +99,7 @@ enum ResponseEnvelopeDelivery {
             case .delivered:
                 return .delivered
             case .failed(let failure):
-                return ResponseDeliveryResult(sendFailure: failure)
+                return ResponseDeliveryOutcome(sendFailure: failure)
             }
         case .failure(let failure):
             return .failed(.responseEncodingFailed(failure))
@@ -113,10 +108,6 @@ enum ResponseEnvelopeDelivery {
 }
 
 extension TheGetaway {
-
-    typealias DeliveryResult = ResponseDeliveryResult
-    typealias DeliveryFailure = ResponseDeliveryFailure
-
     // MARK: - Encode / Decode
 
     func encodeEnvelope(
@@ -130,18 +121,18 @@ extension TheGetaway {
         insideJobLogger.error("\(failure.description)")
     }
 
-    func logDeliveryFailure(_ failure: DeliveryFailure) {
+    func logDeliveryFailure(_ failure: ResponseDeliveryFailure) {
         insideJobLogger.error("\(failure.description)")
     }
 
-    func logDeliveryResult(_ result: DeliveryResult) {
-        switch result {
+    func logDeliveryOutcome(_ outcome: ResponseDeliveryOutcome) {
+        switch outcome {
         case .delivered:
             break
         case .refused(let failure), .failed(let failure):
             logDeliveryFailure(failure)
         case .transportUnavailable:
-            insideJobLogger.error("\(result.description)")
+            insideJobLogger.error("\(outcome.description)")
         }
     }
 
@@ -150,18 +141,18 @@ extension TheGetaway {
         _ message: ServerMessage,
         requestId: RequestID? = nil,
         respond: @escaping SocketResponseHandler
-    ) async -> DeliveryResult {
-        let result = await ResponseEnvelopeDelivery.sendMessage(message, requestId: requestId, respond: respond)
-        logDeliveryResult(result)
-        return result
+    ) async -> ResponseDeliveryOutcome {
+        let outcome = await ResponseEnvelopeDelivery.sendMessage(message, requestId: requestId, respond: respond)
+        logDeliveryOutcome(outcome)
+        return outcome
     }
 
-    func sendEncodedData(_ data: Data, toClient clientId: Int) async -> DeliveryResult {
+    func sendEncodedData(_ data: Data, toClient clientId: Int) async -> ResponseDeliveryOutcome {
         switch await muscle.sendData(data, toClient: clientId) {
         case .delivered:
             return .delivered
         case .failed(let sendFailure):
-            return DeliveryResult(sendFailure: sendFailure)
+            return ResponseDeliveryOutcome(sendFailure: sendFailure)
         }
     }
 }

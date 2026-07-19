@@ -95,7 +95,7 @@ extension AccessibilityNotificationKind: CustomStringConvertible {
 /// Notifications are transition-edge product data: snapshots remain the state
 /// truth, while this stream explains what UIKit/SwiftUI announced between
 /// those states. Payload strings and unresolved-object summaries may contain
-/// app content and are intentionally Codable so receipts can preserve the same
+/// app content and are intentionally Codable so results can preserve the same
 /// evidence an accessibility user or runtime notification exposed. Do not mirror
 /// these payloads into logs.
 public struct AccessibilityNotificationEvidence: Codable, Sendable, Equatable, Hashable {

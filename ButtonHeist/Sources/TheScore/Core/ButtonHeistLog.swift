@@ -28,7 +28,7 @@ package enum ButtonHeistLog {
     }
 
     package enum Score: String, Sendable {
-        case receipts
+        case results
     }
 
     package static func logger(_ channel: Channel) -> Logger {

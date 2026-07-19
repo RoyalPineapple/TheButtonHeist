@@ -115,13 +115,13 @@ extension TypeTextTarget: CustomStringConvertible {
         let sourceDescription: String
         switch source {
         case .text(let text):
-            sourceDescription = ScoreDescription.stringField("text", text.rawText) ?? "text=\"\""
+            sourceDescription = CanonicalValueDescription.stringField("text", text.rawText) ?? "text=\"\""
         case .reference(let reference, _):
-            sourceDescription = ScoreDescription.valueField("textRef", reference) ?? "textRef=\(reference)"
+            sourceDescription = CanonicalValueDescription.valueField("textRef", reference) ?? "textRef=\(reference)"
         }
-        return ScoreDescription.call("typeText", [
+        return CanonicalValueDescription.call("typeText", [
             sourceDescription,
-            ScoreDescription.valueField("mode", source.mode),
+            CanonicalValueDescription.valueField("mode", source.mode),
             target?.description,
         ].compactMap { $0 })
     }
@@ -159,8 +159,8 @@ public struct SetPasteboardTarget: Codable, Sendable, Equatable {
 
 extension SetPasteboardTarget: CustomStringConvertible {
     public var description: String {
-        ScoreDescription.call("pasteboard", [
-            ScoreDescription.stringField("text", text.rawText),
+        CanonicalValueDescription.call("pasteboard", [
+            CanonicalValueDescription.stringField("text", text.rawText),
         ].compactMap { $0 })
     }
 }
@@ -192,8 +192,8 @@ public struct EditActionTarget: Codable, Sendable, Equatable {
 
 extension EditActionTarget: CustomStringConvertible {
     public var description: String {
-        ScoreDescription.call("editAction", [
-            ScoreDescription.valueField("action", action),
+        CanonicalValueDescription.call("editAction", [
+            CanonicalValueDescription.valueField("action", action),
         ].compactMap { $0 })
     }
 }
@@ -282,7 +282,7 @@ public struct WaitTimeout: Codable, Sendable, Equatable, Comparable, CustomStrin
         try container.encode(seconds)
     }
 
-    public var description: String { ScoreDescription.decimal(seconds) }
+    public var description: String { CanonicalValueDescription.decimal(seconds) }
 
     public static func < (lhs: Self, rhs: Self) -> Bool {
         lhs.seconds < rhs.seconds
@@ -299,7 +299,7 @@ public enum WaitTimeoutError: Error, Sendable, Equatable, CustomStringConvertibl
     public var description: String {
         switch self {
         case .invalid(let observed, let expected):
-            return "wait timeout must be \(expected) (observed \(ScoreDescription.decimal(observed)))"
+            return "wait timeout must be \(expected) (observed \(CanonicalValueDescription.decimal(observed)))"
         }
     }
 }
@@ -342,9 +342,9 @@ public struct WaitTarget: Codable, Sendable, Equatable {
 
 extension WaitTarget: CustomStringConvertible {
     public var description: String {
-        ScoreDescription.call("wait", [
+        CanonicalValueDescription.call("wait", [
             predicate.description,
-            timeout.map { "timeout=\(ScoreDescription.decimal($0.seconds))" },
+            timeout.map { "timeout=\(CanonicalValueDescription.decimal($0.seconds))" },
         ].compactMap { $0 })
     }
 }

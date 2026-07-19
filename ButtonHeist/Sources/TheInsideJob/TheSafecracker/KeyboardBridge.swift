@@ -2,7 +2,7 @@
 #if DEBUG
 import UIKit
 
-enum KeyboardTextInjectionResult: Equatable {
+enum KeyboardTextInjectionOutcome: Equatable {
     case dispatched
     case failed(KeyboardTextInjectionDiagnostic)
 
@@ -120,7 +120,7 @@ final class UIKeyboardImplTextInjection {
         self.runtime = runtime
     }
 
-    func type(_ character: Character) -> KeyboardTextInjectionResult {
+    func type(_ character: Character) -> KeyboardTextInjectionOutcome {
         let text = String(character)
         guard let addInputString = runtime.addInputString(impl) else {
             return .failed(.missingSelector(
@@ -133,7 +133,7 @@ final class UIKeyboardImplTextInjection {
         return drainTaskQueue(character: text)
     }
 
-    func drainTaskQueue(character: String?) -> KeyboardTextInjectionResult {
+    func drainTaskQueue(character: String?) -> KeyboardTextInjectionOutcome {
         guard let taskQueueGetter = runtime.taskQueue(impl) else {
             return .failed(.missingSelector(
                 KeyboardObjectGetter.keyboardTaskQueue.rawValue,
@@ -202,7 +202,7 @@ final class UIKeyboardImplTextInjection {
     /// Routes through UIKeyboardImpl's internal input processing, which
     /// means the character lands via the normal `UIKeyInput.insertText(_:)`
     /// pathway with all responder-chain delegate callbacks.
-    func type(_ character: Character) -> KeyboardTextInjectionResult {
+    func type(_ character: Character) -> KeyboardTextInjectionOutcome {
         textInjection.type(character)
     }
 
@@ -218,7 +218,7 @@ final class UIKeyboardImplTextInjection {
         return true
     }
 
-    func deleteBackward() -> KeyboardTextInjectionResult {
+    func deleteBackward() -> KeyboardTextInjectionOutcome {
         guard let input = delegate as? UIKeyInput else {
             return .failed(.noActiveInput(strategy: UIKeyboardImplTextInjection.strategyName))
         }

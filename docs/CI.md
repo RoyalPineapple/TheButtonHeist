@@ -9,28 +9,28 @@ the `buttonheist` CLI/MCP build must be the same release. The wire handshake
 compares versions for exact equality and rejects mismatches, so pin the CLI to
 the release your app embeds rather than installing "latest" in CI.
 
-## Receipt artifact contract
+## Result artifact contract
 
-CI receipt capture uses the repository's existing wrapper, collector, and
-manifest scripts. The contract is the script flow and the raw receipt files it
+CI result capture uses the repository's existing wrapper, collector, and
+manifest scripts. The contract is the script flow and the raw result files it
 uploads, not a new evidence format:
 
-- `scripts/run-with-heist-receipts.sh` wraps a test or replay command, sets
-  `BUTTONHEIST_RECEIPTS_DIR` and `BUTTONHEIST_RECEIPTS_MODE`, preserves the
+- `scripts/run-with-heist-results.sh` wraps a test or replay command, sets
+  `BUTTONHEIST_RESULTS_DIR` and `BUTTONHEIST_RESULTS_MODE`, preserves the
   wrapped command's exit status, and supports `--ios-sandbox` for
-  simulator-hosted test processes that must write receipts inside their own
+  simulator-hosted test processes that must write results inside their own
   container.
-- `scripts/collect-ios-heist-receipts.sh` copies `*.json` and `*.json.gz`
-  receipts from simulator `buttonheist-receipts` directories into the host
+- `scripts/collect-ios-heist-results.sh` copies `*.json` and `*.json.gz`
+  results from simulator `buttonheist-results` directories into the host
   artifact directory. It also writes `collection-diagnostics.txt`, and missing
-  receipts are diagnostics rather than collection-script failures.
-- `scripts/write-ci-heist-receipt-manifest.sh` writes `manifest.txt` and
-  `receipt-files.txt` into the artifact directory so downloaded CI artifacts
+  results are diagnostics rather than collection-script failures.
+- `scripts/write-ci-heist-result-manifest.sh` writes `manifest.txt` and
+  `result-files.txt` into the artifact directory so downloaded CI artifacts
   are readable without custom tooling.
 
-Upload the whole receipt directory after the manifest step. Consumers should
-look for `manifest.txt`, then inspect the raw `.json` or `.json.gz` receipts
-listed in `receipt-files.txt`.
+Upload the whole result directory after the manifest step. Consumers should
+look for `manifest.txt`, then inspect the raw `.json` or `.json.gz` results
+listed in `result-files.txt`.
 
 ## Topology 1: app-hosted tests (recommended)
 
@@ -60,33 +60,33 @@ suites, use `runHeistSync` (see
 `XCTFail` at the call site, so heist failures appear in your runner's normal
 test results — no separate report plumbing.
 
-To keep receipts as build artifacts, record them explicitly and upload the
+To keep results as build artifacts, record them explicitly and upload the
 directory:
 
 ```swift
-runHeistSync("Checkout.pay", recordReceipt: .always, to: receiptsURL) {
+runHeistSync("Checkout.pay", recordResult: .always, to: resultsURL) {
     Activate(.label("Pay"))
         .expect(.changed(.elements([.appeared(.label("Payment Complete"))])))
 }
 ```
 
-If no URL is supplied, receipts are written under the process temporary
-directory at `buttonheist-receipts/`.
+If no URL is supplied, results are written under the process temporary
+directory at `buttonheist-results/`.
 
-In this repository, use the canonical test runner. It applies the receipt
-wrapper and owns the result and receipt paths:
+In this repository, use the canonical test runner. It applies the result
+wrapper and owns the Xcode result-bundle and recorded-heist-result paths:
 
 ```bash
-BUTTONHEIST_RECEIPTS_MODE=failures \
+BUTTONHEIST_RESULTS_MODE=failures \
   scripts/test-runner.py run ButtonHeistTests --selection full
 ```
 
 iOS simulator-hosted test bundles write inside the app/test process sandbox.
 The runner selects an explicit simulator, applies the sandbox sentinel, and
-collects receipts after each run and during failure cleanup:
+collects results after each run and during failure cleanup:
 
 ```bash
-BUTTONHEIST_RECEIPTS_MODE=failures \
+BUTTONHEIST_RESULTS_MODE=failures \
   scripts/test-runner.py run TheInsideJobTests --selection full \
   --simulator-name "$TASK_SLUG"
 ```
@@ -123,9 +123,9 @@ CI budgets macOS capacity explicitly:
 - A final `exact-sha-suite` job records the commit, workflow revision, run ID,
   and every required suite conclusion in `buttonheist-exact-sha-suite`. Release
   admission accepts only that successful aggregate and validates its manifest.
-- Successful jobs publish timing summaries. Receipt and result bundles are
-  retained only when a job fails; the release proof manifest is retained for
-  every main run.
+- Successful jobs publish timing summaries. Recorded heist results and Xcode
+  result bundles are retained only when a job fails; the release admission
+  manifest is retained for every main run.
 
 This keeps the main validation topology within the same three-runner ceiling
 while making the exact release SHA prove the complete required suite. CI and
@@ -142,7 +142,7 @@ named focus instead of reconstructing scheme and test selectors:
 
 ```bash
 scripts/test-runner.py catalog
-scripts/test-runner.py run --focus contract-receipts --selection full
+scripts/test-runner.py run --focus contract-results --selection full
 ```
 
 Every invocation writes `run.json` beside its result artifacts. The record

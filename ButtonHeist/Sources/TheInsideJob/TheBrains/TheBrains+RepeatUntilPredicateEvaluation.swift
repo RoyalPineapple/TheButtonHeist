@@ -23,11 +23,11 @@ extension TheBrains.RepeatUntil {
 
         internal var trace: AccessibilityTrace? { traceEvidence?.trace }
 
-        internal init?(_ receipt: HeistWaitReceipt) {
-            guard let sequence = receipt.observedSequence else { return nil }
+        internal init?(_ result: HeistWaitResult) {
+            guard let sequence = result.observedSequence else { return nil }
             self.sequence = sequence
-            traceEvidence = receipt.result.actionResult.traceEvidence
-            summary = receipt.observationSummary
+            traceEvidence = result.outcome.actionResult.traceEvidence
+            summary = result.observationSummary
         }
 
         internal init(_ observation: SettledObservationEvidence) {
@@ -43,32 +43,32 @@ extension TheBrains.RepeatUntil {
     internal struct MetCheck {
         internal let observation: Observation
         internal let expectation: ExpectationResult.Met
-        internal let receipt: HeistWaitReceipt
+        internal let result: HeistWaitResult
 
         internal init(
             observation: Observation,
             expectation: ExpectationResult.Met,
-            receipt: HeistWaitReceipt
+            result: HeistWaitResult
         ) {
             self.observation = observation
             self.expectation = expectation
-            self.receipt = receipt
+            self.result = result
         }
     }
 
     internal struct UnmetCheck {
         internal let observation: Observation
         internal let expectation: ExpectationResult.Unmet
-        internal let receipt: HeistWaitReceipt
+        internal let result: HeistWaitResult
 
         internal init(
             observation: Observation,
             expectation: ExpectationResult.Unmet,
-            receipt: HeistWaitReceipt
+            result: HeistWaitResult
         ) {
             self.observation = observation
             self.expectation = expectation
-            self.receipt = receipt
+            self.result = result
         }
     }
 
@@ -77,34 +77,34 @@ extension TheBrains.RepeatUntil {
         case unmet(UnmetCheck)
 
         internal init?(
-            receipt: HeistWaitReceipt,
+            result: HeistWaitResult,
             expectation: ExpectationResult? = nil
         ) {
-            guard let observation = Observation(receipt) else { return nil }
+            guard let observation = Observation(result) else { return nil }
             self.init(
                 observation: observation,
-                check: expectation ?? receipt.result.expectation,
-                receipt: receipt
+                check: expectation ?? result.outcome.expectation,
+                result: result
             )
         }
 
         internal init(
             observation: Observation,
             check: ExpectationResult,
-            receipt: HeistWaitReceipt
+            result: HeistWaitResult
         ) {
             switch check {
             case .met(let expectation):
                 self = .met(MetCheck(
                     observation: observation,
                     expectation: expectation,
-                    receipt: receipt
+                    result: result
                 ))
             case .unmet(let expectation):
                 self = .unmet(UnmetCheck(
                     observation: observation,
                     expectation: expectation,
-                    receipt: receipt
+                    result: result
                 ))
             }
         }
@@ -114,7 +114,7 @@ extension TheBrains.RepeatUntil {
         case deadlineElapsed(ExpectationResult.Unmet)
         case met(MetCheck)
         case unmet(UnmetCheck)
-        case noProgress(observation: Observation?, expectation: ExpectationResult.Unmet, receipt: HeistWaitReceipt)
+        case noProgress(observation: Observation?, expectation: ExpectationResult.Unmet, result: HeistWaitResult)
 
         internal var observation: Observation? {
             switch self {
@@ -149,15 +149,13 @@ extension TheBrains {
             return .abort
         }
         let shouldCheck: Bool
-        switch failedStep.actionEvidence?.dispatchResult?.outcome.errorKind {
+        switch failedStep.actionEvidence?.dispatchResult?.outcome.failureKind {
         case nil, .some(.actionFailed):
             shouldCheck = true
         case .some(.accessibilityTreeUnavailable),
              .some(.elementNotFound),
              .some(.timeout),
-             .some(.validationError),
-             .some(.authFailure),
-             .some(.general):
+             .some(.validationError):
             shouldCheck = false
         }
         guard shouldCheck else { return .abort }
@@ -205,15 +203,15 @@ extension TheBrains {
                 actual: String(describing: error)
             ))
         }
-        let receipt: HeistWaitReceipt
+        let result: HeistWaitResult
         if let observation {
-            receipt = await context.runtime.wait(.afterObservation(
+            result = await context.runtime.wait(.afterObservation(
                 .changedElements(timeout: progressTimeout),
                 baselineTrace: observation.trace,
                 sequence: observation.sequence
             ))
         } else {
-            receipt = await context.runtime.wait(.baselineTraceOnly(
+            result = await context.runtime.wait(.baselineTraceOnly(
                 ResolvedWaitRuntimeInput(repeatUntil: step, timeout: progressTimeout),
                 trace: nil
             ))
@@ -221,12 +219,12 @@ extension TheBrains {
         let expectation = repeatUntilStopExpectation(
             authored: step.predicateExpression,
             resolved: step.predicate,
-            evidence: receipt.result.actionResult.traceEvidence,
-            fallback: receipt.result.actionResult.message ?? receipt.result.expectation.actual
+            evidence: result.outcome.actionResult.traceEvidence,
+            fallback: result.outcome.actionResult.message ?? result.outcome.expectation.actual
         )
         let stopCheck = expectation
-        let observedCheck = RepeatUntil.Observation(receipt).map {
-            RepeatUntil.ObservedCheck(observation: $0, check: stopCheck, receipt: receipt)
+        let observedCheck = RepeatUntil.Observation(result).map {
+            RepeatUntil.ObservedCheck(observation: $0, check: stopCheck, result: result)
         }
         guard let check = observedCheck else {
             let noProgressExpectation: ExpectationResult.Unmet
@@ -234,7 +232,7 @@ extension TheBrains {
             case .met(let metExpectation):
                 noProgressExpectation = ExpectationResult.Unmet(
                     predicate: step.predicateExpression,
-                    actual: receipt.observedSequence == nil
+                    actual: result.observedSequence == nil
                         ? "repeat_until post-body check matched without settled observation"
                         : (metExpectation.result.actual ?? "repeat_until post-body check made no progress")
                 )
@@ -242,20 +240,20 @@ extension TheBrains {
                 noProgressExpectation = unmetExpectation
             }
             return .noProgress(
-                observation: RepeatUntil.Observation(receipt),
+                observation: RepeatUntil.Observation(result),
                 expectation: noProgressExpectation,
-                receipt: receipt
+                result: result
             )
         }
         switch check {
         case .met(let check):
             return .met(check)
         case .unmet(let check):
-            guard case .matched = receipt.result else {
+            guard case .matched = result.outcome else {
                 return .noProgress(
                     observation: check.observation,
                     expectation: check.expectation,
-                    receipt: receipt
+                    result: result
                 )
             }
             return .unmet(check)
@@ -288,7 +286,7 @@ extension TheBrains {
         )
         switch stopExpectation {
         case .met(let expectation):
-            let receipt = HeistWaitReceipt.matched(
+            let result = HeistWaitResult.matched(
                 message: expectation.actual,
                 traceEvidence: traceEvidence,
                 expectation: expectation,
@@ -298,10 +296,10 @@ extension TheBrains {
             return .met(RepeatUntil.MetCheck(
                 observation: actionObservation,
                 expectation: expectation,
-                receipt: receipt
+                result: result
             ))
         case .unmet(let expectation):
-            let receipt = HeistWaitReceipt.timedOut(
+            let result = HeistWaitResult.timedOut(
                 message: expectation.actual,
                 traceEvidence: traceEvidence,
                 expectation: expectation,
@@ -311,7 +309,7 @@ extension TheBrains {
             return .unmet(RepeatUntil.UnmetCheck(
                 observation: actionObservation,
                 expectation: expectation,
-                receipt: receipt
+                result: result
             ))
         }
     }

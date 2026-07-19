@@ -27,7 +27,7 @@ extension TheBrains {
             }
         }
 
-        var errorKind: ErrorKind {
+        var actionFailureKind: ActionFailure.Kind {
             switch self {
             case .inactiveRuntime, .accessibilityTreeUnavailable:
                 return .accessibilityTreeUnavailable
@@ -46,7 +46,7 @@ extension TheBrains {
         guard semanticObservationIsActive else {
             return .failure(.inactiveRuntime)
         }
-        guard let observation = await interactionObservation.observeVisibleState(timeout: 1.0) else {
+        guard let observation = await interactionCoordinator.admittedVisibleBaseline(timeout: 1.0) else {
             return .failure(.accessibilityTreeUnavailable)
         }
 
@@ -88,8 +88,8 @@ extension TheBrains {
             )
         case .failure(let failure):
             return .failure(
-                method: .takeScreenshot,
-                errorKind: failure.errorKind,
+                payload: .screenshot(nil),
+                failureKind: failure.actionFailureKind,
                 message: failure.message,
                 timing: ActionPerformanceTiming(totalMs: elapsedMilliseconds(since: start))
             )

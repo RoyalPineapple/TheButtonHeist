@@ -55,7 +55,7 @@ enum SettleOutcome: Equatable, Sendable {
     /// the loop reached multi-cycle stability. A Tripwire signal may have
     /// reset the baseline during the loop, but that event is tracked
     /// separately in `SettleSession.Result.events`; it is not itself
-    /// stability proof.
+    /// stability criterion.
     var didSettleCleanly: Bool {
         switch self {
         case .settled: return true
@@ -78,7 +78,7 @@ enum SettleOutcome: Equatable, Sendable {
 // MARK: - Settle Loop Machine
 
 /// The settle loop has one reducer and one runner. This policy only selects
-/// the stability proof and sampling cadence used by that runner.
+/// the stability criterion and sampling cadence used by that runner.
 enum SettlePolicy: Equatable, Sendable {
     case consecutiveCycles(required: Int)
     case quietWindow(milliseconds: Int)
@@ -175,30 +175,30 @@ struct SettleLoopMachine: Equatable {
         case tripwireSignal(TheTripwire.TripwireSignal)
     }
 
-    enum Effect: Equatable, Sendable {
+    enum Decision: Equatable, Sendable {
         case continuePolling
         case terminal(SettleOutcome)
     }
 
     func reduce(_ state: State, event: Event) -> SettleLoopTransition {
         var state = state
-        let effect: Effect
+        let decision: Decision
         switch event {
         case .observation(let observation, let elapsedMs):
-            effect = state.observe(observation, elapsedMs: elapsedMs)
+            decision = state.observe(observation, elapsedMs: elapsedMs)
                 ? .terminal(.settled(timeMs: elapsedMs))
                 : .continuePolling
         case .tripwireSignal(let signal):
             state.observe(signal)
-            effect = .continuePolling
+            decision = .continuePolling
         }
-        return SettleLoopTransition(state: state, effect: effect)
+        return SettleLoopTransition(state: state, decision: decision)
     }
 }
 
 struct SettleLoopTransition: Equatable, Sendable {
     let state: SettleLoopMachine.State
-    let effect: SettleLoopMachine.Effect
+    let decision: SettleLoopMachine.Decision
 }
 
 @MainActor
@@ -354,7 +354,7 @@ final class SettleSessionFinalObservation {
     }
 
     /// Live wiring against the real vault/tripwire. The policy selects the
-    /// stability proof while this type continues to own the entire loop.
+    /// stability criterion while this type continues to own the entire loop.
     static func live(
         vault: TheVault,
         tripwire: TheTripwire,
@@ -372,7 +372,7 @@ final class SettleSessionFinalObservation {
             { await tripwire.yieldRealFrames(1) }
         }
         return SettleSession(
-            parseProvider: { vault.semanticObservationForSettle() },
+            parseProvider: { vault.refreshLiveCapture() },
             tripwireSignalProvider: { tripwire.tripwireSignal() },
             observationYield: observationYield,
             policy: policy,
@@ -381,7 +381,7 @@ final class SettleSessionFinalObservation {
         )
     }
 
-    /// Minimal proof for a programmatic viewport transition. UIKit receives
+    /// Minimal stability criterion for a programmatic viewport transition. UIKit receives
     /// two run-loop turns to lay out the new viewport, and the parser must
     /// return the same semantic fingerprint across both repeat captures.
     static func viewportTransition(
@@ -390,7 +390,7 @@ final class SettleSessionFinalObservation {
         timeoutMs: Int
     ) -> SettleSession {
         SettleSession(
-            parseProvider: { vault.semanticObservationForSettle() },
+            parseProvider: { vault.refreshLiveCapture() },
             tripwireSignalProvider: { tripwire.tripwireSignal() },
             observationYield: { await tripwire.yieldRealFrames(1) },
             policy: .consecutiveCycles(required: 2),
@@ -501,7 +501,7 @@ private struct SettleLoopRunner {
         let machine = SettleLoopMachine()
         var state = initial
 
-        func send(_ event: SettleLoopMachine.Event) -> SettleLoopTransition {
+        func reduce(_ event: SettleLoopMachine.Event) -> SettleLoopTransition {
             let transition = machine.reduce(state, event: event)
             state = transition.state
             return transition
@@ -509,13 +509,13 @@ private struct SettleLoopRunner {
 
         func ingest(_ observation: InterfaceObservation) -> SettleSession.Result? {
             let recorded = observations.record(observation)
-            let transition = send(
+            let transition = reduce(
                 .observation(
                     recorded.sample,
                     elapsedMs: deadline.elapsedMilliseconds(at: clock())
                 )
             )
-            guard case .terminal(let outcome) = transition.effect else { return nil }
+            guard case .terminal(let outcome) = transition.decision else { return nil }
             return SettleSession.result(
                 outcome: outcome,
                 state: transition.state,
@@ -546,7 +546,7 @@ private struct SettleLoopRunner {
             }
 
             let eventCount = state.events.count
-            _ = send(.tripwireSignal(tripwireSignalProvider()))
+            _ = reduce(.tripwireSignal(tripwireSignalProvider()))
             if state.events.count > eventCount {
                 observations.resetCurrentGeneration()
                 continue

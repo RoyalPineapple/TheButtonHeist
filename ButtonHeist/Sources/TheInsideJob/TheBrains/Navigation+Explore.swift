@@ -21,7 +21,7 @@ extension Navigation {
         let explorer = ViewportExplorer(
             navigation: self,
             exploration: SemanticExploration(
-                baseline: baseline ?? .interfaceMemory(vault.explorationBaseline()),
+                baseline: baseline ?? .interfaceMemory(vault.interfaceMemoryBaseline()),
                 deadline: deadline,
                 maxScrollsPerContainer: maxScrollsPerContainer ?? InterfaceExplorationProgress.maxScrollsPerContainer,
                 maxScrollsPerDiscovery: maxScrollsPerDiscovery ?? InterfaceExplorationProgress.maxScrollsPerDiscovery
@@ -29,12 +29,12 @@ extension Navigation {
             searchOrder: searchOrder,
         )
         return await explorer.exploreViewports(exitPosition: exitPosition) { event in
-            if let decision = onObservation?(event), decision == .finish {
-                return .finish
+            if let decision = onObservation?(event), decision == .goalSatisfied {
+                return .goalSatisfied
             }
             guard let target else { return .continue }
             return vault.hasVisibleTerminalResolution(target, in: event.settledObservation.observation.tree)
-                ? .finish
+                ? .goalSatisfied
                 : .continue
         }
     }

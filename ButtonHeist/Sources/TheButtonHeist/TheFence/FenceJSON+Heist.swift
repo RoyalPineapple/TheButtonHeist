@@ -30,10 +30,10 @@ struct PublicHeistValidationResponse: Encodable {
     let buildDiagnostics: [PublicHeistBuildDiagnostic]
     let canonicalPlan: String?
 
-    init(report: HeistValidationReport) {
+    init(report: HeistValidation.Report) {
         admissible = report.admissible
         plan = PublicHeistPlanValidation(report.plan)
-        invocation = PublicHeistInvocationValidation(report.invocation)
+        invocation = PublicHeistInvocationValidation(report.invocation, argumentProvided: report.argumentProvided)
         lint = PublicHeistLintReport(report.lint)
         buildDiagnostics = report.plan.diagnostics.map(PublicHeistBuildDiagnostic.init)
         canonicalPlan = report.canonicalPlan
@@ -48,7 +48,7 @@ struct PublicHeistPlanValidation: Encodable {
     let definitionCount: Int?
     let topLevelStepCount: Int?
 
-    init(_ validation: HeistPlanValidation) {
+    init(_ validation: HeistValidation.Result<HeistValidation.PlanSummary>) {
         switch validation {
         case .valid(let summary):
             valid = true
@@ -69,25 +69,36 @@ struct PublicHeistPlanValidation: Encodable {
 }
 
 struct PublicHeistInvocationValidation: Encodable {
-    let state: String
+    let status: String
     let argumentProvided: Bool
     let diagnostics: [PublicHeistBuildDiagnostic]
 
-    init(_ validation: HeistInvocationValidation) {
-        state = validation.state.rawValue
-        argumentProvided = validation.argumentProvided
+    init(
+        _ validation: HeistValidation.Evaluation<HeistValidation.InvocationSummary>,
+        argumentProvided: Bool
+    ) {
+        status = switch validation {
+        case .evaluated(.valid): "valid"
+        case .evaluated(.invalid): "invalid"
+        case .notEvaluated: "not_evaluated"
+        }
+        self.argumentProvided = argumentProvided
         diagnostics = validation.diagnostics.map(PublicHeistBuildDiagnostic.init)
     }
 }
 
 struct PublicHeistLintReport: Encodable {
     let mode: String
-    let state: String
+    let status: String
     let findings: [PublicHeistLintFinding]
 
-    init(_ report: HeistLintReport) {
+    init(_ report: HeistValidation.Lint) {
         mode = report.mode.rawValue
-        state = report.state.rawValue
+        status = switch report {
+        case .notEvaluated: "not_evaluated"
+        case .passed: "passed"
+        case .findings: "findings"
+        }
         findings = report.findings.map(PublicHeistLintFinding.init)
     }
 }

@@ -268,9 +268,9 @@ public struct ElementPredicate: Codable, Sendable, Equatable, Hashable {
 
 extension ElementPredicate: CustomStringConvertible {
     public var description: String {
-        ScoreDescription.call(
+        CanonicalValueDescription.call(
             "predicate",
-            core.checks.map { $0.map(ScoreDescription.quoted).description }
+            core.checks.map { $0.map(CanonicalValueDescription.quoted).description }
         )
     }
 }

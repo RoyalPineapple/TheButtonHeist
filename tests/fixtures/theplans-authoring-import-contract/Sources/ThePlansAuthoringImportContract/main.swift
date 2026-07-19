@@ -10,7 +10,7 @@ struct ThePlansAuthoringImportContract {
             TypeText("milk", into: .element(.label("Search"), .traits([.searchField])))
                 .expect(.exists(.element(.label("Search"), .value("milk"))), timeout: 2)
 
-            DismissKeyboard()
+            dismissKeyboard()
                 .withoutExpectation("The keyboard may already be absent")
 
             Increment(.label("Quantity"))

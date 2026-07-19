@@ -77,9 +77,9 @@ enum HeistRepairSuggestionRenderer {
             stepPath: request.currentFailure.stepPath,
             failureKind: analysis.failureKind,
             oldTarget: request.lastSuccess.target,
-            oldResolvedElement: analysis.oldResolved.repairContext,
+            oldResolvedElement: analysis.oldResolved.repairEvidence,
             newTarget: selection.target,
-            newResolvedElement: candidate.element.repairContext,
+            newResolvedElement: candidate.element.repairEvidence,
             confidence: confidence(
                 score: candidate.score,
                 selection: selection,
@@ -218,7 +218,7 @@ extension HeistRepairRefusalReason {
     var noSuggestionReason: String {
         switch self {
         case .differentStepPaths:
-            return "receipts refer to different step paths"
+            return "results refer to different step paths"
         case .incompatibleHeistFingerprints:
             return "heist fingerprints are incompatible"
         case .oldTargetDidNotResolveExactlyOnce:

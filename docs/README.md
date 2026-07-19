@@ -8,7 +8,7 @@ Platform scope: The Button Heist automates iOS apps. The CLI and MCP server are 
 
 | Document | Use it for |
 |----------|------------|
-| [Project overview](../README.md) | Public story, setup, first heist, and receipts |
+| [Project overview](../README.md) | Public story, setup, first heist, and results |
 | [Accessibility contract](ACCESSIBILITY-CONTRACT.md) | The runtime loop: product semantics in, settled evidence out |
 | [Why in-process](WHY-IN-PROCESS.md) | What running inside the app buys, and how the out-of-process drivers differ |
 | [Scope and limits](SCOPE-AND-LIMITS.md) | What The Button Heist cannot see, what "settled" means, and how to triage findings |
@@ -54,4 +54,4 @@ Platform scope: The Button Heist automates iOS apps. The CLI and MCP server are 
 
 | Document | Use it for |
 |----------|------------|
-| [Heist Doctor](HEIST-DOCTOR.md) | Experimental repair suggestions over heist execution receipts |
+| [Heist Doctor](HEIST-DOCTOR.md) | Experimental repair suggestions over heist execution results |

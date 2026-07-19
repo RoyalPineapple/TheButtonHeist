@@ -67,17 +67,17 @@ import ThePlans
         }
     }
 
-    @Test func `shared receipt directory fixture finds one gzip artifact recursively`() throws {
-        let receiptName = try withReceiptDirectory(prefix: "receipt-directory-fixture") { directory in
+    @Test func `shared result directory fixture finds one gzip artifact recursively`() throws {
+        let resultName = try withResultDirectory(prefix: "result-directory-fixture") { directory in
             let nestedDirectory = directory.appendingPathComponent("checkout-flow", isDirectory: true)
             try FileManager.default.createDirectory(at: nestedDirectory, withIntermediateDirectories: true)
-            try Data([0x00]).write(to: nestedDirectory.appendingPathComponent("receipt-passed.json.gz"))
+            try Data([0x00]).write(to: nestedDirectory.appendingPathComponent("result-passed.json.gz"))
             try Data([0x00]).write(to: nestedDirectory.appendingPathComponent("notes.txt"))
 
-            return try assertSingleReceiptArtifactURL(in: directory).lastPathComponent
+            return try assertSingleResultArtifactURL(in: directory).lastPathComponent
         }
 
-        #expect(receiptName == "receipt-passed.json.gz")
+        #expect(resultName == "result-passed.json.gz")
     }
 
     @Test func `interface fixture owns paths traversal annotations and activation defaults`() throws {
@@ -128,21 +128,21 @@ import ThePlans
         #expect(unavailable.activationPoint == AccessibilityPoint(x: 50, y: 22))
     }
 
-    @Test func `receipt fixture constructs terminal and child aborted nodes`() {
-        let passed = HeistReceiptFixture.action(
+    @Test func `result fixture constructs terminal and child aborted nodes`() {
+        let passed = HeistResultFixture.action(
             command: .dismiss,
-            result: .success(method: .dismiss)
+            result: .success(payload: .dismiss)
         )
-        let failed = HeistReceiptFixture.action(
+        let failed = HeistResultFixture.action(
             command: .dismiss,
             result: .failure(
-                method: .dismiss,
-                errorKind: .actionFailed,
+                payload: .dismiss,
+                failureKind: .actionFailed,
                 message: "blocked",
             )
         )
-        let warning = HeistReceiptFixture.warning(message: "Heads up")
-        let wait = HeistReceiptFixture.wait()
+        let warning = HeistResultFixture.warning(message: "Heads up")
+        let wait = HeistResultFixture.wait()
         let selection = HeistCaseSelectionResult.selectingFirstMatch(
             cases: [
                 HeistCaseMatchResult(
@@ -153,11 +153,11 @@ import ThePlans
             ifNone: .noMatch,
             elapsedMs: 1
         )
-        let conditional = HeistReceiptFixture.conditional(
+        let conditional = HeistResultFixture.conditional(
             selection: selection,
             children: [failed]
         )
-        let iteration = HeistReceiptFixture.forEachStringIteration(
+        let iteration = HeistResultFixture.forEachStringIteration(
             ordinal: 0,
             value: "Milk",
             status: .failed,
@@ -171,7 +171,7 @@ import ThePlans
         #expect(wait.waitEvidence?.outcome == .matched)
         #expect(conditional.abortedAtChildPath == failed.path)
         #expect(iteration.abortedAtChildPath == failed.path)
-        #expect(HeistReceiptFixture.result(steps: [failed]).abortedAtPath == failed.path)
+        #expect(HeistResultFixture.result(steps: [failed]).abortedAtPath == failed.path)
     }
 
     @Test func `eventually uses a bounded ContinuousClock poll`() async {

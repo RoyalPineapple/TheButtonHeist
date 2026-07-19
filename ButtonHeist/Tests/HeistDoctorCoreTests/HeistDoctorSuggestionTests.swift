@@ -91,14 +91,14 @@ import TheScore
             Issue.record("Expected refused diagnosis")
             return
         }
-        guard case .eligible(let context) = diagnosis.context else {
-            Issue.record("Expected eligible refusal context")
+        guard case .eligible(let evidence) = diagnosis.evidence else {
+            Issue.record("Expected eligible refusal evidence")
             return
         }
         let refusal = diagnosis.refusal
 
-        #expect(context.candidates.isEmpty)
-        #expect(context.failureKind == .missingTarget)
+        #expect(evidence.candidates.isEmpty)
+        #expect(evidence.failureKind == .missingTarget)
         #expect(refusal.stage == .candidateRanking)
         #expect(refusal.reason == .noCandidateMetScoreThreshold)
         #expect(result.noSuggestionReason == refusal.message)

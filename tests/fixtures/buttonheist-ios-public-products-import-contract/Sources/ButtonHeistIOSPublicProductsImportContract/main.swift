@@ -62,10 +62,10 @@ func scopedSessionShapeCompiles() {
 }
 
 func kifStyleReplacementShapeCompiles() {
-    let receiptsURL = FileManager.default.temporaryDirectory
-        .appendingPathComponent("buttonheist-receipts", isDirectory: true)
+    let resultsURL = FileManager.default.temporaryDirectory
+        .appendingPathComponent("buttonheist-results", isDirectory: true)
 
-    runHeistSync("Checkout.pay", recordReceipt: .always, to: receiptsURL) {
+    runHeistSync("Checkout.pay", recordResult: .always, to: resultsURL) {
         Activate(.label("Pay"))
             .expect(.changed(.elements([.appeared(.label("Payment Complete"))])))
     }
@@ -85,10 +85,10 @@ func manualJoinShapeCompiles() {
 func systemDialogPairingInAppContractShapeCompiles() {
     seedLocationPermissionAsGranted()
 
-    let receiptsURL = FileManager.default.temporaryDirectory
-        .appendingPathComponent("buttonheist-receipts", isDirectory: true)
+    let resultsURL = FileManager.default.temporaryDirectory
+        .appendingPathComponent("buttonheist-results", isDirectory: true)
 
-    runHeistSync("Permissions.location.granted", recordReceipt: .always, to: receiptsURL) {
+    runHeistSync("Permissions.location.granted", recordResult: .always, to: resultsURL) {
         WaitFor(.exists(.label("Location Enabled")), timeout: 5)
 
         Activate(.label("Continue"))

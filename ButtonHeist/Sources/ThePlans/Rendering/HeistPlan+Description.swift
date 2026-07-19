@@ -2,8 +2,8 @@ import Foundation
 
 extension HeistPlan: CustomStringConvertible {
     public var description: String {
-        ScoreDescription.call("heistPlan", [
-            ScoreDescription.valueField("version", version),
+        CanonicalValueDescription.call("heistPlan", [
+            CanonicalValueDescription.valueField("version", version),
             "body=\(body.count)",
         ].compactMap { $0 })
     }
@@ -28,7 +28,7 @@ extension HeistStep: CustomStringConvertible {
 
 extension ActionStep: CustomStringConvertible {
     public var description: String {
-        ScoreDescription.call("action", [
+        CanonicalValueDescription.call("action", [
             "command=\(command.wireType.rawValue)",
             expectationPolicy.expectedStep.map { "expect=\($0)" },
             expectationPolicy.waiver.map { "withoutExpectation=\($0.reason)" },
@@ -38,9 +38,9 @@ extension ActionStep: CustomStringConvertible {
 
 extension WaitStep: CustomStringConvertible {
     public var description: String {
-        ScoreDescription.call("wait", [
+        CanonicalValueDescription.call("wait", [
             predicate.description,
-            "timeout=\(ScoreDescription.decimal(timeout.seconds))",
+            "timeout=\(CanonicalValueDescription.decimal(timeout.seconds))",
             elseBody.map { "else=\($0.count)" },
         ].compactMap { $0 })
     }
@@ -48,7 +48,7 @@ extension WaitStep: CustomStringConvertible {
 
 extension ConditionalStep: CustomStringConvertible {
     public var description: String {
-        ScoreDescription.call("if", [
+        CanonicalValueDescription.call("if", [
             "cases=\(cases.count)",
             elseBody.map { "else=\($0.count)" },
         ].compactMap { $0 })
@@ -57,7 +57,7 @@ extension ConditionalStep: CustomStringConvertible {
 
 extension PredicateCase: CustomStringConvertible {
     public var description: String {
-        ScoreDescription.call("case", [
+        CanonicalValueDescription.call("case", [
             predicate.description,
             "body=\(body.count)",
         ])
@@ -66,7 +66,7 @@ extension PredicateCase: CustomStringConvertible {
 
 extension ForEachElementStep: CustomStringConvertible {
     public var description: String {
-        ScoreDescription.call("forEachElement", [
+        CanonicalValueDescription.call("forEachElement", [
             matching.description,
             "limit=\(limit)",
             "parameter=\(parameter)",
@@ -77,7 +77,7 @@ extension ForEachElementStep: CustomStringConvertible {
 
 extension ForEachStringStep: CustomStringConvertible {
     public var description: String {
-        ScoreDescription.call("forEachString", [
+        CanonicalValueDescription.call("forEachString", [
             "values=\(values.count)",
             "parameter=\(parameter)",
             "body=\(body.count)",
@@ -87,9 +87,9 @@ extension ForEachStringStep: CustomStringConvertible {
 
 extension RepeatUntilStep: CustomStringConvertible {
     public var description: String {
-        ScoreDescription.call("repeatUntil", [
+        CanonicalValueDescription.call("repeatUntil", [
             predicate.description,
-            "timeout=\(ScoreDescription.decimal(timeout.seconds))",
+            "timeout=\(CanonicalValueDescription.decimal(timeout.seconds))",
             "body=\(body.count)",
             elseBody.map { "else=\($0.count)" },
         ].compactMap { $0 })
@@ -98,19 +98,19 @@ extension RepeatUntilStep: CustomStringConvertible {
 
 extension WarnStep: CustomStringConvertible {
     public var description: String {
-        ScoreDescription.call("warn", [ScoreDescription.quoted(message.rawValue)])
+        CanonicalValueDescription.call("warn", [CanonicalValueDescription.quoted(message.rawValue)])
     }
 }
 
 extension FailStep: CustomStringConvertible {
     public var description: String {
-        ScoreDescription.call("fail", [ScoreDescription.quoted(message.rawValue)])
+        CanonicalValueDescription.call("fail", [CanonicalValueDescription.quoted(message.rawValue)])
     }
 }
 
 extension HeistInvocationStep: CustomStringConvertible {
     public var description: String {
-        ScoreDescription.call("invoke", [
+        CanonicalValueDescription.call("invoke", [
             "path=\(path.description)",
             "argument=\(argument.kind.rawValue)",
         ])

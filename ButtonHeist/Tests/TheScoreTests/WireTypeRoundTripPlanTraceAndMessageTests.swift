@@ -82,10 +82,10 @@ extension WireTypeRoundTripTests {
             observed: "No element matching label \"Save\"",
             expected: "predicate(label=\"Save\")"
         )
-        let step = HeistReceiptFixture.action(
+        let step = HeistResultFixture.action(
             command: command,
             result: .activationFailure(
-                errorKind: .elementNotFound,
+                failureKind: .elementNotFound,
                 message: "No element matching label \"Save\"",
                 observation: .none,
                 activationTrace: activationTrace
@@ -93,10 +93,10 @@ extension WireTypeRoundTripTests {
             durationMs: 0,
             failure: failure
         )
-        let result = HeistReceiptFixture.result(steps: [step])
+        let result = HeistResultFixture.result(steps: [step])
 
         let data = try encoder.encode(result)
-        let decoded = try decoder.decode(HeistExecutionResult.self, from: data)
+        let decoded = try decoder.decode(HeistResult.self, from: data)
 
         XCTAssertEqual(decoded, result)
         XCTAssertEqual(decoded.abortedAtPath?.description, "$.body[0]")
@@ -117,7 +117,7 @@ extension WireTypeRoundTripTests {
 
     func testInvocationExpectationDerivesSummaryFromWaitEvidence() throws {
         let predicate = AccessibilityPredicate.exists(.label("Done"))
-        let actionResult = ActionResult.success(method: .wait)
+        let actionResult = ActionResult.success(payload: .wait)
         let expectation = ExpectationResult.Met(predicate: predicate)
         let check = try XCTUnwrap(HeistWaitEvidence.MatchedCheck(
             actionResult: actionResult,
@@ -293,12 +293,20 @@ extension WireTypeRoundTripTests {
         XCTAssertEqual(TXTRecordKey.transport.rawValue, "transport")
     }
 
-    // MARK: - ErrorKind
+    // MARK: - Failure kinds
 
-    func testErrorKindAllCasesRoundTrip() throws {
-        for kind in ErrorKind.allCases {
+    func testActionFailureKindAllCasesRoundTrip() throws {
+        for kind in ActionFailure.Kind.allCases {
             let data = try encoder.encode(kind)
-            let decoded = try decoder.decode(ErrorKind.self, from: data)
+            let decoded = try decoder.decode(ActionFailure.Kind.self, from: data)
+            XCTAssertEqual(decoded, kind)
+        }
+    }
+
+    func testServerErrorKindAllCasesRoundTrip() throws {
+        for kind in ServerError.Kind.allCases {
+            let data = try encoder.encode(kind)
+            let decoded = try decoder.decode(ServerError.Kind.self, from: data)
             XCTAssertEqual(decoded, kind)
         }
     }

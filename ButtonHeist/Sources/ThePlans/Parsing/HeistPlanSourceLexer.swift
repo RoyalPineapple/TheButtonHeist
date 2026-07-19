@@ -198,8 +198,8 @@ struct HeistPlanSourceLexer {
         HeistPlanSourceMarker(offset: offset, line: line, column: column, length: length)
     }
 
-    private func error(_ message: String) -> HeistPlanSourceCompilerError {
-        HeistPlanSourceCompilerError(
+    private func error(_ message: String) -> HeistSourceCompilationError {
+        HeistSourceCompilationError(
             message: message,
             sourceName: sourceName,
             offset: offset,

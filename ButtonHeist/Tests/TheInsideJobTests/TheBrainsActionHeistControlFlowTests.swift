@@ -28,8 +28,8 @@ extension TheBrainsActionTests {
         ])
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let heist = try XCTUnwrap(result.heistExecutionPayload)
-        let step = try XCTUnwrap(heist.steps.first)
+        let heistResult = try XCTUnwrap(result.resultPayload)
+        let step = try XCTUnwrap(heistResult.steps.first)
 
         XCTAssertTrue(result.outcome.isSuccess)
         XCTAssertEqual(step.kind, .conditional)
@@ -52,12 +52,12 @@ extension TheBrainsActionTests {
         ])
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let heist = try XCTUnwrap(result.heistExecutionPayload)
+        let heistResult = try XCTUnwrap(result.resultPayload)
 
         XCTAssertTrue(result.outcome.isSuccess)
-        XCTAssertEqual(heist.steps.map(\.kind), [.conditional, .warn])
+        XCTAssertEqual(heistResult.steps.map(\.kind), [.conditional, .warn])
         XCTAssertEqual(
-            heist.steps.first?.caseSelectionEvidence?.selection.outcome,
+            heistResult.steps.first?.caseSelectionEvidence?.selection.outcome,
             HeistCaseSelectionOutcome.elseBranch(reason: .noMatch)
         )
     }
@@ -74,8 +74,8 @@ extension TheBrainsActionTests {
         ])
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let heist = try XCTUnwrap(result.heistExecutionPayload)
-        let step = try XCTUnwrap(heist.steps.first)
+        let heistResult = try XCTUnwrap(result.resultPayload)
+        let step = try XCTUnwrap(heistResult.steps.first)
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(step.kind, .wait)
@@ -96,8 +96,8 @@ extension TheBrainsActionTests {
         ])
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let heist = try XCTUnwrap(result.heistExecutionPayload)
-        let step = try XCTUnwrap(heist.steps.first)
+        let heistResult = try XCTUnwrap(result.resultPayload)
+        let step = try XCTUnwrap(heistResult.steps.first)
 
         XCTAssertTrue(result.outcome.isSuccess)
         XCTAssertEqual(step.kind, .wait)
@@ -117,7 +117,7 @@ extension TheBrainsActionTests {
                 if case .increment = command {
                     incrementCount += 1
                 }
-                return ActionResult.success(method: .increment, message: command.runtimeType.rawValue)
+                return ActionResult.success(payload: .increment, message: command.runtimeType.rawValue)
             }
         )
         let plan = try HeistPlan(body: [
@@ -131,8 +131,8 @@ extension TheBrainsActionTests {
         ])
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let heist = try XCTUnwrap(result.heistExecutionPayload)
-        let step = try XCTUnwrap(heist.steps.first)
+        let heistResult = try XCTUnwrap(result.resultPayload)
+        let step = try XCTUnwrap(heistResult.steps.first)
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "repeat_until failed")
         XCTAssertEqual(incrementCount, 2)
@@ -157,7 +157,7 @@ extension TheBrainsActionTests {
                 if case .increment = command {
                     incrementCount += 1
                 }
-                return ActionResult.success(method: .increment, message: command.runtimeType.rawValue)
+                return ActionResult.success(payload: .increment, message: command.runtimeType.rawValue)
             },
             observedTimeouts: { observedTimeouts.append($0) }
         )
@@ -172,8 +172,8 @@ extension TheBrainsActionTests {
         ])
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let heist = try XCTUnwrap(result.heistExecutionPayload)
-        let step = try XCTUnwrap(heist.steps.first)
+        let heistResult = try XCTUnwrap(result.resultPayload)
+        let step = try XCTUnwrap(heistResult.steps.first)
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "repeat_until failed")
         XCTAssertEqual(incrementCount, 1)
@@ -195,7 +195,7 @@ extension TheBrainsActionTests {
                 if case .increment = command {
                     incrementCount += 1
                 }
-                return ActionResult.success(method: .increment, message: command.runtimeType.rawValue)
+                return ActionResult.success(payload: .increment, message: command.runtimeType.rawValue)
             },
             unavailableObservationCount: 1
         )
@@ -210,8 +210,8 @@ extension TheBrainsActionTests {
         ])
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let heist = try XCTUnwrap(result.heistExecutionPayload)
-        let step = try XCTUnwrap(heist.steps.first)
+        let heistResult = try XCTUnwrap(result.resultPayload)
+        let step = try XCTUnwrap(heistResult.steps.first)
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "repeat_until failed")
         XCTAssertEqual(incrementCount, 1)
@@ -227,11 +227,11 @@ extension TheBrainsActionTests {
         let secondMutation = observedState(elements: [(makeElement(value: "2", identifier: "quantity"), "quantity")])
         let states = [initialState, firstMutation, secondMutation]
         var incrementCount = 0
-        let runtime = repeatUntilReceiptRuntime(
+        let runtime = repeatUntilWaitRuntime(
             observations: [initialState],
             execute: { command in
                 guard case .increment = command else {
-                    return ActionResult.success(method: .activate)
+                    return ActionResult.success(payload: .activate)
                 }
                 let before = states[incrementCount]
                 incrementCount += 1
@@ -242,15 +242,14 @@ extension TheBrainsActionTests {
                     transition: after.capture.transition
                 )
                 return ActionResult.success(
-                    method: .increment,
-                        observation: .settledTrace(
-                            makeTestTraceEvidence(
-                                actionTrace,
-                                completeness: .incomplete
-                            ),
-                            .settled(duration: 0)
-                        )
-
+                    payload: .increment,
+                    observation: .settledTrace(
+                        makeTestTraceEvidence(
+                            actionTrace,
+                            completeness: .incomplete
+                        ),
+                        .settled(duration: 0)
+                    )
                 )
             },
             wait: { request in
@@ -273,7 +272,7 @@ extension TheBrainsActionTests {
                 case .afterObservation:
                     XCTFail("repeat_until should use action trace progress before post-body wait")
                     return .failed(
-                        errorKind: .general,
+                        failureKind: .actionFailed,
                         message: "unexpected post-body wait",
                         traceEvidence: nil,
                         expectation: ExpectationResult.Unmet(
@@ -284,7 +283,7 @@ extension TheBrainsActionTests {
                 case .standalone, .actionEndpoint, .baselineTraceOnly:
                     XCTFail("repeat_until should not issue \(request)")
                     return .failed(
-                        errorKind: .general,
+                        failureKind: .actionFailed,
                         message: "unexpected wait request",
                         traceEvidence: nil,
                         expectation: ExpectationResult.Unmet(
@@ -306,10 +305,11 @@ extension TheBrainsActionTests {
         ])
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        guard case .heistExecution(let heist) = result.payload else {
+        guard case .heist(let payload) = result.payload,
+              let heistResult = payload else {
             return XCTFail("Expected heist execution payload")
         }
-        let step = try XCTUnwrap(heist.steps.first)
+        let step = try XCTUnwrap(heistResult.steps.first)
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "repeat_until failed")
         XCTAssertEqual(incrementCount, 2)
@@ -334,13 +334,13 @@ extension TheBrainsActionTests {
                     activationCount += 1
                     if activationCount == 2 {
                         return ActionResult.failure(
-                            method: .activate,
-                            errorKind: .actionFailed,
+                            payload: .activate,
+                            failureKind: .actionFailed,
                             message: "Element is disabled (has 'notEnabled' trait)",
                         )
                     }
                 }
-                return ActionResult.success(method: .activate, message: command.runtimeType.rawValue)
+                return ActionResult.success(payload: .activate, message: command.runtimeType.rawValue)
             }
         )
         let plan = try HeistPlan(body: [
@@ -354,12 +354,12 @@ extension TheBrainsActionTests {
         ])
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let heist = try XCTUnwrap(result.heistExecutionPayload)
-        let step = try XCTUnwrap(heist.steps.first)
+        let heistResult = try XCTUnwrap(result.resultPayload)
+        let step = try XCTUnwrap(heistResult.steps.first)
         let secondIteration = try XCTUnwrap(step.children.last)
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "repeat_until failed")
-        XCTAssertNil(heist.abortedAtPath)
+        XCTAssertNil(heistResult.abortedAtPath)
         XCTAssertEqual(activationCount, 2)
         XCTAssertEqual(step.repeatUntilEvidence?.iterationCount, 2)
         XCTAssertEqual(step.repeatUntilEvidence?.expectation.met, true)
@@ -382,13 +382,13 @@ extension TheBrainsActionTests {
                     activationCount += 1
                     if activationCount == 2 {
                         return ActionResult.failure(
-                            method: .activate,
-                            errorKind: .actionFailed,
+                            payload: .activate,
+                            failureKind: .actionFailed,
                             message: "Element is disabled (has 'notEnabled' trait)",
                         )
                     }
                 }
-                return ActionResult.success(method: .activate, message: command.runtimeType.rawValue)
+                return ActionResult.success(payload: .activate, message: command.runtimeType.rawValue)
             }
         )
         let plan = try HeistPlan(body: [
@@ -402,15 +402,15 @@ extension TheBrainsActionTests {
         ])
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let heist = try XCTUnwrap(result.heistExecutionPayload)
-        let step = try XCTUnwrap(heist.steps.first)
+        let heistResult = try XCTUnwrap(result.resultPayload)
+        let step = try XCTUnwrap(heistResult.steps.first)
         let failedIteration = try XCTUnwrap(step.children.last)
         let failedRetry = try XCTUnwrap(failedIteration.children.first)
         let failedRetryPath: HeistExecutionPath = "$.body[0].repeat_until.iterations[1].body[0]"
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(activationCount, 2)
-        XCTAssertEqual(heist.abortedAtPath, failedRetryPath)
+        XCTAssertEqual(heistResult.abortedAtPath, failedRetryPath)
         XCTAssertEqual(step.status, .failed)
         XCTAssertEqual(step.repeatUntilEvidence?.iterationCount, 2)
         XCTAssertEqual(step.repeatUntilEvidence?.expectation.met, false)
@@ -425,7 +425,7 @@ extension TheBrainsActionTests {
             "child failed at \(failedRetryPath)"
         )
         XCTAssertEqual(failedRetry.status, .failed)
-        XCTAssertEqual(failedRetry.actionEvidence?.dispatchResult?.outcome.errorKind, .actionFailed)
+        XCTAssertEqual(failedRetry.actionEvidence?.dispatchResult?.outcome.failureKind, .actionFailed)
     }
 
     func testHeistRepeatUntilMinimumTimeoutWithElseRunsBodyOnce() async throws {
@@ -439,7 +439,7 @@ extension TheBrainsActionTests {
                 if case .increment = command {
                     incrementCount += 1
                 }
-                return ActionResult.success(method: .increment, message: command.runtimeType.rawValue)
+                return ActionResult.success(payload: .increment, message: command.runtimeType.rawValue)
             }
         )
         let plan = try HeistPlan(body: [
@@ -456,8 +456,8 @@ extension TheBrainsActionTests {
         ])
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let heist = try XCTUnwrap(result.heistExecutionPayload)
-        let step = try XCTUnwrap(heist.steps.first)
+        let heistResult = try XCTUnwrap(result.resultPayload)
+        let step = try XCTUnwrap(heistResult.steps.first)
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "repeat_until else failed")
         XCTAssertEqual(incrementCount, 1)
@@ -478,7 +478,7 @@ extension TheBrainsActionTests {
         let initialTrace = AccessibilityTrace(interface: initialState.interface)
         let matchedTrace = AccessibilityTrace(interface: matchedState.interface)
         var afterObservationCount = 0
-        let runtime = repeatUntilReceiptRuntime(
+        let runtime = repeatUntilWaitRuntime(
             observations: [initialState],
             wait: { request in
                 switch request {
@@ -512,7 +512,7 @@ extension TheBrainsActionTests {
                 case .standalone, .actionEndpoint, .baselineTraceOnly:
                     XCTFail("repeat_until should not issue \(request)")
                     return .failed(
-                        errorKind: .general,
+                        failureKind: .actionFailed,
                         message: "unexpected wait request",
                         traceEvidence: nil,
                         expectation: ExpectationResult.Unmet(
@@ -534,8 +534,8 @@ extension TheBrainsActionTests {
         ])
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let heist = try XCTUnwrap(result.heistExecutionPayload)
-        let step = try XCTUnwrap(heist.steps.first)
+        let heistResult = try XCTUnwrap(result.resultPayload)
+        let step = try XCTUnwrap(heistResult.steps.first)
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(afterObservationCount, 1)
@@ -553,7 +553,7 @@ extension TheBrainsActionTests {
         let resolved = try resolvedPredicate(predicate)
         let initialState = observedState(elements: [(makeElement(value: "0", identifier: "quantity"), "quantity")])
         let initialTrace = AccessibilityTrace(interface: initialState.interface)
-        let runtime = repeatUntilReceiptRuntime(
+        let runtime = repeatUntilWaitRuntime(
             observations: [initialState],
             wait: { request in
                 switch request {
@@ -585,7 +585,7 @@ extension TheBrainsActionTests {
                 case .standalone, .actionEndpoint, .baselineTraceOnly:
                     XCTFail("repeat_until should not issue \(request)")
                     return .failed(
-                        errorKind: .general,
+                        failureKind: .actionFailed,
                         message: "unexpected wait request",
                         traceEvidence: nil,
                         expectation: ExpectationResult.Unmet(
@@ -607,8 +607,8 @@ extension TheBrainsActionTests {
         ])
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let heist = try XCTUnwrap(result.heistExecutionPayload)
-        let step = try XCTUnwrap(heist.steps.first)
+        let heistResult = try XCTUnwrap(result.resultPayload)
+        let step = try XCTUnwrap(heistResult.steps.first)
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(step.repeatUntilEvidence?.expectation.met, false)
@@ -635,12 +635,12 @@ extension TheBrainsActionTests {
         ])
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let heist = try XCTUnwrap(result.heistExecutionPayload)
-        let step = try XCTUnwrap(heist.steps.first)
+        let heistResult = try XCTUnwrap(result.resultPayload)
+        let step = try XCTUnwrap(heistResult.steps.first)
         let elseFailurePath: HeistExecutionPath = "$.body[0].repeat_until.else_body[0]"
 
         XCTAssertFalse(result.outcome.isSuccess)
-        XCTAssertEqual(heist.abortedAtPath, elseFailurePath)
+        XCTAssertEqual(heistResult.abortedAtPath, elseFailurePath)
         XCTAssertEqual(step.status, .failed)
         XCTAssertEqual(step.abortedAtChildPath, elseFailurePath)
         XCTAssertEqual(step.repeatUntilEvidence?.outcome, .failed)
@@ -668,8 +668,8 @@ extension TheBrainsActionTests {
         ])
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let heist = try XCTUnwrap(result.heistExecutionPayload)
-        let step = try XCTUnwrap(heist.steps.first)
+        let heistResult = try XCTUnwrap(result.resultPayload)
+        let step = try XCTUnwrap(heistResult.steps.first)
 
         XCTAssertTrue(result.outcome.isSuccess)
         XCTAssertEqual(step.kind, .conditional)
@@ -691,7 +691,7 @@ extension TheBrainsActionTests {
         )
         var stream = PredicateObservationStreamState()
 
-        let baselineObservation = brains.postActionObservation.semanticObservation(from: baselineEvent)
+        let baselineObservation = brains.actionEvidenceProjector.projectSettledEvidence(from: baselineEvent)
         let changePredicate = AccessibilityPredicate.changed(.elements([.appeared(readyTarget)]))
         let resolvedChangePredicate = try resolvedPredicate(changePredicate)
         stream = stream.seedingBaseline(
@@ -712,7 +712,7 @@ extension TheBrainsActionTests {
             PredicateObservationDiagnostics.changePredicateNeedsFutureObservationMessage
         )
 
-        let changedObservation = brains.postActionObservation.semanticObservation(from: changedEvent)
+        let changedObservation = brains.actionEvidenceProjector.projectSettledEvidence(from: changedEvent)
         let baseline = try XCTUnwrap(seeded.state.observationBaseline)
         let changed = stream.reducing(
             changedObservation,
@@ -752,8 +752,8 @@ extension TheBrainsActionTests {
         ])
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let heist = try XCTUnwrap(result.heistExecutionPayload)
-        let step = try XCTUnwrap(heist.steps.first)
+        let heistResult = try XCTUnwrap(result.resultPayload)
+        let step = try XCTUnwrap(heistResult.steps.first)
 
         XCTAssertTrue(result.outcome.isSuccess)
         XCTAssertEqual(
@@ -788,8 +788,8 @@ extension TheBrainsActionTests {
 }
 
 private extension ActionResult {
-    var heistExecutionPayload: HeistExecutionResult? {
-        guard case .heistExecution(let result) = payload else { return nil }
+    var resultPayload: HeistResult? {
+        guard case .heist(let result) = payload else { return nil }
         return result
     }
 }

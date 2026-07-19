@@ -171,8 +171,8 @@ enum DiagnosticFailureMapper {
         )
     }
 
-    static func map(errorKind: ErrorKind, message: String) -> DiagnosticFailure {
-        DiagnosticFailure(message: message, details: failureDetails(for: errorKind))
+    static func map(failureKind: ActionFailure.Kind, message: String) -> DiagnosticFailure {
+        DiagnosticFailure(message: message, details: failureDetails(for: failureKind))
     }
 
     static func map(reportFailure: HeistFailureDetail, message: String? = nil) -> DiagnosticFailure {
@@ -182,8 +182,8 @@ enum DiagnosticFailureMapper {
         )
     }
 
-    static func failureDetails(for errorKind: ErrorKind) -> FailureDetails {
-        errorKind.failureDetails
+    static func failureDetails(for failureKind: ActionFailure.Kind) -> FailureDetails {
+        failureKind.failureDetails
     }
 
     static func failureDetails(for reportFailure: HeistFailureDetail) -> FailureDetails {
@@ -253,10 +253,9 @@ public enum FenceResponse {
     case screenshotData(payload: ScreenPayload, options: ScreenshotResponseOptions = ScreenshotResponseOptions())
     case heistExecution(
         plan: HeistPlan,
-        result: HeistExecutionResult,
-        accessibilityTrace: AccessibilityTrace? = nil
+        report: HeistReport
     )
-    case heistValidation(HeistValidationReport)
+    case heistValidation(HeistValidation.Report)
     case heistCatalog(HeistDiscoveryCatalog)
     case heistDescription(HeistDescription)
     case sessionState(payload: SessionStatePayload)
@@ -284,7 +283,7 @@ public enum FenceResponse {
     public var isFailure: Bool {
         switch self {
         case .ok, .status, .pong, .devices, .interface, .announcements, .screenshot, .screenshotData,
-             .heistValidation, .heistCatalog, .heistDescription,
+             .heistCatalog, .heistDescription,
              .sessionState, .targets:
             return false
         case .error:
@@ -293,8 +292,10 @@ public enum FenceResponse {
             if !result.outcome.isSuccess { return true }
             if let expectation, !expectation.met { return true }
             return false
-        case .heistExecution(_, let result, _):
-            return result.isFailure
+        case .heistExecution(_, let report):
+            return report.failure != nil
+        case .heistValidation(let report):
+            return !report.commandPassed
         }
     }
 

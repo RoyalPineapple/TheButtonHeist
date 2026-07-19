@@ -14,25 +14,25 @@ extension Actions {
     }
 
     func executeDismiss(
-    ) async -> TheSafecracker.ActionDispatchOutcome {
+    ) async -> TheSafecracker.ActionDispatchResult {
         screenActionResult(
             accessibilityActions.dismiss(
                 startingAt: screenActionStartingObject(),
                 fallback: tripwire.topmostViewController()
             ),
-            method: .dismiss,
+            payload: .dismiss,
             missingHandlerMessage: "no escape handler in responder chain"
         )
     }
 
     func executeMagicTap(
-    ) async -> TheSafecracker.ActionDispatchOutcome {
+    ) async -> TheSafecracker.ActionDispatchResult {
         screenActionResult(
             accessibilityActions.magicTap(
                 startingAt: screenActionStartingObject(),
                 fallback: tripwire.topmostViewController()
             ),
-            method: .magicTap,
+            payload: .magicTap,
             missingHandlerMessage: "no magic tap handler in responder chain"
         )
     }
@@ -44,14 +44,14 @@ extension Actions {
 
     private func screenActionResult(
         _ outcome: AccessibilityActionDispatcher.ScreenActionOutcome,
-        method: ActionMethod,
+        payload: ActionResult.Payload,
         missingHandlerMessage: String
-    ) -> TheSafecracker.ActionDispatchOutcome {
+    ) -> TheSafecracker.ActionDispatchResult {
         switch outcome {
         case .succeeded(let handler):
-            return .success(method: method, message: "Handler: \(handler)")
+            return .success(payload: payload, message: "Handler: \(handler)")
         case .noHandler:
-            return .failure(method, message: missingHandlerMessage)
+            return .failure(payload, message: missingHandlerMessage)
         }
     }
 }

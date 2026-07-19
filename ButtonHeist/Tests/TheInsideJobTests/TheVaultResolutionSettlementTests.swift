@@ -206,7 +206,7 @@ extension TheVaultResolutionTests {
             notificationData: .none,
             associatedElement: .none
         )
-        let outcome = SettleSession.Result(
+        let settleResult = SettleSession.Result(
             outcome: .timedOut(timeMs: 1),
             events: [],
             finalObservation: SettleSessionFinalObservation(observation: observation),
@@ -214,9 +214,9 @@ extension TheVaultResolutionTests {
             tripwireSignal: bagman.tripwire.tripwireSignal()
         )
 
-        _ = await bagman.semanticObservationStream.settlePostActionObservation(
+        _ = await bagman.semanticObservationStream.settleActionObservation(
             baselineTripwireSignal: bagman.tripwire.tripwireSignal(),
-            settleOutcome: outcome,
+            settleResult: settleResult,
             notificationWindow: action
         )
         firstHeist.cancel()
@@ -273,15 +273,15 @@ extension TheVaultResolutionTests {
         XCTAssertTrue(secondEvent.trace.changeFacts.isEmpty)
     }
 
-    func testCleanPostActionSettleRequiresActionWindowToClaimAccessibilityNotifications() async {
+    func testSettledActionRequiresActionWindowToClaimAccessibilityNotifications() async {
         let observation = InterfaceObservation.makeForTests(elements: [(element(label: "Stable"), "stable")])
-        bagman.recordParsedObservedEvidence(observation)
+        bagman.observeInterface(observation)
         bagman.accessibilityNotifications.recordForTesting(
             code: 1008,
             notificationData: CapturedAccessibilityNotificationPayload("Done" as NSString),
             associatedElement: .none
         )
-        let outcome = SettleSession.Result(
+        let settleResult = SettleSession.Result(
             outcome: .settled(timeMs: 1),
             events: [],
             finalObservation: SettleSessionFinalObservation(observation: observation),
@@ -289,13 +289,13 @@ extension TheVaultResolutionTests {
             tripwireSignal: bagman.tripwire.tripwireSignal()
         )
 
-        let result = await bagman.semanticObservationStream.settlePostActionObservation(
+        let result = await bagman.semanticObservationStream.settleActionObservation(
             baselineTripwireSignal: bagman.tripwire.tripwireSignal(),
-            settleOutcome: outcome
+            settleResult: settleResult
         )
 
-        guard case .committed(let event) = result.result else {
-            return XCTFail("Expected clean settle to commit")
+        guard case .committed(let event) = result.commitOutcome else {
+            return XCTFail("Expected successful settlement to commit")
         }
         XCTAssertEqual(event.trace.captures.last?.transition.accessibilityNotifications, [])
         XCTAssertEqual(
@@ -307,34 +307,34 @@ extension TheVaultResolutionTests {
         )
     }
 
-    func testCleanSettleProofCarriesTheExactSettledObservation() throws {
+    func testSettlementAdmissionCarriesTheExactObservation() throws {
         let stableElement = element(label: "Stable")
         let settled = InterfaceObservation.makeForTests(elements: [(stableElement, "stable")])
         let finalObservation = SettleSessionFinalObservation(observation: settled)
-        let outcome = SettleSession.Result(
+        let settleResult = SettleSession.Result(
             outcome: .settled(timeMs: 1),
             events: [],
             finalObservation: finalObservation,
             elementsByKey: [:],
             tripwireSignal: bagman.tripwire.tripwireSignal()
         )
-        bagman.recordParsedObservedEvidence(settled)
+        bagman.observeInterface(settled)
 
         let replacement = InterfaceObservation.makeForTests(elements: [(stableElement, "stable")])
         XCTAssertEqual(replacement.tree, settled.tree)
         XCTAssertEqual(replacement.liveCapture.snapshot, settled.liveCapture.snapshot)
-        XCTAssertNotEqual(replacement.captureToken, settled.captureToken)
-        bagman.recordParsedObservedEvidence(replacement)
+        XCTAssertNotEqual(replacement.captureID, settled.captureID)
+        bagman.observeInterface(replacement)
 
-        let proof = try XCTUnwrap(InterfaceObservationProof.settled(outcome))
-        XCTAssertEqual(proof.observation.captureToken, settled.captureToken)
-        XCTAssertNotEqual(proof.observation.captureToken, replacement.captureToken)
+        let committableObservation = try XCTUnwrap(CommittableInterfaceObservation.admit(settleResult))
+        XCTAssertEqual(committableObservation.observation.captureID, settled.captureID)
+        XCTAssertNotEqual(committableObservation.observation.captureID, replacement.captureID)
     }
 
-    func testViewportMovementLineageRequiresDedicatedProofConstructor() throws {
+    func testViewportMovementLineageRequiresDedicatedAdmissionConstructor() throws {
         let observation = InterfaceObservation.makeForTests(elements: [(element(label: "Stable"), "stable")])
-        bagman.recordParsedObservedEvidence(observation)
-        let outcome = SettleSession.Result(
+        bagman.observeInterface(observation)
+        let settleResult = SettleSession.Result(
             outcome: .settled(timeMs: 1),
             events: [],
             finalObservation: SettleSessionFinalObservation(observation: observation),
@@ -342,10 +342,10 @@ extension TheVaultResolutionTests {
             tripwireSignal: bagman.tripwire.tripwireSignal()
         )
 
-        let ordinary = try XCTUnwrap(InterfaceObservationProof.settled(outcome))
+        let ordinary = try XCTUnwrap(CommittableInterfaceObservation.admit(settleResult))
         let afterMovement = try XCTUnwrap(
-            InterfaceObservationProof.settled(
-                outcome,
+            CommittableInterfaceObservation.admit(
+                settleResult,
                 lineageEvidence: .viewportMovement
             )
         )
@@ -366,9 +366,9 @@ extension TheVaultResolutionTests {
             notificationData: .none,
             associatedElement: .none
         )
-        let result = await bagman.semanticObservationStream.settlePostActionObservation(
+        let result = await bagman.semanticObservationStream.settleActionObservation(
             baselineTripwireSignal: bagman.tripwire.tripwireSignal(),
-            settleOutcome: SettleSession.Result(
+            settleResult: SettleSession.Result(
                 outcome: .settled(timeMs: 1),
                 events: [],
                 finalObservation: SettleSessionFinalObservation(observation: observation),
@@ -378,8 +378,8 @@ extension TheVaultResolutionTests {
             notificationWindow: action
         )
 
-        guard case .committed(let event) = result.result else {
-            return XCTFail("Expected clean settle to commit")
+        guard case .committed(let event) = result.commitOutcome else {
+            return XCTFail("Expected successful settlement to commit")
         }
         XCTAssertEqual(
             event.trace.captures.last?.transition.accessibilityNotifications.map(\.kind),
@@ -401,7 +401,7 @@ extension TheVaultResolutionTests {
             (element(label: "Volume", value: "75%", traits: .adjustable), "volume"),
         ])
         bagman.semanticObservationStream.commitVisibleObservationForTesting(before)
-        bagman.recordParsedObservedEvidence(after)
+        bagman.observeInterface(after)
 
         let action = bagman.accessibilityNotifications.beginActionWindow()
         bagman.accessibilityNotifications.recordForTesting(
@@ -409,9 +409,9 @@ extension TheVaultResolutionTests {
             notificationData: .none,
             associatedElement: .none
         )
-        let result = await bagman.semanticObservationStream.settlePostActionObservation(
+        let result = await bagman.semanticObservationStream.settleActionObservation(
             baselineTripwireSignal: bagman.tripwire.tripwireSignal(),
-            settleOutcome: SettleSession.Result(
+            settleResult: SettleSession.Result(
                 outcome: .settled(timeMs: 1),
                 events: [],
                 finalObservation: SettleSessionFinalObservation(observation: after),
@@ -421,8 +421,8 @@ extension TheVaultResolutionTests {
             notificationWindow: action
         )
 
-        guard case .committed(let event) = result.result else {
-            return XCTFail("Expected clean settle to commit")
+        guard case .committed(let event) = result.commitOutcome else {
+            return XCTFail("Expected successful settlement to commit")
         }
         XCTAssertEqual(
             event.trace.captures.last?.transition.accessibilityNotifications.map(\.kind),
@@ -449,9 +449,9 @@ extension TheVaultResolutionTests {
             notificationData: CapturedAccessibilityNotificationPayload("Saved" as NSString),
             associatedElement: .none
         )
-        let result = await bagman.semanticObservationStream.settlePostActionObservation(
+        let result = await bagman.semanticObservationStream.settleActionObservation(
             baselineTripwireSignal: bagman.tripwire.tripwireSignal(),
-            settleOutcome: SettleSession.Result(
+            settleResult: SettleSession.Result(
                 outcome: .settled(timeMs: 1),
                 events: [],
                 finalObservation: SettleSessionFinalObservation(observation: observation),
@@ -461,8 +461,8 @@ extension TheVaultResolutionTests {
             notificationWindow: action
         )
 
-        guard case .committed(let event) = result.result else {
-            return XCTFail("Expected clean settle to commit")
+        guard case .committed(let event) = result.commitOutcome else {
+            return XCTFail("Expected successful settlement to commit")
         }
         XCTAssertEqual(event.trace.capturedAnnouncements.map(\.text), ["Saved"])
         XCTAssertEqual(event.trace.captures.last?.transition.accessibilityNotifications.map(\.kind), [.announcement])
@@ -529,7 +529,7 @@ extension TheVaultResolutionTests {
             associatedElement: .none
         )
         let observation = InterfaceObservation.makeForTests(elements: [(element(label: "Unstable"), "unstable")])
-        let outcome = SettleSession.Result(
+        let settleResult = SettleSession.Result(
             outcome: .timedOut(timeMs: 1),
             events: [],
             finalObservation: SettleSessionFinalObservation(observation: observation),
@@ -537,9 +537,9 @@ extension TheVaultResolutionTests {
             tripwireSignal: bagman.tripwire.tripwireSignal()
         )
 
-        _ = await bagman.semanticObservationStream.settlePostActionObservation(
+        _ = await bagman.semanticObservationStream.settleActionObservation(
             baselineTripwireSignal: bagman.tripwire.tripwireSignal(),
-            settleOutcome: outcome,
+            settleResult: settleResult,
             notificationWindow: action
         )
 
@@ -558,7 +558,7 @@ extension TheVaultResolutionTests {
         let observation = InterfaceObservation.makeForTests([
             .init(element(label: "Unstable"), heistId: "unstable", object: object),
         ])
-        let outcome = SettleSession.Result(
+        let settleResult = SettleSession.Result(
             outcome: .timedOut(timeMs: 1),
             events: [],
             finalObservation: SettleSessionFinalObservation(observation: observation),
@@ -566,22 +566,22 @@ extension TheVaultResolutionTests {
             tripwireSignal: bagman.tripwire.tripwireSignal()
         )
 
-        let result = await bagman.semanticObservationStream.settlePostActionObservation(
+        let result = await bagman.semanticObservationStream.settleActionObservation(
             baselineTripwireSignal: bagman.tripwire.tripwireSignal(),
-            settleOutcome: outcome
+            settleResult: settleResult
         )
 
-        guard case .observedUnsettled(let observedObservation, _) = result.result else {
+        guard case .observedUnsettled(let observedObservation, _) = result.commitOutcome else {
             return XCTFail("Expected observed unsettled settle evidence")
         }
         XCTAssertEqual(observedObservation.tree.orderedElements.first?.element.label, "Unstable")
-        XCTAssertEqual(observedObservation.captureToken, observation.captureToken)
+        XCTAssertEqual(observedObservation.captureID, observation.captureID)
         XCTAssertTrue(observedObservation.liveCapture.object(for: "unstable") === object)
         XCTAssertEqual(
             bagman.latestFailedSettleDiagnosticEvidence?.tree.orderedElements.first?.element.label,
             "Unstable"
         )
-        XCTAssertEqual(bagman.latestFailedSettleDiagnosticEvidence?.captureToken, observation.captureToken)
+        XCTAssertEqual(bagman.latestFailedSettleDiagnosticEvidence?.captureID, observation.captureID)
         XCTAssertTrue(bagman.latestFailedSettleDiagnosticEvidence?.liveCapture.object(for: "unstable") === object)
         XCTAssertTrue(bagman.semanticObservationStream.latestSettledObservationInvalidated)
     }
@@ -607,28 +607,28 @@ extension TheVaultResolutionTests {
         let screenB = InterfaceObservation.makeForTests([
             .init(element(label: "B"), heistId: "b", object: objectB),
         ])
-        let rejectedOutcome = SettleSession.Result(
+        let rejectedResult = SettleSession.Result(
             outcome: .settled(timeMs: 1),
             events: [],
             finalObservation: SettleSessionFinalObservation(observation: screenA),
             elementsByKey: [:],
             tripwireSignal: bagman.tripwire.tripwireSignal()
         )
-        bagman.recordParsedObservedEvidence(screenA)
-        bagman.recordParsedObservedEvidence(screenB)
+        bagman.observeInterface(screenA)
+        bagman.observeInterface(screenB)
 
-        let result = await bagman.semanticObservationStream.settlePostActionObservation(
+        let result = await bagman.semanticObservationStream.settleActionObservation(
             baselineTripwireSignal: bagman.tripwire.tripwireSignal(),
-            settleOutcome: rejectedOutcome
+            settleResult: rejectedResult
         )
 
-        guard case .unavailable = result.result else {
-            return XCTFail("Expected stale settle proof to be rejected")
+        guard case .unavailable = result.commitOutcome else {
+            return XCTFail("Expected stale settlement admission to be rejected")
         }
-        XCTAssertEqual(bagman.latestObservation.captureToken, screenB.captureToken)
+        XCTAssertEqual(bagman.latestObservation.captureID, screenB.captureID)
         XCTAssertTrue(bagman.latestObservation.liveCapture.object(for: "b") === objectB)
         XCTAssertNil(bagman.latestObservation.liveCapture.object(for: "a"))
-        XCTAssertEqual(bagman.latestFailedSettleDiagnosticEvidence?.captureToken, screenA.captureToken)
+        XCTAssertEqual(bagman.latestFailedSettleDiagnosticEvidence?.captureID, screenA.captureID)
         XCTAssertTrue(bagman.latestFailedSettleDiagnosticEvidence?.liveCapture.object(for: "a") === objectA)
     }
 }

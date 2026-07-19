@@ -328,7 +328,6 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
         }
         XCTAssertNil(job.transport, file: file, line: line)
         XCTAssertFalse(job.lifecycleObservationIsInstalled, file: file, line: line)
-        XCTAssertTrue(job.lifecycleBoundaryTasks.isEmpty, file: file, line: line)
         XCTAssertFalse(job.brains.semanticObservationIsActive, file: file, line: line)
         XCTAssertFalse(job.brains.vault.semanticObservationStream.isActive, file: file, line: line)
         XCTAssertFalse(job.tripwire.isPulseRunning, file: file, line: line)
@@ -336,7 +335,7 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
     }
 
     private func recordSettleFailureDiagnostic(on job: TheInsideJob) async -> String {
-        let outcome = SettleSession.Result(
+        let settleResult = SettleSession.Result(
             outcome: .timedOut(timeMs: 17),
             events: [],
             finalObservation: SettleSessionFinalObservation(
@@ -346,9 +345,9 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
             tripwireSignal: job.brains.vault.semanticObservationStream.currentTripwireSignal(),
             instabilityDescription: "runtime lifecycle diagnostic"
         )
-        _ = await job.brains.vault.semanticObservationStream.settlePostActionObservation(
+        _ = await job.brains.vault.semanticObservationStream.settleActionObservation(
             baselineTripwireSignal: job.tripwire.tripwireSignal(),
-            settleOutcome: outcome
+            settleResult: settleResult
         )
         guard let diagnostic = job.brains.vault.semanticObservationStream.latestSettleFailureDiagnostic else {
             XCTFail("Expected settle failure diagnostic")

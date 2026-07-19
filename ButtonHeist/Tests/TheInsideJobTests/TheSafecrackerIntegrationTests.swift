@@ -18,7 +18,7 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
         safecracker.startKeyboardObservation()
 
         _ = await retireKeyboard {
-            safecracker.resignFirstResponder()
+            safecracker.dismissKeyboard()
         }
 
         let windowScene = try requireForegroundWindowScene()
@@ -39,7 +39,7 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
     override func tearDown() async throws {
         _ = await retireKeyboard {
             window?.endEditing(true)
-            return safecracker.resignFirstResponder()
+            return safecracker.dismissKeyboard()
         }
         safecracker.stopKeyboardObservation()
         safecracker = nil
@@ -129,7 +129,7 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
         textField.frame = CGRect(x: 50, y: 400, width: 200, height: 44)
         hostView.addSubview(textField)
 
-        XCTAssertFalse(safecracker.hasActiveTextInput())
+        XCTAssertFalse(safecracker.hasActiveTextInput)
 
         await activateTextInput(textField)
 
@@ -147,7 +147,7 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
         XCTAssertTrue(textField.isFirstResponder)
 
         let result = await retireKeyboard {
-            safecracker.resignFirstResponder()
+            safecracker.dismissKeyboard()
         }
         XCTAssertTrue(result)
         XCTAssertFalse(textField.isFirstResponder)
@@ -167,7 +167,7 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
     private func retireKeyboard<Result>(
         perform action: () -> Result
     ) async -> Result {
-        let hasActiveResponder = safecracker.hasActiveTextInput()
+        let hasActiveResponder = safecracker.hasActiveTextInput
             || KeyboardWindowTestHelpers.hasFirstResponder(in: hostView)
 
         let result = action()
@@ -175,7 +175,7 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
             await KeyboardWindowTestHelpers.waitForKeyboardWindowsToRetire()
         }
 
-        XCTAssertFalse(safecracker.hasActiveTextInput())
+        XCTAssertFalse(safecracker.hasActiveTextInput)
         XCTAssertFalse(KeyboardWindowTestHelpers.hasFirstResponder(in: hostView))
         return result
     }

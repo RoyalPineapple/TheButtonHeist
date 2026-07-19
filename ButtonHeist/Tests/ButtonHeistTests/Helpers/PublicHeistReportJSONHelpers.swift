@@ -11,7 +11,7 @@ func assertPublicHeistSummary(
     _ summary: JSONProbe,
     executedTopLevelStepCount: Int,
     executedNodeCount: Int,
-    outputReceiptNodeCount: Int,
+    outputNodeCount: Int,
     durationMs: Int,
     abortedAtPath: String?,
     file: StaticString = #filePath,
@@ -19,7 +19,7 @@ func assertPublicHeistSummary(
 ) throws {
     XCTAssertEqual(try summary.int("executedTopLevelStepCount"), executedTopLevelStepCount, file: file, line: line)
     XCTAssertEqual(try summary.int("executedNodeCount"), executedNodeCount, file: file, line: line)
-    XCTAssertEqual(try summary.int("outputReceiptNodeCount"), outputReceiptNodeCount, file: file, line: line)
+    XCTAssertEqual(try summary.int("outputNodeCount"), outputNodeCount, file: file, line: line)
     XCTAssertEqual(try summary.int("durationMs"), durationMs, file: file, line: line)
     if let abortedAtPath {
         XCTAssertEqual(try summary.string("abortedAtPath"), abortedAtPath, file: file, line: line)

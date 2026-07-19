@@ -50,7 +50,7 @@ class TestRunnerTests(unittest.TestCase):
             {
                 "contract-actions",
                 "contract-predicates",
-                "contract-receipts",
+                "contract-results",
                 "contract-wire",
                 "contract-targets",
             },
@@ -69,11 +69,11 @@ class TestRunnerTests(unittest.TestCase):
             "--focus",
             "contract-actions",
             "--focus",
-            "contract-receipts",
+            "contract-results",
         ])
 
         self.assertEqual(args.suites, [])
-        self.assertEqual(args.focus, ["contract-actions", "contract-receipts"])
+        self.assertEqual(args.focus, ["contract-actions", "contract-results"])
 
     def test_arguments_reject_mixed_or_missing_selection(self) -> None:
         with self.assertRaises(ValueError):
@@ -89,7 +89,7 @@ class TestRunnerTests(unittest.TestCase):
     def test_focus_expansion_merges_tests_per_suite_without_duplicates(self) -> None:
         selected = RUNNER["focus_runs"]([
             "contract-predicates",
-            "contract-receipts",
+            "contract-results",
             "contract-predicates",
         ])
 
@@ -98,7 +98,7 @@ class TestRunnerTests(unittest.TestCase):
             selected["TheScoreTests"],
             (
                 "TheScoreTests/AccessibilityPredicateTests",
-                "TheScoreTests/HeistExecutionReceiptContractTests",
+                "TheScoreTests/HeistResultContractTests",
             ),
         )
 
@@ -106,10 +106,13 @@ class TestRunnerTests(unittest.TestCase):
         for name in SUITES:
             paths = RUNNER["suite_paths"](name)
             self.assertEqual(
-                paths["result"],
-                Path(f"/artifacts/{name}/results/{name}.xcresult"),
+                paths["result_bundle"],
+                Path(f"/artifacts/{name}/result-bundles/{name}.xcresult"),
             )
-            self.assertEqual(paths["receipts"], Path(f"/artifacts/{name}/receipts"))
+            self.assertEqual(
+                paths["heist_results"],
+                Path(f"/artifacts/{name}/heist-results"),
+            )
             self.assertEqual(paths["diagnostics"], Path(f"/artifacts/{name}/diagnostics"))
             self.assertEqual(paths["derived"], Path(f"/derived/{name}"))
             self.assertEqual(paths["record"], Path(f"/artifacts/{name}/run.json"))
@@ -127,8 +130,8 @@ class TestRunnerTests(unittest.TestCase):
         self.assertNotIn("--no-selective-testing", selective)
         self.assertIn("--no-selective-testing", full)
         self.assertIn("platform=macOS", full)
-        self.assertIn(str(paths["result"]), full)
-        self.assertIn(str(paths["receipts"]), full)
+        self.assertIn(str(paths["result_bundle"]), full)
+        self.assertIn(str(paths["heist_results"]), full)
 
     def test_focused_run_passes_only_testing_identifiers_to_canonical_command(self) -> None:
         suite = SUITES["TheScoreTests"]
@@ -142,13 +145,13 @@ class TestRunnerTests(unittest.TestCase):
             "full",
             (
                 "TheScoreTests/AccessibilityPredicateTests",
-                "TheScoreTests/HeistExecutionReceiptContractTests",
+                "TheScoreTests/HeistResultContractTests",
             ),
         )
 
         self.assertIn("-only-testing:TheScoreTests/AccessibilityPredicateTests", command)
         self.assertIn(
-            "-only-testing:TheScoreTests/HeistExecutionReceiptContractTests",
+            "-only-testing:TheScoreTests/HeistResultContractTests",
             command,
         )
 
@@ -218,12 +221,12 @@ class TestRunnerTests(unittest.TestCase):
         self.assertNotIn(str(RUNNER["WRAPPER"]), build)
         self.assertIn(str(RUNNER["WRAPPER"]), test)
         self.assertIn("--ios-sandbox", test)
-        self.assertIn(str(paths["result"]), test)
+        self.assertIn(str(paths["result_bundle"]), test)
 
     def test_macos_supports_prebuilt_focused_feedback(self) -> None:
         suite = SUITES["TheScoreTests"]
         paths = RUNNER["suite_paths"]("TheScoreTests")
-        selected = ("TheScoreTests/HeistExecutionReceiptContractTests",)
+        selected = ("TheScoreTests/HeistResultContractTests",)
         build = RUNNER["test_command"](
             "build-for-testing",
             "TheScoreTests",
@@ -246,11 +249,11 @@ class TestRunnerTests(unittest.TestCase):
         self.assertIn("platform=macOS", build)
         self.assertIn("platform=macOS", test)
         self.assertIn(
-            "-only-testing:TheScoreTests/HeistExecutionReceiptContractTests",
+            "-only-testing:TheScoreTests/HeistResultContractTests",
             build,
         )
         self.assertIn(
-            "-only-testing:TheScoreTests/HeistExecutionReceiptContractTests",
+            "-only-testing:TheScoreTests/HeistResultContractTests",
             test,
         )
 
@@ -264,14 +267,14 @@ class TestRunnerTests(unittest.TestCase):
         index = command.index("-parallel-testing-enabled")
         self.assertEqual(command[index + 1], "NO")
 
-    def test_simulator_receipt_cleanup_is_scoped_to_selected_device(self) -> None:
+    def test_simulator_result_cleanup_is_scoped_to_selected_device(self) -> None:
         with mock.patch.object(RUNNER["Path"], "home", return_value=Path("/Users/test")), \
              mock.patch.object(RUNNER["Path"], "exists", return_value=True), \
-             mock.patch.object(RUNNER["Path"], "glob", return_value=[Path("/receipt-dir")]), \
+             mock.patch.object(RUNNER["Path"], "glob", return_value=[Path("/result-dir")]), \
              mock.patch.object(RUNNER["shutil"], "rmtree") as remove:
-            RUNNER["clear_simulator_receipts"](SIMULATOR)
+            RUNNER["clear_simulator_results"](SIMULATOR)
 
-        remove.assert_called_once_with(Path("/receipt-dir"))
+        remove.assert_called_once_with(Path("/result-dir"))
 
     @mock.patch.object(RUNNER["subprocess"], "run")
     def test_dependency_install_runs_once_for_multiple_suites(

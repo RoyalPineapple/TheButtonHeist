@@ -24,7 +24,7 @@ extension Navigation {
         case scroll
         case scrollToEdge
 
-        var method: ActionMethod {
+        var payload: ActionResult.Payload {
             switch self {
             case .scroll:
                 return .scroll

@@ -21,7 +21,7 @@ MAY inspect or control the current live session, but they MUST NOT appear inside
 
 1. **Read** — `get_interface` returns the app accessibility state with labels, values, traits, actions, and capture-local diagnostic annotations.
 2. **Act** — use `perform(step:)` with one durable ButtonHeist DSL step for ordinary app controls. Always attach `.expect(...)` when you know what should change.
-3. **Read the response** — tool text is the concise summary; `structuredContent` carries the full public JSON receipt. If the delta answers your question, skip `get_interface`.
+3. **Read the response** — tool text is the concise summary; `structuredContent` carries the full public JSON result. If the delta answers your question, skip `get_interface`.
 4. **Wait if needed** — when the delta shows a transient state, call `perform(step:)` with one `WaitFor(...)` statement. The server checks the current settled state first, then watches settled accessibility state until the predicate is true.
 5. **Repeat** — only re-fetch when you need elements you haven't seen.
 
@@ -51,12 +51,12 @@ CustomAction("Archive", on: .label("Message"))
 Rotor("Headings", on: .label("Article"))
 SetPasteboard("hello")
 Edit(.paste)
-DismissKeyboard()
+dismissKeyboard()
 
-Mechanical.Tap(.label("Map"))
-Mechanical.LongPress(.label("Message"))
-Mechanical.Swipe(.label("Carousel"), .left)
-Mechanical.Drag(.label("Slider"), to: ScreenPoint(x: 200, y: 40))
+oneFingerTap(.label("Map"))
+longPress(.label("Message"))
+swipe(.label("Carousel"), .left)
+drag(.label("Slider"), to: ScreenPoint(x: 200, y: 40))
 
 WaitFor(.label("Checkout"), timeout: 5)
 ```
@@ -269,7 +269,7 @@ Activate(.label("Pay"))
 WaitFor(.label("Receipt"), timeout: 10)
 ```
 
-If the action receipt shows a spinner or loading overlay instead of the final state,
+If the action result shows a spinner or loading overlay instead of the final state,
 run `WaitFor(...)` through `perform(step:)`. The Button Heist checks the
 current settled hierarchy first, then watches settled accessibility state until
 the final state is true or the timeout expires.
@@ -292,7 +292,7 @@ Activate(.label("Delete"))
 
 Before you act, ask what should be true afterward. A nav button changes the
 screen. A delete removes an element. Text entry updates a value. Encode that fact
-as the expectation and let the receipt confirm or correct you.
+as the expectation and let the result confirm or correct you.
 
 ## Authoring heists
 

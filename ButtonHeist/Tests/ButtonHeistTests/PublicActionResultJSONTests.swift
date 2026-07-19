@@ -56,33 +56,33 @@ final class PublicActionResultJSONTests: XCTestCase {
     }
 
     func testStandaloneActionResponseEncodesHeistExecutionPayloadSummary() throws {
-        let heistResult = HeistExecutionResult(
+        let result = HeistResult(
             steps: [
-                HeistReceiptFixture.warning(message: "heads up"),
+                HeistResultFixture.warning(message: "heads up"),
             ],
             durationMs: 1
         )
         let response = FenceResponse.action(
             command: .runHeist,
             result: ActionResult.success(
-                payload: .heistExecution(heistResult),
+                payload: .heist(result),
                 message: "ran",
             )
         )
 
-        let result = try publicJSONProbe(response).object()
+        let object = try publicJSONProbe(response).object()
 
-        XCTAssertEqual(try result.object("heistExecution").int("stepCount"), 1)
-        try result.assertMissing("value")
-        try result.assertMissing("rotor")
-        try result.assertMissing("screenshot")
+        XCTAssertEqual(try object.object("heistExecution").int("stepCount"), 1)
+        try object.assertMissing("value")
+        try object.assertMissing("rotor")
+        try object.assertMissing("screenshot")
     }
 
     func testStandaloneActionResponseOmitsPayloadFieldsWhenAbsent() throws {
         let response = FenceResponse.action(
             command: .activate,
             result: ActionResult.success(
-                method: .activate,
+                payload: .activate,
                 message: "activated",
             )
         )
@@ -100,7 +100,7 @@ final class PublicActionResultJSONTests: XCTestCase {
         let response = FenceResponse.action(
             command: .activate,
             result: ActionResult.success(
-                method: .activate,
+                payload: .activate,
                 subjectEvidence: subjectEvidence
             )
         )
@@ -116,7 +116,7 @@ final class PublicActionResultJSONTests: XCTestCase {
 
     func testStandaloneAndNestedActionsShareWarningProjection() throws {
         let actionResult = ActionResult.success(
-            method: .activate,
+            payload: .activate,
             subjectEvidence: try weakActivationSubjectEvidence()
         )
 
@@ -198,14 +198,14 @@ final class PublicActionResultJSONTests: XCTestCase {
 
     func testHeistReportNodeFailureEncodesCanonicalFailureDetails() throws {
         let actionResult = ActionResult.failure(
-            method: .activate,
-            errorKind: .elementNotFound,
+            payload: .activate,
+            failureKind: .elementNotFound,
             message: "Delete not found")
         let response = FenceResponse.heistExecution(
             plan: try minimalPlan(),
-            result: HeistExecutionResult(
+            report: HeistReport.project(result: HeistResult(
                 steps: [
-                    HeistReceiptFixture.action(
+                    HeistResultFixture.action(
                         path: "$.body[0]",
                         result: actionResult,
                         durationMs: 7,
@@ -217,7 +217,7 @@ final class PublicActionResultJSONTests: XCTestCase {
                     ),
                 ],
                 durationMs: 7
-            )
+            ))
         )
 
         let report = try publicHeistReportJSON(response)
@@ -235,7 +235,7 @@ final class PublicActionResultJSONTests: XCTestCase {
         XCTAssertEqual(try action.bool("retryable"), try failure.bool("retryable"))
     }
 
-    func testHeistReportProjectionIsDeterministicAcrossInterleavedProfiles() throws {
+    func testHeistReportRenderingIsDeterministicAcrossInterleavedProfiles() throws {
         let checkoutRows = (0..<4).map { index in
             makeTestHeistElement(
                 label: "Checkout Row \(index)",
@@ -250,17 +250,16 @@ final class PublicActionResultJSONTests: XCTestCase {
             afterTransition: makeTestScreenChangedTransition()
         )
         let actionResult = ActionResult.failure(
-            method: .activate,
-            errorKind: .elementNotFound,
+            payload: .activate,
+            failureKind: .elementNotFound,
             message: "Pay not found",
-                observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
-
+            observation: .trace(makeTestTraceEvidence(trace, completeness: .incomplete))
         )
         let response = FenceResponse.heistExecution(
             plan: try minimalPlan(),
-            result: HeistExecutionResult(
+            report: HeistReport.project(result: HeistResult(
                 steps: [
-                    HeistReceiptFixture.action(
+                    HeistResultFixture.action(
                         path: "$.body[0]",
                         result: actionResult,
                         durationMs: 7,
@@ -272,7 +271,7 @@ final class PublicActionResultJSONTests: XCTestCase {
                     ),
                 ],
                 durationMs: 7
-            )
+            ))
         )
         let narrowProfile = summaryProfile(screenPreviewElements: 1)
         let wideProfile = summaryProfile(screenPreviewElements: 4)
@@ -294,17 +293,16 @@ final class PublicActionResultJSONTests: XCTestCase {
     func testNestedHeistActionResultEncodesSubjectEvidenceOmissionReason() throws {
         let subject = makeTestHeistElement(label: "Pay", identifier: "pay")
         let actionResult = ActionResult.success(
-            method: .activate,
-                observation: .none,
-                subjectEvidence: ActionSubjectEvidence(
-                    source: .resolvedSemanticTarget,
-                    target: try AccessibilityTarget
-                        .predicate(ElementPredicateTemplate(label: "Pay"))
-                        .resolve(in: .empty),
-                    element: subject,
-                    resolution: ActionSubjectResolution(origin: .visible)
-                )
-
+            payload: .activate,
+            observation: .none,
+            subjectEvidence: ActionSubjectEvidence(
+                source: .resolvedSemanticTarget,
+                target: try AccessibilityTarget
+                    .predicate(ElementPredicateTemplate(label: "Pay"))
+                    .resolve(in: .empty),
+                element: subject,
+                resolution: ActionSubjectResolution(origin: .visible)
+            )
         )
 
         let result = try nestedHeistActionResultJSON(result: actionResult, status: .passed)
@@ -323,15 +321,14 @@ final class PublicActionResultJSONTests: XCTestCase {
         ])
         let result = try standaloneActionResultJSON(
             result: ActionResult.success(
-                method: .activate,
-                    observation: .settledTrace(
-                        makeTestTraceEvidence(
-                            makeTestTrace(before: interface, after: interface),
-                            completeness: .incomplete
-                        ),
-                        .timedOut(duration: 0)
-                    )
-
+                payload: .activate,
+                observation: .settledTrace(
+                    makeTestTraceEvidence(
+                        makeTestTrace(before: interface, after: interface),
+                        completeness: .incomplete
+                    ),
+                    .timedOut(duration: 0)
+                )
             ),
             profile: .mcp
         )
@@ -344,15 +341,14 @@ final class PublicActionResultJSONTests: XCTestCase {
             makeTestHeistElement(label: "Lazy Row \(index)", identifier: "lazy_row_\(index)")
         }
         let actionResult = ActionResult.success(
-            method: .activate,
-                observation: .trace(makeTestTraceEvidence(
-                    makeTestTrace(
-                        before: makeTestInterface(elements: []),
-                        after: makeTestInterface(elements: addedRows)
-                    ),
-                    completeness: .incomplete
-                ))
-
+            payload: .activate,
+            observation: .trace(makeTestTraceEvidence(
+                makeTestTrace(
+                    before: makeTestInterface(elements: []),
+                    after: makeTestInterface(elements: addedRows)
+                ),
+                completeness: .incomplete
+            ))
         )
 
         let result = try nestedHeistActionResultJSON(result: actionResult, status: .passed)
@@ -375,15 +371,14 @@ final class PublicActionResultJSONTests: XCTestCase {
             makeTestHeistElement(label: "Lazy Row \(index)", identifier: "lazy_row_\(index)")
         }
         let actionResult = ActionResult.success(
-            method: .activate,
-                observation: .trace(makeTestTraceEvidence(
-                    makeTestTrace(
-                        before: makeTestInterface(elements: []),
-                        after: makeTestInterface(elements: addedRows)
-                    ),
-                    completeness: .incomplete
-                ))
-
+            payload: .activate,
+            observation: .trace(makeTestTraceEvidence(
+                makeTestTrace(
+                    before: makeTestInterface(elements: []),
+                    after: makeTestInterface(elements: addedRows)
+                ),
+                completeness: .incomplete
+            ))
         )
 
         let standalone = try standaloneActionResultJSON(result: actionResult, profile: .mcp)
@@ -417,12 +412,11 @@ final class PublicActionResultJSONTests: XCTestCase {
             transition: AccessibilityTrace.Transition(transient: transient)
         )
         let actionResult = ActionResult.success(
-            method: .activate,
-                observation: .trace(makeTestTraceEvidence(
-                    AccessibilityTrace(captures: [before, after]),
-                    completeness: .incomplete
-                ))
-
+            payload: .activate,
+            observation: .trace(makeTestTraceEvidence(
+                AccessibilityTrace(captures: [before, after]),
+                completeness: .incomplete
+            ))
         )
 
         let result = try nestedHeistActionResultJSON(result: actionResult, status: .passed)
@@ -459,12 +453,11 @@ final class PublicActionResultJSONTests: XCTestCase {
             transition: AccessibilityTrace.Transition(transient: transient)
         )
         let actionResult = ActionResult.success(
-            method: .activate,
-                observation: .trace(makeTestTraceEvidence(
-                    AccessibilityTrace(captures: [before, after]),
-                    completeness: .incomplete
-                ))
-
+            payload: .activate,
+            observation: .trace(makeTestTraceEvidence(
+                AccessibilityTrace(captures: [before, after]),
+                completeness: .incomplete
+            ))
         )
 
         let standalone = try standaloneActionResultJSON(result: actionResult, profile: .mcp)
@@ -497,8 +490,8 @@ final class PublicActionResultJSONTests: XCTestCase {
     private func treeUnavailableActionResult(traceEvidence: AccessibilityTraceEvidence? = nil) -> ActionResult {
         let observation = traceEvidence.map(ActionResultObservationEvidence.trace) ?? .none
         return ActionResult.failure(
-            method: .activate,
-            errorKind: .accessibilityTreeUnavailable,
+            payload: .activate,
+            failureKind: .accessibilityTreeUnavailable,
             message: Self.treeUnavailableMessage,
             observation: observation
         )
@@ -511,27 +504,27 @@ final class PublicActionResultJSONTests: XCTestCase {
         failure: HeistFailureDetail? = nil
     ) throws -> JSONProbe {
         let step = status == .failed
-            ? HeistReceiptFixture.action(
+            ? HeistResultFixture.action(
                 path: "$.body[0]",
                 command: command,
                 result: result,
                 durationMs: 7,
                 failure: failure ?? HeistFailureDetail(
-                    category: result.outcome.errorKind == .elementNotFound ? .targetResolution : .action,
+                    category: result.outcome.failureKind == .elementNotFound ? .targetResolution : .action,
                     contract: "action dispatch succeeds",
                     observed: result.message ?? "action failed"
                 )
             )
-            : HeistReceiptFixture.action(
+            : HeistResultFixture.action(
                 path: "$.body[0]",
                 command: command,
                 result: result,
                 durationMs: 7
             )
-        let execution = HeistExecutionResult(steps: [step], durationMs: 7)
+        let heistResult = HeistResult(steps: [step], durationMs: 7)
         let response = FenceResponse.heistExecution(
             plan: try minimalPlan(),
-            result: execution
+            report: HeistReport.project(result: heistResult)
         )
         let report = try publicHeistReportJSON(response)
         let node = try XCTUnwrap(try report.array("nodes").first)

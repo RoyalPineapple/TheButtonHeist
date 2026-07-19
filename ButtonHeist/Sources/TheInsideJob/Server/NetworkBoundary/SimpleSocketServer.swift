@@ -149,7 +149,7 @@ actor SimpleSocketServer {
         callbacks: SocketServerCallbacks?
     ) async throws -> UInt16 {
         guard currentListener == nil else {
-            throw ServerError.alreadyRunning
+            throw StartupError.alreadyRunning
         }
 
         let attemptID = UUID()
@@ -348,7 +348,7 @@ actor SimpleSocketServer {
 
     // MARK: - Errors
 
-    enum ServerError: Error, LocalizedError, Equatable {
+    enum StartupError: Error, LocalizedError, Equatable {
         case failedToBindPort
         case alreadyRunning
 

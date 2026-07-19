@@ -62,7 +62,7 @@ enum RepairDiagnosisPipeline {
             stepPath: request.currentFailure.stepPath,
             failureKind: eligibleAnalysis.failureKind,
             oldTarget: request.lastSuccess.target,
-            oldResolvedElement: eligibleAnalysis.oldResolved.repairContext,
+            oldResolvedElement: eligibleAnalysis.oldResolved.repairEvidence,
             currentMatchCount: eligibleAnalysis.currentResolution.matchCount,
             candidates: candidates,
             suggestions: suggestions
@@ -79,7 +79,7 @@ enum RepairDiagnosisPipeline {
                 source: analysis.preferredCandidates.contains(candidate.element.id)
                     ? .currentAmbiguousMatch
                     : .semanticContinuityScan,
-                resolvedElement: candidate.element.repairContext,
+                resolvedElement: candidate.element.repairEvidence,
                 score: candidate.score,
                 reasons: candidate.reasons,
                 caveats: candidate.caveats,
@@ -110,7 +110,7 @@ enum RepairDiagnosisPipeline {
         .refused(HeistRepairRefusedDiagnosis(
             stepPath: request.currentFailure.stepPath,
             oldTarget: request.lastSuccess.target,
-            context: .evidenceEligibility,
+            evidence: .evidenceEligibility,
             refusal: HeistRepairRefusal(stage: stage, reason: reason, message: message)
         ))
     }
@@ -126,9 +126,9 @@ enum RepairDiagnosisPipeline {
         .refused(HeistRepairRefusedDiagnosis(
             stepPath: request.currentFailure.stepPath,
             oldTarget: request.lastSuccess.target,
-            context: .eligible(HeistRepairEligibleRefusalContext(
+            evidence: .eligible(HeistRepairEligibleRefusalEvidence(
                 failureKind: analysis.failureKind,
-                oldResolvedElement: analysis.oldResolved.repairContext,
+                oldResolvedElement: analysis.oldResolved.repairEvidence,
                 currentMatchCount: analysis.currentResolution.matchCount,
                 candidates: candidates
             )),

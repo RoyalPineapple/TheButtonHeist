@@ -79,8 +79,8 @@ extension ElementInflation {
             .init(.geometryNotActionable, failureKind: failureKind, message: message)
         }
 
-        internal func actionDispatchOutcome(commandMethod: ActionMethod) -> TheSafecracker.ActionDispatchOutcome {
-            .failure(commandMethod, message: message, failureKind: failureKind)
+        internal func actionDispatchResult(payload: ActionResult.Payload) -> TheSafecracker.ActionDispatchResult {
+            .failure(payload, message: message, failureKind: failureKind)
         }
 
         private init(

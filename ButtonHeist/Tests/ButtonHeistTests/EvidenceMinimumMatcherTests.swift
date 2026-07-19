@@ -9,7 +9,7 @@ final class EvidenceMinimumMatcherTests: XCTestCase {
         let label = makeTestHeistElement(label: "Delete", traits: [.staticText])
         let button = makeTestHeistElement(label: "Delete", traits: [.button], actions: [])
         let actionResult = try semanticActionResult(
-            method: .activate,
+            payload: .activate,
             source: .resolvedSemanticTarget,
             target: .predicate(ElementPredicateTemplate(label: "Delete"), ordinal: 1),
             subject: button,
@@ -26,7 +26,7 @@ final class EvidenceMinimumMatcherTests: XCTestCase {
     func testMinimumMatcherRefusesUnsettledEvidence() throws {
         let button = makeTestHeistElement(label: "Delete", traits: [.button], actions: [])
         let actionResult = try semanticActionResult(
-            method: .activate,
+            payload: .activate,
             source: .resolvedSemanticTarget,
             target: .predicate(ElementPredicateTemplate(label: "Delete")),
             subject: button,
@@ -40,7 +40,7 @@ final class EvidenceMinimumMatcherTests: XCTestCase {
 }
 
 private func semanticActionResult(
-    method: ActionMethod,
+    payload: ActionResult.Payload,
     source: ActionSubjectEvidence.Source,
     target: AccessibilityTarget,
     subject: HeistElement,
@@ -49,24 +49,23 @@ private func semanticActionResult(
     settled: Bool = true
 ) throws -> ActionResult {
     ActionResult.success(
-        method: method,
-            observation: .settledTrace(
-                makeTestTraceEvidence(
-                    makeTestTrace(
-                        before: makeTestInterface(elements: before),
-                        after: makeTestInterface(elements: after)
-                    ),
-                    completeness: settled ? .complete : .incomplete
+        payload: payload,
+        observation: .settledTrace(
+            makeTestTraceEvidence(
+                makeTestTrace(
+                    before: makeTestInterface(elements: before),
+                    after: makeTestInterface(elements: after)
                 ),
-                settled ? .settled(duration: 0) : .timedOut(duration: 0)
+                completeness: settled ? .complete : .incomplete
             ),
-            subjectEvidence: ActionSubjectEvidence(
-                source: source,
-                target: try target.resolve(in: .empty),
-                element: subject,
-                resolution: ActionSubjectResolution(origin: .visible),
-                settledObservationSequence: 1
-            )
-
+            settled ? .settled(duration: 0) : .timedOut(duration: 0)
+        ),
+        subjectEvidence: ActionSubjectEvidence(
+            source: source,
+            target: try target.resolve(in: .empty),
+            element: subject,
+            resolution: ActionSubjectResolution(origin: .visible),
+            settledObservationSequence: 1
+        )
     )
 }

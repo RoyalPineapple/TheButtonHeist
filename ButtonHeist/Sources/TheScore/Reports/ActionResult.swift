@@ -1,74 +1,6 @@
 import ThePlans
 import Foundation
 
-extension ActionResultPayload {
-    fileprivate static func decoded(
-        method: ActionMethod,
-        resultPayload: ResultPayload,
-        codingPath: [CodingKey]
-    ) throws -> ActionResultPayload {
-        switch (method, resultPayload) {
-        case (.typeText, .value(let value)):
-            return .typeText(value)
-        case (.setPasteboard, .value(let value)):
-            return .setPasteboard(value)
-        case (.getPasteboard, .value(let value)):
-            return .getPasteboard(value)
-        case (.takeScreenshot, .screenshot(let screen)):
-            return .screenshot(screen)
-        case (.rotor, .rotor(let rotor)):
-            return .rotor(rotor)
-        case (.heistPlan, .heistExecution(let result)):
-            return .heistExecution(result)
-        case (.activate, _),
-             (.increment, _),
-             (.decrement, _),
-             (.syntheticTap, _),
-             (.syntheticLongPress, _),
-             (.syntheticSwipe, _),
-             (.syntheticDrag, _),
-             (.typeText, _),
-             (.customAction, _),
-             (.editAction, _),
-             (.resignFirstResponder, _),
-             (.setPasteboard, _),
-             (.getPasteboard, _),
-             (.takeScreenshot, _),
-             (.rotor, _),
-             (.heistPlan, _),
-             (.dismiss, _),
-             (.magicTap, _),
-             (.scroll, _),
-             (.scrollToVisible, _),
-             (.scrollToEdge, _),
-             (.wait, _):
-            throw DecodingError.dataCorrupted(.init(
-                codingPath: codingPath,
-                debugDescription: payloadValidationMessage(method: method, payload: resultPayload)
-            ))
-        }
-    }
-
-    private static func payloadValidationMessage(method: ActionMethod, payload: ResultPayload) -> String {
-        switch (method, payload) {
-        case (.takeScreenshot, _):
-            return "takeScreenshot ActionResult payload must be screenshot"
-        case (.heistPlan, _):
-            return "heistPlan ActionResult payload must be heistExecution"
-        case (.rotor, _):
-            return "rotor ActionResult payload must be rotor"
-        case (_, .value):
-            return "value ActionResult payload is only valid for typeText, setPasteboard, or getPasteboard"
-        case (_, .screenshot):
-            return "screenshot ActionResult payload is only valid for takeScreenshot"
-        case (_, .heistExecution):
-            return "heistExecution ActionResult payload is only valid for heistPlan"
-        case (_, .rotor):
-            return "rotor ActionResult payload is only valid for rotor"
-        }
-    }
-}
-
 public struct ActionSettlementDuration: Codable, Sendable, Equatable, CustomStringConvertible {
     public let milliseconds: Int
 
@@ -158,50 +90,67 @@ public struct ActionSettlementEvidence: Codable, Sendable, Equatable {
     }
 }
 
-/// The outcome of executing an action command, including post-action diagnostics.
+/// The result of executing an action command, including post-action diagnostics.
 public struct ActionResult: Codable, Sendable, Equatable {
-    package enum MethodAndPayload: Sendable, Equatable {
-        case methodOnly(ActionMethod)
-        case payload(ActionResultPayload)
+    public enum Payload: Sendable, Equatable {
+        case activate
+        case increment
+        case decrement
+        case dismiss
+        case magicTap
+        case oneFingerTap
+        case longPress
+        case swipe
+        case drag
+        case typeText(String?)
+        case customAction
+        case editAction
+        case dismissKeyboard
+        case setPasteboard(String?)
+        case getPasteboard(String?)
+        case screenshot(ScreenPayload?)
+        case rotor(RotorResult?)
+        case heist(HeistResult?)
+        case scroll
+        case scrollToVisible
+        case scrollToEdge
+        case wait
 
-        init(
-            decodedMethod method: ActionMethod,
-            decodedPayload payload: ResultPayload?,
-            codingPath: [CodingKey]
-        ) throws {
-            guard let payload else {
-                self = .methodOnly(method)
-                return
-            }
-            self = .payload(try ActionResultPayload.decoded(
-                method: method,
-                resultPayload: payload,
-                codingPath: codingPath
-            ))
-        }
-
-        var method: ActionMethod {
+        package var method: ActionMethod {
             switch self {
-            case .methodOnly(let method):
-                return method
-            case .payload(let payload):
-                return payload.method
+            case .activate: .activate
+            case .increment: .increment
+            case .decrement: .decrement
+            case .dismiss: .dismiss
+            case .magicTap: .magicTap
+            case .oneFingerTap: .oneFingerTap
+            case .longPress: .longPress
+            case .swipe: .swipe
+            case .drag: .drag
+            case .typeText: .typeText
+            case .customAction: .customAction
+            case .editAction: .editAction
+            case .dismissKeyboard: .dismissKeyboard
+            case .setPasteboard: .setPasteboard
+            case .getPasteboard: .getPasteboard
+            case .screenshot: .takeScreenshot
+            case .rotor: .rotor
+            case .heist: .heistPlan
+            case .scroll: .scroll
+            case .scrollToVisible: .scrollToVisible
+            case .scrollToEdge: .scrollToEdge
+            case .wait: .wait
             }
-        }
-
-        var resultPayload: ResultPayload? {
-            guard case .payload(let payload) = self else { return nil }
-            return payload.resultPayload
         }
     }
 
-    private let methodAndPayload: MethodAndPayload
+    public let payload: Payload
     public var outcome: ActionResultOutcome { evidence.outcome }
 
     /// Identifies the delivered action behavior. Activation-point delivery for
     /// `activate` still reports `.activate`.
     /// Explicit mechanical tap commands report the mechanical tap method.
-    public var method: ActionMethod { methodAndPayload.method }
+    public var method: ActionMethod { payload.method }
     public let message: String?
     public let evidence: ActionResultEvidence
     public var warning: HeistActionWarning? { evidence.warning }
@@ -209,11 +158,9 @@ public struct ActionResult: Codable, Sendable, Equatable {
     public var capturedAnnouncement: CapturedAnnouncement? {
         evidence.accessibilityTrace?.capturedAnnouncements.first
     }
-    /// Command-specific payload. At most one variant per result.
-    public var payload: ResultPayload? { methodAndPayload.resultPayload }
-    /// Source-of-truth accessibility capture receipt for this action.
+    /// Source-of-truth accessibility capture evidence for this action.
     public var accessibilityTrace: AccessibilityTrace? { evidence.accessibilityTrace }
-    /// Source-of-truth trace and observation-completeness proof for this action.
+    /// Source-of-truth trace and observation-completeness evidence for this action.
     public var traceEvidence: AccessibilityTraceEvidence? { evidence.traceEvidence }
     /// True when the response represents a settled UI state — either the
     /// AX tree reached multi-cycle stability, or a screen transition
@@ -233,26 +180,14 @@ public struct ActionResult: Codable, Sendable, Equatable {
     public var timing: ActionPerformanceTiming? { evidence.timing }
 
     public static func success(
-        method: ActionMethod,
+        payload: Payload,
         message: String? = nil,
         observation: ActionResultObservationEvidence = .none,
         subjectEvidence: ActionSubjectEvidence? = nil,
         timing: ActionPerformanceTiming? = nil
     ) -> ActionResult {
         construct(
-            .methodOnly(method), .success, message, observation, subjectEvidence, timing: timing
-        )
-    }
-
-    public static func success(
-        payload: ActionResultPayload,
-        message: String? = nil,
-        observation: ActionResultObservationEvidence = .none,
-        subjectEvidence: ActionSubjectEvidence? = nil,
-        timing: ActionPerformanceTiming? = nil
-    ) -> ActionResult {
-        construct(
-            .payload(payload), .success, message, observation, subjectEvidence, timing: timing
+            payload, .success, message, observation, subjectEvidence, timing: timing
         )
     }
 
@@ -264,7 +199,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
         timing: ActionPerformanceTiming? = nil
     ) -> ActionResult {
         construct(
-            .methodOnly(.activate),
+            .activate,
             .success,
             message,
             observation,
@@ -275,33 +210,20 @@ public struct ActionResult: Codable, Sendable, Equatable {
     }
 
     public static func failure(
-        method: ActionMethod,
-        errorKind: ErrorKind,
+        payload: Payload,
+        failureKind: ActionFailure.Kind,
         message: String? = nil,
         observation: ActionResultObservationEvidence = .none,
         subjectEvidence: ActionSubjectEvidence? = nil,
         timing: ActionPerformanceTiming? = nil
     ) -> ActionResult {
         construct(
-            .methodOnly(method), .failure(errorKind), message, observation, subjectEvidence, timing: timing
-        )
-    }
-
-    public static func failure(
-        payload: ActionResultPayload,
-        errorKind: ErrorKind,
-        message: String? = nil,
-        observation: ActionResultObservationEvidence = .none,
-        subjectEvidence: ActionSubjectEvidence? = nil,
-        timing: ActionPerformanceTiming? = nil
-    ) -> ActionResult {
-        construct(
-            .payload(payload), .failure(errorKind), message, observation, subjectEvidence, timing: timing
+            payload, .failure(failureKind), message, observation, subjectEvidence, timing: timing
         )
     }
 
     public static func activationFailure(
-        errorKind: ErrorKind,
+        failureKind: ActionFailure.Kind,
         message: String? = nil,
         observation: ActionResultObservationEvidence = .none,
         subjectEvidence: ActionSubjectEvidence? = nil,
@@ -309,8 +231,8 @@ public struct ActionResult: Codable, Sendable, Equatable {
         timing: ActionPerformanceTiming? = nil
     ) -> ActionResult {
         construct(
-            .methodOnly(.activate),
-            .failure(errorKind),
+            .activate,
+            .failure(failureKind),
             message,
             observation,
             subjectEvidence,
@@ -320,7 +242,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
     }
 
     private static func construct(
-        _ methodAndPayload: MethodAndPayload,
+        _ payload: Payload,
         _ outcome: ActionResultOutcome,
         _ message: String?,
         _ observation: ActionResultObservationEvidence,
@@ -338,25 +260,25 @@ public struct ActionResult: Codable, Sendable, Equatable {
         case .success:
             ActionResultEvidence.success(ActionResultSuccessEvidence(
                 body: body,
-                warning: warning(method: methodAndPayload.method, subjectEvidence: subjectEvidence)
+                warning: warning(method: payload.method, subjectEvidence: subjectEvidence)
             ))
-        case .failure(let errorKind):
-            ActionResultEvidence.failure(errorKind, ActionResultFailureEvidence(body: body))
+        case .failure(let failureKind):
+            ActionResultEvidence.failure(failureKind, ActionResultFailureEvidence(body: body))
         }
-        return ActionResult(methodAndPayload: methodAndPayload, message: message, evidence: evidence)
+        return ActionResult(payload: payload, message: message, evidence: evidence)
     }
 
     package init(
         outcome: ActionResultOutcome,
-        methodAndPayload: MethodAndPayload,
+        payload: Payload,
         message: String?,
         observation: ActionResultObservationEvidence,
         subjectEvidence: ActionSubjectEvidence?,
         activationTrace: ActivationTrace?
     ) {
-        precondition(activationTrace == nil || methodAndPayload.method == .activate)
+        precondition(activationTrace == nil || payload.method == .activate)
         self = Self.construct(
-            methodAndPayload,
+            payload,
             outcome,
             message,
             observation,
@@ -367,11 +289,11 @@ public struct ActionResult: Codable, Sendable, Equatable {
     }
 
     private init(
-        methodAndPayload: MethodAndPayload,
+        payload: Payload,
         message: String?,
         evidence: ActionResultEvidence
     ) {
-        self.methodAndPayload = methodAndPayload
+        self.payload = payload
         self.message = message
         self.evidence = evidence
     }
@@ -389,12 +311,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let outcome = try container.decode(ActionResultOutcome.self, forKey: .outcome)
         let method = try container.decode(ActionMethod.self, forKey: .method)
-        let payload = try container.decodeIfPresent(ResultPayload.self, forKey: .payload)
-        let methodAndPayload = try MethodAndPayload(
-            decodedMethod: method,
-            decodedPayload: payload,
-            codingPath: container.codingPath + [CodingKeys.payload]
-        )
+        let payload = try Self.decodePayload(method: method, from: container)
 
         let evidence: ActionResultEvidence
         switch outcome {
@@ -402,9 +319,9 @@ public struct ActionResult: Codable, Sendable, Equatable {
             evidence = .success(
                 try container.decode(ActionResultSuccessEvidence.self, forKey: .evidence)
             )
-        case .failure(let errorKind):
+        case .failure(let failureKind):
             evidence = .failure(
-                errorKind,
+                failureKind,
                 try container.decode(ActionResultFailureEvidence.self, forKey: .evidence)
             )
         }
@@ -430,7 +347,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
         }
 
         self.init(
-            methodAndPayload: methodAndPayload,
+            payload: payload,
             message: try container.decodeIfPresent(String.self, forKey: .message),
             evidence: evidence
         )
@@ -441,7 +358,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
         try container.encode(outcome, forKey: .outcome)
         try container.encode(method, forKey: .method)
         try container.encodeIfPresent(message, forKey: .message)
-        try container.encodeIfPresent(payload, forKey: .payload)
+        try encodePayload(to: &container)
         switch evidence {
         case .success(let evidence):
             try container.encode(evidence, forKey: .evidence)
@@ -453,10 +370,109 @@ public struct ActionResult: Codable, Sendable, Equatable {
     public func withTiming(_ timing: ActionPerformanceTiming?) -> ActionResult {
         guard let timing else { return self }
         return ActionResult(
-            methodAndPayload: methodAndPayload,
+            payload: payload,
             message: message,
             evidence: evidence.withTiming(timing)
         )
+    }
+
+    private static func decodePayload(
+        method: ActionMethod,
+        from container: KeyedDecodingContainer<CodingKeys>
+    ) throws -> Payload {
+        switch method {
+        case .activate:
+            return try decodePayloadWithoutData(.activate, method: method, from: container)
+        case .increment:
+            return try decodePayloadWithoutData(.increment, method: method, from: container)
+        case .decrement:
+            return try decodePayloadWithoutData(.decrement, method: method, from: container)
+        case .dismiss:
+            return try decodePayloadWithoutData(.dismiss, method: method, from: container)
+        case .magicTap:
+            return try decodePayloadWithoutData(.magicTap, method: method, from: container)
+        case .oneFingerTap:
+            return try decodePayloadWithoutData(.oneFingerTap, method: method, from: container)
+        case .longPress:
+            return try decodePayloadWithoutData(.longPress, method: method, from: container)
+        case .swipe:
+            return try decodePayloadWithoutData(.swipe, method: method, from: container)
+        case .drag:
+            return try decodePayloadWithoutData(.drag, method: method, from: container)
+        case .typeText:
+            return .typeText(try container.decodeIfPresent(String.self, forKey: .payload))
+        case .customAction:
+            return try decodePayloadWithoutData(.customAction, method: method, from: container)
+        case .editAction:
+            return try decodePayloadWithoutData(.editAction, method: method, from: container)
+        case .dismissKeyboard:
+            return try decodePayloadWithoutData(.dismissKeyboard, method: method, from: container)
+        case .setPasteboard:
+            return .setPasteboard(try container.decodeIfPresent(String.self, forKey: .payload))
+        case .getPasteboard:
+            return .getPasteboard(try container.decodeIfPresent(String.self, forKey: .payload))
+        case .takeScreenshot:
+            return .screenshot(try container.decodeIfPresent(ScreenPayload.self, forKey: .payload))
+        case .rotor:
+            return .rotor(try container.decodeIfPresent(RotorResult.self, forKey: .payload))
+        case .heistPlan:
+            return .heist(try container.decodeIfPresent(HeistResult.self, forKey: .payload))
+        case .scroll:
+            return try decodePayloadWithoutData(.scroll, method: method, from: container)
+        case .scrollToVisible:
+            return try decodePayloadWithoutData(.scrollToVisible, method: method, from: container)
+        case .scrollToEdge:
+            return try decodePayloadWithoutData(.scrollToEdge, method: method, from: container)
+        case .wait:
+            return try decodePayloadWithoutData(.wait, method: method, from: container)
+        }
+    }
+
+    private static func decodePayloadWithoutData(
+        _ payload: Payload,
+        method: ActionMethod,
+        from container: KeyedDecodingContainer<CodingKeys>
+    ) throws -> Payload {
+        guard !container.contains(.payload) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .payload,
+                in: container,
+                debugDescription: "\(method.rawValue) ActionResult does not carry payload data"
+            )
+        }
+        return payload
+    }
+
+    private func encodePayload(
+        to container: inout KeyedEncodingContainer<CodingKeys>
+    ) throws {
+        switch payload {
+        case .typeText(let value), .setPasteboard(let value), .getPasteboard(let value):
+            try container.encodeIfPresent(value, forKey: .payload)
+        case .screenshot(let screen):
+            try container.encodeIfPresent(screen, forKey: .payload)
+        case .rotor(let rotor):
+            try container.encodeIfPresent(rotor, forKey: .payload)
+        case .heist(let result):
+            try container.encodeIfPresent(result, forKey: .payload)
+        case .activate,
+             .increment,
+             .decrement,
+             .dismiss,
+             .magicTap,
+             .oneFingerTap,
+             .longPress,
+             .swipe,
+             .drag,
+             .customAction,
+             .editAction,
+             .dismissKeyboard,
+             .scroll,
+             .scrollToVisible,
+             .scrollToEdge,
+             .wait:
+            break
+        }
     }
 
     private static func warning(

@@ -2,7 +2,7 @@
 """Nightly adversarial lab gate for BH Demo.
 
 This is intentionally separate from PR correctness tests. It repeats hostile
-demo flows through the public CLI and records fresh receipts as CI artifacts.
+demo flows through the public CLI and records fresh results as CI artifacts.
 """
 
 from __future__ import annotations
@@ -118,7 +118,7 @@ def report_metrics_object(response: Any) -> dict[str, Any] | None:
     return metrics if isinstance(metrics, dict) else None
 
 
-def receipt_ceiling_hits(response: Any) -> list[dict[str, Any]]:
+def result_ceiling_hits(response: Any) -> list[dict[str, Any]]:
     metrics = report_metrics_object(response)
     if metrics is None:
         return []
@@ -154,7 +154,7 @@ def observe_iteration(
 ) -> IterationObservation:
     parsed_stdout = parse_jsonish(result.stdout)
     parsed = parsed_stdout if parsed_stdout is not None else parse_jsonish(result.stderr)
-    ceiling_hits = receipt_ceiling_hits(parsed)
+    ceiling_hits = result_ceiling_hits(parsed)
     diagnostic_matched: bool | None = None
     if scenario.expectation is ScenarioExpectation.COMMAND_SUCCEEDS:
         passed = result.returncode == 0
@@ -358,7 +358,7 @@ PASSING_PLANS = {
         """
     TypeText(.replacing("fallback typed"), into: .element(.label("Fallback field"), .traits([.textEntry])))
         .expect(.exists(.value("fallback typed")), timeout: 3)
-    DismissKeyboard()
+    dismissKeyboard()
         .withoutExpectation("Returns the app to navigation after text entry")
 """,
     ),

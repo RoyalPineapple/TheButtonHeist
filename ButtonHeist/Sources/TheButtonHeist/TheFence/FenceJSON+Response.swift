@@ -119,12 +119,11 @@ struct PublicResponseModel: Encodable {
                 includeInterface: options.includeInterface,
                 profile: profile
             )).encode(to: encoder)
-        case .heistExecution(_, let result, let accessibilityTrace):
-            try PublicHeistExecutionResponse(projection: HeistReportProjection(
-                result: result,
-                accessibilityTrace: accessibilityTrace,
+        case .heistExecution(_, let report):
+            try PublicHeistExecutionResponse(
+                report: report,
                 profile: profile
-            )).encode(to: encoder)
+            ).encode(to: encoder)
         case .heistValidation(let report):
             try PublicHeistValidationResponse(report: report).encode(to: encoder)
         case .heistCatalog(let catalog):

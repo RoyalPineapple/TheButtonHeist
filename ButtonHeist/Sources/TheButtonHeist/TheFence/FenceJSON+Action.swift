@@ -167,12 +167,12 @@ extension ActionResult {
     /// Canonical public failure projection shared by JSON and compact renderers.
     func diagnosticFailureProjection(fallbackMessage: String) -> ActionFailureProjection? {
         guard !outcome.isSuccess else { return nil }
-        let resolvedErrorKind = outcome.errorKind ?? .actionFailed
+        let resolvedErrorKind = outcome.failureKind ?? .actionFailed
         return ActionFailureProjection(
             message: message ?? fallbackMessage,
             errorClass: resolvedErrorKind.rawValue,
             diagnosticFailure: DiagnosticFailureMapper.map(
-                errorKind: resolvedErrorKind,
+                failureKind: resolvedErrorKind,
                 message: message ?? fallbackMessage
             )
         )

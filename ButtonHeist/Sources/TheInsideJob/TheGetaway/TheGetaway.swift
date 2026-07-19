@@ -46,12 +46,12 @@ final class TheGetaway {
         self.muscle = muscle
         self.brains = brains
         self.identity = identity
-        self.pongPayload = Self.makePongPayload(identity: identity)
+        self.pongPayload = Self.capturePongPayload(identity: identity)
     }
 
-    // MARK: - Message Dispatch
+    // MARK: - Message Execution
 
-    func handleClientMessage(_ admitted: AdmittedClientMessage, respond: @escaping SocketResponseHandler) async {
+    func executeClientMessage(_ admitted: AdmittedClientMessage, respond: @escaping SocketResponseHandler) async {
         let clientId = admitted.clientId
         let envelope = admitted.envelope
         let requestId = envelope.requestId
@@ -77,7 +77,7 @@ final class TheGetaway {
             await muscle.noteClientActivity(clientId)
             await sendMessage(.pong(pongPayload.withServerTimestamp()), requestId: requestId, respond: respond)
         case .status:
-            await sendMessage(.status(await makeStatusPayload()), requestId: requestId, respond: respond)
+            await sendMessage(.status(await captureStatus()), requestId: requestId, respond: respond)
 
         // Observation
         case .getPasteboard:
@@ -86,23 +86,21 @@ final class TheGetaway {
         case .getAnnouncements:
             await sendMessage(.announcements(brains.capturedAnnouncements()), requestId: requestId, respond: respond)
         case .requestScreen(let payload):
-            await handleScreen(
+            await sendScreen(
                 mode: payload.mode,
                 requestId: requestId,
                 respond: respond
             )
         case .runtimeAction(let command):
             let actionResult = await executeDirectRuntimeAction(command)
-            await recordAndRespond(
-                command: message,
+            await sendActionResult(
                 actionResult: actionResult,
                 requestId: requestId,
                 respond: respond
             )
         case .heistPlan(let run):
             let actionResult = await brains.executeHeistPlan(run.plan, argument: run.argument)
-            await recordAndRespond(
-                command: message,
+            await sendActionResult(
                 actionResult: actionResult,
                 requestId: requestId,
                 respond: respond
@@ -111,29 +109,29 @@ final class TheGetaway {
     }
 
     func executeDirectRuntimeAction(_ command: HeistActionCommand) async -> ActionResult {
-        let method = actionMethod(for: command)
+        let payload = actionPayload(for: command)
         guard command.durableHeistActionFailure != nil else {
             return .failure(
-                method: method,
-                errorKind: .validationError,
+                payload: payload,
+                failureKind: .validationError,
                 message: "Direct runtimeAction accepts only transient non-durable commands; durable commands must run as heistPlan"
             )
         }
         guard brains.semanticObservationIsActive else {
-            return brains.runtimeInactiveResult(method: method)
+            return brains.runtimeInactiveResult(payload: payload)
         }
         do {
             return await brains.executeRuntimeAction(try command.resolve(in: .empty))
         } catch {
             return .failure(
-                method: method,
-                errorKind: .validationError,
+                payload: payload,
+                failureKind: .validationError,
                 message: "Could not resolve direct runtime action: \(error)"
             )
         }
     }
 
-    private func actionMethod(for command: HeistActionCommand) -> ActionMethod {
+    private func actionPayload(for command: HeistActionCommand) -> ActionResult.Payload {
         switch command.core {
         case .activate:
             return .activate
@@ -144,22 +142,22 @@ final class TheGetaway {
         case .customAction:
             return .customAction
         case .rotor:
-            return .rotor
+            return .rotor(nil)
         case .typeText:
-            return .typeText
-        case .mechanicalTap:
-            return .syntheticTap
-        case .mechanicalLongPress:
-            return .syntheticLongPress
-        case .mechanicalSwipe:
-            return .syntheticSwipe
-        case .mechanicalDrag:
-            return .syntheticDrag
-        case .viewportScroll:
+            return .typeText(nil)
+        case .oneFingerTap:
+            return .oneFingerTap
+        case .longPress:
+            return .longPress
+        case .swipe:
+            return .swipe
+        case .drag:
+            return .drag
+        case .scroll:
             return .scroll
-        case .viewportScrollToVisible:
+        case .scrollToVisible:
             return .scrollToVisible
-        case .viewportScrollToEdge:
+        case .scrollToEdge:
             return .scrollToEdge
         case .dismiss:
             return .dismiss
@@ -168,16 +166,15 @@ final class TheGetaway {
         case .editAction:
             return .editAction
         case .setPasteboard:
-            return .setPasteboard
+            return .setPasteboard(nil)
         case .takeScreenshot:
-            return .takeScreenshot
+            return .screenshot(nil)
         case .dismissKeyboard:
-            return .resignFirstResponder
+            return .dismissKeyboard
         }
     }
 
-    private func recordAndRespond(
-        command: ClientMessage,
+    private func sendActionResult(
         actionResult: ActionResult,
         requestId: RequestID?,
         respond: @escaping SocketResponseHandler
@@ -211,7 +208,7 @@ final class TheGetaway {
                 return
             }
             await sendMessage(
-                .error(ServerError(kind: error.errorKind, message: message)),
+                .error(ServerError(kind: .general, message: message)),
                 requestId: requestId,
                 respond: respond
             )
@@ -220,7 +217,7 @@ final class TheGetaway {
 
     // MARK: - InterfaceObservation Capture
 
-    func handleScreen(
+    func sendScreen(
         mode: ScreenCaptureMode = .raw,
         requestId: RequestID? = nil,
         respond: @escaping SocketResponseHandler
@@ -240,7 +237,7 @@ final class TheGetaway {
                 return
             }
             await sendMessage(
-                .error(ServerError(kind: failure.errorKind, message: message)),
+                .error(ServerError(kind: .general, message: message)),
                 requestId: requestId,
                 respond: respond
             )

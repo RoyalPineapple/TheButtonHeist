@@ -324,6 +324,14 @@ final class StartupConfigurationTests: XCTestCase {
         XCTAssertEqual(runtimeConfiguration.sessionReleaseTimeout, startupConfiguration.sessionTimeout)
     }
 
+    func testRuntimeConfigurationGeneratesUUIDSessionToken() {
+        let configuration = StartupConfiguration.resolve(env: .empty, infoPlist: makeInfoPlist([:]))
+        let runtimeConfiguration = InsideJobRuntimeConfiguration.resolve(startupConfiguration: configuration)
+
+        XCTAssertEqual(runtimeConfiguration.token.source, .generated)
+        XCTAssertNotNil(UUID(uuidString: runtimeConfiguration.token.value.description))
+    }
+
     func testRuntimeKnobsUseDefaults() {
         let knobs = ButtonHeistRuntimeKnobs.resolve(environment: .empty)
 

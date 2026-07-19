@@ -85,8 +85,8 @@ final class TheVaultCustomRotorTests: XCTestCase {
             rootView: rootView
         )
 
-        guard let observation = vault.parse() else {
-            XCTFail("Expected live parse result")
+        guard let observation = vault.refreshLiveCapture() else {
+            XCTFail("Expected live capture")
             return
         }
         vault.installObservationForTesting(observation)
@@ -147,8 +147,8 @@ final class TheVaultCustomRotorTests: XCTestCase {
             rootView: rootView
         )
 
-        guard let observation = vault.parse() else {
-            XCTFail("Expected live parse result")
+        guard let observation = vault.refreshLiveCapture() else {
+            XCTFail("Expected live capture")
             return
         }
         vault.installObservationForTesting(observation)
@@ -235,7 +235,7 @@ final class TheVaultCustomRotorTests: XCTestCase {
             searchResult.message?.contains("returned a target outside the parsed hierarchy") == true,
             searchResult.message ?? "<nil>"
         )
-        XCTAssertNil(searchResult.payload)
+        XCTAssertEqual(searchResult.payload, .rotor(nil))
         XCTAssertEqual(virtualResult.activationCount, 0)
         XCTAssertEqual(customActionHandler.actionCount, 0)
     }
@@ -271,7 +271,7 @@ final class TheVaultCustomRotorTests: XCTestCase {
 
         let brains = TheBrains(tripwire: TheTripwire())
         guard let observation = brains.vault.refreshLiveCapture() else {
-            XCTFail("Expected live parse result")
+            XCTFail("Expected live capture")
             return
         }
 
@@ -303,7 +303,7 @@ final class TheVaultCustomRotorTests: XCTestCase {
             search.message?.contains("returned a target outside the parsed hierarchy") == true,
             search.message ?? "<nil>"
         )
-        XCTAssertNil(search.payload)
+        XCTAssertEqual(search.payload, .rotor(nil))
         XCTAssertEqual(cachedResult.activationCount, 0)
     }
 

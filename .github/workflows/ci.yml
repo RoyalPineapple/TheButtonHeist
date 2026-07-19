@@ -58,7 +58,7 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 45
     env:
-      BUTTONHEIST_RECEIPTS_MODE: failures
+      BUTTONHEIST_RESULTS_MODE: failures
       BUTTONHEIST_TEST_ARTIFACTS_DIR: ${{ github.workspace }}/ci-artifacts/test-runs
       BUTTONHEIST_MAX_WAIT_TIMEOUT: "60"
 
@@ -132,13 +132,13 @@ jobs:
         if: failure()
         run: scripts/test-runner.py collect MacFrameworkTests
 
-      - name: Upload macOS failure receipts
+      - name: Upload macOS failure results
         if: failure()
-        uses: ./.github/actions/finalize-heist-receipts
+        uses: ./.github/actions/finalize-heist-results
         with:
-          receipt-directory: ${{ env.BUTTONHEIST_TEST_RECEIPTS_DIR }}
+          result-directory: ${{ env.BUTTONHEIST_TEST_RESULTS_DIR }}
           job-label: macos-tests
-          artifact-name: buttonheist-receipts-macos-tests-${{ github.run_attempt }}
+          artifact-name: buttonheist-results-macos-tests-${{ github.run_attempt }}
           retention-days: 14
 
       - name: Report macOS validation timing
@@ -154,7 +154,7 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 40
     env:
-      BUTTONHEIST_RECEIPTS_MODE: failures
+      BUTTONHEIST_RESULTS_MODE: failures
       BUTTONHEIST_TEST_ARTIFACTS_DIR: ${{ github.workspace }}/ci-artifacts/test-runs
       BUTTONHEIST_TEST_SIMULATOR_NAME: buttonheist-ci-core-demo-${{ github.run_id }}-${{ github.run_attempt }}
 
@@ -199,9 +199,9 @@ jobs:
         run: |
           echo "IOS_DEMO_RUN_START=$(date +%s)" >> "$GITHUB_ENV"
           APP="$BUTTONHEIST_TEST_DERIVED_DATA/Build/Products/Debug-iphonesimulator/BHDemo.app"
-          scripts/run-with-heist-receipts.sh \
-            --dir "$BUTTONHEIST_TEST_RECEIPTS_DIR" \
-            --mode "$BUTTONHEIST_RECEIPTS_MODE" \
+          scripts/run-with-heist-results.sh \
+            --dir "$BUTTONHEIST_TEST_RESULTS_DIR" \
+            --mode "$BUTTONHEIST_RESULTS_MODE" \
             -- scripts/e2e-demo-smoke.sh \
             --skip-generate \
             --skip-cli-build \
@@ -213,13 +213,13 @@ jobs:
         if: failure()
         run: scripts/test-runner.py collect TheInsideJobTests
 
-      - name: Upload iOS failure receipts
+      - name: Upload iOS failure results
         if: failure()
-        uses: ./.github/actions/finalize-heist-receipts
+        uses: ./.github/actions/finalize-heist-results
         with:
-          receipt-directory: ${{ env.BUTTONHEIST_TEST_RECEIPTS_DIR }}
+          result-directory: ${{ env.BUTTONHEIST_TEST_RESULTS_DIR }}
           job-label: ios-tests
-          artifact-name: buttonheist-receipts-ios-tests-${{ github.run_attempt }}
+          artifact-name: buttonheist-results-ios-tests-${{ github.run_attempt }}
           retention-days: 14
 
       - name: Upload iOS failure diagnostics
@@ -250,7 +250,7 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 35
     env:
-      BUTTONHEIST_RECEIPTS_MODE: failures
+      BUTTONHEIST_RESULTS_MODE: failures
       BUTTONHEIST_TEST_ARTIFACTS_DIR: ${{ github.workspace }}/ci-artifacts/test-runs
       BUTTONHEIST_TEST_SIMULATOR_NAME: buttonheist-ci-hosted-canaries-${{ github.run_id }}-${{ github.run_attempt }}
 
@@ -290,13 +290,13 @@ jobs:
         if: failure()
         run: scripts/test-runner.py collect HostedBehaviorTests
 
-      - name: Upload hosted failure receipts
+      - name: Upload hosted failure results
         if: failure()
-        uses: ./.github/actions/finalize-heist-receipts
+        uses: ./.github/actions/finalize-heist-results
         with:
-          receipt-directory: ${{ env.BUTTONHEIST_TEST_RECEIPTS_DIR }}
+          result-directory: ${{ env.BUTTONHEIST_TEST_RESULTS_DIR }}
           job-label: ios-demo-gates
-          artifact-name: buttonheist-receipts-hosted-canaries-${{ github.run_attempt }}
+          artifact-name: buttonheist-results-hosted-canaries-${{ github.run_attempt }}
           retention-days: 14
 
       - name: Upload hosted failure diagnostics
@@ -326,7 +326,7 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 35
     env:
-      BUTTONHEIST_RECEIPTS_MODE: failures
+      BUTTONHEIST_RESULTS_MODE: failures
       BUTTONHEIST_TEST_ARTIFACTS_DIR: ${{ github.workspace }}/ci-artifacts/test-runs
       BUTTONHEIST_TEST_SIMULATOR_NAME: buttonheist-ci-main-integration-${{ github.run_id }}-${{ github.run_attempt }}
 
@@ -366,13 +366,13 @@ jobs:
         if: failure()
         run: scripts/test-runner.py collect TheInsideJobIntegrationTests
 
-      - name: Upload integration failure receipts
+      - name: Upload integration failure results
         if: failure()
-        uses: ./.github/actions/finalize-heist-receipts
+        uses: ./.github/actions/finalize-heist-results
         with:
-          receipt-directory: ${{ env.BUTTONHEIST_TEST_RECEIPTS_DIR }}
+          result-directory: ${{ env.BUTTONHEIST_TEST_RESULTS_DIR }}
           job-label: main-integration
-          artifact-name: buttonheist-receipts-main-integration-${{ github.run_attempt }}
+          artifact-name: buttonheist-results-main-integration-${{ github.run_attempt }}
           retention-days: 14
 
       - name: Upload integration failure diagnostics

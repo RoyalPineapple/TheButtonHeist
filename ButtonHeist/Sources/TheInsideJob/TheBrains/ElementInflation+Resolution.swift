@@ -58,7 +58,7 @@ extension ElementInflation {
                 for: target,
                 treeElement: treeElement,
                 method: method,
-                after: vault.semanticObservationStream.latestEvent?.sequence,
+                after: vault.semanticObservationStream.latestCommittedEvent?.sequence,
                 deadline: deadline,
                 resolution: pendingRetry.resolution
             ) {

@@ -19,17 +19,16 @@ extension TheBrainsActionTests {
             observations: [],
             execute: { command in
                 dispatchedTypes.append(command.runtimeType)
-                return ActionResult.success(method: .activate, message: command.runtimeType.rawValue)
+                return ActionResult.success(payload: .activate, message: command.runtimeType.rawValue)
             },
             wait: { request in
                 waitRequests.append(request)
                 return ActionResult.success(
-                    method: .wait,
-                        observation: .trace(makeTestTraceEvidence(
-                            AccessibilityTrace(capture: observedReady.capture),
-                            completeness: .incomplete
-                        ))
-
+                    payload: .wait,
+                    observation: .trace(makeTestTraceEvidence(
+                        AccessibilityTrace(capture: observedReady.capture),
+                        completeness: .incomplete
+                    ))
                 )
             }
         )
@@ -42,9 +41,9 @@ extension TheBrainsActionTests {
         ])
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let heist: HeistExecutionResult = try XCTUnwrap(result.heistExecutionPayload)
-        let actionStep = try XCTUnwrap(heist.steps.first)
-        let waitStep = try XCTUnwrap(heist.steps.dropFirst().first)
+        let heistResult: HeistResult = try XCTUnwrap(result.resultPayload)
+        let actionStep = try XCTUnwrap(heistResult.steps.first)
+        let waitStep = try XCTUnwrap(heistResult.steps.dropFirst().first)
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "heist failed")
         XCTAssertEqual(dispatchedTypes, [.activate])
@@ -55,7 +54,7 @@ extension TheBrainsActionTests {
         } else {
             XCTFail("Expected standalone wait request")
         }
-        XCTAssertEqual(heist.steps.map(\.kind), [HeistExecutionStepKind.action, .wait])
+        XCTAssertEqual(heistResult.steps.map(\.kind), [HeistExecutionStepKind.action, .wait])
         XCTAssertNotNil(actionStep.actionEvidence)
         XCTAssertNil(actionStep.waitEvidence)
         XCTAssertNil(waitStep.actionEvidence)
@@ -75,7 +74,7 @@ extension TheBrainsActionTests {
             observations: [],
             execute: { _ in
                 ActionResult.success(
-                    method: .activate,
+                    payload: .activate,
                     observation: .none,
                     subjectEvidence: ActionSubjectEvidence(
                         source: .resolvedSemanticTarget,
@@ -93,15 +92,15 @@ extension TheBrainsActionTests {
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "heist failed")
-        let heist = try XCTUnwrap(result.heistExecutionPayload)
-        let warning = try XCTUnwrap(heist.steps.first?.actionEvidence?.warning)
+        let heistResult = try XCTUnwrap(result.resultPayload)
+        let warning = try XCTUnwrap(heistResult.steps.first?.actionEvidence?.warning)
         XCTAssertEqual(warning.code, "activation_weak_affordance_evidence")
         XCTAssertEqual(
             warning.message,
             "activate succeeded, but the target does not advertise a primary activation affordance"
         )
         XCTAssertEqual(warning.evidence, #"label="Checkout" traits=[staticText] actions=[activate]"#)
-        XCTAssertEqual(heist.warnings, [])
+        XCTAssertEqual(HeistReport.project(result: heistResult).warnings, [])
     }
 
     func testHeistTypeTextRecordsWeakAffordanceWarningOnSuccessfulActionEvidence() async throws {
@@ -116,7 +115,7 @@ extension TheBrainsActionTests {
             observations: [],
             execute: { _ in
                 ActionResult.success(
-                    method: .typeText,
+                    payload: .typeText(nil),
                     observation: .none,
                     subjectEvidence: ActionSubjectEvidence(
                         source: .textInputTarget,
@@ -137,8 +136,8 @@ extension TheBrainsActionTests {
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "heist failed")
-        let heist = try XCTUnwrap(result.heistExecutionPayload)
-        let warning = try XCTUnwrap(heist.steps.first?.actionEvidence?.warning)
+        let heistResult = try XCTUnwrap(result.resultPayload)
+        let warning = try XCTUnwrap(heistResult.steps.first?.actionEvidence?.warning)
         XCTAssertEqual(warning.code, "text_entry_weak_affordance_evidence")
         XCTAssertEqual(
             warning.message,
@@ -163,8 +162,8 @@ extension TheBrainsActionTests {
                 return ActionResult.success(payload: .screenshot(screenshot))
             }
             return ActionResult.failure(
-                method: .activate,
-                errorKind: .actionFailed,
+                payload: .activate,
+                failureKind: .actionFailed,
                 message: "activate failed",
             )
         }
@@ -176,12 +175,13 @@ extension TheBrainsActionTests {
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(dispatchedTypes, [.activate, .takeScreenshot])
-        let heist = try XCTUnwrap(result.heistExecutionPayload)
-        XCTAssertEqual(heist.abortedAtPath, "$.body[0]")
-        XCTAssertEqual(heist.executedTopLevelStepCount, 1)
-        XCTAssertEqual(heist.outputReceiptNodes.count, 2)
-        XCTAssertEqual(heist.steps.map(\.path), ["$.body[0]", "$.body[0].failure.actions[0]"])
-        let screenshotStep = try XCTUnwrap(heist.steps.last)
+        let heistResult = try XCTUnwrap(result.resultPayload)
+        let report = HeistReport.project(result: heistResult)
+        XCTAssertEqual(heistResult.abortedAtPath, "$.body[0]")
+        XCTAssertEqual(report.summary.executedTopLevelStepCount, 1)
+        XCTAssertEqual(heistResult.outputNodes.count, 2)
+        XCTAssertEqual(heistResult.steps.map(\.path), ["$.body[0]", "$.body[0].failure.actions[0]"])
+        let screenshotStep = try XCTUnwrap(heistResult.steps.last)
         XCTAssertEqual(screenshotStep.kind, .action)
         XCTAssertEqual(screenshotStep.status, .passed)
         XCTAssertEqual(screenshotStep.actionCommand, .takeScreenshot)
@@ -197,11 +197,11 @@ extension TheBrainsActionTests {
         let runtime = heistRuntime(observations: []) { command in
             dispatchedTypes.append(command.runtimeType)
             if case .takeScreenshot = command {
-                return ActionResult.success(method: .takeScreenshot)
+                return ActionResult.success(payload: .screenshot(nil))
             }
             return ActionResult.failure(
-                method: .activate,
-                errorKind: .actionFailed,
+                payload: .activate,
+                failureKind: .actionFailed,
                 message: "activate failed",
             )
         }
@@ -217,24 +217,24 @@ extension TheBrainsActionTests {
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(dispatchedTypes, [.activate, .takeScreenshot])
-        let heist = try XCTUnwrap(result.heistExecutionPayload)
-        XCTAssertEqual(heist.abortedAtPath, "$.body[0]")
-        XCTAssertEqual(heist.steps.map(\.path), [
+        let heistResult = try XCTUnwrap(result.resultPayload)
+        XCTAssertEqual(heistResult.abortedAtPath, "$.body[0]")
+        XCTAssertEqual(heistResult.steps.map(\.path), [
             "$.body[0]",
             "$.body[1]",
             "$.body[2]",
             "$.body[0].failure.actions[0]",
         ])
-        XCTAssertEqual(heist.steps.map(\.status), [.failed, .skipped, .skipped, .passed])
-        let skippedInlineHeist = try XCTUnwrap(heist.steps.dropFirst(2).first)
+        XCTAssertEqual(heistResult.steps.map(\.status), [.failed, .skipped, .skipped, .passed])
+        let skippedInlineHeist = try XCTUnwrap(heistResult.steps.dropFirst(2).first)
         XCTAssertEqual(skippedInlineHeist.children.map(\.status), [.skipped])
     }
 
 }
 
 private extension ActionResult {
-    var heistExecutionPayload: HeistExecutionResult? {
-        guard case .heistExecution(let result) = payload else { return nil }
+    var resultPayload: HeistResult? {
+        guard case .heist(let result) = payload else { return nil }
         return result
     }
 }

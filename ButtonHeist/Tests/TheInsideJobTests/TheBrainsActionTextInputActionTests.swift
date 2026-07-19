@@ -53,7 +53,7 @@ extension TheBrainsActionTests {
 
         XCTAssertFalse(textField.isFirstResponder)
         XCTAssertFalse(
-            brains.safecracker.isKeyboardVisible(),
+            brains.safecracker.isKeyboardVisible,
             "targeted typing must work when an active input has no software keyboard"
         )
 
@@ -188,7 +188,7 @@ extension TheBrainsActionTests {
         XCTAssertEqual(subjectEvidence.source, .textInputTarget)
         XCTAssertEqual(subjectEvidence.element.identifier, "message_field")
         XCTAssertEqual(textField.text, "hello")
-        guard case .value(let value) = result.payload else {
+        guard case .typeText(let value?) = result.payload else {
             XCTFail("Expected final text value payload, got \(String(describing: result.payload))")
             return
         }
@@ -233,7 +233,7 @@ extension TheBrainsActionTests {
         XCTAssertEqual(result.method, .typeText)
         XCTAssertEqual(result.subjectEvidence?.element.identifier, "message_field")
         XCTAssertEqual(textField.text, "b")
-        guard case .value(let value) = result.payload else {
+        guard case .typeText(let value?) = result.payload else {
             XCTFail("Expected final text value payload, got \(String(describing: result.payload))")
             return
         }
@@ -278,7 +278,7 @@ extension TheBrainsActionTests {
         XCTAssertEqual(result.method, .typeText)
         XCTAssertEqual(result.subjectEvidence?.element.identifier, "message_field")
         XCTAssertEqual(textField.text, "")
-        guard case .value(let value) = result.payload else {
+        guard case .typeText(let value?) = result.payload else {
             XCTFail("Expected final text value payload, got \(String(describing: result.payload))")
             return
         }
@@ -286,7 +286,7 @@ extension TheBrainsActionTests {
     }
 
     func testExecuteTypeTextWithoutActiveInputReportsFocusState() async {
-        _ = brains.safecracker.resignFirstResponder()
+        _ = brains.safecracker.dismissKeyboard()
 
         let result = await brains.actions.executeTypeText(
             text: "hello",
@@ -326,7 +326,7 @@ extension TheBrainsActionTests {
     }
 
     func testExecuteEditActionWithoutResponderReportsFocusState() async {
-        _ = brains.safecracker.resignFirstResponder()
+        _ = brains.safecracker.dismissKeyboard()
 
         let result = await brains.actions.executeEditAction(EditActionTarget(action: .copy))
 
@@ -343,7 +343,7 @@ extension TheBrainsActionTests {
     }
 
     func testExecuteDeleteEditActionWithoutResponderReportsFocusState() async {
-        _ = brains.safecracker.resignFirstResponder()
+        _ = brains.safecracker.dismissKeyboard()
 
         let result = await brains.actions.executeEditAction(EditActionTarget(action: .delete))
 
@@ -360,12 +360,12 @@ extension TheBrainsActionTests {
     }
 
     func testExecuteResignFirstResponderWithoutResponderReportsFocusState() async {
-        _ = brains.safecracker.resignFirstResponder()
+        _ = brains.safecracker.dismissKeyboard()
 
         let result = await brains.actions.executeResignFirstResponder()
 
         XCTAssertFalse(result.success)
-        XCTAssertEqual(result.method, .resignFirstResponder)
+        XCTAssertEqual(result.method, .dismissKeyboard)
         XCTAssertNil(result.subjectEvidence)
         XCTAssertNil(result.resolvedElementId)
         XCTAssertDiagnostic(result.message, contains: [
@@ -417,7 +417,7 @@ extension TheBrainsActionTests {
         let result = await brains.actions.executeResignFirstResponder()
 
         XCTAssertTrue(result.success, result.message ?? "resign first responder failed")
-        XCTAssertEqual(result.method, .resignFirstResponder)
+        XCTAssertEqual(result.method, .dismissKeyboard)
         XCTAssertEqual(staleTextField.resignationCount, 0)
         XCTAssertEqual(replacementTextField.resignationCount, 1)
         XCTAssertFalse(replacementTextField.isFirstResponder)

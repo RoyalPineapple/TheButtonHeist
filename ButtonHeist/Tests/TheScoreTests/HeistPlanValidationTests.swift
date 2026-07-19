@@ -98,9 +98,9 @@ func `composition quality allows explicit expectation waiver`() throws {
 }
 
 @Test
-func lintFlagsMechanicalCommands() throws {
+func lintFlagsSpatialGestureCommands() throws {
     let plan = try HeistPlan(body: [
-        .action(ActionStep(command: .mechanicalTap(TapTarget(selection: .coordinate(ScreenPoint(x: 10, y: 20)))))),
+        .action(ActionStep(command: .oneFingerTap(TapTarget(selection: .coordinate(ScreenPoint(x: 10, y: 20)))))),
         .action(ActionStep(
             command: .activate(.predicate(.label("Save"))),
             expectationPolicy: .expect(ActionExpectation(predicate: .exists(.label("Done")), timeout: 1)))),
@@ -108,7 +108,7 @@ func lintFlagsMechanicalCommands() throws {
 
     let messages = plan.lint(.strictTest).map(\.message)
 
-    #expect(messages.contains("Mechanical command appears in strict semantic-test mode"))
+    #expect(messages.contains("Spatial gesture command appears in strict semantic-test mode"))
 }
 
 @Test

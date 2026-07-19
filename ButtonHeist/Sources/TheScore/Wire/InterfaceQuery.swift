@@ -85,7 +85,7 @@ extension InterfaceQuery: Codable {
 
 extension InterfaceQuery: CustomStringConvertible {
     public var description: String {
-        ScoreDescription.call("interfaceQuery", [
+        CanonicalValueDescription.call("interfaceQuery", [
             subtree?.description,
             maxScrollsPerContainer.map { "maxScrollsPerContainer=\($0)" },
             maxScrollsPerDiscovery.map { "maxScrollsPerDiscovery=\($0)" },

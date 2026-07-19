@@ -193,50 +193,38 @@ final class SemanticObservationStoreTests: XCTestCase {
         }
     }
 
-    func testInvalidationPreservesLatestEventAndHistoryButBlocksCleanRead() throws {
+    func testInvalidationPreservesLatestEventAndHistoryButBlocksAdmittedRead() throws {
         var store = SemanticObservationStore()
         let initial = try commit(scope: .visible, in: &store)
 
         store.invalidateCurrentObservation()
 
         XCTAssertTrue(store.latestSettledObservationInvalidated)
-        XCTAssertEqual(store.latestSourceEvent, initial)
-        XCTAssertNil(store.cleanObservation(scope: .visible, after: nil))
+        XCTAssertEqual(store.latestCommittedEvent, initial)
+        XCTAssertNil(store.admittedObservation(scope: .visible, after: nil))
         XCTAssertEqual(store.retainedEntries(scope: .visible).map(\.event), [initial])
 
         let next = try commit(scope: .visible, in: &store)
 
         XCTAssertFalse(store.latestSettledObservationInvalidated)
-        XCTAssertEqual(store.cleanObservation(scope: .visible, after: initial.sequence)?.event, next)
+        XCTAssertEqual(store.admittedObservation(scope: .visible, after: initial.sequence)?.event, next)
         XCTAssertEqual(store.retainedEntries(scope: .visible).map(\.event), [initial, next])
     }
 
-    func testCleanReadRejectsScopeRetainedFromAnOlderGeneration() throws {
+    func testAdmittedReadRejectsScopeRetainedFromAnOlderGeneration() throws {
         var store = SemanticObservationStore()
         let initialDiscovery = try commit(scope: .discovery, in: &store)
         let initialVisible = try XCTUnwrap(store.retainedEntries(scope: .visible).last?.event)
         XCTAssertEqual(
-            store.cleanObservation(scope: .visible, after: nil),
-            CleanSettledObservation(event: initialVisible, tripwireSignal: .empty)
+            store.admittedObservation(scope: .visible, after: nil),
+            SemanticObservationStore.AdmittedObservation(event: initialVisible, tripwireSignal: .empty)
         )
         store.requireReplacement()
         let replacementVisible = try commit(scope: .visible, in: &store)
 
-        XCTAssertEqual(store.cleanObservation(scope: .visible, after: nil)?.event, replacementVisible)
-        XCTAssertNil(store.cleanObservation(scope: .discovery, after: nil))
+        XCTAssertEqual(store.admittedObservation(scope: .visible, after: nil)?.event, replacementVisible)
+        XCTAssertNil(store.admittedObservation(scope: .discovery, after: nil))
         XCTAssertEqual(store.retainedEntries(scope: .discovery).map(\.event), [initialDiscovery])
-    }
-
-    func testBeginningScreenReplacementWithdrawsCurrentObservationWithoutClearingHistory() throws {
-        var store = SemanticObservationStore()
-        let initial = try commit(scope: .visible, in: &store)
-
-        store.beginScreenReplacement()
-
-        XCTAssertTrue(store.latestSettledObservationInvalidated)
-        XCTAssertNil(store.latestSourceEvent)
-        XCTAssertNil(store.cleanObservation(scope: .visible, after: nil))
-        XCTAssertEqual(store.retainedEntries(scope: .visible).map(\.event), [initial])
     }
 
     private func initialEntry(
@@ -289,7 +277,7 @@ final class SemanticObservationStoreTests: XCTestCase {
     ) throws -> SettledObservationEvent {
         let observation = InterfaceObservation.makeForTests()
         return try store.commitObservation(
-            .uncheckedForTesting(observation, tripwireSignal: .empty),
+            .admittedForTesting(observation, tripwireSignal: .empty),
             scope: scope,
             notificationBatch: AccessibilityNotificationBatch(
                 events: [],
@@ -302,7 +290,7 @@ final class SemanticObservationStoreTests: XCTestCase {
                 accessibilityNotifications: [],
                 firstResponder: nil
             ) }
-        ).sourceEvent
+        ).event
     }
 
     private func event(

@@ -561,10 +561,10 @@ final class ClientMessageTests: XCTestCase {
     }
 
     func testActionResultWithoutPayload() throws {
-        let result = ActionResult.success(method: .activate)
+        let result = ActionResult.success(payload: .activate)
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
-        XCTAssertNil(decoded.payload)
+        XCTAssertEqual(decoded.payload, .activate)
     }
 
     // MARK: - AccessibilityTarget Ordinal Tests

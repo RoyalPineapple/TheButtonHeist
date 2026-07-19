@@ -8,27 +8,27 @@ final class HeistJUnitReportTests: XCTestCase {
 
     func testAllPassedReport() {
         let report = makeReport(outcomes: [.passed, .passed, .passed])
-        XCTAssertEqual(report.passedReceiptNodeCount, 3)
-        XCTAssertEqual(report.failedReceiptNodeCount, 0)
+        XCTAssertEqual(report.passedResultNodeCount, 3)
+        XCTAssertEqual(report.failedResultNodeCount, 0)
         XCTAssertTrue(report.allPassed)
     }
 
     func testPartialFailureReport() {
         let report = makeReport(outcomes: [
             .passed,
-            .failed(message: "element not found", errorKind: .action(.elementNotFound)),
+            .failed(message: "element not found", failureKind: .action(.elementNotFound)),
             .skipped,
         ])
-        XCTAssertEqual(report.passedReceiptNodeCount, 1)
-        XCTAssertEqual(report.failedReceiptNodeCount, 1)
+        XCTAssertEqual(report.passedResultNodeCount, 1)
+        XCTAssertEqual(report.failedResultNodeCount, 1)
         XCTAssertFalse(report.allPassed)
     }
 
     func testSkippedNodesAreNotFailures() {
         let report = makeReport(outcomes: [.passed, .skipped])
 
-        XCTAssertEqual(report.passedReceiptNodeCount, 1)
-        XCTAssertEqual(report.failedReceiptNodeCount, 0)
+        XCTAssertEqual(report.passedResultNodeCount, 1)
+        XCTAssertEqual(report.failedResultNodeCount, 0)
         XCTAssertTrue(report.allPassed)
     }
 
@@ -39,8 +39,8 @@ final class HeistJUnitReportTests: XCTestCase {
             totalTimeSeconds: 0,
             steps: []
         )
-        XCTAssertEqual(report.passedReceiptNodeCount, 0)
-        XCTAssertEqual(report.failedReceiptNodeCount, 0)
+        XCTAssertEqual(report.passedResultNodeCount, 0)
+        XCTAssertEqual(report.failedResultNodeCount, 0)
         XCTAssertTrue(report.allPassed)
     }
 
@@ -101,7 +101,7 @@ final class HeistJUnitReportTests: XCTestCase {
     func testOutcomeFailedProperties() {
         let outcome = HeistJUnitReport.Outcome.failed(
             message: "timeout waiting for element",
-            errorKind: .action(.timeout)
+            failureKind: .action(.timeout)
         )
         XCTAssertEqual(outcome.failureMessage, "timeout waiting for element")
         XCTAssertEqual(outcome.failureType, .action(.timeout))
@@ -110,7 +110,7 @@ final class HeistJUnitReportTests: XCTestCase {
     func testOutcomeFailedWithNilErrorKind() {
         let outcome = HeistJUnitReport.Outcome.failed(
             message: "connection lost",
-            errorKind: nil
+            failureKind: nil
         )
         XCTAssertEqual(outcome.failureMessage, "connection lost")
         XCTAssertNil(outcome.failureType)
@@ -137,7 +137,7 @@ final class HeistJUnitReportTests: XCTestCase {
         let report = makeReport(
             outcomes: [
                 .passed,
-                .failed(message: "element not found", errorKind: .action(.elementNotFound)),
+                .failed(message: "element not found", failureKind: .action(.elementNotFound)),
             ]
         )
         let xml = report.junitXML()
@@ -146,13 +146,13 @@ final class HeistJUnitReportTests: XCTestCase {
         assertContains(xml, "failures=\"1\"")
         assertContains(xml, "<failure message=\"element not found\"")
         assertContains(xml, "type=\"elementNotFound\"")
-        assertContains(xml, "Completed 1/2 receipt node(s) before failure.")
+        assertContains(xml, "Completed 1/2 result node(s) before failure.")
         assertContains(xml, "step: [1] activate")
     }
 
     func testJunitXMLFailureWithNilErrorKind() {
         let report = makeReport(outcomes: [
-            .failed(message: "unknown error", errorKind: nil),
+            .failed(message: "unknown error", failureKind: nil),
         ])
         let xml = report.junitXML()
 
@@ -165,14 +165,14 @@ final class HeistJUnitReportTests: XCTestCase {
             command: "invocation",
             target: nil,
             timeSeconds: 0.1,
-            outcome: .failed(message: "wrapper failed", errorKind: .commandError)
+            outcome: .failed(message: "wrapper failed", failureKind: .commandError)
         )
         let leaf = HeistJUnitReport.StepResult(
             index: 1,
             command: "activate",
             target: semanticTarget(label: "Pay"),
             timeSeconds: 0.2,
-            outcome: .failed(message: "leaf failed", errorKind: .action(.actionFailed))
+            outcome: .failed(message: "leaf failed", failureKind: .action(.actionFailed))
         )
         let report = HeistJUnitReport(
             heistName: "nested-failure",
@@ -212,7 +212,7 @@ final class HeistJUnitReportTests: XCTestCase {
             timeSeconds: 0.1,
             outcome: .failed(
                 message: "Element \"Save & Continue <now>\" not found",
-                errorKind: nil
+                failureKind: nil
             )
         )
         let report = HeistJUnitReport(
@@ -256,7 +256,7 @@ final class HeistJUnitReportTests: XCTestCase {
             command: "swipe",
             target: semanticTarget(label: "List", identifier: "main-list"),
             timeSeconds: 0.5,
-            outcome: .failed(message: "swipe failed", errorKind: .action(.actionFailed))
+            outcome: .failed(message: "swipe failed", failureKind: .action(.actionFailed))
         )
         let report = HeistJUnitReport(
             heistName: "target-test",
@@ -266,7 +266,7 @@ final class HeistJUnitReportTests: XCTestCase {
         )
         let xml = report.junitXML()
 
-        assertContains(xml, "Completed 0/1 receipt node(s) before failure.")
+        assertContains(xml, "Completed 0/1 result node(s) before failure.")
         assertContains(xml, "step: [0] swipe")
         assertContains(xml, "label=&quot;List&quot;")
         assertContains(xml, "identifier=&quot;main-list&quot;")

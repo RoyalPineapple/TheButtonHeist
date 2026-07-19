@@ -31,7 +31,7 @@ enum TheFenceFixtures {
 
 extension TheFence {
     @ButtonHeistActor
-    func parseRequest(command: Command, values: [String: HeistValue] = [:]) throws -> FenceOperationRequest {
+    func parseRequest(command: Command, values: [String: HeistValue] = [:]) throws -> AdmittedFenceCommand {
         try parseRequest(
             command: command,
             arguments: CommandArgumentEnvelope(values: values)
@@ -39,13 +39,13 @@ extension TheFence {
     }
 
     @ButtonHeistActor
-    func parseRequest(command: Command, arguments: CommandArgumentEnvelope) throws -> FenceOperationRequest {
+    func parseRequest(command: Command, arguments: CommandArgumentEnvelope) throws -> AdmittedFenceCommand {
         try admit(FenceCommandInput(command: command, arguments: arguments))
     }
 
     @ButtonHeistActor
     func execute(command: Command, arguments: CommandArgumentEnvelope) async throws -> FenceResponse {
-        let request: FenceOperationRequest
+        let request: AdmittedFenceCommand
         do {
             request = try admit(FenceCommandInput(command: command, arguments: arguments))
         } catch {
@@ -61,34 +61,16 @@ extension TheFence {
 }
 
 extension FenceResponse {
-    /// The leaf action for assertions, whether the response is a direct
-    /// `.action` (e.g. the `get_pasteboard` read) or a single-leaf
-    /// `.heistExecution` (a single command executed as a one-step heist).
     @ButtonHeistActor
-    var leafAction: (result: ActionResult, expectation: ExpectationResult?)? {
-        if case .action(_, let result, let expectation) = self {
-            return (result, expectation)
+    var containsAction: Bool {
+        switch self {
+        case .action:
+            true
+        case .heistExecution(_, let report):
+            report.outputNodes.contains { $0.kind == .action }
+        default:
+            false
         }
-        if case .heistExecution(_, let result, _) = self,
-           let step = result.steps.firstActionLeaf,
-           let actionResult = step.reportActionResult {
-            return (actionResult, step.reportExpectation)
-        }
-        return nil
-    }
-}
-
-private extension Array where Element == HeistExecutionStepResult {
-    var firstActionLeaf: HeistExecutionStepResult? {
-        for step in self {
-            if step.kind == .action {
-                return step
-            }
-            if let child = step.children.firstActionLeaf {
-                return child
-            }
-        }
-        return nil
     }
 }
 
@@ -178,9 +160,9 @@ func targetArgumentValue(
 }
 
 func scriptedHeistResponse(
-    _ result: HeistExecutionResult = HeistReceiptFixture.result(steps: [HeistReceiptFixture.action()])
+    _ result: HeistResult = HeistResultFixture.result(steps: [HeistResultFixture.action()])
 ) -> ServerMessage {
-    .actionResult(.success(payload: .heistExecution(result)))
+    .actionResult(.success(payload: .heist(result)))
 }
 
 func stringMatchArgumentValue(_ value: String, mode: String = "exact") -> HeistValue {
@@ -224,7 +206,7 @@ func makeConnectedFence(configuration: TheFence.Configuration = .init()) -> (The
         case .heistPlan:
             return scriptedHeistResponse()
         default:
-            return .actionResult(ActionResult.success(method: .activate))
+            return .actionResult(ActionResult.success(payload: .activate))
         }
     }
 
@@ -249,7 +231,7 @@ func makeConnectedFence(configuration: TheFence.Configuration = .init()) -> (The
                     session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
                 ))
             }
-            return .actionResult(ActionResult.success(method: .activate))
+            return .actionResult(ActionResult.success(payload: .activate))
         }
         return probe
     }
@@ -292,86 +274,6 @@ func publicInterfaceJSONProbe(
     line: UInt = #line
 ) throws -> JSONProbe {
     try JSONProbe(data: try JSONEncoder().encode(interface))
-}
-
-struct HeistInspection {
-    let commands: [TheFence.Command]
-    let steps: [HeistStep]
-    let executionResult: HeistExecutionResult
-    let executedTopLevelStepCount: Int
-    let abortedAtPath: HeistExecutionPath?
-    let durationMs: Int
-    let expectationsChecked: Int
-    let expectationsMet: Int
-    let accessibilityTrace: AccessibilityTrace?
-}
-
-func inspectHeist(_ response: FenceResponse) -> HeistInspection? {
-    guard case .heistExecution(let plan, let result, let accessibilityTrace) = response else {
-        return nil
-    }
-    let plannedSteps = plan.body
-    return HeistInspection(
-        commands: plannedSteps.map(\.commandForInspection),
-        steps: plannedSteps,
-        executionResult: result,
-        executedTopLevelStepCount: result.executedTopLevelStepCount,
-        abortedAtPath: result.abortedAtPath,
-        durationMs: result.durationMs,
-        expectationsChecked: result.expectationsChecked,
-        expectationsMet: result.expectationsMet,
-        accessibilityTrace: accessibilityTrace
-    )
-}
-
-private extension HeistStep {
-    var commandForInspection: TheFence.Command {
-        switch self {
-        case .action(let action):
-            return action.command.fenceCommandForInspection
-        case .wait:
-            return .wait
-        case .conditional, .forEachElement, .forEachString, .repeatUntil, .heist, .invoke, .warn, .fail:
-            return .runHeist
-        }
-    }
-}
-
-private extension HeistActionCommand {
-    var fenceCommandForInspection: TheFence.Command {
-        switch wireType {
-        case .activate, .increment, .decrement, .performCustomAction:
-            return .activate
-        case .rotor:
-            return .rotor
-        case .dismiss, .magicTap:
-            return .perform
-        case .oneFingerTap:
-            return .oneFingerTap
-        case .longPress:
-            return .longPress
-        case .swipe:
-            return .swipe
-        case .drag:
-            return .drag
-        case .typeText:
-            return .typeText
-        case .editAction:
-            return .editAction
-        case .setPasteboard:
-            return .setPasteboard
-        case .takeScreenshot:
-            return .getScreen
-        case .scroll:
-            return .scroll
-        case .scrollToVisible:
-            return .scrollToVisible
-        case .scrollToEdge:
-            return .scrollToEdge
-        case .resignFirstResponder:
-            return .dismissKeyboard
-        }
-    }
 }
 
 private extension Array {

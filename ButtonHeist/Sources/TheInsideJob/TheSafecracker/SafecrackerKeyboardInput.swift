@@ -27,18 +27,18 @@ final class SafecrackerKeyboardInput {
         center.removeObserver(self, name: UIResponder.keyboardDidHideNotification, object: nil)
     }
 
-    func isKeyboardVisible() -> Bool {
+    var isKeyboardVisible: Bool {
         keyboardVisibleFlag
     }
 
-    func hasActiveTextInput() -> Bool {
+    var hasActiveTextInput: Bool {
         activeKeyboardInput() != nil
     }
 
     func typeText(
         _ text: String,
         interKeyDelay: UInt64 = TheSafecracker.defaultInterKeyDelay
-    ) async -> KeyboardTextInjectionResult {
+    ) async -> KeyboardTextInjectionOutcome {
         guard let keyboard = activeKeyboardInput() else {
             return .failed(.noActiveInput(strategy: UIKeyboardImplTextInjection.strategyName))
         }
@@ -59,7 +59,7 @@ final class SafecrackerKeyboardInput {
     func clearText(
         existingValue: String?,
         interKeyDelay: UInt64 = TheSafecracker.defaultInterKeyDelay
-    ) async -> KeyboardTextInjectionResult {
+    ) async -> KeyboardTextInjectionOutcome {
         guard let keyboard = activeKeyboardInput() else {
             return .failed(.noActiveInput(strategy: UIKeyboardImplTextInjection.strategyName))
         }

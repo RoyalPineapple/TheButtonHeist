@@ -208,7 +208,7 @@ extension TheVaultResolutionTests {
             activationPoint: freshPoint,
             customRotors: [.init(name: "Errors")]
         )
-        bagman.recordParsedObservedEvidence(InterfaceObservation.makeForTests(
+        bagman.observeInterface(InterfaceObservation.makeForTests(
             elements: [(freshElement, "rotor_host")],
             objects: ["rotor_host": liveObject]
         ))
@@ -255,7 +255,7 @@ extension TheVaultResolutionTests {
             traits: .adjustable,
             frame: rawFrame
         )
-        bagman.recordParsedObservedEvidence(InterfaceObservation.makeForTests(
+        bagman.observeInterface(InterfaceObservation.makeForTests(
             elements: [(rawElement, rawId)],
             objects: [rawId: rawObject]
         ))
@@ -267,7 +267,7 @@ extension TheVaultResolutionTests {
             return XCTFail("Expected different-HeistId raw evidence to remain non-dispatchable")
         }
 
-        bagman.recordParsedObservedEvidence(InterfaceObservation.makeForTests(
+        bagman.observeInterface(InterfaceObservation.makeForTests(
             elements: [(rawElement, committedId)],
             objects: [committedId: rawObject]
         ))
@@ -350,7 +350,7 @@ extension TheVaultResolutionTests {
                 firstResponderHeistId: nil,
             )
         )
-        bagman.recordParsedObservedEvidence(liveScreen)
+        bagman.observeInterface(liveScreen)
 
         let resolved = bagman.resolveTarget(try resolvedTarget(
             .container(.identifier("actions"))

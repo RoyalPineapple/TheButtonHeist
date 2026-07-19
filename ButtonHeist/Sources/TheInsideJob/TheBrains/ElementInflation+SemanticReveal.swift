@@ -153,7 +153,7 @@ extension ElementInflation {
             .revealContentPoint(observedPoint.point, in: scrollTarget)
         )
         guard semanticRevealInterruption(deadline: deadline) == nil else { return false }
-        switch transition.result {
+        switch transition.outcome {
         case .unavailable:
             return false
         case .unchanged:

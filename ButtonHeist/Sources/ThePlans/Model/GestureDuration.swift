@@ -62,6 +62,6 @@ public struct GestureDuration: Codable, Sendable, Equatable, CustomStringConvert
     }
 
     public var description: String {
-        ScoreDescription.decimal(seconds)
+        CanonicalValueDescription.decimal(seconds)
     }
 }

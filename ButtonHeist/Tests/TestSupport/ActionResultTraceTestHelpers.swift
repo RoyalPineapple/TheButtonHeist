@@ -15,13 +15,12 @@ package func makeTestTraceEvidence(
     return evidence
 }
 
-package enum HeistReceiptFixture {
+package enum HeistResultFixture {
     package static func actionResult(
         succeeded: Bool = true,
-        method: ActionMethod = .activate,
+        payload: ActionResult.Payload = .activate,
         message: String? = nil,
-        errorKind: ErrorKind? = nil,
-        payload: ActionResultPayload? = nil,
+        failureKind: ActionFailure.Kind? = nil,
         traceEvidence: AccessibilityTraceEvidence? = nil,
         subjectEvidence: ActionSubjectEvidence? = nil,
         activationTrace: ActivationTrace? = nil,
@@ -30,8 +29,8 @@ package enum HeistReceiptFixture {
         let observation = traceEvidence.map(ActionResultObservationEvidence.trace) ?? .none
         if succeeded {
             if let activationTrace {
-                guard payload == nil, method == .activate else {
-                    preconditionFailure("activation trace fixture requires method-only activate result")
+                guard payload == .activate else {
+                    preconditionFailure("activation trace fixture requires activate payload")
                 }
                 return .activationSuccess(
                     message: message,
@@ -41,17 +40,8 @@ package enum HeistReceiptFixture {
                     timing: timing
                 )
             }
-            if let payload {
-                return .success(
-                    payload: payload,
-                    message: message,
-                    observation: observation,
-                    subjectEvidence: subjectEvidence,
-                    timing: timing
-                )
-            }
             return .success(
-                method: method,
+                payload: payload,
                 message: message,
                 observation: observation,
                 subjectEvidence: subjectEvidence,
@@ -59,15 +49,15 @@ package enum HeistReceiptFixture {
             )
         }
 
-        guard let errorKind else {
-            preconditionFailure("failed test ActionResult requires errorKind")
+        guard let failureKind else {
+            preconditionFailure("failed test ActionResult requires failureKind")
         }
         if let activationTrace {
-            guard payload == nil, method == .activate else {
-                preconditionFailure("activation trace fixture requires method-only activate result")
+            guard payload == .activate else {
+                preconditionFailure("activation trace fixture requires activate payload")
             }
             return .activationFailure(
-                errorKind: errorKind,
+                failureKind: failureKind,
                 message: message,
                 observation: observation,
                 subjectEvidence: subjectEvidence,
@@ -75,19 +65,9 @@ package enum HeistReceiptFixture {
                 timing: timing
             )
         }
-        if let payload {
-            return .failure(
-                payload: payload,
-                errorKind: errorKind,
-                message: message,
-                observation: observation,
-                subjectEvidence: subjectEvidence,
-                timing: timing
-            )
-        }
         return .failure(
-            method: method,
-            errorKind: errorKind,
+            payload: payload,
+            failureKind: failureKind,
             message: message,
             observation: observation,
             subjectEvidence: subjectEvidence,
@@ -119,7 +99,7 @@ package enum HeistReceiptFixture {
         let resolvedFailure = failure ?? inferredActionFailure(result)
         if let resolvedFailure {
             guard let evidence = HeistFailedActionEvidence(evidence) else {
-                preconditionFailure("failed action receipt fixture requires failing evidence")
+                preconditionFailure("failed action result fixture requires failing evidence")
             }
             return HeistExecutionStepResult.action(
                 path: executionPath(path),
@@ -128,7 +108,7 @@ package enum HeistReceiptFixture {
             )
         }
         guard let evidence = HeistPassedActionEvidence(evidence) else {
-            preconditionFailure("passed action receipt fixture requires passing evidence")
+            preconditionFailure("passed action result fixture requires passing evidence")
         }
         return HeistExecutionStepResult.action(
             path: executionPath(path),
@@ -139,7 +119,7 @@ package enum HeistReceiptFixture {
 
     package static func wait(
         path: String = "$.body[0]",
-        actionResult: ActionResult = .success(method: .wait),
+        actionResult: ActionResult = .success(payload: .wait),
         expectation: ExpectationResult = ExpectationResult(
             met: true,
             predicate: .exists(.label("Done"))
@@ -172,12 +152,12 @@ package enum HeistReceiptFixture {
         let completion: HeistWaitCompletion
         if let failure {
             guard let evidence = HeistFailedWaitEvidence(evidence) else {
-                preconditionFailure("failed wait receipt fixture requires failing evidence")
+                preconditionFailure("failed wait result fixture requires failing evidence")
             }
             completion = .failed(evidence: .observed(evidence), failure: failure)
         } else {
             guard let evidence = HeistPassedWaitEvidence(evidence) else {
-                preconditionFailure("passed wait receipt fixture requires matched evidence")
+                preconditionFailure("passed wait result fixture requires matched evidence")
             }
             completion = .passed(evidence: evidence)
         }
@@ -350,8 +330,8 @@ package enum HeistReceiptFixture {
     package static func result(
         steps: [HeistExecutionStepResult],
         durationMs: Int = 1
-    ) -> HeistExecutionResult {
-        HeistExecutionResult(
+    ) -> HeistResult {
+        HeistResult(
             steps: steps,
             durationMs: durationMs
         )
@@ -361,13 +341,13 @@ package enum HeistReceiptFixture {
         do {
             return try HeistExecutionPath(validating: description)
         } catch {
-            preconditionFailure("invalid receipt fixture path \(description): \(error)")
+            preconditionFailure("invalid result fixture path \(description): \(error)")
         }
     }
 
     private static func passingChildren(_ children: [HeistExecutionStepResult]) -> HeistPassingChildren {
         guard let children = HeistPassingChildren(children) else {
-            preconditionFailure("passing receipt fixture cannot contain failed children")
+            preconditionFailure("passing result fixture cannot contain failed children")
         }
         return children
     }
@@ -375,7 +355,7 @@ package enum HeistReceiptFixture {
     private static func inferredActionFailure(_ result: ActionResult) -> HeistFailureDetail? {
         guard !result.outcome.isSuccess else { return nil }
         return HeistFailureDetail(
-            category: result.outcome.errorKind == .elementNotFound ? .targetResolution : .action,
+            category: result.outcome.failureKind == .elementNotFound ? .targetResolution : .action,
             contract: "action dispatch succeeds",
             observed: result.message ?? "action failed"
         )

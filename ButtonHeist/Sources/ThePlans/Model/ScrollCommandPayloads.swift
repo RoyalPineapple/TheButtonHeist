@@ -17,8 +17,8 @@ public enum ScrollContainerSelection: Sendable, Equatable, CustomStringConvertib
         case .element(let target):
             return target.description
         case .container(let containerName):
-            return ScoreDescription.call("container", [
-                "containerName=\(ScoreDescription.quoted(containerName.rawValue))",
+            return CanonicalValueDescription.call("container", [
+                "containerName=\(CanonicalValueDescription.quoted(containerName.rawValue))",
             ])
         }
     }
@@ -70,9 +70,9 @@ public struct ScrollTarget: Sendable, Equatable {
 
 extension ScrollTarget: CustomStringConvertible {
     public var description: String {
-        ScoreDescription.call("scroll", [
+        CanonicalValueDescription.call("scroll", [
             selectionDescription,
-            ScoreDescription.valueField("direction", direction),
+            CanonicalValueDescription.valueField("direction", direction),
         ].compactMap { $0 })
     }
 }
@@ -115,7 +115,7 @@ extension ScrollTarget: Codable {
 
 /// Target for one-shot scroll-to-visible.
 /// The element must be present in semantic state with scroll membership.
-/// Scans the owning scroll container to reveal the element; it is an explicit viewport command,
+/// Scans the owning scroll container to reveal the element; it is an explicit scroll command,
 /// not setup for ordinary semantic actions.
 public struct ScrollToVisibleTarget: Sendable, Equatable {
     /// Element to scroll into view. Must be a known element with scroll membership.
@@ -127,7 +127,7 @@ public struct ScrollToVisibleTarget: Sendable, Equatable {
 
 extension ScrollToVisibleTarget: CustomStringConvertible {
     public var description: String {
-        ScoreDescription.call("scrollToVisible", [
+        CanonicalValueDescription.call("scrollToVisible", [
             target.description,
         ].compactMap { $0 })
     }
@@ -201,9 +201,9 @@ public struct ScrollToEdgeTarget: Sendable, Equatable {
 
 extension ScrollToEdgeTarget: CustomStringConvertible {
     public var description: String {
-        ScoreDescription.call("scrollToEdge", [
+        CanonicalValueDescription.call("scrollToEdge", [
             selectionDescription,
-            ScoreDescription.valueField("edge", edge),
+            CanonicalValueDescription.valueField("edge", edge),
         ].compactMap { $0 })
     }
 }

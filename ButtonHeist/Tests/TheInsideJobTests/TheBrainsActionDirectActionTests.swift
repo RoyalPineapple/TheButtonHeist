@@ -10,29 +10,29 @@ import XCTest
 @MainActor
 extension TheBrainsActionTests {
 
-    func testPostActionObservationCaptureReturnsEmptySnapshotWhenRegistryEmpty() {
-        let before = brains.postActionObservation.captureSemanticState()
+    func testActionEvidenceProjectorCaptureReturnsEmptySnapshotWhenRegistryEmpty() {
+        let before = brains.actionEvidenceProjector.projectBaseline()
         XCTAssertTrue(before.elements.isEmpty,
                       "Elements should be empty when no hierarchy set")
     }
 
-    func testPostActionObservationCaptureIncludesRegisteredElements() {
+    func testActionEvidenceProjectorCaptureIncludesRegisteredElements() {
         let element = makeElement(label: "Title", traits: .header)
         let heistId: HeistId = "header_title"
         installScreen(elements: [(element, heistId)])
 
-        let before = brains.postActionObservation.captureSemanticState()
+        let before = brains.actionEvidenceProjector.projectBaseline()
         XCTAssertEqual(before.observation.tree.orderedElements.count, 1)
         XCTAssertEqual(before.observation.tree.orderedElements.first?.heistId, heistId)
         XCTAssertEqual(before.elements.count, 1)
     }
 
-    func testInteractionObservationBeforeStateDoesNotReuseInvalidatedSettledObservation() async {
+    func testInteractionCoordinatorBeforeStateDoesNotReuseInvalidatedSettledObservation() async {
         installScreen(elements: [(makeElement(label: "Title", traits: .header), "header_title")])
         brains.vault.invalidateSettledObservationFromTripwire()
 
         let current = await withNoTraversableWindows {
-            await brains.interactionObservation.prepareBeforeState(timeout: 0.001)
+            await brains.interactionCoordinator.admittedBaseline(timeout: 0.001)
         }
 
         XCTAssertNil(
@@ -451,16 +451,16 @@ extension TheBrainsActionTests {
             ("activate", .activate(target)),
             ("custom action", .customAction(name: "Archive", target: target)),
             ("rotor", .rotor(selection: .named("Links"), target: target, direction: .next)),
-            ("tap", .mechanicalTap(TapTarget(selection: .element(target)))),
-            ("swipe", .mechanicalSwipe(SwipeTarget(selection: .elementDirection(target, .left)))),
+            ("tap", .oneFingerTap(TapTarget(selection: .element(target)))),
+            ("swipe", .swipe(SwipeTarget(selection: .elementDirection(target, .left)))),
             ("type text", .typeText(text: "hello", target: target)),
         ]
 
         for (label, authoredCommand) in commands {
             let command = try authoredCommand.resolve(in: .empty)
-            brains.clearCache()
+            brains.vault.resetInterfaceForLifecycle()
             let single = await brains.executeRuntimeAction(command)
-            brains.clearCache()
+            brains.vault.resetInterfaceForLifecycle()
             let heist = try await heistStepResult(
                 for: .action(ActionStep(command: authoredCommand)),
                 label: command.runtimeType.rawValue
@@ -473,13 +473,13 @@ extension TheBrainsActionTests {
         }
 
         let authoredWait = WaitStep(predicate: .exists(target), timeout: 0.01)
-        brains.clearCache()
+        brains.vault.resetInterfaceForLifecycle()
         let singleWait = await brains.performWait(step: try resolvedWait(authoredWait))
-        brains.clearCache()
+        brains.vault.resetInterfaceForLifecycle()
         let heistWait = try await heistStepResult(for: .wait(authoredWait), label: "wait")
         XCTAssertEqual(heistWait.outcome.isSuccess, singleWait.outcome.isSuccess)
         XCTAssertEqual(heistWait.method, singleWait.method)
-        XCTAssertEqual(heistWait.outcome.errorKind, singleWait.outcome.errorKind)
+        XCTAssertEqual(heistWait.outcome.failureKind, singleWait.outcome.failureKind)
     }
 
     func testHeistPlanDispatchesEveryDurableActionCommandThroughRuntime() async throws {
@@ -492,10 +492,10 @@ extension TheBrainsActionTests {
             .customAction(name: "Archive", target: target),
             .rotor(selection: .named("Errors"), target: target, direction: .next),
             .typeText(text: "hello", target: target),
-            .mechanicalTap(TapTarget(selection: point)),
-            .mechanicalLongPress(LongPressTarget(selection: point)),
-            .mechanicalSwipe(SwipeTarget(selection: .pointDirection(start: ScreenPoint(x: 20, y: 20), direction: .left))),
-            .mechanicalDrag(DragTarget(start: .coordinate(ScreenPoint(x: 20, y: 20)), end: ScreenPoint(x: 80, y: 80))),
+            .oneFingerTap(TapTarget(selection: point)),
+            .longPress(LongPressTarget(selection: point)),
+            .swipe(SwipeTarget(selection: .pointDirection(start: ScreenPoint(x: 20, y: 20), direction: .left))),
+            .drag(DragTarget(start: .coordinate(ScreenPoint(x: 20, y: 20)), end: ScreenPoint(x: 80, y: 80))),
             .editAction(EditActionTarget(action: .paste)),
             .setPasteboard(SetPasteboardTarget(text: "clipboard")),
             .takeScreenshot,
@@ -505,7 +505,7 @@ extension TheBrainsActionTests {
         let runtime = heistRuntime(observations: []) { command in
             dispatchedTypes.append(command.runtimeType)
             return ActionResult.success(
-                method: command.testActionResultMethod,
+                payload: command.resultPayload,
                 message: command.runtimeType.rawValue,
             )
         }
@@ -518,11 +518,12 @@ extension TheBrainsActionTests {
             try $0.resolve(in: .empty).runtimeType
         }
         XCTAssertEqual(dispatchedTypes, expectedTypes)
-        guard case .heistExecution(let heist) = result.payload else {
+        guard case .heist(let payload) = result.payload,
+              let heistResult = payload else {
             return XCTFail("Expected heist execution payload")
         }
-        XCTAssertEqual(heist.steps.count, commands.count)
-        XCTAssertTrue(heist.steps.allSatisfy { $0.status == HeistExecutionStepStatus.passed })
+        XCTAssertEqual(heistResult.steps.count, commands.count)
+        XCTAssertTrue(heistResult.steps.allSatisfy { $0.status == HeistExecutionStepStatus.passed })
     }
 
     func testFailedActivateHeistActionKeepsActivationTraceInActionEvidence() async throws {
@@ -535,7 +536,7 @@ extension TheBrainsActionTests {
         let command = HeistActionCommand.activate(target)
         let runtime = heistRuntime(observations: []) { _ in
             ActionResult.activationFailure(
-                errorKind: .actionFailed,
+                failureKind: .actionFailed,
                 message: "text entry failed: observed focus=none keyboardVisible=false activeTextInput=false",
                 observation: .none,
                 activationTrace: activationTrace
@@ -546,19 +547,20 @@ extension TheBrainsActionTests {
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
 
         XCTAssertFalse(result.outcome.isSuccess)
-        guard case .heistExecution(let heist) = result.payload else {
+        guard case .heist(let payload) = result.payload,
+              let heistResult = payload else {
             return XCTFail("Expected failed heist execution payload")
         }
-        let step = try XCTUnwrap(heist.steps.first)
+        let step = try XCTUnwrap(heistResult.steps.first)
         XCTAssertEqual(step.actionEvidence?.dispatchResult?.activationTrace, activationTrace)
     }
 
     func testViewportDebugCommandsResolveForDirectRuntimeDispatch() throws {
         let target = AccessibilityTarget.identifier("target")
         let commands: [(HeistActionCommand, HeistActionCommandType)] = [
-            (.viewportScroll(ScrollTarget(direction: .down)), .scroll),
-            (.viewportScrollToVisible(target), .scrollToVisible),
-            (.viewportScrollToEdge(ScrollToEdgeTarget(edge: .bottom)), .scrollToEdge),
+            (.scroll(ScrollTarget(direction: .down)), .scroll),
+            (.scrollToVisible(target), .scrollToVisible),
+            (.scrollToEdge(ScrollToEdgeTarget(edge: .bottom)), .scrollToEdge),
         ]
 
         for (command, expectedType) in commands {
@@ -571,7 +573,7 @@ extension TheBrainsActionTests {
         let element = makeElement(label: "Item")
         installScreen(elements: [(element, "test_id")])
 
-        brains.clearCache()
+        brains.vault.resetInterfaceForLifecycle()
 
         XCTAssertEqual(brains.vault.interfaceTree, .empty)
     }
@@ -585,7 +587,7 @@ extension TheBrainsActionTests {
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .wait)
-        XCTAssertEqual(result.outcome.errorKind, .timeout)
+        XCTAssertEqual(result.outcome.failureKind, .timeout)
     }
 
     func testActionsExecuteIncrementFailsWhenSemanticTargetHasNoLiveGeometry() async throws {

@@ -27,7 +27,7 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
     ) -> InsideJobRuntimeConfiguration {
         let explicitToken = token.flatMap { try? SessionAuthToken(validating: $0) }
         let explicitInstanceId = instanceId.flatMap { try? InsideJobInstanceID(validating: $0) }
-        let resolvedToken = resolvedRuntimeToken(
+        let resolvedToken = resolveRuntimeToken(
             explicitToken: explicitToken,
             startupToken: startupConfiguration.token
         )
@@ -51,12 +51,12 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
             } ?? startupConfiguration.fingerprintsEnabled,
             failureEvidencePolicy: startupConfiguration.failureEvidencePolicy,
             authenticationPolicy: authenticationPolicy,
-            sessionIdentity: InsideJobSessionIdentity.make(instanceId: resolvedInstanceId)
+            sessionIdentity: InsideJobSessionIdentity.resolve(instanceId: resolvedInstanceId)
         )
     }
 
     static func resolve(startupConfiguration: StartupConfiguration) -> InsideJobRuntimeConfiguration {
-        let resolvedToken = resolvedRuntimeToken(
+        let resolvedToken = resolveRuntimeToken(
             explicitToken: nil,
             startupToken: startupConfiguration.token
         )
@@ -69,11 +69,11 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
             fingerprintsEnabled: startupConfiguration.fingerprintsEnabled,
             failureEvidencePolicy: startupConfiguration.failureEvidencePolicy,
             authenticationPolicy: .default,
-            sessionIdentity: InsideJobSessionIdentity.make(instanceId: startupConfiguration.instanceId)
+            sessionIdentity: InsideJobSessionIdentity.resolve(instanceId: startupConfiguration.instanceId)
         )
     }
 
-    private static func resolvedRuntimeToken(
+    private static func resolveRuntimeToken(
         explicitToken: SessionAuthToken?,
         startupToken: ResolvedStartupValue<SessionAuthToken?>
     ) -> ResolvedStartupValue<SessionAuthToken> {
@@ -83,7 +83,7 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
         if let startupTokenValue = startupToken.value {
             return ResolvedStartupValue(value: startupTokenValue, source: startupToken.source)
         }
-        return ResolvedStartupValue(value: GeneratedSessionToken.make(), source: .generated)
+        return ResolvedStartupValue(value: SessionTokenGenerator.generate(), source: .generated)
     }
 }
 
@@ -92,7 +92,7 @@ struct InsideJobSessionIdentity: Equatable, Sendable {
     let installationId: InstallationID
     let effectiveInstanceId: ResolvedStartupValue<InsideJobInstanceID>
 
-    static func make(
+    static func resolve(
         instanceId: ResolvedStartupValue<InsideJobInstanceID?>
     ) -> InsideJobSessionIdentity {
         guard let launchId = try? ServerLaunchID(validating: UUID().uuidString),
@@ -103,14 +103,14 @@ struct InsideJobSessionIdentity: Equatable, Sendable {
         }
         return InsideJobSessionIdentity(
             launchId: launchId,
-            installationId: loadInstallationId(),
+            installationId: loadOrCreateInstallationId(),
             effectiveInstanceId: instanceId.value.map {
                 ResolvedStartupValue(value: $0, source: instanceId.source)
             } ?? ResolvedStartupValue(value: generatedInstanceId, source: .generated)
         )
     }
 
-    private static func loadInstallationId() -> InstallationID {
+    private static func loadOrCreateInstallationId() -> InstallationID {
         let defaultsKey = "\(Bundle.main.insideJobIdentifier).installation-id"
 
         if let existing = UserDefaults.standard.string(forKey: defaultsKey),

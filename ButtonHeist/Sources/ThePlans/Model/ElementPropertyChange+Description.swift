@@ -1,44 +1,44 @@
 extension TraitSetMatch: CustomStringConvertible {
     public var description: String {
-        ScoreDescription.call("traitSet", [
-            ScoreDescription.listField("include", include.isEmpty ? nil : include.canonicalHeistTraitArray),
-            ScoreDescription.listField("exclude", exclude.isEmpty ? nil : exclude.canonicalHeistTraitArray),
+        CanonicalValueDescription.call("traitSet", [
+            CanonicalValueDescription.listField("include", include.isEmpty ? nil : include.canonicalHeistTraitArray),
+            CanonicalValueDescription.listField("exclude", exclude.isEmpty ? nil : exclude.canonicalHeistTraitArray),
         ].compactMap { $0 })
     }
 }
 
 extension ActionSetMatch: CustomStringConvertible {
     public var description: String {
-        ScoreDescription.call("actionSet", [
-            ScoreDescription.listField("include", include.isEmpty ? nil : include.canonicalElementActionArray),
-            ScoreDescription.listField("exclude", exclude.isEmpty ? nil : exclude.canonicalElementActionArray),
+        CanonicalValueDescription.call("actionSet", [
+            CanonicalValueDescription.listField("include", include.isEmpty ? nil : include.canonicalElementActionArray),
+            CanonicalValueDescription.listField("exclude", exclude.isEmpty ? nil : exclude.canonicalElementActionArray),
         ].compactMap { $0 })
     }
 }
 
 extension ElementFrameMatch: CustomStringConvertible {
     public var description: String {
-        ScoreDescription.call("frame", [
-            ScoreDescription.valueField("x", x), ScoreDescription.valueField("y", y),
-            ScoreDescription.valueField("width", width), ScoreDescription.valueField("height", height),
+        CanonicalValueDescription.call("frame", [
+            CanonicalValueDescription.valueField("x", x), CanonicalValueDescription.valueField("y", y),
+            CanonicalValueDescription.valueField("width", width), CanonicalValueDescription.valueField("height", height),
         ].compactMap { $0 })
     }
 }
 
 extension ElementPointMatch: CustomStringConvertible {
     public var description: String {
-        ScoreDescription.call("point", [
-            ScoreDescription.valueField("x", x), ScoreDescription.valueField("y", y),
+        CanonicalValueDescription.call("point", [
+            CanonicalValueDescription.valueField("x", x), CanonicalValueDescription.valueField("y", y),
         ].compactMap { $0 })
     }
 }
 
 extension CustomContentMatchCore: CustomStringConvertible {
     package var description: String {
-        ScoreDescription.call("customContent", [
+        CanonicalValueDescription.call("customContent", [
             label.map { "label=\($0)" },
             value.map { "value=\($0)" },
-            ScoreDescription.valueField("isImportant", isImportant),
+            CanonicalValueDescription.valueField("isImportant", isImportant),
         ].compactMap { $0 })
     }
 }
@@ -49,7 +49,7 @@ extension CustomContentMatch: CustomStringConvertible {
 
 extension RotorSetMatchCore: CustomStringConvertible {
     package var description: String {
-        ScoreDescription.call("rotorSet", [
+        CanonicalValueDescription.call("rotorSet", [
             include.isEmpty ? nil : "include=[\(include.map(\.description).joined(separator: ", "))]",
             exclude.isEmpty ? nil : "exclude=[\(exclude.map(\.description).joined(separator: ", "))]",
         ].compactMap { $0 })
@@ -85,7 +85,7 @@ extension ElementPropertyChangeCore: CustomStringConvertible {
 
 private extension PropertyChangeCore {
     func description(property: ElementProperty) -> String {
-        ScoreDescription.call("change", [
+        CanonicalValueDescription.call("change", [
             "property=.\(property.rawValue)",
             before.map { "before=\($0)" },
             after.map { "after=\($0)" },

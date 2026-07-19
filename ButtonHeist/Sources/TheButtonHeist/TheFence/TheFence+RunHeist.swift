@@ -3,55 +3,6 @@ import Foundation
 import ThePlans
 import TheScore
 
-struct HeistRunProjection {
-    enum Effect: Sendable, Equatable {
-        case recordReceipt(result: HeistExecutionResult, plan: HeistPlan)
-    }
-
-    let projectedResult: HeistExecutionResult
-    let response: FenceResponse
-    let effects: [Effect]
-
-    init(
-        plan: HeistPlan,
-        remoteResult: HeistExecutionResult,
-        totalMs: Int
-    ) {
-        let result = Self.project(remoteResult: remoteResult, totalMs: totalMs)
-        projectedResult = result
-        response = .heistExecution(
-            plan: plan,
-            result: result,
-            accessibilityTrace: Self.heistAccessibilityTrace(result: result)
-        )
-        effects = [.recordReceipt(result: result, plan: plan)]
-    }
-
-    private static func project(
-        remoteResult: HeistExecutionResult,
-        totalMs: Int
-    ) -> HeistExecutionResult {
-        HeistExecutionResult(steps: remoteResult.steps, durationMs: totalMs)
-    }
-
-    private static func heistAccessibilityTrace(
-        result: HeistExecutionResult
-    ) -> AccessibilityTrace? {
-        // Don't emit a net trace if an action step ran without producing a
-        // trace — a partial action trace would be misleading. Wait steps then
-        // contribute their settled-state trace when available; `combinedTrace`
-        // returns nil unless at least two distinct captures survive.
-        let actionResults = result.dispatchedActionResults
-        guard !actionResults.isEmpty,
-              actionResults.allSatisfy({ $0.traceEvidence?.isComplete == true })
-        else { return nil }
-        let traceResults = result.traceResultsInExecutionOrder
-        guard traceResults.allSatisfy({ $0.traceEvidence?.isComplete == true }) else { return nil }
-        let traces = traceResults.compactMap(\.accessibilityTrace)
-        return AccessibilityTrace.combinedTrace(from: traces)
-    }
-}
-
 extension TheFence {
 
     // MARK: - Heist Execution and Session State
@@ -84,25 +35,23 @@ extension TheFence {
         argument: HeistArgument = .none,
         timeout: TimeInterval
     ) async throws -> FenceResponse {
-        let heistStart = CFAbsoluteTimeGetCurrent()
-        let executionResult = try await sendAndAwaitHeistExecution(plan, argument: argument, timeout: timeout)
-        let totalMs = Int((CFAbsoluteTimeGetCurrent() - heistStart) * 1000)
-
-        let projection = HeistRunProjection(
-            plan: plan,
-            remoteResult: executionResult,
-            totalMs: totalMs
+        let result = try await sendAndAwaitHeistExecution(
+            plan,
+            argument: argument,
+            timeout: timeout
         )
-        interpret(projection.effects)
-        return projection.response
+        HeistResultRecorder.recordIfEnabled(result, plan: plan)
+        return .heistExecution(
+            plan: plan,
+            report: HeistReport.project(result: result)
+        )
     }
 
     // MARK: - Single-Step Execution
 
-    /// Build the one-step `HeistPlan` for a request already classified as a
-    /// durable heist dispatch.
-    func singleStepHeistPlan(for request: SingleStepHeistRequest) throws -> HeistPlan {
-        switch request {
+    /// Project an admitted single-step execution onto the canonical plan runtime.
+    func singleStepHeistPlan(for execution: SingleStepHeistExecution) throws -> HeistPlan {
+        switch execution {
         case .wait(let step):
             return try HeistPlan(body: [.wait(step)])
         case .action(let action, let expectationPayload, _):
@@ -122,15 +71,15 @@ extension TheFence {
         }
     }
 
-    func executeSingleStepHeist(_ request: SingleStepHeistRequest) async throws -> FenceResponse {
+    func executeSingleStepHeist(_ execution: SingleStepHeistExecution) async throws -> FenceResponse {
         try await runHeistPlan(
-            singleStepHeistPlan(for: request),
-            timeout: singleStepTimeout(for: request)
+            singleStepHeistPlan(for: execution),
+            timeout: singleStepTimeout(for: execution)
         )
     }
 
-    private func singleStepTimeout(for request: SingleStepHeistRequest) -> TimeInterval {
-        switch request {
+    private func singleStepTimeout(for execution: SingleStepHeistExecution) -> TimeInterval {
+        switch execution {
         case .wait(let wait):
             return wait.timeout.seconds + config.postActionExpectationTimeoutBuffer
         case .action(_, let expectationPayload, let actionBudget):
@@ -183,24 +132,11 @@ extension TheFence {
             return .editAction
         case .setPasteboard:
             return .setPasteboard
-        case .resignFirstResponder:
+        case .dismissKeyboard:
             return .dismissKeyboard
         case .activate, .increment, .decrement, .performCustomAction, .dismiss, .magicTap, .takeScreenshot,
              .scroll, .scrollToVisible, .scrollToEdge:
             return .activate
-        }
-    }
-
-    private func interpret(_ effects: [HeistRunProjection.Effect]) {
-        for effect in effects {
-            interpret(effect)
-        }
-    }
-
-    private func interpret(_ effect: HeistRunProjection.Effect) {
-        switch effect {
-        case .recordReceipt(let result, let plan):
-            HeistReceiptRecorder.recordIfEnabled(result, plan: plan)
         }
     }
 

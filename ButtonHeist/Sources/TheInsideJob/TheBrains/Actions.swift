@@ -24,10 +24,10 @@ final class Actions {
 
     func staleLiveTargetFailure(
         _ staleness: TheVault.LiveTargetStaleness<HeistId>,
-        method: ActionMethod
-    ) -> TheSafecracker.ActionDispatchOutcome {
+        payload: ActionResult.Payload
+    ) -> TheSafecracker.ActionDispatchResult {
         .failure(
-            method,
+            payload,
             message: staleness.message,
             failureKind: .targetUnavailable
         )

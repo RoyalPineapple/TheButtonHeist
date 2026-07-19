@@ -29,10 +29,10 @@ import TheScore
 
 }
 
-/// Fully admitted operation ready to enter TheFence's execution pipeline.
-@_spi(ButtonHeistTooling) public struct FenceOperationRequest: Sendable {
+/// Fully admitted command ready to enter TheFence's execution pipeline.
+@_spi(ButtonHeistTooling) public struct AdmittedFenceCommand: Sendable {
     @_spi(ButtonHeistTooling) public let command: TheFence.Command
-    let dispatch: TheFence.DecodedRequestDispatch
+    let execution: TheFence.CommandExecution
 }
 
 @_spi(ButtonHeistTooling) public extension TheFence.Command {
@@ -52,13 +52,6 @@ import TheScore
         routeToolCall(named: name).map { command in
             FenceCommandInput(command: command, arguments: arguments)
         }
-    }
-
-    static func routeCommandEnvelope(
-        _ arguments: TheFence.CommandArgumentEnvelope,
-        context: String
-    ) -> Result<FenceCommandInput, FenceOperationRoutingError> {
-        routeCanonicalStep(arguments, context: context, isExecutable: nil)
     }
 
     static func routeCLICommandEnvelope(

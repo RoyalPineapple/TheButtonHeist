@@ -63,7 +63,7 @@ final class SocketClientRegistryTests: XCTestCase {
         XCTAssertEqual(registry.count, 0)
     }
 
-    func testRegistryOwnsSendReservationProof() throws {
+    func testRegistryOwnsSendReservationAdmission() throws {
         var registry = SocketClientRegistry()
         let connection = makeConnection()
         let clientId = try registeredClient(in: &registry, connection: connection)
@@ -88,7 +88,7 @@ final class SocketClientRegistryTests: XCTestCase {
         XCTAssertEqual(maxBytes, SocketSendBuffer.defaultMaxPendingBytes)
     }
 
-    func testRegistryAccumulatesConcurrentReservationProofs() throws {
+    func testRegistryAccumulatesConcurrentReservationAdmissions() throws {
         var registry = SocketClientRegistry()
         let clientId = try registeredClient(in: &registry)
 

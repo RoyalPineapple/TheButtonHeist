@@ -43,7 +43,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             elements: [(visible, HeistId(rawValue: "button_visible"))],
             offViewport: [.init(offViewport, heistId: HeistId(rawValue: "button_below_fold"))]
         ))
-        let state = brains.postActionObservation.captureSemanticState()
+        let state = brains.actionEvidenceProjector.projectBaseline()
 
         XCTAssertEqual(
             Set(state.observation.tree.orderedElements.map(\.heistId)),
@@ -69,7 +69,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
         let event = brains.vault.semanticObservationStream.commitVisibleObservationForTesting(observation)
 
-        let evidence = brains.postActionObservation.semanticObservation(from: event)
+        let evidence = brains.actionEvidenceProjector.projectSettledEvidence(from: event)
 
         XCTAssertEqual(
             Set(evidence.baseline.observation.tree.orderedElements.map(\.heistId)),
@@ -84,9 +84,9 @@ final class TheBrainsPipelineTests: XCTestCase {
     func testBeforeStateDerivesNeededSemanticProjectionsFromCanonicalInputs() {
         let screen = makeScreen(elements: [("Save", .button, "save")])
         brains.vault.installObservationForTesting(screen)
-        let captured = brains.postActionObservation.captureSemanticState()
+        let captured = brains.actionEvidenceProjector.projectBaseline()
 
-        let state = PostActionObservation.ObservationBaseline(
+        let state = ActionEvidenceProjector.Baseline(
             observation: captured.observation,
             capture: captured.capture,
             tripwireSignal: captured.tripwireSignal,
@@ -106,7 +106,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             from: viewportObservation.tree
         ).interface
         let semanticInterface = TheVault.WireConversion.toSemanticInterface(from: viewportObservation.tree)
-        let traceCapture = brains.postActionObservation.makeTraceCapture(
+        let traceCapture = brains.actionEvidenceProjector.makeTraceCapture(
             interface: semanticInterface,
             sequence: 1,
             observation: viewportObservation,
@@ -126,7 +126,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             previous: nil,
             trace: trace
         )
-        let observation = brains.postActionObservation.semanticObservation(from: event)
+        let observation = brains.actionEvidenceProjector.projectSettledEvidence(from: event)
 
         XCTAssertNotEqual(discoveryInterface.tree, semanticInterface.tree)
         XCTAssertEqual(observation.baseline.interface.tree, semanticInterface.tree)
@@ -152,7 +152,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         brains.vault.installObservationForTesting(.makeForTests(
             elements: [(beforeElement, HeistId(rawValue: "chicken_tikka_button"))]
         ))
-        let baseline = brains.postActionObservation.captureSemanticState()
+        let baseline = brains.actionEvidenceProjector.projectBaseline()
 
         let afterElement = AccessibilityElement.make(
             label: "Chicken Tikka",
@@ -164,7 +164,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         brains.vault.installObservationForTesting(.makeForTests(
             elements: [(afterElement, HeistId(rawValue: "chicken_tikka_button"))]
         ))
-        let current = brains.postActionObservation.captureSemanticState()
+        let current = brains.actionEvidenceProjector.projectBaseline()
         let classification = ScreenClassifier.classify(
             before: baseline.screenSnapshot,
             after: current.screenSnapshot,
@@ -172,7 +172,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
 
         XCTAssertFalse(
-            PostActionObservation.shouldRecordAccessibilityTrace(
+            ActionEvidenceProjector.shouldRecordAccessibilityTrace(
                 baseline: baseline,
                 current: current,
                 classification: classification
@@ -191,7 +191,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         brains.vault.installObservationForTesting(.makeForTests(
             elements: [(beforeElement, HeistId(rawValue: "total_staticText"))]
         ))
-        let baseline = brains.postActionObservation.captureSemanticState()
+        let baseline = brains.actionEvidenceProjector.projectBaseline()
 
         let afterElement = AccessibilityElement.make(
             label: "Total",
@@ -202,7 +202,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         brains.vault.installObservationForTesting(.makeForTests(
             elements: [(afterElement, HeistId(rawValue: "total_staticText"))]
         ))
-        let current = brains.postActionObservation.captureSemanticState()
+        let current = brains.actionEvidenceProjector.projectBaseline()
         let classification = ScreenClassifier.classify(
             before: baseline.screenSnapshot,
             after: current.screenSnapshot,
@@ -210,7 +210,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
 
         XCTAssertTrue(
-            PostActionObservation.shouldRecordAccessibilityTrace(
+            ActionEvidenceProjector.shouldRecordAccessibilityTrace(
                 baseline: baseline,
                 current: current,
                 classification: classification
@@ -484,26 +484,26 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     func successOutcome(
-        method: ActionMethod = .activate,
+        payload: ActionResult.Payload = .activate,
         subjectEvidence: ActionSubjectEvidence? = nil,
         activationTrace: ActivationTrace? = nil
-    ) -> TheSafecracker.ActionDispatchOutcome {
+    ) -> TheSafecracker.ActionDispatchResult {
         .success(
-            method: method,
+            payload: payload,
             subjectEvidence: subjectEvidence,
             activationTrace: activationTrace
         )
     }
 
     func failureOutcome(
-        method: ActionMethod = .activate,
+        payload: ActionResult.Payload = .activate,
         message: String = "action failed",
         subjectEvidence: ActionSubjectEvidence? = nil,
         failureKind: TheSafecracker.FailureKind = .actionFailed,
         activationTrace: ActivationTrace? = nil
-    ) -> TheSafecracker.ActionDispatchOutcome {
+    ) -> TheSafecracker.ActionDispatchResult {
         .failure(
-            method,
+            payload,
             message: message,
             subjectEvidence: subjectEvidence,
             activationTrace: activationTrace,
@@ -548,25 +548,25 @@ final class TheBrainsPipelineTests: XCTestCase {
         ])
     }
 
-    func temporalWaitReceipt(
+    func temporalWaitResult(
         predicate: AccessibilityPredicate,
         baseline: InterfaceObservation,
         final: InterfaceObservation
-    ) async throws -> HeistWaitReceipt {
+    ) async throws -> HeistWaitResult {
         let stream = brains.vault.semanticObservationStream
         let baselineEvent = stream.commitVisibleObservationForTesting(baseline)
         brains.vault.installObservationForTesting(final)
         let baselineCapture = try XCTUnwrap(baselineEvent.settledCapture)
-        return await brains.interactionObservation.waitForPredicate(
+        return await brains.interactionCoordinator.waitForPredicate(
             try resolvedWait(WaitStep(predicate: predicate, timeout: .milliseconds(1))),
             changeBaseline: .supplied(baselineCapture)
         )
     }
 
     func elementChanges(
-        in receipt: HeistWaitReceipt
+        in result: HeistWaitResult
     ) -> [AccessibilityTrace.ElementsChangeFact] {
-        receipt.result.actionResult.accessibilityTrace?.changeFacts.compactMap { fact in
+        result.outcome.actionResult.accessibilityTrace?.changeFacts.compactMap { fact in
             guard case .elementsChanged(let changes) = fact else { return nil }
             return changes
         } ?? []
@@ -617,12 +617,12 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
     }
 
-    func settledOutcome(
+    func settledResult(
         finalScreen: InterfaceObservation?,
         outcome: SettleOutcome = .settled(timeMs: 0)
     ) -> SettleSession.Result {
         if let finalScreen {
-            brains.vault.recordParsedObservedEvidence(finalScreen)
+            brains.vault.observeInterface(finalScreen)
         }
         let elements = finalScreen?.liveCapture.hierarchy.sortedElements ?? []
         let elementsByKey = Dictionary(uniqueKeysWithValues: elements.map { ($0.timelineKey, $0) })

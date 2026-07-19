@@ -209,14 +209,14 @@ struct HandoffConnectionAttempt {
     let device: DiscoveredDevice
 }
 
-struct HandoffReconnectRunContext: Equatable, Sendable {
+struct HandoffReconnectAttempt: Equatable, Sendable {
     let id: UUID
     let target: HandoffReconnectTarget
 }
 
 enum HandoffConnectionPhase {
     case disconnected
-    case reconnecting(HandoffReconnectRunContext)
+    case reconnecting(HandoffReconnectAttempt)
     case connecting(HandoffConnectionAttempt)
     case connected(HandoffConnectedSession)
     case failed(HandoffConnectionError)

@@ -7,7 +7,7 @@ import TheScore
 
 @MainActor
 extension SemanticObservationStream {
-    internal func visibleEvidence(timeout: Double?) async -> CleanSettledObservation? {
+    internal func admittedVisibleObservation(timeout: Double?) async -> SemanticObservationStore.AdmittedObservation? {
         let subscription = subscribe(scope: .visible)
         defer { _ = subscription }
 
@@ -17,14 +17,14 @@ extension SemanticObservationStream {
             timeoutMs: timeoutMs
         )
         while deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) {
-            if let observation = cleanObservation(scope: .visible, after: nil) {
+            if let observation = admittedObservation(scope: .visible, after: nil) {
                 return observation
             }
             let settlement = await refreshVisibleObservation(
                 timeoutMs: max(1, Int((deadline.remainingSeconds() * 1_000).rounded(.up)))
             )
-            if case .committed(let event) = settlement.result,
-               let observation = cleanObservation(scope: .visible, after: nil),
+            if case .committed(let event) = settlement.commitOutcome,
+               let observation = admittedObservation(scope: .visible, after: nil),
                observation.event.cursor == event.cursor {
                 return observation
             }
@@ -32,23 +32,23 @@ extension SemanticObservationStream {
         return nil
     }
 
-    internal func cleanObservation(
+    internal func admittedObservation(
         scope: SemanticObservationScope,
         after sequence: SettledObservationSequence?
-    ) -> CleanSettledObservation? {
+    ) -> SemanticObservationStore.AdmittedObservation? {
         invalidateSettledObservationIfScreenChangedSinceCommit()
         observationStore.invalidateIfSignalChanged(to: currentTripwireSignal())
-        return observationStore.cleanObservation(scope: scope, after: sequence)
+        return observationStore.admittedObservation(scope: scope, after: sequence)
     }
 
     @discardableResult
     internal func commitSettledVisibleObservation(
-        _ proof: InterfaceObservationProof,
+        _ committableObservation: CommittableInterfaceObservation,
         notificationBatch: AccessibilityNotificationBatch? = nil,
         notificationIdentityObservation: InterfaceObservation? = nil
     ) -> SettledObservationEvent {
         publishCommittedObservation(
-            proof,
+            committableObservation,
             scope: .visible,
             notificationBatch: notificationBatch,
             notificationIdentityObservation: notificationIdentityObservation
@@ -57,11 +57,11 @@ extension SemanticObservationStream {
 
     @discardableResult
     internal func commitSettledDiscoveryObservation(
-        _ proof: InterfaceObservationProof,
+        _ committableObservation: CommittableInterfaceObservation,
         notificationBatch: AccessibilityNotificationBatch? = nil
     ) -> SettledObservationEvent {
         publishCommittedObservation(
-            proof,
+            committableObservation,
             scope: .discovery,
             notificationBatch: notificationBatch
         )
@@ -69,7 +69,7 @@ extension SemanticObservationStream {
 
     @discardableResult
     internal func commitSettledDiscoveryObservation(
-        _ outcome: SettleSession.Result,
+        _ settleResult: SettleSession.Result,
         discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy,
         afterViewportMovement: Bool,
         notificationBatch: AccessibilityNotificationBatch? = nil
@@ -77,21 +77,21 @@ extension SemanticObservationStream {
         guard let vault else {
             preconditionFailure("SemanticObservationStream cannot admit after TheVault is released")
         }
-        guard let proof = admitSettledProof(
-            outcome,
+        guard let committableObservation = admitSettledObservation(
+            settleResult,
             vault: vault,
             discoveryCommitPolicy: discoveryCommitPolicy,
             lineageEvidence: afterViewportMovement ? .viewportMovement : nil
         ) else { return nil }
         return commitSettledDiscoveryObservation(
-            proof,
+            committableObservation,
             notificationBatch: notificationBatch
         )
     }
 
     @discardableResult
     private func publishCommittedObservation(
-        _ proof: InterfaceObservationProof,
+        _ committableObservation: CommittableInterfaceObservation,
         scope: SemanticObservationScope,
         notificationBatch: AccessibilityNotificationBatch? = nil,
         notificationIdentityObservation: InterfaceObservation? = nil
@@ -103,10 +103,10 @@ extension SemanticObservationStream {
             ?? vault.accessibilityNotifications.checkpoint(
                 after: observationStore.notificationCursor
             )
-        let commit: SemanticObservationStore.Commit
+        let committed: SemanticObservationStore.CommittedObservation
         do {
-            commit = try observationStore.commitObservation(
-                proof,
+            committed = try observationStore.commitObservation(
+                committableObservation,
                 scope: scope,
                 notificationBatch: resolvedNotificationBatch
             ) { committedObservation in
@@ -123,21 +123,24 @@ extension SemanticObservationStream {
         } catch {
             preconditionFailure("Committed interface observation failed validation: \(error)")
         }
-        vault.recordCommittedObservation(commit.observation, sourceObservation: proof.observation)
-        for fallbackReason in commit.fallbackReasons {
+        vault.recordCommittedObservation(
+            committed.interfaceObservation,
+            sourceObservation: committableObservation.observation
+        )
+        for fallbackReason in committed.fallbackReasons {
             AccessibilityObservationFallbackLog.record(
                 fallbackReason,
                 source: .settledObservation
             )
         }
         completeObservationWaiters()
-        return commit.sourceEvent
+        return committed.event
     }
 
-    internal func settlePostActionObservation(
+    internal func settleActionObservation(
         baselineTripwireSignal: TheTripwire.TripwireSignal,
         commitScope: SemanticObservationScope = .visible,
-        settleOutcome providedOutcome: SettleSession.Result? = nil,
+        settleResult providedResult: SettleSession.Result? = nil,
         notificationWindow: AccessibilityNotificationScopeLease? = nil
     ) async -> ObservationSettlement {
         if let session = visibleRefreshSession {
@@ -147,7 +150,7 @@ extension SemanticObservationStream {
             baselineTripwireSignal: baselineTripwireSignal,
             timeoutMs: SettleSession.defaultTimeoutMs,
             commitScope: commitScope,
-            providedOutcome: providedOutcome,
+            providedResult: providedResult,
             notificationWindow: notificationWindow,
             invalidatingCurrentObservation: true
         )
@@ -161,7 +164,7 @@ extension SemanticObservationStream {
             baselineTripwireSignal: currentTripwireSignal(),
             timeoutMs: timeoutMs,
             commitScope: .visible,
-            providedOutcome: nil,
+            providedResult: nil,
             notificationWindow: nil,
             invalidatingCurrentObservation: false
         )
@@ -171,7 +174,7 @@ extension SemanticObservationStream {
         baselineTripwireSignal: TheTripwire.TripwireSignal,
         timeoutMs: Int,
         commitScope: SemanticObservationScope,
-        providedOutcome: SettleSession.Result?,
+        providedResult: SettleSession.Result?,
         notificationWindow: AccessibilityNotificationScopeLease?,
         invalidatingCurrentObservation: Bool
     ) async -> ObservationSettlement {
@@ -185,7 +188,7 @@ extension SemanticObservationStream {
                 baselineTripwireSignal: baselineTripwireSignal,
                 timeoutMs: timeoutMs,
                 commitScope: commitScope,
-                providedOutcome: providedOutcome,
+                providedResult: providedResult,
                 notificationWindow: notificationWindow
             ))
         }
@@ -208,28 +211,28 @@ extension SemanticObservationStream {
         baselineTripwireSignal: TheTripwire.TripwireSignal,
         timeoutMs: Int,
         commitScope: SemanticObservationScope,
-        providedOutcome: SettleSession.Result?,
+        providedResult: SettleSession.Result?,
         notificationWindow: AccessibilityNotificationScopeLease?
     ) async -> ObservationSettlement {
         guard let vault else {
             let notificationBatch = notificationWindow?.capture()
             notificationWindow?.cancel()
             return ObservationSettlement(
-                settle: SettleSession.Result(
+                settleResult: SettleSession.Result(
                     outcome: .cancelled(timeMs: 0),
                     events: [],
                     finalObservation: nil,
                     elementsByKey: [:],
                     tripwireSignal: baselineTripwireSignal
                 ),
-                result: .unavailable(notificationBatch: notificationBatch)
+                commitOutcome: .unavailable(notificationBatch: notificationBatch)
             )
         }
-        let outcome: SettleSession.Result
-        if let providedOutcome {
-            outcome = providedOutcome
+        let settleResult: SettleSession.Result
+        if let providedResult {
+            settleResult = providedResult
         } else {
-            outcome = await settleVisibleObservation(
+            settleResult = await settleVisibleObservation(
                 vault,
                 tripwire,
                 activeObservationDemandState,
@@ -241,13 +244,13 @@ extension SemanticObservationStream {
         let terminalActionNotificationBatch = notificationWindow?.capture()
         notificationWindow?.cancel()
 
-        if Task.isCancelled, providedOutcome == nil {
+        if Task.isCancelled, providedResult == nil {
             return ObservationSettlement(
-                settle: outcome,
-                result: .unavailable(notificationBatch: terminalActionNotificationBatch)
+                settleResult: settleResult,
+                commitOutcome: .unavailable(notificationBatch: terminalActionNotificationBatch)
             )
         }
-        if let proof = admitSettledProof(outcome, vault: vault) {
+        if let committableObservation = admitSettledObservation(settleResult, vault: vault) {
             let notificationBatch = terminalActionNotificationBatch
                 ?? vault.accessibilityNotifications.checkpoint(
                     after: observationStore.notificationCursor
@@ -256,22 +259,22 @@ extension SemanticObservationStream {
             switch commitScope {
             case .visible:
                 event = commitSettledVisibleObservation(
-                    proof,
+                    committableObservation,
                     notificationBatch: notificationBatch,
-                    notificationIdentityObservation: proof.observation
+                    notificationIdentityObservation: committableObservation.observation
                 )
             case .discovery:
                 event = commitSettledDiscoveryObservation(
-                    proof,
+                    committableObservation,
                     notificationBatch: notificationBatch
                 )
             }
-            return ObservationSettlement(settle: outcome, result: .committed(event))
+            return ObservationSettlement(settleResult: settleResult, commitOutcome: .committed(event))
         }
         return ObservationSettlement(
-            settle: outcome,
-            result: postActionFailureResult(
-                outcome,
+            settleResult: settleResult,
+            commitOutcome: postActionFailureResult(
+                settleResult,
                 notificationBatch: terminalActionNotificationBatch
             )
         )
@@ -303,44 +306,44 @@ extension SemanticObservationStream {
     func invalidateSettledObservationIfScreenChangedSinceCommit() {
         guard let vault,
               !latestSettledObservationInvalidated,
-              latestEvent != nil,
+              latestCommittedEvent != nil,
               vault.accessibilityNotifications.latestScopedScreenChangedSequence
               > observationStore.scopedScreenChangedSequence
         else { return }
         observationStore.invalidateCurrentObservation()
     }
 
-    func admitSettledProof(
-        _ outcome: SettleSession.Result,
+    func admitSettledObservation(
+        _ settleResult: SettleSession.Result,
         vault: TheVault,
         layerGateWasClear: Bool? = nil,
         discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy = .mergeIntoInterface,
         lineageEvidence: ScreenLineageEvidence? = nil
-    ) -> InterfaceObservationProof? {
-        guard outcome.tripwireSignal == currentTripwireSignal(),
-              outcome.finalObservation?.observation.captureToken == vault.latestObservation.captureToken,
-              let proof = InterfaceObservationProof.settled(
-                  outcome,
+    ) -> CommittableInterfaceObservation? {
+        guard settleResult.tripwireSignal == currentTripwireSignal(),
+              settleResult.finalObservation?.observation.captureID == vault.latestObservation.captureID,
+              let committableObservation = CommittableInterfaceObservation.admit(
+                  settleResult,
                   discoveryCommitPolicy: discoveryCommitPolicy,
                   lineageEvidence: lineageEvidence
               ) else {
             recordFailedSettle(
-                SettleFailureDiagnostic.message(for: outcome, layerGateWasClear: layerGateWasClear),
-                observation: outcome.finalObservation?.observation,
+                SettleFailureDiagnostic.message(for: settleResult, layerGateWasClear: layerGateWasClear),
+                observation: settleResult.finalObservation?.observation,
                 vault: vault
             )
             return nil
         }
-        return proof
+        return committableObservation
     }
 
     private func postActionFailureResult(
-        _ outcome: SettleSession.Result,
+        _ settleResult: SettleSession.Result,
         notificationBatch: AccessibilityNotificationBatch?
-    ) -> ObservationSettlement.Result {
-        guard !outcome.outcome.didSettleCleanly,
-              case .timedOut = outcome.outcome,
-              let observation = outcome.finalObservation?.observation else {
+    ) -> ObservationSettlement.CommitOutcome {
+        guard !settleResult.outcome.didSettleCleanly,
+              case .timedOut = settleResult.outcome,
+              let observation = settleResult.finalObservation?.observation else {
             return .unavailable(notificationBatch: notificationBatch)
         }
         return .observedUnsettled(observation, notificationBatch: notificationBatch)

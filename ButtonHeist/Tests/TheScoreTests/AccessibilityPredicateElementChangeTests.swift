@@ -103,7 +103,7 @@ extension AccessibilityPredicateTests {
         )).met)
 
         let explicitlyIncomplete = ActionResult.success(
-            method: .syntheticTap,
+            payload: .oneFingerTap,
                 observation: .settledTrace(
                     traceEvidence(factFreeTrace, completeness: .incomplete),
                     .settled(duration: 0)
@@ -132,7 +132,7 @@ extension AccessibilityPredicateTests {
         XCTAssertEqual(trace.changeFacts.map(\.kind), [.elementsChanged, .elementsChanged])
 
         let action = ActionResult.success(
-            method: .activate,
+            payload: .activate,
                 observation: .trace(traceEvidence(trace, completeness: .incomplete))
 
         )
@@ -205,7 +205,7 @@ extension AccessibilityPredicateTests {
         XCTAssertTrue(try predicate.resolve(in: .empty).validate(against: action).met)
     }
 
-    func testElementUpdatedPassReportsObservedPropertyProof() throws {
+    func testElementUpdatedPassReportsObservedPropertyEvidence() throws {
         let trace = try makeUpdateTrace(label: "Quantity", property: .value, old: "2", new: "3")
         let action = result(success: true, trace: trace, completeness: .incomplete)
         let predicate = AccessibilityPredicate.changed(.elements([
@@ -528,7 +528,7 @@ extension AccessibilityPredicateTests {
 
     func testElementUpdatedAllFieldsMatch() throws {
         let result = ActionResult.success(
-            method: .activate,
+            payload: .activate,
                 observation: .trace(traceEvidence(
                     .elementsChangedForTests(
                         elementCount: 5,
@@ -548,7 +548,7 @@ extension AccessibilityPredicateTests {
 
     func testElementUpdatedPropertyOnly() throws {
         let result = ActionResult.success(
-            method: .activate,
+            payload: .activate,
                 observation: .trace(traceEvidence(
                     .elementsChangedForTests(
                         elementCount: 5,
@@ -568,7 +568,7 @@ extension AccessibilityPredicateTests {
 
     func testElementUpdatedNoUpdatesInResult() throws {
         let result = ActionResult.success(
-            method: .activate,
+            payload: .activate,
                 observation: .trace(traceEvidence(
                     .elementsChangedForTests(elementCount: 5, edits: ElementEdits()),
                     completeness: .incomplete
@@ -585,7 +585,7 @@ extension AccessibilityPredicateTests {
 
     func testElementUpdatedPropertyMismatch() throws {
         let result = ActionResult.success(
-            method: .activate,
+            payload: .activate,
                 observation: .trace(traceEvidence(
                     .elementsChangedForTests(
                         elementCount: 5,

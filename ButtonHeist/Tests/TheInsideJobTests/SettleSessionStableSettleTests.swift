@@ -152,7 +152,7 @@ extension SettleSessionTests {
         )
 
         if case .settled = outcome.outcome {
-            // Expected: a no-change parse is valid stability proof.
+            // Expected: a no-change parse is valid stability evidence.
         } else {
             XCTFail("Expected .settled for no-change parses, got \(outcome.outcome)")
         }

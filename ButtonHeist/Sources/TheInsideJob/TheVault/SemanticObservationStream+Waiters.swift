@@ -68,7 +68,7 @@ extension SemanticObservationStream {
         )
     }
 
-    internal func latestObservationCursor(
+    internal func latestCommittedObservationCursor(
         scope: SemanticObservationScope
     ) -> ObservationCursor? {
         observationStore.latestCursor(scope: scope)
@@ -96,13 +96,13 @@ extension SemanticObservationStream {
         if timeout == 0 {
             guard isActive else { return nil }
             if scope != .discovery {
-                return cleanObservation(scope: scope, after: requiredSequence)?.event
+                return admittedObservation(scope: scope, after: requiredSequence)?.event
             }
         }
         let requiresFreshDiscoveryCycle = timeout == 0 && scope == .discovery
 
         if !requiresFreshDiscoveryCycle,
-           let latest = cleanObservation(scope: scope, after: requiredSequence)?.event {
+           let latest = admittedObservation(scope: scope, after: requiredSequence)?.event {
             return latest
         }
 
@@ -122,11 +122,11 @@ extension SemanticObservationStream {
             ) {
             case .observation(let entry):
                 cursor = entry.cursor
-                if let latest = cleanObservation(scope: scope, after: requiredSequence)?.event {
+                if let latest = admittedObservation(scope: scope, after: requiredSequence)?.event {
                     return latest
                 }
             case .cycleCompleted:
-                return cleanObservation(scope: scope, after: requiredSequence)?.event
+                return admittedObservation(scope: scope, after: requiredSequence)?.event
             case .deadlineReached, .cancelled, .unavailable:
                 return nil
             }
@@ -177,7 +177,7 @@ extension SemanticObservationStream {
         if let sequence {
             return sequence
         }
-        let currentSequence = latestEvent?.sequence
+        let currentSequence = latestCommittedEvent?.sequence
         if scope == .discovery || !isActive {
             return currentSequence
         }

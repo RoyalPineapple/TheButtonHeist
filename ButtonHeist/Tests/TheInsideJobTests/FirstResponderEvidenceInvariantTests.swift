@@ -73,7 +73,7 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
             ],
             firstResponderHeistId: heistId
         )
-        brains.vault.recordParsedObservedEvidence(originalScreen)
+        brains.vault.observeInterface(originalScreen)
         XCTAssertEqual(brains.vault.firstResponderHeistId, heistId)
 
         let replacement = UITextField()
@@ -88,7 +88,7 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
             ],
             firstResponderHeistId: nil
         )
-        brains.vault.recordParsedObservedEvidence(replacementScreen)
+        brains.vault.observeInterface(replacementScreen)
         original = nil
 
         XCTAssertNil(releasedOriginal)
@@ -216,7 +216,7 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
         let expectedAuthoredTarget = AccessibilityTarget.label("Email")
         let expectedResolvedTarget = literalTarget(ElementPredicate.label("Email"))
 
-        let postAction = brains.postActionObservation.captureSemanticState(
+        let postAction = brains.actionEvidenceProjector.projectBaseline(
             from: screen,
             tripwireSignal: .empty,
             settledObservationSequence: nil

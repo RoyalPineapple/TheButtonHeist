@@ -1,18 +1,14 @@
 import Foundation
 
-extension ClientAdmission.Authentication {
-    struct Proof {
+extension ClientAdmission {
+    struct SessionAdmission: Sendable {
         let clientId: Int
-        let address: ClientNetworkAddress
         let owner: SessionOwner
-        let respond: ClientAdmission.ResponseHandler
-        let source: Source
+        let respond: ResponseHandler
     }
+}
 
-    enum Source {
-        case token
-    }
-
+extension ClientAdmission.Authentication {
     /// Per-client authentication lifecycle owned by `ClientAdmission.Reducer`.
     enum State: Equatable, Sendable {
         case connected(address: ClientNetworkAddress)
@@ -40,11 +36,11 @@ extension ClientAdmission.Authentication {
     }
 
     enum Event: Equatable, Sendable {
-        case validateHello
-        case completeAuthentication
+        case helloValidationRequested
+        case authenticationCompletionRequested
     }
 
-    enum Effect: Equatable, Sendable {
+    enum Outcome: Equatable, Sendable {
         case helloValidated
         case authenticated
     }
@@ -56,7 +52,7 @@ extension ClientAdmission.Authentication {
     }
 
     enum Transition: Equatable, Sendable {
-        case advanced(State, effect: Effect)
+        case advanced(State, outcome: Outcome)
         case rejected(Rejection, state: State)
         case missingClient
     }
@@ -64,20 +60,20 @@ extension ClientAdmission.Authentication {
     struct Reducer: Equatable {
         func reduce(_ state: State, event: Event) -> Transition {
             switch (state, event) {
-            case (.connected(let address), .validateHello):
-                return .advanced(.helloValidated(address: address), effect: .helloValidated)
+            case (.connected(let address), .helloValidationRequested):
+                return .advanced(.helloValidated(address: address), outcome: .helloValidated)
 
-            case (.helloValidated(let address), .completeAuthentication):
-                return .advanced(.authenticated(address: address), effect: .authenticated)
+            case (.helloValidated(let address), .authenticationCompletionRequested):
+                return .advanced(.authenticated(address: address), outcome: .authenticated)
 
-            case (.connected, .completeAuthentication):
+            case (.connected, .authenticationCompletionRequested):
                 return .rejected(.missingHello, state: state)
 
-            case (.helloValidated, .validateHello):
+            case (.helloValidated, .helloValidationRequested):
                 return .rejected(.helloAlreadyValidated, state: state)
 
-            case (.authenticated, .validateHello),
-                 (.authenticated, .completeAuthentication):
+            case (.authenticated, .helloValidationRequested),
+                 (.authenticated, .authenticationCompletionRequested):
                 return .rejected(.alreadyAuthenticated, state: state)
             }
         }

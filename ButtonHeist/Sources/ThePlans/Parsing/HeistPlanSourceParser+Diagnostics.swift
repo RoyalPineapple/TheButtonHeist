@@ -76,8 +76,8 @@ extension HeistPlanSourceParser {
     func error(
         _ token: HeistPlanSourceToken,
         _ message: String
-    ) -> HeistPlanSourceCompilerError {
-        HeistPlanSourceCompilerError(
+    ) -> HeistSourceCompilationError {
+        HeistSourceCompilationError(
             message: message,
             sourceName: sourceName,
             offset: token.marker.offset,

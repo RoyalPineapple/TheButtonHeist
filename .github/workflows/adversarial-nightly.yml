@@ -31,8 +31,8 @@ jobs:
       BUTTONHEIST_ADVERSARIAL_REPEAT_COUNT: ${{ github.event.inputs.passing_repeat_count || '5' }}
       BUTTONHEIST_ADVERSARIAL_FAILURE_REPEAT_COUNT: ${{ github.event.inputs.failure_repeat_count || '1' }}
       BUTTONHEIST_ADVERSARIAL_CEILING_POLICY: fail
-      BUTTONHEIST_RECEIPTS_DIR: ${{ github.workspace }}/ci-artifacts/buttonheist-receipts/adversarial-nightly
-      BUTTONHEIST_RECEIPTS_MODE: failures
+      BUTTONHEIST_RESULTS_DIR: ${{ github.workspace }}/ci-artifacts/buttonheist-results/adversarial-nightly
+      BUTTONHEIST_RESULTS_MODE: failures
 
     steps:
       - name: Checkout repository
@@ -74,9 +74,9 @@ jobs:
         timeout-minutes: 40
         run: |
           APP="$DERIVED_DATA_PATH/Build/Products/Debug-iphonesimulator/BHDemo.app"
-          scripts/run-with-heist-receipts.sh \
-            --dir "$BUTTONHEIST_RECEIPTS_DIR" \
-            --mode "$BUTTONHEIST_RECEIPTS_MODE" \
+          scripts/run-with-heist-results.sh \
+            --dir "$BUTTONHEIST_RESULTS_DIR" \
+            --mode "$BUTTONHEIST_RESULTS_MODE" \
             -- python3 scripts/e2e-adversarial-lab.py \
             --sim-udid "$SIM_UDID" \
             --app "$APP" \
@@ -91,9 +91,9 @@ jobs:
         timeout-minutes: 10
         run: |
           APP="$DERIVED_DATA_PATH/Build/Products/Debug-iphonesimulator/BHDemo.app"
-          scripts/run-with-heist-receipts.sh \
-            --dir "$BUTTONHEIST_RECEIPTS_DIR" \
-            --mode "$BUTTONHEIST_RECEIPTS_MODE" \
+          scripts/run-with-heist-results.sh \
+            --dir "$BUTTONHEIST_RESULTS_DIR" \
+            --mode "$BUTTONHEIST_RESULTS_MODE" \
             -- scripts/e2e-lifecycle-gate.py \
             --sim-udid "$SIM_UDID" \
             --app "$APP" \
@@ -130,20 +130,20 @@ jobs:
       - name: Collect nightly failure diagnostics
         if: failure()
         run: |
-          mkdir -p "$BUTTONHEIST_RECEIPTS_DIR/diagnostics"
+          mkdir -p "$BUTTONHEIST_RESULTS_DIR/diagnostics"
           for report in \
             "$RUNNER_TEMP/buttonheist-adversarial-nightly-report.json" \
             "$RUNNER_TEMP/buttonheist-lifecycle-nightly-report.json"; do
             if [[ -f "$report" ]]; then
-              cp "$report" "$BUTTONHEIST_RECEIPTS_DIR/diagnostics/$(basename "$report")"
+              cp "$report" "$BUTTONHEIST_RESULTS_DIR/diagnostics/$(basename "$report")"
             fi
           done
 
-      - name: Finalize heist receipts
+      - name: Finalize heist results
         if: failure()
-        uses: ./.github/actions/finalize-heist-receipts
+        uses: ./.github/actions/finalize-heist-results
         with:
-          receipt-directory: ${{ env.BUTTONHEIST_RECEIPTS_DIR }}
+          result-directory: ${{ env.BUTTONHEIST_RESULTS_DIR }}
           job-label: adversarial-nightly
-          artifact-name: buttonheist-receipts-adversarial-nightly-${{ github.run_attempt }}
+          artifact-name: buttonheist-results-adversarial-nightly-${{ github.run_attempt }}
           retention-days: 30

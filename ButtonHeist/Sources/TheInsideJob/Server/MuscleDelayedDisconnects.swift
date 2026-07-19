@@ -13,10 +13,6 @@ final class DelayedDisconnects: Sendable {
         self.gracePeriod = gracePeriod
     }
 
-    var taskCountForTesting: Int {
-        tasks.snapshot.taskCount
-    }
-
     func schedule(clientId: Int, disconnect: @escaping @Sendable () async -> Void) {
         let gracePeriod = gracePeriod
         tasks.spawn {

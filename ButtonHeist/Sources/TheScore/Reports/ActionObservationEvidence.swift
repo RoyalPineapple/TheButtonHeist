@@ -8,7 +8,7 @@ public struct ActionPerformanceTiming: Codable, Sendable, Equatable {
     public let actionDispatchMs: Int?
     public let interactionMs: Int?
     public let finalSemanticEvidenceMs: Int?
-    public let receiptGenerationMs: Int?
+    public let resultAssemblyMs: Int?
     public let totalMs: Int?
 
     public init(
@@ -17,7 +17,7 @@ public struct ActionPerformanceTiming: Codable, Sendable, Equatable {
         actionDispatchMs: Int? = nil,
         interactionMs: Int? = nil,
         finalSemanticEvidenceMs: Int? = nil,
-        receiptGenerationMs: Int? = nil,
+        resultAssemblyMs: Int? = nil,
         totalMs: Int? = nil
     ) {
         self.beforeObservationMs = beforeObservationMs
@@ -25,7 +25,7 @@ public struct ActionPerformanceTiming: Codable, Sendable, Equatable {
         self.actionDispatchMs = actionDispatchMs
         self.interactionMs = interactionMs
         self.finalSemanticEvidenceMs = finalSemanticEvidenceMs
-        self.receiptGenerationMs = receiptGenerationMs
+        self.resultAssemblyMs = resultAssemblyMs
         self.totalMs = totalMs
     }
 
@@ -37,7 +37,7 @@ public struct ActionPerformanceTiming: Codable, Sendable, Equatable {
             actionDispatchMs: other.actionDispatchMs ?? actionDispatchMs,
             interactionMs: other.interactionMs ?? interactionMs,
             finalSemanticEvidenceMs: other.finalSemanticEvidenceMs ?? finalSemanticEvidenceMs,
-            receiptGenerationMs: other.receiptGenerationMs ?? receiptGenerationMs,
+            resultAssemblyMs: other.resultAssemblyMs ?? resultAssemblyMs,
             totalMs: other.totalMs ?? totalMs
         )
     }
@@ -48,7 +48,7 @@ public struct ActionPerformanceTiming: Codable, Sendable, Equatable {
         case actionDispatchMs
         case interactionMs
         case finalSemanticEvidenceMs
-        case receiptGenerationMs
+        case resultAssemblyMs
         case totalMs
     }
 
@@ -61,7 +61,7 @@ public struct ActionPerformanceTiming: Codable, Sendable, Equatable {
             actionDispatchMs: try container.decodeIfPresent(Int.self, forKey: .actionDispatchMs),
             interactionMs: try container.decodeIfPresent(Int.self, forKey: .interactionMs),
             finalSemanticEvidenceMs: try container.decodeIfPresent(Int.self, forKey: .finalSemanticEvidenceMs),
-            receiptGenerationMs: try container.decodeIfPresent(Int.self, forKey: .receiptGenerationMs),
+            resultAssemblyMs: try container.decodeIfPresent(Int.self, forKey: .resultAssemblyMs),
             totalMs: try container.decodeIfPresent(Int.self, forKey: .totalMs)
         )
     }

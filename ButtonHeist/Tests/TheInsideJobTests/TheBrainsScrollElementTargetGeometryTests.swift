@@ -168,13 +168,13 @@ extension TheBrainsScrollTests {
             scrollableContainerViewsByPath: [path: .init(view: replacementScrollView)]
         ))
 
-        let proof = await brains.navigation.scrollOnePageAndSettle(
+        let transition = await brains.navigation.scrollOnePageAndSettle(
             staleTarget,
             direction: .down,
             animated: false
         )
 
-        XCTAssertEqual(proof.result, .moved)
+        XCTAssertEqual(transition.outcome, .moved)
         XCTAssertEqual(oldScrollView.contentOffset, .zero)
         XCTAssertGreaterThan(replacementScrollView.contentOffset.y, 0)
     }
@@ -208,9 +208,9 @@ extension TheBrainsScrollTests {
             scrollableContainerViewsByPath: [path: .init(view: replacementScrollView)]
         ))
 
-        let proof = await brains.navigation.scrollToEdgeAndSettle(staleTarget, edge: .bottom)
+        let transition = await brains.navigation.scrollToEdgeAndSettle(staleTarget, edge: .bottom)
 
-        XCTAssertEqual(proof.result, .moved)
+        XCTAssertEqual(transition.outcome, .moved)
         XCTAssertEqual(oldScrollView.contentOffset, .zero)
         XCTAssertEqual(replacementScrollView.contentOffset.y, 1_200)
     }

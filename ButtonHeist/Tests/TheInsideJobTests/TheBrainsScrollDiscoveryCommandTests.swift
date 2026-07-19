@@ -76,7 +76,7 @@ extension TheBrainsScrollTests {
             (currentHeader, "current_controls_header"),
             (currentBackButton, "current_back_button"),
         ])
-        brains.vault.recordParsedObservedEvidence(currentScreen)
+        brains.vault.observeInterface(currentScreen)
         brains.vault.nextVisibleRefreshObservationForTesting = currentScreen
 
         let discovered = await brains.navigation.elementInflation.exploration.discoverTarget(
@@ -590,7 +590,7 @@ extension TheBrainsScrollTests {
             firstResponderHeistId: nil,
             scrollableContainerViewsByPath: [TreePath([0]): .init(view: scrollView)]
         ))
-        let baselineSequence = brains.vault.semanticObservationStream.latestEvent?.sequence
+        let baselineSequence = brains.vault.semanticObservationStream.latestCommittedEvent?.sequence
 
         let result = await brains.navigation.executeScroll(
             try resolvedScrollTarget(ScrollTarget())
@@ -598,7 +598,7 @@ extension TheBrainsScrollTests {
 
         XCTAssertTrue(result.success, "Expected default scroll to pick the only visible container: \(String(describing: result.message))")
         XCTAssertGreaterThan(scrollView.contentOffset.y, 0)
-        let committedMovement = try XCTUnwrap(brains.vault.semanticObservationStream.latestEvent)
+        let committedMovement = try XCTUnwrap(brains.vault.semanticObservationStream.latestCommittedEvent)
         XCTAssertEqual(committedMovement.scope, .discovery)
         XCTAssertNotEqual(committedMovement.sequence, baselineSequence)
     }

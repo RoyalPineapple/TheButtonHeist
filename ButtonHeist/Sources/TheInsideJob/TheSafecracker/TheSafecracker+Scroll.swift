@@ -6,7 +6,7 @@ import ThePlans
 
 extension TheSafecracker {
 
-    enum ScrollPrimitiveResult: Equatable, Sendable {
+    enum ScrollPrimitiveOutcome: Equatable, Sendable {
         case moved
         case alreadyInPosition
         case unavailable
@@ -21,7 +21,7 @@ extension TheSafecracker {
         _ scrollView: UIScrollView,
         direction: UIAccessibilityScrollDirection,
         animated: Bool = true
-    ) -> ScrollPrimitiveResult {
+    ) -> ScrollPrimitiveOutcome {
         guard !scrollView.bhIsUnsafeForProgrammaticScrolling else { return .unavailable }
 
         let overlap = CGFloat(ScrollContainerMetrics.pageOverlap)
@@ -63,7 +63,7 @@ extension TheSafecracker {
         animated: Bool = true,
         preferredScreenRect: CGRect,
         minimumScreenRect: CGRect
-    ) -> ScrollPrimitiveResult {
+    ) -> ScrollPrimitiveOutcome {
         guard !scrollView.bhIsUnsafeForProgrammaticScrolling else { return .unavailable }
 
         let pointInContent = scrollView.convert(screenPoint, from: nil)
@@ -118,7 +118,7 @@ extension TheSafecracker {
     func revealContentPoint(
         _ contentPoint: ScrollContentPoint,
         in scrollView: UIScrollView
-    ) -> ScrollPrimitiveResult {
+    ) -> ScrollPrimitiveOutcome {
         guard !scrollView.bhIsUnsafeForProgrammaticScrolling else { return .unavailable }
 
         let point = contentPoint.cgPoint
@@ -164,7 +164,7 @@ extension TheSafecracker {
         _ scrollView: UIScrollView,
         edge: ScrollEdge,
         animated: Bool = true
-    ) -> ScrollPrimitiveResult {
+    ) -> ScrollPrimitiveOutcome {
         guard !scrollView.bhIsUnsafeForProgrammaticScrolling else { return .unavailable }
 
         let insets = scrollView.adjustedContentInset
@@ -192,7 +192,7 @@ extension TheSafecracker {
     func restoreVisualOrigin(
         _ visualOrigin: CGPoint,
         in scrollView: UIScrollView
-    ) -> ScrollPrimitiveResult {
+    ) -> ScrollPrimitiveOutcome {
         let insets = scrollView.adjustedContentInset
         let currentOrigin = CGPoint(
             x: scrollView.contentOffset.x + insets.left,

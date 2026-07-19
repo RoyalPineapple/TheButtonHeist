@@ -1,0 +1,358 @@
+import Testing
+@testable import ThePlans
+
+@Test func `inline plan source accepts controlled predicate and loop sugar`() throws {
+    let plan = try HeistSourceCompilation.compile(root(#"""
+    Activate(.label("Search"))
+        .expect(.exists(.label("Results")))
+    Activate(.label("Open Details"))
+        .expect(.changed(.screen([.exists(.label("Details"))])))
+    If(.exists(.value(.contains("Promo")))) {
+        Warn("promo visible")
+    }
+    ForEach("Milk", "Eggs") { item in
+        TypeText(item, into: .label("Search"))
+    }
+    ForEach(.label("Delete"), limit: 2) { target in
+        Activate(target).expect(.missing(target))
+    }
+    """#))
+
+    let expected = try HeistPlan(body: [
+        .action(ActionStep(
+            command: .activate(.predicate(.label("Search"))),
+            expectationPolicy: .expect(ActionExpectation(predicate: .exists(.label("Results")), timeout: 1)))),
+        .action(ActionStep(
+            command: .activate(.predicate(.label("Open Details"))),
+            expectationPolicy: .expect(ActionExpectation(
+                predicate: .changed(.screen([.exists(.label("Details"))])),
+                timeout: 1
+            )))),
+        .conditional(try ConditionalStep(cases: [
+            PredicateCase(
+                predicate: .exists(.value(.contains("Promo"))),
+                body: [.warn(WarnStep(message: "promo visible"))]
+            ),
+        ])),
+        .forEachString(try ForEachStringStep(
+            values: ["Milk", "Eggs"],
+            parameter: "item",
+            body: [
+                .action(ActionStep(command: .typeText(
+                    reference: "item",
+                    target: .label("Search")
+                ))),
+            ]
+        )),
+        .forEachElement(try ForEachElementStep(
+            matching: .label("Delete"),
+            limit: 2,
+            parameter: "target",
+            body: [
+                .action(ActionStep(
+                    command: .activate(.ref("target")),
+                    expectationPolicy: .expect(ActionExpectation(predicate: .missing(.ref("target")), timeout: 1)))),
+            ]
+        )),
+    ])
+
+    #expect(plan == expected)
+    try assertCanonicalRoundTrip(plan)
+}
+
+@Test func `inline plan source unicode string escapes preserve following characters`() throws {
+    let plan = try HeistSourceCompilation.compile(root(#"""
+    Warn("A\u0062C")
+    """#))
+    let expected = try HeistPlan(body: [
+        .warn(WarnStep(message: "AbC")),
+    ])
+
+    #expect(plan == expected)
+}
+
+@Test func `runtime authored product DSL compiles through canonical parser`() throws {
+    let source = """
+    HeistPlan("checkout") {
+        HeistDef<String>("Cart.addItem", parameter: "item") { item in
+            Activate(.label(item))
+        }
+
+        Activate(.label("Pay")).expect(.changed(.screen()))
+
+        WaitFor(.exists(.label("Receipt")), timeout: 5).else {
+            Fail("Receipt did not appear")
+        }
+
+        Warn("Receipt appeared")
+
+        ForEach("Milk", "Bread") { item in
+            RunHeist("Cart.addItem", item)
+        }
+    }
+    """
+
+    let plan = try HeistSourceCompilation.compile(source)
+
+    #expect(plan.name == "checkout")
+    #expect(plan.definitions.first?.name == "Cart")
+    #expect(plan.definitions.first?.definitions.first?.name == "addItem")
+    #expect(plan.body == [
+        .action(ActionStep(
+            command: .activate(.predicate(.label("Pay"))),
+            expectationPolicy: .expect(ActionExpectation(predicate: .changed(.screen()), timeout: 1)))),
+        .wait(WaitStep(
+            predicate: .exists(.label("Receipt")),
+            timeout: 5,
+            elseBody: [.fail(FailStep(message: "Receipt did not appear"))]
+        )),
+        .warn(WarnStep(message: "Receipt appeared")),
+        .forEachString(try ForEachStringStep(
+            values: ["Milk", "Bread"],
+            parameter: "item",
+            body: [
+                .invoke(HeistInvocationStep(
+                    path: "Cart.addItem",
+                    argument: .string(reference: "item")
+                )),
+            ]
+        )),
+    ])
+
+    try assertCanonicalRoundTrip(plan)
+}
+
+@Test func `runtime parser accepts the complete durable ButtonHeist DSL surface`() throws {
+    let source = """
+    HeistPlan("RuntimeSurface", targetParameter: "rootTarget") { rootTarget in
+        HeistDef<String>("Cart.addItem", parameter: "item") { item in
+            Activate(.label(item))
+                .expect(.exists(.label("Added")))
+        }
+
+        HeistDef<AccessibilityTarget>("Messages.archive", parameter: "message") { message in
+            CustomAction("Archive", on: message)
+        }
+
+        Activate(rootTarget)
+        Activate(.label("Pay"))
+            .expect(.changed(.screen()))
+
+        WaitFor(.exists(.label("Receipt")), timeout: 5).else {
+            Fail("Receipt did not appear")
+        }
+
+        Warn("Receipt appeared")
+
+        If {
+            Case(.exists(.label("Cart"))) {
+                Warn("Cart ready")
+            }
+            Else {
+                Warn("Cart missing")
+            }
+        }
+
+        If(.exists(.label("Pay"))) {
+            Warn("Pay visible")
+        }.else {
+            Warn("Pay missing")
+        }
+
+        ForEach("Milk", "Bread") { item in
+            RunHeist("Cart.addItem", item)
+        }
+
+        ForEach(.element(.label("Message"), .traits([.button])), limit: 2) { message in
+            RunHeist("Messages.archive", message)
+        }
+    }
+    """
+
+    let plan = try HeistSourceCompilation.compile(source)
+
+    #expect(plan.name == "RuntimeSurface")
+    #expect(plan.parameter == .accessibilityTarget(name: "rootTarget"))
+    #expect(plan.body.map(\.testKind) == [
+        .action,
+        .action,
+        .wait,
+        .warn,
+        .conditional,
+        .conditional,
+        .forEachString,
+        .forEachElement,
+    ])
+
+    let cart = try #require(plan.definitions.first { $0.name == "Cart" })
+    let addItem = try #require(cart.definitions.first { $0.name == "addItem" })
+    #expect(addItem.parameter == .string(name: "item"))
+    #expect(addItem.body.map(\.testKind) == [.action])
+
+    let messages = try #require(plan.definitions.first { $0.name == "Messages" })
+    let archive = try #require(messages.definitions.first { $0.name == "archive" })
+    #expect(archive.parameter == .accessibilityTarget(name: "message"))
+    #expect(archive.body.map(\.testKind) == [.action])
+
+    try assertCanonicalRoundTrip(plan)
+}
+
+@Test func `inline plan source ForEach string compiles`() throws {
+    let plan = try HeistSourceCompilation.compile(root("""
+    ForEach("a", "b") { item in
+        Activate(.label(item)).expect(.exists(.label(item)))
+    }
+    """))
+    let expected = try HeistPlan(body: [
+        .forEachString(try ForEachStringStep(
+            values: ["a", "b"],
+            parameter: "item",
+            body: [
+                .action(ActionStep(
+                    command: .activate(.predicate(
+                        .label(HeistReferenceName(stringLiteral: "item"))
+                    )),
+                    expectationPolicy: .expect(ActionExpectation(
+                        predicate: .exists(.label(HeistReferenceName(stringLiteral: "item"))),
+                        timeout: 1
+                    )))),
+            ]
+        )),
+    ])
+
+    #expect(plan == expected)
+}
+
+@Test func `inline plan source RepeatUntil compiles`() throws {
+    let plan = try HeistSourceCompilation.compile(root("""
+    RepeatUntil(.exists(.value("3")), timeout: 2) {
+        Increment(.identifier("Quantity"))
+    }.else {
+        Fail("quantity did not reach 3")
+    }
+    """))
+    let expected = try HeistPlan(body: [
+        .repeatUntil(try RepeatUntilStep(
+            predicate: .exists(.value("3")),
+            timeout: 2,
+            body: [
+                .action(ActionStep(command: .increment(.predicate(.identifier("Quantity"))))),
+            ],
+            elseBody: [
+                .fail(FailStep(message: "quantity did not reach 3")),
+            ]
+        )),
+    ])
+
+    #expect(plan == expected)
+    try assertCanonicalRoundTrip(plan)
+}
+
+@Test func `inline plan source action until compiles to repeat until`() throws {
+    let plan = try HeistSourceCompilation.compile(root("""
+    Increment(.label("Volume")).until(.exists(.element(.label("Volume"), .value("100"))))
+    """))
+    let expected = try HeistPlan(body: [
+        .repeatUntil(try RepeatUntilStep(
+            predicate: .exists(.element(.label("Volume"), .value("100"))),
+            timeout: defaultWaitTimeout,
+            body: [
+                .action(ActionStep(command: .increment(.predicate(.label("Volume"))))),
+            ]
+        )),
+    ])
+
+    #expect(plan == expected)
+    try assertCanonicalRoundTrip(plan)
+}
+
+@Test func `inline plan source WaitFor and If compile`() throws {
+    let plan = try HeistSourceCompilation.compile(root("""
+    WaitFor(.exists(.label("Home")), timeout: 1)
+    If {
+        Case(.exists(.label("Pay"))) {
+            Warn("ready")
+        }
+    }
+    """))
+    let expected = try HeistPlan(body: [
+        .wait(WaitStep(predicate: .exists(.label("Home")), timeout: 1)),
+        .conditional(try ConditionalStep(cases: [
+            PredicateCase(predicate: .exists(.label("Pay")), body: [.warn(WarnStep(message: "ready"))]),
+        ])),
+    ])
+
+    #expect(plan == expected)
+}
+
+@Test func `inline plan source ForEach element predicate compiles`() throws {
+    let plan = try HeistSourceCompilation.compile(root("""
+    ForEach(.label("Row"), limit: 2) { target in
+        Activate(target).expect(.missing(target))
+    }
+    """))
+    let expected = try HeistPlan(body: [
+        .forEachElement(try ForEachElementStep(
+            matching: .label("Row"),
+            limit: 2,
+            parameter: "target",
+            body: [
+                .action(ActionStep(
+                    command: .activate(.ref("target")),
+                    expectationPolicy: .expect(ActionExpectation(predicate: .missing(.ref("target")), timeout: 1)))),
+            ]
+        )),
+    ])
+
+    #expect(plan == expected)
+}
+
+@Test func `inline plan source rejects old ForEach compatibility spellings`() {
+    let arrayDiagnostic = compileError(root("""
+    ForEach(["a"]) { item in
+        TypeText(item)
+    }
+    """))
+    expect(arrayDiagnostic, contains: #"ForEach string loops use `ForEach("a", "b")`, not array literals"#)
+
+    let matchingDiagnostic = compileError(root("""
+    ForEach(.matching(.label("Row")), limit: 2) { target in
+        Activate(target)
+    }
+    """))
+    expect(
+        matchingDiagnostic,
+        contains: #"ForEach element loops use direct predicates like `ForEach(.label("x"))`, "# +
+            #"not `.matching(...)`"#
+    )
+}
+
+private enum ParsedHeistStepKind: Equatable {
+    case action
+    case wait
+    case conditional
+    case forEachElement
+    case forEachString
+    case repeatUntil
+    case warn
+    case fail
+    case heist
+    case invoke
+}
+
+private extension HeistStep {
+    var testKind: ParsedHeistStepKind {
+        switch self {
+        case .action: return .action
+        case .wait: return .wait
+        case .conditional: return .conditional
+        case .forEachElement: return .forEachElement
+        case .forEachString: return .forEachString
+        case .repeatUntil: return .repeatUntil
+        case .warn: return .warn
+        case .fail: return .fail
+        case .heist: return .heist
+        case .invoke: return .invoke
+        }
+    }
+}

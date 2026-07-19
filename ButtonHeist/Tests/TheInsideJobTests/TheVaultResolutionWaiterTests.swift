@@ -11,7 +11,7 @@ extension TheVaultResolutionTests {
     func testSettledSemanticObservationWaiterCompletesOnLaterObservation() async {
         let first = InterfaceObservation.makeForTests(elements: [(element(label: "First"), "first")])
         bagman.semanticObservationStream.commitVisibleObservationForTesting(first)
-        let firstSequence = bagman.semanticObservationStream.latestObservation?.sequence
+        let firstSequence = bagman.semanticObservationStream.latestCommittedObservation?.sequence
 
         let waiter = Task {
             await bagman.semanticObservationStream.settledEvent(scope: .visible, after: firstSequence, timeout: 1)
@@ -46,7 +46,7 @@ extension TheVaultResolutionTests {
         XCTAssertEqual(observation?.settledObservation.observation.tree.orderedElements.first?.element.label, "Second")
     }
 
-    func testInvalidatedSettledObservationIsNotReturnedAsCleanTruth() async {
+    func testInvalidatedSettledObservationIsNotReturnedAsAdmittedTruth() async {
         let first = InterfaceObservation.makeForTests(elements: [(element(label: "First"), "first")])
         bagman.semanticObservationStream.commitVisibleObservationForTesting(first)
 
@@ -91,7 +91,7 @@ extension TheVaultResolutionTests {
     func testDiscoveryWaiterIgnoresVisibleObservation() async {
         let first = InterfaceObservation.makeForTests(elements: [(element(label: "First"), "first")])
         bagman.semanticObservationStream.commitVisibleObservationForTesting(first)
-        let firstSequence = bagman.semanticObservationStream.latestObservation?.sequence
+        let firstSequence = bagman.semanticObservationStream.latestCommittedObservation?.sequence
 
         let waiter = Task { @MainActor in
             await bagman.semanticObservationStream.settledEvent(
@@ -108,7 +108,7 @@ extension TheVaultResolutionTests {
 
         let visible = InterfaceObservation.makeForTests(elements: [(element(label: "Visible"), "visible")])
         bagman.semanticObservationStream.commitVisibleObservationForTesting(visible)
-        XCTAssertEqual(bagman.semanticObservationStream.latestObservation?.sequence, 2)
+        XCTAssertEqual(bagman.semanticObservationStream.latestCommittedObservation?.sequence, 2)
         XCTAssertEqual(bagman.semanticObservationStream.observationWaiterCount, 1)
 
         let discovery = InterfaceObservation.makeForTests(elements: [(element(label: "Discovery"), "discovery")])
@@ -127,7 +127,7 @@ extension TheVaultResolutionTests {
             (element(label: "First"), "first"),
         ])
         bagman.semanticObservationStream.commitVisibleObservationForTesting(first)
-        let firstSequence = bagman.semanticObservationStream.latestObservation?.sequence
+        let firstSequence = bagman.semanticObservationStream.latestCommittedObservation?.sequence
 
         let waiter = Task { @MainActor in
             await bagman.semanticObservationStream.settledEvent(
@@ -170,7 +170,7 @@ extension TheVaultResolutionTests {
             observation?.trace.captures.last?.interface.projectedElements.compactMap(\.label),
             ["Catalog", "Visible Discovery", "First", "Known Discovery"]
         )
-        XCTAssertEqual(bagman.semanticObservationStream.latestObservation?.scope, .discovery)
+        XCTAssertEqual(bagman.semanticObservationStream.latestCommittedObservation?.scope, .discovery)
         XCTAssertEqual(
             bagman.interfaceElementIDs,
             ["catalog", "first", "known_discovery", "visible_discovery"]
@@ -178,14 +178,14 @@ extension TheVaultResolutionTests {
         XCTAssertEqual(bagman.semanticObservationStream.observationWaiterCount, 0)
     }
 
-    func testCleanVisibleEventAfterDiscoveryCarriesCanonicalGraph() async {
+    func testCommittedVisibleEventAfterDiscoveryCarriesCanonicalGraph() async {
         let sharedHeader = element(label: "Catalog", traits: .header)
         let first = InterfaceObservation.makeForTests(elements: [
             (sharedHeader, "catalog"),
             (element(label: "First"), "first"),
         ])
         bagman.semanticObservationStream.commitVisibleObservationForTesting(first)
-        let firstSequence = bagman.semanticObservationStream.latestObservation?.sequence
+        let firstSequence = bagman.semanticObservationStream.latestCommittedObservation?.sequence
 
         let visibleDiscovery = element(label: "Visible Discovery")
         let knownDiscovery = element(label: "Known Discovery")
@@ -322,16 +322,16 @@ extension TheVaultResolutionTests {
         )
     }
 
-    func testTimeoutZeroTurnsObservationCycleBeforeReturningCleanLatest() async {
+    func testTimeoutZeroTurnsObservationCycleBeforeReturningAdmittedLatest() async {
         let first = InterfaceObservation.makeForTests(elements: [(element(label: "First"), "first")])
         bagman.semanticObservationStream.commitDiscoveryObservationForTesting(first)
-        let firstSequence = bagman.semanticObservationStream.latestObservation?.sequence
+        let firstSequence = bagman.semanticObservationStream.latestCommittedObservation?.sequence
 
         let second = InterfaceObservation.makeForTests(elements: [(element(label: "Second"), "second")])
         var discoveryCount = 0
         bagman.semanticObservationStream.start {
             discoveryCount += 1
-            self.bagman.recordParsedObservedEvidence(second)
+            self.bagman.observeInterface(second)
             let event = self.bagman.semanticObservationStream
                 .commitDiscoveryObservationForTesting(second)
             return Navigation.InterfaceExplorationResult(
@@ -356,7 +356,7 @@ extension TheVaultResolutionTests {
         var discoveryCount = 0
         bagman.semanticObservationStream.start {
             discoveryCount += 1
-            self.bagman.recordParsedObservedEvidence(discovery)
+            self.bagman.observeInterface(discovery)
             let event = self.bagman.semanticObservationStream
                 .commitDiscoveryObservationForTesting(discovery)
             return Navigation.InterfaceExplorationResult(
@@ -432,7 +432,7 @@ extension TheVaultResolutionTests {
             let observation = discoveryObservation
             discoveryObservation = nil
             return observation.map {
-                self.bagman.recordParsedObservedEvidence($0)
+                self.bagman.observeInterface($0)
                 let event = self.bagman.semanticObservationStream
                     .commitDiscoveryObservationForTesting($0)
                 return Navigation.InterfaceExplorationResult(

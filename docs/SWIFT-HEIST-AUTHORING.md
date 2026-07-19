@@ -106,9 +106,9 @@ try await runHeist("addToCart", argument: "Milk") { item in
 ```
 
 Outside `runHeist(...) { ... }` is Swift: tests may choose data, await the
-receipt, and assert on failures. Inside the closure is heist source that
+result, and assert on failures. Inside the closure is heist source that
 lowers to `HeistPlan`, validates through the normal plan contract, executes
-through the in-app heist runtime, and returns the normal receipt.
+through the in-app heist runtime, and returns the normal result.
 
 For app-hosted XCTest/KIF-style targets, `runHeistSync(...) { ... }` provides
 the same in-process execution without making
@@ -117,24 +117,24 @@ loop, and report failures with `XCTFail` at the call site. Use this path when
 your test host shares teardown machinery with KIF/RKT-style app tests; async
 XCTest teardown can race app cleanup in those targets.
 
-Passing runs can record receipts without relying on inherited environment
+Passing runs can record results without relying on inherited environment
 variables:
 
 ```swift
 func testCheckoutCompletes() {
-    runHeistSync("Checkout.pay", recordReceipt: .always, to: receiptsURL) {
+    runHeistSync("Checkout.pay", recordResult: .always, to: resultsURL) {
         Activate(.label("Pay"))
             .expect(.changed(.elements([.appeared(.label("Payment Complete"))])))
     }
 }
 ```
 
-If no URL is supplied, explicit sync-test receipts are written under the process
-temporary directory at `buttonheist-receipts/`.
+If no URL is supplied, explicit sync-test results are written under the process
+temporary directory at `buttonheist-results/`.
 
 See [Adoption examples](../examples/adoption-examples.md) for a copyable
-KIF-style replacement that records receipts with
-`runHeistSync(..., recordReceipt: .always, to:)`.
+KIF-style replacement that records results with
+`runHeistSync(..., recordResult: .always, to:)`.
 
 `RunHeist(...)` composes inside durable plans. `runHeist(...)` executes a heist
 now from Swift tests. `run_heist` crosses the CLI/MCP tool boundary.
@@ -230,15 +230,15 @@ Runtime admission and lint are separate:
 - Runtime admission rejects plans that cannot safely execute.
 - `.compositionQuality` lint flags composed plans that read like transcripts
   instead of compact semantic tests.
-- `.strictTest` lint treats missing expectations, mechanical commands,
+- `.strictTest` lint treats missing expectations, spatial gesture actions,
   viewport/debug/session action steps, and empty branches as
   test quality failures.
 
-Mechanical commands are explicit escape hatches. Use the namespace to make that
-intent visible:
+Spatial gesture actions are explicit escape hatches. Use the concrete verb to
+make that intent visible:
 
 ```swift
-Mechanical.Tap(x: 120, y: 400)
+oneFingerTap(ScreenPoint(x: 120, y: 400))
 ```
 
 Viewport/debug/session commands such as `scroll`, `scroll_to_edge`, and
@@ -437,7 +437,7 @@ The MCP tool still does not expose local Swift authoring inputs such as
 commands or raw wire IR as heist source.
 
 This runtime compiler accepts only ButtonHeist DSL constructs: semantic and
-durable mechanical actions, expectations and expectation waivers, `If`,
+durable spatial gesture actions, expectations and expectation waivers, `If`,
 `WaitFor`, `RepeatUntil`, `Case`, `Else`, `ForEach`, `RunHeist`, `Warn`,
 `Fail`, canonical `HeistDef` definitions, and the `HeistPlan { ... }` root
 wrapper emitted by canonical rendering. It rejects arbitrary Swift such as imports, variables,
@@ -522,4 +522,4 @@ Swift Heist does not preserve:
 The durable language intentionally excludes unbounded loops, sleeps, retries,
 catch/recover flow, and unknown JSON keys. Runtime admission rejects unsafe or
 unexecutable plans; lint reports quality issues such as missing expectations or
-mechanical commands in strict semantic tests.
+spatial gesture actions in strict semantic tests.

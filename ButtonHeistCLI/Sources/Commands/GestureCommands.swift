@@ -29,15 +29,15 @@ private func admittedUnitPoint(x: Double, y: Double, label: String) throws -> Un
 
 // MARK: - Tap
 
-struct TapSubcommand: ConnectedOneShotCLICommand {
+struct OneFingerTapCommand: ConnectedOneShotCLICommand {
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
-        abstract: "Explicit mechanical/spatial one-finger tap",
+        abstract: "Explicit spatial one-finger tap",
         discussion: """
-            Performs an explicit mechanical/spatial gesture. Element-targeted \
+            Performs an explicit spatial gesture. Element-targeted \
             gestures use the element inflation path: resolve, reveal, acquire fresh accessibility \
             geometry, then dispatch the gesture. Coordinate gestures are \
-            explicit viewport actions.
+            explicit screen-coordinate actions.
 
             Use one_finger_tap when the product intent is a spatial gesture \
             itself, for example a specific point on a canvas or map.
@@ -74,7 +74,7 @@ struct TapSubcommand: ConnectedOneShotCLICommand {
 
 // MARK: - Long Press
 
-struct LongPressSubcommand: ConnectedOneShotCLICommand {
+struct LongPressCommand: ConnectedOneShotCLICommand {
     static let configuration = CommandConfiguration(commandName: Self.cliCommandName, abstract: "Long press at a point or element")
 
     @OptionGroup var element: AccessibilityTargetOptions
@@ -113,7 +113,7 @@ struct LongPressSubcommand: ConnectedOneShotCLICommand {
 
 // MARK: - Swipe
 
-struct SwipeSubcommand: ConnectedOneShotCLICommand {
+struct SwipeCommand: ConnectedOneShotCLICommand {
     static let configuration = CommandConfiguration(commandName: Self.cliCommandName, abstract: "Swipe between two points or in a direction")
 
     @OptionGroup var element: AccessibilityTargetOptions
@@ -226,7 +226,7 @@ struct SwipeSubcommand: ConnectedOneShotCLICommand {
 
 // MARK: - Drag
 
-struct DragSubcommand: ConnectedOneShotCLICommand {
+struct DragCommand: ConnectedOneShotCLICommand {
     static let configuration = CommandConfiguration(commandName: Self.cliCommandName, abstract: "Drag from one point to another")
 
     @OptionGroup var element: AccessibilityTargetOptions

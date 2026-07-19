@@ -6,13 +6,13 @@ public enum HeistFailureDiagnostics {
 
     public static func screenshotSummary(
         _ screenshot: ScreenPayload,
-        receiptPath: String? = nil
+        resultPath: String? = nil
     ) -> String {
         var parts = [
             "failure screenshot: \(Int(screenshot.width))x\(Int(screenshot.height))",
         ]
-        if let receiptPath {
-            parts.append("receipt=\(receiptPath)")
+        if let resultPath {
+            parts.append("result=\(resultPath)")
         }
         if let interface = screenshot.interface {
             parts.append("interface=\(interface.projectedElements.count) elements")
@@ -23,10 +23,10 @@ public enum HeistFailureDiagnostics {
     }
 
     public static func unavailableScreenshotSummary(
-        receiptPath: String,
+        resultPath: String,
         message: String?
     ) -> String {
-        var parts = ["failure screenshot: unavailable", "receipt=\(receiptPath)"]
+        var parts = ["failure screenshot: unavailable", "result=\(resultPath)"]
         if let message, !message.isEmpty {
             parts.append("message=\(ElementDiagnosticSummary.RenderProfile.failureInterface().renderString(message))")
         }
@@ -80,7 +80,7 @@ public enum HeistFailureDiagnostics {
     }
 }
 
-public extension HeistExecutionResult {
+public extension HeistResult {
     package var failureScreenshotPayload: ScreenPayload? {
         failureScreenshotStep?.screenshotPayload
     }
@@ -97,10 +97,10 @@ public extension HeistExecutionResult {
     var failureScreenshotSummary: String? {
         guard let step = failureScreenshotStep else { return nil }
         if let screenshot = step.screenshotPayload {
-            return HeistFailureDiagnostics.screenshotSummary(screenshot, receiptPath: step.path.description)
+            return HeistFailureDiagnostics.screenshotSummary(screenshot, resultPath: step.path.description)
         }
         return HeistFailureDiagnostics.unavailableScreenshotSummary(
-            receiptPath: step.path.description,
+            resultPath: step.path.description,
             message: step.reportActionResult?.message
         )
     }

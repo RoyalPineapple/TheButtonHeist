@@ -33,11 +33,12 @@ extension TheHandoff {
     }
 
     func disconnect() {
-        tearDownConnection(cancelAutoReconnect: true)
+        _ = connectionLifecycle.disable()
+        tearDownConnection()
     }
 
     func disconnectForReplacement() {
-        tearDownConnection(cancelAutoReconnect: true, replacementReason: .localDisconnect)
+        tearDownConnection(replacementReason: .localDisconnect)
     }
 
     /// Tear down an in-flight connection attempt after its owner reaches a setup
@@ -66,7 +67,7 @@ extension TheHandoff {
         guard connectionLifecycle.isConnected else { return }
         handoffConnectionLogger.warning("Force-disconnecting stale connection")
         let reconnectDevice = connectionLifecycle.connectedDevice
-        tearDownConnection(cancelAutoReconnect: true, replacementReason: .localDisconnect)
+        tearDownConnection(replacementReason: .localDisconnect)
         if let reconnectDevice {
             scheduleAutoReconnectIfNeeded(disconnectedDevice: reconnectDevice)
         }
@@ -178,13 +179,8 @@ extension TheHandoff {
         }
     }
 
-    private func tearDownConnection(
-        cancelAutoReconnect: Bool,
-        replacementReason: DisconnectReason? = nil
-    ) {
-        if cancelAutoReconnect {
-            _ = connectionLifecycle.cancel(clearTarget: true)
-        }
+    private func tearDownConnection(replacementReason: DisconnectReason? = nil) {
+        _ = connectionLifecycle.cancelReconnectAttempt()
         execute(connectionLifecycle.disconnect(reason: replacementReason))
     }
 

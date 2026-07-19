@@ -465,8 +465,8 @@ extension SemanticContainerPredicateCore: Codable where Text: Codable & StringMa
 extension SemanticContainerPredicateCore: CustomStringConvertible {
     package var description: String {
         switch self {
-        case .label(let match): return ScoreDescription.call("semantic", ["label=\(match)"])
-        case .value(let match): return ScoreDescription.call("semantic", ["value=\(match)"])
+        case .label(let match): return CanonicalValueDescription.call("semantic", ["label=\(match)"])
+        case .value(let match): return CanonicalValueDescription.call("semantic", ["value=\(match)"])
         }
     }
 }
@@ -587,6 +587,6 @@ extension ContainerPredicateCore: Codable where Text: Codable & StringMatchLeaf 
 
 extension ContainerPredicateCore: CustomStringConvertible {
     package var description: String {
-        ScoreDescription.call("container", checks.map(\.description))
+        CanonicalValueDescription.call("container", checks.map(\.description))
     }
 }

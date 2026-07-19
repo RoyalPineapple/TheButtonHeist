@@ -14,7 +14,7 @@ extension WireTypeRoundTripTests {
             actionDispatchMs: 2,
             interactionMs: 12,
             finalSemanticEvidenceMs: 23,
-            receiptGenerationMs: 0,
+            resultAssemblyMs: 0,
             totalMs: 116
         )
 
@@ -71,13 +71,13 @@ extension WireTypeRoundTripTests {
             actionDispatchMs: 3,
             interactionMs: 4,
             finalSemanticEvidenceMs: 6,
-            receiptGenerationMs: 7,
+            resultAssemblyMs: 7,
             totalMs: 8
         )
         let overlay = ActionPerformanceTiming(
             targetResolutionMs: 20,
             interactionMs: 40,
-            receiptGenerationMs: 70,
+            resultAssemblyMs: 70,
             totalMs: 80
         )
 
@@ -88,7 +88,7 @@ extension WireTypeRoundTripTests {
             actionDispatchMs: 3,
             interactionMs: 40,
             finalSemanticEvidenceMs: 6,
-            receiptGenerationMs: 70,
+            resultAssemblyMs: 70,
             totalMs: 80
         ))
     }
@@ -100,11 +100,11 @@ extension WireTypeRoundTripTests {
             actionDispatchMs: 2,
             interactionMs: 12,
             finalSemanticEvidenceMs: 23,
-            receiptGenerationMs: 0,
+            resultAssemblyMs: 0,
             totalMs: 116
         )
         let result = ActionResult.success(
-            method: .activate,
+            payload: .activate,
             message: "activated",
             observation: .settledTrace(
                 makeTestTraceEvidence(
@@ -126,11 +126,11 @@ extension WireTypeRoundTripTests {
             actionDispatchMs: 3,
             interactionMs: 4,
             finalSemanticEvidenceMs: 6,
-            receiptGenerationMs: 7,
+            resultAssemblyMs: 7,
             totalMs: 8
         )
         let result = ActionResult.success(
-            method: .activate,
+            payload: .activate,
             observation: .settledTrace(
                 makeTestTraceEvidence(
                     .noChangeForTests(elementCount: 0),
@@ -152,7 +152,7 @@ extension WireTypeRoundTripTests {
             actionDispatchMs: 30,
             interactionMs: 4,
             finalSemanticEvidenceMs: 60,
-            receiptGenerationMs: 7,
+            resultAssemblyMs: 7,
             totalMs: 8
         ))
         XCTAssertEqual(result.withTiming(overlay).settleTimeMs, 5)

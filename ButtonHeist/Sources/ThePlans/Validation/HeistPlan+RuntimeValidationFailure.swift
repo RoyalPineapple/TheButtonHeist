@@ -39,7 +39,7 @@ package struct HeistPlanRuntimeSafetyError: Error, Sendable, Equatable, CustomSt
 
 extension HeistPlanRuntimeSafetyValidator {
     private static let durableHeistActionCorrection =
-        "Use a direct client command for viewport/debug/session actions, or replace " +
+        "Use a direct client command for debug/session actions, or replace " +
         "this with a canonical durable DSL action."
 
     mutating func fail(

@@ -53,11 +53,11 @@ extension HeistValue: CustomStringConvertible {
     public var description: String {
         switch self {
         case .string(let stringValue):
-            return ScoreDescription.quoted(stringValue)
+            return CanonicalValueDescription.quoted(stringValue)
         case .int(let intValue):
             return "\(intValue)"
         case .double(let doubleValue):
-            return ScoreDescription.decimal(doubleValue)
+            return CanonicalValueDescription.decimal(doubleValue)
         case .bool(let boolValue):
             return "\(boolValue)"
         case .array(let arrayValue):
@@ -65,7 +65,7 @@ extension HeistValue: CustomStringConvertible {
         case .object(let objectValue):
             let fields = objectValue
                 .sorted { $0.key < $1.key }
-                .map { "\(ScoreDescription.quoted($0.key))=\($0.value)" }
+                .map { "\(CanonicalValueDescription.quoted($0.key))=\($0.value)" }
             return "{\(fields.joined(separator: ", "))}"
         }
     }

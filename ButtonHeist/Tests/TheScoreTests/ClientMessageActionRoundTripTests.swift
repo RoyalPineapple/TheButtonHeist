@@ -29,7 +29,7 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
         }
 
         XCTAssertEqual(commands.count, 6)
-        let expectedTypes: [HeistActionCommandType] = [.activate, .rotor, .dismiss, .magicTap, .editAction, .resignFirstResponder]
+        let expectedTypes: [HeistActionCommandType] = [.activate, .rotor, .dismiss, .magicTap, .editAction, .dismissKeyboard]
         XCTAssertEqual(commands.map(\.wireType), expectedTypes)
     }
 
@@ -37,13 +37,13 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
         let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Canvas"))
         let point = GesturePointSelection.coordinate(ScreenPoint(x: 10, y: 20))
         let plan = try HeistPlan(body: [
-            .action(ActionStep(command: .mechanicalTap(TapTarget(selection: point)))),
-            .action(ActionStep(command: .mechanicalLongPress(LongPressTarget(
+            .action(ActionStep(command: .oneFingerTap(TapTarget(selection: point)))),
+            .action(ActionStep(command: .longPress(LongPressTarget(
                 selection: point,
                 duration: 1.0
             )))),
-            .action(ActionStep(command: .mechanicalSwipe(SwipeTarget(selection: .elementDirection(target, .left))))),
-            .action(ActionStep(command: .mechanicalDrag(DragTarget(
+            .action(ActionStep(command: .swipe(SwipeTarget(selection: .elementDirection(target, .left))))),
+            .action(ActionStep(command: .drag(DragTarget(
                 start: .element(target),
                 end: ScreenPoint(x: 30, y: 40)
             )))),
@@ -74,7 +74,7 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
     }
 
     func testRuntimeActionCarriesTransientViewportCommand() throws {
-        let message = ClientMessage.runtimeAction(.viewportScroll(ScrollTarget(direction: .down)))
+        let message = ClientMessage.runtimeAction(.scroll(ScrollTarget(direction: .down)))
         let data = try JSONEncoder().encode(message)
         let json = try XCTUnwrap(String(data: data, encoding: .utf8))
 
@@ -114,7 +114,7 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
             """,
             #"{"type":"oneFingerTap","payload":{"point":{"x":100,"y":200}}}"#,
             #"{"type":"editAction","payload":{"action":"paste"}}"#,
-            #"{"type":"resignFirstResponder"}"#,
+            #"{"type":"dismissKeyboard"}"#,
         ]
 
         for json in primitiveMessages {
@@ -126,22 +126,22 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
 
     func testActionResultEncodesCanonicalOutcomeObject() throws {
         let result = ActionResult.failure(
-            method: .activate,
-            errorKind: .elementNotFound,
+            payload: .activate,
+            failureKind: .elementNotFound,
             message: "Element not found",
         )
         let data = try JSONEncoder().encode(result)
         let encoded = try JSONDecoder().decode(EncodedActionResultProbe.self, from: data)
 
         XCTAssertEqual(encoded.outcome.kind, "failure")
-        XCTAssertEqual(encoded.outcome.errorKind, .elementNotFound)
+        XCTAssertEqual(encoded.outcome.failureKind, .elementNotFound)
         XCTAssertNil(encoded.success)
-        XCTAssertNil(encoded.errorKind)
+        XCTAssertNil(encoded.failureKind)
     }
 
     func testActionResultRejectsLegacySuccessErrorKindFields() throws {
         let json = """
-        {"success":false,"method":"activate","errorKind":"elementNotFound","message":"Element not found"}
+        {"success":false,"method":"activate","failureKind":"elementNotFound","message":"Element not found"}
         """
 
         XCTAssertThrowsError(try JSONDecoder().decode(ActionResult.self, from: Data(json.utf8))) { error in
@@ -167,10 +167,10 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
 private struct EncodedActionResultProbe: Decodable {
     let outcome: EncodedActionResultOutcomeProbe
     let success: Bool?
-    let errorKind: ErrorKind?
+    let failureKind: String?
 }
 
 private struct EncodedActionResultOutcomeProbe: Decodable {
     let kind: String
-    let errorKind: ErrorKind?
+    let failureKind: ActionFailure.Kind?
 }

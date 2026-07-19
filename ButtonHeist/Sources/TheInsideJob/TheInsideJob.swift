@@ -94,9 +94,9 @@ public final class TheInsideJob {
 
     // MARK: - Properties
 
-    private var lifecycle = StateDriver(
+    private var lifecycle = StateStore(
         initial: ServerPhase.stopped,
-        machine: InsideJobLifecycleMachine()
+        reducer: InsideJobLifecycleReducer()
     )
     private var lifecycleObserversInstalled = false
 
@@ -170,9 +170,9 @@ public final class TheInsideJob {
 
     @discardableResult
     func applyLifecycleEvent(
-        _ event: InsideJobLifecycleMachine.Event
-    ) -> StateChange<ServerPhase, InsideJobLifecycleMachine.Effect, InsideJobLifecycleMachine.Rejection> {
-        lifecycle.send(event)
+        _ event: InsideJobLifecycleReducer.Event
+    ) -> StateTransition<ServerPhase, InsideJobLifecycleReducer.Effect, InsideJobLifecycleReducer.Rejection> {
+        lifecycle.reduce(event)
     }
 
     func setLifecycleObservationInstalled(_ installed: Bool) {
@@ -244,7 +244,7 @@ public final class TheInsideJob {
         self.runtimeConfiguration = runtimeConfiguration
         self.transportFactory = transportFactory
         self.muscle = TheMuscle(
-            explicitToken: runtimeConfiguration.token.value,
+            sessionToken: runtimeConfiguration.token.value,
             sessionReleaseTimeout: runtimeConfiguration.sessionReleaseTimeout.value,
             authenticationPolicy: runtimeConfiguration.authenticationPolicy
         )

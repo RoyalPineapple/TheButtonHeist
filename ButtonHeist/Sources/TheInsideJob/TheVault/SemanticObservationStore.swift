@@ -3,32 +3,14 @@
 import TheScore
 import ThePlans
 
-internal struct CleanSettledObservation: Sendable, Equatable {
-    internal let event: SettledObservationEvent
-    internal let tripwireSignal: TheTripwire.TripwireSignal
-}
-
-internal enum SemanticObservationLineage: Equatable {
-    case continuous(ScreenGeneration)
-    case replacementRequired(ScreenGeneration)
-
-    internal var generation: ScreenGeneration {
-        switch self {
-        case .continuous(let value), .replacementRequired(let value): value
-        }
-    }
-
-    internal func admitting(_ continuity: ScreenContinuity) -> ScreenContinuity {
-        switch self {
-        case .continuous: continuity
-        case .replacementRequired: .replacement(.screenChangedNotification)
-        }
-    }
-}
-
 @MainActor
 internal struct SemanticObservationStore {
     internal nonisolated static let defaultRetentionLimit = 256
+
+    internal struct AdmittedObservation: Sendable, Equatable {
+        internal let event: SettledObservationEvent
+        internal let tripwireSignal: TheTripwire.TripwireSignal
+    }
 
     private typealias EventsByScope = [SemanticObservationScope: SettledObservationEvent]
 
@@ -39,44 +21,43 @@ internal struct SemanticObservationStore {
     }
 
     private enum Availability: Sendable, Equatable {
-        case empty
-        case observing(sourceScope: SemanticObservationScope, tripwireSignal: TheTripwire.TripwireSignal)
+        case admitted(sourceScope: SemanticObservationScope, tripwireSignal: TheTripwire.TripwireSignal)
         case invalidated(sourceScope: SemanticObservationScope?)
     }
 
     private var history: SemanticObservationHistory
-    private var availability = Availability.empty
+    private var availability = Availability.invalidated(sourceScope: nil)
     internal private(set) var interfaceTree: InterfaceTree = .empty
     internal private(set) var sequence: SettledObservationSequence = 0
-    internal private(set) var lineage: SemanticObservationLineage = .continuous(.initial)
     internal private(set) var notificationCursor = AccessibilityNotificationCursor.origin
     internal private(set) var scopedScreenChangedSequence: UInt64 = 0
     internal private(set) var settleFailureDiagnostic: String?
+    private var replacementRequired = false
 
-    internal struct Commit {
-        internal let observation: InterfaceObservation
-        internal let sourceEvent: SettledObservationEvent
+    internal struct CommittedObservation {
+        internal let interfaceObservation: InterfaceObservation
+        internal let event: SettledObservationEvent
         internal let fallbackReasons: [AccessibilityObservationFallbackReason]
     }
 
-    internal var latestSourceEvent: SettledObservationEvent? {
+    internal var latestCommittedEvent: SettledObservationEvent? {
         switch availability {
-        case .observing(let sourceScope, _), .invalidated(.some(let sourceScope)):
+        case .admitted(let sourceScope, _), .invalidated(.some(let sourceScope)):
             history.latestByScope[sourceScope]?.event
-        case .empty, .invalidated(.none):
+        case .invalidated(.none):
             nil
         }
     }
 
-    internal var latestObservation: SettledObservation? {
-        latestSourceEvent?.settledObservation
+    internal var latestCommittedObservation: SettledObservation? {
+        latestCommittedEvent?.settledObservation
     }
 
     internal var latestSettledObservationInvalidated: Bool {
         switch availability {
-        case .empty, .invalidated:
+        case .invalidated:
             true
-        case .observing:
+        case .admitted:
             false
         }
     }
@@ -89,25 +70,22 @@ internal struct SemanticObservationStore {
         _ events: EventsByScope,
         sourceScope: SemanticObservationScope,
         tripwireSignal: TheTripwire.TripwireSignal
-    ) throws {
-        precondition(events[sourceScope] != nil, "Semantic observation scope did not fulfill itself")
+    ) throws -> SettledObservationEvent {
+        guard let committedEvent = events[sourceScope] else {
+            preconditionFailure("Semantic observation scope did not fulfill itself")
+        }
         var candidate = history
         for event in events.values.sorted(by: { $0.scope < $1.scope }) {
             try candidate.append(event)
         }
         history = candidate
-        availability = .observing(sourceScope: sourceScope, tripwireSignal: tripwireSignal)
-    }
-
-    internal mutating func beginScreenReplacement() {
-        availability = .empty
+        availability = .admitted(sourceScope: sourceScope, tripwireSignal: tripwireSignal)
+        return committedEvent
     }
 
     internal mutating func invalidateCurrentObservation() {
         switch availability {
-        case .empty:
-            availability = .invalidated(sourceScope: nil)
-        case .observing(let sourceScope, _):
+        case .admitted(let sourceScope, _):
             availability = .invalidated(sourceScope: sourceScope)
         case .invalidated:
             break
@@ -118,24 +96,24 @@ internal struct SemanticObservationStore {
     internal mutating func invalidateIfSignalChanged(
         to tripwireSignal: TheTripwire.TripwireSignal
     ) -> Bool {
-        guard case .observing(let sourceScope, let admittedSignal) = availability,
+        guard case .admitted(let sourceScope, let admittedSignal) = availability,
               admittedSignal != tripwireSignal else { return false }
         availability = .invalidated(sourceScope: sourceScope)
         return true
     }
 
-    internal func cleanObservation(
+    internal func admittedObservation(
         scope: SemanticObservationScope,
         after sequence: SettledObservationSequence?
-    ) -> CleanSettledObservation? {
-        guard case .observing(let sourceScope, let tripwireSignal) = availability,
+    ) -> AdmittedObservation? {
+        guard case .admitted(let sourceScope, let tripwireSignal) = availability,
               let currentGeneration = history.latestByScope[sourceScope]?.cursor.generation,
               let latest = history.latestByScope[scope]?.event,
               latest.generation == currentGeneration,
               latest.sequence > (sequence ?? 0) else {
             return nil
         }
-        return CleanSettledObservation(event: latest, tripwireSignal: tripwireSignal)
+        return AdmittedObservation(event: latest, tripwireSignal: tripwireSignal)
     }
 
     internal func read(
@@ -254,52 +232,55 @@ internal struct SemanticObservationStore {
     }
 
     internal mutating func commitObservation(
-        _ proof: InterfaceObservationProof,
+        _ committableObservation: CommittableInterfaceObservation,
         scope: SemanticObservationScope,
         notificationBatch: AccessibilityNotificationBatch,
         evidence: (InterfaceObservation) -> Evidence
-    ) throws -> Commit {
+    ) throws -> CommittedObservation {
         let previousTree = interfaceTree
         let candidateTree = switch scope {
         case .visible:
-            previousTree.updatingViewport(with: proof.observation)
+            previousTree.updatingViewport(with: committableObservation.observation)
         case .discovery:
-            proof.discoveryCommitPolicy == .replaceInterface
-                ? proof.observation.tree
-                : previousTree.merging(proof.observation.tree)
+            committableObservation.discoveryCommitPolicy == .replaceInterface
+                ? committableObservation.observation.tree
+                : previousTree.merging(committableObservation.observation.tree)
         }
-        let continuity = lineage.admitting(ScreenClassifier.classify(
+        let classifiedContinuity = ScreenClassifier.classify(
             from: previousTree == .empty ? nil : previousTree,
             to: candidateTree,
             notifications: notificationBatch.events.map(\.kind),
-            lineageEvidence: proof.lineageEvidence
-        ))
-        let nextTree = continuity.isReplacement ? proof.observation.tree : candidateTree
-        let committedObservation = try proof.observation.replacingTreeWithCurrentCapture(nextTree)
+            lineageEvidence: committableObservation.lineageEvidence
+        )
+        let continuity = replacementRequired
+            ? ScreenContinuity.replacement(.screenChangedNotification)
+            : classifiedContinuity
+        let nextTree = continuity.isReplacement ? committableObservation.observation.tree : candidateTree
+        let committedObservation = try committableObservation.observation.replacingTreeWithCurrentCapture(nextTree)
         let events = eventsForCommit(
             sourceScope: scope,
             notificationBatch: notificationBatch,
             observation: committedObservation,
-            semanticSignal: proof.tripwireSignal.semanticValue,
+            semanticSignal: committableObservation.tripwireSignal.semanticValue,
             continuity: continuity,
             evidence: evidence(committedObservation)
         )
-        guard let sourceEvent = events[scope] else {
-            preconditionFailure("Semantic observation scope did not fulfill itself")
-        }
-
         var next = self
-        try next.record(events, sourceScope: scope, tripwireSignal: proof.tripwireSignal)
+        let committedEvent = try next.record(
+            events,
+            sourceScope: scope,
+            tripwireSignal: committableObservation.tripwireSignal
+        )
         next.interfaceTree = nextTree
-        next.sequence = sourceEvent.sequence
-        next.lineage = .continuous(sourceEvent.generation)
+        next.sequence = committedEvent.sequence
         next.notificationCursor = notificationBatch.through
         next.scopedScreenChangedSequence = notificationBatch.scopedScreenChangedThrough
         next.settleFailureDiagnostic = nil
+        next.replacementRequired = false
         self = next
-        return Commit(
-            observation: committedObservation,
-            sourceEvent: sourceEvent,
+        return CommittedObservation(
+            interfaceObservation: committedObservation,
+            event: committedEvent,
             fallbackReasons: events.values.compactMap {
                 $0.trace.captures.last?.transition.fallbackReason
             }
@@ -307,8 +288,8 @@ internal struct SemanticObservationStore {
     }
 
     internal mutating func requireReplacement() {
-        beginScreenReplacement()
-        lineage = .replacementRequired(lineage.generation)
+        invalidateCurrentObservation()
+        replacementRequired = true
         settleFailureDiagnostic = nil
     }
 
@@ -329,9 +310,10 @@ internal struct SemanticObservationStore {
         continuity: ScreenContinuity,
         evidence: Evidence
     ) -> EventsByScope {
+        let currentGeneration = latestCommittedEvent?.generation ?? .initial
         let eventGeneration = continuity.isReplacement
-            ? lineage.generation.advanced()
-            : lineage.generation
+            ? currentGeneration.advanced()
+            : currentGeneration
         var events: EventsByScope = [:]
         for fulfilledScope in sourceScope.fulfilledScopes {
             let previousEvent = history.latestByScope[fulfilledScope]?.event

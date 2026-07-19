@@ -93,7 +93,7 @@ extension TheInsideJob {
     func suspend() async {
         let suspension: InsideJobSuspension?
         if case .running(let resources) = serverPhase {
-            brains.clearCache()
+            brains.vault.resetInterfaceForLifecycle()
             suspension = InsideJobSuspension(id: UUID(), resources: resources)
         } else {
             suspension = nil

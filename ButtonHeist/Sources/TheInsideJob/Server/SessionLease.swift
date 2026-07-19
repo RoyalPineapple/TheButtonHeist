@@ -3,6 +3,11 @@ import Foundation
 import ButtonHeistSupport
 import TheScore
 
+enum SessionOwner: Equatable, Sendable {
+    case driver(DriverID)
+    case token(SessionAuthToken)
+}
+
 /// Explicit session lease state machine for ButtonHeist driver ownership.
 struct SessionLease {
     enum Phase: Equatable, Sendable {
@@ -12,9 +17,9 @@ struct SessionLease {
     }
 
     private enum Event: Equatable, Sendable {
-        case acquire(owner: SessionOwner, clientId: Int, at: Date)
-        case release
-        case removeConnection(clientId: Int, at: Date)
+        case acquisitionRequested(owner: SessionOwner, clientId: Int, at: Date)
+        case releaseRequested
+        case connectionRemoved(clientId: Int, at: Date)
     }
 
     private enum Rejection: Equatable, Sendable {
@@ -92,16 +97,16 @@ struct SessionLease {
         }
     }
 
-    private var driver: StateDriver<Machine>
+    private var store: StateStore<Reducer>
     init(releaseTimeout: TimeInterval) {
-        self.driver = StateDriver(
+        self.store = StateStore(
             initial: .idle,
-            machine: Machine(releaseTimeout: releaseTimeout)
+            reducer: Reducer(releaseTimeout: releaseTimeout)
         )
     }
 
     var phase: Phase {
-        driver.state
+        store.state
     }
 
     var activeSessionOwner: SessionOwner? {
@@ -131,30 +136,30 @@ struct SessionLease {
     }
 
     mutating func acquire(owner: SessionOwner, clientId: Int, at now: Date) -> Acquisition {
-        let change = driver.send(.acquire(owner: owner, clientId: clientId, at: now))
-        switch change {
+        let transition = store.reduce(.acquisitionRequested(owner: owner, clientId: clientId, at: now))
+        switch transition {
         case .changed:
-            return .accepted(change.effects)
+            return .accepted(transition.effects)
         case .rejected(.acquisition(let diagnostic), _):
             return .rejected(diagnostic)
         }
     }
 
     mutating func release() -> [Effect] {
-        let change = driver.send(.release)
-        switch change {
+        let transition = store.reduce(.releaseRequested)
+        switch transition {
         case .changed:
-            return change.effects
+            return transition.effects
         case .rejected(let rejection, _):
             preconditionFailure("SessionLease release emitted unexpected rejection: \(rejection)")
         }
     }
 
     mutating func removeConnection(_ clientId: Int, at now: Date) -> [Effect] {
-        let change = driver.send(.removeConnection(clientId: clientId, at: now))
-        switch change {
+        let transition = store.reduce(.connectionRemoved(clientId: clientId, at: now))
+        switch transition {
         case .changed:
-            return change.effects
+            return transition.effects
         case .rejected(let rejection, _):
             preconditionFailure("SessionLease removeConnection emitted unexpected rejection: \(rejection)")
         }
@@ -165,24 +170,25 @@ struct SessionLease {
         return .exposed(driverId)
     }
 
-    private struct Machine: SimpleStateMachine {
+    private struct Reducer: StateReducer {
         let releaseTimeout: TimeInterval
 
-        func advance(_ state: Phase, with event: Event) -> StateChange<Phase, Effect, Rejection> {
+        func reduce(_ state: Phase, event: Event) -> StateTransition<Phase, Effect, Rejection> {
             switch (state, event) {
-            case (.idle, .acquire(let owner, let clientId, _)):
+            case (.idle, .acquisitionRequested(let owner, let clientId, _)):
                 return .changed(
                     to: .active(owner: owner, clientId: clientId),
                     effects: [.log(.sessionClaimed(clientId: clientId))]
                 )
 
-            case (.active(let activeOwner, _), .acquire(let owner, _, _)) where owner == activeOwner:
+            case (.active(let activeOwner, _), .acquisitionRequested(let owner, _, _))
+                where owner == activeOwner:
                 return .rejected(
                     .acquisition(.sameDriverActive(owner: driverIdentity(from: activeOwner))),
                     stayingIn: state
                 )
 
-            case (.draining(let activeOwner, _), .acquire(let owner, let clientId, _))
+            case (.draining(let activeOwner, _), .acquisitionRequested(let owner, let clientId, _))
                 where owner == activeOwner:
                 return .changed(
                     to: .active(owner: activeOwner, clientId: clientId),
@@ -192,13 +198,16 @@ struct SessionLease {
                     ]
                 )
 
-            case (.active(let owner, _), .acquire):
+            case (.active(let owner, _), .acquisitionRequested):
                 return .rejected(
                     .acquisition(.activeOwner(owner: driverIdentity(from: owner))),
                     stayingIn: state
                 )
 
-            case (.draining(let owner, let releaseDeadline), .acquire(_, _, let now)):
+            case (
+                .draining(let owner, let releaseDeadline),
+                .acquisitionRequested(_, _, let now)
+            ):
                 return .rejected(
                     .acquisition(.drainingOwner(
                         owner: driverIdentity(from: owner),
@@ -207,19 +216,22 @@ struct SessionLease {
                     stayingIn: state
                 )
 
-            case (.idle, .release):
+            case (.idle, .releaseRequested):
                 return .changed(to: .idle, effects: [.cancelReleaseTimer])
 
-            case (.active, .release), (.draining, .release):
+            case (.active, .releaseRequested), (.draining, .releaseRequested):
                 return .changed(
                     to: .idle,
                     effects: [.cancelReleaseTimer, .log(.sessionReleased)]
                 )
 
-            case (.idle, .removeConnection), (.draining, .removeConnection):
+            case (.idle, .connectionRemoved), (.draining, .connectionRemoved):
                 return .changed(to: state)
 
-            case (.active(let owner, let activeClientId), .removeConnection(let clientId, let now))
+            case (
+                .active(let owner, let activeClientId),
+                .connectionRemoved(let clientId, let now)
+            )
                 where activeClientId == clientId:
                 let releaseDeadline = now.addingTimeInterval(releaseTimeout)
                 return .changed(
@@ -230,7 +242,7 @@ struct SessionLease {
                     ]
                 )
 
-            case (.active, .removeConnection):
+            case (.active, .connectionRemoved):
                 return .changed(to: state)
             }
         }

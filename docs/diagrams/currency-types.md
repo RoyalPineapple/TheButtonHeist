@@ -18,7 +18,7 @@ flowchart TD
         LIVET["LiveActionTarget<br/>weak live object + frame + activationPoint"]
         WALK --> AXE
         AXE --> OBS
-        OBS -- "proof-backed commit / merge" --> STORE
+        OBS -- "admitted commit / merge" --> STORE
         OBS -- "live evidence for<br/>committed HeistIds only" --> STASH
         STORE --> TREE
         STORE --> STASH

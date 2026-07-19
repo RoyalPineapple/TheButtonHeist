@@ -35,19 +35,19 @@ final class TheSafecracker {
         keyboardInput.stopObservation()
     }
 
-    func isKeyboardVisible() -> Bool {
-        keyboardInput.isKeyboardVisible()
+    var isKeyboardVisible: Bool {
+        keyboardInput.isKeyboardVisible
     }
 
-    func hasActiveTextInput() -> Bool {
-        keyboardInput.hasActiveTextInput()
+    var hasActiveTextInput: Bool {
+        keyboardInput.hasActiveTextInput
     }
 
     func waitForActiveTextInput() async -> Bool {
-        if hasActiveTextInput() { return true }
+        if hasActiveTextInput { return true }
         for _ in 0..<Self.keyboardPollMaxAttempts {
             guard await Task.cancellableSleep(for: Self.keyboardPollInterval) else { return false }
-            if hasActiveTextInput() { return true }
+            if hasActiveTextInput { return true }
         }
         return false
     }
@@ -55,14 +55,14 @@ final class TheSafecracker {
     func typeText(
         _ text: String,
         interKeyDelay: UInt64 = TheSafecracker.defaultInterKeyDelay
-    ) async -> KeyboardTextInjectionResult {
+    ) async -> KeyboardTextInjectionOutcome {
         await keyboardInput.typeText(text, interKeyDelay: interKeyDelay)
     }
 
     func clearText(
         existingValue: String?,
         interKeyDelay: UInt64 = TheSafecracker.defaultInterKeyDelay
-    ) async -> KeyboardTextInjectionResult {
+    ) async -> KeyboardTextInjectionOutcome {
         await keyboardInput.clearText(existingValue: existingValue, interKeyDelay: interKeyDelay)
     }
 
@@ -70,11 +70,11 @@ final class TheSafecracker {
         editActions.perform(action, on: object)
     }
 
-    func resignFirstResponder() -> Bool {
+    func dismissKeyboard() -> Bool {
         editActions.resignFirstResponder()
     }
 
-    func resignFirstResponder(_ object: NSObject) -> Bool {
+    func dismissKeyboard(_ object: NSObject) -> Bool {
         editActions.resignFirstResponder(object)
     }
 

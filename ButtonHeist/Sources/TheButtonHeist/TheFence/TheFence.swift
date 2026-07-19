@@ -126,19 +126,6 @@ public final class TheFence {
         pendingRequests.resolveTransientFailure(FenceError(failure), requestId: requestId)
     }
 
-    // MARK: - Command Dispatch (thin router)
-
-    func dispatch(_ request: FenceOperationRequest) async throws -> FenceResponse {
-        switch request.dispatch {
-        case .singleStepHeist(let dispatch):
-            return try await executeSingleStepHeist(dispatch)
-        case .directAction(let dispatch):
-            return try await handleDirectActionRequest(dispatch, command: request.command)
-        case .handler(let handler):
-            return try await handler(self)
-        }
-    }
-
     // Expectation parsing (`parseExpectation` and its helpers) lives in
     // TheFence+ExpectationParsing.swift.
 

@@ -31,7 +31,7 @@ extension Navigation {
 
     enum ViewportExplorationDecision: Equatable, Sendable {
         case `continue`
-        case finish
+        case goalSatisfied
     }
 
     enum ViewportExitPosition: Equatable, Sendable {
@@ -69,16 +69,8 @@ extension Navigation {
         case back
     }
 
-    enum ScrollContainerScanResult: Equatable, Sendable {
-        case finished
-        case completed
-        case screenReplaced
-        case omitted(InterfaceDiscoveryReasonCode)
-        case interrupted
-    }
-
     enum ScrollScanOutcome: Equatable, Sendable {
-        case finished
+        case goalSatisfied
         case exhausted
         case screenReplaced
         case limitHit(InterfaceDiscoveryReasonCode)

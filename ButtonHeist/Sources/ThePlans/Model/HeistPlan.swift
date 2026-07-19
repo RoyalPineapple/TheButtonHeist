@@ -14,8 +14,8 @@ import Foundation
 // - *Expressions.swift files own scoped expression/reference types.
 // - Runtime safety extensions own the bounded executable-plan boundary.
 // - HeistPlan+Validation.swift owns linting and composition-quality checks only.
-// - HeistPlanSourceCompiler/Lexer/Parser.swift owns canonical ButtonHeist source compilation.
-// - HeistSwiftFileCompiler.swift owns authored Swift-file compilation.
+// - HeistSourceCompilation/Lexer/Parser.swift owns canonical ButtonHeist source compilation.
+// - HeistSwiftFileCompilation.swift owns authored Swift-file compilation.
 // - HeistPlan+CanonicalSwiftDSL.swift owns canonical Swift DSL rendering.
 // - HeistArtifact.swift owns .heist package read/write.
 // - HeistPlan+Discovery.swift and HeistPlan+Description.swift own discovery and description.

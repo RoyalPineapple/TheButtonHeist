@@ -32,7 +32,7 @@ public struct AnnouncementPredicate: Codable, Sendable, Equatable, Hashable {
 extension AnnouncementPredicate: CustomStringConvertible {
     public var description: String {
         guard let match else { return "announcement" }
-        return ScoreDescription.call("announcement", [match.description])
+        return CanonicalValueDescription.call("announcement", [match.description])
     }
 }
 
@@ -51,6 +51,6 @@ public struct ResolvedAnnouncementPredicate: Sendable, Equatable, Hashable {
 extension ResolvedAnnouncementPredicate: CustomStringConvertible {
     public var description: String {
         guard let match else { return "announcement" }
-        return ScoreDescription.call("announcement", [match.core.description])
+        return CanonicalValueDescription.call("announcement", [match.core.description])
     }
 }

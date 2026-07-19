@@ -7,40 +7,34 @@ internal enum SemanticObservationLifecycle {
 
     internal typealias DiscoveryObservation = @MainActor () async -> Navigation.InterfaceExplorationResult?
 
-    internal struct RunningObservation {
-        let task: Task<Void, Never>
-        var discovery: DiscoveryObservation
-    }
-
     case stopped
-    case running(RunningObservation)
+    case running(task: Task<Void, Never>, discovery: DiscoveryObservation)
 
     internal var isRunning: Bool {
         if case .running = self { true } else { false }
     }
 
     internal var discovery: DiscoveryObservation? {
-        if case .running(let observation) = self { observation.discovery } else { nil }
+        if case .running(_, let discovery) = self { discovery } else { nil }
     }
 
     // MARK: - Lifecycle
 
     internal mutating func start(task: Task<Void, Never>, discovery: @escaping DiscoveryObservation) {
         precondition(!isRunning, "semantic observation is already running")
-        self = .running(RunningObservation(task: task, discovery: discovery))
+        self = .running(task: task, discovery: discovery)
     }
 
     internal mutating func replaceDiscoveryIfRunning(_ discovery: @escaping DiscoveryObservation) -> Bool {
-        guard case .running(var observation) = self else { return false }
-        observation.discovery = discovery
-        self = .running(observation)
+        guard case .running(let task, _) = self else { return false }
+        self = .running(task: task, discovery: discovery)
         return true
     }
 
     internal mutating func stop() -> Task<Void, Never>? {
-        guard case .running(let observation) = self else { return nil }
+        guard case .running(let task, _) = self else { return nil }
         self = .stopped
-        return observation.task
+        return task
     }
 
 }

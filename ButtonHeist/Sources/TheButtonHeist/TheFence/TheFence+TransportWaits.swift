@@ -34,7 +34,7 @@ extension TheFence {
         _ plan: HeistPlan,
         argument: HeistArgument = .none,
         timeout: TimeInterval
-    ) async throws -> HeistExecutionResult {
+    ) async throws -> HeistResult {
         let message = ClientMessage.heistPlan(HeistPlanRun(plan: plan, argument: argument))
         return try await sendAndAwait(message, expecting: .heistExecution, timeout: timeout)
     }

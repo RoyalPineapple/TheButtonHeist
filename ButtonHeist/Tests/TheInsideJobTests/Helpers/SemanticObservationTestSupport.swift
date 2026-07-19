@@ -9,7 +9,7 @@ extension SemanticObservationStream {
         notificationIdentityObservation: InterfaceObservation? = nil
     ) -> SettledObservationEvent {
         commitSettledVisibleObservation(
-            .uncheckedForTesting(observation, tripwireSignal: currentTripwireSignal()),
+            .admittedForTesting(observation, tripwireSignal: currentTripwireSignal()),
             notificationBatch: notificationBatch,
             notificationIdentityObservation: notificationIdentityObservation
         )
@@ -22,7 +22,7 @@ extension SemanticObservationStream {
         notificationIdentityObservation: InterfaceObservation? = nil
     ) -> SettledObservationEvent {
         commitSettledVisibleObservation(
-            .uncheckedForTesting(
+            .admittedForTesting(
                 observation,
                 tripwireSignal: currentTripwireSignal(),
                 lineageEvidence: .viewportMovement
@@ -38,7 +38,7 @@ extension SemanticObservationStream {
         notificationBatch: AccessibilityNotificationBatch? = nil
     ) -> SettledObservationEvent {
         commitSettledDiscoveryObservation(
-            .uncheckedForTesting(observation, tripwireSignal: currentTripwireSignal()),
+            .admittedForTesting(observation, tripwireSignal: currentTripwireSignal()),
             notificationBatch: notificationBatch
         )
     }
@@ -49,7 +49,7 @@ extension SemanticObservationStream {
         notificationBatch: AccessibilityNotificationBatch? = nil
     ) -> SettledObservationEvent {
         commitSettledDiscoveryObservation(
-            .uncheckedForTesting(
+            .admittedForTesting(
                 observation,
                 tripwireSignal: currentTripwireSignal(),
                 lineageEvidence: .viewportMovement

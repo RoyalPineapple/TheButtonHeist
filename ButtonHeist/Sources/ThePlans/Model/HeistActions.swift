@@ -171,7 +171,7 @@ public func Edit(_ editAction: EditAction) -> Action {
     Action(command: .editAction(EditActionTarget(action: editAction)))
 }
 
-public func DismissKeyboard() -> Action {
+public func dismissKeyboard() -> Action {
     Action(command: .dismissKeyboard)
 }
 
@@ -185,83 +185,75 @@ public enum ScreenActions {
     }
 }
 
-public enum Mechanical {
-    @_disfavoredOverload
-    public static func Tap(_ target: AccessibilityTarget) -> Action {
-        Action(command: .mechanicalTap(TapTarget(selection: .element(target))))
-    }
+@_disfavoredOverload
+public func oneFingerTap(_ target: AccessibilityTarget) -> Action {
+    Action(command: .oneFingerTap(TapTarget(selection: .element(target))))
+}
 
-    public static func Tap(_ point: ScreenPoint) -> Action {
-        Action(command: .mechanicalTap(TapTarget(selection: .coordinate(point))))
-    }
+public func oneFingerTap(_ point: ScreenPoint) -> Action {
+    Action(command: .oneFingerTap(TapTarget(selection: .coordinate(point))))
+}
 
-    public static func Tap(_ target: AccessibilityTarget, at point: UnitPoint) -> Action {
-        Action(command: .mechanicalTap(TapTarget(selection: .elementUnitPoint(target, point))))
-    }
+public func oneFingerTap(_ target: AccessibilityTarget, at point: UnitPoint) -> Action {
+    Action(command: .oneFingerTap(TapTarget(selection: .elementUnitPoint(target, point))))
+}
 
-    public static func LongPress(
-        _ target: AccessibilityTarget,
-        duration: GestureDuration = .longPressDefault
-    ) -> Action {
-        Action(command: .mechanicalLongPress(
-            LongPressTarget(selection: .element(target), duration: duration)
-        ))
-    }
+public func longPress(
+    _ target: AccessibilityTarget,
+    duration: GestureDuration = .longPressDefault
+) -> Action {
+    Action(command: .longPress(LongPressTarget(selection: .element(target), duration: duration)))
+}
 
-    public static func LongPress(
-        _ point: ScreenPoint,
-        duration: GestureDuration = .longPressDefault
-    ) -> Action {
-        Action(command: .mechanicalLongPress(
-            LongPressTarget(selection: .coordinate(point), duration: duration)
-        ))
-    }
+public func longPress(
+    _ point: ScreenPoint,
+    duration: GestureDuration = .longPressDefault
+) -> Action {
+    Action(command: .longPress(LongPressTarget(selection: .coordinate(point), duration: duration)))
+}
 
-    public static func LongPress(
-        _ target: AccessibilityTarget,
-        at point: UnitPoint,
-        duration: GestureDuration = .longPressDefault
-    ) -> Action {
-        Action(command: .mechanicalLongPress(
-            LongPressTarget(selection: .elementUnitPoint(target, point), duration: duration)
-        ))
-    }
+public func longPress(
+    _ target: AccessibilityTarget,
+    at point: UnitPoint,
+    duration: GestureDuration = .longPressDefault
+) -> Action {
+    Action(command: .longPress(LongPressTarget(selection: .elementUnitPoint(target, point), duration: duration)))
+}
 
-    public static func Swipe(_ target: AccessibilityTarget, _ direction: SwipeDirection) -> Action {
-        Action(command: .mechanicalSwipe(SwipeTarget(selection: .elementDirection(target, direction))))
-    }
+public func swipe(_ target: AccessibilityTarget, _ direction: SwipeDirection) -> Action {
+    Action(command: .swipe(SwipeTarget(selection: .elementDirection(target, direction))))
+}
 
-    public static func Swipe(
-        _ target: AccessibilityTarget,
-        from start: UnitPoint,
-        to end: UnitPoint
-    ) -> Action {
-        Action(command: .mechanicalSwipe(SwipeTarget(selection: .unitElement(target, start: start, end: end))))
-    }
+public func swipe(
+    _ target: AccessibilityTarget,
+    from start: UnitPoint,
+    to end: UnitPoint
+) -> Action {
+    Action(command: .swipe(SwipeTarget(selection: .unitElement(target, start: start, end: end))))
+}
 
-    public static func Swipe(from start: ScreenPoint, to end: ScreenPoint) -> Action {
-        Action(command: .mechanicalSwipe(SwipeTarget(selection: .pointToPoint(start: start, end: end))))
-    }
+public func swipe(from start: ScreenPoint, to end: ScreenPoint) -> Action {
+    Action(command: .swipe(SwipeTarget(selection: .pointToPoint(start: start, end: end))))
+}
 
-    public static func Swipe(from start: ScreenPoint, _ direction: SwipeDirection) -> Action {
-        Action(command: .mechanicalSwipe(SwipeTarget(selection: .pointDirection(start: start, direction: direction))))
-    }
+public func swipe(from start: ScreenPoint, _ direction: SwipeDirection) -> Action {
+    Action(command: .swipe(SwipeTarget(selection: .pointDirection(start: start, direction: direction))))
+}
 
-    public static func Drag(_ target: AccessibilityTarget, to end: ScreenPoint) -> Action {
-        Action(command: .mechanicalDrag(DragTarget(start: .element(target), end: end)))
-    }
+public func drag(_ target: AccessibilityTarget, to end: ScreenPoint) -> Action {
+    Action(command: .drag(DragTarget(start: .element(target), end: end)))
+}
 
-    public static func Drag(
-        _ target: AccessibilityTarget,
-        from start: UnitPoint,
-        to end: ScreenPoint
-    ) -> Action {
-        Action(command: .mechanicalDrag(DragTarget(start: .elementUnitPoint(target, start), end: end)))
-    }
+public func drag(
+    _ target: AccessibilityTarget,
+    from start: UnitPoint,
+    to end: ScreenPoint
+) -> Action {
+    Action(command: .drag(DragTarget(start: .elementUnitPoint(target, start), end: end)))
+}
 
-    public static func Drag(from start: ScreenPoint, to end: ScreenPoint) -> Action {
-        Action(command: .mechanicalDrag(DragTarget(start: .coordinate(start), end: end)))
-    }
+public func drag(from start: ScreenPoint, to end: ScreenPoint) -> Action {
+    Action(command: .drag(DragTarget(start: .coordinate(start), end: end)))
 }
 
 struct ExpectationTimeoutComposition {

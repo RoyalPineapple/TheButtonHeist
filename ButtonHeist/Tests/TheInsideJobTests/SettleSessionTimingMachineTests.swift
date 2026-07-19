@@ -23,7 +23,7 @@ extension SettleSessionTests {
         state: inout SettleLoopMachine.State
     ) -> MachineStep {
         let recordedObservation = recordedObservation(observation, ledger: &ledger)
-        return send(
+        return reduce(
             .observation(recordedObservation.sample, elapsedMs: elapsedMs),
             machine: machine,
             ledger: &ledger,
@@ -31,7 +31,7 @@ extension SettleSessionTests {
         )
     }
 
-    private func send(
+    private func reduce(
         _ event: SettleLoopMachine.Event,
         machine: SettleLoopMachine,
         ledger: inout SettleObservationLedger,
@@ -43,7 +43,7 @@ extension SettleSessionTests {
         if state.events.count > eventCount {
             ledger.resetCurrentGeneration()
         }
-        let result: SettleSession.Result? = switch transition.effect {
+        let result: SettleSession.Result? = switch transition.decision {
         case .continuePolling:
             nil
         case .terminal(let outcome):
@@ -54,13 +54,13 @@ extension SettleSessionTests {
             )
         }
         return MachineStep(
-            effect: transition.effect,
+            decision: transition.decision,
             result: result
         )
     }
 
     private struct MachineStep {
-        let effect: SettleLoopMachine.Effect
+        let decision: SettleLoopMachine.Decision
         let result: SettleSession.Result?
     }
 
@@ -69,8 +69,8 @@ extension SettleSessionTests {
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
-        guard case .continuePolling = step.effect else {
-            return XCTFail("Expected continuePolling, got \(step.effect)", file: file, line: line)
+        guard case .continuePolling = step.decision else {
+            return XCTFail("Expected continuePolling, got \(step.decision)", file: file, line: line)
         }
     }
 
@@ -171,8 +171,8 @@ extension SettleSessionTests {
         XCTAssertContinue(reduceObservation(stable, elapsedMs: 1, machine: machine, ledger: &ledger, state: &state))
         let step = reduceObservation(stable, elapsedMs: 2, machine: machine, ledger: &ledger, state: &state)
 
-        guard case .terminal(.settled(let timeMs)) = step.effect else {
-            return XCTFail("Expected settled terminal effect, got \(step.effect)")
+        guard case .terminal(.settled(let timeMs)) = step.decision else {
+            return XCTFail("Expected settled terminal decision, got \(step.decision)")
         }
         XCTAssertEqual(timeMs, 2)
         XCTAssertEqual(step.result?.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
@@ -193,8 +193,8 @@ extension SettleSessionTests {
         XCTAssertContinue(reduceObservation(stable, elapsedMs: 20, machine: machine, ledger: &ledger, state: &state))
         let step = reduceObservation(stable, elapsedMs: 30, machine: machine, ledger: &ledger, state: &state)
 
-        guard case .terminal(.settled(let timeMs)) = step.effect else {
-            return XCTFail("Expected settled terminal effect, got \(step.effect)")
+        guard case .terminal(.settled(let timeMs)) = step.decision else {
+            return XCTFail("Expected settled terminal decision, got \(step.decision)")
         }
         XCTAssertEqual(timeMs, 30)
         XCTAssertEqual(step.result?.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
@@ -220,8 +220,8 @@ extension SettleSessionTests {
         XCTAssertContinue(reduceObservation(ready, elapsedMs: 3, machine: machine, ledger: &ledger, state: &state))
         let step = reduceObservation(ready, elapsedMs: 4, machine: machine, ledger: &ledger, state: &state)
 
-        guard case .terminal(.settled(let timeMs)) = step.effect else {
-            return XCTFail("Expected settled terminal effect after post-change stability, got \(step.effect)")
+        guard case .terminal(.settled(let timeMs)) = step.decision else {
+            return XCTFail("Expected settled terminal decision after post-change stability, got \(step.decision)")
         }
         XCTAssertEqual(timeMs, 4)
         XCTAssertEqual(step.result?.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Ready")
@@ -242,7 +242,7 @@ extension SettleSessionTests {
         )
 
         XCTAssertContinue(reduceObservation(stale, elapsedMs: 0, machine: machine, ledger: &ledger, state: &state))
-        XCTAssertContinue(send(.tripwireSignal(changed), machine: machine, ledger: &ledger, state: &state))
+        XCTAssertContinue(reduce(.tripwireSignal(changed), machine: machine, ledger: &ledger, state: &state))
         let result = SettleSession.result(
             outcome: .timedOut(timeMs: 10),
             state: state,
@@ -255,7 +255,7 @@ extension SettleSessionTests {
         _ = changedObject
     }
 
-    func testMachineTripwireResetRestartsBothPolicyProofs() {
+    func testMachineTripwireResetRestartsBothPolicyCriteria() {
         let stable = makeParseResult([
             makeElement(label: "Stable", traits: .staticText),
         ])
@@ -275,12 +275,12 @@ extension SettleSessionTests {
             )
 
             XCTAssertContinue(reduceObservation(stable, elapsedMs: 0, machine: machine, ledger: &ledger, state: &state))
-            XCTAssertContinue(send(.tripwireSignal(changed), machine: machine, ledger: &ledger, state: &state))
+            XCTAssertContinue(reduce(.tripwireSignal(changed), machine: machine, ledger: &ledger, state: &state))
             XCTAssertContinue(reduceObservation(stable, elapsedMs: 1, machine: machine, ledger: &ledger, state: &state))
             let step = reduceObservation(stable, elapsedMs: 2, machine: machine, ledger: &ledger, state: &state)
 
-            guard case .terminal(.settled(let timeMs)) = step.effect else {
-                return XCTFail("Expected post-reset settle for \(policy), got \(step.effect)")
+            guard case .terminal(.settled(let timeMs)) = step.decision else {
+                return XCTFail("Expected post-reset settle for \(policy), got \(step.decision)")
             }
             XCTAssertEqual(timeMs, 2)
             XCTAssertEqual(step.result?.events, [.tripwireSignalChanged(from: baseline, to: changed)])
@@ -302,11 +302,11 @@ extension SettleSessionTests {
         )
 
         XCTAssertContinue(reduceObservation(stable, elapsedMs: 0, machine: machine, ledger: &ledger, state: &state))
-        XCTAssertContinue(send(.tripwireSignal(changed), machine: machine, ledger: &ledger, state: &state))
+        XCTAssertContinue(reduce(.tripwireSignal(changed), machine: machine, ledger: &ledger, state: &state))
         let step = reduceObservation(stable, elapsedMs: 1, machine: machine, ledger: &ledger, state: &state)
 
-        guard case .terminal(.settled(let timeMs)) = step.effect else {
-            return XCTFail("Expected notification-only signal to allow settle, got \(step.effect)")
+        guard case .terminal(.settled(let timeMs)) = step.decision else {
+            return XCTFail("Expected notification-only signal to allow settle, got \(step.decision)")
         }
         XCTAssertEqual(timeMs, 1)
         XCTAssertEqual(step.result?.finalObservation?.tree.viewportCapture.hierarchy.sortedElements.first?.label, "Stable")

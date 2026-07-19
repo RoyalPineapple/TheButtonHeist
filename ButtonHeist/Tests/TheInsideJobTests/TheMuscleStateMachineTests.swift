@@ -12,7 +12,7 @@ final class TheMuscleStateMachineTests: XCTestCase {
 
     func testTokenAdmissionLocksAddressAfterConfiguredFailures() throws {
         var admission = ClientAdmission.TokenAuthentication(
-            tokenSource: .configured("good-token"),
+            sessionToken: "good-token",
             policy: try XCTUnwrap(.init(maximumFailedAttempts: 2, lockoutDuration: 30))
         )
 
@@ -23,8 +23,8 @@ final class TheMuscleStateMachineTests: XCTestCase {
         ) else {
             return XCTFail("Expected the first bad token to be rejected")
         }
-        XCTAssertEqual(firstError.message, "Invalid token. Retry with the configured token.")
-        XCTAssertEqual(firstError.recoveryHint, "Retry with the configured token.")
+        XCTAssertEqual(firstError.message, "Invalid token. Retry with the session token.")
+        XCTAssertEqual(firstError.recoveryHint, "Retry with the session token.")
         XCTAssertEqual(firstAttempts, 1)
 
         guard case .rejected(.lockoutStarted(let secondError, let secondAttempts)) = admission.admit(
@@ -34,7 +34,7 @@ final class TheMuscleStateMachineTests: XCTestCase {
         ) else {
             return XCTFail("Expected the second bad token to be rejected")
         }
-        XCTAssertEqual(secondError.recoveryHint, "Retry with the configured token.")
+        XCTAssertEqual(secondError.recoveryHint, "Retry with the session token.")
         XCTAssertEqual(secondAttempts, 2)
 
         guard case .lockedOut(let error) = admission.admit(
@@ -49,7 +49,7 @@ final class TheMuscleStateMachineTests: XCTestCase {
 
     func testTokenAdmissionPrunesExpiredFailureHistory() throws {
         var admission = ClientAdmission.TokenAuthentication(
-            tokenSource: .configured("good-token"),
+            sessionToken: "good-token",
             policy: try XCTUnwrap(.init(
                 maximumFailedAttempts: 2,
                 failedAddressRetentionDuration: 5
@@ -71,7 +71,7 @@ final class TheMuscleStateMachineTests: XCTestCase {
 
     func testTokenAdmissionEvictsOldestFailingAddressAtCapacity() throws {
         var admission = ClientAdmission.TokenAuthentication(
-            tokenSource: .configured("good-token"),
+            sessionToken: "good-token",
             policy: try XCTUnwrap(.init(
                 maximumFailedAttempts: 3,
                 maximumTrackedFailedAddresses: 1
@@ -99,7 +99,7 @@ final class TheMuscleStateMachineTests: XCTestCase {
 
     func testTokenAdmissionPreservesActiveLockoutAtCapacity() throws {
         var admission = ClientAdmission.TokenAuthentication(
-            tokenSource: .configured("good-token"),
+            sessionToken: "good-token",
             policy: try XCTUnwrap(.init(
                 maximumFailedAttempts: 1,
                 maximumTrackedFailedAddresses: 1
@@ -136,7 +136,7 @@ final class TheMuscleStateMachineTests: XCTestCase {
         XCTAssertEqual(
             ClientAdmission.Authentication.Reducer().reduce(
                 .connected(address: "127.0.0.1"),
-                event: .completeAuthentication
+                event: .authenticationCompletionRequested
             ),
             .rejected(.missingHello, state: .connected(address: "127.0.0.1"))
         )
@@ -154,20 +154,20 @@ final class TheMuscleStateMachineTests: XCTestCase {
         XCTAssertEqual(
             ClientAdmission.Authentication.Reducer().reduce(
                 .connected(address: "127.0.0.1"),
-                event: .validateHello
+                event: .helloValidationRequested
             ),
-            .advanced(.helloValidated(address: "127.0.0.1"), effect: .helloValidated)
+            .advanced(.helloValidated(address: "127.0.0.1"), outcome: .helloValidated)
         )
         var registry = ClientAdmission.Registry()
         registry.registerAddress(1, address: "127.0.0.1")
 
         XCTAssertEqual(
             registry.validateHello(1),
-            .advanced(.helloValidated(address: "127.0.0.1"), effect: .helloValidated)
+            .advanced(.helloValidated(address: "127.0.0.1"), outcome: .helloValidated)
         )
         XCTAssertEqual(
             registry.completeAuthentication(1),
-            .advanced(.authenticated(address: "127.0.0.1"), effect: .authenticated)
+            .advanced(.authenticated(address: "127.0.0.1"), outcome: .authenticated)
         )
         XCTAssertEqual(registry.state(for: 1), .authenticated(address: "127.0.0.1"))
     }
@@ -187,12 +187,11 @@ final class TheMuscleStateMachineTests: XCTestCase {
 
     func testAdmissionLifecycleOwnsCredentialAndAuthenticationDeadlineEffects() throws {
         var admission = ClientAdmission.Reducer(
-            tokenSource: .configured("good-token"),
+            sessionToken: "good-token",
             authenticationPolicy: try XCTUnwrap(.init(maximumFailedAttempts: 2, lockoutDuration: 30))
         )
         let respond: SocketResponseHandler = { _ in .delivered }
 
-        XCTAssertEqual(admission.sessionToken, "good-token")
         guard case .replaceAuthenticationDeadline(let registeredClientId)? =
             admission.registerClientAddress(1, address: "127.0.0.1").first
         else {
@@ -207,11 +206,15 @@ final class TheMuscleStateMachineTests: XCTestCase {
         let authentication = try JSONEncoder().encode(RequestEnvelope(message: .authenticate(
             AuthenticatePayload(token: "good-token", driverId: "driver")
         )))
-        guard case .authenticate(let proof) = admission.admit(1, data: authentication, respond: respond) else {
-            return XCTFail("Expected valid credentials to produce authentication proof")
+        guard case .sessionAdmission(let sessionAdmission) = admission.admit(
+            1,
+            data: authentication,
+            respond: respond
+        ) else {
+            return XCTFail("Expected valid credentials to request session admission")
         }
         guard case .cancelAuthenticationDeadline(let authenticatedClientId)? =
-            admission.completeAuthentication(proof).first
+            admission.completeAuthentication(sessionAdmission).first
         else {
             return XCTFail("Expected authentication to cancel its deadline")
         }
@@ -232,16 +235,16 @@ final class TheMuscleStateMachineTests: XCTestCase {
         let now = Date(timeIntervalSinceReferenceDate: 1_000)
         registry.registerAddress(1, address: "127.0.0.1")
         for _ in 0..<ClientAdmission.RateLimiter.defaultMaxMessagesPerSecond {
-            XCTAssertEqual(registry.recordMessage(1, at: now), .accepted)
+            XCTAssertEqual(registry.admitMessage(1, at: now), .accept)
         }
-        XCTAssertEqual(registry.recordMessage(1, at: now), .rateLimited(shouldNotify: true))
+        XCTAssertEqual(registry.admitMessage(1, at: now), .drop(shouldNotify: true))
 
         XCTAssertEqual(registry.remove(1), .connected(address: "127.0.0.1"))
         XCTAssertFalse(registry.contains(1))
         XCTAssertNil(registry.state(for: 1))
 
         registry.registerAddress(1, address: "127.0.0.1")
-        XCTAssertEqual(registry.recordMessage(1, at: now), .accepted)
+        XCTAssertEqual(registry.admitMessage(1, at: now), .accept)
     }
 
     func testSessionLeaseDrainingRejectionUsesOneStructuredDiagnostic() {

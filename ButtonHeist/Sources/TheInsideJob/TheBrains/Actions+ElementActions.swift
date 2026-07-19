@@ -11,13 +11,13 @@ extension Actions {
 
     func performElementAction(
         target: ResolvedAccessibilityTarget,
-        method: ActionMethod,
+        payload: ActionResult.Payload,
         requireInteractive: Bool = true,
         activationPointPolicy: ElementInflation.ActivationPointPolicy = .requireOnscreen,
-        preflight: (@MainActor (InterfaceTree.Element) -> TheSafecracker.ActionDispatchOutcome?)? = nil,
+        preflight: (@MainActor (InterfaceTree.Element) -> TheSafecracker.ActionDispatchResult?)? = nil,
         action: @MainActor (ElementInflation.InflatedElementTarget) async
-            -> TheSafecracker.ActionDispatchOutcome
-    ) async -> TheSafecracker.ActionDispatchOutcome {
+            -> TheSafecracker.ActionDispatchResult
+    ) async -> TheSafecracker.ActionDispatchResult {
         func elapsedMilliseconds(since start: CFAbsoluteTime) -> Int {
             Int((CFAbsoluteTimeGetCurrent() - start) * 1_000)
         }
@@ -25,22 +25,22 @@ extension Actions {
         let resolutionStart = CFAbsoluteTimeGetCurrent()
         let inflation = await navigation.elementInflation.inflate(
             for: target,
-            method: method,
+            method: payload.method,
             activationPointPolicy: activationPointPolicy
         )
         let targetResolutionMs = elapsedMilliseconds(since: resolutionStart)
 
         let dispatchStart = CFAbsoluteTimeGetCurrent()
-        let result: TheSafecracker.ActionDispatchOutcome
+        let result: TheSafecracker.ActionDispatchResult
         switch inflation {
         case .failed(let failure):
-            result = failure.actionDispatchOutcome(commandMethod: method)
+            result = failure.actionDispatchResult(payload: payload)
         case .inflated(let context):
             if let failure = preflight?(context.treeElement) {
                 result = failure
             } else if let failure = interactivityFailure(
                 context,
-                method: method,
+                payload: payload,
                 requireInteractive: requireInteractive
             ) {
                 result = failure
@@ -64,23 +64,23 @@ extension Actions {
 
     private func interactivityFailure(
         _ context: ElementInflation.InflatedElementTarget,
-        method: ActionMethod,
+        payload: ActionResult.Payload,
         requireInteractive: Bool
-    ) -> TheSafecracker.ActionDispatchOutcome? {
+    ) -> TheSafecracker.ActionDispatchResult? {
         guard requireInteractive else { return nil }
         let treeElement = context.treeElement
         let liveTarget = context.liveTarget
         switch TheVault.Interactivity.checkInteractivity(treeElement.element, object: liveTarget.object) {
         case .blocked(let reason):
-            return .failure(method, message: reason)
+            return .failure(payload, message: reason)
         case .interactive(let warning):
             if let warning { insideJobLogger.warning("\(warning)") }
         }
         guard TheVault.Interactivity.isInteractive(element: treeElement.element, object: liveTarget.object) else {
             return .failure(
-                method,
+                payload,
                 message: ActionCapabilityDiagnostic.unsupportedElementAction(
-                    method,
+                    payload.method,
                     element: treeElement
                 )
             )
@@ -90,10 +90,10 @@ extension Actions {
 
     func executeActivate(
         _ target: ResolvedAccessibilityTarget,
-    ) async -> TheSafecracker.ActionDispatchOutcome {
+    ) async -> TheSafecracker.ActionDispatchResult {
         return await performElementAction(
             target: target,
-            method: .activate,
+            payload: .activate,
         ) { context in
             await ActivationPolicy(
                 accessibilityActivate: { liveTarget in
@@ -114,7 +114,7 @@ extension Actions {
                     case .inflated(let inflatedTarget):
                         return .resolved(inflatedTarget)
                     case .failed(let failure):
-                        return .failure(failure.actionDispatchOutcome(commandMethod: .activate))
+                        return .failure(failure.actionDispatchResult(payload: .activate))
                     }
                 },
                 prepareActivationPointDispatch: safecracker.prepareTap,
@@ -128,7 +128,7 @@ extension Actions {
     private func textEntryActivationFailure(
         treeElement: InterfaceTree.Element,
         activationTrace: ActivationTrace
-    ) async -> TheSafecracker.ActionDispatchOutcome? {
+    ) async -> TheSafecracker.ActionDispatchResult? {
         guard treeElement.element.traits.contains(.textEntry) else { return nil }
         guard await safecracker.waitForActiveTextInput() else {
             return .failure(
@@ -147,30 +147,30 @@ extension Actions {
 
     func executeIncrement(
         _ target: ResolvedAccessibilityTarget,
-    ) async -> TheSafecracker.ActionDispatchOutcome {
-        await executeAdjustment(target, method: .increment, action: accessibilityActions.increment)
+    ) async -> TheSafecracker.ActionDispatchResult {
+        await executeAdjustment(target, payload: .increment, action: accessibilityActions.increment)
     }
 
     func executeDecrement(
         _ target: ResolvedAccessibilityTarget,
-    ) async -> TheSafecracker.ActionDispatchOutcome {
-        await executeAdjustment(target, method: .decrement, action: accessibilityActions.decrement)
+    ) async -> TheSafecracker.ActionDispatchResult {
+        await executeAdjustment(target, payload: .decrement, action: accessibilityActions.decrement)
     }
 
     private func executeAdjustment(
         _ target: ResolvedAccessibilityTarget,
-        method: ActionMethod,
+        payload: ActionResult.Payload,
         action: @MainActor (TheVault.LiveActionTarget) -> Bool
-    ) async -> TheSafecracker.ActionDispatchOutcome {
+    ) async -> TheSafecracker.ActionDispatchResult {
         await performElementAction(
             target: target,
-            method: method,
+            payload: payload,
             preflight: { treeElement in
                 guard treeElement.element.traits.contains(.adjustable) else {
                     return .failure(
-                        method,
+                        payload,
                         message: ActionCapabilityDiagnostic.nonAdjustableAction(
-                            method,
+                            payload.method,
                             element: treeElement
                         )
                     )
@@ -180,9 +180,9 @@ extension Actions {
             action: { context in
                 switch self.vault.dispatchOnFreshLiveActionTarget(context.liveTarget, operation: action) {
                 case .success:
-                    return .success(method: method)
+                    return .success(payload: payload)
                 case .failure(let staleness):
-                    return self.staleLiveTargetFailure(staleness, method: method)
+                    return self.staleLiveTargetFailure(staleness, payload: payload)
                 }
             }
         )
@@ -191,10 +191,10 @@ extension Actions {
     func executeCustomAction(
         name: CustomActionName,
         target: ResolvedAccessibilityTarget,
-    ) async -> TheSafecracker.ActionDispatchOutcome {
+    ) async -> TheSafecracker.ActionDispatchResult {
         await performElementAction(
             target: target,
-            method: .customAction,
+            payload: .customAction,
         ) { context in
             let dispatchContext: ElementInflation.InflatedElementTarget
             switch await self.customActionDispatchContext(
@@ -208,7 +208,7 @@ extension Actions {
             }
             let treeElement = dispatchContext.treeElement
             let liveTarget = dispatchContext.liveTarget
-            let result: TheSafecracker.ActionDispatchOutcome
+            let result: TheSafecracker.ActionDispatchResult
             let dispatch = self.vault.dispatchOnFreshLiveActionTarget(
                 liveTarget,
             ) { target in
@@ -219,7 +219,7 @@ extension Actions {
             case .success(let outcome):
                 customActionOutcome = outcome
             case .failure(let staleness):
-                return self.staleLiveTargetFailure(staleness, method: .customAction)
+                return self.staleLiveTargetFailure(staleness, payload: .customAction)
             }
             switch customActionOutcome {
             case .deallocated:
@@ -241,7 +241,7 @@ extension Actions {
                     )
                 )
             case .succeeded:
-                result = .success(method: .customAction)
+                result = .success(payload: .customAction)
             }
             return result.withSubjectEvidence(
                 dispatchContext.subjectEvidence(source: .resolvedSemanticTarget)
@@ -251,7 +251,7 @@ extension Actions {
 
     private enum CustomActionDispatchContextResolution {
         case resolved(ElementInflation.InflatedElementTarget)
-        case failed(TheSafecracker.ActionDispatchOutcome)
+        case failed(TheSafecracker.ActionDispatchResult)
     }
 
     private func customActionDispatchContext(
@@ -270,7 +270,7 @@ extension Actions {
         case .inflated(let refreshedContext):
             return .resolved(refreshedContext)
         case .failed(let failure):
-            return .failed(failure.actionDispatchOutcome(commandMethod: .customAction))
+            return .failed(failure.actionDispatchResult(payload: .customAction))
         }
     }
 

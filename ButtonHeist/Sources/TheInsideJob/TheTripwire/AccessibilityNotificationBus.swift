@@ -202,7 +202,7 @@ final class AccessibilityNotificationBus: @unchecked Sendable {
     /// Opens the inner attribution window for one dispatched action.
     ///
     /// Events with sequence numbers greater than this cursor can be attached to
-    /// the action receipt without stealing earlier heist-level context.
+    /// the action evidence without stealing earlier heist-level context.
     func beginActionWindow() -> AccessibilityNotificationScopeLease {
         beginScopeLease()
     }

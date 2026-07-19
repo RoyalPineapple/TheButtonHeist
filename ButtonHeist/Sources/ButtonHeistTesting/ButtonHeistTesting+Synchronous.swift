@@ -6,22 +6,22 @@ import os
 import TheInsideJob
 import ThePlans
 
-/// XCTest-facing receipt recording policy for synchronous heist helpers.
+/// XCTest-facing result recording policy for synchronous heist helpers.
 ///
-/// Use `.always` when a passing run should leave proof of the exact interface
+/// Use `.always` when a passing run should retain evidence of the exact interface
 /// it matched. This is useful in app-hosted test processes where environment
-/// variables such as `BUTTONHEIST_RECEIPTS_MODE` and `BUTTONHEIST_RECEIPTS_DIR`
+/// variables such as `BUTTONHEIST_RESULTS_MODE` and `BUTTONHEIST_RESULTS_DIR`
 /// may not be inherited from the test runner.
-public enum HeistTestReceiptRecording: Sendable, Equatable {
-    /// Use the normal `BUTTONHEIST_RECEIPTS_MODE` / `BUTTONHEIST_RECEIPTS_DIR`
+public enum HeistTestResultRecording: Sendable, Equatable {
+    /// Use the normal `BUTTONHEIST_RESULTS_MODE` / `BUTTONHEIST_RESULTS_DIR`
     /// environment-variable behavior.
     case environment
-    /// Write only failed heist receipts to the supplied directory.
+    /// Write only failed heist results to the supplied directory.
     case failures
-    /// Write failed and passing heist receipts to the supplied directory.
+    /// Write failed and passing heist results to the supplied directory.
     case always
 
-    fileprivate var explicitRecorderMode: HeistReceiptRecordingMode? {
+    fileprivate var explicitRecorderMode: HeistResultRecordingMode? {
         switch self {
         case .environment:
             return nil
@@ -53,8 +53,8 @@ public enum HeistTestReceiptRecording: Sendable, Equatable {
 public func runHeistSync(
     _ path: HeistDefinitionPath,
     timeout: TimeInterval = 60,
-    recordReceipt: HeistTestReceiptRecording = .environment,
-    to receiptDirectory: URL? = nil,
+    recordResult: HeistTestResultRecording = .environment,
+    to resultDirectory: URL? = nil,
     file: StaticString = #filePath,
     line: UInt = #line,
     @HeistBuilder _ content: @escaping () throws -> some HeistContent
@@ -62,8 +62,8 @@ public func runHeistSync(
     runHeistSyncRequest(
         makeRequest: { try makeRunHeistRequest(path, content) },
         timeout: timeout,
-        recordReceipt: recordReceipt,
-        receiptDirectory: receiptDirectory,
+        recordResult: recordResult,
+        resultDirectory: resultDirectory,
         file: file,
         line: line
     )
@@ -76,8 +76,8 @@ public func runHeistSync(
     argument input: String,
     parameter: HeistReferenceName = "input",
     timeout: TimeInterval = 60,
-    recordReceipt: HeistTestReceiptRecording = .environment,
-    to receiptDirectory: URL? = nil,
+    recordResult: HeistTestResultRecording = .environment,
+    to resultDirectory: URL? = nil,
     file: StaticString = #filePath,
     line: UInt = #line,
     @HeistBuilder _ content: @escaping (HeistReferenceName) throws -> some HeistContent
@@ -87,8 +87,8 @@ public func runHeistSync(
             try makeRunHeistRequest(path, argument: input, parameter: parameter, content)
         },
         timeout: timeout,
-        recordReceipt: recordReceipt,
-        receiptDirectory: receiptDirectory,
+        recordResult: recordResult,
+        resultDirectory: resultDirectory,
         file: file,
         line: line
     )
@@ -102,8 +102,8 @@ public func runHeistSync(
     argument input: AccessibilityTarget,
     parameter: HeistReferenceName = "input",
     timeout: TimeInterval = 60,
-    recordReceipt: HeistTestReceiptRecording = .environment,
-    to receiptDirectory: URL? = nil,
+    recordResult: HeistTestResultRecording = .environment,
+    to resultDirectory: URL? = nil,
     file: StaticString = #filePath,
     line: UInt = #line,
     @HeistBuilder _ content: @escaping (AccessibilityTarget) throws -> some HeistContent
@@ -113,8 +113,8 @@ public func runHeistSync(
             try makeRunHeistRequest(path, argument: input, parameter: parameter, content)
         },
         timeout: timeout,
-        recordReceipt: recordReceipt,
-        receiptDirectory: receiptDirectory,
+        recordResult: recordResult,
+        resultDirectory: resultDirectory,
         file: file,
         line: line
     )
@@ -123,8 +123,8 @@ public func runHeistSync(
 private func runHeistSyncRequest(
     makeRequest: () throws -> HeistRunRequest,
     timeout: TimeInterval,
-    recordReceipt: HeistTestReceiptRecording,
-    receiptDirectory: URL?,
+    recordResult: HeistTestResultRecording,
+    resultDirectory: URL?,
     file: StaticString,
     line: UInt
 ) -> Heist? {
@@ -148,25 +148,25 @@ private func runHeistSyncRequest(
     return runHeistSyncOperation(timeout: timeout, file: file, line: line) { @MainActor in
         do {
             let heist = try await Heist(request.plan, argument: request.argument)
-            try recordReceiptIfRequested(
+            try recordResultIfRequested(
                 heist.result,
                 plan: request.plan,
-                policy: recordReceipt,
-                receiptDirectory: receiptDirectory
+                policy: recordResult,
+                resultDirectory: resultDirectory
             )
             return heist
         } catch let failure as Heist.Failure {
             do {
-                try recordReceiptIfRequested(
+                try recordResultIfRequested(
                     failure.result,
                     plan: request.plan,
-                    policy: recordReceipt,
-                    receiptDirectory: receiptDirectory
+                    policy: recordResult,
+                    resultDirectory: resultDirectory
                 )
             } catch {
                 throw HeistXCTestFailure(
                     primaryError: failure,
-                    receiptRecordingError: error
+                    resultRecordingError: error
                 )
             }
             throw failure
@@ -272,19 +272,19 @@ private func resolveHeistSyncDeadline<Value>(
     }
 }
 
-private func recordReceiptIfRequested(
-    _ result: HeistExecutionResult,
+private func recordResultIfRequested(
+    _ result: HeistResult,
     plan: HeistPlan,
-    policy: HeistTestReceiptRecording,
-    receiptDirectory: URL?
+    policy: HeistTestResultRecording,
+    resultDirectory: URL?
 ) throws {
     guard let mode = policy.explicitRecorderMode else { return }
-    let rootDirectory = receiptDirectory ?? FileManager.default.temporaryDirectory
-        .appendingPathComponent("buttonheist-receipts", isDirectory: true)
-    _ = try HeistReceiptRecorder.write(
+    let rootDirectory = resultDirectory ?? FileManager.default.temporaryDirectory
+        .appendingPathComponent("buttonheist-results", isDirectory: true)
+    _ = try HeistResultRecorder.write(
         result,
         plan: plan,
-        configuration: HeistReceiptRecordingConfiguration(
+        configuration: HeistResultRecordingConfiguration(
             rootDirectory: rootDirectory,
             mode: mode
         )
@@ -395,10 +395,10 @@ final class HeistSyncState<Value: Sendable>: Sendable {
 
 private struct HeistXCTestFailure: Error, CustomStringConvertible {
     let primaryError: Error
-    let receiptRecordingError: Error
+    let resultRecordingError: Error
 
     var description: String {
-        "\(primaryError)\nreceipt recording failed: \(receiptRecordingError)"
+        "\(primaryError)\nresult recording failed: \(resultRecordingError)"
     }
 }
 #endif // DEBUG

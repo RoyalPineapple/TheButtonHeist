@@ -20,8 +20,8 @@ from typing import Sequence
 
 ROOT = Path(__file__).resolve().parent.parent
 WORKSPACE = ROOT / "ButtonHeist.xcworkspace"
-WRAPPER = ROOT / "scripts/run-with-heist-receipts.sh"
-COLLECTOR = ROOT / "scripts/collect-ios-heist-receipts.sh"
+WRAPPER = ROOT / "scripts/run-with-heist-results.sh"
+COLLECTOR = ROOT / "scripts/collect-ios-heist-results.sh"
 SELECTOR = ROOT / "scripts/select-ios-ci-simulator.py"
 IOS_DEVICE = "iPhone 16 Pro"
 
@@ -48,8 +48,8 @@ FOCUSES = {
     "contract-predicates": {
         "TheScoreTests": ("TheScoreTests/AccessibilityPredicateTests",),
     },
-    "contract-receipts": {
-        "TheScoreTests": ("TheScoreTests/HeistExecutionReceiptContractTests",),
+    "contract-results": {
+        "TheScoreTests": ("TheScoreTests/HeistResultContractTests",),
     },
     "contract-wire": {
         "TheScoreTests": (
@@ -119,8 +119,8 @@ def suite_paths(name: str) -> dict[str, Path]:
     )).expanduser().resolve()
     root = artifacts / name
     return {
-        "result": root / "results" / f"{name}.xcresult",
-        "receipts": root / "receipts",
+        "result_bundle": root / "result-bundles" / f"{name}.xcresult",
+        "heist_results": root / "heist-results",
         "diagnostics": root / "diagnostics",
         "derived": derived / name,
         "record": root / "run.json",
@@ -280,7 +280,7 @@ def test_command(
             name,
             "--selective-testing" if selection == "selective" else "--no-selective-testing",
             "--result-bundle-path",
-            str(paths["result"]),
+            str(paths["result_bundle"]),
             "--",
             "-destination",
             test_destination,
@@ -302,7 +302,7 @@ def test_command(
             "-derivedDataPath",
             str(paths["derived"]),
             "-resultBundlePath",
-            str(paths["result"]),
+            str(paths["result_bundle"]),
             *test_options,
             *only_testing,
         ]
@@ -310,10 +310,10 @@ def test_command(
     if suite["platform"] == "ios":
         wrapper.append("--ios-sandbox")
     else:
-        wrapper.extend(("--dir", str(paths["receipts"])))
+        wrapper.extend(("--dir", str(paths["heist_results"])))
     return wrapper + [
         "--mode",
-        os.environ.get("BUTTONHEIST_RECEIPTS_MODE", "failures"),
+        os.environ.get("BUTTONHEIST_RESULTS_MODE", "failures"),
         "--",
         *command,
     ]
@@ -321,8 +321,8 @@ def test_command(
 
 def publish(paths: dict[str, Path], simulator: dict[str, str] | None) -> None:
     values = {
-        "BUTTONHEIST_TEST_RESULT_BUNDLE": str(paths["result"]),
-        "BUTTONHEIST_TEST_RECEIPTS_DIR": str(paths["receipts"]),
+        "BUTTONHEIST_TEST_RESULT_BUNDLE": str(paths["result_bundle"]),
+        "BUTTONHEIST_TEST_RESULTS_DIR": str(paths["heist_results"]),
         "BUTTONHEIST_TEST_DIAGNOSTICS_DIR": str(paths["diagnostics"]),
         "BUTTONHEIST_TEST_DERIVED_DATA": str(paths["derived"]),
     }
@@ -346,12 +346,12 @@ def collect(
     paths: dict[str, Path],
     include_diagnostics: bool = False,
 ) -> None:
-    paths["receipts"].mkdir(parents=True, exist_ok=True)
+    paths["heist_results"].mkdir(parents=True, exist_ok=True)
     if suite["platform"] != "ios":
         return
     simulator = os.environ.get("SIM_UDID")
     if simulator:
-        subprocess.run([str(COLLECTOR), simulator, str(paths["receipts"])], check=False)
+        subprocess.run([str(COLLECTOR), simulator, str(paths["heist_results"])], check=False)
     if not include_diagnostics:
         return
     paths["diagnostics"].mkdir(parents=True, exist_ok=True)
@@ -367,7 +367,7 @@ def collect(
             )
 
 
-def clear_simulator_receipts(simulator: dict[str, str] | None) -> None:
+def clear_simulator_results(simulator: dict[str, str] | None) -> None:
     if simulator is None:
         return
     containers = (
@@ -376,11 +376,11 @@ def clear_simulator_receipts(simulator: dict[str, str] | None) -> None:
     )
     if not containers.exists():
         return
-    for directory in containers.glob("**/buttonheist-receipts"):
+    for directory in containers.glob("**/buttonheist-results"):
         shutil.rmtree(directory)
 
 
-def require_executed_tests(result: Path) -> int:
+def require_executed_tests(result_bundle: Path) -> int:
     summary = subprocess.run(
         [
             "xcrun",
@@ -389,7 +389,7 @@ def require_executed_tests(result: Path) -> int:
             "test-results",
             "summary",
             "--path",
-            str(result),
+            str(result_bundle),
             "--format",
             "json",
         ],
@@ -399,7 +399,7 @@ def require_executed_tests(result: Path) -> int:
     )
     count = int(json.loads(summary.stdout)["totalTestCount"])
     if count == 0:
-        raise RuntimeError(f"Test result executed zero tests: {result}")
+        raise RuntimeError(f"Test result bundle executed zero tests: {result_bundle}")
     return count
 
 
@@ -417,14 +417,14 @@ def execute(
     simulator = select_simulator(args.mode, suite, args.simulator_name)
     publish(paths, simulator)
 
-    for key in ("result", "receipts", "diagnostics"):
+    for key in ("result_bundle", "heist_results", "diagnostics"):
         if paths[key].exists():
             shutil.rmtree(paths[key])
     paths["record"].unlink(missing_ok=True)
-    paths["result"].parent.mkdir(parents=True, exist_ok=True)
-    paths["receipts"].mkdir(parents=True, exist_ok=True)
+    paths["result_bundle"].parent.mkdir(parents=True, exist_ok=True)
+    paths["heist_results"].mkdir(parents=True, exist_ok=True)
     if args.mode in ("run", "test-without-building"):
-        clear_simulator_receipts(simulator)
+        clear_simulator_results(simulator)
 
     command = test_command(
         args.mode,
@@ -458,7 +458,7 @@ def execute(
     if args.mode in ("run", "test-without-building"):
         collect(suite, paths, include_diagnostics=phase.exit_code != 0)
         try:
-            test_count = require_executed_tests(paths["result"])
+            test_count = require_executed_tests(paths["result_bundle"])
         except (OSError, ValueError, KeyError, RuntimeError, subprocess.CalledProcessError) as error:
             write_run_record(
                 paths["record"],

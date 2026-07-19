@@ -4,25 +4,35 @@ import TheScore
 
 extension FenceResponse {
 
-    func compactHeistFormatted(_ projection: HeistReportProjection) -> String {
-        var text = "heist: \(projection.summary.executedTopLevelStepCount) top-level steps in \(projection.summary.durationMs)ms"
-        if let abortedAtPath = projection.summary.abortedAtPath {
+    func compactHeistFormatted(
+        _ report: HeistReport,
+        profile: ProjectionProfile
+    ) -> String {
+        let profile = profile.heistReport
+        var text = "heist: \(report.summary.executedTopLevelStepCount) top-level steps in \(report.summary.durationMs)ms"
+        if let abortedAtPath = report.summary.abortedAtPath {
             text += " (stopped at \(abortedAtPath))"
         }
-        if let expectations = projection.summary.expectations {
+        if let expectations = report.summary.expectations {
             text += " [expectations: \(expectations.met)/\(expectations.checked)]"
         }
-        if let netDelta = projection.netDelta {
+        if case .changed(let trace) = report.accessibilityChange,
+           let netDelta = DeltaProjection(
+                trace: trace,
+                isComplete: true,
+                profile: profile,
+                includeScreenInterface: true
+           ) {
             text += " [net: \(netDelta.kind.rawValue)]"
         }
-        if let lastScreenId = projection.summary.finalScreenId {
+        if let lastScreenId = report.summary.finalScreenId {
             text = "\(lastScreenId) | \(text)"
         }
-        for (index, step) in projection.outputNodes.enumerated() {
+        for (index, step) in report.outputNodes.enumerated() {
             var line = "  [\(index)] \(Self.compactHeistStepName(step))"
             var detailLines: [String] = []
-            let delta = step.traceDelta
-            if let failureMessage = step.failureMessage {
+            let delta = step.evidence?.traceDelta(profile: profile)
+            if let failureMessage = step.failure?.message {
                 line += " -> error: \(failureMessage)"
                 detailLines = Self.compactHeistFailureDeltaLines(delta, step: step)
                 if let activationTrace = step.activationTrace {
@@ -50,7 +60,7 @@ extension FenceResponse {
 
     private static func compactHeistDeltaSummary(
         _ delta: DeltaProjection,
-        step: HeistReportNodeProjection
+        step: HeistReport.Node
     ) -> String? {
         let renderedDelta = Self.compactDelta(
             delta,
@@ -65,7 +75,7 @@ extension FenceResponse {
 
     private static func compactHeistFailureDeltaLines(
         _ delta: DeltaProjection?,
-        step: HeistReportNodeProjection
+        step: HeistReport.Node
     ) -> [String] {
         guard let delta else { return [] }
         let renderedDelta = Self.compactDelta(
@@ -83,7 +93,7 @@ extension FenceResponse {
 
     private static func compactHeistStepDeltaSummary(
         _ summary: String,
-        step: HeistReportNodeProjection
+        step: HeistReport.Node
     ) -> String {
         let method = Self.compactHeistStepName(step)
         let prefix = "\(method): "
@@ -91,8 +101,34 @@ extension FenceResponse {
         return String(summary.dropFirst(prefix.count))
     }
 
-    private static func compactHeistStepName(_ step: HeistReportNodeProjection) -> String {
+    private static func compactHeistStepName(_ step: HeistReport.Node) -> String {
         step.invocationDisplayName ?? step.command?.rawValue ?? step.kind.rawValue
     }
 
+}
+
+private extension HeistReport.Evidence {
+    func traceDelta(profile: ProjectionProfile) -> DeltaProjection? {
+        let result: ActionResult?
+        switch self {
+        case .action(_, let evidence):
+            result = evidence.reportedResult
+        case .wait(let evidence):
+            result = evidence.actionResult
+        case .repeatUntil(_, let evidence):
+            result = evidence.actionResult
+        case .invocation(_, let evidence):
+            result = evidence.expectationActionResult
+        case .caseSelection, .forEachString, .forEachElement, .warning:
+            result = nil
+        }
+        return result?.traceEvidence.flatMap {
+            DeltaProjection(
+                trace: $0.trace,
+                isComplete: $0.isComplete,
+                profile: profile,
+                includeScreenInterface: true
+            )
+        }
+    }
 }

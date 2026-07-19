@@ -11,7 +11,7 @@ extension TheFence {
         let command: Command
     }
 
-    typealias RequestHandler = @ButtonHeistActor @Sendable (TheFence) async throws -> FenceResponse
+    typealias ResponseOperation = @ButtonHeistActor @Sendable (TheFence) async throws -> FenceResponse
 
     struct DurableHeistActionCommand: Sendable {
         let action: HeistActionCommand
@@ -22,7 +22,7 @@ extension TheFence {
         }
     }
 
-    enum SingleStepHeistRequest: Sendable {
+    enum SingleStepHeistExecution: Sendable {
         case action(
             DurableHeistActionCommand,
             expectation: ExpectationPayload,
@@ -31,7 +31,7 @@ extension TheFence {
         case wait(WaitStep)
     }
 
-    struct DirectActionRequest: Sendable {
+    struct DirectActionExecution: Sendable {
         let action: HeistActionCommand
         let timeout: TimeInterval
 
@@ -42,13 +42,13 @@ extension TheFence {
         }
     }
 
-    enum DecodedRequestDispatch: Sendable {
-        case singleStepHeist(SingleStepHeistRequest)
-        case directAction(DirectActionRequest)
-        case handler(RequestHandler)
+    enum CommandExecution: Sendable {
+        case singleStepHeist(SingleStepHeistExecution)
+        case directAction(DirectActionExecution)
+        case response(ResponseOperation)
 
-        init(handler: @escaping RequestHandler) {
-            self = .handler(handler)
+        init(response: @escaping ResponseOperation) {
+            self = .response(response)
         }
     }
 
@@ -166,29 +166,29 @@ extension TheFence {
         )
     }
 
-    static func directActionDispatch(
+    static func directActionExecution(
         _ command: Command,
         _ action: HeistActionCommand,
         timeout: TimeInterval,
         expectationPayload: ExpectationPayload
-    ) throws -> DecodedRequestDispatch {
+    ) throws -> CommandExecution {
         guard expectationPayload.expectation == nil else {
             throw FenceError.invalidRequest(
                 "command \"\(command.rawValue)\" direct dispatch does not support expect"
             )
         }
-        guard let request = DirectActionRequest(action, timeout: timeout) else {
-            preconditionFailure("\(command.rawValue) definition classified a durable action as direct dispatch")
+        guard let execution = DirectActionExecution(action, timeout: timeout) else {
+            preconditionFailure("\(command.rawValue) contract classified a durable action as direct execution")
         }
-        return .directAction(request)
+        return .directAction(execution)
     }
 
-    static func appInteractionDispatch(
+    static func appInteractionExecution(
         _ command: Command,
         _ action: HeistActionCommand,
         actionTimeout: TimeInterval,
         expectationPayload: ExpectationPayload
-    ) throws -> DecodedRequestDispatch {
+    ) throws -> CommandExecution {
         if let durableAction = DurableHeistActionCommand(action) {
             return .singleStepHeist(.action(
                 durableAction,
@@ -196,7 +196,7 @@ extension TheFence {
                 actionTimeout: actionTimeout
             ))
         }
-        return try directActionDispatch(
+        return try directActionExecution(
             command,
             action,
             timeout: actionTimeout,
@@ -205,11 +205,11 @@ extension TheFence {
     }
 
     /// Admit a routed public command input into TheFence's typed runtime.
-    @_spi(ButtonHeistTooling) public func admit(_ input: FenceCommandInput) throws -> FenceOperationRequest {
+    @_spi(ButtonHeistTooling) public func admit(_ input: FenceCommandInput) throws -> AdmittedFenceCommand {
         try Self.validateBoundaryShape(command: input.command, arguments: input.arguments)
-        return FenceOperationRequest(
+        return AdmittedFenceCommand(
             command: input.command,
-            dispatch: try input.command.contract.admission(self, input.command, input.arguments)
+            execution: try input.command.contract.admission(self, input.command, input.arguments)
         )
     }
 }

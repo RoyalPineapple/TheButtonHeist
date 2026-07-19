@@ -5,27 +5,20 @@ import Foundation
 extension ClientAdmission {
 private enum RateLimitState: Equatable, Sendable {
     case accepting(timestamps: [Date])
-    case limitedUnnotified(timestamps: [Date])
     case limitedNotified(timestamps: [Date])
 
     var timestamps: [Date] {
         switch self {
         case .accepting(let timestamps),
-             .limitedUnnotified(let timestamps),
              .limitedNotified(let timestamps):
             return timestamps
         }
     }
+}
 
-    func limited(with timestamps: [Date]) -> Self {
-        switch self {
-        case .limitedNotified:
-            return .limitedNotified(timestamps: timestamps)
-        case .accepting,
-             .limitedUnnotified:
-            return .limitedUnnotified(timestamps: timestamps)
-        }
-    }
+enum RateLimitDecision: Equatable, Sendable {
+    case accept
+    case drop(shouldNotify: Bool)
 }
 
 struct RateLimiter: Equatable, Sendable {
@@ -39,30 +32,22 @@ struct RateLimiter: Equatable, Sendable {
         self.state = .accepting(timestamps: [])
     }
 
-    /// Records a message attempt. Returns true when the caller should drop it.
-    mutating func recordMessage(at now: Date = Date()) -> Bool {
+    mutating func admitMessage(at now: Date = Date()) -> RateLimitDecision {
         let activeTimestamps = state.timestamps.filter { now.timeIntervalSince($0) < 1.0 }
         guard activeTimestamps.count < maxMessagesPerSecond else {
-            state = state.limited(with: activeTimestamps)
-            return true
+            let shouldNotify: Bool
+            switch state {
+            case .accepting:
+                shouldNotify = true
+            case .limitedNotified:
+                shouldNotify = false
+            }
+            state = .limitedNotified(timestamps: activeTimestamps)
+            return .drop(shouldNotify: shouldNotify)
         }
 
         state = .accepting(timestamps: activeTimestamps + [now])
-        return false
-    }
-
-    /// Marks that this rate-limit window has notified the client.
-    /// Returns true only for the first notification in the current window.
-    mutating func markNotifiedIfNeeded() -> Bool {
-        switch state {
-        case .accepting:
-            return false
-        case .limitedNotified:
-            return false
-        case .limitedUnnotified(let timestamps):
-            state = .limitedNotified(timestamps: timestamps)
-            return true
-        }
+        return .accept
     }
 
 }

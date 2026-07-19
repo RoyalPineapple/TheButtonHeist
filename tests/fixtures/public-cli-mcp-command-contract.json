@@ -58,7 +58,7 @@
     },
     {
       "cliExposure" : "directCommand",
-      "description" : "Explicit mechanical/spatial drag using exactly one typed intent: elementToPoint (activation point or unit start override) or pointToPoint.",
+      "description" : "Explicit spatial drag action using exactly one typed intent: elementToPoint (activation point or unit start override) or pointToPoint.",
       "family" : "spatialAction",
       "inputSchemaSHA256" : "2357ec08cc5950270eaa1284846d495c4e98958dd7111d4a10e89d8f4cd2c891",
       "mcpExposure" : "notExposed",
@@ -221,7 +221,7 @@
     },
     {
       "cliExposure" : "directCommand",
-      "description" : "Explicit mechanical/spatial long press. Element targets dispatch at their activation point unless unitPoint supplies an element-frame override; point supplies a raw screen coordinate.",
+      "description" : "Explicit spatial longPress action. Element targets dispatch at their activation point unless unitPoint supplies an element-frame override; point supplies a raw screen coordinate.",
       "family" : "spatialAction",
       "inputSchemaSHA256" : "d55e29beebc26e4ee5587d1323fad2de413a30b673119ddd1b002a0b7369b43b",
       "mcpExposure" : "notExposed",
@@ -235,7 +235,7 @@
     },
     {
       "cliExposure" : "directCommand",
-      "description" : "Explicit mechanical/spatial tap. Element targets dispatch at their activation point unless unitPoint supplies an element-frame override; point supplies a raw screen coordinate. ordinary accessible controls should use the semantic command path.",
+      "description" : "Explicit spatial oneFingerTap action. Element targets dispatch at their activation point unless unitPoint supplies an element-frame override; point supplies a raw screen coordinate. Use activate for ordinary accessible controls.",
       "family" : "spatialAction",
       "inputSchemaSHA256" : "6ef23f829a4acfe015cc31161318ea50e863ad44e3561cd0a4db9bc525b96d0e",
       "mcpExposure" : "notExposed",
@@ -249,7 +249,7 @@
     },
     {
       "cliExposure" : "notExposed",
-      "description" : "Run one durable ButtonHeist DSL instruction from `step`: one action or one `WaitFor(...)` statement.\n\nExamples:\n`Activate(.label(\"Pay\")).expect(.changed(.screen()))`\n`TypeText(\"milk\", into: .label(\"Search\")).expect(.changed(.elements()))`\n`Increment(.label(\"Quantity\"))`\n`Decrement(.label(\"Quantity\"))`\n`CustomAction(\"Archive\", on: .label(\"Message\"))`\n`Rotor(\"Headings\", on: .label(\"Article\"))`\n`ScreenActions.Dismiss()`\n`ScreenActions.MagicTap()`\n`SetPasteboard(\"hello\")`\n`Edit(.paste)`\n`DismissKeyboard()`\n`Mechanical.Tap(.label(\"Map\"))`\n`Mechanical.Tap(ScreenPoint(x: 888, y: 372))`\n`Mechanical.Tap(.label(\"Map\"), at: UnitPoint(x: 0.5, y: 0.25))`\n`Mechanical.LongPress(.label(\"Message\"), at: UnitPoint(x: 0.5, y: 0.5))`\n`Mechanical.Swipe(.label(\"Carousel\"), .left)`\n`Mechanical.Drag(.label(\"Slider\"), to: ScreenPoint(x: 200, y: 40))`\n`WaitFor(.label(\"Checkout\"), timeout: 5)`\n\nUse `perform` when one line is enough. Use `run_heist` when the job needs\nmultiple instructions, reusable heists, `RunHeist`, `If`,\n`WaitFor(...).else { ... }`, `ForEach`, `Warn`, or `Fail`.",
+      "description" : "Run one durable ButtonHeist DSL instruction from `step`: one action or one `WaitFor(...)` statement.\n\nExamples:\n`Activate(.label(\"Pay\")).expect(.changed(.screen()))`\n`TypeText(\"milk\", into: .label(\"Search\")).expect(.changed(.elements()))`\n`Increment(.label(\"Quantity\"))`\n`Decrement(.label(\"Quantity\"))`\n`CustomAction(\"Archive\", on: .label(\"Message\"))`\n`Rotor(\"Headings\", on: .label(\"Article\"))`\n`ScreenActions.Dismiss()`\n`ScreenActions.MagicTap()`\n`SetPasteboard(\"hello\")`\n`Edit(.paste)`\n`dismissKeyboard()`\n`oneFingerTap(.label(\"Map\"))`\n`oneFingerTap(ScreenPoint(x: 888, y: 372))`\n`oneFingerTap(.label(\"Map\"), at: UnitPoint(x: 0.5, y: 0.25))`\n`longPress(.label(\"Message\"), at: UnitPoint(x: 0.5, y: 0.5))`\n`swipe(.label(\"Carousel\"), .left)`\n`drag(.label(\"Slider\"), to: ScreenPoint(x: 200, y: 40))`\n`WaitFor(.label(\"Checkout\"), timeout: 5)`\n\nUse `perform` when one line is enough. Use `run_heist` when the job needs\nmultiple instructions, reusable heists, `RunHeist`, `If`,\n`WaitFor(...).else { ... }`, `ForEach`, `Warn`, or `Fail`.",
       "family" : "heistRuntime",
       "inputSchemaSHA256" : "160bda4f9f66a3802a1026a26581c31999c01d489db5c8fb76adc30f8661ad74",
       "mcpExposure" : "directTool",
@@ -363,7 +363,7 @@
     },
     {
       "cliExposure" : "directCommand",
-      "description" : "Explicit mechanical/spatial swipe using exactly one typed intent: elementDirection, elementUnitPoints, pointToPoint, or pointDirection.",
+      "description" : "Explicit spatial swipe action using exactly one typed intent: elementDirection, elementUnitPoints, pointToPoint, or pointDirection.",
       "family" : "spatialAction",
       "inputSchemaSHA256" : "2d804ad98a7c642c6034487a5a248a863b424afaa8d5fe247ff97225eec2cd0e",
       "mcpExposure" : "notExposed",

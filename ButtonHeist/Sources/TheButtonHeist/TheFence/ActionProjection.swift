@@ -78,15 +78,31 @@ struct ActionProjection: Sendable {
 
     var payload: ActionPayloadProjection {
         switch result.payload {
-        case .value(let value):
-            return .value(value)
+        case .typeText(let value), .setPasteboard(let value), .getPasteboard(let value):
+            return value.map(ActionPayloadProjection.value) ?? .none
         case .rotor(let rotor):
-            return .rotor(rotor)
+            return rotor.map(ActionPayloadProjection.rotor) ?? .none
         case .screenshot(let screen):
+            guard let screen else { return .none }
             return .screenshot(width: screen.width, height: screen.height)
-        case .heistExecution(let heist):
-            return .heistExecutionStepCount(heist.steps.count)
-        case .none:
+        case .heist(let result):
+            return result.map { .heistExecutionStepCount($0.steps.count) } ?? .none
+        case .activate,
+             .increment,
+             .decrement,
+             .dismiss,
+             .magicTap,
+             .oneFingerTap,
+             .longPress,
+             .swipe,
+             .drag,
+             .customAction,
+             .editAction,
+             .dismissKeyboard,
+             .scroll,
+             .scrollToVisible,
+             .scrollToEdge,
+             .wait:
             return .none
         }
     }

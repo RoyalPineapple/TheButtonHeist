@@ -70,7 +70,7 @@ public struct ScreenPoint: Codable, Sendable, Equatable, Hashable, CustomStringC
     }
 
     public var description: String {
-        "point(\(ScoreDescription.decimal(x)),\(ScoreDescription.decimal(y)))"
+        "point(\(CanonicalValueDescription.decimal(x)),\(CanonicalValueDescription.decimal(y)))"
     }
 }
 
@@ -92,7 +92,7 @@ public enum GestureProjectionError: Error, Sendable, Equatable, CustomStringConv
         case .missingSwipeIntent:
             return "swipe requires a start target or point and an end point or direction"
         case .invalidDuration(let observed, let expected):
-            return "duration must be \(expected) (observed \(ScoreDescription.decimal(observed)))"
+            return "duration must be \(expected) (observed \(CanonicalValueDescription.decimal(observed)))"
         }
     }
 }
@@ -190,7 +190,7 @@ public enum GesturePointSelection: Codable, Sendable, Equatable, CustomStringCon
         case .element(let target):
             return target.description
         case .elementUnitPoint(let target, let unitPoint):
-            return ScoreDescription.call("unitPoint", [
+            return CanonicalValueDescription.call("unitPoint", [
                 target.description,
                 "at=\(unitPoint)",
             ])

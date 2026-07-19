@@ -12,88 +12,88 @@ extension TheBrainsPipelineTests {
 
     // MARK: - Wait Evidence Path
 
-    func testWaitSuccessReceiptUsesSettledVisibleObservation() async throws {
+    func testWaitSuccessResultUsesSettledVisibleObservation() async throws {
         brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
             makeScreen(elements: [("Home", .header, "home")])
         )
-        let receipt = await brains.interactionObservation.waitForPredicate(
+        let result = await brains.interactionCoordinator.waitForPredicate(
             try resolvedWait(WaitStep(predicate: .exists(.label("Home")), timeout: .milliseconds(1)))
         )
-        let trace = try XCTUnwrap(receipt.result.actionResult.accessibilityTrace)
+        let trace = try XCTUnwrap(result.outcome.actionResult.accessibilityTrace)
 
-        XCTAssertTrue(receipt.result.actionResult.outcome.isSuccess)
+        XCTAssertTrue(result.outcome.actionResult.outcome.isSuccess)
         XCTAssertEqual(trace.captures.last?.interface.projectedElements.map(\.label), ["Home"])
-        XCTAssertTrue(receipt.result.expectation.met)
+        XCTAssertTrue(result.outcome.expectation.met)
     }
 
-    func testWaitTimeoutReceiptUsesLastSettledVisibleObservation() async throws {
+    func testWaitTimeoutResultUsesLastSettledVisibleObservation() async throws {
         brains.vault.installObservationForTesting(
             makeScreen(elements: [("Known", .staticText, "known")])
         )
-        let receipt = await brains.interactionObservation.waitForPredicate(
+        let result = await brains.interactionCoordinator.waitForPredicate(
             try resolvedWait(WaitStep(predicate: .exists(.label("Missing")), timeout: .milliseconds(1)))
         )
-        let trace = try XCTUnwrap(receipt.result.actionResult.accessibilityTrace)
+        let trace = try XCTUnwrap(result.outcome.actionResult.accessibilityTrace)
 
-        XCTAssertFalse(receipt.result.actionResult.outcome.isSuccess)
-        XCTAssertEqual(receipt.result.actionResult.outcome.errorKind, .timeout)
+        XCTAssertFalse(result.outcome.actionResult.outcome.isSuccess)
+        XCTAssertEqual(result.outcome.actionResult.outcome.failureKind, .timeout)
         XCTAssertEqual(trace.captures.last?.interface.projectedElements.map(\.label), ["Known"])
-        XCTAssertTrue(receipt.result.actionResult.message?.contains("interface: 1 elements") == true)
-        XCTAssertTrue(receipt.result.actionResult.message?.contains("last result:") == true)
+        XCTAssertTrue(result.outcome.actionResult.message?.contains("interface: 1 elements") == true)
+        XCTAssertTrue(result.outcome.actionResult.message?.contains("last result:") == true)
     }
 
     func testAppearedWaitRequiresObservedTransitionWhenFinalStateIsAlreadyPresent() async throws {
         let ready = makeScreen(elements: [("Ready", .staticText, "ready")])
-        let receipt = try await temporalWaitReceipt(
+        let result = try await temporalWaitResult(
             predicate: .changed(.elements([.appeared(.label("Ready"))])),
             baseline: ready,
             final: ready
         )
 
-        XCTAssertFalse(receipt.result.actionResult.outcome.isSuccess)
-        XCTAssertEqual(receipt.result.actionResult.outcome.errorKind, .timeout)
-        XCTAssertFalse(receipt.result.expectation.met)
-        XCTAssertTrue(elementChanges(in: receipt).isEmpty)
+        XCTAssertFalse(result.outcome.actionResult.outcome.isSuccess)
+        XCTAssertEqual(result.outcome.actionResult.outcome.failureKind, .timeout)
+        XCTAssertFalse(result.outcome.expectation.met)
+        XCTAssertTrue(elementChanges(in: result).isEmpty)
     }
 
     func testAppearedWaitSucceedsFromCanonicalTransition() async throws {
-        let receipt = try await temporalWaitReceipt(
+        let result = try await temporalWaitResult(
             predicate: .changed(.elements([.appeared(.label("Ready"))])),
             baseline: .empty,
             final: makeScreen(elements: [("Ready", .staticText, "ready")])
         )
-        let changes = try XCTUnwrap(elementChanges(in: receipt).first)
+        let changes = try XCTUnwrap(elementChanges(in: result).first)
 
-        XCTAssertTrue(receipt.result.actionResult.outcome.isSuccess)
-        XCTAssertTrue(receipt.result.expectation.met)
+        XCTAssertTrue(result.outcome.actionResult.outcome.isSuccess)
+        XCTAssertTrue(result.outcome.expectation.met)
         XCTAssertEqual(changes.appeared.count, 1)
         XCTAssertTrue(changes.disappeared.isEmpty)
         XCTAssertTrue(changes.updated.isEmpty)
     }
 
     func testDisappearedWaitRequiresObservedTransitionWhenFinalStateIsAlreadyAbsent() async throws {
-        let receipt = try await temporalWaitReceipt(
+        let result = try await temporalWaitResult(
             predicate: .changed(.elements([.disappeared(.label("Loading"))])),
             baseline: .empty,
             final: .empty
         )
 
-        XCTAssertFalse(receipt.result.actionResult.outcome.isSuccess)
-        XCTAssertEqual(receipt.result.actionResult.outcome.errorKind, .timeout)
-        XCTAssertFalse(receipt.result.expectation.met)
-        XCTAssertTrue(elementChanges(in: receipt).isEmpty)
+        XCTAssertFalse(result.outcome.actionResult.outcome.isSuccess)
+        XCTAssertEqual(result.outcome.actionResult.outcome.failureKind, .timeout)
+        XCTAssertFalse(result.outcome.expectation.met)
+        XCTAssertTrue(elementChanges(in: result).isEmpty)
     }
 
     func testDisappearedWaitSucceedsFromCanonicalTransition() async throws {
-        let receipt = try await temporalWaitReceipt(
+        let result = try await temporalWaitResult(
             predicate: .changed(.elements([.disappeared(.label("Loading"))])),
             baseline: makeScreen(elements: [("Loading", .staticText, "loading")]),
             final: .empty
         )
-        let changes = try XCTUnwrap(elementChanges(in: receipt).first)
+        let changes = try XCTUnwrap(elementChanges(in: result).first)
 
-        XCTAssertTrue(receipt.result.actionResult.outcome.isSuccess)
-        XCTAssertTrue(receipt.result.expectation.met)
+        XCTAssertTrue(result.outcome.actionResult.outcome.isSuccess)
+        XCTAssertTrue(result.outcome.expectation.met)
         XCTAssertTrue(changes.appeared.isEmpty)
         XCTAssertEqual(changes.disappeared.count, 1)
         XCTAssertTrue(changes.updated.isEmpty)
@@ -101,7 +101,7 @@ extension TheBrainsPipelineTests {
 
     func testUpdatedWaitRequiresObservedTransitionWhenFinalStateAlreadyMatches() async throws {
         let quantity = volumeScreen(value: "3")
-        let receipt = try await temporalWaitReceipt(
+        let result = try await temporalWaitResult(
             predicate: .changed(.elements([.updated(
                 .label("Volume"),
                 .value(before: "2", after: "3")
@@ -110,14 +110,14 @@ extension TheBrainsPipelineTests {
             final: quantity
         )
 
-        XCTAssertFalse(receipt.result.actionResult.outcome.isSuccess)
-        XCTAssertEqual(receipt.result.actionResult.outcome.errorKind, .timeout)
-        XCTAssertFalse(receipt.result.expectation.met)
-        XCTAssertTrue(elementChanges(in: receipt).isEmpty)
+        XCTAssertFalse(result.outcome.actionResult.outcome.isSuccess)
+        XCTAssertEqual(result.outcome.actionResult.outcome.failureKind, .timeout)
+        XCTAssertFalse(result.outcome.expectation.met)
+        XCTAssertTrue(elementChanges(in: result).isEmpty)
     }
 
     func testUpdatedWaitSucceedsFromCanonicalTransition() async throws {
-        let receipt = try await temporalWaitReceipt(
+        let result = try await temporalWaitResult(
             predicate: .changed(.elements([.updated(
                 .label("Volume"),
                 .value(before: "2", after: "3")
@@ -125,10 +125,10 @@ extension TheBrainsPipelineTests {
             baseline: volumeScreen(value: "2"),
             final: volumeScreen(value: "3")
         )
-        let changes = try XCTUnwrap(elementChanges(in: receipt).first)
+        let changes = try XCTUnwrap(elementChanges(in: result).first)
 
-        XCTAssertTrue(receipt.result.actionResult.outcome.isSuccess)
-        XCTAssertTrue(receipt.result.expectation.met)
+        XCTAssertTrue(result.outcome.actionResult.outcome.isSuccess)
+        XCTAssertTrue(result.outcome.expectation.met)
         XCTAssertTrue(changes.appeared.isEmpty)
         XCTAssertTrue(changes.disappeared.isEmpty)
         XCTAssertEqual(changes.updated.count, 1)
@@ -141,13 +141,13 @@ extension TheBrainsPipelineTests {
         let after = brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
             volumeScreen(value: "3")
         )
-        let receipt = await brains.interactionObservation.waitForPredicate(
+        let result = await brains.interactionCoordinator.waitForPredicate(
             try resolvedWait(WaitStep(predicate: .changed(.elements()), timeout: .milliseconds(1))),
             initialTrace: after.trace
         )
 
-        XCTAssertTrue(receipt.result.actionResult.outcome.isSuccess)
-        XCTAssertTrue(receipt.result.expectation.met)
+        XCTAssertTrue(result.outcome.actionResult.outcome.isSuccess)
+        XCTAssertTrue(result.outcome.expectation.met)
     }
 
     func testSuppliedCanonicalBaselineOverridesStaleInitialTrace() async throws {
@@ -162,19 +162,19 @@ extension TheBrainsPipelineTests {
             volumeScreen(value: "1")
         )
         let staleHash = try XCTUnwrap(staleEvent.trace.captures.last?.hash)
-        let receipt = await brains.interactionObservation.waitForPredicate(
+        let result = await brains.interactionCoordinator.waitForPredicate(
             try resolvedWait(WaitStep(predicate: .changed(.elements()), timeout: .milliseconds(1))),
             initialTrace: staleEvent.trace,
             changeBaseline: .supplied(before)
         )
 
-        XCTAssertTrue(receipt.result.actionResult.outcome.isSuccess)
-        XCTAssertTrue(receipt.result.expectation.met)
+        XCTAssertTrue(result.outcome.actionResult.outcome.isSuccess)
+        XCTAssertTrue(result.outcome.expectation.met)
         XCTAssertEqual(
-            receipt.result.actionResult.accessibilityTrace?.captures.map(\.hash),
+            result.outcome.actionResult.accessibilityTrace?.captures.map(\.hash),
             [before.capture.hash, after.capture.hash]
         )
-        XCTAssertFalse(receipt.result.actionResult.accessibilityTrace?.captures.contains { $0.hash == staleHash } == true)
+        XCTAssertFalse(result.outcome.actionResult.accessibilityTrace?.captures.contains { $0.hash == staleHash } == true)
     }
 
     func testPredicateWaitBuildsScreenChangeHistoryOnlyFromCanonicalObservationLog() async throws {
@@ -195,7 +195,7 @@ extension TheBrainsPipelineTests {
         let before = try XCTUnwrap(beforeEvent.settledCapture)
         let actionEndpoint = try XCTUnwrap(actionEndpointEvent.settledCapture)
         let destination = try XCTUnwrap(destinationEvent.settledCapture)
-        let receipt = await brains.interactionObservation.waitForPredicate(
+        let result = await brains.interactionCoordinator.waitForPredicate(
             try resolvedWait(WaitStep(
                 predicate: .changed(.screen([.exists(.label("Menu"))])),
                 timeout: .milliseconds(1)
@@ -203,16 +203,16 @@ extension TheBrainsPipelineTests {
             changeBaseline: .supplied(before)
         )
 
-        XCTAssertTrue(receipt.result.actionResult.outcome.isSuccess)
-        XCTAssertTrue(receipt.result.expectation.met)
-        XCTAssertEqual(receipt.result.actionResult.traceEvidence?.completeness, .complete)
-        let receiptTrace = try XCTUnwrap(receipt.result.actionResult.accessibilityTrace)
+        XCTAssertTrue(result.outcome.actionResult.outcome.isSuccess)
+        XCTAssertTrue(result.outcome.expectation.met)
+        XCTAssertEqual(result.outcome.actionResult.traceEvidence?.completeness, .complete)
+        let resultTrace = try XCTUnwrap(result.outcome.actionResult.accessibilityTrace)
         XCTAssertEqual(
-            receiptTrace.captures.map(\.hash),
+            resultTrace.captures.map(\.hash),
             [before.capture.hash, actionEndpoint.capture.hash, destination.capture.hash]
         )
-        XCTAssertEqual(receiptTrace.captures.last?.interface.projectedElements.last?.label, "Menu")
-        XCTAssertTrue(receiptTrace.changeFacts.contains {
+        XCTAssertEqual(resultTrace.captures.last?.interface.projectedElements.last?.label, "Menu")
+        XCTAssertTrue(resultTrace.changeFacts.contains {
             if case .screenChanged = $0 { true } else { false }
         })
     }
@@ -305,7 +305,7 @@ extension TheBrainsPipelineTests {
         XCTAssertEqual(window.trace.changeFacts.count, 3)
     }
 
-    func testCompleteObservationWindowProducesUnchangedWaitProof() async throws {
+    func testCompleteObservationWindowProducesUnchangedWaitEvidence() async throws {
         let baselineEvent = brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
             volumeScreen(value: "50%")
         )
@@ -323,16 +323,15 @@ extension TheBrainsPipelineTests {
 
         let expression = AccessibilityPredicate.noChange
         let predicate = try resolvedPredicate(expression)
-        let receipt = await brains.interactionObservation.waitForPredicate(
+        let result = await brains.interactionCoordinator.waitForPredicate(
             try resolvedWait(WaitStep(predicate: expression, timeout: .milliseconds(1))),
             changeBaseline: .supplied(baseline)
         )
 
-        XCTAssertTrue(receipt.result.actionResult.outcome.isSuccess)
-        XCTAssertTrue(receipt.result.expectation.met)
-        XCTAssertEqual(receipt.result.actionResult.traceEvidence?.completeness, .complete)
-        XCTAssertEqual(receipt.result.actionResult.traceEvidence?.completeness, .complete)
-        XCTAssertTrue(predicate.validate(against: receipt.result.actionResult).met)
+        XCTAssertTrue(result.outcome.actionResult.outcome.isSuccess)
+        XCTAssertTrue(result.outcome.expectation.met)
+        XCTAssertEqual(result.outcome.actionResult.traceEvidence?.completeness, .complete)
+        XCTAssertTrue(predicate.validate(against: result.outcome.actionResult).met)
     }
 
     func testIncompleteObservationWindowTimesOutUnchangedWait() async throws {
@@ -358,20 +357,19 @@ extension TheBrainsPipelineTests {
 
         let expression = AccessibilityPredicate.noChange
         let predicate = try resolvedPredicate(expression)
-        let receipt = await brains.interactionObservation.waitForPredicate(
+        let result = await brains.interactionCoordinator.waitForPredicate(
             try resolvedWait(WaitStep(predicate: expression, timeout: .milliseconds(1))),
             changeBaseline: .supplied(baseline)
         )
         let laterValidation = predicate.validate(
-            against: receipt.result.actionResult
+            against: result.outcome.actionResult
         )
 
-        XCTAssertFalse(receipt.result.actionResult.outcome.isSuccess)
-        XCTAssertEqual(receipt.result.actionResult.outcome.errorKind, .timeout)
-        XCTAssertFalse(receipt.result.expectation.met)
-        XCTAssertEqual(receipt.result.expectation.actual, "observation history incomplete")
-        XCTAssertEqual(receipt.result.actionResult.traceEvidence?.completeness, .incomplete)
-        XCTAssertEqual(receipt.result.actionResult.traceEvidence?.completeness, .incomplete)
+        XCTAssertFalse(result.outcome.actionResult.outcome.isSuccess)
+        XCTAssertEqual(result.outcome.actionResult.outcome.failureKind, .timeout)
+        XCTAssertFalse(result.outcome.expectation.met)
+        XCTAssertEqual(result.outcome.expectation.actual, "observation history incomplete")
+        XCTAssertEqual(result.outcome.actionResult.traceEvidence?.completeness, .incomplete)
         XCTAssertFalse(laterValidation.met)
         XCTAssertEqual(laterValidation.actual, "observation history incomplete")
     }
@@ -400,7 +398,7 @@ extension TheBrainsPipelineTests {
         XCTAssertNotEqual(window.captures.first?.cursor, baseline.cursor)
         XCTAssertEqual(window.trace.changeFacts.count, 1)
 
-        let observation = brains.postActionObservation.semanticObservation(from: currentEvent)
+        let observation = brains.actionEvidenceProjector.projectSettledEvidence(from: currentEvent)
         let expression = AccessibilityPredicate.changed(.elements())
         let predicateResult = PredicateObservationEvidence(
             observation: observation,

@@ -9,7 +9,7 @@ extension Actions {
 
     enum GestureResolution<Value> {
         case success(Value)
-        case failure(TheSafecracker.ActionDispatchOutcome)
+        case failure(TheSafecracker.ActionDispatchResult)
     }
 
     enum GesturePointSource {
@@ -29,35 +29,39 @@ extension Actions {
 
     func resolveGesturePoint(
         selection: ResolvedGesturePointSelection,
-        method: ActionMethod,
+        payload: ActionResult.Payload,
     ) async -> GestureResolution<ResolvedGesturePoint> {
         let inflatedTarget: ElementInflation.InflatedElementTarget?
         switch selection {
         case .element(let target), .elementUnitPoint(let target, _):
             switch await navigation.elementInflation.inflate(
                 for: target,
-                method: method,
+                method: payload.method,
             ) {
             case .inflated(let target):
                 inflatedTarget = target
             case .failed(let failure):
-                return .failure(failure.actionDispatchOutcome(commandMethod: method))
+                return .failure(failure.actionDispatchResult(payload: payload))
             }
         case .coordinate:
             inflatedTarget = nil
         }
-        return resolveGesturePoint(from: inflatedTarget, selection: selection, method: method)
+        return resolveGesturePoint(from: inflatedTarget, selection: selection, payload: payload)
     }
 
     func resolveGesturePoint(
         from inflatedTarget: ElementInflation.InflatedElementTarget?,
         selection: ResolvedGesturePointSelection,
-        method: ActionMethod
+        payload: ActionResult.Payload
     ) -> GestureResolution<ResolvedGesturePoint> {
         switch selection {
         case .element:
             guard let inflatedTarget else {
-                return .failure(.failure(method, message: "No target specified", failureKind: .targetUnavailable))
+                return .failure(.failure(
+                    payload,
+                    message: "No target specified",
+                    failureKind: .targetUnavailable
+                ))
             }
             return .success(ResolvedGesturePoint(
                 source: .liveTarget(inflatedTarget.liveTarget, unitPoint: nil),
@@ -65,7 +69,11 @@ extension Actions {
             ))
         case .elementUnitPoint(_, let unitPoint):
             guard let inflatedTarget else {
-                return .failure(.failure(method, message: "No target specified", failureKind: .targetUnavailable))
+                return .failure(.failure(
+                    payload,
+                    message: "No target specified",
+                    failureKind: .targetUnavailable
+                ))
             }
             return .success(ResolvedGesturePoint(
                 source: .liveTarget(inflatedTarget.liveTarget, unitPoint: unitPoint),
@@ -81,12 +89,12 @@ extension Actions {
 
     func prepareGestureDispatch<PreparedDispatch: Sendable>(
         for resolvedPoint: ResolvedGesturePoint,
-        method: ActionMethod,
+        payload: ActionResult.Payload,
         prepare: (CGPoint) -> GestureResolution<PreparedDispatch?>
     ) -> GestureResolution<PreparedGestureDispatch<PreparedDispatch>> {
         switch resolvedPoint.source {
         case .coordinate(let point):
-            return prepareGestureDispatch(at: point, method: method, prepare: prepare)
+            return prepareGestureDispatch(at: point, payload: payload, prepare: prepare)
         case .liveTarget(let liveTarget, let unitPoint):
             switch vault.dispatchOnFreshLiveActionTarget(
                 liveTarget,
@@ -97,8 +105,8 @@ extension Actions {
                     let frame = currentTarget.frame
                     if let message = GeometryValidation.validateRect(frame, field: "frame") {
                         return .failure(.failure(
-                            method,
-                            message: "\(method.rawValue) failed: \(message)",
+                            payload,
+                            message: "\(payload.method.rawValue) failed: \(message)",
                             failureKind: .inputValidation
                         ))
                     }
@@ -109,23 +117,23 @@ extension Actions {
                 } else {
                     point = currentTarget.activationPoint
                 }
-                return prepareGestureDispatch(at: point, method: method, prepare: prepare)
+                return prepareGestureDispatch(at: point, payload: payload, prepare: prepare)
                 }
             ) {
             case .success(let resolution):
                 return resolution
             case .failure(let staleness):
-                return .failure(staleLiveTargetFailure(staleness, method: method))
+                return .failure(staleLiveTargetFailure(staleness, payload: payload))
             }
         }
     }
 
     private func prepareGestureDispatch<PreparedDispatch: Sendable>(
         at point: CGPoint,
-        method: ActionMethod,
+        payload: ActionResult.Payload,
         prepare: (CGPoint) -> GestureResolution<PreparedDispatch?>
     ) -> GestureResolution<PreparedGestureDispatch<PreparedDispatch>> {
-        if let failure = geometryFailure(method: method, field: "point", point: point) {
+        if let failure = geometryFailure(payload: payload, field: "point", point: point) {
             return .failure(failure)
         }
         switch prepare(point) {
@@ -137,27 +145,27 @@ extension Actions {
     }
 
     func geometryFailure(
-        method: ActionMethod,
+        payload: ActionResult.Payload,
         field: String,
         point: CGPoint
-    ) -> TheSafecracker.ActionDispatchOutcome? {
+    ) -> TheSafecracker.ActionDispatchResult? {
         guard let message = GeometryValidation.validateScreenPoint(point, field: field) else { return nil }
         return .failure(
-            method,
-            message: "\(method.rawValue) failed: \(message)",
+            payload,
+            message: "\(payload.method.rawValue) failed: \(message)",
             failureKind: .inputValidation
         )
     }
 
     func geometryFailure(
-        method: ActionMethod,
+        payload: ActionResult.Payload,
         field: String,
         points: [CGPoint]
-    ) -> TheSafecracker.ActionDispatchOutcome? {
+    ) -> TheSafecracker.ActionDispatchResult? {
         guard let message = GeometryValidation.validateScreenPoints(points, field: field) else { return nil }
         return .failure(
-            method,
-            message: "\(method.rawValue) failed: \(message)",
+            payload,
+            message: "\(payload.method.rawValue) failed: \(message)",
             failureKind: .inputValidation
         )
     }

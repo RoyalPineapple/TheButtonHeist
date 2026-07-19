@@ -34,7 +34,7 @@ extension TheGetaway {
         await sendMessage(.info(info), respond: respond)
     }
 
-    func makeStatusPayload() async -> StatusPayload {
+    func captureStatus() async -> StatusPayload {
         let appName = Bundle.main.infoDictionary?["CFBundleName"] as? String ?? "App"
         let appBuild = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? ""
 
@@ -60,7 +60,7 @@ extension TheGetaway {
         return StatusPayload(identity: identity, session: session)
     }
 
-    static func makePongPayload(identity: ServerIdentity) -> PongPayload {
+    static func capturePongPayload(identity: ServerIdentity) -> PongPayload {
         let info = Bundle.main.infoDictionary ?? [:]
         let appName = (info["CFBundleDisplayName"] as? String)
             ?? (info["CFBundleName"] as? String)

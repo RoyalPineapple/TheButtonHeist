@@ -11,11 +11,6 @@ extension ClientAdmission {
         var rateLimiter: RateLimiter
     }
 
-    enum MessageAdmission: Equatable, Sendable {
-        case accepted
-        case rateLimited(shouldNotify: Bool)
-    }
-
     /// Auth/admission source of truth owned by `ClientAdmission.Reducer`.
     struct Registry {
     private var clients: [Int: Client] = [:]
@@ -50,27 +45,22 @@ extension ClientAdmission {
         return state
     }
 
-    mutating func recordMessage(_ clientId: Int, at now: Date) -> MessageAdmission {
+    mutating func admitMessage(_ clientId: Int, at now: Date) -> RateLimitDecision {
         var client = clients[clientId] ?? Client(
             registration: .unregistered,
             rateLimiter: RateLimiter()
         )
-        guard client.rateLimiter.recordMessage(at: now) else {
-            clients[clientId] = client
-            return .accepted
-        }
-
-        let shouldNotify = client.rateLimiter.markNotifiedIfNeeded()
+        let decision = client.rateLimiter.admitMessage(at: now)
         clients[clientId] = client
-        return .rateLimited(shouldNotify: shouldNotify)
+        return decision
     }
 
     mutating func validateHello(_ clientId: Int) -> Authentication.Transition {
-        reduce(.validateHello, for: clientId)
+        reduce(.helloValidationRequested, for: clientId)
     }
 
     mutating func completeAuthentication(_ clientId: Int) -> Authentication.Transition {
-        reduce(.completeAuthentication, for: clientId)
+        reduce(.authenticationCompletionRequested, for: clientId)
     }
 
     private mutating func reduce(
@@ -82,7 +72,7 @@ extension ClientAdmission {
         let transition = Authentication.Reducer().reduce(currentState, event: event)
 
         switch transition {
-        case .advanced(let state, effect: _):
+        case .advanced(let state, outcome: _):
             var updatedClient = client
             updatedClient.registration = .registered(state)
             clients[clientId] = updatedClient

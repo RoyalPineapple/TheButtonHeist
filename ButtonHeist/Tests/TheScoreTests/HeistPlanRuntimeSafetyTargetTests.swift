@@ -4,7 +4,7 @@ import Testing
 @testable import TheScore
 
 private let nonDurableHeistActionRepairHint =
-    "Use a direct client command for viewport/debug/session actions, or replace " +
+    "Use a direct client command for debug/session actions, or replace " +
     "this with a canonical durable DSL action."
 
 private func expectNonDurableHeistActionFailure(
@@ -75,7 +75,7 @@ func heistPlanConstructionRejectsNonDurableActions() throws {
 func heistPlanJSONDecodeRejectsNonDurableActions() throws {
     let expectedFailure = try #require(
         HeistActionCommand
-            .viewportScroll(ScrollTarget(selection: .container("scrollable_0_0_40_50"), direction: .down))
+            .scroll(ScrollTarget(selection: .container("scrollable_0_0_40_50"), direction: .down))
             .durableHeistActionFailure
     )
     let json = """

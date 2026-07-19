@@ -33,14 +33,14 @@ extension TheBrains {
             )
         }
 
-        let receipt = await runtime.wait(.standalone(resolvedWait, startedAt: start))
-        switch receipt.result {
+        let result = await runtime.wait(.standalone(resolvedWait, startedAt: start))
+        switch result.outcome {
         case .matched(let actionResult, let expectation):
             let evidence = HeistWaitEvidence.matched(
                 .init(executed: actionResult, expectation: expectation),
                 finalSummary: expectation.actual
             )
-            return waitReceipt(
+            return waitStepResult(
                 step: step,
                 completion: .passed(evidence: .init(admitted: evidence)),
                 path: path,
@@ -53,11 +53,11 @@ extension TheBrains {
                     .init(executed: actionResult, expectation: expectation.result),
                     finalSummary: expectation.actual
                 )
-                return waitReceipt(
+                return waitStepResult(
                     step: step,
                     completion: .failed(
                         evidence: .observed(.init(admitted: evidence)),
-                        failure: standaloneWaitFailureDetail(wait: step, receipt: receipt)
+                        failure: standaloneWaitFailureDetail(wait: step, result: result)
                     ),
                     path: path,
                     start: start
@@ -86,7 +86,7 @@ extension TheBrains {
                     children: children
                 )
             }
-            return waitReceipt(
+            return waitStepResult(
                 step: step,
                 completion: completion,
                 path: path,
@@ -95,7 +95,7 @@ extension TheBrains {
         }
     }
 
-    private func waitReceipt(
+    private func waitStepResult(
         step: WaitStep,
         completion: HeistWaitCompletion,
         path: HeistExecutionPath,
@@ -112,8 +112,8 @@ extension TheBrains {
     }
 }
 
-struct HeistWaitReceipt {
-    enum Result {
+struct HeistWaitResult {
+    enum Outcome {
         case matched(ActionResult, ExpectationResult.Met)
         case unmatched(ActionResult, ExpectationResult.Unmet)
 
@@ -134,16 +134,16 @@ struct HeistWaitReceipt {
         }
     }
 
-    let result: Result
+    let outcome: Outcome
     let observedSequence: SettledObservationSequence?
     let observationSummary: String?
 
     private init(
-        result: Result,
+        outcome: Outcome,
         observedSequence: SettledObservationSequence?,
         observationSummary: String?
     ) {
-        self.result = result
+        self.outcome = outcome
         self.observedSequence = observedSequence
         self.observationSummary = observationSummary
     }
@@ -155,11 +155,11 @@ struct HeistWaitReceipt {
         observedSequence: SettledObservationSequence? = nil,
         observationSummary: String? = nil,
         announcement: ActionAnnouncementText? = nil
-    ) -> HeistWaitReceipt {
-        HeistWaitReceipt(
-            result: .matched(
+    ) -> HeistWaitResult {
+        HeistWaitResult(
+            outcome: .matched(
                 makeActionResult(
-                    errorKind: nil,
+                    failureKind: nil,
                     message: message,
                     traceEvidence: traceEvidence,
                     announcement: announcement
@@ -177,11 +177,11 @@ struct HeistWaitReceipt {
         expectation: ExpectationResult.Unmet,
         observedSequence: SettledObservationSequence? = nil,
         observationSummary: String? = nil
-    ) -> HeistWaitReceipt {
-        HeistWaitReceipt(
-            result: .unmatched(
+    ) -> HeistWaitResult {
+        HeistWaitResult(
+            outcome: .unmatched(
                 makeActionResult(
-                    errorKind: .timeout,
+                    failureKind: .timeout,
                     message: message,
                     traceEvidence: traceEvidence,
                     announcement: nil
@@ -194,16 +194,16 @@ struct HeistWaitReceipt {
     }
 
     static func failed(
-        errorKind: ErrorKind,
+        failureKind: ActionFailure.Kind,
         message: String?,
         traceEvidence: AccessibilityTraceEvidence?,
         expectation: ExpectationResult.Unmet,
         announcement: ActionAnnouncementText? = nil
-    ) -> HeistWaitReceipt {
-        HeistWaitReceipt(
-            result: .unmatched(
+    ) -> HeistWaitResult {
+        HeistWaitResult(
+            outcome: .unmatched(
                 makeActionResult(
-                    errorKind: errorKind,
+                    failureKind: failureKind,
                     message: message,
                     traceEvidence: traceEvidence,
                     announcement: announcement
@@ -216,7 +216,7 @@ struct HeistWaitReceipt {
     }
 
     private static func makeActionResult(
-        errorKind: ErrorKind?,
+        failureKind: ActionFailure.Kind?,
         message: String?,
         traceEvidence: AccessibilityTraceEvidence?,
         announcement: ActionAnnouncementText?
@@ -230,16 +230,16 @@ struct HeistWaitReceipt {
         case (let evidence?, _):
             observation = .trace(evidence)
         }
-        if let errorKind {
+        if let failureKind {
             return ActionResult.failure(
-                method: .wait,
-                errorKind: errorKind,
+                payload: .wait,
+                failureKind: failureKind,
                 message: message,
                 observation: observation
             )
         }
         return ActionResult.success(
-            method: .wait,
+            payload: .wait,
             message: message,
             observation: observation
         )

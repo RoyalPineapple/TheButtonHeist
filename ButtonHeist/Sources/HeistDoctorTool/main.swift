@@ -13,15 +13,15 @@ enum HeistDoctorToolOutput {
 struct HeistDoctorCommand: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "heist-doctor",
-        abstract: "Alpha: suggest offline heist target repairs from two execution receipts",
+        abstract: "Alpha: suggest offline heist target repairs from two execution results",
         discussion: """
             heist-doctor is an alpha, suggestion-only offline tool.
 
-            heist-doctor reads durable HeistExecutionResult JSON receipts. It
+            heist-doctor reads durable HeistResult JSON results. It
             compares a last passing run with a new failing run and prints repair
             candidates for the failed action step. It never connects to an app,
             reruns a heist, edits a plan, or changes playback behavior.
-            Receipt inputs may be plain JSON or gzip-compressed JSON.
+            Result inputs may be plain JSON or gzip-compressed JSON.
 
             Examples:
               heist-doctor --last-pass last-pass.json --new-fail new-fail.json
@@ -31,10 +31,10 @@ struct HeistDoctorCommand: ParsableCommand {
             """
     )
 
-    @Option(name: .long, help: "Path to the last passing HeistExecutionResult JSON or JSON.gz receipt.")
+    @Option(name: .long, help: "Path to the last passing HeistResult JSON or JSON.gz result.")
     var lastPass: String
 
-    @Option(name: .long, help: "Path to the new failing HeistExecutionResult JSON or JSON.gz receipt.")
+    @Option(name: .long, help: "Path to the new failing HeistResult JSON or JSON.gz result.")
     var newFail: String
 
     @Option(name: .long, help: "Optional action step path to compare instead of the first failed step.")
@@ -44,12 +44,12 @@ struct HeistDoctorCommand: ParsableCommand {
     var format: HeistDoctorOutputFormat = .human
 
     mutating func run() throws {
-        let lastPassReceipt = try Self.decodeReceipt(at: lastPass)
-        let newFailReceipt = try Self.decodeReceipt(at: newFail)
+        let lastPassResult = try Self.decodeResult(at: lastPass)
+        let newFailResult = try Self.decodeResult(at: newFail)
         let requestedStepPath = try stepPath.map(HeistExecutionPath.init(validating:))
         let diagnosis = try HeistDoctor.diagnosis(
-            lastPass: lastPassReceipt,
-            newFail: newFailReceipt,
+            lastPass: lastPassResult,
+            newFail: newFailResult,
             stepPath: requestedStepPath
         )
 
@@ -67,16 +67,16 @@ struct HeistDoctorCommand: ParsableCommand {
         }
     }
 
-    private static func decodeReceipt(at path: String) throws -> HeistExecutionResult {
+    private static func decodeResult(at path: String) throws -> HeistResult {
         let url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
         do {
-            return try HeistReceiptCodec.decode(contentsOf: url)
+            return try HeistResultCodec.decode(contentsOf: url)
         } catch let error as DecodingError {
-            throw ValidationError("failed to decode HeistExecutionResult at \(path): \(error)")
-        } catch let error as HeistReceiptCodecError {
-            throw ValidationError("failed to decompress HeistExecutionResult at \(path): \(error)")
+            throw ValidationError("failed to decode HeistResult at \(path): \(error)")
+        } catch let error as HeistResultCodecError {
+            throw ValidationError("failed to decompress HeistResult at \(path): \(error)")
         } catch {
-            throw ValidationError("failed to read receipt at \(path): \(error)")
+            throw ValidationError("failed to read result at \(path): \(error)")
         }
     }
 
@@ -97,8 +97,8 @@ struct HeistDoctorCommand: ParsableCommand {
             lines.append("step: \(suggestion.stepPath)")
             lines.append("old target: \(suggestion.oldTarget)")
             lines.append("new target: \(suggestion.newTarget)")
-            lines.append("old element: \(elementContextLine(suggestion.oldResolvedElement))")
-            lines.append("new element: \(elementContextLine(suggestion.newResolvedElement))")
+            lines.append("old element: \(elementEvidenceLine(suggestion.oldResolvedElement))")
+            lines.append("new element: \(elementEvidenceLine(suggestion.newResolvedElement))")
             appendSection("reasons", suggestion.reasons.map(\.reportText), to: &lines)
             appendSection("caveats", suggestion.caveats.map(\.reportText), to: &lines)
         }
@@ -115,8 +115,8 @@ struct HeistDoctorCommand: ParsableCommand {
         lines.append(contentsOf: values.map { "  - \($0)" })
     }
 
-    private static func elementContextLine(_ context: HeistRepairElementContext) -> String {
-        let element = context.element
+    private static func elementEvidenceLine(_ evidence: HeistRepairElementEvidence) -> String {
+        let element = evidence.element
         let traitSummary = element.traits.map(\.rawValue).joined(separator: ",")
         return [
             element.label.map { "label=\"\($0)\"" },

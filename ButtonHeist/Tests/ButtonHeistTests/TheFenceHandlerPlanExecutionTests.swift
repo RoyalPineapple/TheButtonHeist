@@ -10,10 +10,10 @@ extension TheFenceHandlerTests {
 
     // MARK: - Plan Execution and Discovery Commands
     @ButtonHeistActor
-    func testRunHeistSendsValidatedPlanAndProjectsServerReceipt() async throws {
+    func testRunHeistSendsValidatedPlanAndProjectsServerResult() async throws {
         let (fence, mockConn) = makeConnectedFence()
-        let scriptedResult = HeistReceiptFixture.result(steps: [
-            HeistReceiptFixture.warning(message: "server receipt"),
+        let scriptedResult = HeistResultFixture.result(steps: [
+            HeistResultFixture.warning(message: "server result"),
         ])
         mockConn.responseScript = { _ in scriptedHeistResponse(scriptedResult) }
         fence.handoff.connect(to: TheFenceFixtures.testDevice)
@@ -22,30 +22,30 @@ extension TheFenceHandlerTests {
             "plan": .string(Self.pureRuntimeHeistSource),
         ])
 
-        guard case .heistExecution(let plan, let result, _) = response else {
+        guard case .heistExecution(let plan, let report) = response else {
             return XCTFail("Expected heistExecution response, got \(response)")
         }
         XCTAssertEqual(plan.name, "agentFlow")
         XCTAssertEqual(mockConn.sent.sentHeistPlan, plan)
         XCTAssertEqual(mockConn.sent.sentHeistRun?.argument, HeistArgument.none)
-        XCTAssertEqual(result.steps, scriptedResult.steps)
+        XCTAssertEqual(report, HeistReport.project(result: scriptedResult))
     }
 
     @ButtonHeistActor
-    func testRunHeistRecordsReceiptArtifactWhenEnvironmentConfigured() async throws {
-        try await withReceiptDirectory { directory in
-            let previousDirectory = EnvironmentKey.buttonheistReceiptsDir.value
-            let previousMode = EnvironmentKey.buttonheistReceiptsMode.value
-            setEnvironment(EnvironmentKey.buttonheistReceiptsDir.rawValue, directory.path)
-            setEnvironment(EnvironmentKey.buttonheistReceiptsMode.rawValue, HeistReceiptRecordingMode.failingAndPassing.rawValue)
+    func testRunHeistRecordsResultArtifactWhenEnvironmentConfigured() async throws {
+        try await withResultDirectory { directory in
+            let previousDirectory = EnvironmentKey.buttonheistResultsDir.value
+            let previousMode = EnvironmentKey.buttonheistResultsMode.value
+            setEnvironment(EnvironmentKey.buttonheistResultsDir.rawValue, directory.path)
+            setEnvironment(EnvironmentKey.buttonheistResultsMode.rawValue, HeistResultRecordingMode.all.rawValue)
             defer {
-                setEnvironment(EnvironmentKey.buttonheistReceiptsDir.rawValue, previousDirectory)
-                setEnvironment(EnvironmentKey.buttonheistReceiptsMode.rawValue, previousMode)
+                setEnvironment(EnvironmentKey.buttonheistResultsDir.rawValue, previousDirectory)
+                setEnvironment(EnvironmentKey.buttonheistResultsMode.rawValue, previousMode)
             }
 
             let (fence, mockConn) = makeConnectedFence()
-            let scriptedResult = HeistReceiptFixture.result(steps: [
-                HeistReceiptFixture.warning(message: "recorded receipt"),
+            let scriptedResult = HeistResultFixture.result(steps: [
+                HeistResultFixture.warning(message: "recorded result"),
             ])
             mockConn.responseScript = { _ in scriptedHeistResponse(scriptedResult) }
             fence.handoff.connect(to: TheFenceFixtures.testDevice)
@@ -54,12 +54,12 @@ extension TheFenceHandlerTests {
                 "plan": .string(Self.pureRuntimeHeistSource),
             ])
 
-            guard case .heistExecution(_, let result, _) = response else {
+            guard case .heistExecution(_, let report) = response else {
                 return XCTFail("Expected heistExecution response, got \(response)")
             }
-            XCTAssertEqual(result.steps, scriptedResult.steps)
-            let receiptURL = try assertSingleReceiptArtifactURL(in: directory)
-            XCTAssertEqual(try HeistReceiptCodec.decode(contentsOf: receiptURL), result)
+            XCTAssertEqual(report, HeistReport.project(result: scriptedResult))
+            let resultURL = try assertSingleResultArtifactURL(in: directory)
+            XCTAssertEqual(try HeistResultCodec.decode(contentsOf: resultURL), scriptedResult)
         }
     }
 
@@ -561,15 +561,14 @@ extension TheFenceHandlerTests {
         XCTAssertTrue(message.contains("shop, openCart"), message)
     }
 
-    func testHeistExecutionResponseFailureDerivesFromTypedReceipt() throws {
-        let result = HeistReceiptFixture.result(
-            steps: [HeistReceiptFixture.explicitFailure(message: "boom", durationMs: 5)],
+    func testHeistExecutionResponseFailureDerivesFromTypedResult() throws {
+        let result = HeistResultFixture.result(
+            steps: [HeistResultFixture.explicitFailure(message: "boom", durationMs: 5)],
             durationMs: 5
         )
         let response = FenceResponse.heistExecution(
             plan: try HeistPlan(body: [.warn(WarnStep(message: "x"))]),
-            result: result,
-            accessibilityTrace: nil
+            report: HeistReport.project(result: result)
         )
         XCTAssertTrue(response.isFailure)
         XCTAssertEqual(result.abortedAtPath, "$.body[0]")

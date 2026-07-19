@@ -46,7 +46,7 @@ extension ElementInflation {
 
         let treeElement = liveTarget.treeElement
         let description = Navigation.ScrollTargetDescription(treeElement).description
-        let settledSequence = vault.semanticObservationStream.latestEvent?.sequence
+        let settledSequence = vault.semanticObservationStream.latestCommittedEvent?.sequence
         let placement = await scrollActivationPointIntoBounds(
             liveTarget.activationPoint,
             in: vault.liveScrollView(for: treeElement),
@@ -108,7 +108,7 @@ extension ElementInflation {
         unsafeProgrammaticScrollMessage: String?,
         scrollFailedMessage: String,
         transaction: RevealTransaction? = nil
-    ) async -> Result<TheSafecracker.ScrollPrimitiveResult, ElementInflationFailure> {
+    ) async -> Result<TheSafecracker.ScrollPrimitiveOutcome, ElementInflationFailure> {
         if Self.interactionComfortZone.contains(activationPoint) {
             return .success(.alreadyInPosition)
         }
@@ -137,7 +137,7 @@ extension ElementInflation {
                 minimumScreenRect: ScreenMetrics.current.bounds
             )
         )
-        switch transition.result {
+        switch transition.outcome {
         case .unchanged:
             return .success(.alreadyInPosition)
         case .unavailable:

@@ -3,7 +3,7 @@ import Foundation
 import TheScore
 
 struct PublicInterfaceRendering: Encodable {
-    let state: String
+    let completeness: String
     let reasonCode: String?
     let observedElementCount: Int
     let renderedElementCount: Int
@@ -12,7 +12,7 @@ struct PublicInterfaceRendering: Encodable {
     let totalNodeBudget: Int?
 
     init(projection: InterfaceRenderingProjection) {
-        self.state = projection.state.rawValue
+        completeness = projection.completeness.rawValue
         self.reasonCode = projection.reason?.rawValue
         self.observedElementCount = projection.observedElementCount
         self.renderedElementCount = projection.renderedElementCount

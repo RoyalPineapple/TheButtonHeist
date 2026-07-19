@@ -98,7 +98,7 @@ struct Compile: AsyncParsableCommand {
         } catch {
             throw ValidationError(String(describing: error))
         }
-        let result = await HeistCompiler().compileFile(
+        let result = await HeistSwiftCompiler().compileFile(
             URL(fileURLWithPath: source),
             entry: entrySymbol
         )
@@ -121,7 +121,7 @@ enum HeistPlanIO {
     static func readValidatedPlan(from path: String) throws -> HeistPlan {
         let url = URL(fileURLWithPath: path)
         do {
-            return try HeistPlanning.readPlan(from: url)
+            return try HeistArtifactCodec.readPlan(from: url)
         } catch let error as HeistArtifactCodecError {
             throw ValidationError(error.description)
         } catch {

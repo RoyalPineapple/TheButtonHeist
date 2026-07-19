@@ -34,7 +34,7 @@ flowchart TD
 
 Notes:
 
-- The copy is made at the IPC boundary: out-of-process tools can only ever see a serialized snapshot, because iOS has no public cross-process live-tree API. Button Heist never crosses that boundary — the wire carries commands and receipts, not the tree walk.
+- The copy is made at the IPC boundary: out-of-process tools can only ever see a serialized snapshot, because iOS has no public cross-process live-tree API. Button Heist never crosses that boundary — the wire carries commands and results, not the tree walk.
 - The live element is held in `LiveCapture.ElementRef` as a weak reference, captured per parse and invalidated on the next parse — live access without keeping UIKit objects alive past their lifetime.
 - Activation goes through the element's own contract: `accessibilityActivate()` first (what VoiceOver invokes), and on decline a tap at the element's **declared** activation point — not a hittable point computed from the frame (see [activation-policy.md](activation-policy.md)).
 - The parser is the AccessibilitySnapshot fork under `submodules/AccessibilitySnapshotBH` — the same tree walk assistive technology semantics are derived from, run in-process on demand.

@@ -259,7 +259,7 @@ func runHeistBuildsHeistRunSteps() throws {
         )),
     ])
 
-    let expectedReceipt = WaitStep(
+    let expectation = WaitStep(
         predicate: .changed(.screen([.exists(.label("Receipt"))])),
         timeout: ThePlans.defaultActionExpectationTimeout
     )
@@ -268,7 +268,7 @@ func runHeistBuildsHeistRunSteps() throws {
     #expect(screenRun.heistSteps == [
         .invoke(HeistInvocationStep(
             path: "Checkout.pay",
-            expectation: expectedReceipt
+            expectation: expectation
         )),
     ])
 }

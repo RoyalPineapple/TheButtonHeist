@@ -144,29 +144,29 @@ struct CanonicalHeistSourceRoundTripTests {
                 .expect(.exists(.within(container: .identifier(item), .label(item))))
         }
         """)
-        #expect(try HeistPlanSourceCompiler().compile(source) == plan)
+        #expect(try HeistSourceCompilation.compile(source) == plan)
     }
 
-    @Test("durable mechanical actions round trip")
+    @Test("durable spatial gesture actions round trip")
     func durableMechanicalActionsRoundTrip() throws {
         try assertRoundTrip(try HeistPlan(body: [
-            .action(ActionStep(command: .mechanicalTap(TapTarget(
+            .action(ActionStep(command: .oneFingerTap(TapTarget(
                 selection: .coordinate(ScreenPoint(x: 12, y: 34))
             )))),
-            .action(ActionStep(command: .mechanicalLongPress(LongPressTarget(
+            .action(ActionStep(command: .longPress(LongPressTarget(
                 selection: .coordinate(ScreenPoint(x: 20, y: 40)),
                 duration: 1
             )))),
-            .action(ActionStep(command: .mechanicalSwipe(SwipeTarget(selection: .elementDirection(
+            .action(ActionStep(command: .swipe(SwipeTarget(selection: .elementDirection(
                 .label("List"),
                 .down
             ))))),
-            .action(ActionStep(command: .mechanicalSwipe(SwipeTarget(selection: .unitElement(
+            .action(ActionStep(command: .swipe(SwipeTarget(selection: .unitElement(
                 .label("Carousel"),
                 start: UnitPoint(x: 0.8, y: 0.5),
                 end: UnitPoint(x: 0.2, y: 0.5)
             ))))),
-            .action(ActionStep(command: .mechanicalDrag(DragTarget(
+            .action(ActionStep(command: .drag(DragTarget(
                 selection: .pointToPoint(start: ScreenPoint(x: 10, y: 10), end: ScreenPoint(x: 100, y: 100))
             )))),
         ]))
@@ -269,7 +269,7 @@ struct CanonicalHeistSourceRoundTripTests {
 
     private func assertRoundTrip(_ plan: HeistPlan) throws {
         let source = try plan.canonicalSwiftDSL()
-        let parsed = try HeistPlanSourceCompiler().compile(source)
+        let parsed = try HeistSourceCompilation.compile(source)
         #expect(parsed == plan, "Canonical source failed round trip:\n\(source)")
     }
 }

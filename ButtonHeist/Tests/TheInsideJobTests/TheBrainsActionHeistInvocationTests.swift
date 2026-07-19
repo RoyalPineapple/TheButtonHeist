@@ -42,7 +42,7 @@ extension TheBrainsActionTests {
             observations: [],
             execute: { command in
                 executedCommands.append(command)
-                return ActionResult.success(method: .activate)
+                return ActionResult.success(payload: .activate)
             }
         )
         let plan = try HeistPlanAdmissionCandidate(definitions: [
@@ -92,7 +92,7 @@ extension TheBrainsActionTests {
             ],
             execute: { command in
                 executedCommands.append(command)
-                return ActionResult.success(method: .activate)
+                return ActionResult.success(payload: .activate)
             }
         )
         let plan = try HeistPlan(
@@ -123,16 +123,17 @@ extension TheBrainsActionTests {
         )
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let heist = try XCTUnwrap(result.heistExecutionPayload)
-        let step = try XCTUnwrap(heist.steps.first)
+        let heistResult = try XCTUnwrap(result.resultPayload)
+        let report = HeistReport.project(result: heistResult)
+        let step = try XCTUnwrap(heistResult.steps.first)
 
         XCTAssertTrue(result.outcome.isSuccess)
         XCTAssertEqual(
             executedCommands,
             [try HeistActionCommand.activate(.label("Milk")).resolve(in: .empty)]
         )
-        XCTAssertEqual(heist.expectationsChecked, 1)
-        XCTAssertEqual(heist.expectationsMet, 1)
+        XCTAssertEqual(report.summary.expectationsChecked, 1)
+        XCTAssertEqual(report.summary.expectationsMet, 1)
         XCTAssertEqual(step.kind, .invoke)
         XCTAssertEqual(step.invocationEvidence?.expectationActionResult?.method, .wait)
         XCTAssertEqual(step.invocationEvidence?.expectationActionResult?.outcome.isSuccess, true)
@@ -147,7 +148,7 @@ extension TheBrainsActionTests {
                 observedState(labels: ["Payment Complete"]),
             ],
             execute: { _ in
-                ActionResult.success(method: .activate)
+                ActionResult.success(payload: .activate)
             }
         )
         let plan = try HeistPlan(
@@ -170,8 +171,8 @@ extension TheBrainsActionTests {
         )
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let heist = try XCTUnwrap(result.heistExecutionPayload)
-        let step = try XCTUnwrap(heist.steps.first)
+        let heistResult = try XCTUnwrap(result.resultPayload)
+        let step = try XCTUnwrap(heistResult.steps.first)
 
         XCTAssertTrue(result.outcome.isSuccess)
         XCTAssertEqual(step.kind, .invoke)
@@ -191,7 +192,7 @@ extension TheBrainsActionTests {
                 ]),
             ],
             execute: { _ in
-                ActionResult.success(method: .activate)
+                ActionResult.success(payload: .activate)
             }
         )
         let plan = try HeistPlan(
@@ -224,8 +225,8 @@ extension TheBrainsActionTests {
         )
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let heist = try XCTUnwrap(result.heistExecutionPayload)
-        let step = try XCTUnwrap(heist.steps.first)
+        let heistResult = try XCTUnwrap(result.resultPayload)
+        let step = try XCTUnwrap(heistResult.steps.first)
 
         XCTAssertTrue(result.outcome.isSuccess)
         XCTAssertEqual(step.kind, .invoke)
@@ -240,7 +241,7 @@ extension TheBrainsActionTests {
                 observedState(labels: ["Receipt"], screenId: "receipt", screenChanged: true),
             ],
             execute: { _ in
-                ActionResult.success(method: .activate)
+                ActionResult.success(payload: .activate)
             }
         )
         let plan = try HeistPlan(
@@ -263,8 +264,8 @@ extension TheBrainsActionTests {
         )
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let heist = try XCTUnwrap(result.heistExecutionPayload)
-        let step = try XCTUnwrap(heist.steps.first)
+        let heistResult = try XCTUnwrap(result.resultPayload)
+        let step = try XCTUnwrap(heistResult.steps.first)
 
         XCTAssertTrue(result.outcome.isSuccess)
         XCTAssertEqual(step.kind, .invoke)
@@ -283,7 +284,7 @@ extension TheBrainsActionTests {
                 ]),
             ],
             execute: { _ in
-                ActionResult.success(method: .activate)
+                ActionResult.success(payload: .activate)
             }
         )
         let plan = try HeistPlan(
@@ -316,11 +317,11 @@ extension TheBrainsActionTests {
         )
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let heist = try XCTUnwrap(result.heistExecutionPayload)
-        let step = try XCTUnwrap(heist.steps.first)
+        let heistResult = try XCTUnwrap(result.resultPayload)
+        let step = try XCTUnwrap(heistResult.steps.first)
 
         XCTAssertFalse(result.outcome.isSuccess)
-        XCTAssertEqual(heist.abortedAtPath, "$.body[0]")
+        XCTAssertEqual(heistResult.abortedAtPath, "$.body[0]")
         XCTAssertEqual(step.kind, .invoke)
         XCTAssertEqual(step.status, .failed)
         XCTAssertNil(step.abortedAtChildPath)
@@ -336,7 +337,7 @@ extension TheBrainsActionTests {
             observations: [],
             execute: { command in
                 executedCommands.append(command)
-                return ActionResult.success(method: .activate)
+                return ActionResult.success(payload: .activate)
             }
         )
         let plan = try HeistPlanAdmissionCandidate(definitions: [
@@ -367,7 +368,7 @@ extension TheBrainsActionTests {
             observations: [],
             execute: { command in
                 executedCommands.append(command)
-                return ActionResult.success(method: .typeText)
+                return ActionResult.success(payload: .typeText(nil))
             }
         )
         let plan = try HeistPlan(
@@ -400,7 +401,7 @@ extension TheBrainsActionTests {
             observations: [],
             execute: { command in
                 executedCommands.append(command)
-                return ActionResult.success(method: .activate)
+                return ActionResult.success(payload: .activate)
             }
         )
         let plan = try HeistPlan(
@@ -440,7 +441,7 @@ extension TheBrainsActionTests {
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
 
         XCTAssertFalse(result.outcome.isSuccess)
-        XCTAssertEqual(result.outcome.errorKind, .validationError)
+        XCTAssertEqual(result.outcome.failureKind, .validationError)
         XCTAssertEqual(result.message, "Could not bind root heist argument: heist argument type none does not match parameter type string")
     }
 
@@ -450,7 +451,7 @@ extension TheBrainsActionTests {
             observations: [],
             execute: { command in
                 executedCommands.append(command)
-                return ActionResult.success(method: .activate)
+                return ActionResult.success(payload: .activate)
             }
         )
         let plan = try HeistPlan(definitions: [
@@ -481,8 +482,8 @@ extension TheBrainsActionTests {
 }
 
 private extension ActionResult {
-    var heistExecutionPayload: HeistExecutionResult? {
-        guard case .heistExecution(let result) = payload else { return nil }
+    var resultPayload: HeistResult? {
+        guard case .heist(let result) = payload else { return nil }
         return result
     }
 }
