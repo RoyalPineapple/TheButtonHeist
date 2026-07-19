@@ -4,30 +4,30 @@ import Foundation
 import ThePlans
 import TheScore
 
-struct PostActionPayloadContext {
-    let baseline: PostActionObservation.ObservationBaseline
+struct ActionPayloadEvidence {
+    let committedBaseline: ActionEvidenceProjector.Baseline
     let resolvedElementId: HeistId?
 }
 
 @MainActor
-final class InteractionObservation {
+final class InteractionCoordinator {
     private static let defaultVisibleStateTimeout = Double(SettleSession.defaultTimeoutMs) / 1_000
 
     private let vault: TheVault
-    private let postActionObservation: PostActionObservation
+    private let actionEvidenceProjector: ActionEvidenceProjector
     private let predicateWait: PredicateWait
 
     init(
         vault: TheVault,
         navigation: Navigation,
-        postActionObservation: PostActionObservation
+        actionEvidenceProjector: ActionEvidenceProjector
     ) {
         self.vault = vault
-        self.postActionObservation = postActionObservation
+        self.actionEvidenceProjector = actionEvidenceProjector
         self.predicateWait = PredicateWait(
             vault: vault,
             navigation: navigation,
-            postActionObservation: postActionObservation
+            actionEvidenceProjector: actionEvidenceProjector
         )
     }
 
@@ -35,21 +35,21 @@ final class InteractionObservation {
         predicateWait.resetAnnouncementWaitCursorForHeist(to: cursor)
     }
 
-    func prepareBeforeState(
+    func admittedBaseline(
         scope: SemanticObservationScope = .visible,
-        timeout: Double? = InteractionObservation.defaultVisibleStateTimeout
-    ) async -> PostActionObservation.ObservationBaseline? {
+        timeout: Double? = InteractionCoordinator.defaultVisibleStateTimeout
+    ) async -> ActionEvidenceProjector.Baseline? {
         switch scope {
         case .visible:
-            return await observeVisibleState(timeout: timeout)
+            return await admittedVisibleBaseline(timeout: timeout)
         case .discovery:
-            return await observeSemanticState(scope: .discovery, after: nil, timeout: timeout)?.baseline
+            return await settledEvidence(scope: .discovery, after: nil, timeout: timeout)?.baseline
         }
     }
 
-    func captureSettledBaseline(
+    func settledCapture(
         scope: SemanticObservationScope?,
-        timeout: Double = InteractionObservation.defaultVisibleStateTimeout
+        timeout: Double = InteractionCoordinator.defaultVisibleStateTimeout
     ) async -> SettledCapture? {
         guard let scope else { return nil }
         return await vault.semanticObservationStream.settledEvent(
@@ -59,16 +59,14 @@ final class InteractionObservation {
         )?.settledCapture
     }
 
-    func observeVisibleState(timeout: Double? = InteractionObservation.defaultVisibleStateTimeout) async -> PostActionObservation.ObservationBaseline? {
-        baselineState(from: await vault.semanticObservationStream.visibleEvidence(timeout: timeout))
+    func admittedVisibleBaseline(timeout: Double? = InteractionCoordinator.defaultVisibleStateTimeout) async -> ActionEvidenceProjector.Baseline? {
+        guard let admittedObservation = await vault.semanticObservationStream.admittedVisibleObservation(
+            timeout: timeout
+        ) else { return nil }
+        return actionEvidenceProjector.projectBaseline(from: admittedObservation)
     }
 
-    func baselineState(from evidence: CleanSettledObservation?) -> PostActionObservation.ObservationBaseline? {
-        guard let evidence else { return nil }
-        return postActionObservation.captureSemanticState(from: evidence)
-    }
-
-    func observeSemanticState(
+    func settledEvidence(
         scope: SemanticObservationScope,
         after sequence: SettledObservationSequence?,
         timeout: Double?
@@ -80,35 +78,35 @@ final class InteractionObservation {
         )
 
         guard let event else { return nil }
-        return postActionObservation.semanticObservation(from: event)
+        return actionEvidenceProjector.projectSettledEvidence(from: event)
     }
 
-    func finishAfterAction(
-        outcome: TheSafecracker.ActionDispatchOutcome,
-        afterStatePayload: ((PostActionPayloadContext) -> ActionResultPayload?)? = nil,
-        before: PostActionObservation.ObservationBaseline,
+    func observeAction(
+        dispatchResult: TheSafecracker.ActionDispatchResult,
+        afterStatePayload: ((ActionPayloadEvidence) -> ActionResultPayload?)? = nil,
+        before: ActionEvidenceProjector.Baseline,
         postActionCommitScope: SemanticObservationScope = .visible,
         settleOutcome: SettleSession.Result? = nil,
         notificationWindow: AccessibilityNotificationScopeLease? = nil
     ) async -> ActionResult {
-        let settledObservation = await postActionObservation.settleObservation(
-            before: before,
+        let observationSettlement = await vault.semanticObservationStream.settleActionObservation(
+            baselineTripwireSignal: before.tripwireSignal,
             commitScope: postActionCommitScope,
-            outcome: settleOutcome,
+            settleOutcome: settleOutcome,
             notificationWindow: notificationWindow
         )
         let finalEvidenceStart = CFAbsoluteTimeGetCurrent()
-        let settledResult = postActionObservation.settledObservationResult(
+        let actionEvidence = actionEvidenceProjector.projectResult(
             before: before,
-            observation: settledObservation
+            observation: observationSettlement
         )
         let finalSemanticEvidenceMs = elapsedMilliseconds(since: finalEvidenceStart)
 
         let receiptStart = CFAbsoluteTimeGetCurrent()
         let result = ActionResult(
-            outcome: outcome,
+            dispatchResult: dispatchResult,
             afterStatePayload: afterStatePayload,
-            settledObservation: settledResult
+            settledObservation: actionEvidence
         )
         return result.withTiming(ActionPerformanceTiming(
             finalSemanticEvidenceMs: finalSemanticEvidenceMs,

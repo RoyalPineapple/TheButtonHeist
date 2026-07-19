@@ -73,26 +73,26 @@ reinterpret parser fields.
 `LiveCapture` from one parser read. Raw parser samples remain live evidence or
 failed-settle diagnostic evidence; they never append temporal history and do
 not become targetable semantic truth by themselves. `SettleSession` reduces
-those samples and carries its exact final observation in a clean outcome. The
-semantic stream alone admits that outcome into `InterfaceObservationProof`, and
+those samples and carries its exact final observation in a successful outcome. The
+semantic stream alone admits that outcome into `CommittableInterfaceObservation`, and
 only while both its tripwire signal and capture identity remain current.
 
 `SemanticObservationStore` is the sole semantic state owner. It holds the
 current `InterfaceTree`, retained entries, generation and sequence lineage,
-notification cursor, and clean-read seal. `SemanticObservationStream` admits a
-clean `InterfaceObservationProof` and asks the Store to commit it. The Store
+notification cursor, and admitted-read state. `SemanticObservationStream` admits a
+`CommittableInterfaceObservation` and asks the Store to commit it. The Store
 classifies continuity, derives every fulfilled-scope event, validates history
-in a copied value, and installs graph, history, lineage, cursors, and seal with
+in a copied value, and installs graph, history, lineage, cursors, and admitted-read state with
 one assignment. The stream updates disposable live UIKit evidence and wakes
 waiters only after that commit returns. There is no parser-to-history path,
 subscriber-driven graph mutation, compatibility reducer, or second runtime
 state projection.
 
 The stream is also the one visible-observation producer. `TheTripwire` is its
-serialized refresh trigger: a changed signal invalidates the current cursor and
-clean admission, settled-read admission pauses, and one capture/settle/commit cycle
-runs. Concurrent consumers join that cycle. Once a Store commit installs a clean
-seal, waits and action before-state acquisition reuse the committed event until
+serialized refresh trigger: a changed signal invalidates the admitted read,
+settled-read admission pauses, and one capture/settle/commit cycle runs.
+Concurrent consumers join that cycle. Once a Store commit installs admitted-read
+state, waits and action before-state acquisition reuse the committed event until
 the next trip, explicit invalidation, or screen replacement. After-action
 observation always requests a fresh cycle from the same producer.
 
@@ -139,8 +139,8 @@ ordering, keyboard state, and first responder state. It never classifies the
 accessibility tree.
 
 When Tripwire triggers, TheBrains parses the accessibility hierarchy and
-`SettleSession` waits for a clean result that can produce an
-`InterfaceObservationProof`. One pure `ScreenClassifier` combines typed
+`SettleSession` waits for a successful result that can produce a
+`CommittableInterfaceObservation`. One pure `ScreenClassifier` combines typed
 snapshots with scoped `screenChanged`, `elementChanged`, and `announcement`
 notifications. `AccessibilityNotificationBus` appends normalized events to one
 bounded ingress log. Action/heist cursors checkpoint that retained history
@@ -154,7 +154,7 @@ Notification delivery is best effort; absence is not evidence of replacement
 or stability.
 
 Settling itself has one AX reducer, `SettleLoopMachine`, and one async runner,
-`SettleLoopRunner`. `SettlePolicy` selects the stability proof and sampling
+`SettleLoopRunner`. `SettlePolicy` selects the stability criterion and sampling
 cadence for that pair; it does not create another settle pipeline. UIKit and
 ObjC signals may trigger or reset sampling, but they never classify the AX tree.
 
@@ -182,7 +182,7 @@ geometry. Refresh, exploration, selection, and stale-state decisions live inside
 TheInsideJob; clients and adapters send typed observation intent.
 
 Visible observation reduces parser reads through `SettleSession`; only the
-semantic stream can admit a clean outcome into the proof consumed by the
+semantic stream can admit a settled outcome into the value consumed by the
 visible commit path. Discovery uses the same admission and commit boundary.
 `Navigation.performViewportTransition`
 is the sole product-driven viewport movement operation: page scroll, discovery,
@@ -191,7 +191,7 @@ successful movement dispatch, its minimal movement-specific settle parses the
 new viewport, yields one run-loop turn, and parses again. Matching semantic
 fingerprints prove the viewport in one turn; layout churn may consume another
 turn, bounded by the 250 ms transition ceiling. Page, edge, swipe, known
-content-point reveal, and restore intents all commit their proof into the
+content-point reveal, and restore intents all commit their admitted observation into the
 canonical Store and produce one settled event. When a target is already present
 in `InterfaceTree`, inflation uses its parser-derived scroll membership and
 two-dimensional content point to jump directly to it; blank intervening pages
@@ -262,7 +262,7 @@ The pipeline is:
    a replacement element.
 6. Acquire and stabilize fresh live geometry under the same deadline.
 7. Execute the accessibility operation or explicit mechanical gesture.
-8. Return settled semantic evidence through `InteractionObservation`.
+8. Return settled semantic evidence through `InteractionCoordinator`.
 
 Predicate evaluation uses semantic observations, not live UIKit geometry. Live
 geometry is used for inflation and explicit mechanical or viewport commands; it
@@ -281,7 +281,7 @@ The approved long-lived owners are:
 
 - `TheVault`: latest disposable `LiveCapture` and live UIKit boundary evidence.
   Its `SemanticObservationStore` owns the committed `InterfaceTree`, retained
-  history, lineage, cursors, clean-read state, and settle diagnostics. Its
+  history, lineage, cursors, admitted-read state, and settle diagnostics. Its
   `SemanticObservationStream` is the sole visible-observation producer and
   waiter-delivery owner.
 - `TheMuscle`: auth, admission, and session state inside the app.
@@ -310,8 +310,8 @@ pipelines are explicit:
 | Receipt private storage codec | `HeistExecutionStepNode.swift` and `HeistExecutionStepNode+Codable.swift` | External receipt JSON projection only |
 | Receipt report projection | `HeistExecutionResult+Report.swift` and `HeistExecutionStepResult+Report.swift` | Report, compact, JUnit, doctor, and metric adapters |
 | Semantic observation scheduling | `SemanticObservationStream.swift` | Passive settle cycles and observation demand |
-| Semantic observation state | `SemanticObservationStore.swift` | One commit of graph, retained history, lineage, cursors, and clean-read state |
-| Semantic observation settlement | `SemanticObservationStream+Settlement.swift` | Proof admission, Store commit, disposable live-evidence refresh, and waiter delivery |
+| Semantic observation state | `SemanticObservationStore.swift` | One commit of graph, retained history, lineage, cursors, and admitted-read state |
+| Semantic observation settlement | `SemanticObservationStream+Settlement.swift` | Observation admission, Store commit, disposable live-evidence refresh, and waiter delivery |
 | Semantic observation waiter delivery | `SemanticObservationStream+Waiters.swift` | Cursor, window, replay, and timeout projections |
 | Testing request construction | `ButtonHeistTesting.swift` | Synchronous helpers and joined sessions live in their named extension files |
 | Fence action JSON | `FenceJSON+Action.swift` and `FenceJSON+HeistExecution.swift`, one result family each | Fence response formatting |
@@ -336,11 +336,12 @@ and rejects incompatible external fields. There is no `Result` repair path or
 synthetic fallback receipt. Status and abort paths derive from the private node,
 and the wire decoder accepts only fields legal for its `type` and `outcome`.
 
-`ActionDispatchOutcome` is the one result of app-side action dispatch. Its state
-is success, with an optional payload and resolved element id, or failure, with a
-typed failure kind. `PostActionObservation` consumes that value, coordinates
-settlement, and constructs `ActionResult`; it does not translate through a
-second interaction-result model.
+`ActionDispatchResult` is the one aggregate of app-side action dispatch. Its
+outcome is success, with an optional payload and resolved element id, or failure,
+with a typed failure kind. `InteractionCoordinator` coordinates settlement and
+combines that result with the evidence projected by `ActionEvidenceProjector`
+to construct `ActionResult`; it does not translate through a second
+interaction-result model.
 
 `ActionResult.success` and `ActionResult.failure` accept either a method-only
 action or an `ActionResultPayload` that binds its payload to the only legal
@@ -355,7 +356,7 @@ the typed settlement duration. Successful activation and text-entry warnings
 derive from the method and subject evidence instead of entering as caller data.
 
 `AccessibilityNotificationBus` owns one retained ingress log. Each action opens
-one cursor-bounded attribution window. A clean post-action settle checkpoints
+one cursor-bounded attribution window. A successful action settlement checkpoints
 that window once as one `AccessibilityNotificationBatch`; a failed settle closes
 the attribution window without admitting its evidence. Checkpointing is
 non-destructive: the batch selects every retained event after the opening

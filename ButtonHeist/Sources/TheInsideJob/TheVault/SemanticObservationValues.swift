@@ -224,14 +224,14 @@ internal struct SettledObservation: Sendable, Equatable {
     internal let scope: SemanticObservationScope
     internal let semanticSignal: TheTripwire.SemanticSignal
     private let tree: InterfaceTree
-    private let captureToken: InterfaceCaptureToken
+    private let captureID: InterfaceCaptureID
 
     internal var observation: InterfaceObservation {
         do {
             return try InterfaceObservation.build(
                 tree: tree,
                 dispatchReferences: .empty,
-                captureToken: captureToken
+                captureID: captureID
             )
         } catch {
             preconditionFailure("Settled semantic observation failed validation: \(error)")
@@ -248,7 +248,7 @@ internal struct SettledObservation: Sendable, Equatable {
         self.scope = scope
         self.semanticSignal = semanticSignal
         self.tree = observation.tree
-        self.captureToken = observation.captureToken
+        self.captureID = observation.captureID
     }
 }
 
@@ -317,8 +317,8 @@ internal struct SettledObservationEvent: Sendable, Equatable {
     }
 }
 
-/// Validated evidence admitted for a semantic observation commit.
-internal struct InterfaceObservationProof {
+/// A semantic observation admitted for commit.
+internal struct CommittableInterfaceObservation {
     internal let observation: InterfaceObservation
     internal let tripwireSignal: TheTripwire.TripwireSignal
     internal let discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy
@@ -336,7 +336,7 @@ internal struct InterfaceObservationProof {
         self.lineageEvidence = lineageEvidence
     }
 
-    internal static func uncheckedForTesting(
+    internal static func admittedForTesting(
         _ observation: InterfaceObservation,
         tripwireSignal: TheTripwire.TripwireSignal,
         lineageEvidence: ScreenLineageEvidence? = nil
@@ -348,14 +348,14 @@ internal struct InterfaceObservationProof {
         )
     }
 
-    @MainActor internal static func settled(
+    @MainActor internal static func admit(
         _ outcome: SettleSession.Result,
         discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy = .mergeIntoInterface,
         lineageEvidence: ScreenLineageEvidence? = nil
-    ) -> InterfaceObservationProof? {
+    ) -> CommittableInterfaceObservation? {
         guard outcome.outcome.didSettleCleanly,
               let finalObservation = outcome.finalObservation else { return nil }
-        return InterfaceObservationProof(
+        return CommittableInterfaceObservation(
             observation: finalObservation.observation,
             tripwireSignal: outcome.tripwireSignal,
             discoveryCommitPolicy: discoveryCommitPolicy,
@@ -366,14 +366,14 @@ internal struct InterfaceObservationProof {
 
 /// The settlement result available after an action observation attempt.
 internal struct ObservationSettlement {
-    internal enum Result {
+    internal enum CommitOutcome {
         case committed(SettledObservationEvent)
         case observedUnsettled(InterfaceObservation, notificationBatch: AccessibilityNotificationBatch?)
         case unavailable(notificationBatch: AccessibilityNotificationBatch?)
     }
 
-    internal let settle: SettleSession.Result
-    internal let result: Result
+    internal let settleResult: SettleSession.Result
+    internal let commitOutcome: CommitOutcome
 }
 
 #endif // DEBUG

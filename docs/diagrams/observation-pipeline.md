@@ -2,13 +2,13 @@
 
 Button Heist has one `SemanticObservationStore`. It owns the current semantic
 graph, retained ordered history, sequence and screen lineage, notification
-cursor, and clean-read seal. `SemanticObservationStream` owns settlement
+cursor, and admitted-read state. `SemanticObservationStream` owns settlement
 scheduling and delivery, but no second semantic state. Raw parser samples
-remain live or diagnostic evidence. Only a clean settlement proof can enter the
+remain live or diagnostic evidence. Only an admitted settled observation can enter the
 Store. Presence reads its current tree; temporal predicates and receipts read
 its replayable retained entries. The tripwire drives one serialized producer
-from dirty state to a sealed clean commit. Consumers join that refresh or reuse
-its clean result.
+from invalidated state to an admitted commit. Consumers join that refresh or
+reuse its admitted result.
 
 **Illustrates:** [ARCHITECTURE.md](../ARCHITECTURE.md),
 [API.md](../API.md), [WIRE-PROTOCOL.md](../WIRE-PROTOCOL.md)
@@ -25,7 +25,7 @@ its clean result.
 `ButtonHeist/Sources/TheInsideJob/TheBrains/Navigation+Explore.swift`,
 `ButtonHeist/Sources/TheInsideJob/TheBrains/Navigation+ExplorationScanning.swift`,
 `ButtonHeist/Sources/TheInsideJob/TheBrains/Navigation+SemanticExploration.swift`,
-`ButtonHeist/Sources/TheInsideJob/TheBrains/InteractionObservation.swift`,
+`ButtonHeist/Sources/TheInsideJob/TheBrains/InteractionCoordinator.swift`,
 `ButtonHeist/Sources/TheInsideJob/TheBrains/PredicateWait.swift`,
 `ButtonHeist/Sources/TheInsideJob/TheBrains/PredicateWait+Evaluation.swift`,
 `ButtonHeist/Sources/TheInsideJob/TheBrains/PredicateWait+ObservationStream.swift`,
@@ -45,22 +45,22 @@ flowchart TD
     Signals["UIKit accessibility notifications"] --> Bus["AccessibilityNotificationBus<br/>retained ingress evidence"]
     Bus --> Checkpoint["non-destructive notification checkpoint"]
     Checkpoint --> Admission
-    Settle --> Clean{"clean settlement?"}
-    Clean -->|no| Diagnostic["failed-settle diagnostic<br/>no semantic commit"]
-    Clean -->|yes| Outcome["SettleSession.Result<br/>exact final InterfaceObservation"]
+    Settle --> Settled{"settled?"}
+    Settled -->|no| Diagnostic["failed-settle diagnostic<br/>no semantic commit"]
+    Settled -->|yes| Outcome["SettleSession.Result<br/>exact final InterfaceObservation"]
     Outcome --> Admission{"stream admission<br/>tripwire + exact capture still current?"}
     Admission -->|no| Diagnostic
-    Admission -->|yes| Proof["InterfaceObservationProof"]
+    Admission -->|yes| Committable["CommittableInterfaceObservation"]
 
-    Proof --> Committer["SemanticObservationStream<br/>ordered commit caller"]
+    Committable --> Committer["SemanticObservationStream<br/>ordered commit caller"]
     Committer --> Store["SemanticObservationStore.commitObservation<br/>derive candidate graph + continuity + events"]
-    Store --> Atomic["one Store assignment<br/>tree + history + lineage + cursors + clean seal"]
+    Store --> Atomic["one Store assignment<br/>tree + history + lineage + cursors + admitted-read state"]
     Atomic --> Delivery["SemanticObservationStream<br/>complete waiters"]
     Atomic --> Cursor["ObservationCursor<br/>generation + sequence order<br/>capture-derived timestamp metadata"]
-    Cursor --> Seal["clean Store state<br/>admitting tripwire signal"]
-    Seal --> Delivery
+    Cursor --> Admitted["admitted Store state<br/>admitting tripwire signal"]
+    Admitted --> Delivery
     Delivery --> Consumers
-    Seal --> Armed["re-arm and wait for next trip"]
+    Admitted --> Armed["re-arm and wait for next trip"]
     Armed --> Tripwire
     Cursor --> Entries["SemanticObservationStore.read<br/>scope plus cursor replay"]
 
@@ -84,7 +84,7 @@ not commit. Cursor `observedAt` is derived from the capture's interface
 timestamp and is metadata; generation and settled sequence provide correctness
 ordering.
 
-Visible settlement is serialized. A trip invalidates the clean seal before a
+Visible settlement is serialized. A trip invalidates admitted-read state before a
 read can be admitted. The first consumer starts the refresh and concurrent
 consumers join it; once the Store commit completes, all consumers receive the
 same ordered event. Quiet action chains
@@ -105,11 +105,11 @@ content point, inflation submits that point directly to the same transition.
 Directional page discovery is the fallback for unknown targets or missing
 reveal evidence.
 
-After a physical page move, the first clean capture whose semantic viewport
-differs from the pre-movement viewport commits immediately. An identical clean
+After a physical page move, the first settled capture whose semantic viewport
+differs from the pre-movement viewport commits immediately. An identical settled
 capture remains provisional within the shared one-second semantic observation
 budget so delayed SwiftUI accessibility updates can arrive. If the viewport is
-legitimately blank or semantically identical, its latest clean capture commits
+legitimately blank or semantically identical, its latest settled capture commits
 when there is no budget for another two-frame settle.
 
 ```mermaid
@@ -126,10 +126,10 @@ sequenceDiagram
     Transition->>UIKit: dispatch movement
     UIKit-->>Transition: moved
     Transition->>Settle: minimal settle: parse + two run-loop turns + stable repeat
-    Settle-->>Transition: clean outcome with exact final observation
+    Settle-->>Transition: successful outcome with exact final observation
     Transition->>Stream: admit and commit outcome
-    Stream->>Stream: verify tripwire and capture identity<br/>construct InterfaceObservationProof
-    Stream->>Store: commit proof + notification checkpoint
+    Stream->>Stream: verify tripwire and capture identity<br/>construct CommittableInterfaceObservation
+    Stream->>Store: commit admitted observation + notification checkpoint
     Store->>Store: derive graph, events, lineage, and cursors<br/>install one complete Store value
     Store-->>Stream: committed event
     Stream->>Stream: complete waiters
@@ -143,7 +143,7 @@ sequenceDiagram
 ```mermaid
 flowchart TD
     Target{"known target with<br/>scroll-content point?"} -->|yes| Direct["jump directly to 2D content point"]
-    Direct --> DirectCommit["minimal settle → parse proof<br/>→ Store commit"]
+    Direct --> DirectCommit["minimal settle → parse + admit<br/>→ Store commit"]
     DirectCommit --> RetainKnown["retain revealed viewport"]
     Target -->|no| Save["save visual origin"]
     Save --> Order{"caller-selected search order"}
@@ -152,7 +152,7 @@ flowchart TD
     FirstForward --> Move["move exactly one viewport"]
     FirstBack --> Move
     Move --> Legal{"legal content offset changed?"}
-    Legal -->|yes| Commit["minimal settle → parse proof<br/>→ Store commit"]
+    Legal -->|yes| Commit["minimal settle → parse + admit<br/>→ Store commit"]
     Legal -->|no: true edge<br/>or clamped overdrag| Deplete["deplete this directional ray"]
     Commit --> Callback["observation callback"]
     Callback -->|finish| Finalize{"caller-selected exit position"}
@@ -172,7 +172,7 @@ the next page cannot change the clamped legal content offset; UIKit bounce and
 stretch are outside that legal interval. The exit position is known before
 traversal and is applied whenever traversal ends: command and wait discovery
 restore `.origin`, while inflation retains `.current`. Restoration is itself a movement, so `.origin`
-cannot return before its settle, proof, and Store commit finish.
+cannot return before its settle, observation admission, and Store commit finish.
 When the callback already returned `finish`, final restoration does not invoke
 that goal callback again. There is no alternate traversal or commit path.
 

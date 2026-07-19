@@ -5,15 +5,18 @@ import TheScore
 
 extension ActionResult {
     @MainActor init(
-        outcome: TheSafecracker.ActionDispatchOutcome,
-        afterStatePayload: ((PostActionPayloadContext) -> ActionResultPayload?)?,
-        settledObservation: PostActionObservation.SettlementResult
+        dispatchResult: TheSafecracker.ActionDispatchResult,
+        afterStatePayload: ((ActionPayloadEvidence) -> ActionResultPayload?)?,
+        settledObservation: ActionEvidenceProjector.Result
     ) {
-        let resultOutcome = settledObservation.resultOutcome(for: outcome)
-        let message = settledObservation.message(explicit: outcome.message)
-        let payload = settledObservation.payload(for: outcome, afterStatePayload: afterStatePayload)
+        let resultOutcome = settledObservation.resultOutcome(for: dispatchResult)
+        let message = settledObservation.message(explicit: dispatchResult.message)
+        let payload = settledObservation.payload(
+            for: dispatchResult,
+            afterStatePayload: afterStatePayload
+        )
         let methodAndPayload = payload.map(ActionResult.MethodAndPayload.payload)
-            ?? .methodOnly(outcome.method)
+            ?? .methodOnly(dispatchResult.method)
         let duration: ActionSettlementDuration
         do {
             duration = try ActionSettlementDuration(
@@ -21,11 +24,11 @@ extension ActionResult {
             )
         } catch {
             self = ActionResult.failure(
-                method: outcome.method,
-                errorKind: .actionFailed,
+                method: dispatchResult.method,
+                failureKind: .actionFailed,
                 message: String(describing: error),
                 observation: .trace(settledObservation.traceEvidence),
-                subjectEvidence: outcome.subjectEvidence
+                subjectEvidence: dispatchResult.subjectEvidence
             )
             return
         }
@@ -41,19 +44,19 @@ extension ActionResult {
             methodAndPayload: methodAndPayload,
             message: message,
             observation: observation,
-            subjectEvidence: outcome.subjectEvidence,
-            activationTrace: outcome.activationTrace
+            subjectEvidence: dispatchResult.subjectEvidence,
+            activationTrace: dispatchResult.activationTrace
         )
     }
 }
 
-extension PostActionObservation.SettlementResult {
+extension ActionEvidenceProjector.Result {
     var traceEvidence: AccessibilityTraceEvidence {
         guard let evidence = AccessibilityTraceEvidence(
             trace: accessibilityTrace,
             completeness: .incomplete
         ) else {
-            preconditionFailure("post-action observation requires a current accessibility capture")
+            preconditionFailure("action evidence requires a current accessibility capture")
         }
         return evidence
     }
@@ -73,15 +76,15 @@ extension PostActionObservation.SettlementResult {
     }
 
     var settleTimeMs: Int {
-        settle.outcome.timeMs
+        settleResult.outcome.timeMs
     }
 
-    private var settle: SettleSession.Result {
+    private var settleResult: SettleSession.Result {
         switch self {
-        case .committed(let settle, _, _),
-             .diagnostic(let settle, _),
-             .unavailable(let settle, _, _):
-            return settle
+        case .committed(let settleResult, _, _),
+             .diagnostic(let settleResult, _),
+             .unavailable(let settleResult, _, _):
+            return settleResult
         }
     }
 
@@ -95,15 +98,15 @@ extension PostActionObservation.SettlementResult {
     }
 
     func resultOutcome(
-        for outcome: TheSafecracker.ActionDispatchOutcome
+        for dispatchResult: TheSafecracker.ActionDispatchResult
     ) -> ActionResultOutcome {
         switch self {
         case .committed, .diagnostic:
-            switch outcome.state {
+            switch dispatchResult.outcome {
             case .success:
                 return .success
             case .failure(let failureKind):
-                return .failure(TheBrains.actionErrorKind(for: failureKind))
+                return .failure(TheBrains.actionFailureKind(for: failureKind))
             }
         case .unavailable:
             return .failure(.actionFailed)
@@ -111,15 +114,15 @@ extension PostActionObservation.SettlementResult {
     }
 
     func payload(
-        for outcome: TheSafecracker.ActionDispatchOutcome,
-        afterStatePayload: ((PostActionPayloadContext) -> ActionResultPayload?)?
+        for dispatchResult: TheSafecracker.ActionDispatchResult,
+        afterStatePayload: ((ActionPayloadEvidence) -> ActionResultPayload?)?
     ) -> ActionResultPayload? {
-        guard case .success(let payload, let resolvedElementId) = outcome.state else { return nil }
+        guard case .success(let payload, let resolvedElementId) = dispatchResult.outcome else { return nil }
         if let payload { return payload }
         guard let afterStatePayload else { return nil }
         guard case .committed(_, let finalBaseline, _) = self else { return nil }
-        return afterStatePayload(PostActionPayloadContext(
-            baseline: finalBaseline,
+        return afterStatePayload(ActionPayloadEvidence(
+            committedBaseline: finalBaseline,
             resolvedElementId: resolvedElementId
         ))
     }

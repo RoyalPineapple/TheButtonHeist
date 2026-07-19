@@ -230,7 +230,7 @@ extension TheBrainsPipelineTests {
             through: newScreenEvent
         ))
         let screenEvidence = PredicateObservationEvidence(
-            observation: brains.postActionObservation.semanticObservation(from: newScreenEvent),
+            observation: brains.actionEvidenceProjector.projectSettledEvidence(from: newScreenEvent),
             baseline: oldScreenBaseline,
             window: screenWindow
         )
@@ -260,7 +260,7 @@ extension TheBrainsPipelineTests {
             through: elementCurrentEvent
         ))
         let elementEvidence = PredicateObservationEvidence(
-            observation: brains.postActionObservation.semanticObservation(from: elementCurrentEvent),
+            observation: brains.actionEvidenceProjector.projectSettledEvidence(from: elementCurrentEvent),
             baseline: elementBaseline,
             window: elementWindow
         )
@@ -298,7 +298,7 @@ extension TheBrainsPipelineTests {
         )
 
         let intermediate = stream.reducing(
-            brains.postActionObservation.semanticObservation(from: intermediateEvent),
+            brains.actionEvidenceProjector.projectSettledEvidence(from: intermediateEvent),
             predicate: predicate,
             predicateExpression: expression,
             observationWindow: try XCTUnwrap(brains.vault.semanticObservationStream.observationWindow(
@@ -307,7 +307,7 @@ extension TheBrainsPipelineTests {
             ))
         )
         let final = intermediate.state.reducing(
-            brains.postActionObservation.semanticObservation(from: finalEvent),
+            brains.actionEvidenceProjector.projectSettledEvidence(from: finalEvent),
             predicate: predicate,
             predicateExpression: expression,
             observationWindow: try XCTUnwrap(brains.vault.semanticObservationStream.observationWindow(
@@ -347,7 +347,7 @@ extension TheBrainsPipelineTests {
             when: resolved.requiresChangeBaseline
         )
         let final = stream.reducing(
-            brains.postActionObservation.semanticObservation(from: finalEvent),
+            brains.actionEvidenceProjector.projectSettledEvidence(from: finalEvent),
             predicate: resolved,
             predicateExpression: predicate,
             observationWindow: window

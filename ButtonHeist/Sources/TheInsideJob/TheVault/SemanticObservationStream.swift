@@ -51,10 +51,10 @@ internal final class SemanticObservationStream {
     // MARK: - Subscriber-Facing Settled Observation History
 
     var lifecycle = SemanticObservationLifecycle.stopped
-    internal var latestEvent: SettledObservationEvent? {
-        observationStore.latestSourceEvent
+    internal var latestCommittedEvent: SettledObservationEvent? {
+        observationStore.latestCommittedEvent
     }
-    /// Invalidates only latest fulfilled events as clean waiter results.
+    /// Invalidates only latest fulfilled events as admitted waiter results.
     /// Settled semantic truth remains in `TheVault` until the next explicit
     /// commit.
     internal var latestSettledObservationInvalidated: Bool {
@@ -64,8 +64,8 @@ internal final class SemanticObservationStream {
         observationStore.settleFailureDiagnostic
     }
 
-    internal var latestObservation: SettledObservation? {
-        observationStore.latestObservation
+    internal var latestCommittedObservation: SettledObservation? {
+        observationStore.latestCommittedObservation
     }
 
     internal var isActive: Bool {
@@ -202,7 +202,7 @@ internal final class SemanticObservationStream {
     }
 
     private func observeVisibleSemanticState() async -> Bool {
-        if cleanObservation(scope: .visible, after: nil) != nil {
+        if admittedObservation(scope: .visible, after: nil) != nil {
             _ = await Task.cancellableSleep(for: .milliseconds(100))
             observationStore.invalidateIfSignalChanged(to: currentTripwireSignal())
             return !Task.isCancelled

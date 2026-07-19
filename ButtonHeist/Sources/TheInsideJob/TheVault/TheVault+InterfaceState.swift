@@ -10,23 +10,18 @@ import TheScore
 
 extension TheVault {
 
-    /// Clear cached element data (used on suspend).
-    func clearCache() {
-        clearInterfaceForLifecycleReset()
-    }
-
-    /// Clear screen-level state on screen change. Screens are values, so
-    /// "clear screen" is identical to "clear everything" — the next parse
-    /// produces a fresh screen.
-    func clearScreen() {
-        clearInterfaceForLifecycleReset()
+    func resetInterfaceForLifecycle() {
+        latestObservation = .empty
+        latestFailedSettleDiagnosticEvidence = nil
+        nextVisibleRefreshObservationForTesting = nil
+        semanticObservationStream.clearCurrentInterface()
     }
 
     /// Clear stale interface state at a top-level heist boundary while leaving a
     /// queued synthetic visible refresh intact for in-process runtime tests.
-    func clearInterfaceForHeistBootstrap() {
+    func resetInterfaceForHeistBootstrap() {
         let queuedVisibleRefresh = nextVisibleRefreshObservationForTesting
-        clearInterfaceForLifecycleReset()
+        resetInterfaceForLifecycle()
         nextVisibleRefreshObservationForTesting = queuedVisibleRefresh
     }
 
@@ -35,39 +30,14 @@ extension TheVault {
         semanticObservationStream.invalidateLatestSettledObservation()
     }
 
-    /// Read the live accessibility tree and retain its live evidence.
-    /// Parsing never promotes an unproven sample into targetable truth.
-    /// Returns nil if no accessible windows exist (loading screen,
-    /// app backgrounded, etc.).
-    func parse() -> InterfaceObservation? {
-        guard let observation = parsedInterfaceObservation() else { return nil }
-        recordParsedObservedEvidence(from: observation)
-        return observation
-    }
-
     /// Refresh the latest live viewport evidence. The returned value remains the raw
     /// capture-local observation for geometry and exploration consumers.
     @discardableResult
     func refreshLiveCapture() -> InterfaceObservation? {
-        if let viewportObservation = nextVisibleRefreshObservationForTesting {
-            recordParsedObservedEvidence(from: viewportObservation)
-            return viewportObservation
-        }
-        return parse()
-    }
-
-    /// Produce one raw parser value for the settle runner without committing it.
-    func semanticObservationForSettle() -> InterfaceObservation? {
-        guard let observation = nextVisibleRefreshObservationForTesting ?? parsedInterfaceObservation() else {
-            return nil
-        }
-        recordParsedObservedEvidence(from: observation)
+        guard let observation = nextVisibleRefreshObservationForTesting
+            ?? capture().map(Self.buildObservation(from:)) else { return nil }
+        observeInterface(observation)
         return observation
-    }
-
-    /// Produce one raw page observation for scroll exploration.
-    func semanticPageForExploration() -> InterfaceObservation? {
-        refreshLiveCapture()
     }
 
     func recordCommittedObservation(
@@ -78,7 +48,7 @@ extension TheVault {
            queuedVisibleRefresh.tree.interfaceHash != sourceObservation.tree.interfaceHash {
             nextVisibleRefreshObservationForTesting = nil
         }
-        recordParsedObservedEvidence(from: observation)
+        observeInterface(observation)
         latestFailedSettleDiagnosticEvidence = nil
     }
 
@@ -87,14 +57,14 @@ extension TheVault {
         semanticObservationStream.invalidateLatestSettledObservation()
     }
 
-    func recordParsedObservedEvidence(_ observation: InterfaceObservation) {
-        recordParsedObservedEvidence(from: observation)
+    func observeInterface(_ observation: InterfaceObservation) {
+        latestObservation = observation
     }
 
     /// Starting value for page-by-page exploration. The tree's value-only
     /// viewport capture is the evidence that belongs to this committed state;
     /// a fresh parser read replaces it before exploration performs live work.
-    func explorationBaseline() -> InterfaceObservation {
+    func interfaceMemoryBaseline() -> InterfaceObservation {
         do {
             return try InterfaceObservation.build(tree: interfaceTree)
         } catch {
@@ -114,14 +84,6 @@ extension TheVault {
         viewportObservation.viewportOnly
     }
 
-    /// Starting value for action-owned target discovery.
-    ///
-    /// The canonical continuity decision is applied when observations commit,
-    /// so retained discovery memory already belongs to the current generation.
-    func actionDiscoveryBaseline() -> InterfaceObservation {
-        explorationBaseline()
-    }
-
     func firstResponderInterfaceElement() -> InterfaceTree.Element? {
         guard let heistId = firstResponderHeistId else { return nil }
         return treeElement(heistId: heistId, in: .interface)
@@ -132,21 +94,6 @@ extension TheVault {
         timestamp: Date = Date()
     ) -> Interface {
         WireConversion.toSemanticInterface(from: observation.tree, timestamp: timestamp)
-    }
-
-    private func clearInterfaceForLifecycleReset() {
-        latestObservation = .empty
-        latestFailedSettleDiagnosticEvidence = nil
-        nextVisibleRefreshObservationForTesting = nil
-        semanticObservationStream.clearCurrentInterface()
-    }
-
-    private func recordParsedObservedEvidence(from observation: InterfaceObservation) {
-        latestObservation = observation
-    }
-
-    private func parsedInterfaceObservation() -> InterfaceObservation? {
-        capture().map(Self.buildObservation(from:))
     }
 
 }

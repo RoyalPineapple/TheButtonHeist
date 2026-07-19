@@ -9,7 +9,7 @@ import TheScore
 /// A settled semantic observation paired with its trace and summary.
 struct SettledObservationEvidence {
     let event: SettledObservationEvent
-    let baseline: PostActionObservation.ObservationBaseline
+    let baseline: ActionEvidenceProjector.Baseline
     let accessibilityTrace: AccessibilityTrace
     let summary: String
 }
@@ -56,16 +56,16 @@ struct SemanticObservationDeadline: Sendable, Equatable {
     }
 }
 
-/// Builds traces, captures, change facts, and action receipts from supplied semantic
-/// states. The post-action contract is: admitted clean state → before → action →
+/// Projects traces, captures, change facts, and action receipts from supplied semantic
+/// states. The action contract is: admitted state → before → action →
 /// refresh/settle → after → result.
 @MainActor
-final class PostActionObservation {
+final class ActionEvidenceProjector {
     let vault: TheVault
     let safecracker: TheSafecracker
 
     /// State captured before an action for delta computation.
-    struct ObservationBaseline {
+    struct Baseline {
         let observation: InterfaceObservation
         let capture: AccessibilityTrace.Capture
         let tripwireSignal: TheTripwire.TripwireSignal
@@ -80,11 +80,11 @@ final class PostActionObservation {
         var screenId: String? { observation.tree.id }
     }
 
-    enum SettlementResult {
-        case committed(settle: SettleSession.Result, finalBaseline: ObservationBaseline, trace: AccessibilityTrace)
-        case diagnostic(settle: SettleSession.Result, trace: AccessibilityTrace)
+    enum Result {
+        case committed(settleResult: SettleSession.Result, committedBaseline: Baseline, trace: AccessibilityTrace)
+        case diagnostic(settleResult: SettleSession.Result, trace: AccessibilityTrace)
         case unavailable(
-            settle: SettleSession.Result,
+            settleResult: SettleSession.Result,
             trace: AccessibilityTrace,
             failureMessage: String
         )
@@ -95,24 +95,24 @@ final class PostActionObservation {
         self.safecracker = safecracker
     }
 
-    func captureSemanticState(from observation: SettledObservation) -> ObservationBaseline {
-        captureSemanticState(
+    func projectBaseline(from observation: SettledObservation) -> Baseline {
+        projectBaseline(
             from: observation.observation,
             tripwireSignal: vault.tripwire.tripwireSignal(),
             settledObservationSequence: observation.sequence
         )
     }
 
-    func captureSemanticState(from evidence: CleanSettledObservation) -> ObservationBaseline {
-        captureSemanticState(
+    func projectBaseline(from evidence: SemanticObservationStore.AdmittedObservation) -> Baseline {
+        projectBaseline(
             from: evidence.event.settledObservation.observation,
             tripwireSignal: evidence.tripwireSignal,
             settledObservationSequence: evidence.event.sequence
         )
     }
 
-    func semanticObservation(from event: SettledObservationEvent) -> SettledObservationEvidence {
-        let current = captureSemanticState(
+    func projectSettledEvidence(from event: SettledObservationEvent) -> SettledObservationEvidence {
+        let current = projectBaseline(
             from: event.settledObservation.observation,
             tripwireSignal: vault.tripwire.tripwireSignal(),
             settledObservationSequence: event.sequence
@@ -125,49 +125,35 @@ final class PostActionObservation {
         )
     }
 
-    func settleObservation(
-        before: ObservationBaseline,
-        commitScope: SemanticObservationScope = .visible,
-        outcome: SettleSession.Result?,
-        notificationWindow: AccessibilityNotificationScopeLease? = nil
-    ) async -> ObservationSettlement {
-        await vault.semanticObservationStream.settlePostActionObservation(
-            baselineTripwireSignal: before.tripwireSignal,
-            commitScope: commitScope,
-            settleOutcome: outcome,
-            notificationWindow: notificationWindow
-        )
-    }
-
-    func settledObservationResult(
-        before: ObservationBaseline,
+    func projectResult(
+        before: Baseline,
         observation: ObservationSettlement
-    ) -> SettlementResult {
-        switch observation.result {
+    ) -> Result {
+        switch observation.commitOutcome {
         case .committed(let event):
             precondition(
-                observation.settle.outcome.didSettleCleanly,
-                "committed observation requires clean settle"
+                observation.settleResult.outcome.didSettleCleanly,
+                "committed observation requires successful settlement"
             )
-            let finalBaseline = captureFinalBaseline(after: event)
+            let committedBaseline = projectCommittedBaseline(from: event)
             let trace = observedTrace(
                 before: before,
-                finalBaseline: finalBaseline,
-                settle: observation.settle,
+                finalBaseline: committedBaseline,
+                settleResult: observation.settleResult,
                 continuity: event.continuity,
                 transitionEvidence: event.trace.captures.last?.transition
             )
             return .committed(
-                settle: observation.settle,
-                finalBaseline: finalBaseline,
+                settleResult: observation.settleResult,
+                committedBaseline: committedBaseline,
                 trace: trace
             )
 
         case .observedUnsettled(let viewportObservation, let notificationBatch):
-            guard case .timedOut = observation.settle.outcome else {
+            guard case .timedOut = observation.settleResult.outcome else {
                 preconditionFailure("unsettled observation requires settle timeout")
             }
-            let finalBaseline = captureSemanticState(
+            let finalBaseline = projectBaseline(
                 from: viewportObservation,
                 tripwireSignal: before.tripwireSignal,
                 settledObservationSequence: nil
@@ -175,13 +161,13 @@ final class PostActionObservation {
             let trace = diagnosticObservedTrace(
                 before: before,
                 finalBaseline: finalBaseline,
-                settle: observation.settle,
+                settleResult: observation.settleResult,
                 transitionEvidence: diagnosticTransitionEvidence(
                     notificationBatch,
                     in: finalBaseline.observation
                 )
             )
-            return .diagnostic(settle: observation.settle, trace: trace)
+            return .diagnostic(settleResult: observation.settleResult, trace: trace)
 
         case .unavailable(let notificationBatch):
             let trace: AccessibilityTrace
@@ -189,7 +175,7 @@ final class PostActionObservation {
                 trace = diagnosticObservedTrace(
                     before: before,
                     finalBaseline: before,
-                    settle: observation.settle,
+                    settleResult: observation.settleResult,
                     transitionEvidence: diagnosticTransitionEvidence(
                         notificationBatch,
                         in: before.observation
@@ -198,29 +184,29 @@ final class PostActionObservation {
             } else {
                 trace = AccessibilityTrace(capture: before.capture)
             }
-            switch observation.settle.outcome {
+            switch observation.settleResult.outcome {
             case .cancelled(let timeMs):
                 return .unavailable(
-                    settle: observation.settle,
+                    settleResult: observation.settleResult,
                     trace: trace,
                     failureMessage: "cancelled after \(timeMs)ms"
                 )
             case .timedOut:
                 return .unavailable(
-                    settle: observation.settle,
+                    settleResult: observation.settleResult,
                     trace: trace,
-                    failureMessage: "Could not parse post-action accessibility tree"
+                    failureMessage: "Could not capture accessibility tree after action"
                 )
             case .settled:
-                preconditionFailure("clean settle requires committed observation")
+                preconditionFailure("successful settlement requires a committed observation")
             }
         }
     }
 
     private func observedTrace(
-        before: ObservationBaseline,
-        finalBaseline: ObservationBaseline,
-        settle: SettleSession.Result,
+        before: Baseline,
+        finalBaseline: Baseline,
+        settleResult: SettleSession.Result,
         continuity: ScreenContinuity,
         transitionEvidence: AccessibilityTrace.Transition?
     ) -> AccessibilityTrace {
@@ -229,7 +215,7 @@ final class PostActionObservation {
             parentCapture: before.capture,
             classification: continuity,
             transient: Self.transientElements(
-                settleResult: settle,
+                settleResult: settleResult,
                 before: before,
                 final: finalBaseline,
                 classification: continuity
@@ -240,9 +226,9 @@ final class PostActionObservation {
     }
 
     private func diagnosticObservedTrace(
-        before: ObservationBaseline,
-        finalBaseline: ObservationBaseline,
-        settle: SettleSession.Result,
+        before: Baseline,
+        finalBaseline: Baseline,
+        settleResult: SettleSession.Result,
         transitionEvidence: AccessibilityTrace.Transition?
     ) -> AccessibilityTrace {
         let continuity = ScreenClassifier.classify(
@@ -253,7 +239,7 @@ final class PostActionObservation {
         return observedTrace(
             before: before,
             finalBaseline: finalBaseline,
-            settle: settle,
+            settleResult: settleResult,
             continuity: continuity,
             transitionEvidence: transitionEvidence
         )
@@ -273,11 +259,11 @@ final class PostActionObservation {
         )
     }
 
-    func captureSemanticState(
+    func projectBaseline(
         from observation: InterfaceObservation,
         tripwireSignal: TheTripwire.TripwireSignal,
         settledObservationSequence: SettledObservationSequence?
-    ) -> ObservationBaseline {
+    ) -> Baseline {
         let interface = vault.semanticInterface(for: observation)
         let capture = makeTraceCapture(
             interface: interface,
@@ -286,7 +272,7 @@ final class PostActionObservation {
             tripwireSignal: tripwireSignal,
             screenId: observation.tree.id
         )
-        return ObservationBaseline(
+        return Baseline(
             observation: observation,
             capture: capture,
             tripwireSignal: tripwireSignal,
@@ -295,8 +281,8 @@ final class PostActionObservation {
     }
 
     static func shouldRecordAccessibilityTrace(
-        baseline: ObservationBaseline,
-        current: ObservationBaseline,
+        baseline: Baseline,
+        current: Baseline,
         classification: ScreenContinuity
     ) -> Bool {
         switch classification {
@@ -383,9 +369,9 @@ final class PostActionObservation {
         )
     }
 
-    private func captureFinalBaseline(after visibleEvent: SettledObservationEvent) -> ObservationBaseline {
+    private func projectCommittedBaseline(from visibleEvent: SettledObservationEvent) -> Baseline {
         let settledObservation = visibleEvent.settledObservation
-        return captureSemanticState(
+        return projectBaseline(
             from: settledObservation.observation,
             tripwireSignal: vault.tripwire.tripwireSignal(),
             settledObservationSequence: settledObservation.sequence
@@ -406,7 +392,7 @@ final class PostActionObservation {
         }
         return AccessibilityTrace.Context(
             firstResponder: observation.flatMap { vault.firstResponderTarget(in: $0.tree) },
-            keyboardVisible: safecracker.isKeyboardVisible(),
+            keyboardVisible: safecracker.isKeyboardVisible,
             screenId: screenId ?? vault.lastScreenId,
             windowStack: windows
         )
@@ -414,7 +400,7 @@ final class PostActionObservation {
 
     // MARK: - Observation Helpers
 
-    static func observationSummary(_ state: ObservationBaseline) -> String {
+    static func observationSummary(_ state: Baseline) -> String {
         var parts = ["interface: \(state.interface.projectedElements.count) elements"]
         if let screenId = state.screenId {
             parts.insert("screen: \(screenId)", at: 0)
@@ -424,8 +410,8 @@ final class PostActionObservation {
 
     static func transientElements(
         settleResult: SettleSession.Result,
-        before: ObservationBaseline,
-        final: ObservationBaseline,
+        before: Baseline,
+        final: Baseline,
         classification: ScreenContinuity
     ) -> [HeistElement] {
         guard case .sameGeneration = classification,
