@@ -24,7 +24,7 @@ final class CLICommandSyncTests: XCTestCase {
     @ButtonHeistActor
     func testOneShotDescriptorsOwnConnectedAndLocalLifecycleModes() async throws {
         let connected = try await PingCommand.parse([]).runnerDescriptor()
-        let local = try await ListCommand.parse([]).runnerDescriptor()
+        let local = try await ListDevicesCommand.parse([]).runnerDescriptor()
 
         XCTAssertEqual(connected.fenceDescriptor.command, .ping)
         XCTAssertEqual(connected.executionMode, .connected)
@@ -131,7 +131,7 @@ final class CLICommandSyncTests: XCTestCase {
     func testParsedTimeoutDefaultsComeFromFenceDescriptorsWhenExposed() throws {
         XCTAssertEqual(try WaitCommand.parse(["--change", "screen"]).timeout, CLITimeoutDefaults.wait)
         XCTAssertEqual(
-            try TypeCommand.parse(["--text", "hello"]).timeout,
+            try TypeTextCommand.parse(["--text", "hello"]).timeout,
             try XCTUnwrap(TheFence.Command.typeText.descriptor.timeout.singleStepBaseSeconds)
         )
         XCTAssertEqual(
@@ -142,15 +142,15 @@ final class CLICommandSyncTests: XCTestCase {
     }
 
     func testTypeTextRequiresText() {
-        XCTAssertThrowsError(try TypeCommand.parse([]))
+        XCTAssertThrowsError(try TypeTextCommand.parse([]))
     }
 
     func testTypeTextRejectsEmptyText() throws {
-        XCTAssertThrowsError(try TypeCommand.parse(["--text", ""]))
+        XCTAssertThrowsError(try TypeTextCommand.parse(["--text", ""]))
     }
 
     func testTypeTextRejectsUnknownOption() {
-        XCTAssertThrowsError(try TypeCommand.parse(["--unknown-option", "--text", "hello"]))
+        XCTAssertThrowsError(try TypeTextCommand.parse(["--unknown-option", "--text", "hello"]))
     }
 
     func testFenceExpectationArgumentContractRejectsShorthand() {
@@ -269,7 +269,7 @@ final class CLICommandSyncTests: XCTestCase {
         let prepared = try await RunHeistCommand.prepareInput(
             path: "Flow.swift",
             entry: "makeHeist",
-            compileSwiftFile: { _, _ in .success(plan, diagnostics: []) }
+            compileSwiftSource: { _, _ in .success(plan, diagnostics: []) }
         )
         defer { prepared.cleanup() }
 
@@ -665,7 +665,7 @@ final class CLICommandSyncTests: XCTestCase {
     }
 
     func testSwipeCLIHelpUsesDescriptorDirectionValues() {
-        let help = SwipeSubcommand.helpMessage()
+        let help = SwipeCommand.helpMessage()
 
         XCTAssertTrue(help.contains("Swipe direction: up, down, left, right"), help)
     }

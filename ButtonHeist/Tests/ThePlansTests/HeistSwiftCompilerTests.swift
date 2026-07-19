@@ -3,7 +3,7 @@ import Testing
 @testable import ThePlans
 
 @Suite(.serialized)
-struct HeistCompilerTests {
+struct HeistSwiftCompilerTests {
     @Test
     func `entry symbol validates one canonical dotted identifier currency`() throws {
         #expect(try HeistEntrySymbol(validating: "Checkout.compile").description == "Checkout.compile")
@@ -46,7 +46,7 @@ struct HeistCompilerTests {
             """
         )
 
-        let (plan, diagnostics) = try await requireSuccess(HeistCompiler().compileFile(source))
+        let (plan, diagnostics) = try await requireSuccess(HeistSwiftCompiler().compileFile(source))
 
         #expect(diagnostics.isEmpty)
         #expect(plan.name == "NamedPlan")
@@ -67,7 +67,7 @@ struct HeistCompilerTests {
             """
         )
 
-        let diagnostics = try await requireFailure(HeistCompiler().compileFile(source))
+        let diagnostics = try await requireFailure(HeistSwiftCompiler().compileFile(source))
         let text = diagnostics.map(\.description).joined(separator: "\n")
 
         #expect(text.contains("cannot call value of non-function type"))
@@ -85,7 +85,7 @@ struct HeistCompilerTests {
             """
         )
 
-        let diagnostics = try await requireFailure(HeistCompiler().compileFile(source))
+        let diagnostics = try await requireFailure(HeistSwiftCompiler().compileFile(source))
         let diagnostic = try #require(diagnostics.first)
 
         #expect(diagnostic.code.rawValue == "heist.swift_compilation.compile_failed")
@@ -114,7 +114,7 @@ struct HeistCompilerTests {
             """
         )
 
-        let diagnostics = try await requireFailure(HeistCompiler().compileFile(source))
+        let diagnostics = try await requireFailure(HeistSwiftCompiler().compileFile(source))
         let diagnostic = try #require(diagnostics.first)
 
         #expect(diagnostic.code.rawValue == "heist.swift_compilation.invalid_output")
@@ -152,7 +152,7 @@ struct HeistCompilerTests {
             """
         )
 
-        let (plan, _) = try await requireSuccess(HeistCompiler().compileFile(source))
+        let (plan, _) = try await requireSuccess(HeistSwiftCompiler().compileFile(source))
 
         #expect(plan.lint(.strictTest).isEmpty)
         #expect(try JSONDecoder().decode(HeistPlan.self, from: plan.canonicalHeistJSONData()) == plan)
@@ -180,7 +180,7 @@ struct HeistCompilerTests {
             """
         )
 
-        let (plan, diagnostics) = try await requireSuccess(HeistCompiler().compileFile(source))
+        let (plan, diagnostics) = try await requireSuccess(HeistSwiftCompiler().compileFile(source))
 
         #expect(diagnostics.isEmpty)
         #expect(plan.name == "Checkout")
@@ -211,7 +211,7 @@ struct HeistCompilerTests {
             """#
         )
 
-        let (plan, diagnostics) = try await requireSuccess(HeistCompiler().compileFile(source))
+        let (plan, diagnostics) = try await requireSuccess(HeistSwiftCompiler().compileFile(source))
 
         #expect(diagnostics.isEmpty)
         #expect(plan.name == "WrapperStrings")
@@ -247,7 +247,7 @@ struct HeistCompilerTests {
             """
         )
 
-        let (plan, diagnostics) = try await requireSuccess(HeistCompiler().compileFile(source))
+        let (plan, diagnostics) = try await requireSuccess(HeistSwiftCompiler().compileFile(source))
 
         #expect(diagnostics.isEmpty)
         #expect(plan.name == "WrapperComments")
@@ -273,7 +273,7 @@ struct HeistCompilerTests {
             """
         )
 
-        let (plan, diagnostics) = try await requireSuccess(HeistCompiler().compileFile(source))
+        let (plan, diagnostics) = try await requireSuccess(HeistSwiftCompiler().compileFile(source))
 
         #expect(diagnostics.isEmpty)
         #expect(plan.name == "TrustedFrontend")
@@ -300,7 +300,7 @@ struct HeistCompilerTests {
             """
         )
 
-        let (plan, diagnostics) = try await requireSuccess(HeistCompiler().compileFile(source))
+        let (plan, diagnostics) = try await requireSuccess(HeistSwiftCompiler().compileFile(source))
 
         #expect(diagnostics.isEmpty)
         #expect(plan.name == "RawBody")
@@ -353,7 +353,7 @@ struct HeistCompilerTests {
             """
         )
 
-        let diagnostics = try await requireFailure(HeistCompiler().compileFile(source))
+        let diagnostics = try await requireFailure(HeistSwiftCompiler().compileFile(source))
         let text = diagnostics.map(\.description).joined(separator: "\n")
 
         #expect(text.contains("Failed to compile Swift heist source"))
@@ -381,7 +381,7 @@ struct HeistCompilerTests {
             """
         )
 
-        let diagnostics = try await requireFailure(HeistCompiler().compileFile(source))
+        let diagnostics = try await requireFailure(HeistSwiftCompiler().compileFile(source))
         let text = diagnostics.map(\.description).joined(separator: "\n")
 
         #expect(text.contains("Failed to compile Swift heist source"))
@@ -414,7 +414,7 @@ struct HeistCompilerTests {
             }
             """
         )
-        let (plan, _) = try await requireSuccess(HeistCompiler().compileFile(validSource))
+        let (plan, _) = try await requireSuccess(HeistSwiftCompiler().compileFile(validSource))
         #expect(plan.body.count == 2)
     }
 
@@ -441,7 +441,7 @@ struct HeistCompilerTests {
             }
             """
         )
-        let (plan, _) = try await requireSuccess(HeistCompiler().compileFile(validSource))
+        let (plan, _) = try await requireSuccess(HeistSwiftCompiler().compileFile(validSource))
         #expect(plan.body.count == 4)
     }
 
@@ -451,7 +451,7 @@ struct HeistCompilerTests {
         _ = try temp.writeSwiftSource(named: "Alpha.swift", namedPlan: "Alpha")
         _ = try temp.writeSwiftSource(named: "Beta.swift", namedPlan: "Beta")
 
-        let (catalog, diagnostics) = try await requireSuccess(HeistCompiler().compileDirectory(temp.url))
+        let (catalog, diagnostics) = try await requireSuccess(HeistSwiftCompiler().compileDirectory(temp.url))
 
         #expect(diagnostics.isEmpty)
         #expect(catalog.source == HeistCatalogSource(url: temp.url.standardizedFileURL))
@@ -464,7 +464,7 @@ struct HeistCompilerTests {
         _ = try temp.writeSwiftSource(named: "First.swift", namedPlan: "Duplicate")
         _ = try temp.writeSwiftSource(named: "Second.swift", namedPlan: "Duplicate")
 
-        let diagnostics = try await requireFailure(HeistCompiler().compileDirectory(temp.url))
+        let diagnostics = try await requireFailure(HeistSwiftCompiler().compileDirectory(temp.url))
         let diagnostic = try #require(diagnostics.first)
 
         #expect(diagnostic.code.rawValue == "heist.catalog.duplicate_capability")
@@ -477,7 +477,7 @@ struct HeistCompilerTests {
         let temp = try CompilerTemporaryDirectory()
         _ = try temp.writeSwiftSource(named: "Filename.swift", namedPlan: "PlanName")
 
-        let (catalog, _) = try await requireSuccess(HeistCompiler().compileDirectory(temp.url))
+        let (catalog, _) = try await requireSuccess(HeistSwiftCompiler().compileDirectory(temp.url))
 
         #expect(catalog.capabilities.map(\.name) == ["PlanName"])
         #expect(!catalog.capabilities.map { $0.name ?? "" }.contains("Filename"))
@@ -489,7 +489,7 @@ struct HeistCompilerTests {
         _ = try temp.writeSwiftSource(named: ".Hidden.swift", "this is not Swift")
         _ = try temp.writeSwiftSource(named: "Visible.swift", namedPlan: "Visible")
 
-        let (catalog, _) = try await requireSuccess(HeistCompiler().compileDirectory(temp.url))
+        let (catalog, _) = try await requireSuccess(HeistSwiftCompiler().compileDirectory(temp.url))
 
         #expect(catalog.capabilities.map(\.name) == ["Visible"])
     }
@@ -511,7 +511,7 @@ struct HeistCompilerTests {
         )
         _ = try temp.writeSwiftSource(named: "Named.swift", namedPlan: "Named")
 
-        let diagnostics = try await requireFailure(HeistCompiler().compileDirectory(temp.url))
+        let diagnostics = try await requireFailure(HeistSwiftCompiler().compileDirectory(temp.url))
 
         #expect(diagnostics.map(\.description).joined(separator: "\n").contains("anonymous capability"))
     }

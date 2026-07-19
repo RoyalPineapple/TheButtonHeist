@@ -1,27 +1,27 @@
 import Foundation
 
-public extension HeistPlanning {
-    static func rejectRawStructuredJSONIRSourceFieldsResult(
+public enum HeistPlanSourceAdmission {
+    public static func rejectRawStructuredJSONIRSourceFields(
         commandName: String,
         fields: Set<HeistPlanRejectedPublicSourceField>
     ) -> ValidationResult<Void, HeistBuildDiagnostic> {
         guard !fields.isEmpty else { return .success((), diagnostics: []) }
-        return .failure([HeistPlanningError.rawStructuredJSONIRFields(
+        return .failure([HeistAdmissionFailure.rawStructuredJSONIRFields(
             commandName: commandName,
             fields: fields.sorted { $0.rawValue < $1.rawValue }
         ).diagnostic])
     }
 
-    static func admittedSourceResult(
+    public static func admittedSource(
         commandName: String,
         path: String?,
         inlineDSL: String?
     ) -> ValidationResult<HeistPlanSource, HeistBuildDiagnostic> {
         switch (path, inlineDSL) {
         case (.some, .some):
-            return .failure([HeistPlanningError.multiplePlanSources(commandName: commandName).diagnostic])
+            return .failure([HeistAdmissionFailure.multiplePlanSources(commandName: commandName).diagnostic])
         case (.none, .none):
-            return .failure([HeistPlanningError.missingPlanSource(commandName: commandName).diagnostic])
+            return .failure([HeistAdmissionFailure.missingPlanSource(commandName: commandName).diagnostic])
         case (.some(let path), .none):
             return .success(.artifactPath(path), diagnostics: [])
         case (.none, .some(let source)):
@@ -29,13 +29,13 @@ public extension HeistPlanning {
         }
     }
 
-    static func admissionRequestResult(
+    public static func request(
         commandName: String,
         path: String?,
         inlineDSL: String?,
         sourcePolicy: HeistPlanSourceAdmissionPolicy = .artifactOrInlineDSL
     ) -> ValidationResult<HeistPlanSourceAdmissionRequest, HeistBuildDiagnostic> {
-        admittedSourceResult(commandName: commandName, path: path, inlineDSL: inlineDSL).map {
+        admittedSource(commandName: commandName, path: path, inlineDSL: inlineDSL).map {
             HeistPlanSourceAdmissionRequest(
                 commandName: commandName,
                 source: $0,
@@ -44,7 +44,7 @@ public extension HeistPlanning {
         }
     }
 
-    static func admitPlanSourceResult(
+    public static func admit(
         from request: HeistPlanSourceAdmissionRequest
     ) -> ValidationResult<HeistPlanLoadRequest, HeistBuildDiagnostic> {
         switch request.source {
@@ -56,7 +56,7 @@ public extension HeistPlanning {
         case .inlineDSL(let source):
             guard request.sourcePolicy.acceptsInlineDSL else {
                 return .failure([
-                    HeistPlanningError.inlineSourceNotAccepted(commandName: request.commandName).diagnostic,
+                    HeistAdmissionFailure.inlineSourceNotAccepted(commandName: request.commandName).diagnostic,
                 ])
             }
             return .success(
@@ -65,14 +65,17 @@ public extension HeistPlanning {
             )
         }
     }
+}
 
-    static func loadValidatedPlanResult(
+public enum HeistPlanLoading {
+    public static func loadValidated(
         from request: HeistPlanSourceAdmissionRequest
     ) -> ValidationResult<HeistPlan, HeistBuildDiagnostic> {
-        admitPlanSourceResult(from: request).flatMap { loadValidatedPlanResult(from: $0) }
+        HeistPlanSourceAdmission.admit(from: request)
+            .flatMap { loadValidated(from: $0) }
     }
 
-    static func loadValidatedPlanResult(
+    public static func loadValidated(
         from request: HeistPlanLoadRequest
     ) -> ValidationResult<HeistPlan, HeistBuildDiagnostic> {
         switch request.source {
@@ -82,22 +85,24 @@ public extension HeistPlanning {
             return compileInlineButtonHeistSourceResult(source, commandName: request.commandName)
         }
     }
+}
 
-    static func decodeArgumentJSONResult(
+public enum HeistArgumentAdmission {
+    public static func decodeJSON(
         _ data: Data,
         sourceURL: URL = URL(fileURLWithPath: "inline-heist-argument.json")
     ) -> ValidationResult<HeistArgument, HeistBuildDiagnostic> {
         do {
             return .success(try JSONDecoder().decode(HeistArgument.self, from: data), diagnostics: [])
         } catch {
-            return .failure([HeistPlanningError.invalidArgument(
+            return .failure([HeistAdmissionFailure.invalidArgument(
                 source: sourceURL.path,
                 reason: String(describing: error)
             ).diagnostic])
         }
     }
 
-    static func validateRootArgumentResult(
+    public static func validateRootArgument(
         _ argument: HeistArgument,
         for plan: HeistPlan
     ) -> ValidationResult<Void, HeistBuildDiagnostic> {
@@ -105,12 +110,12 @@ public extension HeistPlanning {
             _ = try HeistExecutionEnvironment.empty.binding(argument: argument, to: plan.parameter)
             return .success((), diagnostics: [])
         } catch {
-            return .failure([HeistPlanningError.invalidRootArgument(String(describing: error)).diagnostic])
+            return .failure([HeistAdmissionFailure.invalidRootArgument(String(describing: error)).diagnostic])
         }
     }
 }
 
-public extension HeistPlanningError {
+package extension HeistAdmissionFailure {
     var diagnostics: [HeistBuildDiagnostic] {
         [diagnostic]
     }
@@ -135,8 +140,6 @@ public extension HeistPlanningError {
             return planningDiagnostic(code: .planningEmptyInlineSource, message: description)
         case .rawStructuredJSONIRFields:
             return planningDiagnostic(code: .planningRawJSONIRFields, message: description)
-        case .invalidPlanSource:
-            return planningDiagnostic(code: .planningInvalidPlanSource, message: description)
         case .invalidArgument(let source, _):
             return planningDiagnostic(
                 code: .planningInvalidArgument,
@@ -162,19 +165,19 @@ public extension HeistPlanningError {
     }
 }
 
-private extension HeistPlanning {
+private extension HeistPlanLoading {
     static func loadValidatedArtifactPlanResult(
         path: String,
         commandName: String
     ) -> ValidationResult<HeistPlan, HeistBuildDiagnostic> {
         let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            return .failure([HeistPlanningError.emptyPath(commandName: commandName).diagnostic])
+            return .failure([HeistAdmissionFailure.emptyPath(commandName: commandName).diagnostic])
         }
 
         let url = URL(fileURLWithPath: (trimmed as NSString).expandingTildeInPath)
         guard url.pathExtension.lowercased() == "heist" else {
-            return .failure([HeistPlanningError.unsupportedPath(commandName: commandName, path: path).diagnostic])
+            return .failure([HeistAdmissionFailure.unsupportedPath(commandName: commandName, path: path).diagnostic])
         }
 
         do {
@@ -201,10 +204,10 @@ private extension HeistPlanning {
         commandName: String
     ) -> ValidationResult<HeistPlan, HeistBuildDiagnostic> {
         guard !source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return .failure([HeistPlanningError.emptyInlineSource(commandName: commandName).diagnostic])
+            return .failure([HeistAdmissionFailure.emptyInlineSource(commandName: commandName).diagnostic])
         }
 
-        return HeistPlanSourceCompiler().compileResult(
+        return HeistSourceCompilation.compileResult(
             source,
             sourceName: "\(commandName)-inline.plan"
         )

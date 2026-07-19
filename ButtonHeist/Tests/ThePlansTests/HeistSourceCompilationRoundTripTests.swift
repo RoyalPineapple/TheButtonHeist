@@ -1,7 +1,7 @@
 import Testing
 @testable import ThePlans
 
-@Test func `canonical semantic actions round trip through source compiler`() throws {
+@Test func `canonical semantic actions round trip through source compilation`() throws {
     try assertCanonicalRoundTrip(try HeistPlan(body: [
         .action(ActionStep(
             command: .activate(.predicate(.label("Pay"))),
@@ -32,46 +32,46 @@ import Testing
     ]))
 }
 
-@Test func `canonical mechanical actions round trip through source compiler`() throws {
+@Test func `canonical spatial gesture actions round trip through source compilation`() throws {
     try assertCanonicalRoundTrip(try HeistPlan(body: [
-        .action(ActionStep(command: .mechanicalTap(TapTarget(
+        .action(ActionStep(command: .oneFingerTap(TapTarget(
             selection: .coordinate(ScreenPoint(x: 12, y: 34))
         )))),
-        .action(ActionStep(command: .mechanicalTap(TapTarget(
+        .action(ActionStep(command: .oneFingerTap(TapTarget(
             selection: .elementUnitPoint(.label("Cell"), UnitPoint(x: 0.25, y: 0.75))
         )))),
-        .action(ActionStep(command: .mechanicalLongPress(LongPressTarget(
+        .action(ActionStep(command: .longPress(LongPressTarget(
             selection: .coordinate(ScreenPoint(x: 20, y: 40)),
             duration: 1
         )))),
-        .action(ActionStep(command: .mechanicalLongPress(LongPressTarget(
+        .action(ActionStep(command: .longPress(LongPressTarget(
             selection: .elementUnitPoint(.label("Message"), UnitPoint(x: 0.5, y: 0.2)),
             duration: 1.4
         )))),
-        .action(ActionStep(command: .mechanicalSwipe(SwipeTarget(selection: .unitElement(
+        .action(ActionStep(command: .swipe(SwipeTarget(selection: .unitElement(
             .label("Carousel"),
             start: UnitPoint(x: 0.8, y: 0.5),
             end: UnitPoint(x: 0.2, y: 0.5)
         ))))),
-        .action(ActionStep(command: .mechanicalDrag(DragTarget(
+        .action(ActionStep(command: .drag(DragTarget(
             selection: .elementToPoint(
                 .label("Slider"),
                 start: UnitPoint(x: 0.8, y: 0.5),
                 end: ScreenPoint(x: 200, y: 40)
             )
         )))),
-        .action(ActionStep(command: .mechanicalDrag(DragTarget(
+        .action(ActionStep(command: .drag(DragTarget(
             selection: .pointToPoint(start: ScreenPoint(x: 10, y: 10), end: ScreenPoint(x: 100, y: 100))
         )))),
     ]))
 }
 
-@Test func `mechanical tap ScreenPoint source compiles to raw coordinate tap`() throws {
-    let plan = try HeistPlanSourceCompiler().compile(root("""
-    Mechanical.Tap(ScreenPoint(x: 888, y: 372))
+@Test func `spatial gesture tap ScreenPoint source compiles to raw coordinate tap`() throws {
+    let plan = try HeistSourceCompilation.compile(root("""
+    oneFingerTap(ScreenPoint(x: 888, y: 372))
     """))
     let expected = try HeistPlan(body: [
-        .action(ActionStep(command: .mechanicalTap(TapTarget(
+        .action(ActionStep(command: .oneFingerTap(TapTarget(
             selection: .coordinate(ScreenPoint(x: 888, y: 372))
         )))),
     ])
@@ -79,25 +79,25 @@ import Testing
     #expect(plan == expected)
 }
 
-@Test func `mechanical element unit-point source compiles to element-relative gesture`() throws {
-    let plan = try HeistPlanSourceCompiler().compile(root("""
-    Mechanical.Tap(.label("Row"), at: UnitPoint(x: 0.25, y: 0.75))
-    Mechanical.LongPress(.label("Row"), at: UnitPoint(x: 0.5, y: 0.5), duration: 1.4)
-    Mechanical.Drag(.label("Slider"), from: UnitPoint(x: 0.8, y: 0.5), to: ScreenPoint(x: 200, y: 40))
+@Test func `spatial gesture element unit-point source compiles to element-relative gesture`() throws {
+    let plan = try HeistSourceCompilation.compile(root("""
+    oneFingerTap(.label("Row"), at: UnitPoint(x: 0.25, y: 0.75))
+    longPress(.label("Row"), at: UnitPoint(x: 0.5, y: 0.5), duration: 1.4)
+    drag(.label("Slider"), from: UnitPoint(x: 0.8, y: 0.5), to: ScreenPoint(x: 200, y: 40))
     """))
     let expected = try HeistPlan(body: [
-        .action(ActionStep(command: .mechanicalTap(TapTarget(selection: .elementUnitPoint(
+        .action(ActionStep(command: .oneFingerTap(TapTarget(selection: .elementUnitPoint(
             .predicate(.label("Row")),
             UnitPoint(x: 0.25, y: 0.75)
         ))))),
-        .action(ActionStep(command: .mechanicalLongPress(LongPressTarget(
+        .action(ActionStep(command: .longPress(LongPressTarget(
             selection: .elementUnitPoint(
                 .predicate(.label("Row")),
                 UnitPoint(x: 0.5, y: 0.5)
             ),
             duration: 1.4
         )))),
-        .action(ActionStep(command: .mechanicalDrag(DragTarget(
+        .action(ActionStep(command: .drag(DragTarget(
             selection: .elementToPoint(
                 .predicate(.label("Slider")),
                 start: UnitPoint(x: 0.8, y: 0.5),
@@ -112,8 +112,8 @@ import Testing
 @Test func `gesture point source rejects nonfinite decimal coordinates`() {
     let overflowingDecimal = String(repeating: "9", count: 400)
     let sources = [
-        "Mechanical.Tap(ScreenPoint(x: \(overflowingDecimal), y: 0))",
-        "Mechanical.Tap(.label(\"Row\"), at: UnitPoint(x: 0, y: \(overflowingDecimal)))",
+        "oneFingerTap(ScreenPoint(x: \(overflowingDecimal), y: 0))",
+        "oneFingerTap(.label(\"Row\"), at: UnitPoint(x: 0, y: \(overflowingDecimal)))",
     ]
 
     for source in sources {
@@ -121,7 +121,7 @@ import Testing
     }
 }
 
-@Test func `canonical control flow and loops round trip through source compiler`() throws {
+@Test func `canonical control flow and loops round trip through source compilation`() throws {
     try assertCanonicalRoundTrip(try HeistPlan(body: [
         .conditional(try ConditionalStep(
             cases: [
@@ -160,7 +160,7 @@ import Testing
     ]))
 }
 
-@Test func `canonical definitions and root parameters round trip through source compiler`() throws {
+@Test func `canonical definitions and root parameters round trip through source compilation`() throws {
     let tapDefinition = try HeistPlan(
         name: "tap",
         body: [.action(ActionStep(command: .activate(.predicate(.label("Add to Cart")))))]
@@ -216,7 +216,7 @@ import Testing
     }
     """
 
-    _ = try HeistPlanSourceCompiler().compile(source)
+    _ = try HeistSourceCompilation.compile(source)
 }
 
 @Test func `element semantic surfaces parse and render canonically`() throws {
@@ -232,7 +232,7 @@ import Testing
     )), timeout: 2)
     """#)
 
-    let plan = try HeistPlanSourceCompiler().compile(source)
+    let plan = try HeistSourceCompilation.compile(source)
     let canonical = try plan.canonicalSwiftDSL()
 
     #expect(canonical.contains(#".hint(.contains("edit"))"#))

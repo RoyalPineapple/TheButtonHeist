@@ -26,7 +26,7 @@ import Testing
         ),
         (
             "scroll expression target",
-            .viewportScrollToVisible(.label("Checkout")),
+            .scrollToVisible(.label("Checkout")),
             [
                 TargetOccurrenceExpectation(
                     role: .scroll,
@@ -38,7 +38,7 @@ import Testing
         ),
         (
             "gesture element target",
-            .mechanicalSwipe(SwipeTarget(
+            .swipe(SwipeTarget(
                 selection: .elementDirection(.label("Row"), .up)
             )),
             [
@@ -52,7 +52,7 @@ import Testing
         ),
         (
             "scroll container element target",
-            .viewportScroll(ScrollTarget(selection: .element(.label("List")), direction: .down)),
+            .scroll(ScrollTarget(selection: .element(.label("List")), direction: .down)),
             [
                 TargetOccurrenceExpectation(
                     role: .scroll,
@@ -136,7 +136,7 @@ import Testing
             let plan = try raw.validatedForRuntimeSafety()
             let expectedSource = canonicalPlanSource(canonicalLine)
             #expect(try plan.canonicalSwiftDSL() == expectedSource)
-            #expect(try HeistPlanSourceCompiler().compile(expectedSource) == plan)
+            #expect(try HeistSourceCompilation.compile(expectedSource) == plan)
         } else {
             let expectedFailure = try #require(testCase.durabilityFailure)
             let failures = runtimeSafetyFailures(for: raw)
@@ -201,7 +201,7 @@ import Testing
         .customAction(name: "Archive", target: .ref("field")),
         .rotor(selection: .named("Links"), target: .ref("field"), direction: .next),
         .typeText(text: "milk", target: .ref("field")),
-        .viewportScrollToVisible(.ref("field")),
+        .scrollToVisible(.ref("field")),
     ]
 
     for command in commands {
@@ -514,31 +514,31 @@ private let actionCommandContractCases: [ActionCommandContractCase] = [
     ),
     ActionCommandContractCase(
         wireType: .oneFingerTap,
-        command: .mechanicalTap(TapTarget(selection: .element(.label("Tap Target")))),
+        command: .oneFingerTap(TapTarget(selection: .element(.label("Tap Target")))),
         durabilityFailure: nil,
         reportTarget: .label("Tap Target"),
-        canonicalLine: #"Mechanical.Tap(.label("Tap Target"))"#
+        canonicalLine: #"oneFingerTap(.label("Tap Target"))"#
     ),
     ActionCommandContractCase(
         wireType: .longPress,
-        command: .mechanicalLongPress(LongPressTarget(selection: .element(.label("Press Target")))),
+        command: .longPress(LongPressTarget(selection: .element(.label("Press Target")))),
         durabilityFailure: nil,
         reportTarget: .label("Press Target"),
-        canonicalLine: #"Mechanical.LongPress(.label("Press Target"))"#
+        canonicalLine: #"longPress(.label("Press Target"))"#
     ),
     ActionCommandContractCase(
         wireType: .swipe,
-        command: .mechanicalSwipe(SwipeTarget(selection: .elementDirection(.label("List"), .up))),
+        command: .swipe(SwipeTarget(selection: .elementDirection(.label("List"), .up))),
         durabilityFailure: nil,
         reportTarget: .label("List"),
-        canonicalLine: #"Mechanical.Swipe(.label("List"), .up)"#
+        canonicalLine: #"swipe(.label("List"), .up)"#
     ),
     ActionCommandContractCase(
         wireType: .drag,
-        command: .mechanicalDrag(DragTarget(start: .element(.label("Slider")), end: ScreenPoint(x: 200, y: 40))),
+        command: .drag(DragTarget(start: .element(.label("Slider")), end: ScreenPoint(x: 200, y: 40))),
         durabilityFailure: nil,
         reportTarget: .label("Slider"),
-        canonicalLine: #"Mechanical.Drag(.label("Slider"), to: ScreenPoint(x: 200, y: 40))"#
+        canonicalLine: #"drag(.label("Slider"), to: ScreenPoint(x: 200, y: 40))"#
     ),
     ActionCommandContractCase(
         wireType: .typeText,
@@ -584,31 +584,31 @@ private let actionCommandContractCases: [ActionCommandContractCase] = [
     ),
     ActionCommandContractCase(
         wireType: .scroll,
-        command: .viewportScroll(ScrollTarget(selection: .element(.label("Scrollable List")), direction: .down)),
-        durabilityFailure: "scroll is a viewport debug command, not a durable heist action",
+        command: .scroll(ScrollTarget(selection: .element(.label("Scrollable List")), direction: .down)),
+        durabilityFailure: "scroll is a direct client command, not a durable heist action",
         reportTarget: .label("Scrollable List"),
         canonicalLine: nil
     ),
     ActionCommandContractCase(
         wireType: .scrollToVisible,
-        command: .viewportScrollToVisible(.label("Checkout")),
-        durabilityFailure: "scroll_to_visible is a viewport debug command, not a durable heist action",
+        command: .scrollToVisible(.label("Checkout")),
+        durabilityFailure: "scroll_to_visible is a direct client command, not a durable heist action",
         reportTarget: .label("Checkout"),
         canonicalLine: nil
     ),
     ActionCommandContractCase(
         wireType: .scrollToEdge,
-        command: .viewportScrollToEdge(ScrollToEdgeTarget(selection: .element(.label("Scrollable List")), edge: .bottom)),
-        durabilityFailure: "scroll_to_edge is a viewport debug command, not a durable heist action",
+        command: .scrollToEdge(ScrollToEdgeTarget(selection: .element(.label("Scrollable List")), edge: .bottom)),
+        durabilityFailure: "scroll_to_edge is a direct client command, not a durable heist action",
         reportTarget: .label("Scrollable List"),
         canonicalLine: nil
     ),
     ActionCommandContractCase(
-        wireType: .resignFirstResponder,
+        wireType: .dismissKeyboard,
         command: .dismissKeyboard,
         durabilityFailure: nil,
         reportTarget: nil,
-        canonicalLine: "DismissKeyboard()"
+        canonicalLine: "dismissKeyboard()"
     ),
 ]
 
@@ -633,7 +633,7 @@ private func runtimeSafetyFailures(for raw: HeistPlanAdmissionCandidate) -> [Hei
 }
 
 private let nonDurableHeistActionRepairHint =
-    "Use a direct client command for viewport/debug/session actions, or replace " +
+    "Use a direct client command for debug/session actions, or replace " +
     "this with a canonical durable DSL action."
 
 private func expectNonDurableHeistActionFailure(

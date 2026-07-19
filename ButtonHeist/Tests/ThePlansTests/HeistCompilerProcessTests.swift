@@ -10,10 +10,10 @@ import Glibc
 
 #if os(macOS) || os(Linux)
 @Suite(.serialized)
-struct CompilerProcessTests {
+struct HeistCompilerProcessTests {
     @Test
     func `nonzero exit and signal termination are distinct outcomes`() async throws {
-        let runner = CompilerProcess.Runner()
+        let runner = HeistCompilerProcess.Runner()
 
         let nonzero = try await runner.execute(
             shell("exit 23"),
@@ -52,7 +52,7 @@ struct CompilerProcessTests {
             bufferingPolicy: .bufferingNewest(1)
         )
         let task = Task {
-            try await CompilerProcess.Runner().execute(
+            try await HeistCompilerProcess.Runner().execute(
                 shell(script, arguments: [ready.path]),
                 purpose: .execution,
                 limits: limits(
@@ -96,7 +96,7 @@ struct CompilerProcessTests {
             bufferingPolicy: .bufferingNewest(1)
         )
         let task = Task {
-            try await CompilerProcess.Runner().execute(
+            try await HeistCompilerProcess.Runner().execute(
                 command,
                 purpose: .execution,
                 limits: limits(
@@ -127,7 +127,7 @@ struct CompilerProcessTests {
     @Test
     func `stdout overflow is terminal and retains its bounded prefix`() async throws {
         let byteLimit = 8
-        let outcome = try await CompilerProcess.Runner().execute(
+        let outcome = try await HeistCompilerProcess.Runner().execute(
             shell(
                 """
                 printf 'stdout-overflow'
@@ -150,7 +150,7 @@ struct CompilerProcessTests {
     @Test
     func `stderr overflow is terminal and retains its bounded prefix`() async throws {
         let byteLimit = 8
-        let outcome = try await CompilerProcess.Runner().execute(
+        let outcome = try await HeistCompilerProcess.Runner().execute(
             shell("printf 'stderr-overflow' >&2"),
             purpose: .execution,
             limits: limits(capturedByteLimitPerStream: byteLimit)
@@ -171,7 +171,7 @@ struct CompilerProcessTests {
         printf 'stdout-overflow'
         printf 'stderr-overflow' >&2
         """
-        let outcome = try await CompilerProcess.Runner().execute(
+        let outcome = try await HeistCompilerProcess.Runner().execute(
             shell(script),
             purpose: .execution,
             limits: limits(capturedByteLimitPerStream: 8)
@@ -198,7 +198,7 @@ struct CompilerProcessTests {
             bufferingPolicy: .bufferingNewest(1)
         )
         let task = Task {
-            try await CompilerProcess.Runner().execute(
+            try await HeistCompilerProcess.Runner().execute(
                 shell(script),
                 purpose: .execution,
                 limits: limits(
@@ -224,7 +224,7 @@ struct CompilerProcessTests {
 
     @Test
     func `runner is reusable after terminal overflow`() async throws {
-        let runner = CompilerProcess.Runner()
+        let runner = HeistCompilerProcess.Runner()
         let processLimits = limits(capturedByteLimitPerStream: 8)
 
         let overflow = try await runner.execute(
@@ -263,13 +263,13 @@ struct CompilerProcessTests {
             }
             """
         )
-        let configuration = HeistCompiler.Configuration(
+        let configuration = HeistSwiftCompiler.Configuration(
             packageRoot: buttonHeistPackageRoot,
             processLimits: limits(compilationTimeout: .nanoseconds(1)),
             temporaryDirectory: temp.url
         )
 
-        let result = await HeistCompiler(configuration: configuration).compileFile(source)
+        let result = await HeistSwiftCompiler(configuration: configuration).compileFile(source)
         let diagnostic = try #require(result.failureDiagnostics?.first)
 
         #expect(diagnostic.code.knownCode == .swiftCompilationCompileTimedOut)
@@ -289,7 +289,7 @@ struct CompilerProcessTests {
             }
             """
         )
-        let configuration = HeistCompiler.Configuration(
+        let configuration = HeistSwiftCompiler.Configuration(
             packageRoot: buttonHeistPackageRoot,
             processLimits: limits(
                 compilationTimeout: .seconds(30),
@@ -298,7 +298,7 @@ struct CompilerProcessTests {
             temporaryDirectory: temp.url
         )
 
-        let result = await HeistCompiler(configuration: configuration).compileFile(source)
+        let result = await HeistSwiftCompiler(configuration: configuration).compileFile(source)
         let diagnostic = try #require(result.failureDiagnostics?.first)
 
         #expect(diagnostic.code.knownCode == .swiftCompilationExecutionTimedOut)
@@ -318,13 +318,13 @@ struct CompilerProcessTests {
             }
             """
         )
-        let configuration = HeistCompiler.Configuration(
+        let configuration = HeistSwiftCompiler.Configuration(
             packageRoot: buttonHeistPackageRoot,
             processLimits: limits(executionTimeout: .seconds(10)),
             temporaryDirectory: temp.url
         )
 
-        let result = await HeistCompiler(configuration: configuration).compileFile(source)
+        let result = await HeistSwiftCompiler(configuration: configuration).compileFile(source)
         let diagnostic = try #require(result.failureDiagnostics?.first)
 
         #expect(diagnostic.code.knownCode == .swiftCompilationExecutionTerminated)
@@ -334,8 +334,8 @@ struct CompilerProcessTests {
     private func shell(
         _ script: String,
         arguments: [String] = []
-    ) -> CompilerProcess.Command {
-        CompilerProcess.Command(
+    ) -> HeistCompilerProcess.Command {
+        HeistCompilerProcess.Command(
             executable: URL(fileURLWithPath: "/bin/sh"),
             arguments: ["-c", script, "compiler-process-test"] + arguments
         )
@@ -346,8 +346,8 @@ struct CompilerProcessTests {
         executionTimeout: Duration = .seconds(2),
         terminationGrace: Duration = .milliseconds(50),
         capturedByteLimitPerStream: Int = 1_048_576
-    ) -> CompilerProcess.Limits {
-        CompilerProcess.Limits(
+    ) -> HeistCompilerProcess.Limits {
+        HeistCompilerProcess.Limits(
             compilationTimeout: compilationTimeout,
             executionTimeout: executionTimeout,
             terminationGrace: terminationGrace,

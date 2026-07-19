@@ -49,19 +49,19 @@ extension HeistActionCommand {
             return [.semantic(target)]
         case .typeText(let payload):
             return payload.target.map { [.semantic($0)] } ?? []
-        case .mechanicalTap(let target):
+        case .oneFingerTap(let target):
             return target.selection.targetOccurrences(role: .gesture, path: .payloadElement)
-        case .mechanicalLongPress(let target):
+        case .longPress(let target):
             return target.selection.targetOccurrences(role: .gesture, path: .payloadElement)
-        case .mechanicalSwipe(let target):
+        case .swipe(let target):
             return target.selection.targetOccurrences
-        case .mechanicalDrag(let target):
+        case .drag(let target):
             return target.selection.targetOccurrences
-        case .viewportScroll(let target):
+        case .scroll(let target):
             return target.selection.targetOccurrences
-        case .viewportScrollToVisible(let target):
+        case .scrollToVisible(let target):
             return [.scroll(target)]
-        case .viewportScrollToEdge(let target):
+        case .scrollToEdge(let target):
             return target.selection.targetOccurrences
         case .dismiss, .magicTap, .editAction, .setPasteboard, .takeScreenshot, .dismissKeyboard:
             return []
@@ -75,23 +75,23 @@ public extension HeistActionCommand {
         case .rotor(let selection, _, _):
             if case .named = selection { return nil }
             return "rotor selection \(selection) is not a durable heist action"
-        case .mechanicalSwipe(let target):
+        case .swipe(let target):
             if target.duration != nil {
                 return "swipe duration \(String(describing: target.duration)) is not a durable heist action"
             }
             return nil
-        case .mechanicalDrag(let target):
+        case .drag(let target):
             if target.duration != nil {
                 return "drag duration \(String(describing: target.duration)) is not a durable heist action"
             }
             return nil
-        case .viewportScroll:
-            return "scroll is a viewport debug command, not a durable heist action"
-        case .viewportScrollToVisible:
-            return "scroll_to_visible is a viewport debug command, not a durable heist action"
-        case .viewportScrollToEdge:
-            return "scroll_to_edge is a viewport debug command, not a durable heist action"
-        case .activate, .increment, .decrement, .customAction, .typeText, .mechanicalTap, .mechanicalLongPress,
+        case .scroll:
+            return "scroll is a direct client command, not a durable heist action"
+        case .scrollToVisible:
+            return "scroll_to_visible is a direct client command, not a durable heist action"
+        case .scrollToEdge:
+            return "scroll_to_edge is a direct client command, not a durable heist action"
+        case .activate, .increment, .decrement, .customAction, .typeText, .oneFingerTap, .longPress,
              .dismiss, .magicTap, .editAction, .setPasteboard, .takeScreenshot, .dismissKeyboard:
             return nil
         }

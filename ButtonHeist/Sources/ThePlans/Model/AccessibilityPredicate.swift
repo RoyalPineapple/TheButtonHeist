@@ -582,8 +582,8 @@ private func describe<Phase: AccessibilityPredicatePhase>(
     _ presence: PresencePredicateCore<Phase>
 ) -> String {
     switch presence {
-    case .exists(let target): return ScoreDescription.call("exists", [String(describing: target)])
-    case .missing(let target): return ScoreDescription.call("missing", [String(describing: target)])
+    case .exists(let target): return CanonicalValueDescription.call("exists", [String(describing: target)])
+    case .missing(let target): return CanonicalValueDescription.call("missing", [String(describing: target)])
     }
 }
 
@@ -600,10 +600,10 @@ private func describe<Phase: AccessibilityPredicatePhase>(
 ) -> String {
     switch assertion {
     case .presence(let presence): return describe(presence)
-    case .appeared(let target): return ScoreDescription.call("appeared", [String(describing: target)])
-    case .disappeared(let target): return ScoreDescription.call("disappeared", [String(describing: target)])
+    case .appeared(let target): return CanonicalValueDescription.call("appeared", [String(describing: target)])
+    case .disappeared(let target): return CanonicalValueDescription.call("disappeared", [String(describing: target)])
     case .updated(let target, let change):
-        return ScoreDescription.call("updated", [String(describing: target), String(describing: change)])
+        return CanonicalValueDescription.call("updated", [String(describing: target), String(describing: change)])
     }
 }
 
@@ -611,8 +611,8 @@ private func describe<Phase: AccessibilityPredicatePhase>(
     _ declaration: ChangeDeclarationCore<Phase>
 ) -> String {
     switch declaration {
-    case .screen(let assertions): return ScoreDescription.call("screen", assertions.map { describe($0) })
-    case .elements(let assertions): return ScoreDescription.call("elements", assertions.map { describe($0) })
+    case .screen(let assertions): return CanonicalValueDescription.call("screen", assertions.map { describe($0) })
+    case .elements(let assertions): return CanonicalValueDescription.call("elements", assertions.map { describe($0) })
     }
 }
 
@@ -622,7 +622,7 @@ private func describe<Phase: AccessibilityPredicatePhase>(
     switch predicate {
     case .presence(let presence): return describe(presence)
     case .announcement(let announcement): return String(describing: announcement)
-    case .changed(let declaration): return ScoreDescription.call("changed", [describe(declaration)])
+    case .changed(let declaration): return CanonicalValueDescription.call("changed", [describe(declaration)])
     case .noChange: return "no_change"
     }
 }

@@ -5,7 +5,7 @@ import ThePlans
 import TheScore
 
 struct RunHeistCommand: ConnectedOneShotCLICommand {
-    typealias SwiftHeistCompiler = @Sendable (
+    typealias SwiftHeistCompilation = @Sendable (
         _ source: URL,
         _ entry: HeistEntrySymbol
     ) async -> ValidationResult<HeistPlan, HeistBuildDiagnostic>
@@ -131,8 +131,8 @@ struct RunHeistCommand: ConnectedOneShotCLICommand {
     static func prepareInput(
         path: String?,
         entry: String?,
-        compileSwiftFile: SwiftHeistCompiler = { source, entry in
-            await HeistCompiler().compileFile(source, entry: entry)
+        compileSwiftSource: SwiftHeistCompilation = { source, entry in
+            await HeistSwiftCompiler().compileFile(source, entry: entry)
         }
     ) async throws -> PreparedInput {
         guard let path, path.lowercased().hasSuffix(".swift") else {
@@ -151,7 +151,7 @@ struct RunHeistCommand: ConnectedOneShotCLICommand {
         let source = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
         let name = source.deletingPathExtension().lastPathComponent
         let plan: HeistPlan
-        switch await compileSwiftFile(source, entrySymbol) {
+        switch await compileSwiftSource(source, entrySymbol) {
         case .success(let compiledPlan, _):
             plan = compiledPlan
         case .failure(let diagnostics):

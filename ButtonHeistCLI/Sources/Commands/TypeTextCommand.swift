@@ -1,7 +1,7 @@
 import ArgumentParser
 @_spi(ButtonHeistTooling) import ButtonHeist
 
-struct TypeCommand: ConnectedOneShotCLICommand {
+struct TypeTextCommand: ConnectedOneShotCLICommand {
     private static let defaultTimeout: Double = {
         guard let seconds = TheFence.Command.typeText.descriptor.timeout.singleStepBaseSeconds else {
             preconditionFailure("type_text descriptor must expose a single-step action timeout")
@@ -29,8 +29,8 @@ struct TypeCommand: ConnectedOneShotCLICommand {
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
 
-    @Option(name: .shortAndLong, help: "Timeout in seconds (default: \(Int(TypeCommand.defaultTimeout)))")
-    var timeout: Double = TypeCommand.defaultTimeout
+    @Option(name: .shortAndLong, help: "Timeout in seconds (default: \(Int(TypeTextCommand.defaultTimeout)))")
+    var timeout: Double = TypeTextCommand.defaultTimeout
 
     func validate() throws {
         if text.isEmpty {

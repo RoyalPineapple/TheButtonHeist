@@ -74,9 +74,9 @@ extension Expr: CustomStringConvertible where Value == String {
     package var description: String {
         switch self {
         case .literal(let literal):
-            return ScoreDescription.quoted(literal)
+            return CanonicalValueDescription.quoted(literal)
         case .ref(let reference):
-            return ScoreDescription.call("stringRef", [ScoreDescription.quoted(reference.rawValue)])
+            return CanonicalValueDescription.call("stringRef", [CanonicalValueDescription.quoted(reference.rawValue)])
         }
     }
 }

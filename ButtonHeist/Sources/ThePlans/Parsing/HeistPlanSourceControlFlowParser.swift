@@ -111,7 +111,7 @@ extension HeistPlanSourceParser {
         do {
             invocationPath = try HeistInvocationPath(validating: name)
         } catch let validationError {
-            throw HeistPlanSourceCompilerError(diagnostic: .invalidInvocationPath(
+            throw HeistSourceCompilationError(diagnostic: .invalidInvocationPath(
                 name,
                 error: validationError,
                 phase: .sourceCompilation,

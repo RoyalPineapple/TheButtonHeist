@@ -7,7 +7,7 @@ extension HeistPlanRuntimeSafetyValidator {
         scope: HeistReferenceScope
     ) {
         switch command.core {
-        case .activate, .increment, .decrement, .viewportScrollToVisible:
+        case .activate, .increment, .decrement, .scrollToVisible:
             validateActionTargets(in: command, path: path, scope: scope)
         case .customAction(let name, _):
             addString(name.rawValue, path: path.child(.payload).child(.actionName), role: "custom action name")
@@ -25,15 +25,15 @@ extension HeistPlanRuntimeSafetyValidator {
                 validateStringReference(reference, path: path.child(.payload).child(.textRef), scope: scope)
             }
             validateActionTargets(in: command, path: path, scope: scope)
-        case .mechanicalTap:
+        case .oneFingerTap:
             validateActionTargets(in: command, path: path, scope: scope)
-        case .mechanicalLongPress:
+        case .longPress:
             validateActionTargets(in: command, path: path, scope: scope)
-        case .mechanicalSwipe:
+        case .swipe:
             validateActionTargets(in: command, path: path, scope: scope)
-        case .mechanicalDrag:
+        case .drag:
             validateActionTargets(in: command, path: path, scope: scope)
-        case .viewportScroll, .viewportScrollToEdge:
+        case .scroll, .scrollToEdge:
             validateActionTargets(in: command, path: path, scope: scope)
         case .setPasteboard(let target):
             addString(target.text.rawText, path: path.child(.payload).child(.text), role: "pasteboard text")

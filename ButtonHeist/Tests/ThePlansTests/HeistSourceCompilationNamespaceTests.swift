@@ -23,7 +23,7 @@ import Testing
     }
     """
 
-    let plan = try HeistPlanSourceCompiler().compile(source)
+    let plan = try HeistSourceCompilation.compile(source)
     let lib = try #require(plan.definitions.first { $0.name == "lib" })
     let checkout = try #require(lib.definitions.first { $0.name == "checkout" })
 
@@ -165,7 +165,7 @@ import Testing
     }
     """
 
-    let plan = try HeistPlanSourceCompiler().compile(source)
+    let plan = try HeistSourceCompilation.compile(source)
     let echo = try #require(plan.definitions.first { $0.name == "Echo" })
     let item = try #require(echo.definitions.first { $0.name == "item" })
     let messages = try #require(plan.definitions.first { $0.name == "Messages" })

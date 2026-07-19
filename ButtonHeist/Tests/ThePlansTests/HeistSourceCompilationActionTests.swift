@@ -2,7 +2,7 @@ import Testing
 @testable import ThePlans
 
 @Test func `screen action namespace compiles regular actions`() throws {
-    let plan = try HeistPlanSourceCompiler().compile(root("""
+    let plan = try HeistSourceCompilation.compile(root("""
     ScreenActions.Dismiss()
         .expect(.changed(.screen()))
     ScreenActions.MagicTap()
@@ -21,13 +21,13 @@ import Testing
 }
 
 @Test func `inline plan source type text replacement and clear compile`() throws {
-    let replacement = try HeistPlanSourceCompiler().compile(root(#"""
+    let replacement = try HeistSourceCompilation.compile(root(#"""
     TypeText(.replacing("b"), into: .identifier("Field"))
     """#))
-    let clear = try HeistPlanSourceCompiler().compile(root(#"""
+    let clear = try HeistSourceCompilation.compile(root(#"""
     ClearText(.identifier("Field"))
     """#))
-    let emptyReplacement = try HeistPlanSourceCompiler().compile(root(#"""
+    let emptyReplacement = try HeistSourceCompilation.compile(root(#"""
     TypeText(.replacing(""), into: .identifier("Field"))
     """#))
 
@@ -52,7 +52,7 @@ import Testing
 }
 
 @Test func `runtime parser accepts repeated string predicate checks for one field`() throws {
-    let plan = try HeistPlanSourceCompiler().compile(root("""
+    let plan = try HeistSourceCompilation.compile(root("""
     Activate(.element(.label(.prefix("foo")), .label(.contains("bar")), .label(.suffix("baz")), .traits([.button])))
     """))
     let expected = try HeistPlan(body: [
@@ -69,7 +69,7 @@ import Testing
 }
 
 @Test func `inline plan source chained expectation compiles`() throws {
-    let plan = try HeistPlanSourceCompiler().compile(root("""
+    let plan = try HeistSourceCompilation.compile(root("""
     Activate(.label("Pay")).expect(.changed(.screen()))
     """))
     let expected = try HeistPlan(body: [
@@ -82,7 +82,7 @@ import Testing
 }
 
 @Test func `inline plan source RunHeist expectation compiles`() throws {
-    let plan = try HeistPlanSourceCompiler().compile("""
+    let plan = try HeistSourceCompilation.compile("""
     HeistPlan("shop") {
         HeistDef<String>("Cart.addItem", parameter: "item") { item in
             Activate(.label(item))
@@ -167,7 +167,7 @@ import Testing
 
 @Test func `inline plan source rejects empty HeistDef path components`() throws {
     do {
-        _ = try HeistPlanSourceCompiler().compile("""
+        _ = try HeistSourceCompilation.compile("""
         HeistPlan("cart") {
             HeistDef<Void>("Cart..checkout") {
                 Warn("checkout")
@@ -176,8 +176,8 @@ import Testing
             RunHeist("Cart.checkout")
         }
         """)
-        Issue.record("Expected source compiler to reject empty HeistDef path component")
-    } catch let error as HeistPlanSourceCompilerError {
+        Issue.record("Expected source compilation to reject empty HeistDef path component")
+    } catch let error as HeistSourceCompilationError {
         let diagnostic = error.diagnostic
         #expect(diagnostic.code == .dslInvalidDefinition)
         #expect(diagnostic.title == "Invalid heist definition")
@@ -186,27 +186,27 @@ import Testing
         #expect(diagnostic.sourceSpan?.line == 2)
         expect(error.description, contains: "heist path component at index 1 must not be empty")
     } catch {
-        Issue.record("Expected HeistPlanSourceCompilerError, got \(error)")
+        Issue.record("Expected HeistSourceCompilationError, got \(error)")
     }
 }
 
 @Test func `inline plan source property update expectations compile`() throws {
-    let scoped = try HeistPlanSourceCompiler().compile(root(#"""
+    let scoped = try HeistSourceCompilation.compile(root(#"""
     TypeText("Bruschetta", into: .identifier("Search"))
         .expect(.changed(.elements([.updated(.identifier("Search"), .value("Bruschetta"))])))
     """#))
-    let unscoped = try HeistPlanSourceCompiler().compile(root(#"""
+    let unscoped = try HeistSourceCompilation.compile(root(#"""
     Increment(.identifier("Quantity"))
         .expect(.changed(.elements([.updated(.identifier("Quantity"), .value("3"))])))
     """#))
-    let beforeAfter = try HeistPlanSourceCompiler().compile(root(#"""
+    let beforeAfter = try HeistSourceCompilation.compile(root(#"""
     Increment(.identifier("Quantity"))
         .expect(.changed(.elements([.updated(
             .identifier("Quantity"),
             .value(before: "2", after: "3")
         )])))
     """#))
-    let broadBeforeAfter = try HeistPlanSourceCompiler().compile(root(#"""
+    let broadBeforeAfter = try HeistSourceCompilation.compile(root(#"""
     Increment(.identifier("Quantity"))
         .expect(.changed(.elements([.updated(
             .identifier("Quantity"),
@@ -258,7 +258,7 @@ import Testing
 }
 
 @Test func `inline plan source custom content update queries label and value`() throws {
-    let plan = try HeistPlanSourceCompiler().compile(root(#"""
+    let plan = try HeistSourceCompilation.compile(root(#"""
     WaitFor(.changed(.elements([.updated(.identifier("status"), .customContent(after: .init(
         label: "Status",
         value: .contains("Ready"),
@@ -283,26 +283,26 @@ import Testing
 }
 
 @Test func `inline plan source accepts canonical direct delta predicates`() throws {
-    let appeared = try HeistPlanSourceCompiler().compile(root(#"""
+    let appeared = try HeistSourceCompilation.compile(root(#"""
     Activate(.label("Add"))
         .expect(.changed(.elements([.appeared(.label("Back"))])))
     """#))
-    let disappeared = try HeistPlanSourceCompiler().compile(root(#"""
+    let disappeared = try HeistSourceCompilation.compile(root(#"""
     Activate(.label("Clear"))
         .expect(.changed(.elements([.disappeared(.identifier("row-1"))])))
     """#))
-    let updatedPropertyOnly = try HeistPlanSourceCompiler().compile(root(#"""
+    let updatedPropertyOnly = try HeistSourceCompilation.compile(root(#"""
     TypeText("milk", into: .identifier("Search"))
         .expect(.changed(.elements([.updated(.identifier("Search"), .value())])))
     """#))
-    let updatedBeforeAfterOnly = try HeistPlanSourceCompiler().compile(root(#"""
+    let updatedBeforeAfterOnly = try HeistSourceCompilation.compile(root(#"""
     TypeText("milk", into: .identifier("Search"))
         .expect(.changed(.elements([.updated(
             .identifier("Search"),
             .value(before: "", after: "milk")
         )])))
     """#))
-    let updatedAllFields = try HeistPlanSourceCompiler().compile(root(#"""
+    let updatedAllFields = try HeistSourceCompilation.compile(root(#"""
     TypeText("milk", into: .identifier("Search"))
         .expect(.changed(.elements([.updated(
             .identifier("Search"),

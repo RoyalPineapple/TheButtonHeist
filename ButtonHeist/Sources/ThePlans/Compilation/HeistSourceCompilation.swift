@@ -1,9 +1,7 @@
 import Foundation
 
-package struct HeistPlanSourceCompiler: Sendable {
-    package init() {}
-
-    package func compileResult(
+public enum HeistSourceCompilation {
+    package static func compileResult(
         _ source: String,
         sourceName: String = "inline-heist-plan"
     ) -> ValidationResult<HeistPlan, HeistBuildDiagnostic> {
@@ -13,7 +11,7 @@ package struct HeistPlanSourceCompiler: Sendable {
             var parser = HeistPlanSourceParser(tokens: tokens, sourceName: sourceName)
             let plan = try parser.parseProgram()
             return plan.semanticValidationResult()
-        } catch let error as HeistPlanSourceCompilerError {
+        } catch let error as HeistSourceCompilationError {
             return .failure(error.diagnostics)
         } catch let error as HeistPlanRuntimeSafetyError {
             return .failure(error.diagnostics)
@@ -26,16 +24,16 @@ package struct HeistPlanSourceCompiler: Sendable {
         }
     }
 
-    package func compile(
+    public static func compile(
         _ source: String,
         sourceName: String = "inline-heist-plan"
     ) throws -> HeistPlan {
         try compileResult(source, sourceName: sourceName)
-            .get(orThrow: HeistPlanSourceCompilerError.init(diagnostics:))
+            .get(orThrow: HeistSourceCompilationError.init(diagnostics:))
     }
 }
 
-package struct HeistPlanSourceCompilerError: Error, Sendable, Equatable, CustomStringConvertible {
+package struct HeistSourceCompilationError: Error, Sendable, Equatable, CustomStringConvertible {
     package let diagnostics: [HeistBuildDiagnostic]
 
     package var diagnostic: HeistBuildDiagnostic { diagnostics.first ?? HeistBuildDiagnostic(
@@ -91,14 +89,5 @@ package struct HeistPlanSourceCompilerError: Error, Sendable, Equatable, CustomS
                 message: "ButtonHeist source failed without diagnostics"
             )]
             : diagnostics
-    }
-}
-
-public extension HeistPlanning {
-    static func compileHeistPlanSource(
-        _ source: String,
-        sourceName: String = "inline-heist-plan"
-    ) throws -> HeistPlan {
-        try HeistPlanSourceCompiler().compile(source, sourceName: sourceName)
     }
 }

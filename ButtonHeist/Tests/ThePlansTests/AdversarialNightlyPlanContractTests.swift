@@ -9,7 +9,7 @@ private struct AdversarialNightlyPlan: Decodable {
     let plan: String
 }
 
-@Test func `every adversarial nightly plan compiles through the canonical source compiler`() throws {
+@Test func `every adversarial nightly plan compiles through the canonical source compilation`() throws {
     let repository = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent()
         .deletingLastPathComponent()
@@ -38,7 +38,7 @@ private struct AdversarialNightlyPlan: Decodable {
     #expect(plans.count == 17)
     for plan in plans {
         do {
-            _ = try HeistPlanning.compileHeistPlanSource(
+            _ = try HeistSourceCompilation.compile(
                 plan.plan,
                 sourceName: "adversarial-nightly:\(plan.expectation):\(plan.name)"
             )

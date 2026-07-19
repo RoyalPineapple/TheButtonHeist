@@ -1,7 +1,7 @@
 import Foundation
 
 #if os(macOS) || os(Linux)
-enum HeistSwiftFileCompilerError: Error, Sendable, Equatable, CustomStringConvertible {
+enum HeistSwiftFileCompilationError: Error, Sendable, Equatable, CustomStringConvertible {
     case sourceFileNotFound(String)
     case packageRootNotFound
     case buildArtifactsNotFound(searched: [String], hint: String)
@@ -9,8 +9,8 @@ enum HeistSwiftFileCompilerError: Error, Sendable, Equatable, CustomStringConver
     case executionFailed(String, String)
     case compileTimedOut(String, String)
     case executionTimedOut(String, String)
-    case compileOutputLimitExceeded(String, stream: CompilerProcess.OutputStream, diagnostics: String)
-    case executionOutputLimitExceeded(String, stream: CompilerProcess.OutputStream, diagnostics: String)
+    case compileOutputLimitExceeded(String, stream: HeistCompilerProcess.OutputStream, diagnostics: String)
+    case executionOutputLimitExceeded(String, stream: HeistCompilerProcess.OutputStream, diagnostics: String)
     case compilerTerminated(String, signal: Int32, diagnostics: String)
     case executionTerminated(String, signal: Int32, diagnostics: String)
     case invalidCompilerOutput(String)
@@ -64,11 +64,11 @@ enum HeistSwiftFileCompilerError: Error, Sendable, Equatable, CustomStringConver
     }
 }
 
-enum HeistSwiftFileCompilerProcessPhase {
+enum HeistSwiftFileCompilationProcessPhase {
     case compilation(String)
     case execution(String)
 
-    func nonzeroExit(code: Int32, diagnostics: String) -> HeistSwiftFileCompilerError {
+    func nonzeroExit(code: Int32, diagnostics: String) -> HeistSwiftFileCompilationError {
         let details = processDetails(prefix: "exit code \(code)", diagnostics: diagnostics)
         switch self {
         case .compilation(let path):
@@ -78,7 +78,7 @@ enum HeistSwiftFileCompilerProcessPhase {
         }
     }
 
-    func signaled(signal: Int32, diagnostics: String) -> HeistSwiftFileCompilerError {
+    func signaled(signal: Int32, diagnostics: String) -> HeistSwiftFileCompilationError {
         switch self {
         case .compilation(let path):
             return .compilerTerminated(path, signal: signal, diagnostics: diagnostics)
@@ -87,7 +87,7 @@ enum HeistSwiftFileCompilerProcessPhase {
         }
     }
 
-    func timedOut(diagnostics: String) -> HeistSwiftFileCompilerError {
+    func timedOut(diagnostics: String) -> HeistSwiftFileCompilationError {
         switch self {
         case .compilation(let path):
             return .compileTimedOut(path, diagnostics)
@@ -97,9 +97,9 @@ enum HeistSwiftFileCompilerProcessPhase {
     }
 
     func outputLimitExceeded(
-        stream: CompilerProcess.OutputStream,
+        stream: HeistCompilerProcess.OutputStream,
         diagnostics: String
-    ) -> HeistSwiftFileCompilerError {
+    ) -> HeistSwiftFileCompilationError {
         switch self {
         case .compilation(let path):
             return .compileOutputLimitExceeded(path, stream: stream, diagnostics: diagnostics)

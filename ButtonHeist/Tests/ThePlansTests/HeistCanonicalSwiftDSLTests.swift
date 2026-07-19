@@ -201,13 +201,13 @@ func canonicalSwiftRendererRendersAmbientActions() throws {
 
         Edit(.paste)
 
-        DismissKeyboard()
+        dismissKeyboard()
     }
     """)
 }
 
 @Test
-func canonicalSwiftRendererSeparatesSemanticAndMechanicalActions() throws {
+func canonicalSwiftRendererSeparatesSemanticAndSpatialGestureActions() throws {
     let plan = try HeistPlan(body: [
         .action(ActionStep(command: .customAction(name: "Archive", target: .predicate(.label("Message"))))),
         .action(ActionStep(command: .rotor(
@@ -215,7 +215,7 @@ func canonicalSwiftRendererSeparatesSemanticAndMechanicalActions() throws {
             target: .predicate(.label("Article")),
             direction: .next
         ))),
-        .action(ActionStep(command: .mechanicalTap(TapTarget(
+        .action(ActionStep(command: .oneFingerTap(TapTarget(
             selection: .coordinate(ScreenPoint(x: 12, y: 34))
         )))),
     ])
@@ -225,14 +225,14 @@ func canonicalSwiftRendererSeparatesSemanticAndMechanicalActions() throws {
 
         Rotor("Headings", on: .label("Article"), direction: .next)
 
-        Mechanical.Tap(ScreenPoint(x: 12, y: 34))
+        oneFingerTap(ScreenPoint(x: 12, y: 34))
     }
     """)
 }
 
 @Test
 func elementUnitPointSwipeIsDurableAndCanonical() throws {
-    let command = HeistActionCommand.mechanicalSwipe(SwipeTarget(selection: .unitElement(
+    let command = HeistActionCommand.swipe(SwipeTarget(selection: .unitElement(
         .predicate(.label("Carousel")),
         start: UnitPoint(x: 0.8, y: 0.5),
         end: UnitPoint(x: 0.2, y: 0.5)
@@ -242,51 +242,51 @@ func elementUnitPointSwipeIsDurableAndCanonical() throws {
     #expect(command.durableHeistActionFailure == nil)
     #expect(try plan.canonicalSwiftDSL() == """
     HeistPlan {
-        Mechanical.Swipe(.label("Carousel"), from: UnitPoint(x: 0.8, y: 0.5), to: UnitPoint(x: 0.2, y: 0.5))
+        swipe(.label("Carousel"), from: UnitPoint(x: 0.8, y: 0.5), to: UnitPoint(x: 0.2, y: 0.5))
     }
     """)
 }
 
 @Test
-func canonicalSwiftRendererRendersMechanicalActionForms() throws {
+func canonicalSwiftRendererRendersSpatialGestureActionForms() throws {
     let plan = try HeistPlan(body: [
-        .action(ActionStep(command: .mechanicalTap(TapTarget(
+        .action(ActionStep(command: .oneFingerTap(TapTarget(
             selection: .element(.predicate(.label("Button")))
         )))),
-        .action(ActionStep(command: .mechanicalTap(TapTarget(
+        .action(ActionStep(command: .oneFingerTap(TapTarget(
             selection: .elementUnitPoint(
                 .predicate(.label("Cell")),
                 UnitPoint(x: 0.25, y: 0.75)
             )
         )))),
-        .action(ActionStep(command: .mechanicalLongPress(LongPressTarget(
+        .action(ActionStep(command: .longPress(LongPressTarget(
             selection: .coordinate(ScreenPoint(x: 1.25, y: 2.5)),
             duration: 1.2
         )))),
-        .action(ActionStep(command: .mechanicalLongPress(LongPressTarget(
+        .action(ActionStep(command: .longPress(LongPressTarget(
             selection: .elementUnitPoint(
                 .predicate(.label("Message")),
                 UnitPoint(x: 0.5, y: 0.2)
             ),
             duration: 1.4
         )))),
-        .action(ActionStep(command: .mechanicalSwipe(SwipeTarget(selection: .elementDirection(
+        .action(ActionStep(command: .swipe(SwipeTarget(selection: .elementDirection(
             .predicate(.label("List")),
             .up
         ))))),
-        .action(ActionStep(command: .mechanicalSwipe(SwipeTarget(selection: .pointDirection(
+        .action(ActionStep(command: .swipe(SwipeTarget(selection: .pointDirection(
             start: ScreenPoint(x: 10, y: 20),
             direction: .left
         ))))),
-        .action(ActionStep(command: .mechanicalDrag(DragTarget(
+        .action(ActionStep(command: .drag(DragTarget(
             start: .element(.predicate(.label("Slider"))),
             end: ScreenPoint(x: 200, y: 40)
         )))),
-        .action(ActionStep(command: .mechanicalDrag(DragTarget(
+        .action(ActionStep(command: .drag(DragTarget(
             start: .elementUnitPoint(.predicate(.label("Slider")), UnitPoint(x: 0.8, y: 0.5)),
             end: ScreenPoint(x: 220, y: 40)
         )))),
-        .action(ActionStep(command: .mechanicalDrag(DragTarget(
+        .action(ActionStep(command: .drag(DragTarget(
             start: .coordinate(ScreenPoint(x: 3.3333333, y: 4)),
             end: ScreenPoint(x: 5, y: 6.5)
         )))),
@@ -294,23 +294,23 @@ func canonicalSwiftRendererRendersMechanicalActionForms() throws {
 
     #expect(try plan.canonicalSwiftDSL() == """
     HeistPlan {
-        Mechanical.Tap(.label("Button"))
+        oneFingerTap(.label("Button"))
 
-        Mechanical.Tap(.label("Cell"), at: UnitPoint(x: 0.25, y: 0.75))
+        oneFingerTap(.label("Cell"), at: UnitPoint(x: 0.25, y: 0.75))
 
-        Mechanical.LongPress(ScreenPoint(x: 1.25, y: 2.5), duration: 1.2)
+        longPress(ScreenPoint(x: 1.25, y: 2.5), duration: 1.2)
 
-        Mechanical.LongPress(.label("Message"), at: UnitPoint(x: 0.5, y: 0.2), duration: 1.4)
+        longPress(.label("Message"), at: UnitPoint(x: 0.5, y: 0.2), duration: 1.4)
 
-        Mechanical.Swipe(.label("List"), .up)
+        swipe(.label("List"), .up)
 
-        Mechanical.Swipe(from: ScreenPoint(x: 10, y: 20), .left)
+        swipe(from: ScreenPoint(x: 10, y: 20), .left)
 
-        Mechanical.Drag(.label("Slider"), to: ScreenPoint(x: 200, y: 40))
+        drag(.label("Slider"), to: ScreenPoint(x: 200, y: 40))
 
-        Mechanical.Drag(.label("Slider"), from: UnitPoint(x: 0.8, y: 0.5), to: ScreenPoint(x: 220, y: 40))
+        drag(.label("Slider"), from: UnitPoint(x: 0.8, y: 0.5), to: ScreenPoint(x: 220, y: 40))
 
-        Mechanical.Drag(from: ScreenPoint(x: 3.333333, y: 4), to: ScreenPoint(x: 5, y: 6.5))
+        drag(from: ScreenPoint(x: 3.333333, y: 4), to: ScreenPoint(x: 5, y: 6.5))
     }
     """)
 }
@@ -335,25 +335,25 @@ func nonDurableActionShapeFailsPlanAdmission() throws {
 }
 
 @Test
-func viewportDebugActionsAreNotDurableHeistDSL() throws {
+func directScrollCommandsAreNotDurableHeistDSL() throws {
     let commands: [HeistActionCommand] = [
-        .viewportScroll(ScrollTarget(direction: .down)),
-        .viewportScroll(ScrollTarget(selection: .element(.predicate(.label("List"))), direction: .down)),
-        .viewportScroll(ScrollTarget(selection: .container("scrollable_0_0_40_50"), direction: .down)),
-        .viewportScrollToVisible(.label("Checkout")),
-        .viewportScrollToEdge(ScrollToEdgeTarget(edge: .bottom)),
-        .viewportScrollToEdge(ScrollToEdgeTarget(selection: .element(.predicate(.label("List"))), edge: .bottom)),
-        .viewportScrollToEdge(ScrollToEdgeTarget(selection: .container("scrollable_0_0_40_50"), edge: .bottom)),
+        .scroll(ScrollTarget(direction: .down)),
+        .scroll(ScrollTarget(selection: .element(.predicate(.label("List"))), direction: .down)),
+        .scroll(ScrollTarget(selection: .container("scrollable_0_0_40_50"), direction: .down)),
+        .scrollToVisible(.label("Checkout")),
+        .scrollToEdge(ScrollToEdgeTarget(edge: .bottom)),
+        .scrollToEdge(ScrollToEdgeTarget(selection: .element(.predicate(.label("List"))), edge: .bottom)),
+        .scrollToEdge(ScrollToEdgeTarget(selection: .container("scrollable_0_0_40_50"), edge: .bottom)),
     ]
 
     for command in commands {
         let reason = try #require(command.durableHeistActionFailure)
 
-        #expect(reason.contains("viewport debug command"))
+        #expect(reason.contains("direct client command"))
 
         do {
             _ = try HeistPlan(body: [.action(ActionStep(command: command))])
-            Issue.record("Expected viewport action to fail plan admission")
+            Issue.record("Expected scroll action to fail plan admission")
         } catch let error as HeistPlanRuntimeSafetyError {
             expectNonDurableHeistActionFailure(error.failures, observed: reason)
         } catch {
@@ -381,11 +381,11 @@ func viewportDebugActionsAreNotDurableHeistDSL() throws {
       ]
     }
     """.utf8))
-        Issue.record("Expected viewport JSON action to fail plan admission")
+        Issue.record("Expected scroll JSON action to fail plan admission")
     } catch let error as HeistPlanRuntimeSafetyError {
         expectNonDurableHeistActionFailure(
             error.failures,
-            observed: "scroll is a viewport debug command, not a durable heist action"
+            observed: "scroll is a direct client command, not a durable heist action"
         )
     } catch {
         Issue.record("Expected runtime safety error, got \(error)")
@@ -393,7 +393,7 @@ func viewportDebugActionsAreNotDurableHeistDSL() throws {
 }
 
 private let nonDurableHeistActionRepairHint =
-    "Use a direct client command for viewport/debug/session actions, or replace " +
+    "Use a direct client command for debug/session actions, or replace " +
     "this with a canonical durable DSL action."
 
 private func expectNonDurableHeistActionFailure(
@@ -417,7 +417,7 @@ private func compileCanonicalHeist(_ source: String) async throws -> HeistPlan {
     defer { try? FileManager.default.removeItem(at: tempDirectory) }
     let sourceURL = tempDirectory.appendingPathComponent("Canonical.swift")
     try source.write(to: sourceURL, atomically: true, encoding: .utf8)
-    let result = await HeistCompiler(configuration: .init(packageRoot: buttonHeistPackageRoot()))
+    let result = await HeistSwiftCompiler(configuration: .init(packageRoot: buttonHeistPackageRoot()))
         .compileFile(sourceURL, entry: "heist")
     switch result {
     case .success(let plan, _):

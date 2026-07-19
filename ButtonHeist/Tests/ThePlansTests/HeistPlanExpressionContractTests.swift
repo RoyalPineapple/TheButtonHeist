@@ -136,11 +136,11 @@ import ThePlans
     #expect(resolvedTypeText.text == "Pay")
     #expect(resolvedTypeText.target == source)
 
-    let swipe = HeistActionCommand.mechanicalSwipe(SwipeTarget(
+    let swipe = HeistActionCommand.swipe(SwipeTarget(
         selection: .elementDirection(.ref("sourceTarget"), .up)
     ))
-    guard case .mechanicalSwipe(let resolvedSwipe) = try swipe.resolve(in: environment) else {
-        Issue.record("Expected resolved mechanical swipe")
+    guard case .swipe(let resolvedSwipe) = try swipe.resolve(in: environment) else {
+        Issue.record("Expected resolved spatial gesture swipe")
         return
     }
     #expect(resolvedSwipe.selection == .elementDirection(source, .up))

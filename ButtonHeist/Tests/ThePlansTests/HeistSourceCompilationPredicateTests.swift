@@ -2,7 +2,7 @@ import Testing
 @testable import ThePlans
 
 @Test func `inline plan source simple Activate compiles to HeistPlan`() throws {
-    let plan = try HeistPlanSourceCompiler().compile(root("""
+    let plan = try HeistSourceCompilation.compile(root("""
     Activate(.label("Pay"))
     """))
     let expected = try HeistPlan(body: [
@@ -14,7 +14,7 @@ import Testing
 }
 
 @Test func `runtime parser accepts explicit StringMatch enum cases for all string predicate fields`() throws {
-    let plan = try HeistPlanSourceCompiler().compile(root("""
+    let plan = try HeistSourceCompilation.compile(root("""
     Activate(.identifier(.suffix("field")))
     WaitFor(
         .exists(.element(
@@ -45,7 +45,7 @@ import Testing
 }
 
 @Test func `runtime parser accepts announcement predicates`() throws {
-    let plan = try HeistPlanSourceCompiler().compile(root("""
+    let plan = try HeistSourceCompilation.compile(root("""
     Activate(.label("Delete")).expect(.announcement("Item deleted"))
     WaitFor(.announcement(.contains("processed")), timeout: 5)
     WaitFor(.announcement)
@@ -64,7 +64,7 @@ import Testing
 }
 
 @Test func `runtime parser accepts container predicates and scoped targets`() throws {
-    let plan = try HeistPlanSourceCompiler().compile(root("""
+    let plan = try HeistSourceCompilation.compile(root("""
     WaitFor(.exists(.container(.label("Checkout"))), timeout: 2)
     WaitFor(.exists(.container(.actions(.init(.custom("Archive"))))), timeout: 1)
     WaitFor(.exists(.container(.dataTable(rowCount: .init(3), columnCount: .init(2)))))
@@ -93,16 +93,16 @@ import Testing
 }
 
 @Test func `runtime parser rejects exact StringMatch source spelling`() {
-    #expect(throws: HeistPlanSourceCompilerError.self) {
-        _ = try HeistPlanSourceCompiler().compile(root("""
+    #expect(throws: HeistSourceCompilationError.self) {
+        _ = try HeistSourceCompilation.compile(root("""
         Activate(.label(.exact("Search")))
         """))
     }
 }
 
 @Test func `runtime parser rejects labeled element predicate fields`() {
-    #expect(throws: HeistPlanSourceCompilerError.self) {
-        _ = try HeistPlanSourceCompiler().compile(root("""
+    #expect(throws: HeistSourceCompilationError.self) {
+        _ = try HeistSourceCompilation.compile(root("""
         Activate(.element(label: "Pay", traits: [.button]))
         """))
     }
@@ -183,11 +183,11 @@ import Testing
         (#"TypeText("")"#, "text to append must be non-empty"),
         (#"SetPasteboard("")"#, "pasteboard text must be non-empty"),
         (
-            "Mechanical.LongPress(ScreenPoint(x: 1, y: 1), duration: 0)",
+            "longPress(ScreenPoint(x: 1, y: 1), duration: 0)",
             "duration must be"
         ),
         (
-            "Mechanical.LongPress(ScreenPoint(x: 1, y: 1), duration: 61)",
+            "longPress(ScreenPoint(x: 1, y: 1), duration: 61)",
             "duration must be"
         ),
     ]
@@ -252,11 +252,11 @@ import Testing
 }
 
 @Test func `runtime parser requires canonical dotted enum cases`() throws {
-    _ = try HeistPlanSourceCompiler().compile(root("""
+    _ = try HeistSourceCompilation.compile(root("""
     Activate(.traits([.button]))
     Edit(.paste)
     Rotor("Headings", on: .label("Article"), direction: .previous)
-    Mechanical.Swipe(.label("List"), .down)
+    swipe(.label("List"), .down)
     """))
 
     let cases = [
@@ -266,7 +266,7 @@ import Testing
             #"Rotor("Headings", on: .label("Article"), direction: previous)"#,
             "rotor direction must use canonical dotted enum-case syntax"
         ),
-        (#"Mechanical.Swipe(.label("List"), down)"#, "swipe direction must use canonical dotted enum-case syntax"),
+        (#"swipe(.label("List"), down)"#, "swipe direction must use canonical dotted enum-case syntax"),
     ]
 
     for (source, expected) in cases {

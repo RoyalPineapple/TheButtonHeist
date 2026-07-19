@@ -6,18 +6,18 @@ import TheScore
 
 @testable import ButtonHeistCLIExe
 
-final class ScreenshotCommandTests: XCTestCase {
+final class GetScreenCommandTests: XCTestCase {
 
     func testIncludeInterfaceFlagIsNotACommandSurface() {
-        XCTAssertThrowsError(try ScreenshotCommand.parse(["--include-interface"]))
+        XCTAssertThrowsError(try GetScreenCommand.parse(["--include-interface"]))
     }
 
     func testInlineRejectsOutputPath() {
-        XCTAssertThrowsError(try ScreenshotCommand.parse(["--inline", "--output", "/tmp/screen.png"]))
+        XCTAssertThrowsError(try GetScreenCommand.parse(["--inline", "--output", "/tmp/screen.png"]))
     }
 
     func testAccessibilityFlagSetsScreenMode() throws {
-        let command = try ScreenshotCommand.parse(["--accessibility"])
+        let command = try GetScreenCommand.parse(["--accessibility"])
 
         let arguments = try command.requestArguments()
 
@@ -34,7 +34,7 @@ final class ScreenshotCommandTests: XCTestCase {
             )
         )
 
-        let result = try ScreenshotCommand.inlineCommandResult(for: response)
+        let result = try GetScreenCommand.inlineCommandResult(for: response)
 
         guard case .binary(let data) = result else {
             return XCTFail("expected inline screenshot to produce binary output")
@@ -48,7 +48,7 @@ final class ScreenshotCommandTests: XCTestCase {
             message: "screenshot failed",
             details: FailureDetails(code: .requestActionFailed)
         )
-        let result = try ScreenshotCommand.inlineCommandResult(for: .error(failure))
+        let result = try GetScreenCommand.inlineCommandResult(for: .error(failure))
 
         guard case .response(let formatted) = result else {
             return XCTFail("expected failure to stay on formatted response path")
@@ -64,7 +64,7 @@ final class ScreenshotCommandTests: XCTestCase {
             payload: ScreenPayload(pngData: "not-base64", width: 1, height: 1)
         )
 
-        XCTAssertThrowsError(try ScreenshotCommand.inlineCommandResult(for: response)) { error in
+        XCTAssertThrowsError(try GetScreenCommand.inlineCommandResult(for: response)) { error in
             XCTAssertTrue(String(describing: error).contains("Failed to decode screenshot data"))
         }
     }

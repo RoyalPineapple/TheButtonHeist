@@ -181,7 +181,7 @@ extension HeistPlanSourceParser {
         return .dismissKeyboard
     }
 
-    mutating func parseMechanicalTap() throws -> HeistActionCommand {
+    mutating func parseOneFingerTap() throws -> HeistActionCommand {
         try expectSymbol("(")
         let selection: GesturePointSelection
         if tokenIsIdentifier(currentToken, "ScreenPoint") {
@@ -197,10 +197,10 @@ extension HeistPlanSourceParser {
             }
         }
         try expectSymbol(")")
-        return .mechanicalTap(TapTarget(selection: selection))
+        return .oneFingerTap(TapTarget(selection: selection))
     }
 
-    mutating func parseMechanicalLongPress() throws -> HeistActionCommand {
+    mutating func parseLongPress() throws -> HeistActionCommand {
         try expectSymbol("(")
         let selection: GesturePointSelection
         var duration = GestureDuration.longPressDefault
@@ -223,10 +223,10 @@ extension HeistPlanSourceParser {
             duration = try parseGestureDuration()
         }
         try expectSymbol(")")
-        return .mechanicalLongPress(LongPressTarget(selection: selection, duration: duration))
+        return .longPress(LongPressTarget(selection: selection, duration: duration))
     }
 
-    mutating func parseMechanicalSwipe() throws -> HeistActionCommand {
+    mutating func parseSwipe() throws -> HeistActionCommand {
         try expectSymbol("(")
         let selection: SwipeGestureSelection
         if lookaheadLabel("from") {
@@ -258,10 +258,10 @@ extension HeistPlanSourceParser {
             }
         }
         try expectSymbol(")")
-        return .mechanicalSwipe(SwipeTarget(selection: selection))
+        return .swipe(SwipeTarget(selection: selection))
     }
 
-    mutating func parseMechanicalDrag() throws -> HeistActionCommand {
+    mutating func parseDrag() throws -> HeistActionCommand {
         try expectSymbol("(")
         let selection: DragGestureSelection
         if lookaheadLabel("from") {
@@ -289,7 +289,7 @@ extension HeistPlanSourceParser {
             selection = .elementToPoint(target, start: start, end: try parseScreenPoint())
         }
         try expectSymbol(")")
-        return .mechanicalDrag(DragTarget(selection: selection))
+        return .drag(DragTarget(selection: selection))
     }
 
     mutating func parsePointCoordinates() throws -> (x: FiniteCoordinate, y: FiniteCoordinate) {

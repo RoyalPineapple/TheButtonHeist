@@ -1,6 +1,6 @@
 import Foundation
 
-package enum ScoreDescription {
+package enum CanonicalValueDescription {
     package static func quoted(_ value: String) -> String {
         // Boundary try?: display-only JSON string escaping, with a local
         // deterministic escape path when Foundation encoding cannot help.

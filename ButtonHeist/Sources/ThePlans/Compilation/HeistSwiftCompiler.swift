@@ -28,13 +28,13 @@ public struct HeistBuildSourceLocation: Sendable, Equatable, CustomStringConvert
     }
 }
 
-public actor HeistCompiler {
+public actor HeistSwiftCompiler {
     public struct Configuration: Sendable, Equatable {
         public static let `default` = Configuration()
 
         public let packageRoot: URL?
         public let directoryEntry: HeistEntrySymbol
-        let processLimits: CompilerProcess.Limits
+        let processLimits: HeistCompilerProcess.Limits
         let temporaryDirectory: URL
 
         public init(
@@ -50,7 +50,7 @@ public actor HeistCompiler {
         init(
             packageRoot: URL? = nil,
             directoryEntry: HeistEntrySymbol = "heist",
-            processLimits: CompilerProcess.Limits,
+            processLimits: HeistCompilerProcess.Limits,
             temporaryDirectory: URL = FileManager.default.temporaryDirectory
         ) {
             self.packageRoot = packageRoot
@@ -74,11 +74,11 @@ public actor HeistCompiler {
         do {
             try Task.checkCancellation()
 #if os(macOS) || os(Linux)
-            let plan = try await HeistSwiftFileCompiler(
+            let plan = try await HeistSwiftFileCompilation(
                 packageRoot: configuration.packageRoot,
                 processLimits: configuration.processLimits,
                 temporaryDirectory: configuration.temporaryDirectory
-            ).compileSwiftFile(source, entry: entry)
+            ).compile(source, entry: entry)
             try Task.checkCancellation()
             return .success(plan, diagnostics: [])
 #else
@@ -155,7 +155,7 @@ public actor HeistCompiler {
     }
 }
 
-private extension HeistCompiler {
+private extension HeistSwiftCompiler {
     static func sourceFiles(in directory: URL) throws -> [URL] {
         let fileManager = FileManager.default
         var isDirectory: ObjCBool = false
@@ -262,7 +262,7 @@ private extension HeistCompiler {
         entry: HeistEntrySymbol?
     ) -> [HeistBuildDiagnostic] {
 #if os(macOS) || os(Linux)
-        if let compilerError = error as? HeistSwiftFileCompilerError {
+        if let compilerError = error as? HeistSwiftFileCompilationError {
             return diagnostics(for: compilerError, source: source, entry: entry)
         }
 #endif
@@ -274,7 +274,7 @@ private extension HeistCompiler {
 
 #if os(macOS) || os(Linux)
     static func diagnostics(
-        for error: HeistSwiftFileCompilerError,
+        for error: HeistSwiftFileCompilationError,
         source: URL?,
         entry: HeistEntrySymbol?
     ) -> [HeistBuildDiagnostic] {

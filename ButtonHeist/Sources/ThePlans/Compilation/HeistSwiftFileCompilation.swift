@@ -1,7 +1,7 @@
 import Foundation
 
 #if os(macOS) || os(Linux)
-private struct HeistSwiftFileCompilerEnvironmentKey: RawRepresentable, Hashable, Sendable, CustomStringConvertible {
+private struct HeistSwiftFileCompilationEnvironmentKey: RawRepresentable, Hashable, Sendable, CustomStringConvertible {
     let rawValue: String
 
     init(rawValue: String) {
@@ -24,7 +24,7 @@ private struct HeistSwiftFileCompilerEnvironmentKey: RawRepresentable, Hashable,
     static let configurationBuildDirectory = Self("CONFIGURATION_BUILD_DIR")
     static let sourceCompilerTrace = Self("HEIST_SOURCE_COMPILER_TRACE")
 
-    static let xcodeProductsDirectories: [HeistSwiftFileCompilerEnvironmentKey] = [
+    static let xcodeProductsDirectories: [HeistSwiftFileCompilationEnvironmentKey] = [
         .builtProductsDirectory,
         .targetBuildDirectory,
         .configurationBuildDirectory,
@@ -32,19 +32,19 @@ private struct HeistSwiftFileCompilerEnvironmentKey: RawRepresentable, Hashable,
 }
 
 private extension Dictionary where Key == String, Value == String {
-    subscript(_ key: HeistSwiftFileCompilerEnvironmentKey) -> String? {
+    subscript(_ key: HeistSwiftFileCompilationEnvironmentKey) -> String? {
         self[key.rawValue]
     }
 }
 
-struct HeistSwiftFileCompiler: Sendable {
+struct HeistSwiftFileCompilation: Sendable {
     let packageRoot: URL?
-    let processLimits: CompilerProcess.Limits
+    let processLimits: HeistCompilerProcess.Limits
     let temporaryDirectory: URL
 
     init(
         packageRoot: URL? = nil,
-        processLimits: CompilerProcess.Limits = .default,
+        processLimits: HeistCompilerProcess.Limits = .default,
         temporaryDirectory: URL = FileManager.default.temporaryDirectory
     ) {
         self.packageRoot = packageRoot
@@ -58,18 +58,18 @@ struct HeistSwiftFileCompiler: Sendable {
     static let sharedModuleCacheDirectory = FileManager.default.temporaryDirectory
         .appendingPathComponent("buttonheist-heist-plan-module-cache", isDirectory: true)
 
-    func compileSwiftFile(
+    func compile(
         _ source: URL,
         entry: HeistEntrySymbol
     ) async throws -> HeistPlan {
         try Task.checkCancellation()
         let source = source.standardizedFileURL
         guard FileManager.default.fileExists(atPath: source.path) else {
-            throw HeistSwiftFileCompilerError.sourceFileNotFound(source.path)
+            throw HeistSwiftFileCompilationError.sourceFileNotFound(source.path)
         }
-        HeistSwiftFileCompilerTrace.write("preparing Swift heist compile")
+        HeistSwiftFileCompilationTrace.write("preparing Swift heist compile")
         let artifacts = try ThePlansBuildArtifacts.resolve(explicitPackageRoot: packageRoot)
-        HeistSwiftFileCompilerTrace.write("using built ThePlans artifacts at \(artifacts.buildDirectory.path)")
+        HeistSwiftFileCompilationTrace.write("using built ThePlans artifacts at \(artifacts.buildDirectory.path)")
 
         let tempURL = temporaryDirectory
             .appendingPathComponent("heist-source-\(UUID().uuidString)", isDirectory: true)
@@ -110,9 +110,9 @@ struct HeistSwiftFileCompiler: Sendable {
         artifacts: ThePlansBuildArtifacts
     ) async throws -> HeistPlan {
         let executableURL = buildDirectory.appendingPathComponent("plan-compiler")
-        HeistSwiftFileCompilerTrace.write("compiling Swift heist wrapper against built ThePlans artifacts")
-        let compilerResult = try await CompilerProcess.Runner.shared.execute(
-            CompilerProcess.Command(
+        HeistSwiftFileCompilationTrace.write("compiling Swift heist wrapper against built ThePlans artifacts")
+        let compilerResult = try await HeistCompilerProcess.Runner.shared.execute(
+            HeistCompilerProcess.Command(
                 executable: URL(fileURLWithPath: "/usr/bin/env"),
                 arguments: swiftcPlanCompilerArguments(
                     compileDirectory: compileDirectory,
@@ -129,9 +129,9 @@ struct HeistSwiftFileCompiler: Sendable {
             phase: .compilation(source.path)
         )
 
-        HeistSwiftFileCompilerTrace.write("running Swift heist wrapper")
-        let executionResult = try await CompilerProcess.Runner.shared.execute(
-            CompilerProcess.Command(executable: executableURL, arguments: []),
+        HeistSwiftFileCompilationTrace.write("running Swift heist wrapper")
+        let executionResult = try await HeistCompilerProcess.Runner.shared.execute(
+            HeistCompilerProcess.Command(executable: executableURL, arguments: []),
             purpose: .execution,
             limits: processLimits
         )
@@ -143,18 +143,18 @@ struct HeistSwiftFileCompiler: Sendable {
         do {
             return try HeistPlanJSONCodec.decodeValidatedPlan(output.stdout, sourceURL: source)
         } catch let error as HeistPlanJSONCodecError {
-            throw HeistSwiftFileCompilerError.invalidCompilerOutput(error.description)
+            throw HeistSwiftFileCompilationError.invalidCompilerOutput(error.description)
         } catch let error as HeistPlanRuntimeSafetyError {
-            throw HeistSwiftFileCompilerError.runtimeSafetyFailed(error.description)
+            throw HeistSwiftFileCompilationError.runtimeSafetyFailed(error.description)
         } catch {
-            throw HeistSwiftFileCompilerError.invalidCompilerOutput(String(describing: error))
+            throw HeistSwiftFileCompilationError.invalidCompilerOutput(String(describing: error))
         }
     }
 
     private func successfulOutput(
-        from outcome: CompilerProcess.Outcome,
-        phase: HeistSwiftFileCompilerProcessPhase
-    ) throws -> CompilerProcess.Output {
+        from outcome: HeistCompilerProcess.Outcome,
+        phase: HeistSwiftFileCompilationProcessPhase
+    ) throws -> HeistCompilerProcess.Output {
         switch outcome {
         case .succeeded(let output):
             return output
@@ -239,7 +239,7 @@ struct HeistSwiftFileCompiler: Sendable {
 private enum LocalThePlansPackage {
     static func resolve() throws -> URL {
         guard let packageRoot = resolveCandidates().first else {
-            throw HeistSwiftFileCompilerError.packageRootNotFound
+            throw HeistSwiftFileCompilationError.packageRootNotFound
         }
         return packageRoot
     }
@@ -305,14 +305,14 @@ private enum LocalThePlansPackage {
 /// directories are searched. Every route feeds the same compile path, and a miss
 /// reports what was searched and how to fix it.
 private struct ThePlansBuildArtifacts {
-    static let environmentOverrideKey = HeistSwiftFileCompilerEnvironmentKey.thePlansBuildDirectory
+    static let environmentOverrideKey = HeistSwiftFileCompilationEnvironmentKey.thePlansBuildDirectory
 
     let buildDirectory: URL
     let swiftcArguments: [String]
 
     static func resolve(explicitPackageRoot: URL?) throws -> ThePlansBuildArtifacts {
         if let override = environmentOverridePath() {
-            HeistSwiftFileCompilerTrace.write("resolving \(environmentOverrideKey) override at \(override)")
+            HeistSwiftFileCompilationTrace.write("resolving \(environmentOverrideKey) override at \(override)")
             let buildDirectory = URL(fileURLWithPath: override, isDirectory: true)
             if let artifacts = try resolveSwiftPMBuildDirectory(buildDirectory) {
                 return artifacts
@@ -320,7 +320,7 @@ private struct ThePlansBuildArtifacts {
             if let artifacts = resolveXcodeProductsDirectory(buildDirectory) {
                 return artifacts
             }
-            throw HeistSwiftFileCompilerError.buildArtifactsNotFound(
+            throw HeistSwiftFileCompilationError.buildArtifactsNotFound(
                 searched: [buildDirectory.path],
                 hint: """
                 \(environmentOverrideKey)=\(override) does not contain built ThePlans artifacts \
@@ -336,7 +336,7 @@ private struct ThePlansBuildArtifacts {
         let installedCandidates = candidateInstalledBuildDirectories()
         searched.append(contentsOf: installedCandidates.map(\.path))
         for buildDirectory in installedCandidates {
-            HeistSwiftFileCompilerTrace.write("checking installed ThePlans artifacts: \(buildDirectory.path)")
+            HeistSwiftFileCompilationTrace.write("checking installed ThePlans artifacts: \(buildDirectory.path)")
             if let artifacts = try resolveSwiftPMBuildDirectory(buildDirectory) {
                 return artifacts
             }
@@ -346,15 +346,15 @@ private struct ThePlansBuildArtifacts {
         if let explicitPackageRoot {
             packageRoots = [explicitPackageRoot.standardizedFileURL]
         } else {
-            HeistSwiftFileCompilerTrace.write("resolving ButtonHeist package roots")
+            HeistSwiftFileCompilationTrace.write("resolving ButtonHeist package roots")
             packageRoots = LocalThePlansPackage.resolveCandidates()
         }
         guard !packageRoots.isEmpty || !installedCandidates.isEmpty else {
-            throw HeistSwiftFileCompilerError.packageRootNotFound
+            throw HeistSwiftFileCompilationError.packageRootNotFound
         }
 
         for packageRoot in packageRoots {
-            HeistSwiftFileCompilerTrace.write("checking ButtonHeist package root: \(packageRoot.path)")
+            HeistSwiftFileCompilationTrace.write("checking ButtonHeist package root: \(packageRoot.path)")
             let swiftPMCandidates = try candidateBuildDirectories(in: packageRoot)
             searched.append(contentsOf: swiftPMCandidates.map(\.path))
             for buildDirectory in swiftPMCandidates {
@@ -376,7 +376,7 @@ private struct ThePlansBuildArtifacts {
             ? "local ButtonHeist package .build directories"
             : packageRoots.map { $0.appendingPathComponent(".build").path }.joined(separator: " or ")
 
-        throw HeistSwiftFileCompilerError.buildArtifactsNotFound(
+        throw HeistSwiftFileCompilationError.buildArtifactsNotFound(
             searched: searched,
             hint: """
             No built ThePlans artifacts found in the installed lib/ThePlans directory or under \
@@ -549,7 +549,7 @@ private struct ThePlansBuildArtifacts {
     }
 
     private static func candidateXcodeProductsDirectories(packageRoot: URL) -> [URL] {
-        let environmentDirectories = HeistSwiftFileCompilerEnvironmentKey.xcodeProductsDirectories.compactMap { key -> URL? in
+        let environmentDirectories = HeistSwiftFileCompilationEnvironmentKey.xcodeProductsDirectories.compactMap { key -> URL? in
             guard let value = ProcessInfo.processInfo.environment[key], !value.isEmpty else {
                 return nil
             }
@@ -675,7 +675,7 @@ struct SwiftPMBuildCommand: Decodable {
     }
 }
 
-private enum HeistSwiftFileCompilerTrace {
+private enum HeistSwiftFileCompilationTrace {
     static func write(_ message: String) {
         guard ProcessInfo.processInfo.environment[.sourceCompilerTrace] == "1" else {
             return

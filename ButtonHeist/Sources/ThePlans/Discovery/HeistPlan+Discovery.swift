@@ -21,7 +21,7 @@ public enum HeistCatalogTag: String, Codable, Sendable, Equatable {
     case composed
     case assertion
     case textInput = "text-input"
-    case viewport
+    case scroll
     case gesture
     case semanticAction = "semantic-action"
 }
@@ -397,11 +397,11 @@ private extension HeistPlan {
             case .typeText:
                 appendUnique(.textInput, to: &tags)
             case .scroll, .scrollToVisible, .scrollToEdge:
-                appendUnique(.viewport, to: &tags)
+                appendUnique(.scroll, to: &tags)
             case .oneFingerTap, .longPress, .swipe, .drag:
                 appendUnique(.gesture, to: &tags)
             case .activate, .increment, .decrement, .performCustomAction, .rotor, .dismiss, .magicTap,
-                    .editAction, .setPasteboard, .resignFirstResponder:
+                    .editAction, .setPasteboard, .dismissKeyboard:
                 appendUnique(.semanticAction, to: &tags)
             case .takeScreenshot:
                 break

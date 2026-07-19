@@ -141,7 +141,7 @@ extension HeistPlanSourceParser {
         do {
             definitionPath = try HeistDefinitionPath(validating: path)
         } catch {
-            throw HeistPlanSourceCompilerError(diagnostic: .invalidDefinitionPath(
+            throw HeistSourceCompilationError(diagnostic: .invalidDefinitionPath(
                 path,
                 error: error,
                 phase: .sourceCompilation,
@@ -220,16 +220,16 @@ extension HeistPlanSourceParser {
             return [HeistStepAdmissionCandidate(try parseActionStep(command: parseMagicTapAction()))]
         case ["Edit"]:
             return [HeistStepAdmissionCandidate(try parseActionStep(command: parseEditAction()))]
-        case ["DismissKeyboard"]:
+        case ["dismissKeyboard"]:
             return [HeistStepAdmissionCandidate(try parseActionStep(command: parseDismissKeyboardAction()))]
-        case ["Mechanical", "Tap"]:
-            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseMechanicalTap()))]
-        case ["Mechanical", "LongPress"]:
-            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseMechanicalLongPress()))]
-        case ["Mechanical", "Swipe"]:
-            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseMechanicalSwipe()))]
-        case ["Mechanical", "Drag"]:
-            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseMechanicalDrag()))]
+        case ["oneFingerTap"]:
+            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseOneFingerTap()))]
+        case ["longPress"]:
+            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseLongPress()))]
+        case ["swipe"]:
+            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseSwipe()))]
+        case ["drag"]:
+            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseDrag()))]
         case ["WaitFor"]:
             return [try parseWaitFor()]
         case ["If"]:

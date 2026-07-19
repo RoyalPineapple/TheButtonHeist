@@ -6,15 +6,15 @@ import ThePlans
 final class AccessibilityTargetOptionsTests: XCTestCase {
 
     func testHeistIdOptionIsNotSupported() throws {
-        XCTAssertThrowsError(try TapSubcommand.parse(["--heist-id", "button_save"]))
+        XCTAssertThrowsError(try OneFingerTapCommand.parse(["--heist-id", "button_save"]))
     }
 
     func testPositionalTargetIsRejected() {
-        XCTAssertThrowsError(try TapSubcommand.parse(["button_save"]))
+        XCTAssertThrowsError(try OneFingerTapCommand.parse(["button_save"]))
     }
 
     func testMatcherOptionsParseToTypedPredicateTarget() throws {
-        let command = try TapSubcommand.parse([
+        let command = try OneFingerTapCommand.parse([
             "--identifier", "saveButton",
             "--label", "Save",
             "--traits", "button",
@@ -39,7 +39,7 @@ final class AccessibilityTargetOptionsTests: XCTestCase {
     }
 
     func testTapOptionsEncodeCanonicalTapTarget() throws {
-        let command = try TapSubcommand.parse(["--label", "Save"])
+        let command = try OneFingerTapCommand.parse(["--label", "Save"])
 
         try assertCanonicalArguments(
             try command.requestArguments(),
@@ -48,7 +48,7 @@ final class AccessibilityTargetOptionsTests: XCTestCase {
     }
 
     func testLongPressOptionsEncodeCanonicalLongPressTarget() throws {
-        let command = try LongPressSubcommand.parse(["--x", "12", "--y", "34", "--duration", "1.25"])
+        let command = try LongPressCommand.parse(["--x", "12", "--y", "34", "--duration", "1.25"])
 
         try assertCanonicalArguments(
             try command.requestArguments(),
@@ -60,7 +60,7 @@ final class AccessibilityTargetOptionsTests: XCTestCase {
     }
 
     func testSwipeOptionsEncodeCanonicalSwipeTarget() throws {
-        let command = try SwipeSubcommand.parse([
+        let command = try SwipeCommand.parse([
             "--label", "Map",
             "--start-x", "0.8",
             "--start-y", "0.5",
@@ -79,7 +79,7 @@ final class AccessibilityTargetOptionsTests: XCTestCase {
     }
 
     func testDragOptionsEncodeCanonicalDragTarget() throws {
-        let command = try DragSubcommand.parse([
+        let command = try DragCommand.parse([
             "--from-x", "10",
             "--from-y", "20",
             "--to-x", "30",
@@ -96,7 +96,7 @@ final class AccessibilityTargetOptionsTests: XCTestCase {
     }
 
     func testOrdinalOnlyIsRejectedAtTypedTargetBoundary() throws {
-        let command = try TapSubcommand.parse(["--ordinal", "0"])
+        let command = try OneFingerTapCommand.parse(["--ordinal", "0"])
 
         XCTAssertThrowsError(try command.element.parsedTarget()) { error in
             XCTAssertTrue(
@@ -107,7 +107,7 @@ final class AccessibilityTargetOptionsTests: XCTestCase {
     }
 
     func testTapWithoutTargetOrCoordinatesStillFailsValidation() async throws {
-        var command = try TapSubcommand.parse([])
+        var command = try OneFingerTapCommand.parse([])
 
         XCTAssertFalse(try command.element.hasTarget)
 

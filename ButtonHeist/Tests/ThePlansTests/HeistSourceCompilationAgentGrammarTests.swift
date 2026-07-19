@@ -2,12 +2,12 @@ import Testing
 @testable import ThePlans
 
 @Test func `reported agent target grammar gaps parse`() throws {
-    let ordinal = try HeistPlanSourceCompiler().compile(root(#"Activate(.target(.label("Pay"), ordinal: 0))"#))
+    let ordinal = try HeistSourceCompilation.compile(root(#"Activate(.target(.label("Pay"), ordinal: 0))"#))
     #expect(ordinal.body == [
         .action(ActionStep(command: .activate(.predicate(.label("Pay"), ordinal: 0)))),
     ])
 
-    let scopedOrdinal = try HeistPlanSourceCompiler().compile(root(
+    let scopedOrdinal = try HeistSourceCompilation.compile(root(
         #"Activate(.within(container: .identifier("Sheet"), .target(.label("Pay"), ordinal: 0)))"#
     ))
     #expect(scopedOrdinal.body == [
@@ -17,22 +17,22 @@ import Testing
         )))),
     ])
 
-    let traits = try HeistPlanSourceCompiler().compile(root(#"Activate(.element(.label("Pay"), .traits([.button])))"#))
+    let traits = try HeistSourceCompilation.compile(root(#"Activate(.element(.label("Pay"), .traits([.button])))"#))
     #expect(traits.body == [
         .action(ActionStep(command: .activate(.predicate(.element(.label("Pay"), .traits([.button])))))),
     ])
 
-    let typeText = try HeistPlanSourceCompiler().compile(root(#"TypeText("milk", into: .label("Search"))"#))
+    let typeText = try HeistSourceCompilation.compile(root(#"TypeText("milk", into: .label("Search"))"#))
     #expect(typeText.body == [
         .action(ActionStep(command: .typeText(text: "milk", target: .predicate(.label("Search"))))),
     ])
 
-    let screenshot = try HeistPlanSourceCompiler().compile(root("TakeScreenshot()"))
+    let screenshot = try HeistSourceCompilation.compile(root("TakeScreenshot()"))
     #expect(screenshot.body == [
         .action(ActionStep(command: .takeScreenshot)),
     ])
 
-    let waived = try HeistPlanSourceCompiler().compile(root(#"Activate(.label("Pay")).withoutExpectation("reason")"#))
+    let waived = try HeistSourceCompilation.compile(root(#"Activate(.label("Pay")).withoutExpectation("reason")"#))
     #expect(waived.body == [
         .action(ActionStep(
             command: .activate(.predicate(.label("Pay"))),
@@ -71,7 +71,7 @@ import Testing
     expect(nativeIf, contains: "native Swift if/else is not supported")
     expect(nativeIf, contains: "If { Case(...) { ... } Else { ... } }")
 
-    let ifShorthand = try HeistPlanSourceCompiler().compile(root("""
+    let ifShorthand = try HeistSourceCompilation.compile(root("""
     If(.exists(.label("Pay"))) {
         Activate(.label("Pay"))
     }.else {

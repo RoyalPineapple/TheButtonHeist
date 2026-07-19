@@ -358,7 +358,7 @@ private func unknownBasicStepPayloadCases() -> [UnknownFieldCase] {
         UnknownFieldCase(name: "action step", expectedMessage: #"Unknown action step field "unexpected""#, decode: {
             _ = try JSONDecoder().decode(ActionStep.self, from: Data("""
             {
-              "command": { "type": "resignFirstResponder" },
+              "command": { "type": "dismissKeyboard" },
               "unexpected": true
             }
             """.utf8))

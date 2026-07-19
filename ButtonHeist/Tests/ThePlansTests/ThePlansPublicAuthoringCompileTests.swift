@@ -70,3 +70,44 @@ func `public payload construction exposes only admitted values`() throws {
     #expect(pasteboard.text.description == "milk")
     #expect(wait.resolvedTimeout == timeout)
 }
+
+@Test
+func `public spatial gesture authoring uses direct concrete verbs`() throws {
+    let plan = try HeistPlan {
+        oneFingerTap(ScreenPoint(x: 10, y: 20))
+        longPress(.label("Message"))
+        swipe(.label("Carousel"), .left)
+        drag(from: ScreenPoint(x: 10, y: 20), to: ScreenPoint(x: 30, y: 40))
+        dismissKeyboard()
+    }
+
+    #expect(plan.body.compactMap { step in
+        guard case .action(let action) = step else { return nil }
+        return action.command.wireType
+    } == [.oneFingerTap, .longPress, .swipe, .drag, .dismissKeyboard])
+}
+
+@Test
+func `public command construction preserves one action spelling`() {
+    let commands: [HeistActionCommand] = [
+        .oneFingerTap(TapTarget(selection: .coordinate(ScreenPoint(x: 10, y: 20)))),
+        .longPress(LongPressTarget(selection: .coordinate(ScreenPoint(x: 10, y: 20)))),
+        .swipe(SwipeTarget(selection: .pointDirection(
+            start: ScreenPoint(x: 10, y: 20),
+            direction: .left
+        ))),
+        .drag(DragTarget(
+            start: .coordinate(ScreenPoint(x: 10, y: 20)),
+            end: ScreenPoint(x: 30, y: 40)
+        )),
+        .scroll(ScrollTarget(direction: .down)),
+        .scrollToVisible(.label("Checkout")),
+        .scrollToEdge(ScrollToEdgeTarget(edge: .bottom)),
+        .dismissKeyboard,
+    ]
+
+    #expect(commands.map(\.wireType) == [
+        .oneFingerTap, .longPress, .swipe, .drag,
+        .scroll, .scrollToVisible, .scrollToEdge, .dismissKeyboard,
+    ])
+}

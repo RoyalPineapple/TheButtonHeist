@@ -15,7 +15,7 @@ struct ActivateCommand: ConnectedOneShotCLICommand {
             activation: "increment", "decrement", or any custom action from \
             the element's actions array.
 
-            For explicit mechanical or spatial gestures, use the gesture \
+            For explicit spatial gestures, use the gesture \
             commands such as `buttonheist one_finger_tap`.
 
             Examples:

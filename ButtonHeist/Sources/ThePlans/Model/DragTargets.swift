@@ -5,13 +5,13 @@ public enum DragGestureSelection: Sendable, Equatable, CustomStringConvertible {
     public var description: String {
         switch self {
         case .elementToPoint(let target, let start, let end):
-            return ScoreDescription.call("elementToPointDrag", [
+            return CanonicalValueDescription.call("elementToPointDrag", [
                 target.description,
                 start.map { "start=\($0)" },
                 "end=\(end)",
             ].compactMap { $0 })
         case .pointToPoint(let start, let end):
-            return ScoreDescription.call("pointToPointDrag", [
+            return CanonicalValueDescription.call("pointToPointDrag", [
                 "start=\(start)",
                 "end=\(end)",
             ])
@@ -155,7 +155,7 @@ public struct DragTarget: Codable, Sendable, Equatable {
 
 extension DragTarget: CustomStringConvertible {
     public var description: String {
-        ScoreDescription.call("drag", [
+        CanonicalValueDescription.call("drag", [
             selection.description,
             duration.map { "duration=\($0)" },
         ].compactMap { $0 })

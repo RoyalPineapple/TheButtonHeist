@@ -42,7 +42,7 @@ package struct BoundedSeconds: Sendable, Equatable {
               value <= maximum else {
             throw BoundedSecondsError(
                 observed: value,
-                expected: "finite number greater than 0 and no more than \(ScoreDescription.decimal(maximum))"
+                expected: "finite number greater than 0 and no more than \(CanonicalValueDescription.decimal(maximum))"
             )
         }
         self.value = value

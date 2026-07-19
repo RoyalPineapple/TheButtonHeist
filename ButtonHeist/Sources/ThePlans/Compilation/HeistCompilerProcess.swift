@@ -6,7 +6,7 @@ import Darwin
 import Glibc
 #endif
 
-enum CompilerProcess {
+enum HeistCompilerProcess {
     enum Purpose: Sendable {
         case compilation
         case execution

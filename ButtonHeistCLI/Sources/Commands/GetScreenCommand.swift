@@ -3,13 +3,13 @@ import Foundation
 @_spi(ButtonHeistTooling) import ButtonHeist
 import TheScore
 
-struct ScreenshotCommand: OneShotCLICommand {
+struct GetScreenCommand: OneShotCLICommand {
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Capture a screenshot from the connected device"
     )
 
-    @OptionGroup var destination: ScreenshotDestinationInput
+    @OptionGroup var destination: ScreenDestinationInput
 
     @OptionGroup var connection: ConnectionOptions
 
@@ -53,7 +53,7 @@ struct ScreenshotCommand: OneShotCLICommand {
     }
 }
 
-struct ScreenshotDestinationInput: ParsableArguments {
+struct ScreenDestinationInput: ParsableArguments {
     @Option(name: .shortAndLong, help: "Output file path (default: generated artifact path)")
     var output: String?
 

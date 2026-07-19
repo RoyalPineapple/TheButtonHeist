@@ -3,13 +3,13 @@ import Testing
 
 func assertCanonicalRoundTrip(_ plan: HeistPlan) throws {
     let source = try plan.canonicalSwiftDSL()
-    let compiled = try HeistPlanSourceCompiler().compile(source)
+    let compiled = try HeistSourceCompilation.compile(source)
     #expect(compiled == plan, "Rendered source did not compile back to the same plan:\n\(source)")
 }
 
 func compileError(_ source: String) -> String {
     do {
-        _ = try HeistPlanSourceCompiler().compile(source)
+        _ = try HeistSourceCompilation.compile(source)
         Issue.record("Expected source to fail: \(source)")
         return ""
     } catch {
@@ -19,17 +19,17 @@ func compileError(_ source: String) -> String {
 
 func compileDiagnostic(_ source: String) -> HeistBuildDiagnostic {
     do {
-        _ = try HeistPlanSourceCompiler().compile(source)
+        _ = try HeistSourceCompilation.compile(source)
         Issue.record("Expected source to fail: \(source)")
         return HeistBuildDiagnostic(
             externalBoundaryRawCode: "test.missing_diagnostic",
             phase: .sourceCompilation,
             message: "Expected source to fail"
         )
-    } catch let error as HeistPlanSourceCompilerError {
+    } catch let error as HeistSourceCompilationError {
         return error.diagnostic
     } catch {
-        Issue.record("Expected HeistPlanSourceCompilerError, got \(error)")
+        Issue.record("Expected HeistSourceCompilationError, got \(error)")
         return HeistBuildDiagnostic(
             externalBoundaryRawCode: "test.unexpected_error",
             phase: .sourceCompilation,
@@ -66,7 +66,7 @@ func expect(_ string: String, contains substring: String) {
 
 @Test func `non-durable action admission exposes source diagnostic code and path`() throws {
     let raw = HeistPlanAdmissionCandidate(body: [
-        .action(ActionStep(command: .viewportScroll(ScrollTarget(direction: .down)))),
+        .action(ActionStep(command: .scroll(ScrollTarget(direction: .down)))),
     ])
     guard case .failure(let diagnostics) = raw.runtimeSafetyValidationResult(),
           let diagnostic = diagnostics.first else {
@@ -82,7 +82,7 @@ func expect(_ string: String, contains substring: String) {
     #expect(diagnostic.path == "$.body[0].action.command")
     #expect(
         diagnostic.message ==
-            "durable heist action; observed scroll is a viewport debug command, " +
+            "durable heist action; observed scroll is a direct client command, " +
             "not a durable heist action"
     )
     #expect(diagnostic.hint == nonDurableHeistActionRepairHint)
@@ -95,8 +95,8 @@ func expect(_ string: String, contains substring: String) {
         "Process()",
         #"await Warn("x")"#,
     ] {
-        #expect(throws: HeistPlanSourceCompilerError.self) {
-            _ = try HeistPlanSourceCompiler().compile(source)
+        #expect(throws: HeistSourceCompilationError.self) {
+            _ = try HeistSourceCompilation.compile(source)
         }
     }
 }
@@ -118,7 +118,7 @@ func expect(_ string: String, contains substring: String) {
 }
 
 @Test func `planning admission exposes typed diagnostics before rendering`() {
-    let result = HeistPlanning.rejectRawStructuredJSONIRSourceFieldsResult(
+    let result = HeistPlanSourceAdmission.rejectRawStructuredJSONIRSourceFields(
         commandName: "run_heist",
         fields: [.body, .version]
     )
@@ -135,7 +135,7 @@ func expect(_ string: String, contains substring: String) {
 }
 
 @Test func `canonical ForEach string compiles without body try`() throws {
-    let plan = try HeistPlanSourceCompiler().compile(root("""
+    let plan = try HeistSourceCompilation.compile(root("""
     ForEach("a") { item in
         TypeText(item)
     }
@@ -154,8 +154,8 @@ func expect(_ string: String, contains substring: String) {
 }
 
 @Test func `inline plan source import Foundation is rejected`() throws {
-    #expect(throws: HeistPlanSourceCompilerError.self) {
-        _ = try HeistPlanSourceCompiler().compile("""
+    #expect(throws: HeistSourceCompilationError.self) {
+        _ = try HeistSourceCompilation.compile("""
         import Foundation
         Activate(.label("Pay"))
         """)
@@ -163,8 +163,8 @@ func expect(_ string: String, contains substring: String) {
 }
 
 @Test func `inline plan source while true is rejected`() throws {
-    #expect(throws: HeistPlanSourceCompilerError.self) {
-        _ = try HeistPlanSourceCompiler().compile("""
+    #expect(throws: HeistSourceCompilationError.self) {
+        _ = try HeistSourceCompilation.compile("""
         while true {
             Activate(.label("Pay"))
         }
@@ -173,8 +173,8 @@ func expect(_ string: String, contains substring: String) {
 }
 
 @Test func `inline plan source arbitrary function declaration is rejected`() throws {
-    #expect(throws: HeistPlanSourceCompilerError.self) {
-        _ = try HeistPlanSourceCompiler().compile("""
+    #expect(throws: HeistSourceCompilationError.self) {
+        _ = try HeistSourceCompilation.compile("""
         func pay() {
             Activate(.label("Pay"))
         }
@@ -183,10 +183,10 @@ func expect(_ string: String, contains substring: String) {
 }
 
 private let nonDurableHeistActionRepairHint =
-    "Use a direct client command for viewport/debug/session actions, or replace " +
+    "Use a direct client command for debug/session actions, or replace " +
     "this with a canonical durable DSL action."
 
-@Test func `runtime source compiler rejects standard definition cap`() throws {
+@Test func `runtime source compilation rejects standard definition cap`() throws {
     let definitions = (0...250).map { index in
         """
             HeistDef<String>("Definitions.definition\(index)", parameter: "value") { value in

@@ -2,7 +2,7 @@ import Testing
 @testable import ThePlans
 
 @Test func `inline plan source accepts controlled predicate and loop sugar`() throws {
-    let plan = try HeistPlanSourceCompiler().compile(root(#"""
+    let plan = try HeistSourceCompilation.compile(root(#"""
     Activate(.label("Search"))
         .expect(.exists(.label("Results")))
     Activate(.label("Open Details"))
@@ -61,7 +61,7 @@ import Testing
 }
 
 @Test func `inline plan source unicode string escapes preserve following characters`() throws {
-    let plan = try HeistPlanSourceCompiler().compile(root(#"""
+    let plan = try HeistSourceCompilation.compile(root(#"""
     Warn("A\u0062C")
     """#))
     let expected = try HeistPlan(body: [
@@ -92,7 +92,7 @@ import Testing
     }
     """
 
-    let plan = try HeistPlanSourceCompiler().compile(source)
+    let plan = try HeistSourceCompilation.compile(source)
 
     #expect(plan.name == "checkout")
     #expect(plan.definitions.first?.name == "Cart")
@@ -169,7 +169,7 @@ import Testing
     }
     """
 
-    let plan = try HeistPlanSourceCompiler().compile(source)
+    let plan = try HeistSourceCompilation.compile(source)
 
     #expect(plan.name == "RuntimeSurface")
     #expect(plan.parameter == .accessibilityTarget(name: "rootTarget"))
@@ -198,7 +198,7 @@ import Testing
 }
 
 @Test func `inline plan source ForEach string compiles`() throws {
-    let plan = try HeistPlanSourceCompiler().compile(root("""
+    let plan = try HeistSourceCompilation.compile(root("""
     ForEach("a", "b") { item in
         Activate(.label(item)).expect(.exists(.label(item)))
     }
@@ -224,7 +224,7 @@ import Testing
 }
 
 @Test func `inline plan source RepeatUntil compiles`() throws {
-    let plan = try HeistPlanSourceCompiler().compile(root("""
+    let plan = try HeistSourceCompilation.compile(root("""
     RepeatUntil(.exists(.value("3")), timeout: 2) {
         Increment(.identifier("Quantity"))
     }.else {
@@ -249,7 +249,7 @@ import Testing
 }
 
 @Test func `inline plan source action until compiles to repeat until`() throws {
-    let plan = try HeistPlanSourceCompiler().compile(root("""
+    let plan = try HeistSourceCompilation.compile(root("""
     Increment(.label("Volume")).until(.exists(.element(.label("Volume"), .value("100"))))
     """))
     let expected = try HeistPlan(body: [
@@ -267,7 +267,7 @@ import Testing
 }
 
 @Test func `inline plan source WaitFor and If compile`() throws {
-    let plan = try HeistPlanSourceCompiler().compile(root("""
+    let plan = try HeistSourceCompilation.compile(root("""
     WaitFor(.exists(.label("Home")), timeout: 1)
     If {
         Case(.exists(.label("Pay"))) {
@@ -286,7 +286,7 @@ import Testing
 }
 
 @Test func `inline plan source ForEach element predicate compiles`() throws {
-    let plan = try HeistPlanSourceCompiler().compile(root("""
+    let plan = try HeistSourceCompilation.compile(root("""
     ForEach(.label("Row"), limit: 2) { target in
         Activate(target).expect(.missing(target))
     }

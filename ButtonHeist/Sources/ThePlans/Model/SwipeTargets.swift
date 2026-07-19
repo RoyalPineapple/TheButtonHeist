@@ -7,23 +7,23 @@ public enum SwipeGestureSelection: Sendable, Equatable, CustomStringConvertible 
     public var description: String {
         switch self {
         case .unitElement(let target, let start, let end):
-            return ScoreDescription.call("unitSwipe", [
+            return CanonicalValueDescription.call("unitSwipe", [
                 target.description,
                 "start=\(start)",
                 "end=\(end)",
             ])
         case .elementDirection(let target, let direction):
-            return ScoreDescription.call("elementDirectionSwipe", [
+            return CanonicalValueDescription.call("elementDirectionSwipe", [
                 target.description,
                 "direction=\(direction)",
             ])
         case .pointToPoint(let start, let end):
-            return ScoreDescription.call("pointToPointSwipe", [
+            return CanonicalValueDescription.call("pointToPointSwipe", [
                 "start=\(start)",
                 "end=\(end)",
             ])
         case .pointDirection(let start, let direction):
-            return ScoreDescription.call("pointDirectionSwipe", [
+            return CanonicalValueDescription.call("pointDirectionSwipe", [
                 "start=\(start)",
                 "direction=\(direction)",
             ])
@@ -70,7 +70,7 @@ public struct UnitPoint: Codable, Sendable, Equatable {
 
 extension UnitPoint: CustomStringConvertible {
     public var description: String {
-        "unitPoint(\(ScoreDescription.decimal(x)),\(ScoreDescription.decimal(y)))"
+        "unitPoint(\(CanonicalValueDescription.decimal(x)),\(CanonicalValueDescription.decimal(y)))"
     }
 }
 
@@ -248,7 +248,7 @@ public struct SwipeTarget: Codable, Sendable, Equatable {
 
 extension SwipeTarget: CustomStringConvertible {
     public var description: String {
-        ScoreDescription.call("swipe", [
+        CanonicalValueDescription.call("swipe", [
             selection.description,
             duration.map { "duration=\($0)" },
         ].compactMap { $0 })

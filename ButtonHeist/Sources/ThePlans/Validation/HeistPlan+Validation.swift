@@ -47,8 +47,8 @@ private struct HeistPlanLinter: HeistPlanTraversalVisitor {
     var findings: [HeistPlanLintFinding] = []
 
     mutating func visitStep(_ step: HeistStep, context: HeistTraversalContext) {
-        if isViewportSetup(step), context.nextStep?.isSemanticActionStep == true {
-            findings.append(viewportBeforeSemanticActionFinding(path: context.path))
+        if isScrollSetup(step), context.nextStep?.isSemanticActionStep == true {
+            findings.append(scrollBeforeSemanticActionFinding(path: context.path))
         }
     }
 
@@ -62,13 +62,13 @@ private struct HeistPlanLinter: HeistPlanTraversalVisitor {
             if mode.requiresExpectationFinding {
                 findings.append(typeTextTargetFinding(path: context.path))
             }
-        case .mechanical:
+        case .spatialGesture:
             if mode == .strictTest {
-                findings.append(mechanicalFinding(path: context.path))
+                findings.append(spatialGestureFinding(path: context.path))
             }
-        case .viewport:
+        case .scroll:
             if mode == .strictTest {
-                findings.append(viewportFinding(path: context.path))
+                findings.append(scrollFinding(path: context.path))
             }
         case .ambient:
             if action.expectationPolicy.requiresAuthoredExpectation, mode.requiresExpectationFinding {
@@ -109,21 +109,21 @@ private struct HeistPlanLinter: HeistPlanTraversalVisitor {
         )
     }
 
-    private func mechanicalFinding(path: HeistPlanPath) -> HeistPlanLintFinding {
+    private func spatialGestureFinding(path: HeistPlanPath) -> HeistPlanLintFinding {
         .init(
             severity: .error,
             path: path,
-            message: "Mechanical command appears in strict semantic-test mode",
-            suggestion: "Use semantic actions for normal UI, or keep Mechanical.* only for explicit spatial tests"
+            message: "Spatial gesture command appears in strict semantic-test mode",
+            suggestion: "Use semantic actions for normal UI, or keep gesture commands only for explicit spatial tests"
         )
     }
 
-    private func viewportFinding(path: HeistPlanPath) -> HeistPlanLintFinding {
+    private func scrollFinding(path: HeistPlanPath) -> HeistPlanLintFinding {
         .init(
             severity: .error,
             path: path,
-            message: "Viewport command appears in strict semantic-test mode",
-            suggestion: "Semantic actions own reveal and viewport mechanics"
+            message: "Scroll command appears in strict semantic-test mode",
+            suggestion: "Semantic actions own reveal and scrolling"
         )
     }
 
@@ -136,12 +136,12 @@ private struct HeistPlanLinter: HeistPlanTraversalVisitor {
         )
     }
 
-    private func viewportBeforeSemanticActionFinding(path: HeistPlanPath) -> HeistPlanLintFinding {
+    private func scrollBeforeSemanticActionFinding(path: HeistPlanPath) -> HeistPlanLintFinding {
         .init(
             severity: mode == .strictTest ? .error : .warning,
             path: path,
-            message: "Pre-action viewport movement immediately precedes a semantic action",
-            suggestion: "Remove the viewport movement; semantic actions own reveal and element inflation"
+            message: "Pre-action scroll immediately precedes a semantic action",
+            suggestion: "Remove the scroll; semantic actions own reveal and element inflation"
         )
     }
 
@@ -154,9 +154,9 @@ private struct HeistPlanLinter: HeistPlanTraversalVisitor {
         )
     }
 
-    private func isViewportSetup(_ step: HeistStep) -> Bool {
+    private func isScrollSetup(_ step: HeistStep) -> Bool {
         guard case .action(let action) = step else { return false }
-        return action.command.authoringLintKind == .viewport
+        return action.command.authoringLintKind == .scroll
     }
 
 }
@@ -164,8 +164,8 @@ private struct HeistPlanLinter: HeistPlanTraversalVisitor {
 private enum HeistCommandAuthoringLintKind: Equatable {
     case semantic
     case typeTextWithoutTarget
-    case mechanical
-    case viewport
+    case spatialGesture
+    case scroll
     case ambient
     case observation
 }
@@ -177,10 +177,10 @@ private extension HeistActionCommand {
             return .semantic
         case .typeText(let payload):
             return payload.target == nil ? .typeTextWithoutTarget : .semantic
-        case .mechanicalTap, .mechanicalLongPress, .mechanicalSwipe, .mechanicalDrag:
-            return .mechanical
-        case .viewportScroll, .viewportScrollToVisible, .viewportScrollToEdge:
-            return .viewport
+        case .oneFingerTap, .longPress, .swipe, .drag:
+            return .spatialGesture
+        case .scroll, .scrollToVisible, .scrollToEdge:
+            return .scroll
         case .dismiss, .magicTap, .editAction, .setPasteboard, .dismissKeyboard:
             return .ambient
         case .takeScreenshot:
