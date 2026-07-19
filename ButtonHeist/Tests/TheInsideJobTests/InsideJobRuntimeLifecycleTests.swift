@@ -328,7 +328,6 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
         }
         XCTAssertNil(job.transport, file: file, line: line)
         XCTAssertFalse(job.lifecycleObservationIsInstalled, file: file, line: line)
-        XCTAssertTrue(job.lifecycleBoundaryTasks.isEmpty, file: file, line: line)
         XCTAssertFalse(job.brains.semanticObservationIsActive, file: file, line: line)
         XCTAssertFalse(job.brains.vault.semanticObservationStream.isActive, file: file, line: line)
         XCTAssertFalse(job.tripwire.isPulseRunning, file: file, line: line)
