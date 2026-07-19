@@ -463,14 +463,17 @@ final class WaitForIntegrationTests: XCTestCase {
         let didObserveBaseline = await waitForSettledVisibleObservation()
         XCTAssertTrue(didObserveBaseline)
 
+        let start = CFAbsoluteTimeGetCurrent()
         let result = await changedWait(
             expectation: .changed(.elements()),
             timeout: 0.2
         )
+        let elapsed = CFAbsoluteTimeGetCurrent() - start
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .wait)
         XCTAssertEqual(result.outcome.errorKind, .timeout)
+        XCTAssertLessThanOrEqual(elapsed, 0.225)
         XCTAssertTrue(result.message?.contains("expected: changed(elements(*))") == true)
     }
 

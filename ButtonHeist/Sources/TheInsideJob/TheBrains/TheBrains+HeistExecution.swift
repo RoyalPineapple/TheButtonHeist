@@ -27,7 +27,7 @@ extension TheBrains {
     }
 
     internal enum HeistRuntimeWaitRequest: Equatable, Sendable {
-        case standalone(ResolvedWaitRuntimeInput)
+        case standalone(ResolvedWaitRuntimeInput, startedAt: CFAbsoluteTime)
         case actionEndpoint(
             ResolvedWaitRuntimeInput,
             trace: AccessibilityTrace?,
@@ -43,7 +43,7 @@ extension TheBrains {
 
         internal var step: ResolvedWaitRuntimeInput {
             switch self {
-            case .standalone(let step),
+            case .standalone(let step, _),
                  .actionEndpoint(let step, _, _),
                  .immediate(let step),
                  .afterObservation(let step, _, _),
@@ -61,6 +61,18 @@ extension TheBrains {
                  .afterObservation(_, let trace, _),
                  .baselineTraceOnly(_, let trace):
                 return trace
+            }
+        }
+
+        internal var startedAt: CFAbsoluteTime? {
+            switch self {
+            case .standalone(_, let startedAt):
+                return startedAt
+            case .actionEndpoint,
+                 .immediate,
+                 .afterObservation,
+                 .baselineTraceOnly:
+                return nil
             }
         }
 
@@ -140,7 +152,8 @@ extension TheBrains {
                         initialTrace: request.initialTrace,
                         baselineSequence: request.afterSequence,
                         changeBaseline: request.changeBaseline,
-                        announcementCursorStrategy: request.announcementCursorStrategy
+                        announcementCursorStrategy: request.announcementCursorStrategy,
+                        startedAt: request.startedAt
                     )
                 },
                 selectPredicateCase: { cases, timeout in

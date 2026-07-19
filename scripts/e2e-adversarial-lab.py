@@ -304,8 +304,6 @@ PASSING_PLANS = {
         "adversarialOffscreenCheckoutPass",
         "Offscreen Checkout",
         """
-    Activate(.label("Add Espresso"))
-        .expect(.exists(.label("Remove Espresso")), timeout: 2)
     Activate(.element(.label("Place order"), .traits([.button])))
         .expect(.exists(.label("Order placed")), timeout: 4)
 """,
@@ -317,15 +315,15 @@ PASSING_PLANS = {
     CustomAction("Toggle", on: .element(
         .label("Review PR"),
         .value("Active"),
-        .customContent(.match(label: "Category", value: "Work")),
-        .customContent(.match(label: "Priority", value: "High")),
+        .customContent(.init(label: "Category", value: "Work")),
+        .customContent(.init(label: "Priority", value: "High")),
         .actions([.custom("Toggle")])
     ))
         .expect(.exists(.element(
             .label("Review PR"),
             .value("Completed"),
-            .customContent(.match(label: "Category", value: "Work")),
-            .customContent(.match(label: "Priority", value: "High"))
+            .customContent(.init(label: "Category", value: "Work")),
+            .customContent(.init(label: "Priority", value: "High"))
         )), timeout: 2)
 """,
     ),
@@ -336,20 +334,20 @@ PASSING_PLANS = {
     Activate(.label("Churn menu"))
         .expect(.exists(.label("Menu churned")), timeout: 4)
     CustomAction("Add to Cart", on: .element(
-        .label("Nebula Noodles Prime"),
-        .customContent(.match(label: "SKU", value: "SKU-72")),
-        .customContent(.match(label: "Category", value: "Mains")),
-        .customContent(.match(label: "Churn State", value: "post-churn")),
-        .customContent(.match(label: "Menu Slot", value: "deep target after churn")),
-        .customContent(.match(label: "Unit Price", value: "$18.00")),
+        .label("Nebula Noodles"),
+        .customContent(.init(label: "SKU", value: "SKU-72")),
+        .customContent(.init(label: "Category", value: "Mains")),
+        .customContent(.init(label: "Generation", value: "2")),
+        .customContent(.init(label: "Menu Slot", value: "deep target after churn")),
+        .customContent(.init(label: "Unit Price", value: "$18.00")),
         .actions([.custom("Add to Cart")])
     ))
         .expect(.exists(.element(
-            .label("Nebula Noodles Prime"),
-            .customContent(.match(label: "SKU", value: "SKU-72")),
-            .customContent(.match(label: "Churn State", value: "post-churn")),
-            .customContent(.match(label: "Quantity", value: "1")),
-            .customContent(.match(label: "Line Total", value: "$18.00")),
+            .label("Nebula Noodles"),
+            .customContent(.init(label: "SKU", value: "SKU-72")),
+            .customContent(.init(label: "Generation", value: "2")),
+            .customContent(.init(label: "Quantity", value: "1")),
+            .customContent(.init(label: "Line Total", value: "$18.00")),
             .actions([.custom("Remove from Cart")])
         )), timeout: 6)
 """,
@@ -368,11 +366,15 @@ PASSING_PLANS = {
         "adversarialStaleLiveObjectPass",
         "Stale Live Object",
         """
-    WaitFor(.exists(.element(.label("Submit Order"), .value("version 1"))), timeout: 2)
-    Activate(.label("Replace Target"))
-        .expect(.exists(.element(.label("Submit Order"), .value("version 2"))), timeout: 2)
-    Activate(.element(.label("Submit Order"), .value("version 2")))
-        .expect(.exists(.label("Result: submitted version 2")), timeout: 2)
+    WaitFor(.exists(.element(
+        .label("Submit Order"),
+        .value("Generation 2, actions 0, generation 1 actions 0")
+    )), timeout: 3)
+    Activate(.element(
+        .label("Submit Order"),
+        .value("Generation 2, actions 0, generation 1 actions 0")
+    ))
+        .expect(.exists(.label("Result: submitted generation 2")), timeout: 2)
 """,
     ),
     "/modal-obstruction": scenario_plan(
@@ -380,7 +382,7 @@ PASSING_PLANS = {
         "Modal Obstruction",
         """
     Activate(.label("Review order"))
-        .expect(.exists(.label("Order review")), timeout: 4)
+        .expect(.exists(.element(.label("Order review"), .value("Ready"))), timeout: 4)
     Activate(.label("Confirm review"))
         .expect(.exists(.label("Status: Review confirmed")), timeout: 2)
     Activate(.label("Close"))
@@ -416,10 +418,10 @@ FAILING_PLANS = {
             "adversarialOffscreenCheckoutDisabledFails",
             "Offscreen Checkout",
             """
-    Activate(.element(.label("Place order"), .traits([.button])))
+    Activate(.element(.label("Unavailable order"), .traits([.button])))
 """,
         ),
-        "Place order",
+        "Unavailable order",
     ),
     "/duplicate-labels": (
         scenario_plan(
@@ -440,13 +442,13 @@ FAILING_PLANS = {
         .expect(.exists(.label("Menu churned")), timeout: 4)
     CustomAction("Add to Cart", on: .element(
         .label("Nebula Noodles"),
-        .customContent(.match(label: "SKU", value: "SKU-72")),
-        .customContent(.match(label: "Churn State", value: "pre-churn")),
+        .customContent(.init(label: "SKU", value: "SKU-72")),
+        .customContent(.init(label: "Generation", value: "1")),
         .actions([.custom("Add to Cart")])
     ))
 """,
         ),
-        "pre-churn",
+        "Generation",
     ),
     "/text-field-fallback": (
         scenario_plan(
@@ -463,10 +465,15 @@ FAILING_PLANS = {
             "adversarialStaleLiveObjectAmbiguousFails",
             "Stale Live Object",
         """
-    Activate(.label("Replace Target"))
-        .expect(.exists(.element(.label("Submit Order"), .value("version 2"))), timeout: 2)
+    WaitFor(.exists(.element(
+        .label("Submit Order"),
+        .value("Generation 2, actions 0, generation 1 actions 0")
+    )), timeout: 3)
     Activate(.label("Show Duplicate Target"))
-        .expect(.exists(.element(.label("Submit Order"), .value("version duplicate"))), timeout: 2)
+        .expect(.exists(.element(
+            .label("Submit Order"),
+            .value("Generation 3, actions 0, generation 1 actions 0")
+        )), timeout: 2)
     Activate(.label("Submit Order"))
 """,
         ),
@@ -478,7 +485,7 @@ FAILING_PLANS = {
             "Modal Obstruction",
             """
     Activate(.label("Review order"))
-        .expect(.exists(.label("Order review")), timeout: 4)
+        .expect(.exists(.element(.label("Order review"), .value("Ready"))), timeout: 4)
     Activate(.label("Archive order 100"))
 """,
         ),
@@ -578,6 +585,11 @@ def write_report(path: Path, report: dict[str, Any]) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the BH Demo adversarial lab nightly gate")
+    parser.add_argument(
+        "--print-plan-catalog",
+        action="store_true",
+        help="Print every authored nightly plan as JSON without launching the app.",
+    )
     parser.add_argument("--cli", default=os.environ.get("BUTTONHEIST_CLI", "ButtonHeistCLI/.build/debug/buttonheist"))
     parser.add_argument("--app", default=os.environ.get("BH_DEMO_APP"))
     parser.add_argument("--sim-udid", default=os.environ.get("SIM_UDID"))
@@ -602,6 +614,24 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    if args.print_plan_catalog:
+        catalog = [
+            {
+                "name": name,
+                "expectation": ScenarioExpectation.COMMAND_SUCCEEDS.value,
+                "plan": plan,
+            }
+            for name, plan in PASSING_PLANS.items()
+        ] + [
+            {
+                "name": name,
+                "expectation": ScenarioExpectation.COMMAND_FAILS_WITH_DIAGNOSTIC.value,
+                "plan": plan,
+            }
+            for name, (plan, _) in FAILING_PLANS.items()
+        ]
+        print(json.dumps(catalog, sort_keys=True))
+        return 0
     report_path = Path(args.report)
     report: dict[str, Any] = {
         "gate": "ios-demo-adversarial-lab-nightly",
