@@ -57,7 +57,7 @@ import TheScore
     public let command: TheFence.Command
     public let family: FenceCommandFamily
     public let requiresConnectionBeforeDispatch: Bool
-    public let parameters: [FenceParameterSpec]
+    public let parameters: FenceCommandParameters
     public let timeout: FenceCommandTimeoutSemantics
     public let cliExposure: CLIExposure
     public let mcpExposure: MCPExposure
@@ -110,46 +110,6 @@ import TheScore
     }
 }
 
-struct FenceCommandProjection: Sendable, Equatable {
-    let cliExposure: CLIExposure
-    let mcpExposure: MCPExposure
-    let mcpAnnotations: MCPToolAnnotationSpec?
-    let description: String
-
-    init(
-        cliExposure: CLIExposure = .directCommand,
-        mcpExposure: MCPExposure = .directTool,
-        mcpAnnotations: MCPToolAnnotationSpec? = nil,
-        description: String
-    ) {
-        self.cliExposure = cliExposure
-        self.mcpExposure = mcpExposure
-        self.mcpAnnotations = mcpAnnotations
-        self.description = description
-    }
-
-    static func cliAndMCP(
-        _ description: String,
-        mcpAnnotations: MCPToolAnnotationSpec? = nil
-    ) -> Self {
-        Self(mcpAnnotations: mcpAnnotations, description: description)
-    }
-
-    static func cliOnly(
-        _ description: String,
-        mcpAnnotations: MCPToolAnnotationSpec? = nil
-    ) -> Self {
-        Self(mcpExposure: .notExposed, mcpAnnotations: mcpAnnotations, description: description)
-    }
-
-    static func mcpOnly(
-        _ description: String,
-        mcpAnnotations: MCPToolAnnotationSpec? = nil
-    ) -> Self {
-        Self(cliExposure: .notExposed, mcpAnnotations: mcpAnnotations, description: description)
-    }
-}
-
 typealias FenceCommandAdmission = @ButtonHeistActor @Sendable (
     TheFence,
     TheFence.Command,
@@ -169,178 +129,75 @@ typealias FenceActionAdmission = @ButtonHeistActor @Sendable (
     TheFence.CommandArgumentEnvelope
 ) throws -> HeistActionCommand
 extension TheFence {
-    public enum Command: CaseIterable, Hashable, RawRepresentable, Sendable {
+    public enum Command: String, CaseIterable, Hashable, Sendable {
         case ping
-        case listDevices
-        case getInterface
-        case getScreen
-        case getAnnouncements
+        case listDevices = "list_devices"
+        case getInterface = "get_interface"
+        case getScreen = "get_screen"
+        case getAnnouncements = "get_announcements"
         case wait
-        case oneFingerTap
-        case longPress
+        case oneFingerTap = "one_finger_tap"
+        case longPress = "long_press"
         case swipe
         case drag
         case scroll
-        case scrollToVisible
-        case scrollToEdge
+        case scrollToVisible = "scroll_to_visible"
+        case scrollToEdge = "scroll_to_edge"
         case activate
         case rotor
-        case typeText
-        case editAction
-        case setPasteboard
-        case getPasteboard
-        case dismissKeyboard
+        case typeText = "type_text"
+        case editAction = "edit_action"
+        case setPasteboard = "set_pasteboard"
+        case getPasteboard = "get_pasteboard"
+        case dismissKeyboard = "dismiss_keyboard"
         case perform
-        case runHeist
-        case validateHeist
-        case listHeists
-        case describeHeist
-        case getSessionState
+        case runHeist = "run_heist"
+        case validateHeist = "validate_heist"
+        case listHeists = "list_heists"
+        case describeHeist = "describe_heist"
+        case getSessionState = "get_session_state"
         case connect
-        case listTargets
-
-        public init?(rawValue: String) {
-            guard let command = Self.allCases.first(where: { $0.definition.name == rawValue }) else {
-                return nil
-            }
-            self = command
-        }
-
-        public var rawValue: String {
-            definition.name
-        }
+        case listTargets = "list_targets"
     }
 
-    enum CommandConnectionRequirement: Equatable, Sendable {
-        case activeSession
-        case none
-    }
+}
 
-    struct CommandDefinition: Sendable {
-        let name: String
-        let family: FenceCommandFamily
-        let connectionRequirement: CommandConnectionRequirement
-        let parameters: [FenceParameterSpec]
-        let timeout: FenceCommandTimeoutSemantics
-        let projection: FenceCommandProjection
+extension TheFence.Command {
+    struct Contract: Sendable {
+        let descriptor: FenceCommandDescriptor
         let admission: FenceCommandAdmission
 
-        func descriptor(for command: Command) -> FenceCommandDescriptor {
-            FenceCommandDescriptor(
+        init(
+            command: TheFence.Command,
+            family: FenceCommandFamily,
+            requiresConnectionBeforeDispatch: Bool,
+            parameters: FenceCommandParameters,
+            timeout: FenceCommandTimeoutSemantics,
+            description: String,
+            cliExposure: CLIExposure,
+            mcpExposure: MCPExposure,
+            mcpAnnotations: MCPToolAnnotationSpec?,
+            admission: @escaping FenceCommandAdmission
+        ) {
+            descriptor = FenceCommandDescriptor(
                 command: command,
                 family: family,
-                requiresConnectionBeforeDispatch: connectionRequirement == .activeSession,
+                requiresConnectionBeforeDispatch: requiresConnectionBeforeDispatch,
                 parameters: parameters,
                 timeout: timeout,
-                cliExposure: projection.cliExposure,
-                mcpExposure: projection.mcpExposure,
-                mcpAnnotations: projection.mcpAnnotations,
-                description: projection.description
+                cliExposure: cliExposure,
+                mcpExposure: mcpExposure,
+                mcpAnnotations: mcpAnnotations,
+                description: description
             )
+            self.admission = admission
         }
-
-        static func handler(
-            name: String,
-            family: FenceCommandFamily,
-            connectionRequirement: CommandConnectionRequirement = .activeSession,
-            parameters: [FenceParameterSpec] = [],
-            timeout: FenceCommandTimeoutSemantics = .none,
-            projection: FenceCommandProjection,
-            admission: @escaping FenceHandlerAdmission
-        ) -> Self {
-            Self(
-                name: name,
-                family: family,
-                connectionRequirement: connectionRequirement,
-                parameters: parameters,
-                timeout: timeout,
-                projection: projection,
-                admission: { fence, _, arguments in
-                    try admission(fence, arguments)
-                }
-            )
-        }
-
-        static func fixedHandler(
-            name: String,
-            family: FenceCommandFamily,
-            connectionRequirement: CommandConnectionRequirement = .activeSession,
-            parameters: [FenceParameterSpec] = [],
-            timeout: FenceCommandFixedTimeout,
-            projection: FenceCommandProjection,
-            admission: @escaping FenceFixedHandlerAdmission
-        ) -> Self {
-            Self(
-                name: name,
-                family: family,
-                connectionRequirement: connectionRequirement,
-                parameters: parameters,
-                timeout: .fixed(timeout),
-                projection: projection,
-                admission: { fence, _, arguments in
-                    try admission(fence, arguments, timeout.seconds)
-                }
-            )
-        }
-
-        static func singleStepAction(
-            name: String,
-            family: FenceCommandFamily,
-            parameters: [FenceParameterSpec],
-            baseTimeout: FenceCommandFixedTimeout,
-            projection: FenceCommandProjection,
-            admission: @escaping FenceActionAdmission
-        ) -> Self {
-            Self(
-                name: name,
-                family: family,
-                connectionRequirement: .activeSession,
-                parameters: parameters,
-                timeout: .singleStepAction(base: baseTimeout),
-                projection: projection,
-                admission: { fence, command, arguments in
-                    try TheFence.appInteractionDispatch(
-                        command,
-                        try admission(fence, arguments),
-                        actionTimeout: baseTimeout.seconds,
-                        expectationPayload: try ExpectationPayload(arguments: arguments)
-                    )
-                }
-            )
-        }
-
-        static func directAction(
-            name: String,
-            family: FenceCommandFamily,
-            parameters: [FenceParameterSpec],
-            timeout: FenceCommandFixedTimeout,
-            projection: FenceCommandProjection,
-            admission: @escaping FenceActionAdmission
-        ) -> Self {
-            Self(
-                name: name,
-                family: family,
-                connectionRequirement: .activeSession,
-                parameters: parameters,
-                timeout: .fixed(timeout),
-                projection: projection,
-                admission: { fence, command, arguments in
-                    try TheFence.directActionDispatch(
-                        command,
-                        try admission(fence, arguments),
-                        timeout: timeout.seconds,
-                        expectationPayload: try ExpectationPayload(arguments: arguments)
-                    )
-                }
-            )
-        }
-
     }
 }
 
 @_spi(ButtonHeistTooling) public extension TheFence.Command {
     var descriptor: FenceCommandDescriptor {
-        definition.descriptor(for: self)
+        contract.descriptor
     }
 
     static var descriptors: [FenceCommandDescriptor] {
@@ -353,37 +210,135 @@ extension TheFence {
 }
 
 extension TheFence.Command {
-    // This exhaustive switch is the canonical command definition and policy table.
-    var definition: TheFence.CommandDefinition {
+    private func handler(
+        family: FenceCommandFamily,
+        requiresConnectionBeforeDispatch: Bool = true,
+        parameters: FenceCommandParameters = [],
+        timeout: FenceCommandTimeoutSemantics = .none,
+        description: String,
+        cliExposure: CLIExposure = .directCommand,
+        mcpExposure: MCPExposure = .notExposed,
+        mcpAnnotations: MCPToolAnnotationSpec? = nil,
+        admission: @escaping FenceHandlerAdmission
+    ) -> Contract {
+        Contract(
+            command: self,
+            family: family,
+            requiresConnectionBeforeDispatch: requiresConnectionBeforeDispatch,
+            parameters: parameters,
+            timeout: timeout,
+            description: description,
+            cliExposure: cliExposure,
+            mcpExposure: mcpExposure,
+            mcpAnnotations: mcpAnnotations,
+            admission: { fence, _, arguments in try admission(fence, arguments) }
+        )
+    }
+
+    private func fixedHandler(
+        family: FenceCommandFamily,
+        requiresConnectionBeforeDispatch: Bool = true,
+        parameters: FenceCommandParameters = [],
+        timeout: FenceCommandFixedTimeout,
+        description: String,
+        cliExposure: CLIExposure = .directCommand,
+        mcpExposure: MCPExposure = .notExposed,
+        mcpAnnotations: MCPToolAnnotationSpec? = nil,
+        admission: @escaping FenceFixedHandlerAdmission
+    ) -> Contract {
+        handler(
+            family: family,
+            requiresConnectionBeforeDispatch: requiresConnectionBeforeDispatch,
+            parameters: parameters,
+            timeout: .fixed(timeout),
+            description: description,
+            cliExposure: cliExposure,
+            mcpExposure: mcpExposure,
+            mcpAnnotations: mcpAnnotations,
+            admission: { fence, arguments in try admission(fence, arguments, timeout.seconds) }
+        )
+    }
+
+    private func singleStepAction(
+        family: FenceCommandFamily,
+        parameters: FenceCommandParameters,
+        baseTimeout: FenceCommandFixedTimeout,
+        description: String,
+        admission: @escaping FenceActionAdmission
+    ) -> Contract {
+        Contract(
+            command: self,
+            family: family,
+            requiresConnectionBeforeDispatch: true,
+            parameters: parameters,
+            timeout: .singleStepAction(base: baseTimeout),
+            description: description,
+            cliExposure: .directCommand,
+            mcpExposure: .notExposed,
+            mcpAnnotations: nil,
+            admission: { fence, command, arguments in
+                try TheFence.appInteractionDispatch(
+                    command,
+                    try admission(fence, arguments),
+                    actionTimeout: baseTimeout.seconds,
+                    expectationPayload: try TheFence.ExpectationPayload(arguments: arguments)
+                )
+            }
+        )
+    }
+
+    private func directAction(
+        family: FenceCommandFamily,
+        parameters: FenceCommandParameters,
+        timeout: FenceCommandFixedTimeout,
+        description: String,
+        admission: @escaping FenceActionAdmission
+    ) -> Contract {
+        Contract(
+            command: self,
+            family: family,
+            requiresConnectionBeforeDispatch: true,
+            parameters: parameters,
+            timeout: .fixed(timeout),
+            description: description,
+            cliExposure: .directCommand,
+            mcpExposure: .notExposed,
+            mcpAnnotations: nil,
+            admission: { fence, command, arguments in
+                try TheFence.directActionDispatch(
+                    command,
+                    try admission(fence, arguments),
+                    timeout: timeout.seconds,
+                    expectationPayload: try TheFence.ExpectationPayload(arguments: arguments)
+                )
+            }
+        )
+    }
+
+    // This exhaustive switch is the canonical command contract and policy table.
+    var contract: Contract {
         switch self {
         case .ping:
-            return .fixedHandler(
-                name: "ping",
+            return fixedHandler(
                 family: .session,
-                connectionRequirement: .none,
+                requiresConnectionBeforeDispatch: false,
                 timeout: .health,
-                projection: .cliOnly(
-                    "Check connection health without reading accessibility state.",
-                    mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
-                )
+                description: "Check connection health without reading accessibility state.",
+                mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
             ) { _, _, timeout in
                 .init { fence in try await fence.handlePing(timeout: timeout) }
             }
         case .listDevices:
-            return .handler(
-                name: "list_devices",
+            return handler(
                 family: .session,
-                connectionRequirement: .none,
-                projection: .cliOnly(
-                    "List discovered iOS devices and configured connection targets.",
-                    mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
-                )
+                requiresConnectionBeforeDispatch: false,
+                description: "List discovered iOS devices and configured connection targets.",
+                mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
             ) { _, _ in
                 .init { fence in try await fence.handleListDevices() }
             }
         case .getInterface:
-            return .fixedHandler(
-                name: "get_interface",
+            return fixedHandler(
                 family: .observation,
                 parameters: [
                     FenceParameterBlocks.interfaceSubtree,
@@ -392,17 +347,15 @@ extension TheFence.Command {
                     FenceParameters.maxScrollsPerDiscovery.spec,
                 ],
                 timeout: .explore,
-                projection: .cliAndMCP(
-                    Self.getInterfaceDescription,
-                    mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
-                )
+                description: Self.getInterfaceDescription,
+                mcpExposure: .directTool,
+                mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
             ) { fence, arguments, timeout in
                 let request = try fence.makeGetInterfaceRequest(arguments)
                 return .init { fence in try await fence.handleGetInterface(request, timeout: timeout) }
             }
         case .getScreen:
-            return .fixedHandler(
-                name: "get_screen",
+            return fixedHandler(
                 family: .observation,
                 parameters: [
                     FenceParameters.output.spec,
@@ -410,350 +363,319 @@ extension TheFence.Command {
                     FenceParameters.screenMode.spec,
                 ],
                 timeout: .screenCapture,
-                projection: .cliAndMCP(
-                    "Capture a PNG screenshot with visible interface state. Pass mode=accessibility to render accessibility markers and legend.",
-                    mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
-                )
+                description: "Capture a PNG screenshot with visible interface state. Pass mode=accessibility to render accessibility markers and legend.",
+                mcpExposure: .directTool,
+                mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
             ) { fence, arguments, timeout in
                 let request = try fence.makeScreenRequest(arguments)
                 return .init { fence in try await fence.handleGetScreen(request, timeout: timeout) }
             }
         case .getAnnouncements:
-            return .fixedHandler(
-                name: "get_announcements",
+            return fixedHandler(
                 family: .observation,
                 timeout: .health,
-                projection: .cliAndMCP(
-                    "Read recent spoken accessibility text captured from announcement, elementChanged, valueChanged, or screenChanged notifications.",
-                    mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
-                )
+                description: "Read recent spoken accessibility text captured from announcement, elementChanged, valueChanged, or screenChanged notifications.",
+                mcpExposure: .directTool,
+                mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
             ) { _, _, timeout in
                 .init { fence in try await fence.handleGetAnnouncements(timeout: timeout) }
             }
         case .wait:
-            return .init(
-                name: "wait",
+            return handler(
                 family: .assertion,
-                connectionRequirement: .activeSession,
-                parameters: FenceParameterBlocks.wait,
+                parameters: FenceCommandParameters(FenceParameterBlocks.wait),
                 timeout: .wait,
-                projection: .cliOnly(
-                    "Assert that an accessibility predicate is satisfied within timeout "
-                        + "by evaluating settled accessibility state.",
-                    mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true)
-                ),
-                admission: { _, _, arguments in
-                    let expectation = try TheFence.ExpectationPayload(arguments: arguments)
-                    return .singleStepHeist(.wait(WaitStep(
-                        predicate: try TheFence.ExpectationPayload.parseRequiredPredicate(
-                            arguments.value(for: .predicate)
-                        ),
-                        timeout: expectation.timeout ?? defaultWaitTimeout
-                    )))
-                }
-            )
+                description: "Assert that an accessibility predicate is satisfied within timeout "
+                    + "by evaluating settled accessibility state.",
+                mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true)
+            ) { _, arguments in
+                let expectation = try TheFence.ExpectationPayload(arguments: arguments)
+                return .singleStepHeist(.wait(WaitStep(
+                    predicate: try TheFence.ExpectationPayload.parseRequiredPredicate(
+                        arguments.value(for: .predicate)
+                    ),
+                    timeout: expectation.timeout ?? defaultWaitTimeout
+                )))
+            }
         case .oneFingerTap:
-            return .singleStepAction(
-                name: "one_finger_tap",
+            return singleStepAction(
                 family: .spatialAction,
-                parameters: FenceParameterBlocks.gesturePointSelection + FenceParameterBlocks.expectation,
+                parameters: FenceCommandParameters(
+                    FenceParameterBlocks.gesturePointSelection + FenceParameterBlocks.expectation
+                ),
                 baseTimeout: .standardAction,
-                projection: .cliOnly(
-                    "Explicit mechanical/spatial tap. Element targets dispatch at their activation point "
-                        + "unless unitPoint supplies an element-frame override; point supplies a raw screen coordinate. "
-                        + "ordinary accessible controls should use the semantic command path."
-                )
+                description: "Explicit mechanical/spatial tap. Element targets dispatch at their activation point "
+                    + "unless unitPoint supplies an element-frame override; point supplies a raw screen coordinate. "
+                    + "ordinary accessible controls should use the semantic command path."
             ) { fence, arguments in
                 .mechanicalTap(try fence.decodeTapTarget(arguments))
             }
         case .longPress:
-            return .singleStepAction(
-                name: "long_press",
+            return singleStepAction(
                 family: .spatialAction,
-                parameters: FenceParameterBlocks.gesturePointSelection
-                    + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation,
+                parameters: FenceCommandParameters(
+                    FenceParameterBlocks.gesturePointSelection
+                        + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation
+                ),
                 baseTimeout: .standardAction,
-                projection: .cliOnly(
-                    "Explicit mechanical/spatial long press. Element targets dispatch at their activation point "
-                        + "unless unitPoint supplies an element-frame override; point supplies a raw screen coordinate."
-                )
+                description: "Explicit mechanical/spatial long press. Element targets dispatch at their activation point "
+                    + "unless unitPoint supplies an element-frame override; point supplies a raw screen coordinate."
             ) { fence, arguments in
                 .mechanicalLongPress(try fence.decodeLongPressTarget(arguments))
             }
         case .swipe:
-            return .singleStepAction(
-                name: "swipe",
+            return singleStepAction(
                 family: .spatialAction,
-                parameters: FenceParameterBlocks.swipeIntents
-                    + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation,
+                parameters: FenceCommandParameters(
+                    FenceParameterBlocks.swipeIntents
+                        + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation
+                ),
                 baseTimeout: .standardAction,
-                projection: .cliOnly(
-                    "Explicit mechanical/spatial swipe using exactly one typed intent: "
-                        + "elementDirection, elementUnitPoints, pointToPoint, or pointDirection."
-                )
+                description: "Explicit mechanical/spatial swipe using exactly one typed intent: "
+                    + "elementDirection, elementUnitPoints, pointToPoint, or pointDirection."
             ) { fence, arguments in
                 .mechanicalSwipe(try fence.decodeSwipeTarget(arguments))
             }
         case .drag:
-            return .singleStepAction(
-                name: "drag",
+            return singleStepAction(
                 family: .spatialAction,
-                parameters: FenceParameterBlocks.dragIntents
-                    + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation,
+                parameters: FenceCommandParameters(
+                    FenceParameterBlocks.dragIntents
+                        + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation
+                ),
                 baseTimeout: .standardAction,
-                projection: .cliOnly(
-                    "Explicit mechanical/spatial drag using exactly one typed intent: "
-                        + "elementToPoint (activation point or unit start override) or pointToPoint."
-                )
+                description: "Explicit mechanical/spatial drag using exactly one typed intent: "
+                    + "elementToPoint (activation point or unit start override) or pointToPoint."
             ) { fence, arguments in
                 .mechanicalDrag(try fence.decodeDragTarget(arguments))
             }
         case .scroll:
-            return .directAction(
-                name: "scroll",
+            return directAction(
                 family: .viewportDebug,
-                parameters: FenceParameterBlocks.target + [
-                    FenceParameters.containerName.spec,
-                    FenceParameters.scrollDirection.spec,
-                ] + FenceParameterBlocks.expectation,
+                parameters: FenceCommandParameters(
+                    FenceParameterBlocks.target + [
+                        FenceParameters.containerName.spec,
+                        FenceParameters.scrollDirection.spec,
+                    ] + FenceParameterBlocks.expectation
+                ),
                 timeout: .standardAction,
-                projection: .cliOnly(
-                    "Explicit viewport/debug operation: scroll one page in the visible viewport, "
-                        + "within a semantic target's owning scroll ancestor, or for direct debug requests, "
-                        + "within a current containerName."
-                )
+                description: "Explicit viewport/debug operation: scroll one page in the visible viewport, "
+                    + "within a semantic target's owning scroll ancestor, or for direct debug requests, "
+                    + "within a current containerName."
             ) { fence, arguments in
                 .viewportScroll(try fence.decodeScrollTarget(arguments))
             }
         case .scrollToVisible:
-            return .directAction(
-                name: "scroll_to_visible",
+            return directAction(
                 family: .viewportDebug,
-                parameters: FenceParameterBlocks.target + FenceParameterBlocks.expectation,
+                parameters: FenceCommandParameters(FenceParameterBlocks.target + FenceParameterBlocks.expectation),
                 timeout: .standardAction,
-                projection: .cliOnly(
-                    "Explicit viewport/debug operation: move the viewport until a "
-                        + "semantic target is visible and report its fresh geometry."
-                )
+                description: "Explicit viewport/debug operation: move the viewport until a "
+                    + "semantic target is visible and report its fresh geometry."
             ) { _, arguments in
                 .viewportScrollToVisible(try arguments.requiredAccessibilityTarget(command: .scrollToVisible))
             }
         case .scrollToEdge:
-            return .directAction(
-                name: "scroll_to_edge",
+            return directAction(
                 family: .viewportDebug,
-                parameters: FenceParameterBlocks.target + [
-                    FenceParameters.containerName.spec,
-                    FenceParameters.scrollEdge.spec,
-                ] + FenceParameterBlocks.expectation,
+                parameters: FenceCommandParameters(
+                    FenceParameterBlocks.target + [
+                        FenceParameters.containerName.spec,
+                        FenceParameters.scrollEdge.spec,
+                    ] + FenceParameterBlocks.expectation
+                ),
                 timeout: .standardAction,
-                projection: .cliOnly(
-                    "Explicit viewport/debug operation: scroll the visible viewport, "
-                        + "a semantic target's owning scroll ancestor, or for direct debug requests, "
-                        + "a current containerName, to a requested edge."
-                )
+                description: "Explicit viewport/debug operation: scroll the visible viewport, "
+                    + "a semantic target's owning scroll ancestor, or for direct debug requests, "
+                    + "a current containerName, to a requested edge."
             ) { fence, arguments in
                 .viewportScrollToEdge(try fence.decodeScrollToEdgeTarget(arguments))
             }
         case .activate:
-            return .singleStepAction(
-                name: "activate",
+            return singleStepAction(
                 family: .semanticAction,
-                parameters: FenceParameterBlocks.target
-                    + [FenceParameters.actionName.spec] + FenceParameterBlocks.expectation,
+                parameters: FenceCommandParameters(
+                    FenceParameterBlocks.target
+                        + [FenceParameters.actionName.spec] + FenceParameterBlocks.expectation
+                ),
                 baseTimeout: .standardAction,
-                projection: .cliOnly(
-                    "Perform primary accessibility activation on a semantic UI element, "
-                        + "or one of its named accessibility actions."
-                )
+                description: "Perform primary accessibility activation on a semantic UI element, "
+                    + "or one of its named accessibility actions."
             ) { fence, arguments in
                 try fence.decodeAccessibilityAction(arguments)
             }
         case .rotor:
-            return .singleStepAction(
-                name: "rotor",
+            return singleStepAction(
                 family: .semanticAction,
-                parameters: FenceParameterBlocks.target + [
-                    FenceParameters.rotorName.spec,
-                    FenceParameters.rotorIndex.spec,
-                    FenceParameters.rotorDirection.spec,
-                ] + FenceParameterBlocks.expectation,
+                parameters: FenceCommandParameters(
+                    FenceParameterBlocks.target + [
+                        FenceParameters.rotorName.spec,
+                        FenceParameters.rotorIndex.spec,
+                        FenceParameters.rotorDirection.spec,
+                    ] + FenceParameterBlocks.expectation
+                ),
                 baseTimeout: .standardAction,
-                projection: .cliOnly(
-                    "Move through an element rotor by direction. The server holds the rotor cursor "
-                        + "while in rotor mode (entering at the first item); any other interaction exits rotor mode "
-                        + "and drops the cursor."
-                )
+                description: "Move through an element rotor by direction. The server holds the rotor cursor "
+                    + "while in rotor mode (entering at the first item); any other interaction exits rotor mode "
+                    + "and drops the cursor."
             ) { fence, arguments in
                 try fence.decodeRotorAction(arguments)
             }
         case .typeText:
-            return .singleStepAction(
-                name: "type_text",
+            return singleStepAction(
                 family: .semanticAction,
-                parameters: FenceParameterBlocks.target + [
-                    FenceParameters.text.spec,
-                    FenceParameters.textInputMode.spec,
-                ] + FenceParameterBlocks.expectation,
+                parameters: FenceCommandParameters(
+                    FenceParameterBlocks.target + [
+                        FenceParameters.text.spec,
+                        FenceParameters.textInputMode.spec,
+                    ] + FenceParameterBlocks.expectation
+                ),
                 baseTimeout: .longAction,
-                projection: .cliOnly("Type text. Replace mode clears the focused field before typing.")
+                description: "Type text. Replace mode clears the focused field before typing."
             ) { fence, arguments in
                 try fence.decodeTypeTextAction(arguments)
             }
         case .editAction:
-            return .singleStepAction(
-                name: "edit_action",
+            return singleStepAction(
                 family: .semanticAction,
-                parameters: [FenceParameters.editAction.spec] + FenceParameterBlocks.expectation,
+                parameters: FenceCommandParameters(
+                    [FenceParameters.editAction.spec] + FenceParameterBlocks.expectation
+                ),
                 baseTimeout: .standardAction,
-                projection: .cliOnly("Perform an edit action on the current first responder.")
+                description: "Perform an edit action on the current first responder."
             ) { _, arguments in
                 .editAction(EditActionTarget(
                     action: try arguments.requiredValue(FenceParameters.editAction)
                 ))
             }
         case .setPasteboard:
-            return .singleStepAction(
-                name: "set_pasteboard",
+            return singleStepAction(
                 family: .semanticAction,
-                parameters: [FenceParameters.pasteboardText.spec] + FenceParameterBlocks.expectation,
+                parameters: FenceCommandParameters(
+                    [FenceParameters.pasteboardText.spec] + FenceParameterBlocks.expectation
+                ),
                 baseTimeout: .standardAction,
-                projection: .cliOnly("Write text to the general pasteboard from within the app.")
+                description: "Write text to the general pasteboard from within the app."
             ) { _, arguments in
                 .setPasteboard(SetPasteboardTarget(
                     text: try PasteboardText(validating: arguments.requiredValue(FenceParameters.pasteboardText))
                 ))
             }
         case .getPasteboard:
-            return .fixedHandler(
-                name: "get_pasteboard",
+            return fixedHandler(
                 family: .observation,
                 timeout: .health,
-                projection: .cliAndMCP(
-                    "Read text from the general pasteboard.",
-                    mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true)
-                )
+                description: "Read text from the general pasteboard.",
+                mcpExposure: .directTool,
+                mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true)
             ) { _, _, timeout in
                 .init { fence in try await fence.handleGetPasteboard(timeout: timeout) }
             }
         case .dismissKeyboard:
-            return .singleStepAction(
-                name: "dismiss_keyboard",
+            return singleStepAction(
                 family: .semanticAction,
-                parameters: FenceParameterBlocks.expectation,
+                parameters: FenceCommandParameters(FenceParameterBlocks.expectation),
                 baseTimeout: .standardAction,
-                projection: .cliOnly(
-                    "Dismiss the on-screen keyboard through the current first responder or keyboard action path."
-                )
+                description: "Dismiss the on-screen keyboard through the current first responder or keyboard action path."
             ) { _, _ in
                 .dismissKeyboard
             }
         case .perform:
-            return .handler(
-                name: "perform",
+            return handler(
                 family: .heistRuntime,
                 parameters: [FenceParameters.performStep.spec],
                 timeout: .performStep,
-                projection: .mcpOnly(Self.performDescription)
+                description: Self.performDescription,
+                cliExposure: .notExposed,
+                mcpExposure: .directTool
             ) { fence, arguments in
                 let request = try fence.decodePerformRequest(arguments)
                 return .init { fence in try await fence.handlePerform(request) }
             }
         case .runHeist:
-            return .fixedHandler(
-                name: "run_heist",
+            return fixedHandler(
                 family: .heistRuntime,
-                parameters: [Self.rootArgumentParameter] + Self.planSourceParameters,
+                parameters: FenceCommandParameters([Self.rootArgumentParameter] + Self.planSourceParameters),
                 timeout: .longAction,
-                projection: .cliAndMCP(Self.runHeistDescription)
+                description: Self.runHeistDescription,
+                mcpExposure: .directTool
             ) { fence, arguments, timeout in
                 let request = try fence.decodeRunHeistRequest(arguments)
                 return .init { fence in try await fence.handleRunHeist(request, timeout: timeout) }
             }
         case .validateHeist:
-            return .handler(
-                name: "validate_heist",
+            return handler(
                 family: .heistRuntime,
-                connectionRequirement: .none,
-                parameters: [
+                requiresConnectionBeforeDispatch: false,
+                parameters: FenceCommandParameters([
                     Self.rootArgumentParameter,
                     FenceParameters.heistValidationLint.spec,
-                ] + Self.planSourceParameters,
-                projection: .cliAndMCP(
-                    Self.validateHeistDescription,
-                    mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
-                )
+                ] + Self.planSourceParameters),
+                description: Self.validateHeistDescription,
+                mcpExposure: .directTool,
+                mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
             ) { fence, arguments in
                 let request = try fence.decodeValidateHeistRequest(arguments)
                 return .init { fence in try fence.handleValidateHeist(request) }
             }
         case .listHeists:
-            return .handler(
-                name: "list_heists",
+            return handler(
                 family: .heistRuntime,
-                connectionRequirement: .none,
-                parameters: [
+                requiresConnectionBeforeDispatch: false,
+                parameters: FenceCommandParameters([
                     FenceParameters.heistCatalogDetail.spec,
-                ] + Self.planSourceParameters,
-                projection: .cliAndMCP(
-                    "List the root entry and reusable heists in a plan. Use `detail: \"detailed\"` "
-                        + "when composing against available capabilities.",
-                    mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
-                )
+                ] + Self.planSourceParameters),
+                description: "List the root entry and reusable heists in a plan. Use `detail: \"detailed\"` "
+                    + "when composing against available capabilities.",
+                mcpExposure: .directTool,
+                mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
             ) { fence, arguments in
                 let request = try fence.decodeListHeistsRequest(arguments)
                 return .init { fence in fence.handleListHeists(request) }
             }
         case .describeHeist:
-            return .handler(
-                name: "describe_heist",
+            return handler(
                 family: .heistRuntime,
-                connectionRequirement: .none,
-                parameters: [FenceParameters.heistName.spec] + Self.planSourceParameters,
-                projection: .cliAndMCP(
-                    "Describe one root entry or reusable heist from a plan so an agent can call it safely.",
-                    mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
-                )
+                requiresConnectionBeforeDispatch: false,
+                parameters: FenceCommandParameters([FenceParameters.heistName.spec] + Self.planSourceParameters),
+                description: "Describe one root entry or reusable heist from a plan so an agent can call it safely.",
+                mcpExposure: .directTool,
+                mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
             ) { fence, arguments in
                 let request = try fence.decodeDescribeHeistRequest(arguments)
                 return .init { fence in fence.handleDescribeHeist(request) }
             }
         case .getSessionState:
-            return .handler(
-                name: "get_session_state",
+            return handler(
                 family: .session,
-                connectionRequirement: .none,
-                projection: .cliAndMCP(
-                    "Inspect connection, device, and last-action session state.",
-                    mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
-                )
+                requiresConnectionBeforeDispatch: false,
+                description: "Inspect connection, device, and last-action session state.",
+                mcpExposure: .directTool,
+                mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
             ) { _, _ in
                 .init { fence in .sessionState(payload: fence.currentSessionState()) }
             }
         case .connect:
-            return .handler(
-                name: "connect",
+            return handler(
                 family: .session,
-                connectionRequirement: .none,
+                requiresConnectionBeforeDispatch: false,
                 parameters: [
                     FenceParameters.connectionTarget.spec,
                     FenceParameters.device.spec,
                     FenceParameters.token.spec,
                 ],
-                projection: .cliAndMCP("Establish or switch the active connection to an app running The Button Heist.")
+                description: "Establish or switch the active connection to an app running The Button Heist.",
+                mcpExposure: .directTool
             ) { fence, arguments in
                 let request = try fence.decodeConnectRequest(arguments)
                 return .init { fence in try await fence.handleConnect(request) }
             }
         case .listTargets:
-            return .handler(
-                name: "list_targets",
+            return handler(
                 family: .session,
-                connectionRequirement: .none,
-                projection: .cliOnly(
-                    "List configured connection targets and the default target.",
-                    mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
-                )
+                requiresConnectionBeforeDispatch: false,
+                description: "List configured connection targets and the default target.",
+                mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
             ) { _, _ in
                 .init { fence in fence.handleListTargets() }
             }

@@ -249,11 +249,13 @@ for the full matching contract.
 
 ## Captures, Change Facts, and Public Deltas
 
-`SemanticObservationLog` is the runtime observation owner. It retains settled
-`ObservationEntry` values, each pairing one `SettledCapture` with an initial,
-same-generation, or screen-boundary transition. Consumers read that history
-through scope-plus-cursor log reads coordinated by `SemanticObservationStream`;
-reads and notification checkpoints do not consume shared history.
+`SemanticObservationStore` is the runtime semantic owner. It commits the
+current tree, retained `ObservationEntry` values, generation and sequence
+lineage, notification cursor, and clean-read seal together. Each entry pairs
+one `SettledCapture` with an initial, same-generation, or screen-boundary
+transition. Consumers read retained history through scope-plus-cursor Store
+reads coordinated by `SemanticObservationStream`; reads and notification
+checkpoints do not consume shared history.
 
 Temporal evaluation builds one `ObservationWindow` from an immutable baseline
 cursor through the current retained entry. Presence predicates bypass temporal

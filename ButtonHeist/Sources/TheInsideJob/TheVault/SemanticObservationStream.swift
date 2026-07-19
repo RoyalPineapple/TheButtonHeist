@@ -5,7 +5,7 @@ import ButtonHeistSupport
 
 import TheScore
 
-/// Coordinates semantic observation scheduling, settlement, and publication.
+/// Coordinates semantic observation scheduling, settlement, and delivery.
 @MainActor
 internal final class SemanticObservationStream {
     private static let passiveSettleTimeoutMs = 1_000
@@ -45,31 +45,31 @@ internal final class SemanticObservationStream {
     // MARK: - Observation Bookkeeping
 
     var scopePressure = SemanticObservationScopePressure()
-    let observationLog = SemanticObservationLog()
+    var observationStore = SemanticObservationStore()
     var observationWaiters = WaiterStore<UInt64, SemanticObservationWaiter>()
 
     // MARK: - Subscriber-Facing Settled Observation History
 
-    var runtimeState = SemanticObservationRuntimeState()
+    var lifecycle = SemanticObservationLifecycle.stopped
     internal var latestEvent: SettledObservationEvent? {
-        observationLog.latestSourceEvent
+        observationStore.latestSourceEvent
     }
     /// Invalidates only latest fulfilled events as clean waiter results.
     /// Settled semantic truth remains in `TheVault` until the next explicit
     /// commit.
     internal var latestSettledObservationInvalidated: Bool {
-        observationLog.latestSettledObservationInvalidated
+        observationStore.latestSettledObservationInvalidated
     }
     internal var latestSettleFailureDiagnostic: String? {
-        runtimeState.settleFailureDiagnostic
+        observationStore.settleFailureDiagnostic
     }
 
     internal var latestObservation: SettledObservation? {
-        observationLog.latestObservation
+        observationStore.latestObservation
     }
 
     internal var isActive: Bool {
-        runtimeState.isRunning
+        lifecycle.isRunning
     }
 
     internal var observationWaiterCount: Int {
@@ -116,24 +116,24 @@ internal final class SemanticObservationStream {
     }
 
     internal func start(
-        discovery: @escaping SemanticObservationRuntimeState.DiscoveryObservation
+        discovery: @escaping SemanticObservationLifecycle.DiscoveryObservation
     ) {
-        guard !runtimeState.replaceDiscoveryIfRunning(discovery) else { return }
+        guard !lifecycle.replaceDiscoveryIfRunning(discovery) else { return }
         if let vault {
             AccessibilityNotificationObserver.shared.subscribe(vault.accessibilityNotifications)
         }
-        observationLog.invalidateCurrentPublication()
+        observationStore.invalidateCurrentObservation()
         let task = Task { [weak self] in
             guard let self else { return }
             while !Task.isCancelled {
                 await self.runPassiveObservationCycle()
             }
         }
-        runtimeState.start(task: task, discovery: discovery)
+        lifecycle.start(task: task, discovery: discovery)
     }
 
     internal func stop() {
-        runtimeState.stop()?.cancel()
+        lifecycle.stop()?.cancel()
         visibleRefreshSession?.task.cancel()
         visibleRefreshSession = nil
         cancelObservationWaiters()
@@ -188,7 +188,7 @@ internal final class SemanticObservationStream {
         case .visible:
             return await observeVisibleSemanticState()
         case .discovery:
-            guard let discovery = runtimeState.discovery else {
+            guard let discovery = lifecycle.discovery else {
                 invalidateLatestSettledObservation()
                 return true
             }
@@ -204,7 +204,7 @@ internal final class SemanticObservationStream {
     private func observeVisibleSemanticState() async -> Bool {
         if cleanObservation(scope: .visible, after: nil) != nil {
             _ = await Task.cancellableSleep(for: .milliseconds(100))
-            observationLog.invalidateIfSignalChanged(to: currentTripwireSignal())
+            observationStore.invalidateIfSignalChanged(to: currentTripwireSignal())
             return !Task.isCancelled
         }
 

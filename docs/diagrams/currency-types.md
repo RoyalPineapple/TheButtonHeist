@@ -3,7 +3,7 @@
 The type families that carry UI state through the system, and the hard border between internal types and wire types. This diagram answers "which type do I pass here, and which types are allowed to cross the network?"
 
 **Illustrates:** [ARCHITECTURE.md](../ARCHITECTURE.md), [API.md](../API.md)
-**Source of truth:** `submodules/AccessibilitySnapshotBH/AccessibilitySnapshotModel/Sources/AccessibilitySnapshotModel/`, `ButtonHeist/Sources/TheScore/Core/AccessibilityHierarchy+Traversal.swift`, `ButtonHeist/Sources/TheScore/Core/ElementPredicate+HeistElement.swift`, `ButtonHeist/Sources/TheInsideJob/TheVault/InterfaceObservation.swift`, `ButtonHeist/Sources/TheInsideJob/TheVault/InterfaceTree.swift`, `ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationLog.swift`, `ButtonHeist/Sources/TheInsideJob/TheVault/TheVault.swift`, `ButtonHeist/Sources/TheInsideJob/TheVault/TheVault+TargetResolution.swift`, `ButtonHeist/Sources/TheInsideJob/TheVault/IdAssignment.swift`, `ButtonHeist/Sources/TheScore/Wire/InterfaceModels.swift`, `ButtonHeist/Sources/ThePlans/Model/AccessibilityTarget.swift`
+**Source of truth:** `submodules/AccessibilitySnapshotBH/AccessibilitySnapshotModel/Sources/AccessibilitySnapshotModel/`, `ButtonHeist/Sources/TheScore/Core/AccessibilityHierarchy+Traversal.swift`, `ButtonHeist/Sources/TheScore/Core/ElementPredicate+HeistElement.swift`, `ButtonHeist/Sources/TheInsideJob/TheVault/InterfaceObservation.swift`, `ButtonHeist/Sources/TheInsideJob/TheVault/InterfaceTree.swift`, `ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStore.swift`, `ButtonHeist/Sources/TheInsideJob/TheVault/TheVault.swift`, `ButtonHeist/Sources/TheInsideJob/TheVault/TheVault+TargetResolution.swift`, `ButtonHeist/Sources/TheInsideJob/TheVault/IdAssignment.swift`, `ButtonHeist/Sources/TheScore/Wire/InterfaceModels.swift`, `ButtonHeist/Sources/ThePlans/Model/AccessibilityTarget.swift`
 
 ```mermaid
 flowchart TD
@@ -12,17 +12,16 @@ flowchart TD
         AXE["AccessibilityElement /<br/>AccessibilityHierarchy<br/>(AccessibilitySnapshotModel)"]
         OBS["InterfaceObservation<br/>tree: InterfaceTree<br/>liveCapture: LiveCapture"]
         TREE["InterfaceTree<br/>elements + containers + HeistIds<br/>canonical viewport snapshot"]
-        LOG["SemanticObservationLog<br/>cursor-backed retained entries"]
-        STASH["TheVault<br/>InterfaceTree targetable truth<br/>SemanticObservationLog temporal truth<br/>latest live evidence"]
+        STORE["SemanticObservationStore<br/>InterfaceTree + retained entries<br/>lineage + cursors + clean seal"]
+        STASH["TheVault<br/>Store projection + latest live evidence"]
         PIN["CommittedElementTarget<br/>source target + exact HeistId<br/>+ graph-derived deadline"]
         LIVET["LiveActionTarget<br/>weak live object + frame + activationPoint"]
         WALK --> AXE
         AXE --> OBS
-        OBS -- "proof-backed commit / merge" --> TREE
+        OBS -- "proof-backed commit / merge" --> STORE
         OBS -- "live evidence for<br/>committed HeistIds only" --> STASH
-        TREE --> STASH
-        TREE --> LOG
-        LOG --> STASH
+        STORE --> TREE
+        STORE --> STASH
         STASH --> PIN
         PIN --> LIVET
     end
@@ -65,9 +64,10 @@ Notes:
   and container entries once; its path-indexed convenience views are derived.
   Live references are replaced on every parse and never unioned across
   exploration pages.
-- `TheVault` owns one `InterfaceTree`, one retained `SemanticObservationLog`,
-  one latest live observation, and optional failed-settle diagnostic evidence.
-  There is no parallel screen/query store or semantic back map.
+- `SemanticObservationStore` owns one `InterfaceTree`, retained history,
+  lineage, cursors, and clean-read state. `TheVault` keeps only the latest live
+  UIKit observation beside that Store. There is no parallel screen/query store
+  or semantic back map.
 - Each delivered `Interface` validates and stores one package `InterfaceGraph`
   for structural hierarchy operations and formatting. The delivered value
   supplies `HeistElement` subjects while the host supplies

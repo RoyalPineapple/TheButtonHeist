@@ -367,22 +367,15 @@ final class SemanticObservationStreamTests: XCTestCase {
         XCTAssertEqual(transition.previousCursor, discoveryEntries[0].cursor)
     }
 
-    func testRuntimeStateOwnsLifecycleReplacementAndCancellation() {
-        var state = SemanticObservationRuntimeState()
+    func testLifecycleOwnsRunningObservationAndCancellation() {
+        var state = SemanticObservationLifecycle.stopped
         let task = Task<Void, Never> { await Task.yield() }
-        let initialDiscovery: SemanticObservationRuntimeState.DiscoveryObservation = { nil }
+        let initialDiscovery: SemanticObservationLifecycle.DiscoveryObservation = { nil }
         state.start(task: task, discovery: initialDiscovery)
 
         XCTAssertTrue(state.isRunning)
         XCTAssertNotNil(state.discovery)
         XCTAssertTrue(state.replaceDiscoveryIfRunning { nil })
-        XCTAssertEqual(state.lineage, .continuous(.initial))
-
-        state.requireReplacement()
-        state.requireReplacement()
-
-        XCTAssertEqual(state.lineage, .replacementRequired(.initial))
-        XCTAssertEqual(state.lineage.admitting(.sameGeneration), .replacement(.screenChangedNotification))
 
         let stoppedTask = state.stop()
         stoppedTask?.cancel()
@@ -393,52 +386,46 @@ final class SemanticObservationStreamTests: XCTestCase {
         XCTAssertTrue(task.isCancelled)
     }
 
-    func testStreamRunningTruthIsRuntimeState() {
+    func testStreamRunningTruthIsLifecycle() {
         let stream = vault.semanticObservationStream
         XCTAssertFalse(stream.isActive)
-        XCTAssertFalse(stream.runtimeState.isRunning)
+        XCTAssertFalse(stream.lifecycle.isRunning)
 
         stream.start { nil }
         XCTAssertTrue(stream.isActive)
-        XCTAssertTrue(stream.runtimeState.isRunning)
+        XCTAssertTrue(stream.lifecycle.isRunning)
 
         stream.stop()
         XCTAssertFalse(stream.isActive)
-        XCTAssertFalse(stream.runtimeState.isRunning)
+        XCTAssertFalse(stream.lifecycle.isRunning)
     }
 
-    func testPublicationBuilderUsesOnlySuppliedEvidence() {
+    func testStoreCommitAdvancesAllObservationTruthTogether() throws {
         let screen = observation(label: "Published", heistId: "published")
         let interface = makeTestInterface(elements: [])
         let notificationBatch = screenChangedBatch()
-        let publication = SemanticObservationPublication.make(
-            sourceScope: .visible,
-            sequence: 1,
+        var store = SemanticObservationStore()
+        store.requireReplacement()
+
+        let commit = try store.commitObservation(
+            .uncheckedForTesting(screen, tripwireSignal: .empty),
+            scope: .visible,
             notificationBatch: notificationBatch,
-            observation: screen,
-            semanticSignal: .empty,
-            context: SemanticObservationPublication.Context(
-                continuity: .replacement(.screenChangedNotification),
-                generation: .initial,
-                previousEvents: [:]
-            ),
-            evidence: SemanticObservationPublication.Evidence(
+            evidence: { _ in SemanticObservationStore.Evidence(
                 interface: interface,
                 accessibilityNotifications: [],
                 firstResponder: nil
-            )
+            ) }
         )
-        var state = SemanticObservationRuntimeState()
-        state.requireReplacement()
-        state.commit(publication, notificationBatch: notificationBatch)
 
-        XCTAssertEqual(publication.sourceEvent.sequence, 1)
-        XCTAssertEqual(publication.sourceEvent.generation, ScreenGeneration.initial.advanced())
-        XCTAssertEqual(publication.sourceEvent.trace.captures.last?.interface, interface)
-        XCTAssertEqual(state.sequence, 1)
-        XCTAssertEqual(state.lineage, .continuous(publication.generation))
-        XCTAssertEqual(state.notificationCursor, notificationBatch.through)
-        XCTAssertEqual(state.scopedScreenChangedSequence, 1)
+        XCTAssertEqual(commit.sourceEvent.sequence, 1)
+        XCTAssertEqual(commit.sourceEvent.generation, ScreenGeneration.initial.advanced())
+        XCTAssertEqual(commit.sourceEvent.trace.captures.last?.interface, interface)
+        XCTAssertEqual(store.interfaceTree, commit.observation.tree)
+        XCTAssertEqual(store.sequence, 1)
+        XCTAssertEqual(store.lineage, .continuous(commit.sourceEvent.generation))
+        XCTAssertEqual(store.notificationCursor, notificationBatch.through)
+        XCTAssertEqual(store.scopedScreenChangedSequence, 1)
     }
 
     func testFirstPublicationInScopeDoesNotBorrowCrossScopePredecessor() throws {
@@ -629,9 +616,9 @@ final class SemanticObservationStreamTests: XCTestCase {
             )
             return (
                 result: result,
-                sequence: stream.runtimeState.sequence,
-                lineage: stream.runtimeState.lineage,
-                notificationCursor: stream.runtimeState.notificationCursor
+                sequence: stream.observationStore.sequence,
+                lineage: stream.observationStore.lineage,
+                notificationCursor: stream.observationStore.notificationCursor
             )
         }
         await waitForObservationWaiterCount(1)

@@ -1,13 +1,14 @@
 # Observation Pipeline
 
-Button Heist has one current semantic graph owned by TheVault, one private
-retained ordered history owned by `SemanticObservationLog`, and one delivery
-path owned by `SemanticObservationStream`. Raw parser samples remain live or
-diagnostic evidence. Only a clean settlement proof can enter the ordered commit
-path. Presence reads the committed tree; temporal predicates and receipts read
-replayable retained entries. The tripwire drives one serialized producer from
-dirty state to a sealed clean publication. Consumers join that refresh or reuse
-its clean commit.
+Button Heist has one `SemanticObservationStore`. It owns the current semantic
+graph, retained ordered history, sequence and screen lineage, notification
+cursor, and clean-read seal. `SemanticObservationStream` owns settlement
+scheduling and delivery, but no second semantic state. Raw parser samples
+remain live or diagnostic evidence. Only a clean settlement proof can enter the
+Store. Presence reads its current tree; temporal predicates and receipts read
+its replayable retained entries. The tripwire drives one serialized producer
+from dirty state to a sealed clean commit. Consumers join that refresh or reuse
+its clean result.
 
 **Illustrates:** [ARCHITECTURE.md](../ARCHITECTURE.md),
 [API.md](../API.md), [WIRE-PROTOCOL.md](../WIRE-PROTOCOL.md)
@@ -15,9 +16,10 @@ its clean commit.
 **Source of truth:**
 `ButtonHeist/Sources/TheInsideJob/TheVault/TheVault+InterfaceState.swift`,
 `ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationValues.swift`,
-`ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationLog.swift`,
-`ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationPublication.swift`,
+`ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationHistory.swift`,
+`ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStore.swift`,
 `ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStream.swift`,
+`ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStream+Settlement.swift`,
 `ButtonHeist/Sources/TheInsideJob/TheBrains/SettleSession.swift`,
 `ButtonHeist/Sources/TheInsideJob/TheBrains/Navigation+ScrollSettleProof.swift`,
 `ButtonHeist/Sources/TheInsideJob/TheBrains/Navigation+Explore.swift`,
@@ -29,7 +31,7 @@ its clean commit.
 `ButtonHeist/Sources/TheInsideJob/TheBrains/PredicateWait+ObservationStream.swift`,
 `ButtonHeist/Sources/TheInsideJob/TheTripwire/AccessibilityNotificationBus.swift`
 
-## Authority And Publication
+## Authority And Commit
 
 ```mermaid
 flowchart TD
@@ -44,29 +46,26 @@ flowchart TD
     Bus --> Checkpoint["non-destructive notification checkpoint"]
     Checkpoint --> Admission
     Settle --> Clean{"clean settlement?"}
-    Clean -->|no| Diagnostic["failed-settle diagnostic<br/>no graph or log mutation"]
+    Clean -->|no| Diagnostic["failed-settle diagnostic<br/>no semantic commit"]
     Clean -->|yes| Outcome["SettleSession.Result<br/>exact final InterfaceObservation"]
     Outcome --> Admission{"stream admission<br/>tripwire + exact capture still current?"}
     Admission -->|no| Diagnostic
     Admission -->|yes| Proof["InterfaceObservationProof"]
 
-    Proof --> Committer["SemanticObservationStream<br/>ordered admission + publication"]
-    Committer --> Graph["TheVault.commitInterfaceGraph<br/>classify + commit current graph"]
-    Graph --> Publication["construct settled publication<br/>from committed graph"]
-    Publication --> Scope["project tree + trace evidence<br/>once per fulfilled scope"]
-    Scope --> Log["private SemanticObservationLog<br/>publish retained entry"]
-    Log --> Runtime["advance runtime generation<br/>and settled sequence"]
-    Runtime --> Delivery["SemanticObservationStream<br/>complete waiters"]
-    Runtime --> Cursor["ObservationCursor<br/>generation + sequence order<br/>capture-derived timestamp metadata"]
-    Cursor --> Seal["clean publication<br/>admitting tripwire signal"]
+    Proof --> Committer["SemanticObservationStream<br/>ordered commit caller"]
+    Committer --> Store["SemanticObservationStore.commitObservation<br/>derive candidate graph + continuity + events"]
+    Store --> Atomic["one Store assignment<br/>tree + history + lineage + cursors + clean seal"]
+    Atomic --> Delivery["SemanticObservationStream<br/>complete waiters"]
+    Atomic --> Cursor["ObservationCursor<br/>generation + sequence order<br/>capture-derived timestamp metadata"]
+    Cursor --> Seal["clean Store state<br/>admitting tripwire signal"]
     Seal --> Delivery
     Delivery --> Consumers
     Seal --> Armed["re-arm and wait for next trip"]
     Armed --> Tripwire
-    Cursor --> Entries["SemanticObservationLog.read<br/>scope plus cursor replay"]
+    Cursor --> Entries["SemanticObservationStore.read<br/>scope plus cursor replay"]
 
     Current["committed InterfaceTree"] --> Presence["presence and target resolution"]
-    Graph --> Current
+    Atomic --> Current
     Entries --> Window["ObservationWindow<br/>immutable baseline through current"]
     Window --> Temporal["temporal predicate and receipt facts"]
     Window --> Trace["AccessibilityTrace"]
@@ -74,24 +73,21 @@ flowchart TD
     Delta -. "never evaluator input" .-> Output["public output only"]
 ```
 
-The ordering is structural: stream admission precedes TheVault's graph commit,
-which computes the candidate tree, classifies continuity, admits the replacement
-observation, and only then mutates canonical state. The graph commit completes
-before private log publication; runtime state advances before stream waiters
-are completed. This is an ordered, non-interleaving `@MainActor` sequence, not
-an atomic transaction across Vault, log, runtime, and delivery owners. The
-admitted result carries the exact parser observation which settled; the stream
-rejects it if a later parse or tripwire signal superseded that capture. Each
-fulfilled scope projects its tree and trace evidence from the same committed
-observation. Consumers cannot observe an entry for graph state that has not
-already committed, and consuming an entry cannot mutate the graph. Cursor
-`observedAt` is derived from the capture's interface timestamp and is metadata;
-generation and settled sequence provide correctness ordering.
+The ordering is structural. The stream first admits the exact parser capture
+which settled. `SemanticObservationStore.commitObservation` then derives the
+candidate graph, classifies continuity, constructs every fulfilled-scope event,
+validates retained lineage in a copied Store, and installs that Store with one
+assignment. Only then does the stream update disposable live evidence and wake
+waiters. A failed derivation leaves the complete prior Store intact. Consumers
+therefore cannot observe history, lineage, or cursor state for a graph that did
+not commit. Cursor `observedAt` is derived from the capture's interface
+timestamp and is metadata; generation and settled sequence provide correctness
+ordering.
 
 Visible settlement is serialized. A trip invalidates the clean seal before a
 read can be admitted. The first consumer starts the refresh and concurrent
-consumers join it; once graph reduction, log publication, and runtime commit
-complete, all consumers receive the same ordered event. Quiet action chains
+consumers join it; once the Store commit completes, all consumers receive the
+same ordered event. Quiet action chains
 reuse that event. After-action settlement always starts a fresh capture through
 the same producer and publishes through the same commit path.
 
@@ -123,8 +119,7 @@ sequenceDiagram
     participant UIKit as UIKit viewport
     participant Settle as SettleSession
     participant Stream as SemanticObservationStream
-    participant Graph as TheVault current graph
-    participant Log as Private ordered log
+    participant Store as SemanticObservationStore
     participant Callback as Observation callback
 
     Caller->>Transition: movement intent
@@ -134,11 +129,10 @@ sequenceDiagram
     Settle-->>Transition: clean outcome with exact final observation
     Transition->>Stream: admit and commit outcome
     Stream->>Stream: verify tripwire and capture identity<br/>construct InterfaceObservationProof
-    Stream->>Graph: reduce graph
-    Graph-->>Stream: committed tree
-    Stream->>Log: publish retained entry
-    Log-->>Stream: published
-    Stream->>Stream: advance runtime state<br/>complete waiters
+    Stream->>Store: commit proof + notification checkpoint
+    Store->>Store: derive graph, events, lineage, and cursors<br/>install one complete Store value
+    Store-->>Stream: committed event
+    Stream->>Stream: complete waiters
     Stream-->>Transition: settled event
     Transition-->>Caller: committed event
     Caller->>Callback: evaluate committed observation
@@ -149,7 +143,7 @@ sequenceDiagram
 ```mermaid
 flowchart TD
     Target{"known target with<br/>scroll-content point?"} -->|yes| Direct["jump directly to 2D content point"]
-    Direct --> DirectCommit["minimal settle → parse proof<br/>→ graph reduce → stream commit"]
+    Direct --> DirectCommit["minimal settle → parse proof<br/>→ Store commit"]
     DirectCommit --> RetainKnown["retain revealed viewport"]
     Target -->|no| Save["save visual origin"]
     Save --> Order{"caller-selected search order"}
@@ -158,7 +152,7 @@ flowchart TD
     FirstForward --> Move["move exactly one viewport"]
     FirstBack --> Move
     Move --> Legal{"legal content offset changed?"}
-    Legal -->|yes| Commit["minimal settle → parse proof<br/>→ graph reduce → stream commit"]
+    Legal -->|yes| Commit["minimal settle → parse proof<br/>→ Store commit"]
     Legal -->|no: true edge<br/>or clamped overdrag| Deplete["deplete this directional ray"]
     Commit --> Callback["observation callback"]
     Callback -->|finish| Finalize{"caller-selected exit position"}
@@ -178,7 +172,7 @@ the next page cannot change the clamped legal content offset; UIKit bounce and
 stretch are outside that legal interval. The exit position is known before
 traversal and is applied whenever traversal ends: command and wait discovery
 restore `.origin`, while inflation retains `.current`. Restoration is itself a movement, so `.origin`
-cannot return before its settle, proof, graph reduction, and publication finish.
+cannot return before its settle, proof, and Store commit finish.
 When the callback already returned `finish`, final restoration does not invoke
 that goal callback again. There is no alternate traversal or commit path.
 

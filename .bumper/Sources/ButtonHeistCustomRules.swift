@@ -39,8 +39,8 @@ let buttonHeistRules = RuleSet {
     callbackIsolationRule
     checkedConcurrencyRule
     Rules.boundaryOnly(
-        function: "reduceInterfaceGraph",
-        allowed: .files([semanticObservationPublicationPath]),
+        function: "commitObservation",
+        allowed: .files([semanticObservationSettlementPath]),
         id: "buttonheist.semantic_observation_commit_ownership"
     )
 }
@@ -55,8 +55,8 @@ private let demoAccessibilityIdentifierResearchFixtures: Set<RelativeFilePath> =
     "TestApp/Sources/TraitValidationView.swift",
 ]
 
-private let semanticObservationPublicationPath: RelativeFilePath =
-    "ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStream+Publication.swift"
+private let semanticObservationSettlementPath: RelativeFilePath =
+    "ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStream+Settlement.swift"
 
 private let anyBoundaryRule = Rules.files(
     "buttonheist.any_boundary",

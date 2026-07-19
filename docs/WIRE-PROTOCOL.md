@@ -426,8 +426,8 @@ an action is drawn in the [action pipeline diagram](diagrams/action-pipeline.md)
 
 ## Traces, Facts, and Public Deltas
 
-`SemanticObservationLog` is the in-app temporal owner. It retains settled
-entries with typed lineage and serves replayable cursor-backed sequences. A
+`SemanticObservationStore` is the in-app semantic owner. It commits the current
+tree and retained entries with typed lineage and serves replayable cursor-backed sequences. A
 temporal predicate builds one `ObservationWindow` from its immutable baseline
 through the current retained entry; it does not merge a private trace or claim
 notification ownership. Presence predicates read the current tree directly.
@@ -438,8 +438,8 @@ adjacent captures. A timed-out action may return a diagnostic trace in its
 receipt, but that trace is not committed or usable as a settled observation
 baseline. No separate stored or endpoint temporal model exists.
 
-Only proof-backed observations are published and appended to the retained
-semantic observation log. A raw `InterfaceObservation` is live parser evidence
+Only proof-backed observations are committed and appended to retained semantic
+history. A raw `InterfaceObservation` is live parser evidence
 and cannot be committed directly. Visible commits require a clean-settle
 `InterfaceObservationProof`; discovery commits require the proof made from the
 finished exploration graph after its settled pages have been reduced.

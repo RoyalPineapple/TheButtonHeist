@@ -2,10 +2,10 @@
 
 One action end to end: a typed command crosses the wire, resolves one
 `AccessibilityTarget`, dispatches into one `ActionDispatchOutcome`, settles,
-appends to the retained observation log, and returns state-shaped evidence.
+commits to the semantic observation Store, and returns state-shaped evidence.
 
 **Illustrates:** [ARCHITECTURE.md](../ARCHITECTURE.md), [API.md](../API.md), [WIRE-PROTOCOL.md](../WIRE-PROTOCOL.md)
-**Source of truth:** `ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+RequestPayload.swift`, `ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+HeistActionExecution.swift`, `ButtonHeist/Sources/TheInsideJob/TheBrains/ElementInflation.swift`, `ButtonHeist/Sources/TheInsideJob/TheBrains/InteractionObservation.swift`, `ButtonHeist/Sources/TheInsideJob/TheBrains/PostActionObservation.swift`, `ButtonHeist/Sources/TheInsideJob/TheSafecracker/ActionDispatchOutcome.swift`, `ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationLog.swift`, `ButtonHeist/Sources/TheInsideJob/TheTripwire/AccessibilityNotificationBus.swift`, `ButtonHeist/Sources/TheScore/Reports/ActionResult.swift`, `ButtonHeist/Sources/TheScore/Reports/ActionResultEvidence.swift`, `ButtonHeist/Sources/TheButtonHeist/TheFence/DeltaProjection.swift`
+**Source of truth:** `ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+RequestPayload.swift`, `ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+HeistActionExecution.swift`, `ButtonHeist/Sources/TheInsideJob/TheBrains/ElementInflation.swift`, `ButtonHeist/Sources/TheInsideJob/TheBrains/InteractionObservation.swift`, `ButtonHeist/Sources/TheInsideJob/TheBrains/PostActionObservation.swift`, `ButtonHeist/Sources/TheInsideJob/TheSafecracker/ActionDispatchOutcome.swift`, `ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStore.swift`, `ButtonHeist/Sources/TheInsideJob/TheTripwire/AccessibilityNotificationBus.swift`, `ButtonHeist/Sources/TheScore/Reports/ActionResult.swift`, `ButtonHeist/Sources/TheScore/Reports/ActionResultEvidence.swift`, `ButtonHeist/Sources/TheButtonHeist/TheFence/DeltaProjection.swift`
 
 ```mermaid
 sequenceDiagram
@@ -37,8 +37,8 @@ sequenceDiagram
     alt clean settle
         Brains->>Notifications: checkpoint after opening cursor
         Notifications-->>Brains: retained events, through-cursor, gap
-        Brains->>Vault: commit settled interface and transition
-        Vault->>Vault: append ObservationEntry to SemanticObservationLog
+        Brains->>Vault: commit proof to SemanticObservationStore
+        Vault->>Vault: install tree, history, lineage, and cursors together
     else timeout or unavailable
         Brains->>Notifications: close attribution window
         Brains->>Vault: retain diagnostic observation only

@@ -5,13 +5,13 @@ import Testing
 @Suite("Canonical runtime ownership")
 struct CanonicalRuntimeOwnerRuleTests {
     @Test
-    func interfaceGraphCommitsOutsidePublicationOwnerAreRejected() throws {
+    func observationCommitsOutsideStreamOwnerAreRejected() throws {
         let path: RelativeFilePath =
             "ButtonHeist/Sources/TheInsideJob/TheVault/CompetingCommitter.swift"
         let report = try evaluateButtonHeistRules(
             path: path,
             component: .runtime,
-            source: "func commit() { reduceInterfaceGraph() }"
+            source: "func commit() { commitObservation() }"
         )
 
         #expect(report.contains(ViolationMatcher(

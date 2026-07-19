@@ -404,7 +404,7 @@ private extension FenceParameterSpec.ParamType {
 @_spi(ButtonHeistTooling) public extension FenceCommandDescriptor {
     var inputJSONSchema: HeistValue {
         FenceParameterSpec.jsonInputSchema(
-            parameters: parameters
+            parameters: parameters.elements
         )
     }
 }
