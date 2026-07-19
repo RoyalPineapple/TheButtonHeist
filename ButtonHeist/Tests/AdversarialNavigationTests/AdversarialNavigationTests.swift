@@ -10,11 +10,31 @@ import ThePlans
 @MainActor
 final class AdversarialNavigationTests: XCTestCase {
 
+    func testModalReviewBecomesInteractiveOnlyAfterPresentationCompletes() async throws {
+        try await AdversarialLabRoute.open(.modalObstruction)
+        let heist = try await runHeist("AdversarialModalObstructionPass") {
+            Activate(.label("Review order"))
+                .expect(.exists(.element(
+                    .label("Order review"),
+                    .value("Ready")
+                )), timeout: 4)
+            Activate(.label("Confirm review"))
+                .expect(.exists(.label("Status: Review confirmed")), timeout: 2)
+            Activate(.label("Close"))
+                .expect(.missing(.label("Order review")), timeout: 4)
+        }
+
+        XCTAssertNil(heist.result.firstFailedStep)
+    }
+
     func testModalObstructionBlocksBackgroundActionSearch() async throws {
         try await AdversarialLabRoute.open(.modalObstruction)
         let failure = try await expectHeistFailure("AdversarialModalObstructionBackgroundFails") {
             Activate(.label("Review order"))
-                .expect(.exists(.label("Order review")), timeout: 4)
+                .expect(.exists(.element(
+                    .label("Order review"),
+                    .value("Ready")
+                )), timeout: 4)
             Activate(.label("Archive order 3"))
         }
 

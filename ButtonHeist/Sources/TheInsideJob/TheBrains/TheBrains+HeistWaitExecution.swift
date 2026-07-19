@@ -33,7 +33,7 @@ extension TheBrains {
             )
         }
 
-        let receipt = await runtime.wait(.standalone(resolvedWait))
+        let receipt = await runtime.wait(.standalone(resolvedWait, startedAt: start))
         switch receipt.result {
         case .matched(let actionResult, let expectation):
             let evidence = HeistWaitEvidence.matched(

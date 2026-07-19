@@ -127,6 +127,7 @@ final class InteractionObservation {
         changeBaseline: PredicateChangeBaselineSource = .establishFromFirstObservation,
         announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly,
         onReadyToPoll: PredicateWait.ReadyToPoll? = nil,
+        startedAt: CFAbsoluteTime? = nil
     ) async -> HeistWaitReceipt {
         let baselineSource: PredicateChangeBaselineSource
         switch (changeBaseline, baselineSequence) {
@@ -143,7 +144,8 @@ final class InteractionObservation {
             initialTrace: initialTrace,
             changeBaseline: baselineSource,
             announcementCursorStrategy: announcementCursorStrategy,
-            onReadyToPoll: onReadyToPoll
+            onReadyToPoll: onReadyToPoll,
+            startedAt: startedAt
         )
     }
 

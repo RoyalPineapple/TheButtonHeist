@@ -106,7 +106,7 @@ private final class ModalObstructionViewController: UIViewController {
     @objc private func presentReview() {
         guard presentedViewController == nil else { return }
         scrollView.resetEvidence()
-        let review = UIViewController()
+        let review = ReviewViewController()
         review.view.backgroundColor = .systemGroupedBackground
         review.modalPresentationStyle = .pageSheet
         review.isModalInPresentation = true
@@ -121,6 +121,7 @@ private final class ModalObstructionViewController: UIViewController {
         heading.text = "Order review"
         heading.font = .preferredFont(forTextStyle: .title2)
         heading.accessibilityTraits.insert(.header)
+        review.readinessElement = heading
         stack.addArrangedSubview(heading)
 
         let reviewStatus = UILabel()
@@ -204,5 +205,15 @@ private final class ModalObstructionViewController: UIViewController {
         label.text = title
         label.accessibilityLabel = title
         label.accessibilityValue = "0"
+    }
+}
+
+private final class ReviewViewController: UIViewController {
+    weak var readinessElement: UILabel?
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        readinessElement?.accessibilityValue = "Ready"
+        UIAccessibility.post(notification: .layoutChanged, argument: readinessElement)
     }
 }

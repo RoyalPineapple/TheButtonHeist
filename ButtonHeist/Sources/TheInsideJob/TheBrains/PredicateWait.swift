@@ -66,9 +66,10 @@ where Evidence: Sendable & Equatable {
         initialTrace: AccessibilityTrace? = nil,
         changeBaseline: PredicateChangeBaselineSource = .establishFromFirstObservation,
         announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly,
-        onReadyToPoll: ReadyToPoll? = nil
+        onReadyToPoll: ReadyToPoll? = nil,
+        startedAt: CFAbsoluteTime? = nil
     ) async -> HeistWaitReceipt {
-        let start = CFAbsoluteTimeGetCurrent()
+        let start = startedAt ?? CFAbsoluteTimeGetCurrent()
         if case .announcement(let announcement) = step.predicate.core {
             return await waitForAnnouncementPredicate(
                 announcement,

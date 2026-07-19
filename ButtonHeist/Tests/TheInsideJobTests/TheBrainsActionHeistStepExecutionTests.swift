@@ -49,8 +49,9 @@ extension TheBrainsActionTests {
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "heist failed")
         XCTAssertEqual(dispatchedTypes, [.activate])
         XCTAssertEqual(waitRequests.count, 1)
-        if case .standalone(let request)? = waitRequests.first {
+        if case .standalone(let request, let startedAt)? = waitRequests.first {
             XCTAssertEqual(request.predicate, try resolvedPredicate(.exists(.label("Ready"))))
+            XCTAssertLessThanOrEqual(startedAt, CFAbsoluteTimeGetCurrent())
         } else {
             XCTFail("Expected standalone wait request")
         }
