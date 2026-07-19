@@ -25,8 +25,8 @@ struct HeistPlanToolTests {
         let result = try runHeistPlan(["validate", planURL.path])
 
         #expect(result.exitCode != 0)
-        #expect(result.stderr.contains("raw `.json` HeistPlan IR"))
-        #expect(result.stderr.contains("not public run input"))
+        #expect(result.stderr.contains("Unsupported heist input extension"))
+        #expect(result.stderr.contains("Use a generated .heist package artifact"))
     }
 
     @Test
