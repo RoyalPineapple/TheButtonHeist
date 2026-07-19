@@ -230,7 +230,7 @@ final class SettleSessionFinalObservation {
 /// shared. `TheTripwire.waitForAllClear`
 /// watches CALayers and is deliberately blind to the AX tree; "no layer
 /// motion" and "AX tree stable" disagree on every spinner-driven loading
-/// state. Viewport movement uses this same reducer with a one-cycle policy.
+/// state. Viewport movement uses this same reducer with a two-cycle policy.
 ///
 /// The loop seeds `previousFingerprint` from a synchronous parse *before*
 /// the first sleep, so a static screen settles after exactly
@@ -280,10 +280,11 @@ final class SettleSessionFinalObservation {
     /// last-seen snapshot than blocking the action pipeline further.
     static let defaultTimeoutMs: Int = 5_000
 
-    /// Programmatic viewport movement should normally prove itself after two
-    /// run-loop turns. This ceiling allows brief layout churn without turning
-    /// page-by-page discovery into action settlement.
-    static let viewportTransitionTimeoutMs: Int = 250
+    /// Programmatic viewport movement normally proves itself after two
+    /// run-loop turns. The shared semantic-observation budget also covers
+    /// delayed SwiftUI accessibility updates without slowing the normal path.
+    static let viewportTransitionTimeoutMs = Int(SemanticObservationTiming.defaultTimeout * 1_000)
+    static let viewportTransitionMinimumBudgetMs = 32
 
     typealias ParseProvider = @MainActor () -> InterfaceObservation?
     typealias TripwireSignalProvider = @MainActor () -> TheTripwire.TripwireSignal

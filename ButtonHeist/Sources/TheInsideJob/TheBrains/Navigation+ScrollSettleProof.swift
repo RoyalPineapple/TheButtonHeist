@@ -53,9 +53,10 @@ extension Navigation {
     ) async -> ViewportTransition {
         guard !Task.isCancelled,
               deadline.map({
-                  $0.remainingSeconds() >= Double(SettleSession.viewportTransitionTimeoutMs) / 1_000
+                  $0.remainingSeconds() >= Double(SettleSession.viewportTransitionMinimumBudgetMs) / 1_000
               }) ?? true
         else { return .unavailable() }
+        let previousViewportHash = vault.latestObservation.tree.viewportOnly.interfaceHash
         let previousVisibleIds = vault.viewportElementIDs
         let notificationWindow = vault.accessibilityNotifications.beginActionWindow()
         let primitiveResult = await dispatchViewportMovement(intent)
@@ -65,7 +66,7 @@ extension Navigation {
                 deadline: deadline,
                 discoveryCommitPolicy: discoveryCommitPolicy,
                 notificationWindow: notificationWindow,
-                requiredAfterMovement: true
+                previousViewportHash: previousViewportHash
             )
             guard let event else {
                 return .unavailable(previousVisibleIds: previousVisibleIds)

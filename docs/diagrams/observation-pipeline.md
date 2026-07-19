@@ -109,6 +109,13 @@ content point, inflation submits that point directly to the same transition.
 Directional page discovery is the fallback for unknown targets or missing
 reveal evidence.
 
+After a physical page move, the first clean capture whose semantic viewport
+differs from the pre-movement viewport commits immediately. An identical clean
+capture remains provisional within the shared one-second semantic observation
+budget so delayed SwiftUI accessibility updates can arrive. If the viewport is
+legitimately blank or semantically identical, its latest clean capture commits
+when there is no budget for another two-frame settle.
+
 ```mermaid
 sequenceDiagram
     participant Caller as Explorer / scroll / inflation
@@ -123,7 +130,7 @@ sequenceDiagram
     Caller->>Transition: movement intent
     Transition->>UIKit: dispatch movement
     UIKit-->>Transition: moved
-    Transition->>Settle: minimal settle: parse + one run-loop turn + repeat parse
+    Transition->>Settle: minimal settle: parse + two run-loop turns + stable repeat
     Settle-->>Transition: clean outcome with exact final observation
     Transition->>Stream: admit and commit outcome
     Stream->>Stream: verify tripwire and capture identity<br/>construct InterfaceObservationProof
