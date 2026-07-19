@@ -75,7 +75,8 @@ internal final class ElementInflation {
     internal func inflate(
         for target: ResolvedAccessibilityTarget,
         method: ActionMethod,
-        activationPointPolicy: ActivationPointPolicy = .requireOnscreen
+        activationPointPolicy: ActivationPointPolicy = .requireOnscreen,
+        operationDeadline: SemanticObservationDeadline? = nil
     ) async -> ElementInflationResult {
         guard !Task.isCancelled else {
             return .failed(.cancelled("element inflation was cancelled before resolution"))
@@ -89,7 +90,8 @@ internal final class ElementInflation {
         return await runInflation(
             for: validatedTarget,
             method: method,
-            activationPointPolicy: activationPointPolicy
+            activationPointPolicy: activationPointPolicy,
+            operationDeadline: operationDeadline
         )
     }
 
@@ -97,6 +99,7 @@ internal final class ElementInflation {
         for target: ResolvedAccessibilityTarget,
         method: ActionMethod,
         activationPointPolicy: ActivationPointPolicy,
+        operationDeadline: SemanticObservationDeadline? = nil,
         initialState: State = .resolving
     ) async -> ElementInflationResult {
         var state = initialState
@@ -112,14 +115,14 @@ internal final class ElementInflation {
                     nextState = .refreshing(
                         target: target,
                         treeElement: treeElement,
-                        deadline: handoffDeadline(for: treeElement),
+                        deadline: operationDeadline ?? handoffDeadline(for: treeElement),
                         resolution: resolution
                     )
                 case .success(.known(let treeElement, let resolution)):
                     nextState = .revealing(
                         target: target,
                         treeElement: treeElement,
-                        deadline: handoffDeadline(for: treeElement),
+                        deadline: operationDeadline ?? handoffDeadline(for: treeElement),
                         resolution: resolution
                     )
                 case .failure(let failure):

@@ -68,7 +68,10 @@ extension TheGetaway {
             insideJobLogger.info("Client \(clientId) connected from \(remoteAddress ?? "unknown"), awaiting hello")
             replaceClientRequestPipeline(clientId: clientId)
             if let remoteAddress {
-                await muscle.registerClientAddress(clientId, address: remoteAddress)
+                await muscle.registerClientAddress(
+                    clientId,
+                    address: ClientNetworkAddress(remoteAddress)
+                )
             }
             await muscle.sendServerHello(clientId: clientId)
 

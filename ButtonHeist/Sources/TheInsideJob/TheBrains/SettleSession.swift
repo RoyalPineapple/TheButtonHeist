@@ -4,6 +4,7 @@ import Foundation
 import UIKit
 
 import AccessibilitySnapshotParser
+import ButtonHeistSupport
 
 // MARK: - Settle Event/Outcome
 
@@ -229,7 +230,7 @@ final class SettleSessionFinalObservation {
 /// shared. `TheTripwire.waitForAllClear`
 /// watches CALayers and is deliberately blind to the AX tree; "no layer
 /// motion" and "AX tree stable" disagree on every spinner-driven loading
-/// state. Viewport movement uses this same reducer with a one-cycle policy.
+/// state. Viewport movement uses this same reducer with a two-cycle policy.
 ///
 /// The loop seeds `previousFingerprint` from a synchronous parse *before*
 /// the first sleep, so a static screen settles after exactly
@@ -266,6 +267,10 @@ final class SettleSessionFinalObservation {
     /// is why agents driving the same AX surface feel "in sync" at this rate.
     static let defaultCycleIntervalMs: Int = 100
 
+    static let minimumStableDurationSeconds = Double(
+        defaultCyclesRequired * defaultCycleIntervalMs
+    ) / 1_000
+
     /// Hard ceiling on how long the settle loop will wait for the AX tree
     /// to quiesce before giving up with `.timedOut`. 5 s is the longest
     /// any well-behaved iOS transition (push, modal, alert, tab switch)
@@ -275,15 +280,16 @@ final class SettleSessionFinalObservation {
     /// last-seen snapshot than blocking the action pipeline further.
     static let defaultTimeoutMs: Int = 5_000
 
-    /// Programmatic viewport movement should normally prove itself after one
-    /// run-loop turn. This ceiling allows brief layout churn without turning
-    /// page-by-page discovery into action settlement.
-    static let viewportTransitionTimeoutMs: Int = 250
+    /// Programmatic viewport movement normally proves itself after two
+    /// run-loop turns. The shared semantic-observation budget also covers
+    /// delayed SwiftUI accessibility updates without slowing the normal path.
+    static let viewportTransitionTimeoutMs = Int(SemanticObservationTiming.defaultTimeout * 1_000)
+    static let viewportTransitionMinimumBudgetMs = 32
 
     typealias ParseProvider = @MainActor () -> InterfaceObservation?
     typealias TripwireSignalProvider = @MainActor () -> TheTripwire.TripwireSignal
-    typealias Sleeper = @Sendable (UInt64) async throws -> Void
-    typealias ObservationYield = @MainActor () async throws -> Void
+    typealias Sleeper = @Sendable (UInt64) async -> Void
+    typealias ObservationYield = @MainActor () async -> Void
     typealias Clock = @MainActor () -> CFAbsoluteTime
 
     let parseProvider: ParseProvider
@@ -312,7 +318,7 @@ final class SettleSessionFinalObservation {
     init(
         parseProvider: @escaping ParseProvider,
         tripwireSignalProvider: @escaping TripwireSignalProvider,
-        sleeper: @escaping Sleeper = { try await Task.sleep(nanoseconds: $0) },
+        sleeper: @escaping Sleeper = { _ = await Task.cancellableSleep(nanoseconds: $0) },
         cyclesRequired: Int = SettleSession.defaultCyclesRequired,
         cycleIntervalMs: Int = SettleSession.defaultCycleIntervalMs,
         timeoutMs: Int = SettleSession.defaultTimeoutMs
@@ -321,7 +327,7 @@ final class SettleSessionFinalObservation {
             parseProvider: parseProvider,
             tripwireSignalProvider: tripwireSignalProvider,
             observationYield: {
-                try await sleeper(UInt64(cycleIntervalMs) * 1_000_000)
+                await sleeper(UInt64(cycleIntervalMs) * 1_000_000)
             },
             policy: .consecutiveCycles(required: cyclesRequired),
             clock: { CFAbsoluteTimeGetCurrent() },
@@ -359,7 +365,9 @@ final class SettleSessionFinalObservation {
     ) -> SettleSession {
         let observationYield: ObservationYield = switch policy {
         case .consecutiveCycles:
-            { try await Task.sleep(nanoseconds: UInt64(SettleSession.defaultCycleIntervalMs) * 1_000_000) }
+            { _ = await Task.cancellableSleep(
+                nanoseconds: UInt64(SettleSession.defaultCycleIntervalMs) * 1_000_000
+            ) }
         case .quietWindow:
             { await tripwire.yieldRealFrames(1) }
         }
@@ -374,8 +382,8 @@ final class SettleSessionFinalObservation {
     }
 
     /// Minimal proof for a programmatic viewport transition. UIKit receives
-    /// one run-loop turn to lay out the new viewport, then the parser must
-    /// return the same semantic fingerprint on consecutive captures.
+    /// two run-loop turns to lay out the new viewport, and the parser must
+    /// return the same semantic fingerprint across both repeat captures.
     static func viewportTransition(
         vault: TheVault,
         tripwire: TheTripwire,
@@ -385,7 +393,7 @@ final class SettleSessionFinalObservation {
             parseProvider: { vault.semanticObservationForSettle() },
             tripwireSignalProvider: { tripwire.tripwireSignal() },
             observationYield: { await tripwire.yieldRealFrames(1) },
-            policy: .consecutiveCycles(required: 1),
+            policy: .consecutiveCycles(required: 2),
             clock: { CFAbsoluteTimeGetCurrent() },
             timeoutMs: timeoutMs
         )
@@ -479,13 +487,10 @@ final class SettleSessionFinalObservation {
 }
 
 private struct SettleLoopRunner {
-    typealias ObservationYield = @MainActor () async throws -> Void
-    typealias Clock = @MainActor () -> CFAbsoluteTime
-
     let parseProvider: SettleSession.ParseProvider
     let tripwireSignalProvider: SettleSession.TripwireSignalProvider
-    let observationYield: ObservationYield
-    let clock: Clock
+    let observationYield: SettleSession.ObservationYield
+    let clock: SettleSession.Clock
     let timeoutMs: Int
     let initial: SettleLoopMachine.State
 
@@ -533,17 +538,7 @@ private struct SettleLoopRunner {
         }
 
         while deadline.hasTimeRemaining(at: clock()) {
-            do {
-                try await observationYield()
-            } catch is CancellationError {
-                return result(
-                    .cancelled(timeMs: deadline.elapsedMilliseconds(at: clock()))
-                )
-            } catch {
-                return result(
-                    .timedOut(timeMs: deadline.elapsedMilliseconds(at: clock()))
-                )
-            }
+            await observationYield()
             if Task.isCancelled {
                 return result(
                     .cancelled(timeMs: deadline.elapsedMilliseconds(at: clock()))

@@ -33,7 +33,7 @@ RECEIPT = {
                 {
                     "source": "caseSelection.timeout",
                     "budgetMs": 500,
-                    "elapsedMs": 490,
+                    "elapsedMs": 526,
                     "path": "$.body[2]",
                     "kind": "conditional",
                     "status": "failed",
@@ -51,7 +51,7 @@ assert lab.receipt_ceiling_hits(RECEIPT) == [
         "status": "failed",
         "source": "caseSelection.timeout",
         "budgetMs": 500,
-        "elapsedMs": 490,
+        "elapsedMs": 526,
     }
 ]
 

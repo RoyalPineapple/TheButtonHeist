@@ -16,26 +16,6 @@ internal enum PredicateWaitOutcome: Sendable, Equatable {
     case cancelled
 }
 
-internal enum PredicateWaitVisibleBudget: Sendable, Equatable {
-    case overall
-    case viewportTransition
-
-    @MainActor
-    internal func deadline(
-        overall: SemanticObservationDeadline
-    ) -> SemanticObservationDeadline {
-        switch self {
-        case .overall:
-            return overall
-        case .viewportTransition:
-            return SemanticObservationDeadline(
-                start: CFAbsoluteTimeGetCurrent(),
-                timeoutMs: SettleSession.viewportTransitionTimeoutMs
-            )
-        }
-    }
-}
-
 extension PredicateWait {
     internal struct LifecycleEvidence: Sendable, Equatable {
         internal let stream: PredicateObservationStreamState

@@ -4,7 +4,6 @@ import TheScore
 // MARK: - Repair Screen
 
 private typealias RepairPredicateElement = PredicateSelectionSubjectElement<HeistElement>
-private typealias RepairPredicateGraph = ElementPredicateGraph<PredicateSelectionElementId, RepairPredicateElement>
 
 struct RepairScreen {
     struct Element: Sendable, Equatable {
@@ -25,7 +24,7 @@ struct RepairScreen {
     }
 
     let elements: [Element]
-    private let predicateGraph: RepairPredicateGraph
+    private let targetMatchGraph: AccessibilityTargetMatchGraph<HeistElement>
     private let predicateSelectionElements: [RepairPredicateElement]
 
     init(interface: Interface) {
@@ -63,47 +62,38 @@ struct RepairScreen {
             PredicateSelectionSubjectElement(id: $0.id, element: $0.element)
         }
         self.elements = elements
-        self.predicateGraph = ElementPredicateGraph(
-            subjects: predicateSelectionElements,
-            identity: \.id
-        )
+        self.targetMatchGraph = AccessibilityTargetMatchGraph(interface: interface)
         self.predicateSelectionElements = predicateSelectionElements
     }
 
     func resolve(_ target: AccessibilityTarget) -> RepairTargetResolution {
-        switch target {
-        case .predicate(let predicate, let ordinal):
-            let resolvedPredicate: ElementPredicate
-            do {
-                resolvedPredicate = try predicate.resolve(in: .empty)
-            } catch {
-                return .unsupportedTarget(.unresolvedExpression)
-            }
-            let matches = predicateGraph
-                .resolve(resolvedPredicate)
-                .matches
-                .map { elements[$0.traversalOrder] }
-            if let ordinal {
-                guard matches.indices.contains(ordinal) else {
-                    return .notFound(matchCount: matches.count)
-                }
-                return .resolved(matches[ordinal], matchCount: matches.count)
-            }
-            switch matches.count {
-            case 0:
-                return .notFound(matchCount: 0)
-            case 1:
-                return .resolved(matches[0], matchCount: 1)
-            default:
-                return .ambiguous(matches, matchCount: matches.count)
-            }
-        case .container:
-            return .unsupportedTarget(.container)
-        case .ref:
+        let resolvedTarget: ResolvedAccessibilityTarget
+        do {
+            resolvedTarget = try target.resolve(in: .empty)
+        } catch HeistExpressionError.unresolvedTargetReference {
             return .unsupportedTarget(.reference)
-        case .within:
-            return .unsupportedTarget(.scoped)
+        } catch {
+            return .unsupportedTarget(.unresolvedExpression)
         }
+
+        let candidates = repairElements(at: targetMatchGraph.matches(for: resolvedTarget).elements.orderedPaths)
+        let selected = repairElements(at: targetMatchGraph.resolve(resolvedTarget).elements.orderedPaths)
+        guard resolvedTarget.isElementTarget else {
+            return .unsupportedTarget(.container)
+        }
+
+        if candidates.count > 1, selected.count == candidates.count {
+            return .ambiguous(candidates, matchCount: candidates.count)
+        }
+        if let match = selected.first {
+            return .resolved(match, matchCount: candidates.count)
+        }
+        return .notFound(matchCount: candidates.count)
+    }
+
+    private func repairElements(at paths: [TreePath]) -> [Element] {
+        let paths = Set(paths)
+        return elements.filter { paths.contains($0.path) }
     }
 
     func minimumUniquePredicate(
@@ -164,7 +154,6 @@ enum RepairTargetResolution {
 enum UnsupportedRepairTargetKind: String, Sendable, Equatable {
     case container
     case reference
-    case scoped
     case unresolvedExpression
 }
 

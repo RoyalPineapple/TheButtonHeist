@@ -84,8 +84,6 @@ private extension UnsupportedRepairTargetKind {
             return .containerTargetUnsupported
         case .reference:
             return .targetReferenceUnsupported
-        case .scoped:
-            return .scopedTargetUnsupported
         case .unresolvedExpression:
             return .unresolvedTargetExpression
         }

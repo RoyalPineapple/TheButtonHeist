@@ -12,6 +12,7 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
     let sessionReleaseTimeout: ResolvedStartupValue<TimeInterval>
     let fingerprintsEnabled: ResolvedStartupValue<Bool>
     let failureEvidencePolicy: ResolvedStartupValue<FailureEvidencePolicy>
+    let authenticationPolicy: InsideJobAuthenticationPolicy
     let sessionIdentity: InsideJobSessionIdentity
 
     static func resolve(
@@ -21,7 +22,8 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
         allowedScopes: Set<ConnectionScope>?,
         port: UInt16,
         addressFamily: ListenerAddressFamily = .dualStack,
-        fingerprintsEnabled: Bool? = nil
+        fingerprintsEnabled: Bool? = nil,
+        authenticationPolicy: InsideJobAuthenticationPolicy = .default
     ) -> InsideJobRuntimeConfiguration {
         let explicitToken = token.flatMap { try? SessionAuthToken(validating: $0) }
         let explicitInstanceId = instanceId.flatMap { try? InsideJobInstanceID(validating: $0) }
@@ -48,6 +50,7 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
                 ResolvedStartupValue(value: $0, source: .api)
             } ?? startupConfiguration.fingerprintsEnabled,
             failureEvidencePolicy: startupConfiguration.failureEvidencePolicy,
+            authenticationPolicy: authenticationPolicy,
             sessionIdentity: InsideJobSessionIdentity.make(instanceId: resolvedInstanceId)
         )
     }
@@ -65,6 +68,7 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
             sessionReleaseTimeout: startupConfiguration.sessionTimeout,
             fingerprintsEnabled: startupConfiguration.fingerprintsEnabled,
             failureEvidencePolicy: startupConfiguration.failureEvidencePolicy,
+            authenticationPolicy: .default,
             sessionIdentity: InsideJobSessionIdentity.make(instanceId: startupConfiguration.instanceId)
         )
     }

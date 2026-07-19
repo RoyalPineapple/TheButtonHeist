@@ -3,7 +3,7 @@ import Foundation
 extension ClientAdmission.Authentication {
     struct Proof {
         let clientId: Int
-        let address: String
+        let address: ClientNetworkAddress
         let owner: SessionOwner
         let respond: ClientAdmission.ResponseHandler
         let source: Source
@@ -15,11 +15,11 @@ extension ClientAdmission.Authentication {
 
     /// Per-client authentication lifecycle owned by `ClientAdmission.Reducer`.
     enum State: Equatable, Sendable {
-        case connected(address: String)
-        case helloValidated(address: String)
-        case authenticated(address: String)
+        case connected(address: ClientNetworkAddress)
+        case helloValidated(address: ClientNetworkAddress)
+        case authenticated(address: ClientNetworkAddress)
 
-        var address: String {
+        var address: ClientNetworkAddress {
             switch self {
             case .connected(let address),
                  .helloValidated(let address),

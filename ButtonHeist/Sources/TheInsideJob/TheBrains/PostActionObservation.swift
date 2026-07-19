@@ -44,6 +44,13 @@ struct SemanticObservationDeadline: Sendable, Equatable {
         max(0, Int((now - start) * 1_000))
     }
 
+    func reserving(
+        _ seconds: Double,
+        at now: CFAbsoluteTime = CFAbsoluteTimeGetCurrent()
+    ) -> Self {
+        Self(start: now, timeoutSeconds: max(0, remainingSeconds(at: now) - max(0, seconds)))
+    }
+
     private var deadline: CFAbsoluteTime {
         start + timeoutSeconds
     }

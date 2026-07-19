@@ -2,30 +2,8 @@ import Foundation
 import ThePlans
 import TheScore
 
-protocol FencePublicJSONResponse: Encodable {}
-
-struct PublicStatus: Encodable {
-    static let ok = PublicStatus(value: "ok")
-    static let error = PublicStatus(value: "error")
-
-    let value: String
-
-    init(value: String) {
-        self.value = value
-    }
-
-    init(_ status: PublicResponseStatus) {
-        self.value = status.rawValue
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        try container.encode(value)
-    }
-}
-
-struct PublicErrorResponse: FencePublicJSONResponse {
-    let status = PublicStatus.error
+struct PublicErrorResponse: Encodable {
+    let status = PublicResponseStatus.error
     let message: String
     let code: KnownFailureCode
     let details: PublicErrorDetails
@@ -91,7 +69,7 @@ struct PublicHeistBuildSourceSpan: Encodable {
     }
 }
 
-struct PublicResponseModel: FencePublicJSONResponse {
+struct PublicResponseModel: Encodable {
     let response: FenceResponse
     let profile: ProjectionProfile
 
@@ -161,7 +139,7 @@ struct PublicResponseModel: FencePublicJSONResponse {
     }
 }
 
-struct PublicAnnouncementsResponse: FencePublicJSONResponse {
-    let status = PublicStatus.ok
+struct PublicAnnouncementsResponse: Encodable {
+    let status = PublicResponseStatus.ok
     let announcements: [CapturedAnnouncement]
 }

@@ -56,7 +56,8 @@ public final class TheInsideJob {
         allowedScopes: Set<ConnectionScope>? = nil,
         port: UInt16 = 0,
         addressFamily: ListenerAddressFamily = .dualStack,
-        fingerprintsEnabled: Bool? = nil
+        fingerprintsEnabled: Bool? = nil,
+        authenticationPolicy: InsideJobAuthenticationPolicy = .default
     ) {
         switch sharedState {
         case .pending:
@@ -69,7 +70,8 @@ public final class TheInsideJob {
                     allowedScopes: allowedScopes,
                     port: port,
                     addressFamily: addressFamily,
-                    fingerprintsEnabled: fingerprintsEnabled
+                    fingerprintsEnabled: fingerprintsEnabled,
+                    authenticationPolicy: authenticationPolicy
                 )
             )
             sharedState = .pending(args)
@@ -185,7 +187,8 @@ public final class TheInsideJob {
         allowedScopes: Set<ConnectionScope>? = nil,
         port: UInt16 = 0,
         addressFamily: ListenerAddressFamily = .dualStack,
-        fingerprintsEnabled: Bool? = nil
+        fingerprintsEnabled: Bool? = nil,
+        authenticationPolicy: InsideJobAuthenticationPolicy = .default
     ) {
         self.init(
             token: token,
@@ -194,6 +197,7 @@ public final class TheInsideJob {
             port: port,
             addressFamily: addressFamily,
             fingerprintsEnabled: fingerprintsEnabled,
+            authenticationPolicy: authenticationPolicy,
             transportFactory: { ServerTransport(token: $0, allowedScopes: $1) }
         )
     }
@@ -205,6 +209,7 @@ public final class TheInsideJob {
         port: UInt16 = 0,
         addressFamily: ListenerAddressFamily = .dualStack,
         fingerprintsEnabled: Bool? = nil,
+        authenticationPolicy: InsideJobAuthenticationPolicy = .default,
         transportFactory: @escaping @MainActor (SessionAuthToken, Set<ConnectionScope>) -> ServerTransport = {
             ServerTransport(token: $0, allowedScopes: $1)
         }
@@ -217,7 +222,8 @@ public final class TheInsideJob {
                 allowedScopes: allowedScopes,
                 port: port,
                 addressFamily: addressFamily,
-                fingerprintsEnabled: fingerprintsEnabled
+                fingerprintsEnabled: fingerprintsEnabled,
+                authenticationPolicy: authenticationPolicy
             ),
             transportFactory: transportFactory
         )
@@ -239,7 +245,8 @@ public final class TheInsideJob {
         self.transportFactory = transportFactory
         self.muscle = TheMuscle(
             explicitToken: runtimeConfiguration.token.value,
-            sessionReleaseTimeout: runtimeConfiguration.sessionReleaseTimeout.value
+            sessionReleaseTimeout: runtimeConfiguration.sessionReleaseTimeout.value,
+            authenticationPolicy: runtimeConfiguration.authenticationPolicy
         )
         self.brains = TheBrains(
             tripwire: self.tripwire,

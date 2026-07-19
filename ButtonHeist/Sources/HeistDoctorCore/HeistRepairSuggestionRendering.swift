@@ -227,8 +227,6 @@ extension HeistRepairRefusalReason {
             return "container-only targets are not repairable as accessibility elements"
         case .targetReferenceUnsupported:
             return "unresolved target references are not repairable without their execution environment"
-        case .scopedTargetUnsupported:
-            return "container-scoped targets are not repairable without container-aware repair resolution"
         case .unresolvedTargetExpression:
             return "target expressions are not repairable without all referenced values"
         case .oldTargetStillResolvesAndSupportsRequestedAction:

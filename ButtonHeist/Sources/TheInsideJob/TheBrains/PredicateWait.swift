@@ -160,6 +160,7 @@ where Evidence: Sendable & Equatable {
         private let deadline: SemanticObservationDeadline
         private let projection: ExecutionProjection<Result, Evidence>
         private let onReadyToPoll: ReadyToPoll?
+        private var terminalVerificationReserveSeconds = 0.0
 
         init(
             wait: PredicateWait,
@@ -175,10 +176,9 @@ where Evidence: Sendable & Equatable {
         }
 
         func run() async -> Result {
+            let initialRouteStart = CFAbsoluteTimeGetCurrent()
             var evaluation = evaluate(
-                await wait.settleVisible(
-                    PredicateWaitVisibleBudget.overall.deadline(overall: deadline)
-                ),
+                await wait.settleVisible(deadline),
                 isInitialVisible: true,
                 evidence: projection.initialEvidence
             )
@@ -196,6 +196,7 @@ where Evidence: Sendable & Equatable {
                 deadline: deadline,
                 evidence: evaluation.evidence
             )
+            recordTerminalVerificationCost(since: initialRouteStart)
             evaluation = initialDiscovery.evaluation
             if evaluation.matched {
                 return finish(.matched, evidence: evaluation.evidence)
@@ -213,7 +214,7 @@ where Evidence: Sendable & Equatable {
                 switch await stream.waitForObservation(
                     after: cursor,
                     scope: .visible,
-                    deadline: deadline
+                    deadline: deadline.reserving(terminalVerificationReserveSeconds)
                 ) {
                 case .observation(let observation):
                     cursor = observation.cursor
@@ -229,10 +230,12 @@ where Evidence: Sendable & Equatable {
                         return finish(.cancelled, evidence: evaluation.evidence)
                     }
 
+                    let discoveryStart = CFAbsoluteTimeGetCurrent()
                     let discovery = await runDiscovery(
                         deadline: deadline,
                         evidence: evaluation.evidence
                     )
+                    recordTerminalVerificationCost(since: discoveryStart)
                     evaluation = discovery.evaluation
                     if evaluation.matched {
                         return finish(.matched, evidence: evaluation.evidence)
@@ -253,9 +256,7 @@ where Evidence: Sendable & Equatable {
 
         private func terminalVerification(evidence: Evidence) async -> Result {
             let visibleEvaluation = evaluate(
-                await wait.settleVisible(
-                    PredicateWaitVisibleBudget.viewportTransition.deadline(overall: deadline)
-                ),
+                await wait.settleVisible(deadline),
                 isInitialVisible: false,
                 evidence: evidence
             )
@@ -267,7 +268,7 @@ where Evidence: Sendable & Equatable {
             }
 
             let discovery = await runDiscovery(
-                deadline: nil,
+                deadline: deadline,
                 evidence: visibleEvaluation.evidence
             )
             if discovery.evaluation.matched {
@@ -280,13 +281,16 @@ where Evidence: Sendable & Equatable {
         }
 
         private func runDiscovery(
-            deadline: SemanticObservationDeadline?,
+            deadline: SemanticObservationDeadline,
             evidence: Evidence
         ) async -> PredicateWaitDiscoveryResult<Evidence> {
             var evaluation = PredicateWaitEvaluation(
                 evidence: evidence,
                 matched: false
             )
+            guard wait.hasStableObservationBudget(deadline) else {
+                return PredicateWaitDiscoveryResult(evaluation: evaluation, event: nil)
+            }
             var lastEvaluatedSequence: SettledObservationSequence?
             let event: SettledObservationEvent?
             if let waitTarget = projection.target,
@@ -343,6 +347,10 @@ where Evidence: Sendable & Equatable {
 
         private func finish(_ outcome: PredicateWaitOutcome, evidence: Evidence) -> Result {
             projection.result(outcome, deadline, evidence)
+        }
+
+        private func recordTerminalVerificationCost(since start: CFAbsoluteTime) {
+            terminalVerificationReserveSeconds = max(terminalVerificationReserveSeconds, CFAbsoluteTimeGetCurrent() - start)
         }
     }
 
@@ -429,7 +437,7 @@ where Evidence: Sendable & Equatable {
         ) {
             return current.event
         }
-        guard deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) else { return nil }
+        guard hasStableObservationBudget(deadline) else { return nil }
         return await vault.semanticObservationStream.visibleEvidence(
             timeout: min(
                 Double(SettleSession.defaultTimeoutMs) / 1_000,
@@ -438,20 +446,26 @@ where Evidence: Sendable & Equatable {
         )?.event
     }
 
+    private func hasStableObservationBudget(
+        _ deadline: SemanticObservationDeadline
+    ) -> Bool {
+        deadline.remainingSeconds() >= SettleSession.minimumStableDurationSeconds
+    }
+
     private func revealTarget(
         _ target: ResolvedAccessibilityTarget,
-        _ deadline: SemanticObservationDeadline?
+        _ deadline: SemanticObservationDeadline
     ) async -> SettledObservationEvent? {
         guard target.isElementTarget,
               case .resolved(.element) = vault.resolveTarget(target)
         else { return nil }
-        if let deadline,
-           !deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) {
+        if !deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) {
             return nil
         }
         switch await navigation.elementInflation.inflate(
             for: target,
             method: .scrollToVisible,
+            operationDeadline: deadline
         ) {
         case .inflated:
             return vault.semanticObservationStream.latestEvent
@@ -462,11 +476,10 @@ where Evidence: Sendable & Equatable {
 
     private func discover(
         _ target: ResolvedAccessibilityTarget?,
-        _ deadline: SemanticObservationDeadline?,
+        _ deadline: SemanticObservationDeadline,
         _ observer: @escaping @MainActor (SettledObservationEvent) -> Bool
     ) async -> SettledObservationEvent? {
-        if let deadline,
-           !deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) {
+        if !deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) {
             return nil
         }
         let baseline = Navigation.ExplorationBaseline.currentViewport(

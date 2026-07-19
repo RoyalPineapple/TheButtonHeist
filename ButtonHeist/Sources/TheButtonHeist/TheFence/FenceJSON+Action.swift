@@ -29,7 +29,7 @@ private enum PublicActionResultCodingKey: String, CodingKey {
     case omitted
 }
 
-struct PublicActionResponse: FencePublicJSONResponse {
+struct PublicActionResponse: Encodable {
     private let projection: ActionProjection
 
     init(command: TheFence.Command, result: ActionResult, expectation: ExpectationResult?) {
@@ -82,7 +82,7 @@ struct PublicActionResultOutput: Encodable {
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: PublicActionResultCodingKey.self)
-        try container.encode(PublicStatus(projection.status), forKey: .status)
+        try container.encode(projection.status, forKey: .status)
         try container.encode(projection.actionMethod.rawValue, forKey: .method)
         try container.encodeIfPresent(projection.message, forKey: .message)
         try container.encodeIfPresent(projection.warning, forKey: .warning)
@@ -148,7 +148,7 @@ struct PublicHeistExecutionActionResult: Encodable {
 }
 
 /// Status vocabulary for public command responses.
-enum PublicResponseStatus: String, Sendable, Equatable {
+enum PublicResponseStatus: String, Encodable, Sendable, Equatable {
     case ok
     case error
     case expectationFailed = "expectation_failed"

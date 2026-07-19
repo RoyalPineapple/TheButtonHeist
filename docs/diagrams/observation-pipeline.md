@@ -1,11 +1,13 @@
 # Observation Pipeline
 
-Button Heist has one committed semantic tree and one private retained temporal
-log. Raw parser samples remain live or diagnostic evidence. Only a clean
-settlement proof can enter the ordered commit path. Presence reads the committed
-tree; temporal predicates and receipts read replayable retained entries. The
-tripwire drives one serialized producer from dirty state to a sealed clean
-publication. Consumers join that refresh or reuse its clean commit.
+Button Heist has one current semantic graph owned by TheVault, one private
+retained ordered history owned by `SemanticObservationLog`, and one delivery
+path owned by `SemanticObservationStream`. Raw parser samples remain live or
+diagnostic evidence. Only a clean settlement proof can enter the ordered commit
+path. Presence reads the committed tree; temporal predicates and receipts read
+replayable retained entries. The tripwire drives one serialized producer from
+dirty state to a sealed clean publication. Consumers join that refresh or reuse
+its clean commit.
 
 **Illustrates:** [ARCHITECTURE.md](../ARCHITECTURE.md),
 [API.md](../API.md), [WIRE-PROTOCOL.md](../WIRE-PROTOCOL.md)
@@ -49,14 +51,16 @@ flowchart TD
     Admission -->|yes| Proof["InterfaceObservationProof"]
 
     Proof --> Committer["SemanticObservationStream<br/>ordered admission + publication"]
-    Committer --> Graph["TheVault.commitInterfaceGraph<br/>classify + admit + commit atomically"]
+    Committer --> Graph["TheVault.commitInterfaceGraph<br/>classify + commit current graph"]
     Graph --> Publication["construct settled publication<br/>from committed graph"]
     Publication --> Scope["project tree + trace evidence<br/>once per fulfilled scope"]
     Scope --> Log["private SemanticObservationLog<br/>publish retained entry"]
     Log --> Runtime["advance runtime generation<br/>and settled sequence"]
+    Runtime --> Delivery["SemanticObservationStream<br/>complete waiters"]
     Runtime --> Cursor["ObservationCursor<br/>generation + sequence order<br/>capture-derived timestamp metadata"]
     Cursor --> Seal["clean publication<br/>admitting tripwire signal"]
-    Seal --> Consumers
+    Seal --> Delivery
+    Delivery --> Consumers
     Seal --> Armed["re-arm and wait for next trip"]
     Armed --> Tripwire
     Cursor --> Entries["SemanticObservationLog.read<br/>scope plus cursor replay"]
@@ -70,24 +74,26 @@ flowchart TD
     Delta -. "never evaluator input" .-> Output["public output only"]
 ```
 
-The ordering is structural: stream admission precedes the Vault's atomic graph
-commit, which computes the candidate tree, classifies continuity, admits the
-replacement observation, and only then mutates canonical state. The commit
-completes before private log publication. The admitted result carries the exact
-parser observation which settled; the stream rejects it if a later parse or
-tripwire signal superseded that capture. Each fulfilled scope projects its tree
-and trace evidence from the same committed observation. Consumers cannot
-observe an entry for graph state that has not already committed, and consuming
-an entry cannot mutate the graph. Cursor
+The ordering is structural: stream admission precedes TheVault's graph commit,
+which computes the candidate tree, classifies continuity, admits the replacement
+observation, and only then mutates canonical state. The graph commit completes
+before private log publication; runtime state advances before stream waiters
+are completed. This is an ordered, non-interleaving `@MainActor` sequence, not
+an atomic transaction across Vault, log, runtime, and delivery owners. The
+admitted result carries the exact parser observation which settled; the stream
+rejects it if a later parse or tripwire signal superseded that capture. Each
+fulfilled scope projects its tree and trace evidence from the same committed
+observation. Consumers cannot observe an entry for graph state that has not
+already committed, and consuming an entry cannot mutate the graph. Cursor
 `observedAt` is derived from the capture's interface timestamp and is metadata;
 generation and settled sequence provide correctness ordering.
 
 Visible settlement is serialized. A trip invalidates the clean seal before a
 read can be admitted. The first consumer starts the refresh and concurrent
-consumers join it; once graph reduction and log publication complete, all
-consumers receive the same ordered event. Quiet action chains reuse that event.
-After-action settlement always starts a fresh capture through the same producer
-and publishes through the same commit path.
+consumers join it; once graph reduction, log publication, and runtime commit
+complete, all consumers receive the same ordered event. Quiet action chains
+reuse that event. After-action settlement always starts a fresh capture through
+the same producer and publishes through the same commit path.
 
 ## Viewport Movement
 
@@ -103,6 +109,13 @@ content point, inflation submits that point directly to the same transition.
 Directional page discovery is the fallback for unknown targets or missing
 reveal evidence.
 
+After a physical page move, the first clean capture whose semantic viewport
+differs from the pre-movement viewport commits immediately. An identical clean
+capture remains provisional within the shared one-second semantic observation
+budget so delayed SwiftUI accessibility updates can arrive. If the viewport is
+legitimately blank or semantically identical, its latest clean capture commits
+when there is no budget for another two-frame settle.
+
 ```mermaid
 sequenceDiagram
     participant Caller as Explorer / scroll / inflation
@@ -110,14 +123,14 @@ sequenceDiagram
     participant UIKit as UIKit viewport
     participant Settle as SettleSession
     participant Stream as SemanticObservationStream
-    participant Graph as TheVault graph
-    participant Log as Private observation log
+    participant Graph as TheVault current graph
+    participant Log as Private ordered log
     participant Callback as Observation callback
 
     Caller->>Transition: movement intent
     Transition->>UIKit: dispatch movement
     UIKit-->>Transition: moved
-    Transition->>Settle: minimal settle: parse + one run-loop turn + repeat parse
+    Transition->>Settle: minimal settle: parse + two run-loop turns + stable repeat
     Settle-->>Transition: clean outcome with exact final observation
     Transition->>Stream: admit and commit outcome
     Stream->>Stream: verify tripwire and capture identity<br/>construct InterfaceObservationProof
@@ -125,6 +138,7 @@ sequenceDiagram
     Graph-->>Stream: committed tree
     Stream->>Log: publish retained entry
     Log-->>Stream: published
+    Stream->>Stream: advance runtime state<br/>complete waiters
     Stream-->>Transition: settled event
     Transition-->>Caller: committed event
     Caller->>Callback: evaluate committed observation
@@ -187,9 +201,9 @@ flowchart TD
     Window --> EntryEvaluation{"matched?"}
     EntryEvaluation -->|yes| Match
     EntryEvaluation -->|no, time remains| Route
-    Idle -->|deadline| FinalVisible["final bare-settle visible check"]
+    Idle -->|terminal reserve reached| FinalVisible["final visible settle<br/>same operation deadline"]
     FinalVisible -->|matched| Match
-    FinalVisible -->|unmatched| FinalSearch["final reveal or full canonical discovery<br/>normal traversal caps"]
+    FinalVisible -->|unmatched, time remains| FinalSearch["final reveal or canonical discovery<br/>same operation deadline"]
     FinalSearch -->|matched| Match
     FinalSearch -->|unmatched| Timeout["return timed out"]
 ```
@@ -199,13 +213,18 @@ an unmatched entry re-runs the same reveal or discovery route. A standalone
 temporal baseline is established only after initial positioning; every later
 evaluation uses the full accumulated window from that immutable baseline.
 Action expectations keep the supplied pre-action baseline. The terminal visible
-check gets the viewport transition's 250 ms settle budget. Terminal search is
-not cancelled by the elapsed wait deadline; normal traversal caps bound it.
-Every stage returns immediately when the predicate is fulfilled, and no
-compatibility wait orchestration exists. `PredicateWait.Execution` directly
-coordinates the visible, reveal/discovery, retained-log waiter, and terminal
-verification stages. `PredicateObservationStreamState` only reduces one settled
-observation against the immutable baseline and owns no lifecycle or history.
+check, reveal, discovery, and waiter phases inherit one authored operation
+deadline. Already-settled truth remains immediately evaluable; new settlement
+or discovery starts only when the remaining budget contains the settle reducer's
+declared quiet-window floor. After each reveal or discovery, the wait records its route cost and
+reserves the longest observed duration so terminal verification starts before
+that deadline. Terminal work receives no fresh 250 ms budget and no discovery
+continues after the operation deadline. Every stage returns immediately when
+the predicate is fulfilled, and no compatibility wait orchestration exists.
+`PredicateWait.Execution` directly coordinates the visible, reveal/discovery,
+retained-log waiter, and terminal verification stages.
+`PredicateObservationStreamState` only reduces one settled observation against
+the immutable baseline and owns no lifecycle or history.
 
 ## Screen Boundaries
 

@@ -622,6 +622,52 @@ private let repairJSONDiagnosisFixture = HeistRepairDiagnosis.suggested(
         #expect(resolved.path == second.path)
     }
 
+    @Test("Repair screen uses canonical target matching for scoped, ordinal, and unsupported targets")
+    func repairScreenUsesCanonicalTargetMatching() {
+        let screen = RepairScreen(interface: makeTestInterface(nodes: [
+            testContainer(makeTestSemanticContainer(label: "Checkout"), children: [
+                testElement(element(label: "Pay", traits: [.button], actions: [.activate])),
+            ]),
+            testContainer(makeTestSemanticContainer(label: "Cart"), children: [
+                testElement(element(label: "Pay", traits: [.button], actions: [.activate])),
+            ]),
+        ]))
+
+        let scoped = AccessibilityTarget.within(container: .label("Checkout"), target: .label("Pay"))
+        guard case .resolved(let scopedMatch, let scopedCount) = screen.resolve(scoped) else {
+            Issue.record("Expected scoped element target to resolve")
+            return
+        }
+        #expect(scopedCount == 1)
+        #expect(scopedMatch.path == TreePath([0, 0]))
+
+        guard case .resolved(let ordinalMatch, let ordinalCount) = screen.resolve(
+            .predicate(ElementPredicateTemplate(label: "Pay"), ordinal: 1)
+        ) else {
+            Issue.record("Expected ordinal target to resolve")
+            return
+        }
+        #expect(ordinalCount == 2)
+        #expect(ordinalMatch.path == TreePath([1, 0]))
+
+        guard case .notFound(let matchCount) = screen.resolve(
+            .predicate(ElementPredicateTemplate(label: "Pay"), ordinal: 2)
+        ) else {
+            Issue.record("Expected out-of-range ordinal to preserve candidate cardinality")
+            return
+        }
+        #expect(matchCount == 2)
+
+        guard case .unsupportedTarget(.container) = screen.resolve(.container(.label("Checkout"))) else {
+            Issue.record("Expected matched container to remain unsupported for repair")
+            return
+        }
+        guard case .unsupportedTarget(.reference) = screen.resolve(.ref("pay")) else {
+            Issue.record("Expected unresolved target reference to remain unsupported")
+            return
+        }
+    }
+
     @Test("One screen context preserves scoring and output order across repair rules")
     func oneScreenContextPreservesScoringAndOutputOrderAcrossRepairRules() throws {
         let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete item"))
@@ -1063,18 +1109,8 @@ private let repairJSONDiagnosisFixture = HeistRepairDiagnosis.suggested(
     }
 
     private func resolvedCount(_ target: AccessibilityTarget, in interface: Interface) -> Int {
-        let elements = interface.projectedElements
-        switch target {
-        case .predicate(let predicate, let ordinal):
-            guard let predicate = try? predicate.resolve(in: .empty) else { return 0 }
-            let matches = elements.filter { $0.matches(predicate) }
-            if let ordinal {
-                return matches.indices.contains(ordinal) ? 1 : 0
-            }
-            return matches.count
-        case .container, .ref, .within:
-            return 0
-        }
+        guard let target = try? target.resolve(in: .empty) else { return 0 }
+        return AccessibilityTargetMatchGraph(interface: interface).resolve(target).orderedPaths.count
     }
 
     private func receipt(

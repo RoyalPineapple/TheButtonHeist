@@ -4,12 +4,12 @@ import ThePlans
 import AccessibilitySnapshotModel
 import TheScore
 
-struct PublicHeistExecutionResponse: FencePublicJSONResponse {
-    let status: PublicStatus
+struct PublicHeistExecutionResponse: Encodable {
+    let status: PublicResponseStatus
     let report: PublicHeistReport
 
     init(projection: HeistReportProjection) {
-        self.status = PublicStatus(projection.status)
+        self.status = projection.status
         self.report = PublicHeistReport(projection: projection)
     }
 }

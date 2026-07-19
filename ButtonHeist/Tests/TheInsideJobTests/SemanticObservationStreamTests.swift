@@ -619,6 +619,44 @@ final class SemanticObservationStreamTests: XCTestCase {
         XCTAssertEqual(vault.semanticObservationStream.observationWaiterCount, 0)
     }
 
+    func testObservationWaiterResumesAfterRuntimeStateCommit() async throws {
+        let stream = vault.semanticObservationStream
+        let task = Task { @MainActor in
+            let result = await stream.waitForObservation(
+                after: nil,
+                scope: .visible,
+                deadline: nil
+            )
+            return (
+                result: result,
+                sequence: stream.runtimeState.sequence,
+                lineage: stream.runtimeState.lineage,
+                notificationCursor: stream.runtimeState.notificationCursor
+            )
+        }
+        await waitForObservationWaiterCount(1)
+
+        let notificationBatch = AccessibilityNotificationBatch(
+            events: [],
+            through: AccessibilityNotificationCursor(sequence: 7),
+            scopedScreenChangedThrough: 0,
+            gap: nil
+        )
+        let committed = stream.commitVisibleObservationForTesting(
+            observation(label: "Initial", heistId: "initial"),
+            notificationBatch: notificationBatch
+        )
+
+        let received = await task.value
+        guard case .observation(let entry) = received.result else {
+            return XCTFail("Expected waiter to receive the committed observation")
+        }
+        XCTAssertEqual(entry.cursor, committed.cursor)
+        XCTAssertEqual(received.sequence, committed.sequence)
+        XCTAssertEqual(received.lineage, .continuous(committed.generation))
+        XCTAssertEqual(received.notificationCursor, notificationBatch.through)
+    }
+
     func testFreshDiscoveryCycleCompletesBeforeTimedReplayFallbackBegins() async throws {
         let initialDiscovery = vault.semanticObservationStream.commitDiscoveryObservationForTesting(
             observation(label: "Initial Discovery", heistId: "initial_discovery")

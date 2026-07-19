@@ -192,7 +192,7 @@ final class WaitForIntegrationTests: XCTestCase {
 
         let response = try await waitFor(
             target: .label("WaitFor-Missing-Target"),
-            timeout: 0.2
+            timeout: 1.0
         )
         let result = try XCTUnwrap(response)
         let message = try XCTUnwrap(result.message)
@@ -375,7 +375,7 @@ final class WaitForIntegrationTests: XCTestCase {
 
         let result = await changedWait(
             expectation: .exists(.label("WaitForChange-AlreadyPresent")),
-            timeout: 0.2
+            timeout: 1.0
         )
 
         XCTAssertTrue(result.outcome.isSuccess)
@@ -389,7 +389,7 @@ final class WaitForIntegrationTests: XCTestCase {
     func testWaitForStateAbsentAlreadyAbsentSucceedsFromCurrentState() async throws {
         let result = await changedWait(
             expectation: .missing(.label("WaitForChange-NeverExisted")),
-            timeout: 0.2
+            timeout: 1.0
         )
 
         XCTAssertTrue(result.outcome.isSuccess)
@@ -474,7 +474,7 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertTrue(result.message?.contains("expected: changed(elements(*))") == true)
     }
 
-    func testWaitForChangeMinimumTimeoutPerformsOneBoundedSettledCheck() async throws {
+    func testWaitForChangeMinimumTimeoutDoesNotStartUnfinishableSettlement() async throws {
         let baseline = addLabel("WaitForChange-MinimumTimeoutBaseline")
         defer { baseline.removeFromSuperview() }
         let didObserveBaseline = await waitForSettledVisibleObservation()
@@ -491,7 +491,7 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .wait)
         XCTAssertEqual(result.outcome.errorKind, .timeout)
-        XCTAssertLessThan(elapsed, 1.0)
+        XCTAssertLessThan(elapsed, 0.1)
         XCTAssertTrue(
             message.contains("expected: label=\"WaitForChange-MinimumTimeoutMissing\""),
             "Unexpected message: \(message)"
@@ -575,7 +575,7 @@ final class WaitForIntegrationTests: XCTestCase {
 
         let result = await changedWait(
             expectation: .missing(.label("WaitForChange-StillPresent")),
-            timeout: 0.2
+            timeout: 1.0
         )
 
         XCTAssertFalse(result.outcome.isSuccess)
