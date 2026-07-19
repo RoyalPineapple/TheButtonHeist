@@ -21,7 +21,7 @@ its clean result.
 `ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStream.swift`,
 `ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStream+Settlement.swift`,
 `ButtonHeist/Sources/TheInsideJob/TheBrains/SettleSession.swift`,
-`ButtonHeist/Sources/TheInsideJob/TheBrains/Navigation+ScrollSettleProof.swift`,
+`ButtonHeist/Sources/TheInsideJob/TheBrains/Navigation+ViewportTransition.swift`,
 `ButtonHeist/Sources/TheInsideJob/TheBrains/Navigation+Explore.swift`,
 `ButtonHeist/Sources/TheInsideJob/TheBrains/Navigation+ExplorationScanning.swift`,
 `ButtonHeist/Sources/TheInsideJob/TheBrains/Navigation+SemanticExploration.swift`,

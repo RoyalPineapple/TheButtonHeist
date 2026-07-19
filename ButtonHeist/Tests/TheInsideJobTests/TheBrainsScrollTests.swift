@@ -112,7 +112,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(TheBrains.actionErrorKind(for: failureKind), .elementNotFound)
     }
 
-    func testExploreScreenReturnsNoProofWhenInitialSettlementIsCancelled() async {
+    func testExploreScreenReturnsNilWhenInitialSettlementIsCancelled() async {
         let staleBaseline = InterfaceObservation.makeForTests([
             InterfaceObservation.TestEntry(
                 AccessibilityElement.make(label: "Stale", traits: .staticText),
@@ -124,12 +124,12 @@ final class TheBrainsScrollTests: XCTestCase {
         }
         explorationTask.cancel()
 
-        let returnedProof = await explorationTask.value
+        let returnedResult = await explorationTask.value
 
-        XCTAssertFalse(returnedProof)
+        XCTAssertFalse(returnedResult)
     }
 
-    func testScanForHeistIdReturnsNoProofWhenInitialSettlementIsCancelled() async {
+    func testScanForHeistIdReturnsNilWhenInitialSettlementIsCancelled() async {
         let staleId: HeistId = "stale_action_target"
         brains.vault.installObservationForTesting(.makeForTests([
             .init(
@@ -143,11 +143,11 @@ final class TheBrainsScrollTests: XCTestCase {
         }
         scanTask.cancel()
 
-        let returnedNoProof = await scanTask.value
-        XCTAssertTrue(returnedNoProof)
+        let returnedNil = await scanTask.value
+        XCTAssertTrue(returnedNil)
     }
 
-    func testScanForHeistIdReturnsNoProofWhenDeadlineIsExpired() async {
+    func testScanForHeistIdReturnsNilWhenDeadlineIsExpired() async {
         let deadline = SemanticObservationDeadline(
             start: CFAbsoluteTimeGetCurrent() - 1,
             timeoutSeconds: 0

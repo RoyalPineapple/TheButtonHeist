@@ -29,12 +29,12 @@ extension Navigation {
             searchOrder: searchOrder,
         )
         return await explorer.exploreViewports(exitPosition: exitPosition) { event in
-            if let decision = onObservation?(event), decision == .finish {
-                return .finish
+            if let decision = onObservation?(event), decision == .goalSatisfied {
+                return .goalSatisfied
             }
             guard let target else { return .continue }
             return vault.hasVisibleTerminalResolution(target, in: event.settledObservation.observation.tree)
-                ? .finish
+                ? .goalSatisfied
                 : .continue
         }
     }

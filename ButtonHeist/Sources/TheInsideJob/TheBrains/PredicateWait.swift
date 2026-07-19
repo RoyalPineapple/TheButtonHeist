@@ -492,7 +492,7 @@ where Evidence: Sendable & Equatable {
             exitPosition: .origin,
             deadline: deadline,
             onObservation: { event in
-                observer(event) ? .finish : .continue
+                observer(event) ? .goalSatisfied : .continue
             },
         ) else { return nil }
         return exploration.event

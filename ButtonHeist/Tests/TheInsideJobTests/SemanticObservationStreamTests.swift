@@ -215,7 +215,7 @@ final class SemanticObservationStreamTests: XCTestCase {
         XCTAssertEqual(entries.map(\.cursor), [firstEvent.cursor, secondEvent.cursor].compactMap { $0 })
     }
 
-    func testInferredReplacementResetsGraphAndRetainsClassifierProof() {
+    func testInferredReplacementResetsGraphAndRetainsClassifierEvidence() {
         let firstEvent = vault.semanticObservationStream.commitVisibleObservationForTesting(
             observation(label: "Before", heistId: "before")
         )

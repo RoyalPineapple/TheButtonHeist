@@ -8,13 +8,13 @@ import TheScore
 import AccessibilitySnapshotParser
 
 internal enum ScreenContinuity: Sendable, Equatable {
-    internal enum ReplacementProof: Sendable, Equatable {
+    internal enum ReplacementEvidence: Sendable, Equatable {
         case screenChangedNotification
         case inferred(AccessibilityObservationFallbackReason)
     }
 
     case sameGeneration
-    case replacement(ReplacementProof)
+    case replacement(ReplacementEvidence)
 
     internal var isReplacement: Bool {
         if case .replacement = self { return true }

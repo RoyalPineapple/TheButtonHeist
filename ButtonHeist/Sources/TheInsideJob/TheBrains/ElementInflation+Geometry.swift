@@ -137,7 +137,7 @@ extension ElementInflation {
                 minimumScreenRect: ScreenMetrics.current.bounds
             )
         )
-        switch transition.result {
+        switch transition.outcome {
         case .unchanged:
             return .success(.alreadyInPosition)
         case .unavailable:

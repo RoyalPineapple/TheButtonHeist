@@ -29,12 +29,12 @@ extension Navigation {
         ) {
         case .resolved(let scrollTarget):
             let uiDirection = Self.uiScrollDirection(for: direction)
-            let proof = await scrollOnePageAndSettle(
+            let transition = await scrollOnePageAndSettle(
                 scrollTarget,
                 direction: uiDirection,
                 animated: false,
             )
-            switch proof.result {
+            switch transition.outcome {
             case .moved:
                 return .success(method: .scroll)
             case .unchanged:
@@ -68,11 +68,11 @@ extension Navigation {
             command: .scrollToEdge
         ) {
         case .resolved(let scrollTarget):
-            let proof = await scrollToEdgeAndSettle(
+            let transition = await scrollToEdgeAndSettle(
                 scrollTarget,
                 edge: edge,
             )
-            switch proof.result {
+            switch transition.outcome {
             case .moved:
                 return .success(method: .scrollToEdge)
             case .unchanged:

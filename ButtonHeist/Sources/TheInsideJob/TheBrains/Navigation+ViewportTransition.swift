@@ -22,7 +22,7 @@ extension Navigation {
 
     }
 
-    enum ScrollSettleResult: Equatable {
+    enum ScrollSettleOutcome: Equatable {
         case moved
         case unchanged
         case unavailable
@@ -33,13 +33,13 @@ extension Navigation {
     }
 
     struct ViewportTransition {
-        let result: ScrollSettleResult
+        let outcome: ScrollSettleOutcome
         let previousVisibleIds: Set<HeistId>
         let event: SettledObservationEvent?
 
         static func unavailable(previousVisibleIds: Set<HeistId> = []) -> ViewportTransition {
             ViewportTransition(
-                result: .unavailable,
+                outcome: .unavailable,
                 previousVisibleIds: previousVisibleIds,
                 event: nil
             )
@@ -59,8 +59,8 @@ extension Navigation {
         let previousViewportHash = vault.latestObservation.tree.viewportOnly.interfaceHash
         let previousVisibleIds = vault.viewportElementIDs
         let notificationWindow = vault.accessibilityNotifications.beginActionWindow()
-        let primitiveResult = await dispatchViewportMovement(intent)
-        switch primitiveResult {
+        let primitiveOutcome = await dispatchViewportMovement(intent)
+        switch primitiveOutcome {
         case .moved:
             let event = await settledExplorationPage(
                 deadline: deadline,
@@ -72,7 +72,7 @@ extension Navigation {
                 return .unavailable(previousVisibleIds: previousVisibleIds)
             }
             return ViewportTransition(
-                result: movementResult(
+                outcome: movementOutcome(
                     for: intent,
                     previousVisibleIds: previousVisibleIds
                 ),
@@ -82,7 +82,7 @@ extension Navigation {
         case .alreadyInPosition:
             notificationWindow.cancel()
             return ViewportTransition(
-                result: .unchanged,
+                outcome: .unchanged,
                 previousVisibleIds: previousVisibleIds,
                 event: nil
             )
@@ -144,10 +144,10 @@ extension Navigation {
         }
     }
 
-    private func movementResult(
+    private func movementOutcome(
         for intent: ViewportMovementIntent,
         previousVisibleIds: Set<HeistId>
-    ) -> ScrollSettleResult {
+    ) -> ScrollSettleOutcome {
         guard case .swipe = intent else { return .moved }
         return vault.viewportElementIDs == previousVisibleIds ? .unchanged : .moved
     }
