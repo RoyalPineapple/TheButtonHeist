@@ -72,11 +72,18 @@ extension Actions {
         let liveTarget = context.liveTarget
         switch TheVault.Interactivity.checkInteractivity(treeElement.element, object: liveTarget.object) {
         case .blocked(let reason):
+            // Deliberate VoiceOver divergence: VoiceOver permits the double-tap
+            // and lets the app ignore it, while `notEnabled` is explicit
+            // accessibility state saying that Button Heist should not dispatch.
             return .failure(payload, message: reason)
         case .interactive(let warning):
             if let warning { insideJobLogger.warning("\(warning)") }
         }
-        guard TheVault.Interactivity.isInteractive(element: treeElement.element, object: liveTarget.object) else {
+        // VoiceOver calls accessibilityActivate() for any target, then dispatches
+        // at its activation point when it declines. Let expectations arbitrate
+        // whether that delivery had the intended effect.
+        guard payload.method != .activate else { return nil }
+        guard TheVault.Interactivity.isInteractive(element: treeElement.element) else {
             return .failure(
                 payload,
                 message: ActionCapabilityDiagnostic.unsupportedElementAction(

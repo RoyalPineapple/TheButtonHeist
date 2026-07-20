@@ -260,7 +260,11 @@ public struct ActionResult: Codable, Sendable, Equatable {
         case .success:
             ActionResultEvidence.success(ActionResultSuccessEvidence(
                 body: body,
-                warning: warning(method: payload.method, subjectEvidence: subjectEvidence)
+                warning: warning(
+                    method: payload.method,
+                    subjectEvidence: subjectEvidence,
+                    activationTrace: activationTrace
+                )
             ))
         case .failure(let failureKind):
             ActionResultEvidence.failure(failureKind, ActionResultFailureEvidence(body: body))
@@ -477,7 +481,8 @@ public struct ActionResult: Codable, Sendable, Equatable {
 
     private static func warning(
         method: ActionMethod,
-        subjectEvidence: ActionSubjectEvidence?
+        subjectEvidence: ActionSubjectEvidence?,
+        activationTrace: ActivationTrace?
     ) -> HeistActionWarning? {
         guard let element = subjectEvidence?.element else { return nil }
         let evidence = ElementDiagnosticSummary(
@@ -488,7 +493,8 @@ public struct ActionResult: Codable, Sendable, Equatable {
         ).rendered(using: .activationAffordanceEvidence)
 
         switch method {
-        case .activate where !AccessibilityPolicy.advertisesActivationAffordance(element.traits):
+        case .activate where !element.actions.contains(.activate)
+            && activationTrace?.implementsAccessibilityActivation == false:
             return .activationWeakAffordance(evidence: evidence)
         case .typeText where !AccessibilityPolicy.supportsTextEntry(element.traits):
             return .textEntryWeakAffordance(evidence: evidence)

@@ -14,6 +14,10 @@ final class ActivationPolicyTests: XCTestCase {
 
     private final class ActivationObject: NSObject {}
 
+    private final class DecliningActivationObject: NSObject {
+        override func accessibilityActivate() -> Bool { false }
+    }
+
     func testElementInflationFailureMapsNoRevealPathToCommandMethod() {
         let result = ElementInflation.ElementInflationFailure.noRevealPath("target has no reveal path")
             .actionDispatchResult(payload: .activate)
@@ -160,7 +164,7 @@ final class ActivationPolicyTests: XCTestCase {
             axActivateReturned: false,
             tapActivationPoint: ScreenPoint(x: 30, y: 40),
             tapActivationSucceeded: true
-        )))
+        ), implementsAccessibilityActivation: false))
     }
 
     func testNonFiniteActivationPointStopsBeforeMechanicalDispatch() async throws {
@@ -225,7 +229,7 @@ final class ActivationPolicyTests: XCTestCase {
             axActivateReturned: false,
             tapActivationPoint: ScreenPoint(x: 30, y: 40),
             tapActivationSucceeded: true
-        ))
+        ), implementsAccessibilityActivation: false)
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.message, "text entry did not focus")
         XCTAssertEqual(result.activationTrace, expectedTrace)
@@ -265,7 +269,8 @@ final class ActivationPolicyTests: XCTestCase {
             label: "Refreshed Button",
             traits: .button,
             frame: CGRect(x: 12, y: 30, width: 80, height: 44),
-            activationPoint: CGPoint(x: 52, y: 52)
+            activationPoint: CGPoint(x: 52, y: 52),
+            object: DecliningActivationObject()
         )
         var activateCount = 0
         var dispatchedPoints: [CGPoint] = []
@@ -307,12 +312,14 @@ final class ActivationPolicyTests: XCTestCase {
             axActivateReturned: false,
             tapActivationPoint: ScreenPoint(x: 52, y: 52),
             tapActivationSucceeded: false
-        )))
+        ), implementsAccessibilityActivation: true))
         XCTAssertDiagnostic(result.message, contains: [
             "activate failed: accessibilityActivate() declined after semantic refresh",
             "activation-point dispatch was attempted at the fresh accessibility activation point",
             "label=\"Refreshed Button\"",
             "actions=[activate]",
+            "activationImplementation=present",
+            "likelyConditionalState=true",
             "correction: target an element with primary accessibility activation",
         ])
         XCTAssertDiagnostic(result.message, doesNotContain: [
@@ -358,7 +365,8 @@ final class ActivationPolicyTests: XCTestCase {
         label: String = "Target",
         traits: UIAccessibilityTraits = [],
         frame: CGRect = CGRect(x: 0, y: 0, width: 44, height: 44),
-        activationPoint: CGPoint
+        activationPoint: CGPoint,
+        object: NSObject = ActivationObject()
     ) -> TheVault.LiveActionTarget {
         let element = AccessibilityElement.make(
             label: label,
@@ -372,7 +380,6 @@ final class ActivationPolicyTests: XCTestCase {
             scrollMembership: nil,
             element: element
         )
-        let object = ActivationObject()
         object.accessibilityFrame = frame
         let vault = TheVault(tripwire: TheTripwire())
         vault.installObservationForTesting(.makeForTests(

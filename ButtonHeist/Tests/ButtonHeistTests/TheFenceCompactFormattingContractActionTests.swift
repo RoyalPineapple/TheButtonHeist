@@ -339,7 +339,7 @@ extension TheFenceCompactFormattingContractTests {
                     axActivateReturned: false,
                     tapActivationPoint: ScreenPoint(x: 888, y: 372),
                     tapActivationSucceeded: true
-                ))
+                ), implementsAccessibilityActivation: false)
             )
         )
 
@@ -825,7 +825,7 @@ extension TheFenceCompactFormattingContractTests {
             axActivateReturned: false,
             tapActivationPoint: ScreenPoint(x: 195, y: 139),
             tapActivationSucceeded: true
-        ))
+        ), implementsAccessibilityActivation: false)
         let command = HeistActionCommand.activate(.predicate(ElementPredicateTemplate(label: "Search all items")))
         let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
         let response = FenceResponse.heistExecution(

@@ -169,7 +169,8 @@ public enum HeistActionWarning: Codable, Sendable, Equatable {
     public var message: String {
         switch self {
         case .activationWeakAffordance:
-            return "activate succeeded, but the target does not advertise a primary activation affordance"
+            return "target advertised no interactivity and implements no activation; "
+                + "activate proceeded as VoiceOver would"
         case .textEntryWeakAffordance:
             return "typeText succeeded, but the target does not advertise a text-input trait"
         }

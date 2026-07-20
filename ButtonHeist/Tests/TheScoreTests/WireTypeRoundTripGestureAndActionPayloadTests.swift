@@ -31,6 +31,7 @@ extension WireTypeRoundTripTests {
         let missingTapResult = """
         {
           "axActivateReturned": false,
+          "implementsAccessibilityActivation": false,
           "tapActivationDispatched": true,
           "tapActivationPoint": { "x": 10, "y": 20 }
         }
@@ -42,6 +43,7 @@ extension WireTypeRoundTripTests {
         let strayTapPoint = """
         {
           "axActivateReturned": true,
+          "implementsAccessibilityActivation": false,
           "tapActivationDispatched": false,
           "tapActivationPoint": { "x": 10, "y": 20 },
           "tapActivationSucceeded": true
