@@ -28,22 +28,24 @@ final class KeyboardInjectionTaskQueue: NSObject {
 
 @MainActor
 final class KeyboardInjectionKeyboardImpl: NSObject {
-    private typealias AddInputStringMethod = ObjCRuntime.ObjectMethod<ObjCRuntime.ObjectArgument<NSString>>
+    private typealias AddInputStringMethod = ObjCRuntime.ObjectMethod<ObjCRuntime.ObjectUIntArguments<NSString>>
     private typealias KeyboardObjectGetter = ObjCRuntime.ObjectGetter<NSObject>
     private typealias KeyboardNoArgumentMethod = ObjCRuntime.ObjectMethod<ObjCRuntime.NoArguments>
 
     let inputDelegate = KeyboardInjectionTextInputDelegate()
     var taskQueueObject: KeyboardInjectionTaskQueue? = KeyboardInjectionTaskQueue()
     private(set) var inputStrings: [String] = []
+    private(set) var inputFlags: [UInt] = []
 
     @objc(delegate)
     func delegate() -> AnyObject? {
         inputDelegate
     }
 
-    @objc(addInputString:)
-    func addInputString(_ text: NSString) {
+    @objc(addInputString:withFlags:)
+    func addInputString(_ text: NSString, flags: UInt) {
         inputStrings.append(text as String)
+        inputFlags.append(flags)
     }
 
     @objc(taskQueue)
@@ -61,8 +63,8 @@ final class KeyboardInjectionKeyboardImpl: NSObject {
     func runtime(missingSelector selector: String? = nil) -> UIKeyboardImplTextInjection.Runtime {
         UIKeyboardImplTextInjection.Runtime(
             addInputString: { target in
-                guard AddInputStringMethod.keyboardAddInputString.rawValue != selector else { return nil }
-                return ObjCRuntime.message(.keyboardAddInputString, to: target)
+                guard AddInputStringMethod.keyboardAddLiteralInputString.rawValue != selector else { return nil }
+                return ObjCRuntime.message(.keyboardAddLiteralInputString, to: target)
             },
             taskQueue: { target in
                 guard KeyboardObjectGetter.keyboardTaskQueue.rawValue != selector else { return nil }
@@ -207,7 +209,7 @@ final class TheSafecrackerTests: XCTestCase {
         let keyboardImpl = KeyboardInjectionKeyboardImpl()
         let injection = UIKeyboardImplTextInjection(
             impl: keyboardImpl,
-            runtime: keyboardImpl.runtime(missingSelector: "addInputString:")
+            runtime: keyboardImpl.runtime(missingSelector: "addInputString:withFlags:")
         )
 
         let result = injection.type("h")
@@ -215,12 +217,45 @@ final class TheSafecrackerTests: XCTestCase {
         XCTAssertEqual(
             result.diagnostic,
             KeyboardTextInjectionDiagnostic.missingSelector(
-                "addInputString:",
+                "addInputString:withFlags:",
                 strategy: UIKeyboardImplTextInjection.strategyName,
                 character: "h"
             )
         )
         XCTAssertTrue(keyboardImpl.inputStrings.isEmpty)
+    }
+
+    func testTextInjectionDispatchesComposedGraphemeAsOneLiteralInsertion() {
+        let keyboardImpl = KeyboardInjectionKeyboardImpl()
+        let injection = UIKeyboardImplTextInjection(impl: keyboardImpl)
+        let grapheme: Character = "e\u{301}"
+
+        let result = injection.type(grapheme)
+
+        XCTAssertEqual(result, .dispatched)
+        XCTAssertEqual(keyboardImpl.inputStrings, [String(grapheme)])
+        XCTAssertEqual(
+            keyboardImpl.inputFlags,
+            [UIKeyboardImplTextInjection.literalInsertionFlags]
+        )
+        XCTAssertEqual(keyboardImpl.taskQueueObject?.waitCount, 1)
+    }
+
+    func testTypeTextDispatchesEachCharacterLiterallyAndDrainsAfterEach() async {
+        let keyboardImpl = KeyboardInjectionKeyboardImpl()
+        let safecracker = TheSafecracker(keyboardInput: SafecrackerKeyboardInput(
+            keyboardBridgeProvider: { keyboardImpl.bridge() }
+        ))
+
+        let result = await safecracker.typeText("teh", interKeyDelay: 0)
+
+        XCTAssertEqual(result, .dispatched)
+        XCTAssertEqual(keyboardImpl.inputStrings, ["t", "e", "h"])
+        XCTAssertEqual(
+            keyboardImpl.inputFlags,
+            Array(repeating: UIKeyboardImplTextInjection.literalInsertionFlags, count: 3)
+        )
+        XCTAssertEqual(keyboardImpl.taskQueueObject?.waitCount, 3)
     }
 
     func testTextInjectionReportsMissingDrainSelectorAfterDispatch() {
@@ -263,7 +298,7 @@ final class TheSafecrackerTests: XCTestCase {
     func testTypeTextReturnsKeyboardInjectionDiagnostic() async {
         let keyboardImpl = KeyboardInjectionKeyboardImpl()
         let safecracker = TheSafecracker(keyboardInput: SafecrackerKeyboardInput(
-            keyboardBridgeProvider: { keyboardImpl.bridge(missingSelector: "addInputString:") }
+            keyboardBridgeProvider: { keyboardImpl.bridge(missingSelector: "addInputString:withFlags:") }
         ))
 
         let result = await safecracker.typeText("hello")
@@ -271,7 +306,7 @@ final class TheSafecrackerTests: XCTestCase {
         XCTAssertEqual(
             result.diagnostic,
             KeyboardTextInjectionDiagnostic.missingSelector(
-                "addInputString:",
+                "addInputString:withFlags:",
                 strategy: UIKeyboardImplTextInjection.strategyName,
                 character: "h"
             )

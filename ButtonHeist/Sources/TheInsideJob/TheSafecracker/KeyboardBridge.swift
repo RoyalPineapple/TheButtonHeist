@@ -90,18 +90,21 @@ final class UIKeyboardImplTextInjection {
 
     static let strategyName = "UIKeyboardImplTextInjection"
 
-    private typealias AddInputStringMethod = ObjCRuntime.ObjectMethod<ObjCRuntime.ObjectArgument<NSString>>
+    /// Bypass the IME candidate engine and commit the supplied text literally.
+    static let literalInsertionFlags: UInt = 1 << 7
+
+    private typealias AddInputStringMethod = ObjCRuntime.ObjectMethod<ObjCRuntime.ObjectUIntArguments<NSString>>
     private typealias KeyboardObjectGetter = ObjCRuntime.ObjectGetter<NSObject>
     private typealias KeyboardNoArgumentMethod = ObjCRuntime.ObjectMethod<ObjCRuntime.NoArguments>
     typealias TaskQueueGetter = ObjCRuntime.ResolvedObjectGetter<NSObject, NSObject>
 
     struct Runtime: Sendable {
-        var addInputString: @Sendable (NSObject) -> ObjCRuntime.Message<NSObject, ObjCRuntime.ObjectArgument<NSString>>?
+        var addInputString: @Sendable (NSObject) -> ObjCRuntime.Message<NSObject, ObjCRuntime.ObjectUIntArguments<NSString>>?
         var taskQueue: @Sendable (NSObject) -> TaskQueueGetter?
         var waitUntilAllTasksAreFinished: @Sendable (NSObject) -> ObjCRuntime.Message<NSObject, ObjCRuntime.NoArguments>?
 
         static let live = Runtime(
-            addInputString: { ObjCRuntime.message(.keyboardAddInputString, to: $0) },
+            addInputString: { ObjCRuntime.message(.keyboardAddLiteralInputString, to: $0) },
             taskQueue: { ObjCRuntime.resolve(.keyboardTaskQueue, from: $0) },
             waitUntilAllTasksAreFinished: {
                 ObjCRuntime.message(.keyboardWaitUntilAllTasksAreFinished, to: $0)
@@ -124,12 +127,12 @@ final class UIKeyboardImplTextInjection {
         let text = String(character)
         guard let addInputString = runtime.addInputString(impl) else {
             return .failed(.missingSelector(
-                AddInputStringMethod.keyboardAddInputString.rawValue,
+                AddInputStringMethod.keyboardAddLiteralInputString.rawValue,
                 strategy: Self.strategyName,
                 character: text
             ))
         }
-        addInputString.send(text as NSString)
+        addInputString.send(text as NSString, flags: Self.literalInsertionFlags)
         return drainTaskQueue(character: text)
     }
 
@@ -199,9 +202,8 @@ final class UIKeyboardImplTextInjection {
     }
 
     /// Inject a single character into the focused text field.
-    /// Routes through UIKeyboardImpl's internal input processing, which
-    /// means the character lands via the normal `UIKeyInput.insertText(_:)`
-    /// pathway with all responder-chain delegate callbacks.
+    /// Routes through UIKeyboardImpl's literal insertion path, which bypasses
+    /// autocorrection while preserving the normal text-input delegate gates.
     func type(_ character: Character) -> KeyboardTextInjectionOutcome {
         textInjection.type(character)
     }
