@@ -733,8 +733,8 @@ private final class ProductTextInputKeyboardImpl: NSObject {
         return inputDelegate
     }
 
-    @objc(addInputString:)
-    func addInputString(_ text: NSString) {
+    @objc(addInputString:withFlags:)
+    func addInputString(_ text: NSString, flags: UInt) {
         guard textField?.isFirstResponder == true else { return }
         let nextValue = (textField?.text ?? "") + (text as String)
         textField?.text = nextValue

@@ -320,7 +320,7 @@ extension TheBrainsActionTests {
     func testExecuteTypeTextReportsKeyboardInjectionFailure() async {
         let keyboardImpl = KeyboardInjectionKeyboardImpl()
         replaceBrains(keyboardInput: SafecrackerKeyboardInput(
-            keyboardBridgeProvider: { keyboardImpl.bridge(missingSelector: "addInputString:") }
+            keyboardBridgeProvider: { keyboardImpl.bridge(missingSelector: "addInputString:withFlags:") }
         ))
 
         let result = await brains.actions.executeTypeText(
@@ -332,7 +332,7 @@ extension TheBrainsActionTests {
         XCTAssertEqual(result.method, .typeText)
         XCTAssertDiagnostic(result.message, contains: [
             "UIKeyboardImplTextInjection failed",
-            "missing selector addInputString:",
+            "missing selector addInputString:withFlags:",
             "while typing \"h\"",
         ])
         XCTAssertTrue(keyboardImpl.inputStrings.isEmpty)

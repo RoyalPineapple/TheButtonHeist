@@ -19,6 +19,7 @@ enum ObjCRuntime {
 
     struct ObjectArgument<Argument: NSObject> {}
     struct ObjectBoolArguments<Argument: NSObject> {}
+    struct ObjectUIntArguments<Argument: NSObject> {}
     struct ObjectReturningBoolArgument<Argument: NSObject> {}
     struct PointRadiusArguments<Result: NSObject> {}
 
@@ -226,8 +227,10 @@ extension ObjCRuntime.ObjectMethod where Arguments == ObjCRuntime.NoArguments {
     static let eventClearTouches = ObjCRuntime.ObjectMethod<Arguments>("_clearTouches")
 }
 
-extension ObjCRuntime.ObjectMethod where Arguments == ObjCRuntime.ObjectArgument<NSString> {
-    static let keyboardAddInputString = ObjCRuntime.ObjectMethod<Arguments>("addInputString:")
+extension ObjCRuntime.ObjectMethod where Arguments == ObjCRuntime.ObjectUIntArguments<NSString> {
+    static let keyboardAddLiteralInputString = ObjCRuntime.ObjectMethod<Arguments>(
+        "addInputString:withFlags:"
+    )
 }
 
 extension ObjCRuntime.ObjectMethod where Arguments == ObjCRuntime.ObjectArgument<UIWindow> {
@@ -301,6 +304,11 @@ extension ObjCRuntime.Message {
     func send<Argument: NSObject>(_ argument: Argument, _ flag: Bool)
         where Arguments == ObjCRuntime.ObjectBoolArguments<Argument> {
         bridge.sendVoid(argument, flag)
+    }
+
+    func send<Argument: NSObject>(_ argument: Argument, flags: UInt)
+        where Arguments == ObjCRuntime.ObjectUIntArguments<Argument> {
+        bridge.sendVoid(argument, flags)
     }
 
     func call<Argument: NSObject>(_ argument: Argument) -> Bool
@@ -394,6 +402,12 @@ private struct RawObjCMessageBridge {
         RawObjectiveCReceiver,
         Bool
     ) -> Void
+    private typealias IMPObjectUIntVoid = @convention(c) (
+        RawObjectiveCReceiver,
+        Selector,
+        RawObjectiveCReceiver,
+        UInt
+    ) -> Void
     private typealias IMPObjectBool = @convention(c) (
         RawObjectiveCReceiver,
         Selector,
@@ -457,6 +471,10 @@ private struct RawObjCMessageBridge {
 
     func sendVoid<Argument: NSObject>(_ argument: Argument, _ flag: Bool) {
         imp(as: IMPObjectBoolVoid.self)(target, selector, argument, flag)
+    }
+
+    func sendVoid<Argument: NSObject>(_ argument: Argument, _ flags: UInt) {
+        imp(as: IMPObjectUIntVoid.self)(target, selector, argument, flags)
     }
 
     func sendObject<Result: NSObject>() -> Result? {

@@ -90,8 +90,8 @@ final class ActionTextInputKeyboardImpl: NSObject {
         textField?.isFirstResponder == true ? inputDelegate : nil
     }
 
-    @objc(addInputString:)
-    func addInputString(_ text: NSString) {
+    @objc(addInputString:withFlags:)
+    func addInputString(_ text: NSString, flags: UInt) {
         inputDelegate.insertText(text as String)
     }
 
