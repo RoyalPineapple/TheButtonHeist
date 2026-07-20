@@ -4,7 +4,7 @@ import PackageDescription
 let package = Package(
     name: "ButtonHeistIOSPublicProductsImportContract",
     platforms: [
-        .iOS(.v17)
+        .iOS(.v16)
     ],
     products: [
         .executable(name: "buttonheist-ios-public-products-import-contract", targets: ["ButtonHeistIOSPublicProductsImportContract"])

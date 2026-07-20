@@ -13,12 +13,12 @@ struct AdjustableControlsDemo: View {
                     Text("Volume")
                 }
                 .accessibilityValue("\(Int(sliderValue))")
-                .onChange(of: sliderValue) { _, newValue in
+                .onChange(of: sliderValue) { newValue in
                     lastAction = "Slider: \(Int(newValue))"
                 }
 
                 Stepper("Quantity: \(stepperValue)", value: $stepperValue, in: 0...10)
-                    .onChange(of: stepperValue) { _, newValue in
+                    .onChange(of: stepperValue) { newValue in
                         lastAction = "Stepper: \(newValue)"
                     }
 

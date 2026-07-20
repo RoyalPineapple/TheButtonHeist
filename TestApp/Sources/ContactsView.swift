@@ -51,7 +51,11 @@ struct ContactsView: View {
     var body: some View {
         Group {
             if filteredContacts.isEmpty {
-                ContentUnavailableView.search(text: searchText)
+                UnavailablePlaceholderView(
+                    title: "No Contacts",
+                    systemImage: "magnifyingglass",
+                    description: searchText.isEmpty ? "No contacts are available." : "No contacts match \(searchText)."
+                )
             } else {
                 List {
                     ForEach(groupedContacts, id: \.department) { group in
@@ -164,5 +168,5 @@ private struct Contact: Identifiable {
     NavigationStack {
         ContactsView()
     }
-    .environment(AppSettings())
+    .environmentObject(AppSettings())
 }

@@ -21,10 +21,10 @@ struct MessagesView: View {
     var body: some View {
         VStack(spacing: 0) {
             if messages.isEmpty {
-                ContentUnavailableView(
-                    "No messages yet",
+                UnavailablePlaceholderView(
+                    title: "No messages yet",
                     systemImage: "bubble.left.and.bubble.right",
-                    description: Text("Start a conversation")
+                    description: "Start a conversation"
                 )
                 .frame(maxHeight: .infinity)
             } else {
@@ -67,7 +67,7 @@ struct MessagesView: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
             }
-            .onChange(of: messages.count) {
+            .onChange(of: messages.count) { _ in
                 if let last = messages.last {
                     withAnimation {
                         proxy.scrollTo(last.id, anchor: .bottom)
@@ -180,5 +180,5 @@ private struct ChatMessage: Identifiable {
     NavigationStack {
         MessagesView()
     }
-    .environment(AppSettings())
+    .environmentObject(AppSettings())
 }

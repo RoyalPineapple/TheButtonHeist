@@ -82,10 +82,10 @@ struct DashboardView: View {
     private var alertsTab: some View {
         Group {
             if alerts.isEmpty {
-                ContentUnavailableView(
-                    "All Clear",
+                UnavailablePlaceholderView(
+                    title: "All Clear",
                     systemImage: "checkmark.shield.fill",
-                    description: Text("No active alerts")
+                    description: "No active alerts"
                 )
             } else {
                 List {
@@ -204,5 +204,5 @@ private struct AlertItem: Identifiable {
     NavigationStack {
         DashboardView()
     }
-    .environment(AppSettings())
+    .environmentObject(AppSettings())
 }

@@ -112,15 +112,13 @@ struct CartView: View {
 
     private var emptySection: some View {
         Section {
-            ContentUnavailableView {
-                Label("Your Cart is Empty", systemImage: "cart")
-            } description: {
-                Text("Add something tasty.")
-            } actions: {
-                Button("Add Something") {
-                    addRandomItem()
-                }
-            }
+            UnavailablePlaceholderView(
+                title: "Your Cart is Empty",
+                systemImage: "cart",
+                description: "Add something tasty.",
+                actionTitle: "Add Something",
+                action: addRandomItem
+            )
         }
     }
 
@@ -249,5 +247,5 @@ private struct CartItem: Identifiable, Equatable {
     NavigationStack {
         CartView()
     }
-    .environment(AppSettings())
+    .environmentObject(AppSettings())
 }

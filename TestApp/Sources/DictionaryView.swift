@@ -206,11 +206,11 @@ struct DictionaryView: View {
             if isFilteredMode {
                 Section {
                     if visibleSections.isEmpty {
-                        ContentUnavailableView {
-                            Label("No Matches", systemImage: "magnifyingglass")
-                        } description: {
-                            Text(emptyResultMessage)
-                        }
+                        UnavailablePlaceholderView(
+                            title: "No Matches",
+                            systemImage: "magnifyingglass",
+                            description: emptyResultMessage
+                        )
                     } else {
                         ForEach(visibleSections) { section in
                             DictionarySectionHeaderView(title: section.title, entryCount: section.entries.count)
