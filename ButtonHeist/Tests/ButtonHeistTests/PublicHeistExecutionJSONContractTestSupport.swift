@@ -60,8 +60,8 @@ enum PublicHeistExecutionJSONContractFixture {
             iterationOrdinal: 0,
             value: "Milk"
         ))
-        return .forEachStringIteration(
-            path: "$.body[0].for_each_string.iterations[0]",
+        return .forEachString(
+            path: "$.body[0]",
             durationMs: 2,
             declaration: declaration,
             completion: .passed(evidence: try XCTUnwrap(HeistPassedForEachStringEvidence(evidence)))
@@ -81,8 +81,8 @@ enum PublicHeistExecutionJSONContractFixture {
             targetOrdinal: 1,
             targetSummary: "Row 2"
         ))
-        return .forEachElementIteration(
-            path: "$.body[0].for_each_element.iterations[0]",
+        return .forEachElement(
+            path: "$.body[0]",
             durationMs: 2,
             declaration: declaration,
             completion: .passed(evidence: try XCTUnwrap(HeistPassedForEachElementEvidence(evidence)))

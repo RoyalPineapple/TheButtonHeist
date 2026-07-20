@@ -1,6 +1,7 @@
 import ButtonHeistTestSupport
 import Foundation
 import Testing
+import ThePlans
 @_spi(ButtonHeistInternals) import TheScore
 
 @Suite struct HeistResultCodecLimitsTests {
@@ -169,6 +170,138 @@ import Testing
         )
     }
 
+    @Test func `aggregate admission rejects child paths outside parent grammar`() throws {
+        let data = try replacingChildPath(in: nestedResultData(), with: "$.body[0].conditional.cases[0].body[0]")
+
+        try expectResultDecodeError(
+            data,
+            format: .json,
+            limits: .default,
+            containing: ["is not a legal heist child", "$.body[0]", "$.body[0].conditional.cases[0].body[0]"]
+        )
+    }
+
+    @Test func `aggregate admission admits auxiliary failure screenshot roots`() throws {
+        let result = try HeistResult(
+            steps: [
+                HeistResultFixture.explicitFailure(path: "$.body[0]", message: "stop"),
+                HeistResultFixture.action(
+                    path: "$.body[0].failure.actions[0]",
+                    command: .takeScreenshot,
+                    result: .success(payload: .screenshot(nil))
+                ),
+            ],
+            durationMs: 2
+        )
+
+        #expect(result.steps.map(\.path) == ["$.body[0]", "$.body[0].failure.actions[0]"])
+    }
+
+    @Test func `aggregate admission rejects loop iteration paths with non iteration child nodes`() throws {
+        let declaration = try #require(HeistForEachStringDeclaration(parameter: "item", count: 1))
+        let child = HeistResultFixture.warning(
+            path: "$.body[0].for_each_string.iterations[0]",
+            message: "not an iteration"
+        )
+        let evidence = try #require(HeistForEachStringEvidence(iterationCount: 1))
+        let children = try #require(HeistPassingChildren([child]))
+        let root = HeistExecutionStepResult.forEachString(
+            path: "$.body[0]",
+            durationMs: 1,
+            declaration: declaration,
+            completion: .passed(
+                evidence: try #require(HeistPassedForEachStringEvidence(evidence)),
+                children: children
+            )
+        )
+
+        #expect(throws: (any Error).self) {
+            try HeistResult(steps: [root], durationMs: 1)
+        }
+    }
+
+    @Test func `aggregate admission uses branch local ordinals for repeat until else body`() throws {
+        let predicate = AccessibilityPredicate.exists(.label("Done"))
+        let declaration = HeistRepeatUntilDeclaration(predicate: predicate, timeout: 0.5)
+        let unmet = try #require(ExpectationResult.Unmet(ExpectationResult(
+            met: false,
+            predicate: predicate,
+            actual: "not found"
+        )))
+        let iterationEvidence = try #require(HeistRepeatUntilEvidence.continued(
+            iterationCount: 1,
+            iterationOrdinal: 0,
+            expectation: unmet
+        ))
+        let iteration = HeistExecutionStepResult.repeatUntilIteration(
+            path: "$.body[0].repeat_until.iterations[0]",
+            durationMs: 1,
+            declaration: declaration,
+            completion: .passed(
+                evidence: try #require(HeistPassedRepeatUntilIterationEvidence(iterationEvidence))
+            )
+        )
+        let elseStep = HeistResultFixture.warning(
+            path: "$.body[0].repeat_until.else_body[0]",
+            message: "handled timeout"
+        )
+        let rootEvidence = try #require(HeistRepeatUntilEvidence.handledElse(
+            iterationCount: 1,
+            expectation: unmet,
+            lastObservedSummary: "not found"
+        ))
+        let root = HeistExecutionStepResult.repeatUntil(
+            path: "$.body[0]",
+            durationMs: 2,
+            declaration: declaration,
+            completion: .passed(
+                evidence: try #require(HeistPassedRepeatUntilEvidence(rootEvidence)),
+                children: try #require(HeistPassingChildren([iteration, elseStep]))
+            )
+        )
+
+        let result = try HeistResult(steps: [root], durationMs: 2)
+
+        #expect(result.steps.first?.children.map { $0.path } == [
+            "$.body[0].repeat_until.iterations[0]",
+            "$.body[0].repeat_until.else_body[0]",
+        ])
+    }
+
+    @Test func `aggregate admission rejects stale warning fixture with heist child path`() throws {
+        let data = Data(#"""
+        {
+          "steps": [{
+            "path": "$.body[0]",
+            "durationMs": 1,
+            "node": {
+              "type": "warning",
+              "outcome": "passed",
+              "message": "root",
+              "children": [{
+                "path": "$.body[0].heist.body[0]",
+                "durationMs": 100,
+                "node": {
+                  "type": "warning",
+                  "outcome": "passed",
+                  "message": "child",
+                  "children": []
+                }
+              }]
+            }
+          }],
+          "durationMs": 5
+        }
+        """#.utf8)
+
+        try expectResultDecodeError(
+            data,
+            format: .json,
+            limits: .default,
+            containing: ["is not a legal warn child", "$.body[0]", "$.body[0].heist.body[0]"]
+        )
+    }
+
     @Test func `aggregate and parent durations are independent wall clock observations`() throws {
         let result = try HeistResultCodec.decode(nestedResultData())
         let root = try #require(result.steps.first)
@@ -193,9 +326,8 @@ import Testing
             "path": "$.body[0]",
             "durationMs": 1,
             "node": {
-              "type": "warning",
+              "type": "heist",
               "outcome": "passed",
-              "message": "root",
               "children": [{
                 "path": "$.body[0].heist.body[0]",
                 "durationMs": 100,

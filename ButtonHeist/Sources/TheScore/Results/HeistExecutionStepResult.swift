@@ -185,6 +185,16 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
     public var children: [HeistExecutionStepResult] { node.facts.children }
     public var abortedAtChildPath: HeistExecutionPath? { node.facts.abortedAtChildPath }
 
+    package var isForEachElementIteration: Bool {
+        guard case .forEachElementIteration = node else { return false }
+        return true
+    }
+
+    package var isForEachStringIteration: Bool {
+        guard case .forEachStringIteration = node else { return false }
+        return true
+    }
+
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case path
         case durationMs

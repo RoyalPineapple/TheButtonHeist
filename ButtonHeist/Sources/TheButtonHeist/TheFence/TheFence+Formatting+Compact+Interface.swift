@@ -284,25 +284,17 @@ extension FenceResponse {
               let viewportWidth = try? FiniteDimension(validating: frame.size.width),
               let viewportHeight = try? FiniteDimension(validating: frame.size.height)
         else { return [] }
-        let axis = ScrollContainerMetrics.axis(
-            contentWidth: contentWidth.value,
-            contentHeight: contentHeight.value,
-            viewportWidth: viewportWidth.value,
-            viewportHeight: viewportHeight.value
+        guard let metrics = ScrollContainerMetrics.project(
+                contentWidth: contentWidth,
+                contentHeight: contentHeight,
+                viewportWidth: viewportWidth,
+                viewportHeight: viewportHeight
         )
-        let pageScrollsX = ScrollContainerMetrics.estimatedHorizontalPageScrolls(
-            contentWidth: contentWidth.value,
-            viewportWidth: viewportWidth.value
-        )
-        let pageScrollsY = ScrollContainerMetrics.estimatedVerticalPageScrolls(
-            contentHeight: contentHeight.value,
-            viewportHeight: viewportHeight.value
-        )
-        let pages = max(1, max(pageScrollsX, pageScrollsY) + 1)
+        else { return [] }
         return [
             "  \(geometryDescription(viewportWidth.value))×\(geometryDescription(viewportHeight.value)) view, "
                 + "\(geometryDescription(contentWidth.value))×\(geometryDescription(contentHeight.value)) content "
-                + "(\(pages) pages), \(axis.rawValue)",
+                + "(\(metrics.estimatedPageCount) pages), \(metrics.axis.rawValue)",
         ]
     }
 

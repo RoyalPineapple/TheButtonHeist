@@ -10,6 +10,7 @@ import TheScore
 internal final class SemanticObservationStream {
     private static let passiveSettleTimeoutMs = 1_000
     private static let activeQuietWindowMs = 60
+    private static let passiveDiscoveryCadence: Duration = .seconds(1)
 
     internal typealias VisibleObservationSettler = @MainActor (
         TheVault,
@@ -42,6 +43,7 @@ internal final class SemanticObservationStream {
     var visibleRefreshSession: VisibleRefreshSession?
     var settleVisibleObservation: VisibleObservationSettler
     var readTripwireSignal: @MainActor () -> TheTripwire.TripwireSignal
+    private var lastPassiveDiscoveryStartedAt: RuntimeElapsed.Instant?
     // MARK: - Observation Bookkeeping
 
     var scopePressure = SemanticObservationScopePressure()
@@ -119,6 +121,7 @@ internal final class SemanticObservationStream {
         discovery: @escaping SemanticObservationLifecycle.DiscoveryObservation
     ) {
         guard !lifecycle.replaceDiscoveryIfRunning(discovery) else { return }
+        lastPassiveDiscoveryStartedAt = nil
         if let vault {
             AccessibilityNotificationObserver.shared.subscribe(vault.accessibilityNotifications)
         }
@@ -134,6 +137,7 @@ internal final class SemanticObservationStream {
 
     internal func stop() {
         lifecycle.stop()?.cancel()
+        lastPassiveDiscoveryStartedAt = nil
         visibleRefreshSession?.task.cancel()
         visibleRefreshSession = nil
         cancelObservationWaiters()
@@ -171,10 +175,26 @@ internal final class SemanticObservationStream {
     private func runPassiveObservationCycle() async {
         let scope = subscribedObservationScope()
         guard !Task.isCancelled,
+              await admitPassiveObservationCycle(scope: scope),
               await performObservationCycle(scope: scope),
               !Task.isCancelled else { return }
         completeObservationWaiters(completedScope: scope)
         await Task.yield()
+    }
+
+    private func admitPassiveObservationCycle(
+        scope: SemanticObservationScope
+    ) async -> Bool {
+        guard scope == .discovery else { return true }
+        if let lastPassiveDiscoveryStartedAt {
+            let elapsed = lastPassiveDiscoveryStartedAt.duration(to: RuntimeElapsed.now)
+            let remaining = Self.passiveDiscoveryCadence - elapsed
+            if remaining > .zero {
+                guard await Task.cancellableSleep(for: remaining) else { return false }
+            }
+        }
+        lastPassiveDiscoveryStartedAt = RuntimeElapsed.now
+        return !Task.isCancelled
     }
 
     private func performObservationCycle(

@@ -59,9 +59,15 @@ public struct HeistResult: Codable, Sendable, Equatable {
         limits: HeistResultCodecLimits
     ) throws {
         var pending = roots.reversed().map {
-            (step: $0, depth: 1, parentPath: Optional<HeistExecutionPath>.none)
+            (
+                step: $0,
+                depth: 1,
+                parent: Optional<HeistExecutionStepResult>.none,
+                childOrdinal: Optional<Int>.none
+            )
         }
         var paths: Set<HeistExecutionPath> = []
+        var admittedStepsByPath: [HeistExecutionPath: HeistExecutionStepResult] = [:]
         var nodeCount = 0
         while let current = pending.popLast() {
             nodeCount += 1
@@ -77,16 +83,62 @@ public struct HeistResult: Codable, Sendable, Equatable {
             guard paths.insert(current.step.path).inserted else {
                 throw HeistResultCodecError.duplicateExecutionPath(current.step.path)
             }
-            if let parentPath = current.parentPath,
-               !current.step.path.isDescendant(of: parentPath) {
-                throw HeistResultCodecError.nonDescendantChildPath(
-                    parent: parentPath,
-                    child: current.step.path
+            if let parent = current.parent {
+                guard current.step.path.isDescendant(of: parent.path) else {
+                    throw HeistResultCodecError.nonDescendantChildPath(
+                        parent: parent.path,
+                        child: current.step.path
+                    )
+                }
+                guard let childOrdinal = current.childOrdinal else {
+                    throw HeistResultCodecError.illegalChildExecutionPath(
+                        parent: parent.path,
+                        child: current.step.path,
+                        parentKind: parent.kind
+                    )
+                }
+                guard current.step.path.isLegalChild(
+                    of: parent,
+                    child: current.step,
+                    childOrdinal: childOrdinal
+                ) else {
+                    throw HeistResultCodecError.illegalChildExecutionPath(
+                        parent: parent.path,
+                        child: current.step.path,
+                        parentKind: parent.kind
+                    )
+                }
+            } else if current.step.path.isRootStepPath() {
+                // Top-level result fragments may carry their original body index.
+            } else if let failureAction = current.step.path.failureActionAncestor,
+                      let parent = admittedStepsByPath[failureAction.path],
+                      parent.status == .failed,
+                      current.step.path.isLegalChild(
+                        of: parent,
+                        child: current.step,
+                        childOrdinal: failureAction.actionIndex
+                      ) {
+                // Auxiliary failure-action roots are emitted beside top-level roots,
+                // but their path must still be owned by an admitted failed step.
+            } else {
+                throw HeistResultCodecError.illegalRootExecutionPath(current.step.path)
+            }
+            admittedStepsByPath[current.step.path] = current.step
+            var branchCounts: [HeistExecutionPath.ChildBranch: Int] = [:]
+            let children = current.step.children.map { child in
+                let branch = child.path.childBranch(after: current.step.path)
+                let childOrdinal = branch.map { branch in
+                    defer { branchCounts[branch, default: 0] += 1 }
+                    return branchCounts[branch, default: 0]
+                }
+                return (
+                    step: child,
+                    depth: current.depth + 1,
+                    parent: Optional(current.step),
+                    childOrdinal: childOrdinal
                 )
             }
-            pending.append(contentsOf: current.step.children.reversed().map {
-                (step: $0, depth: current.depth + 1, parentPath: current.step.path)
-            })
+            pending.append(contentsOf: children.reversed())
         }
     }
 

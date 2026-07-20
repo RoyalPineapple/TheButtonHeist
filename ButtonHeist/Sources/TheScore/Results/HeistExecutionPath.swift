@@ -24,6 +24,26 @@ public struct HeistExecutionPath: Sendable, Equatable, Hashable, Codable,
         case wait
     }
 
+    private enum ComponentPattern {
+        case field(Field)
+        case index(Int)
+        case anyIndex
+    }
+
+    package enum ChildBranch: Sendable, Hashable {
+        case waitElseBody
+        case conditionalCase(Int)
+        case conditionalElse
+        case forEachElementIterations
+        case forEachStringIterations
+        case repeatUntilIterations
+        case repeatUntilElse
+        case body
+        case heistBody
+        case invocationBody
+        case failureActions
+    }
+
     private let components: [Component]
 
     private init(components: [Component]) {
@@ -108,6 +128,112 @@ public struct HeistExecutionPath: Sendable, Equatable, Hashable, Codable,
             && components.starts(with: ancestor.components)
     }
 
+    package func isRootStepPath() -> Bool {
+        rootStepIndex != nil
+    }
+
+    package var rootStepIndex: Int? {
+        guard components.count == 2,
+              case .field(.body) = components[0],
+              case .index(let index) = components[1]
+        else { return nil }
+        return index
+    }
+
+    package var failureActionAncestor: (path: Self, actionIndex: Int)? {
+        guard components.count > 3,
+              case .field(.failure) = components[components.count - 3],
+              case .field(.actions) = components[components.count - 2],
+              case .index(let actionIndex) = components[components.count - 1]
+        else { return nil }
+        return (
+            Self(components: Array(components.dropLast(3))),
+            actionIndex
+        )
+    }
+
+    package func isLegalChild(
+        of parent: HeistExecutionStepResult,
+        child: HeistExecutionStepResult,
+        childOrdinal: Int
+    ) -> Bool {
+        let regularChild = switch parent.kind {
+        case .action, .warn, .fail:
+            false
+        case .wait:
+            childSuffix(after: parent.path, matches: [.field(.wait), .field(.elseBody), .index(childOrdinal)])
+        case .conditional:
+            childSuffix(
+                after: parent.path,
+                matches: [.field(.conditional), .field(.cases), .anyIndex, .field(.body), .index(childOrdinal)]
+            ) || childSuffix(after: parent.path, matches: [.field(.conditional), .field(.elseBody), .index(childOrdinal)])
+        case .forEachElement:
+            child.isForEachElementIteration
+                && childSuffix(after: parent.path, matches: [.field(.forEachElement), .field(.iterations), .index(childOrdinal)])
+        case .forEachString:
+            child.isForEachStringIteration
+                && childSuffix(after: parent.path, matches: [.field(.forEachString), .field(.iterations), .index(childOrdinal)])
+        case .forEachIteration, .repeatUntilIteration:
+            childSuffix(after: parent.path, matches: [.field(.body), .index(childOrdinal)])
+        case .repeatUntil:
+            (child.kind == .repeatUntilIteration
+                && childSuffix(after: parent.path, matches: [.field(.repeatUntil), .field(.iterations), .index(childOrdinal)]))
+                || childSuffix(after: parent.path, matches: [.field(.repeatUntil), .field(.elseBody), .index(childOrdinal)])
+        case .heist:
+            childSuffix(after: parent.path, matches: [.field(.heist), .field(.body), .index(childOrdinal)])
+        case .invoke:
+            childSuffix(after: parent.path, matches: [.field(.invoke), .field(.body), .index(childOrdinal)])
+        }
+
+        return regularChild || parent.status == .failed
+            && child.kind == .action
+            && childSuffix(after: parent.path, matches: [.field(.failure), .field(.actions), .index(childOrdinal)])
+    }
+
+    package func childBranch(after parent: Self) -> ChildBranch? {
+        guard isDescendant(of: parent) else { return nil }
+        let suffix = Array(components.dropFirst(parent.components.count))
+        if Self.components(suffix, match: [.field(.wait), .field(.elseBody), .anyIndex]) {
+            return .waitElseBody
+        }
+        if suffix.count == 5,
+           case .field(.conditional) = suffix[0],
+           case .field(.cases) = suffix[1],
+           case .index(let caseIndex) = suffix[2],
+           case .field(.body) = suffix[3],
+           case .index = suffix[4] {
+            return .conditionalCase(caseIndex)
+        }
+        if Self.components(suffix, match: [.field(.conditional), .field(.elseBody), .anyIndex]) {
+            return .conditionalElse
+        }
+        if Self.components(suffix, match: [.field(.forEachElement), .field(.iterations), .anyIndex]) {
+            return .forEachElementIterations
+        }
+        if Self.components(suffix, match: [.field(.forEachString), .field(.iterations), .anyIndex]) {
+            return .forEachStringIterations
+        }
+        if Self.components(suffix, match: [.field(.repeatUntil), .field(.iterations), .anyIndex]) {
+            return .repeatUntilIterations
+        }
+        if Self.components(suffix, match: [.field(.repeatUntil), .field(.elseBody), .anyIndex]) {
+            return .repeatUntilElse
+        }
+        if Self.components(suffix, match: [.field(.body), .anyIndex]) {
+            return .body
+        }
+        if Self.components(suffix, match: [.field(.heist), .field(.body), .anyIndex]) {
+            return .heistBody
+        }
+        if Self.components(suffix, match: [.field(.invoke), .field(.body), .anyIndex]) {
+            return .invocationBody
+        }
+        if Self.components(suffix, match: [.field(.failure), .field(.actions), .anyIndex]) {
+            return .failureActions
+        }
+        return nil
+    }
+
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         let description = try container.decode(String.self)
@@ -128,6 +254,33 @@ public struct HeistExecutionPath: Sendable, Equatable, Hashable, Codable,
 
     private func appending(_ additions: Component...) -> Self {
         Self(components: components + additions)
+    }
+
+    private func childSuffix(after parent: Self, matches patterns: [ComponentPattern]) -> Bool {
+        isDescendant(of: parent)
+            && Self.components(components.dropFirst(parent.components.count), match: patterns)
+    }
+
+    private func matches(_ patterns: [ComponentPattern]) -> Bool {
+        Self.components(components, match: patterns)
+    }
+
+    private static func components<Components>(
+        _ components: Components,
+        match patterns: [ComponentPattern]
+    ) -> Bool where Components: Collection, Components.Element == Component {
+        components.count == patterns.count && zip(components, patterns).allSatisfy { component, pattern in
+            switch (component, pattern) {
+            case (.field(let componentField), .field(let patternField)):
+                componentField == patternField
+            case (.index(let componentIndex), .index(let patternIndex)):
+                componentIndex == patternIndex
+            case (.index, .anyIndex):
+                true
+            default:
+                false
+            }
+        }
     }
 
     private static func parse(_ description: String) throws -> [Component] {
