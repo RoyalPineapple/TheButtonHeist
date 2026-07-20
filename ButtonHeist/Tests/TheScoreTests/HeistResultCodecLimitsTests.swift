@@ -585,18 +585,12 @@ import ThePlans
     }
 
     private func expectTerminalOrderAdmissionError(_ fixture: TerminalOrderFixture) {
-        do {
+        let expected = HeistResultCodecError.incoherentExecutionEvidence(
+            path: fixture.offendingPath,
+            reason: "regular root cannot execute after abort at \(fixture.terminalPath)"
+        )
+        #expect(throws: expected) {
             _ = try HeistResult(steps: fixture.steps, durationMs: 1)
-            Issue.record("Expected result admission to fail for \(fixture.depth)")
-        } catch let error as HeistResultCodecError {
-            guard case .incoherentExecutionEvidence(let offendingPath, let reason) = error else {
-                Issue.record("Expected incoherent execution evidence for \(fixture.depth), got \(error)")
-                return
-            }
-            #expect(offendingPath == fixture.offendingPath)
-            #expect(reason == "regular root cannot execute after abort at \(fixture.terminalPath)")
-        } catch {
-            Issue.record("Expected HeistResultCodecError for \(fixture.depth), got \(error)")
         }
     }
 

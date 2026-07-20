@@ -397,10 +397,7 @@ internal enum ScreenLineageEvidence: Sendable, Equatable {
                         depth: depth,
                         hasMultipleRootNodes: hasMultipleRootNodes
                     ) {
-                        return AccessibilityHierarchyTraversal.Decision(
-                            contentsContext: depth,
-                            shouldContinue: true
-                        )
+                        return depth
                     }
                     let facts = container.containerPredicateFacts
                     components.append(
@@ -415,10 +412,7 @@ internal enum ScreenLineageEvidence: Sendable, Equatable {
                             )
                         )
                     )
-                    return AccessibilityHierarchyTraversal.Decision(
-                        contentsContext: depth + 1,
-                        shouldContinue: true
-                    )
+                    return depth + 1
                 },
                 descend: { depth, _ in depth }
             )

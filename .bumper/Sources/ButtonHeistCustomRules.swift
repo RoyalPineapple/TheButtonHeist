@@ -355,7 +355,7 @@ private func inheritedDefaultAccess(of node: some SyntaxProtocol) -> ContractAcc
         if let declaration = ancestor.as(ExtensionDeclSyntax.self) {
             return explicitAccess(declaration.modifiers) ?? .internal
         }
-        if isNominalDeclaration(ancestor) {
+        if nominalModifiers(ancestor) != nil {
             return .internal
         }
     }
@@ -386,10 +386,6 @@ private func nominalModifiers(_ node: Syntax) -> DeclModifierListSyntax? {
         return declaration.modifiers
     }
     return node.as(ProtocolDeclSyntax.self)?.modifiers
-}
-
-private func isNominalDeclaration(_ node: Syntax) -> Bool {
-    nominalModifiers(node) != nil
 }
 
 private func explicitAccess(_ modifiers: DeclModifierListSyntax) -> ContractAccess? {

@@ -113,12 +113,9 @@ extension TheVault {
                     let childScrollContainerPath = scrollableContainerPaths.contains(context.path)
                         ? context.path
                         : context.parentScrollContainerPath
-                    return AccessibilityHierarchyTraversal.Decision(
-                        contentsContext: IdentityTraversal(
-                            path: context.path,
-                            parentScrollContainerPath: childScrollContainerPath
-                        ),
-                        shouldContinue: true
+                    return IdentityTraversal(
+                        path: context.path,
+                        parentScrollContainerPath: childScrollContainerPath
                     )
                 },
                 descend: { context, childIndex in
