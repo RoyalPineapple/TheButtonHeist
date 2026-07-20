@@ -30,11 +30,11 @@ import TheScore
 
     @Test func `failed result exposes derived failure facts`() {
         let result = HeistResultFixture.result(
-            steps: [HeistResultFixture.explicitFailure(path: "$.body[4]", message: "stop")]
+            steps: [HeistResultFixture.explicitFailure(path: "$.body[0]", message: "stop")]
         )
 
         #expect(result.isFailure)
-        #expect(result.abortedAtPath == "$.body[4]")
+        #expect(result.abortedAtPath == "$.body[0]")
         #expect(result.steps.first?.failure?.observed == "stop")
     }
 }

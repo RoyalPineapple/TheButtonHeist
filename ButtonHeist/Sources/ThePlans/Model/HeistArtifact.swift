@@ -290,10 +290,7 @@ public enum HeistArtifactCodec {
                 .write(to: temporaryURL.appendingPathComponent(planFileName), options: .atomic)
 
             if fileManager.fileExists(atPath: packageURL.path) {
-                let backupURL = try fileManager.replaceItemAt(packageURL, withItemAt: temporaryURL)
-                if let backupURL {
-                    try? fileManager.removeItem(at: backupURL)
-                }
+                _ = try fileManager.replaceItemAt(packageURL, withItemAt: temporaryURL)
             } else {
                 try fileManager.moveItem(at: temporaryURL, to: packageURL)
             }
@@ -529,7 +526,8 @@ public enum HeistArtifactCodec {
             throw HeistArtifactCodecError.invalidManifestEntry(
                 path: packageURL.path,
                 contract: "entry must equal the root HeistPlan.name",
-                observed: "entry \(quoted(manifestEntry.description)) with root plan name \(quoted(planName.description))",
+                observed: "entry \(CanonicalValueDescription.quoted(manifestEntry.description)) " +
+                    "with root plan name \(CanonicalValueDescription.quoted(planName.description))",
                 correction: artifactEntryCorrection(for: plan)
             )
         }
@@ -541,13 +539,9 @@ public enum HeistArtifactCodec {
             return "Add a non-empty root plan name in plan.json and set manifest.json entry to the same value."
         }
         return """
-        Set manifest.json entry to \(quoted(planName.description)), the root plan name. \
+        Set manifest.json entry to \(CanonicalValueDescription.quoted(planName.description)), the root plan name. \
         Do not use the .heist directory name, a definition name, or a registry key.
         """
-    }
-
-    private static func quoted(_ value: String) -> String {
-        "\"\(value.replacingOccurrences(of: "\"", with: "\\\""))\""
     }
 
 }

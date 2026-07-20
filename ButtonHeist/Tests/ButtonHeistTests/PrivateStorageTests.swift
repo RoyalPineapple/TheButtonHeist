@@ -28,7 +28,56 @@ final class PrivateStorageTests: XCTestCase {
         XCTAssertEqual(directory.path, "/tmp/buttonheist-storage")
     }
 
+    func testWritePrivateDataReplacesExistingFileWithPrivatePermissions() throws {
+        try withTemporaryDirectory { directory in
+            let url = directory.appendingPathComponent("driver-id")
+            try PrivateStorage.writePrivateData(Data("old".utf8), to: url)
+
+            try PrivateStorage.writePrivateData(Data("new".utf8), to: url)
+
+            XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), "new")
+            XCTAssertEqual(try permissions(at: url), 0o600)
+        }
+    }
+
+    func testWritePrivateDataPreservesExistingFileWhenReplacementFails() throws {
+        try withTemporaryDirectory { directory in
+            let url = directory.appendingPathComponent("driver-id")
+            try PrivateStorage.writePrivateData(Data("old".utf8), to: url)
+            var replacementURL: URL?
+
+            XCTAssertThrowsError(try PrivateStorage.writePrivateData(
+                Data("new".utf8),
+                to: url,
+                replaceItem: { _, replacement in
+                    replacementURL = replacement
+                    throw ReplacementFailure.failed
+                }
+            ))
+
+            XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), "old")
+            XCTAssertFalse(FileManager.default.fileExists(atPath: try XCTUnwrap(replacementURL).path))
+        }
+    }
+
     private func environment(_ values: [StorageEnvironmentKey: String]) -> StorageEnvironment {
         StorageEnvironment(testValues: values)
+    }
+
+    private func withTemporaryDirectory(_ body: (URL) throws -> Void) throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("private-storage-tests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try body(directory)
+    }
+
+    private func permissions(at url: URL) throws -> Int {
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        return try XCTUnwrap(attributes[.posixPermissions] as? Int) & 0o777
+    }
+
+    private enum ReplacementFailure: Error {
+        case failed
     }
 }

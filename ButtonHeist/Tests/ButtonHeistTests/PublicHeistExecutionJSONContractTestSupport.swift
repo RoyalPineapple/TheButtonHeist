@@ -60,11 +60,24 @@ enum PublicHeistExecutionJSONContractFixture {
             iterationOrdinal: 0,
             value: "Milk"
         ))
+        let iteration = HeistResultFixture.forEachStringIteration(
+            path: "$.body[0].for_each_string.iterations[0]",
+            parameter: "item",
+            count: 2,
+            iterationCount: 1,
+            ordinal: 0,
+            value: "Milk",
+            status: .passed,
+            children: []
+        )
         return .forEachString(
             path: "$.body[0]",
             durationMs: 2,
             declaration: declaration,
-            completion: .passed(evidence: try XCTUnwrap(HeistPassedForEachStringEvidence(evidence)))
+            completion: .passed(
+                evidence: try XCTUnwrap(HeistPassedForEachStringEvidence(evidence)),
+                children: try XCTUnwrap(HeistPassingChildren([iteration]))
+            )
         )
     }
 
@@ -81,29 +94,77 @@ enum PublicHeistExecutionJSONContractFixture {
             targetOrdinal: 1,
             targetSummary: "Row 2"
         ))
+        let iteration = HeistExecutionStepResult.forEachElementIteration(
+            path: "$.body[0].for_each_element.iterations[0]",
+            durationMs: 1,
+            declaration: declaration,
+            completion: .passed(evidence: try XCTUnwrap(HeistPassedForEachElementEvidence(evidence)))
+        )
         return .forEachElement(
             path: "$.body[0]",
             durationMs: 2,
             declaration: declaration,
-            completion: .passed(evidence: try XCTUnwrap(HeistPassedForEachElementEvidence(evidence)))
+            completion: .passed(
+                evidence: try XCTUnwrap(HeistPassedForEachElementEvidence(evidence)),
+                children: try XCTUnwrap(HeistPassingChildren([iteration]))
+            )
         )
     }
 
     static func repeatUntil() throws -> HeistExecutionStepResult {
-        let evidence = try XCTUnwrap(HeistRepeatUntilEvidence.matched(
+        let met = ExpectationResult.Met(
+            predicate: donePredicate,
+            actual: "Done visible"
+        )
+        let unmet = try XCTUnwrap(ExpectationResult.Unmet(ExpectationResult(
+            met: false,
+            predicate: donePredicate,
+            actual: "Loading"
+        )))
+        let firstIterationEvidence = try XCTUnwrap(HeistRepeatUntilEvidence.continued(
             iterationCount: 2,
-            expectation: ExpectationResult.Met(
-                predicate: donePredicate,
-                actual: "Done visible"
-            ),
+            iterationOrdinal: 0,
+            expectation: unmet
+        ))
+        let secondIterationEvidence = try XCTUnwrap(HeistRepeatUntilEvidence.matched(
+            iterationCount: 2,
+            expectation: met,
             actionResult: .success(payload: .wait, message: "repeat matched"),
             lastObservedSummary: "Done visible"
         ))
+        let evidence = try XCTUnwrap(HeistRepeatUntilEvidence.matched(
+            iterationCount: 2,
+            expectation: met,
+            actionResult: .success(payload: .wait, message: "repeat matched"),
+            lastObservedSummary: "Done visible"
+        ))
+        let declaration = HeistRepeatUntilDeclaration(predicate: donePredicate, timeout: 0.5)
+        let iterations = [
+            HeistExecutionStepResult.repeatUntilIteration(
+                path: "$.body[0].repeat_until.iterations[0]",
+                durationMs: 1,
+                declaration: declaration,
+                completion: .passed(evidence: try XCTUnwrap(
+                    HeistPassedRepeatUntilIterationEvidence(firstIterationEvidence)
+                ))
+            ),
+            HeistExecutionStepResult.repeatUntilIteration(
+                path: "$.body[0].repeat_until.iterations[1]",
+                durationMs: 1,
+                declaration: declaration,
+                completion: .passed(evidence: try XCTUnwrap(
+                    HeistPassedRepeatUntilIterationEvidence(secondIterationEvidence)
+                ))
+            ),
+        ]
         return .repeatUntil(
             path: "$.body[0]",
             durationMs: 6,
-            declaration: HeistRepeatUntilDeclaration(predicate: donePredicate, timeout: 0.5),
-            completion: .passed(evidence: try XCTUnwrap(HeistPassedRepeatUntilEvidence(evidence)))
+            declaration: declaration,
+            completion: .passed(
+                evidence: try XCTUnwrap(HeistPassedRepeatUntilEvidence(evidence)),
+                children: try XCTUnwrap(HeistPassingChildren(iterations))
+            )
         )
     }
 

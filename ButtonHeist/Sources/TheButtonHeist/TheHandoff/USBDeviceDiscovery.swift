@@ -3,6 +3,7 @@ import Foundation
 import ButtonHeistSupport
 import os.log
 
+import ThePlans
 import TheScore
 
 private let logger = ButtonHeistLog.logger(.handoff(.usbDiscovery))
@@ -165,7 +166,7 @@ nonisolated extension USBDeviceDiscovery {
         guard let output = await runProcess(
             "/usr/bin/xcrun",
             arguments: ["devicectl", "list", "devices"],
-            timeout: 10
+            timeout: .seconds(10)
         ) else {
             return []
         }
@@ -210,7 +211,7 @@ nonisolated extension USBDeviceDiscovery {
         guard let output = await runProcess(
             "/usr/sbin/lsof",
             arguments: ["-i", "-P", "-n"],
-            timeout: 5
+            timeout: .seconds(5)
         ) else {
             return nil
         }
@@ -233,84 +234,43 @@ nonisolated extension USBDeviceDiscovery {
         return "\(prefix)::1"
     }
 
-    private static func runProcess(
+    package static func runProcess(
         _ path: String,
         arguments: [String],
-        timeout: TimeInterval
+        timeout: Duration
     ) async -> String? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: path)
-        process.arguments = arguments
-
-        let outputURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("buttonheist-usb-discovery-\(UUID().uuidString)")
-        guard FileManager.default.createFile(atPath: outputURL.path, contents: nil) else {
-            logger.debug("Failed to create temporary output file for \(path)")
-            return nil
-        }
-        guard let outputHandle = FileHandle(forWritingAtPath: outputURL.path) else {
-            logger.debug("Failed to open temporary output file for \(path)")
-            do {
-                try FileManager.default.removeItem(at: outputURL)
-            } catch {
-                logger.debug("Failed to remove temporary output file: \(error.localizedDescription)")
-            }
-            return nil
-        }
-        defer {
-            outputHandle.closeFile()
-            do {
-                try FileManager.default.removeItem(at: outputURL)
-            } catch {
-                logger.debug("Failed to remove temporary output file: \(error.localizedDescription)")
-            }
-        }
-
-        process.standardOutput = outputHandle
-        process.standardError = FileHandle.nullDevice
-
-        // Schedule a terminate after `timeout`. If the process exits first, cancel.
-        // When process exits naturally OR via terminate, the terminationHandler
-        // fires exactly once and resumes the continuation below.
-        let timeoutTask = Task {
-            guard await Task<Never, Never>.cancellableSleep(nanoseconds: UInt64(timeout * 1_000_000_000)) else { return }
-            if process.isRunning {
-                logger.debug("Timed out running \(path) after \(timeout)s")
-                process.terminate()
-            }
-        }
-        defer { timeoutTask.cancel() }
-
+        let command = HeistCompilerProcess.Command(
+            executable: URL(fileURLWithPath: path),
+            arguments: arguments
+        )
+        let limits = HeistCompilerProcess.Limits(
+            compilationTimeout: timeout,
+            executionTimeout: timeout,
+            terminationGrace: .milliseconds(250),
+            killGrace: .seconds(2),
+            pollInterval: .milliseconds(10),
+            capturedByteLimitPerStream: 2_097_152
+        )
+        let outcome: HeistCompilerProcess.Outcome
         do {
-            try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
-                process.terminationHandler = { _ in cont.resume() }
-                do {
-                    try process.run()
-                } catch {
-                    cont.resume(throwing: error)
-                }
-            }
+            outcome = try await HeistCompilerProcess.Runner.shared.execute(
+                command,
+                purpose: .execution,
+                limits: limits
+            )
         } catch {
             logger.debug("Failed to run \(path): \(error.localizedDescription)")
             return nil
         }
 
-        guard process.terminationStatus == 0 else {
+        guard case .succeeded(let output) = outcome else {
+            if case .timedOut = outcome {
+                logger.debug("Timed out running \(path)")
+            }
             return nil
         }
 
-        // Safe to read before `outputHandle.closeFile()` runs in the defer: the
-        // child has exited and flushed its dup'd fd, and the kernel page cache
-        // serves reads from the same file regardless of open write handles.
-        let data: Data
-        do {
-            data = try Data(contentsOf: outputURL)
-        } catch {
-            logger.debug("Failed to read output of \(path): \(error.localizedDescription)")
-            return nil
-        }
-
-        return String(data: data, encoding: .utf8)
+        return String(data: output.stdout, encoding: .utf8)
     }
 }
 #endif // os(macOS)

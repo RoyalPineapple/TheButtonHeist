@@ -99,7 +99,7 @@ public final class TheInsideJob {
         initial: ServerPhase.stopped,
         reducer: InsideJobLifecycleReducer()
     )
-    private var lifecycleObserversInstalled = false
+    var lifecycleObservation = LifecycleObservationState.uninstalled
 
     var serverPhase: ServerPhase {
         lifecycle.state
@@ -136,7 +136,7 @@ public final class TheInsideJob {
     }
 
     var lifecycleObservationIsInstalled: Bool {
-        lifecycleObserversInstalled
+        lifecycleObservation.isInstalled
     }
 
     var retainedIdleTimerBaseline: Bool? {
@@ -174,10 +174,6 @@ public final class TheInsideJob {
         _ event: InsideJobLifecycleReducer.Event
     ) -> StateTransition<ServerPhase, InsideJobLifecycleReducer.Effect, InsideJobLifecycleReducer.Rejection> {
         lifecycle.reduce(event)
-    }
-
-    func setLifecycleObservationInstalled(_ installed: Bool) {
-        lifecycleObserversInstalled = installed
     }
 
     // MARK: - Initialization

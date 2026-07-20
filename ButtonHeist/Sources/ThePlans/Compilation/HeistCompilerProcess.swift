@@ -6,14 +6,14 @@ import Darwin
 import Glibc
 #endif
 
-enum HeistCompilerProcess {
-    enum Purpose: Sendable {
+package enum HeistCompilerProcess {
+    package enum Purpose: Sendable {
         case compilation
         case execution
     }
 
-    struct Limits: Sendable, Equatable {
-        static let `default` = Self(
+    package struct Limits: Sendable, Equatable {
+        package static let `default` = Self(
             compilationTimeout: .seconds(120),
             executionTimeout: .seconds(10),
             terminationGrace: .milliseconds(250),
@@ -22,14 +22,14 @@ enum HeistCompilerProcess {
             capturedByteLimitPerStream: 1_048_576
         )
 
-        let compilationTimeout: Duration
-        let executionTimeout: Duration
-        let terminationGrace: Duration
-        let killGrace: Duration
-        let pollInterval: Duration
-        let capturedByteLimitPerStream: Int
+        package let compilationTimeout: Duration
+        package let executionTimeout: Duration
+        package let terminationGrace: Duration
+        package let killGrace: Duration
+        package let pollInterval: Duration
+        package let capturedByteLimitPerStream: Int
 
-        init(
+        package init(
             compilationTimeout: Duration,
             executionTimeout: Duration,
             terminationGrace: Duration,
@@ -51,7 +51,7 @@ enum HeistCompilerProcess {
             self.capturedByteLimitPerStream = capturedByteLimitPerStream
         }
 
-        func timeout(for purpose: Purpose) -> Duration {
+        package func timeout(for purpose: Purpose) -> Duration {
             switch purpose {
             case .compilation:
                 compilationTimeout
@@ -62,22 +62,22 @@ enum HeistCompilerProcess {
     }
 
 #if os(macOS) || os(Linux)
-    struct Command: Sendable, Equatable {
-        let executable: URL
-        let arguments: [String]
+    package struct Command: Sendable, Equatable {
+        package let executable: URL
+        package let arguments: [String]
 
-        init(executable: URL, arguments: [String]) {
+        package init(executable: URL, arguments: [String]) {
             precondition(executable.isFileURL)
             self.executable = executable.standardizedFileURL
             self.arguments = arguments
         }
     }
 
-    struct Output: Sendable, Equatable {
-        let stdout: Data
-        let stderr: Data
+    package struct Output: Sendable, Equatable {
+        package let stdout: Data
+        package let stderr: Data
 
-        var diagnostics: String {
+        package var diagnostics: String {
             let stderrText = String(data: stderr, encoding: .utf8) ?? ""
             let stdoutText = String(data: stdout, encoding: .utf8) ?? ""
             return [stderrText, stdoutText]
@@ -87,12 +87,12 @@ enum HeistCompilerProcess {
         }
     }
 
-    enum OutputStream: String, Sendable, Equatable, CaseIterable {
+    package enum OutputStream: String, Sendable, Equatable, CaseIterable {
         case stdout
         case stderr
     }
 
-    enum Outcome: Sendable, Equatable {
+    package enum Outcome: Sendable, Equatable {
         case succeeded(Output)
         case nonzeroExit(code: Int32, output: Output)
         case signaled(signal: Int32, output: Output)
@@ -139,12 +139,14 @@ enum HeistCompilerProcess {
         }
     }
 
-    actor Runner {
-        static let shared = Runner()
+    package actor Runner {
+        package static let shared = Runner()
 
         private var activeProcessGroups: Set<pid_t> = []
 
-        func execute(
+        package init() {}
+
+        package func execute(
             _ command: Command,
             purpose: Purpose,
             limits: Limits = .default,

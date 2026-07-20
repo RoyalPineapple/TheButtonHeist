@@ -47,6 +47,16 @@ final class USBDeviceDiscoveryParsingTests: XCTestCase {
         ])
     }
 
+    func testRunProcessTimeoutReturnsForProcessIgnoringTerminate() async {
+        let output = await USBDeviceDiscovery.runProcess(
+            "/bin/sh",
+            arguments: ["-c", "trap '' TERM; while :; do :; done"],
+            timeout: .milliseconds(100)
+        )
+
+        XCTAssertNil(output)
+    }
+
     @ButtonHeistActor
     func testStartIsIdempotentWhilePollSessionIsActive() async {
         let pollGate = USBDiscoveryPollGate()

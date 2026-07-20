@@ -37,8 +37,8 @@ import TheScore
         #expect(values(in: metrics, named: .heistDurationMs) == [1234])
         #expect(values(in: metrics, named: .actionPipelineTargetResolutionMs) == [1])
         #expect(values(in: metrics, named: .actionPipelineTotalMs) == [15])
-        #expect(values(in: metrics, named: .waitPipelineTargetResolutionMs) == [6, 11, 21])
-        #expect(values(in: metrics, named: .waitPipelineTotalMs) == [40, 95, 60])
+        #expect(values(in: metrics, named: .waitPipelineTargetResolutionMs) == [6, 11, 21, 21])
+        #expect(values(in: metrics, named: .waitPipelineTotalMs) == [40, 95, 60, 60])
         #expect(values(in: metrics, named: .expectationWaitMs) == [40])
         #expect(metrics.measurements.filter { $0.path?.description == "$.body[0]" }.allSatisfy {
             $0.kind == .action && $0.status == .passed
@@ -58,6 +58,14 @@ import TheScore
                 elapsedMs: 60,
                 path: "$.body[2]",
                 kind: .repeatUntil,
+                status: .passed
+            ),
+            HeistReport.CeilingMetric(
+                source: .repeatUntilTimeout,
+                budgetMs: 50,
+                elapsedMs: 60,
+                path: "$.body[2].repeat_until.iterations[0]",
+                kind: .repeatUntilIteration,
                 status: .passed
             ),
             HeistReport.CeilingMetric(
@@ -229,13 +237,21 @@ import TheScore
                 timing: repeatTiming
             )
         ))
+        let declaration = HeistRepeatUntilDeclaration(predicate: predicate, timeout: 0.05)
+        let iteration = HeistExecutionStepResult.repeatUntilIteration(
+            path: try HeistExecutionPath(validating: "$.body[2].repeat_until.iterations[0]"),
+            durationMs: 60,
+            declaration: declaration,
+            completion: .passed(evidence: try #require(HeistPassedRepeatUntilIterationEvidence(evidence)))
+        )
         let completion = HeistRepeatUntilCompletion.passed(
-            evidence: try #require(HeistPassedRepeatUntilEvidence(evidence))
+            evidence: try #require(HeistPassedRepeatUntilEvidence(evidence)),
+            children: try #require(HeistPassingChildren([iteration]))
         )
         return HeistExecutionStepResult.repeatUntil(
             path: try HeistExecutionPath(validating: "$.body[2]"),
             durationMs: 60,
-            declaration: HeistRepeatUntilDeclaration(predicate: predicate, timeout: 0.05),
+            declaration: declaration,
             completion: completion
         )
     }

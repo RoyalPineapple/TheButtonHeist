@@ -49,6 +49,7 @@ enum StorageEnvironmentBridge {
 }
 
 enum PrivateStorage {
+    typealias ReplacementOperation = (URL, URL) throws -> Void
 
     // MARK: - Paths
 
@@ -146,7 +147,11 @@ enum PrivateStorage {
         }
     }
 
-    static func writePrivateData(_ data: Data, to url: URL) throws {
+    static func writePrivateData(
+        _ data: Data,
+        to url: URL,
+        replaceItem: ReplacementOperation = defaultReplaceItem
+    ) throws {
         let fileManager = FileManager.default
         let attributes = PrivateFileAttributes.privateFile
         try createPrivateDirectory(at: url.deletingLastPathComponent())
@@ -155,23 +160,19 @@ enum PrivateStorage {
         try createPrivateFile(at: temporaryURL, contents: data)
         do {
             if fileManager.fileExists(atPath: url.path) {
-                do {
-                    try fileManager.removeItem(at: url)
-                } catch {
-                    if fileManager.fileExists(atPath: url.path) {
-                        throw error
-                    } else {
-                        // Destination disappeared after the existence check; the move below
-                        // still provides the one authoritative replacement write.
-                    }
-                }
+                try replaceItem(url, temporaryURL)
+            } else {
+                try fileManager.moveItem(at: temporaryURL, to: url)
             }
-            try fileManager.moveItem(at: temporaryURL, to: url)
             try fileManager.setAttributes(attributes.foundationAttributes, ofItemAtPath: url.path)
         } catch {
             try? fileManager.removeItem(at: temporaryURL)
             throw error
         }
+    }
+
+    private static func defaultReplaceItem(destination: URL, replacement: URL) throws {
+        _ = try FileManager.default.replaceItemAt(destination, withItemAt: replacement)
     }
 
 }
