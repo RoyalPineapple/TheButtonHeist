@@ -50,6 +50,9 @@ extension TheVault {
     }
 
     private static func hasActivationBlock(_ object: NSObject) -> Bool {
+        // accessibilityActivateBlock is iOS 17+; on earlier deployment targets
+        // block-based activation cannot exist, so there is nothing to detect.
+        guard #available(iOS 17.0, *) else { return false }
         guard object.responds(to: #selector(NSObject.accessibilityActivateBlock)) else {
             return false
         }
