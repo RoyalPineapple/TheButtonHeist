@@ -265,7 +265,8 @@ Every timeout in the language is a `Double` in **seconds**. DSL source spells
 fixed timeouts as bare numeric literals; generated plan JSON carries the same
 value as a bare number of seconds. Runtime Swift code constructing a dynamic
 timeout uses `try WaitTimeout.seconds(_:)` or
-`try WaitTimeout.milliseconds(_:)`. Timeouts MUST be finite and positive.
+`try WaitTimeout.milliseconds(_:)`. Timeouts MUST be finite and satisfy
+`0 < value <= configuredMaximum`.
 `WaitTimeout` defaults to a 60-second maximum. Set
 `BUTTONHEIST_MAX_WAIT_TIMEOUT` to a finite number of seconds greater than or
 equal to 30 to override that maximum; there is no additional fixed policy cap.
@@ -338,9 +339,8 @@ RepeatUntil(.exists(.label("Inbox empty")), timeout: 10) {
 ```
 
 `RepeatUntil` has no default timeout: the timeout is the totality guarantee for
-a predicate only the run can decide, so authors MUST write one. A timeout of
-`0` still runs the body once, then an unmet predicate fails the step with the
-result.
+a predicate only the run can decide, so authors MUST write one within the
+strictly positive `WaitTimeout` range.
 
 Use definitions and composition inside a durable plan:
 
