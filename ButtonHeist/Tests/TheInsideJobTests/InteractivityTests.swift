@@ -43,25 +43,28 @@ final class InteractivityTests: XCTestCase {
         XCTAssertTrue(TheVault.Interactivity.isInteractive(element: element))
     }
 
-    func testActivationBlockIsInteractiveWithoutTraits() {
+    func testActivationBlockIsDetectedAsImplementationWithoutChangingSemanticInteractivity() {
         let object = ActivationBlockView()
         let element = makeElement(label: "Plain")
 
-        XCTAssertTrue(TheVault.Interactivity.isInteractive(element: element, object: object))
+        XCTAssertFalse(TheVault.Interactivity.isInteractive(element: element))
+        XCTAssertTrue(TheVault.Interactivity.implementsAccessibilityActivation(object))
     }
 
-    func testAccessibilityActivateOverrideIsInteractiveWithoutTraits() {
+    func testAccessibilityActivateOverrideIsDetectedAsImplementationWithoutChangingSemanticInteractivity() {
         let element = makeElement(label: "Plain")
         let object = ActivationOverrideView()
 
-        XCTAssertTrue(TheVault.Interactivity.isInteractive(element: element, object: object))
+        XCTAssertFalse(TheVault.Interactivity.isInteractive(element: element))
+        XCTAssertTrue(TheVault.Interactivity.implementsAccessibilityActivation(object))
     }
 
     func testPlainObjectWithoutActivationSignalIsNotInteractive() {
         let element = makeElement(label: "Plain")
         let object = UIView()
 
-        XCTAssertFalse(TheVault.Interactivity.isInteractive(element: element, object: object))
+        XCTAssertFalse(TheVault.Interactivity.isInteractive(element: element))
+        XCTAssertFalse(TheVault.Interactivity.implementsAccessibilityActivation(object))
     }
 
     func testAdjustableTraitIsInteractive() {
@@ -144,7 +147,7 @@ final class InteractivityTests: XCTestCase {
         switch result {
         case .interactive(let warning):
             let warningText = try XCTUnwrap(warning, "Static-only element should surface an advisory warning")
-            XCTAssertTrue(warningText.contains("static traits"))
+            XCTAssertTrue(warningText.contains("proceeding as VoiceOver would"))
         case .blocked(let reason):
             XCTFail("Expected interactive (with warning), got blocked: \(reason)")
         }

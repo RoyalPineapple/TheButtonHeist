@@ -68,20 +68,24 @@ extension TheBrainsActionTests {
         let subject = makeTestHeistElement(
             label: "Checkout",
             traits: [.staticText],
-            actions: [.activate]
+            actions: []
         )
         let runtime = heistRuntime(
             observations: [],
             execute: { _ in
-                ActionResult.success(
-                    payload: .activate,
+                ActionResult.activationSuccess(
                     observation: .none,
                     subjectEvidence: ActionSubjectEvidence(
                         source: .resolvedSemanticTarget,
                         target: resolvedTarget,
                         element: subject,
                         resolution: ActionSubjectResolution(origin: .visible)
-                    )
+                    ),
+                    activationTrace: ActivationTrace(.activationPointFallback(
+                        axActivateReturned: false,
+                        tapActivationPoint: ScreenPoint(x: 50, y: 50),
+                        tapActivationSucceeded: true
+                    ), implementsAccessibilityActivation: false)
                 )
             }
         )
@@ -97,9 +101,10 @@ extension TheBrainsActionTests {
         XCTAssertEqual(warning.code, "activation_weak_affordance_evidence")
         XCTAssertEqual(
             warning.message,
-            "activate succeeded, but the target does not advertise a primary activation affordance"
+            "target advertised no interactivity and implements no activation; "
+                + "activate proceeded as VoiceOver would"
         )
-        XCTAssertEqual(warning.evidence, #"label="Checkout" traits=[staticText] actions=[activate]"#)
+        XCTAssertEqual(warning.evidence, #"label="Checkout" traits=[staticText] actions=[]"#)
         XCTAssertEqual(HeistReport.project(result: heistResult).warnings, [])
     }
 

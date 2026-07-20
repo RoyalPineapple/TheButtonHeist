@@ -60,9 +60,8 @@ public enum AccessibilityPolicy {
 
     /// Traits that signal "user can interact with this element".
     ///
-    /// Consumed by `TheVault.Interactivity.isInteractive` to gate whether
-    /// `activate` should attempt synthetic events for an element with no
-    /// explicit accessibility action.
+    /// Consumed by accessibility projections and diagnostics to classify
+    /// advertised interactivity. This classification never gates `activate`.
     public static let interactiveTraits: Set<HeistTrait> = [
         .button,
         .link,

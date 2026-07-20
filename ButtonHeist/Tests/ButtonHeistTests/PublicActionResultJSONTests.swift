@@ -99,9 +99,9 @@ final class PublicActionResultJSONTests: XCTestCase {
         let subjectEvidence = try weakActivationSubjectEvidence()
         let response = FenceResponse.action(
             command: .activate,
-            result: ActionResult.success(
-                payload: .activate,
-                subjectEvidence: subjectEvidence
+            result: ActionResult.activationSuccess(
+                subjectEvidence: subjectEvidence,
+                activationTrace: weakActivationTrace()
             )
         )
 
@@ -115,9 +115,9 @@ final class PublicActionResultJSONTests: XCTestCase {
     }
 
     func testStandaloneAndNestedActionsShareWarningProjection() throws {
-        let actionResult = ActionResult.success(
-            payload: .activate,
-            subjectEvidence: try weakActivationSubjectEvidence()
+        let actionResult = ActionResult.activationSuccess(
+            subjectEvidence: try weakActivationSubjectEvidence(),
+            activationTrace: weakActivationTrace()
         )
 
         let standalone = try publicJSONProbe(FenceResponse.action(
@@ -144,6 +144,14 @@ final class PublicActionResultJSONTests: XCTestCase {
             element: makeTestHeistElement(label: "Continue", traits: [.staticText]),
             resolution: ActionSubjectResolution(origin: .visible)
         )
+    }
+
+    private func weakActivationTrace() -> ActivationTrace {
+        ActivationTrace(.activationPointFallback(
+            axActivateReturned: false,
+            tapActivationPoint: ScreenPoint(x: 50, y: 50),
+            tapActivationSucceeded: true
+        ), implementsAccessibilityActivation: false)
     }
 
     func testStandaloneActionResponseEncodesStructuredFailure() throws {

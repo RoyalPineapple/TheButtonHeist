@@ -38,6 +38,8 @@ struct ActivationPolicy<PreparedDispatch: Sendable> {
         let treeElement = refreshedTarget.treeElement
         let refreshedLiveTarget = refreshedTarget.liveTarget
         let subjectEvidence = refreshedTarget.subjectEvidence(source: .resolvedSemanticTarget)
+        let implementsAccessibilityActivation = TheVault.Interactivity
+            .implementsAccessibilityActivation(refreshedLiveTarget.object)
 
         let activateOutcome: AccessibilityActionDispatcher.ActivateOutcome
         let activationPoint: CGPoint
@@ -86,7 +88,7 @@ struct ActivationPolicy<PreparedDispatch: Sendable> {
             axActivateReturned: activateOutcome.axActivateReturned,
             tapActivationPoint: admittedActivationPoint,
             tapActivationSucceeded: tapActivationSucceeded
-        ))
+        ), implementsAccessibilityActivation: implementsAccessibilityActivation)
         if tapActivationSucceeded {
             if let failure = await textEntryActivationFailure(treeElement, trace) {
                 return failure.withSubjectEvidence(subjectEvidence)
@@ -100,7 +102,11 @@ struct ActivationPolicy<PreparedDispatch: Sendable> {
 
         return .failure(
             .activate,
-            message: activationFailureMessage(treeElement: treeElement, activateOutcome: activateOutcome),
+            message: activationFailureMessage(
+                treeElement: treeElement,
+                activateOutcome: activateOutcome,
+                implementsAccessibilityActivation: implementsAccessibilityActivation
+            ),
             subjectEvidence: subjectEvidence,
             activationTrace: trace
         )
@@ -109,7 +115,8 @@ struct ActivationPolicy<PreparedDispatch: Sendable> {
     @MainActor
     private func activationFailureMessage(
         treeElement: InterfaceTree.Element,
-        activateOutcome: AccessibilityActionDispatcher.ActivateOutcome
+        activateOutcome: AccessibilityActionDispatcher.ActivateOutcome,
+        implementsAccessibilityActivation: Bool
     ) -> String {
         let observed: String
         switch activateOutcome {
@@ -120,9 +127,13 @@ struct ActivationPolicy<PreparedDispatch: Sendable> {
         case .refused:
             observed = "accessibilityActivate() declined after semantic refresh"
         }
+        let implementationEvidence = implementsAccessibilityActivation
+            ? "activationImplementation=present likelyConditionalState=true"
+            : "activationImplementation=absent likelyInertTarget=true"
         return "activate failed: \(observed); activation-point dispatch was attempted at the fresh " +
             "accessibility activation point and did not complete for " +
-            "\(ActionCapabilityDiagnostic.elementObservation(treeElement)); correction: target an element " +
+            "\(ActionCapabilityDiagnostic.elementObservation(treeElement)); \(implementationEvidence); " +
+            "correction: target an element " +
             "with primary accessibility activation, or use an explicit mechanical gesture when the " +
             "test intent is viewport coordinate delivery"
     }

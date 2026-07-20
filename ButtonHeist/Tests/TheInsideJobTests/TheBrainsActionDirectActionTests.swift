@@ -235,7 +235,7 @@ extension TheBrainsActionTests {
         XCTAssertEqual(liveObject.activationCount, 1)
     }
 
-    func testExecuteActivateFailsForNoTraitElementWithoutActivationSignal() async throws {
+    func testExecuteActivateDispatchesNoTraitElementWithoutActivationImplementation() async throws {
         let heistId: HeistId = "plain_label"
         let liveObject = UIView()
         registerScreenElement(
@@ -247,14 +247,14 @@ extension TheBrainsActionTests {
         let target = try AccessibilityTarget.label("Plain label").resolve(in: .empty)
         let result = await brains.actions.executeActivate(target)
 
-        XCTAssertFalse(result.success)
+        XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, .activate)
-        XCTAssertDiagnostic(result.message, contains: [
-            "activate failed",
-            "label=\"Plain label\"",
-            "actions=[]",
-            "try retarget an element whose actions include activate",
-        ])
+        XCTAssertEqual(result.activationTrace?.axActivateReturned, false)
+        XCTAssertEqual(result.activationTrace?.implementsAccessibilityActivation, false)
+        XCTAssertTrue(result.activationTrace?.tapActivationDispatched == true)
+        XCTAssertEqual(result.activationTrace?.tapActivationSucceeded, true)
+        XCTAssertEqual(result.subjectEvidence?.element.label, "Plain label")
+        XCTAssertEqual(result.subjectEvidence?.element.actions, [])
     }
 
     func testExecuteCommandFailedActivateCarriesPostActionTraceLikeSuccessfulAction() async throws {
@@ -531,7 +531,7 @@ extension TheBrainsActionTests {
             axActivateReturned: false,
             tapActivationPoint: ScreenPoint(x: 195, y: 139),
             tapActivationSucceeded: true
-        ))
+        ), implementsAccessibilityActivation: false)
         let target = AccessibilityTarget.label("Search all items")
         let command = HeistActionCommand.activate(target)
         let runtime = heistRuntime(observations: []) { _ in

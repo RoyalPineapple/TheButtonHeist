@@ -259,7 +259,7 @@ extension TheBrainsPipelineTests {
             axActivateReturned: false,
             tapActivationPoint: ScreenPoint(x: 50, y: 22),
             tapActivationSucceeded: true
-        ))
+        ), implementsAccessibilityActivation: false)
         let success = TheSafecracker.ActionDispatchResult.success(
             payload: .setPasteboard("ok"),
             message: "completed",

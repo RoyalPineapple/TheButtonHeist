@@ -30,7 +30,7 @@ package extension AccessibilityElement {
 
 extension TheVault {
 
-    /// Pure predicates for interactivity and default-activation classification.
+    /// Interactivity classification and runtime activation diagnostics.
     enum InteractivityCheck {
         case interactive(warning: String?)
         case blocked(reason: String)
@@ -44,7 +44,12 @@ extension TheVault {
         !element.traits.isDisjoint(with: AccessibilityPolicy.interactiveTraitsBitmask)
     }
 
-    private static func supportsDefaultActivation(_ object: NSObject?) -> Bool {
+    /// Runtime implementation introspection for activation diagnostics.
+    ///
+    /// This is not an accessibility semantic and must never decide whether an
+    /// `activate` command is dispatched. VoiceOver asks every target to activate;
+    /// Button Heist uses this only to explain a declined activation afterward.
+    static func implementsAccessibilityActivation(_ object: NSObject?) -> Bool {
         guard let object else { return false }
         return hasActivationBlock(object) || overridesAccessibilityActivate(object)
     }
@@ -64,28 +69,28 @@ extension TheVault {
     }
 
     /// Check if an element is interactive based on its parsed accessibility data.
-    static func isInteractive(element: AccessibilityElement, object: NSObject? = nil) -> Bool {
+    static func isInteractive(element: AccessibilityElement) -> Bool {
         element.projectedActionSet.actions.contains(.activate)
-            || supportsDefaultActivation(object)
     }
 
-    /// Validate whether an element can receive interaction based on its traits.
-    /// Pure — any advisory warning travels with `.interactive`; the caller decides
-    /// whether to log it.
+    /// Enforce advertised disabled state and derive advisory diagnostics. Runtime
+    /// implementation introspection can suppress a weak-target warning, but can
+    /// never block dispatch.
     static func checkInteractivity(_ element: AccessibilityElement, object: NSObject? = nil) -> InteractivityCheck {
         if element.traits.contains(.notEnabled) {
             return .blocked(reason: "Element is disabled (has 'notEnabled' trait)")
         }
 
-        let supportsActivation = supportsDefaultActivation(object)
+        let implementsActivation = implementsAccessibilityActivation(object)
         let staticTraitsOnly = element.traits.isSubset(of: AccessibilityPolicy.staticOnlyTraitsBitmask)
         let warning: String? = (
             staticTraitsOnly
-                && !supportsActivation
+                && !implementsActivation
                 && !hasInteractiveTraits(element)
                 && element.customActions.isEmpty
         )
-            ? "Element '\(element.description)' has only static traits, tap may not work"
+            ? "Target advertised no interactivity and implements no activation; "
+                + "proceeding as VoiceOver would"
             : nil
 
         return .interactive(warning: warning)

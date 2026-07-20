@@ -83,11 +83,15 @@ final class ActionResultEvidenceContractTests: XCTestCase {
     func testSuccessEvidenceRoundTripsWithCanonicalShape() throws {
         let trace = traceWithAnnouncement("Checkout")
         let traceEvidence = traceEvidence(trace, completeness: .incomplete)
-        let result = ActionResult.success(
-            payload: .activate,
+        let result = ActionResult.activationSuccess(
             message: "done",
             observation: .settledTrace(traceEvidence, .settled(duration: 125)),
             subjectEvidence: try weakActivationSubjectEvidence(),
+            activationTrace: ActivationTrace(.activationPointFallback(
+                axActivateReturned: false,
+                tapActivationPoint: ScreenPoint(x: 50, y: 50),
+                tapActivationSucceeded: true
+            ), implementsAccessibilityActivation: false),
             timing: ActionPerformanceTiming(actionDispatchMs: 4)
         )
 
@@ -100,7 +104,10 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         let timing = try XCTUnwrap(evidence["timing"] as? [String: Any])
 
         XCTAssertEqual(Set(object.keys), Set(["outcome", "method", "message", "evidence"]))
-        XCTAssertEqual(Set(evidence.keys), Set(["observation", "subjectEvidence", "timing", "warning"]))
+        XCTAssertEqual(
+            Set(evidence.keys),
+            Set(["observation", "subjectEvidence", "activationTrace", "timing", "warning"])
+        )
         XCTAssertEqual(observation["kind"] as? String, "settledTrace")
         XCTAssertEqual(Set(observation.keys), Set(["kind", "traceEvidence", "settlement"]))
         XCTAssertEqual(Set(encodedTraceEvidence.keys), Set(["accessibilityTrace", "completeness"]))

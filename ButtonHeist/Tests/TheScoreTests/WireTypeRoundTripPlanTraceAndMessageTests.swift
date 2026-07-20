@@ -75,7 +75,7 @@ extension WireTypeRoundTripTests {
             axActivateReturned: false,
             tapActivationPoint: ScreenPoint(x: 195, y: 139),
             tapActivationSucceeded: true
-        ))
+        ), implementsAccessibilityActivation: false)
         let failure = HeistFailureDetail(
             category: .targetResolution,
             contract: "action dispatch succeeds",

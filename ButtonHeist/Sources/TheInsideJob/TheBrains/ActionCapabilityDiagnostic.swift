@@ -186,9 +186,6 @@ import AccessibilitySnapshotParser
     ) -> [ElementAction] {
         let element = treeElement.element
         var actions = element.projectedActionSet.actions
-        if TheVault.Interactivity.isInteractive(element: element, object: liveObject) {
-            actions.insert(.activate)
-        }
         let liveNames = liveObject?.accessibilityCustomActions?
             .compactMap { try? CustomActionName(validating: $0.name) } ?? []
         actions.formUnion(liveNames.map(ElementAction.custom))

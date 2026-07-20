@@ -109,7 +109,7 @@ extension TheBrainsPipelineTests {
             axActivateReturned: false,
             tapActivationPoint: ScreenPoint(x: 888, y: 372),
             tapActivationSucceeded: true
-        ))
+        ), implementsAccessibilityActivation: false)
 
         let result = await brains.interactionCoordinator.settleAfterAction(
             dispatchResult: successOutcome(

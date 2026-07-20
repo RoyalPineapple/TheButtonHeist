@@ -147,6 +147,9 @@ public enum ActivationTracePhase: Sendable, Equatable {
 
 public struct ActivationTrace: Codable, Sendable, Equatable {
     private let phase: ActivationTracePhase
+    /// Runtime implementation evidence captured only after semantic activation
+    /// declined. This is diagnostic X-ray evidence, never dispatch permission.
+    public let implementsAccessibilityActivation: Bool?
 
     public var axActivateReturned: Bool? {
         switch phase {
@@ -180,12 +183,17 @@ public struct ActivationTrace: Codable, Sendable, Equatable {
         return succeeded
     }
 
-    public init(_ phase: ActivationTracePhase) {
+    public init(
+        _ phase: ActivationTracePhase,
+        implementsAccessibilityActivation: Bool? = nil
+    ) {
         self.phase = phase
+        self.implementsAccessibilityActivation = implementsAccessibilityActivation
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case axActivateReturned
+        case implementsAccessibilityActivation
         case tapActivationDispatched
         case tapActivationPoint
         case tapActivationSucceeded
@@ -195,6 +203,10 @@ public struct ActivationTrace: Codable, Sendable, Equatable {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "ActivationTrace")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let axActivateReturned = try container.decodeIfPresent(Bool.self, forKey: .axActivateReturned)
+        let implementsAccessibilityActivation = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .implementsAccessibilityActivation
+        )
         let tapActivationDispatched = try container.decode(Bool.self, forKey: .tapActivationDispatched)
         let tapActivationPoint = try container.decodeIfPresent(ScreenPoint.self, forKey: .tapActivationPoint)
         let tapActivationSucceeded = try container.decodeIfPresent(Bool.self, forKey: .tapActivationSucceeded)
@@ -210,9 +222,11 @@ public struct ActivationTrace: Codable, Sendable, Equatable {
                 axActivateReturned: axActivateReturned,
                 tapActivationPoint: tapActivationPoint,
                 tapActivationSucceeded: tapActivationSucceeded
-            ))
+            ), implementsAccessibilityActivation: implementsAccessibilityActivation)
         } else {
-            guard tapActivationPoint == nil, tapActivationSucceeded == nil else {
+            guard implementsAccessibilityActivation == nil,
+                  tapActivationPoint == nil,
+                  tapActivationSucceeded == nil else {
                 throw DecodingError.dataCorrupted(.init(
                     codingPath: container.codingPath,
                     debugDescription: "tapActivationPoint and tapActivationSucceeded require tapActivationDispatched"
@@ -235,6 +249,10 @@ public struct ActivationTrace: Codable, Sendable, Equatable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encodeIfPresent(axActivateReturned, forKey: .axActivateReturned)
+        try container.encodeIfPresent(
+            implementsAccessibilityActivation,
+            forKey: .implementsAccessibilityActivation
+        )
         try container.encode(tapActivationDispatched, forKey: .tapActivationDispatched)
         try container.encodeIfPresent(tapActivationPoint, forKey: .tapActivationPoint)
         try container.encodeIfPresent(tapActivationSucceeded, forKey: .tapActivationSucceeded)
