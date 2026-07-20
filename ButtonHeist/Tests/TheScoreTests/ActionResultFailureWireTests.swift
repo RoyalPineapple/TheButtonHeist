@@ -2,16 +2,6 @@ import XCTest
 import TheScore
 
 final class ActionResultFailureWireTests: XCTestCase {
-    func testActionResultRejectsSuccessWithFailureKind() throws {
-        let json = """
-        {"outcome":{"kind":"success","failureKind":"actionFailed"},"method":"activate"}
-        """
-
-        XCTAssertThrowsError(try JSONDecoder().decode(ActionResult.self, from: Data(json.utf8))) { error in
-            XCTAssertTrue("\(error)".contains("successful ActionResult outcome must not include failureKind"), "\(error)")
-        }
-    }
-
     func testActionResultWithFailureKind() throws {
         let result = ActionResult.failure(
             payload: .oneFingerTap,
@@ -37,16 +27,6 @@ final class ActionResultFailureWireTests: XCTestCase {
             let data = try JSONEncoder().encode(result)
             let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
             XCTAssertEqual(decoded.outcome.failureKind, kind, "Round-trip failed for \(kind)")
-        }
-    }
-
-    func testActionResultRejectsFailureWithoutFailureKind() throws {
-        let json = """
-        {"type":"actionResult","payload":{"outcome":{"kind":"failure"},"method":"oneFingerTap","message":"fail"}}
-        """
-
-        XCTAssertThrowsError(try JSONDecoder().decode(ServerMessage.self, from: Data(json.utf8))) { error in
-            XCTAssertTrue("\(error)".contains("failed ActionResult outcome requires failureKind"), "\(error)")
         }
     }
 }

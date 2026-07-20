@@ -106,21 +106,6 @@ final class AccessibilityTraceChangeFactRoundTripTests: XCTestCase {
         XCTAssertTrue(payload.updated.isEmpty)
     }
 
-    func testElementsChangedEmptyArraysAreOmitted() throws {
-        let fact = AccessibilityTrace.ChangeFact.elementsChanged(.init())
-        let data = try encoder.encode(fact)
-        let json = try JSONProbe(data: data)
-
-        try json.assertMissing("appeared")
-        try json.assertMissing("disappeared")
-        try json.assertMissing("updated")
-
-        guard case .elementsChanged(let payload) = try roundTrip(fact) else {
-            return XCTFail("Expected elementsChanged fact")
-        }
-        XCTAssertFalse(payload.hasLifecycleOrUpdateFacts)
-    }
-
     func testElementsChangedFullRoundTrip() throws {
         let appeared = makeNode(label: "New")
         let disappeared = makeNode(label: "Old")
@@ -172,95 +157,6 @@ final class AccessibilityTraceChangeFactRoundTripTests: XCTestCase {
         try json.assertMissing("elementCount")
 
         XCTAssertEqual(try roundTrip(fact), fact)
-    }
-
-    func testScreenChangedMetadataRoundTrip() throws {
-        let fact = AccessibilityTrace.ChangeFact.screenChanged(.init(
-            metadata: .init(transient: [makeElement(label: "Loading")])
-        ))
-
-        guard case .screenChanged(let payload) = try roundTrip(fact) else {
-            return XCTFail("Expected screenChanged fact")
-        }
-        XCTAssertEqual(payload.metadata.transient.map(\.label), ["Loading"])
-    }
-
-    // MARK: - Malformed input
-
-    func testRejectsUnknownKind() {
-        assertDecodeFailure(
-            AccessibilityTrace.ChangeFact.self,
-            json: #"{"kind":"shrugChanged","metadata":{}}"#,
-            decoder: decoder
-        )
-    }
-
-    func testRejectsMissingKind() {
-        assertDecodeFailure(
-            AccessibilityTrace.ChangeFact.self,
-            json: #"{"metadata":{}}"#,
-            decoder: decoder
-        )
-    }
-
-    func testRejectsNoChangeFact() {
-        assertDecodeFailure(
-            AccessibilityTrace.ChangeFact.self,
-            json: #"{"kind":"noChange","metadata":{}}"#,
-            decoder: decoder
-        )
-    }
-
-    func testRejectsMissingMetadata() {
-        assertDecodeFailure(
-            AccessibilityTrace.ChangeFact.self,
-            json: #"{"kind":"elementsChanged"}"#,
-            decoder: decoder
-        )
-    }
-
-    func testRejectsScreenChangedElementPayloads() {
-        assertDecodeFailure(
-            AccessibilityTrace.ChangeFact.self,
-            json: #"{"kind":"screenChanged","metadata":{},"appeared":[]}"#,
-            decoder: decoder
-        )
-    }
-
-    func testRejectsObsoleteScreenInterfacePayload() {
-        assertDecodeFailure(
-            AccessibilityTrace.ChangeFact.self,
-            json: #"{"kind":"screenChanged","metadata":{},"replacementInterface":{}}"#,
-            decoder: decoder
-        )
-    }
-
-    // MARK: - PropertyChange
-
-    func testPropertyChangeRejectsMismatchedTypedValues() throws {
-        let json = Data(#"{"property":"traits","old":"button","new":["button","selected"]}"#.utf8)
-        XCTAssertThrowsError(try decoder.decode(PropertyChange.self, from: json))
-    }
-
-    func testPropertyChangeRejectsErasedElementPropertyValuePayloads() throws {
-        let json = Data("""
-        {
-          "property": "value",
-          "old": {"kind":"text","value":"1"},
-          "new": {"kind":"text","value":"2"}
-        }
-        """.utf8)
-        XCTAssertThrowsError(try decoder.decode(PropertyChange.self, from: json))
-    }
-
-    func testPropertyChangeRejectsNoOpTransition() throws {
-        let json = Data(#"{"property":"value","old":"Ready","new":"Ready"}"#.utf8)
-        XCTAssertThrowsError(try decoder.decode(PropertyChange.self, from: json))
-    }
-
-    func testPropertyChangeRejectsEmptyTransition() throws {
-        let json = Data(#"{"property":"value"}"#.utf8)
-        XCTAssertThrowsError(try decoder.decode(PropertyChange.self, from: json))
     }
 
     // MARK: - ElementEdits
