@@ -260,6 +260,13 @@ struct LiveCapture {
         dispatchReferences: DispatchReferences
     ) throws {
         let snapshot = tree.viewportCapture
+        try InterfaceGeometryAdmission.validate(snapshot.hierarchy)
+        for element in tree.elements.values {
+            try InterfaceGeometryAdmission.validate(element.element, at: element.path)
+        }
+        for container in tree.containers.values {
+            try InterfaceGeometryAdmission.validate(container.container, at: container.path)
+        }
         let indexedElements = snapshot.hierarchy.pathIndexedElements
 
         for (heistId, element) in tree.elements.sorted(by: { $0.key < $1.key })

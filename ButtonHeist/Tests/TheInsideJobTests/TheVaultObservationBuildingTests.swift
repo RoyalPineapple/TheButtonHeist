@@ -469,7 +469,9 @@ final class TheVaultObservationBuildingTests: XCTestCase {
         let observedContainerPoint = try XCTUnwrap(
             InterfaceTree.ObservedScrollContentActivationPoint(CGPoint(x: 160, y: 200))
         )
-        let inventory = ScrollInventory(totalElementCount: 20, visibleIndices: [7])
+        let inventory = try XCTUnwrap(
+            ScrollInventory(totalElementCount: 20, visibleIndices: [7])
+        )
         let result = TheVault.CaptureResult(
             hierarchy: [
                 .container(scrollableContainer, children: [

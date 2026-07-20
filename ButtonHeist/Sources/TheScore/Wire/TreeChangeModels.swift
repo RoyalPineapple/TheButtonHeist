@@ -9,11 +9,45 @@ public struct ElementPropertyFrame: Codable, Sendable, Equatable, Hashable {
     public let width: Int
     public let height: Int
 
-    public init(x: Int, y: Int, width: Int, height: Int) {
+    package init(x: Int, y: Int, width: Int, height: Int) {
+        precondition(Self.admits(width: width, height: height))
         self.x = x
         self.y = y
         self.width = width
         self.height = height
+    }
+
+    public static func admit(x: Int, y: Int, width: Int, height: Int) -> Self? {
+        guard admits(width: width, height: height) else { return nil }
+        return Self(x: x, y: y, width: width, height: height)
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case x
+        case y
+        case width
+        case height
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "element property frame")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        guard let admitted = Self.admit(
+            x: try container.decode(Int.self, forKey: .x),
+            y: try container.decode(Int.self, forKey: .y),
+            width: try container.decode(Int.self, forKey: .width),
+            height: try container.decode(Int.self, forKey: .height)
+        ) else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath,
+                debugDescription: "element property frame dimensions must be non-negative"
+            ))
+        }
+        self = admitted
+    }
+
+    private static func admits(width: Int, height: Int) -> Bool {
+        width >= 0 && height >= 0
     }
 
     public var displayText: String {

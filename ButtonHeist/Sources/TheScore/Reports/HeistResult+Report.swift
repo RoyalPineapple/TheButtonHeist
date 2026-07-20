@@ -64,7 +64,7 @@ public struct HeistReport: Sendable, Equatable {
             target = step.reportTarget
             status = step.status
             message = step.reportMessage
-            durationMs = step.durationMs
+            durationMs = step.durationMs.milliseconds
             failure = step.failure.map {
                 Failure(
                     detail: $0,
@@ -169,14 +169,14 @@ public struct HeistReport: Sendable, Equatable {
 
     public struct Measurement: Codable, Sendable, Equatable {
         public let name: MetricName
-        public let valueMs: Int
+        public let valueMs: ElapsedMilliseconds
         public let path: HeistExecutionPath?
         public let kind: HeistExecutionStepKind?
         public let status: HeistExecutionStepStatus?
 
         public init(
             name: MetricName,
-            valueMs: Int,
+            valueMs: ElapsedMilliseconds,
             path: HeistExecutionPath? = nil,
             kind: HeistExecutionStepKind? = nil,
             status: HeistExecutionStepStatus? = nil
@@ -197,16 +197,16 @@ public struct HeistReport: Sendable, Equatable {
 
     public struct CeilingMetric: Codable, Sendable, Equatable {
         public let source: CeilingMetricSource
-        public let budgetMs: Int
-        public let elapsedMs: Int
+        public let budgetMs: ElapsedMilliseconds
+        public let elapsedMs: ElapsedMilliseconds
         public let path: HeistExecutionPath
         public let kind: HeistExecutionStepKind
         public let status: HeistExecutionStepStatus
 
         public init(
             source: CeilingMetricSource,
-            budgetMs: Int,
-            elapsedMs: Int,
+            budgetMs: ElapsedMilliseconds,
+            elapsedMs: ElapsedMilliseconds,
             path: HeistExecutionPath,
             kind: HeistExecutionStepKind,
             status: HeistExecutionStepStatus
@@ -245,7 +245,7 @@ private extension HeistReport {
     }
 
     struct Reducer {
-        let durationMs: Int
+        let durationMs: ElapsedMilliseconds
         var frames: [Frame] = []
         var roots: [Node] = []
         var outputNodes: [Node?] = []
@@ -258,7 +258,7 @@ private extension HeistReport {
         var warnings: [HeistExecutionWarning] = []
         var metricBuilder: MetricBuilder
 
-        init(durationMs: Int) {
+        init(durationMs: ElapsedMilliseconds) {
             self.durationMs = durationMs
             var metricBuilder = MetricBuilder()
             metricBuilder.append(.heistDurationMs, valueMs: durationMs)
@@ -309,7 +309,7 @@ private extension HeistReport {
                     executedNodeCount: executedNodeCount,
                     outputNodeCount: outputNodes.count,
                     abortedAtPath: firstFailedStep?.path,
-                    durationMs: durationMs,
+                    durationMs: durationMs.milliseconds,
                     expectations: expectations,
                     finalScreenId: finalScreenId
                 ),
@@ -415,13 +415,13 @@ private struct MetricBuilder {
 
     mutating func append(
         _ name: HeistReport.MetricName,
-        valueMs: Int?,
+        valueMs: ElapsedMilliseconds?,
         step: HeistExecutionStepResult? = nil
     ) {
         guard let valueMs else { return }
         measurements.append(HeistReport.Measurement(
             name: name,
-            valueMs: max(0, valueMs),
+            valueMs: valueMs,
             path: step?.path,
             kind: step?.kind,
             status: step?.status
@@ -450,24 +450,28 @@ private struct MetricBuilder {
 
     private mutating func appendCeiling(
         _ source: HeistReport.CeilingMetricSource,
-        budgetMs: Int?,
-        elapsedMs: Int,
+        budgetMs: ElapsedMilliseconds?,
+        elapsedMs: ElapsedMilliseconds,
         step: HeistExecutionStepResult
     ) {
         guard let budgetMs else { return }
         ceilings.append(HeistReport.CeilingMetric(
             source: source,
             budgetMs: budgetMs,
-            elapsedMs: max(0, elapsedMs),
+            elapsedMs: elapsedMs,
             path: step.path,
             kind: step.kind,
             status: step.status
         ))
     }
 
-    private static func milliseconds(seconds: Double?) -> Int? {
-        guard let seconds, seconds.isFinite else { return nil }
-        return max(0, Int((seconds * 1_000).rounded()))
+    private static func milliseconds(seconds: Double?) -> ElapsedMilliseconds? {
+        guard let seconds, seconds.isFinite, seconds >= 0 else { return nil }
+        let roundedMilliseconds = (seconds * 1_000).rounded()
+        guard roundedMilliseconds.isFinite, roundedMilliseconds <= Double(Int.max) else { return nil }
+        return requireValidLiteralPayload {
+            try ElapsedMilliseconds(validatingMilliseconds: Int(roundedMilliseconds))
+        }
     }
 }
 

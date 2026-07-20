@@ -56,7 +56,7 @@ final class PublicActionResultJSONTests: XCTestCase {
     }
 
     func testStandaloneActionResponseEncodesHeistExecutionPayloadSummary() throws {
-        let result = HeistResult(
+        let result = try HeistResult(
             steps: [
                 HeistResultFixture.warning(message: "heads up"),
             ],
@@ -211,7 +211,7 @@ final class PublicActionResultJSONTests: XCTestCase {
             message: "Delete not found")
         let response = FenceResponse.heistExecution(
             plan: try minimalPlan(),
-            report: HeistReport.project(result: HeistResult(
+            report: HeistReport.project(result: try HeistResult(
                 steps: [
                     HeistResultFixture.action(
                         path: "$.body[0]",
@@ -265,7 +265,7 @@ final class PublicActionResultJSONTests: XCTestCase {
         )
         let response = FenceResponse.heistExecution(
             plan: try minimalPlan(),
-            report: HeistReport.project(result: HeistResult(
+            report: HeistReport.project(result: try HeistResult(
                 steps: [
                     HeistResultFixture.action(
                         path: "$.body[0]",
@@ -529,7 +529,7 @@ final class PublicActionResultJSONTests: XCTestCase {
                 result: result,
                 durationMs: 7
             )
-        let heistResult = HeistResult(steps: [step], durationMs: 7)
+        let heistResult = try HeistResult(steps: [step], durationMs: 7)
         let response = FenceResponse.heistExecution(
             plan: try minimalPlan(),
             report: HeistReport.project(result: heistResult)

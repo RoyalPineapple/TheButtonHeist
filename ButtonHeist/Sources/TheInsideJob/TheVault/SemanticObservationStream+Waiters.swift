@@ -41,7 +41,7 @@ extension SemanticObservationStream {
             return .cancelled
         }
         if let deadline,
-           !deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) {
+           !deadline.hasTimeRemaining(at: RuntimeElapsed.now) {
             return .deadlineReached
         }
 
@@ -108,7 +108,7 @@ extension SemanticObservationStream {
 
         let deadline = timeout == 0 ? nil : timeout.map {
             SemanticObservationDeadline(
-                start: CFAbsoluteTimeGetCurrent(),
+                start: RuntimeElapsed.now,
                 timeoutSeconds: $0
             )
         }

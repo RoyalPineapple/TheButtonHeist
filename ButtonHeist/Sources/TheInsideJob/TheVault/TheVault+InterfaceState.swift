@@ -13,20 +13,10 @@ extension TheVault {
     func resetInterfaceForLifecycle() {
         latestObservation = .empty
         latestFailedSettleDiagnosticEvidence = nil
-        nextVisibleRefreshObservationForTesting = nil
         semanticObservationStream.clearCurrentInterface()
     }
 
-    /// Clear stale interface state at a top-level heist boundary while leaving a
-    /// queued synthetic visible refresh intact for in-process runtime tests.
-    func resetInterfaceForHeistBootstrap() {
-        let queuedVisibleRefresh = nextVisibleRefreshObservationForTesting
-        resetInterfaceForLifecycle()
-        nextVisibleRefreshObservationForTesting = queuedVisibleRefresh
-    }
-
     func invalidateSettledObservationFromTripwire() {
-        nextVisibleRefreshObservationForTesting = nil
         semanticObservationStream.invalidateLatestSettledObservation()
     }
 
@@ -34,20 +24,15 @@ extension TheVault {
     /// capture-local observation for geometry and exploration consumers.
     @discardableResult
     func refreshLiveCapture() -> InterfaceObservation? {
-        guard let observation = nextVisibleRefreshObservationForTesting
-            ?? capture().map(Self.buildObservation(from:)) else { return nil }
+        guard let observation = captureVisibleObservation() else { return nil }
         observeInterface(observation)
         return observation
     }
 
     func recordCommittedObservation(
         _ observation: InterfaceObservation,
-        sourceObservation: InterfaceObservation
+        sourceObservation _: InterfaceObservation
     ) {
-        if let queuedVisibleRefresh = nextVisibleRefreshObservationForTesting,
-           queuedVisibleRefresh.tree.interfaceHash != sourceObservation.tree.interfaceHash {
-            nextVisibleRefreshObservationForTesting = nil
-        }
         observeInterface(observation)
         latestFailedSettleDiagnosticEvidence = nil
     }

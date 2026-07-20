@@ -108,15 +108,77 @@ public struct StatusSession: Codable, Sendable {
     /// Driver ID that owns the active session, when the client supplied one.
     public let activeDriverId: DriverID?
 
-    public init(
+    package init(
         active: Bool,
         watchersAllowed: Bool,
         activeConnections: Int,
         activeDriverId: DriverID? = nil
     ) {
+        precondition(Self.admits(
+            active: active,
+            watchersAllowed: watchersAllowed,
+            activeConnections: activeConnections,
+            activeDriverId: activeDriverId
+        ))
         self.active = active
         self.watchersAllowed = watchersAllowed
         self.activeConnections = activeConnections
         self.activeDriverId = activeDriverId
+    }
+
+    public static func admit(
+        active: Bool,
+        watchersAllowed: Bool,
+        activeConnections: Int,
+        activeDriverId: DriverID? = nil
+    ) -> Self? {
+        guard admits(
+            active: active,
+            watchersAllowed: watchersAllowed,
+            activeConnections: activeConnections,
+            activeDriverId: activeDriverId
+        ) else { return nil }
+        return Self(
+            active: active,
+            watchersAllowed: watchersAllowed,
+            activeConnections: activeConnections,
+            activeDriverId: activeDriverId
+        )
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case active
+        case watchersAllowed
+        case activeConnections
+        case activeDriverId
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "status session")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        guard let admitted = Self.admit(
+            active: try container.decode(Bool.self, forKey: .active),
+            watchersAllowed: try container.decode(Bool.self, forKey: .watchersAllowed),
+            activeConnections: try container.decode(Int.self, forKey: .activeConnections),
+            activeDriverId: try container.decodeIfPresent(DriverID.self, forKey: .activeDriverId)
+        ) else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath,
+                debugDescription: "status session requires watchersAllowed=false, 0 or 1 activeConnections, "
+                    + "and inactive sessions without connections or a driver ID"
+            ))
+        }
+        self = admitted
+    }
+
+    private static func admits(
+        active: Bool,
+        watchersAllowed: Bool,
+        activeConnections: Int,
+        activeDriverId: DriverID?
+    ) -> Bool {
+        !watchersAllowed
+            && (0...1).contains(activeConnections)
+            && (active || (activeConnections == 0 && activeDriverId == nil))
     }
 }

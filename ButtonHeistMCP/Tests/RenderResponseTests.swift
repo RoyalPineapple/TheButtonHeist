@@ -11,12 +11,12 @@ struct RenderResponseTests {
     @Test("inline screenshot render includes image content and interface text")
     func inlineScreenshotRenderIncludesImageAndInterfaceText() throws {
         let response = FenceResponse.screenshotData(
-            payload: ScreenPayload(
+            payload: try #require(ScreenPayload.admit(
                 pngData: "abc",
                 width: 100,
                 height: 200,
                 interface: try Self.interfaceFixture()
-            ),
+            )),
             options: .init(includeInterface: true)
         )
 
@@ -243,7 +243,10 @@ struct RenderResponseTests {
             accessibilityLanguage: nil,
             respondsToUserInteraction: true
         )
-        elementAnnotations.append(InterfaceElementAnnotation(path: TreePath([0, 0]), actions: [.activate]))
+        elementAnnotations.append(InterfaceElementAnnotation(
+            path: try #require(TreePath(validating: [0, 0])),
+            actions: [.activate]
+        ))
 
         let container = AccessibilityContainer(
             type: .semanticGroup(label: "Actions", value: nil),
@@ -260,7 +263,10 @@ struct RenderResponseTests {
             annotations: InterfaceAnnotations(
                 elements: elementAnnotations,
                 containers: [
-                    InterfaceContainerAnnotation(path: TreePath([0]), containerName: "semantic_actions__actions"),
+                    InterfaceContainerAnnotation(
+                        path: try #require(TreePath(validating: [0])),
+                        containerName: "semantic_actions__actions"
+                    ),
                 ]
             )
         )
@@ -315,7 +321,10 @@ struct RenderResponseTests {
             },
             annotations: InterfaceAnnotations(
                 elements: elements.indices.map { index in
-                    InterfaceElementAnnotation(path: TreePath([index]), actions: [])
+                    InterfaceElementAnnotation(
+                        path: try #require(TreePath(validating: [index])),
+                        actions: []
+                    )
                 }
             )
         )

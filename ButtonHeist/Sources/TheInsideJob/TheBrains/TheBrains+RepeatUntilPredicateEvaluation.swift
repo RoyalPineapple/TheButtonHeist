@@ -44,32 +44,12 @@ extension TheBrains.RepeatUntil {
         internal let observation: Observation
         internal let expectation: ExpectationResult.Met
         internal let result: HeistWaitResult
-
-        internal init(
-            observation: Observation,
-            expectation: ExpectationResult.Met,
-            result: HeistWaitResult
-        ) {
-            self.observation = observation
-            self.expectation = expectation
-            self.result = result
-        }
     }
 
     internal struct UnmetCheck {
         internal let observation: Observation
         internal let expectation: ExpectationResult.Unmet
         internal let result: HeistWaitResult
-
-        internal init(
-            observation: Observation,
-            expectation: ExpectationResult.Unmet,
-            result: HeistWaitResult
-        ) {
-            self.observation = observation
-            self.expectation = expectation
-            self.result = result
-        }
     }
 
     internal enum ObservedCheck {
@@ -173,7 +153,7 @@ extension TheBrains {
         step: ResolvedRepeatUntilStep,
         observation: RepeatUntil.Observation?,
         iterationResults: HeistPassingChildren,
-        deadline: CFAbsoluteTime
+        deadline: SemanticObservationDeadline
     ) async -> RepeatUntil.PostBodyCheck {
         if let observation,
            let actionTraceCheck = repeatUntilActionTracePostBodyCheck(
@@ -184,7 +164,7 @@ extension TheBrains {
             return actionTraceCheck
         }
 
-        let remaining = deadline - CFAbsoluteTimeGetCurrent()
+        let remaining = deadline.remainingSeconds()
         guard remaining > 0 else {
             return .deadlineElapsed(ExpectationResult.Unmet(
                 predicate: step.predicateExpression,

@@ -89,6 +89,57 @@ final class HeistElementTests: XCTestCase {
         XCTAssertNil(decoded.identifier)
     }
 
+    func testUnavailableFrameEvidenceRoundTripsWithoutFabricatedCoordinates() throws {
+        let element = HeistElement(
+            description: "Unavailable",
+            label: "Unavailable",
+            value: nil,
+            identifier: nil,
+            frameEvidence: .unavailable,
+            actions: []
+        )
+
+        let data = try JSONEncoder().encode(element)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let decoded = try JSONDecoder().decode(HeistElement.self, from: data)
+
+        XCTAssertNil(object["frameX"])
+        XCTAssertNil(object["frameY"])
+        XCTAssertNil(object["frameWidth"])
+        XCTAssertNil(object["frameHeight"])
+        XCTAssertEqual(decoded.frameEvidence, .unavailable)
+        XCTAssertNil(decoded.activationPointX)
+        XCTAssertNil(decoded.activationPointY)
+    }
+
+    func testDecodeRejectsPartialOrInvalidFrameEvidence() {
+        let invalidFrames = [
+            #""frameX":0,"frameY":0,"frameWidth":100"#,
+            #""frameX":0,"frameY":0,"frameWidth":-1,"frameHeight":44"#,
+            #""frameX":"NaN","frameY":0,"frameWidth":100,"frameHeight":44"#,
+        ]
+        let decoder = JSONDecoder()
+        decoder.nonConformingFloatDecodingStrategy = .convertFromString(
+            positiveInfinity: "Infinity",
+            negativeInfinity: "-Infinity",
+            nan: "NaN"
+        )
+
+        for frame in invalidFrames {
+            let json = """
+            {
+              "description": "Invalid",
+              "traits": [],
+              \(frame),
+              "activationPointEvidence": {"source": "unavailable"},
+              "respondsToUserInteraction": true,
+              "actions": []
+            }
+            """
+            XCTAssertThrowsError(try decoder.decode(HeistElement.self, from: Data(json.utf8)))
+        }
+    }
+
     func testElementWithRotorsRoundTrips() throws {
         let element = HeistElement(
             description: "Validation Results",

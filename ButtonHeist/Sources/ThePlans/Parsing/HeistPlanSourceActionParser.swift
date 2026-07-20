@@ -75,7 +75,7 @@ extension HeistPlanSourceParser {
             }
         }
         try expectSymbol(")")
-        return HeistActionCommand(core: .typeText(TypeTextTarget(source: source, target: target)))
+        return .typeText(TypeTextTarget(source: source, target: target))
     }
 
     mutating func parseTextInputMode(for source: TextInputSource) throws -> TextInputSource {
@@ -378,18 +378,20 @@ extension HeistPlanSourceParser {
             }
         }
         if let repeatedContent {
-            if let diagnostic = repeatedContent.heistBuildDiagnostics.first {
+            if let diagnostic = repeatedContent.heistContent.diagnostics.first {
                 throw error(previous, diagnostic.message)
             }
-            guard let step = repeatedContent.heistSteps.first, repeatedContent.heistSteps.count == 1 else {
+            let steps = repeatedContent.heistContent.steps
+            guard let step = steps.first, steps.count == 1 else {
                 throw error(previous, "action .until statement did not produce exactly one step")
             }
             return step
         }
-        if let diagnostic = content.heistBuildDiagnostics.first {
+        if let diagnostic = content.heistContent.diagnostics.first {
             throw error(previous, diagnostic.message)
         }
-        guard let step = content.heistSteps.first, content.heistSteps.count == 1 else {
+        let steps = content.heistContent.steps
+        guard let step = steps.first, steps.count == 1 else {
             throw error(previous, "action statement did not produce exactly one step")
         }
         return step

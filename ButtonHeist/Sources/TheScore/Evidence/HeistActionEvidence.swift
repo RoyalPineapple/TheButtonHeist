@@ -119,7 +119,7 @@ extension HeistActionEvidence {
 
 extension HeistActionCommand {
     var actionResultMethod: ActionMethod {
-        switch core {
+        switch self {
         case .activate: .activate
         case .increment: .increment
         case .decrement: .decrement

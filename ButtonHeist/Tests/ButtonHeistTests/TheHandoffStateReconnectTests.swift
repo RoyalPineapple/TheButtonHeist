@@ -5,7 +5,7 @@ import XCTest
 @_spi(ButtonHeistTooling) @testable import ButtonHeist
 import TheScore
 
-extension TheHandoffStateTests {
+final class TheHandoffStateReconnectTests: XCTestCase {
     // MARK: - Auto Reconnect
 
     @ButtonHeistActor

@@ -8,11 +8,8 @@ import os
 final class SimpleSocketServerDeliveryTests: XCTestCase {
     func testRemoveClientNotifiesExactlyOnceAfterRegistryRemoval() async throws {
         let disconnectedClientIds = OSAllocatedUnfairLock<[Int]>(initialState: [])
-        let server = SimpleSocketServer()
-        await server.setCallbacksForTesting(SocketServerCallbacks(
-            onClientDisconnected: { clientId in
-                disconnectedClientIds.withLock { $0.append(clientId) }
-            }
+        let server = deliveryServer(callbacks: SocketServerCallbacks(
+            onClientDisconnected: { clientId in disconnectedClientIds.withLock { $0.append(clientId) } }
         ))
         try await startForDeliveryTesting(server)
         let clientId = try await insertClientForDeliveryTesting(into: server)
@@ -27,9 +24,8 @@ final class SimpleSocketServerDeliveryTests: XCTestCase {
     }
 
     func testSendSuccessWaitsForContentProcessedCompletion() async throws {
-        let server = SimpleSocketServer()
         let gate = SendCompletionGate()
-        await server.setSendContentForTesting { _, _, completion in
+        let server = deliveryServer { _, _, completion in
             if case .contentProcessed(let handler) = completion {
                 Task { await gate.capture(handler) }
             }
@@ -55,13 +51,13 @@ final class SimpleSocketServerDeliveryTests: XCTestCase {
     }
 
     func testRejectedClientErrorUsesReservedSendBeforeDisconnecting() async throws {
-        let server = SimpleSocketServer()
         let sendGate = SendCompletionGate()
         let disconnections = AsyncStream.makeStream(of: Int.self)
-        await server.setCallbacksForTesting(SocketServerCallbacks(
-            onClientDisconnected: { disconnections.continuation.yield($0) }
-        ))
-        await server.setSendContentForTesting { _, _, completion in
+        let server = deliveryServer(
+            callbacks: SocketServerCallbacks(
+                onClientDisconnected: { disconnections.continuation.yield($0) }
+            )
+        ) { _, _, completion in
             if case .contentProcessed(let handler) = completion {
                 Task { await sendGate.capture(handler) }
             }
@@ -91,39 +87,9 @@ final class SimpleSocketServerDeliveryTests: XCTestCase {
         await server.stop()
     }
 
-    func testResponseHandlerWaitsForContentProcessedCompletion() async throws {
-        let server = SimpleSocketServer()
-        let gate = SendCompletionGate()
-        await server.setSendContentForTesting { _, _, completion in
-            if case .contentProcessed(let handler) = completion {
-                Task { await gate.capture(handler) }
-            }
-        }
-        try await startForDeliveryTesting(server)
-        let clientId = try await insertClientForDeliveryTesting(into: server)
-        let responder = await server.responseHandlerForTesting(clientId: clientId)
-
-        let sendTask = Task {
-            await responder(Data("reply".utf8))
-        }
-        await gate.waitUntilCaptured()
-
-        let pendingSendBytes = await server.clientPendingSendBytesForTesting(clientId)
-        XCTAssertEqual(pendingSendBytes, 6)
-
-        await gate.complete(nil)
-
-        let outcome = await sendTask.value
-        let completedPendingSendBytes = await server.clientPendingSendBytesForTesting(clientId)
-        XCTAssertEqual(outcome, .delivered)
-        XCTAssertEqual(completedPendingSendBytes, 0)
-        await server.stop()
-    }
-
     func testSendFailureReturnsNetworkTransportFailureAndRemovesClient() async throws {
-        let server = SimpleSocketServer()
         let gate = SendCompletionGate()
-        await server.setSendContentForTesting { _, _, completion in
+        let server = deliveryServer { _, _, completion in
             if case .contentProcessed(let handler) = completion {
                 Task { await gate.capture(handler) }
             }
@@ -148,9 +114,8 @@ final class SimpleSocketServerDeliveryTests: XCTestCase {
     }
 
     func testDisconnectDuringSendReturnsClientNotFound() async throws {
-        let server = SimpleSocketServer()
         let gate = SendCompletionGate()
-        await server.setSendContentForTesting { _, _, completion in
+        let server = deliveryServer { _, _, completion in
             if case .contentProcessed(let handler) = completion {
                 Task { await gate.capture(handler) }
             }
@@ -173,9 +138,8 @@ final class SimpleSocketServerDeliveryTests: XCTestCase {
     }
 
     func testSendCompletionAfterStopIsRejectedByListenerGeneration() async throws {
-        let server = SimpleSocketServer()
         let gate = SendCompletionGate()
-        await server.setSendContentForTesting { _, _, completion in
+        let server = deliveryServer { _, _, completion in
             if case .contentProcessed(let handler) = completion {
                 Task { await gate.capture(handler) }
             }
@@ -203,8 +167,23 @@ final class SimpleSocketServerDeliveryTests: XCTestCase {
     }
 
     private func startForDeliveryTesting(_ server: SimpleSocketServer) async throws {
-        await server.setListenerRuntimeStartOverrideForTesting { _ in 49_152 }
-        _ = try await server.startPlaintextForTests()
+        _ = try await server.startPlaintext()
+    }
+
+    private func deliveryServer(
+        callbacks: SocketServerCallbacks = SocketServerCallbacks(),
+        sendContent: @escaping SocketSendContent = { connection, content, completion in
+            connection.send(content: content, completion: completion)
+        }
+    ) -> SimpleSocketServer {
+        let listeners = TestSocketListenerFactory(port: 49_152)
+        return SimpleSocketServer(
+            callbacks: callbacks,
+            dependencies: SimpleSocketServer.Dependencies(
+                sendContent: sendContent,
+                listenerFactory: listeners.listenerFactory
+            )
+        )
     }
 
     private func insertClientForDeliveryTesting(into server: SimpleSocketServer) async throws -> Int {

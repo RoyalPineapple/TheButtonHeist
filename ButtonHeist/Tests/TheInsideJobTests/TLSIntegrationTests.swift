@@ -27,11 +27,11 @@ final class TLSIntegrationTests: XCTestCase {
         let callbacks = SocketServerCallbacks(
             onClientConnected: { _, _ in connected.fulfill() }
         )
+        server = SimpleSocketServer(callbacks: callbacks)
         let port = try await server.startAsync(
             port: 0,
             bindToLoopback: true,
-            tlsParameters: ButtonHeistTLSPreSharedKey.networkParameters(from: token),
-            callbacks: callbacks
+            tlsParameters: ButtonHeistTLSPreSharedKey.networkParameters(from: token)
         )
         let client = ButtonHeistNetworkTestClient.tls(port: port, token: token)
         defer { client.cancel() }
@@ -52,11 +52,11 @@ final class TLSIntegrationTests: XCTestCase {
                 }
             }
         )
+        server = SimpleSocketServer(callbacks: callbacks)
         let port = try await server.startAsync(
             port: 0,
             bindToLoopback: true,
-            tlsParameters: ButtonHeistTLSPreSharedKey.networkParameters(from: token),
-            callbacks: callbacks
+            tlsParameters: ButtonHeistTLSPreSharedKey.networkParameters(from: token)
         )
         let client = ButtonHeistNetworkTestClient.tls(port: port, token: token)
         defer { client.cancel() }
@@ -94,11 +94,11 @@ final class TLSIntegrationTests: XCTestCase {
                 unexpectedPreAuthData.fulfill()
             }
         )
+        server = SimpleSocketServer(callbacks: callbacks)
         let port = try await server.startAsync(
             port: 0,
             bindToLoopback: true,
-            tlsParameters: ButtonHeistTLSPreSharedKey.networkParameters(from: token),
-            callbacks: callbacks
+            tlsParameters: ButtonHeistTLSPreSharedKey.networkParameters(from: token)
         )
         let client = ButtonHeistNetworkTestClient.tls(port: port, token: token)
         defer { client.cancel() }

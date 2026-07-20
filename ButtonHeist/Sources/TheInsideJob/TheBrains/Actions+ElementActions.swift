@@ -12,25 +12,22 @@ extension Actions {
     func performElementAction(
         target: ResolvedAccessibilityTarget,
         payload: ActionResult.Payload,
+        timing: inout ActionTiming,
         requireInteractive: Bool = true,
         activationPointPolicy: ElementInflation.ActivationPointPolicy = .requireOnscreen,
         preflight: (@MainActor (InterfaceTree.Element) -> TheSafecracker.ActionDispatchResult?)? = nil,
         action: @MainActor (ElementInflation.InflatedElementTarget) async
             -> TheSafecracker.ActionDispatchResult
     ) async -> TheSafecracker.ActionDispatchResult {
-        func elapsedMilliseconds(since start: CFAbsoluteTime) -> Int {
-            Int((CFAbsoluteTimeGetCurrent() - start) * 1_000)
-        }
-
-        let resolutionStart = CFAbsoluteTimeGetCurrent()
+        let resolutionStart = RuntimeElapsed.now
         let inflation = await navigation.elementInflation.inflate(
             for: target,
             method: payload.method,
             activationPointPolicy: activationPointPolicy
         )
-        let targetResolutionMs = elapsedMilliseconds(since: resolutionStart)
+        timing.record(.targetResolution, since: resolutionStart)
 
-        let dispatchStart = CFAbsoluteTimeGetCurrent()
+        let dispatchStart = RuntimeElapsed.now
         let result: TheSafecracker.ActionDispatchResult
         switch inflation {
         case .failed(let failure):
@@ -56,10 +53,8 @@ extension Actions {
             }
         }
 
-        return result.withTiming(ActionPerformanceTiming(
-            targetResolutionMs: targetResolutionMs,
-            actionDispatchMs: elapsedMilliseconds(since: dispatchStart)
-        ))
+        timing.record(.actionDispatch, since: dispatchStart)
+        return result
     }
 
     private func interactivityFailure(
@@ -97,10 +92,12 @@ extension Actions {
 
     func executeActivate(
         _ target: ResolvedAccessibilityTarget,
+        timing: inout ActionTiming
     ) async -> TheSafecracker.ActionDispatchResult {
         return await performElementAction(
             target: target,
             payload: .activate,
+            timing: &timing
         ) { context in
             await ActivationPolicy(
                 accessibilityActivate: { liveTarget in
@@ -154,24 +151,38 @@ extension Actions {
 
     func executeIncrement(
         _ target: ResolvedAccessibilityTarget,
+        timing: inout ActionTiming
     ) async -> TheSafecracker.ActionDispatchResult {
-        await executeAdjustment(target, payload: .increment, action: accessibilityActions.increment)
+        await executeAdjustment(
+            target,
+            payload: .increment,
+            timing: &timing,
+            action: accessibilityActions.increment
+        )
     }
 
     func executeDecrement(
         _ target: ResolvedAccessibilityTarget,
+        timing: inout ActionTiming
     ) async -> TheSafecracker.ActionDispatchResult {
-        await executeAdjustment(target, payload: .decrement, action: accessibilityActions.decrement)
+        await executeAdjustment(
+            target,
+            payload: .decrement,
+            timing: &timing,
+            action: accessibilityActions.decrement
+        )
     }
 
     private func executeAdjustment(
         _ target: ResolvedAccessibilityTarget,
         payload: ActionResult.Payload,
+        timing: inout ActionTiming,
         action: @MainActor (TheVault.LiveActionTarget) -> Bool
     ) async -> TheSafecracker.ActionDispatchResult {
         await performElementAction(
             target: target,
             payload: payload,
+            timing: &timing,
             preflight: { treeElement in
                 guard treeElement.element.traits.contains(.adjustable) else {
                     return .failure(
@@ -198,10 +209,12 @@ extension Actions {
     func executeCustomAction(
         name: CustomActionName,
         target: ResolvedAccessibilityTarget,
+        timing: inout ActionTiming
     ) async -> TheSafecracker.ActionDispatchResult {
         await performElementAction(
             target: target,
             payload: .customAction,
+            timing: &timing
         ) { context in
             let dispatchContext: ElementInflation.InflatedElementTarget
             switch await self.customActionDispatchContext(

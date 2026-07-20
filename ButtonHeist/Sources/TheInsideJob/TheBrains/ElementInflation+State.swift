@@ -90,20 +90,6 @@ extension ElementInflation {
         internal let deadline: SemanticObservationDeadline
         internal let resolution: ActionSubjectResolution
 
-        internal init(
-            target: ResolvedAccessibilityTarget,
-            treeElement: InterfaceTree.Element,
-            liveTarget: TheVault.LiveActionTarget,
-            deadline: SemanticObservationDeadline,
-            resolution: ActionSubjectResolution
-        ) {
-            self.target = target
-            self.treeElement = treeElement
-            self.liveTarget = liveTarget
-            self.deadline = deadline
-            self.resolution = resolution
-        }
-
         internal func replacingLiveTarget(_ liveTarget: TheVault.LiveActionTarget) -> Self {
             Self(
                 target: target,

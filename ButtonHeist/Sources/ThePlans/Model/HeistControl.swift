@@ -1,8 +1,6 @@
-public struct WaitFor: HeistContent {
-    public let heistSteps: [HeistStep]
-    public let heistDefinitions: [HeistPlanAdmissionCandidate]
-    public let heistBuildDiagnostics: [HeistBuildDiagnostic]
+public struct WaitFor {
     private let step: WaitStep
+    var heistContent: HeistContent { HeistContent([.wait(step)]) }
 
     public init(
         _ predicate: AccessibilityPredicate,
@@ -10,122 +8,117 @@ public struct WaitFor: HeistContent {
     ) {
         let step = WaitStep(predicate: predicate, timeout: timeout)
         self.step = step
-        heistSteps = [.wait(step)]
-        heistDefinitions = []
-        heistBuildDiagnostics = []
     }
 
     public func `else`(
-        @HeistBuilder _ content: () -> some HeistContent
-    ) -> some HeistContent {
+        @HeistBuilder _ content: () -> HeistContent
+    ) -> HeistContent {
         let content = content()
-        return HeistStepList(
+        return HeistContent(
             [.wait(WaitStep(
                 predicate: step.predicate,
                 timeout: step.timeout,
-                elseBody: content.heistSteps
+                elseBody: content.steps
             ))],
-            definitions: content.heistDefinitions,
-            diagnostics: content.heistBuildDiagnostics
+            definitions: content.definitions,
+            diagnostics: content.diagnostics
         )
     }
 }
 
-public struct RepeatUntil: HeistContent {
-    public let heistSteps: [HeistStep]
-    public let heistDefinitions: [HeistPlanAdmissionCandidate]
-    public let heistBuildDiagnostics: [HeistBuildDiagnostic]
+public struct RepeatUntil {
+    let heistContent: HeistContent
     private let step: RepeatUntilStep?
 
     public init(
         _ predicate: AccessibilityPredicate,
         timeout: WaitTimeout,
-        @HeistBuilder _ content: () -> some HeistContent
+        @HeistBuilder _ content: () -> HeistContent
     ) {
         let content = content()
         do {
             let step = try RepeatUntilStep(
                 predicate: predicate,
                 timeout: timeout,
-                body: content.heistSteps
+                body: content.steps
             )
             self.step = step
-            heistSteps = [.repeatUntil(step)]
-            heistDefinitions = content.heistDefinitions
-            heistBuildDiagnostics = content.heistBuildDiagnostics
+            heistContent = HeistContent(
+                [.repeatUntil(step)],
+                definitions: content.definitions,
+                diagnostics: content.diagnostics
+            )
         } catch {
             self.step = nil
-            heistSteps = []
-            heistDefinitions = []
-            heistBuildDiagnostics = content.heistBuildDiagnostics + [.dslBuild(
+            heistContent = HeistContent(diagnostics: content.diagnostics + [.dslBuild(
                 code: .dslInvalidRepeatUntil,
                 message: "RepeatUntil loop is invalid: \(String(describing: error))"
-            )]
+            )])
         }
     }
 
     public func `else`(
-        @HeistBuilder _ content: () -> some HeistContent
-    ) -> some HeistContent {
+        @HeistBuilder _ content: () -> HeistContent
+    ) -> HeistContent {
         let content = content()
         let completedSteps = step.map {
-            [HeistStep.repeatUntil(RepeatUntilStep(completing: $0, elseBody: content.heistSteps))]
+            [HeistStep.repeatUntil(RepeatUntilStep(completing: $0, elseBody: content.steps))]
         } ?? []
-        return HeistStepList(
+        return HeistContent(
             completedSteps,
-            definitions: step == nil ? [] : heistDefinitions + content.heistDefinitions,
-            diagnostics: heistBuildDiagnostics + content.heistBuildDiagnostics
+            definitions: step == nil ? [] : heistContent.definitions + content.definitions,
+            diagnostics: heistContent.diagnostics + content.diagnostics
         )
     }
 }
 
-public struct IfContent: HeistContent {
-    public let heistSteps: [HeistStep]
-    public let heistDefinitions: [HeistPlanAdmissionCandidate]
-    public let heistBuildDiagnostics: [HeistBuildDiagnostic]
+public struct IfContent {
+    let heistContent: HeistContent
     private let step: ConditionalStep
 
     public func `else`(
-        @HeistBuilder _ content: () -> some HeistContent
-    ) -> some HeistContent {
+        @HeistBuilder _ content: () -> HeistContent
+    ) -> HeistContent {
         let content = content()
-        return HeistStepList(
+        return HeistContent(
             [.conditional(ConditionalStep(
                 completing: step,
-                elseBody: content.heistSteps
+                elseBody: content.steps
             ))],
-            definitions: heistDefinitions + content.heistDefinitions,
-            diagnostics: heistBuildDiagnostics + content.heistBuildDiagnostics
+            definitions: heistContent.definitions + content.definitions,
+            diagnostics: heistContent.diagnostics + content.diagnostics
         )
     }
 
     fileprivate init(
         predicate: ChangeDeclaration.ScreenAssertion,
-        content: some HeistContent
+        content: HeistContent
     ) {
         let step = ConditionalStep(cases: NonEmptyArray(PredicateCase(
             predicate: predicate,
-            body: content.heistSteps
+            body: content.steps
         )))
         self.step = step
-        heistSteps = [.conditional(step)]
-        heistDefinitions = content.heistDefinitions
-        heistBuildDiagnostics = content.heistBuildDiagnostics
+        heistContent = HeistContent(
+            [.conditional(step)],
+            definitions: content.definitions,
+            diagnostics: content.diagnostics
+        )
     }
 }
 
 public func If(
     _ predicate: ChangeDeclaration.ScreenAssertion,
-    @HeistBuilder _ content: () -> some HeistContent
+    @HeistBuilder _ content: () -> HeistContent
 ) -> IfContent {
     IfContent(predicate: predicate, content: content())
 }
 
 public func If(
     @PredicateBranchBuilder _ branches: () -> PredicateBranches
-) -> some HeistContent {
+) -> HeistContent {
     let branches = branches()
-    return HeistStepList(
+    return HeistContent(
         [.conditional(ConditionalStep(cases: branches.cases, elseBody: branches.elseBody))],
         definitions: branches.definitions,
         diagnostics: branches.diagnostics
@@ -139,12 +132,12 @@ public struct Case {
 
     public init(
         _ predicate: ChangeDeclaration.ScreenAssertion,
-        @HeistBuilder _ content: () -> some HeistContent
+        @HeistBuilder _ content: () -> HeistContent
     ) {
         let content = content()
-        predicateCase = PredicateCase(predicate: predicate, body: content.heistSteps)
-        definitions = content.heistDefinitions
-        diagnostics = content.heistBuildDiagnostics
+        predicateCase = PredicateCase(predicate: predicate, body: content.steps)
+        definitions = content.definitions
+        diagnostics = content.diagnostics
     }
 }
 
@@ -154,30 +147,28 @@ public struct Else {
     fileprivate let diagnostics: [HeistBuildDiagnostic]
 
     public init(
-        @HeistBuilder _ content: () -> some HeistContent
+        @HeistBuilder _ content: () -> HeistContent
     ) {
         let content = content()
-        body = content.heistSteps
-        definitions = content.heistDefinitions
-        diagnostics = content.heistBuildDiagnostics
+        body = content.steps
+        definitions = content.definitions
+        diagnostics = content.diagnostics
     }
 }
 
-public struct Warn: HeistContent {
-    public let heistSteps: [HeistStep]
-    public let heistDefinitions: [HeistPlanAdmissionCandidate] = []
+public struct Warn {
+    let heistContent: HeistContent
 
     public init(_ message: HeistWarningMessage) {
-        heistSteps = [.warn(WarnStep(message: message))]
+        heistContent = HeistContent([.warn(WarnStep(message: message))])
     }
 }
 
-public struct Fail: HeistContent {
-    public let heistSteps: [HeistStep]
-    public let heistDefinitions: [HeistPlanAdmissionCandidate] = []
+public struct Fail {
+    let heistContent: HeistContent
 
     public init(_ message: HeistFailureMessage) {
-        heistSteps = [.fail(FailStep(message: message))]
+        heistContent = HeistContent([.fail(FailStep(message: message))])
     }
 }
 

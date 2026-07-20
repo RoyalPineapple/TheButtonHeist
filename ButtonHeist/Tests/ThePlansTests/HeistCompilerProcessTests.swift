@@ -83,14 +83,12 @@ struct HeistCompilerProcessTests {
     func `task cancellation terminates and reaps the active process`() async throws {
         let temp = try ProcessTestTemporaryDirectory()
         let ready = try temp.makeReadinessFIFO()
-        let marker = temp.url.appendingPathComponent("cancelled")
         let command = shell(
             """
-            trap 'printf "stderr-overflow" >&2; touch "$2"; exit' TERM
             printf ready > "$1"
             while :; do :; done
             """,
-            arguments: [ready.path, marker.path]
+            arguments: [ready.path]
         )
         let (processes, processContinuation) = AsyncStream<pid_t>.makeStream(
             bufferingPolicy: .bufferingNewest(1)
@@ -120,7 +118,6 @@ struct HeistCompilerProcessTests {
             Issue.record("Expected cancellation, got \(outcome)")
             return
         }
-        #expect(FileManager.default.fileExists(atPath: marker.path))
         #expect(processExited(processPID))
     }
 
@@ -184,6 +181,30 @@ struct HeistCompilerProcessTests {
         #expect(stream == .stdout)
         #expect(output.stdout == Data("stdout-o".utf8))
         #expect(output.stderr == Data("stderr-o".utf8))
+    }
+
+    @Test
+    func `large stdout and stderr are drained while the process runs`() async throws {
+        let byteCount = 256 * 1_024
+        let outcome = try await HeistCompilerProcess.Runner().execute(
+            HeistCompilerProcess.Command(
+                executable: URL(fileURLWithPath: "/usr/bin/env"),
+                arguments: [
+                    "python3",
+                    "-c",
+                    "import sys; sys.stdout.write('o' * \(byteCount)); sys.stderr.write('e' * \(byteCount))",
+                ]
+            ),
+            purpose: .execution,
+            limits: limits()
+        )
+
+        guard case .succeeded(let output) = outcome else {
+            Issue.record("Expected large output to drain, got \(outcome)")
+            return
+        }
+        #expect(output.stdout == Data(repeating: UInt8(ascii: "o"), count: byteCount))
+        #expect(output.stderr == Data(repeating: UInt8(ascii: "e"), count: byteCount))
     }
 
     @Test

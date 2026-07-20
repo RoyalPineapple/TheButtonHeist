@@ -11,6 +11,7 @@ extension TheBrains {
         case appWindowUnavailable
         case accessibilitySnapshotRenderingFailed
         case pngEncodingFailed
+        case invalidScreenDimensions
 
         var message: String {
             switch self {
@@ -24,6 +25,8 @@ extension TheBrains {
                 return "Failed to render accessibility snapshot"
             case .pngEncodingFailed:
                 return "Failed to encode screen as PNG"
+            case .invalidScreenDimensions:
+                return "Captured screen dimensions are invalid"
             }
         }
 
@@ -31,7 +34,8 @@ extension TheBrains {
             switch self {
             case .inactiveRuntime, .accessibilityTreeUnavailable:
                 return .accessibilityTreeUnavailable
-            case .appWindowUnavailable, .accessibilitySnapshotRenderingFailed, .pngEncodingFailed:
+            case .appWindowUnavailable, .accessibilitySnapshotRenderingFailed, .pngEncodingFailed,
+                 .invalidScreenDimensions:
                 return .actionFailed
             }
         }
@@ -69,29 +73,32 @@ extension TheBrains {
             return .failure(.pngEncodingFailed)
         }
 
-        return .success(ScreenPayload(
+        guard let payload = ScreenPayload.admit(
             pngData: pngData.base64EncodedString(),
             width: screenCapture.bounds.width,
             height: screenCapture.bounds.height,
             interface: observation.interface
-        ))
+        ) else {
+            return .failure(.invalidScreenDimensions)
+        }
+        return .success(payload)
     }
 
     func executeTakeScreenshot(mode: ScreenCaptureMode = .raw) async -> ActionResult {
-        let start = CFAbsoluteTimeGetCurrent()
+        let timing = ActionTiming()
         switch await captureScreenPayload(mode: mode) {
         case .success(let payload):
             return .success(
                 payload: .screenshot(payload),
                 message: "Captured screenshot \(Int(payload.width))x\(Int(payload.height))",
-                timing: ActionPerformanceTiming(totalMs: elapsedMilliseconds(since: start))
+                timing: timing.freeze()
             )
         case .failure(let failure):
             return .failure(
                 payload: .screenshot(nil),
                 failureKind: failure.actionFailureKind,
                 message: failure.message,
-                timing: ActionPerformanceTiming(totalMs: elapsedMilliseconds(since: start))
+                timing: timing.freeze()
             )
         }
     }

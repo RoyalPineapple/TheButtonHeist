@@ -100,7 +100,11 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
     func testFirstResponderInflationRejectsCurrentResponderUnderWrongHeistId() async throws {
         let expected: HeistId = "email_field"
         let replacement: HeistId = "password_field"
-        let brains = TheBrains(tripwire: TheTripwire())
+        let visibleObservationSource = VisibleObservationSourceFixture()
+        let brains = TheBrains(
+            tripwire: TheTripwire(),
+            visibleObservationSource: visibleObservationSource.capture
+        )
         let expectedObject = UITextField()
         let replacementObject = UITextField()
         let expectedEntry = InterfaceObservation.TestEntry(
@@ -113,7 +117,7 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
             [expectedEntry],
             firstResponderHeistId: expected
         ))
-        brains.vault.nextVisibleRefreshObservationForTesting = .makeForTests(
+        visibleObservationSource.observation = .makeForTests(
             [
                 expectedEntry,
                 InterfaceObservation.TestEntry(
@@ -177,7 +181,7 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
             treeElement: replacementElement,
             liveTarget: replacementLiveTarget,
             deadline: SemanticObservationDeadline(
-                start: 0,
+                start: RuntimeElapsed.now,
                 timeoutSeconds: 1
             ),
             resolution: ActionSubjectResolution(origin: .visible)

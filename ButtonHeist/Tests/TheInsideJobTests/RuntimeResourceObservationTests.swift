@@ -16,7 +16,7 @@ final class RuntimeResourceObservationTests: XCTestCase {
     override func setUp() async throws {
         try await super.setUp()
         originalIdleTimerDisabled = UIApplication.shared.isIdleTimerDisabled
-        job = TheInsideJob(token: "runtime-resource-test-token")
+        job = try TheInsideJob(token: "runtime-resource-test-token")
         resources = TheInsideJob.InsideJobRuntimeResources(
             transport: ServerTransport(token: "runtime-resource-test-token"),
             actualPort: 0,

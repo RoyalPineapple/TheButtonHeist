@@ -10,7 +10,7 @@ extension TheBrains {
         _ step: ConditionalStep,
         index: Int,
         path: HeistExecutionPath,
-        start: CFAbsoluteTime,
+        start: RuntimeElapsed.Instant,
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
@@ -114,7 +114,7 @@ extension TheBrains {
     private func caseResolutionFailure(
         index _: Int,
         path: HeistExecutionPath,
-        start: CFAbsoluteTime,
+        start: RuntimeElapsed.Instant,
         error: Error
     ) -> HeistExecutionStepResult {
         .conditional(
@@ -141,7 +141,7 @@ private struct PredicateCaseDispatch {
     let cases: [ResolvedPredicateCaseRuntimeInput]
     let elseBody: [HeistStep]?
     let path: HeistExecutionPath
-    let start: CFAbsoluteTime
+    let start: RuntimeElapsed.Instant
 }
 
 #endif // DEBUG

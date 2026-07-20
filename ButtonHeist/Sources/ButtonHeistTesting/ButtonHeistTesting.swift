@@ -20,7 +20,7 @@ struct HeistRunRequest: Equatable, Sendable {
 @discardableResult
 public func runHeist(
     _ path: HeistDefinitionPath,
-    @HeistBuilder _ content: @escaping () throws -> some HeistContent
+    @HeistBuilder _ content: @escaping () throws -> HeistContent
 ) async throws -> Heist {
     let request = try makeRunHeistRequest(path, content)
     return try await Heist(request.plan, argument: request.argument)
@@ -38,7 +38,7 @@ public func runHeist(
 
 func makeRunHeistRequest(
     _ path: HeistDefinitionPath,
-    @HeistBuilder _ content: @escaping () throws -> some HeistContent
+    @HeistBuilder _ content: @escaping () throws -> HeistContent
 ) throws -> HeistRunRequest {
     let definition = HeistDef<Void>(path, content)
     return HeistRunRequest(
@@ -53,7 +53,7 @@ public func runHeist(
     _ path: HeistDefinitionPath,
     argument input: String,
     parameter: HeistReferenceName = "input",
-    @HeistBuilder _ content: @escaping (HeistReferenceName) throws -> some HeistContent
+    @HeistBuilder _ content: @escaping (HeistReferenceName) throws -> HeistContent
 ) async throws -> Heist {
     let request = try makeRunHeistRequest(
         path,
@@ -68,7 +68,7 @@ func makeRunHeistRequest(
     _ path: HeistDefinitionPath,
     argument input: String,
     parameter: HeistReferenceName = "input",
-    @HeistBuilder _ content: @escaping (HeistReferenceName) throws -> some HeistContent
+    @HeistBuilder _ content: @escaping (HeistReferenceName) throws -> HeistContent
 ) throws -> HeistRunRequest {
     HeistRunRequest(
         plan: try makeRunHeistPlan(path, parameter: parameter, content: content),
@@ -83,7 +83,7 @@ public func runHeist(
     _ path: HeistDefinitionPath,
     argument input: AccessibilityTarget,
     parameter: HeistReferenceName = "input",
-    @HeistBuilder _ content: @escaping (AccessibilityTarget) throws -> some HeistContent
+    @HeistBuilder _ content: @escaping (AccessibilityTarget) throws -> HeistContent
 ) async throws -> Heist {
     let request = try makeRunHeistRequest(
         path,
@@ -99,7 +99,7 @@ func makeRunHeistRequest(
     _ path: HeistDefinitionPath,
     argument input: AccessibilityTarget,
     parameter: HeistReferenceName = "input",
-    @HeistBuilder _ content: @escaping (AccessibilityTarget) throws -> some HeistContent
+    @HeistBuilder _ content: @escaping (AccessibilityTarget) throws -> HeistContent
 ) throws -> HeistRunRequest {
     let plan = try makeRunHeistPlan(path, targetParameter: parameter, content: content)
     return HeistRunRequest(
@@ -111,7 +111,7 @@ func makeRunHeistRequest(
 private func makeRunHeistPlan(
     _ path: HeistDefinitionPath,
     parameter: HeistReferenceName,
-    content: @escaping (HeistReferenceName) throws -> some HeistContent
+    content: @escaping (HeistReferenceName) throws -> HeistContent
 ) throws -> HeistPlan {
     let definition = HeistDef<String>(path, parameter: parameter, content)
     return try HeistPlan(parameter: parameter) { input in
@@ -122,7 +122,7 @@ private func makeRunHeistPlan(
 private func makeRunHeistPlan(
     _ path: HeistDefinitionPath,
     targetParameter parameter: HeistReferenceName,
-    content: @escaping (AccessibilityTarget) throws -> some HeistContent
+    content: @escaping (AccessibilityTarget) throws -> HeistContent
 ) throws -> HeistPlan {
     let definition = HeistDef<AccessibilityTarget>(path, parameter: parameter, content)
     return try HeistPlan(targetParameter: parameter) { target in

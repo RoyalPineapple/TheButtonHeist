@@ -265,7 +265,7 @@ final class InterfaceComputedTests: XCTestCase {
         frameX: Double = 0,
         frameY: Double = 0
     ) -> HeistElement {
-        HeistElement(
+        makeTestHeistElement(
             description: label ?? "",
             label: label, value: value, identifier: nil,
             traits: traits,

@@ -83,14 +83,14 @@ public enum HeistCaseSelectionOutcome: Codable, Sendable, Equatable {
 public struct HeistCaseSelectionResult: Codable, Sendable, Equatable {
     public let cases: [HeistCaseMatchResult]
     public let outcome: HeistCaseSelectionOutcome
-    public let elapsedMs: Int
+    public let elapsedMs: ElapsedMilliseconds
     public let timeout: Double?
     public let lastObservedSummary: String?
 
     public static func selectingFirstMatch(
         cases: [HeistCaseMatchResult],
         ifNone: HeistCaseSelectionMissReason,
-        elapsedMs: Int,
+        elapsedMs: ElapsedMilliseconds,
         timeout: Double? = nil,
         lastObservedSummary: String? = nil
     ) -> Self {
@@ -137,7 +137,7 @@ public struct HeistCaseSelectionResult: Codable, Sendable, Equatable {
     private init(
         cases: [HeistCaseMatchResult],
         outcome: HeistCaseSelectionOutcome,
-        elapsedMs: Int,
+        elapsedMs: ElapsedMilliseconds,
         timeout: Double?,
         lastObservedSummary: String?
     ) {
@@ -161,7 +161,7 @@ public struct HeistCaseSelectionResult: Codable, Sendable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let cases = try container.decode([HeistCaseMatchResult].self, forKey: .cases)
         let outcome = try container.decode(HeistCaseSelectionOutcome.self, forKey: .outcome)
-        let elapsedMs = try container.decode(Int.self, forKey: .elapsedMs)
+        let elapsedMs = try container.decode(ElapsedMilliseconds.self, forKey: .elapsedMs)
         let timeout = try container.decodeIfPresent(Double.self, forKey: .timeout)
         try Self.validate(
             outcome: outcome,
@@ -191,16 +191,10 @@ public struct HeistCaseSelectionResult: Codable, Sendable, Equatable {
     private static func validate(
         outcome: HeistCaseSelectionOutcome,
         cases: [HeistCaseMatchResult],
-        elapsedMs: Int,
+        elapsedMs: ElapsedMilliseconds,
         timeout: Double?,
         codingPath: [CodingKey]
     ) throws {
-        guard elapsedMs >= 0 else {
-            throw DecodingError.dataCorrupted(.init(
-                codingPath: codingPath + [CodingKeys.elapsedMs],
-                debugDescription: "case selection elapsedMs must be non-negative"
-            ))
-        }
         guard timeout.map({ $0.isFinite && $0 >= 0 }) ?? true else {
             throw DecodingError.dataCorrupted(.init(
                 codingPath: codingPath + [CodingKeys.timeout],

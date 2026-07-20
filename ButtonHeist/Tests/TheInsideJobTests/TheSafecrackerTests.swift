@@ -103,7 +103,9 @@ final class TheSafecrackerTests: XCTestCase {
 
     func testKeyboardVisibilityDoesNotInferFromFocusedTextInput() {
         let keyboardImpl = KeyboardInjectionKeyboardImpl()
-        safecracker.keyboardBridgeProvider = { keyboardImpl.bridge() }
+        let safecracker = TheSafecracker(keyboardInput: SafecrackerKeyboardInput(
+            keyboardBridgeProvider: { keyboardImpl.bridge() }
+        ))
 
         XCTAssertTrue(safecracker.hasActiveTextInput)
         XCTAssertFalse(safecracker.isKeyboardVisible)
@@ -260,7 +262,9 @@ final class TheSafecrackerTests: XCTestCase {
 
     func testTypeTextReturnsKeyboardInjectionDiagnostic() async {
         let keyboardImpl = KeyboardInjectionKeyboardImpl()
-        safecracker.keyboardBridgeProvider = { keyboardImpl.bridge(missingSelector: "addInputString:") }
+        let safecracker = TheSafecracker(keyboardInput: SafecrackerKeyboardInput(
+            keyboardBridgeProvider: { keyboardImpl.bridge(missingSelector: "addInputString:") }
+        ))
 
         let result = await safecracker.typeText("hello")
 

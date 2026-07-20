@@ -13,13 +13,13 @@ extension TheBrainsActionTests {
     func testHeistActionAndWaitStepsUseSeparateRuntimeTransitions() async throws {
         let observedReady = observedState(labels: ["Ready"])
         let target = AccessibilityTarget.identifier("target")
-        var dispatchedTypes: [HeistActionCommandType] = []
+        var dispatchedCommands: [ResolvedHeistActionCommand] = []
         var waitRequests: [TheBrains.HeistRuntimeWaitRequest] = []
         let runtime = heistRuntime(
             observations: [],
             execute: { command in
-                dispatchedTypes.append(command.runtimeType)
-                return ActionResult.success(payload: .activate, message: command.runtimeType.rawValue)
+                dispatchedCommands.append(command)
+                return ActionResult.success(payload: .activate)
             },
             wait: { request in
                 waitRequests.append(request)
@@ -46,11 +46,11 @@ extension TheBrainsActionTests {
         let waitStep = try XCTUnwrap(heistResult.steps.dropFirst().first)
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "heist failed")
-        XCTAssertEqual(dispatchedTypes, [.activate])
+        XCTAssertEqual(dispatchedCommands, [.activate(try target.resolve(in: .empty))])
         XCTAssertEqual(waitRequests.count, 1)
         if case .standalone(let request, let startedAt)? = waitRequests.first {
             XCTAssertEqual(request.predicate, try resolvedPredicate(.exists(.label("Ready"))))
-            XCTAssertLessThanOrEqual(startedAt, CFAbsoluteTimeGetCurrent())
+            XCTAssertLessThanOrEqual(startedAt, RuntimeElapsed.now)
         } else {
             XCTFail("Expected standalone wait request")
         }
@@ -160,9 +160,9 @@ extension TheBrainsActionTests {
             timestamp: Date(timeIntervalSince1970: 0),
             interface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
         )
-        var dispatchedTypes: [HeistActionCommandType] = []
+        var dispatchedCommands: [ResolvedHeistActionCommand] = []
         let runtime = heistRuntime(observations: []) { command in
-            dispatchedTypes.append(command.runtimeType)
+            dispatchedCommands.append(command)
             if case .takeScreenshot = command {
                 return ActionResult.success(payload: .screenshot(screenshot))
             }
@@ -179,7 +179,10 @@ extension TheBrainsActionTests {
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
 
         XCTAssertFalse(result.outcome.isSuccess)
-        XCTAssertEqual(dispatchedTypes, [.activate, .takeScreenshot])
+        XCTAssertEqual(dispatchedCommands, [
+            .activate(try target.resolve(in: .empty)),
+            .takeScreenshot,
+        ])
         let heistResult = try XCTUnwrap(result.resultPayload)
         let report = HeistReport.project(result: heistResult)
         XCTAssertEqual(heistResult.abortedAtPath, "$.body[0]")
@@ -198,9 +201,9 @@ extension TheBrainsActionTests {
 
     func testHeistFailurePhaseSkipsRemainingStepsWithoutDispatchingActions() async throws {
         let target = AccessibilityTarget.identifier("target")
-        var dispatchedTypes: [HeistActionCommandType] = []
+        var dispatchedCommands: [ResolvedHeistActionCommand] = []
         let runtime = heistRuntime(observations: []) { command in
-            dispatchedTypes.append(command.runtimeType)
+            dispatchedCommands.append(command)
             if case .takeScreenshot = command {
                 return ActionResult.success(payload: .screenshot(nil))
             }
@@ -221,7 +224,10 @@ extension TheBrainsActionTests {
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
 
         XCTAssertFalse(result.outcome.isSuccess)
-        XCTAssertEqual(dispatchedTypes, [.activate, .takeScreenshot])
+        XCTAssertEqual(dispatchedCommands, [
+            .activate(try target.resolve(in: .empty)),
+            .takeScreenshot,
+        ])
         let heistResult = try XCTUnwrap(result.resultPayload)
         XCTAssertEqual(heistResult.abortedAtPath, "$.body[0]")
         XCTAssertEqual(heistResult.steps.map(\.path), [

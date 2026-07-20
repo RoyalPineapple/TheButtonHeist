@@ -66,35 +66,6 @@ extension WireTypeRoundTripTests {
         }
     }
 
-    func testActionPerformanceTimingMergingPreservesExistingFieldsAndAppliesOverlay() {
-        let original = ActionPerformanceTiming(
-            beforeObservationMs: 1,
-            targetResolutionMs: 2,
-            actionDispatchMs: 3,
-            interactionMs: 4,
-            finalSemanticEvidenceMs: 6,
-            resultAssemblyMs: 7,
-            totalMs: 8
-        )
-        let overlay = ActionPerformanceTiming(
-            targetResolutionMs: 20,
-            interactionMs: 40,
-            resultAssemblyMs: 70,
-            totalMs: 80
-        )
-
-        XCTAssertEqual(original.merging(nil), original)
-        XCTAssertEqual(original.merging(overlay), ActionPerformanceTiming(
-            beforeObservationMs: 1,
-            targetResolutionMs: 20,
-            actionDispatchMs: 3,
-            interactionMs: 40,
-            finalSemanticEvidenceMs: 6,
-            resultAssemblyMs: 70,
-            totalMs: 80
-        ))
-    }
-
     func testActionResultRoundTripPreservesTiming() throws {
         let timing = ActionPerformanceTiming(
             beforeObservationMs: 5,
@@ -114,50 +85,12 @@ extension WireTypeRoundTripTests {
                     completeness: .incomplete
                 ),
                 .settled(duration: 74)
-            )
-        ).withTiming(timing)
+            ),
+            timing: timing
+        )
 
         let decoded = try assertRoundTrip(result, encoder: encoder, decoder: decoder)
         XCTAssertEqual(decoded.timing, timing)
-    }
-
-    func testActionResultWithTimingMergesWithoutErasingExistingFields() {
-        let initialTiming = ActionPerformanceTiming(
-            beforeObservationMs: 1,
-            targetResolutionMs: 2,
-            actionDispatchMs: 3,
-            interactionMs: 4,
-            finalSemanticEvidenceMs: 6,
-            resultAssemblyMs: 7,
-            totalMs: 8
-        )
-        let result = ActionResult.success(
-            payload: .activate,
-            observation: .settledTrace(
-                makeTestTraceEvidence(
-                    .noChangeForTests(elementCount: 0),
-                    completeness: .incomplete
-                ),
-                .settled(duration: 5)
-            )
-        ).withTiming(initialTiming)
-        let overlay = ActionPerformanceTiming(
-            beforeObservationMs: 10,
-            actionDispatchMs: 30,
-            finalSemanticEvidenceMs: 60
-        )
-
-        XCTAssertEqual(result.withTiming(nil), result)
-        XCTAssertEqual(result.withTiming(overlay).timing, ActionPerformanceTiming(
-            beforeObservationMs: 10,
-            targetResolutionMs: 2,
-            actionDispatchMs: 30,
-            interactionMs: 4,
-            finalSemanticEvidenceMs: 60,
-            resultAssemblyMs: 7,
-            totalMs: 8
-        ))
-        XCTAssertEqual(result.withTiming(overlay).settleTimeMs, 5)
     }
 
     // MARK: - CustomActionTarget

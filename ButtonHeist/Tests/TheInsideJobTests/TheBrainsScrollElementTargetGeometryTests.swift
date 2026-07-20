@@ -18,7 +18,7 @@ extension TheBrainsScrollTests {
             scrollMembership: nil,
             element: makeElement(label: "Item")
         )
-        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
+        installSyntheticObservation(InterfaceObservation.makeForTests(
             elements: [treeElement.heistId: treeElement],
             hierarchy: [.element(treeElement.element, traversalIndex: 0)],
             heistIdsByPath: [TreePath([0]): treeElement.heistId],

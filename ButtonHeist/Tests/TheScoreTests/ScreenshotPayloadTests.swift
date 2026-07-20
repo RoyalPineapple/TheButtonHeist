@@ -110,4 +110,37 @@ final class ScreenshotPayloadTests: XCTestCase {
         XCTAssertEqual(payload.width, 402)
         XCTAssertEqual(payload.height, 874)
     }
+
+    func testAdmissionRejectsInvalidDimensions() {
+        for dimensions in [(0.0, 1.0), (-1, 1), (.nan, 1), (1, 0), (1, .infinity)] {
+            XCTAssertNil(ScreenPayload.admit(pngData: "data", width: dimensions.0, height: dimensions.1))
+        }
+    }
+
+    func testDecodingRejectsInvalidDimensions() {
+        let decoder = JSONDecoder()
+        decoder.nonConformingFloatDecodingStrategy = .convertFromString(
+            positiveInfinity: "Infinity",
+            negativeInfinity: "-Infinity",
+            nan: "NaN"
+        )
+        let invalidDimensions = [
+            ("0", "1"),
+            ("-1", "1"),
+            (#""NaN""#, "1"),
+            ("1", #""Infinity""#),
+        ]
+
+        for dimensions in invalidDimensions {
+            let json = """
+            {
+              "pngData":"data",
+              "width":\(dimensions.0),
+              "height":\(dimensions.1),
+              "timestamp":0
+            }
+            """
+            XCTAssertThrowsError(try decoder.decode(ScreenPayload.self, from: Data(json.utf8)))
+        }
+    }
 }

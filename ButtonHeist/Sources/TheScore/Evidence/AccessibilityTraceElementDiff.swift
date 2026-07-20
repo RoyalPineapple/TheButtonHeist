@@ -163,14 +163,14 @@ private func appendGeometryChanges(
     to changes: inout [PropertyChange]
 ) {
     appendChangeIfNeeded(
-        ElementPropertyFrame(old.screenFrame),
-        ElementPropertyFrame(new.screenFrame),
+        old.screenFrame.flatMap(ElementPropertyFrame.init),
+        new.screenFrame.flatMap(ElementPropertyFrame.init),
         change: PropertyChange.frame,
         to: &changes
     )
     appendChangeIfNeeded(
-        old.activationPointEvidence.point.map(ElementPropertyPoint.init),
-        new.activationPointEvidence.point.map(ElementPropertyPoint.init),
+        old.activationPointEvidence.point.flatMap(ElementPropertyPoint.init),
+        new.activationPointEvidence.point.flatMap(ElementPropertyPoint.init),
         change: PropertyChange.activationPoint,
         to: &changes
     )
@@ -197,18 +197,23 @@ private func semanticRotors(_ element: HeistElement) -> [HeistRotor]? {
 }
 
 private extension ElementPropertyFrame {
-    init(_ frame: ScreenRect) {
+    init?(_ frame: ScreenRect) {
+        let values = [frame.x.value, frame.y.value, frame.width.value, frame.height.value]
+        guard values.allSatisfy({ $0 >= Double(Int.min) && $0 <= Double(Int.max) }) else { return nil }
         self.init(
-            x: Int(frame.x),
-            y: Int(frame.y),
-            width: Int(frame.width),
-            height: Int(frame.height)
+            x: Int(frame.x.value),
+            y: Int(frame.y.value),
+            width: Int(frame.width.value),
+            height: Int(frame.height.value)
         )
     }
 }
 
 private extension ElementPropertyPoint {
-    init(_ point: ScreenPoint) {
+    init?(_ point: ScreenPoint) {
+        guard point.x >= Double(Int.min), point.x <= Double(Int.max),
+              point.y >= Double(Int.min), point.y <= Double(Int.max)
+        else { return nil }
         self.init(x: Int(point.x), y: Int(point.y))
     }
 }

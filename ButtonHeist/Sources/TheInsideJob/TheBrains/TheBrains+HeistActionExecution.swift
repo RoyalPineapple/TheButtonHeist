@@ -19,7 +19,7 @@ extension TheBrains {
         _ step: ActionStep,
         index _: Int,
         path: HeistExecutionPath,
-        start: CFAbsoluteTime,
+        start: RuntimeElapsed.Instant,
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment
     ) async -> HeistExecutionStepResult {
@@ -90,7 +90,7 @@ extension TheBrains {
         command: HeistActionCommand,
         actionResult: ActionResult,
         path: HeistExecutionPath,
-        start: CFAbsoluteTime
+        start: RuntimeElapsed.Instant
     ) -> HeistExecutionStepResult {
         let evidence = HeistActionEvidence.dispatch(dispatchResult: actionResult)
         let execution: HeistActionExecution
@@ -117,7 +117,7 @@ extension TheBrains {
         wait: WaitStep,
         result: HeistWaitResult,
         path: HeistExecutionPath,
-        start: CFAbsoluteTime
+        start: RuntimeElapsed.Instant
     ) -> HeistExecutionStepResult {
         let execution: HeistActionExecution
         switch result.outcome {
@@ -150,7 +150,7 @@ extension TheBrains {
     private func actionStepResult(
         execution: HeistActionExecution,
         path: HeistExecutionPath,
-        start: CFAbsoluteTime
+        start: RuntimeElapsed.Instant
     ) -> HeistExecutionStepResult {
         let durationMs = elapsedMilliseconds(since: start)
         return .action(
@@ -165,7 +165,7 @@ extension TheBrains {
         failedPath: HeistExecutionPath,
         mode: ScreenCaptureMode
     ) async -> HeistExecutionStepResult? {
-        let start = CFAbsoluteTimeGetCurrent()
+        let start = RuntimeElapsed.now
         let result = mode == .raw
             ? await runtime.execute(.takeScreenshot, nil).result
             : await executeTakeScreenshot(mode: mode)

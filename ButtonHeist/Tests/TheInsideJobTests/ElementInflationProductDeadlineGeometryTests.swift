@@ -79,18 +79,19 @@ extension ElementInflationProductTests {
             target: try AccessibilityTarget.identifier(heistId.rawValue).resolve(in: .empty),
             treeElement: treeElement,
             liveTarget: liveTarget,
-            deadline: SemanticObservationDeadline(start: 0, timeoutSeconds: 0),
+            deadline: SemanticObservationDeadline(start: RuntimeElapsed.now, timeoutSeconds: 0),
             resolution: ActionSubjectResolution(origin: .visible)
         )
         brains.stopSemanticObservation()
         let replacementObject = UIButton(frame: CGRect(x: 20, y: 20, width: 160, height: 44))
-        brains.vault.nextVisibleRefreshObservationForTesting = .makeForTests([
+        visibleObservationSource.observation = .makeForTests([
             .init(element, heistId: heistId, object: replacementObject),
         ])
-        var now: CFAbsoluteTime = 100
+        var now = RuntimeElapsed.now
+        let deadlineStart = now
         brains.navigation.elementInflation.geometryEnvironment = .init(
             now: { now },
-            awaitFrame: { now += 0.01 }
+            awaitFrame: { now = now.advanced(by: .milliseconds(10)) }
         )
 
         let result = await brains.navigation.elementInflation.refreshCommittedTarget(
@@ -104,7 +105,7 @@ extension ElementInflationProductTests {
         XCTAssertEqual(refreshedTarget.treeElement.heistId, heistId)
         XCTAssertTrue(refreshedTarget.liveTarget.object === replacementObject)
         XCTAssertFalse(refreshedTarget.liveTarget.object === staleObject)
-        XCTAssertEqual(refreshedTarget.deadline.start, 100)
+        XCTAssertEqual(refreshedTarget.deadline.start, deadlineStart)
         XCTAssertEqual(refreshedTarget.deadline.timeoutSeconds, 2)
     }
 

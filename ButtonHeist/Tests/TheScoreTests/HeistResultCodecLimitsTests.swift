@@ -102,11 +102,137 @@ import Testing
         )
     }
 
+    @Test func `gzip result rejects negative duration after decompression`() throws {
+        // gzip for {"steps":[],"durationMs":-1}
+        let malformedGzip = try #require(Data(
+            base64Encoded: "H4sIAAAAAAAAA6tWKi5JLShWsoqO1VFKKS1KLMnMz/MF8nUNawGXzDspHAAAAA=="
+        ))
+
+        #expect(throws: DecodingError.self) {
+            try HeistResultCodec.decode(malformedGzip, format: .gzipJSON)
+        }
+    }
+
+    @Test func `result node count is bounded before codec exposure`() throws {
+        let data = nestedResultData()
+        let limits = HeistResultCodecLimits(
+            maxJSONBytes: data.count,
+            maxGzipCompressedBytes: 1024,
+            maxGzipDecompressedBytes: 1024,
+            maxNodeCount: 1
+        )
+
+        try expectResultDecodeError(
+            data,
+            format: .json,
+            limits: limits,
+            containing: ["too many nodes", "limit 1"]
+        )
+    }
+
+    @Test func `result nesting depth is bounded before codec exposure`() throws {
+        let data = nestedResultData()
+        let limits = HeistResultCodecLimits(
+            maxJSONBytes: data.count,
+            maxGzipCompressedBytes: 1024,
+            maxGzipDecompressedBytes: 1024,
+            maxNestingDepth: 1
+        )
+
+        try expectResultDecodeError(
+            data,
+            format: .json,
+            limits: limits,
+            containing: ["nesting is too deep", "limit 1"]
+        )
+    }
+
+    @Test func `aggregate admission rejects duplicate execution paths`() throws {
+        let data = try duplicatingRoot(in: nestedResultData())
+
+        try expectResultDecodeError(
+            data,
+            format: .json,
+            limits: .default,
+            containing: ["duplicate execution path", "$.body[0]"]
+        )
+    }
+
+    @Test func `aggregate admission rejects child paths outside their parent`() throws {
+        let data = try replacingChildPath(in: nestedResultData(), with: "$.body[1]")
+
+        try expectResultDecodeError(
+            data,
+            format: .json,
+            limits: .default,
+            containing: ["is not a descendant", "$.body[0]", "$.body[1]"]
+        )
+    }
+
+    @Test func `aggregate and parent durations are independent wall clock observations`() throws {
+        let result = try HeistResultCodec.decode(nestedResultData())
+        let root = try #require(result.steps.first)
+        let child = try #require(root.children.first)
+
+        #expect(result.durationMs == 5)
+        #expect(root.durationMs == 1)
+        #expect(child.durationMs == 100)
+    }
+
     private func sampleResult(message: String) -> HeistResult {
         HeistResultFixture.result(
             steps: [HeistResultFixture.explicitFailure(message: message)],
             durationMs: 1
         )
+    }
+
+    private func nestedResultData() -> Data {
+        Data(#"""
+        {
+          "steps": [{
+            "path": "$.body[0]",
+            "durationMs": 1,
+            "node": {
+              "type": "warning",
+              "outcome": "passed",
+              "message": "root",
+              "children": [{
+                "path": "$.body[0].heist.body[0]",
+                "durationMs": 100,
+                "node": {
+                  "type": "warning",
+                  "outcome": "passed",
+                  "message": "child",
+                  "children": []
+                }
+              }]
+            }
+          }],
+          "durationMs": 5
+        }
+        """#.utf8)
+    }
+
+    private func duplicatingRoot(in data: Data) throws -> Data {
+        var object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        var steps = try #require(object["steps"] as? [[String: Any]])
+        steps.append(steps[0])
+        object["steps"] = steps
+        return try JSONSerialization.data(withJSONObject: object)
+    }
+
+    private func replacingChildPath(in data: Data, with path: String) throws -> Data {
+        var object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        var steps = try #require(object["steps"] as? [[String: Any]])
+        var root = steps[0]
+        var node = try #require(root["node"] as? [String: Any])
+        var children = try #require(node["children"] as? [[String: Any]])
+        children[0]["path"] = path
+        node["children"] = children
+        root["node"] = node
+        steps[0] = root
+        object["steps"] = steps
+        return try JSONSerialization.data(withJSONObject: object)
     }
 
     private func expectResultDecodeError(

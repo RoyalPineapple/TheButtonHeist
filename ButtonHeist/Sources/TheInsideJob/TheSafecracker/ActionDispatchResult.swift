@@ -17,7 +17,6 @@ extension TheSafecracker {
         let message: String?
         let subjectEvidence: ActionSubjectEvidence?
         let activationTrace: ActivationTrace?
-        let timing: ActionPerformanceTiming?
         let outcome: ActionDispatchOutcome
 
         var success: Bool {
@@ -40,14 +39,12 @@ extension TheSafecracker {
             message: String?,
             subjectEvidence: ActionSubjectEvidence?,
             activationTrace: ActivationTrace?,
-            timing: ActionPerformanceTiming?,
             outcome: ActionDispatchOutcome
         ) {
             self.payload = payload
             self.message = message
             self.subjectEvidence = subjectEvidence
             self.activationTrace = activationTrace
-            self.timing = timing
             self.outcome = outcome
         }
 
@@ -63,7 +60,6 @@ extension TheSafecracker {
                 message: message,
                 subjectEvidence: subjectEvidence,
                 activationTrace: activationTrace,
-                timing: nil,
                 outcome: .success(resolvedElementId: resolvedElementId)
             )
         }
@@ -80,7 +76,6 @@ extension TheSafecracker {
                 message: message,
                 subjectEvidence: subjectEvidence,
                 activationTrace: activationTrace,
-                timing: nil,
                 outcome: .failure(failureKind)
             )
         }
@@ -92,7 +87,6 @@ extension TheSafecracker {
                 message: message,
                 subjectEvidence: evidence,
                 activationTrace: activationTrace,
-                timing: timing,
                 outcome: outcome
             )
         }
@@ -104,7 +98,6 @@ extension TheSafecracker {
                 message: message,
                 subjectEvidence: subjectEvidence,
                 activationTrace: activationTrace,
-                timing: timing,
                 outcome: .success(resolvedElementId: heistId)
             )
         }
@@ -116,19 +109,6 @@ extension TheSafecracker {
                 message: message,
                 subjectEvidence: subjectEvidence,
                 activationTrace: trace,
-                timing: timing,
-                outcome: outcome
-            )
-        }
-
-        func withTiming(_ timing: ActionPerformanceTiming?) -> ActionDispatchResult {
-            guard let timing else { return self }
-            return ActionDispatchResult(
-                payload: payload,
-                message: message,
-                subjectEvidence: subjectEvidence,
-                activationTrace: activationTrace,
-                timing: self.timing?.merging(timing) ?? timing,
                 outcome: outcome
             )
         }

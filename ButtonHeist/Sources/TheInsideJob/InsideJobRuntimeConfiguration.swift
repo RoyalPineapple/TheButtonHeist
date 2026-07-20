@@ -4,6 +4,13 @@ import Foundation
 
 import TheScore
 
+public enum InsideJobConfigurationError: Error, Equatable, Sendable {
+    case blankToken
+    case blankInstanceID
+    case alreadyConfigured
+    case alreadyLive
+}
+
 struct InsideJobRuntimeConfiguration: Equatable, Sendable {
     let token: ResolvedStartupValue<SessionAuthToken>
     let preferredPort: ResolvedStartupValue<UInt16>
@@ -24,9 +31,9 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
         addressFamily: ListenerAddressFamily = .dualStack,
         fingerprintsEnabled: Bool? = nil,
         authenticationPolicy: InsideJobAuthenticationPolicy = .default
-    ) -> InsideJobRuntimeConfiguration {
-        let explicitToken = token.flatMap { try? SessionAuthToken(validating: $0) }
-        let explicitInstanceId = instanceId.flatMap { try? InsideJobInstanceID(validating: $0) }
+    ) throws(InsideJobConfigurationError) -> InsideJobRuntimeConfiguration {
+        let explicitToken = try admitToken(token)
+        let explicitInstanceId = try admitInstanceId(instanceId)
         let resolvedToken = resolveRuntimeToken(
             explicitToken: explicitToken,
             startupToken: startupConfiguration.token
@@ -84,6 +91,24 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
             return ResolvedStartupValue(value: startupTokenValue, source: startupToken.source)
         }
         return ResolvedStartupValue(value: SessionTokenGenerator.generate(), source: .generated)
+    }
+
+    private static func admitToken(_ value: String?) throws(InsideJobConfigurationError) -> SessionAuthToken? {
+        guard let value else { return nil }
+        do {
+            return try SessionAuthToken(validating: value)
+        } catch {
+            throw .blankToken
+        }
+    }
+
+    private static func admitInstanceId(_ value: String?) throws(InsideJobConfigurationError) -> InsideJobInstanceID? {
+        guard let value else { return nil }
+        do {
+            return try InsideJobInstanceID(validating: value)
+        } catch {
+            throw .blankInstanceID
+        }
     }
 }
 

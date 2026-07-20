@@ -281,10 +281,12 @@ final class MinimumPredicateSelectorTests: XCTestCase {
             value: value,
             identifier: identifier,
             traits: traits,
-            frameX: frameX,
-            frameY: frameY,
-            frameWidth: frameWidth,
-            frameHeight: frameHeight,
+            frameEvidence: ScreenFrameEvidence(CGRect(
+                x: frameX,
+                y: frameY,
+                width: frameWidth,
+                height: frameHeight
+            )),
             actions: []
         )
     }

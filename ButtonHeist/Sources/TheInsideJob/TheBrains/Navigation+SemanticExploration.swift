@@ -113,7 +113,7 @@ extension Navigation {
         }
 
         var hasTimeRemaining: Bool {
-            deadline?.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) ?? true
+            deadline?.hasTimeRemaining(at: RuntimeElapsed.now) ?? true
         }
 
         mutating func recordCommittedObservation(

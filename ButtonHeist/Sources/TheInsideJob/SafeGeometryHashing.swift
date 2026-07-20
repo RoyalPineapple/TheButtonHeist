@@ -6,16 +6,20 @@ import UIKit
 
 // MARK: - Coarse Frame Comparison
 
-struct CoarseFrameKey: Hashable {
-    let minX: Int
-    let minY: Int
-    let width: Int
-    let height: Int
-
-    static let zero = CoarseFrameKey(minX: 0, minY: 0, width: 0, height: 0)
+enum CoarseFrameKey: Hashable {
+    case available(minX: Int, minY: Int, width: Int, height: Int)
+    case masked
+    case unavailable
 
     var hashFragment: String {
-        "\(minX)_\(minY)_\(width)_\(height)"
+        switch self {
+        case .available(let minX, let minY, let width, let height):
+            "\(minX)_\(minY)_\(width)_\(height)"
+        case .masked:
+            "masked"
+        case .unavailable:
+            "unavailable"
+        }
     }
 }
 
@@ -29,7 +33,8 @@ struct CoarseFrameKey: Hashable {
     }
 
     static func key(for frame: CGRect, bucket: CGFloat = currentBucket) -> CoarseFrameKey {
-        CoarseFrameKey(
+        guard let frame = ScreenFrameEvidence(frame).rect?.cgRect else { return .unavailable }
+        return .available(
             minX: component(frame.origin.x, bucket: bucket),
             minY: component(frame.origin.y, bucket: bucket),
             width: component(frame.size.width, bucket: bucket),
@@ -42,31 +47,10 @@ struct CoarseFrameKey: Hashable {
     }
 
     private static func component(_ value: CGFloat, bucket: CGFloat) -> Int {
-        let sanitized = value.isFinite ? value : 0
-        guard bucket > 0, bucket.isFinite else { return safeInt(sanitized.rounded()) }
-        return safeInt((sanitized / bucket).rounded())
-    }
-}
-
-// MARK: - Safe Path Bounds
-
-extension UIBezierPath {
-    /// Bounds that won't trap on degenerate paths.
-    ///
-    /// `UIBezierPath.bounds` and `cgPath.boundingBoxOfPath` can return `.null`
-    /// for empty paths and may carry non-finite coordinates when callers feed
-    /// in NaN or infinity. Returns `.zero` for any non-finite result so callers
-    /// can hash the rect safely.
-    var safeBounds: CGRect {
-        guard !isEmpty else { return .zero }
-        let rect = cgPath.boundingBoxOfPath
-        guard !rect.isNull,
-              rect.origin.x.isFinite,
-              rect.origin.y.isFinite,
-              rect.size.width.isFinite,
-              rect.size.height.isFinite
-        else { return .zero }
-        return rect
+        let scaled = bucket > 0 && bucket.isFinite ? (value / bucket).rounded() : value.rounded()
+        if scaled >= CGFloat(Int.max) { return Int.max }
+        if scaled <= CGFloat(Int.min) { return Int.min }
+        return Int(scaled)
     }
 }
 

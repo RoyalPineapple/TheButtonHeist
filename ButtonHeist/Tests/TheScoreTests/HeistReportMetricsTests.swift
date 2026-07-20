@@ -76,9 +76,77 @@ import TheScore
         #expect(try JSONDecoder().decode(HeistReport.Metrics.self, from: encoded) == metrics)
     }
 
+    @Test func `metric decoding rejects negative durations`() {
+        let negativeMeasurement = Data(#"""
+        {
+          "name": "heistDurationMs",
+          "valueMs": -1
+        }
+        """#.utf8)
+        let negativeCeiling = Data(#"""
+        {
+          "source": "intent.wait.timeout",
+          "budgetMs": -1,
+          "elapsedMs": 0,
+          "path": "$.body[0]",
+          "kind": "wait",
+          "status": "passed"
+        }
+        """#.utf8)
+        let negativeCeilingElapsed = Data(#"""
+        {
+          "source": "intent.wait.timeout",
+          "budgetMs": 0,
+          "elapsedMs": -1,
+          "path": "$.body[0]",
+          "kind": "wait",
+          "status": "passed"
+        }
+        """#.utf8)
+
+        #expect(throws: DecodingError.self) {
+            try JSONDecoder().decode(HeistReport.Measurement.self, from: negativeMeasurement)
+        }
+        #expect(throws: DecodingError.self) {
+            try JSONDecoder().decode(HeistReport.CeilingMetric.self, from: negativeCeiling)
+        }
+        #expect(throws: DecodingError.self) {
+            try JSONDecoder().decode(HeistReport.CeilingMetric.self, from: negativeCeilingElapsed)
+        }
+    }
+
+    @Test func `metric construction requires admitted durations`() {
+        #expect(throws: (any Error).self) {
+            _ = HeistReport.Measurement(
+                name: .heistDurationMs,
+                valueMs: try ElapsedMilliseconds(validatingMilliseconds: -1)
+            )
+        }
+        #expect(throws: (any Error).self) {
+            _ = HeistReport.CeilingMetric(
+                source: .intentWaitTimeout,
+                budgetMs: try ElapsedMilliseconds(validatingMilliseconds: -1),
+                elapsedMs: 0,
+                path: "$.body[0]",
+                kind: .wait,
+                status: .passed
+            )
+        }
+        #expect(throws: (any Error).self) {
+            _ = HeistReport.CeilingMetric(
+                source: .intentWaitTimeout,
+                budgetMs: 0,
+                elapsedMs: try ElapsedMilliseconds(validatingMilliseconds: -1),
+                path: "$.body[0]",
+                kind: .wait,
+                status: .passed
+            )
+        }
+    }
+
     private func metricsFixture() throws -> HeistResult {
         let predicate = AccessibilityPredicate.exists(.label("Done"))
-        return HeistResult(
+        return try HeistResult(
             steps: [
                 actionStep(predicate: predicate),
                 try waitStep(predicate: predicate),
@@ -229,6 +297,6 @@ import TheScore
         in projection: HeistReport.Metrics,
         named name: HeistReport.MetricName
     ) -> [Int] {
-        projection.measurements.filter { $0.name == name }.map(\.valueMs)
+        projection.measurements.filter { $0.name == name }.map(\.valueMs.milliseconds)
     }
 }

@@ -8,7 +8,7 @@ extension TheBrains {
     internal func actionResolutionFailureResult(
         _ failure: HeistActionResolutionFailure,
         path: HeistExecutionPath,
-        start: CFAbsoluteTime
+        start: RuntimeElapsed.Instant
     ) -> HeistExecutionStepResult {
         let detail = HeistFailureDetail(
             category: .targetResolution,
@@ -33,7 +33,7 @@ extension TheBrains {
         command: HeistActionCommand,
         actionResult: ActionResult,
         path: HeistExecutionPath,
-        start: CFAbsoluteTime
+        start: RuntimeElapsed.Instant
     ) -> HeistExecutionStepResult {
         let observed = "could not resolve heist expectation: \(failure.errorDescription)"
         let expectationResult = ActionResult.failure(
@@ -66,7 +66,7 @@ extension TheBrains {
     internal func standaloneWaitResolutionFailureResult(
         _ failure: HeistStandaloneWaitResolutionFailure,
         path: HeistExecutionPath,
-        start: CFAbsoluteTime
+        start: RuntimeElapsed.Instant
     ) -> HeistExecutionStepResult {
         let durationMs = elapsedMilliseconds(since: start)
         return .wait(
@@ -146,7 +146,7 @@ extension TheBrains {
     private func actionFailureResult(
         execution: HeistActionExecution,
         path: HeistExecutionPath,
-        start: CFAbsoluteTime
+        start: RuntimeElapsed.Instant
     ) -> HeistExecutionStepResult {
         let durationMs = elapsedMilliseconds(since: start)
         return .action(

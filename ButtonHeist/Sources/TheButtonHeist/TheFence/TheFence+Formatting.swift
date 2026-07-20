@@ -282,8 +282,15 @@ extension FenceResponse {
             parts.append("id=\(Self.quotedString(identifier))")
         }
         if detail == .full {
-            parts.append("frame=(\(Int(element.frameX)),\(Int(element.frameY)),\(Int(element.frameWidth)),\(Int(element.frameHeight)))")
-            parts.append("activation=(\(Int(element.activationPointX)),\(Int(element.activationPointY)))")
+            if let frame = element.screenFrame {
+                parts.append(
+                    "frame=(\(Self.geometryDescription(frame.x.value)),\(Self.geometryDescription(frame.y.value))," +
+                        "\(Self.geometryDescription(frame.width.value)),\(Self.geometryDescription(frame.height.value)))"
+                )
+            }
+            if let x = element.activationPointX, let y = element.activationPointY {
+                parts.append("activation=(\(Self.geometryDescription(x)),\(Self.geometryDescription(y)))")
+            }
         }
         return parts.joined(separator: " ")
     }
@@ -331,17 +338,30 @@ extension FenceResponse {
         }
         if let contentSize = container.scrollableContentSize {
             let frame = container.frame
-            parts.append("viewport=\(Int(frame.size.width))x\(Int(frame.size.height))")
-            parts.append("content=\(Int(contentSize.width))x\(Int(contentSize.height))")
+            if let viewportWidth = try? FiniteDimension(validating: frame.size.width),
+               let viewportHeight = try? FiniteDimension(validating: frame.size.height),
+               let contentWidth = try? FiniteDimension(validating: contentSize.width),
+               let contentHeight = try? FiniteDimension(validating: contentSize.height) {
+                parts.append(
+                    "viewport=\(Self.geometryDescription(viewportWidth.value))x" +
+                        "\(Self.geometryDescription(viewportHeight.value))"
+                )
+                parts.append(
+                    "content=\(Self.geometryDescription(contentWidth.value))x" +
+                        "\(Self.geometryDescription(contentHeight.value))"
+                )
+            }
         }
         if facts.isModalBoundary {
             parts.append("modal=true")
         }
         if detail == .full {
-            let frame = container.frame
-            parts.append(
-                "frame=(\(Int(frame.origin.x)),\(Int(frame.origin.y)),\(Int(frame.size.width)),\(Int(frame.size.height)))"
-            )
+            if let frame = ScreenFrameEvidence(container.frame).rect {
+                parts.append(
+                    "frame=(\(Self.geometryDescription(frame.x.value)),\(Self.geometryDescription(frame.y.value))," +
+                        "\(Self.geometryDescription(frame.width.value)),\(Self.geometryDescription(frame.height.value)))"
+                )
+            }
         }
         return [parts.joined(separator: " ")]
     }
@@ -424,6 +444,12 @@ extension FenceResponse {
             case .custom: return true
             }
         }
+    }
+
+    static func geometryDescription(_ value: Double) -> String {
+        guard value.isFinite else { return "unavailable" }
+        guard value >= Double(Int.min), value <= Double(Int.max) else { return String(value) }
+        return String(Int(value))
     }
 
     private func formatDelta(_ projection: DeltaProjection) -> String {

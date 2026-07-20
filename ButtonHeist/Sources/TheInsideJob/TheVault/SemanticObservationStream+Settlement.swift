@@ -13,10 +13,10 @@ extension SemanticObservationStream {
 
         let timeoutMs = Self.timeoutMilliseconds(from: timeout)
         let deadline = SemanticObservationDeadline(
-            start: CFAbsoluteTimeGetCurrent(),
+            start: RuntimeElapsed.now,
             timeoutMs: timeoutMs
         )
-        while deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) {
+        while deadline.hasTimeRemaining(at: RuntimeElapsed.now) {
             if let observation = admittedObservation(scope: .visible, after: nil) {
                 return observation
             }

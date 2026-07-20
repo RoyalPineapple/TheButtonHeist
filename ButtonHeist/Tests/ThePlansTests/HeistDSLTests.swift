@@ -771,12 +771,11 @@ func emptyHeistRejectsPlanUsingDecodedHeistPlanContract() {
     }
 }
 
-private func loginFlow(email: TextInputText, password: TextInputText) throws -> some HeistContent {
-    try HeistPlan {
-        TypeText(email, into: .identifier("email"))
-        TypeText(password, into: .identifier("password"))
+@HeistBuilder
+private func loginFlow(email: TextInputText, password: TextInputText) throws -> HeistContent {
+    TypeText(email, into: .identifier("email"))
+    TypeText(password, into: .identifier("password"))
 
-        Activate(.label("Sign In"))
-            .expect(.exists(.label("Home")), timeout: 5)
-    }
+    Activate(.label("Sign In"))
+        .expect(.exists(.label("Home")), timeout: 5)
 }

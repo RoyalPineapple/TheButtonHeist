@@ -243,10 +243,10 @@ tests. `run_heist` crosses the CLI/MCP tool boundary.
 If a test already has a `HeistPlan`, run it through the same testing facade with
 `try await runHeist(plan)` instead of constructing `Heist` directly.
 
-`runHeistSync(..., recordReceipt: .always, to: receiptsURL) { ... }` records
-passing and failing XCTest receipts without relying on inherited environment
-variables. If no URL is supplied, receipts are written under the process
-temporary directory at `buttonheist-receipts/`.
+`runHeistSync(..., recordResult: .always, to: resultsURL) { ... }` records
+passing and failing XCTest results without relying on inherited environment
+variables. If no URL is supplied, results are written under the process
+temporary directory at `buttonheist-results/`.
 
 To stop at a screen, open a ButtonHeist session, and let a human or agent
 connect through MCP or the CLI, halt a synchronous XCTest after ordinary app
@@ -346,7 +346,7 @@ Link `TheInsideJob` to your debug target. It starts a local TCP server via ObjC
 `TheInsideJob` is compiled under `#if DEBUG`, so the code is absent from release
 binaries, not merely disabled at runtime.
 
-By default the server accepts simulator loopback and USB-scoped connections. It does not publish Bonjour on the LAN unless you opt into network scope with `INSIDEJOB_SCOPE=simulator,usb,network` or `InsideJobScope`. Interaction fingerprints are enabled by default; disable them with `INSIDEJOB_FINGERPRINTS=false`, `InsideJobFingerprintsEnabled`, or `TheInsideJob.configure(fingerprintsEnabled: false)`.
+By default the server accepts simulator loopback and USB-scoped connections. It does not publish Bonjour on the LAN unless you opt into network scope with `INSIDEJOB_SCOPE=simulator,usb,network` or `InsideJobScope`. Interaction fingerprints are enabled by default; disable them with `INSIDEJOB_FINGERPRINTS=false`, `InsideJobFingerprintsEnabled`, or `try TheInsideJob.configure(fingerprintsEnabled: false)`.
 
 If you enable network scope, add the Bonjour permissions:
 

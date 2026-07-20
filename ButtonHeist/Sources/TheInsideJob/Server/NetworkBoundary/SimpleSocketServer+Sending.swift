@@ -39,7 +39,7 @@ extension SimpleSocketServer {
         }
 
         return await withCheckedContinuation { continuation in
-            sendContent(reservation.connection, dataToSend, .contentProcessed { [weak self] error in
+            dependencies.sendContent(reservation.connection, dataToSend, .contentProcessed { [weak self] error in
                 if let error {
                     sendLogger.error("Send error to client \(clientId): \(error)")
                 }

@@ -10,7 +10,7 @@ extension TheBrains {
         _ step: RepeatUntilStep,
         index _: Int,
         path: HeistExecutionPath,
-        start: CFAbsoluteTime,
+        start: RuntimeElapsed.Instant,
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
@@ -53,15 +53,18 @@ extension TheBrains {
         state initialState: RepeatUntil.LoopState,
         timeout: WaitTimeout
     ) async -> HeistExecutionStepResult {
-        let deadline = context.start + timeout.seconds
+        let deadline = SemanticObservationDeadline(
+            start: context.start,
+            timeoutSeconds: timeout.seconds
+        )
         var state = initialState
 
         while case .running(let running) = state {
-            guard running.iterationNodes.values.isEmpty || CFAbsoluteTimeGetCurrent() < deadline else {
+            guard running.iterationNodes.values.isEmpty || deadline.hasTimeRemaining(at: RuntimeElapsed.now) else {
                 break
             }
             let iterationIndex = running.iterationNodes.values.count
-            let iterationStart = CFAbsoluteTimeGetCurrent()
+            let iterationStart = RuntimeElapsed.now
             let iterationPath = context.path.repeatUntilIteration(at: iterationIndex)
             let iterationResults = await executeHeistSteps(
                 step.body,
@@ -134,7 +137,7 @@ extension TheBrains {
         step: ResolvedRepeatUntilStep,
         frame: RepeatUntil.IterationFrame,
         children: HeistAbortedChildren,
-        deadline: CFAbsoluteTime,
+        deadline: SemanticObservationDeadline,
         running: RepeatUntil.RunningState
     ) async -> RepeatUntil.FailedIterationEvent {
         let failureExpectation = ExpectationResult.Unmet(

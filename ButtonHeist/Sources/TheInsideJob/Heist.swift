@@ -35,7 +35,7 @@ public struct Heist: Sendable {
 
     @MainActor
     public init(
-        @HeistBuilder _ content: () throws -> some HeistContent
+        @HeistBuilder _ content: () throws -> HeistContent
     ) async throws {
         let plan = try HeistPlan(content)
         self.result = try await Self.execute(plan, argument: .none, runtime: .shared)
@@ -44,7 +44,7 @@ public struct Heist: Sendable {
     @MainActor
     init(
         runtime: InAppHeistRuntime,
-        @HeistBuilder _ content: () throws -> some HeistContent
+        @HeistBuilder _ content: () throws -> HeistContent
     ) async throws {
         let plan = try HeistPlan(content)
         self.result = try await Self.execute(plan, argument: .none, runtime: runtime)
@@ -54,7 +54,7 @@ public struct Heist: Sendable {
     public init(
         _ input: String,
         parameter: HeistReferenceName = "input",
-        @HeistBuilder _ content: (HeistReferenceName) throws -> some HeistContent
+        @HeistBuilder _ content: (HeistReferenceName) throws -> HeistContent
     ) async throws {
         let plan = try HeistPlan(parameter: parameter, content)
         self.result = try await Self.execute(
@@ -69,7 +69,7 @@ public struct Heist: Sendable {
         _ input: String,
         parameter: HeistReferenceName = "input",
         runtime: InAppHeistRuntime,
-        @HeistBuilder _ content: (HeistReferenceName) throws -> some HeistContent
+        @HeistBuilder _ content: (HeistReferenceName) throws -> HeistContent
     ) async throws {
         let plan = try HeistPlan(parameter: parameter, content)
         self.result = try await Self.execute(
@@ -83,7 +83,7 @@ public struct Heist: Sendable {
     public init(
         _ input: AccessibilityTarget,
         parameter: HeistReferenceName = "input",
-        @HeistBuilder _ content: (AccessibilityTarget) throws -> some HeistContent
+        @HeistBuilder _ content: (AccessibilityTarget) throws -> HeistContent
     ) async throws {
         try await self.init(
             input,
@@ -98,7 +98,7 @@ public struct Heist: Sendable {
         _ input: AccessibilityTarget,
         parameter: HeistReferenceName = "input",
         runtime: InAppHeistRuntime,
-        @HeistBuilder _ content: (AccessibilityTarget) throws -> some HeistContent
+        @HeistBuilder _ content: (AccessibilityTarget) throws -> HeistContent
     ) async throws {
         let plan = try HeistPlan(targetParameter: parameter, content)
         self.result = try await Self.execute(
@@ -260,7 +260,7 @@ extension TheInsideJob {
         // keeps conditionals, waits, and first actions from inheriting the
         // previous run's settled semantic world when the app is already on
         // another screen.
-        brains.vault.resetInterfaceForHeistBootstrap()
+        brains.vault.resetInterfaceForLifecycle()
         _ = await brains.interactionCoordinator.admittedVisibleBaseline(
             timeout: SemanticObservationTiming.defaultTimeout
         )

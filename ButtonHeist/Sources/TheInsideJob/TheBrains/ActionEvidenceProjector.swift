@@ -19,39 +19,46 @@ enum SemanticObservationTiming {
 }
 
 struct SemanticObservationDeadline: Sendable, Equatable {
-    let start: CFAbsoluteTime
-    let timeoutSeconds: Double
+    let start: RuntimeElapsed.Instant
+    private let timeout: Duration
 
-    init(start: CFAbsoluteTime, timeoutSeconds: Double) {
+    init(start: RuntimeElapsed.Instant, timeoutSeconds: Double) {
+        precondition(timeoutSeconds.isFinite && timeoutSeconds >= 0, "observation timeout must be finite and non-negative")
         self.start = start
-        self.timeoutSeconds = max(0, timeoutSeconds)
+        timeout = .seconds(timeoutSeconds)
     }
 
-    init(start: CFAbsoluteTime, timeoutMs: Int) {
-        self.init(start: start, timeoutSeconds: Double(max(0, timeoutMs)) / 1_000)
+    init(start: RuntimeElapsed.Instant, timeoutMs: Int) {
+        precondition(timeoutMs >= 0, "observation timeout must be non-negative")
+        self.init(start: start, timeoutSeconds: Double(timeoutMs) / 1_000)
     }
 
-    func hasTimeRemaining(at now: CFAbsoluteTime) -> Bool {
+    var timeoutSeconds: Double {
+        timeout / .seconds(1)
+    }
+
+    func hasTimeRemaining(at now: RuntimeElapsed.Instant) -> Bool {
         now < deadline
     }
 
-    func remainingSeconds(at now: CFAbsoluteTime = CFAbsoluteTimeGetCurrent()) -> Double {
-        max(0, deadline - now)
+    func remainingSeconds(at now: RuntimeElapsed.Instant = RuntimeElapsed.now) -> Double {
+        max(0, now.duration(to: deadline) / .seconds(1))
     }
 
-    func elapsedMilliseconds(at now: CFAbsoluteTime = CFAbsoluteTimeGetCurrent()) -> Int {
-        max(0, Int((now - start) * 1_000))
+    func elapsedMilliseconds(at now: RuntimeElapsed.Instant = RuntimeElapsed.now) -> Int {
+        max(0, Int(start.duration(to: now) / .milliseconds(1)))
     }
 
     func reserving(
         _ seconds: Double,
-        at now: CFAbsoluteTime = CFAbsoluteTimeGetCurrent()
+        at now: RuntimeElapsed.Instant = RuntimeElapsed.now
     ) -> Self {
-        Self(start: now, timeoutSeconds: max(0, remainingSeconds(at: now) - max(0, seconds)))
+        precondition(seconds.isFinite && seconds >= 0, "observation reservation must be finite and non-negative")
+        return Self(start: now, timeoutSeconds: max(0, remainingSeconds(at: now) - seconds))
     }
 
-    private var deadline: CFAbsoluteTime {
-        start + timeoutSeconds
+    private var deadline: RuntimeElapsed.Instant {
+        start.advanced(by: timeout)
     }
 }
 

@@ -14,7 +14,7 @@ extension TheBrains {
         _ step: WaitStep,
         index _: Int,
         path: HeistExecutionPath,
-        start: CFAbsoluteTime,
+        start: RuntimeElapsed.Instant,
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
@@ -99,7 +99,7 @@ extension TheBrains {
         step: WaitStep,
         completion: HeistWaitCompletion,
         path: HeistExecutionPath,
-        start: CFAbsoluteTime
+        start: RuntimeElapsed.Instant
     ) -> HeistExecutionStepResult {
         let durationMs = elapsedMilliseconds(since: start)
         return .wait(

@@ -120,7 +120,7 @@ extension SimpleSocketServer {
             data.append(WireFrameLimits.newlineDelimiterByte)
         }
 
-        sendContent(connection, data, .contentProcessed { error in
+        dependencies.sendContent(connection, data, .contentProcessed { error in
             if let error {
                 connectionLogger.error("Send error while rejecting unregistered connection: \(error)")
             }

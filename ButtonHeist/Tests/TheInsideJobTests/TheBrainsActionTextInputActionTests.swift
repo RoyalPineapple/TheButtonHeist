@@ -11,7 +11,6 @@ import XCTest
 extension TheBrainsActionTests {
 
     func testExecuteTypeTextIntoTargetFocusesWithAccessibilityActivateBeforeTyping() async throws {
-        brains.tripwire.startPulse()
         let rootView = UIView(frame: UIScreen.main.bounds)
         rootView.backgroundColor = .white
 
@@ -31,10 +30,13 @@ extension TheBrainsActionTests {
             window.isHidden = true
         }
 
-        let keyboardImpl = ActionTextInputKeyboardImpl(textField: textField) { [vault = brains.vault] in
-            vault.invalidateSettledObservationFromTripwire()
+        let keyboardImpl = ActionTextInputKeyboardImpl(textField: textField) { [weak self] in
+            self?.brains.vault.invalidateSettledObservationFromTripwire()
         }
-        brains.safecracker.keyboardBridgeProvider = { keyboardImpl.bridge() }
+        replaceBrains(keyboardInput: SafecrackerKeyboardInput(
+            keyboardBridgeProvider: { keyboardImpl.bridge() }
+        ))
+        brains.tripwire.startPulse()
         await brains.tripwire.yieldFrames(3)
 
         let heistId: HeistId = "message_field"
@@ -46,7 +48,7 @@ extension TheBrainsActionTests {
         )
         let staleTextField = ActionActivatingTextField()
         installScreen(elements: [(element, heistId)], objects: [heistId: staleTextField])
-        brains.vault.nextVisibleRefreshObservationForTesting = .makeForTests(
+        visibleObservationSource.observation = .makeForTests(
             elements: [(element, heistId)],
             objects: [heistId: textField]
         )
@@ -108,12 +110,15 @@ extension TheBrainsActionTests {
             traits: .textEntry,
             frame: otherTextField.frame
         )
+        let keyboardImpl = ActionTextInputKeyboardImpl(textField: selectedTextField) {}
+        replaceBrains(keyboardInput: SafecrackerKeyboardInput(
+            keyboardBridgeProvider: { keyboardImpl.bridge() }
+        ))
+        brains.stopSemanticObservation()
         installScreen(elements: [
             (selectedElement, selectedId),
             (otherElement, otherId),
         ])
-        let keyboardImpl = ActionTextInputKeyboardImpl(textField: selectedTextField) {}
-        brains.safecracker.keyboardBridgeProvider = { keyboardImpl.bridge() }
 
         let resolvedTarget = try AccessibilityTarget.target(
             .label("Repeated Message"),
@@ -138,7 +143,7 @@ extension TheBrainsActionTests {
             ]
         )
         _ = brains.vault.semanticObservationStream.commitVisibleObservationForTesting(reorderedScreen)
-        brains.vault.nextVisibleRefreshObservationForTesting = reorderedScreen
+        visibleObservationSource.observation = reorderedScreen
 
         let result = await actionTask.value
 
@@ -150,7 +155,6 @@ extension TheBrainsActionTests {
     }
 
     func testExecuteTypeTextReportsFinalValueFromInteractionAfterState() async throws {
-        brains.tripwire.startPulse()
         let rootView = UIView(frame: UIScreen.main.bounds)
         rootView.backgroundColor = .white
 
@@ -170,10 +174,13 @@ extension TheBrainsActionTests {
             window.isHidden = true
         }
 
-        let keyboardImpl = ActionTextInputKeyboardImpl(textField: textField) { [vault = brains.vault] in
-            vault.invalidateSettledObservationFromTripwire()
+        let keyboardImpl = ActionTextInputKeyboardImpl(textField: textField) { [weak self] in
+            self?.brains.vault.invalidateSettledObservationFromTripwire()
         }
-        brains.safecracker.keyboardBridgeProvider = { keyboardImpl.bridge() }
+        replaceBrains(keyboardInput: SafecrackerKeyboardInput(
+            keyboardBridgeProvider: { keyboardImpl.bridge() }
+        ))
+        brains.tripwire.startPulse()
         await brains.tripwire.yieldFrames(3)
 
         let command = try HeistActionCommand.typeText(
@@ -196,7 +203,6 @@ extension TheBrainsActionTests {
     }
 
     func testExecuteTypeTextReplacingExistingReportsReplacementValueFromInteractionAfterState() async throws {
-        brains.tripwire.startPulse()
         let rootView = UIView(frame: UIScreen.main.bounds)
         rootView.backgroundColor = .white
 
@@ -217,10 +223,13 @@ extension TheBrainsActionTests {
             window.isHidden = true
         }
 
-        let keyboardImpl = ActionTextInputKeyboardImpl(textField: textField) { [vault = brains.vault] in
-            vault.invalidateSettledObservationFromTripwire()
+        let keyboardImpl = ActionTextInputKeyboardImpl(textField: textField) { [weak self] in
+            self?.brains.vault.invalidateSettledObservationFromTripwire()
         }
-        brains.safecracker.keyboardBridgeProvider = { keyboardImpl.bridge() }
+        replaceBrains(keyboardInput: SafecrackerKeyboardInput(
+            keyboardBridgeProvider: { keyboardImpl.bridge() }
+        ))
+        brains.tripwire.startPulse()
         await brains.tripwire.yieldFrames(3)
 
         let command = try HeistActionCommand.typeText(
@@ -241,7 +250,6 @@ extension TheBrainsActionTests {
     }
 
     func testExecuteTypeTextReplacingExistingWithEmptyTextClearsField() async throws {
-        brains.tripwire.startPulse()
         let rootView = UIView(frame: UIScreen.main.bounds)
         rootView.backgroundColor = .white
 
@@ -262,10 +270,13 @@ extension TheBrainsActionTests {
             window.isHidden = true
         }
 
-        let keyboardImpl = ActionTextInputKeyboardImpl(textField: textField) { [vault = brains.vault] in
-            vault.invalidateSettledObservationFromTripwire()
+        let keyboardImpl = ActionTextInputKeyboardImpl(textField: textField) { [weak self] in
+            self?.brains.vault.invalidateSettledObservationFromTripwire()
         }
-        brains.safecracker.keyboardBridgeProvider = { keyboardImpl.bridge() }
+        replaceBrains(keyboardInput: SafecrackerKeyboardInput(
+            keyboardBridgeProvider: { keyboardImpl.bridge() }
+        ))
+        brains.tripwire.startPulse()
         await brains.tripwire.yieldFrames(3)
 
         let command = try HeistActionCommand.typeText(
@@ -308,7 +319,9 @@ extension TheBrainsActionTests {
 
     func testExecuteTypeTextReportsKeyboardInjectionFailure() async {
         let keyboardImpl = KeyboardInjectionKeyboardImpl()
-        brains.safecracker.keyboardBridgeProvider = { keyboardImpl.bridge(missingSelector: "addInputString:") }
+        replaceBrains(keyboardInput: SafecrackerKeyboardInput(
+            keyboardBridgeProvider: { keyboardImpl.bridge(missingSelector: "addInputString:") }
+        ))
 
         let result = await brains.actions.executeTypeText(
             text: "hello",
@@ -408,7 +421,7 @@ extension TheBrainsActionTests {
             objects: [heistId: staleTextField],
             firstResponderHeistId: heistId
         ))
-        brains.vault.nextVisibleRefreshObservationForTesting = .makeForTests(
+        visibleObservationSource.observation = .makeForTests(
             elements: [(element, heistId)],
             objects: [heistId: replacementTextField],
             firstResponderHeistId: heistId

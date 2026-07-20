@@ -168,7 +168,7 @@ extension ElementInflation {
         deadline: SemanticObservationDeadline
     ) -> SemanticRevealResult? {
         if Task.isCancelled { return .cancelled }
-        return deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) ? nil : .timedOut
+        return deadline.hasTimeRemaining(at: RuntimeElapsed.now) ? nil : .timedOut
     }
 }
 

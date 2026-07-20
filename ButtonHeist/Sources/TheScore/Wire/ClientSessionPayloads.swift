@@ -36,8 +36,38 @@ public struct SessionLockedPayload: Codable, Sendable {
     public let message: String
     public let activeConnections: Int
 
-    public init(message: String, activeConnections: Int) {
+    package init(message: String, activeConnections: Int) {
+        precondition(Self.admits(activeConnections: activeConnections))
         self.message = message
         self.activeConnections = activeConnections
+    }
+
+    public static func admit(message: String, activeConnections: Int) -> Self? {
+        guard admits(activeConnections: activeConnections) else { return nil }
+        return Self(message: message, activeConnections: activeConnections)
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case message
+        case activeConnections
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "session locked payload")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        guard let admitted = Self.admit(
+            message: try container.decode(String.self, forKey: .message),
+            activeConnections: try container.decode(Int.self, forKey: .activeConnections)
+        ) else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath,
+                debugDescription: "session locked activeConnections must be 0 or 1"
+            ))
+        }
+        self = admitted
+    }
+
+    private static func admits(activeConnections: Int) -> Bool {
+        (0...1).contains(activeConnections)
     }
 }

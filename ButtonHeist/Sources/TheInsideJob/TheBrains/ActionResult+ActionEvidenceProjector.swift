@@ -7,29 +7,18 @@ extension ActionResult {
     @MainActor init(
         dispatchResult: TheSafecracker.ActionDispatchResult,
         afterStateValue: ((ActionPayloadEvidence) -> String?)?,
-        settledObservation: ActionEvidenceProjector.Result
+        settledObservation: ActionEvidenceProjector.Result,
+        timing initialTiming: ActionTiming
     ) {
+        var timing = initialTiming
+        let assemblyStart = RuntimeElapsed.now
         let resultOutcome = settledObservation.resultOutcome(for: dispatchResult)
         let message = settledObservation.message(explicit: dispatchResult.message)
         let payload = settledObservation.payload(
             for: dispatchResult,
             afterStateValue: afterStateValue
         )
-        let duration: ActionSettlementDuration
-        do {
-            duration = try ActionSettlementDuration(
-                validatingMilliseconds: settledObservation.settleTimeMs
-            )
-        } catch {
-            self = ActionResult.failure(
-                payload: dispatchResult.payload,
-                failureKind: .actionFailed,
-                message: String(describing: error),
-                observation: .trace(settledObservation.traceEvidence),
-                subjectEvidence: dispatchResult.subjectEvidence
-            )
-            return
-        }
+        let duration = RuntimeElapsed.admit(milliseconds: settledObservation.settleTimeMs)
         let settlement: ActionSettlementEvidence = settledObservation.settled
             ? .settled(duration: duration)
             : .timedOut(duration: duration)
@@ -37,13 +26,15 @@ extension ActionResult {
             settledObservation.traceEvidence,
             settlement
         )
+        timing.record(.resultAssembly, since: assemblyStart)
         self = ActionResult(
             outcome: resultOutcome,
             payload: payload,
             message: message,
             observation: observation,
             subjectEvidence: dispatchResult.subjectEvidence,
-            activationTrace: dispatchResult.activationTrace
+            activationTrace: dispatchResult.activationTrace,
+            timing: timing.freeze()
         )
     }
 }

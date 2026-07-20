@@ -89,7 +89,7 @@ func element(
     frameX: Double = 0,
     frameY: Double = 0
 ) -> HeistElement {
-    HeistElement(
+    makeTestHeistElement(
         description: label ?? "element",
         label: label,
         value: value,

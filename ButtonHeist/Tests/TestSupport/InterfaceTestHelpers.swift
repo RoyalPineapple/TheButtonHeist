@@ -159,10 +159,12 @@ package func makeTestHeistElement(
         identifier: identifier,
         hint: hint,
         traits: traits,
-        frameX: frameX,
-        frameY: frameY,
-        frameWidth: frameWidth,
-        frameHeight: frameHeight,
+        frameEvidence: (try? ScreenRect(validating: CGRect(
+            x: frameX,
+            y: frameY,
+            width: frameWidth,
+            height: frameHeight
+        ))).map(ScreenFrameEvidence.available) ?? .unavailable,
         activationPointEvidence: activationPointEvidence ?? defaultActivationPointEvidence,
         respondsToUserInteraction: respondsToUserInteraction,
         customContent: customContent,
@@ -172,13 +174,16 @@ package func makeTestHeistElement(
 }
 
 package func makeTestAccessibilityElement(_ element: HeistElement) -> AccessibilityElement {
+    guard let frame = element.screenFrame else {
+        preconditionFailure("parser-backed test elements require available frame evidence")
+    }
     let activationPoint: AccessibilityPoint
     let usesDefaultActivationPoint: Bool
     switch element.activationPointEvidence {
     case .unavailable:
         activationPoint = AccessibilityPoint(
-            x: element.frameX + element.frameWidth / 2,
-            y: element.frameY + element.frameHeight / 2
+            x: frame.midX,
+            y: frame.midY
         )
         usesDefaultActivationPoint = true
     case .explicit(let point):
@@ -198,10 +203,10 @@ package func makeTestAccessibilityElement(_ element: HeistElement) -> Accessibil
         hint: element.hint,
         userInputLabels: nil,
         shape: .frame(AccessibilityRect(
-            x: element.frameX,
-            y: element.frameY,
-            width: element.frameWidth,
-            height: element.frameHeight
+            x: frame.x.value,
+            y: frame.y.value,
+            width: frame.width.value,
+            height: frame.height.value
         )),
         activationPoint: activationPoint,
         usesDefaultActivationPoint: usesDefaultActivationPoint,

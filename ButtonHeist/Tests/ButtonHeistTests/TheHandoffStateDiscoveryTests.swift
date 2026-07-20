@@ -5,7 +5,7 @@ import XCTest
 @_spi(ButtonHeistTooling) @testable import ButtonHeist
 import TheScore
 
-extension TheHandoffStateTests {
+final class TheHandoffStateDiscoveryTests: XCTestCase {
     // MARK: - Discovery (existing)
 
     @ButtonHeistActor

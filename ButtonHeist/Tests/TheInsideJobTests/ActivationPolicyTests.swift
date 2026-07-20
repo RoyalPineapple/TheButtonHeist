@@ -405,7 +405,7 @@ final class ActivationPolicyTests: XCTestCase {
             treeElement: liveTarget.treeElement,
             liveTarget: liveTarget,
             deadline: SemanticObservationDeadline(
-                start: CFAbsoluteTimeGetCurrent(),
+                start: RuntimeElapsed.now,
                 timeoutSeconds: 1
             ),
             resolution: resolution

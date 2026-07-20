@@ -5,24 +5,34 @@ package struct HeistResultCodecLimits: Sendable, Equatable {
     package static let `default` = HeistResultCodecLimits(
         maxJSONBytes: 64 * 1024 * 1024,
         maxGzipCompressedBytes: 16 * 1024 * 1024,
-        maxGzipDecompressedBytes: 64 * 1024 * 1024
+        maxGzipDecompressedBytes: 64 * 1024 * 1024,
+        maxNodeCount: 100_000,
+        maxNestingDepth: 64
     )
 
     package let maxJSONBytes: Int
     package let maxGzipCompressedBytes: Int
     package let maxGzipDecompressedBytes: Int
+    package let maxNodeCount: Int
+    package let maxNestingDepth: Int
 
     package init(
         maxJSONBytes: Int = 64 * 1024 * 1024,
         maxGzipCompressedBytes: Int,
-        maxGzipDecompressedBytes: Int
+        maxGzipDecompressedBytes: Int,
+        maxNodeCount: Int = 100_000,
+        maxNestingDepth: Int = 64
     ) {
         precondition(maxJSONBytes > 0, "maxJSONBytes must be positive")
         precondition(maxGzipCompressedBytes > 0, "maxGzipCompressedBytes must be positive")
         precondition(maxGzipDecompressedBytes > 0, "maxGzipDecompressedBytes must be positive")
+        precondition(maxNodeCount > 0, "maxNodeCount must be positive")
+        precondition(maxNestingDepth > 0, "maxNestingDepth must be positive")
         self.maxJSONBytes = maxJSONBytes
         self.maxGzipCompressedBytes = maxGzipCompressedBytes
         self.maxGzipDecompressedBytes = maxGzipDecompressedBytes
+        self.maxNodeCount = maxNodeCount
+        self.maxNestingDepth = maxNestingDepth
     }
 }
 
@@ -87,7 +97,9 @@ public enum HeistResultCodec {
             }
             jsonData = try GzipCodec.decompress(data, maxBytes: limits.maxGzipDecompressedBytes)
         }
-        return try JSONDecoder().decode(HeistResult.self, from: jsonData)
+        let decoder = JSONDecoder()
+        decoder.userInfo[.heistResultCodecLimits] = limits
+        return try decoder.decode(HeistResult.self, from: jsonData)
     }
 
     public static func encode(_ result: HeistResult, format: HeistResultFormat = .json) throws -> Data {
@@ -143,6 +155,10 @@ public enum HeistResultCodecError: Error, Sendable, Equatable, CustomStringConve
     case jsonDataTooLarge(limit: Int, observed: Int)
     case gzipCompressedDataTooLarge(limit: Int, observed: Int)
     case gzipDecompressedDataTooLarge(limit: Int, observed: Int)
+    case nodeCountExceeded(limit: Int, observed: Int)
+    case nestingDepthExceeded(limit: Int, observed: Int)
+    case duplicateExecutionPath(HeistExecutionPath)
+    case nonDescendantChildPath(parent: HeistExecutionPath, child: HeistExecutionPath)
     case gzipCorruptData
 
     public var description: String {
@@ -157,6 +173,14 @@ public enum HeistResultCodecError: Error, Sendable, Equatable, CustomStringConve
             return "gzip result compressed data is too large (\(observed) bytes; limit \(limit) bytes)"
         case .gzipDecompressedDataTooLarge(let limit, let observed):
             return "gzip result decompressed data is too large (\(observed) bytes; limit \(limit) bytes)"
+        case .nodeCountExceeded(let limit, let observed):
+            return "heist result contains too many nodes (\(observed); limit \(limit))"
+        case .nestingDepthExceeded(let limit, let observed):
+            return "heist result nesting is too deep (\(observed); limit \(limit))"
+        case .duplicateExecutionPath(let path):
+            return "heist result contains duplicate execution path \(path)"
+        case .nonDescendantChildPath(let parent, let child):
+            return "heist result child path \(child) is not a descendant of parent path \(parent)"
         case .gzipCorruptData:
             return "gzip decompression failed: corrupt or truncated gzip data"
         }

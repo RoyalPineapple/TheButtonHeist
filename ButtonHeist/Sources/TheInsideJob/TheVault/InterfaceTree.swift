@@ -183,12 +183,11 @@ struct InterfaceTree: Sendable, Equatable {
         let point: ScrollContentPoint
 
         init?(_ point: CGPoint) {
-            guard point.x.isFinite, point.y.isFinite else { return nil }
-            self.point = ScrollContentPoint(point)
+            guard let point = try? ScrollContentPoint(validating: point) else { return nil }
+            self.point = point
         }
 
         init?(_ point: ScrollContentPoint) {
-            guard point.x.isFinite, point.y.isFinite else { return nil }
             self.point = point
         }
     }
@@ -253,7 +252,7 @@ struct InterfaceTree: Sendable, Equatable {
                 container: container,
                 path: path,
                 containerName: containerName,
-                contentRect: contentFrame.map(ContentRect.init),
+                contentRect: contentFrame.flatMap { try? ContentRect(validating: $0) },
                 scrollMembership: scrollMembership,
                 observedScrollContentActivationPoint: observedScrollContentActivationPoint,
                 scrollInventory: scrollInventory

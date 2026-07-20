@@ -10,7 +10,7 @@ Architecture diagrams for Button Heist, one file per concern. Every diagram is M
 
 ## The runtime loop
 
-- [action-pipeline.md](action-pipeline.md) — one action end to end: target resolution, one dispatch outcome, settle, evidence, receipt
+- [action-pipeline.md](action-pipeline.md) — one action end to end: target resolution, one dispatch outcome, settle, evidence, result
 - [observation-pipeline.md](observation-pipeline.md) — current tree, retained cursor-backed observations, screen boundaries, predicate evaluation, and the public fold
 - [settle-loop.md](settle-loop.md) — the tripwire and the settle loop; what "settled" means, with the constants
 - [activation-policy.md](activation-policy.md) — the `activate` decision tree in VoiceOver order

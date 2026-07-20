@@ -165,7 +165,7 @@ final class HeistResultTests: XCTestCase {
     }
 
     func testPrebuiltPlanRunsThroughInAppRuntimeWithoutTransport() async throws {
-        let job = TheInsideJob(token: "in-app-heist-plan-test")
+        let job = try TheInsideJob(token: "in-app-heist-plan-test")
         let plan = try HeistPlan("login") {
             Warn("prebuilt")
         }
@@ -184,7 +184,11 @@ final class HeistResultTests: XCTestCase {
     }
 
     func testTopLevelHeistBootstrapsFromFreshVisibleScreen() async throws {
-        let job = TheInsideJob(token: "in-app-heist-bootstrap-test")
+        let visibleObservationSource = VisibleObservationSourceFixture()
+        let job = try TheInsideJob(
+            token: "in-app-heist-bootstrap-test",
+            visibleObservationSource: visibleObservationSource.capture
+        )
         let staleHeader = AccessibilityElement.make(
             label: "Controls Demo",
             traits: .header,
@@ -206,14 +210,13 @@ final class HeistResultTests: XCTestCase {
             traits: .header,
             respondsToUserInteraction: false
         )
-        let currentScreen = InterfaceObservation.makeForTests(elements: [(currentHeader, HeistId(rawValue: "buttonheist_demo"))])
-        job.brains.vault.nextVisibleRefreshObservationForTesting = currentScreen
+        visibleObservationSource.observation = .makeForTests(
+            elements: [(currentHeader, HeistId(rawValue: "buttonheist_demo"))]
+        )
 
-        let plan = try HeistPlan {
+        _ = try await Heist(runtime: .insideJob(job)) {
             Warn("bootstrapped")
         }
-
-        _ = try await Heist(plan, runtime: .insideJob(job))
 
         XCTAssertEqual(job.brains.vault.lastScreenName, "ButtonHeist Demo")
         XCTAssertEqual(job.brains.vault.interfaceElementIDs, ["buttonheist_demo"])
@@ -221,7 +224,7 @@ final class HeistResultTests: XCTestCase {
     }
 
     func testSingleStringRootHeistBindsOneRootArgument() async throws {
-        let job = TheInsideJob(token: "in-app-heist-string-test")
+        let job = try TheInsideJob(token: "in-app-heist-string-test")
         let capture = RuntimeCapture(job: job)
 
         let heist = try await Heist("milk", runtime: capture.runtime) { _ in
@@ -291,7 +294,7 @@ final class HeistResultTests: XCTestCase {
     }
 
     func testSingleAccessibilityTargetRootHeistBindsOneRootArgument() async throws {
-        let job = TheInsideJob(token: "in-app-heist-target-test")
+        let job = try TheInsideJob(token: "in-app-heist-target-test")
         let capture = RuntimeCapture(job: job)
 
         let heist = try await Heist(AccessibilityTarget.label("Delete"), runtime: capture.runtime) { _ in
@@ -304,7 +307,7 @@ final class HeistResultTests: XCTestCase {
     }
 
     func testRepeatUntilSuccessResultDoesNotSynthesizeWaitActionResult() async throws {
-        let job = TheInsideJob(token: "in-app-repeat-until-success-result-test")
+        let job = try TheInsideJob(token: "in-app-repeat-until-success-result-test")
         let waitScript = WaitResultScript(states: [
             observedQuantityState(job: job, value: "0"),
             observedQuantityState(job: job, value: "2"),
@@ -342,7 +345,7 @@ final class HeistResultTests: XCTestCase {
     }
 
     func testRepeatUntilTimeoutResultDoesNotSynthesizeWaitActionResult() async throws {
-        let job = TheInsideJob(token: "in-app-repeat-until-timeout-result-test")
+        let job = try TheInsideJob(token: "in-app-repeat-until-timeout-result-test")
         let waitScript = WaitResultScript(states: [
             observedQuantityState(job: job, value: "0"),
         ])
@@ -420,7 +423,7 @@ final class HeistResultTests: XCTestCase {
         }
     }
 
-    func testFailureDescriptionIncludesScreenshotInterfaceDump() {
+    func testFailureDescriptionIncludesScreenshotInterfaceDump() throws {
         var elements: [AccessibilityElement] = []
         elements.reserveCapacity(21)
         for index in 0..<21 {
@@ -446,7 +449,7 @@ final class HeistResultTests: XCTestCase {
             timestamp: Date(timeIntervalSince1970: 0),
             interface: interface
         )
-        let result = HeistResult(
+        let result = try HeistResult(
             steps: [
                 HeistResultFixture.explicitFailure(
                     path: "$.body[0]",
@@ -480,7 +483,7 @@ final class HeistResultTests: XCTestCase {
     }
 
     func testFailureAbortsAtFirstFailedStepAndRestoresRuntime() async throws {
-        let job = TheInsideJob(token: "in-app-heist-abort-test")
+        let job = try TheInsideJob(token: "in-app-heist-abort-test")
 
         do {
             _ = try await Heist(runtime: .insideJob(job)) {
@@ -506,7 +509,7 @@ final class HeistResultTests: XCTestCase {
     }
 
     func testResultMatchesDirectBrainsExecutionShape() async throws {
-        let job = TheInsideJob(token: "in-app-heist-machinery-test")
+        let job = try TheInsideJob(token: "in-app-heist-machinery-test")
         let plan = try HeistPlan {
             Warn("same executor")
         }

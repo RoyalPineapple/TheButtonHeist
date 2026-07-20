@@ -16,11 +16,16 @@ final class TheBrainsScrollTests: XCTestCase {
     }
 
     var brains: TheBrains!
+    var visibleObservationSource: VisibleObservationSourceFixture!
     var retainedLiveObjects: [NSObject] = []
 
     override func setUp() async throws {
         try await super.setUp()
-        brains = TheBrains(tripwire: TheTripwire())
+        visibleObservationSource = VisibleObservationSourceFixture()
+        brains = TheBrains(
+            tripwire: TheTripwire(),
+            visibleObservationSource: visibleObservationSource.capture
+        )
         brains.tripwire.startPulse()
         brains.startSemanticObservation()
     }
@@ -29,6 +34,7 @@ final class TheBrainsScrollTests: XCTestCase {
         brains?.stopSemanticObservation()
         brains?.tripwire.stopPulse()
         brains = nil
+        visibleObservationSource = nil
         retainedLiveObjects.removeAll()
         try await super.tearDown()
     }
@@ -36,6 +42,11 @@ final class TheBrainsScrollTests: XCTestCase {
     func retainLiveObject<Object: NSObject>(_ object: Object) -> Object {
         retainedLiveObjects.append(object)
         return object
+    }
+
+    func installSyntheticObservation(_ observation: InterfaceObservation) {
+        visibleObservationSource.observation = observation
+        brains.vault.installObservationForTesting(observation)
     }
 
     func retainedLiveObject() -> NSObject {
@@ -76,7 +87,7 @@ final class TheBrainsScrollTests: XCTestCase {
     }
 
     func semanticRevealDeadline() -> SemanticObservationDeadline {
-        SemanticObservationDeadline(start: CFAbsoluteTimeGetCurrent(), timeoutSeconds: 10)
+        SemanticObservationDeadline(start: RuntimeElapsed.now, timeoutSeconds: 10)
     }
 
     func waitForSettledSemanticWaiter(
@@ -149,7 +160,7 @@ final class TheBrainsScrollTests: XCTestCase {
 
     func testScanForHeistIdReturnsNilWhenDeadlineIsExpired() async {
         let deadline = SemanticObservationDeadline(
-            start: CFAbsoluteTimeGetCurrent() - 1,
+            start: RuntimeElapsed.now,
             timeoutSeconds: 0
         )
 
@@ -173,17 +184,17 @@ final class TheBrainsScrollTests: XCTestCase {
         guard case .resolved(let liveTarget) = brains.vault.resolveLiveActionTarget(for: treeElement) else {
             return XCTFail("Expected live geometry fixture to resolve")
         }
-        var now: CFAbsoluteTime = 100
+        var now = RuntimeElapsed.now
         let inflation = brains.navigation.elementInflation
         inflation.geometryEnvironment = .init(
             now: { now },
-            awaitFrame: { now = 101 }
+            awaitFrame: { now = now.advanced(by: .seconds(1)) }
         )
         let inflatedTarget = ElementInflation.InflatedElementTarget(
             target: try resolvedTarget(.label("Deadline Target")),
             treeElement: treeElement,
             liveTarget: liveTarget,
-            deadline: SemanticObservationDeadline(start: 100, timeoutSeconds: 1),
+            deadline: SemanticObservationDeadline(start: now, timeoutSeconds: 1),
             resolution: ActionSubjectResolution(origin: .visible)
         )
 
@@ -449,10 +460,11 @@ final class TheBrainsScrollTests: XCTestCase {
         liveHierarchy: [(AccessibilityElement, HeistId)],
         offViewport: [InterfaceObservation.OffViewportEntry]
     ) {
-        brains.vault.installObservationForTesting(makeScreenWithOffViewportEntry(
+        let observation = makeScreenWithOffViewportEntry(
             liveHierarchy: liveHierarchy,
             offViewport: offViewport
-        ))
+        )
+        installSyntheticObservation(observation)
     }
 
     struct OffViewportScrollTarget {
@@ -500,7 +512,7 @@ final class TheBrainsScrollTests: XCTestCase {
             observedScrollContentActivationPoint: offscreen.observedActivationPoint,
             element: offscreen.element
         )
-        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
+        let observation = InterfaceObservation.makeForTests(
             elements: [
                 visibleEntry.heistId: visibleEntry,
                 offscreenEntry.heistId: offscreenEntry,
@@ -519,9 +531,10 @@ final class TheBrainsScrollTests: XCTestCase {
             scrollableContainerViewsByPath: includeLiveScrollAncestor
                 ? [scrollContainerPath: .init(view: offscreen.scrollView)]
                 : [:]
-        ))
+        )
+        installSyntheticObservation(observation)
         if revealsTargetOnRefresh {
-            brains.vault.nextVisibleRefreshObservationForTesting = InterfaceObservation.makeForTests(
+            visibleObservationSource.observation = InterfaceObservation.makeForTests(
                 elements: [offscreenEntry.heistId: offscreenEntry],
                 hierarchy: [
                     .container(scrollContainer, children: [
@@ -598,12 +611,13 @@ final class TheBrainsScrollTests: XCTestCase {
         let containerRefs = Dictionary(uniqueKeysWithValues: containers.indices.map { index in
             (TreePath([index]), LiveCapture.ContainerRef(object: retainedLiveObject()))
         })
-        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
+        let observation = InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: containers.map { .container($0, children: []) },
             containerRefsByPath: containerRefs,
             firstResponderHeistId: nil,
-        ))
+        )
+        installSyntheticObservation(observation)
     }
 
     func installLiveScrollTarget(
@@ -615,7 +629,7 @@ final class TheBrainsScrollTests: XCTestCase {
             contentSize: scrollView.contentSize,
             frame: scrollView.frame
         )
-        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
+        let observation = InterfaceObservation.makeForTests(
             elements: [treeElement.heistId: treeElement],
             hierarchy: [
                 .container(container, children: [
@@ -632,7 +646,8 @@ final class TheBrainsScrollTests: XCTestCase {
             scrollableContainerViewsByPath: [
                 TreePath([0]): .init(view: scrollView)
             ]
-        ))
+        )
+        installSyntheticObservation(observation)
     }
 
     func makeButton(label: String, frame: CGRect) -> UIButton {
@@ -654,6 +669,7 @@ final class TheBrainsScrollTests: XCTestCase {
     }
 
     func installModalWindow(rootView: UIView) throws -> UIWindow {
+        visibleObservationSource.useLiveCapture()
         let windowScene = try requireForegroundWindowScene()
         let viewController = UIViewController()
         viewController.view = rootView

@@ -78,7 +78,7 @@ sufficient for this model and is easier to recognize, copy, and pass around.
 
 | Method | Key | Example |
 |--------|-----|---------|
-| Runtime API | `TheInsideJob.configure(token:)` | `TheInsideJob.configure(token: "agent-token")` |
+| Runtime API | `TheInsideJob.configure(token:)` | `try TheInsideJob.configure(token: "agent-token")` |
 | Environment variable | `INSIDEJOB_TOKEN` | `INSIDEJOB_TOKEN=agent-token` |
 | Info.plist | `InsideJobToken` | `<string>agent-token</string>` |
 | Generated | none | UUID v4 logged as `BUTTONHEIST_TOKEN=<uuid>` |

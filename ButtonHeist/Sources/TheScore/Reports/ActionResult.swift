@@ -1,12 +1,12 @@
 import ThePlans
 import Foundation
 
-public struct ActionSettlementDuration: Codable, Sendable, Equatable, CustomStringConvertible {
+public struct ElapsedMilliseconds: Codable, Sendable, Equatable, CustomStringConvertible {
     public let milliseconds: Int
 
     public init(validatingMilliseconds milliseconds: Int) throws {
         guard milliseconds >= 0 else {
-            throw ReportAdmissionError(description: "action settlement duration must not be negative")
+            throw ReportAdmissionError(description: "elapsed milliseconds must not be negative")
         }
         self.milliseconds = milliseconds
     }
@@ -22,7 +22,7 @@ public struct ActionSettlementDuration: Codable, Sendable, Equatable, CustomStri
     public var description: String { milliseconds.description }
 }
 
-extension ActionSettlementDuration: ExpressibleByIntegerLiteral {
+extension ElapsedMilliseconds: ExpressibleByIntegerLiteral {
     public init(integerLiteral value: Int) {
         self = requireValidLiteralPayload { try Self(validatingMilliseconds: value) }
     }
@@ -35,8 +35,7 @@ public struct ActionSettlementEvidence: Codable, Sendable, Equatable {
     }
 
     private let state: State
-    public let duration: ActionSettlementDuration
-    public var durationMs: Int { duration.milliseconds }
+    public let durationMs: ElapsedMilliseconds
 
     private enum Kind: String, Codable {
         case settled
@@ -48,11 +47,11 @@ public struct ActionSettlementEvidence: Codable, Sendable, Equatable {
         case durationMs
     }
 
-    public static func settled(duration: ActionSettlementDuration) -> ActionSettlementEvidence {
+    public static func settled(duration: ElapsedMilliseconds) -> ActionSettlementEvidence {
         ActionSettlementEvidence(state: .settled, duration: duration)
     }
 
-    public static func timedOut(duration: ActionSettlementDuration) -> ActionSettlementEvidence {
+    public static func timedOut(duration: ElapsedMilliseconds) -> ActionSettlementEvidence {
         ActionSettlementEvidence(state: .timedOut, duration: duration)
     }
 
@@ -61,15 +60,15 @@ public struct ActionSettlementEvidence: Codable, Sendable, Equatable {
         return false
     }
 
-    private init(state: State, duration: ActionSettlementDuration) {
+    private init(state: State, duration: ElapsedMilliseconds) {
         self.state = state
-        self.duration = duration
+        durationMs = duration
     }
 
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "ActionSettlementEvidence")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let duration = try container.decode(ActionSettlementDuration.self, forKey: .durationMs)
+        let duration = try container.decode(ElapsedMilliseconds.self, forKey: .durationMs)
         switch try container.decode(Kind.self, forKey: .kind) {
         case .settled:
             self.init(state: .settled, duration: duration)
@@ -86,7 +85,7 @@ public struct ActionSettlementEvidence: Codable, Sendable, Equatable {
         case .timedOut:
             try container.encode(Kind.timedOut, forKey: .kind)
         }
-        try container.encode(duration, forKey: .durationMs)
+        try container.encode(durationMs, forKey: .durationMs)
     }
 }
 
@@ -171,7 +170,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
     public var settled: Bool? { evidence.settlement?.settled }
     /// Wall-clock milliseconds from action start to settle decision
     /// (settled, screen-changed, or timed out).
-    public var settleTimeMs: Int? { evidence.settlement?.durationMs }
+    public var settleTimeMs: ElapsedMilliseconds? { evidence.settlement?.durationMs }
     /// Semantic subject the runtime resolved before dispatching the action.
     public var subjectEvidence: ActionSubjectEvidence? { evidence.subjectEvidence }
     /// Semantic activation dispatch-path diagnostics, present for `activate`.
@@ -278,7 +277,8 @@ public struct ActionResult: Codable, Sendable, Equatable {
         message: String?,
         observation: ActionResultObservationEvidence,
         subjectEvidence: ActionSubjectEvidence?,
-        activationTrace: ActivationTrace?
+        activationTrace: ActivationTrace?,
+        timing: ActionPerformanceTiming?
     ) {
         precondition(activationTrace == nil || payload.method == .activate)
         self = Self.construct(
@@ -288,7 +288,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
             observation,
             subjectEvidence,
             activationTrace: activationTrace,
-            timing: nil
+            timing: timing
         )
     }
 
@@ -369,15 +369,6 @@ public struct ActionResult: Codable, Sendable, Equatable {
         case .failure(_, let evidence):
             try container.encode(evidence, forKey: .evidence)
         }
-    }
-
-    public func withTiming(_ timing: ActionPerformanceTiming?) -> ActionResult {
-        guard let timing else { return self }
-        return ActionResult(
-            payload: payload,
-            message: message,
-            evidence: evidence.withTiming(timing)
-        )
     }
 
     private static func decodePayload(

@@ -81,7 +81,7 @@ package enum HeistResultFixture {
         result: ActionResult = actionResult(),
         expectationActionResult: ActionResult? = nil,
         expectation: ExpectationResult? = nil,
-        durationMs: Int = 1,
+        durationMs: ElapsedMilliseconds = 1,
         failure: HeistFailureDetail? = nil
     ) -> HeistExecutionStepResult {
         let evidence: HeistActionEvidence
@@ -124,7 +124,7 @@ package enum HeistResultFixture {
             met: true,
             predicate: .exists(.label("Done"))
         ),
-        durationMs: Int = 1,
+        durationMs: ElapsedMilliseconds = 1,
         failure: HeistFailureDetail? = nil
     ) -> HeistExecutionStepResult {
         let evidence: HeistWaitEvidence
@@ -173,7 +173,7 @@ package enum HeistResultFixture {
     package static func warning(
         path: String = "$.body[0]",
         message: String,
-        durationMs: Int = 1
+        durationMs: ElapsedMilliseconds = 1
     ) -> HeistExecutionStepResult {
         .warning(
             path: executionPath(path),
@@ -186,7 +186,7 @@ package enum HeistResultFixture {
     package static func explicitFailure(
         path: String = "$.body[0]",
         message: String,
-        durationMs: Int = 1
+        durationMs: ElapsedMilliseconds = 1
     ) -> HeistExecutionStepResult {
         .failure(
             path: executionPath(path),
@@ -204,7 +204,7 @@ package enum HeistResultFixture {
         path: String = "$.body[0]",
         status: HeistExecutionStepStatus = .passed,
         selection: HeistCaseSelectionResult,
-        durationMs: Int? = nil,
+        durationMs: ElapsedMilliseconds? = nil,
         failure: HeistFailureDetail? = nil,
         children: [HeistExecutionStepResult] = []
     ) -> HeistExecutionStepResult {
@@ -258,7 +258,7 @@ package enum HeistResultFixture {
         ordinal: Int,
         value: String,
         status: HeistExecutionStepStatus,
-        durationMs: Int = 1,
+        durationMs: ElapsedMilliseconds = 1,
         failureReason: String? = nil,
         children: [HeistExecutionStepResult]
     ) -> HeistExecutionStepResult {
@@ -329,12 +329,13 @@ package enum HeistResultFixture {
 
     package static func result(
         steps: [HeistExecutionStepResult],
-        durationMs: Int = 1
+        durationMs: ElapsedMilliseconds = 1
     ) -> HeistResult {
-        HeistResult(
-            steps: steps,
-            durationMs: durationMs
-        )
+        do {
+            return try HeistResult(steps: steps, durationMs: durationMs)
+        } catch {
+            preconditionFailure("invalid heist result fixture: \(error)")
+        }
     }
 
     private static func executionPath(_ description: String) -> HeistExecutionPath {

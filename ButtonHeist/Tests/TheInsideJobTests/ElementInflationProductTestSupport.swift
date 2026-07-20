@@ -10,10 +10,15 @@ import ThePlans
 final class ElementInflationProductTests: XCTestCase {
 
     var brains: TheBrains!
+    var visibleObservationSource: VisibleObservationSourceFixture!
 
     override func setUp() async throws {
         try await super.setUp()
-        brains = TheBrains(tripwire: TheTripwire())
+        visibleObservationSource = VisibleObservationSourceFixture()
+        brains = TheBrains(
+            tripwire: TheTripwire(),
+            visibleObservationSource: visibleObservationSource.capture
+        )
         brains.tripwire.startPulse()
         brains.startSemanticObservation()
     }
@@ -25,6 +30,7 @@ final class ElementInflationProductTests: XCTestCase {
             assertRuntimeStopped(brains)
         }
         brains = nil
+        visibleObservationSource = nil
         try await super.tearDown()
     }
 
@@ -151,8 +157,8 @@ final class ElementInflationProductTests: XCTestCase {
             tree: InterfaceTree(elements: elements, containers: screen.tree.containers),
             liveCapture: screen.liveCapture
         ))
-        if refreshesFromUIKit {
-            targetBrains.vault.clearInstalledVisibleRefreshObservationForTesting()
+        if refreshesFromUIKit, targetBrains === brains {
+            visibleObservationSource.useLiveCapture()
         }
     }
 

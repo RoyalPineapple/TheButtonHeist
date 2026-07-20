@@ -40,7 +40,7 @@ extension TheBrains {
         renderer.scale = UIScreen.main.scale
         guard let pngData = renderer.uiImage?.pngData() else { return nil }
 
-        return ScreenPayload(
+        return ScreenPayload.admit(
             pngData: pngData.base64EncodedString(),
             width: fittingSize.width,
             height: fittingSize.height,

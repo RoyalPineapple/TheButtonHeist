@@ -7,8 +7,11 @@ import ButtonHeistSupport
 final class SafecrackerKeyboardInput {
 
     private var keyboardVisibleFlag = false
+    private let keyboardBridgeProvider: () -> KeyboardBridge?
 
-    var keyboardBridgeProvider: () -> KeyboardBridge? = { KeyboardBridge.shared() }
+    init(keyboardBridgeProvider: @escaping () -> KeyboardBridge? = { KeyboardBridge.shared() }) {
+        self.keyboardBridgeProvider = keyboardBridgeProvider
+    }
 
     func startObservation() {
         let center = NotificationCenter.default

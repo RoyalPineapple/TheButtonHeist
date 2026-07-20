@@ -10,7 +10,11 @@ import XCTest
 @MainActor
 final class RawParserEvidenceAdmissionTests: XCTestCase {
     func testRawParserAndDiagnosticEvidenceCannotMutateCommittedInterfaceTree() {
-        let brains = TheBrains(tripwire: TheTripwire())
+        let visibleObservationSource = VisibleObservationSourceFixture()
+        let brains = TheBrains(
+            tripwire: TheTripwire(),
+            visibleObservationSource: visibleObservationSource.capture
+        )
         let stream = brains.vault.semanticObservationStream
         let committed = observation(label: "Committed", heistId: "committed")
         _ = stream.commitVisibleObservationForTesting(committed)
@@ -18,7 +22,7 @@ final class RawParserEvidenceAdmissionTests: XCTestCase {
         let retainedCount = stream.retainedObservationEntries(scope: .visible).count
 
         let raw = observation(label: "Raw", heistId: "raw")
-        brains.vault.nextVisibleRefreshObservationForTesting = raw
+        visibleObservationSource.observation = raw
         let refreshed = brains.vault.refreshLiveCapture()
 
         XCTAssertEqual(refreshed?.tree.interfaceHash, raw.tree.interfaceHash)
@@ -42,10 +46,14 @@ final class RawParserEvidenceAdmissionTests: XCTestCase {
     }
 
     func testCommittedObservationAdmitsPreviouslyRawEvidenceToInterfaceTree() {
-        let brains = TheBrains(tripwire: TheTripwire())
+        let visibleObservationSource = VisibleObservationSourceFixture()
+        let brains = TheBrains(
+            tripwire: TheTripwire(),
+            visibleObservationSource: visibleObservationSource.capture
+        )
         let stream = brains.vault.semanticObservationStream
         let raw = observation(label: "Raw", heistId: "raw")
-        brains.vault.nextVisibleRefreshObservationForTesting = raw
+        visibleObservationSource.observation = raw
         _ = brains.vault.refreshLiveCapture()
 
         XCTAssertTrue(brains.vault.interfaceTree.orderedElements.isEmpty)

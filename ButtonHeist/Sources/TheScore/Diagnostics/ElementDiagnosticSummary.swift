@@ -80,6 +80,19 @@ package struct ElementDiagnosticSummary: Equatable, Sendable {
         availability: Availability? = nil,
         liveObjectState: String? = nil
     ) {
+        let geometry: Geometry? = element.screenFrame.flatMap { frame in
+            guard let activationPointX = element.activationPointX,
+                  let activationPointY = element.activationPointY
+            else { return nil }
+            return Geometry(
+                frameX: frame.x.value,
+                frameY: frame.y.value,
+                frameWidth: frame.width.value,
+                frameHeight: frame.height.value,
+                activationPointX: activationPointX,
+                activationPointY: activationPointY
+            )
+        }
         self.init(
             label: element.label,
             identifier: element.identifier,
@@ -88,14 +101,7 @@ package struct ElementDiagnosticSummary: Equatable, Sendable {
             traits: element.traits,
             actions: actions ?? element.actions,
             rotors: element.rotors?.compactMap { Self.nonEmpty($0.name) } ?? [],
-            geometry: Geometry(
-                frameX: element.frameX,
-                frameY: element.frameY,
-                frameWidth: element.frameWidth,
-                frameHeight: element.frameHeight,
-                activationPointX: element.activationPointX,
-                activationPointY: element.activationPointY
-            ),
+            geometry: geometry,
             availability: availability,
             liveObjectState: liveObjectState
         )
@@ -240,8 +246,15 @@ package struct ElementDiagnosticSummary: Equatable, Sendable {
             parts.append("id=\(profile.renderString(identifier))")
         }
         if profile.includesGeometry, let geometry {
-            parts.append("frame=(\(Int(geometry.frameX)),\(Int(geometry.frameY)),\(Int(geometry.frameWidth)),\(Int(geometry.frameHeight)))")
-            parts.append("activation=(\(Int(geometry.activationPointX)),\(Int(geometry.activationPointY)))")
+            parts.append(
+                "frame=(\(Self.geometryDescription(geometry.frameX)),\(Self.geometryDescription(geometry.frameY))," +
+                    "\(Self.geometryDescription(geometry.frameWidth))," +
+                    "\(Self.geometryDescription(geometry.frameHeight)))"
+            )
+            parts.append(
+                "activation=(\(Self.geometryDescription(geometry.activationPointX))," +
+                    "\(Self.geometryDescription(geometry.activationPointY)))"
+            )
         }
 
         return parts.joined(separator: " ")
@@ -279,6 +292,12 @@ package struct ElementDiagnosticSummary: Equatable, Sendable {
     private static func nonEmpty(_ value: String?) -> String? {
         guard let value, !value.isEmpty else { return nil }
         return value
+    }
+
+    private static func geometryDescription(_ value: Double) -> String {
+        guard value.isFinite else { return "unavailable" }
+        guard value >= Double(Int.min), value <= Double(Int.max) else { return String(value) }
+        return String(Int(value))
     }
 }
 

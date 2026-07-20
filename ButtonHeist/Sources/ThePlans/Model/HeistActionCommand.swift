@@ -10,7 +10,7 @@ public enum HeistActionCommandType: String, Codable, Sendable, CaseIterable, Equ
     public var description: String { rawValue }
 }
 
-package enum HeistActionCommandCore: Sendable, Equatable {
+public enum HeistActionCommand: Codable, Sendable, Equatable {
     case activate(AccessibilityTarget)
     case increment(AccessibilityTarget)
     case decrement(AccessibilityTarget)
@@ -30,65 +30,43 @@ package enum HeistActionCommandCore: Sendable, Equatable {
     case setPasteboard(SetPasteboardTarget)
     case takeScreenshot
     case dismissKeyboard
-}
 
-public struct HeistActionCommand: Codable, Sendable, Equatable {
-    package let core: HeistActionCommandCore
-
-    package init(core: HeistActionCommandCore) {
-        self.core = core
-    }
-
-    public static func activate(_ target: AccessibilityTarget) -> Self { Self(core: .activate(target)) }
-    public static func increment(_ target: AccessibilityTarget) -> Self { Self(core: .increment(target)) }
-    public static func decrement(_ target: AccessibilityTarget) -> Self { Self(core: .decrement(target)) }
-    public static func customAction(name: CustomActionName, target: AccessibilityTarget) -> Self {
-        Self(core: .customAction(name: name, target: target))
-    }
-    public static func rotor(
-        selection: RotorSelection,
-        target: AccessibilityTarget,
-        direction: RotorDirection
-    ) -> Self {
-        Self(core: .rotor(selection: selection, target: target, direction: direction))
-    }
-    public static var dismiss: Self { Self(core: .dismiss) }
-    public static var magicTap: Self { Self(core: .magicTap) }
     public static func typeText(
         text: TextInputText,
         target: AccessibilityTarget?
     ) -> Self {
-        Self(core: .typeText(TypeTextTarget(text: text, target: target)))
+        .typeText(TypeTextTarget(text: text, target: target))
     }
     public static func typeText(
         reference: HeistReferenceName,
         target: AccessibilityTarget?,
         mode: TextInputText.Mode = .append
     ) -> Self {
-        Self(core: .typeText(TypeTextTarget(reference: reference, mode: mode, target: target)))
+        .typeText(TypeTextTarget(reference: reference, mode: mode, target: target))
     }
-    public static func oneFingerTap(_ target: TapTarget) -> Self { Self(core: .oneFingerTap(target)) }
-    public static func longPress(_ target: LongPressTarget) -> Self {
-        Self(core: .longPress(target))
-    }
-    public static func swipe(_ target: SwipeTarget) -> Self { Self(core: .swipe(target)) }
-    public static func drag(_ target: DragTarget) -> Self { Self(core: .drag(target)) }
-    public static func scroll(_ target: ScrollTarget) -> Self { Self(core: .scroll(target)) }
-    public static func scrollToVisible(_ target: AccessibilityTarget) -> Self {
-        Self(core: .scrollToVisible(target))
-    }
-    public static func scrollToEdge(_ target: ScrollToEdgeTarget) -> Self {
-        Self(core: .scrollToEdge(target))
-    }
-    public static func editAction(_ target: EditActionTarget) -> Self { Self(core: .editAction(target)) }
-    public static func setPasteboard(_ target: SetPasteboardTarget) -> Self { Self(core: .setPasteboard(target)) }
-    public static var takeScreenshot: Self { Self(core: .takeScreenshot) }
-    public static var dismissKeyboard: Self { Self(core: .dismissKeyboard) }
 
-    public var wireType: HeistActionCommandType { core.wireType }
-
-    package func resolve(in environment: HeistExecutionEnvironment) throws -> ResolvedHeistActionCommand {
-        try core.resolve(in: environment)
+    public var wireType: HeistActionCommandType {
+        switch self {
+        case .activate: .activate
+        case .increment: .increment
+        case .decrement: .decrement
+        case .customAction: .performCustomAction
+        case .rotor: .rotor
+        case .dismiss: .dismiss
+        case .magicTap: .magicTap
+        case .typeText: .typeText
+        case .oneFingerTap: .oneFingerTap
+        case .longPress: .longPress
+        case .swipe: .swipe
+        case .drag: .drag
+        case .scroll: .scroll
+        case .scrollToVisible: .scrollToVisible
+        case .scrollToEdge: .scrollToEdge
+        case .editAction: .editAction
+        case .setPasteboard: .setPasteboard
+        case .takeScreenshot: .takeScreenshot
+        case .dismissKeyboard: .dismissKeyboard
+        }
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable { case type, payload }
@@ -118,45 +96,45 @@ public struct HeistActionCommand: Codable, Sendable, Equatable {
             return payloadDecoder
         }
         switch type {
-        case .activate: core = .activate(try TargetPayload(from: payload()).target)
-        case .increment: core = .increment(try TargetPayload(from: payload()).target)
-        case .decrement: core = .decrement(try TargetPayload(from: payload()).target)
+        case .activate: self = .activate(try TargetPayload(from: payload()).target)
+        case .increment: self = .increment(try TargetPayload(from: payload()).target)
+        case .decrement: self = .decrement(try TargetPayload(from: payload()).target)
         case .performCustomAction:
             let payload = try CustomActionPayload(from: payload())
-            core = .customAction(name: payload.actionName, target: payload.target)
+            self = .customAction(name: payload.actionName, target: payload.target)
         case .rotor:
             let payload = try RotorPayload(from: payload())
-            core = .rotor(selection: payload.selection, target: payload.target, direction: payload.direction)
+            self = .rotor(selection: payload.selection, target: payload.target, direction: payload.direction)
         case .dismiss:
             try Self.rejectPayload(payloadDecoder, for: type)
-            core = .dismiss
+            self = .dismiss
         case .magicTap:
             try Self.rejectPayload(payloadDecoder, for: type)
-            core = .magicTap
+            self = .magicTap
         case .typeText:
-            core = .typeText(try TypeTextTarget(from: payload()))
-        case .oneFingerTap: core = .oneFingerTap(try TapTarget(from: payload()))
-        case .longPress: core = .longPress(try LongPressTarget(from: payload()))
-        case .swipe: core = .swipe(try SwipeTarget(from: payload()))
-        case .drag: core = .drag(try DragTarget(from: payload()))
-        case .scroll: core = .scroll(try ScrollTarget(from: payload()))
-        case .scrollToVisible: core = .scrollToVisible(try TargetPayload(from: payload()).target)
-        case .scrollToEdge: core = .scrollToEdge(try ScrollToEdgeTarget(from: payload()))
-        case .editAction: core = .editAction(try EditActionTarget(from: payload()))
-        case .setPasteboard: core = .setPasteboard(try SetPasteboardTarget(from: payload()))
+            self = .typeText(try TypeTextTarget(from: payload()))
+        case .oneFingerTap: self = .oneFingerTap(try TapTarget(from: payload()))
+        case .longPress: self = .longPress(try LongPressTarget(from: payload()))
+        case .swipe: self = .swipe(try SwipeTarget(from: payload()))
+        case .drag: self = .drag(try DragTarget(from: payload()))
+        case .scroll: self = .scroll(try ScrollTarget(from: payload()))
+        case .scrollToVisible: self = .scrollToVisible(try TargetPayload(from: payload()).target)
+        case .scrollToEdge: self = .scrollToEdge(try ScrollToEdgeTarget(from: payload()))
+        case .editAction: self = .editAction(try EditActionTarget(from: payload()))
+        case .setPasteboard: self = .setPasteboard(try SetPasteboardTarget(from: payload()))
         case .takeScreenshot:
             try Self.rejectPayload(payloadDecoder, for: type)
-            core = .takeScreenshot
+            self = .takeScreenshot
         case .dismissKeyboard:
             try Self.rejectPayload(payloadDecoder, for: type)
-            core = .dismissKeyboard
+            self = .dismissKeyboard
         }
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(wireType, forKey: .type)
-        switch core {
+        switch self {
         case .activate(let target), .increment(let target), .decrement(let target),
              .scrollToVisible(let target):
             try TargetPayload(target: target).encode(to: container.superEncoder(forKey: .payload))
@@ -190,31 +168,7 @@ public struct HeistActionCommand: Codable, Sendable, Equatable {
     }
 }
 
-package extension HeistActionCommandCore {
-    var wireType: HeistActionCommandType {
-        switch self {
-        case .activate: return .activate
-        case .increment: return .increment
-        case .decrement: return .decrement
-        case .customAction: return .performCustomAction
-        case .rotor: return .rotor
-        case .dismiss: return .dismiss
-        case .magicTap: return .magicTap
-        case .typeText: return .typeText
-        case .oneFingerTap: return .oneFingerTap
-        case .longPress: return .longPress
-        case .swipe: return .swipe
-        case .drag: return .drag
-        case .scroll: return .scroll
-        case .scrollToVisible: return .scrollToVisible
-        case .scrollToEdge: return .scrollToEdge
-        case .editAction: return .editAction
-        case .setPasteboard: return .setPasteboard
-        case .takeScreenshot: return .takeScreenshot
-        case .dismissKeyboard: return .dismissKeyboard
-        }
-    }
-
+package extension HeistActionCommand {
     func resolve(in environment: HeistExecutionEnvironment) throws -> ResolvedHeistActionCommand {
         switch self {
         case .activate(let target): return .activate(try target.resolve(in: environment))

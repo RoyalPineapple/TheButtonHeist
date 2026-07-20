@@ -16,6 +16,14 @@ extension TheVault {
     /// extracted into typed facts first; projection then assigns heistIds,
     /// resolves context, computes container names, and applies live facts.
     static func buildObservation(from result: CaptureResult) -> InterfaceObservation {
+        do {
+            return try admitObservation(from: result)
+        } catch {
+            preconditionFailure("InterfaceObservation build failed validation: \(error)")
+        }
+    }
+
+    static func admitObservation(from result: CaptureResult) throws -> InterfaceObservation {
         let hierarchy = screenCoordinateHierarchy(from: result)
         let identityContext = buildIdentityContext(
             hierarchy: hierarchy,
@@ -32,7 +40,7 @@ extension TheVault {
             facts: facts
         )
         logObservationBuildEvents(projection.logEvents)
-        return buildObservation(
+        return try admitObservation(
             from: projection,
             result: result
         )
@@ -49,7 +57,7 @@ extension TheVault {
             identityContext: identityContext,
             facts: facts
         )
-        return buildObservation(
+        return requireObservation(
             from: projection,
             result: result
         )
@@ -118,10 +126,10 @@ extension TheVault {
         )
     }
 
-    private static func buildObservation(
+    private static func admitObservation(
         from projection: ObservationBuildProjection,
         result: CaptureResult
-    ) -> InterfaceObservation {
+    ) throws -> InterfaceObservation {
         let liveReferences = ObservationLiveReferences(
             result: result,
             hierarchy: projection.tree.viewportCapture.hierarchy,
@@ -136,11 +144,18 @@ extension TheVault {
             containerRefsByPath: liveReferences.containerRefsByPath,
             scrollableContainerViewsByPath: liveReferences.scrollableContainerViewsByPath
         )
+        return try InterfaceObservation.build(
+            tree: projection.tree,
+            dispatchReferences: dispatchReferences
+        )
+    }
+
+    private static func requireObservation(
+        from projection: ObservationBuildProjection,
+        result: CaptureResult
+    ) -> InterfaceObservation {
         do {
-            return try InterfaceObservation.build(
-                tree: projection.tree,
-                dispatchReferences: dispatchReferences
-            )
+            return try admitObservation(from: projection, result: result)
         } catch {
             preconditionFailure("InterfaceObservation build failed validation: \(error)")
         }

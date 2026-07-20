@@ -302,7 +302,7 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
             failNonDurableAction(at: path, observed: failure)
         }
         do {
-            _ = try HeistActionPayloadAdmission.resolve(command, in: environment)
+            _ = try command.resolve(in: environment)
         } catch {
             fail(
                 path: path,
@@ -424,7 +424,7 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
     ) {
         for check in context.bindingSamples {
             do {
-                _ = try HeistActionPayloadAdmission.resolve(action.command, in: check.environment)
+                _ = try action.command.resolve(in: check.environment)
             } catch {
                 fail(
                     path: context.path,

@@ -15,7 +15,7 @@ extension TheVault {
         let path: TreePath
         let container: AccessibilityContainer
         let children: [AccessibilityHierarchy]
-        let contentFrame: ContentRect
+        let contentFrame: ContentRect?
         let scrollMembership: InterfaceTree.ScrollMembership?
 
         var subtree: AccessibilityHierarchy {
@@ -50,7 +50,9 @@ extension TheVault {
         let elements: [ElementIdentity]
 
         var contentFramesByPath: [TreePath: ContentRect] {
-            Dictionary(uniqueKeysWithValues: containers.map { ($0.path, $0.contentFrame) })
+            Dictionary(uniqueKeysWithValues: containers.compactMap { identity in
+                identity.contentFrame.map { (identity.path, $0) }
+            })
         }
 
         var scrollMembershipsByPath: [TreePath: InterfaceTree.ScrollMembership] {
@@ -96,9 +98,9 @@ extension TheVault {
                         InterfaceTree.ScrollMembership(containerPath: $0, index: nil)
                     }
                     let frame = container.frame.cgRect
-                    let contentFrame = membership == nil
-                        ? ContentRect(frame)
-                        : ContentRect(CGRect(origin: .zero, size: frame.size))
+                    let contentFrame = try? ContentRect(validating: membership == nil
+                        ? frame
+                        : CGRect(origin: .zero, size: frame.size))
                     accumulator.containers.append(
                         ContainerIdentity(
                             path: context.path,
@@ -148,9 +150,9 @@ extension TheVault {
     /// subtree hash when multiple containers share this prefix in one parse.
     static func containerName(
         for container: AccessibilityContainer,
-        contentFrame: ContentRect
+        contentFrame: ContentRect?
     ) -> ContainerName {
-        let frameHash = coarseFrameHash(contentFrame.cgRect)
+        let frameHash = contentFrame.map { coarseFrameHash($0.cgRect) } ?? "unavailable"
         let facts = container.containerPredicateFacts
         switch facts.role {
         case .none where facts.isScrollable:

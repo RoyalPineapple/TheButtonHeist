@@ -20,30 +20,42 @@ public final class TheInsideJob {
 
     // MARK: - Singleton
 
-    /// Pre-init configuration captured by ``configure(...)`` and consumed at
-    /// the first ``shared`` access. Once `shared` resolves, the state pins to
-    /// `.live` for the process lifetime and further `configure` calls are
-    /// ignored with a warning.
-    struct ConfigureArgs: Sendable {
-        let runtimeConfiguration: InsideJobRuntimeConfiguration
-    }
-
     enum SharedState {
-        case pending(ConfigureArgs?)
+        case unconfigured
+        case configured(InsideJobRuntimeConfiguration)
         case live(TheInsideJob)
+
+        mutating func configure(
+            _ resolve: () throws(InsideJobConfigurationError) -> InsideJobRuntimeConfiguration
+        ) throws(InsideJobConfigurationError) {
+            switch self {
+            case .unconfigured:
+                self = .configured(try resolve())
+            case .configured:
+                throw .alreadyConfigured
+            case .live:
+                throw .alreadyLive
+            }
+        }
     }
 
-    private static var sharedState: SharedState = .pending(nil)
+    private static var sharedState: SharedState = .unconfigured
 
     public static var shared: TheInsideJob {
         switch sharedState {
         case .live(let existing):
             return existing
-        case .pending(let args):
-            let runtimeConfiguration = args?.runtimeConfiguration
-                ?? InsideJobRuntimeConfiguration.resolve(startupConfiguration: StartupConfiguration.resolve())
+        case .configured(let runtimeConfiguration):
             let instance = TheInsideJob(
                 runtimeConfiguration: runtimeConfiguration
+            )
+            sharedState = .live(instance)
+            return instance
+        case .unconfigured:
+            let instance = TheInsideJob(
+                runtimeConfiguration: InsideJobRuntimeConfiguration.resolve(
+                    startupConfiguration: StartupConfiguration.resolve()
+                )
             )
             sharedState = .live(instance)
             return instance
@@ -58,37 +70,26 @@ public final class TheInsideJob {
         addressFamily: ListenerAddressFamily = .dualStack,
         fingerprintsEnabled: Bool? = nil,
         authenticationPolicy: InsideJobAuthenticationPolicy = .default
-    ) {
-        switch sharedState {
-        case .pending:
-            let startupConfiguration = StartupConfiguration.resolve()
-            let args = ConfigureArgs(
-                runtimeConfiguration: InsideJobRuntimeConfiguration.resolve(
-                    startupConfiguration: startupConfiguration,
-                    token: token,
-                    instanceId: instanceId,
-                    allowedScopes: allowedScopes,
-                    port: port,
-                    addressFamily: addressFamily,
-                    fingerprintsEnabled: fingerprintsEnabled,
-                    authenticationPolicy: authenticationPolicy
-                )
+    ) throws(InsideJobConfigurationError) {
+        try sharedState.configure { () throws(InsideJobConfigurationError) -> InsideJobRuntimeConfiguration in
+            try InsideJobRuntimeConfiguration.resolve(
+                startupConfiguration: StartupConfiguration.resolve(),
+                token: token,
+                instanceId: instanceId,
+                allowedScopes: allowedScopes,
+                port: port,
+                addressFamily: addressFamily,
+                fingerprintsEnabled: fingerprintsEnabled,
+                authenticationPolicy: authenticationPolicy
             )
-            sharedState = .pending(args)
-        case .live:
-            insideJobLogger.warning("TheInsideJob.configure() called after already created — ignoring")
         }
     }
 
-    static func configure(startupConfiguration: StartupConfiguration) {
-        switch sharedState {
-        case .pending:
-            let args = ConfigureArgs(
-                runtimeConfiguration: InsideJobRuntimeConfiguration.resolve(startupConfiguration: startupConfiguration)
-            )
-            sharedState = .pending(args)
-        case .live:
-            insideJobLogger.warning("TheInsideJob.configure() called after already created — ignoring")
+    static func configure(
+        startupConfiguration: StartupConfiguration
+    ) throws(InsideJobConfigurationError) {
+        try sharedState.configure {
+            InsideJobRuntimeConfiguration.resolve(startupConfiguration: startupConfiguration)
         }
     }
 
@@ -189,8 +190,8 @@ public final class TheInsideJob {
         addressFamily: ListenerAddressFamily = .dualStack,
         fingerprintsEnabled: Bool? = nil,
         authenticationPolicy: InsideJobAuthenticationPolicy = .default
-    ) {
-        self.init(
+    ) throws(InsideJobConfigurationError) {
+        try self.init(
             token: token,
             instanceId: instanceId,
             allowedScopes: allowedScopes,
@@ -210,12 +211,13 @@ public final class TheInsideJob {
         addressFamily: ListenerAddressFamily = .dualStack,
         fingerprintsEnabled: Bool? = nil,
         authenticationPolicy: InsideJobAuthenticationPolicy = .default,
+        visibleObservationSource: @escaping TheVault.VisibleObservationSource = TheVault.captureVisibleObservation,
         transportFactory: @escaping @MainActor (SessionAuthToken, Set<ConnectionScope>) -> ServerTransport = {
             ServerTransport(token: $0, allowedScopes: $1)
         }
-    ) {
+    ) throws(InsideJobConfigurationError) {
         self.init(
-            runtimeConfiguration: InsideJobRuntimeConfiguration.resolve(
+            runtimeConfiguration: try InsideJobRuntimeConfiguration.resolve(
                 startupConfiguration: StartupConfiguration.resolve(),
                 token: token,
                 instanceId: instanceId,
@@ -225,6 +227,7 @@ public final class TheInsideJob {
                 fingerprintsEnabled: fingerprintsEnabled,
                 authenticationPolicy: authenticationPolicy
             ),
+            visibleObservationSource: visibleObservationSource,
             transportFactory: transportFactory
         )
     }
@@ -237,6 +240,7 @@ public final class TheInsideJob {
 
     init(
         runtimeConfiguration: InsideJobRuntimeConfiguration,
+        visibleObservationSource: @escaping TheVault.VisibleObservationSource = TheVault.captureVisibleObservation,
         transportFactory: @escaping @MainActor (SessionAuthToken, Set<ConnectionScope>) -> ServerTransport = {
             ServerTransport(token: $0, allowedScopes: $1)
         }
@@ -251,7 +255,8 @@ public final class TheInsideJob {
         self.brains = TheBrains(
             tripwire: self.tripwire,
             fingerprintsEnabled: runtimeConfiguration.fingerprintsEnabled.value,
-            failureEvidencePolicy: runtimeConfiguration.failureEvidencePolicy.value
+            failureEvidencePolicy: runtimeConfiguration.failureEvidencePolicy.value,
+            visibleObservationSource: visibleObservationSource
         )
         self.getaway = TheGetaway(
             muscle: self.muscle,

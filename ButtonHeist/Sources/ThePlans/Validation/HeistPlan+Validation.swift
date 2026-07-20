@@ -172,7 +172,7 @@ private enum HeistCommandAuthoringLintKind: Equatable {
 
 private extension HeistActionCommand {
     var authoringLintKind: HeistCommandAuthoringLintKind {
-        switch core {
+        switch self {
         case .activate, .increment, .decrement, .customAction, .rotor:
             return .semantic
         case .typeText(let payload):

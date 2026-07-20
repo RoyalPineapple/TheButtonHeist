@@ -66,10 +66,33 @@ extension TextRangeReference: CustomStringConvertible {
     }
 }
 
+public struct RotorIndex: Equatable, Hashable, Sendable, ExpressibleByIntegerLiteral {
+    public enum ValidationError: Error, Equatable, Sendable, CustomStringConvertible {
+        case negative(Int)
+
+        public var description: String {
+            switch self {
+            case .negative(let value): "rotorIndex must be non-negative, got \(value)"
+            }
+        }
+    }
+
+    public let value: Int
+
+    public init(validating value: Int) throws(ValidationError) {
+        guard value >= 0 else { throw .negative(value) }
+        self.value = value
+    }
+
+    public init(integerLiteral value: Int) {
+        self = requireValidLiteralPayload { try Self(validating: value) }
+    }
+}
+
 public enum RotorSelection: Equatable, Hashable, Sendable {
     case automatic
     case named(RotorName)
-    case index(Int)
+    case index(RotorIndex)
 
     public var rotorName: RotorName? {
         guard case .named(let name) = self else { return nil }
@@ -78,7 +101,7 @@ public enum RotorSelection: Equatable, Hashable, Sendable {
 
     public var rotorIndex: Int? {
         guard case .index(let index) = self else { return nil }
-        return index
+        return index.value
     }
 }
 
@@ -94,14 +117,17 @@ extension RotorSelection {
                 debugDescription: "rotor accepts either rotor or rotorIndex, not both"
             ))
         }
-        if let index, index < 0 {
-            throw DecodingError.dataCorrupted(.init(
-                codingPath: codingPath,
-                debugDescription: "rotorIndex must be non-negative, got \(index)"
-            ))
-        }
         if let name { return .named(name) }
-        if let index { return .index(index) }
+        if let index {
+            do {
+                return .index(try RotorIndex(validating: index))
+            } catch {
+                throw DecodingError.dataCorrupted(.init(
+                    codingPath: codingPath,
+                    debugDescription: error.description
+                ))
+            }
+        }
         return .automatic
     }
 
@@ -113,7 +139,7 @@ extension RotorSelection {
         switch self {
         case .automatic: break
         case .named(let name): try container.encode(name, forKey: nameKey)
-        case .index(let index): try container.encode(index, forKey: indexKey)
+        case .index(let index): try container.encode(index.value, forKey: indexKey)
         }
     }
 }
@@ -126,7 +152,7 @@ extension RotorSelection: CustomStringConvertible {
         case .named(let name):
             return CanonicalValueDescription.stringField("name", name.rawValue) ?? "name=\"\""
         case .index(let index):
-            return CanonicalValueDescription.valueField("index", index) ?? "index=\(index)"
+            return CanonicalValueDescription.valueField("index", index.value) ?? "index=\(index.value)"
         }
     }
 }

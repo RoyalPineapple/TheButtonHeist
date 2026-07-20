@@ -11,7 +11,8 @@ final class ActionResultEvidenceContractTests: XCTestCase {
             message: nil,
             observation: .none,
             subjectEvidence: nil,
-            activationTrace: nil
+            activationTrace: nil,
+            timing: nil
         )
 
         XCTAssertEqual(result.method, .typeText)
@@ -234,17 +235,34 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         }
     }
 
-    func testSettlementDurationAdmissionRejectsNegativeSourceAndJSONValues() {
-        XCTAssertThrowsError(try ActionSettlementDuration(validatingMilliseconds: -1)) { error in
+    func testElapsedMillisecondsAdmissionRejectsNegativeSourceAndJSONValues() {
+        XCTAssertThrowsError(try ElapsedMilliseconds(validatingMilliseconds: -1)) { error in
             XCTAssertEqual(
                 String(describing: error),
-                "action settlement duration must not be negative"
+                "elapsed milliseconds must not be negative"
             )
         }
         XCTAssertThrowsError(try JSONDecoder().decode(
             ActionSettlementEvidence.self,
             from: Data(#"{"kind":"settled","durationMs":-1}"#.utf8)
         ))
+    }
+
+    func testActionPerformanceTimingRejectsEveryNegativeWireField() {
+        for key in [
+            "beforeObservationMs",
+            "targetResolutionMs",
+            "actionDispatchMs",
+            "interactionMs",
+            "finalSemanticEvidenceMs",
+            "resultAssemblyMs",
+            "totalMs",
+        ] {
+            XCTAssertThrowsError(try JSONDecoder().decode(
+                ActionPerformanceTiming.self,
+                from: Data(#"{"\#(key)":-1}"#.utf8)
+            ))
+        }
     }
 
     private func assertActionResultRejects(

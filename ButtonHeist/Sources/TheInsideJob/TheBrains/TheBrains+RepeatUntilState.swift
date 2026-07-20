@@ -12,24 +12,10 @@ extension TheBrains {
 extension TheBrains.RepeatUntil {
     internal struct Context {
         internal let path: HeistExecutionPath
-        internal let start: CFAbsoluteTime
+        internal let start: RuntimeElapsed.Instant
         internal let runtime: TheBrains.HeistExecutionRuntime
         internal let environment: HeistExecutionEnvironment
         internal let scope: TheBrains.HeistExecutionScope
-
-        internal init(
-            path: HeistExecutionPath,
-            start: CFAbsoluteTime,
-            runtime: TheBrains.HeistExecutionRuntime,
-            environment: HeistExecutionEnvironment,
-            scope: TheBrains.HeistExecutionScope
-        ) {
-            self.path = path
-            self.start = start
-            self.runtime = runtime
-            self.environment = environment
-            self.scope = scope
-        }
     }
 
     internal struct RunningState {
@@ -196,32 +182,15 @@ extension TheBrains.RepeatUntil {
 
     internal struct IterationFrame {
         internal let path: HeistExecutionPath
-        internal let start: CFAbsoluteTime
+        internal let start: RuntimeElapsed.Instant
         internal let index: Int
         internal let count: Int
-
-        internal init(path: HeistExecutionPath, start: CFAbsoluteTime, index: Int, count: Int) {
-            self.path = path
-            self.start = start
-            self.index = index
-            self.count = count
-        }
     }
 
     internal struct PassedIterationEvent {
         internal let frame: IterationFrame
         internal let postBody: PostBodyCheck
         internal let iteration: HeistPassingChildren
-
-        internal init(
-            frame: IterationFrame,
-            postBody: PostBodyCheck,
-            iteration: HeistPassingChildren
-        ) {
-            self.frame = frame
-            self.postBody = postBody
-            self.iteration = iteration
-        }
     }
 
     internal struct FailedIterationEvent {
@@ -229,18 +198,6 @@ extension TheBrains.RepeatUntil {
         internal let predicateEvaluation: FailedBodyPredicateEvaluation
         internal let failureExpectation: ExpectationResult.Unmet
         internal let failedIteration: HeistAbortedChildren
-
-        internal init(
-            frame: IterationFrame,
-            predicateEvaluation: FailedBodyPredicateEvaluation,
-            failureExpectation: ExpectationResult.Unmet,
-            failedIteration: HeistAbortedChildren
-        ) {
-            self.frame = frame
-            self.predicateEvaluation = predicateEvaluation
-            self.failureExpectation = failureExpectation
-            self.failedIteration = failedIteration
-        }
     }
 
     internal enum FailedBodyPredicateEvaluation {

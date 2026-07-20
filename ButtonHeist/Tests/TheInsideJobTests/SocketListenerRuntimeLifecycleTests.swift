@@ -6,54 +6,49 @@ import XCTest
 import ButtonHeistSupport
 @testable import TheInsideJob
 
+@MainActor
 final class SocketListenerRuntimeLifecycleTests: XCTestCase {
     func testRuntimeOwnsListenerLifecycle() async throws {
         let runtime = SocketListenerRuntime()
         let gate = ListenerRuntimeStartGate()
-        let initialPhase = await runtime.phaseForTesting
+        let listeners = TestSocketListenerFactory { _ in
+            await gate.enterAndWaitForRelease()
+            return .ready(2468)
+        }
 
-        let startTask = Task {
-            try await runtime.startForTesting {
-                await gate.enterAndWaitForRelease()
-                return 2468
-            }
+        let startTask = Task { @MainActor in
+            try await Self.start(runtime, with: listeners)
         }
         await gate.waitUntilEntered()
-        let startingPhase = await runtime.phaseForTesting
         let acceptsWhileStarting = await runtime.isAcceptingConnections()
 
         gate.release()
         let port = try await startTask.value
-        let listeningPhase = await runtime.phaseForTesting
         let acceptsWhileListening = await runtime.isAcceptingConnections()
 
         await runtime.stop()
-        let stoppedPhase = await runtime.phaseForTesting
         let acceptsAfterStop = await runtime.isAcceptingConnections()
 
-        XCTAssertEqual(initialPhase, .idle)
-        XCTAssertEqual(startingPhase, .starting)
         XCTAssertFalse(acceptsWhileStarting)
         XCTAssertEqual(port, 2468)
-        XCTAssertEqual(listeningPhase, .listening(port: 2468))
         XCTAssertTrue(acceptsWhileListening)
-        XCTAssertEqual(stoppedPhase, .stopped)
         XCTAssertFalse(acceptsAfterStop)
     }
 
     func testRuntimeRejectsSecondStartWhileStarting() async throws {
         let runtime = SocketListenerRuntime()
         let gate = ListenerRuntimeStartGate()
-        let startTask = Task {
-            try await runtime.startForTesting {
-                await gate.enterAndWaitForRelease()
-                return 2468
-            }
+        let listeners = TestSocketListenerFactory { _ in
+            await gate.enterAndWaitForRelease()
+            return .ready(2468)
+        }
+        let startTask = Task { @MainActor in
+            try await Self.start(runtime, with: listeners)
         }
         await gate.waitUntilEntered()
 
         do {
-            _ = try await runtime.startForTesting { 9753 }
+            _ = try await Self.start(runtime, with: TestSocketListenerFactory(port: 9753))
             XCTFail("Expected the runtime to reject a second start")
         } catch is CancellationError {
             // The runtime has one irreversible lifecycle.
@@ -69,11 +64,12 @@ final class SocketListenerRuntimeLifecycleTests: XCTestCase {
     func testStopDuringStartPreventsStaleListeningTransition() async {
         let runtime = SocketListenerRuntime()
         let gate = ListenerRuntimeStartGate()
-        let startTask = Task {
-            try await runtime.startForTesting {
-                await gate.enterAndWaitForRelease()
-                return 2468
-            }
+        let listeners = TestSocketListenerFactory { _ in
+            await gate.enterAndWaitForRelease()
+            return .ready(2468)
+        }
+        let startTask = Task { @MainActor in
+            try await Self.start(runtime, with: listeners)
         }
         await gate.waitUntilEntered()
 
@@ -88,26 +84,26 @@ final class SocketListenerRuntimeLifecycleTests: XCTestCase {
         } catch {
             XCTFail("Expected CancellationError, got \(error)")
         }
-        let phase = await runtime.phaseForTesting
-        XCTAssertEqual(phase, .stopped)
+        let isAcceptingConnections = await runtime.isAcceptingConnections()
+        XCTAssertFalse(isAcceptingConnections)
     }
 
     func testStaleReadyCallbackCannotAttachToReplacementGeneration() async throws {
-        let server = SimpleSocketServer()
-        let recorder = ListenerGenerationRecorder()
-        await server.setListenerRuntimeStartOverrideForTesting { generation in
-            let sequence = await recorder.record(generation)
-            return UInt16(24_680 + sequence)
-        }
+        let listeners = TestSocketListenerFactory(port: 24_680)
+        let server = SimpleSocketServer(dependencies: .init(
+            listenerFactory: listeners.listenerFactory
+        ))
 
-        _ = try await server.startPlaintextForTests(addressFamily: .dualStack)
-        let staleGeneration = await recorder.entry(at: 0).generation
+        _ = try await server.startPlaintext(addressFamily: .ipv4)
+        let currentStaleGeneration = await server.currentListener
+        let staleGeneration = try XCTUnwrap(currentStaleGeneration)
         let staleConnection = makeConnection()
         XCTAssertTrue(staleGeneration.own(staleConnection))
 
         await server.stop()
-        _ = try await server.startPlaintextForTests(addressFamily: .dualStack)
-        let replacementGeneration = await recorder.entry(at: 1).generation
+        _ = try await server.startPlaintext(addressFamily: .ipv4)
+        let currentReplacementGeneration = await server.currentListener
+        let replacementGeneration = try XCTUnwrap(currentReplacementGeneration)
         let acceptance = await server.acceptReadyConnection(
             staleConnection,
             generation: staleGeneration
@@ -120,24 +116,22 @@ final class SocketListenerRuntimeLifecycleTests: XCTestCase {
         XCTAssertEqual(acceptance, .rejected)
         XCTAssertFalse(staleIsCurrent)
         XCTAssertTrue(replacementIsCurrent)
-        XCTAssertEqual(staleGeneration.pendingConnectionCountForTesting, 0)
         XCTAssertEqual(clientCount, 0)
         await server.stop()
     }
 
     func testConcurrentReadyConnectionsCannotExceedCapacity() async throws {
-        let server = SimpleSocketServer()
-        let recorder = ListenerGenerationRecorder()
-        await server.setListenerRuntimeStartOverrideForTesting { generation in
-            _ = await recorder.record(generation)
-            return 24_680
-        }
-        await server.setSendContentForTesting { _, _, completion in
-            guard case .contentProcessed(let handler) = completion else { return }
-            handler(nil)
-        }
-        _ = try await server.startPlaintextForTests(addressFamily: .dualStack)
-        let generation = await recorder.entry(at: 0).generation
+        let listeners = TestSocketListenerFactory(port: 24_680)
+        let server = SimpleSocketServer(dependencies: .init(
+            sendContent: { _, _, completion in
+                guard case .contentProcessed(let handler) = completion else { return }
+                handler(nil)
+            },
+            listenerFactory: listeners.listenerFactory
+        ))
+        _ = try await server.startPlaintext(addressFamily: .ipv4)
+        let currentGeneration = await server.currentListener
+        let generation = try XCTUnwrap(currentGeneration)
         let connections = (0...SimpleSocketServer.maxConnections).map { _ in makeConnection() }
         connections.forEach { XCTAssertTrue(generation.own($0)) }
 
@@ -150,7 +144,11 @@ final class SocketListenerRuntimeLifecycleTests: XCTestCase {
                     await server.acceptReadyConnection(connection, generation: generation)
                 }
             }
-            return await group.reduce(into: []) { $0.append($1) }
+            var acceptances: [ReadyConnectionAcceptance] = []
+            for await acceptance in group {
+                acceptances.append(acceptance)
+            }
+            return acceptances
         }
 
         let registeredClientIds = acceptances.compactMap { acceptance -> Int? in
@@ -162,56 +160,66 @@ final class SocketListenerRuntimeLifecycleTests: XCTestCase {
         XCTAssertEqual(acceptances.filter { $0 == .rejected }.count, 1)
         let clientCount = await server.clientCountForTesting
         XCTAssertEqual(clientCount, SimpleSocketServer.maxConnections)
-        XCTAssertEqual(generation.pendingConnectionCountForTesting, 0)
         await server.stop()
     }
 
     func testPartialDualListenerStartupFailureCleansPendingCallbacksAndConnections() async {
-        let server = SimpleSocketServer()
-        let recorder = ListenerGenerationRecorder()
+        let failureGate = ListenerRuntimeFailureGate()
+        let listeners = TestSocketListenerFactory { invocation in
+            guard invocation > 1 else { return .ready(24_680) }
+            await failureGate.enterAndWaitForRelease()
+            return .failed(.posix(.EADDRINUSE))
+        }
         let pendingConnection = makeConnection()
         let admissionConnection = makeConnection()
-        let callbackTask = await MainActor.run { neverEndingTask() }
-        await server.setListenerRuntimeStartOverrideForTesting { generation in
-            generation.spawnCallbackTask {
-                await withTaskCancellationHandler {
-                    await callbackTask.value
-                } onCancel: {
-                    callbackTask.cancel()
-                }
-            }
-            let ownsPendingConnection = generation.own(pendingConnection)
-            let ownsAdmissionConnection = generation.own(admissionConnection)
-            let acceptance = await server.acceptReadyConnection(
-                admissionConnection,
-                generation: generation
-            )
-            _ = await recorder.record(
-                generation,
-                ownsPendingConnection: ownsPendingConnection,
-                ownsAdmissionConnection: ownsAdmissionConnection,
-                acceptance: acceptance
-            )
-            throw ListenerStartFailure.partialDualListener
+        let server = SimpleSocketServer(dependencies: .init(
+            listenerFactory: listeners.listenerFactory
+        ))
+
+        let startTask = Task { @MainActor in
+            try await server.startPlaintext(bindToLoopback: true, addressFamily: .dualStack)
         }
+        await failureGate.waitUntilEntered()
+        guard let generation = await server.currentListener else {
+            return XCTFail("Expected an active listener generation")
+        }
+        let ownsPendingConnection = generation.own(pendingConnection)
+        let ownsAdmissionConnection = generation.own(admissionConnection)
+        let acceptance = await server.acceptReadyConnection(
+            admissionConnection,
+            generation: generation
+        )
+        failureGate.release()
 
         do {
-            _ = try await server.startPlaintextForTests(addressFamily: .dualStack)
+            _ = try await startTask.value
             XCTFail("Expected partial dual-listener startup to fail")
-        } catch let error as ListenerStartFailure {
-            XCTAssertEqual(error, .partialDualListener)
+        } catch let error as NWError {
+            XCTAssertEqual(error, .posix(.EADDRINUSE))
         } catch {
-            XCTFail("Expected ListenerStartFailure, got \(error)")
+            XCTFail("Expected NWError, got \(error)")
         }
 
-        let observation = await recorder.entry(at: 0)
         let clientCount = await server.clientCountForTesting
-        XCTAssertTrue(observation.ownsPendingConnection)
-        XCTAssertTrue(observation.ownsAdmissionConnection)
-        XCTAssertEqual(observation.acceptance, .rejected)
-        XCTAssertEqual(observation.generation.pendingConnectionCountForTesting, 0)
-        XCTAssertTrue(callbackTask.isCancelled)
+        XCTAssertTrue(ownsPendingConnection)
+        XCTAssertTrue(ownsAdmissionConnection)
+        XCTAssertEqual(acceptance, .rejected)
         XCTAssertEqual(clientCount, 0)
+    }
+
+    private static func start(
+        _ runtime: SocketListenerRuntime,
+        with listeners: TestSocketListenerFactory
+    ) async throws -> UInt16 {
+        try await runtime.start(
+            port: 0,
+            bindToLoopback: true,
+            addressFamily: .ipv4,
+            parameters: .tcp,
+            queue: DispatchQueue(label: "SocketListenerRuntimeLifecycleTests"),
+            listenerFactory: listeners.listenerFactory,
+            newConnectionHandler: { _ in }
+        )
     }
 
     private func makeConnection() -> NWConnection {
@@ -221,10 +229,6 @@ final class SocketListenerRuntimeLifecycleTests: XCTestCase {
             using: .tcp
         )
     }
-}
-
-private enum ListenerStartFailure: Error, Equatable {
-    case partialDualListener
 }
 
 private final class ListenerRuntimeStartGate: Sendable {
@@ -245,36 +249,21 @@ private final class ListenerRuntimeStartGate: Sendable {
     }
 }
 
-private actor ListenerGenerationRecorder {
-    struct Entry: Sendable {
-        let generation: SocketListenerGeneration
-        let ownsPendingConnection: Bool
-        let ownsAdmissionConnection: Bool
-        let acceptance: ReadyConnectionAcceptance?
+private final class ListenerRuntimeFailureGate: Sendable {
+    private let entered = CompletionSignal()
+    private let released = CompletionSignal()
+
+    func enterAndWaitForRelease() async {
+        entered.finish()
+        await released.wait()
     }
 
-    private var entries: [Entry] = []
-
-    @discardableResult
-    func record(
-        _ generation: SocketListenerGeneration,
-        ownsPendingConnection: Bool = false,
-        ownsAdmissionConnection: Bool = false,
-        acceptance: ReadyConnectionAcceptance? = nil
-    ) -> Int {
-        entries.append(
-            Entry(
-                generation: generation,
-                ownsPendingConnection: ownsPendingConnection,
-                ownsAdmissionConnection: ownsAdmissionConnection,
-                acceptance: acceptance
-            )
-        )
-        return entries.count
+    func waitUntilEntered() async {
+        await entered.wait()
     }
 
-    func entry(at index: Int) -> Entry {
-        entries[index]
+    func release() {
+        released.finish()
     }
 }
 

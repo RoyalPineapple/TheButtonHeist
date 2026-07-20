@@ -147,19 +147,4 @@ public enum ActionResultEvidence: Sendable, Equatable {
     }
 
     private var observation: ActionResultObservationEvidence { body.observation }
-
-    func withTiming(_ timing: ActionPerformanceTiming) -> ActionResultEvidence {
-        let body = ActionResultEvidenceBody(
-            observation: body.observation,
-            subjectEvidence: body.subjectEvidence,
-            activationTrace: body.activationTrace,
-            timing: body.timing?.merging(timing) ?? timing
-        )
-        switch self {
-        case .success(let evidence):
-            return .success(ActionResultSuccessEvidence(body: body, warning: evidence.warning))
-        case .failure(let failureKind, _):
-            return .failure(failureKind, ActionResultFailureEvidence(body: body))
-        }
-    }
 }

@@ -132,7 +132,7 @@ final class TheGetaway {
     }
 
     private func actionPayload(for command: HeistActionCommand) -> ActionResult.Payload {
-        switch command.core {
+        switch command {
         case .activate:
             return .activate
         case .increment:

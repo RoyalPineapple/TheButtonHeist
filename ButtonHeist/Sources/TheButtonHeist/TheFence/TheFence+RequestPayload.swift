@@ -128,7 +128,7 @@ extension TheFence {
         let selection: RotorSelection = if let rotor {
             .named(try RotorName(validating: rotor))
         } else if let rotorIndex {
-            .index(rotorIndex)
+            .index(try RotorIndex(validating: rotorIndex))
         } else {
             .automatic
         }

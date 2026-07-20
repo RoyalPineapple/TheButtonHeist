@@ -449,7 +449,11 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
     // MARK: - Settled Observation Invalidation
 
     func testScreenChangedAfterCommitInvalidatesStaleServedObservation() async {
-        let brains = TheBrains(tripwire: TheTripwire())
+        let visibleObservationSource = VisibleObservationSourceFixture()
+        let brains = TheBrains(
+            tripwire: TheTripwire(),
+            visibleObservationSource: visibleObservationSource.capture
+        )
         brains.tripwire.startPulse()
         brains.startSemanticObservation()
         defer {
@@ -481,7 +485,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
                 heistId: "destination_header"
             )
         ])
-        brains.vault.nextVisibleRefreshObservationForTesting = freshScreen
+        visibleObservationSource.observation = freshScreen
 
         let served = await brains.vault.semanticObservationStream.settledEvent(
             scope: .visible,
@@ -498,7 +502,11 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
     }
 
     func testAmbientScreenChangedAfterCommitDoesNotInvalidateLaterScopedRead() async {
-        let brains = TheBrains(tripwire: TheTripwire())
+        let visibleObservationSource = VisibleObservationSourceFixture()
+        let brains = TheBrains(
+            tripwire: TheTripwire(),
+            visibleObservationSource: visibleObservationSource.capture
+        )
         brains.tripwire.startPulse()
         brains.startSemanticObservation()
         defer {
@@ -521,7 +529,7 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         )
         let actionWindow = brains.vault.accessibilityNotifications.beginActionWindow()
         defer { actionWindow.cancel() }
-        brains.vault.nextVisibleRefreshObservationForTesting = InterfaceObservation.makeForTests([
+        visibleObservationSource.observation = InterfaceObservation.makeForTests([
             InterfaceObservation.TestEntry(
                 AccessibilityElement.make(label: "Destination", traits: .header),
                 heistId: "destination_header"

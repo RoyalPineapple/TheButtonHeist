@@ -10,6 +10,16 @@ private func validatedDefinitions(_ definitions: [HeistPlanAdmissionCandidate]) 
     .definitions
 }
 
+private func admittedSteps<Input>(
+    _ invocation: HeistInvocationContent,
+    declaredBy definition: HeistDef<Input>
+) throws -> [HeistStep] {
+    try HeistPlan {
+        definition
+        invocation
+    }.body
+}
+
 @Test
 func heistDefinitionsCompileToInvocationsWithLocalDefinitions() throws {
     enum LibraryScreen {
@@ -199,18 +209,21 @@ func rawHeistPlanContentCarriesDefinitions() throws {
 
 @Test
 func runHeistBuildsHeistRunSteps() throws {
+    let stringDefinition = HeistDef<String>("LibraryScreen.addToCart") { _ in Warn("declared") }
     let stringRun = ThePlans.RunHeist("LibraryScreen.addToCart", "Milk")
-    #expect(stringRun.heistSteps == [
+    #expect(try admittedSteps(stringRun, declaredBy: stringDefinition) == [
         .invoke(HeistInvocationStep(path: "LibraryScreen.addToCart", argument: .string("Milk"))),
     ])
 
+    let noArgumentDefinition = HeistDef<Void>("CartScreen.checkout") { Warn("declared") }
     let noArgRun = ThePlans.RunHeist("CartScreen.checkout")
-    #expect(noArgRun.heistSteps == [
+    #expect(try admittedSteps(noArgRun, declaredBy: noArgumentDefinition) == [
         .invoke(HeistInvocationStep(path: "CartScreen.checkout", argument: .none)),
     ])
 
+    let targetDefinition = HeistDef<AccessibilityTarget>("Rows.activate") { _ in Warn("declared") }
     let targetRun = ThePlans.RunHeist("Rows.activate", AccessibilityTarget.label("Row 1"))
-    #expect(targetRun.heistSteps == [
+    #expect(try admittedSteps(targetRun, declaredBy: targetDefinition) == [
         .invoke(HeistInvocationStep(path: "Rows.activate", argument: .accessibilityTarget(.label("Row 1")))),
     ])
 
@@ -218,9 +231,10 @@ func runHeistBuildsHeistRunSteps() throws {
         predicate: .changed(.elements([.appeared(.label("subtotal"))])),
         timeout: ThePlans.defaultActionExpectationTimeout
     )
+    let addItemDefinition = HeistDef<String>("Cart.addItem") { _ in Warn("declared") }
     let expectedRun = ThePlans.RunHeist("Cart.addItem", "Milk")
         .expect(.changed(.elements([.appeared(.label("subtotal"))])))
-    #expect(expectedRun.heistSteps == [
+    #expect(try admittedSteps(expectedRun, declaredBy: addItemDefinition) == [
         .invoke(HeistInvocationStep(
             path: "Cart.addItem",
             argument: .string("Milk"),
@@ -238,7 +252,7 @@ func runHeistBuildsHeistRunSteps() throws {
         .expect(.changed(.elements([
             .updated(.label("subtotal"), .value(.contains("2 items"))),
         ])))
-    #expect(updatedRun.heistSteps == [
+    #expect(try admittedSteps(updatedRun, declaredBy: addItemDefinition) == [
         .invoke(HeistInvocationStep(
             path: "Cart.addItem",
             argument: .string("Eggs"),
@@ -250,9 +264,10 @@ func runHeistBuildsHeistRunSteps() throws {
         predicate: .exists(.label("Payment Complete")),
         timeout: ThePlans.defaultActionExpectationTimeout
     )
+    let paymentDefinition = HeistDef<Void>("Checkout.pay") { Warn("declared") }
     let snapshotRun = ThePlans.RunHeist("Checkout.pay")
         .expect(.exists(.label("Payment Complete")))
-    #expect(snapshotRun.heistSteps == [
+    #expect(try admittedSteps(snapshotRun, declaredBy: paymentDefinition) == [
         .invoke(HeistInvocationStep(
             path: "Checkout.pay",
             expectation: expectedCompletion
@@ -265,7 +280,7 @@ func runHeistBuildsHeistRunSteps() throws {
     )
     let screenRun = ThePlans.RunHeist("Checkout.pay")
         .expect(.changed(.screen([.exists(.label("Receipt"))])))
-    #expect(screenRun.heistSteps == [
+    #expect(try admittedSteps(screenRun, declaredBy: paymentDefinition) == [
         .invoke(HeistInvocationStep(
             path: "Checkout.pay",
             expectation: expectation

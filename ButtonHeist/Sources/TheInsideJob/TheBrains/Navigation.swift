@@ -291,8 +291,8 @@ final class Navigation {
                     containerName: containerName,
                     type: container.containerPredicateFacts.role.kind,
                     reasonCodes: reasons.sorted(),
-                    viewportWidth: Double(frame.size.width),
-                    viewportHeight: Double(frame.size.height)
+                    viewportWidth: try? FiniteDimension(validating: Double(frame.size.width)),
+                    viewportHeight: try? FiniteDimension(validating: Double(frame.size.height))
                 )
             }
 
@@ -307,10 +307,10 @@ final class Navigation {
                 type: container.containerPredicateFacts.role.kind,
                 reasonCodes: reasons.sorted(),
                 scrollAxis: scrollAxis,
-                viewportWidth: Double(frame.size.width),
-                viewportHeight: Double(frame.size.height),
-                contentWidth: Double(contentSize.width),
-                contentHeight: Double(contentSize.height)
+                viewportWidth: try? FiniteDimension(validating: Double(frame.size.width)),
+                viewportHeight: try? FiniteDimension(validating: Double(frame.size.height)),
+                contentWidth: try? FiniteDimension(validating: Double(contentSize.width)),
+                contentHeight: try? FiniteDimension(validating: Double(contentSize.height))
             )
         }
 

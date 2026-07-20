@@ -14,7 +14,7 @@ import TheScore
             execution: .skipped(command: command)
         )
 
-        let report = HeistReport.project(result: HeistResult(steps: [step], durationMs: 0))
+        let report = HeistReport.project(result: try HeistResult(steps: [step], durationMs: 0))
         let node = try #require(report.outputNodes.first)
 
         #expect(node.command == .activate)
@@ -38,7 +38,7 @@ import TheScore
             )
         )
 
-        let report = HeistReport.project(result: HeistResult(steps: [step], durationMs: 1))
+        let report = HeistReport.project(result: try HeistResult(steps: [step], durationMs: 1))
         let node = try #require(report.outputNodes.first)
 
         #expect(node.invocationDisplayName == #"RunHeist("Cart.checkout", "Milk")"#)
@@ -59,7 +59,7 @@ import TheScore
             name: "Checkout",
             completion: .passed(children: children)
         )
-        let result = HeistResult(steps: [root], durationMs: 5)
+        let result = try HeistResult(steps: [root], durationMs: 5)
 
         let report = HeistReport.project(result: result)
 
@@ -79,7 +79,7 @@ import TheScore
         let before = makeTestInterface(elementCount: 0)
         let after = makeTestInterface(elementCount: 1)
 
-        let notApplicable = HeistReport.project(result: HeistResult(steps: [], durationMs: 0))
+        let notApplicable = HeistReport.project(result: try HeistResult(steps: [], durationMs: 0))
         #expect(notApplicable.accessibilityChange == .notApplicable)
 
         let incomplete = report(trace: makeTestTrace(before: before, after: after), completeness: .incomplete)
@@ -105,6 +105,6 @@ import TheScore
         let action = HeistResultFixture.action(
             result: HeistResultFixture.actionResult(traceEvidence: evidence)
         )
-        return HeistReport.project(result: HeistResult(steps: [action], durationMs: 0))
+        return HeistReport.project(result: HeistResultFixture.result(steps: [action], durationMs: 0))
     }
 }

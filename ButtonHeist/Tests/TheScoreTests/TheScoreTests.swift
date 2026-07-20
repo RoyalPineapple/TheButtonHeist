@@ -49,7 +49,7 @@ final class MessageIntegrationTests: XCTestCase {
         let elements = (0..<100).map { i -> HeistElement in
             let value: String? = i % 2 == 0 ? "Value" : nil
             let actions: [ElementAction] = i % 3 == 0 ? [.activate] : []
-            return HeistElement(
+            return makeTestHeistElement(
                 description: "Element \(i)",
                 label: "Label \(i)",
                 value: value,

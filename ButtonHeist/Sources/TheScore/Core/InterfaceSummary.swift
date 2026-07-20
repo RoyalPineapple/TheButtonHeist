@@ -101,8 +101,12 @@ private extension InterfaceSummary {
                 return (index, element)
             }
             .min { left, right in
-                if left.element.frameY != right.element.frameY { return left.element.frameY < right.element.frameY }
-                if left.element.frameX != right.element.frameX { return left.element.frameX < right.element.frameX }
+                if left.element.frameY != right.element.frameY {
+                    return (left.element.frameY ?? .infinity) < (right.element.frameY ?? .infinity)
+                }
+                if left.element.frameX != right.element.frameX {
+                    return (left.element.frameX ?? .infinity) < (right.element.frameX ?? .infinity)
+                }
                 return left.index < right.index
             }?
             .element

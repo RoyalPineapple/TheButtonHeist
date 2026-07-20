@@ -44,10 +44,10 @@ extension TheVault {
         let selection: UIAccessibilityCustomRotor
         switch rotorSelection {
         case .index(let rotorIndex):
-            guard rotors.indices.contains(rotorIndex) else {
+            guard rotors.indices.contains(rotorIndex.value) else {
                 return .noSuchRotor(available: availableNames)
             }
-            selection = rotors[rotorIndex]
+            selection = rotors[rotorIndex.value]
         case .named(let rotorName):
             let matches = rotors.enumerated().filter {
                 $0.element.bhInvocableName(locale: object.accessibilityLanguage) == .some(rotorName)

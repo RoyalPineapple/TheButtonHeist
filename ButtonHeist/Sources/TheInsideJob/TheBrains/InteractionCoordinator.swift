@@ -83,39 +83,33 @@ final class InteractionCoordinator {
 
     func settleAfterAction(
         dispatchResult: TheSafecracker.ActionDispatchResult,
+        timing initialTiming: ActionTiming = ActionTiming(),
         afterStateValue: ((ActionPayloadEvidence) -> String?)? = nil,
         before: ActionEvidenceProjector.Baseline,
         postActionCommitScope: SemanticObservationScope = .visible,
         settleResult: SettleSession.Result? = nil,
         notificationWindow: AccessibilityNotificationScopeLease? = nil
     ) async -> ActionResult {
+        var timing = initialTiming
         let observationSettlement = await vault.semanticObservationStream.settleActionObservation(
             baselineTripwireSignal: before.tripwireSignal,
             commitScope: postActionCommitScope,
             settleResult: settleResult,
             notificationWindow: notificationWindow
         )
-        let finalEvidenceStart = CFAbsoluteTimeGetCurrent()
+        let finalEvidenceStart = RuntimeElapsed.now
         let actionEvidence = actionEvidenceProjector.projectResult(
             before: before,
             observation: observationSettlement
         )
-        let finalSemanticEvidenceMs = elapsedMilliseconds(since: finalEvidenceStart)
+        timing.record(.finalSemanticEvidence, since: finalEvidenceStart)
 
-        let resultAssemblyStart = CFAbsoluteTimeGetCurrent()
-        let result = ActionResult(
+        return ActionResult(
             dispatchResult: dispatchResult,
             afterStateValue: afterStateValue,
-            settledObservation: actionEvidence
+            settledObservation: actionEvidence,
+            timing: timing
         )
-        return result.withTiming(ActionPerformanceTiming(
-            finalSemanticEvidenceMs: finalSemanticEvidenceMs,
-            resultAssemblyMs: elapsedMilliseconds(since: resultAssemblyStart)
-        ))
-    }
-
-    private func elapsedMilliseconds(since start: CFAbsoluteTime) -> Int {
-        Int((CFAbsoluteTimeGetCurrent() - start) * 1_000)
     }
 
     func waitForPredicate(
@@ -125,7 +119,7 @@ final class InteractionCoordinator {
         changeBaseline: PredicateChangeBaselineSource = .establishFromFirstObservation,
         announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly,
         onReadyToPoll: PredicateWait.ReadyToPoll? = nil,
-        startedAt: CFAbsoluteTime? = nil
+        startedAt: RuntimeElapsed.Instant? = nil
     ) async -> HeistWaitResult {
         let baselineSource: PredicateChangeBaselineSource
         switch (changeBaseline, baselineSequence) {

@@ -90,7 +90,7 @@ extension SettleSessionTests {
         )
 
         let outcome = await session.run(
-            start: CFAbsoluteTimeGetCurrent(),
+            start: RuntimeElapsed.now,
             baselineTripwireSignal: tripwireSignal(topmostVC: nil)
         )
 
@@ -182,7 +182,7 @@ extension SettleSessionTests {
         )
 
         let outcome = await session.run(
-            start: CFAbsoluteTimeGetCurrent(),
+            start: RuntimeElapsed.now,
             baselineTripwireSignal: tripwireSignal(topmostVC: nil)
         )
 
@@ -218,7 +218,7 @@ extension SettleSessionTests {
         )
 
         let outcome = await session.run(
-            start: CFAbsoluteTimeGetCurrent(),
+            start: RuntimeElapsed.now,
             baselineTripwireSignal: tripwireSignal(topmostVC: nil)
         )
 
@@ -251,7 +251,7 @@ extension SettleSessionTests {
         )
 
         let outcome = await session.run(
-            start: CFAbsoluteTimeGetCurrent(),
+            start: RuntimeElapsed.now,
             baselineTripwireSignal: tripwireSignal(topmostVC: nil)
         )
 
@@ -286,7 +286,7 @@ extension SettleSessionTests {
         )
 
         let outcome = await session.run(
-            start: CFAbsoluteTimeGetCurrent(),
+            start: RuntimeElapsed.now,
             baselineTripwireSignal: tripwireSignal(topmostVC: nil)
         )
         _ = liveObject // keep alive
@@ -326,7 +326,7 @@ extension SettleSessionTests {
         )
 
         let outcome = await session.run(
-            start: CFAbsoluteTimeGetCurrent(),
+            start: RuntimeElapsed.now,
             baselineTripwireSignal: tripwireSignal(topmostVC: baseline)
         )
         _ = baselineObject // keep alive
@@ -367,7 +367,7 @@ extension SettleSessionTests {
         )
 
         let outcome = await session.run(
-            start: CFAbsoluteTimeGetCurrent(),
+            start: RuntimeElapsed.now,
             baselineTripwireSignal: tripwireSignal(topmostVC: baseline)
         )
         _ = baselineObject // keep alive
@@ -397,7 +397,7 @@ extension SettleSessionTests {
         )
 
         let outcome = await session.run(
-            start: CFAbsoluteTimeGetCurrent(),
+            start: RuntimeElapsed.now,
             baselineTripwireSignal: tripwireSignal(topmostVC: baseline)
         )
         _ = baselineObject // keep alive

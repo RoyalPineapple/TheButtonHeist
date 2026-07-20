@@ -30,6 +30,7 @@ extension TheBrainsActionTests {
     func testInteractionCoordinatorBeforeStateDoesNotReuseInvalidatedSettledObservation() async {
         installScreen(elements: [(makeElement(label: "Title", traits: .header), "header_title")])
         brains.vault.invalidateSettledObservationFromTripwire()
+        visibleObservationSource.observation = nil
 
         let current = await withNoTraversableWindows {
             await brains.interactionCoordinator.admittedBaseline(timeout: 0.001)
@@ -51,7 +52,8 @@ extension TheBrainsActionTests {
         )
 
         let target = try AccessibilityTarget.label("Live").resolve(in: .empty)
-        let result = await brains.actions.executeIncrement(target)
+        var timing = ActionTiming()
+        let result = await brains.actions.executeIncrement(target, timing: &timing)
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .increment)
@@ -74,7 +76,8 @@ extension TheBrainsActionTests {
         )
 
         let target = try AccessibilityTarget.label("Live").resolve(in: .empty)
-        let result = await brains.actions.executeDecrement(target)
+        var timing = ActionTiming()
+        let result = await brains.actions.executeDecrement(target, timing: &timing)
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .decrement)
@@ -100,9 +103,12 @@ extension TheBrainsActionTests {
             object: liveObject
         )
 
+        var timing = ActionTiming()
+
         let result = await brains.actions.executeCustomAction(
             name: "Share",
-            target: try AccessibilityTarget.label("Options").resolve(in: .empty)
+            target: try AccessibilityTarget.label("Options").resolve(in: .empty),
+            timing: &timing
         )
 
         XCTAssertFalse(result.success)
@@ -133,9 +139,12 @@ extension TheBrainsActionTests {
             object: liveObject
         )
 
+        var timing = ActionTiming()
+
         let result = await brains.actions.executeCustomAction(
             name: "Delete",
-            target: try AccessibilityTarget.label("Options").resolve(in: .empty)
+            target: try AccessibilityTarget.label("Options").resolve(in: .empty),
+            timing: &timing
         )
 
         XCTAssertFalse(result.success)
@@ -166,9 +175,12 @@ extension TheBrainsActionTests {
             object: liveObject
         )
 
+        var timing = ActionTiming()
+
         let result = await brains.actions.executeCustomAction(
             name: "Archive",
-            target: try AccessibilityTarget.label("Options").resolve(in: .empty)
+            target: try AccessibilityTarget.label("Options").resolve(in: .empty),
+            timing: &timing
         )
 
         XCTAssertTrue(result.success)
@@ -193,9 +205,12 @@ extension TheBrainsActionTests {
             object: liveObject
         )
 
+        var timing = ActionTiming()
+
         let result = await brains.actions.executeCustomAction(
             name: "Archive",
-            target: try AccessibilityTarget.label("Options").resolve(in: .empty)
+            target: try AccessibilityTarget.label("Options").resolve(in: .empty),
+            timing: &timing
         )
 
         XCTAssertFalse(result.success)
@@ -228,7 +243,8 @@ extension TheBrainsActionTests {
         await brains.tripwire.yieldFrames(3)
 
         let target = try AccessibilityTarget.identifier("plain_action").resolve(in: .empty)
-        let result = await brains.actions.executeActivate(target)
+        var timing = ActionTiming()
+        let result = await brains.actions.executeActivate(target, timing: &timing)
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, .activate)
@@ -245,7 +261,8 @@ extension TheBrainsActionTests {
         )
 
         let target = try AccessibilityTarget.label("Plain label").resolve(in: .empty)
-        let result = await brains.actions.executeActivate(target)
+        var timing = ActionTiming()
+        let result = await brains.actions.executeActivate(target, timing: &timing)
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, .activate)
@@ -310,7 +327,8 @@ extension TheBrainsActionTests {
         )
 
         let target = try AccessibilityTarget.label("Disabled action").resolve(in: .empty)
-        let result = await brains.actions.executeActivate(target)
+        var timing = ActionTiming()
+        let result = await brains.actions.executeActivate(target, timing: &timing)
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .activate)
@@ -328,7 +346,8 @@ extension TheBrainsActionTests {
         )
 
         let target = try AccessibilityTarget.label("Live").resolve(in: .empty)
-        let result = await brains.actions.executeIncrement(target)
+        var timing = ActionTiming()
+        let result = await brains.actions.executeIncrement(target, timing: &timing)
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, .increment)
@@ -363,7 +382,9 @@ extension TheBrainsActionTests {
         XCTAssertEqual(liveTarget?.activationPoint, capturePoint)
         XCTAssertNotEqual(liveTarget?.activationPoint, staleObjectPoint)
 
-        let result = await brains.actions.executeIncrement(target)
+        var timing = ActionTiming()
+
+        let result = await brains.actions.executeIncrement(target, timing: &timing)
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, .increment)
@@ -389,13 +410,15 @@ extension TheBrainsActionTests {
             frame: CGRect(x: 80, y: 180, width: 180, height: 44),
             activationPoint: CGPoint(x: 170, y: 202)
         )
-        brains.vault.installObservationForTesting(.makeForTests(
+        installSyntheticObservation(.makeForTests(
             elements: [(currentElement, heistId)],
             objects: [heistId: liveObject]
         ))
         let target = try matcherTarget(label: "Quantity", in: sourceScreen)
 
-        let result = await brains.actions.executeIncrement(try target.resolve(in: .empty))
+        var timing = ActionTiming()
+
+        let result = await brains.actions.executeIncrement(try target.resolve(in: .empty), timing: &timing)
 
         XCTAssertTrue(result.success, result.message ?? "increment failed")
         XCTAssertEqual(result.method, .increment)
@@ -418,13 +441,15 @@ extension TheBrainsActionTests {
             traits: .adjustable
         )
         let liveObject = AdjustableGeometryView(frame: .zero, activationPoint: CGPoint(x: 170, y: 202))
-        brains.vault.installObservationForTesting(.makeForTests(
+        installSyntheticObservation(.makeForTests(
             elements: [(currentElement, heistId)],
             objects: [heistId: liveObject]
         ))
         let target = try matcherTarget(label: "Quantity", in: sourceScreen)
 
-        let result = await brains.actions.executeIncrement(try target.resolve(in: .empty))
+        var timing = ActionTiming()
+
+        let result = await brains.actions.executeIncrement(try target.resolve(in: .empty), timing: &timing)
 
         XCTAssertTrue(result.success, result.message ?? "increment failed")
         XCTAssertEqual(result.method, .increment)
@@ -463,7 +488,7 @@ extension TheBrainsActionTests {
             brains.vault.resetInterfaceForLifecycle()
             let heist = try await heistStepResult(
                 for: .action(ActionStep(command: authoredCommand)),
-                label: command.runtimeType.rawValue
+                label: authoredCommand.wireType.rawValue
             )
             assertSameActionResult(
                 label,
@@ -501,12 +526,12 @@ extension TheBrainsActionTests {
             .takeScreenshot,
             .dismissKeyboard,
         ]
-        var dispatchedTypes: [HeistActionCommandType] = []
+        var dispatchedCommands: [ResolvedHeistActionCommand] = []
         let runtime = heistRuntime(observations: []) { command in
-            dispatchedTypes.append(command.runtimeType)
+            dispatchedCommands.append(command)
             return ActionResult.success(
                 payload: command.resultPayload,
-                message: command.runtimeType.rawValue,
+                message: "action dispatched",
             )
         }
         let plan = try HeistPlan(body: commands.map { .action(ActionStep(command: $0)) })
@@ -514,10 +539,8 @@ extension TheBrainsActionTests {
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "heist failed")
-        let expectedTypes = try commands.map {
-            try $0.resolve(in: .empty).runtimeType
-        }
-        XCTAssertEqual(dispatchedTypes, expectedTypes)
+        let expectedCommands = try commands.map { try $0.resolve(in: .empty) }
+        XCTAssertEqual(dispatchedCommands, expectedCommands)
         guard case .heist(let payload) = result.payload,
               let heistResult = payload else {
             return XCTFail("Expected heist execution payload")
@@ -565,7 +588,8 @@ extension TheBrainsActionTests {
 
         for (command, expectedType) in commands {
             XCTAssertNotNil(command.durableHeistActionFailure)
-            XCTAssertEqual(try command.resolve(in: .empty).runtimeType, expectedType)
+            XCTAssertNoThrow(try command.resolve(in: .empty))
+            XCTAssertEqual(command.wireType, expectedType)
         }
     }
 
@@ -612,7 +636,8 @@ extension TheBrainsActionTests {
         } else {
             liveTarget = nil
         }
-        let result = await brains.actions.executeIncrement(target)
+        var timing = ActionTiming()
+        let result = await brains.actions.executeIncrement(target, timing: &timing)
 
         XCTAssertNotNil(resolved)
         XCTAssertNil(liveTarget)
@@ -664,12 +689,14 @@ extension TheBrainsActionTests {
             XCTFail("Expected the settled UIKit evidence to be held weakly")
             return
         }
-        brains.vault.nextVisibleRefreshObservationForTesting = .makeForTests(
+        visibleObservationSource.observation = .makeForTests(
             elements: [(refreshedElement, heistId)],
             objects: [heistId: replacementObject]
         )
 
-        let result = await brains.actions.executeIncrement(target)
+        var timing = ActionTiming()
+
+        let result = await brains.actions.executeIncrement(target, timing: &timing)
 
         XCTAssertTrue(result.success, result.message ?? "increment failed")
         XCTAssertEqual(result.method, .increment)
@@ -696,13 +723,14 @@ extension TheBrainsActionTests {
         let staleObject = RefusingActivationView(frame: settledElement.bhFrame)
         let replacementObject = ActionActivationOverrideView(frame: settledElement.bhFrame)
         installScreen(elements: [(settledElement, heistId)], objects: [heistId: staleObject])
-        brains.vault.nextVisibleRefreshObservationForTesting = .makeForTests(
+        visibleObservationSource.observation = .makeForTests(
             elements: [(settledElement, heistId)],
             objects: [heistId: replacementObject]
         )
 
         let target = try AccessibilityTarget.identifier("refresh_activate").resolve(in: .empty)
-        let result = await brains.actions.executeActivate(target)
+        var timing = ActionTiming()
+        let result = await brains.actions.executeActivate(target, timing: &timing)
 
         XCTAssertTrue(result.success, result.message ?? "activate failed")
         XCTAssertEqual(result.method, .activate)
@@ -732,7 +760,8 @@ extension TheBrainsActionTests {
             ordinal: 0
         ).resolve(in: .empty)
         let actionTask = Task { @MainActor in
-            await brains.actions.executeActivate(target)
+            var timing = ActionTiming()
+            return await brains.actions.executeActivate(target, timing: &timing)
         }
 
         await waitForSettledSemanticWaiter(on: brains.vault)
@@ -747,7 +776,7 @@ extension TheBrainsActionTests {
             ]
         )
         _ = brains.vault.semanticObservationStream.commitVisibleObservationForTesting(reorderedScreen)
-        brains.vault.nextVisibleRefreshObservationForTesting = reorderedScreen
+        visibleObservationSource.observation = reorderedScreen
 
         let result = await actionTask.value
 

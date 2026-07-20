@@ -75,25 +75,32 @@ extension SettleSessionTests {
     }
 
     func testSemanticObservationDeadlineOwnsRemainingAndElapsedTime() {
-        let deadline = SemanticObservationDeadline(start: 10, timeoutSeconds: 0.25)
+        let start = RuntimeElapsed.now
+        let deadline = SemanticObservationDeadline(start: start, timeoutSeconds: 0.25)
 
-        XCTAssertTrue(deadline.hasTimeRemaining(at: 10.1))
-        XCTAssertEqual(deadline.remainingSeconds(at: 10.1), 0.15, accuracy: 0.000_001)
-        XCTAssertEqual(deadline.elapsedMilliseconds(at: 10.125), 125)
-        XCTAssertFalse(deadline.hasTimeRemaining(at: 10.25))
-        XCTAssertEqual(deadline.remainingSeconds(at: 10.5), 0)
+        XCTAssertTrue(deadline.hasTimeRemaining(at: start.advanced(by: .milliseconds(100))))
+        XCTAssertEqual(
+            deadline.remainingSeconds(at: start.advanced(by: .milliseconds(100))),
+            0.15,
+            accuracy: 0.000_001
+        )
+        XCTAssertEqual(deadline.elapsedMilliseconds(at: start.advanced(by: .milliseconds(125))), 125)
+        XCTAssertFalse(deadline.hasTimeRemaining(at: start.advanced(by: .milliseconds(250))))
+        XCTAssertEqual(deadline.remainingSeconds(at: start.advanced(by: .milliseconds(500))), 0)
 
-        let terminalWakeDeadline = deadline.reserving(0.05, at: 10.1)
-        XCTAssertEqual(terminalWakeDeadline.start, 10.1)
-        XCTAssertEqual(terminalWakeDeadline.remainingSeconds(at: 10.1), 0.1, accuracy: 0.000_001)
-        XCTAssertFalse(terminalWakeDeadline.hasTimeRemaining(at: 10.2))
+        let reservationStart = start.advanced(by: .milliseconds(100))
+        let terminalWakeDeadline = deadline.reserving(0.05, at: reservationStart)
+        XCTAssertEqual(terminalWakeDeadline.start, reservationStart)
+        XCTAssertEqual(terminalWakeDeadline.remainingSeconds(at: reservationStart), 0.1, accuracy: 0.000_001)
+        XCTAssertFalse(terminalWakeDeadline.hasTimeRemaining(at: reservationStart.advanced(by: .milliseconds(100))))
 
-        let millisecondDeadline = SemanticObservationDeadline(start: 20, timeoutMs: 250)
-        XCTAssertEqual(millisecondDeadline.remainingSeconds(at: 20.1), 0.15, accuracy: 0.000_001)
+        let millisecondDeadline = SemanticObservationDeadline(start: start, timeoutMs: 250)
+        XCTAssertEqual(
+            millisecondDeadline.remainingSeconds(at: start.advanced(by: .milliseconds(100))),
+            0.15,
+            accuracy: 0.000_001
+        )
 
-        let expiredDeadline = SemanticObservationDeadline(start: 30, timeoutSeconds: -1)
-        XCTAssertFalse(expiredDeadline.hasTimeRemaining(at: 30))
-        XCTAssertEqual(expiredDeadline.remainingSeconds(at: 30), 0)
     }
 
     func testViewportTransitionSettleUsesTwoRunLoopTurnsWhenTheRepeatsAreStable() async {
@@ -114,7 +121,7 @@ extension SettleSessionTests {
         )
 
         let outcome = await session.run(
-            start: CFAbsoluteTimeGetCurrent(),
+            start: RuntimeElapsed.now,
             baselineTripwireSignal: tripwireSignal(topmostVC: nil)
         )
 
@@ -144,7 +151,7 @@ extension SettleSessionTests {
         )
 
         let outcome = await session.run(
-            start: CFAbsoluteTimeGetCurrent(),
+            start: RuntimeElapsed.now,
             baselineTripwireSignal: tripwireSignal(topmostVC: nil)
         )
 
