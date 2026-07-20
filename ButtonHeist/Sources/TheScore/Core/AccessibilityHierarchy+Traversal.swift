@@ -23,7 +23,17 @@ package struct PathIndexedAccessibilityContainer: Equatable, Sendable {
     }
 }
 
-enum AccessibilityHierarchyTraversal {
+package enum AccessibilityHierarchyTraversal {
+    package struct Decision<Context> {
+        let contentsContext: Context
+        let shouldContinue: Bool
+
+        package init(contentsContext: Context, shouldContinue: Bool) {
+            self.contentsContext = contentsContext
+            self.shouldContinue = shouldContinue
+        }
+    }
+
     enum Event {
         case enter(AccessibilityHierarchy, index: Int)
         case leave(AccessibilityContainer, childCount: Int)
@@ -159,7 +169,7 @@ package extension AccessibilityHierarchy {
             [AccessibilityHierarchy],
             Context,
             inout Accumulator
-        ) -> (contentsContext: Context, shouldContinue: Bool),
+        ) -> AccessibilityHierarchyTraversal.Decision<Context>,
         descend: (Context, Int) -> Context
     ) -> Bool {
         var contexts: [Context] = []
