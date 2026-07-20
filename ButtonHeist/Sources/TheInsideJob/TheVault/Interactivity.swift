@@ -44,7 +44,13 @@ extension TheVault {
         !element.traits.isDisjoint(with: AccessibilityPolicy.interactiveTraitsBitmask)
     }
 
-    private static func supportsDefaultActivation(_ object: NSObject?) -> Bool {
+    /// Runtime introspection, not an accessibility semantic: reports whether
+    /// the object has code wired to `accessibilityActivate()` — a method
+    /// override or an `accessibilityActivateBlock`. VoiceOver never asks this
+    /// question; users cannot perceive it. It is capability, not state: an
+    /// implementation may still decline activation situationally. A test tool
+    /// living in-process can see it, so we use it as diagnostic evidence.
+    private static func implementsAccessibilityActivation(_ object: NSObject?) -> Bool {
         guard let object else { return false }
         return hasActivationBlock(object) || overridesAccessibilityActivate(object)
     }
@@ -66,7 +72,7 @@ extension TheVault {
     /// Check if an element is interactive based on its parsed accessibility data.
     static func isInteractive(element: AccessibilityElement, object: NSObject? = nil) -> Bool {
         element.projectedActionSet.actions.contains(.activate)
-            || supportsDefaultActivation(object)
+            || implementsAccessibilityActivation(object)
     }
 
     /// Validate whether an element can receive interaction based on its traits.
@@ -77,7 +83,7 @@ extension TheVault {
             return .blocked(reason: "Element is disabled (has 'notEnabled' trait)")
         }
 
-        let supportsActivation = supportsDefaultActivation(object)
+        let supportsActivation = implementsAccessibilityActivation(object)
         let staticTraitsOnly = element.traits.isSubset(of: AccessibilityPolicy.staticOnlyTraitsBitmask)
         let warning: String? = (
             staticTraitsOnly
