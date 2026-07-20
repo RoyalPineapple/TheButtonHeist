@@ -24,7 +24,10 @@ extension TheGetaway {
         _ transport: ServerTransport,
         onBacklogOverflow: @escaping @MainActor @Sendable (Int) async -> Void
     ) async {
-        self.transport = transport
+        let attempt = TransportWiringAttempt(transport: transport)
+        let previousEventConsumer = transportWiring.eventConsumer
+        previousEventConsumer?.cancel()
+        transportWiring = .wiring(attempt)
 
         // Install actor-isolated callbacks on TheMuscle. Each callback is
         // `@Sendable`. We capture the inner `SimpleSocketServer` actor (which
@@ -41,19 +44,23 @@ extension TheGetaway {
         let onAuthenticated: @MainActor @Sendable (Int, @escaping SocketResponseHandler) async -> Void = { [weak self] _, respond in
             await self?.sendServerInfo(respond: respond)
         }
+        if let pauseBeforeTransportCallbackInstallationForTesting {
+            await pauseBeforeTransportCallbackInstallationForTesting()
+        }
         await muscle.installCallbacks(
             sendToClient: sendToClient,
             disconnectClient: disconnect,
             onClientAuthenticated: onAuthenticated
         )
 
-        eventConsumerTask?.cancel()
-        eventConsumerTask = Task { @MainActor [weak self, events = transport.events, onBacklogOverflow] in
+        guard transportWiring.admits(attempt) else { return }
+        let eventConsumer = Task { @MainActor [weak self, events = transport.events, onBacklogOverflow] in
             for await event in events {
                 guard let self else { return }
                 await self.observeTransportEvent(event, onBacklogOverflow: onBacklogOverflow)
             }
         }
+        transportWiring = .wired(WiredTransport(attempt: attempt, eventConsumer: eventConsumer))
     }
 
     /// Observes one transport event on the main actor. Client frames are handed
@@ -90,9 +97,9 @@ extension TheGetaway {
     }
 
     func tearDown() async {
-        let eventConsumer = eventConsumerTask
+        let eventConsumer = transportWiring.eventConsumer
+        transportWiring = .unwired
         eventConsumer?.cancel()
-        eventConsumerTask = nil
         let pipelineConsumers = clientRequestPipelines.values.compactMap { $0.stop() }
         clientRequestPipelines.removeAll()
         await brains.stopInteractionRequests()
@@ -100,7 +107,6 @@ extension TheGetaway {
         for consumer in pipelineConsumers {
             await consumer.value
         }
-        transport = nil
     }
 
     func tearDownIfWired(to expectedTransport: ServerTransport) async {

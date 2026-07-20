@@ -126,22 +126,165 @@ public struct HeistResult: Codable, Sendable, Equatable {
             admittedStepsByPath[current.step.path] = current.step
             var branchCounts: [HeistExecutionPath.ChildBranch: Int] = [:]
             let children = current.step.children.map { child in
-                let branch = child.path.childBranch(after: current.step.path)
-                let childOrdinal = branch.map { branch in
-                    defer { branchCounts[branch, default: 0] += 1 }
-                    return branchCounts[branch, default: 0]
+                let edge = child.path.childEdge(after: current.step.path)
+                let childOrdinal = edge.map { edge in
+                    defer { branchCounts[edge.branch, default: 0] += 1 }
+                    return branchCounts[edge.branch, default: 0]
                 }
                 return (
                     step: child,
                     depth: current.depth + 1,
                     parent: Optional(current.step),
-                    childOrdinal: childOrdinal
+                    childOrdinal: childOrdinal,
+                    edge: edge
                 )
             }
-            pending.append(contentsOf: children.reversed())
+            try admitAggregateEvidence(
+                current.step,
+                childEdges: children.compactMap { child in
+                    child.edge.map { (child.step, $0) }
+                }
+            )
+            pending.append(contentsOf: children.reversed().map {
+                (
+                    step: $0.step,
+                    depth: $0.depth,
+                    parent: $0.parent,
+                    childOrdinal: $0.childOrdinal
+                )
+            })
+        }
+        try admitRootIndices(roots)
+    }
+
+    private static func admitRootIndices(_ roots: [HeistExecutionStepResult]) throws {
+        let rootIndices = roots.compactMap(\.path.rootStepIndex)
+        guard rootIndices == Array(0..<rootIndices.count) else {
+            throw HeistResultCodecError.incoherentExecutionEvidence(
+                path: .body,
+                reason: "top-level body root indices must be contiguous and in result order"
+            )
         }
     }
 
+    private static func admitAggregateEvidence(
+        _ step: HeistExecutionStepResult,
+        childEdges: [(step: HeistExecutionStepResult, edge: HeistExecutionPath.ChildEdge)]
+    ) throws {
+        switch step.kind {
+        case .conditional:
+            try admitConditionalEvidence(step, childEdges: childEdges)
+        case .forEachElement:
+            try admitLoopIterationCount(
+                step,
+                observed: childEdges.count { $0.edge.branch == .forEachElementIterations },
+                expected: step.forEachElementEvidence?.iterationCount,
+                loopName: "for_each_element"
+            )
+        case .forEachString:
+            try admitLoopIterationCount(
+                step,
+                observed: childEdges.count { $0.edge.branch == .forEachStringIterations },
+                expected: step.forEachStringEvidence?.iterationCount,
+                loopName: "for_each_string"
+            )
+        case .repeatUntil:
+            try admitRepeatUntilEvidence(step, childEdges: childEdges)
+        case .action,
+             .wait,
+             .forEachIteration,
+             .repeatUntilIteration,
+             .warn,
+             .fail,
+             .heist,
+             .invoke:
+            break
+        }
+    }
+
+    private static func admitConditionalEvidence(
+        _ step: HeistExecutionStepResult,
+        childEdges: [(step: HeistExecutionStepResult, edge: HeistExecutionPath.ChildEdge)]
+    ) throws {
+        guard let outcome = step.caseSelectionEvidence?.selection.outcome else { return }
+        let executionEdges = childEdges.filter(\.edge.isConditionalExecutionBranch)
+        let accepts: (HeistExecutionPath.ChildEdge) -> Bool
+        switch outcome {
+        case .matchedCase(let index):
+            guard let matchedIndex = Int(exactly: index) else {
+                throw incoherent(step, "matched_case index \(index) is not representable")
+            }
+            accepts = { $0.branch == .conditionalCase(matchedIndex) }
+        case .elseBranch:
+            accepts = { $0.branch == .conditionalElse }
+        case .timedOut, .noMatch:
+            accepts = { _ in false }
+        }
+        guard executionEdges.allSatisfy({ accepts($0.edge) }) else {
+            throw incoherent(step, "conditional children do not match selected branch \(outcome)")
+        }
+    }
+
+    private static func admitLoopIterationCount(
+        _ step: HeistExecutionStepResult,
+        observed: Int,
+        expected: Int?,
+        loopName: String
+    ) throws {
+        guard let expected else { return }
+        guard observed == expected else {
+            throw incoherent(
+                step,
+                "\(loopName) evidence iterationCount \(expected) does not match \(observed) iteration child node(s)"
+            )
+        }
+    }
+
+    private static func admitRepeatUntilEvidence(
+        _ step: HeistExecutionStepResult,
+        childEdges: [(step: HeistExecutionStepResult, edge: HeistExecutionPath.ChildEdge)]
+    ) throws {
+        guard let evidence = step.repeatUntilEvidence else { return }
+        let iterationCount = childEdges.count { $0.edge.branch == .repeatUntilIterations }
+        guard iterationCount == evidence.iterationCount else {
+            throw incoherent(
+                step,
+                "repeat_until evidence iterationCount \(evidence.iterationCount) "
+                    + "does not match \(iterationCount) iteration child node(s)"
+            )
+        }
+        let elseCount = childEdges.count { $0.edge.branch == .repeatUntilElse }
+        switch evidence.outcome {
+        case .matched, .continued:
+            guard elseCount == 0 else {
+                throw incoherent(step, "repeat_until \(evidence.outcome) evidence cannot contain else_body children")
+            }
+        case .handledElse:
+            guard elseCount > 0 else {
+                throw incoherent(step, "repeat_until handled_else evidence requires else_body children")
+            }
+        case .failed:
+            break
+        }
+    }
+
+    private static func incoherent(
+        _ step: HeistExecutionStepResult,
+        _ reason: String
+    ) -> HeistResultCodecError {
+        .incoherentExecutionEvidence(path: step.path, reason: reason)
+    }
+
+}
+
+private extension Sequence {
+    func count(where isIncluded: (Element) throws -> Bool) rethrows -> Int {
+        try reduce(into: 0) { count, element in
+            if try isIncluded(element) {
+                count += 1
+            }
+        }
+    }
 }
 
 public enum HeistExecutionOutcome: Sendable, Equatable {

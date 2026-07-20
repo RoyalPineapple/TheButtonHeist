@@ -28,13 +28,61 @@ final class TheGetaway {
     var identity: ServerIdentity
     let pongPayload: PongPayload
 
-    /// Current transport — set by `wireTransport`, cleared on teardown.
-    weak var transport: ServerTransport?
+    struct TransportWiringAttempt: Equatable {
+        let id: UUID
+        let transport: ServerTransport
 
-    /// Single long-lived consumer Task for `transport.events`. Cancelled on
-    /// `tearDown()`; the for-await loop also exits when the transport finishes
-    /// its event continuation in `stop()`.
-    var eventConsumerTask: Task<Void, Never>?
+        init(transport: ServerTransport) {
+            self.id = UUID()
+            self.transport = transport
+        }
+
+        static func == (lhs: Self, rhs: Self) -> Bool {
+            lhs.id == rhs.id
+        }
+    }
+
+    struct WiredTransport {
+        let attempt: TransportWiringAttempt
+        let eventConsumer: Task<Void, Never>
+    }
+
+    enum TransportWiringState {
+        case unwired
+        case wiring(TransportWiringAttempt)
+        case wired(WiredTransport)
+
+        var transport: ServerTransport? {
+            switch self {
+            case .unwired:
+                nil
+            case .wiring(let attempt):
+                attempt.transport
+            case .wired(let session):
+                session.attempt.transport
+            }
+        }
+
+        var eventConsumer: Task<Void, Never>? {
+            guard case .wired(let session) = self else { return nil }
+            return session.eventConsumer
+        }
+
+        func admits(_ attempt: TransportWiringAttempt) -> Bool {
+            guard case .wiring(let current) = self else { return false }
+            return current == attempt
+        }
+    }
+
+    /// Transport wiring is one explicit state machine so teardown cannot leave a
+    /// stale transport or consumer behind while callback installation is suspended.
+    var transportWiring: TransportWiringState = .unwired
+
+    var pauseBeforeTransportCallbackInstallationForTesting: (@MainActor @Sendable () async -> Void)?
+
+    var transport: ServerTransport? {
+        transportWiring.transport
+    }
 
     /// Frames are admitted and executed in per-client order. Transport
     /// lifecycle events never wait for these consumers.

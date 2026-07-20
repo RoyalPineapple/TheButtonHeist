@@ -473,9 +473,10 @@ open ButtonHeist.xcworkspace
 ### Test locally
 
 ```bash
-tuist test TheScoreTests --no-selective-testing
-tuist test ButtonHeistTests --no-selective-testing
-tuist test TheInsideJobTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
+scripts/test-runner.py run MacFrameworkTests --selection full
+scripts/test-runner.py run TheInsideJobTests --selection full
+scripts/test-runner.py run TheInsideJobIntegrationTests --selection full
+scripts/test-runner.py run HostedBehaviorTests --selection full
 ```
 
 ### Project structure

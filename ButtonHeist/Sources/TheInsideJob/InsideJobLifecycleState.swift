@@ -130,6 +130,37 @@ extension TheInsideJob {
         }
     }
 
+    struct LifecycleObservation: Equatable, Sendable {
+        let id: UUID
+    }
+
+    enum LifecycleObservationState: Equatable, Sendable {
+        case uninstalled
+        case installed(LifecycleObservation)
+
+        var isInstalled: Bool {
+            switch self {
+            case .installed:
+                return true
+            case .uninstalled:
+                return false
+            }
+        }
+
+        mutating func installIfNeeded() -> LifecycleObservation? {
+            guard case .uninstalled = self else { return nil }
+            let observation = LifecycleObservation(id: UUID())
+            self = .installed(observation)
+            return observation
+        }
+
+        mutating func uninstallIfNeeded() -> LifecycleObservation? {
+            guard case .installed(let observation) = self else { return nil }
+            self = .uninstalled
+            return observation
+        }
+    }
+
     /// Tracks @objc lifecycle bridge Tasks that must finish before start/resume reads `serverPhase`.
     @MainActor
     final class LifecycleBoundaryTasks {

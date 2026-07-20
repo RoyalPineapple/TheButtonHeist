@@ -24,7 +24,7 @@ import TheScore
 
     @Test func `unavailable invocation evidence projects declaration identity`() throws {
         let step = HeistExecutionStepResult.invocation(
-            path: try HeistExecutionPath(validating: "$.body[1]"),
+            path: try HeistExecutionPath(validating: "$.body[0]"),
             durationMs: 1,
             invocationPath: "Cart.checkout",
             argument: .string("Milk"),

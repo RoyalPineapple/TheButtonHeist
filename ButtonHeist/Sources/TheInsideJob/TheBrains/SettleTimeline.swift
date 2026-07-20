@@ -3,6 +3,7 @@
 import UIKit
 
 import AccessibilitySnapshotParser
+import ThePlans
 import TheScore
 
 struct TimelineKey: Hashable, Sendable {
@@ -251,7 +252,7 @@ struct SettleRecordedObservation {
 
     private static func quoted(_ value: String?) -> String {
         guard let value else { return "nil" }
-        return "\"\(value)\""
+        return CanonicalValueDescription.quoted(value)
     }
 
     private static func format(_ frame: CGRect) -> String {

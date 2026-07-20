@@ -51,10 +51,10 @@ TheInsideJob uses an OS-assigned port by default, or a fixed port from `INSIDEJO
 buttonheist list_devices
 
 # Connect to a USB device by name when advertised or configured as a target
-buttonheist --device "iPhone 15 Pro" activate --identifier myButton
+buttonheist activate --device "iPhone 15 Pro" --identifier myButton
 
 # Take a screenshot over USB; writes an artifact by default
-buttonheist --device "iPhone 15 Pro" get_screen --output screen.png
+buttonheist get_screen --device "iPhone 15 Pro" --output screen.png
 ```
 
 ### MCP Server
@@ -146,7 +146,7 @@ sequenceDiagram
 
 ### Manual Connection (for debugging)
 
-The protocol requires TLS before any JSON messages and token authentication before commands. Plain `nc` is not a valid production client. For manual debugging, prefer `buttonheist connect host:port` or an MCP named target that carries the endpoint and token.
+The protocol requires TLS before any JSON messages and token authentication before commands. Plain `nc` is not a valid production client. For manual debugging, prefer `buttonheist connect --device host:port` or an MCP named target that carries the endpoint and token.
 
 ## Message Protocol
 

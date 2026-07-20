@@ -7,7 +7,7 @@ extension TheInsideJob {
     // MARK: - App Lifecycle
 
     func installLifecycleObservationIfNeeded() {
-        guard !lifecycleObservationIsInstalled else { return }
+        guard lifecycleObservation.installIfNeeded() != nil else { return }
         NotificationCenter.default.addObserver(
             self, selector: #selector(appWillResignActive),
             name: UIApplication.willResignActiveNotification, object: nil
@@ -28,16 +28,15 @@ extension TheInsideJob {
             self, selector: #selector(appWillTerminate),
             name: UIApplication.willTerminateNotification, object: nil
         )
-        setLifecycleObservationInstalled(true)
     }
 
     func stopLifecycleObservationIfNeeded() {
+        guard lifecycleObservation.uninstallIfNeeded() != nil else { return }
         NotificationCenter.default.removeObserver(self, name: UIApplication.willResignActiveNotification, object: nil)
         NotificationCenter.default.removeObserver(self, name: UIApplication.didEnterBackgroundNotification, object: nil)
         NotificationCenter.default.removeObserver(self, name: UIApplication.willEnterForegroundNotification, object: nil)
         NotificationCenter.default.removeObserver(self, name: UIApplication.didBecomeActiveNotification, object: nil)
         NotificationCenter.default.removeObserver(self, name: UIApplication.willTerminateNotification, object: nil)
-        setLifecycleObservationInstalled(false)
     }
 
     @objc private func appWillResignActive() {

@@ -268,6 +268,132 @@ import ThePlans
         ])
     }
 
+    @Test func `aggregate admission rejects conditional children outside matched case`() throws {
+        let selection = HeistCaseSelectionResult.selectingFirstMatch(
+            cases: [
+                HeistCaseMatchResult(predicate: .exists(.label("One")), met: true),
+                HeistCaseMatchResult(predicate: .exists(.label("Two")), met: false),
+            ],
+            ifNone: .noMatch,
+            elapsedMs: 1
+        )
+        let root = HeistResultFixture.conditional(
+            selection: selection,
+            children: [
+                HeistResultFixture.warning(
+                    path: "$.body[0].conditional.cases[1].body[0]",
+                    message: "wrong case"
+                ),
+            ]
+        )
+
+        try expectAggregateAdmissionError(
+            steps: [root],
+            containing: ["incoherent execution evidence", "conditional children do not match selected branch"]
+        )
+    }
+
+    @Test func `aggregate admission rejects conditional case children for else outcome`() throws {
+        let selection = HeistCaseSelectionResult.selectingFirstMatch(
+            cases: [
+                HeistCaseMatchResult(predicate: .exists(.label("One")), met: false),
+            ],
+            ifNone: .noMatch,
+            elapsedMs: 1
+        ).selectingElseBranch()
+        let root = HeistResultFixture.conditional(
+            selection: selection,
+            children: [
+                HeistResultFixture.warning(
+                    path: "$.body[0].conditional.cases[0].body[0]",
+                    message: "wrong branch"
+                ),
+            ]
+        )
+
+        try expectAggregateAdmissionError(
+            steps: [root],
+            containing: ["incoherent execution evidence", "conditional children do not match selected branch"]
+        )
+    }
+
+    @Test func `aggregate admission rejects loop evidence count that disagrees with iteration children`() throws {
+        let declaration = try #require(HeistForEachStringDeclaration(parameter: "item", count: 2))
+        let evidence = try #require(HeistForEachStringEvidence(iterationCount: 2))
+        let iteration = HeistResultFixture.forEachStringIteration(
+            path: "$.body[0].for_each_string.iterations[0]",
+            count: 2,
+            iterationCount: 2,
+            ordinal: 0,
+            value: "one",
+            status: .passed,
+            children: []
+        )
+        let root = HeistExecutionStepResult.forEachString(
+            path: "$.body[0]",
+            durationMs: 1,
+            declaration: declaration,
+            completion: .passed(
+                evidence: try #require(HeistPassedForEachStringEvidence(evidence)),
+                children: try #require(HeistPassingChildren([iteration]))
+            )
+        )
+
+        try expectAggregateAdmissionError(
+            steps: [root],
+            containing: ["for_each_string evidence iterationCount 2 does not match 1 iteration child"]
+        )
+    }
+
+    @Test func `aggregate admission rejects repeat until handled else evidence without else children`() throws {
+        let predicate = AccessibilityPredicate.exists(.label("Done"))
+        let declaration = HeistRepeatUntilDeclaration(predicate: predicate, timeout: 0.5)
+        let unmet = try #require(ExpectationResult.Unmet(ExpectationResult(
+            met: false,
+            predicate: predicate,
+            actual: "not found"
+        )))
+        let iterationEvidence = try #require(HeistRepeatUntilEvidence.continued(
+            iterationCount: 1,
+            iterationOrdinal: 0,
+            expectation: unmet
+        ))
+        let iteration = HeistExecutionStepResult.repeatUntilIteration(
+            path: "$.body[0].repeat_until.iterations[0]",
+            durationMs: 1,
+            declaration: declaration,
+            completion: .passed(
+                evidence: try #require(HeistPassedRepeatUntilIterationEvidence(iterationEvidence))
+            )
+        )
+        let rootEvidence = try #require(HeistRepeatUntilEvidence.handledElse(
+            iterationCount: 1,
+            expectation: unmet,
+            lastObservedSummary: "not found"
+        ))
+        let root = HeistExecutionStepResult.repeatUntil(
+            path: "$.body[0]",
+            durationMs: 2,
+            declaration: declaration,
+            completion: .passed(
+                evidence: try #require(HeistPassedRepeatUntilEvidence(rootEvidence)),
+                children: try #require(HeistPassingChildren([iteration]))
+            )
+        )
+
+        try expectAggregateAdmissionError(
+            steps: [root],
+            containing: ["repeat_until handled_else evidence requires else_body children"]
+        )
+    }
+
+    @Test func `aggregate admission rejects sparse top level body roots`() throws {
+        try expectAggregateAdmissionError(
+            steps: [HeistResultFixture.warning(path: "$.body[1]", message: "sparse")],
+            containing: ["top-level body root indices must be contiguous and in result order"]
+        )
+    }
+
     @Test func `aggregate admission rejects stale warning fixture with heist child path`() throws {
         let data = Data(#"""
         {
@@ -376,6 +502,21 @@ import ThePlans
         do {
             _ = try HeistResultCodec.decode(data, format: format, limits: limits)
             Issue.record("Expected result decode to fail")
+        } catch {
+            let description = String(describing: error)
+            for substring in substrings {
+                #expect(description.contains(substring), "\(description) did not contain \(substring)")
+            }
+        }
+    }
+
+    private func expectAggregateAdmissionError(
+        steps: [HeistExecutionStepResult],
+        containing substrings: [String]
+    ) throws {
+        do {
+            _ = try HeistResult(steps: steps, durationMs: 1)
+            Issue.record("Expected result admission to fail")
         } catch {
             let description = String(describing: error)
             for substring in substrings {

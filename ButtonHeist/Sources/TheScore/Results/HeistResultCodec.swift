@@ -165,6 +165,7 @@ public enum HeistResultCodecError: Error, Sendable, Equatable, CustomStringConve
         child: HeistExecutionPath,
         parentKind: HeistExecutionStepKind
     )
+    case incoherentExecutionEvidence(path: HeistExecutionPath, reason: String)
     case gzipCorruptData
 
     public var description: String {
@@ -191,6 +192,8 @@ public enum HeistResultCodecError: Error, Sendable, Equatable, CustomStringConve
             return "heist result root path \(path) is not a legal root step path"
         case .illegalChildExecutionPath(let parent, let child, let parentKind):
             return "heist result child path \(child) is not a legal \(parentKind.rawValue) child of \(parent)"
+        case .incoherentExecutionEvidence(let path, let reason):
+            return "heist result node \(path) has incoherent execution evidence: \(reason)"
         case .gzipCorruptData:
             return "gzip decompression failed: corrupt or truncated gzip data"
         }
