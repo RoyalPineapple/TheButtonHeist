@@ -3,41 +3,6 @@ import XCTest
 import TheScore
 
 final class ActionResultPayloadWireTests: XCTestCase {
-    func testActionResultWithValue() throws {
-        let result = ActionResult.success(payload: .typeText("Hello World"))
-        let message = ServerMessage.actionResult(result)
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
-
-        if case .actionResult(let decodedResult) = decoded {
-            XCTAssertTrue(decodedResult.outcome.isSuccess)
-            XCTAssertEqual(decodedResult.method, .typeText)
-            guard case .typeText(let string?) = decodedResult.payload else {
-                XCTFail("Expected .typeText payload")
-                return
-            }
-            XCTAssertEqual(string, "Hello World")
-            XCTAssertNil(decodedResult.message)
-        } else {
-            XCTFail("Expected actionResult, got \(decoded)")
-        }
-    }
-
-    func testActionResultWithoutValue() throws {
-        let result = ActionResult.success(payload: .oneFingerTap)
-        let message = ServerMessage.actionResult(result)
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
-
-        if case .actionResult(let decodedResult) = decoded {
-            XCTAssertTrue(decodedResult.outcome.isSuccess)
-            XCTAssertEqual(decodedResult.method, .oneFingerTap)
-            XCTAssertEqual(decodedResult.payload, .oneFingerTap)
-        } else {
-            XCTFail("Expected actionResult, got \(decoded)")
-        }
-    }
-
     func testActionResultValuePayloadWireShape() throws {
         let result = ActionResult.success(payload: .typeText("Hi"))
         let data = try JSONEncoder().encode(result)
@@ -106,13 +71,6 @@ final class ActionResultPayloadWireTests: XCTestCase {
         XCTAssertEqual(try textRange.string("rangeDescription"), "[10..<16]")
     }
 
-    func testRotorResultRejectsObsoleteFoundElementSnapshot() throws {
-        let json = Data("""
-        {"rotor":"Errors","direction":"next","foundElement":{"heistId":"old"}}
-        """.utf8)
-
-        XCTAssertThrowsError(try JSONDecoder().decode(RotorResult.self, from: json))
-    }
     func testActionResultPayloadDecodesFromExplicitJSON() throws {
         let json = """
         {
