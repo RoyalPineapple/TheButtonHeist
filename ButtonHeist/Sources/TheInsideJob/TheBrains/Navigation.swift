@@ -296,21 +296,34 @@ final class Navigation {
                 )
             }
 
-            let scrollAxis = ScrollContainerMetrics.axis(
-                contentWidth: Double(contentSize.width),
-                contentHeight: Double(contentSize.height),
-                viewportWidth: Double(frame.size.width),
-                viewportHeight: Double(frame.size.height)
-            )
+            let contentWidth = try? FiniteDimension(validating: Double(contentSize.width))
+            let contentHeight = try? FiniteDimension(validating: Double(contentSize.height))
+            let viewportWidth = try? FiniteDimension(validating: Double(frame.size.width))
+            let viewportHeight = try? FiniteDimension(validating: Double(frame.size.height))
+            let scrollAxis: ScrollContainerAxis?
+            if let contentWidth,
+               let contentHeight,
+               let viewportWidth,
+               let viewportHeight,
+               let metrics = ScrollContainerMetrics.project(
+                contentWidth: contentWidth,
+                contentHeight: contentHeight,
+                viewportWidth: viewportWidth,
+                viewportHeight: viewportHeight
+               ) {
+                scrollAxis = metrics.axis
+            } else {
+                scrollAxis = nil
+            }
             return InterfaceDiscoveryOmittedContainer(
                 containerName: containerName,
                 type: container.containerPredicateFacts.role.kind,
                 reasonCodes: reasons.sorted(),
                 scrollAxis: scrollAxis,
-                viewportWidth: try? FiniteDimension(validating: Double(frame.size.width)),
-                viewportHeight: try? FiniteDimension(validating: Double(frame.size.height)),
-                contentWidth: try? FiniteDimension(validating: Double(contentSize.width)),
-                contentHeight: try? FiniteDimension(validating: Double(contentSize.height))
+                viewportWidth: viewportWidth,
+                viewportHeight: viewportHeight,
+                contentWidth: contentWidth,
+                contentHeight: contentHeight
             )
         }
 

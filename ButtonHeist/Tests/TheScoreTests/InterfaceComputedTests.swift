@@ -207,56 +207,114 @@ final class InterfaceComputedTests: XCTestCase {
         )
     }
 
-    func testScrollContainerMetricsEstimatePageScrollsUsingRuntimeOverlap() {
+    func testScrollContainerMetricsEstimatePageScrollsUsingRuntimeOverlap() throws {
         XCTAssertEqual(
-            ScrollContainerMetrics.estimatedVerticalPageScrolls(contentHeight: 1_200, viewportHeight: 400),
+            try scrollMetrics(contentWidth: 390, contentHeight: 1_200, viewportWidth: 390, viewportHeight: 400)
+                .verticalPageScrolls,
             3
         )
         XCTAssertEqual(
-            ScrollContainerMetrics.estimatedHorizontalPageScrolls(contentWidth: 1_200, viewportWidth: 390),
+            try scrollMetrics(contentWidth: 1_200, contentHeight: 400, viewportWidth: 390, viewportHeight: 400)
+                .horizontalPageScrolls,
             3
         )
         XCTAssertEqual(
-            ScrollContainerMetrics.estimatedVerticalPageScrolls(contentHeight: 3_891_549, viewportHeight: 1_032),
+            try scrollMetrics(contentWidth: 390, contentHeight: 3_891_549, viewportWidth: 390, viewportHeight: 1_032)
+                .verticalPageScrolls,
             3_938
         )
         XCTAssertEqual(
-            ScrollContainerMetrics.estimatedVerticalPageScrolls(contentHeight: 400, viewportHeight: 400),
+            try scrollMetrics(contentWidth: 390, contentHeight: 400, viewportWidth: 390, viewportHeight: 400)
+                .verticalPageScrolls,
             0
+        )
+        XCTAssertEqual(
+            try scrollMetrics(
+                contentWidth: 390,
+                contentHeight: .greatestFiniteMagnitude,
+                viewportWidth: 390,
+                viewportHeight: 1
+            ).verticalPageScrolls,
+            ScrollContainerMetrics.maximumEstimatedPageScrolls
         )
     }
 
-    func testScrollContainerMetricsDetectAxis() {
+    func testScrollContainerMetricsDetectAxis() throws {
         XCTAssertEqual(
-            ScrollContainerMetrics.axis(
+            try scrollMetrics(
                 contentWidth: 1_200,
                 contentHeight: 400,
                 viewportWidth: 390,
                 viewportHeight: 400
-            ),
+            ).axis,
             .horizontal
         )
         XCTAssertEqual(
-            ScrollContainerMetrics.axis(
+            try scrollMetrics(
                 contentWidth: 390,
                 contentHeight: 1_200,
                 viewportWidth: 390,
                 viewportHeight: 400
-            ),
+            ).axis,
             .vertical
         )
         XCTAssertEqual(
-            ScrollContainerMetrics.axis(
+            try scrollMetrics(
                 contentWidth: 1_200,
                 contentHeight: 1_200,
                 viewportWidth: 390,
                 viewportHeight: 400
-            ),
+            ).axis,
             .both
         )
     }
 
+    func testScrollContainerMetricsProjectionRequiresUsableViewport() throws {
+        let contentWidth = try FiniteDimension(validating: 1_200)
+        let contentHeight = try FiniteDimension(validating: 1_200)
+        let viewportWidth = try FiniteDimension(validating: 0)
+        let viewportHeight = try FiniteDimension(validating: 400)
+
+        XCTAssertNil(ScrollContainerMetrics.project(
+            contentWidth: contentWidth,
+            contentHeight: contentHeight,
+            viewportWidth: viewportWidth,
+            viewportHeight: viewportHeight
+        ))
+    }
+
+    func testScrollContainerMetricsProjectionKeepsValidNoneAxis() throws {
+        let contentWidth = try FiniteDimension(validating: 390)
+        let contentHeight = try FiniteDimension(validating: 400)
+        let viewportWidth = try FiniteDimension(validating: 390)
+        let viewportHeight = try FiniteDimension(validating: 400)
+
+        let metrics = try XCTUnwrap(ScrollContainerMetrics.project(
+            contentWidth: contentWidth,
+            contentHeight: contentHeight,
+            viewportWidth: viewportWidth,
+            viewportHeight: viewportHeight
+        ))
+        XCTAssertEqual(metrics.axis, .none)
+        XCTAssertEqual(metrics.estimatedPageCount, 1)
+    }
+
     // MARK: - Helpers
+
+    private func scrollMetrics(
+        contentWidth: Double,
+        contentHeight: Double,
+        viewportWidth: Double,
+        viewportHeight: Double
+    ) throws -> ScrollContainerMetrics.Projection {
+        let metrics = ScrollContainerMetrics.project(
+            contentWidth: try FiniteDimension(validating: contentWidth),
+            contentHeight: try FiniteDimension(validating: contentHeight),
+            viewportWidth: try FiniteDimension(validating: viewportWidth),
+            viewportHeight: try FiniteDimension(validating: viewportHeight)
+        )
+        return try XCTUnwrap(metrics)
+    }
 
     private func makeElement(
         label: String?,

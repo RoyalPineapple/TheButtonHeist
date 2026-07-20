@@ -236,13 +236,14 @@ extension Navigation {
             direction: ScrollScanDirection,
             onObservation: (SettledObservationEvent) -> ViewportExplorationDecision
         ) async -> ScrollScanOutcome {
-            while true {
-                guard !Task.isCancelled, exploration.hasTimeRemaining else { return .interrupted }
+            while exploration.hasTimeRemaining {
+                guard !Task.isCancelled else { return .interrupted }
                 if let reason = exploration.progress.recordScrollAttempt(in: container.path) {
                     return .limitHit(reason)
                 }
                 guard let target = currentProgrammaticScrollTarget(for: container) else { return .exhausted }
 
+                await navigation.tripwire.yieldFrames(1)
                 let transition = await navigation.performViewportTransition(
                     .page(
                         target,
@@ -269,6 +270,7 @@ extension Navigation {
                     return nestedOutcome
                 }
             }
+            return .interrupted
         }
 
         private func scanNewlyVisibleNestedContainers(

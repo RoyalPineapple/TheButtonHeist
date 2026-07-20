@@ -159,6 +159,12 @@ public enum HeistResultCodecError: Error, Sendable, Equatable, CustomStringConve
     case nestingDepthExceeded(limit: Int, observed: Int)
     case duplicateExecutionPath(HeistExecutionPath)
     case nonDescendantChildPath(parent: HeistExecutionPath, child: HeistExecutionPath)
+    case illegalRootExecutionPath(HeistExecutionPath)
+    case illegalChildExecutionPath(
+        parent: HeistExecutionPath,
+        child: HeistExecutionPath,
+        parentKind: HeistExecutionStepKind
+    )
     case gzipCorruptData
 
     public var description: String {
@@ -181,6 +187,10 @@ public enum HeistResultCodecError: Error, Sendable, Equatable, CustomStringConve
             return "heist result contains duplicate execution path \(path)"
         case .nonDescendantChildPath(let parent, let child):
             return "heist result child path \(child) is not a descendant of parent path \(parent)"
+        case .illegalRootExecutionPath(let path):
+            return "heist result root path \(path) is not a legal root step path"
+        case .illegalChildExecutionPath(let parent, let child, let parentKind):
+            return "heist result child path \(child) is not a legal \(parentKind.rawValue) child of \(parent)"
         case .gzipCorruptData:
             return "gzip decompression failed: corrupt or truncated gzip data"
         }

@@ -434,8 +434,78 @@ public enum ScrollContainerAxis: String, Codable, Sendable {
 
 public enum ScrollContainerMetrics {
     public static let pageOverlap: Double = 44
+    public static let maximumEstimatedPageScrolls = 1_000_000
 
-    public static func axis(
+    public struct Input: Sendable, Equatable {
+        public let contentWidth: FiniteDimension
+        public let contentHeight: FiniteDimension
+        public let viewportWidth: FiniteDimension
+        public let viewportHeight: FiniteDimension
+
+        public init?(
+            contentWidth: FiniteDimension,
+            contentHeight: FiniteDimension,
+            viewportWidth: FiniteDimension,
+            viewportHeight: FiniteDimension
+        ) {
+            guard viewportWidth.value > 0, viewportHeight.value > 0 else { return nil }
+            self.contentWidth = contentWidth
+            self.contentHeight = contentHeight
+            self.viewportWidth = viewportWidth
+            self.viewportHeight = viewportHeight
+        }
+    }
+
+    public struct Projection: Sendable, Equatable {
+        public let axis: ScrollContainerAxis
+        public let horizontalPageScrolls: Int
+        public let verticalPageScrolls: Int
+
+        public var maximumPageScrolls: Int {
+            max(horizontalPageScrolls, verticalPageScrolls)
+        }
+
+        public var estimatedPageCount: Int {
+            min(ScrollContainerMetrics.maximumEstimatedPageScrolls + 1, maximumPageScrolls + 1)
+        }
+    }
+
+    public static func project(_ input: Input) -> Projection {
+        let horizontalPageScrolls = estimatedHorizontalPageScrolls(
+            contentWidth: input.contentWidth.value,
+            viewportWidth: input.viewportWidth.value
+        )
+        let verticalPageScrolls = estimatedVerticalPageScrolls(
+            contentHeight: input.contentHeight.value,
+            viewportHeight: input.viewportHeight.value
+        )
+        return Projection(
+            axis: axis(
+                contentWidth: input.contentWidth.value,
+                contentHeight: input.contentHeight.value,
+                viewportWidth: input.viewportWidth.value,
+                viewportHeight: input.viewportHeight.value
+            ),
+            horizontalPageScrolls: horizontalPageScrolls,
+            verticalPageScrolls: verticalPageScrolls
+        )
+    }
+
+    public static func project(
+        contentWidth: FiniteDimension,
+        contentHeight: FiniteDimension,
+        viewportWidth: FiniteDimension,
+        viewportHeight: FiniteDimension
+    ) -> Projection? {
+        Input(
+            contentWidth: contentWidth,
+            contentHeight: contentHeight,
+            viewportWidth: viewportWidth,
+            viewportHeight: viewportHeight
+        ).map { project($0) }
+    }
+
+    private static func axis(
         contentWidth: Double,
         contentHeight: Double,
         viewportWidth: Double,
@@ -456,21 +526,21 @@ public enum ScrollContainerMetrics {
         }
     }
 
-    public static func estimatedHorizontalPageScrolls(
+    private static func estimatedHorizontalPageScrolls(
         contentWidth: Double,
         viewportWidth: Double
     ) -> Int {
         estimatedPageScrolls(contentLength: contentWidth, viewportLength: viewportWidth)
     }
 
-    public static func estimatedVerticalPageScrolls(
+    private static func estimatedVerticalPageScrolls(
         contentHeight: Double,
         viewportHeight: Double
     ) -> Int {
         estimatedPageScrolls(contentLength: contentHeight, viewportLength: viewportHeight)
     }
 
-    public static func estimatedPageScrolls(
+    private static func estimatedPageScrolls(
         contentLength: Double,
         viewportLength: Double
     ) -> Int {
@@ -485,7 +555,11 @@ public enum ScrollContainerMetrics {
         guard scrollableDistance > 1 else { return 0 }
 
         let pageStep = max(1, viewportLength - pageOverlap)
-        return Int(ceil(scrollableDistance / pageStep))
+        let estimate = ceil(scrollableDistance / pageStep)
+        guard estimate < Double(maximumEstimatedPageScrolls) else {
+            return maximumEstimatedPageScrolls
+        }
+        return Int(estimate)
     }
 
     private static func isScrollable(

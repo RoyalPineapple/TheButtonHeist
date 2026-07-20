@@ -163,25 +163,17 @@ struct PublicContainer: Encodable {
                   let viewportWidth = try? FiniteDimension(validating: frame.size.width),
                   let viewportHeight = try? FiniteDimension(validating: frame.size.height)
             else { return }
-            let horizontalPageScrolls = ScrollContainerMetrics.estimatedHorizontalPageScrolls(
-                contentWidth: contentWidth.value,
-                viewportWidth: viewportWidth.value
-            )
-            let verticalPageScrolls = ScrollContainerMetrics.estimatedVerticalPageScrolls(
-                contentHeight: contentHeight.value,
-                viewportHeight: viewportHeight.value
-            )
-            let scrollAxis = ScrollContainerMetrics.axis(
-                contentWidth: contentWidth.value,
-                contentHeight: contentHeight.value,
-                viewportWidth: viewportWidth.value,
-                viewportHeight: viewportHeight.value
-            )
+            guard let metrics = ScrollContainerMetrics.project(
+                contentWidth: contentWidth,
+                contentHeight: contentHeight,
+                viewportWidth: viewportWidth,
+                viewportHeight: viewportHeight
+            ) else { return }
             self.contentWidth = contentWidth.value
             self.contentHeight = contentHeight.value
-            self.scrollAxis = scrollAxis.rawValue
-            pageScrollsX = horizontalPageScrolls > 0 ? horizontalPageScrolls : nil
-            pageScrollsY = verticalPageScrolls > 0 ? verticalPageScrolls : nil
+            scrollAxis = metrics.axis.rawValue
+            pageScrollsX = metrics.horizontalPageScrolls > 0 ? metrics.horizontalPageScrolls : nil
+            pageScrollsY = metrics.verticalPageScrolls > 0 ? metrics.verticalPageScrolls : nil
             self.observedElementCount = scrollInventory?.totalElementCount
                 ?? observedElementCount
                 ?? children.reduce(0) { $0 + $1.elementCount }
