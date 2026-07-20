@@ -362,9 +362,6 @@ final class HeistResultTests: XCTestCase {
                 timeout: .milliseconds(1),
                 body: [
                     .action(ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
-                ],
-                elseBody: [
-                    .warn(WarnStep(message: "quantity did not reach 2")),
                 ]
             )),
         ])
@@ -374,12 +371,12 @@ final class HeistResultTests: XCTestCase {
         let step = try XCTUnwrap(heistResult.steps.first)
         let evidence = try XCTUnwrap(step.repeatUntilEvidence)
 
-        XCTAssertTrue(result.outcome.isSuccess, result.message ?? "repeat_until else failed")
+        XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(incrementCount, 1)
-        XCTAssertEqual(step.status, .passed)
-        XCTAssertEqual(step.children.map(\.kind), [.repeatUntilIteration, .warn])
+        XCTAssertEqual(step.status, .failed)
+        XCTAssertEqual(step.children.map(\.kind), [.repeatUntilIteration])
         XCTAssertFalse(evidence.expectation.met)
-        XCTAssertEqual(evidence.outcome, .handledElse)
+        XCTAssertEqual(evidence.outcome, .failed)
         XCTAssertNil(evidence.actionResult)
         XCTAssertNil(step.reportActionResult)
         XCTAssertTrue(evidence.failureReason?.contains("timed out") == true)

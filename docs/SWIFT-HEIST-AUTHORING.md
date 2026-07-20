@@ -369,8 +369,8 @@ ForEach("Milk", "Eggs") { item in
 ```
 
 `RepeatUntil` is the bounded retry form: the body repeats until the predicate
-holds against settled state or the mandatory timeout elapses, with an optional
-`.else { ... }` body for the timeout path:
+holds against settled state or the mandatory timeout elapses. Timeout fails the
+step; use `WaitFor(...).else { ... }` when a timeout needs a recovery branch:
 
 ```swift
 RepeatUntil(.exists(.label("Inbox empty")), timeout: 10) {

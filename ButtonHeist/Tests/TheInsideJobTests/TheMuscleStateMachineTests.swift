@@ -421,6 +421,30 @@ final class TheMuscleStateMachineTests: XCTestCase {
         XCTAssertEqual(callbackOutcome, .failed(.callbacksNotInstalled("disconnectClient")))
     }
 
+    func testClientDeliveryRejectsStaleCallbackGeneration() {
+        var delivery = ClientDelivery.unwired
+        let staleGeneration = ClientDelivery.Generation()
+        let currentGeneration = ClientDelivery.Generation()
+        let callbacks = ClientDelivery.Callbacks(
+            sendToClient: { _, _ in .delivered },
+            disconnectClient: { _ in },
+            onClientAuthenticated: { _, _ in }
+        )
+
+        delivery.begin(staleGeneration)
+        delivery.begin(currentGeneration)
+
+        XCTAssertEqual(delivery.install(callbacks, for: staleGeneration), .rejected)
+        XCTAssertEqual(delivery.install(callbacks, for: currentGeneration), .installed)
+        XCTAssertEqual(delivery.generation, currentGeneration)
+
+        delivery.invalidate(staleGeneration)
+        XCTAssertEqual(delivery.generation, currentGeneration)
+
+        delivery.invalidate(currentGeneration)
+        XCTAssertNil(delivery.generation)
+    }
+
     func testServerTransportFailurePreservesNetworkDiagnosticReason() {
         let diagnostic = NetworkTransportFailure(.posix(.ECONNRESET))
         let failure = ServerSendFailure.transportFailed(clientId: 12, diagnostic: diagnostic)

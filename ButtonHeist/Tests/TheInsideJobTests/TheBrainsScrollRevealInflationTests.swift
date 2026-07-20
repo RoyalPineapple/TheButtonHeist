@@ -98,6 +98,110 @@ extension TheBrainsScrollTests {
         XCTAssertEqual(scrollView.contentOffset, .zero)
     }
 
+    func testSemanticRevealPassesObservedContentPointToFallbackScan() async throws {
+        let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        scrollView.contentSize = CGSize(width: 320, height: 1_600)
+        let observedPoint = CGPoint(x: 160, y: 1_200)
+        installScreenWithOffViewport(
+            visible: .init(makeElement(label: "Visible"), heistId: "visible_element"),
+            offscreen: .init(
+                makeElement(label: "Settings", traits: .button),
+                heistId: "settings_button",
+                contentActivationPoint: observedPoint,
+                scrollView: scrollView
+            )
+        )
+        let entry = try XCTUnwrap(brains.vault.interfaceTree.findElement(heistId: "settings_button"))
+        let currentEvent = brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+            brains.vault.latestObservation
+        )
+        let originalMoveViewport = brains.navigation.elementInflation.exploration.moveViewport
+        var fallbackRequest: ElementInflation.KnownTargetRevealRequest?
+        brains.navigation.elementInflation.exploration.moveViewport = { _ in
+            Navigation.ViewportTransition(
+                outcome: .moved,
+                previousVisibleIds: [],
+                event: currentEvent
+            )
+        }
+        brains.navigation.elementInflation.exploration.revealKnownTarget = { request in
+            fallbackRequest = request
+            return nil
+        }
+        defer {
+            brains.navigation.elementInflation.exploration.moveViewport = originalMoveViewport
+            brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in nil }
+        }
+
+        let result = await brains.navigation.elementInflation.revealSemanticTarget(
+            entry,
+            deadline: semanticRevealDeadline()
+        )
+
+        guard case .failed(.noLiveScrollableAncestor) = result else {
+            return XCTFail("Expected fallback scan miss, got \(result)")
+        }
+        XCTAssertEqual(fallbackRequest?.heistId, "settings_button")
+        XCTAssertEqual(
+            fallbackRequest?.observedScrollContentActivationPoint,
+            InterfaceTree.ObservedScrollContentActivationPoint(observedPoint)
+        )
+    }
+
+    func testSeededKnownTargetScanCanSatisfyWithoutPaging() async throws {
+        let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        scrollView.contentSize = CGSize(width: 320, height: 1_600)
+        let targetId: HeistId = "settings_button"
+        let observedPoint = observedContentActivationPoint(CGPoint(x: 160, y: 1_200))
+        installScreenWithOffViewport(
+            visible: .init(makeElement(label: "Visible"), heistId: "visible_element"),
+            offscreen: .init(
+                makeElement(label: "Settings", traits: .button),
+                heistId: targetId,
+                contentActivationPoint: observedPoint.point.cgPoint,
+                scrollView: scrollView
+            )
+        )
+
+        let visibleTarget = AccessibilityElement.make(
+            label: "Settings",
+            traits: .button,
+            frame: CGRect(x: 40, y: 160, width: 220, height: 44)
+        )
+        let visibleEntry = InterfaceTree.Element(
+            heistId: targetId,
+            scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: nil),
+            element: visibleTarget
+        )
+        let revealedObservation = InterfaceObservation.makeForTests(
+            elements: [targetId: visibleEntry],
+            hierarchy: [
+                .container(makeScrollableContainer(contentSize: scrollView.contentSize, frame: scrollView.frame), children: [
+                    .element(visibleTarget, traversalIndex: 0)
+                ])
+            ],
+            containerNamesByPath: [TreePath([0]): "known_offscreen_scroll"],
+            heistIdsByPath: [TreePath([0, 0]): targetId],
+            elementRefs: [targetId: .init(object: retainedLiveObject(), scrollView: scrollView)],
+            containerRefsByPath: [TreePath([0]): .init(object: scrollView)],
+            firstResponderHeistId: nil,
+            scrollableContainerViewsByPath: [TreePath([0]): .init(view: scrollView)]
+        )
+        scrollView.onSetContentOffset = { _ in
+            self.visibleObservationSource.observation = revealedObservation
+        }
+
+        let result = await brains.navigation.scanForHeistId(
+            targetId,
+            deadline: semanticRevealDeadline(),
+            observedScrollContentActivationPoint: observedPoint
+        )
+
+        XCTAssertNotNil(result)
+        XCTAssertEqual(result?.progress.scrollCount, 0)
+        XCTAssertEqual(scrollView.setContentOffsetAnimations, [false])
+    }
+
     func testKnownTargetRevealReturnsTimedOutInflationFailureBeforeWork() async throws {
         let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)

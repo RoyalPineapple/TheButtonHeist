@@ -197,6 +197,117 @@ import ThePlans
         #expect(result.steps.map(\.path) == ["$.body[0]", "$.body[0].failure.actions[0]"])
     }
 
+    @Test func `aggregate admission admits skipped roots before terminal failure capture`() throws {
+        let result = try HeistResult(
+            steps: [
+                HeistResultFixture.explicitFailure(path: "$.body[0]", message: "stop"),
+                skippedWarning(path: "$.body[1]"),
+                HeistResultFixture.action(
+                    path: "$.body[0].failure.actions[0]",
+                    command: .takeScreenshot,
+                    result: .success(payload: .screenshot(nil))
+                ),
+            ],
+            durationMs: 3
+        )
+
+        #expect(result.steps.map(\.status) == [.failed, .skipped, .passed])
+    }
+
+    @Test func `codec admission rejects passed roots after abort`() throws {
+        let data = try resultData(
+            steps: [
+                HeistResultFixture.explicitFailure(path: "$.body[0]", message: "stop"),
+                HeistResultFixture.warning(path: "$.body[1]", message: "after"),
+            ]
+        )
+
+        try expectResultDecodeError(
+            data,
+            format: .json,
+            limits: .default,
+            containing: ["regular root cannot execute after abort", "$.body[1]", "$.body[0]"]
+        )
+    }
+
+    @Test func `aggregate admission rejects failure capture before owning root`() throws {
+        try expectAggregateAdmissionError(
+            steps: [
+                HeistResultFixture.action(
+                    path: "$.body[0].failure.actions[0]",
+                    command: .takeScreenshot,
+                    result: .success(payload: .screenshot(nil))
+                ),
+                HeistResultFixture.explicitFailure(path: "$.body[0]", message: "stop"),
+            ],
+            containing: ["root path $.body[0].failure.actions[0] is not a legal root step path"]
+        )
+    }
+
+    @Test func `aggregate admission rejects failure capture without matching failed step`() throws {
+        try expectAggregateAdmissionError(
+            steps: [
+                HeistResultFixture.warning(path: "$.body[0]", message: "passed"),
+                HeistResultFixture.action(
+                    path: "$.body[0].failure.actions[0]",
+                    command: .takeScreenshot,
+                    result: .success(payload: .screenshot(nil))
+                ),
+            ],
+            containing: ["root path $.body[0].failure.actions[0] is not a legal root step path"]
+        )
+    }
+
+    @Test func `aggregate admission rejects regular roots after terminal failure capture`() throws {
+        try expectAggregateAdmissionError(
+            steps: [
+                HeistResultFixture.explicitFailure(path: "$.body[0]", message: "stop"),
+                HeistResultFixture.action(
+                    path: "$.body[0].failure.actions[0]",
+                    command: .takeScreenshot,
+                    result: .success(payload: .screenshot(nil))
+                ),
+                skippedWarning(path: "$.body[1]"),
+            ],
+            containing: ["regular root appears after terminal failure-capture evidence", "$.body[1]"]
+        )
+    }
+
+    @Test func `aggregate admission rejects sparse failure capture roots`() throws {
+        try expectAggregateAdmissionError(
+            steps: [
+                HeistResultFixture.explicitFailure(path: "$.body[0]", message: "stop"),
+                HeistResultFixture.action(
+                    path: "$.body[0].failure.actions[1]",
+                    command: .takeScreenshot,
+                    result: .success(payload: .screenshot(nil))
+                ),
+            ],
+            containing: ["failure-capture root index 1 must be 0"]
+        )
+    }
+
+    @Test func `aggregate admission admits nested failure action evidence`() throws {
+        let screenshot = HeistResultFixture.action(
+            path: "$.body[0].failure.actions[0]",
+            command: .takeScreenshot,
+            result: .success(payload: .screenshot(nil))
+        )
+        let root = HeistExecutionStepResult.failure(
+            path: "$.body[0]",
+            durationMs: 1,
+            message: "stop",
+            completion: .failed(
+                failure: failureDetail(observed: "stop"),
+                children: try #require(HeistPassingChildren([screenshot]))
+            )
+        )
+
+        let result = try HeistResult(steps: [root], durationMs: 1)
+
+        #expect(result.steps.first?.children.map(\.path) == ["$.body[0].failure.actions[0]"])
+    }
+
     @Test func `aggregate admission rejects loop iteration paths with non iteration child nodes`() throws {
         let declaration = try #require(HeistForEachStringDeclaration(parameter: "item", count: 1))
         let child = HeistResultFixture.warning(
@@ -218,54 +329,6 @@ import ThePlans
         #expect(throws: (any Error).self) {
             try HeistResult(steps: [root], durationMs: 1)
         }
-    }
-
-    @Test func `aggregate admission uses branch local ordinals for repeat until else body`() throws {
-        let predicate = AccessibilityPredicate.exists(.label("Done"))
-        let declaration = HeistRepeatUntilDeclaration(predicate: predicate, timeout: 0.5)
-        let unmet = try #require(ExpectationResult.Unmet(ExpectationResult(
-            met: false,
-            predicate: predicate,
-            actual: "not found"
-        )))
-        let iterationEvidence = try #require(HeistRepeatUntilEvidence.continued(
-            iterationCount: 1,
-            iterationOrdinal: 0,
-            expectation: unmet
-        ))
-        let iteration = HeistExecutionStepResult.repeatUntilIteration(
-            path: "$.body[0].repeat_until.iterations[0]",
-            durationMs: 1,
-            declaration: declaration,
-            completion: .passed(
-                evidence: try #require(HeistPassedRepeatUntilIterationEvidence(iterationEvidence))
-            )
-        )
-        let elseStep = HeistResultFixture.warning(
-            path: "$.body[0].repeat_until.else_body[0]",
-            message: "handled timeout"
-        )
-        let rootEvidence = try #require(HeistRepeatUntilEvidence.handledElse(
-            iterationCount: 1,
-            expectation: unmet,
-            lastObservedSummary: "not found"
-        ))
-        let root = HeistExecutionStepResult.repeatUntil(
-            path: "$.body[0]",
-            durationMs: 2,
-            declaration: declaration,
-            completion: .passed(
-                evidence: try #require(HeistPassedRepeatUntilEvidence(rootEvidence)),
-                children: try #require(HeistPassingChildren([iteration, elseStep]))
-            )
-        )
-
-        let result = try HeistResult(steps: [root], durationMs: 2)
-
-        #expect(result.steps.first?.children.map { $0.path } == [
-            "$.body[0].repeat_until.iterations[0]",
-            "$.body[0].repeat_until.else_body[0]",
-        ])
     }
 
     @Test func `aggregate admission rejects conditional children outside matched case`() throws {
@@ -342,48 +405,6 @@ import ThePlans
         try expectAggregateAdmissionError(
             steps: [root],
             containing: ["for_each_string evidence iterationCount 2 does not match 1 iteration child"]
-        )
-    }
-
-    @Test func `aggregate admission rejects repeat until handled else evidence without else children`() throws {
-        let predicate = AccessibilityPredicate.exists(.label("Done"))
-        let declaration = HeistRepeatUntilDeclaration(predicate: predicate, timeout: 0.5)
-        let unmet = try #require(ExpectationResult.Unmet(ExpectationResult(
-            met: false,
-            predicate: predicate,
-            actual: "not found"
-        )))
-        let iterationEvidence = try #require(HeistRepeatUntilEvidence.continued(
-            iterationCount: 1,
-            iterationOrdinal: 0,
-            expectation: unmet
-        ))
-        let iteration = HeistExecutionStepResult.repeatUntilIteration(
-            path: "$.body[0].repeat_until.iterations[0]",
-            durationMs: 1,
-            declaration: declaration,
-            completion: .passed(
-                evidence: try #require(HeistPassedRepeatUntilIterationEvidence(iterationEvidence))
-            )
-        )
-        let rootEvidence = try #require(HeistRepeatUntilEvidence.handledElse(
-            iterationCount: 1,
-            expectation: unmet,
-            lastObservedSummary: "not found"
-        ))
-        let root = HeistExecutionStepResult.repeatUntil(
-            path: "$.body[0]",
-            durationMs: 2,
-            declaration: declaration,
-            completion: .passed(
-                evidence: try #require(HeistPassedRepeatUntilEvidence(rootEvidence)),
-                children: try #require(HeistPassingChildren([iteration]))
-            )
-        )
-
-        try expectAggregateAdmissionError(
-            steps: [root],
-            containing: ["repeat_until handled_else evidence requires else_body children"]
         )
     }
 
@@ -523,6 +544,43 @@ import ThePlans
                 #expect(description.contains(substring), "\(description) did not contain \(substring)")
             }
         }
+    }
+
+    private struct RawResult: Encodable {
+        let steps: [HeistExecutionStepResult]
+        let durationMs: ElapsedMilliseconds
+    }
+
+    private func resultData(
+        steps: [HeistExecutionStepResult],
+        durationMs: ElapsedMilliseconds = 1
+    ) throws -> Data {
+        try JSONEncoder().encode(RawResult(steps: steps, durationMs: durationMs))
+    }
+
+    private func skippedWarning(path: String) -> HeistExecutionStepResult {
+        .warning(
+            path: executionPath(path),
+            durationMs: 0,
+            message: "skipped",
+            completion: .skipped()
+        )
+    }
+
+    private func executionPath(_ path: String) -> HeistExecutionPath {
+        do {
+            return try HeistExecutionPath(validating: path)
+        } catch {
+            preconditionFailure("invalid test execution path \(path): \(error)")
+        }
+    }
+
+    private func failureDetail(observed: String) -> HeistFailureDetail {
+        HeistFailureDetail(
+            category: .explicitFailure,
+            contract: "explicit heist failure",
+            observed: observed
+        )
     }
 
 }

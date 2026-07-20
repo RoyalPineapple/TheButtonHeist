@@ -341,7 +341,10 @@ struct HeistCompilerProcessTests {
         )
         let configuration = HeistSwiftCompiler.Configuration(
             packageRoot: buttonHeistPackageRoot,
-            processLimits: limits(executionTimeout: .seconds(10)),
+            processLimits: limits(
+                compilationTimeout: .seconds(30),
+                executionTimeout: .seconds(10)
+            ),
             temporaryDirectory: temp.url
         )
 

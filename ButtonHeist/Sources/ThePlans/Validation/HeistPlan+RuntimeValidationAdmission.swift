@@ -305,31 +305,26 @@ package struct HeistRepeatUntilAdmissionCandidate: Codable, Sendable, Equatable 
     let predicate: AccessibilityPredicate
     let timeout: WaitTimeout
     let body: [HeistStepAdmissionCandidate]
-    let elseBody: [HeistStepAdmissionCandidate]?
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case predicate, timeout, body
-        case elseBody = "else_body"
     }
 
     init(
         predicate: AccessibilityPredicate,
         timeout: WaitTimeout,
-        body: [HeistStepAdmissionCandidate],
-        elseBody: [HeistStepAdmissionCandidate]? = nil
+        body: [HeistStepAdmissionCandidate]
     ) throws {
         guard !body.isEmpty else { throw HeistPlanError.emptyRepeatUntilSteps }
         self.predicate = predicate
         self.timeout = timeout
         self.body = body
-        self.elseBody = elseBody
     }
 
     init(_ step: RepeatUntilStep) {
         predicate = step.predicate
         timeout = step.timeout
         body = step.body.map(HeistStepAdmissionCandidate.init)
-        elseBody = step.elseBody?.map(HeistStepAdmissionCandidate.init)
     }
 
     package init(from decoder: Decoder) throws {
@@ -338,8 +333,7 @@ package struct HeistRepeatUntilAdmissionCandidate: Codable, Sendable, Equatable 
         try self.init(
             predicate: container.decode(AccessibilityPredicate.self, forKey: .predicate),
             timeout: container.decode(WaitTimeout.self, forKey: .timeout),
-            body: container.decode([HeistStepAdmissionCandidate].self, forKey: .body),
-            elseBody: container.decodeIfPresent([HeistStepAdmissionCandidate].self, forKey: .elseBody)
+            body: container.decode([HeistStepAdmissionCandidate].self, forKey: .body)
         )
     }
 }
@@ -411,8 +405,7 @@ private extension HeistStepAdmissionCandidate {
             return .repeatUntil(try RepeatUntilStep(
                 predicate: step.predicate,
                 timeout: step.timeout,
-                body: try step.body.map { try $0.admittedStep() },
-                elseBody: try step.elseBody?.map { try $0.admittedStep() }
+                body: try step.body.map { try $0.admittedStep() }
             ))
         case .warn(let step): return .warn(step)
         case .fail(let step): return .fail(step)

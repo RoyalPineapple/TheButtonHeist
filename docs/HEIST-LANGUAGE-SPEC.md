@@ -328,22 +328,19 @@ itself must prove navigation occurred.
 
 Use `RepeatUntil` for bounded repetition toward a settled outcome. The body
 repeats until the predicate holds against settled state or the mandatory
-timeout elapses; the optional lowercase `.else { ... }` body runs when the
-timeout wins:
+timeout elapses. Timeout fails the step; `RepeatUntil` has no timeout recovery
+branch:
 
 ```swift
 RepeatUntil(.exists(.label("Inbox empty")), timeout: 10) {
     Activate(.label("Delete"))
 }
-.else {
-    Fail("Inbox never emptied")
-}
 ```
 
 `RepeatUntil` has no default timeout: the timeout is the totality guarantee for
 a predicate only the run can decide, so authors MUST write one. A timeout of
-`0` checks the predicate once and runs no bodies before the else path. Without
-an `.else` body, an elapsed timeout fails the step with the result.
+`0` still runs the body once, then an unmet predicate fails the step with the
+result.
 
 Use definitions and composition inside a durable plan:
 

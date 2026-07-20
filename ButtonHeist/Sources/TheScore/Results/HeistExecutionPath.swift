@@ -37,7 +37,6 @@ public struct HeistExecutionPath: Sendable, Equatable, Hashable, Codable,
         case forEachElementIterations
         case forEachStringIterations
         case repeatUntilIterations
-        case repeatUntilElse
         case body
         case heistBody
         case invocationBody
@@ -61,7 +60,6 @@ public struct HeistExecutionPath: Sendable, Equatable, Hashable, Codable,
                  .forEachElementIterations,
                  .forEachStringIterations,
                  .repeatUntilIterations,
-                 .repeatUntilElse,
                  .body,
                  .heistBody,
                  .invocationBody,
@@ -69,6 +67,11 @@ public struct HeistExecutionPath: Sendable, Equatable, Hashable, Codable,
                 false
             }
         }
+    }
+
+    package struct FailureActionAncestor: Sendable, Hashable {
+        package let path: HeistExecutionPath
+        package let actionIndex: Int
     }
 
     private let components: [Component]
@@ -142,10 +145,6 @@ public struct HeistExecutionPath: Sendable, Equatable, Hashable, Codable,
         appending(.field(.body))
     }
 
-    package func repeatUntilElseBody() -> Self {
-        appending(.field(.repeatUntil), .field(.elseBody))
-    }
-
     package func failureAction(at index: Int) -> Self {
         appending(.field(.failure), .field(.actions), .index(index))
     }
@@ -167,15 +166,15 @@ public struct HeistExecutionPath: Sendable, Equatable, Hashable, Codable,
         return index
     }
 
-    package var failureActionAncestor: (path: Self, actionIndex: Int)? {
+    package var failureActionAncestor: FailureActionAncestor? {
         guard components.count > 3,
               case .field(.failure) = components[components.count - 3],
               case .field(.actions) = components[components.count - 2],
               case .index(let actionIndex) = components[components.count - 1]
         else { return nil }
-        return (
-            Self(components: Array(components.dropLast(3))),
-            actionIndex
+        return FailureActionAncestor(
+            path: Self(components: Array(components.dropLast(3))),
+            actionIndex: actionIndex
         )
     }
 
@@ -200,8 +199,7 @@ public struct HeistExecutionPath: Sendable, Equatable, Hashable, Codable,
         case .forEachIteration, .repeatUntilIteration:
             edge.branch == .body
         case .repeatUntil:
-            (child.kind == .repeatUntilIteration && edge.branch == .repeatUntilIterations)
-                || edge.branch == .repeatUntilElse
+            child.kind == .repeatUntilIteration && edge.branch == .repeatUntilIterations
         case .heist:
             edge.branch == .heistBody
         case .invoke:
@@ -242,9 +240,6 @@ public struct HeistExecutionPath: Sendable, Equatable, Hashable, Codable,
         }
         if let ordinal = Self.ordinal(in: suffix, matching: [.field(.repeatUntil), .field(.iterations), .anyIndex]) {
             return ChildEdge(branch: .repeatUntilIterations, ordinal: ordinal)
-        }
-        if let ordinal = Self.ordinal(in: suffix, matching: [.field(.repeatUntil), .field(.elseBody), .anyIndex]) {
-            return ChildEdge(branch: .repeatUntilElse, ordinal: ordinal)
         }
         if let ordinal = Self.ordinal(in: suffix, matching: [.field(.body), .anyIndex]) {
             return ChildEdge(branch: .body, ordinal: ordinal)

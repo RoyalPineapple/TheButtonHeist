@@ -63,12 +63,14 @@ express across files in the runtime target.
 
 These shapers preserve the public/package boundary after the compiler and
 access-control model have rejected most invalid constructions. They use
-Bumper's effective-access, stored-property, and nominal-declaration facts; no
-project syntax visitor reparses or reinterprets Swift.
+Bumper's source queries and repository facts; no project syntax visitor
+reparses or reinterprets Swift.
 
 | Rule ID | Invariant | Repair | Verification and deletion condition |
 | --- | --- | --- | --- |
 | `buttonheist.heist_content_opacity` | `HeistContent` is an opaque authoring fragment with no public stored builder bookkeeping. | Keep steps, nested definitions, and diagnostics internal to the result builder and construct a `HeistPlan` through its public initializer. | Verification: internal and public stored-property fixtures plus repository evaluation. Delete when `HeistContent` moves into an implementation-only module behind a public result-builder function. |
+| `buttonheist.plan_else_ownership` | Only `WaitFor` and `IfContent` expose a DSL `else` branch. `RepeatUntil` timeout is failure, not an executable alternate body. | Model loop timeout behavior through wait predicates or surrounding conditionals instead of adding loop-local else bodies. | Verification: valid wait/conditional fixtures, invalid `RepeatUntil` fixture, and repository evaluation. Delete when Swift access control or separate modules make unsupported DSL `else` declarations unrepresentable. |
+| `buttonheist.exported_tuple_return` | Public, open, and package functions return named contract types instead of multi-value tuples. Tuples remain local scratch values only. | Introduce a named Swift type whose fields state the contract meaning. | Verification: valid named-contract and internal-scratch fixtures, invalid package tuple fixture, and repository evaluation. Delete when Swift provides a native lint for exported tuple result contracts or the build graph isolates all package API behind generated interfaces. |
 
 ## Rule Lifecycle
 

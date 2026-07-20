@@ -89,8 +89,7 @@ extension HeistPlanSourceParser {
         return .repeatUntil(try HeistRepeatUntilAdmissionCandidate(
             predicate: predicate,
             timeout: timeout,
-            body: body,
-            elseBody: try parseLowercaseElseChainIfPresent(chainContext: "RepeatUntil")
+            body: body
         ))
     }
 

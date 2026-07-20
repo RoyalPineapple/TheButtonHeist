@@ -28,7 +28,6 @@ public struct WaitFor {
 
 public struct RepeatUntil {
     let heistContent: HeistContent
-    private let step: RepeatUntilStep?
 
     public init(
         _ predicate: AccessibilityPredicate,
@@ -42,33 +41,17 @@ public struct RepeatUntil {
                 timeout: timeout,
                 body: content.steps
             )
-            self.step = step
             heistContent = HeistContent(
                 [.repeatUntil(step)],
                 definitions: content.definitions,
                 diagnostics: content.diagnostics
             )
         } catch {
-            self.step = nil
             heistContent = HeistContent(diagnostics: content.diagnostics + [.dslBuild(
                 code: .dslInvalidRepeatUntil,
                 message: "RepeatUntil loop is invalid: \(String(describing: error))"
             )])
         }
-    }
-
-    public func `else`(
-        @HeistBuilder _ content: () -> HeistContent
-    ) -> HeistContent {
-        let content = content()
-        let completedSteps = step.map {
-            [HeistStep.repeatUntil(RepeatUntilStep(completing: $0, elseBody: content.steps))]
-        } ?? []
-        return HeistContent(
-            completedSteps,
-            definitions: step == nil ? [] : heistContent.definitions + content.definitions,
-            diagnostics: heistContent.diagnostics + content.diagnostics
-        )
     }
 }
 
@@ -253,15 +236,6 @@ private extension ConditionalStep {
 
     init(completing step: ConditionalStep, elseBody: [HeistStep]) {
         cases = step.cases
-        self.elseBody = elseBody
-    }
-}
-
-private extension RepeatUntilStep {
-    init(completing step: RepeatUntilStep, elseBody: [HeistStep]) {
-        predicate = step.predicate
-        timeout = step.timeout
-        body = step.body
         self.elseBody = elseBody
     }
 }

@@ -112,6 +112,70 @@ final class TheVaultObservationBuildingTests: XCTestCase {
         XCTAssertNotNil(observation.tree.findElement(heistId: "offscreen_button"))
     }
 
+    func testBuildObservationAdmitsScrollInventoryOffscreenElementsAsKnownOnly() throws {
+        let scrollContainerPath = TreePath([0])
+        let visiblePath = scrollContainerPath.appending(0)
+        let offscreenPath = scrollContainerPath.appending(1_000_004)
+        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        scrollView.contentSize = CGSize(width: 320, height: 1_600)
+        let visible = makeElement(label: "Visible", traits: .button)
+        let offscreen = makeElement(
+            label: "Far Target",
+            traits: .button,
+            frame: CGRect(x: 40, y: 1_120, width: 220, height: 44),
+            activationPoint: CGPoint(x: 150, y: 1_142),
+            visibility: .offscreen
+        )
+        let observedPoint = try XCTUnwrap(
+            InterfaceTree.ObservedScrollContentActivationPoint(CGPoint(x: 150, y: 1_142))
+        )
+        let result = TheVault.CaptureResult(
+            hierarchy: [
+                .container(makeScrollableContainer(), children: [
+                    .element(visible, traversalIndex: 0)
+                ])
+            ],
+            objectsByPath: [visiblePath: NSObject()],
+            containerObjectsByPath: [scrollContainerPath: scrollView],
+            scrollViewsByPath: [scrollContainerPath: scrollView],
+            offscreenScrollElements: [
+                .init(
+                    path: offscreenPath,
+                    scrollContainerPath: scrollContainerPath,
+                    scrollIndex: 4,
+                    element: offscreen,
+                    observedScrollContentActivationPoint: observedPoint
+                )
+            ]
+        )
+
+        let observation = TheVault.buildObservation(from: result)
+        let target = try XCTUnwrap(observation.tree.orderedElements.first {
+            $0.element.label == "Far Target"
+        })
+
+        XCTAssertEqual(target.path, offscreenPath)
+        XCTAssertEqual(
+            target.scrollMembership,
+            InterfaceTree.ScrollMembership(containerPath: scrollContainerPath, index: 4)
+        )
+        XCTAssertEqual(target.observedScrollContentActivationPoint, observedPoint)
+        XCTAssertFalse(observation.tree.viewportElementIDs.contains(target.heistId))
+        XCTAssertFalse(observation.liveCapture.contains(heistId: target.heistId))
+        XCTAssertNil(observation.liveCapture.object(for: target.heistId))
+        XCTAssertEqual(observation.viewportOnly.tree.elementIDs, ["visible_button"])
+
+        let interface = TheVault.WireConversion.discoveryProjection(from: observation.tree).interface
+        XCTAssertEqual(interface.projectedElements.compactMap(\.label), ["Visible", "Far Target"])
+        guard case .container(_, let children) = interface.tree.first,
+              case .element(let projectedOffscreen, _) = children.last
+        else {
+            return XCTFail("Expected offscreen inventory element projected under the scroll container")
+        }
+        XCTAssertEqual(projectedOffscreen.label, "Far Target")
+        XCTAssertEqual(projectedOffscreen.visibility, .offscreen)
+    }
+
     // MARK: - InterfaceObservation name derivation
 
     func testScreenNameFromFirstHeader() {
@@ -536,6 +600,17 @@ final class TheVaultObservationBuildingTests: XCTestCase {
             activationPoint: activationPoint,
             respondsToUserInteraction: false,
             visibility: visibility
+        )
+    }
+
+    private func makeScrollableContainer(
+        contentSize: CGSize = CGSize(width: 320, height: 1_600),
+        frame: CGRect = CGRect(x: 0, y: 0, width: 320, height: 400)
+    ) -> AccessibilityContainer {
+        AccessibilityContainer(
+            type: .none,
+            scrollableContentSize: AccessibilitySize(contentSize),
+            frame: AccessibilityRect(frame)
         )
     }
 }

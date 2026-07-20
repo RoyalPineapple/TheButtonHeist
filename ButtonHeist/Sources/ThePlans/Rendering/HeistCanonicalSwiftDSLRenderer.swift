@@ -110,11 +110,8 @@ private struct HeistCanonicalSwiftDSLRenderAlgebra: HeistPlanTraversalVisitor {
             bodyIndents[context.path.child(.forEachElement).child(.body)] = childIndent
         case .forEachString:
             bodyIndents[context.path.child(.forEachString).child(.body)] = childIndent
-        case .repeatUntil(let repeatUntil):
+        case .repeatUntil:
             bodyIndents[context.path.child(.repeatUntil).child(.body)] = childIndent
-            if repeatUntil.elseBody != nil {
-                bodyIndents[context.path.child(.repeatUntil).child(.elseBody)] = childIndent
-            }
         case .heist(let plan):
             let bodyPath = context.path.child(.heist).child(.body)
             bodyIndents[bodyPath] = childIndent
@@ -241,7 +238,6 @@ private struct HeistCanonicalSwiftDSLRenderAlgebra: HeistPlanTraversalVisitor {
             return try renderer.renderRepeatUntil(
                 repeatUntil,
                 renderedBody: renderedBodies[repeatPath.child(.body)] ?? "",
-                renderedElseBody: renderedBodies[repeatPath.child(.elseBody)],
                 indent: indent,
                 environment: environment
             )

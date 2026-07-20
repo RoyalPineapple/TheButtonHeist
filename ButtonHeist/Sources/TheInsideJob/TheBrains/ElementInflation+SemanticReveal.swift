@@ -78,7 +78,8 @@ extension ElementInflation {
         transaction.captureScrollableHierarchy()
         guard await exploration.revealKnownTarget(.init(
             heistId: treeElement.heistId,
-            deadline: deadline
+            deadline: deadline,
+            observedScrollContentActivationPoint: treeElement.observedScrollContentActivationPoint
         )) != nil else {
             return semanticRevealInterruption(deadline: deadline)
                 ?? .failed(.noLiveScrollableAncestor)

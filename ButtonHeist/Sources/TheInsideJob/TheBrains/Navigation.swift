@@ -38,6 +38,7 @@ final class Navigation {
                 return await self.scanForHeistId(
                     request.heistId,
                     deadline: request.deadline,
+                    observedScrollContentActivationPoint: request.observedScrollContentActivationPoint
                 )
             },
             moveViewport: { [weak self] intent in

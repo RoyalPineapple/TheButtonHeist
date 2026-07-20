@@ -91,7 +91,6 @@ extension RepeatUntilStep: CustomStringConvertible {
             predicate.description,
             "timeout=\(CanonicalValueDescription.decimal(timeout.seconds))",
             "body=\(body.count)",
-            elseBody.map { "else=\($0.count)" },
         ].compactMap { $0 })
     }
 }

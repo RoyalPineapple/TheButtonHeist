@@ -641,12 +641,10 @@ func stringForEachBuildsRuntimeStringLoop() throws {
 }
 
 @Test
-func repeatUntilBuildsRuntimeLoopWithElseBody() throws {
+func repeatUntilBuildsRuntimeLoop() throws {
     let heist = try HeistPlan {
         RepeatUntil(.exists(.value("2")), timeout: 3) {
             Increment(.identifier("Quantity"))
-        }.else {
-            Fail("quantity did not reach 2")
         }
     }
 
@@ -656,9 +654,6 @@ func repeatUntilBuildsRuntimeLoopWithElseBody() throws {
             timeout: 3,
             body: [
                 .action(ActionStep(command: .increment(.predicate(.identifier("Quantity"))))),
-            ],
-            elseBody: [
-                .fail(FailStep(message: "quantity did not reach 2")),
             ]
         )),
     ])

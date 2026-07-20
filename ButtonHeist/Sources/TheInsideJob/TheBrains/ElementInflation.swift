@@ -11,6 +11,17 @@ internal final class ElementInflation {
     internal struct KnownTargetRevealRequest {
         internal let heistId: HeistId
         internal let deadline: SemanticObservationDeadline
+        internal let observedScrollContentActivationPoint: InterfaceTree.ObservedScrollContentActivationPoint?
+
+        internal init(
+            heistId: HeistId,
+            deadline: SemanticObservationDeadline,
+            observedScrollContentActivationPoint: InterfaceTree.ObservedScrollContentActivationPoint? = nil
+        ) {
+            self.heistId = heistId
+            self.deadline = deadline
+            self.observedScrollContentActivationPoint = observedScrollContentActivationPoint
+        }
     }
 
     internal typealias MoveViewport = @MainActor (

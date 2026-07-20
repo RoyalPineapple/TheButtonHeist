@@ -82,19 +82,16 @@ public struct ForEachStringStep: Codable, Sendable, Equatable {
 public struct RepeatUntilStep: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case predicate, timeout, body
-        case elseBody = "else_body"
     }
 
     public let predicate: AccessibilityPredicate
     public let timeout: WaitTimeout
     public let body: [HeistStep]
-    public let elseBody: [HeistStep]?
 
     public init(
         predicate: AccessibilityPredicate,
         timeout: WaitTimeout,
-        body: [HeistStep],
-        elseBody: [HeistStep]? = nil
+        body: [HeistStep]
     ) throws {
         guard !body.isEmpty else {
             throw HeistPlanError.emptyRepeatUntilSteps
@@ -102,22 +99,19 @@ public struct RepeatUntilStep: Codable, Sendable, Equatable {
         self.predicate = predicate
         self.timeout = timeout
         self.body = body
-        self.elseBody = elseBody
     }
 
     init(
         predicate: AccessibilityPredicate,
         timeout: WaitTimeout,
         firstBodyStep: HeistStep,
-        remainingBodySteps: [HeistStep] = [],
-        elseBody: [HeistStep]? = nil
+        remainingBodySteps: [HeistStep] = []
     ) {
         var body = [firstBodyStep]
         body.append(contentsOf: remainingBodySteps)
         self.predicate = predicate
         self.timeout = timeout
         self.body = body
-        self.elseBody = elseBody
     }
 
     public init(from decoder: Decoder) throws {
@@ -126,8 +120,7 @@ public struct RepeatUntilStep: Codable, Sendable, Equatable {
         try self.init(
             predicate: try container.decode(AccessibilityPredicate.self, forKey: .predicate),
             timeout: try container.decode(WaitTimeout.self, forKey: .timeout),
-            body: try container.decode([HeistStep].self, forKey: .body),
-            elseBody: try container.decodeIfPresent([HeistStep].self, forKey: .elseBody)
+            body: try container.decode([HeistStep].self, forKey: .body)
         )
     }
 }
@@ -137,20 +130,17 @@ package struct ResolvedRepeatUntilStep: Sendable, Equatable {
     package let predicate: ResolvedAccessibilityPredicate
     package let timeout: WaitTimeout
     package let body: [HeistStep]
-    package let elseBody: [HeistStep]?
 
     package init(
         predicateExpression: AccessibilityPredicate,
         predicate: ResolvedAccessibilityPredicate,
         timeout: WaitTimeout,
-        body: [HeistStep],
-        elseBody: [HeistStep]? = nil
+        body: [HeistStep]
     ) {
         self.predicateExpression = predicateExpression
         self.predicate = predicate
         self.timeout = timeout
         self.body = body
-        self.elseBody = elseBody
     }
 }
 
@@ -160,8 +150,7 @@ package extension RepeatUntilStep {
             predicateExpression: predicate,
             predicate: try predicate.resolve(in: environment),
             timeout: timeout,
-            body: body,
-            elseBody: elseBody
+            body: body
         )
     }
 }

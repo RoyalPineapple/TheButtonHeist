@@ -423,21 +423,6 @@ package struct HeistPlanTraversal {
             callGraph: context.callGraph,
             visitor: &visitor
         )
-        guard let elseBody = repeatUntil.elseBody else { return }
-        let elseContext = repeatContext.child(path: repeatContext.path.child(.elseBody))
-        visitor.visitElseBody(elseBody, context: elseContext)
-        walk(
-            steps: elseBody,
-            path: elseContext.path,
-            depth: context.depth + 1,
-            referenceBindings: context.referenceBindings,
-            bindingSamples: context.bindingSamples,
-            definitionScope: context.definitionScope,
-            rootDefinitionScope: context.rootDefinitionScope,
-            invocationStack: context.invocationStack,
-            callGraph: context.callGraph,
-            visitor: &visitor
-        )
     }
 
     private func walkInlineHeist<V: HeistPlanTraversalVisitor>(

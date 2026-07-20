@@ -194,8 +194,7 @@ struct CanonicalHeistSourceRoundTripTests {
                 timeout: 4,
                 body: [
                     .action(ActionStep(command: .increment(.predicate(.identifier("Quantity"))))),
-                ],
-                elseBody: [.fail(FailStep(message: "quantity did not reach 2"))]
+                ]
             )),
             .warn(WarnStep(message: "screen changed")),
             .forEachString(try ForEachStringStep(

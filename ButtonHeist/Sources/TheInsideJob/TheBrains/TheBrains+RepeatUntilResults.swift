@@ -32,26 +32,11 @@ extension TheBrains {
         step: ResolvedRepeatUntilStep,
         state: RepeatUntil.LoopState
     ) async -> HeistExecutionStepResult {
-        guard case .terminal(let terminal) = state else {
+        guard case .terminal = state else {
             return repeatUntilInternalStateFailure(
                 context: context,
                 step: step,
                 observed: "repeat_until execution ended without terminal state"
-            )
-        }
-        if case .timedOut = terminal,
-           let elseBody = step.elseBody {
-            let elseChildren = await executeHeistSteps(
-                elseBody,
-                runtime: context.runtime,
-                environment: context.environment,
-                scope: context.scope,
-                path: context.path.repeatUntilElseBody()
-            )
-            return repeatUntilTerminalResult(
-                context: context,
-                step: step,
-                terminalState: RepeatUntil.LoopState.reduce(state, event: .elseCompleted(elseChildren))
             )
         }
         return repeatUntilTerminalResult(context: context, step: step, terminalState: state)
@@ -97,22 +82,6 @@ extension TheBrains {
                 observation: observation,
                 expectation: expectation,
                 iterationIndex: index,
-                children: children
-            )
-        case .timeoutHandledByElse(let observation, let expectation, let iterationCount, let children):
-            return repeatUntilHandledTimeoutResult(
-                context: resultContext,
-                observation: observation,
-                expectation: expectation,
-                iterationCount: iterationCount,
-                children: children
-            )
-        case .timeoutElseFailed(let observation, let expectation, let iterationCount, let children):
-            return repeatUntilElseFailureResult(
-                context: resultContext,
-                observation: observation,
-                expectation: expectation,
-                iterationCount: iterationCount,
                 children: children
             )
         }
@@ -179,53 +148,6 @@ extension TheBrains {
             completion: .childAborted(
                 evidence: .init(admitted: evidence),
                 failure: repeatUntilFailure(step: context.step, observed: reason),
-                children: children
-            )
-        )
-    }
-
-    private func repeatUntilHandledTimeoutResult(
-        context: RepeatUntilResultContext,
-        observation: RepeatUntil.Observation?,
-        expectation: ExpectationResult.Unmet,
-        iterationCount: Int,
-        children: HeistPassingChildren
-    ) -> HeistExecutionStepResult {
-        let evidence = HeistRepeatUntilEvidence.executedHandledElse(
-            iterationCount: iterationCount,
-            expectation: expectation,
-            lastObservedSummary: observation?.summary,
-            failureReason: RepeatUntil.Terminal.timeoutReason(step: context.step, expectation: expectation)
-        )
-        return repeatUntilResult(
-            context: context,
-            completion: .passed(evidence: .init(admitted: evidence), children: children)
-        )
-    }
-
-    private func repeatUntilElseFailureResult(
-        context: RepeatUntilResultContext,
-        observation: RepeatUntil.Observation?,
-        expectation: ExpectationResult.Unmet,
-        iterationCount: Int,
-        children: HeistAbortedChildren
-    ) -> HeistExecutionStepResult {
-        let childPath = children.abortedAtPath
-        let reason = [
-            RepeatUntil.Terminal.timeoutReason(step: context.step, expectation: expectation),
-            "else body failed at \(childPath)",
-        ].joined(separator: "; ")
-        let evidence = HeistRepeatUntilEvidence.executedFailed(
-            iterationCount: iterationCount,
-            expectation: expectation,
-            lastObservedSummary: observation?.summary,
-            failureReason: reason
-        )
-        return repeatUntilResult(
-            context: context,
-            completion: .childAborted(
-                evidence: .init(admitted: evidence),
-                failure: childFailureDetail(category: .loop, childPath: childPath),
                 children: children
             )
         )

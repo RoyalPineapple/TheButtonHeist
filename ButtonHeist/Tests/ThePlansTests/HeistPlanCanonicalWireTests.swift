@@ -140,9 +140,6 @@ private func representativeAllStepKindsPlan() throws -> HeistPlan {
                 timeout: 2,
                 body: [
                     .warn(WarnStep(message: "retry")),
-                ],
-                elseBody: [
-                    .fail(FailStep(message: "not ready")),
                 ]
             )),
             .warn(WarnStep(message: "checkpoint")),

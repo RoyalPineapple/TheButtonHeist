@@ -227,8 +227,6 @@ import Testing
     let plan = try HeistSourceCompilation.compile(root("""
     RepeatUntil(.exists(.value("3")), timeout: 2) {
         Increment(.identifier("Quantity"))
-    }.else {
-        Fail("quantity did not reach 3")
     }
     """))
     let expected = try HeistPlan(body: [
@@ -237,15 +235,24 @@ import Testing
             timeout: 2,
             body: [
                 .action(ActionStep(command: .increment(.predicate(.identifier("Quantity"))))),
-            ],
-            elseBody: [
-                .fail(FailStep(message: "quantity did not reach 3")),
             ]
         )),
     ])
 
     #expect(plan == expected)
     try assertCanonicalRoundTrip(plan)
+}
+
+@Test func `inline plan source RepeatUntil else is rejected`() throws {
+    #expect(throws: HeistSourceCompilationError.self) {
+        _ = try HeistSourceCompilation.compile(root("""
+        RepeatUntil(.exists(.value("3")), timeout: 2) {
+            Increment(.identifier("Quantity"))
+        }.else {
+            Fail("quantity did not reach 3")
+        }
+        """))
+    }
 }
 
 @Test func `inline plan source action until compiles to repeat until`() throws {

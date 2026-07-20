@@ -57,13 +57,6 @@ import TheScore
         #expect(failed.outcome == .failed)
         #expect(!failed.expectation.met)
         #expect(failed.failureReason == "timed out")
-
-        let handledElse = try #require(HeistRepeatUntilEvidence.handledElse(
-            iterationCount: 1,
-            expectation: unmet,
-            lastObservedSummary: "Cart"
-        ))
-        #expect(handledElse.outcome == .handledElse)
     }
 
     @Test func `iteration evidence factories return evidence for typed polarity`() throws {
@@ -119,6 +112,24 @@ import TheScore
 
         #expect(throws: DecodingError.self) {
             _ = try JSONDecoder().decode(HeistRepeatUntilEvidence.self, from: invalidData)
+        }
+    }
+
+    @Test func `decode rejects repeat until handled else evidence`() throws {
+        let json = """
+        {
+          "outcome": "handled_else",
+          "iterationCount": 1,
+          "expectation": {
+            "met": false,
+            "predicate": { "type": "exists", "target": { "checks": [{ "kind": "label", "match": { "mode": "exact", "value": "Done" } }] } },
+            "actual": "not found"
+          }
+        }
+        """
+
+        #expect(throws: DecodingError.self) {
+            _ = try JSONDecoder().decode(HeistRepeatUntilEvidence.self, from: Data(json.utf8))
         }
     }
 }

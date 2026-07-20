@@ -134,19 +134,33 @@ actor TheMuscle {
         session.activeSessionConnectionCount
     }
 
+    var callbackDeliveryGenerationForTesting: ClientDelivery.Generation? {
+        delivery.generation
+    }
+
     // MARK: - Callback Wiring
 
+    func beginCallbackWiring(_ generation: ClientDelivery.Generation) {
+        delivery.begin(generation)
+    }
+
     /// Install transport-facing callbacks. Called once by `TheGetaway.wireTransport`.
+    @discardableResult
     func installCallbacks(
         sendToClient: @escaping @Sendable (Data, Int) async -> ServerSendOutcome,
         disconnectClient: @escaping @Sendable (Int) async -> Void,
-        onClientAuthenticated: @escaping @MainActor @Sendable (Int, @escaping SocketResponseHandler) async -> Void
-    ) {
+        onClientAuthenticated: @escaping @MainActor @Sendable (Int, @escaping SocketResponseHandler) async -> Void,
+        generation: ClientDelivery.Generation
+    ) -> ClientDelivery.InstallOutcome {
         delivery.install(ClientDelivery.Callbacks(
             sendToClient: sendToClient,
             disconnectClient: disconnectClient,
             onClientAuthenticated: onClientAuthenticated
-        ))
+        ), for: generation)
+    }
+
+    func invalidateCallbacks(for generation: ClientDelivery.Generation) {
+        delivery.invalidate(generation)
     }
 
     // MARK: - Public API
@@ -191,6 +205,7 @@ actor TheMuscle {
     }
 
     func tearDown() async {
+        delivery.reset()
         await executeAdmissionEffects(admission.removeAllClients())
         let disconnectGeneration = delayedDisconnects
         await disconnectGeneration.drain()

@@ -493,16 +493,29 @@ extension Navigation {
     func scanForHeistId(
         _ heistId: HeistId,
         deadline: SemanticObservationDeadline,
+        observedScrollContentActivationPoint: InterfaceTree.ObservedScrollContentActivationPoint? = nil
     ) async -> InterfaceExplorationResult? {
         guard let rootScrollViewID = revealRootScrollViewID(for: heistId) else { return nil }
         var didFindTarget = false
+        let searchOrder: ViewportSearchOrder = observedScrollContentActivationPoint == nil
+            ? .backwardFirst
+            : .forwardFirst
+        if let observedScrollContentActivationPoint,
+           let seededResult = await moveToFallbackSeed(
+               observedScrollContentActivationPoint.point,
+               rootScrollViewID: rootScrollViewID,
+               heistId: heistId,
+               deadline: deadline
+           ) {
+            return seededResult
+        }
         let explorer = ViewportExplorer(
             navigation: self,
             exploration: SemanticExploration(
                 baseline: .interfaceMemory(vault.interfaceMemoryBaseline()),
                 deadline: deadline
             ),
-            searchOrder: .backwardFirst,
+            searchOrder: searchOrder,
             revealRootScrollViewID: rootScrollViewID,
         )
         let explored = await explorer.exploreViewports(exitPosition: .current) { event in
@@ -510,6 +523,31 @@ extension Navigation {
             return didFindTarget ? .goalSatisfied : .continue
         }
         return didFindTarget ? explored : nil
+    }
+
+    private func moveToFallbackSeed(
+        _ point: ScrollContentPoint,
+        rootScrollViewID: ObjectIdentifier,
+        heistId: HeistId,
+        deadline: SemanticObservationDeadline
+    ) async -> InterfaceExplorationResult? {
+        guard let target = vault.liveScrollTarget(matching: rootScrollViewID) else { return nil }
+        let transition = await performViewportTransition(
+            .revealContentPoint(
+                point,
+                in: .uiScrollView(container: target.container, scrollView: target.scrollView)
+            ),
+            deadline: deadline
+        )
+        guard transition.outcome.didMove,
+              let event = transition.event,
+              event.settledObservation.observation.liveCapture.contains(heistId: heistId)
+        else { return nil }
+        return InterfaceExplorationResult(
+            event: event,
+            progress: .init(),
+            didMoveViewport: true
+        )
     }
 
     private func revealRootScrollViewID(for heistId: HeistId) -> ObjectIdentifier? {
