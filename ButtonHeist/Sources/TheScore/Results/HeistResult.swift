@@ -286,7 +286,7 @@ public struct HeistResult: Codable, Sendable, Equatable {
                 guard step.status == .skipped else {
                     throw HeistResult.incoherent(
                         step,
-                        "regular root cannot execute after abort at \(terminalFailurePath)"
+                        "ordered sequence cannot execute after abort at \(terminalFailurePath)"
                     )
                 }
                 return

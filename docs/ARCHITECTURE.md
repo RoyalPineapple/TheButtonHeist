@@ -307,6 +307,7 @@ pipelines are explicit:
 | Discovery callback delivery | `DeviceDiscoveryEventStream.swift` | `DeviceDiscovery.swift` |
 | Compiler process terminal outcome | `HeistCompilerProcess.Runner` in `HeistCompilerProcess.swift` | `HeistSwiftFileCompilation.swift`; diagnostic rendering lives in `HeistSwiftFileCompilationError.swift` |
 | Result construction and relationship validity | `HeistExecutionStepResult+Construction.swift` | Runtime step executors and result decoding |
+| Result aggregate admission | `HeistResult.admitStructure` in `HeistResult.swift` | Package initialization and decoding; one ordered-sequence reducer admits regular roots and every recursively visited child sequence, while the root adapter alone admits auxiliary failure-capture evidence |
 | Result private storage codec | `HeistExecutionStepNode.swift` and `HeistExecutionStepNode+Codable.swift` | External result JSON projection only |
 | Action semantic and wire payload | `ActionResult.Payload` with `ActionResult` custom `Codable` | Runtime construction and wire encoding/decoding |
 | Result interpretation | `HeistReport.project(result:)` in `HeistResult+Report.swift` | JSON, compact, human, JUnit, doctor, and metric renderers |
@@ -318,6 +319,7 @@ pipelines are explicit:
 | Semantic observation waiter delivery | `SemanticObservationStream+Waiters.swift` | Cursor, window, replay, and timeout projections |
 | Testing request construction | `ButtonHeistTesting.swift` | Synchronous helpers and joined sessions live in their named extension files |
 | Fence action JSON | `FenceJSON+Action.swift` and `FenceJSON+HeistExecution.swift`, one result family each | Fence response formatting |
+| Exported tuple contract enforcement | The single `buttonheist.exported_tuple_return` Bumper rule | One effective-access projection covers functions, properties, subscripts, protocol requirements, and inherited public or package visibility; private and local tuple scratch values never enter the exported-contract projection |
 | Test scheme, destination, and artifact topology | `scripts/test-runner.py` | CI and local invocations |
 
 ### Report and Action Evidence Have One Owner

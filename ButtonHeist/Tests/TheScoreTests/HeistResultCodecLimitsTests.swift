@@ -587,7 +587,7 @@ import ThePlans
     private func expectTerminalOrderAdmissionError(_ fixture: TerminalOrderFixture) {
         let expected = HeistResultCodecError.incoherentExecutionEvidence(
             path: fixture.offendingPath,
-            reason: "regular root cannot execute after abort at \(fixture.terminalPath)"
+            reason: "ordered sequence cannot execute after abort at \(fixture.terminalPath)"
         )
         #expect(throws: expected) {
             _ = try HeistResult(steps: fixture.steps, durationMs: 1)
@@ -602,7 +602,7 @@ import ThePlans
         } catch DecodingError.dataCorrupted(let context) {
             let expected = HeistResultCodecError.incoherentExecutionEvidence(
                 path: fixture.offendingPath,
-                reason: "regular root cannot execute after abort at \(fixture.terminalPath)"
+                reason: "ordered sequence cannot execute after abort at \(fixture.terminalPath)"
             )
             #expect(context.debugDescription == expected.description)
         } catch {
