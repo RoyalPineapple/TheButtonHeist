@@ -7,6 +7,19 @@ import TheScore
 
 private let listenerLogger = ButtonHeistLog.logger(.handoff(.server))
 
+protocol SocketListening: AnyObject, Sendable {
+    var stateUpdateHandler: (@Sendable (NWListener.State) -> Void)? { get set }
+    var newConnectionHandler: (@Sendable (NWConnection) -> Void)? { get set }
+    var port: NWEndpoint.Port? { get }
+
+    func start(queue: DispatchQueue)
+    func cancel()
+}
+
+extension NWListener: SocketListening {}
+
+typealias SocketListenerFactory = @Sendable (NWParameters) throws -> any SocketListening
+
 struct SocketListenerGeneration: Equatable, Sendable {
     let attemptID: UUID
     let runtime: SocketListenerRuntime
@@ -31,15 +44,6 @@ struct SocketListenerGeneration: Equatable, Sendable {
         runtime.transferToClientRegistry(connection)
     }
 
-    #if DEBUG
-    var pendingConnectionCountForTesting: Int {
-        runtime.pendingConnectionCountForTesting
-    }
-
-    func waitUntilStoppedForTesting() async {
-        await runtime.waitUntilStoppedForTesting()
-    }
-    #endif
 }
 
 private final class PendingSocketConnections: Sendable {
@@ -93,21 +97,13 @@ private final class PendingSocketConnections: Sendable {
         connections.forEach { $0.cancel() }
     }
 
-    #if DEBUG
-    var count: Int {
-        phase.withLock { phase in
-            guard case .accepting(let connections) = phase else { return 0 }
-            return connections.count
-        }
-    }
-    #endif
 }
 
 actor SocketListenerRuntime: Equatable {
     private enum Phase {
         case idle
-        case starting([NWListener])
-        case listening([NWListener], port: UInt16)
+        case starting([any SocketListening])
+        case listening([any SocketListening], port: UInt16)
         case stopped
     }
 
@@ -115,16 +111,6 @@ actor SocketListenerRuntime: Equatable {
     nonisolated private let callbackTasks = TaskTracker()
     private let stopSignal = CompletionSignal()
     private var phase = Phase.idle
-
-    #if DEBUG
-    private let stopOverride: (@Sendable () async -> Void)?
-
-    init(stopOverride: (@Sendable () async -> Void)? = nil) {
-        self.stopOverride = stopOverride
-    }
-    #else
-    init() {}
-    #endif
 
     nonisolated static func == (lhs: SocketListenerRuntime, rhs: SocketListenerRuntime) -> Bool {
         lhs === rhs
@@ -149,14 +135,8 @@ actor SocketListenerRuntime: Equatable {
         callbackTasks.spawn(operation)
     }
 
-    #if DEBUG
-    nonisolated fileprivate var pendingConnectionCountForTesting: Int {
-        pendingConnections.count
-    }
-    #endif
-
     func stop() async {
-        let listeners: [NWListener]
+        let listeners: [any SocketListening]
         switch phase {
         case .idle:
             listeners = []
@@ -169,11 +149,6 @@ actor SocketListenerRuntime: Equatable {
         phase = .stopped
         pendingConnections.cancelAll()
         listeners.forEach { $0.cancel() }
-        #if DEBUG
-        if let stopOverride {
-            await stopOverride()
-        }
-        #endif
         await callbackTasks.drain()
         stopSignal.finish()
     }
@@ -189,6 +164,7 @@ actor SocketListenerRuntime: Equatable {
         addressFamily: ListenerAddressFamily,
         parameters: NWParameters,
         queue: DispatchQueue,
+        listenerFactory: SocketListenerFactory,
         newConnectionHandler: @escaping @Sendable (NWConnection) -> Void
     ) async throws -> UInt16 {
         try beginStarting()
@@ -203,6 +179,7 @@ actor SocketListenerRuntime: Equatable {
                     port: requestedPort,
                     parameters: parameters,
                     allowEndpointReuse: hosts.count > 1,
+                    listenerFactory: listenerFactory,
                     newConnectionHandler: newConnectionHandler
                 )
                 try append(listener)
@@ -226,39 +203,6 @@ actor SocketListenerRuntime: Equatable {
         }
     }
 
-    #if DEBUG
-    func startForTesting(
-        _ operation: @escaping @Sendable () async throws -> UInt16
-    ) async throws -> UInt16 {
-        try beginStarting()
-        do {
-            let port = try await operation()
-            try finishStarting(port: port)
-            return port
-        } catch {
-            await stop()
-            throw error
-        }
-    }
-
-    var phaseForTesting: SocketListenerRuntimePhase {
-        switch phase {
-        case .idle:
-            return .idle
-        case .starting:
-            return .starting
-        case .listening(_, let port):
-            return .listening(port: port)
-        case .stopped:
-            return .stopped
-        }
-    }
-
-    func waitUntilStoppedForTesting() async {
-        await stopSignal.wait()
-    }
-    #endif
-
     private func beginStarting() throws {
         guard case .idle = phase else { throw CancellationError() }
         phase = .starting([])
@@ -269,7 +213,7 @@ actor SocketListenerRuntime: Equatable {
         phase = .listening(listeners, port: port)
     }
 
-    private func append(_ listener: NWListener) throws {
+    private func append(_ listener: any SocketListening) throws {
         guard case .starting(var listeners) = phase else {
             listener.cancel()
             throw CancellationError()
@@ -287,21 +231,22 @@ actor SocketListenerRuntime: Equatable {
         port: UInt16,
         parameters: NWParameters,
         allowEndpointReuse: Bool,
+        listenerFactory: SocketListenerFactory,
         newConnectionHandler: @escaping @Sendable (NWConnection) -> Void
-    ) throws -> NWListener {
+    ) throws -> any SocketListening {
         let listenerParameters = parameters.copy()
         listenerParameters.allowLocalEndpointReuse = allowEndpointReuse
         listenerParameters.requiredLocalEndpoint = .hostPort(
             host: host,
             port: NWEndpoint.Port(rawValue: port) ?? .any
         )
-        let listener = try NWListener(using: listenerParameters)
+        let listener = try listenerFactory(listenerParameters)
         listener.newConnectionHandler = newConnectionHandler
         return listener
     }
 
     private func startAndWaitForReady(
-        _ listener: NWListener,
+        _ listener: any SocketListening,
         queue: DispatchQueue
     ) async throws -> UInt16 {
         try await withCheckedThrowingContinuation { continuation in
@@ -347,15 +292,6 @@ actor SocketListenerRuntime: Equatable {
         }
     }
 }
-
-#if DEBUG
-enum SocketListenerRuntimePhase: Equatable, Sendable {
-    case idle
-    case starting
-    case listening(port: UInt16)
-    case stopped
-}
-#endif
 
 private extension ListenerAddressFamily {
     func hosts(bindToLoopback: Bool) -> [NWEndpoint.Host] {

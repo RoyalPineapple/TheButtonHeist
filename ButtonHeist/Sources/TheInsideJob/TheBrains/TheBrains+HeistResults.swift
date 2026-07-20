@@ -10,7 +10,7 @@ extension TheBrains {
     internal func executeWarnStep(
         _ warn: WarnStep,
         path: HeistExecutionPath,
-        start: CFAbsoluteTime
+        start: RuntimeElapsed.Instant
     ) -> HeistExecutionStepResult {
         .warning(
             path: path,
@@ -23,7 +23,7 @@ extension TheBrains {
     internal func executeFailStep(
         _ fail: FailStep,
         path: HeistExecutionPath,
-        start: CFAbsoluteTime
+        start: RuntimeElapsed.Instant
     ) -> HeistExecutionStepResult {
         .failure(
             path: path,
@@ -214,8 +214,8 @@ extension TheBrains {
         return "Heist execution completed \(completedCount) step(s)"
     }
 
-    internal func elapsedMilliseconds(since start: CFAbsoluteTime) -> Int {
-        Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
+    internal func elapsedMilliseconds(since start: RuntimeElapsed.Instant) -> ElapsedMilliseconds {
+        RuntimeElapsed.milliseconds(since: start)
     }
 }
 

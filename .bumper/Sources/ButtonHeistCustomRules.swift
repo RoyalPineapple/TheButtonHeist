@@ -38,6 +38,7 @@ let buttonHeistRules = RuleSet {
     anyBoundaryRule
     callbackIsolationRule
     checkedConcurrencyRule
+    heistContentOpacityRule
     Rules.boundaryOnly(
         function: "commitObservation",
         allowed: .files([semanticObservationSettlementPath]),
@@ -48,6 +49,7 @@ let buttonHeistRules = RuleSet {
 private let runtimeScope = RuleScope.component(ButtonHeistComponent.runtime)
 private let scoreScope = RuleScope.component(ButtonHeistComponent.score)
 private let demoScope = RuleScope.component(ButtonHeistComponent.demo)
+private let plansScope = RuleScope.component(ButtonHeistComponent.plans)
 
 private let demoAccessibilityIdentifierResearchFixtures: Set<RelativeFilePath> = [
     "TestApp/Sources/ScrollSPIHarnessView.swift",
@@ -159,6 +161,31 @@ private let checkedConcurrencyRule = Rules.files(
         }
 
     return preconcurrencyFailures + unsafeNonisolatedFailures
+}
+
+private let heistContentOpacityRule = Rules.repository(
+    "buttonheist.heist_content_opacity",
+    severity: .error,
+    summary: "HeistContent remains an opaque public authoring fragment.",
+    scope: plansScope
+) { context in
+    try context.facts(BuiltInFacts.storedProperties)
+        .filter { occurrence in
+            plansScope.includes(SourceFileDescriptor(path: occurrence.path, component: occurrence.component))
+                && occurrence.property.owner?.rawValue == "HeistContent"
+                && [.public, .open].contains(occurrence.property.access)
+        }
+        .map { occurrence in
+            RuleFailure(
+                path: occurrence.path,
+                location: occurrence.property.location,
+                message: "HeistContent exposes stored builder bookkeeping.",
+                evidence: ViolationEvidence(
+                    observed: occurrence.property.name.rawValue,
+                    expectation: "HeistContent has no public stored properties"
+                )
+            )
+        }
 }
 
 private func isAllowedAnyBoundary(_ node: IdentifierTypeSyntax) -> Bool {

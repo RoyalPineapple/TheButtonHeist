@@ -11,7 +11,7 @@ enum RepairActionRequirement: Sendable, Equatable {
     case unknown
 
     init(command: HeistActionCommand) {
-        switch command.core {
+        switch command {
         case .activate, .oneFingerTap, .longPress:
             self = .activate
         case .increment:

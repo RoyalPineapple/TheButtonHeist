@@ -27,11 +27,11 @@ final class GetScreenCommandTests: XCTestCase {
     func testInlineCommandResultWritesScreenshotDataAsBinary() throws {
         let expectedData = Data([0x89, 0x50, 0x4E, 0x47])
         let response = FenceResponse.screenshotData(
-            payload: ScreenPayload(
+            payload: try XCTUnwrap(ScreenPayload.admit(
                 pngData: expectedData.base64EncodedString(),
                 width: 2,
                 height: 1
-            )
+            ))
         )
 
         let result = try GetScreenCommand.inlineCommandResult(for: response)
@@ -59,9 +59,9 @@ final class GetScreenCommandTests: XCTestCase {
         XCTAssertTrue(result.isFailure)
     }
 
-    func testInlineCommandResultRejectsMalformedScreenshotData() {
+    func testInlineCommandResultRejectsMalformedScreenshotData() throws {
         let response = FenceResponse.screenshotData(
-            payload: ScreenPayload(pngData: "not-base64", width: 1, height: 1)
+            payload: try XCTUnwrap(ScreenPayload.admit(pngData: "not-base64", width: 1, height: 1))
         )
 
         XCTAssertThrowsError(try GetScreenCommand.inlineCommandResult(for: response)) { error in

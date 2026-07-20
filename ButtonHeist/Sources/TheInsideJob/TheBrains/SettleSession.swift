@@ -290,7 +290,7 @@ final class SettleSessionFinalObservation {
     typealias TripwireSignalProvider = @MainActor () -> TheTripwire.TripwireSignal
     typealias Sleeper = @Sendable (UInt64) async -> Void
     typealias ObservationYield = @MainActor () async -> Void
-    typealias Clock = @MainActor () -> CFAbsoluteTime
+    typealias Clock = @MainActor () -> RuntimeElapsed.Instant
 
     let parseProvider: ParseProvider
     let tripwireSignalProvider: TripwireSignalProvider
@@ -330,7 +330,7 @@ final class SettleSessionFinalObservation {
                 await sleeper(UInt64(cycleIntervalMs) * 1_000_000)
             },
             policy: .consecutiveCycles(required: cyclesRequired),
-            clock: { CFAbsoluteTimeGetCurrent() },
+            clock: { RuntimeElapsed.now },
             timeoutMs: timeoutMs
         )
     }
@@ -376,7 +376,7 @@ final class SettleSessionFinalObservation {
             tripwireSignalProvider: { tripwire.tripwireSignal() },
             observationYield: observationYield,
             policy: policy,
-            clock: { CFAbsoluteTimeGetCurrent() },
+            clock: { RuntimeElapsed.now },
             timeoutMs: timeoutMs
         )
     }
@@ -394,7 +394,7 @@ final class SettleSessionFinalObservation {
             tripwireSignalProvider: { tripwire.tripwireSignal() },
             observationYield: { await tripwire.yieldRealFrames(1) },
             policy: .consecutiveCycles(required: 2),
-            clock: { CFAbsoluteTimeGetCurrent() },
+            clock: { RuntimeElapsed.now },
             timeoutMs: timeoutMs
         )
     }
@@ -444,7 +444,7 @@ final class SettleSessionFinalObservation {
     /// returning. The returned events record any Tripwire signals observed along
     /// the way so callers can suppress transition transients without treating
     /// the signal itself as a screen-change classification.
-    func run(start: CFAbsoluteTime, baselineTripwireSignal: TheTripwire.TripwireSignal) async -> Result {
+    func run(start: RuntimeElapsed.Instant, baselineTripwireSignal: TheTripwire.TripwireSignal) async -> Result {
         return await SettleLoopRunner(
             parseProvider: parseProvider,
             tripwireSignalProvider: tripwireSignalProvider,
@@ -495,7 +495,7 @@ private struct SettleLoopRunner {
     let initial: SettleLoopMachine.State
 
     @MainActor
-    func run(start: CFAbsoluteTime) async -> SettleSession.Result {
+    func run(start: RuntimeElapsed.Instant) async -> SettleSession.Result {
         let deadline = SemanticObservationDeadline(start: start, timeoutMs: timeoutMs)
         var observations = SettleObservationLedger()
         let machine = SettleLoopMachine()

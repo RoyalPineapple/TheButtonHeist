@@ -19,7 +19,7 @@ extension PredicateWait {
             )
         }
 
-        let start = CFAbsoluteTimeGetCurrent()
+        let start = RuntimeElapsed.now
         let projection = PredicateCaseSelectionProjection(cases: cases, timeout: timeout)
         return await execute(
             start: start,
@@ -90,7 +90,7 @@ private final class PredicateCaseSelectionProjection {
         return .selectingFirstMatch(
             cases: evidence.cases,
             ifNone: timeout > 0 ? .timedOut : .noMatch,
-            elapsedMs: deadline.elapsedMilliseconds(),
+            elapsedMs: RuntimeElapsed.admit(milliseconds: deadline.elapsedMilliseconds()),
             timeout: timeout,
             lastObservedSummary: evidence.observationSummary
         )

@@ -9,9 +9,9 @@ package enum ExpectedHeistFailureError: Error, Equatable {
 }
 
 @MainActor
-package func expectHeistFailure<Content: HeistContent>(
+package func expectHeistFailure(
     _ name: HeistDefinitionPath,
-    @HeistBuilder content: @escaping () throws -> Content
+    @HeistBuilder content: @escaping () throws -> HeistContent
 ) async throws -> Heist.Failure {
     do {
         _ = try await runHeist(name, content)

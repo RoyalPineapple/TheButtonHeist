@@ -77,16 +77,6 @@ final class ServerTransport {
     nonisolated let events: Events
     private nonisolated let eventStream: EventStream
 
-    #if DEBUG
-    /// Test hooks installed on each `SocketListenerRuntime` before it starts.
-    @MainActor var startOverride: (@MainActor @Sendable (
-        _ generation: SocketListenerGeneration,
-        _ port: UInt16,
-        _ bindToLoopback: Bool
-    ) async throws -> UInt16)?
-    @MainActor var stopOverride: (@MainActor @Sendable () async -> Void)?
-    #endif
-
     /// The port the server is listening on (0 if not started).
     nonisolated var listeningPort: UInt16 {
         server.listeningPort
@@ -94,12 +84,20 @@ final class ServerTransport {
 
     // MARK: - Init
 
-    nonisolated init(token: SessionAuthToken, allowedScopes: Set<ConnectionScope> = ConnectionScope.all) {
-        self.server = SimpleSocketServer(allowedScopes: allowedScopes)
+    nonisolated init(
+        token: SessionAuthToken,
+        allowedScopes: Set<ConnectionScope> = ConnectionScope.all,
+        serverDependencies: SimpleSocketServer.Dependencies = SimpleSocketServer.Dependencies()
+    ) {
         self.token = token
         let eventStream = EventStream(bufferLimit: Self.eventStreamBufferLimit)
         self.eventStream = eventStream
         self.events = eventStream.events
+        self.server = SimpleSocketServer(
+            allowedScopes: allowedScopes,
+            callbacks: eventStream.makeCallbacks(),
+            dependencies: serverDependencies
+        )
     }
 
     // No deinit needed: ServerTransport is owned by the TheInsideJob singleton
@@ -136,24 +134,6 @@ final class ServerTransport {
         operation = .start(attempt)
         defer { finishStarting(attempt) }
 
-        #if DEBUG
-        if let startOverride {
-            await server.setListenerRuntimeStartOverrideForTesting { generation in
-                try await startOverride(generation, port, bindToLoopback)
-            }
-        } else {
-            await server.setListenerRuntimeStartOverrideForTesting(nil)
-        }
-        if let stopOverride {
-            await server.setListenerRuntimeStopOverrideForTesting {
-                await stopOverride()
-            }
-        } else {
-            await server.setListenerRuntimeStopOverrideForTesting(nil)
-        }
-        #endif
-
-        let callbacks = makeCallbacks()
         do {
             guard operation == .start(attempt) else {
                 throw Failure.stopped
@@ -162,8 +142,7 @@ final class ServerTransport {
                 port: port,
                 bindToLoopback: bindToLoopback,
                 addressFamily: addressFamily,
-                tlsParameters: params,
-                callbacks: callbacks
+                tlsParameters: params
             )
             guard operation == .start(attempt) else {
                 await server.stop()

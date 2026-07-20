@@ -1,6 +1,5 @@
 import ThePlans
 import Foundation
-import CoreGraphics
 import AccessibilitySnapshotModel
 
 // MARK: - Element Action Set
@@ -77,17 +76,18 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
     /// Read by VoiceOver after the label/value.
     public let hint: String?
     public let traits: [HeistTrait]
-    public let frameX: Double
-    public let frameY: Double
-    public let frameWidth: Double
-    public let frameHeight: Double
+    public let frameEvidence: ScreenFrameEvidence
+    public var frameX: Double? { frameEvidence.rect?.x.value }
+    public var frameY: Double? { frameEvidence.rect?.y.value }
+    public var frameWidth: Double? { frameEvidence.rect?.width.value }
+    public var frameHeight: Double? { frameEvidence.rect?.height.value }
     /// Where VoiceOver would tap, in screen coordinates. May fall outside `frame`.
     public let activationPointEvidence: ActivationPointEvidence
-    public var activationPointX: Double {
-        activationPointEvidence.point?.x ?? sanitizedDouble(frameX + (frameWidth / 2))
+    public var activationPointX: Double? {
+        activationPointEvidence.point?.x ?? frameEvidence.rect?.midX
     }
-    public var activationPointY: Double {
-        activationPointEvidence.point?.y ?? sanitizedDouble(frameY + (frameHeight / 2))
+    public var activationPointY: Double? {
+        activationPointEvidence.point?.y ?? frameEvidence.rect?.midY
     }
     public let respondsToUserInteraction: Bool
     public let customContent: [HeistCustomContent]?
@@ -101,10 +101,7 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
         identifier: String?,
         hint: String? = nil,
         traits: [HeistTrait] = [],
-        frameX: Double,
-        frameY: Double,
-        frameWidth: Double,
-        frameHeight: Double,
+        frameEvidence: ScreenFrameEvidence,
         activationPointEvidence: ActivationPointEvidence = .unavailable,
         respondsToUserInteraction: Bool = true,
         customContent: [HeistCustomContent]? = nil,
@@ -117,27 +114,55 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
         self.identifier = identifier
         self.hint = hint
         self.traits = traits
-        self.frameX = frameX
-        self.frameY = frameY
-        self.frameWidth = frameWidth
-        self.frameHeight = frameHeight
+        self.frameEvidence = frameEvidence
         self.activationPointEvidence = activationPointEvidence
         self.respondsToUserInteraction = respondsToUserInteraction
         self.customContent = customContent
         self.rotors = rotors
         self.actions = actions.canonicalElementActionArray
     }
+
+    public init(
+        description: String,
+        label: String?,
+        value: String?,
+        identifier: String?,
+        hint: String? = nil,
+        traits: [HeistTrait] = [],
+        frameX: FiniteCoordinate,
+        frameY: FiniteCoordinate,
+        frameWidth: FiniteDimension,
+        frameHeight: FiniteDimension,
+        activationPointEvidence: ActivationPointEvidence = .unavailable,
+        respondsToUserInteraction: Bool = true,
+        customContent: [HeistCustomContent]? = nil,
+        rotors: [HeistRotor]? = nil,
+        actions: [ElementAction]
+    ) {
+        self.init(
+            description: description,
+            label: label,
+            value: value,
+            identifier: identifier,
+            hint: hint,
+            traits: traits,
+            frameEvidence: .available(ScreenRect(
+                x: frameX,
+                y: frameY,
+                width: frameWidth,
+                height: frameHeight
+            )),
+            activationPointEvidence: activationPointEvidence,
+            respondsToUserInteraction: respondsToUserInteraction,
+            customContent: customContent,
+            rotors: rotors,
+            actions: actions
+        )
+    }
 }
 
 public extension HeistElement {
-    var screenFrame: ScreenRect {
-        ScreenRect(
-            x: frameX,
-            y: frameY,
-            width: frameWidth,
-            height: frameHeight
-        )
-    }
+    var screenFrame: ScreenRect? { frameEvidence.rect }
 }
 
 // MARK: - HeistElement Codable
@@ -162,10 +187,7 @@ extension HeistElement {
         let identifier = try container.decodeIfPresent(String.self, forKey: .identifier)
         let hint = try container.decodeIfPresent(String.self, forKey: .hint)
         let traits = try container.decode([HeistTrait].self, forKey: .traits)
-        let frameX = try container.decode(Double.self, forKey: .frameX)
-        let frameY = try container.decode(Double.self, forKey: .frameY)
-        let frameWidth = try container.decode(Double.self, forKey: .frameWidth)
-        let frameHeight = try container.decode(Double.self, forKey: .frameHeight)
+        let frameEvidence = try Self.decodeFrameEvidence(from: container)
         self.init(
             description: description,
             label: label,
@@ -173,10 +195,7 @@ extension HeistElement {
             identifier: identifier,
             hint: hint,
             traits: traits,
-            frameX: frameX,
-            frameY: frameY,
-            frameWidth: frameWidth,
-            frameHeight: frameHeight,
+            frameEvidence: frameEvidence,
             activationPointEvidence: try container.decode(
                 ActivationPointEvidence.self,
                 forKey: .activationPointEvidence
@@ -196,28 +215,49 @@ extension HeistElement {
         try container.encodeIfPresent(identifier, forKey: .identifier)
         try container.encodeIfPresent(hint, forKey: .hint)
         try container.encode(traits, forKey: .traits)
-        try container.encode(frameX, forKey: .frameX)
-        try container.encode(frameY, forKey: .frameY)
-        try container.encode(frameWidth, forKey: .frameWidth)
-        try container.encode(frameHeight, forKey: .frameHeight)
+        if let frame = frameEvidence.rect {
+            try container.encode(frame.x, forKey: .frameX)
+            try container.encode(frame.y, forKey: .frameY)
+            try container.encode(frame.width, forKey: .frameWidth)
+            try container.encode(frame.height, forKey: .frameHeight)
+        }
         try container.encode(activationPointEvidence, forKey: .activationPointEvidence)
         try container.encode(respondsToUserInteraction, forKey: .respondsToUserInteraction)
         try container.encodeIfPresent(customContent, forKey: .customContent)
         try container.encodeIfPresent(rotors, forKey: .rotors)
         try container.encode(ElementActionSet(actions), forKey: .actions)
     }
+
+    private static func decodeFrameEvidence(
+        from container: KeyedDecodingContainer<CodingKeys>
+    ) throws -> ScreenFrameEvidence {
+        let frameKeys: [CodingKeys] = [.frameX, .frameY, .frameWidth, .frameHeight]
+        let suppliedFrameKeys = frameKeys.filter(container.contains)
+        guard !suppliedFrameKeys.isEmpty else { return .unavailable }
+        guard suppliedFrameKeys.count == frameKeys.count else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: container.codingPath,
+                debugDescription: "HeistElement frame geometry must be fully available or fully unavailable"
+            ))
+        }
+        return .available(ScreenRect(
+            x: try container.decode(FiniteCoordinate.self, forKey: .frameX),
+            y: try container.decode(FiniteCoordinate.self, forKey: .frameY),
+            width: try container.decode(FiniteDimension.self, forKey: .frameWidth),
+            height: try container.decode(FiniteDimension.self, forKey: .frameHeight)
+        ))
+    }
 }
 
 public extension HeistElement {
     init(
         accessibilityElement element: AccessibilityElement,
-        annotation: InterfaceElementAnnotation? = nil
+        actions: [ElementAction] = []
     ) {
-        let frame = accessibilityFrame(for: element.shape)
+        let frameEvidence = ScreenFrameEvidence(element.shape)
         let activationPoint = accessibilityActivationPointEvidence(
             for: element,
-            sourceFrame: frame,
-            projectedFrame: frame
+            frameEvidence: frameEvidence
         )
         let validCustomContent = element.customContent.compactMap { HeistCustomContent(projecting: $0) }
         let validRotors = element.customRotors.filter { !$0.name.isEmpty }
@@ -228,95 +268,32 @@ public extension HeistElement {
             identifier: element.identifier,
             hint: element.hint,
             traits: element.traits.heistTraits,
-            frameX: sanitizedDouble(frame.origin.x),
-            frameY: sanitizedDouble(frame.origin.y),
-            frameWidth: sanitizedDouble(frame.size.width),
-            frameHeight: sanitizedDouble(frame.size.height),
+            frameEvidence: frameEvidence,
             activationPointEvidence: activationPoint,
             respondsToUserInteraction: element.respondsToUserInteraction,
             customContent: validCustomContent.isEmpty ? nil : validCustomContent,
             rotors: validRotors.isEmpty ? nil : validRotors.map { HeistRotor(name: $0.name) },
-            actions: annotation?.actions ?? []
+            actions: actions
         )
     }
 }
 
 private func accessibilityActivationPointEvidence(
     for element: AccessibilityElement,
-    sourceFrame: CGRect,
-    projectedFrame: CGRect
+    frameEvidence: ScreenFrameEvidence
 ) -> ActivationPointEvidence {
     if element.usesDefaultActivationPoint {
-        let point = CGPoint(x: projectedFrame.midX, y: projectedFrame.midY)
-        guard let x = try? FiniteCoordinate(validating: Double(point.x)),
-              let y = try? FiniteCoordinate(validating: Double(point.y)) else { return .unavailable }
-        let screenPoint = ScreenPoint(x: x, y: y)
-        return .defaultCenter(screenPoint)
+        guard let frame = frameEvidence.rect,
+              let x = try? FiniteCoordinate(validating: frame.midX),
+              let y = try? FiniteCoordinate(validating: frame.midY)
+        else { return .unavailable }
+        return .defaultCenter(ScreenPoint(x: x, y: y))
     }
-    let sourceActivationPoint = CGPoint(
-        x: CGFloat(element.activationPoint.x),
-        y: CGFloat(element.activationPoint.y)
-    )
-    let projectedActivationPoint = CGPoint(
-        x: sourceActivationPoint.x + projectedFrame.origin.x - sourceFrame.origin.x,
-        y: sourceActivationPoint.y + projectedFrame.origin.y - sourceFrame.origin.y
-    )
-    guard let x = try? FiniteCoordinate(validating: Double(projectedActivationPoint.x)),
-          let y = try? FiniteCoordinate(validating: Double(projectedActivationPoint.y)) else { return .unavailable }
+    guard let x = try? FiniteCoordinate(validating: element.activationPoint.x),
+          let y = try? FiniteCoordinate(validating: element.activationPoint.y)
+    else { return .unavailable }
     let screenPoint = ScreenPoint(x: x, y: y)
     return .explicit(screenPoint)
-}
-
-private func accessibilityFrame(for shape: AccessibilityShape) -> CGRect {
-    switch shape {
-    case .frame(let rect):
-        return CGRect(
-            x: CGFloat(rect.origin.x),
-            y: CGFloat(rect.origin.y),
-            width: CGFloat(rect.size.width),
-            height: CGFloat(rect.size.height)
-        )
-    case .path(let elements):
-        let path = CGMutablePath()
-        for element in elements {
-            switch element {
-            case .move(let point):
-                path.move(to: CGPoint(x: CGFloat(point.x), y: CGFloat(point.y)))
-            case .line(let point):
-                path.addLine(to: CGPoint(x: CGFloat(point.x), y: CGFloat(point.y)))
-            case .quadCurve(let point, let control):
-                path.addQuadCurve(
-                    to: CGPoint(x: CGFloat(point.x), y: CGFloat(point.y)),
-                    control: CGPoint(x: CGFloat(control.x), y: CGFloat(control.y))
-                )
-            case .curve(let point, let control1, let control2):
-                path.addCurve(
-                    to: CGPoint(x: CGFloat(point.x), y: CGFloat(point.y)),
-                    control1: CGPoint(x: CGFloat(control1.x), y: CGFloat(control1.y)),
-                    control2: CGPoint(x: CGFloat(control2.x), y: CGFloat(control2.y))
-                )
-            case .closeSubpath:
-                path.closeSubpath()
-            }
-        }
-        let bounds = path.boundingBoxOfPath
-        guard !bounds.isNull,
-              bounds.origin.x.isFinite,
-              bounds.origin.y.isFinite,
-              bounds.size.width.isFinite,
-              bounds.size.height.isFinite else {
-            return .zero
-        }
-        return bounds
-    }
-}
-
-private func sanitizedDouble(_ value: CGFloat) -> Double {
-    value.isFinite ? Double(value) : 0
-}
-
-private func sanitizedDouble(_ value: Double) -> Double {
-    value.isFinite ? value : 0
 }
 
 /// Rotor metadata attached to a HeistElement.

@@ -175,9 +175,7 @@ final class TheVaultIdentityContextTests: XCTestCase {
     }
 
     /// `coarseFrameHash` is a wire-format heistId fragment for container
-    /// containerNames (`list_...`, `landmark_...`, `tabBar_...`, etc.). After the
-    /// `sanitizedForJSON` pass, non-finite inputs become 0 but finite-but-huge
-    /// values still flow through and would trap `Int(_:)`. Must use `safeInt`.
+    /// containerNames (`list_...`, `landmark_...`, `tabBar_...`, etc.).
     func testCoarseFrameHashHandlesPathologicalFrame() {
         let hugeFrame = CGRect(
             x: 1e100,
@@ -197,17 +195,21 @@ final class TheVaultIdentityContextTests: XCTestCase {
             height: .signalingNaN
         )
         let nonFiniteHash = TheVault.coarseFrameHash(nonFiniteFrame)
-        XCTAssertEqual(nonFiniteHash, "0_0_0_0",
-                       "non-finite geometry folds to 0 before coarse frame bucketing")
+        XCTAssertEqual(nonFiniteHash, "unavailable")
     }
 
     /// Locks in the no-change-for-normal-inputs invariant for `coarseFrameHash`.
-    /// `safeInt` must be the identity for any in-range finite CGFloat — otherwise
-    /// switching `Int` → `safeInt` is a wire-format break.
     func testCoarseFrameHashUnchangedForOrdinaryFrame() {
         let bucket = CoarseFrameComparison.currentBucket
         let frame = CGRect(x: bucket * 2, y: bucket * 12, width: bucket * 40, height: bucket * 5)
         XCTAssertEqual(TheVault.coarseFrameHash(frame), "2_12_40_5")
+    }
+
+    func testCoarseFrameHashTreatsNegativeSizeAsUnavailable() {
+        XCTAssertEqual(
+            TheVault.coarseFrameHash(CGRect(x: 10, y: 20, width: -1, height: 44)),
+            "unavailable"
+        )
     }
 
     func testCoarseFrameComparisonUsesDeviceBuckets() {

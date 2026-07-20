@@ -93,10 +93,4 @@ extension SimpleSocketServer {
             return await self.send(response, to: clientId)
         }
     }
-
-    #if DEBUG
-    func responseHandlerForTesting(clientId: Int) -> SocketResponseHandler {
-        responseHandler(clientId: clientId)
-    }
-    #endif
 }

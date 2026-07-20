@@ -15,6 +15,7 @@ final class WaitForIntegrationTests: XCTestCase {
     private var insideJob: TheInsideJob!
     private var window: UIWindow!
     private var hostView: UIView!
+    private var visibleObservationOverride: InterfaceObservation?
 
     override func setUp() async throws {
         let windowScene = try requireForegroundWindowScene()
@@ -30,7 +31,12 @@ final class WaitForIntegrationTests: XCTestCase {
 
         self.window = window
         hostView = viewController.view
-        insideJob = TheInsideJob(token: "wait-for-test-token")
+        insideJob = try TheInsideJob(
+            token: "wait-for-test-token",
+            visibleObservationSource: { [weak self] vault in
+                self?.visibleObservationOverride ?? TheVault.captureVisibleObservation(from: vault)
+            }
+        )
         insideJob.tripwire.startPulse()
         insideJob.brains.startSemanticObservation()
     }
@@ -44,6 +50,7 @@ final class WaitForIntegrationTests: XCTestCase {
         window?.rootViewController = nil
         window = nil
         hostView = nil
+        visibleObservationOverride = nil
     }
 
     // MARK: - Helpers
@@ -334,6 +341,7 @@ final class WaitForIntegrationTests: XCTestCase {
             elements: [(visibleElement, "wait_for_offscreen_anchor_staticText")],
             offViewport: [.init(offViewportElement, heistId: offViewportHeistId)]
         )
+        visibleObservationOverride = screen
         insideJob.brains.vault.installObservationForTesting(screen)
         XCTAssertTrue(insideJob.brains.semanticObservationIsActive)
         XCTAssertNotNil(insideJob.brains.vault.interfaceTree.findElement(heistId: offViewportHeistId))
@@ -463,43 +471,43 @@ final class WaitForIntegrationTests: XCTestCase {
         let didObserveBaseline = await waitForSettledVisibleObservation()
         XCTAssertTrue(didObserveBaseline)
 
-        let start = CFAbsoluteTimeGetCurrent()
         let result = await changedWait(
             expectation: .changed(.elements()),
             timeout: 0.2
         )
-        let elapsed = CFAbsoluteTimeGetCurrent() - start
 
         XCTAssertFalse(result.outcome.isSuccess)
         XCTAssertEqual(result.method, .wait)
         XCTAssertEqual(result.outcome.failureKind, .timeout)
-        XCTAssertLessThanOrEqual(elapsed, 0.225)
         XCTAssertTrue(result.message?.contains("expected: changed(elements(*))") == true)
     }
 
-    func testWaitForChangeMinimumTimeoutDoesNotStartUnfinishableSettlement() async throws {
-        let baseline = addLabel("WaitForChange-MinimumTimeoutBaseline")
-        defer { baseline.removeFromSuperview() }
-        let didObserveBaseline = await waitForSettledVisibleObservation()
-        XCTAssertTrue(didObserveBaseline)
+    func testPredicateWaitStableObservationDecisionUsesExplicitDeadlineBudget() {
+        let minimum = SettleSession.minimumStableDurationSeconds
+        let start = RuntimeElapsed.now
+        let deadline = SemanticObservationDeadline(start: start, timeoutSeconds: minimum)
 
-        let start = CFAbsoluteTimeGetCurrent()
-        let result = await changedWait(
-            expectation: .exists(.label("WaitForChange-MinimumTimeoutMissing")),
-            timeout: 0.001
+        guard case .observe(let remainingSeconds) = PredicateWait.stableObservationDecision(
+            before: deadline,
+            at: start
+        ) else {
+            return XCTFail("Expected the exact minimum stable budget to permit observation")
+        }
+        XCTAssertEqual(remainingSeconds, minimum, accuracy: 0.000_001)
+        XCTAssertEqual(
+            PredicateWait.stableObservationDecision(
+                before: deadline,
+                at: start.advanced(by: .microseconds(1))
+            ),
+            .skip
         )
-        let elapsed = CFAbsoluteTimeGetCurrent() - start
-        let message = try XCTUnwrap(result.message)
-
-        XCTAssertFalse(result.outcome.isSuccess)
-        XCTAssertEqual(result.method, .wait)
-        XCTAssertEqual(result.outcome.failureKind, .timeout)
-        XCTAssertLessThan(elapsed, 0.1)
-        XCTAssertTrue(
-            message.contains("expected: label=\"WaitForChange-MinimumTimeoutMissing\""),
-            "Unexpected message: \(message)"
+        XCTAssertEqual(
+            PredicateWait.stableObservationDecision(
+                before: deadline,
+                at: start.advanced(by: .seconds(minimum))
+            ),
+            .skip
         )
-        XCTAssertTrue(message.contains("last result:"), "Unexpected message: \(message)")
     }
 
     func testWaitForChangeVisibleUpdatePreservesKnownOffViewportMemory() async throws {

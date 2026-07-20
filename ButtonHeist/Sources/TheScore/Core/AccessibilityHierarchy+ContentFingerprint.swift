@@ -1,12 +1,5 @@
 import AccessibilitySnapshotModel
 
-package func safeInt<T: BinaryFloatingPoint>(_ value: T) -> Int {
-    guard value.isFinite else { return 0 }
-    if value >= T(Int.max) { return Int.max }
-    if value <= T(Int.min) { return Int.min }
-    return Int(value)
-}
-
 package extension AccessibilityElement {
     /// Identity hash based on content only: no traversal index.
     func fingerprint() -> Int {
@@ -15,19 +8,7 @@ package extension AccessibilityElement {
         hasher.combine(identifier)
         hasher.combine(value)
         hasher.combine(traits)
-        switch shape {
-        case let .frame(rect):
-            hasher.combine(safeInt(rect.origin.x))
-            hasher.combine(safeInt(rect.origin.y))
-            hasher.combine(safeInt(rect.size.width))
-            hasher.combine(safeInt(rect.size.height))
-        case let .path(path):
-            let bounds = path.safeFingerprintBounds
-            hasher.combine(safeInt(bounds.origin.x))
-            hasher.combine(safeInt(bounds.origin.y))
-            hasher.combine(safeInt(bounds.size.width))
-            hasher.combine(safeInt(bounds.size.height))
-        }
+        hasher.combine(GeometryFingerprint(ScreenFrameEvidence(shape)))
         return hasher.finalize()
     }
 
@@ -78,40 +59,36 @@ package func contentFingerprints(
     elements.map { $0.fingerprint() }
 }
 
-private extension Array where Element == AccessibilityPathElement {
-    var safeFingerprintBounds: AccessibilityRect {
-        let points = flatMap(\.fingerprintPoints).filter(\.isFinite)
-        guard let first = points.first else { return .zero }
-        let bounds = points.dropFirst().reduce(
-            (minX: first.x, minY: first.y, maxX: first.x, maxY: first.y)
-        ) { bounds, point in
-            (
-                minX: Swift.min(bounds.minX, point.x),
-                minY: Swift.min(bounds.minY, point.y),
-                maxX: Swift.max(bounds.maxX, point.x),
-                maxY: Swift.max(bounds.maxY, point.y)
-            )
+private enum GeometryFingerprint: Hashable {
+    case available(x: Component, y: Component, width: Component, height: Component)
+    case unavailable
+
+    init(_ evidence: ScreenFrameEvidence) {
+        guard let rect = evidence.rect else {
+            self = .unavailable
+            return
         }
-        return AccessibilityRect(
-            x: bounds.minX,
-            y: bounds.minY,
-            width: bounds.maxX - bounds.minX,
-            height: bounds.maxY - bounds.minY
+        self = .available(
+            x: Component(rect.x.value),
+            y: Component(rect.y.value),
+            width: Component(rect.width.value),
+            height: Component(rect.height.value)
         )
     }
-}
 
-private extension AccessibilityPathElement {
-    var fingerprintPoints: [AccessibilityPoint] {
-        switch self {
-        case .move(let point), .line(let point):
-            return [point]
-        case .quadCurve(let point, let control):
-            return [point, control]
-        case .curve(let point, let control1, let control2):
-            return [point, control1, control2]
-        case .closeSubpath:
-            return []
+    enum Component: Hashable {
+        case belowRange
+        case value(Int)
+        case aboveRange
+
+        init(_ value: Double) {
+            if value >= Double(Int.max) {
+                self = .aboveRange
+            } else if value <= Double(Int.min) {
+                self = .belowRange
+            } else {
+                self = .value(Int(value))
+            }
         }
     }
 }

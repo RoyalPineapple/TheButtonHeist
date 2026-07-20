@@ -54,7 +54,7 @@ extension ElementInflationProductTests {
         ).resolve(in: .empty)
         fixture.second.isHidden = true
         brains.vault.installObservationForTesting(try observation(for: [fixture.first]))
-        brains.vault.clearInstalledVisibleRefreshObservationForTesting()
+        visibleObservationSource.useLiveCapture()
         guard case .success(let selected) = brains.navigation.elementInflation.knownSemanticTarget(target) else {
             return XCTFail("Expected the original element to satisfy the committed predicate")
         }
@@ -64,7 +64,7 @@ extension ElementInflationProductTests {
         fixture.first.superview?.insertSubview(fixture.second, belowSubview: fixture.first)
         fixture.window.layoutIfNeeded()
         brains.vault.installObservationForTesting(try observation(for: [fixture.second, fixture.first]))
-        brains.vault.clearInstalledVisibleRefreshObservationForTesting()
+        visibleObservationSource.useLiveCapture()
 
         let state = await brains.navigation.elementInflation.stateAfterRefresh(
             target: target,
@@ -72,7 +72,7 @@ extension ElementInflationProductTests {
             resolution: ActionSubjectResolution(origin: .visible),
             method: .activate,
             activationPointPolicy: .liveObjectOnly,
-            deadline: SemanticObservationDeadline(start: CFAbsoluteTimeGetCurrent(), timeoutSeconds: 1)
+            deadline: SemanticObservationDeadline(start: RuntimeElapsed.now, timeoutSeconds: 1)
         )
         guard case .inflated(let inflatedTarget) = state else {
             return XCTFail("Expected refresh to reacquire live evidence for the selected identity, got \(state)")
@@ -95,7 +95,7 @@ extension ElementInflationProductTests {
         ).resolve(in: .empty)
         fixture.second.isHidden = true
         brains.vault.installObservationForTesting(try observation(for: [fixture.first]))
-        brains.vault.clearInstalledVisibleRefreshObservationForTesting()
+        visibleObservationSource.useLiveCapture()
         guard case .success(let selected) = brains.navigation.elementInflation.knownSemanticTarget(target) else {
             return XCTFail("Expected the original element to satisfy the committed predicate")
         }
@@ -103,7 +103,7 @@ extension ElementInflationProductTests {
         fixture.first.removeFromSuperview()
         fixture.second.isHidden = false
         brains.vault.installObservationForTesting(try observation(for: [fixture.second]))
-        brains.vault.clearInstalledVisibleRefreshObservationForTesting()
+        visibleObservationSource.useLiveCapture()
 
         let state = await brains.navigation.elementInflation.stateAfterRefresh(
             target: target,
@@ -111,7 +111,7 @@ extension ElementInflationProductTests {
             resolution: ActionSubjectResolution(origin: .visible),
             method: .activate,
             activationPointPolicy: .liveObjectOnly,
-            deadline: SemanticObservationDeadline(start: CFAbsoluteTimeGetCurrent(), timeoutSeconds: 1)
+            deadline: SemanticObservationDeadline(start: RuntimeElapsed.now, timeoutSeconds: 1)
         )
         guard case .failed(let failure) = state else {
             return XCTFail("Expected removed selected identity to fail closed, got \(state)")

@@ -69,6 +69,11 @@ Action spellings such as `Activate(...)` and `oneFingerTap(...)` are
 constructor functions that return one `Action` value. `Action` owns the fluent
 `.expect(...)`, `.withoutExpectation(...)`, and `.until(...)` transitions and
 produces `HeistContent`; command and expectation bookkeeping are not exposed.
+`HeistContent` is an opaque authoring fragment with no public step, definition,
+diagnostic, or admission-candidate collections. Swift authoring feeds that
+fragment into `HeistBuilder`; canonical source is parsed into the same
+package-scoped admission shape. One semantic and runtime-safety admission then
+produces the executable public `HeistPlan`.
 
 CI checks public Swift API compatibility against the latest `v*` release tag
 reachable from `origin/main` with:
@@ -156,7 +161,7 @@ INSIDEJOB_FINGERPRINTS=true
 Default scope is `simulator,usb`. WiFi/LAN exposure is opt-in with
 `network`; only that mode requires Bonjour Info.plist entries.
 Fingerprints are enabled by default and can also be disabled from code with
-`TheInsideJob.configure(fingerprintsEnabled: false)`.
+`try TheInsideJob.configure(fingerprintsEnabled: false)`.
 
 ### Lifecycle
 
@@ -519,7 +524,7 @@ evidence values are output projections, not assembly inputs; successful
 activation and text-entry warnings are derived from the method and subject.
 
 Standalone announcement observations carry `ActionAnnouncementText`, and
-settled observations carry an `ActionSettlementDuration`; dynamic values enter
+durations carry `ElapsedMilliseconds`; dynamic values enter
 through their throwing validating initializers, while valid literals remain
 concise. `ServerError` likewise accepts `ServerErrorMessage` and an optional
 `ServerErrorRecoveryHint`. These typed values reject empty text and negative

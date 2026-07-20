@@ -380,12 +380,10 @@ final class AccessibilityHierarchyReconciliationTests: XCTestCase {
         )
     }
 
-    func testFingerprintEmptyPathDoesNotCrash() {
-        // Empty UIBezierPath: bounds is CGRect.null whose origin is .infinity,
-        // and Int(.infinity) traps. Must use safeBounds.
+    func testFingerprintEmptyPathIsNotObservedZeroGeometry() {
         let element = makePathElement(label: "empty", path: UIBezierPath())
-        _ = element.contentFingerprint
-        _ = element.fingerprint()
+        let observedZero = makeElement(label: "empty", frame: .zero)
+        XCTAssertNotEqual(element.contentFingerprint, observedZero.contentFingerprint)
     }
 
     func testFingerprintNaNPathDoesNotCrash() {
@@ -413,38 +411,7 @@ final class AccessibilityHierarchyReconciliationTests: XCTestCase {
         XCTAssertNotEqual(elementA.contentFingerprint, elementB.contentFingerprint)
     }
 
-    // MARK: - safeInt: out-of-range and non-finite
-
-    func testSafeIntClampsGreatestFiniteMagnitude() {
-        // `Int(.greatestFiniteMagnitude)` traps. safeInt must clamp.
-        XCTAssertEqual(safeInt(CGFloat.greatestFiniteMagnitude), Int.max)
-        XCTAssertEqual(safeInt(-CGFloat.greatestFiniteMagnitude), Int.min)
-    }
-
-    func testSafeIntClampsHugeFiniteValues() {
-        // `Int(1e100)` traps because 1e100 > Int.max but is finite.
-        XCTAssertEqual(safeInt(1e100), Int.max)
-        XCTAssertEqual(safeInt(-1e100), Int.min)
-    }
-
-    func testSafeIntReturnsZeroForNonFinite() {
-        XCTAssertEqual(safeInt(CGFloat.nan), 0)
-        XCTAssertEqual(safeInt(CGFloat.infinity), 0)
-        XCTAssertEqual(safeInt(-CGFloat.infinity), 0)
-        XCTAssertEqual(safeInt(CGFloat.signalingNaN), 0)
-    }
-
-    func testSafeIntPassesThroughNormalValues() {
-        XCTAssertEqual(safeInt(0), 0)
-        XCTAssertEqual(safeInt(42), 42)
-        XCTAssertEqual(safeInt(-100), -100)
-        XCTAssertEqual(safeInt(3.7), 3)
-        XCTAssertEqual(safeInt(-3.7), -3)
-    }
-
     func testFingerprintHugeFiniteFrameDoesNotCrash() {
-        // Pathological frame with very large finite coordinates — `Int(1e100)` traps.
-        // Must be guarded by safeInt at every hash site.
         let element = makeElement(
             label: "huge",
             frame: CGRect(x: 1e100, y: -1e100, width: CGFloat.greatestFiniteMagnitude, height: 1e200)

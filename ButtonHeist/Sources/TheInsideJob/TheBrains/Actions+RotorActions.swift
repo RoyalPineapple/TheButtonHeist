@@ -13,12 +13,14 @@ extension Actions {
         selection: RotorSelection,
         target: ResolvedAccessibilityTarget,
         direction: RotorDirection,
+        timing: inout ActionTiming
     ) async -> TheSafecracker.ActionDispatchResult {
         let rotor = selection.rotorName
         let rotorIndex = selection.rotorIndex
         return await performElementAction(
             target: target,
             payload: .rotor(nil),
+            timing: &timing,
             requireInteractive: false,
             activationPointPolicy: .liveObjectOnly
         ) { context in

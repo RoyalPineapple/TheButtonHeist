@@ -176,21 +176,11 @@ import Testing
     }, "\(failures)")
 }
 
-@Test func `runtime admission reuses canonical rotor selection admission`() {
-    let candidate = HeistPlanAdmissionCandidate(body: [
-        .action(ActionStep(command: .rotor(
-            selection: .index(-1),
-            target: .label("Heading"),
-            direction: .next
-        ))),
-    ])
-
-    let failures = runtimeSafetyFailures(for: candidate)
-
-    #expect(failures.contains {
-        $0.contract == "resolved action command must be admissible"
-            && $0.observed.contains("rotorIndex must be non-negative, got -1")
-    }, "\(failures)")
+@Test func `rotor index admits dynamic values before command construction`() throws {
+    #expect(try RotorIndex(validating: 0).value == 0)
+    #expect(throws: RotorIndex.ValidationError.self) {
+        _ = try RotorIndex(validating: -1)
+    }
 }
 
 @Test func `action command refs encode as accessibility targets`() throws {

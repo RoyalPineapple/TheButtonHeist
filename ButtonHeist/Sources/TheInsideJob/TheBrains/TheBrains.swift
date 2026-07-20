@@ -69,13 +69,21 @@ final class TheBrains {
         tripwire: TheTripwire,
         fingerprintsEnabled: Bool = true,
         failureEvidencePolicy: FailureEvidencePolicy = .screenshot,
-        requestExecutor: InteractionRequestExecutor? = nil
+        requestExecutor: InteractionRequestExecutor? = nil,
+        keyboardInput: SafecrackerKeyboardInput = SafecrackerKeyboardInput(),
+        visibleObservationSource: @escaping TheVault.VisibleObservationSource = TheVault.captureVisibleObservation
     ) {
         self.tripwire = tripwire
         self.failureEvidencePolicy = failureEvidencePolicy
         self.requestExecutor = requestExecutor ?? InteractionRequestExecutor()
-        let vault = TheVault(tripwire: tripwire)
-        let safecracker = TheSafecracker(fingerprintsEnabled: fingerprintsEnabled)
+        let vault = TheVault(
+            tripwire: tripwire,
+            visibleObservationSource: visibleObservationSource
+        )
+        let safecracker = TheSafecracker(
+            fingerprintsEnabled: fingerprintsEnabled,
+            keyboardInput: keyboardInput
+        )
         self.vault = vault
         self.safecracker = safecracker
         let navigation = Navigation(

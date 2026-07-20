@@ -49,7 +49,7 @@ package struct HeistActionExecution: Sendable, Equatable {
 }
 
 extension HeistExecutionStepResult {
-    private init(path: HeistExecutionPath, durationMs: Int, node: HeistExecutionStepNode) {
+    private init(path: HeistExecutionPath, durationMs: ElapsedMilliseconds, node: HeistExecutionStepNode) {
         self.path = path
         self.durationMs = durationMs
         self.node = node
@@ -57,7 +57,7 @@ extension HeistExecutionStepResult {
 
     static func admitDecodedNode(
         path: HeistExecutionPath,
-        durationMs: Int,
+        durationMs: ElapsedMilliseconds,
         node: HeistExecutionStepNode,
         from decoder: Decoder
     ) throws -> Self {
@@ -70,67 +70,67 @@ extension HeistExecutionStepResult {
         return Self(path: path, durationMs: durationMs, node: node)
     }
 
-    package static func action(path: HeistExecutionPath, durationMs: Int,
+    package static func action(path: HeistExecutionPath, durationMs: ElapsedMilliseconds,
                                execution: HeistActionExecution) -> Self {
         Self(path: path, durationMs: durationMs,
              node: .action(command: execution.command, completion: execution.completion))
     }
 
-    package static func wait(path: HeistExecutionPath, durationMs: Int,
+    package static func wait(path: HeistExecutionPath, durationMs: ElapsedMilliseconds,
                              predicate: AccessibilityPredicate, timeout: WaitTimeout,
                              completion: HeistWaitCompletion) -> Self {
         Self(path: path, durationMs: durationMs,
              node: .wait(predicate: predicate, timeout: timeout, completion: completion))
     }
 
-    package static func conditional(path: HeistExecutionPath, durationMs: Int,
+    package static func conditional(path: HeistExecutionPath, durationMs: ElapsedMilliseconds,
                                     completion: HeistCaseSelectionCompletion) -> Self {
         Self(path: path, durationMs: durationMs, node: .conditional(completion: completion))
     }
 
-    package static func forEachElement(path: HeistExecutionPath, durationMs: Int,
+    package static func forEachElement(path: HeistExecutionPath, durationMs: ElapsedMilliseconds,
                                        declaration: HeistForEachElementDeclaration,
                                        completion: HeistForEachElementCompletion) -> Self {
         Self(path: path, durationMs: durationMs,
              node: .forEachElement(declaration: declaration, completion: completion))
     }
 
-    package static func forEachElementIteration(path: HeistExecutionPath, durationMs: Int,
+    package static func forEachElementIteration(path: HeistExecutionPath, durationMs: ElapsedMilliseconds,
                                                 declaration: HeistForEachElementDeclaration,
                                                 completion: HeistForEachElementCompletion) -> Self {
         Self(path: path, durationMs: durationMs,
              node: .forEachElementIteration(declaration: declaration, completion: completion))
     }
 
-    package static func forEachString(path: HeistExecutionPath, durationMs: Int,
+    package static func forEachString(path: HeistExecutionPath, durationMs: ElapsedMilliseconds,
                                       declaration: HeistForEachStringDeclaration,
                                       completion: HeistForEachStringCompletion) -> Self {
         Self(path: path, durationMs: durationMs,
              node: .forEachString(declaration: declaration, completion: completion))
     }
 
-    package static func forEachStringIteration(path: HeistExecutionPath, durationMs: Int,
+    package static func forEachStringIteration(path: HeistExecutionPath, durationMs: ElapsedMilliseconds,
                                                declaration: HeistForEachStringDeclaration,
                                                completion: HeistForEachStringCompletion) -> Self {
         Self(path: path, durationMs: durationMs,
              node: .forEachStringIteration(declaration: declaration, completion: completion))
     }
 
-    package static func repeatUntil(path: HeistExecutionPath, durationMs: Int,
+    package static func repeatUntil(path: HeistExecutionPath, durationMs: ElapsedMilliseconds,
                                     declaration: HeistRepeatUntilDeclaration,
                                     completion: HeistRepeatUntilCompletion) -> Self {
         Self(path: path, durationMs: durationMs,
              node: .repeatUntil(declaration: declaration, completion: completion))
     }
 
-    package static func repeatUntilIteration(path: HeistExecutionPath, durationMs: Int,
+    package static func repeatUntilIteration(path: HeistExecutionPath, durationMs: ElapsedMilliseconds,
                                              declaration: HeistRepeatUntilDeclaration,
                                              completion: HeistRepeatUntilIterationCompletion) -> Self {
         Self(path: path, durationMs: durationMs,
              node: .repeatUntilIteration(declaration: declaration, completion: completion))
     }
 
-    package static func skipped(path: HeistExecutionPath, durationMs: Int, step: HeistStep) -> Self {
+    package static func skipped(path: HeistExecutionPath, durationMs: ElapsedMilliseconds, step: HeistStep) -> Self {
         var children = HeistSkippedChildren.empty
         if case .heist(let plan) = step {
             for (index, child) in plan.body.enumerated() {
@@ -171,22 +171,22 @@ extension HeistExecutionStepResult {
         return Self(path: path, durationMs: durationMs, node: node)
     }
 
-    package static func warning(path: HeistExecutionPath, durationMs: Int,
+    package static func warning(path: HeistExecutionPath, durationMs: ElapsedMilliseconds,
                                 message: HeistWarningMessage, completion: HeistWarningCompletion) -> Self {
         Self(path: path, durationMs: durationMs, node: .warning(message: message, completion: completion))
     }
 
-    package static func failure(path: HeistExecutionPath, durationMs: Int,
+    package static func failure(path: HeistExecutionPath, durationMs: ElapsedMilliseconds,
                                 message: HeistFailureMessage, completion: HeistFailureCompletion) -> Self {
         Self(path: path, durationMs: durationMs, node: .failure(message: message, completion: completion))
     }
 
-    package static func heist(path: HeistExecutionPath, durationMs: Int,
+    package static func heist(path: HeistExecutionPath, durationMs: ElapsedMilliseconds,
                               name: HeistPlanName?, completion: HeistGroupCompletion) -> Self {
         Self(path: path, durationMs: durationMs, node: .heist(name: name, completion: completion))
     }
 
-    package static func invocation(path: HeistExecutionPath, durationMs: Int,
+    package static func invocation(path: HeistExecutionPath, durationMs: ElapsedMilliseconds,
                                    invocationPath: HeistInvocationPath, argument: HeistArgument,
                                    completion: HeistInvocationCompletion) -> Self {
         Self(path: path, durationMs: durationMs,

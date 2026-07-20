@@ -142,7 +142,10 @@ package struct InterfaceGraphElementRecord: Equatable, Sendable {
     }
 
     package var projectedElement: HeistElement {
-        HeistElement(accessibilityElement: accessibilityElement, annotation: annotation)
+        HeistElement(
+            accessibilityElement: accessibilityElement,
+            actions: annotation?.actions ?? []
+        )
     }
 
     package var interfaceRecord: InterfaceElementRecord {

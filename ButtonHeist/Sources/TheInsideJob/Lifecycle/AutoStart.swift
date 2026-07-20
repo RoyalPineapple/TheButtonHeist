@@ -60,7 +60,7 @@ func theInsideJobAutoStartFromLoad() {
         autoStartLogger.info("System: \(UIDevice.current.systemName) \(UIDevice.current.systemVersion)")
         armApplicationAccessibility()
         do {
-            TheInsideJob.configure(startupConfiguration: configuration)
+            try TheInsideJob.configure(startupConfiguration: configuration)
             try await TheInsideJob.shared.start()
             autoStartLogger.info("========== AUTO-START SUCCESS ==========")
         } catch {

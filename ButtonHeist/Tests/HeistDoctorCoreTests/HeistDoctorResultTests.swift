@@ -8,7 +8,7 @@ import TheScore
     @Test("Doctor derives suggestions from result pair")
     func doctorDerivesSuggestionsFromResultPair() throws {
         let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
-        let lastPass = result(
+        let lastPass = try result(
             path: "$.body[0]",
             status: .passed,
             target: target,
@@ -22,7 +22,7 @@ import TheScore
             ]),
             actionSucceeded: true
         )
-        let newFail = result(
+        let newFail = try result(
             path: "$.body[0]",
             status: .failed,
             target: target,
@@ -101,7 +101,7 @@ import TheScore
 
     @Test func `doctor diagnosis returns typed refusal for valid result pair`() throws {
         let target = AccessibilityTarget.predicate(ElementPredicateTemplate(label: "Delete"))
-        let lastPass = result(
+        let lastPass = try result(
             path: "$.body[0]",
             status: .passed,
             target: target,
@@ -111,7 +111,7 @@ import TheScore
             after: nil,
             actionSucceeded: true
         )
-        let newFail = result(
+        let newFail = try result(
             path: "$.body[0]",
             status: .failed,
             target: target,
@@ -143,7 +143,7 @@ import TheScore
         before: Interface,
         after: Interface?,
         actionSucceeded: Bool
-    ) -> HeistResult {
+    ) throws -> HeistResult {
         let trace = after
             .map { AccessibilityTrace(first: before).appending($0) }
             ?? AccessibilityTrace(first: before)
@@ -179,7 +179,7 @@ import TheScore
                 result: actionResult,
                 durationMs: 1
             )
-        return HeistResult(
+        return try HeistResult(
             steps: [step],
             durationMs: 1
         )

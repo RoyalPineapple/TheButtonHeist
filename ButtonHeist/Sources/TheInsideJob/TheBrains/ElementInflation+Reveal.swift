@@ -149,7 +149,7 @@ extension ElementInflation {
         var didAttemptKnownTargetReveal = false
         var resolution = mode.resolution
 
-        while deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) {
+        while deadline.hasTimeRemaining(at: RuntimeElapsed.now) {
             guard !Task.isCancelled else { return .cancelled }
             guard let event = await vault.semanticObservationStream.settledEvent(
                 scope: .visible,

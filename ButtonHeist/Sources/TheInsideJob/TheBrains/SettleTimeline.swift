@@ -8,10 +8,7 @@ import TheScore
 struct TimelineKey: Hashable, Sendable {
     let label: String?
     let identifier: String?
-    let frameMinX: Int
-    let frameMinY: Int
-    let frameWidth: Int
-    let frameHeight: Int
+    let frame: CoarseFrameKey
 }
 
 extension AccessibilityElement {
@@ -22,21 +19,16 @@ extension AccessibilityElement {
 
     @MainActor
     func timelineKey(bucket: CGFloat) -> TimelineKey {
-        let rect: CGRect
-        if case .frame(let r) = shape {
-            rect = r.cgRect
-        } else {
-            rect = .zero
-        }
         let masked = traits.contains(.updatesFrequently)
-        let frameKey = masked ? .zero : CoarseFrameComparison.key(for: rect, bucket: bucket)
+        let frameKey = masked
+            ? CoarseFrameKey.masked
+            : ScreenFrameEvidence(shape).rect.map {
+                CoarseFrameComparison.key(for: $0.cgRect, bucket: bucket)
+            } ?? .unavailable
         return TimelineKey(
             label: label,
             identifier: identifier,
-            frameMinX: frameKey.minX,
-            frameMinY: frameKey.minY,
-            frameWidth: frameKey.width,
-            frameHeight: frameKey.height
+            frame: frameKey
         )
     }
 }
@@ -167,8 +159,12 @@ struct SettleRecordedObservation {
         return candidates.sorted { lhs, rhs in
             let lhsKey = lhs.timelineKey
             let rhsKey = rhs.timelineKey
-            if lhsKey.frameMinY != rhsKey.frameMinY { return lhsKey.frameMinY < rhsKey.frameMinY }
-            if lhsKey.frameMinX != rhsKey.frameMinX { return lhsKey.frameMinX < rhsKey.frameMinX }
+            if lhsKey.frame.sortMinY != rhsKey.frame.sortMinY {
+                return lhsKey.frame.sortMinY < rhsKey.frame.sortMinY
+            }
+            if lhsKey.frame.sortMinX != rhsKey.frame.sortMinX {
+                return lhsKey.frame.sortMinX < rhsKey.frame.sortMinX
+            }
             if (lhsKey.label ?? "") != (rhsKey.label ?? "") { return (lhsKey.label ?? "") < (rhsKey.label ?? "") }
             return (lhsKey.identifier ?? "") < (rhsKey.identifier ?? "")
         }
@@ -263,12 +259,24 @@ struct SettleRecordedObservation {
     }
 
     private static func format(_ value: CGFloat) -> String {
-        guard value.isFinite else { return "0" }
+        guard value.isFinite else { return "unavailable" }
         let rounded = value.rounded()
         if abs(value - rounded) < 0.000_001 {
-            return "\(safeInt(rounded))"
+            return String(format: "%.0f", Double(rounded))
         }
         return String(format: "%.1f", Double(value))
+    }
+}
+
+private extension CoarseFrameKey {
+    var sortMinX: Int {
+        guard case .available(let minX, _, _, _) = self else { return Int.max }
+        return minX
+    }
+
+    var sortMinY: Int {
+        guard case .available(_, let minY, _, _) = self else { return Int.max }
+        return minY
     }
 }
 

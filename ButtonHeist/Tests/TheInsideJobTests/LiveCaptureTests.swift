@@ -400,32 +400,6 @@ struct LiveCaptureTests {
         expectElementMismatch(snapshotElement: snapshotElement, treeElement: treeElement)
     }
 
-    @Test func `accepts identical nonfinite viewport geometry`() throws {
-        let element = AccessibilityElement.make(
-            label: "Loading",
-            traits: .button,
-            shape: .frame(
-                AccessibilityRect(
-                    x: Double.nan,
-                    y: Double.infinity,
-                    width: -Double.infinity,
-                    height: 10
-                )
-            ),
-            activationPoint: CGPoint(x: CGFloat.nan, y: CGFloat.infinity)
-        )
-        let path = TreePath([0])
-        let snapshot = makeSnapshot(
-            hierarchy: [.element(element, traversalIndex: 0)],
-            heistIdsByPath: [path: "loading_button"]
-        )
-
-        _ = try LiveCapture.build(
-            validating: makeTree(snapshot: snapshot),
-            dispatchReferences: .empty
-        )
-    }
-
     @Test func `valid builder keeps live lookup behavior`() throws {
         let save = AccessibilityElement.make(label: "Save", traits: .button)
         let cancel = AccessibilityElement.make(label: "Cancel", traits: .button)

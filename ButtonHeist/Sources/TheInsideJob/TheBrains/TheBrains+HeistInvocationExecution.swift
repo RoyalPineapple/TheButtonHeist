@@ -12,30 +12,18 @@ extension TheBrains {
         internal let resolvedPath: HeistInvocationPath
         internal let resolvedName: HeistInvocationPath
         internal let definition: HeistPlan?
-
-        internal init(
-            requestedName: HeistInvocationPath,
-            resolvedPath: HeistInvocationPath,
-            resolvedName: HeistInvocationPath,
-            definition: HeistPlan?
-        ) {
-            self.requestedName = requestedName
-            self.resolvedPath = resolvedPath
-            self.resolvedName = resolvedName
-            self.definition = definition
-        }
     }
 
     internal struct InvocationExecutionContext {
         internal let invoke: HeistInvocationStep
         internal let path: HeistExecutionPath
-        internal let start: CFAbsoluteTime
+        internal let start: RuntimeElapsed.Instant
         internal let requestedName: HeistInvocationPath
 
         internal init(
             invoke: HeistInvocationStep,
             path: HeistExecutionPath,
-            start: CFAbsoluteTime,
+            start: RuntimeElapsed.Instant,
             requestedName: HeistInvocationPath
         ) {
             self.invoke = invoke
@@ -52,14 +40,6 @@ extension TheBrains {
     internal struct InvocationExpectationContext {
         internal let input: ResolvedWaitRuntimeInput
         internal let baseline: HeistWaitResult
-
-        internal init(
-            input: ResolvedWaitRuntimeInput,
-            baseline: HeistWaitResult
-        ) {
-            self.input = input
-            self.baseline = baseline
-        }
     }
 
     private enum InvocationExpectationPreparation {
@@ -89,7 +69,7 @@ extension TheBrains {
         _ invoke: HeistInvocationStep,
         index _: Int,
         path: HeistExecutionPath,
-        start: CFAbsoluteTime,
+        start: RuntimeElapsed.Instant,
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope

@@ -104,11 +104,15 @@ extension FenceResponse {
         }
         if let viewportWidth = container.viewportWidth,
            let viewportHeight = container.viewportHeight {
-            parts.append("viewport=\(Int(viewportWidth))x\(Int(viewportHeight))")
+            parts.append(
+                "viewport=\(geometryDescription(viewportWidth.value))x\(geometryDescription(viewportHeight.value))"
+            )
         }
         if let contentWidth = container.contentWidth,
            let contentHeight = container.contentHeight {
-            parts.append("content=\(Int(contentWidth))x\(Int(contentHeight))")
+            parts.append(
+                "content=\(geometryDescription(contentWidth.value))x\(geometryDescription(contentHeight.value))"
+            )
         }
         if !container.reasonCodes.isEmpty {
             parts.append("reason=\(container.reasonCodes.map(\.rawValue).joined(separator: ","))")
@@ -237,10 +241,12 @@ extension FenceResponse {
             parts.append("modal")
         }
         if detail == .full {
-            let frame = container.frame
-            parts.append(
-                "frame=(\(Int(frame.origin.x)),\(Int(frame.origin.y)),\(Int(frame.size.width)),\(Int(frame.size.height)))"
-            )
+            if let frame = ScreenFrameEvidence(container.frame).rect {
+                parts.append(
+                    "frame=(\(geometryDescription(frame.x.value)),\(geometryDescription(frame.y.value))," +
+                        "\(geometryDescription(frame.width.value)),\(geometryDescription(frame.height.value)))"
+                )
+            }
         }
         return "── \(parts.joined(separator: " ")) ──"
     }
@@ -273,24 +279,29 @@ extension FenceResponse {
     private static func compactScrollMetadataLine(_ projection: InterfaceContainerProjection) -> [String] {
         guard let contentSize = projection.container.scrollableContentSize else { return [] }
         let frame = projection.container.frame
+        guard let contentWidth = try? FiniteDimension(validating: contentSize.width),
+              let contentHeight = try? FiniteDimension(validating: contentSize.height),
+              let viewportWidth = try? FiniteDimension(validating: frame.size.width),
+              let viewportHeight = try? FiniteDimension(validating: frame.size.height)
+        else { return [] }
         let axis = ScrollContainerMetrics.axis(
-            contentWidth: Double(contentSize.width),
-            contentHeight: Double(contentSize.height),
-            viewportWidth: Double(frame.size.width),
-            viewportHeight: Double(frame.size.height)
+            contentWidth: contentWidth.value,
+            contentHeight: contentHeight.value,
+            viewportWidth: viewportWidth.value,
+            viewportHeight: viewportHeight.value
         )
         let pageScrollsX = ScrollContainerMetrics.estimatedHorizontalPageScrolls(
-            contentWidth: Double(contentSize.width),
-            viewportWidth: Double(frame.size.width)
+            contentWidth: contentWidth.value,
+            viewportWidth: viewportWidth.value
         )
         let pageScrollsY = ScrollContainerMetrics.estimatedVerticalPageScrolls(
-            contentHeight: Double(contentSize.height),
-            viewportHeight: Double(frame.size.height)
+            contentHeight: contentHeight.value,
+            viewportHeight: viewportHeight.value
         )
         let pages = max(1, max(pageScrollsX, pageScrollsY) + 1)
         return [
-            "  \(Int(frame.size.width))×\(Int(frame.size.height)) view, "
-                + "\(Int(contentSize.width))×\(Int(contentSize.height)) content "
+            "  \(geometryDescription(viewportWidth.value))×\(geometryDescription(viewportHeight.value)) view, "
+                + "\(geometryDescription(contentWidth.value))×\(geometryDescription(contentHeight.value)) content "
                 + "(\(pages) pages), \(axis.rawValue)",
         ]
     }

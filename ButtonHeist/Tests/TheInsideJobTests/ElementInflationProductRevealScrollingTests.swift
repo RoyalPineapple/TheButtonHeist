@@ -107,12 +107,22 @@ extension ElementInflationProductTests {
             label: "Delivery Note"
         )
         defer { fixture.cleanup() }
-        try seedOffViewportTextInputTarget(fixture)
 
-        let keyboardImpl = ProductTextInputKeyboardImpl(textField: fixture.target) { [vault = brains.vault] in
-            vault.invalidateSettledObservationFromTripwire()
+        let keyboardImpl = ProductTextInputKeyboardImpl(textField: fixture.target) { [weak self] in
+            self?.brains.vault.invalidateSettledObservationFromTripwire()
         }
-        brains.safecracker.keyboardBridgeProvider = { keyboardImpl.bridge() }
+        brains.stopSemanticObservation()
+        brains.tripwire.stopPulse()
+        brains = TheBrains(
+            tripwire: TheTripwire(),
+            keyboardInput: SafecrackerKeyboardInput(
+                keyboardBridgeProvider: { keyboardImpl.bridge() }
+            ),
+            visibleObservationSource: visibleObservationSource.capture
+        )
+        brains.tripwire.startPulse()
+        brains.startSemanticObservation()
+        try seedOffViewportTextInputTarget(fixture)
 
         XCTAssertEqual(fixture.scrollView.contentOffset, .zero)
         XCTAssertFalse(fixture.target.isFirstResponder)
@@ -511,6 +521,7 @@ extension ElementInflationProductTests {
             liveCapture: screen.liveCapture
         )
         brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(discoveryObservation)
+        visibleObservationSource.useLiveCapture()
     }
     private func seedKnownNestedScrollTarget(
         _ fixture: NestedScrollRevealFixture,
@@ -541,10 +552,17 @@ extension ElementInflationProductTests {
             type: .none, scrollableContentSize: AccessibilitySize(fixture.innerScrollView.contentSize),
             frame: AccessibilityRect(fixture.innerScrollView.frame)
         )
-        let innerContainerName = capturedInnerContainer?.containerName ?? TheVault.containerName(
-            for: innerContainer,
-            contentFrame: ContentRect(CGRect(origin: .zero, size: fixture.innerScrollView.frame.size))
-        )
+        let innerContainerName: ContainerName
+        if let capturedName = capturedInnerContainer?.containerName {
+            innerContainerName = capturedName
+        } else {
+            innerContainerName = TheVault.containerName(
+                for: innerContainer,
+                contentFrame: try ContentRect(
+                    validating: CGRect(origin: .zero, size: fixture.innerScrollView.frame.size)
+                )
+            )
+        }
         let element = makeElement(
             label: fixture.label,
             identifier: fixture.identifier,
@@ -603,7 +621,7 @@ extension ElementInflationProductTests {
             tree: InterfaceTree(elements: elements, containers: containers),
             liveCapture: liveCapture
         ))
-        brains.vault.clearInstalledVisibleRefreshObservationForTesting()
+        visibleObservationSource.useLiveCapture()
     }
     private func nestedInnerScrollContainerPath(
         for scrollView: UIScrollView,

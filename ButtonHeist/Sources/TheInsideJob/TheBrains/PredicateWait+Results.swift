@@ -9,7 +9,7 @@ extension PredicateWait {
         _ predicate: ResolvedAnnouncementPredicate,
         step: ResolvedWaitRuntimeInput,
         initialTrace: AccessibilityTrace?,
-        start: CFAbsoluteTime,
+        start: RuntimeElapsed.Instant,
         timeout: WaitTimeout,
         cursorStrategy: AnnouncementWaitCursorStrategy
     ) async -> HeistWaitResult {
@@ -68,7 +68,7 @@ extension PredicateWait {
         _ predicate: ResolvedAnnouncementPredicate,
         step: ResolvedWaitRuntimeInput,
         trace: AccessibilityTrace,
-        start: CFAbsoluteTime
+        start: RuntimeElapsed.Instant
     ) -> HeistWaitResult {
         guard let announcement = trace.capturedAnnouncements.first else {
             let message = Self.missingActionAnnouncementMessage(predicate)
@@ -133,7 +133,7 @@ extension PredicateWait {
         trace: AccessibilityTrace? = nil,
         observationSummary: String? = nil,
         expectation: ExpectationResult,
-        start: CFAbsoluteTime,
+        start: RuntimeElapsed.Instant,
         success: Bool,
         baseline: SettledCapture? = nil,
         window: ObservationWindow? = nil,
@@ -170,8 +170,8 @@ extension PredicateWait {
     internal static let changePredicateNeedsFutureObservationMessage =
         PredicateObservationDiagnostics.changePredicateNeedsFutureObservationMessage
 
-    private static func elapsedSeconds(since start: CFAbsoluteTime) -> String {
-        String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
+    private static func elapsedSeconds(since start: RuntimeElapsed.Instant) -> String {
+        String(format: "%.1f", RuntimeElapsed.seconds(since: start))
     }
 
     private static func waitResult(

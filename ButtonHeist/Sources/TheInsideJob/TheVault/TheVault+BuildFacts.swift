@@ -183,14 +183,12 @@ extension TheVault.BuildFacts {
         scrollViewsByPath: [TreePath: UIScrollView]
     ) -> [TreePath: ScrollInventory] {
         Dictionary(
-            uniqueKeysWithValues: scrollViewsByPath.map { path, scrollView in
-                return (
-                    path,
-                    ScrollInventory(
-                        totalElementCount: totalElementCount(in: scrollView),
-                        visibleIndices: (visibleIndicesByContainerPath[path] ?? []).sorted()
-                    )
-                )
+            uniqueKeysWithValues: scrollViewsByPath.compactMap { path, scrollView in
+                guard let inventory = ScrollInventory(
+                    totalElementCount: totalElementCount(in: scrollView),
+                    visibleIndices: (visibleIndicesByContainerPath[path] ?? []).sorted()
+                ) else { return nil }
+                return (path, inventory)
             }
         )
     }

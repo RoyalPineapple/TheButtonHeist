@@ -292,10 +292,13 @@ final class TheVaultCustomRotorTests: XCTestCase {
             liveCapture: observation.liveCapture
         ))
 
+        var timing = ActionTiming()
+
         let search = await brains.actions.executeRotor(
             selection: .named("Cached Items"),
             target: literalTarget(ElementPredicate.identifier("cached_rotor_host")),
-            direction: .next
+            direction: .next,
+            timing: &timing
         )
 
         XCTAssertFalse(search.success)

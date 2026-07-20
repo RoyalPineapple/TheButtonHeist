@@ -79,7 +79,7 @@ private func startJoinedHeistSession(
     line: UInt
 ) -> JoinedHeistRuntime? {
     runHeistSyncOperation(file: file, line: line) { @MainActor in
-        let job = TheInsideJob(
+        let job = try TheInsideJob(
             token: token,
             allowedScopes: allowedScopes,
             port: port,

@@ -117,7 +117,7 @@ extension TheBrainsActionTests {
                 if case .increment = command {
                     incrementCount += 1
                 }
-                return ActionResult.success(payload: .increment, message: command.runtimeType.rawValue)
+                return ActionResult.success(payload: .increment)
             }
         )
         let plan = try HeistPlan(body: [
@@ -157,7 +157,7 @@ extension TheBrainsActionTests {
                 if case .increment = command {
                     incrementCount += 1
                 }
-                return ActionResult.success(payload: .increment, message: command.runtimeType.rawValue)
+                return ActionResult.success(payload: .increment)
             },
             observedTimeouts: { observedTimeouts.append($0) }
         )
@@ -195,7 +195,7 @@ extension TheBrainsActionTests {
                 if case .increment = command {
                     incrementCount += 1
                 }
-                return ActionResult.success(payload: .increment, message: command.runtimeType.rawValue)
+                return ActionResult.success(payload: .increment)
             },
             unavailableObservationCount: 1
         )
@@ -340,7 +340,7 @@ extension TheBrainsActionTests {
                         )
                     }
                 }
-                return ActionResult.success(payload: .activate, message: command.runtimeType.rawValue)
+                return ActionResult.success(payload: .activate)
             }
         )
         let plan = try HeistPlan(body: [
@@ -388,7 +388,7 @@ extension TheBrainsActionTests {
                         )
                     }
                 }
-                return ActionResult.success(payload: .activate, message: command.runtimeType.rawValue)
+                return ActionResult.success(payload: .activate)
             }
         )
         let plan = try HeistPlan(body: [
@@ -439,7 +439,7 @@ extension TheBrainsActionTests {
                 if case .increment = command {
                     incrementCount += 1
                 }
-                return ActionResult.success(payload: .increment, message: command.runtimeType.rawValue)
+                return ActionResult.success(payload: .increment)
             }
         )
         let plan = try HeistPlan(body: [

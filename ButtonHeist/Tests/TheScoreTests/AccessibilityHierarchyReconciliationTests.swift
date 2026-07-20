@@ -68,23 +68,20 @@ final class AccessibilityHierarchyReconciliationTests: XCTestCase {
         XCTAssertEqual(result.elements.map(\.label), ["Row 1", "Row 2", "Row 3", "Row 4"])
     }
 
-    func testSafeIntClampsNonFiniteAndHugeValues() {
-        XCTAssertEqual(safeInt(Double.nan), 0)
-        XCTAssertEqual(safeInt(Double.infinity), 0)
-        XCTAssertEqual(safeInt(Double.greatestFiniteMagnitude), Int.max)
-        XCTAssertEqual(safeInt(-Double.greatestFiniteMagnitude), Int.min)
-    }
-
-    func testPathFingerprintHandlesNonFinitePoints() {
-        let element = makeElement(
+    func testUnavailablePathGeometryDoesNotFingerprintAsObservedZero() {
+        let unavailable = makeElement(
             label: "Path",
             shape: .path([
                 .move(to: AccessibilityPoint(x: .nan, y: .infinity)),
                 .line(to: AccessibilityPoint(x: 10, y: 20)),
             ])
         )
+        let observedZero = makeElement(
+            label: "Path",
+            shape: .frame(.zero)
+        )
 
-        _ = element.contentFingerprint
+        XCTAssertNotEqual(unavailable.contentFingerprint, observedZero.contentFingerprint)
     }
 
     private func makeElement(

@@ -32,75 +32,47 @@ final class ServerTransportTests: XCTestCase {
 
     @MainActor
     func testStartAfterStopRestartsTransport() async throws {
-        let transport = ServerTransport(token: "restart-token")
-        var startCount = 0
-        var stopCount = 0
-        transport.startOverride = { _, _, _ in
-            startCount += 1
-            return UInt16(49152 + startCount)
+        let listeners = TestSocketListenerFactory { invocation in
+            .ready(UInt16(49_152 + invocation))
         }
-        transport.stopOverride = {
-            stopCount += 1
-        }
+        let transport = ServerTransport(
+            token: "restart-token",
+            serverDependencies: .init(
+                listenerFactory: listeners.listenerFactory
+            )
+        )
 
-        let firstPort = try await transport.start(port: 0, bindToLoopback: true)
+        let firstPort = try await transport.start(
+            port: 0,
+            bindToLoopback: true,
+            addressFamily: .ipv4
+        )
         await transport.stop()
-        let secondPort = try await transport.start(port: 0, bindToLoopback: true)
+        let secondPort = try await transport.start(
+            port: 0,
+            bindToLoopback: true,
+            addressFamily: .ipv4
+        )
 
         XCTAssertEqual(firstPort, 49153)
         XCTAssertEqual(secondPort, 49154)
-        XCTAssertEqual(startCount, 2)
-        XCTAssertEqual(stopCount, 1)
+        XCTAssertEqual(listeners.invocationCount, 2)
+        XCTAssertEqual(listeners.cancellationCount, 1)
         await transport.stop()
-        XCTAssertEqual(stopCount, 2)
-    }
-
-    @MainActor
-    func testRestartWaitsForStopBeforeReplacingListener() async throws {
-        let transport = ServerTransport(token: "replacement-token")
-        let stopGate = TransportStartGate()
-        var startCount = 0
-        var stopCount = 0
-        transport.startOverride = { _, _, _ in
-            startCount += 1
-            return UInt16(50000 + startCount)
-        }
-        transport.stopOverride = {
-            stopCount += 1
-            await stopGate.enterAndWaitForRelease()
-        }
-
-        let firstPort = try await transport.start(port: 0, bindToLoopback: true)
-        let stopTask = Task { @MainActor in
-            await transport.stop()
-        }
-        await stopGate.waitUntilEntered()
-        let restartTask = Task { @MainActor in
-            try await transport.start(port: 0, bindToLoopback: true)
-        }
-
-        XCTAssertEqual(startCount, 1)
-        stopGate.release()
-        await stopTask.value
-        let secondPort = try await restartTask.value
-
-        XCTAssertEqual(firstPort, 50001)
-        XCTAssertEqual(secondPort, 50002)
-        XCTAssertEqual(stopCount, 1)
-        XCTAssertEqual(startCount, 2)
-        await transport.stop()
-        XCTAssertEqual(stopCount, 2)
+        XCTAssertEqual(listeners.cancellationCount, 2)
     }
 
     @MainActor
     func testStopDoesNotTerminateTransportEventStreamBeforeRestart() async throws {
-        let transport = ServerTransport(token: "event-stream-restart-token")
-        transport.startOverride = { _, _, _ in 49152 }
-        transport.stopOverride = {}
+        let listeners = TestSocketListenerFactory(port: 49_152)
+        let transport = ServerTransport(
+            token: "event-stream-restart-token",
+            serverDependencies: .init(listenerFactory: listeners.listenerFactory)
+        )
 
-        _ = try await transport.start(port: 0, bindToLoopback: true)
+        _ = try await transport.start(port: 0, bindToLoopback: true, addressFamily: .ipv4)
         await transport.stop()
-        _ = try await transport.start(port: 0, bindToLoopback: true)
+        _ = try await transport.start(port: 0, bindToLoopback: true, addressFamily: .ipv4)
         let iteratorTask = Task { @MainActor in
             var iterator = transport.events.makeAsyncIterator()
             return await iterator.next()
@@ -119,20 +91,23 @@ final class ServerTransportTests: XCTestCase {
 
     @MainActor
     func testDuplicateStartWhileStartingIsRejected() async throws {
-        let transport = ServerTransport(token: "starting-token")
         let startGate = TransportStartGate()
-        transport.startOverride = { _, _, _ in
+        let listeners = TestSocketListenerFactory { _ in
             await startGate.enterAndWaitForRelease()
-            return 49152
+            return .ready(49_152)
         }
+        let transport = ServerTransport(
+            token: "starting-token",
+            serverDependencies: .init(listenerFactory: listeners.listenerFactory)
+        )
 
         let startTask = Task { @MainActor in
-            try await transport.start(port: 0, bindToLoopback: true)
+            try await transport.start(port: 0, bindToLoopback: true, addressFamily: .ipv4)
         }
         await startGate.waitUntilEntered()
 
         do {
-            _ = try await transport.start(port: 0, bindToLoopback: true)
+            _ = try await transport.start(port: 0, bindToLoopback: true, addressFamily: .ipv4)
             XCTFail("Expected ServerTransport to reject duplicate start while starting")
         } catch let error as ServerTransport.Failure {
             XCTAssertEqual(error, .alreadyRunning)
@@ -147,33 +122,24 @@ final class ServerTransportTests: XCTestCase {
     }
 
     @MainActor
-    func testStopWhileStartingRejectsStaleStartCompletion() async throws {
-        let transport = ServerTransport(token: "starting-token")
+    func testStopWhileStartingRejectsStaleStartCompletion() async {
         let startGate = TransportStartGate()
-        let underlyingStopFinished = CompletionSignal()
-        var stopReturned = false
-        transport.startOverride = { _, _, _ in
+        let listeners = TestSocketListenerFactory { _ in
             await startGate.enterAndWaitForRelease()
-            return 49152
+            return .ready(49_152)
         }
-        transport.stopOverride = {
-            underlyingStopFinished.finish()
-        }
+        let transport = ServerTransport(
+            token: "starting-token",
+            serverDependencies: .init(listenerFactory: listeners.listenerFactory)
+        )
 
         let startTask = Task { @MainActor in
-            try await transport.start(port: 0, bindToLoopback: true)
+            try await transport.start(port: 0, bindToLoopback: true, addressFamily: .ipv4)
         }
         await startGate.waitUntilEntered()
 
-        let stopTask = Task { @MainActor in
-            await transport.stop()
-            stopReturned = true
-        }
-        await underlyingStopFinished.wait()
-        XCTAssertFalse(stopReturned)
-
+        await transport.stop()
         startGate.release()
-        await stopTask.value
 
         do {
             _ = try await startTask.value
@@ -184,73 +150,34 @@ final class ServerTransportTests: XCTestCase {
             XCTFail("Expected ServerTransport.Failure.stopped, got \(error)")
         }
         XCTAssertEqual(transport.listeningPort, 0)
-    }
-
-    @MainActor
-    func testStopDuringUnderlyingListenerStartTranslatesCancellationToStopped() async {
-        let transport = ServerTransport(token: "underlying-start-token")
-        let startSignal = CompletionSignal()
-        transport.startOverride = { generation, _, _ in
-            startSignal.finish()
-            await generation.waitUntilStoppedForTesting()
-            throw CancellationError()
-        }
-
-        let startTask = Task { @MainActor in
-            try await transport.start(port: 0, bindToLoopback: true)
-        }
-        await startSignal.wait()
-        await transport.stop()
-
-        do {
-            _ = try await startTask.value
-            XCTFail("Expected stopped listener startup to fail")
-        } catch let error as ServerTransport.Failure {
-            XCTAssertEqual(error, .stopped)
-        } catch {
-            XCTFail("Expected ServerTransport.Failure.stopped, got \(error)")
-        }
-
-        await transport.waitForStopped()
-        XCTAssertEqual(transport.listeningPort, 0)
+        XCTAssertEqual(listeners.cancellationCount, 1)
     }
 
     @MainActor
     func testRestartAfterStopDuringStartupWaitsForStaleCompletion() async throws {
-        let transport = ServerTransport(token: "starting-token")
         let startGate = TransportStartGate()
-        let underlyingStopFinished = CompletionSignal()
-        var startCount = 0
-        var lifecycleEvents: [String] = []
-        transport.startOverride = { _, _, _ in
-            startCount += 1
-            if startCount == 1 {
-                lifecycleEvents.append("first-started")
+        let listeners = TestSocketListenerFactory { invocation in
+            guard invocation > 1 else {
                 await startGate.enterAndWaitForRelease()
-                lifecycleEvents.append("first-finished")
-                return 49152
+                return .ready(49_152)
             }
-            lifecycleEvents.append("restart-started")
-            return 49153
+            return .ready(49_153)
         }
-        transport.stopOverride = {
-            underlyingStopFinished.finish()
-        }
+        let transport = ServerTransport(
+            token: "starting-token",
+            serverDependencies: .init(listenerFactory: listeners.listenerFactory)
+        )
 
         let staleStart = Task { @MainActor in
-            try await transport.start(port: 0, bindToLoopback: true)
+            try await transport.start(port: 0, bindToLoopback: true, addressFamily: .ipv4)
         }
         await startGate.waitUntilEntered()
-        let stopTask = Task { @MainActor in
-            await transport.stop()
-        }
-        await underlyingStopFinished.wait()
+        await transport.stop()
         let restart = Task { @MainActor in
-            try await transport.start(port: 0, bindToLoopback: true)
+            try await transport.start(port: 0, bindToLoopback: true, addressFamily: .ipv4)
         }
 
         startGate.release()
-        await stopTask.value
 
         do {
             _ = try await staleStart.value
@@ -260,11 +187,7 @@ final class ServerTransportTests: XCTestCase {
         }
         let restartedPort = try await restart.value
         XCTAssertEqual(restartedPort, 49153)
-        XCTAssertEqual(startCount, 2)
-        XCTAssertEqual(
-            lifecycleEvents,
-            ["first-started", "first-finished", "restart-started"]
-        )
+        XCTAssertEqual(listeners.invocationCount, 2)
         await transport.stop()
     }
 

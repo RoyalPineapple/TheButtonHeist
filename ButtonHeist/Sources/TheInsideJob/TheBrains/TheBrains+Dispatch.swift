@@ -9,6 +9,62 @@ internal struct RuntimeActionExecution: Sendable, Equatable {
     internal let expectationBaseline: SettledCapture?
 }
 
+struct ActionTiming {
+    enum Phase {
+        case beforeObservation
+        case targetResolution
+        case actionDispatch
+        case interaction
+        case finalSemanticEvidence
+        case resultAssembly
+    }
+
+    private let actionStart: RuntimeElapsed.Instant
+    private var beforeObservation: ElapsedMilliseconds?
+    private var targetResolution: ElapsedMilliseconds?
+    private var actionDispatch: ElapsedMilliseconds?
+    private var interaction: ElapsedMilliseconds?
+    private var finalSemanticEvidence: ElapsedMilliseconds?
+    private var resultAssembly: ElapsedMilliseconds?
+
+    init(startedAt: RuntimeElapsed.Instant = RuntimeElapsed.now) {
+        actionStart = startedAt
+    }
+
+    mutating func record(
+        _ phase: Phase,
+        since start: RuntimeElapsed.Instant,
+        endedAt: RuntimeElapsed.Instant = RuntimeElapsed.now
+    ) {
+        let duration = RuntimeElapsed.milliseconds(since: start, endedAt: endedAt)
+        switch phase {
+        case .beforeObservation: Self.record(duration, in: &beforeObservation)
+        case .targetResolution: Self.record(duration, in: &targetResolution)
+        case .actionDispatch: Self.record(duration, in: &actionDispatch)
+        case .interaction: Self.record(duration, in: &interaction)
+        case .finalSemanticEvidence: Self.record(duration, in: &finalSemanticEvidence)
+        case .resultAssembly: Self.record(duration, in: &resultAssembly)
+        }
+    }
+
+    func freeze(endedAt: RuntimeElapsed.Instant = RuntimeElapsed.now) -> ActionPerformanceTiming {
+        ActionPerformanceTiming(
+            beforeObservationMs: beforeObservation,
+            targetResolutionMs: targetResolution,
+            actionDispatchMs: actionDispatch,
+            interactionMs: interaction,
+            finalSemanticEvidenceMs: finalSemanticEvidence,
+            resultAssemblyMs: resultAssembly,
+            totalMs: RuntimeElapsed.milliseconds(since: actionStart, endedAt: endedAt)
+        )
+    }
+
+    private static func record(_ duration: ElapsedMilliseconds, in slot: inout ElapsedMilliseconds?) {
+        precondition(slot == nil, "action timing phase may only be recorded once")
+        slot = duration
+    }
+}
+
 extension TheBrains {
     func executeRuntimeAction(_ command: ResolvedHeistActionCommand) async -> ActionResult {
         await executeRuntimeActionWithBaseline(command).result
@@ -26,65 +82,66 @@ extension TheBrains {
         let result: ActionResult
         switch command {
         case .activate(let target):
-            result = await performInteraction(payload: .activate) {
-                await self.actions.executeActivate(target)
+            result = await performInteraction(payload: .activate) { timing in
+                await self.actions.executeActivate(target, timing: &timing)
             }
         case .increment(let target):
-            result = await performInteraction(payload: .increment) {
-                await self.actions.executeIncrement(target)
+            result = await performInteraction(payload: .increment) { timing in
+                await self.actions.executeIncrement(target, timing: &timing)
             }
         case .decrement(let target):
-            result = await performInteraction(payload: .decrement) {
-                await self.actions.executeDecrement(target)
+            result = await performInteraction(payload: .decrement) { timing in
+                await self.actions.executeDecrement(target, timing: &timing)
             }
         case .customAction(let name, let target):
-            result = await performInteraction(payload: .customAction) {
-                await self.actions.executeCustomAction(name: name, target: target)
+            result = await performInteraction(payload: .customAction) { timing in
+                await self.actions.executeCustomAction(name: name, target: target, timing: &timing)
             }
         case .dismiss:
-            result = await performInteraction(payload: .dismiss) {
+            result = await performInteraction(payload: .dismiss) { _ in
                 await self.actions.executeDismiss()
             }
         case .magicTap:
-            result = await performInteraction(payload: .magicTap) {
+            result = await performInteraction(payload: .magicTap) { _ in
                 await self.actions.executeMagicTap()
             }
         case .rotor(let selection, let target, let direction):
-            result = await performInteraction(payload: .rotor(nil)) {
+            result = await performInteraction(payload: .rotor(nil)) { timing in
                 await self.actions.executeRotor(
                     selection: selection,
                     target: target,
-                    direction: direction
+                    direction: direction,
+                    timing: &timing
                 )
             }
         case .editAction(let target):
-            result = await performInteraction(payload: .editAction) {
+            result = await performInteraction(payload: .editAction) { _ in
                 await self.actions.executeEditAction(target)
             }
         case .setPasteboard(let target):
-            result = await performInteraction(payload: .setPasteboard(nil)) {
+            result = await performInteraction(payload: .setPasteboard(nil)) { _ in
                 await self.actions.executeSetPasteboard(target)
             }
         case .takeScreenshot:
             result = await executeTakeScreenshot()
         case .dismissKeyboard:
-            result = await performInteraction(payload: .dismissKeyboard) {
+            result = await performInteraction(payload: .dismissKeyboard) { _ in
                 await self.actions.executeResignFirstResponder()
             }
         case .oneFingerTap(let target):
-            result = await performInteraction(payload: .oneFingerTap) {
+            result = await performInteraction(payload: .oneFingerTap) { _ in
                 await self.actions.executeTap(target)
             }
         case .longPress(let target):
-            result = await performInteraction(payload: .longPress) {
+            result = await performInteraction(payload: .longPress) { _ in
                 await self.actions.executeLongPress(target)
             }
         case .swipe(let target):
-            result = await performInteraction(payload: .swipe) {
+            result = await performInteraction(payload: .swipe) { _ in
                 await self.actions.executeSwipe(target)
             }
         case .drag(let target):
-            result = await performInteraction(payload: .drag) {
+            result = await performInteraction(payload: .drag) { _ in
                 await self.actions.executeDrag(target)
             }
         case .typeText(let payload):
@@ -110,7 +167,7 @@ extension TheBrains {
                     self.actions.typeTextPayload(resolvedElementId: $0, in: context.committedBaseline)
                 }
             },
-            interaction: {
+            interaction: { _ in
                 await self.actions.executeTypeText(text: payload.text, target: payload.target)
             }
         )
@@ -120,7 +177,7 @@ extension TheBrains {
         await performInteraction(
             payload: .scroll,
             postActionCommitScope: .discovery
-        ) {
+        ) { _ in
             await self.navigation.executeScroll(target)
         }
     }
@@ -129,7 +186,7 @@ extension TheBrains {
         await performInteraction(
             payload: .scrollToVisible,
             postActionCommitScope: .discovery
-        ) {
+        ) { _ in
             await self.navigation.executeScrollToVisible(target: target)
         }
     }
@@ -138,7 +195,7 @@ extension TheBrains {
         await performInteraction(
             payload: .scrollToEdge,
             postActionCommitScope: .discovery
-        ) {
+        ) { _ in
             await self.navigation.executeScrollToEdge(target)
         }
     }
@@ -171,42 +228,36 @@ extension TheBrains {
         beforeStateScope: SemanticObservationScope = .visible,
         postActionCommitScope: SemanticObservationScope = .visible,
         afterStateValue: ((ActionPayloadEvidence) -> String?)? = nil,
-        interaction: () async -> TheSafecracker.ActionDispatchResult
+        interaction: (inout ActionTiming) async -> TheSafecracker.ActionDispatchResult
     ) async -> ActionResult {
         guard semanticObservationIsActive else {
             return runtimeInactiveResult(payload: payload)
         }
 
-        let actionStart = CFAbsoluteTimeGetCurrent()
-        let beforeStart = actionStart
+        var timing = ActionTiming()
+        let beforeStart = RuntimeElapsed.now
         guard let before = await interactionCoordinator.admittedBaseline(scope: beforeStateScope) else {
             return treeUnavailableResult(payload: payload)
         }
-        let beforeObservationMs = elapsedMilliseconds(since: beforeStart)
+        timing.record(.beforeObservation, since: beforeStart)
         let notificationWindow = vault.accessibilityNotifications.beginActionWindow()
         defer { notificationWindow.cancel() }
 
         let demand = vault.semanticObservationStream.beginActiveObservationDemand()
         defer { demand.cancel() }
 
-        let interactionStart = CFAbsoluteTimeGetCurrent()
-        let result = await interaction()
-        let interactionMs = elapsedMilliseconds(since: interactionStart)
+        let interactionStart = RuntimeElapsed.now
+        let result = await interaction(&timing)
+        timing.record(.interaction, since: interactionStart)
 
-        let actionResult = await interactionCoordinator.settleAfterAction(
+        return await interactionCoordinator.settleAfterAction(
             dispatchResult: result,
+            timing: timing,
             afterStateValue: afterStateValue,
             before: before,
             postActionCommitScope: postActionCommitScope,
             notificationWindow: notificationWindow
         )
-        return actionResult.withTiming(ActionPerformanceTiming(
-            beforeObservationMs: beforeObservationMs,
-            targetResolutionMs: result.timing?.targetResolutionMs,
-            actionDispatchMs: result.timing?.actionDispatchMs,
-            interactionMs: interactionMs,
-            totalMs: elapsedMilliseconds(since: actionStart)
-        ))
     }
 
     func performWait(step: ResolvedWaitRuntimeInput) async -> ActionResult {

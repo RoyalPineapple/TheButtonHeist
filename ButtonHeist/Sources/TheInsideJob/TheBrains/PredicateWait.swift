@@ -29,6 +29,11 @@ where Evidence: Sendable & Equatable {
     /// Called after an unmatched initial observation is reduced and before polling begins.
     internal typealias ReadyToPoll = @MainActor (SettledObservationSequence) -> Void
 
+    internal enum StableObservationDecision: Sendable, Equatable {
+        case observe(remainingSeconds: Double)
+        case skip
+    }
+
     internal struct ExecutionProjection<Result, Evidence>
     where Evidence: Sendable & Equatable {
         let target: ResolvedAccessibilityTarget?
@@ -67,9 +72,9 @@ where Evidence: Sendable & Equatable {
         changeBaseline: PredicateChangeBaselineSource = .establishFromFirstObservation,
         announcementCursorStrategy: AnnouncementWaitCursorStrategy = .futureOnly,
         onReadyToPoll: ReadyToPoll? = nil,
-        startedAt: CFAbsoluteTime? = nil
+        startedAt: RuntimeElapsed.Instant? = nil
     ) async -> HeistWaitResult {
-        let start = startedAt ?? CFAbsoluteTimeGetCurrent()
+        let start = startedAt ?? RuntimeElapsed.now
         if case .announcement(let announcement) = step.predicate.core {
             return await waitForAnnouncementPredicate(
                 announcement,
@@ -146,7 +151,7 @@ where Evidence: Sendable & Equatable {
     }
 
     internal func execute<Result, Evidence>(
-        start: CFAbsoluteTime,
+        start: RuntimeElapsed.Instant,
         timeout: Double,
         projection: ExecutionProjection<Result, Evidence>,
         onReadyToPoll: ReadyToPoll? = nil
@@ -160,6 +165,17 @@ where Evidence: Sendable & Equatable {
         ).run()
     }
 
+    internal static func stableObservationDecision(
+        before deadline: SemanticObservationDeadline,
+        at now: RuntimeElapsed.Instant
+    ) -> StableObservationDecision {
+        let remainingSeconds = deadline.remainingSeconds(at: now)
+        guard remainingSeconds >= SettleSession.minimumStableDurationSeconds else {
+            return .skip
+        }
+        return .observe(remainingSeconds: remainingSeconds)
+    }
+
     @MainActor
     private final class Execution<Result, Evidence> where Evidence: Sendable & Equatable {
         private let wait: PredicateWait
@@ -170,7 +186,7 @@ where Evidence: Sendable & Equatable {
 
         init(
             wait: PredicateWait,
-            start: CFAbsoluteTime,
+            start: RuntimeElapsed.Instant,
             timeout: Double,
             projection: ExecutionProjection<Result, Evidence>,
             onReadyToPoll: ReadyToPoll?
@@ -182,7 +198,7 @@ where Evidence: Sendable & Equatable {
         }
 
         func run() async -> Result {
-            let initialRouteStart = CFAbsoluteTimeGetCurrent()
+            let initialRouteStart = RuntimeElapsed.now
             var evaluation = evaluate(
                 await wait.settleVisible(deadline),
                 isInitialVisible: true,
@@ -236,7 +252,7 @@ where Evidence: Sendable & Equatable {
                         return finish(.cancelled, evidence: evaluation.evidence)
                     }
 
-                    let discoveryStart = CFAbsoluteTimeGetCurrent()
+                    let discoveryStart = RuntimeElapsed.now
                     let discovery = await runDiscovery(
                         deadline: deadline,
                         evidence: evaluation.evidence
@@ -294,7 +310,10 @@ where Evidence: Sendable & Equatable {
                 evidence: evidence,
                 matched: false
             )
-            guard wait.hasStableObservationBudget(deadline) else {
+            guard case .observe = PredicateWait.stableObservationDecision(
+                before: deadline,
+                at: RuntimeElapsed.now
+            ) else {
                 return PredicateWaitDiscoveryResult(evaluation: evaluation, event: nil)
             }
             var lastEvaluatedSequence: SettledObservationSequence?
@@ -355,8 +374,11 @@ where Evidence: Sendable & Equatable {
             projection.result(outcome, deadline, evidence)
         }
 
-        private func recordTerminalVerificationCost(since start: CFAbsoluteTime) {
-            terminalVerificationReserveSeconds = max(terminalVerificationReserveSeconds, CFAbsoluteTimeGetCurrent() - start)
+        private func recordTerminalVerificationCost(since start: RuntimeElapsed.Instant) {
+            terminalVerificationReserveSeconds = max(
+                terminalVerificationReserveSeconds,
+                RuntimeElapsed.seconds(since: start)
+            )
         }
     }
 
@@ -443,19 +465,16 @@ where Evidence: Sendable & Equatable {
         ) {
             return current.event
         }
-        guard hasStableObservationBudget(deadline) else { return nil }
+        guard case .observe(let remainingSeconds) = Self.stableObservationDecision(
+            before: deadline,
+            at: RuntimeElapsed.now
+        ) else { return nil }
         return await vault.semanticObservationStream.admittedVisibleObservation(
             timeout: min(
                 Double(SettleSession.defaultTimeoutMs) / 1_000,
-                deadline.remainingSeconds()
+                remainingSeconds
             )
         )?.event
-    }
-
-    private func hasStableObservationBudget(
-        _ deadline: SemanticObservationDeadline
-    ) -> Bool {
-        deadline.remainingSeconds() >= SettleSession.minimumStableDurationSeconds
     }
 
     private func revealTarget(
@@ -465,7 +484,7 @@ where Evidence: Sendable & Equatable {
         guard target.isElementTarget,
               case .resolved(.element) = vault.resolveTarget(target)
         else { return nil }
-        if !deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) {
+        if !deadline.hasTimeRemaining(at: RuntimeElapsed.now) {
             return nil
         }
         switch await navigation.elementInflation.inflate(
@@ -485,7 +504,7 @@ where Evidence: Sendable & Equatable {
         _ deadline: SemanticObservationDeadline,
         _ observer: @escaping @MainActor (SettledObservationEvent) -> Bool
     ) async -> SettledObservationEvent? {
-        if !deadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) {
+        if !deadline.hasTimeRemaining(at: RuntimeElapsed.now) {
             return nil
         }
         let baseline = Navigation.ExplorationBaseline.currentViewport(

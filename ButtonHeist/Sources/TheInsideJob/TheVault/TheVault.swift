@@ -15,8 +15,14 @@ import AccessibilitySnapshotParser
 @MainActor
 final class TheVault {
 
-    init(tripwire: TheTripwire) {
+    typealias VisibleObservationSource = @MainActor (TheVault) -> InterfaceObservation?
+
+    init(
+        tripwire: TheTripwire,
+        visibleObservationSource: @escaping VisibleObservationSource = TheVault.captureVisibleObservation
+    ) {
         self.tripwire = tripwire
+        self.visibleObservationSource = visibleObservationSource
     }
 
     /// TheTripwire handles window access and animation detection.
@@ -27,6 +33,10 @@ final class TheVault {
 
     /// Pending accessibility notifications captured while semantic observation is active.
     let accessibilityNotifications = AccessibilityNotificationBus()
+
+    /// The only source used for explicit viewport refreshes. Production parses
+    /// UIKit; tests may replace the source only while constructing the vault.
+    private let visibleObservationSource: VisibleObservationSource
 
     // MARK: - Interface State
 
@@ -39,11 +49,6 @@ final class TheVault {
     var currentLiveCapture: LiveCapture {
         latestObservation.liveCapture
     }
-
-    /// Unit-test fixture for the next explicit viewport refresh. Production
-    /// refreshes always parse UIKit; synthetic tests can install one observation as
-    /// the current tree without retaining any live object strongly.
-    var nextVisibleRefreshObservationForTesting: InterfaceObservation?
 
     // MARK: - Observation Scheduling
 
@@ -139,6 +144,14 @@ final class TheVault {
     /// Slugified screen name for machine use (e.g. "controls_demo").
     var lastScreenId: String? {
         interfaceTree.id
+    }
+
+    static func captureVisibleObservation(from vault: TheVault) -> InterfaceObservation? {
+        vault.capture().flatMap { try? admitObservation(from: $0) }
+    }
+
+    func captureVisibleObservation() -> InterfaceObservation? {
+        visibleObservationSource(self)
     }
 
 }

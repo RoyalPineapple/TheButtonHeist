@@ -171,17 +171,34 @@ final class AdjustableGeometryView: UIView {
 final class TheBrainsActionTests: XCTestCase {
 
     var brains: TheBrains!
+    var visibleObservationSource: VisibleObservationSourceFixture!
 
     override func setUp() async throws {
         try await super.setUp()
-        brains = TheBrains(tripwire: TheTripwire())
+        visibleObservationSource = VisibleObservationSourceFixture()
+        brains = TheBrains(
+            tripwire: TheTripwire(),
+            visibleObservationSource: visibleObservationSource.capture
+        )
         brains.startSemanticObservation()
     }
 
     override func tearDown() async throws {
         brains.stopSemanticObservation()
         brains = nil
+        visibleObservationSource = nil
         try await super.tearDown()
+    }
+
+    func replaceBrains(keyboardInput: SafecrackerKeyboardInput) {
+        brains.stopSemanticObservation()
+        brains.tripwire.stopPulse()
+        brains = TheBrains(
+            tripwire: TheTripwire(),
+            keyboardInput: keyboardInput,
+            visibleObservationSource: visibleObservationSource.capture
+        )
+        brains.startSemanticObservation()
     }
 
     // MARK: - Helpers
@@ -197,25 +214,33 @@ final class TheBrainsActionTests: XCTestCase {
         installScreen(elements: [(element, heistId)], objects: [heistId: object])
     }
 
+    func installSyntheticObservation(_ observation: InterfaceObservation) {
+        visibleObservationSource.observation = observation
+        brains.vault.installObservationForTesting(observation)
+    }
+
     func installScreen(
         elements: [(AccessibilityElement, HeistId)],
         objects: [HeistId: NSObject?] = [:]
     ) {
-        brains.vault.installObservationForTesting(.makeForTests(
+        let observation = InterfaceObservation.makeForTests(
             elements: elements.map { ($0.0, $0.1) },
             objects: objects
-        ))
+        )
+        installSyntheticObservation(observation)
     }
 
     func installScreen(
         offViewport: [InterfaceObservation.OffViewportEntry]
     ) {
-        brains.vault.installObservationForTesting(.makeForTests(
+        let observation = InterfaceObservation.makeForTests(
             offViewport: offViewport
-        ))
+        )
+        installSyntheticObservation(observation)
     }
 
     func installModalWindow(rootView: UIView) throws -> UIWindow {
+        visibleObservationSource.useLiveCapture()
         let windowScene = try requireForegroundWindowScene()
         let viewController = UIViewController()
         viewController.view = rootView
@@ -453,8 +478,7 @@ final class TheBrainsActionTests: XCTestCase {
                     result = await execute(command)
                 } else {
                     result = ActionResult.success(
-                        payload: command.resultPayload,
-                        message: command.runtimeType.rawValue,
+                        payload: command.resultPayload
                     )
                 }
                 return RuntimeActionExecution(
@@ -505,8 +529,7 @@ final class TheBrainsActionTests: XCTestCase {
                     result = await execute(command)
                 } else {
                     result = ActionResult.success(
-                        payload: command.resultPayload,
-                        message: command.runtimeType.rawValue,
+                        payload: command.resultPayload
                     )
                 }
                 return RuntimeActionExecution(result: result, expectationBaseline: nil)

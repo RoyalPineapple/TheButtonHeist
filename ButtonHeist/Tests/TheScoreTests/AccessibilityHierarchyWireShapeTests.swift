@@ -153,28 +153,102 @@ final class AccessibilityHierarchyWireShapeTests: XCTestCase {
         XCTAssertEqual(decoded.projectedElements, [element])
     }
 
-    func testInterfaceContainerRejectsFlatLegacyFramePayload() throws {
+    func testInterfaceAdmissionRejectsMalformedRawHierarchyGeometry() {
+        let invalidNodes: [AccessibilityHierarchy] = [
+            .element(parsedElement(shape: .frame(AccessibilityRect(x: 0, y: 0, width: -1, height: 44))),
+                     traversalIndex: 0),
+            .element(parsedElement(shape: .path([
+                .move(to: AccessibilityPoint(x: .nan, y: 0)),
+            ])), traversalIndex: 0),
+            .element(parsedElement(
+                shape: .frame(.zero),
+                activationPoint: AccessibilityPoint(x: .infinity, y: 0)
+            ), traversalIndex: 0),
+            .element(parsedElement(
+                shape: .frame(.zero),
+                customRotors: [AccessibilityElement.CustomRotor(
+                    name: "Errors",
+                    resultMarkers: [.init(
+                        elementDescription: "Error",
+                        shape: .frame(AccessibilityRect(x: 0, y: 0, width: 10, height: -.infinity))
+                    )]
+                )]
+            ), traversalIndex: 0),
+            .container(AccessibilityContainer(
+                type: .none,
+                scrollableContentSize: AccessibilitySize(width: -1, height: 100),
+                frame: .zero
+            ), children: []),
+            .container(AccessibilityContainer(
+                type: .scrollable(contentSize: AccessibilitySize(width: 100, height: -.infinity)),
+                frame: .zero
+            ), children: []),
+        ]
+
+        for node in invalidNodes {
+            XCTAssertNil(Interface(
+                admitting: Date(timeIntervalSince1970: 0),
+                tree: [node]
+            ))
+        }
+    }
+
+    func testAdmittedPathGeometrySurvivesResponseEnvelopeRoundTrip() throws {
+        let path: [AccessibilityPathElement] = [
+            .move(to: AccessibilityPoint(x: -20, y: 10)),
+            .quadCurve(
+                to: AccessibilityPoint(x: 40, y: 50),
+                control: AccessibilityPoint(x: 5, y: 80)
+            ),
+            .closeSubpath,
+        ]
+        let interface = try XCTUnwrap(Interface(
+            admitting: Date(timeIntervalSince1970: 0),
+            tree: [.element(parsedElement(shape: .path(path)), traversalIndex: 0)]
+        ))
+
+        let data = try encoder.encode(ResponseEnvelope(message: .interface(interface)))
+        let decoded = try decoder.decode(ResponseEnvelope.self, from: data)
+
+        guard case .interface(let decodedInterface) = decoded.message,
+              case .element(let decodedElement, _) = decodedInterface.tree.first,
+              case .path(let decodedPath) = decodedElement.shape else {
+            return XCTFail("Expected path geometry in decoded interface envelope")
+        }
+        XCTAssertEqual(decodedPath, path)
+    }
+
+    func testInterfaceWireDecodingRejectsMalformedContainerGeometry() throws {
         let original = makeTestInterface(nodes: [
             testContainer(
                 makeTestAccessibilityContainer(type: .list, frameWidth: 320, frameHeight: 200),
                 children: []
             ),
         ])
-        let canonicalPayload = try JSONDecoder().decode(JSONValue.self, from: encoder.encode(original))
-        let legacyPayload = try XCTUnwrap(replacingFirstObjectValue(
-            forKey: "frame",
+        let canonicalPayload = try decoder.decode(JSONValue.self, from: encoder.encode(original))
+        let malformedPayload = try XCTUnwrap(replacingFirstObjectValue(
+            forKey: "width",
             in: canonicalPayload,
-            with: .object([
-                "x": .int(0),
-                "y": .int(0),
-                "width": .int(320),
-                "height": .int(200),
-            ])
+            with: .int(-1)
         ))
-        let legacyData = try JSONEncoder().encode(legacyPayload)
 
-        XCTAssertThrowsError(try decoder.decode(Interface.self, from: legacyData)) { error in
-            XCTAssertTrue("\(error)".contains("origin"), "\(error)")
+        XCTAssertThrowsError(try decoder.decode(Interface.self, from: encoder.encode(malformedPayload)))
+    }
+
+    func testInterfaceWireDecodingRejectsUnknownNestedGeometryKey() throws {
+        let original = makeTestInterface(nodes: [
+            testElement(sampleElement()),
+        ])
+        let canonicalPayload = try decoder.decode(JSONValue.self, from: encoder.encode(original))
+        let malformedPayload = try XCTUnwrap(addingFirstObjectValue(
+            .int(0),
+            forKey: "legacyFrame",
+            toObjectForKey: "shape",
+            in: canonicalPayload
+        ))
+
+        XCTAssertThrowsError(try decoder.decode(Interface.self, from: encoder.encode(malformedPayload))) { error in
+            XCTAssertTrue("\(error)".contains("legacyFrame"), "\(error)")
         }
     }
 
@@ -245,6 +319,12 @@ final class AccessibilityHierarchyWireShapeTests: XCTestCase {
         XCTAssertEqual(path.removingPrefix(TreePath([2])), TreePath([4, 6]))
         XCTAssertEqual(path.relative(to: TreePath([2, 4])), TreePath([6]))
         XCTAssertNil(path.removingPrefix(TreePath([3])))
+    }
+
+    func testTreePathAdmissionRejectsNegativeIndices() throws {
+        XCTAssertEqual(TreePath(validating: [0, 2])?.indices, [0, 2])
+        XCTAssertNil(TreePath(validating: [0, -1]))
+        XCTAssertThrowsError(try decoder.decode(TreePath.self, from: Data(#"{"indices":[0,-1]}"#.utf8)))
     }
 
     func testInterfaceDiagnosticsRoundTripThroughCanonicalWireShape() throws {
@@ -326,6 +406,92 @@ final class AccessibilityHierarchyWireShapeTests: XCTestCase {
         )
     }
 
+    func testPublicNumericEvidenceRejectsMalformedValues() throws {
+        XCTAssertNil(ScrollInventory(totalElementCount: -1, visibleIndices: []))
+        XCTAssertNil(ScrollInventory(totalElementCount: 2, visibleIndices: [2]))
+        XCTAssertNil(ScrollInventory(totalElementCount: 3, visibleIndices: [1, 1]))
+        XCTAssertNil(InterfaceDiscoveryDiagnostics(
+            state: .complete,
+            includedElementCount: -1,
+            scrollAttempts: 0,
+            maxScrollsPerDiscovery: 1,
+            maxScrollsPerContainer: 1,
+            exploredScrollableContainerCount: 0,
+            omittedScrollableContainerCount: 0
+        ))
+        XCTAssertNil(InterfaceDiscoveryDiagnostics(
+            state: .complete,
+            reasonCodes: [.discoveryScrollLimit],
+            includedElementCount: 0,
+            scrollAttempts: 0,
+            maxScrollsPerDiscovery: 1,
+            maxScrollsPerContainer: 1,
+            exploredScrollableContainerCount: 0,
+            omittedScrollableContainerCount: 0
+        ))
+        XCTAssertNil(InterfaceDiscoveryDiagnostics(
+            state: .limited,
+            includedElementCount: 0,
+            scrollAttempts: 0,
+            maxScrollsPerDiscovery: 1,
+            maxScrollsPerContainer: 1,
+            exploredScrollableContainerCount: 0,
+            omittedScrollableContainerCount: 1,
+            omittedContainers: []
+        ))
+
+        let negativeInventory = #"{"totalElementCount":-1,"visibleIndices":[]}"#
+        let negativeDiagnostics = """
+        {
+          "state":"complete",
+          "reasonCodes":[],
+          "includedElementCount":0,
+          "scrollAttempts":-1,
+          "maxScrollsPerDiscovery":1,
+          "maxScrollsPerContainer":1,
+          "exploredScrollableContainerCount":0,
+          "omittedScrollableContainerCount":0,
+          "omittedContainers":[]
+        }
+        """
+        let inconsistentDiagnostics = """
+        {
+          "state":"complete",
+          "reasonCodes":["scroll-attempt-budget"],
+          "includedElementCount":0,
+          "scrollAttempts":0,
+          "maxScrollsPerDiscovery":1,
+          "maxScrollsPerContainer":1,
+          "exploredScrollableContainerCount":0,
+          "omittedScrollableContainerCount":0,
+          "omittedContainers":[]
+        }
+        """
+
+        XCTAssertThrowsError(try decoder.decode(ScrollInventory.self, from: Data(negativeInventory.utf8)))
+        XCTAssertThrowsError(
+            try decoder.decode(InterfaceDiscoveryDiagnostics.self, from: Data(negativeDiagnostics.utf8))
+        )
+        XCTAssertThrowsError(
+            try decoder.decode(InterfaceDiscoveryDiagnostics.self, from: Data(inconsistentDiagnostics.utf8))
+        )
+    }
+
+    func testTypedGeometryRejectsNegativeAndNonFiniteDimensions() throws {
+        let negative = #"{"x":0,"y":0,"width":-1,"height":44}"#
+        let nonFinite = #"{"x":0,"y":0,"width":"Infinity","height":44}"#
+        let nonFiniteDecoder = JSONDecoder()
+        nonFiniteDecoder.nonConformingFloatDecodingStrategy = .convertFromString(
+            positiveInfinity: "Infinity",
+            negativeInfinity: "-Infinity",
+            nan: "NaN"
+        )
+
+        XCTAssertThrowsError(try decoder.decode(ScreenRect.self, from: Data(negative.utf8)))
+        XCTAssertThrowsError(try nonFiniteDecoder.decode(ScreenRect.self, from: Data(nonFinite.utf8)))
+        XCTAssertThrowsError(try decoder.decode(ContentRect.self, from: Data(negative.utf8)))
+    }
+
     private func encodeInterfacePayload(_ interface: Interface) throws -> JSONProbe {
         let envelope = ResponseEnvelope(message: .interface(interface))
         let data = try encoder.encode(envelope)
@@ -394,6 +560,73 @@ final class AccessibilityHierarchyWireShapeTests: XCTestCase {
         case .string, .int, .double, .bool, .null:
             return nil
         }
+    }
+
+    private func addingFirstObjectValue(
+        _ value: JSONValue,
+        forKey key: String,
+        toObjectForKey objectKey: String,
+        in payload: JSONValue
+    ) -> JSONValue? {
+        switch payload {
+        case .object(var object):
+            if case .object(var nested)? = object[objectKey] {
+                nested[key] = value
+                object[objectKey] = .object(nested)
+                return .object(object)
+            }
+            for childKey in Array(object.keys) {
+                guard let child = object[childKey],
+                      let updated = addingFirstObjectValue(
+                          value,
+                          forKey: key,
+                          toObjectForKey: objectKey,
+                          in: child
+                      ) else { continue }
+                object[childKey] = updated
+                return .object(object)
+            }
+            return nil
+        case .array(let values):
+            for index in values.indices {
+                guard let updated = addingFirstObjectValue(
+                    value,
+                    forKey: key,
+                    toObjectForKey: objectKey,
+                    in: values[index]
+                ) else { continue }
+                var copy = values
+                copy[index] = updated
+                return .array(copy)
+            }
+            return nil
+        case .string, .int, .double, .bool, .null:
+            return nil
+        }
+    }
+
+    private func parsedElement(
+        shape: AccessibilityShape,
+        activationPoint: AccessibilityPoint = .zero,
+        customRotors: [AccessibilityElement.CustomRotor] = []
+    ) -> AccessibilityElement {
+        AccessibilityElement(
+            description: "Element",
+            label: "Element",
+            value: nil,
+            traits: .button,
+            identifier: nil,
+            hint: nil,
+            userInputLabels: nil,
+            shape: shape,
+            activationPoint: activationPoint,
+            usesDefaultActivationPoint: true,
+            customActions: [],
+            customContent: [],
+            customRotors: customRotors,
+            accessibilityLanguage: nil,
+            respondsToUserInteraction: true
+        )
     }
 
     private func sampleElement(

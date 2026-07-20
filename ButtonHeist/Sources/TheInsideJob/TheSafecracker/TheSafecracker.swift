@@ -11,20 +11,19 @@ final class TheSafecracker {
         fileprivate let preparedTouchID: SafecrackerTouchInjection.PreparedTouchID
     }
 
-    private let keyboardInput = SafecrackerKeyboardInput()
+    private let keyboardInput: SafecrackerKeyboardInput
     private let fingerprints: TheFingerprints
     private let touchInjection: SafecrackerTouchInjection
     private let editActions = SafecrackerEditActions()
 
-    init(fingerprintsEnabled: Bool = true) {
+    init(
+        fingerprintsEnabled: Bool = true,
+        keyboardInput: SafecrackerKeyboardInput = SafecrackerKeyboardInput()
+    ) {
         let fingerprints = TheFingerprints(isEnabled: fingerprintsEnabled)
+        self.keyboardInput = keyboardInput
         self.fingerprints = fingerprints
         self.touchInjection = SafecrackerTouchInjection(fingerprints: fingerprints)
-    }
-
-    var keyboardBridgeProvider: () -> KeyboardBridge? {
-        get { keyboardInput.keyboardBridgeProvider }
-        set { keyboardInput.keyboardBridgeProvider = newValue }
     }
 
     func startKeyboardObservation() {

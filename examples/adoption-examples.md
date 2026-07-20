@@ -8,7 +8,7 @@ they can be pasted into an existing XCTest, Swift Testing, or KIF-style harness.
 
 Use `runHeistSync` when the surrounding test target is synchronous and teardown
 already assumes the main run loop stays under the test method's control.
-Recording to an explicit directory makes the receipt artifact independent from
+Recording to an explicit directory makes the result artifact independent from
 inherited environment variables:
 
 ```swift
@@ -18,10 +18,10 @@ import XCTest
 
 final class CheckoutHeistTests: XCTestCase {
     func testCheckoutCompletes() {
-        let receiptsURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("buttonheist-receipts", isDirectory: true)
+        let resultsURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("buttonheist-results", isDirectory: true)
 
-        runHeistSync("Checkout.pay", recordReceipt: .always, to: receiptsURL) {
+        runHeistSync("Checkout.pay", recordResult: .always, to: resultsURL) {
             Activate(.label("Pay"))
                 .expect(.changed(.elements([.appeared(.label("Payment Complete"))])))
         }
@@ -103,10 +103,10 @@ final class LocationPermissionContractTests: XCTestCase {
     func testGrantedStateInAppAccessibilityContract() {
         seedLocationPermissionAsGranted()
 
-        let receiptsURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("buttonheist-receipts", isDirectory: true)
+        let resultsURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("buttonheist-results", isDirectory: true)
 
-        runHeistSync("Permissions.location.granted", recordReceipt: .always, to: receiptsURL) {
+        runHeistSync("Permissions.location.granted", recordResult: .always, to: resultsURL) {
             WaitFor(.exists(.label("Location Enabled")), timeout: 5)
 
             Activate(.label("Continue"))

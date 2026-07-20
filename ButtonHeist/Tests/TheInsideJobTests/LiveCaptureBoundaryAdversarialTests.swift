@@ -29,8 +29,22 @@ struct LiveCaptureBoundaryAdversarialTests {
         #expect(later.tree == captured.tree)
     }
 
-    private func makeTree(heistId: HeistId) -> InterfaceTree {
-        let element = AccessibilityElement.make(label: "Save", traits: .button)
+    @Test func `canonical observation rejects malformed hierarchy geometry`() {
+        let element = AccessibilityElement.make(
+            label: "Invalid",
+            shape: .frame(AccessibilityRect(x: 0, y: 0, width: -1, height: 44))
+        )
+        let tree = makeTree(heistId: "invalid", element: element)
+
+        #expect(throws: InterfaceGeometryAdmissionError.self) {
+            try InterfaceObservation.build(tree: tree)
+        }
+    }
+
+    private func makeTree(
+        heistId: HeistId,
+        element: AccessibilityElement = .make(label: "Save", traits: .button)
+    ) -> InterfaceTree {
         let path = TreePath([0])
         let entry = InterfaceTree.Element(
             heistId: heistId,

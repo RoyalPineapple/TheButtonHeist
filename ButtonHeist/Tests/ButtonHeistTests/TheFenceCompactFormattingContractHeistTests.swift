@@ -21,7 +21,7 @@ extension TheFenceCompactFormattingContractTests {
         init(measurement: HeistReport.Measurement) {
             self.init(
                 name: measurement.name.rawValue,
-                valueMs: measurement.valueMs,
+                valueMs: measurement.valueMs.milliseconds,
                 path: measurement.path?.description
             )
         }
@@ -65,7 +65,7 @@ extension TheFenceCompactFormattingContractTests {
             expectationActionResult: ActionResult.success(payload: .wait),
             expectation: ExpectationResult(met: true, predicate: expected)
         )
-        let result = HeistResult(
+        let result = try HeistResult(
             steps: [
                 HeistResultFixture.conditional(
                     status: .passed,
@@ -100,7 +100,7 @@ extension TheFenceCompactFormattingContractTests {
             .warn(WarnStep(message: "starting checkout")),
             action,
         ])
-        let result = HeistResult(
+        let result = try HeistResult(
             steps: [
                 HeistResultFixture.warning(path: "$.body[0]", message: "starting checkout"),
                 HeistResultFixture.action(
@@ -145,7 +145,7 @@ extension TheFenceCompactFormattingContractTests {
                 timeout: 1
             )))),
         ])
-        let result = HeistResult(
+        let result = try HeistResult(
             steps: [
                 HeistResultFixture.action(
                     command: command,
@@ -189,7 +189,7 @@ extension TheFenceCompactFormattingContractTests {
         let plan = try HeistPlan(body: [
             .action(ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: "Pay"))))),
         ])
-        let result = HeistResult(
+        let result = try HeistResult(
             steps: [
                 HeistResultFixture.action(
                     command: .activate(.predicate(ElementPredicateTemplate(label: "Pay"))),
@@ -220,7 +220,7 @@ extension TheFenceCompactFormattingContractTests {
         )
         let response = FenceResponse.heistExecution(
             plan: plan,
-            report: HeistReport.project(result: HeistResult(
+            report: HeistReport.project(result: try HeistResult(
                 steps: [
                     HeistResultFixture.action(
                         command: .activate(.predicate(ElementPredicateTemplate(label: "Pay"))),
@@ -245,7 +245,7 @@ extension TheFenceCompactFormattingContractTests {
 
     func testCompactHeistFormattingReportsFailStepMessage() throws {
         let plan = try HeistPlan(body: [.fail(FailStep(message: "Unknown screen"))])
-        let result = HeistResult(
+        let result = try HeistResult(
             steps: [
                 HeistResultFixture.explicitFailure(message: "Unknown screen"),
             ],
@@ -259,7 +259,7 @@ extension TheFenceCompactFormattingContractTests {
 
     func testPublicHeistJSONReportsFailStepMessage() throws {
         let plan = try HeistPlan(body: [.fail(FailStep(message: "Unknown screen"))])
-        let result = HeistResult(
+        let result = try HeistResult(
             steps: [
                 HeistResultFixture.explicitFailure(message: "Unknown screen"),
             ],
@@ -284,7 +284,7 @@ extension TheFenceCompactFormattingContractTests {
             .fail(FailStep(message: "stop")),
             .warn(WarnStep(message: "after")),
         ])
-        let result = HeistResult(
+        let result = try HeistResult(
             steps: [
                 HeistResultFixture.warning(path: "$.body[0]", message: "before"),
                 HeistResultFixture.explicitFailure(path: "$.body[1]", message: "stop"),
@@ -350,7 +350,7 @@ extension TheFenceCompactFormattingContractTests {
                 observed: "nested button failed"
             )
         )
-        let result = HeistResult(
+        let result = try HeistResult(
             steps: [
                 HeistResultFixture.conditional(
                     status: .failed,
@@ -424,7 +424,7 @@ extension TheFenceCompactFormattingContractTests {
             command: .activate(.predicate(ElementPredicateTemplate(label: "Fallback"))),
             result: ActionResult.success(payload: .activate)
         )
-        let result = HeistResult(
+        let result = try HeistResult(
             steps: [
                 HeistResultFixture.conditional(
                     status: .passed,
@@ -524,7 +524,7 @@ extension TheFenceCompactFormattingContractTests {
                 children: abortedChildren
             )
         )
-        let result = HeistResult(
+        let result = try HeistResult(
             steps: [
                 loopResult,
             ],

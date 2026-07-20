@@ -29,7 +29,7 @@ internal final class ElementInflation {
     }
 
     internal struct GeometryEnvironment {
-        internal let now: @MainActor () -> CFAbsoluteTime
+        internal let now: @MainActor () -> RuntimeElapsed.Instant
         internal let awaitFrame: @MainActor () async -> Void
     }
 
@@ -67,7 +67,7 @@ internal final class ElementInflation {
         self.tripwire = tripwire
         self.exploration = exploration
         geometryEnvironment = GeometryEnvironment(
-            now: CFAbsoluteTimeGetCurrent,
+            now: { RuntimeElapsed.now },
             awaitFrame: { await tripwire.yieldRealFrames(1) }
         )
     }

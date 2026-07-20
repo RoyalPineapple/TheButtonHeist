@@ -59,6 +59,17 @@ express across files in the runtime target.
 | --- | --- | --- | --- |
 | `buttonheist.semantic_observation_commit_ownership` | `SemanticObservationStream+Settlement.swift` is the only caller of `SemanticObservationStore.commitObservation`, so graph, history, lineage, and cursors cannot be advanced by competing runtime paths. | Commit admitted observations through the semantic stream. | Verification: standard `boundaryOnly` with an invalid competing committer fixture and repository evaluation of the settlement owner. Delete when Store commit becomes inaccessible outside the stream owner. |
 
+## Plan Language Boundaries
+
+These shapers preserve the public/package boundary after the compiler and
+access-control model have rejected most invalid constructions. They use
+Bumper's effective-access, stored-property, and nominal-declaration facts; no
+project syntax visitor reparses or reinterprets Swift.
+
+| Rule ID | Invariant | Repair | Verification and deletion condition |
+| --- | --- | --- | --- |
+| `buttonheist.heist_content_opacity` | `HeistContent` is an opaque authoring fragment with no public stored builder bookkeeping. | Keep steps, nested definitions, and diagnostics internal to the result builder and construct a `HeistPlan` through its public initializer. | Verification: internal and public stored-property fixtures plus repository evaluation. Delete when `HeistContent` moves into an implementation-only module behind a public result-builder function. |
+
 ## Rule Lifecycle
 
 A new blocking rule must demonstrate valid Swift that violates a durable

@@ -7,24 +7,6 @@ import ThePlans
 
 import AccessibilitySnapshotParser
 
-// MARK: - Float Sanitization
-
-extension CGFloat {
-    /// Replace NaN/infinity with 0 so JSONEncoder doesn't throw.
-    /// UIPickerView's 3D-transformed cells can produce non-finite frame coordinates.
-    var sanitizedForJSON: CGFloat {
-        isFinite ? self : 0
-    }
-}
-
-extension Double {
-    /// Replace NaN/infinity with 0 so JSONEncoder doesn't throw.
-    /// Portable parser points use Double instead of UIKit's CGFloat.
-    var sanitizedForJSON: Double {
-        isFinite ? self : 0
-    }
-}
-
 // MARK: - Wire Conversion
 
 extension TheVault {
@@ -38,41 +20,10 @@ extension TheVault {
     // MARK: - Element Conversion
 
     static func convert(_ element: AccessibilityElement) -> HeistElement {
-        let frame = element.bhFrame
-        let activationPoint = activationPointEvidence(for: element)
-        return HeistElement(
-            description: element.description,
-            label: element.label,
-            value: element.value,
-            identifier: element.identifier,
-            hint: element.hint,
-            traits: element.traits.heistTraits,
-            frameX: frame.origin.x.sanitizedForJSON,
-            frameY: frame.origin.y.sanitizedForJSON,
-            frameWidth: frame.size.width.sanitizedForJSON,
-            frameHeight: frame.size.height.sanitizedForJSON,
-            activationPointEvidence: activationPoint,
-            respondsToUserInteraction: element.respondsToUserInteraction,
-            customContent: {
-                let projected = element.projectedCustomContent
-                return projected.isEmpty ? nil : projected
-            }(),
-            rotors: {
-                let valid = element.customRotors.filter { !$0.name.isEmpty }
-                return valid.isEmpty ? nil : valid.map { HeistRotor(name: $0.name) }
-            }(),
+        HeistElement(
+            accessibilityElement: element,
             actions: element.projectedActionSet.orderedActions
         )
-    }
-
-    private static func activationPointEvidence(for element: AccessibilityElement) -> ActivationPointEvidence {
-        let point = element.bhResolvedActivationPoint
-        guard let x = try? FiniteCoordinate(validating: Double(point.x)),
-              let y = try? FiniteCoordinate(validating: Double(point.y)) else { return .unavailable }
-        let screenPoint = ScreenPoint(x: x, y: y)
-        return element.usesDefaultActivationPoint
-            ? .defaultCenter(screenPoint)
-            : .explicit(screenPoint)
     }
 
     // MARK: - Interface Conversion

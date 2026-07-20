@@ -60,14 +60,11 @@ struct PublicContainer: Encodable {
             self.frameHeight = nil
             return
         }
-        self.frameX = Self.sanitizedDouble(projection.container.frame.origin.x)
-        self.frameY = Self.sanitizedDouble(projection.container.frame.origin.y)
-        self.frameWidth = Self.sanitizedDouble(projection.container.frame.size.width)
-        self.frameHeight = Self.sanitizedDouble(projection.container.frame.size.height)
-    }
-
-    private static func sanitizedDouble(_ value: Double) -> Double {
-        value.isFinite ? value : 0
+        let frame = ScreenFrameEvidence(projection.container.frame).rect
+        self.frameX = frame?.x.value
+        self.frameY = frame?.y.value
+        self.frameWidth = frame?.width.value
+        self.frameHeight = frame?.height.value
     }
 
     private static func actionNames(_ container: AccessibilityContainer) -> [String]? {
@@ -161,26 +158,27 @@ struct PublicContainer: Encodable {
             observedElementCount: Int?,
             scrollInventory: ScrollInventory?
         ) {
-            let contentWidth = PublicContainer.sanitizedDouble(contentSize.width)
-            let contentHeight = PublicContainer.sanitizedDouble(contentSize.height)
-            let viewportWidth = PublicContainer.sanitizedDouble(frame.size.width)
-            let viewportHeight = PublicContainer.sanitizedDouble(frame.size.height)
+            guard let contentWidth = try? FiniteDimension(validating: contentSize.width),
+                  let contentHeight = try? FiniteDimension(validating: contentSize.height),
+                  let viewportWidth = try? FiniteDimension(validating: frame.size.width),
+                  let viewportHeight = try? FiniteDimension(validating: frame.size.height)
+            else { return }
             let horizontalPageScrolls = ScrollContainerMetrics.estimatedHorizontalPageScrolls(
-                contentWidth: contentWidth,
-                viewportWidth: viewportWidth
+                contentWidth: contentWidth.value,
+                viewportWidth: viewportWidth.value
             )
             let verticalPageScrolls = ScrollContainerMetrics.estimatedVerticalPageScrolls(
-                contentHeight: contentHeight,
-                viewportHeight: viewportHeight
+                contentHeight: contentHeight.value,
+                viewportHeight: viewportHeight.value
             )
             let scrollAxis = ScrollContainerMetrics.axis(
-                contentWidth: contentWidth,
-                contentHeight: contentHeight,
-                viewportWidth: viewportWidth,
-                viewportHeight: viewportHeight
+                contentWidth: contentWidth.value,
+                contentHeight: contentHeight.value,
+                viewportWidth: viewportWidth.value,
+                viewportHeight: viewportHeight.value
             )
-            self.contentWidth = contentWidth
-            self.contentHeight = contentHeight
+            self.contentWidth = contentWidth.value
+            self.contentHeight = contentHeight.value
             self.scrollAxis = scrollAxis.rawValue
             pageScrollsX = horizontalPageScrolls > 0 ? horizontalPageScrolls : nil
             pageScrollsY = verticalPageScrolls > 0 ? verticalPageScrolls : nil

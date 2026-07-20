@@ -103,6 +103,11 @@ public struct HeistExecutionPath: Sendable, Equatable, Hashable, Codable,
         appending(.field(.failure), .field(.actions), .index(index))
     }
 
+    package func isDescendant(of ancestor: Self) -> Bool {
+        components.count > ancestor.components.count
+            && components.starts(with: ancestor.components)
+    }
+
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         let description = try container.decode(String.self)

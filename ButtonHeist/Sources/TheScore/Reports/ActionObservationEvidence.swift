@@ -3,22 +3,22 @@ import ThePlans
 
 /// Optional local timing breakdown for one observed action pipeline.
 public struct ActionPerformanceTiming: Codable, Sendable, Equatable {
-    public let beforeObservationMs: Int?
-    public let targetResolutionMs: Int?
-    public let actionDispatchMs: Int?
-    public let interactionMs: Int?
-    public let finalSemanticEvidenceMs: Int?
-    public let resultAssemblyMs: Int?
-    public let totalMs: Int?
+    public let beforeObservationMs: ElapsedMilliseconds?
+    public let targetResolutionMs: ElapsedMilliseconds?
+    public let actionDispatchMs: ElapsedMilliseconds?
+    public let interactionMs: ElapsedMilliseconds?
+    public let finalSemanticEvidenceMs: ElapsedMilliseconds?
+    public let resultAssemblyMs: ElapsedMilliseconds?
+    public let totalMs: ElapsedMilliseconds?
 
     public init(
-        beforeObservationMs: Int? = nil,
-        targetResolutionMs: Int? = nil,
-        actionDispatchMs: Int? = nil,
-        interactionMs: Int? = nil,
-        finalSemanticEvidenceMs: Int? = nil,
-        resultAssemblyMs: Int? = nil,
-        totalMs: Int? = nil
+        beforeObservationMs: ElapsedMilliseconds? = nil,
+        targetResolutionMs: ElapsedMilliseconds? = nil,
+        actionDispatchMs: ElapsedMilliseconds? = nil,
+        interactionMs: ElapsedMilliseconds? = nil,
+        finalSemanticEvidenceMs: ElapsedMilliseconds? = nil,
+        resultAssemblyMs: ElapsedMilliseconds? = nil,
+        totalMs: ElapsedMilliseconds? = nil
     ) {
         self.beforeObservationMs = beforeObservationMs
         self.targetResolutionMs = targetResolutionMs
@@ -27,19 +27,6 @@ public struct ActionPerformanceTiming: Codable, Sendable, Equatable {
         self.finalSemanticEvidenceMs = finalSemanticEvidenceMs
         self.resultAssemblyMs = resultAssemblyMs
         self.totalMs = totalMs
-    }
-
-    public func merging(_ other: ActionPerformanceTiming?) -> ActionPerformanceTiming {
-        guard let other else { return self }
-        return ActionPerformanceTiming(
-            beforeObservationMs: other.beforeObservationMs ?? beforeObservationMs,
-            targetResolutionMs: other.targetResolutionMs ?? targetResolutionMs,
-            actionDispatchMs: other.actionDispatchMs ?? actionDispatchMs,
-            interactionMs: other.interactionMs ?? interactionMs,
-            finalSemanticEvidenceMs: other.finalSemanticEvidenceMs ?? finalSemanticEvidenceMs,
-            resultAssemblyMs: other.resultAssemblyMs ?? resultAssemblyMs,
-            totalMs: other.totalMs ?? totalMs
-        )
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
@@ -56,13 +43,16 @@ public struct ActionPerformanceTiming: Codable, Sendable, Equatable {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "ActionPerformanceTiming")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
-            beforeObservationMs: try container.decodeIfPresent(Int.self, forKey: .beforeObservationMs),
-            targetResolutionMs: try container.decodeIfPresent(Int.self, forKey: .targetResolutionMs),
-            actionDispatchMs: try container.decodeIfPresent(Int.self, forKey: .actionDispatchMs),
-            interactionMs: try container.decodeIfPresent(Int.self, forKey: .interactionMs),
-            finalSemanticEvidenceMs: try container.decodeIfPresent(Int.self, forKey: .finalSemanticEvidenceMs),
-            resultAssemblyMs: try container.decodeIfPresent(Int.self, forKey: .resultAssemblyMs),
-            totalMs: try container.decodeIfPresent(Int.self, forKey: .totalMs)
+            beforeObservationMs: try container.decodeIfPresent(ElapsedMilliseconds.self, forKey: .beforeObservationMs),
+            targetResolutionMs: try container.decodeIfPresent(ElapsedMilliseconds.self, forKey: .targetResolutionMs),
+            actionDispatchMs: try container.decodeIfPresent(ElapsedMilliseconds.self, forKey: .actionDispatchMs),
+            interactionMs: try container.decodeIfPresent(ElapsedMilliseconds.self, forKey: .interactionMs),
+            finalSemanticEvidenceMs: try container.decodeIfPresent(
+                ElapsedMilliseconds.self,
+                forKey: .finalSemanticEvidenceMs
+            ),
+            resultAssemblyMs: try container.decodeIfPresent(ElapsedMilliseconds.self, forKey: .resultAssemblyMs),
+            totalMs: try container.decodeIfPresent(ElapsedMilliseconds.self, forKey: .totalMs)
         )
     }
 }

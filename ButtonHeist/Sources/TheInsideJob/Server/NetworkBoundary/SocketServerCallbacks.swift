@@ -5,9 +5,9 @@ typealias SocketDataHandler = @Sendable (Int, Data, @escaping SocketResponseHand
 
 /// Callback bundle for socket lifecycle and data events.
 struct SocketServerCallbacks: Sendable {
-    var onClientConnected: (@Sendable (_ clientId: Int, _ remoteAddress: String?) -> Void)?
-    var onClientDisconnected: (@Sendable (Int) -> Void)?
-    var onDataReceived: SocketDataHandler?
+    let onClientConnected: (@Sendable (_ clientId: Int, _ remoteAddress: String?) -> Void)?
+    let onClientDisconnected: (@Sendable (Int) -> Void)?
+    let onDataReceived: SocketDataHandler?
 
     init(
         onClientConnected: (@Sendable (_ clientId: Int, _ remoteAddress: String?) -> Void)? = nil,

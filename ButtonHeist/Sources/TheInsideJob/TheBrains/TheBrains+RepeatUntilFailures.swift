@@ -50,7 +50,7 @@ extension TheBrains {
     internal func repeatUntilResolutionFailure(
         _ step: RepeatUntilStep,
         path: HeistExecutionPath,
-        start: CFAbsoluteTime,
+        start: RuntimeElapsed.Instant,
         error: Error
     ) -> HeistExecutionStepResult {
         let durationMs = elapsedMilliseconds(since: start)

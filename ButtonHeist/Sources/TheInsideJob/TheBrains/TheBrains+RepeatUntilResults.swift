@@ -8,13 +8,13 @@ import TheScore
 extension TheBrains {
     private struct RepeatUntilResultContext {
         let path: HeistExecutionPath
-        let durationMs: Int
+        let durationMs: ElapsedMilliseconds
         let declaration: HeistRepeatUntilDeclaration
         let step: ResolvedRepeatUntilStep
 
         init(
             path: HeistExecutionPath,
-            durationMs: Int,
+            durationMs: ElapsedMilliseconds,
             step: ResolvedRepeatUntilStep
         ) {
             self.path = path

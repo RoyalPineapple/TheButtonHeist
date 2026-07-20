@@ -57,7 +57,7 @@ extension SettleSessionTests {
         )
         let task = Task {
             await session.run(
-                start: CFAbsoluteTimeGetCurrent(),
+                start: RuntimeElapsed.now,
                 baselineTripwireSignal: tripwireSignal(topmostVC: nil)
             )
         }
@@ -94,7 +94,7 @@ extension SettleSessionTests {
         )
 
         let outcome = await session.run(
-            start: CFAbsoluteTimeGetCurrent(),
+            start: RuntimeElapsed.now,
             baselineTripwireSignal: tripwireSignal(topmostVC: nil)
         )
 
@@ -124,7 +124,7 @@ extension SettleSessionTests {
         )
 
         let outcome = await session.run(
-            start: CFAbsoluteTimeGetCurrent(),
+            start: RuntimeElapsed.now,
             baselineTripwireSignal: tripwireSignal(topmostVC: nil)
         )
 
@@ -171,7 +171,7 @@ extension SettleSessionTests {
         )
 
         let outcome = await session.run(
-            start: CFAbsoluteTimeGetCurrent(),
+            start: RuntimeElapsed.now,
             baselineTripwireSignal: tripwireSignal(topmostVC: nil)
         )
 

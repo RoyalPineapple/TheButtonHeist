@@ -10,7 +10,30 @@ import TheScore
 /// Actor-isolated — all mutable state is protected by Swift concurrency.
 private let logger = ButtonHeistLog.logger(.handoff(.server))
 
+typealias SocketSendContent = @Sendable (
+    _ connection: NWConnection,
+    _ content: Data,
+    _ completion: NWConnection.SendCompletion
+) -> Void
+
 actor SimpleSocketServer {
+    struct Dependencies: Sendable {
+        let sendContent: SocketSendContent
+        let listenerFactory: SocketListenerFactory
+
+        init(
+            sendContent: @escaping SocketSendContent = { connection, content, completion in
+                connection.send(content: content, completion: completion)
+            },
+            listenerFactory: @escaping SocketListenerFactory = { parameters in
+                try NWListener(using: parameters)
+            }
+        ) {
+            self.sendContent = sendContent
+            self.listenerFactory = listenerFactory
+        }
+    }
+
     // MARK: - Actor-isolated mutable state
 
     private(set) var currentListener: SocketListenerGeneration?
@@ -22,79 +45,22 @@ actor SimpleSocketServer {
         _syncListeningPort.withLock { $0 }
     }
 
-    var callbacks = SocketServerCallbacks()
-
-    #if DEBUG
-    private var listenerRuntimeStartOverride: (@Sendable (SocketListenerGeneration) async throws -> UInt16)?
-    private var listenerRuntimeStopOverride: (@Sendable () async -> Void)?
-    #endif
+    let callbacks: SocketServerCallbacks
+    let dependencies: Dependencies
 
     /// Connection scopes the server will accept. Connections from disallowed scopes are rejected immediately.
     let allowedScopes: Set<ConnectionScope>
 
     private let queue = DispatchQueue(label: "com.buttonheist.thehandoff.server")
-    var sendContent: (
-        @Sendable (
-            _ connection: NWConnection,
-            _ content: Data,
-            _ completion: NWConnection.SendCompletion
-        ) -> Void
-    ) = { connection, content, completion in
-        connection.send(content: content, completion: completion)
-    }
-
-    init(allowedScopes: Set<ConnectionScope> = ConnectionScope.all) {
+    init(
+        allowedScopes: Set<ConnectionScope> = ConnectionScope.all,
+        callbacks: SocketServerCallbacks = SocketServerCallbacks(),
+        dependencies: Dependencies = Dependencies()
+    ) {
         self.allowedScopes = allowedScopes
-    }
-
-    func setSendContentForTesting(
-        _ sendContent: @escaping @Sendable (
-            _ connection: NWConnection,
-            _ content: Data,
-            _ completion: NWConnection.SendCompletion
-        ) -> Void
-    ) {
-        self.sendContent = sendContent
-    }
-
-    func setCallbacksForTesting(_ callbacks: SocketServerCallbacks) {
         self.callbacks = callbacks
+        self.dependencies = dependencies
     }
-
-    #if DEBUG
-    func setListenerRuntimeStartOverrideForTesting(
-        _ start: (@Sendable (SocketListenerGeneration) async throws -> UInt16)?
-    ) {
-        listenerRuntimeStartOverride = start
-    }
-
-    func setListenerRuntimeStopOverrideForTesting(
-        _ stop: (@Sendable () async -> Void)?
-    ) {
-        listenerRuntimeStopOverride = stop
-    }
-
-    func insertClientForTesting(connection: NWConnection) -> Int? {
-        guard currentListener != nil else { return nil }
-        guard case .registered(let clientId) = clientRegistry.admitConnection(
-            connection,
-            capacity: .max,
-            transferOwnership: { true }
-        ) else {
-            return nil
-        }
-        return clientId
-    }
-
-    func clientPendingSendBytesForTesting(_ clientId: Int) -> Int? {
-        clientRegistry.pendingSendBytes(for: clientId)
-    }
-
-    var clientCountForTesting: Int {
-        clientRegistry.count
-    }
-
-    #endif
 
     // MARK: - Public API (async, actor-isolated)
 
@@ -105,39 +71,34 @@ actor SimpleSocketServer {
     ///   - bindToLoopback: If true, bind to loopback only (simulator builds)
     ///   - addressFamily: Address family or families to bind.
     ///   - tlsParameters: Non-optional TLS parameters. Production startup must not fall back to plaintext.
-    ///   - callbacks: Optional callbacks to install before starting
     /// - Returns: Actual port number bound
     func startAsync(
         port: UInt16 = 0,
         bindToLoopback: Bool = false,
         addressFamily: ListenerAddressFamily = .dualStack,
-        tlsParameters: NWParameters,
-        callbacks: SocketServerCallbacks? = nil
+        tlsParameters: NWParameters
     ) async throws -> UInt16 {
         logger.info("TLS configured for server")
         return try await startListening(
             port: port,
             bindToLoopback: bindToLoopback,
             addressFamily: addressFamily,
-            parameters: tlsParameters,
-            callbacks: callbacks
+            parameters: tlsParameters
         )
     }
 
     /// Start a plaintext listener for tests that exercise raw socket behavior.
     /// Production callers must use `startAsync(... tlsParameters:)`.
-    func startPlaintextForTests(
+    func startPlaintext(
         port: UInt16 = 0,
         bindToLoopback: Bool = false,
-        addressFamily: ListenerAddressFamily = .dualStack,
-        callbacks: SocketServerCallbacks? = nil
+        addressFamily: ListenerAddressFamily = .dualStack
     ) async throws -> UInt16 {
         try await startListening(
             port: port,
             bindToLoopback: bindToLoopback,
             addressFamily: addressFamily,
-            parameters: .tcp,
-            callbacks: callbacks
+            parameters: .tcp
         )
     }
 
@@ -145,23 +106,16 @@ actor SimpleSocketServer {
         port: UInt16,
         bindToLoopback: Bool,
         addressFamily: ListenerAddressFamily,
-        parameters: NWParameters,
-        callbacks: SocketServerCallbacks?
+        parameters: NWParameters
     ) async throws -> UInt16 {
         guard currentListener == nil else {
             throw StartupError.alreadyRunning
         }
 
         let attemptID = UUID()
-        #if DEBUG
-        let runtime = SocketListenerRuntime(stopOverride: listenerRuntimeStopOverride)
-        #else
         let runtime = SocketListenerRuntime()
-        #endif
         let generation = SocketListenerGeneration(attemptID: attemptID, runtime: runtime)
         currentListener = generation
-
-        if let callbacks { self.callbacks = callbacks }
 
         do {
             let port = try await startListenerRuntime(
@@ -202,14 +156,6 @@ actor SimpleSocketServer {
         parameters: NWParameters,
         queue: DispatchQueue
     ) async throws -> UInt16 {
-        #if DEBUG
-        if let listenerRuntimeStartOverride {
-            return try await generation.runtime.startForTesting {
-                try await listenerRuntimeStartOverride(generation)
-            }
-        }
-        #endif
-
         let attemptID = generation.attemptID
         let runtime = generation.runtime
         return try await runtime.start(
@@ -217,7 +163,8 @@ actor SimpleSocketServer {
             bindToLoopback: bindToLoopback,
             addressFamily: addressFamily,
             parameters: parameters,
-            queue: queue
+            queue: queue,
+            listenerFactory: dependencies.listenerFactory
         ) { [weak self, weak runtime, attemptID] connection in
             guard let runtime else {
                 connection.cancel()

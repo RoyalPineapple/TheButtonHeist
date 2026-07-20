@@ -109,7 +109,7 @@ internal final class SemanticObservationStream {
                 timeoutMs: timeoutMs,
                 policy: policy
             ).run(
-                start: CFAbsoluteTimeGetCurrent(),
+                start: RuntimeElapsed.now,
                 baselineTripwireSignal: baseline
             )
         }

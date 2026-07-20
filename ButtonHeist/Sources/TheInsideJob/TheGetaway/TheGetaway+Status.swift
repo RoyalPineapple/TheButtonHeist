@@ -15,8 +15,8 @@ extension TheGetaway {
             )
             return
         }
-        let info = ServerInfo(
-            appName: Bundle.main.infoDictionary?["CFBundleName"] as? String ?? "App",
+        guard let info = ServerInfo(
+            admitting: Bundle.main.infoDictionary?["CFBundleName"] as? String ?? "App",
             bundleIdentifier: Bundle.main.insideJobIdentifier,
             deviceName: UIDevice.current.name,
             systemVersion: UIDevice.current.systemVersion,
@@ -30,7 +30,13 @@ extension TheGetaway {
                 try? VendorIdentifier(validating: $0.uuidString)
             },
             tlsActive: identity.tlsActive
-        )
+        ) else {
+            await sendMessage(
+                .error(ServerError(kind: .general, message: "Server info contract failed: screen metrics are invalid")),
+                respond: respond
+            )
+            return
+        }
         await sendMessage(.info(info), respond: respond)
     }
 

@@ -55,7 +55,7 @@ extension Navigation {
             SettleSession.viewportTransitionTimeoutMs,
             deadline.map { max(1, Int(($0.remainingSeconds() * 1_000).rounded(.up))) } ?? .max
         )
-        let transitionDeadline = SemanticObservationDeadline(start: CFAbsoluteTimeGetCurrent(), timeoutMs: timeoutMs)
+        let transitionDeadline = SemanticObservationDeadline(start: RuntimeElapsed.now, timeoutMs: timeoutMs)
         repeat {
             let settleTimeoutMs = max(1, Int((transitionDeadline.remainingSeconds() * 1_000).rounded(.up)))
             let settle = await SettleSession.viewportTransition(
@@ -63,7 +63,7 @@ extension Navigation {
                 tripwire: tripwire,
                 timeoutMs: settleTimeoutMs
             ).run(
-                start: CFAbsoluteTimeGetCurrent(),
+                start: RuntimeElapsed.now,
                 baselineTripwireSignal: tripwire.tripwireSignal()
             )
             guard !Task.isCancelled else { return nil }
@@ -82,13 +82,13 @@ extension Navigation {
             ) {
                 return event
             }
-        } while transitionDeadline.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent())
+        } while transitionDeadline.hasTimeRemaining(at: RuntimeElapsed.now)
             && (afterViewportMovement || hasTimeRemaining(before: deadline))
         return nil
     }
 
     private func hasTimeRemaining(before deadline: SemanticObservationDeadline?) -> Bool {
-        deadline?.hasTimeRemaining(at: CFAbsoluteTimeGetCurrent()) ?? true
+        deadline?.hasTimeRemaining(at: RuntimeElapsed.now) ?? true
     }
 }
 

@@ -93,7 +93,7 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
     // MARK: - Listener lifecycle
 
     func testStartTransitionsToListening() async throws {
-        let port = try await server.startPlaintextForTests(port: 0, bindToLoopback: true)
+        let port = try await server.startPlaintext(port: 0, bindToLoopback: true)
         XCTAssertGreaterThan(port, 0)
         XCTAssertEqual(server.listeningPort, port)
     }
@@ -104,12 +104,12 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
         let callbacks = SocketServerCallbacks(
             onClientConnected: { _, _ in connected.fulfill() }
         )
+        server = SimpleSocketServer(callbacks: callbacks)
 
-        let port = try await server.startPlaintextForTests(
+        let port = try await server.startPlaintext(
             port: 0,
             bindToLoopback: true,
-            addressFamily: .dualStack,
-            callbacks: callbacks
+            addressFamily: .dualStack
         )
         let ipv4Client = ButtonHeistNetworkTestClient.plaintext(
             port: port,
@@ -136,12 +136,12 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
         let callbacks = SocketServerCallbacks(
             onClientConnected: { _, _ in connected.fulfill() }
         )
+        server = SimpleSocketServer(callbacks: callbacks)
 
-        let port = try await server.startPlaintextForTests(
+        let port = try await server.startPlaintext(
             port: 0,
             bindToLoopback: false,
-            addressFamily: .dualStack,
-            callbacks: callbacks
+            addressFamily: .dualStack
         )
         let ipv4Client = ButtonHeistNetworkTestClient.plaintext(
             port: port,
@@ -163,10 +163,10 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
     }
 
     func testDoubleStartThrowsAlreadyRunning() async throws {
-        _ = try await server.startPlaintextForTests(port: 0, bindToLoopback: true)
+        _ = try await server.startPlaintext(port: 0, bindToLoopback: true)
 
         do {
-            _ = try await server.startPlaintextForTests(port: 0, bindToLoopback: true)
+            _ = try await server.startPlaintext(port: 0, bindToLoopback: true)
             XCTFail("Expected alreadyRunning error on double start")
         } catch let error as SimpleSocketServer.StartupError {
             XCTAssertEqual(error, .alreadyRunning)
@@ -174,7 +174,7 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
     }
 
     func testStopFromListeningResetsPort() async throws {
-        _ = try await server.startPlaintextForTests(port: 0, bindToLoopback: true)
+        _ = try await server.startPlaintext(port: 0, bindToLoopback: true)
         XCTAssertGreaterThan(server.listeningPort, 0)
 
         await server.stop()
@@ -187,7 +187,7 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
     }
 
     func testSendToMissingClientFailsTyped() async throws {
-        _ = try await server.startPlaintextForTests(port: 0, bindToLoopback: true)
+        _ = try await server.startPlaintext(port: 0, bindToLoopback: true)
         let outcome = await server.send(Data("late-response".utf8), to: 404)
 
         guard case .failed(.clientNotFound(404)) = outcome else {
@@ -196,12 +196,12 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
     }
 
     func testCanRestartAfterStop() async throws {
-        let firstPort = try await server.startPlaintextForTests(port: 0, bindToLoopback: true)
+        let firstPort = try await server.startPlaintext(port: 0, bindToLoopback: true)
         XCTAssertGreaterThan(firstPort, 0)
 
         await server.stop()
 
-        let secondPort = try await server.startPlaintextForTests(port: 0, bindToLoopback: true)
+        let secondPort = try await server.startPlaintext(port: 0, bindToLoopback: true)
         XCTAssertGreaterThan(secondPort, 0)
     }
 
@@ -223,7 +223,8 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
                 dataReceived.fulfill()
             }
         )
-        let port = try await server.startPlaintextForTests(port: 0, bindToLoopback: true, callbacks: callbacks)
+        server = SimpleSocketServer(callbacks: callbacks)
+        let port = try await server.startPlaintext(port: 0, bindToLoopback: true)
 
         let client = ButtonHeistNetworkTestClient.plaintext(port: port)
         defer { client.cancel() }
@@ -255,7 +256,8 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
                 dataReceived.fulfill()
             }
         )
-        let port = try await server.startPlaintextForTests(port: 0, bindToLoopback: true, callbacks: callbacks)
+        server = SimpleSocketServer(callbacks: callbacks)
+        let port = try await server.startPlaintext(port: 0, bindToLoopback: true)
 
         let client = ButtonHeistNetworkTestClient.plaintext(port: port)
         defer { client.cancel() }
@@ -294,7 +296,8 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
                 clientDisconnected.fulfill()
             }
         )
-        let port = try await server.startPlaintextForTests(port: 0, bindToLoopback: true, callbacks: callbacks)
+        server = SimpleSocketServer(callbacks: callbacks)
+        let port = try await server.startPlaintext(port: 0, bindToLoopback: true)
 
         let client = ButtonHeistNetworkTestClient.plaintext(port: port)
         defer { client.cancel() }
@@ -310,14 +313,14 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
 
     func testScopeRejectionSendsServerErrorBeforeDisconnect() async throws {
         await server.stop()
-        server = SimpleSocketServer(allowedScopes: [.usb])
         let clientConnected = expectation(description: "scope-rejected client must not be accepted")
         clientConnected.isInverted = true
         let callbacks = SocketServerCallbacks(
             onClientConnected: { _, _ in clientConnected.fulfill() }
         )
+        server = SimpleSocketServer(allowedScopes: [.usb], callbacks: callbacks)
 
-        let port = try await server.startPlaintextForTests(port: 0, bindToLoopback: true, callbacks: callbacks)
+        let port = try await server.startPlaintext(port: 0, bindToLoopback: true)
         let client = ButtonHeistNetworkTestClient.plaintext(port: port)
         defer { client.cancel() }
 

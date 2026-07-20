@@ -33,7 +33,7 @@ package struct HeistPassingChildren: Codable, Sendable, Equatable {
 
     package func wrappedInRepeatUntilIteration(
         path: HeistExecutionPath,
-        durationMs: Int,
+        durationMs: ElapsedMilliseconds,
         declaration: HeistRepeatUntilDeclaration,
         evidence: HeistPassedRepeatUntilIterationEvidence
     ) -> HeistPassingChildren {
@@ -73,7 +73,7 @@ package struct HeistSkippedChildren: Codable, Sendable, Equatable {
 
     package mutating func append(
         path: HeistExecutionPath,
-        durationMs: Int,
+        durationMs: ElapsedMilliseconds,
         step: HeistStep
     ) {
         values.append(.skipped(path: path, durationMs: durationMs, step: step))
@@ -113,7 +113,7 @@ package struct HeistAbortedChildren: Codable, Sendable, Equatable {
 
     package func wrappedInRepeatUntilIteration(
         path: HeistExecutionPath,
-        durationMs: Int,
+        durationMs: ElapsedMilliseconds,
         declaration: HeistRepeatUntilDeclaration,
         evidence: HeistFailedRepeatUntilEvidence,
         failure: HeistFailureDetail

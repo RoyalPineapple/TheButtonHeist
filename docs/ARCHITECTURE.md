@@ -489,9 +489,12 @@ diagnostic, and response rendering turns them into strings.
 
 ```mermaid
 flowchart TD
-    Author["Authoring surface<br/>Swift DSL or runtime heist source"] --> Compile["Parse / build<br/>HeistPlanAdmissionCandidate"]
-    Compile --> Validate["Admit once<br/>semantic validation + runtime bounds"]
-    Validate --> Plan["Validated HeistPlan"]
+    SwiftAuthor["Swift DSL authoring"] --> Fragment["Opaque HeistContent<br/>builder fragment"]
+    SourceAuthor["Canonical runtime heist source"] --> Parse["Lex and parse source"]
+    Fragment --> Candidate["Package admission shape<br/>HeistPlanAdmissionCandidate"]
+    Parse --> Candidate
+    Candidate --> Validate["Admit once<br/>semantic validation + runtime bounds"]
+    Validate --> Plan["Executable HeistPlan"]
     Validate --> OfflineReport["validate_heist<br/>plan + invocation + lint report"]
     Plan --> FenceCommand["Fence command<br/>run_heist / perform / wait"]
     FenceCommand --> HandoffSocket["Handoff socket<br/>client version == app version"]

@@ -57,7 +57,7 @@ public func runHeistSync(
     to resultDirectory: URL? = nil,
     file: StaticString = #filePath,
     line: UInt = #line,
-    @HeistBuilder _ content: @escaping () throws -> some HeistContent
+    @HeistBuilder _ content: @escaping () throws -> HeistContent
 ) -> Heist? {
     runHeistSyncRequest(
         makeRequest: { try makeRunHeistRequest(path, content) },
@@ -80,7 +80,7 @@ public func runHeistSync(
     to resultDirectory: URL? = nil,
     file: StaticString = #filePath,
     line: UInt = #line,
-    @HeistBuilder _ content: @escaping (HeistReferenceName) throws -> some HeistContent
+    @HeistBuilder _ content: @escaping (HeistReferenceName) throws -> HeistContent
 ) -> Heist? {
     runHeistSyncRequest(
         makeRequest: {
@@ -106,7 +106,7 @@ public func runHeistSync(
     to resultDirectory: URL? = nil,
     file: StaticString = #filePath,
     line: UInt = #line,
-    @HeistBuilder _ content: @escaping (AccessibilityTarget) throws -> some HeistContent
+    @HeistBuilder _ content: @escaping (AccessibilityTarget) throws -> HeistContent
 ) -> Heist? {
     runHeistSyncRequest(
         makeRequest: {

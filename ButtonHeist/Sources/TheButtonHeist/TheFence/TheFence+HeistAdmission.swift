@@ -212,7 +212,7 @@ extension TheFence {
 
 private extension HeistActionCommand {
     var isPerformPrimitive: Bool {
-        switch core {
+        switch self {
         case .activate, .increment, .decrement, .customAction, .rotor,
              .typeText, .oneFingerTap, .longPress, .swipe,
              .drag, .dismiss, .magicTap, .editAction, .setPasteboard, .takeScreenshot, .dismissKeyboard:

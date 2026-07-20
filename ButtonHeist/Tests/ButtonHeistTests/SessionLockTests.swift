@@ -63,13 +63,13 @@ final class SessionLockTests: XCTestCase {
         }
 
         let payload = SessionLockedPayload(
-            message: "Another driver active; owner driver id: driver-a; active connections: 3.",
-            activeConnections: 3
+            message: "Another driver active.",
+            activeConnections: 1
         )
         try conn.handleMessage(encode(.sessionLocked(payload)))
 
         XCTAssertNotNil(receivedPayload)
-        XCTAssertEqual(receivedPayload?.message, "Another driver active; owner driver id: driver-a; active connections: 3.")
-        XCTAssertEqual(receivedPayload?.activeConnections, 3)
+        XCTAssertEqual(receivedPayload?.message, "Another driver active.")
+        XCTAssertEqual(receivedPayload?.activeConnections, 1)
     }
 }

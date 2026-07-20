@@ -22,7 +22,7 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
     }
 
     func testStartFromStoppedReachesRunningAndSetsTransport() async throws {
-        let harness = makeRuntimeHarness(actualPort: 23456)
+        let harness = try makeRuntimeHarness(actualPort: 23456)
 
         XCTAssertNil(harness.job.transport)
         XCTAssertNil(harness.job.listeningPort)
@@ -38,7 +38,7 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
     }
 
     func testStartWhileRunningDoesNotCreateAnotherRuntime() async throws {
-        let harness = makeRuntimeHarness(actualPort: 23456)
+        let harness = try makeRuntimeHarness(actualPort: 23456)
         try await harness.job.start()
 
         guard case .running(let originalResources) = harness.job.serverPhase else {
@@ -61,7 +61,7 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
 
     func testStartWhileStartingDoesNotCreateAnotherRuntime() async throws {
         let startupGate = RuntimeStartGate()
-        let harness = makeRuntimeHarness(startOverride: { _, _, _ in
+        let harness = try makeRuntimeHarness(listenerPort: { _ in
             await startupGate.enterAndWaitForRelease()
             return 23456
         })
@@ -92,7 +92,7 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
 
     func testStopWhileStartingPreventsStaleActivation() async throws {
         let startupGate = RuntimeStartGate()
-        let harness = makeRuntimeHarness(startOverride: { _, _, _ in
+        let harness = try makeRuntimeHarness(listenerPort: { _ in
             await startupGate.enterAndWaitForRelease()
             return 23456
         })
@@ -124,7 +124,7 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
     }
 
     func testStartWhileSuspendedDoesNotResumeRuntime() async throws {
-        let harness = makeRuntimeHarness(actualPort: 23456)
+        let harness = try makeRuntimeHarness(actualPort: 23456)
         try await harness.job.start()
 
         await harness.job.suspend()
@@ -138,7 +138,7 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
     }
 
     func testSuspendFromRunningReachesSuspendedAndPreservesLifecycleObservation() async throws {
-        let harness = makeRuntimeHarness()
+        let harness = try makeRuntimeHarness()
         try await harness.job.start()
 
         await harness.job.suspend()
@@ -154,7 +154,7 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
 
     func testDuplicateResumeWhileResumingKeepsSingleAttempt() async throws {
         let resumeStartGate = RuntimeStartGate()
-        let harness = makeRuntimeHarness(startOverride: { invocation, _, _ in
+        let harness = try makeRuntimeHarness(listenerPort: { invocation in
             guard invocation > 1 else { return 23456 }
             await resumeStartGate.enterAndWaitForRelease()
             return 23457
@@ -187,7 +187,7 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
 
     func testFailedResumeReturnsToSuspendedAndPreservesLifecycleDiagnostic() async throws {
         let resumeStartGate = RuntimeStartGate()
-        let harness = makeRuntimeHarness(startOverride: { invocation, _, _ in
+        let harness = try makeRuntimeHarness(listenerPort: { invocation in
             guard invocation > 1 else { return 23456 }
             await resumeStartGate.enterAndWaitForRelease()
             throw RuntimeStartFailure.resumeFailed
@@ -218,7 +218,7 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
     }
 
     func testStopFromRunningAndSuspendedReachesStoppedAndClearsLifecycleState() async throws {
-        let runningHarness = makeRuntimeHarness()
+        let runningHarness = try makeRuntimeHarness()
         try await runningHarness.job.start()
 
         await runningHarness.job.stop()
@@ -226,7 +226,7 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
         assertStoppedClearingLifecycleState(runningHarness.job)
         XCTAssertEqual(runningHarness.stopCallCount(), 1)
 
-        let suspendedHarness = makeRuntimeHarness()
+        let suspendedHarness = try makeRuntimeHarness()
         try await suspendedHarness.job.start()
         await suspendedHarness.job.suspend()
 
@@ -238,10 +238,10 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
 
     private func makeRuntimeHarness(
         actualPort: UInt16 = 34567,
-        startOverride: (@MainActor (_ invocation: Int, _ requestedPort: UInt16, _ bindToLoopback: Bool) async throws -> UInt16)? = nil,
+        listenerPort: (@MainActor (_ invocation: Int) async throws -> UInt16)? = nil,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) -> (
+    ) throws(InsideJobConfigurationError) -> (
         job: TheInsideJob,
         latestTransport: @MainActor () -> ServerTransport,
         startCallCount: @MainActor () -> Int,
@@ -252,25 +252,34 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
         let scopes: Set<ConnectionScope> = [.simulator]
         let harnessState = RuntimeHarnessState()
 
-        let job = TheInsideJob(
+        let job = try TheInsideJob(
             token: token.description,
             allowedScopes: scopes,
+            addressFamily: .ipv4,
             transportFactory: { runtimeToken, runtimeScopes in
                 XCTAssertEqual(runtimeToken, token, file: file, line: line)
                 XCTAssertEqual(runtimeScopes, scopes, file: file, line: line)
-                let transport = ServerTransport(token: token, allowedScopes: scopes)
-                transport.startOverride = { _, requestedPort, bindToLoopback in
-                    harnessState.startCount += 1
-                    XCTAssertEqual(requestedPort, 0, file: file, line: line)
-                    XCTAssertTrue(bindToLoopback, file: file, line: line)
-                    if let startOverride {
-                        return try await startOverride(harnessState.startCount, requestedPort, bindToLoopback)
-                    }
-                    return actualPort
-                }
-                transport.stopOverride = {
-                    harnessState.recordStop()
-                }
+                let listeners = TestSocketListenerFactory(
+                    start: { _ in
+                        harnessState.startCount += 1
+                        if let listenerPort {
+                            do {
+                                return .ready(try await listenerPort(harnessState.startCount))
+                            } catch {
+                                return .failed(.posix(.ECONNABORTED))
+                            }
+                        }
+                        return .ready(actualPort)
+                    },
+                    onCancel: { harnessState.recordStop() }
+                )
+                let transport = ServerTransport(
+                    token: token,
+                    allowedScopes: scopes,
+                    serverDependencies: .init(
+                        listenerFactory: listeners.listenerFactory
+                    )
+                )
                 harnessState.transports.append(transport)
                 return transport
             }

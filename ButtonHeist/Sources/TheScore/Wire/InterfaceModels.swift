@@ -5,91 +5,363 @@ import AccessibilitySnapshotModel
 
 // MARK: - Typed Geometry Evidence
 
-public struct ScreenRect: Codable, Equatable, Hashable, Sendable {
-    public let x: Double
-    public let y: Double
-    public let width: Double
-    public let height: Double
+public struct FiniteDimension: Codable, Equatable, Hashable, Sendable,
+    ExpressibleByIntegerLiteral, ExpressibleByFloatLiteral, Comparable, CustomStringConvertible {
+    public enum ValidationError: Error, Sendable, Equatable, CustomStringConvertible {
+        case invalid
 
-    public init(x: Double, y: Double, width: Double, height: Double) {
+        public var description: String { "dimension must be finite and non-negative" }
+    }
+
+    public let value: Double
+
+    public init(validating value: Double) throws(ValidationError) {
+        guard value.isFinite, value >= 0 else { throw .invalid }
+        self.value = value
+    }
+
+    public init(integerLiteral value: Int) {
+        self = requireValidLiteralPayload { try Self(validating: Double(value)) }
+    }
+
+    public init(floatLiteral value: Double) {
+        self = requireValidLiteralPayload { try Self(validating: value) }
+    }
+
+    public init(from decoder: Decoder) throws {
+        self = try decodeSingleValue(from: decoder, admitting: Self.init(validating:))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        try encodeSingleValue(value, to: encoder)
+    }
+
+    public var description: String { String(value) }
+
+    public static func < (lhs: Self, rhs: Self) -> Bool {
+        lhs.value < rhs.value
+    }
+}
+
+public struct ScreenRect: Codable, Equatable, Hashable, Sendable {
+    public let x: FiniteCoordinate
+    public let y: FiniteCoordinate
+    public let width: FiniteDimension
+    public let height: FiniteDimension
+
+    public init(
+        x: FiniteCoordinate,
+        y: FiniteCoordinate,
+        width: FiniteDimension,
+        height: FiniteDimension
+    ) {
         self.x = x
         self.y = y
         self.width = width
         self.height = height
     }
 
-    public init(_ rect: CGRect) {
+    public init(validating rect: CGRect) throws {
         self.init(
-            x: Double(rect.origin.x),
-            y: Double(rect.origin.y),
-            width: Double(rect.size.width),
-            height: Double(rect.size.height)
+            x: try FiniteCoordinate(validating: Double(rect.origin.x)),
+            y: try FiniteCoordinate(validating: Double(rect.origin.y)),
+            width: try FiniteDimension(validating: Double(rect.size.width)),
+            height: try FiniteDimension(validating: Double(rect.size.height))
+        )
+    }
+
+    public init(validating rect: AccessibilityRect) throws {
+        self.init(
+            x: try FiniteCoordinate(validating: rect.origin.x),
+            y: try FiniteCoordinate(validating: rect.origin.y),
+            width: try FiniteDimension(validating: rect.size.width),
+            height: try FiniteDimension(validating: rect.size.height)
+        )
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case x, y, width, height
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "screen rect")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            x: try container.decode(FiniteCoordinate.self, forKey: .x),
+            y: try container.decode(FiniteCoordinate.self, forKey: .y),
+            width: try container.decode(FiniteDimension.self, forKey: .width),
+            height: try container.decode(FiniteDimension.self, forKey: .height)
         )
     }
 
     public var cgRect: CGRect {
-        CGRect(x: x, y: y, width: width, height: height)
+        CGRect(x: x.value, y: y.value, width: width.value, height: height.value)
     }
 
     public var midX: Double {
-        x + width / 2
+        x.value + width.value / 2
     }
 
     public var midY: Double {
-        y + height / 2
+        y.value + height.value / 2
     }
 }
 
 public struct ContentRect: Codable, Equatable, Hashable, Sendable {
-    public let x: Double
-    public let y: Double
-    public let width: Double
-    public let height: Double
+    public let x: FiniteCoordinate
+    public let y: FiniteCoordinate
+    public let width: FiniteDimension
+    public let height: FiniteDimension
 
-    public init(x: Double, y: Double, width: Double, height: Double) {
+    public init(
+        x: FiniteCoordinate,
+        y: FiniteCoordinate,
+        width: FiniteDimension,
+        height: FiniteDimension
+    ) {
         self.x = x
         self.y = y
         self.width = width
         self.height = height
     }
 
-    public init(_ rect: CGRect) {
+    public init(validating rect: CGRect) throws {
         self.init(
-            x: Double(rect.origin.x),
-            y: Double(rect.origin.y),
-            width: Double(rect.size.width),
-            height: Double(rect.size.height)
+            x: try FiniteCoordinate(validating: Double(rect.origin.x)),
+            y: try FiniteCoordinate(validating: Double(rect.origin.y)),
+            width: try FiniteDimension(validating: Double(rect.size.width)),
+            height: try FiniteDimension(validating: Double(rect.size.height))
+        )
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case x, y, width, height
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "content rect")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            x: try container.decode(FiniteCoordinate.self, forKey: .x),
+            y: try container.decode(FiniteCoordinate.self, forKey: .y),
+            width: try container.decode(FiniteDimension.self, forKey: .width),
+            height: try container.decode(FiniteDimension.self, forKey: .height)
         )
     }
 
     public var cgRect: CGRect {
-        CGRect(x: x, y: y, width: width, height: height)
+        CGRect(x: x.value, y: y.value, width: width.value, height: height.value)
     }
 
     public var origin: CGPoint {
-        CGPoint(x: x, y: y)
+        CGPoint(x: x.value, y: y.value)
     }
 
     public var size: CGSize {
-        CGSize(width: width, height: height)
+        CGSize(width: width.value, height: height.value)
     }
 }
 
 public struct ScrollContentPoint: Codable, Equatable, Hashable, Sendable {
-    public let x: Double
-    public let y: Double
+    public let x: FiniteCoordinate
+    public let y: FiniteCoordinate
 
-    public init(x: Double, y: Double) {
+    public init(x: FiniteCoordinate, y: FiniteCoordinate) {
         self.x = x
         self.y = y
     }
 
-    public init(_ point: CGPoint) {
-        self.init(x: Double(point.x), y: Double(point.y))
+    public init(validating point: CGPoint) throws {
+        self.init(
+            x: try FiniteCoordinate(validating: Double(point.x)),
+            y: try FiniteCoordinate(validating: Double(point.y))
+        )
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case x, y
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "scroll content point")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            x: try container.decode(FiniteCoordinate.self, forKey: .x),
+            y: try container.decode(FiniteCoordinate.self, forKey: .y)
+        )
     }
 
     public var cgPoint: CGPoint {
-        CGPoint(x: x, y: y)
+        CGPoint(x: x.value, y: y.value)
+    }
+}
+
+public enum ScreenFrameEvidence: Equatable, Hashable, Sendable {
+    case available(ScreenRect)
+    case unavailable
+
+    public var rect: ScreenRect? {
+        guard case .available(let rect) = self else { return nil }
+        return rect
+    }
+
+    public init(_ rect: CGRect) {
+        guard let rect = try? ScreenRect(validating: rect) else {
+            self = .unavailable
+            return
+        }
+        self = .available(rect)
+    }
+
+    public init(_ rect: AccessibilityRect) {
+        guard let rect = try? ScreenRect(validating: rect) else {
+            self = .unavailable
+            return
+        }
+        self = .available(rect)
+    }
+
+    public init(_ shape: AccessibilityShape) {
+        switch shape {
+        case .frame(let rect):
+            self.init(rect)
+        case .path(let elements):
+            guard !elements.isEmpty else {
+                self = .unavailable
+                return
+            }
+            let path = CGMutablePath()
+            for element in elements {
+                switch element {
+                case .move(let point):
+                    path.move(to: CGPoint(x: point.x, y: point.y))
+                case .line(let point):
+                    path.addLine(to: CGPoint(x: point.x, y: point.y))
+                case .quadCurve(let point, let control):
+                    path.addQuadCurve(
+                        to: CGPoint(x: point.x, y: point.y),
+                        control: CGPoint(x: control.x, y: control.y)
+                    )
+                case .curve(let point, let control1, let control2):
+                    path.addCurve(
+                        to: CGPoint(x: point.x, y: point.y),
+                        control1: CGPoint(x: control1.x, y: control1.y),
+                        control2: CGPoint(x: control2.x, y: control2.y)
+                    )
+                case .closeSubpath:
+                    path.closeSubpath()
+                }
+            }
+            self.init(path.boundingBoxOfPath)
+        }
+    }
+
+}
+
+package struct InterfaceGeometryAdmissionError: Error, Equatable, CustomStringConvertible {
+    package let path: TreePath
+    package let field: String
+
+    package var description: String {
+        "Invalid interface geometry at \(path.indices): \(field)"
+    }
+}
+
+package enum InterfaceGeometryAdmission {
+    package static func validate(_ tree: [AccessibilityHierarchy]) throws {
+        for (index, node) in tree.enumerated() {
+            try validate(node, at: TreePath([index]))
+        }
+    }
+
+    package static func validate(_ element: AccessibilityElement, at path: TreePath) throws {
+        try validate(element.shape, at: path, field: "element shape")
+        guard element.activationPoint.isFinite else {
+            throw InterfaceGeometryAdmissionError(path: path, field: "element activation point")
+        }
+        for (rotorIndex, rotor) in element.customRotors.enumerated() {
+            for (resultIndex, marker) in rotor.resultMarkers.enumerated() {
+                guard let shape = marker.shape else { continue }
+                try validate(
+                    shape,
+                    at: path,
+                    field: "custom rotor \(rotorIndex) result \(resultIndex) shape"
+                )
+            }
+        }
+    }
+
+    package static func validate(_ container: AccessibilityContainer, at path: TreePath) throws {
+        try validate(container.frame, at: path, field: "container frame")
+        if let size = container.scrollableContentSize {
+            try validate(size, at: path, field: "container scrollable content size")
+        }
+        if case .scrollable(let size) = container.type {
+            try validate(size, at: path, field: "scrollable container type content size")
+        }
+    }
+
+    private static func validate(_ node: AccessibilityHierarchy, at path: TreePath) throws {
+        switch node {
+        case .element(let element, _):
+            try validate(element, at: path)
+        case .container(let container, let children):
+            try validate(container, at: path)
+            for (index, child) in children.enumerated() {
+                try validate(child, at: path.appending(index))
+            }
+        }
+    }
+
+    private static func validate(
+        _ shape: AccessibilityShape,
+        at path: TreePath,
+        field: String
+    ) throws {
+        switch shape {
+        case .frame(let rect):
+            try validate(rect, at: path, field: field)
+        case .path(let elements):
+            guard elements.allSatisfy(\.pointsAreFinite) else {
+                throw InterfaceGeometryAdmissionError(path: path, field: field)
+            }
+        }
+    }
+
+    private static func validate(
+        _ rect: AccessibilityRect,
+        at path: TreePath,
+        field: String
+    ) throws {
+        guard ScreenFrameEvidence(rect).rect != nil else {
+            throw InterfaceGeometryAdmissionError(path: path, field: field)
+        }
+    }
+
+    private static func validate(
+        _ size: AccessibilitySize,
+        at path: TreePath,
+        field: String
+    ) throws {
+        guard (try? FiniteDimension(validating: size.width)) != nil,
+              (try? FiniteDimension(validating: size.height)) != nil else {
+            throw InterfaceGeometryAdmissionError(path: path, field: field)
+        }
+    }
+}
+
+private extension AccessibilityPathElement {
+    var pointsAreFinite: Bool {
+        switch self {
+        case .move(let point), .line(let point):
+            point.isFinite
+        case .quadCurve(let point, let control):
+            point.isFinite && control.isFinite
+        case .curve(let point, let control1, let control2):
+            point.isFinite && control1.isFinite && control2.isFinite
+        case .closeSubpath:
+            true
+        }
     }
 }
 
@@ -240,14 +512,40 @@ public enum ScrollContainerMetrics {
 public struct TreePath: Codable, Equatable, Hashable, Sendable {
     public let indices: [Int]
 
-    public init(_ indices: [Int]) {
+    package init(_ indices: [Int]) {
+        precondition(indices.allSatisfy { $0 >= 0 }, "TreePath indices must be non-negative")
+        self.indices = indices
+    }
+
+    public init?(validating indices: [Int]) {
+        guard indices.allSatisfy({ $0 >= 0 }) else { return nil }
         self.indices = indices
     }
 
     public static let root = TreePath([])
 
-    public func appending(_ index: Int) -> TreePath {
+    package func appending(_ index: Int) -> TreePath {
         TreePath(indices + [index])
+    }
+
+    public func appending(validating index: Int) -> TreePath? {
+        TreePath(validating: indices + [index])
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case indices
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "tree path")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        guard let admitted = Self(validating: try container.decode([Int].self, forKey: .indices)) else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath,
+                debugDescription: "tree path indices must be non-negative"
+            ))
+        }
+        self = admitted
     }
 }
 
@@ -291,9 +589,39 @@ public struct ScrollInventory: Codable, Equatable, Hashable, Sendable {
     public let totalElementCount: Int?
     public let visibleIndices: [Int]
 
-    public init(totalElementCount: Int?, visibleIndices: [Int]) {
+    public init?(totalElementCount: Int?, visibleIndices: [Int]) {
+        guard totalElementCount.map({ $0 >= 0 }) ?? true,
+              visibleIndices.allSatisfy({ $0 >= 0 }),
+              Set(visibleIndices).count == visibleIndices.count,
+              totalElementCount.map({ total in visibleIndices.allSatisfy { $0 < total } }) ?? true
+        else { return nil }
         self.totalElementCount = totalElementCount
         self.visibleIndices = visibleIndices
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case totalElementCount
+        case visibleIndices
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "scroll inventory")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let totalElementCount = try container.decodeIfPresent(Int.self, forKey: .totalElementCount)
+        let visibleIndices = try container.decode([Int].self, forKey: .visibleIndices)
+        guard let admitted = Self(totalElementCount: totalElementCount, visibleIndices: visibleIndices) else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath,
+                debugDescription: "scroll inventory indices must be unique and inside the total element count"
+            ))
+        }
+        self = admitted
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(totalElementCount, forKey: .totalElementCount)
+        try container.encode(visibleIndices, forKey: .visibleIndices)
     }
 }
 
@@ -493,7 +821,7 @@ public struct InterfaceDiscoveryDiagnostics: Codable, Equatable, Sendable {
     public let omittedContainers: [InterfaceDiscoveryOmittedContainer]
     public let nextAction: String?
 
-    public init(
+    public init?(
         state: InterfaceDiscoveryStatus,
         reasonCodes: [InterfaceDiscoveryReasonCode] = [],
         includedElementCount: Int,
@@ -505,6 +833,24 @@ public struct InterfaceDiscoveryDiagnostics: Codable, Equatable, Sendable {
         omittedContainers: [InterfaceDiscoveryOmittedContainer] = [],
         nextAction: String? = nil
     ) {
+        let counts = [
+            includedElementCount,
+            scrollAttempts,
+            maxScrollsPerDiscovery,
+            maxScrollsPerContainer,
+            exploredScrollableContainerCount,
+            omittedScrollableContainerCount,
+        ]
+        let stateIsConsistent = switch state {
+        case .complete:
+            reasonCodes.isEmpty && omittedContainers.isEmpty && nextAction == nil
+        case .limited:
+            !reasonCodes.isEmpty || !omittedContainers.isEmpty
+        }
+        guard counts.allSatisfy({ $0 >= 0 }),
+              omittedScrollableContainerCount == omittedContainers.count,
+              stateIsConsistent
+        else { return nil }
         self.state = state
         self.reasonCodes = reasonCodes
         self.includedElementCount = includedElementCount
@@ -516,6 +862,50 @@ public struct InterfaceDiscoveryDiagnostics: Codable, Equatable, Sendable {
         self.omittedContainers = omittedContainers
         self.nextAction = nextAction
     }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case state, reasonCodes, includedElementCount, scrollAttempts
+        case maxScrollsPerDiscovery, maxScrollsPerContainer
+        case exploredScrollableContainerCount, omittedScrollableContainerCount
+        case omittedContainers, nextAction
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "interface discovery diagnostics")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        guard let admitted = Self(
+            state: try container.decode(InterfaceDiscoveryStatus.self, forKey: .state),
+            reasonCodes: try container.decode([InterfaceDiscoveryReasonCode].self, forKey: .reasonCodes),
+            includedElementCount: try container.decode(Int.self, forKey: .includedElementCount),
+            scrollAttempts: try container.decode(Int.self, forKey: .scrollAttempts),
+            maxScrollsPerDiscovery: try container.decode(Int.self, forKey: .maxScrollsPerDiscovery),
+            maxScrollsPerContainer: try container.decode(Int.self, forKey: .maxScrollsPerContainer),
+            exploredScrollableContainerCount: try container.decode(Int.self, forKey: .exploredScrollableContainerCount),
+            omittedScrollableContainerCount: try container.decode(Int.self, forKey: .omittedScrollableContainerCount),
+            omittedContainers: try container.decode([InterfaceDiscoveryOmittedContainer].self, forKey: .omittedContainers),
+            nextAction: try container.decodeIfPresent(String.self, forKey: .nextAction)
+        ) else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath,
+                debugDescription: "interface discovery counts and state must be consistent"
+            ))
+        }
+        self = admitted
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(state, forKey: .state)
+        try container.encode(reasonCodes, forKey: .reasonCodes)
+        try container.encode(includedElementCount, forKey: .includedElementCount)
+        try container.encode(scrollAttempts, forKey: .scrollAttempts)
+        try container.encode(maxScrollsPerDiscovery, forKey: .maxScrollsPerDiscovery)
+        try container.encode(maxScrollsPerContainer, forKey: .maxScrollsPerContainer)
+        try container.encode(exploredScrollableContainerCount, forKey: .exploredScrollableContainerCount)
+        try container.encode(omittedScrollableContainerCount, forKey: .omittedScrollableContainerCount)
+        try container.encode(omittedContainers, forKey: .omittedContainers)
+        try container.encodeIfPresent(nextAction, forKey: .nextAction)
+    }
 }
 
 public struct InterfaceDiscoveryOmittedContainer: Codable, Equatable, Hashable, Sendable {
@@ -523,20 +913,20 @@ public struct InterfaceDiscoveryOmittedContainer: Codable, Equatable, Hashable, 
     public let type: AccessibilityContainerKind
     public let reasonCodes: [InterfaceDiscoveryReasonCode]
     public let scrollAxis: ScrollContainerAxis?
-    public let viewportWidth: Double?
-    public let viewportHeight: Double?
-    public let contentWidth: Double?
-    public let contentHeight: Double?
+    public let viewportWidth: FiniteDimension?
+    public let viewportHeight: FiniteDimension?
+    public let contentWidth: FiniteDimension?
+    public let contentHeight: FiniteDimension?
 
     public init(
         containerName: ContainerName? = nil,
         type: AccessibilityContainerKind,
         reasonCodes: [InterfaceDiscoveryReasonCode],
         scrollAxis: ScrollContainerAxis? = nil,
-        viewportWidth: Double? = nil,
-        viewportHeight: Double? = nil,
-        contentWidth: Double? = nil,
-        contentHeight: Double? = nil
+        viewportWidth: FiniteDimension? = nil,
+        viewportHeight: FiniteDimension? = nil,
+        contentWidth: FiniteDimension? = nil,
+        contentHeight: FiniteDimension? = nil
     ) {
         self.containerName = containerName
         self.type = type
@@ -547,7 +937,6 @@ public struct InterfaceDiscoveryOmittedContainer: Codable, Equatable, Hashable, 
         self.contentWidth = contentWidth
         self.contentHeight = contentHeight
     }
-
 }
 
 extension InterfaceDiscoveryOmittedContainer: Comparable {
@@ -606,11 +995,27 @@ public struct Interface: Codable, Equatable, Sendable {
         graph.elementsInTraversalOrder.map(\.interfaceRecord)
     }
 
-    public init(
+    package init(
         timestamp: Date,
         tree: [AccessibilityHierarchy],
         diagnostics: InterfaceDiagnostics? = nil
     ) {
+        guard let admitted = Self(
+            admitting: timestamp,
+            tree: tree,
+            diagnostics: diagnostics
+        ) else {
+            preconditionFailure("Interface hierarchy geometry must be admitted before construction")
+        }
+        self = admitted
+    }
+
+    public init?(
+        admitting timestamp: Date,
+        tree: [AccessibilityHierarchy],
+        diagnostics: InterfaceDiagnostics? = nil
+    ) {
+        guard (try? InterfaceGeometryAdmission.validate(tree)) != nil else { return nil }
         self.init(
             validatedTimestamp: timestamp,
             tree: tree,
@@ -642,7 +1047,7 @@ public struct Interface: Codable, Equatable, Sendable {
         tree: [AccessibilityHierarchy],
         diagnostics: InterfaceDiagnostics? = nil,
         traceIdentities: InterfaceTraceIdentities
-    ) throws(InterfaceGraphValidationError) {
+    ) throws {
         try self.init(
             timestamp: timestamp,
             tree: tree,
@@ -659,7 +1064,8 @@ public struct Interface: Codable, Equatable, Sendable {
         diagnostics: InterfaceDiagnostics? = nil,
         screenActions: [ScreenAction] = [],
         traceIdentities: InterfaceTraceIdentities
-    ) throws(InterfaceGraphValidationError) {
+    ) throws {
+        try InterfaceGeometryAdmission.validate(tree)
         try InterfaceGraph.validate(
             tree: tree,
             annotations: annotations,
@@ -689,6 +1095,12 @@ public struct Interface: Codable, Equatable, Sendable {
             elementMetadata: elementMetadata,
             containerMetadata: containerMetadata
         )
+
+        do {
+            try InterfaceGeometryAdmission.validate(tree)
+        } catch {
+            preconditionFailure("Interface hierarchy geometry must be admitted before projection: \(error)")
+        }
 
         self.init(
             validatedTimestamp: timestamp,

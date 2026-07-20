@@ -13,9 +13,9 @@ import TheInsideJob
 @main
 struct ButtonHeistIOSPublicProductsImportContract {
     @MainActor
-    static func main() async {
-        TheInsideJob.configure(token: "public-products-import-contract")
-        let job = TheInsideJob(token: "public-products-import-contract")
+    static func main() async throws {
+        try TheInsideJob.configure(token: "public-products-import-contract")
+        let job = try TheInsideJob(token: "public-products-import-contract")
         await job.stop()
     }
 }

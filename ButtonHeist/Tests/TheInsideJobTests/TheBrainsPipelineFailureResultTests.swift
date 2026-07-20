@@ -227,7 +227,7 @@ extension TheBrainsPipelineTests {
         )
     }
 
-    func testActionDispatchResultDecoratorsPreserveExistingFieldsAndMergeTiming() throws {
+    func testActionDispatchResultDecoratorsPreserveExistingFields() throws {
         let element = HeistElement(
             description: "Checkout",
             label: "Checkout",
@@ -266,10 +266,8 @@ extension TheBrainsPipelineTests {
             subjectEvidence: originalEvidence,
             resolvedElementId: "checkout_button"
         )
-        .withTiming(ActionPerformanceTiming(beforeObservationMs: 5, totalMs: 20))
         .withSubjectEvidence(replacementEvidence)
         .withActivationTrace(activationTrace)
-        .withTiming(ActionPerformanceTiming(totalMs: 30))
 
         XCTAssertTrue(success.success)
         XCTAssertEqual(success.method, .setPasteboard)
@@ -278,10 +276,6 @@ extension TheBrainsPipelineTests {
         XCTAssertEqual(success.subjectEvidence, replacementEvidence)
         XCTAssertEqual(success.resolvedElementId, "checkout_button")
         XCTAssertEqual(success.activationTrace, activationTrace)
-        XCTAssertEqual(success.timing, ActionPerformanceTiming(
-            beforeObservationMs: 5,
-            totalMs: 30
-        ))
 
         let failure = TheSafecracker.ActionDispatchResult.failure(
             .activate,
@@ -289,12 +283,10 @@ extension TheBrainsPipelineTests {
             failureKind: .targetUnavailable
         )
         .withActivationTrace(activationTrace)
-        .withTiming(ActionPerformanceTiming(targetResolutionMs: 11))
 
         XCTAssertFalse(failure.success)
         XCTAssertEqual(failure.payload, .activate)
         XCTAssertEqual(failure.activationTrace, activationTrace)
-        XCTAssertEqual(failure.timing, ActionPerformanceTiming(targetResolutionMs: 11))
         guard case .targetUnavailable? = failure.failureKind else {
             return XCTFail("Expected targetUnavailable failure kind, got \(String(describing: failure.failureKind))")
         }

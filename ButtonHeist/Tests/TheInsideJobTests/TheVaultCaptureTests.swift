@@ -25,6 +25,23 @@ final class TheVaultCaptureTests: XCTestCase {
         XCTAssertNil(result)
     }
 
+    func testInjectedObservationSourceRemainsTheRefreshOwnerAcrossLifecycleReset() {
+        let observation = InterfaceObservation.empty
+        var captureCount = 0
+        let injectedVault = TheVault(
+            tripwire: TheTripwire(),
+            visibleObservationSource: { _ in
+                captureCount += 1
+                return observation
+            }
+        )
+
+        XCTAssertEqual(injectedVault.refreshLiveCapture()?.captureID, observation.captureID)
+        injectedVault.resetInterfaceForLifecycle()
+        XCTAssertEqual(injectedVault.refreshLiveCapture()?.captureID, observation.captureID)
+        XCTAssertEqual(captureCount, 2)
+    }
+
     func testCaptureDoesNotMutateSearchBarHiding() throws {
         let windowScene = try requireForegroundWindowScene()
 
@@ -300,38 +317,43 @@ final class TheVaultCaptureTests: XCTestCase {
     func testCaptureIncludesPopoverContentSiblingAfterDismissRegion() throws {
         let windowScene = try requireForegroundWindowScene()
 
-        let viewController = UIViewController()
-        viewController.view.backgroundColor = .white
+        let result = try withNoTraversableWindows {
+            let viewController = UIViewController()
+            viewController.view.frame = UIScreen.main.bounds
+            viewController.view.backgroundColor = .white
 
-        let backgroundLabel = UILabel(frame: CGRect(x: 20, y: 20, width: 260, height: 44))
-        backgroundLabel.text = "Background Should Not Appear"
-        backgroundLabel.isAccessibilityElement = true
-        viewController.view.addSubview(backgroundLabel)
+            let backgroundLabel = UILabel(frame: CGRect(x: 20, y: 20, width: 260, height: 44))
+            backgroundLabel.text = "Background Should Not Appear"
+            backgroundLabel.isAccessibilityElement = true
+            viewController.view.addSubview(backgroundLabel)
 
-        let dismissRegion = UIView(frame: viewController.view.bounds.insetBy(dx: -1000, dy: -1000))
-        dismissRegion.accessibilityViewIsModal = true
-        dismissRegion.isAccessibilityElement = false
-        dismissRegion.accessibilityIdentifier = "PopoverDismissRegion"
-        viewController.view.addSubview(dismissRegion)
+            let dismissRegion = UIView(frame: viewController.view.bounds.insetBy(dx: -1000, dy: -1000))
+            dismissRegion.accessibilityViewIsModal = true
+            dismissRegion.isAccessibilityElement = false
+            dismissRegion.accessibilityIdentifier = "PopoverDismissRegion"
+            viewController.view.addSubview(dismissRegion)
 
-        let popoverButton = UIButton(type: .system)
-        popoverButton.setTitle("Popover Action", for: .normal)
-        popoverButton.frame = CGRect(x: 80, y: 120, width: 180, height: 44)
-        viewController.view.addSubview(popoverButton)
+            let popoverButton = UIButton(type: .system)
+            popoverButton.setTitle("Popover Action", for: .normal)
+            popoverButton.frame = CGRect(x: 80, y: 120, width: 180, height: 44)
+            viewController.view.addSubview(popoverButton)
 
-        let window = UIWindow(windowScene: windowScene)
-        window.windowLevel = .alert + 20
-        window.rootViewController = viewController
-        window.frame = UIScreen.main.bounds
-        window.isHidden = false
+            let window = UIWindow(windowScene: windowScene)
+            window.windowLevel = .alert + 20
+            window.rootViewController = viewController
+            window.frame = UIScreen.main.bounds
+            window.isHidden = false
+            window.layoutIfNeeded()
 
-        defer {
-            window.isHidden = true
-        }
+            defer {
+                window.isHidden = true
+            }
 
-        guard let result = vault.refreshLiveCapture() else {
-            XCTFail("Expected capture for popover-style modal window")
-            return
+            let capture = try XCTUnwrap(
+                vault.capture(),
+                "Expected capture for popover-style modal window"
+            )
+            return try TheVault.admitObservation(from: capture)
         }
 
         let labels = result.liveCapture.hierarchy.sortedElements.compactMap(\.label)
@@ -403,8 +425,8 @@ final class TheVaultCaptureTests: XCTestCase {
     }
 
     private func withNoTraversableWindows<T>(
-        _ operation: () -> T
-    ) -> T {
+        _ operation: () throws -> T
+    ) rethrows -> T {
         let windows = vault.tripwire.captureTraversableWindows().map(\.window)
         let originalHiddenStates = windows.map(\.isHidden)
         for window in windows {
@@ -415,7 +437,7 @@ final class TheVaultCaptureTests: XCTestCase {
                 window.isHidden = originalIsHidden
             }
         }
-        return operation()
+        return try operation()
     }
 
 }

@@ -158,7 +158,9 @@ package struct HeistRepeatUntilDeclaration: Sendable, Equatable {
 /// One semantic node in a heist execution result tree.
 public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
     public let path: HeistExecutionPath
-    public let durationMs: Int
+    /// Wall-clock observation for this step. Parent and child intervals can
+    /// overlap, so this value is not the sum of child durations.
+    public let durationMs: ElapsedMilliseconds
     let node: HeistExecutionStepNode
 
     public var kind: HeistExecutionStepKind {
@@ -190,10 +192,20 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
     }
 
     public init(from decoder: Decoder) throws {
+        let depth = decoder.codingPath.count { $0.stringValue == "children" } + 1
+        let limits = decoder.userInfo[.heistResultCodecLimits] as? HeistResultCodecLimits
+        let maximumDepth = limits?.maxNestingDepth ?? HeistResultCodecLimits.default.maxNestingDepth
+        guard depth <= maximumDepth else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath,
+                debugDescription: "heist result nesting is too deep (\(depth); "
+                    + "limit \(maximumDepth))"
+            ))
+        }
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist execution step result")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let path = try container.decode(HeistExecutionPath.self, forKey: .path)
-        let durationMs = try container.decode(Int.self, forKey: .durationMs)
+        let durationMs = try container.decode(ElapsedMilliseconds.self, forKey: .durationMs)
         let node = try container.decode(HeistExecutionStepNode.self, forKey: .node)
         self = try Self.admitDecodedNode(path: path, durationMs: durationMs, node: node, from: decoder)
     }
@@ -219,6 +231,12 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         walk(enter: { _ in }, leave: { if firstFailure == nil, $0.status == .failed { firstFailure = $0 } })
         return firstFailure
     }
+}
+
+extension CodingUserInfoKey {
+    static let heistResultCodecLimits = CodingUserInfoKey(
+        rawValue: "com.buttonheist.heistResultCodecLimits"
+    )!
 }
 
 package extension Sequence where Element == HeistExecutionStepResult {

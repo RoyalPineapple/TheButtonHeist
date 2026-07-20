@@ -148,4 +148,75 @@ final class ServerInfoTests: XCTestCase {
             XCTAssertEqual(decoded.screenHeight, height)
         }
     }
+
+    func testAdmissionRejectsInvalidNumericValues() {
+        let invalidValues: [(width: Double, height: Double, port: UInt16)] = [
+            (.nan, 852, 49152),
+            (.infinity, 852, 49152),
+            (0, 852, 49152),
+            (-1, 852, 49152),
+            (393, .nan, 49152),
+            (393, 0, 49152),
+            (393, 852, 0),
+        ]
+
+        for value in invalidValues {
+            XCTAssertNil(admitServerInfo(width: value.width, height: value.height, port: value.port))
+        }
+    }
+
+    func testDecodingRejectsInvalidNumericValues() {
+        let decoder = JSONDecoder()
+        decoder.nonConformingFloatDecodingStrategy = .convertFromString(
+            positiveInfinity: "Infinity",
+            negativeInfinity: "-Infinity",
+            nan: "NaN"
+        )
+        let invalidValues = [
+            (width: "0", height: "852", port: "49152"),
+            (width: "-1", height: "852", port: "49152"),
+            (width: #""NaN""#, height: "852", port: "49152"),
+            (width: "393", height: #""Infinity""#, port: "49152"),
+            (width: "393", height: "852", port: "0"),
+        ]
+
+        for value in invalidValues {
+            XCTAssertThrowsError(try decoder.decode(
+                ServerInfo.self,
+                from: Data(serverInfoJSON(width: value.width, height: value.height, port: value.port).utf8)
+            ))
+        }
+    }
+
+    private func admitServerInfo(width: Double, height: Double, port: UInt16) -> ServerInfo? {
+        ServerInfo(
+            admitting: "TestApp",
+            bundleIdentifier: "com.test.app",
+            deviceName: "iPhone",
+            systemVersion: "18.0",
+            screenWidth: width,
+            screenHeight: height,
+            instanceId: "test-session",
+            instanceIdentifier: "test",
+            listeningPort: port,
+            tlsActive: true
+        )
+    }
+
+    private func serverInfoJSON(width: String, height: String, port: String) -> String {
+        """
+        {
+          "appName":"TestApp",
+          "bundleIdentifier":"com.test.app",
+          "deviceName":"iPhone",
+          "systemVersion":"18.0",
+          "screenWidth":\(width),
+          "screenHeight":\(height),
+          "instanceId":"test-session",
+          "instanceIdentifier":"test",
+          "listeningPort":\(port),
+          "tlsActive":true
+        }
+        """
+    }
 }

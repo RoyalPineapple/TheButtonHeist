@@ -156,7 +156,7 @@ extension WireTypeRoundTripTests {
         XCTAssertThrowsError(
             try decoder.decode(HeistCaseSelectionResult.self, from: Data(json.utf8))
         ) { error in
-            assertDecodingError(error, contains: ["elapsedMs", "non-negative"])
+            assertDecodingError(error, contains: ["elapsed milliseconds", "must not be negative"])
         }
     }
 

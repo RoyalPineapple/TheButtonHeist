@@ -27,7 +27,7 @@ extension TheBrains {
     }
 
     internal enum HeistRuntimeWaitRequest: Equatable, Sendable {
-        case standalone(ResolvedWaitRuntimeInput, startedAt: CFAbsoluteTime)
+        case standalone(ResolvedWaitRuntimeInput, startedAt: RuntimeElapsed.Instant)
         case actionEndpoint(
             ResolvedWaitRuntimeInput,
             trace: AccessibilityTrace?,
@@ -64,7 +64,7 @@ extension TheBrains {
             }
         }
 
-        internal var startedAt: CFAbsoluteTime? {
+        internal var startedAt: RuntimeElapsed.Instant? {
             switch self {
             case .standalone(_, let startedAt):
                 return startedAt
@@ -193,7 +193,7 @@ extension TheBrains {
         let demand = vault.semanticObservationStream.beginActiveObservationDemand()
         defer { demand.cancel() }
 
-        let heistStart = CFAbsoluteTimeGetCurrent()
+        let heistStart = RuntimeElapsed.now
         let environment: HeistExecutionEnvironment
         do {
             environment = try HeistExecutionEnvironment.empty.binding(argument: argument, to: plan.parameter)
@@ -222,8 +222,17 @@ extension TheBrains {
            ) {
             stepResults.append(failureScreenshotStep)
         }
-        let durationMs = Int((CFAbsoluteTimeGetCurrent() - heistStart) * 1000)
-        let result = HeistResult(steps: stepResults, durationMs: durationMs)
+        let durationMs = elapsedMilliseconds(since: heistStart)
+        let result: HeistResult
+        do {
+            result = try HeistResult(steps: stepResults, durationMs: durationMs)
+        } catch {
+            return .failure(
+                payload: .heist(nil),
+                failureKind: .validationError,
+                message: "Could not admit heist execution result: \(error)"
+            )
+        }
 
         let message = heistExecutionMessage(
             completedCount: stepResults.count,
@@ -294,7 +303,7 @@ extension TheBrains {
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {
-        let start = CFAbsoluteTimeGetCurrent()
+        let start = RuntimeElapsed.now
         switch step {
         case .action(let action):
             return await executeActionStep(
@@ -386,7 +395,7 @@ extension TheBrains {
         _ plan: HeistPlan,
         index _: Int,
         path: HeistExecutionPath,
-        start: CFAbsoluteTime,
+        start: RuntimeElapsed.Instant,
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope

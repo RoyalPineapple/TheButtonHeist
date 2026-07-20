@@ -3,19 +3,23 @@
 Author-to-replay: how a heist written in Swift (or in the canonical DSL source form) becomes a validated plan, a portable `.heist` artifact, and finally a replayed run with a result. This diagram answers "where does my heist live at each stage, and where can it be rejected?"
 
 **Illustrates:** [HEIST-FORMAT.md](../HEIST-FORMAT.md), [HEIST-LANGUAGE-SPEC.md](../HEIST-LANGUAGE-SPEC.md), [SWIFT-HEIST-AUTHORING.md](../SWIFT-HEIST-AUTHORING.md)
-**Source of truth:** `ButtonHeist/Sources/ThePlans/Model/HeistPlan.swift`, `ButtonHeist/Sources/ThePlans/Compilation/HeistSwiftFileCompilation.swift`, `ButtonHeist/Sources/ThePlans/Parsing/HeistPlanSourceProgramParser.swift`, `ButtonHeist/Sources/ThePlans/Model/HeistArtifact.swift`, `ButtonHeist/Sources/ThePlans/Validation/HeistPlan+RuntimeValidation.swift`, `ButtonHeist/Sources/ThePlans/Validation/HeistPlan+RuntimeValidationAdmission.swift`, `ButtonHeist/Sources/ThePlans/Validation/HeistPlan+RuntimeValidationTraversal.swift`, `ButtonHeist/Sources/ThePlans/Validation/HeistPlan+Validation.swift`, `ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+HeistExecution.swift`, `ButtonHeist/Sources/TheScore/Results/HeistResult.swift`, `ButtonHeist/Sources/TheScore/Reports/HeistResult+Report.swift`, `ButtonHeist/Sources/TheScore/Results/HeistResultRecorder.swift`
+**Source of truth:** `ButtonHeist/Sources/ThePlans/Model/HeistContent.swift`, `ButtonHeist/Sources/ThePlans/Model/HeistPlan.swift`, `ButtonHeist/Sources/ThePlans/Compilation/HeistSwiftFileCompilation.swift`, `ButtonHeist/Sources/ThePlans/Parsing/HeistPlanSourceProgramParser.swift`, `ButtonHeist/Sources/ThePlans/Model/HeistArtifact.swift`, `ButtonHeist/Sources/ThePlans/Validation/HeistPlan+RuntimeValidation.swift`, `ButtonHeist/Sources/ThePlans/Validation/HeistPlan+RuntimeValidationAdmission.swift`, `ButtonHeist/Sources/ThePlans/Validation/HeistPlan+RuntimeValidationTraversal.swift`, `ButtonHeist/Sources/ThePlans/Validation/HeistPlan+Validation.swift`, `ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+HeistExecution.swift`, `ButtonHeist/Sources/TheScore/Results/HeistResult.swift`, `ButtonHeist/Sources/TheScore/Reports/HeistResult+Report.swift`, `ButtonHeist/Sources/TheScore/Results/HeistResultRecorder.swift`
 
 ```mermaid
 flowchart TD
     subgraph author["Authoring"]
         SWIFT["Swift DSL<br/>(ThePlans result builders)"]
         SOURCE["canonical DSL source<br/>(compileHeistPlanSource)"]
+        CONTENT["opaque HeistContent<br/>authoring fragment"]
+        PARSE["lex and parse source"]
+        SWIFT --> CONTENT
+        SOURCE --> PARSE
     end
 
     subgraph ir["IR boundary — admission"]
-        CANDIDATE["HeistPlanAdmissionCandidate<br/>decoded / parsed / built IR"]
+        CANDIDATE["package HeistPlanAdmissionCandidate<br/>pre-admission shape"]
         CHECKS["single semantic admission:<br/>rejectUnknownKeys at decode ·<br/>HeistCallGraph cycle rejection ·<br/>runtime safety limits"]
-        PLAN["HeistPlan<br/>version · name · parameter ·<br/>definitions · body"]
+        PLAN["executable HeistPlan<br/>version · name · parameter ·<br/>definitions · body"]
         CANDIDATE --> CHECKS --> PLAN
     end
 
@@ -36,8 +40,8 @@ flowchart TD
         RECORD -->|yes| RESULTFILE
     end
 
-    SWIFT --> CANDIDATE
-    SOURCE --> CANDIDATE
+    CONTENT --> CANDIDATE
+    PARSE --> CANDIDATE
     PLAN --> HEIST
     HEIST -- "run_heist via XCTest / CLI / MCP" --> GATE
     PLAN -- "direct run (runHeist, perform)" --> GATE
@@ -45,7 +49,7 @@ flowchart TD
 
 Notes:
 
-- Both authoring frontends lower to `HeistPlanAdmissionCandidate`; one semantic admission constructs the validated `HeistPlan`. The runtime never compiles Swift. Live composition (heists assembled over an interactive session) enters the same IR boundary as hand-authoring.
+- Swift authoring produces opaque `HeistContent`, while canonical source is lexed and parsed. Both lower to package-scoped `HeistPlanAdmissionCandidate`; one semantic admission constructs the executable `HeistPlan`. The runtime never compiles Swift. Live composition (heists assembled over an interactive session) enters the same admission boundary as hand-authoring.
 - Admission is strict at the boundary: decoding rejects unknown keys with an explicit allowed list per step type, `HeistCallGraph` rejects any recursive definition cycle ("heist runs must not be recursive"), and `HeistPlanRuntimeSafetyLimits` caps plan size (see [totality.md](totality.md)).
 - `.compositionQuality` and `.strictTest` lint consume an admitted `HeistPlan`; they are quality checks, not a second admission path.
 - The `.heist` package is two JSON files: `manifest.json` (`format`, `formatVersion`, `planVersion`, `entry`, `producer`, `createdAt`) and `plan.json` (the IR, `HeistPlan.currentVersion = 2`), read and written by `HeistArtifactCodec`.

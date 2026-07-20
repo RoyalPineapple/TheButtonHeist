@@ -30,7 +30,7 @@ extension HeistCanonicalSwiftDSLRenderer {
         if let failure = command.durableHeistActionFailure {
             throw HeistCanonicalSwiftDSLError.unsupportedAction(failure)
         }
-        switch command.core {
+        switch command {
         case .activate(let target):
             return "Activate(\(try render(target: target, environment: environment)))"
         case .increment(let target):

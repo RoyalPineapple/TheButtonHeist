@@ -101,7 +101,7 @@ extension TheBrains {
         _ step: ForEachElementStep,
         index: Int,
         path: HeistExecutionPath,
-        start: CFAbsoluteTime,
+        start: RuntimeElapsed.Instant,
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
@@ -214,7 +214,7 @@ extension TheBrains {
             Item,
             Int,
             HeistExecutionPath,
-            CFAbsoluteTime,
+            RuntimeElapsed.Instant,
             HeistExecutedChildren
         ) -> HeistExecutionStepResult
     ) async -> ForEachLoopOutcome {
@@ -233,7 +233,7 @@ extension TheBrains {
                     iterations: iterationNodes
                 )
             }
-            let iterationStart = CFAbsoluteTimeGetCurrent()
+            let iterationStart = RuntimeElapsed.now
             let iterationPath = context.kind.iterationPath(from: context.path, at: iterationIndex)
             let iterationResults = await executeHeistSteps(
                 context.body,
@@ -271,7 +271,7 @@ extension TheBrains {
 
     private func forEachElementIterationResult(
         path: HeistExecutionPath,
-        start: CFAbsoluteTime,
+        start: RuntimeElapsed.Instant,
         step: ForEachElementStep,
         matchedCount: Int,
         iterationIndex: Int,
@@ -306,7 +306,7 @@ extension TheBrains {
 
     private func forEachElementResult(
         path: HeistExecutionPath,
-        start: CFAbsoluteTime,
+        start: RuntimeElapsed.Instant,
         step: ForEachElementStep,
         outcome: ForEachLoopOutcome
     ) -> HeistExecutionStepResult {
@@ -338,7 +338,7 @@ extension TheBrains {
         _ step: ForEachStringStep,
         index _: Int,
         path: HeistExecutionPath,
-        start: CFAbsoluteTime,
+        start: RuntimeElapsed.Instant,
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
@@ -379,7 +379,7 @@ extension TheBrains {
 
     private func forEachStringIterationResult(
         path: HeistExecutionPath,
-        start: CFAbsoluteTime,
+        start: RuntimeElapsed.Instant,
         step: ForEachStringStep,
         iterationIndex: Int,
         value: String,
@@ -411,7 +411,7 @@ extension TheBrains {
 
     private func forEachStringResult(
         path: HeistExecutionPath,
-        start: CFAbsoluteTime,
+        start: RuntimeElapsed.Instant,
         step: ForEachStringStep,
         outcome: ForEachLoopOutcome
     ) -> HeistExecutionStepResult {
@@ -518,7 +518,7 @@ extension TheBrains {
     private func forEachUnavailableResult(
         index _: Int,
         path: HeistExecutionPath,
-        start: CFAbsoluteTime,
+        start: RuntimeElapsed.Instant,
         step: ForEachElementStep
     ) -> HeistExecutionStepResult {
         let observed = "could not observe settled semantic hierarchy before evaluating for_each_element"
@@ -542,7 +542,7 @@ extension TheBrains {
 
     private func forEachResolutionFailureResult(
         path: HeistExecutionPath,
-        start: CFAbsoluteTime,
+        start: RuntimeElapsed.Instant,
         step: ForEachElementStep,
         error: Error
     ) -> HeistExecutionStepResult {
@@ -569,7 +569,7 @@ extension TheBrains {
     private func forEachLimitResult(
         index _: Int,
         path: HeistExecutionPath,
-        start: CFAbsoluteTime,
+        start: RuntimeElapsed.Instant,
         matchedCount: Int,
         step: ForEachElementStep
     ) -> HeistExecutionStepResult {

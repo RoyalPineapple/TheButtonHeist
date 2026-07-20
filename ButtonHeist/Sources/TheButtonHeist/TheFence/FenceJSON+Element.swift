@@ -41,10 +41,10 @@ struct PublicElement: Encodable {
         }
         self.hint = element.hint
         self.customContent = element.customContent.map { PublicCustomContent(items: $0) }
-        self.frameX = element.frameX
-        self.frameY = element.frameY
-        self.frameWidth = element.frameWidth
-        self.frameHeight = element.frameHeight
+        self.frameX = element.screenFrame?.x.value
+        self.frameY = element.screenFrame?.y.value
+        self.frameWidth = element.screenFrame?.width.value
+        self.frameHeight = element.screenFrame?.height.value
         self.activationPointX = element.activationPointX
         self.activationPointY = element.activationPointY
     }

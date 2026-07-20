@@ -242,7 +242,7 @@ final class StartupConfigurationTests: XCTestCase {
         XCTAssertEqual(configuration, expected)
     }
 
-    func testRuntimeConfigurationAppliesAPIOverridesToResolvedStartupSnapshot() {
+    func testRuntimeConfigurationAppliesAPIOverridesToResolvedStartupSnapshot() throws {
         let startupConfiguration = StartupConfiguration(
             disableAutoStart: ResolvedStartupValue(value: false, source: .defaultValue),
             token: ResolvedStartupValue(value: "startup-token", source: .environment),
@@ -253,7 +253,7 @@ final class StartupConfigurationTests: XCTestCase {
             warnings: []
         )
 
-        let runtimeConfiguration = InsideJobRuntimeConfiguration.resolve(
+        let runtimeConfiguration = try InsideJobRuntimeConfiguration.resolve(
             startupConfiguration: startupConfiguration,
             token: "api-token",
             instanceId: "api-id",
@@ -288,7 +288,7 @@ final class StartupConfigurationTests: XCTestCase {
         XCTAssertEqual(runtimeConfiguration.failureEvidencePolicy, startupConfiguration.failureEvidencePolicy)
     }
 
-    func testRuntimeConfigurationUsesExplicitStartupSnapshotForSessionDefaults() {
+    func testRuntimeConfigurationUsesExplicitStartupSnapshotForSessionDefaults() throws {
         let startupConfiguration = StartupConfiguration(
             disableAutoStart: ResolvedStartupValue(value: false, source: .defaultValue),
             token: ResolvedStartupValue(value: "startup-token", source: .environment),
@@ -299,7 +299,7 @@ final class StartupConfigurationTests: XCTestCase {
             warnings: []
         )
 
-        let runtimeConfiguration = InsideJobRuntimeConfiguration.resolve(
+        let runtimeConfiguration = try InsideJobRuntimeConfiguration.resolve(
             startupConfiguration: startupConfiguration,
             token: nil,
             instanceId: nil,
@@ -322,6 +322,54 @@ final class StartupConfigurationTests: XCTestCase {
         )
         XCTAssertEqual(runtimeConfiguration.addressFamily, .dualStack)
         XCTAssertEqual(runtimeConfiguration.sessionReleaseTimeout, startupConfiguration.sessionTimeout)
+    }
+
+    func testRuntimeConfigurationRejectsBlankExplicitValues() {
+        let startupConfiguration = StartupConfiguration.resolve(env: .empty, infoPlist: makeInfoPlist([:]))
+
+        XCTAssertThrowsError(
+            try InsideJobRuntimeConfiguration.resolve(
+                startupConfiguration: startupConfiguration,
+                token: " ",
+                instanceId: nil,
+                allowedScopes: nil,
+                port: 0
+            )
+        ) { error in
+            XCTAssertEqual(error as? InsideJobConfigurationError, .blankToken)
+        }
+
+        XCTAssertThrowsError(
+            try InsideJobRuntimeConfiguration.resolve(
+                startupConfiguration: startupConfiguration,
+                token: nil,
+                instanceId: "\t",
+                allowedScopes: nil,
+                port: 0
+            )
+        ) { error in
+            XCTAssertEqual(error as? InsideJobConfigurationError, .blankInstanceID)
+        }
+    }
+
+    @MainActor
+    func testSharedConfigurationStateRejectsRepeatedAndLiveConfiguration() throws {
+        let startupConfiguration = StartupConfiguration.resolve(env: .empty, infoPlist: makeInfoPlist([:]))
+        let runtimeConfiguration = InsideJobRuntimeConfiguration.resolve(
+            startupConfiguration: startupConfiguration
+        )
+        var configuredState = TheInsideJob.SharedState.unconfigured
+
+        try configuredState.configure { runtimeConfiguration }
+        XCTAssertThrowsError(try configuredState.configure { runtimeConfiguration }) { error in
+            XCTAssertEqual(error as? InsideJobConfigurationError, .alreadyConfigured)
+        }
+
+        let job = TheInsideJob(runtimeConfiguration: runtimeConfiguration)
+        var liveState = TheInsideJob.SharedState.live(job)
+        XCTAssertThrowsError(try liveState.configure { runtimeConfiguration }) { error in
+            XCTAssertEqual(error as? InsideJobConfigurationError, .alreadyLive)
+        }
     }
 
     func testRuntimeConfigurationGeneratesUUIDSessionToken() {

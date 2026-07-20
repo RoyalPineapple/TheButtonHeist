@@ -1,6 +1,6 @@
 public let defaultActionExpectationTimeout: WaitTimeout = 1
 
-public struct Action: HeistContent {
+public struct Action {
     let command: HeistActionCommand
     let expectationPolicy: ActionExpectationPolicy
     let explicitExpectationTimeout: WaitTimeout?
@@ -18,13 +18,14 @@ public struct Action: HeistContent {
         self.expectationValidationDiagnostics = expectationValidationDiagnostics
     }
 
-    public var heistBuildDiagnostics: [HeistBuildDiagnostic] {
-        expectationValidationDiagnostics
-    }
-
-    public var heistSteps: [HeistStep] {
-        guard expectationValidationDiagnostics.isEmpty else { return [] }
-        return [.action(ActionStep(command: command, expectationPolicy: expectationPolicy))]
+    var heistContent: HeistContent {
+        guard expectationValidationDiagnostics.isEmpty else {
+            return HeistContent(diagnostics: expectationValidationDiagnostics)
+        }
+        return HeistContent([.action(ActionStep(
+            command: command,
+            expectationPolicy: expectationPolicy
+        ))])
     }
 
     public func expect(
@@ -83,24 +84,22 @@ public struct Action: HeistContent {
         )
     }
 
-    public struct Repeated: HeistContent {
+    public struct Repeated {
         let command: HeistActionCommand
         let expectationPolicy: ActionExpectationPolicy
         let expectationValidationDiagnostics: [HeistBuildDiagnostic]
         let predicate: AccessibilityPredicate
         let timeout: WaitTimeout
 
-        public var heistSteps: [HeistStep] {
-            guard heistBuildDiagnostics.isEmpty else { return [] }
-            return [.repeatUntil(RepeatUntilStep(
+        var heistContent: HeistContent {
+            guard expectationValidationDiagnostics.isEmpty else {
+                return HeistContent(diagnostics: expectationValidationDiagnostics)
+            }
+            return HeistContent([.repeatUntil(RepeatUntilStep(
                 predicate: predicate,
                 timeout: timeout,
                 firstBodyStep: .action(ActionStep(command: command, expectationPolicy: expectationPolicy))
-            ))]
-        }
-
-        public var heistBuildDiagnostics: [HeistBuildDiagnostic] {
-            expectationValidationDiagnostics
+            ))])
         }
     }
 }

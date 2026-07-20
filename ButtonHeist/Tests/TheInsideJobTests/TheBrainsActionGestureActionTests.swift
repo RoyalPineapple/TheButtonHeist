@@ -140,10 +140,13 @@ extension TheBrainsActionTests {
             object: liveObject
         )
 
+        var timing = ActionTiming()
+
         let result = await brains.actions.executeRotor(
             selection: .named("Errors"),
             target: try AccessibilityTarget.label("Plain rotor host").resolve(in: .empty),
-            direction: .next
+            direction: .next,
+            timing: &timing
         )
 
         XCTAssertFalse(result.success)
@@ -171,10 +174,13 @@ extension TheBrainsActionTests {
             object: liveObject
         )
 
+        var timing = ActionTiming()
+
         let result = await brains.actions.executeRotor(
             selection: .named("Live Rotor"),
             target: try AccessibilityTarget.label("Rotor host").resolve(in: .empty),
-            direction: .next
+            direction: .next,
+            timing: &timing
         )
 
         XCTAssertTrue(result.success, result.message ?? "rotor failed")
@@ -203,10 +209,13 @@ extension TheBrainsActionTests {
         ]
         installScreen(elements: [(element, heistId)], objects: [heistId: liveObject])
 
+        var timing = ActionTiming()
+
         let result = await brains.actions.executeRotor(
             selection: .named("Live Rotor"),
             target: try AccessibilityTarget.identifier("edge_rotor_host").resolve(in: .empty),
-            direction: .next
+            direction: .next,
+            timing: &timing
         )
 
         XCTAssertTrue(result.success, result.message ?? "rotor failed")
@@ -238,10 +247,13 @@ extension TheBrainsActionTests {
         ]
         installScreen(elements: [(element, heistId)], objects: [heistId: liveObject])
 
+        var timing = ActionTiming()
+
         let result = await brains.actions.executeRotor(
             selection: .named("Live Rotor"),
             target: try AccessibilityTarget.identifier("offscreen_rotor_host").resolve(in: .empty),
-            direction: .next
+            direction: .next,
+            timing: &timing
         )
 
         XCTAssertTrue(result.success, result.message ?? "rotor failed")
@@ -294,7 +306,7 @@ extension TheBrainsActionTests {
             },
         ]
 
-        brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
+        installSyntheticObservation(InterfaceObservation.makeForTests(
             elements: [
                 hostHeistId: InterfaceTree.Element(
                     heistId: hostHeistId,
@@ -328,10 +340,13 @@ extension TheBrainsActionTests {
 
         XCTAssertEqual(scrollView.contentOffset, .zero)
 
+        var timing = ActionTiming()
+
         let result = await brains.actions.executeRotor(
             selection: .named("Live Rotor"),
             target: try AccessibilityTarget.identifier(hostHeistId.rawValue).resolve(in: .empty),
-            direction: .next
+            direction: .next,
+            timing: &timing
         )
 
         XCTAssertTrue(result.success, result.message ?? "rotor failed")
@@ -357,10 +372,13 @@ extension TheBrainsActionTests {
             object: liveObject
         )
 
+        var timing = ActionTiming()
+
         let result = await brains.actions.executeRotor(
             selection: .named("Errors"),
             target: try AccessibilityTarget.label("Rotor host").resolve(in: .empty),
-            direction: .next
+            direction: .next,
+            timing: &timing
         )
 
         XCTAssertFalse(result.success)
@@ -386,10 +404,13 @@ extension TheBrainsActionTests {
             object: liveObject
         )
 
+        var timing = ActionTiming()
+
         let result = await brains.actions.executeRotor(
             selection: .named("Errors"),
             target: try AccessibilityTarget.label("Rotor host").resolve(in: .empty),
-            direction: .next
+            direction: .next,
+            timing: &timing
         )
 
         XCTAssertFalse(result.success)
@@ -411,10 +432,13 @@ extension TheBrainsActionTests {
             object: liveObject
         )
 
+        var timing = ActionTiming()
+
         let result = await brains.actions.executeRotor(
             selection: .named("Errors"),
             target: try AccessibilityTarget.label("Rotor host").resolve(in: .empty),
-            direction: .next
+            direction: .next,
+            timing: &timing
         )
 
         XCTAssertFalse(result.success)

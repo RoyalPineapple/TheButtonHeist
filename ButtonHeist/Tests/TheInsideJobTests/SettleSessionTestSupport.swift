@@ -101,14 +101,14 @@ final class SettleSessionTests: XCTestCase {
     }
 
     final class ManualClock {
-        private(set) var now: CFAbsoluteTime = 0
+        private(set) var now = RuntimeElapsed.now
 
-        func currentTime() -> CFAbsoluteTime {
+        func currentTime() -> RuntimeElapsed.Instant {
             now
         }
 
         func advance(milliseconds: Int) {
-            now += Double(milliseconds) / 1_000
+            now = now.advanced(by: .milliseconds(milliseconds))
         }
     }
 

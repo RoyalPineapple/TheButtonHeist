@@ -216,7 +216,7 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
                 containerNamesByPath: [path: identifier],
                 elementRefs: [:],
                 containerRefsByPath: [path: .init(object: object)],
-                containerContentFramesByPath: [path: ContentRect(frame)],
+                containerContentFramesByPath: [path: try ContentRect(validating: frame)],
                 firstResponderHeistId: nil
             )
         ))

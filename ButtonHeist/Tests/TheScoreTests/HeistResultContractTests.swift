@@ -47,6 +47,19 @@ import TheScore
         }
     }
 
+    @Test func `decode rejects negative result and step durations`() {
+        let malformed = [
+            #"{"steps":[],"durationMs":-1}"#,
+            #"{"steps":[{"path":"$.body[0]","durationMs":-1,"node":{"type":"warning","outcome":"passed","message":"notice","children":[]}}],"durationMs":1}"#,
+        ]
+
+        for result in malformed {
+            #expect(throws: DecodingError.self) {
+                _ = try JSONDecoder().decode(HeistResult.self, from: Data(result.utf8))
+            }
+        }
+    }
+
     @Test func `decode rejects malformed external result relationships`() throws {
         let steps = try relationshipSteps()
         let malformed = try [

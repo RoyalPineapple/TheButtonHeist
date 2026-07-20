@@ -324,7 +324,7 @@ extension TheVaultResolutionTests {
                 containerNamesByPath: [path: "actions"],
                 elementRefs: [:],
                 containerRefsByPath: [:],
-                containerContentFramesByPath: [path: ContentRect(staleFrame)],
+                containerContentFramesByPath: [path: try ContentRect(validating: staleFrame)],
                 firstResponderHeistId: nil,
             )
         )
@@ -346,7 +346,7 @@ extension TheVaultResolutionTests {
                 containerNamesByPath: [path: "actions"],
                 elementRefs: [:],
                 containerRefsByPath: [path: .init(object: liveObject)],
-                containerContentFramesByPath: [path: ContentRect(freshFrame)],
+                containerContentFramesByPath: [path: try ContentRect(validating: freshFrame)],
                 firstResponderHeistId: nil,
             )
         )
