@@ -198,7 +198,7 @@ internal final class AdversarialLabRoute {
         }
 
         let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: .seconds(2))
+        let deadline = clock.now.advanced(by: .seconds(5))
         while readyRouteID != routeID {
             guard clock.now < deadline else {
                 throw AdversarialLabRouteError.timedOut(scenario)
